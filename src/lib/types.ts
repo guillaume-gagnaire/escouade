@@ -767,6 +767,8 @@ export interface Project {
   integrations: ProjectIntegrations;
   /** « Commit »: who writes the commits of the files panel's « Commit… » and « Commit tout… ». */
   commitMode: CommitMode;
+  /** « Ouvrir les pages des lancements » (ESC-311): where a launch's page opens once it answers. Kept on this machine. */
+  pagesOpen?: PagesOpen;
   /** « Compte préféré »: the Claude account its new agents and tickets go to (an `Account`'s id); empty is « Automatique ». */
   account: string;
   /** « Dossier des worktrees »: where its new worktrees go, from its folder or absolute; empty is `.claude/worktrees`. */
@@ -893,6 +895,37 @@ export interface ProjectShared {
 
 /** « Rédigé par l'agent » (the agent is asked to commit) or « Direct, avec un message proposé ». */
 export type CommitMode = 'agent' | 'direct';
+
+/** Where a launch's page opens (ESC-311): the agent's view « Page », the project's « Pages » window, the system's browser. */
+export type PagesOpen = 'agent' | 'window' | 'system';
+
+/** A launch's page, as the backend keeps it (ESC-311). */
+export interface PageView {
+  agentId: string;
+  projectId: string;
+  /** « pagination-users · web ». */
+  title: string;
+  url: string;
+  /** In the project's « Pages » window. */
+  detached: boolean;
+  /** The width it is shown at: the whole room, a tablet's, a phone's. */
+  mode?: 'full' | 'tablet' | 'mobile';
+}
+
+/** What happened to a page: a load (`started`, `finished`), a link opened outside or refused, its devtools. */
+export interface PageEvent {
+  agentId: string;
+  phase: 'started' | 'finished' | 'outside' | 'refused' | 'devtools' | 'responsive';
+  url: string;
+}
+
+/** Where a page goes in the window, in its logical pixels. */
+export interface PageBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 /** What a direct commit takes: the files it commits, and the files copied into the worktrees it never does. */
 export interface CommitScope {
@@ -2380,6 +2413,7 @@ export type UiEvent =
   | { type: 'ticket'; ticket: Ticket }
   | { type: 'ticketRemoved'; id: string; projectId: string }
   | { type: 'project'; project: Project }
+  | { type: 'devPage'; page: PageEvent }
   | { type: 'openUrl'; url: string }
   | { type: 'focusBoard'; projectId: string }
   /** Why no ticket of the project's board starts (its target branch), or null once they may. */

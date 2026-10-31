@@ -617,7 +617,7 @@
     gap: 12px;
     min-width: 0;
   }
-  /* Its name and its state before its bars: with a meter of one model more (« Fable · semaine », ESC-312), the bars go
+  /* Its name and its state before its bars: with a meter of one model more (« Fable 7 j », ESC-312), the bars go
      under them rather than cut the name. */
   .l1 {
     flex-wrap: wrap;

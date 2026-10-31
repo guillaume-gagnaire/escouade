@@ -1,5 +1,5 @@
 //! Tests of the conformance bench of the plugins (PLG-3, ESC-175): it passes on the fake plugin
-//! (tests/fixtures/fake-plugin.mjs) and on PLG-10's examples (plugin-examples/, ESC-182, their
+//! (tests/fixtures/fake-plugin.mjs) and on Escouade's own plugins (plugins/<id>/, ESC-182 and ESC-314, their
 //! programs as their folders hold them: `dist/` built and committed), and fails, with the right reason, on a plugin that ignores
 //! `initialize`, answers past its delay, takes a version it does not speak, asks for another's
 //! secret or writes its own out, or does not end at `shutdown`. `escouade-plugin` runs the same.
@@ -15,7 +15,7 @@ fn root() -> PathBuf {
 }
 
 fn example(name: &str) -> PathBuf {
-    root().join("plugin-examples").join(name)
+    root().join("plugins").join(name)
 }
 
 /// The fake plugin in a folder of the test's own, its program started with `args`; it asks for
@@ -67,6 +67,15 @@ async fn bench(folder: &Path) -> Report {
     run(folder, &options()).await
 }
 
+/// The bench of a plugin of Escouade's own hand (its id `dev.escouade.*`, ESC-314).
+async fn bench_own(folder: &Path) -> Report {
+    let o = Options {
+        hand: crate::plugins::manifest::Hand::First,
+        ..options()
+    };
+    run(folder, &o).await
+}
+
 fn verdict(r: &Report, s: Scenario) -> Verdict {
     r.outcome(s).verdict
 }
@@ -107,23 +116,26 @@ async fn the_fake_plugin_passes_every_scenario() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_examples_pass_and_what_does_not_concern_them_is_not_played() {
-    let slack = bench(&example("slack")).await;
+    let slack = bench_own(&example("slack")).await;
     assert!(slack.passed(), "{}", slack.render(Lang::En));
     assert_eq!(verdict(&slack, Scenario::Fact), Verdict::Pass);
     assert!(said(&slack, Scenario::Secret).contains("token"));
     assert_eq!(verdict(&slack, Scenario::Decision), Verdict::Skip);
 
-    let rules = bench(&example("team-rules")).await;
+    let rules = bench_own(&example("team-rules")).await;
     assert!(rules.passed(), "{}", rules.render(Lang::En));
     assert!(said(&rules, Scenario::Decision).contains("\"allow\""));
     assert_eq!(verdict(&rules, Scenario::Fact), Verdict::Skip);
     assert_eq!(verdict(&rules, Scenario::Secret), Verdict::Skip);
 
-    let discord = bench(&example("discord-webhook")).await;
+    let discord = bench_own(&example("discord")).await;
     assert!(discord.passed(), "{}", discord.render(Lang::En));
     assert_eq!(verdict(&discord, Scenario::Manifest), Verdict::Pass);
 
-    let theme = bench(&example("high-contrast")).await;
+    let theme = bench_own(&example("high-contrast")).await;
+    // Without --first-party, its id is anyone's to refuse.
+    let anyone = bench(&example("high-contrast")).await;
+    assert_eq!(verdict(&anyone, Scenario::Manifest), Verdict::Fail);
     assert!(theme.passed(), "{}", theme.render(Lang::En));
     assert_eq!(verdict(&theme, Scenario::Manifest), Verdict::Pass);
     for s in &Scenario::ALL[1..] {
@@ -284,10 +296,15 @@ fn the_command_tests_and_validates_a_folder() {
     let path = |p: PathBuf| p.to_string_lossy().into_owned();
     let args = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
     let theme = path(example("high-contrast"));
-    assert_eq!(cli::main(args(&["validate", &theme, "--lang", "en"])), 0);
-    assert_eq!(cli::main(args(&["test", &theme, "--lang", "en"])), 0);
+    let own = "--first-party";
+    assert_eq!(
+        cli::main(args(&["validate", &theme, "--lang", "en", own])),
+        0
+    );
+    assert_eq!(cli::main(args(&["validate", &theme, "--lang", "en"])), 1);
+    assert_eq!(cli::main(args(&["test", &theme, "--lang", "en", own])), 0);
     let rules = path(example("team-rules"));
-    assert_eq!(cli::main(args(&["test", &rules, "--json"])), 0);
+    assert_eq!(cli::main(args(&["test", &rules, "--json", own])), 0);
 
     let broken = fake("cli", &["--ignore-shutdown"]);
     assert_eq!(cli::main(args(&["test", &path(broken.clone())])), 1);

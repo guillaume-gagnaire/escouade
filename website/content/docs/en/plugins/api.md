@@ -32,7 +32,7 @@ Escouade’s first message is `initialize`. It gives the version of the protocol
   "params": {
     "protocolVersion": 1,
     "escouade": { "version": "2.1.1" },
-    "plugin": { "id": "dev.exemple.slack", "version": "1.2.0" },
+    "plugin": { "id": "dev.escouade.slack", "version": "1.1.0" },
     "capabilities": { "batch": true, "secrets": true, "settings": true, "log": true, "attach": true }
   }
 }

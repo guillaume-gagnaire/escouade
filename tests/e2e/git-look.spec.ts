@@ -158,11 +158,6 @@ test('git beside the conversation looks as the preview draws it, in both themes,
         const [ptx, , , pth] = await place(tab(ptabs, true));
         expect.soft([tx, th], `the first tab's place, ${where}`).toEqual([ptx, pth]);
         expect.soft(await lookBut(tabs.locator('.n'), 'width'), `the count, ${where}`).toEqual(await lookBut(ptabs.locator('.n'), 'width'));
-        const soon = tabs.locator('.soon');
-        const psoon = ptabs.locator('.soon');
-        expect.soft(await soon.isVisible(), `« dans la 2.1 » shown, ${where}`).toBe(await psoon.isVisible());
-        if (await psoon.isVisible())
-          expect.soft(await lookBut(soon, 'width'), `« dans la 2.1 », ${where}`).toEqual(await lookBut(psoon, 'width'));
 
         // The scope and the caption.
         const seg = side.locator('.scope');
@@ -298,18 +293,10 @@ test('git beside the conversation looks as the preview draws it, in both themes,
           await preview.screenshot({ path: path.join(SHOTS, `${n}.preview.png`) });
         }
 
-        // « PR et CI » (`#hosts`): its place, not its detail; under 420 px, gone from the strip for the × (choice 189).
+        // « PR et CI »: in the strip, gone under 420 px for the × (choice 189). The tab is the PR's own view since
+        // ESC-305, no longer the preview's placeholder (`#hosts`, its « dans la 2.1 » and its `.later`): not compared.
         const hosts = side.getByRole('tab', { name: /^PR et CI/ });
         expect.soft(await hosts.isVisible(), `« PR et CI » in the strip, ${where}`).toBe(size.width > 1100);
-        if (!(await hosts.isVisible())) continue;
-        await hosts.click();
-        await page.mouse.move(size.width / 2, 20);
-        await previewAt(preview, 'hosts', t);
-        const later = side.locator('.later');
-        const plater = pv.locator('#side-hosts .later');
-        expect.soft(await place(later), `« PR et CI », ${where}`).toEqual(await place(plater));
-        expect.soft(await look(later), `its box, ${where}`).toEqual(await look(plater));
-        expect.soft(await lookBut(later.locator('b'), 'width'), `its title, ${where}`).toEqual(await lookBut(plater.locator('b'), 'width'));
       }
   } finally {
     await browser.close();

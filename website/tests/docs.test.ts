@@ -416,9 +416,9 @@ describe('the page of the voice settings', () => {
 
 describe('the page of the example plugins', () => {
   const REPO = new URL('../../', import.meta.url);
-  // Each block of code under a path of plugin-examples/ (`plugin-examples/slack/src/plugin.ts`, then the block).
+  // Each block of code under a path of plugins/ (`plugins/slack/src/plugin.ts`, then the block): Escouade’s own plugins.
   const blocks = (lang: Lang) =>
-    [...source(lang, 'plugins/examples').matchAll(/^`(plugin-examples\/[^`\s]+)`\n\n```\w*\n([\s\S]*?)\n```$/gm)].map(([, path, code]) => ({
+    [...source(lang, 'plugins/examples').matchAll(/^`(plugins\/[^`\s]+)`\n\n```\w*\n([\s\S]*?)\n```$/gm)].map(([, path, code]) => ({
       path,
       code,
     }));
@@ -435,10 +435,10 @@ describe('the page of the example plugins', () => {
     expect(blocks('en').map((b) => b.path)).toEqual(blocks('fr').map((b) => b.path));
   });
 
-  it('shows every example of plugin-examples/', () => {
-    const examples = readdirSync(new URL('plugin-examples/', REPO), { withFileTypes: true })
-      .filter((d) => d.isDirectory() && existsSync(new URL(`plugin-examples/${d.name}/escouade-plugin.json`, REPO)))
-      .map((d) => `plugin-examples/${d.name}/escouade-plugin.json`);
+  it('shows every plugin of plugins/', () => {
+    const examples = readdirSync(new URL('plugins/', REPO), { withFileTypes: true })
+      .filter((d) => d.isDirectory() && existsSync(new URL(`plugins/${d.name}/escouade-plugin.json`, REPO)))
+      .map((d) => `plugins/${d.name}/escouade-plugin.json`);
     expect(examples.length).toBe(4);
     for (const lang of LANGS) {
       const shown = blocks(lang).map((b) => b.path);

@@ -2,14 +2,14 @@
 title: "Lancement de test"
 subject: "Kanban"
 sources: ["docs/SPEC.md"]
-tickets: []
-decisions: []
-compared: null
+tickets: ["ESC-311"]
+decisions: [26]
+compared: "2026-10-31T19:01:50+01:00"
 ---
 
 ## Ce que c'est
 
-Tout agent qui a un worktree peut lancer l'app de sa branche pour qu'on l'essaie. L'agent écrit la recette de lancement ; l'utilisateur la lit et l'approuve ; Escouade prépare, lance les processus et ouvre le navigateur sur la fonctionnalité. Quand isola gère le projet, ce sont les services d'isola qui tournent.
+Tout agent qui a un worktree peut lancer l'app de sa branche pour qu'on l'essaie. L'agent écrit la recette de lancement ; l'utilisateur la lit et l'approuve ; Escouade prépare, lance les processus et ouvre la page de la fonctionnalité, dans Escouade par défaut (voir [La page du lancement](page-du-lancement)). Quand isola gère le projet, ce sont les services d'isola qui tournent.
 
 ## Comportement
 
@@ -32,9 +32,9 @@ Tout agent qui a un worktree peut lancer l'app de sa branche pour qu'on l'essaie
 ### Le lancement
 
 - Une fois la recette approuvée, Escouade prépare (une fois par recette), puis lance chaque processus dans un terminal en lecture seule, dans un groupe au nom de l'agent de la section « Lancement ».
-- Elle attend que chacun réponde en HTTP (toutes les 500 ms, 3 min au plus), puis ouvre le navigateur sur la page de la fonctionnalité.
+- Elle attend que chacun réponde en HTTP (toutes les 500 ms, 3 min au plus), puis ouvre la page de la fonctionnalité là où le projet le dit : dans la vue « Page » de l'agent (par défaut), dans la fenêtre « Pages » du projet, ou dans le navigateur du système (voir [La page du lancement](page-du-lancement)).
 - Les lancements s'arrêtent à la validation, à l'archivage, à la suppression de l'agent, à la fermeture du projet, et quand l'agent donne une nouvelle recette, qui remplace l'ancienne.
-- Quand son ticket passe « Terminé », ses terminaux de test quittent la section « Lancement » avec leurs logs, et la fenêtre « Tester » de l'agent se ferme.
+- Quand son ticket passe « Terminé », ses terminaux de test quittent la section « Lancement » avec leurs logs, la fenêtre « Tester » de l'agent se ferme, et sa page aussi.
 
 ### Avec isola
 
@@ -42,5 +42,5 @@ Tout agent qui a un worktree peut lancer l'app de sa branche pour qu'on l'essaie
 - Dans ce cas : pas de bloc de ports pour un ticket ; le protocole dit d'utiliser `isola up`, `isola ls --json` et `isola down`, et de ne donner que `"lancement": {"ouvrir": …}` ; pas de « Préparer le lancement ».
 - « ▶ Tester » montre d'abord le `.isola.toml` du worktree, sous « Configuration isola (.isola.toml) », avec l'adresse « ouvrir ». L'agent peut écrire ou modifier ce fichier, et `isola up` lance ses services et ses commandes `setup` dans ton shell, hors du mode de permission de Claude Code. Rien ne tourne avant « Lancer ».
 - L'approbation garde avec l'agent le contenu entier du fichier et l'adresse. Un fichier modifié, d'une ligne ou d'un caractère, redemande. Le cœur refuse `isola up` quand le `.isola.toml` n'est plus celui qui a été approuvé.
-- Approuvé, « ▶ Tester » lance `isola up` dans un terminal en lecture seule, dans le groupe de l'agent ; isola ne demande jamais de mot de passe. Escouade lit `isola ls --json` (les services de la branche du worktree), attend que chaque service réponde sur son propre port (le proxy d'isola répond avant lui), puis ouvre l'adresse « ouvrir » de l'agent, ou celle du premier service par le proxy. Relancé, il revérifie tout.
+- Approuvé, « ▶ Tester » lance `isola up` dans un terminal en lecture seule, dans le groupe de l'agent ; isola ne demande jamais de mot de passe. Escouade lit `isola ls --json` (les services de la branche du worktree), attend que chaque service réponde sur son propre port (le proxy d'isola répond avant lui), puis ouvre l'adresse « ouvrir » de l'agent, ou celle du premier service par le proxy, comme une recette. Relancé, il revérifie tout.
 - « Tout arrêter », la validation, l'archivage et la fermeture du projet lancent `isola down`. La suppression du worktree lance `isola destroy`, après les commandes de démontage.

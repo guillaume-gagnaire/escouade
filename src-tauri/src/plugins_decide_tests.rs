@@ -333,9 +333,9 @@ async fn the_team_rules_example_refuses_rm_rf_with_its_reason() {
     #[cfg(windows)]
     crate::paths::trim_test_path();
     let h = harness("plg8-team-rules");
-    // The example of PLG-10 (plugin-examples/, ESC-182) as its repository holds it: its program
+    // Escouade's own plugin (plugins/team-rules, ESC-182 and ESC-314) as its repository holds it: its program
     // is dist/plugin.mjs, built and committed.
-    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../plugin-examples/team-rules");
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../plugins/team-rules");
     let dir = h.dir.join("team-rules");
     std::fs::create_dir_all(dir.join("dist")).unwrap();
     for f in [
@@ -352,7 +352,7 @@ async fn the_team_rules_example_refuses_rm_rf_with_its_reason() {
     let name = h
         .core
         .plugins
-        .get("dev.exemple.team-rules", crate::i18n::ui())
+        .get("dev.escouade.team-rules", crate::i18n::ui())
         .unwrap()
         .name;
     let (p, _) = h.project(false).await;

@@ -1,11 +1,13 @@
 #!/usr/bin/env node
-// PLG-10's examples (ESC-182), each as its author would check it before a tag: for those in TypeScript, `npm install`, the
-// typecheck, their tests against the SDK's fake Escouade, and their dist/plugin.mjs built again and compared to the one
-// committed (Escouade runs the plugin as the repository holds it); then, for all, `escouade-plugin validate` and the
-// conformance bench of the app (ESCOUADE_PLUGIN_BIN). CI runs it after building the app's escouade-plugin and the SDK.
+// The plugins of Escouade's own hand in plugins/<id>/ (PLG-10's examples, ESC-182; their ids dev.escouade.*, ESC-314),
+// each as its author checks it before a tag: for those in TypeScript, `npm install`, the typecheck, their tests against
+// the SDK's fake Escouade, and their dist/plugin.mjs built again and compared to the one committed (Escouade runs the
+// plugin as the repository holds it); for the declarative ones, their `node --test`; then, for all, `escouade-plugin
+// validate` and the conformance bench of the app (ESCOUADE_PLUGIN_BIN), `--first-party` for their reserved ids. CI
+// runs it after building the app's escouade-plugin and the SDK.
 //
 //   npx tsc -p sdk/plugin/tsconfig.json
-//   ESCOUADE_PLUGIN_BIN=src-tauri/target/debug/escouade-plugin node plugin-examples/ci.mjs
+//   ESCOUADE_PLUGIN_BIN=src-tauri/target/debug/escouade-plugin node plugins/ci.mjs
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -50,9 +52,13 @@ function check(name) {
       return false;
     }
     console.log(`✓ ${name}: dist/plugin.mjs is the build of src/`);
+  } else if (existsSync(join(folder, 'test')) && !run(folder, 'node', '--test')) {
+    return false;
   }
-  // By its relative folder, as an author runs it beside the plugin.
-  return run(HERE, bin, 'validate', name) && run(HERE, bin, 'test', name);
+  // By its relative folder, as an author runs it beside the plugin; a reserved id is Escouade's own hand.
+  const id = JSON.parse(readFileSync(join(folder, 'escouade-plugin.json'), 'utf8')).id;
+  const hand = String(id).startsWith('dev.escouade.') ? ['--first-party'] : [];
+  return run(HERE, bin, 'validate', name, ...hand) && run(HERE, bin, 'test', name, ...hand);
 }
 
 const lf = (s) => s.replace(/\r\n/g, '\n');
@@ -64,10 +70,10 @@ try {
   // Every example, even after one that fails: one failure must not hide another.
   const failed = examples.filter((name) => !check(name));
   if (failed.length > 0) {
-    console.error(`\n✗ ${failed.length} of ${examples.length} examples fail: ${failed.join(', ')}`);
+    console.error(`\n✗ ${failed.length} of ${examples.length} plugins fail: ${failed.join(', ')}`);
     process.exitCode = 1;
   } else {
-    console.log(`\n✓ ${examples.length} examples pass validate and the conformance bench: ${examples.join(', ')}`);
+    console.log(`\n✓ ${examples.length} plugins pass validate and the conformance bench: ${examples.join(', ')}`);
   }
 } finally {
   rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 });

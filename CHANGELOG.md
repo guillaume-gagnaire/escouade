@@ -8,9 +8,8 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
-- Dans Réglages › Comptes, le petit carré de chaque pastille « Réservé aux projets » s’allume à la couleur du projet quand le compte le sert, et passe au gris sinon. Merci à @Metalzoid (#19).
-- Un message posté pendant qu’un agent travaille peut encore être modifié ou annulé avant de lui parvenir : il attend quelques secondes, ou la fin du tour chez Cursor et OpenCode, et peut aussi partir tout de suite. Merci à @Metalzoid (#18).
-- L’onglet « PR et CI » du panneau de droite montre la PR de la branche de l’agent : sa CI vérification par vérification, le journal d’un échec, « Relancer les échecs » d’un clic, ses revues et ses déploiements. Sans agent, il liste les PR ouvertes du projet, et la carte d’un agent dit l’état de sa CI à côté de « #41 → main ».
+- Les plugins Contraste élevé, Discord, Slack et Règles de l’équipe sont des plugins d’Escouade, sur le store sous `dev.escouade.*` et tenus dans le dépôt de l’app ; seul ce dépôt peut publier ces identifiants. Une version installée sous l’ancien identifiant `dev.exemple.*` se remplace depuis la vue Plugins.
+- La page de l’app que l’agent vient de développer s’ouvre toute seule dans Escouade quand « ▶ Tester » est prêt, dans la vue « Page » de l’agent ou dans une fenêtre « Pages » à part, avec ses outils de développement (F12) et trois largeurs : pleine, tablette et mobile. Elle tourne à part, sans accès à Escouade ni à tes cookies ; Réglages › Projets garde le navigateur du système si tu préfères.
 - Les plugins ont leur vue, ouverte par l’icône de la barre des projets : installer depuis un dossier ou un dépôt git après avoir vu d’où vient le plugin, son empreinte, ce qu’il ajoute et ce qu’il pourra faire, la permission la plus forte d’abord ; l’activer pour l’app ou projet par projet, un projet privé restant coupé d’office ; lui retirer une permission, régler ses secrets, lire son journal, le désinstaller.
 - Une nouvelle version d’un plugin est proposée, jamais installée seule, et redemande ton accord si elle demande plus que la version installée.
 - Un plugin peut avoir son logo : un PNG carré de 256 px au moins, déclaré dans son manifeste, que le store montre à la place de ses deux lettres et qu’Escouade lit dans le plugin installé. Les plugins livrés avec Escouade ont le logo de leur marque quand elle le permet, sinon celui de leur catégorie.
@@ -26,7 +25,6 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Un dépôt peut porter plusieurs plugins, un par dossier : le store liste ses dossiers à la soumission, chaque plugin a ses étiquettes (`plugins/slack/v1.2.3`) et sa page mène à son dossier. Un plugin peut aussi changer de dépôt ou de dossier ; la version qui suit repasse en revue.
 - La documentation dit comment publier un plugin sur le store et préparer sa revue, et une nouvelle page, « La sécurité des plugins », dit ce que l’app vérifie, ce que le sceau « Vérifié par Escouade » couvre et ce que la revue refuse.
 - Un projet peut proposer des plugins dans son `.escouade.yml` : à son ouverture, une bande de Réglages › Projets nomme ceux qui manquent, avec leur page du store, sans rien installer seule ; « Pas pour ce projet » la fait taire. Le fichier peut aussi régler un plugin pour ce projet, jamais avec un secret.
-- Le choix automatique du compte juge chaque fenêtre selon sa longueur : une 5 h pleine met un compte en pause jusqu’à sa remise à zéro sans peser sur la suite, et la semaine (ou les crédits du mois) se juge au rythme — une semaine à 88 % qui se remet à zéro dans 3 h reste un bon choix, une à 60 % au deuxième jour passe derrière les autres. Un compte à 95 % ou plus passe toujours derrière les autres. L’ordre des comptes reste la priorité, et les messages disent quand c’est le rythme qui décide. Merci à @Metalzoid (#20).
 
 ### Retiré
 
@@ -34,11 +32,24 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Corrections
 
+- La barre du quota de Fable s’appelle « Fable 7 j », comme les autres fenêtres, par sa durée.
+- Un agent enregistré sur un harness que cette version n’a pas (celui d’une version plus récente, ou d’un plugin retiré) est lu et gardé avec sa conversation, marqué « harness absent » ; il ne démarre pas, et aucun agent n’est créé sur ce harness.
+
+## [2.1.2] — 2026-10-31
+
+### Nouveautés
+
+- Dans Réglages › Comptes, le petit carré de chaque pastille « Réservé aux projets » s’allume à la couleur du projet quand le compte le sert, et passe au gris sinon. Merci à @Metalzoid (#19).
+- Un message posté pendant qu’un agent travaille peut encore être modifié ou annulé avant de lui parvenir : il attend quelques secondes, ou la fin du tour chez Cursor et OpenCode, et peut aussi partir tout de suite. Merci à @Metalzoid (#18).
+- L’onglet « PR et CI » du panneau de droite montre la PR de la branche de l’agent : sa CI vérification par vérification, le journal d’un échec, « Relancer les échecs » d’un clic, ses revues et ses déploiements. Sans agent, il liste les PR ouvertes du projet, et la carte d’un agent dit l’état de sa CI à côté de « #41 → main ».
+- Le choix automatique du compte juge chaque fenêtre selon sa longueur : une 5 h pleine met un compte en pause jusqu’à sa remise à zéro sans peser sur la suite, et la semaine (ou les crédits du mois) se juge au rythme — une semaine à 88 % qui se remet à zéro dans 3 h reste un bon choix, une à 60 % au deuxième jour passe derrière les autres. Un compte à 95 % ou plus passe toujours derrière les autres. L’ordre des comptes reste la priorité, et les messages disent quand c’est le rythme qui décide. Merci à @Metalzoid (#20).
+
+### Corrections
+
 - « Branche de départ » `origin/x` : le nouvel agent part de la locale `x`, avancée au besoin, et plus de la branche d’un autre agent qui suivait `origin/x` ; les branches des agents ne suivent plus leur base. Merci à @Metalzoid.
 - Le quota propre à Fable a sa barre, « Fable · semaine », et ne retient plus que les tickets et agents Fable : au seuil, ils changent de compte ou attendent, les autres modèles continuent. Un forfait Max sans fenêtre de 5 h n’affiche plus de barre 5 h figée sur une vieille valeur.
 - Les fichiers non commités ne clignotent plus à chaque rafraîchissement : « Aucun fichier modifié par cet agent » et la liste restent affichés tant que rien ne change.
 - Un workflow que tu supprimes, dans Réglages › Projets › Workflow ou en effaçant son fichier, ne revient plus à chaque relecture ni au redémarrage : la liste « Supprimés » le garde, avec « Rétablir ». Et « Pas de workflow pour ce projet », dans l’assistant ou les réglages (et dans `.escouade.yml`), coupe leur lecture et leur écriture.
-- Un agent enregistré sur un harness que cette version n’a pas (celui d’une version plus récente, ou d’un plugin retiré) est lu et gardé avec sa conversation, marqué « harness absent » ; il ne démarre pas, et aucun agent n’est créé sur ce harness.
 - Deux tickets menés en même temps ne proposent plus une décision sous le même numéro : une décision proposée n’a pas de numéro et reçoit le suivant du registre quand elle est acceptée, et les pages et tickets qui la citent suivent.
 - Valider un ticket n’est plus refusé pour « des modifications non commitées » après la comparaison de la spec au code : ses écarts et sa date restent sur ce poste au lieu d’être écrits dans les pages, et l’onglet Docs les montre toujours.
 - « Écrire une première spec depuis le code », et toute nouvelle discussion, ferme sa fenêtre et ouvre la discussion avec son premier message même quand les nouveaux agents s’ouvrent dans le terminal du harness : une discussion reste toujours dans sa conversation, où Escouade refuse ses écritures.

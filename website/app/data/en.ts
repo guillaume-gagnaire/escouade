@@ -415,6 +415,7 @@ export const en: Catalog = {
       board: 'The Kanban',
       autopilot: 'Autopilot',
       testing: 'Review and approve',
+      browser: 'The launch page',
       integrations: 'External tickets',
       'shared-board': 'Sharing the Kanban',
       'docs-space': 'The Docs space',

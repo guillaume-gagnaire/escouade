@@ -12,6 +12,9 @@ import {
   type FetchedBinary,
   type Snapshot,
 } from '../../server/utils/checks';
+import { GithubError } from '../../server/utils/github';
+import type { Source } from '../../server/utils/source';
+import { isFirstParty } from '../../server/utils/submissions';
 import { readArchive } from '../../server/utils/tar';
 import { attestation, MIT, pluginFiles, png, tarball } from '../fake/plugins.mjs';
 
@@ -360,5 +363,49 @@ describe('the names too close', () => {
   it('does not count the MIT text of the fixtures as a README', () => {
     const results = runChecks(snapshot({ ...plugin({ files: { 'README.md': null } }), 'docs/README.md': MIT }));
     expect(by(results, 'readme').status).toBe('fail');
+  });
+});
+
+describe('the ids of Escouade’s own hand (ESC-314)', () => {
+  const own = () => plugin({ manifest: { id: 'dev.escouade.ntfy' } });
+
+  it('pass from the app’s repository, the manifest and the id checks alike', () => {
+    const results = runChecks(snapshot(own(), { firstParty: true }));
+    expect(by(results, 'id').status).toBe('pass');
+    expect(by(results, 'manifest').status).toBe('pass');
+  });
+
+  it('are refused to any other repository, as before', () => {
+    const results = runChecks(snapshot(own(), { firstParty: false }));
+    expect(by(results, 'id')).toMatchObject({ status: 'fail', detail: { en: 'dev.escouade.ntfy is reserved' } });
+    expect(verdict(results)).toBe('rejected');
+  });
+
+  it('take the app’s repository by its GitHub id, from STORE_FIRST_PARTY_REPO or its default', async () => {
+    const asked: string[] = [];
+    const source = (repos: Record<string, number>) =>
+      ({
+        repo: async (name: string) => {
+          asked.push(name);
+          if (!(name in repos)) throw new GithubError('Not Found', 404);
+          return { id: repos[name]!, fullName: name, private: false };
+        },
+      }) as unknown as Source;
+    const app = source({ 'guillaume-gagnaire/escouade': 1001 });
+    expect(await isFirstParty(app, {}, 1001)).toBe(true);
+    // Another repository, whatever its name (a fork, or one that took the app's old name after a rename): its id is not.
+    expect(await isFirstParty(app, {}, 2002)).toBe(false);
+    expect(await isFirstParty(source({ 'escouade-dev/escouade': 3003 }), { STORE_FIRST_PARTY_REPO: ' escouade-dev/escouade ' }, 3003)).toBe(
+      true,
+    );
+    expect(asked).toEqual(['guillaume-gagnaire/escouade', 'guillaume-gagnaire/escouade', 'escouade-dev/escouade']);
+    // A name GitHub does not know is no repository of the app's; GitHub down throws, the check is tried again.
+    expect(await isFirstParty(source({}), {}, 1001)).toBe(false);
+    const down = {
+      repo: async () => {
+        throw new GithubError('Bad Gateway', 502);
+      },
+    } as unknown as Source;
+    await expect(isFirstParty(down, {}, 1001)).rejects.toThrow('Bad Gateway');
   });
 });

@@ -1,10 +1,13 @@
 import type { Logo } from '../../shared/marks';
 import type { Text } from './checks';
 
-// The plugins of Escouade's own hand (docs/PLUGINS.md §4.3): its harnesses, its Kanban sources and its code hosts,
-// installed and updated with the app, signed with it, their ids `dev.escouade.*` reserved. They have a page on the
-// store with the mark « Escouade » (decided by the chief of the squad on 2026-10-29), and no version of their own:
-// theirs is the app's. Nothing here is downloaded; « Ouvrir dans Escouade » opens their page in the app.
+// The plugins the app gives (docs/PLUGINS.md §4.3, INT-4's origin `builtin`): its harnesses, its Kanban sources and its
+// code hosts, installed and updated with the app, signed with it. They have a page on the store with the mark
+// « Escouade » (decided by the chief of the squad on 2026-10-29), and no version of their own: theirs is the app's.
+// Nothing here is downloaded; « Ouvrir dans Escouade » opens their page in the app. Their ids are in the reserve
+// `dev.escouade.*`, which the store grants to the app's repository alone (STORE_FIRST_PARTY_REPO, ESC-314): a plugin of
+// that repository's `plugins/<id>/` is submitted as anyone's (decision 21), its link to its folder from its `path`, and
+// listed as a plugin of the store. No `source` here: what is listed below is what the app gives, nothing more.
 
 export interface Builtin {
   id: string;
@@ -193,4 +196,5 @@ export const BUILTINS: Builtin[] = [
   })),
 ];
 
-export const isBuiltinId = (id: string) => id.startsWith('dev.escouade.');
+/** Whether `id` is one of the plugins the app gives (not every `dev.escouade.*`: those of `plugins/<id>/` are the store's). */
+export const isBuiltinId = (id: string) => BUILTINS.some((b) => b.id === id);

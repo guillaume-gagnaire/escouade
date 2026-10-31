@@ -120,7 +120,7 @@ Le webhook Discord des tickets à tester :
 
 ```json
 {
-  "id": "dev.exemple.discord",
+  "id": "dev.escouade.discord",
   "name": "Discord",
   "version": "1.0.0",
   "escouade": { "api": "1", "min": "2.1.0" },

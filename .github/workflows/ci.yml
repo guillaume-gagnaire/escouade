@@ -63,7 +63,7 @@ jobs:
             store:
               - 'store/**'
               - 'schemas/**'
-              - 'plugin-examples/**'
+              - 'plugins/**'
               - 'website/app/assets/main.css'
               - 'design/store/**'
               - '.github/workflows/ci.yml'
@@ -403,6 +403,12 @@ jobs:
           node ../scripts/nextest-annotations.mjs nextest.log target/nextest/ci/junit.xml $status
           exit $status
 
+      # A launch's page in a real WebKitGTK (ESC-311): no command of Escouade answers it, its storage is
+      # its project's, its devtools open, and it sees a phone's then a tablet's width.
+      - name: A launch's page in a real webview
+        working-directory: src-tauri
+        run: xvfb-run -a cargo run --example devpage_probe
+
       # The conversation's voice under Linux: Microsoft's ONNX Runtime (glibc 2.27), in the .deb and the AppImage
       # (tauri.ort-linux.conf.json), its checksum checked; pyke's needs glibc 2.38.
       - name: ONNX Runtime for Linux
@@ -431,12 +437,13 @@ jobs:
           ESCOUADE_PLUGIN_BIN: src-tauri/target/debug/escouade-plugin
         run: node sdk/scripts/template-ci.mjs
 
-      # PLG-10's example plugins (plugin-examples/, ESC-182), as their author checks them before a tag: the TypeScript
-      # ones' tests, their dist/ rebuilt and compared, then validate and the bench for all (the SDK built by the step above).
-      - name: The example plugins pass their tests, validate and the bench
+      # Escouade's own plugins (plugins/<id>/, PLG-10's examples, ESC-182 and ESC-314), as their author checks them before
+      # a tag: their tests, the TypeScript ones' dist/ rebuilt and compared, then validate and the bench for all
+      # (--first-party: their ids dev.escouade.*; the SDK built by the step above).
+      - name: Escouade's own plugins pass their tests, validate and the bench
         env:
           ESCOUADE_PLUGIN_BIN: src-tauri/target/debug/escouade-plugin
-        run: node plugin-examples/ci.mjs
+        run: node plugins/ci.mjs
 
       - name: Upload the packages
         uses: actions/upload-artifact@v7
@@ -494,6 +501,17 @@ jobs:
           status=${PIPESTATUS[0]}
           node ../scripts/nextest-annotations.mjs nextest.log target/nextest/ci/junit.xml $status
           exit $status
+
+      # A launch's page in a real WKWebView (ESC-311), in the runner's own session: its devtools last,
+      # then first, as a user opens them.
+      - name: A launch's page in a real webview
+        working-directory: src-tauri
+        shell: bash
+        run: |
+          set +e
+          cargo run --example devpage_probe -- --devtools-last; last=$?
+          cargo run --example devpage_probe; first=$?
+          exit $((last || first))
 
   macos-bundle:
     name: macOS (app bundle)

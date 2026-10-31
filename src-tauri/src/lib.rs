@@ -47,6 +47,10 @@ mod deeplink;
 #[cfg(test)]
 mod deeplink_tests;
 mod desktop;
+mod devpage;
+mod devpage_probe;
+#[cfg(test)]
+mod devpage_tests;
 mod discussion;
 #[cfg(test)]
 mod discussion_tests;
@@ -349,6 +353,9 @@ fn build_window(app: &tauri::App) -> tauri::Result<()> {
     // that would take it from the user's app, the window still hidden.
     let mut window = window.clone();
     window.focus &= !paths::hidden_window();
+    // Built with Tauri’s `devtools` for the launches’ pages (ESC-311): the window’s own stay a
+    // debug build’s.
+    window.devtools = Some(cfg!(debug_assertions));
     // Only the dev server's address is the app's besides its own.
     let dev = if tauri::is_dev() {
         config.build.dev_url.clone()
@@ -377,6 +384,17 @@ fn build_window(app: &tauri::App) -> tauri::Result<()> {
 /// for the plugins' authors (PLG-3). Gives the exit code.
 pub fn plugin_cli(args: Vec<String>) -> i32 {
     plugins::bench::cli::main(args)
+}
+
+/// The app's context (its config and its pages), made once: the window's and the probes'.
+fn context() -> tauri::Context {
+    tauri::generate_context!()
+}
+
+/// `devpage_probe` (examples): a launch's page in a real webview of this system (ESC-311), what it
+/// could reach of Escouade, its storage, its devtools and its widths. Gives the exit code.
+pub fn devpage_probe_cli(args: Vec<String>) -> i32 {
+    devpage_probe::cli(args, context())
 }
 
 pub fn run() {
@@ -446,6 +464,8 @@ pub fn run() {
                 log::warn!("Escouade {version} did not install: the app still runs this version");
             }
             app.manage(deeplink::Inbox::default());
+            // The pages of the launches (ESC-311).
+            app.manage(Arc::new(devpage::Pages::default()));
             let (core, git_rx) = Core::load(
                 app.handle().clone(),
                 paths::DataDir::new(paths::default_data_dir()),
@@ -564,6 +584,15 @@ pub fn run() {
                 commands::set_held,
                 commands::set_ui,
                 commands::open_url,
+                commands::devpage_open,
+                commands::devpage_place,
+                commands::devpage_go,
+                commands::devpage_devtools,
+                commands::devpage_detach,
+                commands::devpage_mode,
+                commands::devpage_show,
+                commands::devpage_close,
+                commands::devpage_list,
                 commands::open_path,
                 commands::save_settings,
                 commands::claude_locate,
@@ -854,7 +883,7 @@ pub fn run() {
                 commands::speech_preview_online,
             ],
         ))
-        .build(tauri::generate_context!())
+        .build(context())
         .expect("error while building the application")
         .run(|app, event| match event {
             tauri::RunEvent::Exit => {

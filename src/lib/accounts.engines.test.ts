@@ -128,11 +128,11 @@ describe('the quota of an account', () => {
   });
 
   it('labels a model’s own quota by the model’s name the server gives, in both languages (ESC-312)', () => {
-    expect(meterLabel(10080, 'Fable')).toBe('Fable · semaine');
-    expect(meterLabel(300, 'Fable')).toBe('Fable · 5 h');
+    expect(meterLabel(10080, 'Fable')).toBe('Fable 7 j');
+    expect(meterLabel(300, 'Fable')).toBe('Fable 5 h');
     expect(meterName(10080, 'Fable')).toBe('Quota sur 7 jours de Fable');
     setLang('en');
-    expect(meterLabel(10080, 'Fable')).toBe('Fable · week');
+    expect(meterLabel(10080, 'Fable')).toBe('Fable 7d');
     expect(meterName(10080, 'Fable')).toBe('Fable 7-day quota');
   });
 
@@ -142,12 +142,12 @@ describe('the quota of an account', () => {
     const fable = { minutes: 10080, pct: 0, resetsAt: NOW + HOUR, model: 'Fable' };
     const real = usageOf('principal', { meters: [{ minutes: 300, pct: 2, resetsAt: NOW + HOUR }, week, fable] });
     const shown = metersShown(real, 'claude');
-    expect(shown.map((m) => meterLabel(m.minutes, m.model))).toEqual(['5 h', '7 j', 'Fable · semaine']);
+    expect(shown.map((m) => meterLabel(m.minutes, m.model))).toEqual(['5 h', '7 j', 'Fable 7 j']);
     expect(new Set(shown.map(meterKey)).size).toBe(3);
     expect(meterKey(fable)).toBe('10080:Fable');
     // A Max plan without a 5-hour window: no 5-hour bar.
     const max = usageOf('principal', { meters: [week, fable] });
-    expect(metersShown(max, 'claude').map((m) => meterLabel(m.minutes, m.model))).toEqual(['7 j', 'Fable · semaine']);
+    expect(metersShown(max, 'claude').map((m) => meterLabel(m.minutes, m.model))).toEqual(['7 j', 'Fable 7 j']);
   });
 
   it('counts a model’s own quota for that model alone, by its family (ESC-312)', () => {

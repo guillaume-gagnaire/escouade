@@ -36,7 +36,7 @@ The `$schema` line gives completion and checks in VS Code and the editors that r
 
 | Field | Required | What it says |
 | --- | --- | --- |
-| `id` | yes | The plugin’s unique id, a reversed domain name in lower case: `dev.exemple.slack`. The `dev.escouade.*` ids are kept for Escouade’s own plugins. |
+| `id` | yes | The plugin’s unique id, a reversed domain name in lower case: `dev.exemple.slack`. The `dev.escouade.*` ids are kept for Escouade’s own plugins: the store takes them from its repository alone (`plugins/<folder>/`), the app installs them signed by the store only. |
 | `name` | yes | Its name: one text, or a text per language. |
 | `version` | yes | Its version, in three numbers: `1.2.0`, `0.3.0-beta.1`. The same as the version’s git tag. |
 | `description` | no | What it does, in a sentence: one text, or a text per language. |

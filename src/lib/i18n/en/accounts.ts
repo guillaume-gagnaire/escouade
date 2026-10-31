@@ -238,7 +238,7 @@ export default defineZone('accounts', {
     days: { label: '{n}d', name: { one: '{count}-day quota', other: '{count}-day quota' } },
     credits: { label: 'credits', name: 'Credits of the month' },
     week: { label: 'W' },
-    scoped: { week: '{model} · week', window: '{model} · {window}', name: '{model} {name}' },
+    scoped: { label: '{model} {window}', name: '{model} {name}' },
     reset: 'reset {countdown}',
     overageCurrent: '{names}: extra usage in progress, billed separately. Agents already running stay on it, and new ones go to it too.',
     overage: '{names}: extra usage in progress, billed separately. Agents already running stay on it, new ones go to another account.',

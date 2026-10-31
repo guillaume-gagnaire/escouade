@@ -100,6 +100,9 @@ export interface Snapshot {
   undecodable?: string[];
   /** The icon passed its header's checks but did not decode (PLG-13). */
   iconUndecodable?: boolean;
+  /** Whether the repository submitted is the app's (STORE_FIRST_PARTY_REPO, by its GitHub id; ESC-314): its plugins
+   * alone take the ids `dev.escouade.*`. */
+  firstParty?: boolean;
   /** The plugin already on the store under the manifest's id, if any: whose it is, from which repository and folder. */
   existing: { mine: boolean; repository: string; path?: string } | null;
   /** The versions of this id already taken (published, waiting, or held): a number is never used twice. */
@@ -169,7 +172,7 @@ export function iconOf(m: Manifest | null): string | null {
   return typeof m?.icon === 'string' ? iconPath(m.icon) : null;
 }
 
-function checkManifest(read: ArchiveRead, iconUndecodable = false, path = ''): CheckResult {
+function checkManifest(read: ArchiveRead, iconUndecodable = false, path = '', firstParty = false): CheckResult {
   const raw = read.files.get(MANIFEST_FILE);
   if (!raw)
     return fail('manifest', t(`${MANIFEST_FILE} manque`, `${MANIFEST_FILE} is missing`), [
@@ -191,7 +194,8 @@ function checkManifest(read: ArchiveRead, iconUndecodable = false, path = ''): C
       },
     ]);
   // The icon's header is the library's (a PNG, square, 256 px at least, 1 MB at most); its decoding is the store's.
-  const v = validateText(raw.toString('utf8'), { file: (p: string) => read.files.get(p) ?? null });
+  // The ids dev.escouade.* hold for the app's repository alone (checkId says why to the others).
+  const v = validateText(raw.toString('utf8'), { file: (p: string) => read.files.get(p) ?? null, firstParty });
   const icon = v.ok ? iconOf(JSON.parse(raw.toString('utf8'))) : null;
   const info = icon ? imageInfo(read.files.get(icon)!) : null;
   if (info && info.width > ICON_DECODE_MAX)
@@ -347,7 +351,8 @@ export function closeNames(id: string, name: string, others: Snapshot['others'])
 function checkId(m: Manifest | null, s: Snapshot): CheckResult {
   if (!m || typeof m.id !== 'string') return skip('id', NO_MANIFEST);
   const id = m.id;
-  if (id.startsWith(RESERVED_PREFIX))
+  // Escouade's own hand comes from the app's repository (its plugins/<id>/, decision 21), compared by its GitHub id.
+  if (id.startsWith(RESERVED_PREFIX) && !s.firstParty)
     return fail('id', t(`${id} est réservé`, `${id} is reserved`), [
       {
         path: 'id',
@@ -995,7 +1000,7 @@ export function runChecks(s: Snapshot): CheckResult[] {
   const m = clean ? manifestOf(read) : null;
   const unread = t('L’archive ne se lit pas : ce contrôle attend.', 'The archive does not read: this check waits.');
   const results: Record<CheckKey, CheckResult> = {
-    manifest: clean ? checkManifest(read, s.iconUndecodable, s.path) : skip('manifest', unread),
+    manifest: clean ? checkManifest(read, s.iconUndecodable, s.path, !!s.firstParty) : skip('manifest', unread),
     version: checkVersion(m, s),
     id: checkId(m, s),
     repository: checkRepository(m, s),

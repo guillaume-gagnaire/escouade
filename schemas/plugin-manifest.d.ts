@@ -43,6 +43,8 @@ export interface Validation {
 export interface ValidateOptions {
   /** A plugin the app itself gives, which may take the ids and the programs of Escouade's own. */
   builtin?: boolean;
+  /** A plugin of Escouade's own hand not given by the app (`plugins/<id>/`, ESC-314): the ids `dev.escouade.*`, nothing more. */
+  firstParty?: boolean;
   /** The bytes of a file of the plugin's folder by its path, null when it is none: to read its `icon`. */
   file?: (path: string) => Uint8Array | null | undefined;
 }

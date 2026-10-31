@@ -37,7 +37,7 @@ Escouade follows the two quota windows of your Claude subscription: the 5-hour w
 
 ### A model’s own quota
 
-On some plans, Claude counts one model apart: Fable’s week, for instance, has its own cap and its own reset. Escouade gives it one more bar, beside the others and under the name Anthropic gives it: “Fable · week”. It reads like the others (tooltip, screen readers: “Fable 7-day quota”), in the status bar, the quota panel and Settings › Accounts.
+On some plans, Claude counts one model apart: Fable’s week, for instance, has its own cap and its own reset. Escouade gives it one more bar, beside the others and under the name Anthropic gives it: “Fable 7d”. It reads like the others (tooltip, screen readers: “Fable 7-day quota”), in the status bar, the quota panel and Settings › Accounts.
 
 That quota holds back that model’s agents and tickets alone. When Fable’s week passes the threshold, a Fable ticket goes to another account or waits, and the Opus or Sonnet tickets go on on the same account. The autopilot is not paused for it. A Fable agent stopped by its limit waits for the reset without holding the other models back. Escouade knows the model by its name (“fable”, “claude-fable-5-1”…), whichever name it goes by.
 

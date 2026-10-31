@@ -129,7 +129,7 @@ fn the_version_delays_and_errors_are_those_of_the_schema() {
 fn what_the_core_sends_holds_the_schema() {
     let m = manifest::read(
         r#"{"id":"dev.test.schema","name":"Schéma","version":"1.0.0","escouade":{"api":"1","min":"2.1.0"}}"#,
-        false,
+        manifest::Hand::Third,
     )
     .manifest
     .unwrap();

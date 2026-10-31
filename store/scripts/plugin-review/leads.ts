@@ -57,7 +57,8 @@ const PATTERNS: Pattern[] = [
   },
   {
     kind: 'secrets',
-    re: /\.claude\b|\.codex\b|\.escouade\b|\.cursor\b|\.copilot\b|\.config[\\/](?:gh|opencode)\b/,
+    // A folder, not the ids `dev.escouade.*` of Escouade's own plugins (ESC-314).
+    re: /\.claude\b|\.codex\b|\.escouade\b(?!\.)|\.cursor\b|\.copilot\b|\.config[\\/](?:gh|opencode)\b/,
     why: 'dossier d’un harness ou d’Escouade',
   },
   {
@@ -196,6 +197,8 @@ export function findLeads(files: Map<string, Buffer>, network: string[]): Lead[]
         if (p.re.test(raw)) out.push({ kind: p.kind, file, line, text: cut(raw), why: p.why });
       }
       if (prose) return;
+      // The manifest's own repository is where it comes from, not a host it reaches (ESC-314: plugins/<id>/ of the app's).
+      if (file === 'escouade-plugin.json' && /^\s*"repository"\s*:/.test(raw)) return;
       for (const m of raw.matchAll(URL)) {
         const host = m[1]!.replace(/^\[|\]$/g, '');
         if (QUIET_HOSTS.test(host) || hostAllowed(host, network)) continue;

@@ -30,7 +30,7 @@ Each published version has its `version.json` file: the id, the number, the repo
 | --- | --- |
 | Manifest | `escouade-plugin.json` at the plugin’s root (the repository’s, or its folder), valid against the schema: the same rules as in the app ([the manifest](plugins/manifest)). |
 | Version | `version` equal to the tag (the `v` is optional; in a folder, `<folder>/v1.2.3`), greater than the last one published. |
-| Identifier | Free or already yours, published from this repository and this folder, or from a new source of yours (noted, the version reviewed); `dev.escouade.*` is reserved. A name too close to another plugin’s goes through a manual review first. |
+| Identifier | Free or already yours, published from this repository and this folder, or from a new source of yours (noted, the version reviewed); `dev.escouade.*` is reserved to Escouade’s own plugins, submitted from its own repository. A name too close to another plugin’s goes through a manual review first. |
 | Repository | `repository` equal to the repository submitted, `https://github.com/<owner>/<repository>`, or to its folder, `…/tree/<ref>/<folder>`. |
 | License | A free license (approved by the OSI or the FSF) as an SPDX id, the same one GitHub recognizes in the `LICENSE` or `COPYING` file. |
 | README | `README.md` (or `README.fr.md` and `README.en.md`) at the root, not empty: it is the plugin’s page. In a folder, the repository root’s stands in when it has none; the license too. |

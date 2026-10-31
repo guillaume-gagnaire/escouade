@@ -74,6 +74,7 @@ Créées par le chef d'escouade le 2026-10-29 (Coolify 4.5.3) d'après `docs/STO
 | `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET` | idem ; la clé PEM telle quelle, sur plusieurs lignes (ou sur une, aux `
 ` échappés) ; STORE-2 | oui |
 | `STORE_ADMINS` | l'identifiant numérique GitHub de l'utilisateur ; STORE-8 | non |
+| `STORE_FIRST_PARTY_REPO` | le dépôt de l'app, seul à soumettre des `dev.escouade.*` (comparé par son id GitHub) ; défaut `guillaume-gagnaire/escouade`, à ne poser que s'il change ; ESC-314 | non |
 | `SMTP_URL`, `MAIL_FROM` | Scaleway Transactional Email, `store@escouade.dev` ; STORE-2 | oui (`SMTP_URL`) |
 | `STORE_DISCORD_ADMIN_WEBHOOK` | le webhook du salon privé des admins sur le Discord d'Escouade (ci-dessous) ; STORE-12, facultative | oui |
 | `STORE_DISCORD_PUBLIC_WEBHOOK_FR`, `STORE_DISCORD_PUBLIC_WEBHOOK_EN` | les webhooks du salon public, en français et en anglais ; STORE-12, facultatives | oui |
