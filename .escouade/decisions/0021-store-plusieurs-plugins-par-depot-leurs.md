@@ -2,7 +2,7 @@
 number: 21
 title: "Store : plusieurs plugins par dépôt, leurs étiquettes et le changement de source"
 date: "2026-10-31"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-313"
 pages: ["store/publier-et-securite","store/store-dans-l-app"]
@@ -11,8 +11,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"store/publier-et-securite","added":16,"removed":9},{"page":"store/store-dans-l-app","added":4,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-10-31T15:56:35+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
