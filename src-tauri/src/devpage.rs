@@ -848,8 +848,8 @@ pub fn devtools<R: Runtime>(app: &AppHandle<R>, agent_id: &str) -> Result<(), St
 /// tablet's or a phone's (seen by `devpage_probe` in the CI): it goes into a window of its own,
 /// as WebView2's devtools are on Windows; and as WebKit gives the view back its former frame when
 /// the move ends, later and on its own, the page is placed again where it was, a few times while
-/// the inspector settles (asked again to leave the page each time: it ignores the first ask
-/// while it is still being shown).
+/// the inspector settles (asked again to leave the page each time: it may ignore an ask while it
+/// is still being shown).
 fn open_devtools<R: Runtime>(webview: &tauri::Webview<R>) {
     webview.open_devtools();
     #[cfg(target_os = "macos")]
@@ -870,58 +870,28 @@ fn open_devtools<R: Runtime>(webview: &tauri::Webview<R>) {
     }
 }
 
-/// Moves the inspector of the WKWebView `view` into a window of its own when it is attached to it.
-/// Says whether it was.
+/// Asks the inspector of the WKWebView `view` to leave the page for a window of its own. Each
+/// call is checked first (`respondsToSelector:`): an Objective-C exception would abort the app.
 #[cfg(target_os = "macos")]
-fn detach_inspector(view: *mut objc2::runtime::AnyObject) -> bool {
-    use objc2::runtime::AnyObject;
+fn detach_inspector(view: *mut objc2::runtime::AnyObject) {
+    use objc2::runtime::{AnyObject, Sel};
     if view.is_null() {
-        return false;
+        return;
     }
-    // SAFETY: `view` is a page's live WKWebView, used on the main thread (`with_webview`);
-    // `_inspector` (macOS 10.14+) answers its `_WKInspector`, whose `isAttached` and `detach` are
-    // WebKit's (private, as the `devtools` feature itself).
+    // SAFETY: `view` is a page's live WKWebView, used on the main thread (`with_webview`); every
+    // selector is asked for before it is sent. `_inspector` (macOS 10.14+) answers its
+    // `_WKInspector`, whose `detach` is WebKit's (private, as the `devtools` feature itself).
     unsafe {
-        let inspector: *mut AnyObject = objc2::msg_send![view, _inspector];
-        if inspector.is_null() {
-            return false;
+        let answers = |object: *mut AnyObject, selector: Sel| -> bool {
+            objc2::msg_send![object, respondsToSelector: selector]
+        };
+        if !answers(view, objc2::sel!(_inspector)) {
+            return;
         }
-        let attached: bool = objc2::msg_send![inspector, isAttached];
-        if attached {
+        let inspector: *mut AnyObject = objc2::msg_send![view, _inspector];
+        if !inspector.is_null() && answers(inspector, objc2::sel!(detach)) {
             let _: () = objc2::msg_send![inspector, detach];
         }
-        attached
-    }
-}
-
-/// Whether the inspector of the page of agent `agent_id` is attached to it (macOS; None elsewhere,
-/// or when it cannot be read): for `devpage_probe`.
-pub fn inspector_attached<R: Runtime>(app: &AppHandle<R>, agent_id: &str) -> Option<bool> {
-    #[cfg(target_os = "macos")]
-    {
-        use objc2::runtime::AnyObject;
-        let webview = app.get_webview(&page_label(agent_id))?;
-        let (tx, rx) = std::sync::mpsc::channel();
-        webview
-            .with_webview(move |platform| {
-                let view: *mut AnyObject = platform.inner().cast();
-                // SAFETY: as in `detach_inspector`.
-                let attached = unsafe {
-                    let inspector: *mut AnyObject = objc2::msg_send![view, _inspector];
-                    !inspector.is_null() && {
-                        let a: bool = objc2::msg_send![inspector, isAttached];
-                        a
-                    }
-                };
-                let _ = tx.send(attached);
-            })
-            .ok()?;
-        rx.recv_timeout(std::time::Duration::from_secs(5)).ok()
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = (app, agent_id);
-        None
     }
 }
 

@@ -103,8 +103,6 @@ struct Seen {
     storage_dir: Option<bool>,
     /// None where the webview cannot say (WebView2 always answers false).
     devtools_open: Option<bool>,
-    /// macOS: whether WebKit's inspector stayed attached to the page (it should be in its own window).
-    inspector_attached: Option<bool>,
     width_in_agent: Option<u32>,
     /// The page was still at a phone's width a few seconds later (nothing laid it out again).
     width_in_agent_held: bool,
@@ -283,7 +281,6 @@ pub fn cli(args: Vec<String>, context: tauri::Context) -> i32 {
                 if devtools_last {
                     devtools(&mut seen);
                 }
-                seen.inspector_attached = devpage::inspector_attached(&handle, "probe");
                 let ok = seen.kept_apart();
                 println!("{}", serde_json::to_string(&seen).unwrap_or_default());
                 out.store(if ok { 0 } else { 1 }, std::sync::atomic::Ordering::SeqCst);
