@@ -273,6 +273,32 @@ describe('the view', () => {
     expect(within(nav).getByRole('button', { name: /Mises à jour/ }).className).toContain('upd');
   });
 
+  it('puts a dev.escouade.* of the store with the plugins added, not with those the app gives (ESC-314)', async () => {
+    const store = {
+      kind: 'store' as const,
+      version: '1.1.0',
+      sha256: 'a'.repeat(64),
+      verified: true,
+      repository: 'https://github.com/guillaume-gagnaire/escouade',
+      path: 'plugins/slack',
+      tag: 'plugins/slack/v1.1.0',
+      commit: 'c'.repeat(40),
+    };
+    fakeBackend({
+      plugins_list: () => [
+        view({ id: 'dev.escouade.slack', origin: store, folder: 'C:/data/plugins/dev.escouade.slack' }),
+        view({ id: 'dev.escouade.github', name: 'GitHub', origin: { kind: 'builtin' } }),
+      ],
+    });
+    render(PluginsView);
+    const added = await screen.findByRole('table', { name: 'Ajoutés' });
+    expect(added.textContent).toContain('Slack');
+    expect(added.textContent).not.toContain('GitHub');
+    const shipped = screen.getByRole('table', { name: 'Livrés avec Escouade' });
+    expect(shipped.textContent).toContain('GitHub');
+    expect(shipped.textContent).not.toContain('Slack');
+  });
+
   it('a plugin is uninstalled after its confirmation, its data kept if asked', async () => {
     const backend = fakeBackend({ plugin_remove: () => true });
     plugins.list = [view()];

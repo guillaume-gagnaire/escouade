@@ -19,7 +19,15 @@ export type Origin =
       path?: string;
       tag: string;
       commit: string;
-    };
+    }
+  /**
+   * A plugin the app gives (INT-4, ESC-210), read from the app's own files. Not the same as a `dev.escouade.*` of the store
+   * (ESC-314): that one is `store`, kept in the data's plugins/ as any other; the origin tells them apart, never the id.
+   */
+  | { kind: 'builtin' };
+
+/** Whether the app gives this plugin (« Livrés avec l'app »), by its origin alone: a `dev.escouade.*` of the store is not. */
+export const shippedWithApp = (p: Pick<PluginView, 'origin'>) => p.origin.kind === 'builtin';
 
 /** The page of a plugin's source on GitHub: its repository, or its folder at its tag (`<repository>/tree/<tag>/<folder>`). */
 export function sourceUrl(o: { repository: string; tag: string; path?: string }): string {
@@ -319,6 +327,8 @@ export function originOf(o: Origin): string {
       return `${o.url.replace(/^https?:\/\//, '').replace(/\.git$/, '')} · ${o.tag}`;
     case 'store':
       return 'store.escouade.dev';
+    case 'builtin':
+      return 'Escouade';
     default:
       return o.path;
   }

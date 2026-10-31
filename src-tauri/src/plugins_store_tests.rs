@@ -282,9 +282,9 @@ async fn a_plugin_in_a_folder_keeps_its_folder_and_a_folder_that_climbs_is_refus
             tag,
             ..
         } => {
-            assert_eq!(path, "plugins/discord-webhook");
+            assert_eq!(path, "plugins/discord");
             assert_eq!(repository, "https://github.com/escouade-dev/plugins");
-            assert_eq!(tag, "plugins/discord-webhook/v1.0.0");
+            assert_eq!(tag, "plugins/discord/v1.0.0");
         }
         other => panic!("{other:?}"),
     }
@@ -374,11 +374,87 @@ async fn the_updates_of_a_store_plugin_come_from_the_catalogue_and_say_if_verifi
     assert!(view.update.is_none());
 }
 
+/// A plugin of Escouade's own hand (`dev.escouade.*` from `plugins/<id>/` of the app's
+/// repository, ESC-314) installs from the store signed, as any plugin of the store: its origin is
+/// `store`, its folder `<data>/plugins/<id>`, never the app's `builtin`; read again at the next
+/// start. Not signed yet, it is refused.
+#[tokio::test]
+async fn escouade_s_own_hand_installs_from_the_store_signed_and_stays_a_store_plugin() {
+    let fake = Fake::start().trusted();
+    let (data, store, plugins) = ready(&fake, "first-party").await;
+    let view = install(&store, &plugins, "dev.escouade.discord", None, false)
+        .await
+        .unwrap();
+    assert!(matches!(view.state, State::Ready), "{:?}", view.state);
+    assert!(view.verified);
+    match &view.origin {
+        Origin::Store {
+            verified,
+            repository,
+            path,
+            tag,
+            ..
+        } => {
+            assert!(*verified);
+            assert_eq!(repository, "https://github.com/guillaume-gagnaire/escouade");
+            assert_eq!(path, "plugins/discord");
+            assert_eq!(tag, "plugins/discord/v1.1.0");
+        }
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(
+        Path::new(&view.folder),
+        data.plugins_dir().join("dev.escouade.discord")
+    );
+    // At the next start, its manifest is read again for Escouade's own hand.
+    let again = Plugins::load(data.clone(), "2.1.0");
+    let listed = again.list(Lang::Fr);
+    let back = listed
+        .iter()
+        .find(|p| p.id == "dev.escouade.discord")
+        .unwrap();
+    assert!(matches!(back.state, State::Ready), "{:?}", back.state);
+    assert!(matches!(back.origin, Origin::Store { .. }));
+    // Not signed yet: refused, nothing installed.
+    let e = install(&store, &plugins, "dev.escouade.slack", None, false)
+        .await
+        .unwrap_err();
+    assert!(e.contains("que le store n'a pas encore signé"), "{e}");
+    assert!(plugins
+        .list(Lang::Fr)
+        .iter()
+        .all(|p| p.id != "dev.escouade.slack"));
+}
+
+/// The folder of a plugin of Escouade's own hand loads in development (ESC-314), as its author
+/// tries it; a folder copied or a repository cloned does not take its id.
+#[tokio::test]
+async fn escouade_s_own_folder_loads_in_development() {
+    let data = DataDir::new(temp_dir("first-party-dev").join("data"));
+    let plugins = Plugins::load(data, "2.1.0");
+    let view = plugins
+        .load_dev(&root().join("plugins/discord"), Lang::Fr)
+        .unwrap();
+    assert_eq!(view.id, "dev.escouade.discord");
+    assert!(matches!(view.origin, Origin::Dev { .. }));
+    assert!(matches!(view.state, State::Ready), "{:?}", view.state);
+}
+
 #[tokio::test]
 async fn a_plugin_from_a_folder_is_offered_the_store_version_of_its_id() {
     let fake = Fake::start().trusted();
     let (_, store, plugins) = ready(&fake, "fromgit").await;
-    let src = root().join("plugin-examples/high-contrast");
+    // Escouade's own folder is refused as a folder copied (its id dev.escouade.*, ESC-314); a third
+    // party's copy of it, under an id of its own, is the plugin of this test.
+    let own = root().join("plugins/high-contrast");
+    let e = plugins.install_folder(&own, Lang::Fr).unwrap_err();
+    assert!(e.message.contains("dev.escouade.*"), "{}", e.message);
+    let src = temp_dir("fromgit-src").join("high-contrast");
+    std::fs::create_dir_all(&src).unwrap();
+    let mut m: Value =
+        serde_json::from_slice(&std::fs::read(own.join("escouade-plugin.json")).unwrap()).unwrap();
+    m["id"] = json!("dev.exemple.high-contrast");
+    std::fs::write(src.join("escouade-plugin.json"), m.to_string()).unwrap();
     let view = plugins.install_folder(&src, Lang::Fr).unwrap();
     assert_eq!(view.id, "dev.exemple.high-contrast");
     let offer = view.in_store.expect("the store has this id");

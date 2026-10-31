@@ -36,7 +36,7 @@ La ligne `$schema` donne l’autocomplétion et la vérification dans VS Code et
 
 | Champ | Obligatoire | Ce qu’il dit |
 | --- | --- | --- |
-| `id` | oui | L’identifiant unique du plugin, en nom de domaine inversé et en minuscules : `dev.exemple.slack`. Les ids `dev.escouade.*` sont réservés aux plugins d’Escouade. |
+| `id` | oui | L’identifiant unique du plugin, en nom de domaine inversé et en minuscules : `dev.exemple.slack`. Les ids `dev.escouade.*` sont réservés aux plugins d’Escouade : le store ne les accepte que de son dépôt (`plugins/<dossier>/`), l’app ne les installe que signés par le store. |
 | `name` | oui | Son nom : un texte, ou un texte par langue. |
 | `version` | oui | Sa version, en trois nombres : `1.2.0`, `0.3.0-beta.1`. La même que l’étiquette git de la version. |
 | `description` | non | Ce qu’il fait, en une phrase : un texte, ou un texte par langue. |

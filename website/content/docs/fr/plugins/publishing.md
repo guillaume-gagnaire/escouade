@@ -30,7 +30,7 @@ Chaque version publiée a son fichier `version.json` : l’identifiant, le numé
 | --- | --- |
 | Manifeste | `escouade-plugin.json` à la racine du plugin (celle du dépôt, ou son dossier), valide au schéma : les mêmes règles que dans l’app ([le manifeste](plugins/manifest)). |
 | Version | `version` égale à l’étiquette (le `v` est facultatif ; dans un dossier, `<dossier>/v1.2.3`), plus grande que la dernière publiée. |
-| Identifiant | Libre ou déjà à toi, publié depuis ce dépôt et ce dossier, ou depuis une nouvelle source à toi (notée, la version revue) ; `dev.escouade.*` est réservé. Un nom trop proche de celui d’un autre plugin passe d’abord par une revue manuelle. |
+| Identifiant | Libre ou déjà à toi, publié depuis ce dépôt et ce dossier, ou depuis une nouvelle source à toi (notée, la version revue) ; `dev.escouade.*` est réservé aux plugins d’Escouade, soumis depuis son propre dépôt. Un nom trop proche de celui d’un autre plugin passe d’abord par une revue manuelle. |
 | Dépôt | `repository` égal au dépôt soumis, `https://github.com/<propriétaire>/<dépôt>`, ou à son dossier, `…/tree/<ref>/<dossier>`. |
 | Licence | Une licence libre (reconnue par l’OSI ou la FSF) en identifiant SPDX, la même que celle que GitHub reconnaît dans le fichier `LICENSE` ou `COPYING`. |
 | README | `README.md` (ou `README.fr.md` et `README.en.md`) à la racine, non vide : c’est la page du plugin. Dans un dossier, celui de la racine du dépôt le remplace s’il n’en a pas ; de même pour la licence. |

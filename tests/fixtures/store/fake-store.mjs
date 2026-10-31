@@ -7,14 +7,17 @@
 // Run alone: `node tests/fixtures/store/fake-store.mjs` (FAKE_STORE_PORT, any free port by default) prints one line of
 // JSON, { url, key }, then serves until killed. The Rust tests and the end-to-end tests start it so.
 //
-// What it holds (examples of PLG-10, plugin-examples/, under ids of their own):
+// What it holds (the files of Escouade's own plugins, plugins/<id>/; under a third party's id but one, ESC-314):
 // - dev.exemple.high-contrast: 1.0.0 verified, 1.1.0 not (an update that is not verified);
 // - dev.exemple.team-rules: 1.0.0 verified, a program that decides permissions;
 // - dev.exemple.slack: 1.0.0 not verified, a program and its binary for each system;
 // - dev.exemple.later: 2.0.0 for an Escouade to come (min 99.0.0), 1.0.0 for this one (the last compatible is chosen);
 // - dev.exemple.tampered: its archive changed after its version.json (refused);
 // - dev.exemple.forged: said verified, its signature made for another version (refused);
-// - dev.exemple.in-folder: from the folder plugins/discord-webhook of a repository with several (ESC-313);
+// - dev.exemple.in-folder: from the folder plugins/discord of a repository with several (ESC-313);
+// - dev.escouade.discord: 1.1.0 verified, from plugins/discord of the app's repository (Escouade's own hand, ESC-314),
+//   installed as any plugin of the store (origin store, never the app's builtin);
+// - dev.escouade.slack: 1.1.0 not signed yet (the app refuses it: Escouade's own installs signed only);
 // - dev.exemple.climbs: its version.json names a folder that climbs out (refused).
 // Its controls: POST /_fake/revocations { entries, serial? } signs and serves the next list (the mirror too);
 // POST /_fake/down { down } makes /api/v1 answer 503; GET /_fake/state says the installs counted and the requests.
@@ -38,9 +41,12 @@ const canonical = (v) =>
           .join(',')}}`
       : JSON.stringify(v);
 
+/** The repository of a version: its own, else the third party's (one per plugin, or one with several in folders). */
+const repoOf = (s) => s.repo ?? (s.path ? 'escouade-dev/plugins' : `escouade-dev/plugin-${s.from}`);
+
 const PLATFORMS = ['windows-x64', 'windows-arm64', 'macos-x64', 'macos-arm64', 'linux-x64', 'linux-arm64'];
 
-/** An example's files (plugin-examples/, as their repository would hold them), its manifest changed by `over`. */
+/** A plugin's files (plugins/<name>/, as a repository would hold them), its manifest changed by `over`. */
 function example(name, over = {}) {
   const out = exampleFiles(name);
   const m = { ...JSON.parse(String(out['escouade-plugin.json'])), ...over };
@@ -86,11 +92,32 @@ const SPEC = [
   {
     id: 'dev.exemple.in-folder',
     v: '1.0.0',
-    from: 'discord-webhook',
+    from: 'discord',
     cat: ['notifications'],
     kw: [],
     name: 'En dossier',
-    path: 'plugins/discord-webhook',
+    path: 'plugins/discord',
+  },
+  // ESC-314: Escouade's own hand, from plugins/<id>/ of the app's repository; signed, then not signed yet.
+  {
+    id: 'dev.escouade.discord',
+    v: '1.1.0',
+    from: 'discord',
+    verified: true,
+    cat: ['notifications'],
+    kw: ['discord', 'notifications'],
+    installs: 87,
+    path: 'plugins/discord',
+    repo: 'guillaume-gagnaire/escouade',
+  },
+  {
+    id: 'dev.escouade.slack',
+    v: '1.1.0',
+    from: 'slack',
+    cat: ['notifications'],
+    kw: ['slack', 'notifications'],
+    path: 'plugins/slack',
+    repo: 'guillaume-gagnaire/escouade',
   },
   { id: 'dev.exemple.climbs', v: '1.0.0', from: 'high-contrast', cat: ['themes'], kw: [], name: 'Dossier qui remonte', path: '../escape' },
 ];
@@ -101,7 +128,14 @@ export function build(key) {
   const plugins = new Map();
   SPEC.forEach((s, n) => {
     const commit = sha256(String(n)).slice(0, 40);
-    const over = { id: s.id, version: s.v, ...(s.name ? { name: s.name } : {}), ...(s.min ? { escouade: { api: '1', min: s.min } } : {}) };
+    // A third party's copy has no repository of the app's; Escouade's own keeps its manifest's.
+    const over = {
+      id: s.id,
+      version: s.v,
+      ...(s.repo ? {} : { repository: undefined }),
+      ...(s.name ? { name: s.name } : {}),
+      ...(s.min ? { escouade: { api: '1', min: s.min } } : {}),
+    };
     const f = example(s.from, over);
     if (s.icon) {
       f['icon.png'] = png(256, 256);
@@ -126,7 +160,7 @@ export function build(key) {
       format: 1,
       id: s.id,
       version: s.v,
-      repository: s.path ? 'https://github.com/escouade-dev/plugins' : `https://github.com/escouade-dev/plugin-${s.from}`,
+      repository: `https://github.com/${repoOf(s)}`,
       ...(s.path ? { path: s.path } : {}),
       tag: s.path ? `${s.path}/v${s.v}` : `v${s.v}`,
       commit,
@@ -147,8 +181,8 @@ export function build(key) {
         id: s.id,
         name: m.name,
         description: m.description ?? '',
-        author: 'escouade-dev',
-        repository: `https://github.com/escouade-dev/plugin-${s.from}`,
+        author: repoOf(s).split('/')[0],
+        repository: `https://github.com/${repoOf(s)}`,
         license: 'MIT',
         categories: s.cat,
         keywords: s.kw,

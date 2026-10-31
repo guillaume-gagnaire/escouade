@@ -870,25 +870,25 @@ async fn content(bodies: &mut tokio::sync::mpsc::UnboundedReceiver<String>) -> S
         .to_string()
 }
 
-/// The Discord example of PLG-10 (plugin-examples/discord-webhook, ESC-182), its manifest as the
+/// Escouade's own Discord plugin (plugins/discord, ESC-182 and ESC-314), its manifest as the
 /// repository holds it but for its host: the fake server stands for discord.com.
 #[tokio::test(flavor = "multi_thread")]
 async fn the_discord_example_posts_the_tickets_to_test_and_the_agents_waiting() {
     let h = harness("facts-discord-example");
     let (url, mut bodies) = fake_server().await;
     let (p, _) = h.project(false).await;
-    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../plugin-examples/discord-webhook");
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../plugins/discord");
     let mut manifest: Value =
         serde_json::from_slice(&std::fs::read(src.join("escouade-plugin.json")).unwrap()).unwrap();
     assert_eq!(manifest["permissions"]["network"], json!(["discord.com"]));
     manifest["permissions"]["network"] = json!(["127.0.0.1"]);
-    let dir = h.dir.join("discord-webhook");
+    let dir = h.dir.join("discord");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("escouade-plugin.json"), manifest.to_string()).unwrap();
     h.core.plugins.load_dev(&dir, Lang::En).unwrap();
     h.core
         .secrets
-        .set(&secret_name("dev.exemple.discord", "webhook"), &url)
+        .set(&secret_name("dev.escouade.discord", "webhook"), &url)
         .unwrap();
     // A ticket moved to review; its other moves and its agent at work say nothing.
     let (t, _) = reviewed(&h, &p.id, "Le panier [ok]").await;

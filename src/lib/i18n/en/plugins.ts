@@ -168,6 +168,7 @@ export default defineZone('plugins', {
     folder: 'Folder',
     git: 'Git repository',
     dev: 'Folder in development',
+    builtin: 'Shipped with Escouade',
     devNote: '{path} · read again at each change',
     from: 'Comes from',
     version: 'Version',

@@ -8,6 +8,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- Les plugins Contraste élevé, Discord, Slack et Règles de l’équipe sont des plugins d’Escouade, sur le store sous `dev.escouade.*` et tenus dans le dépôt de l’app ; seul ce dépôt peut publier ces identifiants. Une version installée sous l’ancien identifiant `dev.exemple.*` se remplace depuis la vue Plugins.
 - La page de l’app que l’agent vient de développer s’ouvre toute seule dans Escouade quand « ▶ Tester » est prêt, dans la vue « Page » de l’agent ou dans une fenêtre « Pages » à part, avec ses outils de développement (F12) et trois largeurs : pleine, tablette et mobile. Elle tourne à part, sans accès à Escouade ni à tes cookies ; Réglages › Projets garde le navigateur du système si tu préfères.
 - Dans Réglages › Comptes, le petit carré de chaque pastille « Réservé aux projets » s’allume à la couleur du projet quand le compte le sert, et passe au gris sinon. Merci à @Metalzoid (#19).
 - Un message posté pendant qu’un agent travaille peut encore être modifié ou annulé avant de lui parvenir : il attend quelques secondes, ou la fin du tour chez Cursor et OpenCode, et peut aussi partir tout de suite. Merci à @Metalzoid (#18).

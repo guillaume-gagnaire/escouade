@@ -67,7 +67,7 @@ Lis tes règles **avant** la première demande (au démarrage), pas pendant : 50
 
 ```json
 {
-  "id": "dev.exemple.team-rules",
+  "id": "dev.escouade.team-rules",
   "name": { "fr": "Règles de l'équipe", "en": "Team rules" },
   "version": "1.0.0",
   "escouade": { "api": "1", "min": "2.1.0" },

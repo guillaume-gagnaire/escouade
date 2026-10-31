@@ -6,7 +6,7 @@ A **declarative** plugin can give Escouade other colors: values for the interfac
 
 ```json
 {
-  "id": "dev.exemple.high-contrast",
+  "id": "dev.escouade.high-contrast",
   "name": { "fr": "Contraste élevé", "en": "High contrast" },
   "version": "1.0.0",
   "license": "MIT",
@@ -85,4 +85,4 @@ Never `url()`, another function (`image-set()`, `attr()`, `env()`…), quotes, b
 
 ## Testing a theme
 
-`escouade-plugin validate` checks the manifest. To see the theme, install the plugin’s folder in development (Plugins view › “In development”), pick it in Settings › Application and switch from Dark to Light. The “High contrast” example plugin, the manifest above (`plugin-examples/high-contrast` in Escouade’s repository), is a starting point: see [Example plugins](plugins/examples#high-contrast).
+`escouade-plugin validate` checks the manifest. To see the theme, install the plugin’s folder in development (Plugins view › “In development”), pick it in Settings › Application and switch from Dark to Light. The “High contrast” example plugin, the manifest above (`plugins/high-contrast` in Escouade’s repository), is a starting point: see [Example plugins](plugins/examples#high-contrast).

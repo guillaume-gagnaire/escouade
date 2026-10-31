@@ -1,7 +1,8 @@
 // A fake store and a fake GitHub for the local review (scripts/plugin-review/, docs/STORE.md §4.2): the app's API of
 // the store (catalog.json, version.json, the archives and the binaries, as STORE-6 serves them) and the tags of
-// GitHub's API, on one port. It holds PLG-10's examples (plugin-examples/, a 1.0.0 verified and a
-// 1.1.0 of Slack that asks for more), a plugin booby-trapped on purpose, and a version whose archive was changed after
+// GitHub's API, on one port. It holds the files of Escouade's own plugins (plugins/<id>/ of its repository, ESC-314):
+// dev.escouade.discord from its folder of the app's repository, as the chief reviews it, and the others under a third
+// party's id at the root of a repository of their own (a 1.0.0 verified and a 1.1.0 of Slack that asks for more), a plugin booby-trapped on purpose, and a version whose archive was changed after
 // its fingerprint. Run alone (`node tests/fake/review-store.mjs`, FAKE_REVIEW_STORE_PORT), it serves them for a trial
 // of `npm run plugin-review` (ESCOUADE_STORE_URL, ESCOUADE_REVIEW_GITHUB_API). Nothing here is ever run: bytes.
 import { createHash } from 'node:crypto';
@@ -23,10 +24,13 @@ const canonical = (v) =>
           .join(',')}}`
       : JSON.stringify(v);
 
-const EXAMPLES = fileURLToPath(new URL('../../../plugin-examples/', import.meta.url));
+const EXAMPLES = fileURLToPath(new URL('../../../plugins/', import.meta.url));
 
-/** The files of an example of PLG-10, as its repository holds them (without what npm installs or packs). */
-export function exampleFiles(name) {
+/**
+ * The files of a plugin of plugins/<name>/, as its repository holds them (without what npm installs or packs); `over`
+ * changes its manifest: a third party's id in place of dev.escouade.*, which only the app's repository takes.
+ */
+export function exampleFiles(name, over = {}) {
   const root = join(EXAMPLES, name);
   const out = { 'README.md': `# ${name}\n\nUn exemple de plugin.\n`, LICENSE: MIT };
   const walk = (dir) => {
@@ -38,6 +42,10 @@ export function exampleFiles(name) {
     }
   };
   walk(root);
+  if (Object.keys(over).length) {
+    const m = { ...JSON.parse(String(out['escouade-plugin.json'])), ...over };
+    out['escouade-plugin.json'] = Buffer.from(JSON.stringify(m, null, 2));
+  }
   return out;
 }
 
@@ -92,18 +100,27 @@ export const TRAPPED = {
 };
 const TRAPPED_RAW = { '../../escape.txt': 'out of the folder', '/etc/evil': 'absolute' };
 
+/** A third party's manifest for a copy of plugins/<name>/: its id of old, no repository of the app's. */
+const THIRD = (name) => ({ id: `dev.exemple.${name}`, repository: undefined });
+
 const COMMIT = (n) => createHash('sha1').update(String(n)).digest('hex');
 
 /** The versions the fake store holds, by plugin; each one's archive, version.json and binaries as the store keeps them. */
 export function buildStore() {
   const spec = [
-    { id: 'dev.exemple.slack', repo: 'escouade-dev/plugin-slack', version: '1.0.0', files: exampleFiles('slack'), verified: true },
+    {
+      id: 'dev.exemple.slack',
+      repo: 'escouade-dev/plugin-slack',
+      version: '1.0.0',
+      files: exampleFiles('slack', THIRD('slack')),
+      verified: true,
+    },
     {
       id: 'dev.exemple.slack',
       repo: 'escouade-dev/plugin-slack',
       version: '1.1.0',
       files: (() => {
-        const f = exampleFiles('slack');
+        const f = exampleFiles('slack', THIRD('slack'));
         const m = JSON.parse(f['escouade-plugin.json'].toString());
         m.version = '1.1.0';
         m.permissions.network.push('api.slack.com');
@@ -114,18 +131,35 @@ export function buildStore() {
         return f;
       })(),
     },
-    { id: 'dev.exemple.team-rules', repo: 'escouade-dev/plugin-team-rules', version: '1.0.0', files: exampleFiles('team-rules') },
-    { id: 'dev.exemple.high-contrast', repo: 'escouade-dev/plugin-high-contrast', version: '1.0.0', files: exampleFiles('high-contrast') },
-    // A plugin in a folder of a repository with several (ESC-313): its archive holds that folder alone.
     {
-      id: 'dev.exemple.discord-webhook',
-      repo: 'escouade-dev/plugins',
-      path: 'plugins/discord-webhook',
+      id: 'dev.exemple.team-rules',
+      repo: 'escouade-dev/plugin-team-rules',
       version: '1.0.0',
-      files: exampleFiles('discord-webhook'),
+      files: exampleFiles('team-rules', THIRD('team-rules')),
+    },
+    {
+      id: 'dev.exemple.high-contrast',
+      repo: 'escouade-dev/plugin-high-contrast',
+      version: '1.0.0',
+      files: exampleFiles('high-contrast', THIRD('high-contrast')),
+    },
+    // A plugin of Escouade's own hand in a folder of the app's repository, which holds several (ESC-313, ESC-314): its
+    // archive holds that folder alone.
+    {
+      id: 'dev.escouade.discord',
+      repo: 'guillaume-gagnaire/escouade',
+      path: 'plugins/discord',
+      version: '1.1.0',
+      files: exampleFiles('discord'),
     },
     // A version.json whose folder climbs out of the repository: the review stops before reading it.
-    { id: 'io.github.q7x.climb', repo: 'q7x/climb', path: '../escape', version: '0.0.1', files: exampleFiles('high-contrast') },
+    {
+      id: 'io.github.q7x.climb',
+      repo: 'q7x/climb',
+      path: '../escape',
+      version: '0.0.1',
+      files: exampleFiles('high-contrast', THIRD('high-contrast')),
+    },
     { id: 'io.github.q7x.slak-notify', repo: 'q7x/slak-notify', version: '0.0.1', files: TRAPPED, raw: TRAPPED_RAW, moved: true },
     {
       id: 'io.github.q7x.slak-notify',

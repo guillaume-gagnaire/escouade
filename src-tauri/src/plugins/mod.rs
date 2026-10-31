@@ -76,6 +76,19 @@ pub enum Origin {
     },
 }
 
+/// What a plugin of `origin` may take of Escouade's own (ESC-314). The ids `dev.escouade.*` go to
+/// a version of the store signed for it (the store takes them from the app's repository alone) and
+/// to a folder in development; never to a folder copied or a repository cloned, which anyone may
+/// hand out. None of them takes the app's programs: that is a plugin the app gives (INT-4's origin
+/// `builtin`, read from the app's own files). The two are told apart by their origin, never by
+/// their id: a `dev.escouade.*` of the store is `Origin::Store`, kept in `<data>/plugins/<id>`.
+pub(crate) fn hand_of(origin: &Origin) -> manifest::Hand {
+    match origin {
+        Origin::Store { verified: true, .. } | Origin::Dev { .. } => manifest::Hand::First,
+        _ => manifest::Hand::Third,
+    }
+}
+
 /// A plugin of the list (`plugins.json`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -575,8 +588,9 @@ impl Plugins {
 
     fn read(&self, installed: Installed) -> Loaded {
         let folder = self.folder_of(&installed);
+        let hand = hand_of(&installed.origin);
         let read = std::fs::read_to_string(folder.join(manifest::FILE))
-            .map(|t| manifest::read_in(&t, false, &folder))
+            .map(|t| manifest::read_in(&t, hand, &folder))
             .map_err(|_| Fault::Missing);
         let changed = read.is_ok()
             && !installed.digest.is_empty()
@@ -794,8 +808,8 @@ impl Plugins {
             .unwrap_or_default()
     }
 
-    /// The manifest of the folder `dir`, when it holds.
-    fn checked(dir: &Path, lang: Lang) -> Result<Manifest, Refusal> {
+    /// The manifest of the folder `dir`, when it holds for a plugin of `hand`.
+    fn checked(dir: &Path, hand: manifest::Hand, lang: Lang) -> Result<Manifest, Refusal> {
         let text = std::fs::read_to_string(dir.join(manifest::FILE)).map_err(|_| {
             Refusal::other(tr_in!(
                 lang,
@@ -805,7 +819,7 @@ impl Plugins {
                 dir.display()
             ))
         })?;
-        manifest::read_in(&text, false, dir)
+        manifest::read_in(&text, hand, dir)
             .manifest
             .map_err(|p| Refusal::invalid(lang, &p))
     }
@@ -840,7 +854,7 @@ impl Plugins {
     /// installed: its copy is set aside, pinned by the SHA-256 of its files, until `install` or
     /// `discard`.
     pub fn inspect_folder(&self, src: &Path, lang: Lang) -> Result<Preview, Refusal> {
-        let m = Self::checked(src, lang)?;
+        let m = Self::checked(src, manifest::Hand::Third, lang)?;
         let (dir, digest) = self.set_aside(src, lang)?;
         let path = std::path::absolute(src)
             .map(|p| p.display().to_string())
@@ -912,7 +926,7 @@ impl Plugins {
             let commit = crate::git::text(&clone_s, &["rev-parse", "HEAD"])
                 .await
                 .map_err(|e| Refusal::other(e.to_string()))?;
-            let m = Self::checked(&clone, lang)?;
+            let m = Self::checked(&clone, manifest::Hand::Third, lang)?;
             let (dir, digest) = self.set_aside(&clone, lang)?;
             Ok(self.stage(
                 Installed {
@@ -939,7 +953,7 @@ impl Plugins {
 
     /// What loading the folder in development `dir` in place would do: nothing is copied.
     pub fn inspect_dev(&self, dir: &Path, lang: Lang) -> Result<Preview, Refusal> {
-        let m = Self::checked(dir, lang)?;
+        let m = Self::checked(dir, manifest::Hand::First, lang)?;
         let path = std::path::absolute(dir)
             .map(|p| p.display().to_string())
             .unwrap_or_else(|_| dir.display().to_string());
@@ -1229,7 +1243,7 @@ impl Plugins {
                 Origin::Folder { path } => {
                     std::fs::read_to_string(Path::new(path).join(manifest::FILE))
                         .ok()
-                        .and_then(|t| manifest::read(&t, false).manifest.ok())
+                        .and_then(|t| manifest::read(&t, manifest::Hand::Third).manifest.ok())
                         .filter(|m| {
                             m.id == i.id
                                 && manifest::version(&m.version) > manifest::version(&version)
@@ -1410,7 +1424,24 @@ impl Plugins {
                 }
                 std::fs::write(&to, bytes).map_err(fail)?;
             }
-            let m = Self::checked(&incoming, lang)?;
+            // A plugin of Escouade's own hand (`dev.escouade.*`, ESC-314) comes from the store
+            // signed alone: the store takes it from the app's repository only, then signs it.
+            let signed = f.minisig.is_some();
+            if f.id.starts_with(manifest::RESERVED_PREFIX) && !signed {
+                return Err(Refusal::other(tr_in!(
+                    lang,
+                    "{} v{} est un plugin d'Escouade (`dev.escouade.*`) que le store n'a pas encore signé : il ne s'installe que signé.",
+                    "{} v{} is a plugin of Escouade's own (`dev.escouade.*`) the store has not signed yet: it installs signed only.",
+                    f.id,
+                    f.version
+                )));
+            }
+            let hand = if signed {
+                manifest::Hand::First
+            } else {
+                manifest::Hand::Third
+            };
+            let m = Self::checked(&incoming, hand, lang)?;
             if m.id != f.id || m.version != f.version {
                 return Err(Refusal::other(tr_in!(
                     lang,

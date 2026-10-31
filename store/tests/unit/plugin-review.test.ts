@@ -100,6 +100,8 @@ describe('the leads', () => {
       'host',
     ]);
     expect(findLeads(files(exampleFiles('high-contrast')), [])).toEqual([]);
+    // Its id dev.escouade.* is no folder of Escouade's (ESC-314), the folder .escouade/ still is.
+    expect(findLeads(new Map([['a.mjs', Buffer.from("readFileSync('.escouade/x')")]]), []).map((l) => l.kind)).toContain('secrets');
   });
 
   it('read a binary as a lead, never as text, and skip images and prose', () => {
@@ -416,16 +418,16 @@ describe('the review', () => {
   });
 
   it('reviews a plugin in a folder: its archive that folder alone, the folder named in the report and the summaries (ESC-313)', async () => {
-    const done = await review(options('dev.exemple.discord-webhook@1.0.0'));
+    const done = await review(options('dev.escouade.discord@1.1.0'));
     expect(done.code).toBe(0);
-    expect(done.data.path).toBe('plugins/discord-webhook');
+    expect(done.data.path).toBe('plugins/discord');
     expect(done.data.tagCheck).toEqual({ state: 'same', commit: done.data.commit });
     expect(readdirSync(done.data.folder!)).toContain('escouade-plugin.json');
-    expect(readFileSync(done.report, 'utf8')).toContain('- Dossier : `plugins/discord-webhook` (l’archive ne tient que lui)');
+    expect(readFileSync(done.report, 'utf8')).toContain('- Dossier : `plugins/discord` (l’archive ne tient que lui)');
     expect(readFileSync(done.summary, 'utf8')).toContain(
-      '- Dossier relu : plugins/discord-webhook, dans https://github.com/escouade-dev/plugins',
+      '- Dossier relu : plugins/discord, dans https://github.com/guillaume-gagnaire/escouade',
     );
-    expect(renderPublicEn(done.data)).toContain('- Folder reviewed: plugins/discord-webhook, in https://github.com/escouade-dev/plugins');
+    expect(renderPublicEn(done.data)).toContain('- Folder reviewed: plugins/discord, in https://github.com/guillaume-gagnaire/escouade');
     // A plugin at the root says so, an old version.json without a folder reads as the root.
     const root = await review(options('dev.exemple.team-rules@1.0.0'));
     expect(root.data.path).toBe('');

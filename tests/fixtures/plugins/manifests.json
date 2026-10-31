@@ -153,6 +153,42 @@
       "ignored": []
     },
     {
+      "name": "a plugin of Escouade's own hand from plugins/<id>/ of its repository (ESC-314): its id, not the app's programs",
+      "firstParty": true,
+      "manifest": {
+        "id": "dev.escouade.slack",
+        "name": "Slack",
+        "version": "1.1.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.1.0"
+        },
+        "run": {
+          "command": "{escouade}/escouade-plugins"
+        }
+      },
+      "errors": ["run.command reserved"],
+      "ignored": []
+    },
+    {
+      "name": "the same with its own program: it holds",
+      "firstParty": true,
+      "manifest": {
+        "id": "dev.escouade.slack",
+        "name": "Slack",
+        "version": "1.1.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.1.0"
+        },
+        "run": {
+          "command": "slack"
+        }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
       "name": "a plugin of an API to come is read, and loads disabled",
       "manifest": {
         "id": "dev.exemple.futur",

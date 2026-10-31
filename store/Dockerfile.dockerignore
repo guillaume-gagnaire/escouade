@@ -3,10 +3,13 @@
 !store
 !website/app/assets/main.css
 !schemas
-!plugin-examples
-plugin-examples/*/node_modules
-plugin-examples/*/packs
-plugin-examples/*/package-lock.json
+# The app's README and LICENSE: the root's, standing in for a plugin folder's in the store's trial (tests/unit/trial.test.ts).
+!README.md
+!LICENSE
+!plugins
+plugins/*/node_modules
+plugins/*/packs
+plugins/*/package-lock.json
 store/node_modules
 store/.nuxt
 store/.output

@@ -458,6 +458,48 @@ describe.skipIf(!url)('the submission', () => {
     expect(await checkVersion(db, deps, below.check!)).toBe('rejected');
   });
 
+  it('takes dev.escouade.* from the app’s repository alone, by its GitHub id, and refuses it to a fork (ESC-314)', async () => {
+    const APP = 'guillaume-gagnaire/escouade';
+    const FORK = 'sroux/escouade';
+    gh.add(APP, 90);
+    gh.add(FORK, 91);
+    sam = await signInAs('sroux', 4242, [
+      { id: 90, full_name: APP, private: false },
+      { id: 91, full_name: FORK, private: false },
+    ]);
+    /** The repository's files, its plugin in plugins/ntfy under Escouade's id, its LICENSE MIT by its SPDX line. */
+    const files = (repo: string, version = '0.3.0') =>
+      Object.fromEntries(
+        Object.entries(
+          pluginFiles(repo, {
+            manifest: { id: 'dev.escouade.ntfy', version, repository: `https://github.com/${repo}/tree/main/plugins/ntfy` },
+          }),
+        ).map(([k, v]) => [`plugins/ntfy/${k}`, k === 'LICENSE' ? `SPDX-License-Identifier: MIT\n\n${v}` : v]),
+      );
+    gh.push(APP, 'plugins/ntfy/v0.3.0', files(APP));
+    const own = await submit(sam, APP, 'plugins/ntfy/v0.3.0', 'plugins/ntfy');
+    expect(own.state).toBe('ready');
+    const [v] = await q('select plugin_id, checks from versions where id = $1', [own.id]);
+    expect(v.plugin_id).toBe('dev.escouade.ntfy');
+    expect(v.checks.map((c: { status: string }) => c.status)).toEqual(Array(10).fill('pass'));
+    // Published, it is a plugin of the store in the catalogue: not one the app gives, hidden behind builtin.ts.
+    await publishVersion(db, sam, own.id!, { categories: ['notifications'] });
+    expect((await catalog(db)).find((e) => e.id === 'dev.escouade.ntfy')).toMatchObject({ builtin: false });
+
+    gh.push(FORK, 'plugins/ntfy/v0.3.0', files(FORK));
+    const fork = await submit(sam, FORK, 'plugins/ntfy/v0.3.0', 'plugins/ntfy');
+    expect(fork.state).toBe('rejected');
+    const [w] = await q('select checks from versions where id = $1', [fork.id]);
+    expect(w.checks.find((c: { key: string }) => c.key === 'id')).toMatchObject({
+      status: 'fail',
+      detail: { en: 'dev.escouade.ntfy is reserved' },
+    });
+    // Named by STORE_FIRST_PARTY_REPO, the app's repository may be another: compared by its id all the same.
+    deps = { ...deps, env: { STORE_FIRST_PARTY_REPO: FORK } };
+    gh.push(FORK, 'plugins/ntfy/v0.3.1', files(FORK, '0.3.1'));
+    expect((await submit(sam, FORK, 'plugins/ntfy/v0.3.1', 'plugins/ntfy')).state).toBe('ready');
+  });
+
   it('two plugins of one repository: each from its folder and its tag, its archive that folder alone (ESC-313)', async () => {
     const MONO = 'sroux/escouade-plugins';
     gh.add(MONO, 80);

@@ -71,7 +71,10 @@ const beyond = (v, max) => compare(numbers(v).slice(0, max.split('.').length), n
 
 /**
  * Checks a manifest's value, field by field. `options.builtin`: a plugin the app itself gives, which may take the ids
- * and the programs of Escouade's own (never true for a submitted plugin). `options.file`: the bytes of a file of the
+ * and the programs of Escouade's own (never true for a submitted plugin). `options.firstParty`: a plugin of Escouade's own
+ * hand that is not given by the app (`plugins/<id>/` of its repository, ESC-314), which may take the ids `dev.escouade.*`
+ * and nothing else of the app's; the store grants it to its repository alone, the app to a version signed by the store
+ * and to a folder in development. `options.file`: the bytes of a file of the
  * plugin's folder by its path (null when it is none), to read the icon's; without it, its file is not looked at.
  * @returns {{ ok: boolean, errors: { path: string, code: string, expected?: string }[], ignored: string[] }}
  */
@@ -106,6 +109,7 @@ export function hostCovered(host, network) {
 
 export function validate(manifest, options = {}) {
   const builtin = !!options.builtin;
+  const firstParty = builtin || !!options.firstParty;
   const errors = [];
   const ignored = [];
   const problem = (path, code, expected) => errors.push(expected ? { path, code, expected } : { path, code });
@@ -171,7 +175,7 @@ export function validate(manifest, options = {}) {
     const s = string(v, p);
     if (s === null) return;
     if (!isId(s)) problem(p, 'id');
-    else if (s.startsWith(RESERVED_PREFIX) && !builtin) problem(p, 'reserved');
+    else if (s.startsWith(RESERVED_PREFIX) && !firstParty) problem(p, 'reserved');
   });
   required(o, 'name', 'name', text);
   required(o, 'version', 'version', (v, p) => {

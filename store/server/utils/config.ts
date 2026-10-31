@@ -99,6 +99,12 @@ export function admins(env: Env): number[] {
 }
 
 /**
+ * The app's repository (`owner/name`), the only one whose submissions may take the ids `dev.escouade.*` (ESC-314,
+ * decision 21): its plugins of Escouade's own hand, in `plugins/<id>/`. Compared by its GitHub id, never by its name.
+ */
+export const firstPartyRepo = (env: Env) => (env.STORE_FIRST_PARTY_REPO ?? '').trim() || 'guillaume-gagnaire/escouade';
+
+/**
  * Where the public keys of the store's signatures are read (`*.pub`, the ones the app embeds): `store/keys/` of the
  * checkout, `/app/keys` in the image. The private key is never here (docs/STORE.md, §4.5).
  */

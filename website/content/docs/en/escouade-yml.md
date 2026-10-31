@@ -211,15 +211,15 @@ The project’s “Launch” commands (dev servers, watchers), each in its own t
 
 | Key | Type | Values | Missing | Example |
 |---|---|---|---|---|
-| `plugins.recommended` | List of plugins’ ids | the ids of the [store](plugins/installer) (`dev.exemple.slack`) | no plugin proposed | `recommended: [dev.exemple.slack]` |
+| `plugins.recommended` | List of plugins’ ids | the ids of the [store](plugins/installer) (`dev.escouade.slack`) | no plugin proposed | `recommended: [dev.escouade.slack]` |
 | `plugins.<id>` | Settings of the plugin `<id>` | one key by setting it declares: a text, a number, `true` or `false` | its settings of each machine | see below |
 
 ```yaml
 plugins:
   recommended:
-    - dev.exemple.slack
-    - dev.exemple.team-rules
-  dev.exemple.slack:
+    - dev.escouade.slack
+    - dev.escouade.team-rules
+  dev.escouade.slack:
     channel: '#team-api'
 ```
 

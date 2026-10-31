@@ -9,6 +9,7 @@ import { hostCovered, message, validate, validateText, writtenHost } from './plu
 interface Case {
   name: string;
   builtin?: boolean;
+  firstParty?: boolean;
   manifest: unknown;
   files?: Record<string, { png?: [number, number]; size?: number; text?: string }>;
   errors: string[];
@@ -38,7 +39,7 @@ describe('plugin-manifest', () => {
 
   for (const c of cases) {
     it(c.name, () => {
-      const r = validate(c.manifest, { builtin: c.builtin, file: folderOf(c) });
+      const r = validate(c.manifest, { builtin: c.builtin, firstParty: c.firstParty, file: folderOf(c) });
       const errors = r.errors.map((e) => `${e.path} ${e.code}`);
       expect(errors.sort()).toEqual([...c.errors].sort());
       expect(r.ignored.sort()).toEqual([...c.ignored].sort());

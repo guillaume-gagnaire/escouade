@@ -8,6 +8,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### New
 
+- The High contrast, Discord, Slack and Team rules plugins are Escouade’s own, on the store as `dev.escouade.*` and kept in the app’s repository; only that repository can publish these ids. A version installed under the old `dev.exemple.*` id is replaced from the Plugins view.
 - The page of the app the agent has just built opens by itself inside Escouade when “▶ Test” is ready, in the agent’s “Page” view or in a separate “Pages” window, with its developer tools (F12) and three widths: full, tablet and mobile. It runs apart, with no access to Escouade or to your cookies; Settings › Projects keeps the system browser if you prefer.
 - In Settings › Accounts, the small square of each “Reserved for projects” chip lights up in the project’s colour when the account serves it, and turns grey otherwise. Thanks to @Metalzoid (#19).
 - A message posted while an agent works can still be edited or cancelled before it reaches it: it waits a few seconds, or until the end of the turn with Cursor and OpenCode, and can also go at once. Thanks to @Metalzoid (#18).
