@@ -649,7 +649,7 @@ async fn an_account_is_usable_for_a_handover_unless_out_for_its_quota_by_the_pac
     read(window(10.0, 60), window(93.0, 180));
     assert!(!h.core.account_usable("principal"));
     assert_eq!(
-        crate::accounts::standing(&h.core.usage.lock().accounts, "principal", 90, now),
+        crate::accounts::standing(&h.core.usage.lock().accounts, "principal", 90, now, None),
         crate::pace::Standing::Good
     );
 }

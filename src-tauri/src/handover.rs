@@ -580,7 +580,8 @@ impl<R: Runtime> Core<R> {
     /// under « Pause au-delà du quota »).
     fn account_standing(&self, id: &str) -> Standing {
         let threshold = board::quota_threshold(self.settings.read().quota_pause);
-        let usage = self.usage.lock().accounts.clone();
+        // An agent handed over goes with its harness's default model: no model's own quota counts.
+        let usage = accounts::seen_by(&self.usage.lock().accounts, None);
         let hold = self.hold.lock().clone();
         let now = self.pause_now();
         let usable = usage
@@ -590,7 +591,7 @@ impl<R: Runtime> Core<R> {
             && !self.quota_paused().contains_key(id)
             && board::account_pause(&usage, id, threshold, &hold, now).is_none();
         match usable {
-            true => accounts::standing(&usage, id, threshold, now),
+            true => accounts::standing(&usage, id, threshold, now, None),
             false => Standing::Out,
         }
     }
@@ -714,10 +715,10 @@ impl<R: Runtime> Core<R> {
         let account = accounts::get(&self.settings.read(), &account).id;
         let threshold = board::quota_threshold(self.settings.read().quota_pause);
         let now = self.pause_now();
+        let family = self.agent_family(id);
         let u = self.usage.lock();
         let meters = &u.account(&account)?.meters;
-        meters
-            .iter()
+        pace::for_model(meters, family.as_deref())
             .filter(|m| pace::judge_meter(m, threshold, now).standing == Standing::Out)
             .filter_map(|m| m.resets_at)
             .max()

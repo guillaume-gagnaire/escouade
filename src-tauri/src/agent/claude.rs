@@ -19,6 +19,12 @@ impl AgentRt {
                 let info = &f["rate_limit_info"];
                 if info["status"] == "rejected" {
                     self.limit_resets_at = info["resetsAt"].as_i64().map(|s| s * 1000);
+                    // A model's own window (`seven_day_opus`, `seven_day_overage_included`: Fable's),
+                    // not the account's (ESC-312): it holds that model's tickets alone.
+                    let scoped = info["rateLimitType"]
+                        .as_str()
+                        .is_some_and(|t| t.starts_with("seven_day_"));
+                    self.meta.limit_model = scoped.then(|| self.model_in_use());
                 }
                 fx.rate = Some(parse_rate_event(info));
                 fx.overage = Some(info["isUsingOverage"].as_bool().unwrap_or(false));
@@ -1032,6 +1038,8 @@ impl AgentRt {
     }
 }
 
+/// The windows a `rate_limit_event` tells (`unifiedWindows`, utilization 0-1, resetsAt in seconds):
+/// some of the account's, merged into those last read (`usage::Reading::Windows`).
 fn parse_rate_event(info: &Value) -> Vec<crate::model::QuotaMeter> {
     let w = &info["unifiedWindows"];
     let parse = |k: &str| {
@@ -1040,7 +1048,16 @@ fn parse_rate_event(info: &Value) -> Vec<crate::model::QuotaMeter> {
             resets_at: v["resetsAt"].as_i64().map(|s| s * 1000),
         })
     };
-    crate::model::claude_meters(parse("five_hour"), parse("seven_day"))
+    let mut meters = crate::model::claude_meters(parse("five_hour"), parse("seven_day"));
+    // A model's own week (Fable's), told without the model's name: `merge_meters` names it.
+    if let Some(w) = parse("seven_day_overage_included") {
+        meters.push(crate::model::QuotaMeter::of_model(
+            crate::model::WEEK,
+            w,
+            crate::model::MODEL_UNNAMED,
+        ));
+    }
+    meters
 }
 
 /// A text of the agent once written whole (its passage to be read aloud is kept apart by
