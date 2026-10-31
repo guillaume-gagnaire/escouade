@@ -73,16 +73,6 @@
   {/each}
 </dl>
 {#if !form.project}
-  <!-- « Indexer le code » (ESC-254): offered at the adding, as « Index du code sur tous les projets » says (ESC-293). -->
-  <div class="agent index" data-wizard-code-index>
-    <div class="tx">
-      <span class="tt">{t('codeindex.wizard.title')}</span>
-      <span class="td">{t('codeindex.what')}</span>
-      <span class="td">{t('codeindex.local')}</span>
-      {#if c.private}<span class="td">{t('codeindex.privateNote')}</span>{/if}
-    </div>
-    <Switch label={t('codeindex.wizard.title')} bind:on={form.codeIndex} />
-  </div>
   <div class="agent">
     <div class="tx">
       <span class="tt">{t('wizard.summary.firstAgent')}</span>

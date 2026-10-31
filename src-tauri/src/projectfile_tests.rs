@@ -1495,3 +1495,33 @@ async fn a_project_that_proposes_plugins_says_so_at_its_opening_and_installs_not
     assert!(none.is_empty());
     assert!(h.core.project_plugin("gone", "dev.exemple.slack").is_none());
 }
+
+/// The index of the code's symbols is gone (ESC-310): a file that still sets it is read all the
+/// same, the key left out without a warning, and no file written sets it.
+#[test]
+fn a_file_with_the_key_of_the_retired_index_is_read_without_a_warning() {
+    for text in [
+        "version: 1\ncode_index: true\nworktrees:\n  dir: wt\n",
+        "version: 1\ncodeIndex:\n  enabled: true\nworktrees:\n  dir: wt\n",
+    ] {
+        let r = read(text);
+        assert_eq!(r.values["worktrees.dir"], json!("wt"));
+        assert_eq!(r.values.len(), 1);
+        assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    }
+    assert!(pf::KEYS
+        .iter()
+        .all(|k| !pf::RETIRED.iter().any(|r| k.path.starts_with(r))));
+    let schema = pf::schema().to_string();
+    assert!(!schema.contains("code_index") && !schema.contains("codeIndex"));
+}
+
+#[test]
+fn writing_the_file_again_takes_the_key_of_the_retired_index_away() {
+    let existing = "version: 1\n# ours\ncode_index: true\nworktrees:\n  dir: wt\n";
+    let out = pf::write(Some(existing), &[("worktrees.per_agent", json!(true))]).unwrap();
+    assert!(!out.contains("code_index"), "{out}");
+    assert!(out.contains("# ours") && out.contains("dir: wt") && out.contains("per_agent: true"));
+    let all = pf::export_values(&project());
+    assert!(all.iter().all(|(k, _)| !k.contains("index")));
+}

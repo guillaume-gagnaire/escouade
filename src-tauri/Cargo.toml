@@ -91,18 +91,6 @@ hound = "3.5"
 # ONNX Runtime, turns into sound.
 espeak-ng = { version = "0.2", default-features = false, features = ["bundled-data-fr", "bundled-data-en"] }
 yaml-edit = "0.3"
-# The code index (`codeindex`): tree-sitter cuts the code into symbols and links, a grammar for each language.
-tree-sitter = "0.27"
-tree-sitter-rust = "0.24"
-tree-sitter-typescript = "0.23"
-tree-sitter-javascript = "0.25"
-tree-sitter-python = "0.25"
-tree-sitter-go = "0.25"
-tree-sitter-java = "0.23"
-tree-sitter-c-sharp = "0.23"
-tree-sitter-php = "0.25"
-tree-sitter-md = "0.5"
-tree-sitter-svelte-ng = "1"
 # The text of the documents of the drive (ESC-260), read on the machine: PDF by pdf-extract, Word (.docx) and
 # OpenDocument (.odt) by their XML inside the zip.
 pdf-extract = "0.12"

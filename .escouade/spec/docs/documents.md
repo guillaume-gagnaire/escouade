@@ -2,7 +2,7 @@
 title: "Documents"
 subject: "Docs"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-256","ESC-260"]
+tickets: ["ESC-256","ESC-260","ESC-310"]
 decisions: []
 compared: "2026-10-30T05:36:40+01:00"
 ---
@@ -44,7 +44,7 @@ Le texte tiré est gardé dans le dossier de données d'Escouade (`projects/<id>
 
 ### La recherche
 
-Un document est indexé dès qu'il est déposé, en tâche de fond : son nom, puis son texte (Word et OpenDocument découpés comme du Markdown, PDF comme du texte). Cela se fait avec le modèle de la recherche par le sens, une fois téléchargé (voir *Index du code*). L'index se remet à jour à chaque recherche : un fichier changé est relu, un fichier parti oublié. Sans le modèle, la recherche se fait par les mots.
+Un document est indexé dès qu'il est déposé, en tâche de fond : son nom, puis son texte (Word et OpenDocument découpés comme du Markdown, PDF comme du texte). Cela se fait avec le modèle de la recherche par le sens, une fois téléchargé (voir *Recherche par le sens*). L'index se remet à jour à chaque recherche : un fichier changé est relu, un fichier parti oublié. Sans le modèle, la recherche se fait par les mots.
 
 ### Lu et cité
 

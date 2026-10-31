@@ -157,14 +157,14 @@ pub fn refused_tool(tool: &str) -> bool {
 const DOCS_WRITES: [&str; 3] = ["write_spec_page", "propose_decision", "replace_decision"];
 
 /// Whether a discussion's agent is let use `tool` without asking the user: Escouade's tools that
-/// read (the board, the docs, the memory, the code index) and those that write the docs. Any other
+/// read (the board, the docs, the memory) and those that write the docs. Any other
 /// (a ticket made or started, a message to an agent, the docs shared…) is the user's to allow.
 pub fn allowed_tool(tool: &str) -> bool {
     let Some(name) = tool.strip_prefix("mcp__escouade__") else {
         return false;
     };
     DOCS_WRITES.contains(&name)
-        || ["get_", "list_", "search_", "read_", "index_"]
+        || ["get_", "list_", "search_", "read_"]
             .iter()
             .any(|p| name.starts_with(p))
 }
@@ -173,8 +173,8 @@ pub fn allowed_tool(tool: &str) -> bool {
 pub fn refusal(lang: Lang) -> String {
     tr_in!(
         lang,
-        "Escouade refuse : dans une discussion, tu ne modifies jamais le code ni aucun fichier, et tu ne lances aucune commande. Lis le code par l’index ou en lisant les fichiers ; écris la spec et les décisions par les outils de docs d’Escouade.",
-        "Escouade refuses: in a discussion you never change the code nor any file, and run no command. Read the code through the index or by reading files; write the spec and the decisions through Escouade’s docs tools."
+        "Escouade refuse : dans une discussion, tu ne modifies jamais le code ni aucun fichier, et tu ne lances aucune commande. Lis le code en lisant les fichiers ; écris la spec et les décisions par les outils de docs d’Escouade.",
+        "Escouade refuses: in a discussion you never change the code nor any file, and run no command. Read the code by reading files; write the spec and the decisions through Escouade’s docs tools."
     )
 }
 
@@ -194,8 +194,8 @@ pub fn instructions(lang: Lang, kind: Kind, project: &str) -> String {
     };
     let rules = tr_in!(
         lang,
-        "Tu travailles dans le dossier de la branche des docs. Lis la spec (get_spec_tree, read_spec_page, search_spec), les décisions (list_decisions, read_decision), tous les documents du projet (search_documents, read_document) et le code, par l’index du code quand il est là ou en lisant les fichiers. Tu ne modifies jamais le code ni aucun fichier, et tu ne lances aucune commande : Escouade le refuse. Tu n’écris que les docs, par les outils de docs d’Escouade (project « {project} ») : write_spec_page pour une page (chemin sujet/page, rangée à sa place dans l’arbre), propose_decision ou replace_decision pour une décision. Ce que tu écris ainsi est une proposition : elle s’affiche dans « Ce qui ira dans la spec », et l’utilisateur la verse dans la spec par « Verser dans la spec ». Pose tes questions une à une, avec des choix.",
-        "You work in the folder of the docs branch. Read the spec (get_spec_tree, read_spec_page, search_spec), the decisions (list_decisions, read_decision), all the project’s documents (search_documents, read_document) and the code, through the code index when there is one or by reading files. You never change the code nor any file, and run no command: Escouade refuses it. You only write the docs, through Escouade’s docs tools (project “{project}”): write_spec_page for a page (path subject/page, filed in its place in the tree), propose_decision or replace_decision for a decision. What you write so is a proposal: it shows in “What will go in the spec”, and the user pours it into the spec with “Pour into the spec”. Ask your questions one at a time, with choices."
+        "Tu travailles dans le dossier de la branche des docs. Lis la spec (get_spec_tree, read_spec_page, search_spec), les décisions (list_decisions, read_decision), tous les documents du projet (search_documents, read_document) et le code, en lisant les fichiers. Tu ne modifies jamais le code ni aucun fichier, et tu ne lances aucune commande : Escouade le refuse. Tu n’écris que les docs, par les outils de docs d’Escouade (project « {project} ») : write_spec_page pour une page (chemin sujet/page, rangée à sa place dans l’arbre), propose_decision ou replace_decision pour une décision. Ce que tu écris ainsi est une proposition : elle s’affiche dans « Ce qui ira dans la spec », et l’utilisateur la verse dans la spec par « Verser dans la spec ». Pose tes questions une à une, avec des choix.",
+        "You work in the folder of the docs branch. Read the spec (get_spec_tree, read_spec_page, search_spec), the decisions (list_decisions, read_decision), all the project’s documents (search_documents, read_document) and the code, by reading files. You never change the code nor any file, and run no command: Escouade refuses it. You only write the docs, through Escouade’s docs tools (project “{project}”): write_spec_page for a page (path subject/page, filed in its place in the tree), propose_decision or replace_decision for a decision. What you write so is a proposal: it shows in “What will go in the spec”, and the user pours it into the spec with “Pour into the spec”. Ask your questions one at a time, with choices."
     );
     format!("{role} {rules}")
 }
@@ -365,15 +365,7 @@ impl<R: Runtime> Core<R> {
                     mode: Some(MODES[0].into()),
                     isolated: Some(false),
                     cwd: Some(dir),
-                    // The code index's rule too, as any agent without a ticket gets it.
-                    append_prompt: Some(match self.code_index_on(&project) {
-                        true => format!(
-                            "{} {}",
-                            instructions(lang, start.kind, &project.name),
-                            crate::codeindex::hint::rule(lang)
-                        ),
-                        false => instructions(lang, start.kind, &project.name),
-                    }),
+                    append_prompt: Some(instructions(lang, start.kind, &project.name)),
                     discussion: Some(Discussion {
                         kind: start.kind,
                         subject: start.subject.trim().to_string(),

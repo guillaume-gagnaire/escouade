@@ -1,8 +1,8 @@
 ---
 title: "Spec tenue à jour"
 subject: "Docs"
-sources: ["website/content/docs/fr/docs-space.md","docs/FACTORY.md","src-tauri/src/board.rs","src-tauri/src/docsticket.rs","src-tauri/src/docscompare.rs","src-tauri/src/docsimport.rs","src-tauri/src/docs.rs","src-tauri/src/tickets.rs","src/lib/i18n/fr/docs.ts"]
-tickets: ["ESC-263","ESC-278","ESC-301"]
+sources: ["website/content/docs/fr/docs-space.md","docs/FACTORY.md","src-tauri/src/board.rs","src-tauri/src/docsticket.rs","src-tauri/src/docscompare.rs","src-tauri/src/codesearch.rs","src-tauri/src/docsimport.rs","src-tauri/src/docs.rs","src-tauri/src/tickets.rs","src/lib/i18n/fr/docs.ts"]
+tickets: ["ESC-263","ESC-278","ESC-301","ESC-310"]
 decisions: []
 compared: "2026-10-30T05:39:25+01:00"
 ---
@@ -23,9 +23,10 @@ La spec suit le code de deux façons : les agents des tickets la mettent à jour
 ### La comparaison au code
 
 - Un agent court lit le code sans rien modifier et relève, page par page, où la page dit autre chose que le code : chaque écart dit ce qui diffère et les fichiers en cause. Les écarts et la date de la comparaison sont gardés dans le dossier de données d'Escouade, par projet et par page (`docs-checks.json`), **pas dans la page** : une comparaison ne laisse aucune modification à git, et la validation suivante n'est pas refusée pour « des modifications non commitées » qu'Escouade aurait faites elle-même. Escouade ne commite toujours rien à la place de l'utilisateur.
+- **Les fichiers nommés à l'agent** (ESC-310) : les mots de code de la page (ses passages entre accents graves sans espace, comme `send_receipt` ou `src/pay.rs`, puis les identifiants de sa prose, comme `parseConfig` ou `le_fichier` ; 24 au plus) sont cherchés, sans casse, dans les fichiers suivis par git du dossier du projet (`git grep` : ce que `.gitignore` écarte n'est jamais lu). Les 10 fichiers qui en contiennent le plus lui sont nommés, un chemin cité par la page d'abord ; ni les fichiers Markdown, ni `.escouade/`, ni ce que la clôture refuse (un projet privé rangé dedans). Une page sans mot de code ne nomme aucun fichier : l'agent lit le code lui-même.
 - Ce qui est gardé se lit par-dessus l'en-tête de la page, quelle que soit la branche : la carte des sujets, l'arbre et le haut de la page les montrent (voir *Spécification*), et les agents les lisent par `read_spec_page` et `get_spec_tree`. Une page dont l'en-tête a encore des `gaps` ou un `compared` d'avant se lit telle quelle jusqu'à sa prochaine comparaison. Écrire la page (un agent, « Modifier », une discussion versée) garde son en-tête comme il était ; un écart réglé par une discussion versée sort de ce qui est gardé.
 - Ce qui est gardé reste sur ce poste : un coéquipier voit les écarts de ses propres comparaisons.
-- **Après chaque ticket validé par un merge**, s'il a modifié quelque chose, en arrière-plan : les pages qu'il touche, 12 au plus, celles qu'il a écrites d'abord, puis celles qui citent sa clé et celles qui parlent de ses fichiers (par leurs symboles quand l'index du code est allumé, sinon par leurs chemins et leurs noms).
+- **Après chaque ticket validé par un merge**, s'il a modifié quelque chose, en arrière-plan : les pages qu'il touche, 12 au plus, celles qu'il a écrites d'abord, puis celles qui citent sa clé et celles qui parlent de ses fichiers (leurs chemins, leurs noms pas trop communs, et les noms que ces fichiers déclarent : le mot après `fn`, `function`, `def`, `class`, `struct`, `enum`, `trait`, `interface`, `type`, `const`, de 5 lettres au moins).
 - **À la demande**, « Comparer au code » : en tête de la spécification pour toute la spec (40 pages au plus, les moins récemment comparées d'abord), ou en tête d'une page pour elle seule. Pendant : « Comparaison… (N pages) » ; ensuite : « N pages comparées », « aucun écart », « N pages pas comparées ».
 - Une comparaison à la fois, 5 minutes au plus par page, sur le code du dossier du projet (de son premier dépôt). Chaque page comparée coûte des tokens, sur le harness et le compte de « Modèle des textes rédigés » (voir *Langues*).
 - Un écart se règle de deux façons : « Mettre la spec à jour » (voir *Discussions*) quand le code a raison, « Ouvrir un ticket pour le code » (voir *Spécification*) quand la spec a raison.
@@ -40,3 +41,4 @@ Dès que la spec d'un projet a une page dans Escouade, tout agent qu'Escouade la
 - Rien ne vérifie qu'un agent de ticket a tenu la spec.
 - Pas de comparaison après une validation sans merge (« Valider + PR », « Valider et pousser », « Valider ») ni après un ticket sans modification : « Comparer au code » le fait à la demande.
 - Les écarts ne se partagent pas par git : chaque poste a ceux de ses comparaisons.
+- Les fichiers nommés à l'agent le sont par leur texte : un mot de code courant les nomme tous, et un dossier qui n'est pas un dépôt git n'en nomme aucun.

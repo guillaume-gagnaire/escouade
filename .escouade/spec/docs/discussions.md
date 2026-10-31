@@ -2,7 +2,7 @@
 title: "Discussions"
 subject: "Docs"
 sources: ["website/content/docs/fr/docs-space.md","docs/FACTORY.md","src-tauri/src/discussion.rs","src-tauri/src/mcp/docs.rs","src-tauri/src/engine/mod.rs","src/lib/i18n/fr/docs.ts","src/lib/shortcuts.ts","src/components/docs/SpecSpace.svelte"]
-tickets: ["ESC-261","ESC-289"]
+tickets: ["ESC-261","ESC-289","ESC-310"]
 decisions: []
 compared: "2026-10-30T05:35:00+01:00"
 ---
@@ -31,7 +31,7 @@ Parler de la spec avec un agent, dans l'onglet Docs : l'interroger, la mettre à
 ### Un agent qui ne touche pas au code
 
 - C'est un agent d'Escouade comme les autres : la même conversation, et ses questions se répondent aussi depuis la liste des agents. Il travaille dans le dossier de la branche des docs, en mode « Demander » ou « Plan » seulement.
-- Il lit le code (par l'index du code s'il est allumé) sans jamais le modifier, et n'écrit que les docs, par les outils d'Escouade. Escouade refuse d'office ses écritures de fichiers et ses commandes, en lui disant pourquoi. Ses outils d'Escouade qui lisent (Kanban, docs, mémoire, index) et ceux qui écrivent les docs passent sans demander ; tout autre (créer ou lancer un ticket, écrire à un agent, partager les docs…) reste à l'accord de l'utilisateur.
+- Il lit le code en lisant les fichiers, par les outils de son harness, sans jamais le modifier, et n'écrit que les docs, par les outils d'Escouade. Escouade refuse d'office ses écritures de fichiers et ses commandes, en lui disant pourquoi. Ses outils d'Escouade qui lisent (Kanban, docs, mémoire) et ceux qui écrivent les docs passent sans demander ; tout autre (créer ou lancer un ticket, écrire à un agent, partager les docs…) reste à l'accord de l'utilisateur.
 - Son harness l'en empêche lui-même, dans tous les modes : Claude Code perd ses outils qui écrivent, Codex lit seulement dans son bac à sable ; OpenCode, Copilot CLI, Antigravity CLI et Gemini CLI voient leurs écritures et leurs commandes refusées.
 
 ### « Ce qui ira dans la spec »

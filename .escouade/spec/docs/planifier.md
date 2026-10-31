@@ -1,8 +1,8 @@
 ---
 title: "Planifier"
 subject: "Docs"
-sources: ["website/content/docs/fr/docs-space.md","docs/FACTORY.md","src-tauri/src/docsplan.rs","src-tauri/src/core.rs","src/lib/i18n/fr/docs.ts"]
-tickets: ["ESC-262","ESC-291","ESC-303"]
+sources: ["website/content/docs/fr/docs-space.md","docs/FACTORY.md","src-tauri/src/docsplan.rs","src-tauri/src/codesearch.rs","src-tauri/src/core.rs","src/lib/i18n/fr/docs.ts"]
+tickets: ["ESC-262","ESC-291","ESC-303","ESC-310"]
 decisions: []
 compared: "2026-10-30T05:29:54+01:00"
 ---
@@ -24,7 +24,7 @@ Depuis la dernière planification : les pages versées par une discussion, les p
 
 ### Le planificateur
 
-- Il lit ces pages et ces décisions, le code (les fichiers que l'index du code rapproche des changements, 12 au plus, et le dossier du projet) et les tickets du Kanban, pour n'en créer aucun deux fois ni un pour ce qui est déjà fait. Chaque décision lui est donnée avec sa référence : son numéro, ou l'id d'une proposition.
+- Il lit ces pages et ces décisions, le code (les fichiers suivis par git qui contiennent leurs mots de code, 12 au plus, cherchés comme pour la comparaison au code, voir *Spec tenue à jour* ; et le dossier du projet) et les tickets du Kanban, pour n'en créer aucun deux fois ni un pour ce qui est déjà fait. Chaque décision lui est donnée avec sa référence : son numéro, ou l'id d'une proposition.
 - C'est un agent court qui lit sans rien modifier, sur le harness de « Modèle des textes rédigés » (voir *Langues*), 10 minutes au plus. Une planification à la fois par projet. « Le planificateur lit les changements… » pendant qu'il travaille.
 
 ### Les tickets

@@ -1,6 +1,5 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import type {
-  CodeIndexInfo,
   Memory,
   VectorsModelInfo,
   OfferedMemory,
@@ -264,12 +263,6 @@ export const api = {
   projectLogo: (id: string) => invoke<string | null>('project_logo', { id }),
   /** The image of `path` as a logo would be taken (`data:` URL), or why it would be refused. */
   readLogo: (path: string) => invoke<string>('read_logo', { path }),
-  /** « Index du code » of a project (ESC-254): whether it is on, what it holds, what its fence leaves out. */
-  getCodeIndex: (id: string) => invoke<CodeIndexInfo>('get_code_index', { id }),
-  /** Turns it on (answers once the project is read) or off (its database erased), the project's choice; null follows the app's setting again. */
-  setCodeIndex: (id: string, enabled: boolean | null) => invoke<CodeIndexInfo>('set_code_index', { id, enabled }),
-  /** « Index du code sur tous les projets » (ESC-293), saved at once: on, the projects that follow it read one after the other; off, their index erased. How many follow it. */
-  setCodeIndexAll: (enabled: boolean) => invoke<number>('set_code_index_all', { enabled }),
   /** « Recherche par le sens »: the vectors' model, its download (progress in `vectorsDownload`), « Annuler », « Effacer ». */
   vectorsModel: () => invoke<VectorsModelInfo>('vectors_model'),
   vectorsModelDownload: () => invoke<VectorsModelInfo>('vectors_model_download'),

@@ -131,7 +131,6 @@ fn writes_and_commands_are_refused_and_escouades_tools_for_the_docs_let_through(
         "mcp__escouade__read_document",
         "mcp__escouade__list_decisions",
         "mcp__escouade__search_memory",
-        "mcp__escouade__index_search",
         "mcp__escouade__get_board",
     ] {
         assert!(allowed_tool(t) && !refused_tool(t), "{t}");

@@ -22,7 +22,6 @@
   import SharedMark from './SharedMark.svelte';
   import SharedSection from './SharedSection.svelte';
   import ProposedPlugins from './ProposedPlugins.svelte';
-  import CodeIndexSection from './CodeIndexSection.svelte';
   import MemorySection from './MemorySection.svelte';
   import StepList from './StepList.svelte';
   import Switch from './Switch.svelte';
@@ -649,7 +648,6 @@
 <!-- Its .escouade.yml after what it sets (2.0 design, #sg-yml): its commands that wait are also said on the Kanban. -->
 <SharedSection {project} />
 
-<CodeIndexSection {project} />
 <MemorySection {project} />
 
 <!-- The shared Kanban (ESC-190, choice 113): the name in this project, its shared tickets, « Partager chaque nouveau ticket ». -->

@@ -604,10 +604,6 @@ impl Engine for Codex {
         Some(crate::workflow::UserRoot::Codex)
     }
 
-    fn hook_context(&self) -> bool {
-        true
-    }
-
     /// Its subagents are not told (ESC-196).
     fn track_missing(&self, _view: bool) -> &'static [&'static str] {
         &["subagents"]

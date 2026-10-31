@@ -142,10 +142,6 @@ pub struct Settings {
     /// « Nouveaux projets privés » (Réglages › Projets): a project added is private
     /// (`Project::private`) from the start. Off by default.
     pub private_projects: bool,
-    /// « Index du code sur tous les projets » (Réglages › Projets, ESC-293): the index of every
-    /// project that has not made its own choice (`Project::code_index`) is on. Off by default.
-    /// Saved at once by `set_code_index_all`, never by the settings modal's draft.
-    pub code_index_all: bool,
     /// « Thème » (Réglages › Application › Affichage): the window's look, the system's by default.
     pub theme: ThemeChoice,
     /// « Couleurs » (Réglages › Application › Affichage, PLG-7): the theme of a plugin the window takes,
@@ -640,7 +636,6 @@ impl Default for Settings {
             mid_turn_delay_secs: DEFAULT_MID_TURN_DELAY,
             remote_control_all: false,
             private_projects: false,
-            code_index_all: false,
             theme: ThemeChoice::System,
             plugin_theme: String::new(),
             plugins_verified_only: false,
@@ -797,21 +792,6 @@ pub struct Project {
     /// (`workflows.enabled`).
     #[serde(default = "crate::model::yes")]
     pub workflows_enabled: bool,
-    /// « Index du code » (ESC-251): the project's code cut into symbols and links, in a database
-    /// of this machine (`codeindex`), for the agents to find code with for less; off, nothing is
-    /// read and the database is erased. The project's own choice (ESC-293), on or off; None
-    /// follows « Index du code sur tous les projets » of the app's settings. Read through
-    /// `Core::code_index_on` alone.
-    #[serde(
-        default,
-        rename = "codeIndexChoice",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub code_index: Option<bool>,
-    /// The switch saved before ESC-293 (`codeIndex`), read once by `settle_legacy`, never
-    /// written again.
-    #[serde(default, rename = "codeIndex", skip_serializing)]
-    pub code_index_before: bool,
 }
 
 impl Project {
@@ -852,24 +832,12 @@ impl Project {
     /// A project saved before ESC-160 with « Les agents partent de la branche cible » on starts its
     /// new worktrees from the board's target: the choice is kept as « Branche de départ des
     /// nouveaux worktrees », the old switch never saved again.
-    ///
-    /// « Index du code » saved before ESC-293: on stays a choice of the project's; off follows the
-    /// app's setting, nothing having told the off by default from the off wanted.
     pub fn settle_legacy(&mut self) {
         if std::mem::take(&mut self.board.agents_from_target)
             && self.worktree_base == WorktreeBase::Head
         {
             self.worktree_base = WorktreeBase::Target;
         }
-        if std::mem::take(&mut self.code_index_before) && self.code_index.is_none() {
-            self.code_index = Some(true);
-        }
-    }
-
-    /// Whether its index is on: its own choice, or the app's « Index du code sur tous les
-    /// projets » (`all`) when it made none. Read through `Core::code_index_on`.
-    pub fn code_index_on(&self, all: bool) -> bool {
-        self.code_index.unwrap_or(all)
     }
 }
 
@@ -2622,11 +2590,6 @@ pub enum UiEvent {
     /// A project's shared memory changed (ESC-255): written or forgotten through the server or the window.
     #[serde(rename_all = "camelCase")]
     Memory {
-        project_id: String,
-    },
-    /// A project's « Index du code » changed (ESC-293): read, erased, or waiting for its reading.
-    #[serde(rename_all = "camelCase")]
-    CodeIndex {
         project_id: String,
     },
     #[serde(rename_all = "camelCase")]
