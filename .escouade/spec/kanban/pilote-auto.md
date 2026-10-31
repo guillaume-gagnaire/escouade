@@ -4,7 +4,8 @@ subject: "Kanban"
 sources: ["docs/SPEC.md","src-tauri/src/mcp/act_tests.rs","website/content/docs/fr/autopilot.md"]
 tickets: ["ESC-312"]
 decisions: [20,24]
-compared: null
+compared: "2026-10-31T17:27:51+01:00"
+gaps: [{"text":"La page dit que les cartes « À faire » en attente d'un autre ticket affichent « ⏸ après … » et que ce texte passe avant « En attente : pilote auto en pause ». Le code affiche « Après {keys} » (en anglais « After {keys} »), sans le symbole ⏸.","code":["src/lib/i18n/fr/boardSettings.ts","src/lib/board.ts"]}]
 ---
 
 ## Ce que c'est
