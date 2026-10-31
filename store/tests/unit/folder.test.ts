@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { normalizePath, parseTag, tagFor, tagsOf } from '../../shared/folder';
 import { folderOfUrl, runChecks, verdict, type CheckKey, type CheckResult, type Snapshot } from '../../server/utils/checks';
-import { folderList, folderProblem, judgeFolder, linkOn, manifestFolders, packFolder, scope } from '../../server/utils/folder';
+import { folderList, folderProblem, judgeFolder, linkOn, listingTag, manifestFolders, packFolder, scope } from '../../server/utils/folder';
 import { insidePath, renderDocs } from '../../server/utils/readme';
 import { pluginsOfTag } from '../../server/utils/submissions';
 import { readArchive, type ArchiveRead } from '../../server/utils/tar';
@@ -93,6 +93,28 @@ describe('the tags of a repository with several plugins', () => {
     expect(pluginsOfTag(same, 'a/slack/v1.0.0')).toEqual([{ path: 'a/slack' }]);
     // A repository with its one plugin at the root takes every tag, as before: its checks say why.
     expect(pluginsOfTag([{ path: '' }], 'latest')).toEqual([{ path: '' }]);
+  });
+
+  it('lists the folders at a folder’s tag, never at a higher plain tag of another thing (the app’s v2.1.2, ESC-314)', () => {
+    // The app's repository: its releases tagged v…, on a branch without plugins/; its plugins tagged by folder.
+    const app = [
+      { name: 'v2.1.2', commit: 'release' },
+      { name: 'plugins/discord/v1.1.0', commit: 'main' },
+      { name: 'plugins/high-contrast/v1.1.0', commit: 'main' },
+      { name: 'v2.1.1', commit: 'older' },
+    ];
+    expect(listingTag(app, null)?.commit).toBe('main');
+    expect(listingTag(app, 'plugins/high-contrast')?.name).toBe('plugins/high-contrast/v1.1.0');
+    // A folder typed is read at its own newest tag, by any of the three ways.
+    const mixed = [...app, { name: 'high-contrast@1.2.0', commit: 'newer' }, { name: 'plugins/slack/v3.0.0', commit: 'slack' }];
+    expect(listingTag(mixed, 'plugins/high-contrast')?.name).toBe('high-contrast@1.2.0');
+    expect(listingTag(mixed, null)?.name).toBe('plugins/slack/v3.0.0');
+    // A folder without a tag yet: the newest folder's tag, where it may already be.
+    expect(listingTag(app, 'plugins/team-rules')?.commit).toBe('main');
+    // One plugin at the root: its plain tags, the newest.
+    expect(listingTag([{ name: 'v0.2.0' }, { name: 'v0.10.0' }, { name: 'v0.9.1' }], null)?.name).toBe('v0.10.0');
+    expect(listingTag([{ name: 'v0.2.0' }, { name: 'v0.3.0' }], '')?.name).toBe('v0.3.0');
+    expect(listingTag([], null)).toBeUndefined();
   });
 });
 

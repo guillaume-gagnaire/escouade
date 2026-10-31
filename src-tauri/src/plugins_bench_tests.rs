@@ -86,7 +86,7 @@ fn said(r: &Report, s: Scenario) -> String {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_fake_plugin_passes_every_scenario() {
-    let r = bench(&fake("pass", &[])).await;
+    let r = bench(&fake_points("pass", &[])).await;
     for o in &r.outcomes {
         assert_eq!(o.verdict, Verdict::Pass, "{}", r.render(Lang::En));
     }
@@ -96,13 +96,17 @@ async fn the_fake_plugin_passes_every_scenario() {
     assert!(said(&r, Scenario::Decision).contains("\"ask\""));
     assert!(said(&r, Scenario::Secret).contains("token"));
     assert!(said(&r, Scenario::Version).contains("its own (1)"));
-    // initialize twice (the crash), the decision, the unknown method, shutdown.
+    // initialize twice (the crash), the decision, the source and the host, the unknown method, shutdown.
     let methods: Vec<&str> = r.timings.iter().map(|t| t.method.as_str()).collect();
     assert_eq!(
         methods,
         [
             "initialize",
             "permissions/decide",
+            "account/me",
+            "tickets/containers",
+            "account/me",
+            "forge/pullRequestsOfBranch",
             "bench/unknown",
             "initialize",
             "shutdown"
@@ -275,7 +279,7 @@ async fn the_report_says_what_is_missing_in_both_languages() {
     assert!(fr.contains("✗ Fermeture"), "{fr}");
     assert!(fr.contains("Ce qui manque : répondre à `shutdown`"), "{fr}");
     assert!(fr.contains("✓ Initialisation"), "{fr}");
-    assert!(fr.contains("8 réussis, 1 échoués, 0 sans objet"), "{fr}");
+    assert!(fr.contains("8 réussis, 1 échoués, 2 sans objet"), "{fr}");
     let m = r.measure.as_ref().expect("measured");
     assert_eq!(m.calls, 50);
     assert!(m.median_us > 0 && m.p99_us >= m.median_us);
@@ -344,4 +348,43 @@ fn validate_reads_the_icon_of_the_folder() {
     assert_eq!(cli::main(vec!["validate".into(), bad]), 1);
     let good = path(with_icon("icon-good", 256));
     assert_eq!(cli::main(vec!["validate".into(), good]), 0);
+}
+
+/// The fake plugin declaring a source and a host (INT-5).
+fn fake_points(name: &str, args: &[&str]) -> PathBuf {
+    let dir = fake(name, args);
+    let path = dir.join("escouade-plugin.json");
+    let mut m: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    m["contributes"] = json!({
+        "ticketSources": [{ "id": "fake", "name": "Fake" }],
+        "forges": [{ "id": "fake" }]
+    });
+    std::fs::write(&path, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    dir
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_source_and_host_scenarios_play_the_calls_of_the_adapters() {
+    let r = bench(&fake_points("points", &[])).await;
+    assert!(r.passed(), "{}", r.render(Lang::En));
+    assert_eq!(verdict(&r, Scenario::Tickets), Verdict::Pass);
+    assert_eq!(verdict(&r, Scenario::Forge), Verdict::Pass);
+    assert!(said(&r, Scenario::Tickets).contains("tickets/containers: ok"));
+
+    // Not declared: not played.
+    let r = bench(&fake("nopoints", &[])).await;
+    assert_eq!(verdict(&r, Scenario::Tickets), Verdict::Skip);
+    assert_eq!(verdict(&r, Scenario::Forge), Verdict::Skip);
+
+    // An error that is no code of the contract fails, and says which.
+    let r = bench(&fake_points("untyped", &["--untyped"])).await;
+    assert_eq!(verdict(&r, Scenario::Tickets), Verdict::Fail);
+    assert!(said(&r, Scenario::Tickets).contains("not typed"));
+    assert!(r
+        .outcome(Scenario::Forge)
+        .missing
+        .as_deref()
+        .unwrap()
+        .contains("-32401"));
 }

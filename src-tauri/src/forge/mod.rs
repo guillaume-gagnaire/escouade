@@ -38,7 +38,7 @@ pub use remote::RepoRef;
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// How a pull request merges.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum MergeStrategy {
     Merge,
@@ -83,7 +83,7 @@ pub struct Capabilities {
 }
 
 /// A pull request (a merge request on GitLab) to open.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct PullRequestDraft {
     pub title: String,
     pub body: String,
@@ -164,7 +164,7 @@ pub enum CheckState {
 }
 
 /// A check or a status of a pull request's last commit (a CI job).
-#[derive(Debug, Clone, PartialEq, Serialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Check {
     pub name: String,
@@ -190,7 +190,7 @@ pub fn instant(v: &Value) -> Option<u64> {
     u64::try_from(t).ok().filter(|t| *t > 0)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ReviewState {
     Approved,
@@ -199,7 +199,7 @@ pub enum ReviewState {
 }
 
 /// A comment on a line of a review to publish.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ReviewLine {
     pub path: String,
     pub line: u32,
@@ -207,7 +207,7 @@ pub struct ReviewLine {
 }
 
 /// A review to publish on a pull request, as the user validated it.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ReviewDraft {
     pub state: ReviewState,
     pub body: String,
@@ -215,7 +215,7 @@ pub struct ReviewDraft {
 }
 
 /// How much of its calls a host leaves, as its answers say.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RateLimit {
     pub limit: u32,
@@ -224,7 +224,7 @@ pub struct RateLimit {
     pub reset: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Review {
     pub author: String,
@@ -233,7 +233,7 @@ pub struct Review {
 }
 
 /// A comment of a pull request, on one of its lines or not.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReviewComment {
     pub id: String,
@@ -244,7 +244,7 @@ pub struct ReviewComment {
     pub resolved: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Deployment {
     pub environment: String,
@@ -253,7 +253,7 @@ pub struct Deployment {
 }
 
 /// Who an account is on its host, as its token says.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Identity {
     /// The login.
     pub user: String,
