@@ -115,7 +115,6 @@ describe('a booby-trapped plugin', () => {
     ],
     ['with an id of Escouade’s', 'id', () => snapshot(plugin({ manifest: { id: 'dev.escouade.ntfy' } })), 'id'],
     ['with an id of another author', 'id', () => snapshot(plugin(), { existing: { mine: false, repository: 'other/ntfy' } }), 'id'],
-    ['with an id from another repository', 'id', () => snapshot(plugin(), { existing: { mine: true, repository: 'sroux/other' } }), 'id'],
     [
       'naming another repository',
       'repository',

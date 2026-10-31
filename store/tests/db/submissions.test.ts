@@ -20,12 +20,13 @@ import {
   type Deps,
 } from '../../server/utils/submissions';
 import { sha256 } from '../../server/utils/versions';
+import { readArchive } from '../../server/utils/tar';
 import { authorPage, catalog, pluginPage, search } from '../../server/utils/listing';
 import { buildCatalog } from '../../server/utils/catalog';
 import { authorPlugins } from '../../server/utils/author';
 import { fileReport } from '../../server/utils/reports';
 import { TRAPPED } from '../fake/catalog.mjs';
-import { attestation, pluginFiles, png, tarball } from '../fake/plugins.mjs';
+import { attestation, monorepoFiles, pluginFiles, png, tarball, treeOf } from '../fake/plugins.mjs';
 
 // The submission against a real PostgreSQL (TEST_DATABASE_URL alone, emptied first; skipped without it), with a
 // fake GitHub in memory: a tag resolved once, the archive kept as it came and fingerprinted, the ten checks, the
@@ -39,6 +40,7 @@ interface FakeRepo {
   private: boolean;
   tags: Record<string, string>;
   archives: Record<string, Buffer>;
+  trees: Record<string, ReturnType<typeof treeOf>>;
   licenses: Record<string, string | null>;
   releases: Record<string, (Asset & { bytes: Buffer })[]>;
 }
@@ -73,6 +75,21 @@ function fakeGithub() {
       if (b.length > max) throw new TooBig(b.length);
       return b;
     },
+    async tree(name, commit) {
+      calls.push(`tree ${name}@${commit}`);
+      if (failing) throw new GithubError('GitHub answered 502 to the tree', 502);
+      return { entries: repo(name).trees[commit]!.entries, truncated: false };
+    },
+    async blob(name, sha, max) {
+      for (const t of Object.values(repo(name).trees)) {
+        const b = t.blobs.get(sha);
+        if (b) {
+          if (b.length > max) throw new TooBig(b.length);
+          return b;
+        }
+      }
+      throw new GithubError('404', 404);
+    },
     async license(name, commit) {
       return repo(name).licenses[commit] ?? null;
     },
@@ -98,11 +115,12 @@ function fakeGithub() {
       commit,
       top: `${name.replace('/', '-')}-${commit.slice(0, 7)}`,
     });
+    r.trees[commit] = treeOf(files as Parameters<typeof treeOf>[0]);
     r.licenses[commit] = license;
     return commit;
   };
   const add = (name: string, id: number, isPrivate = false) =>
-    repos.set(name, { id, private: isPrivate, tags: {}, archives: {}, licenses: {}, releases: {} });
+    repos.set(name, { id, private: isPrivate, tags: {}, archives: {}, trees: {}, licenses: {}, releases: {} });
   return { source, repos, attestations, calls, push, add, fail: (on: boolean) => (failing = on) };
 }
 
@@ -132,8 +150,8 @@ describe.skipIf(!url)('the submission', () => {
   };
 
   /** Submits `tag` of `repo` as `who`, then works its job; gives the version's id and where it stands. */
-  const submit = async (who: Account, repo: string, tag: string) => {
-    const started = await startSubmission(db, deps, who, { repo, tag }, T0);
+  const submit = async (who: Account, repo: string, tag: string, path?: string) => {
+    const started = await startSubmission(db, deps, who, { repo, tag, path }, T0);
     if ('error' in started) return { error: started.error };
     return { id: started.id, state: await checkVersion(db, deps, started.id) };
   };
@@ -198,6 +216,7 @@ describe.skipIf(!url)('the submission', () => {
       format: 1,
       id: 'io.github.sroux.escouade-ntfy',
       manifest_sha256: v.manifest_sha256,
+      path: '',
       repository: `https://github.com/${REPO}`,
       tag: 'v0.3.0',
       version: '0.3.0',
@@ -437,6 +456,149 @@ describe.skipIf(!url)('the submission', () => {
     gh.push(REPO, 'v0.8.0', pluginFiles(REPO, { manifest: { version: '0.8.0' } }));
     const below = await onTag(db, deps, { ...hook, tag: 'v0.8.0' }, T0);
     expect(await checkVersion(db, deps, below.check!)).toBe('rejected');
+  });
+
+  it('two plugins of one repository: each from its folder and its tag, its archive that folder alone (ESC-313)', async () => {
+    const MONO = 'sroux/escouade-plugins';
+    gh.add(MONO, 80);
+    sam = await signInAs('sroux', 4242, [{ id: 80, full_name: MONO, private: false }]);
+    const commit = gh.push(MONO, 'plugins/ntfy/v0.3.0', monorepoFiles(MONO));
+    gh.repos.get(MONO)!.tags['slack@0.2.0'] = commit;
+
+    const ntfy = await submit(sam, MONO, 'plugins/ntfy/v0.3.0', 'plugins/ntfy');
+    expect(ntfy.state).toBe('ready');
+    const slack = await submit(sam, MONO, 'slack@0.2.0', './plugins/slack/');
+    expect(slack.state).toBe('ready');
+    // The folder is read by the commit's tree and its own files: never the repository's archive.
+    expect(gh.calls.filter((c) => c.startsWith('tarball'))).toEqual([]);
+    const [v] = await q('select * from versions where id = $1', [slack.id]);
+    expect(v).toMatchObject({ path: 'plugins/slack', plugin_id: 'io.github.sroux.mono-slack', version: '0.2.0' });
+    expect(v.checks.map((c: { status: string }) => c.status)).toEqual(Array(10).fill('pass'));
+    // The archive kept holds the folder alone, its commit in the header; version.json names the folder.
+    const kept = readArchive(await readFile(join(dir, 'sha256', v.archive_sha256.slice(0, 2), `${v.archive_sha256}.tar.gz`)));
+    expect([...kept.files.keys()].sort()).toEqual(['LICENSE', 'escouade-plugin.json', 'icon.png']);
+    expect(kept.comment).toBe(commit);
+    expect(JSON.parse(v.version_json)).toMatchObject({
+      path: 'plugins/slack',
+      repository: `https://github.com/${MONO}`,
+      tag: 'slack@0.2.0',
+    });
+    // The root's README stands in for the folder's on its page.
+    expect(v.docs.readme.en).toContain('Ntfy and a Slack bridge');
+    expect((await versionView(db, sam, slack.id!))!.path).toBe('plugins/slack');
+
+    // A folder refused at once: absolute, climbing; through a link or without a manifest, by the checks.
+    expect(await submit(sam, MONO, 'slack@0.2.0', '/etc')).toEqual({ error: 'path-absolute' });
+    expect(await submit(sam, MONO, 'slack@0.2.0', 'plugins/../..')).toEqual({ error: 'path-parent' });
+    gh.repos.get(MONO)!.tags['linked/v0.3.0'] = commit;
+    expect((await submit(sam, MONO, 'linked/v0.3.0', 'linked')).state).toBe('rejected');
+    gh.repos.get(MONO)!.tags['docs/v0.3.0'] = commit;
+    expect((await submit(sam, MONO, 'docs/v0.3.0', 'docs')).state).toBe('rejected');
+
+    // Both published: two plugins, each tied to (repository, folder).
+    await publishVersion(db, sam, ntfy.id!, { categories: ['notifications'] });
+    await publishVersion(db, sam, slack.id!, { categories: ['notifications'] });
+    expect(await q('select id, path from plugins where repo_id = 80 order by id')).toEqual([
+      { id: 'io.github.sroux.mono-ntfy', path: 'plugins/ntfy' },
+      { id: 'io.github.sroux.mono-slack', path: 'plugins/slack' },
+    ]);
+    const cat = await buildCatalog(db);
+    expect(cat.plugins.find((p) => p.id === 'io.github.sroux.mono-slack')).toMatchObject({ path: 'plugins/slack' });
+    expect((await pluginPage(db, dir, 'io.github.sroux.mono-slack'))!.latest!.path).toBe('plugins/slack');
+
+    // The webhook ties a tag pushed to its plugin by its folder; an app's release `v2.1.1` is no plugin's.
+    const hook = { repoId: 80, fullName: MONO, installationId: 42420, tag: 'slack@0.3.0' };
+    gh.push(MONO, 'slack@0.3.0', monorepoFiles(MONO, { ntfy: '0.3.0', slack: '0.3.0' }));
+    const next = await onTag(db, deps, hook, T0);
+    expect(await checkVersion(db, deps, next.check!)).toBe('ready');
+    expect((await q('select plugin_id, path, version from versions where id = $1', [next.check]))[0]).toEqual({
+      plugin_id: 'io.github.sroux.mono-slack',
+      path: 'plugins/slack',
+      version: '0.3.0',
+    });
+    gh.push(MONO, 'plugins/ntfy/v0.4.0', monorepoFiles(MONO, { ntfy: '0.4.0', slack: '0.3.0' }));
+    const n = await onTag(db, deps, { ...hook, tag: 'plugins/ntfy/v0.4.0' }, T0);
+    expect((await q('select plugin_id from versions where id = $1', [n.check]))[0].plugin_id).toBe('io.github.sroux.mono-ntfy');
+    gh.push(MONO, 'v2.1.1', monorepoFiles(MONO));
+    expect(await onTag(db, deps, { ...hook, tag: 'v2.1.1' }, T0)).toEqual({});
+  });
+
+  it('a tag two folders may both claim is checked for neither, and its author sees why (ESC-313)', async () => {
+    const MONO = 'sroux/twins';
+    gh.add(MONO, 81);
+    sam = await signInAs('sroux', 4242, [{ id: 81, full_name: MONO, private: false }]);
+    const twins = (v: string) => {
+      const files = monorepoFiles(MONO, { ntfy: v, slack: v });
+      const out: Record<string, unknown> = { 'README.md': files['README.md'], LICENSE: files.LICENSE };
+      for (const [p, b] of Object.entries(files)) {
+        if (p.startsWith('plugins/ntfy/'))
+          out[`a/notify/${p.slice('plugins/ntfy/'.length)}`] = typeof b === 'string' ? b.replace('/tree/main/plugins/ntfy', '') : b;
+        if (p.startsWith('plugins/slack/')) out[`b/notify/${p.slice('plugins/slack/'.length)}`] = b;
+      }
+      return out;
+    };
+    gh.push(MONO, 'a/notify/v0.3.0', twins('0.3.0'));
+    gh.repos.get(MONO)!.tags['b/notify/v0.3.0'] = gh.repos.get(MONO)!.tags['a/notify/v0.3.0']!;
+    for (const [tag, path] of [
+      ['a/notify/v0.3.0', 'a/notify'],
+      ['b/notify/v0.3.0', 'b/notify'],
+    ]) {
+      const s = await submit(sam, MONO, tag!, path);
+      expect(s.state).toBe('ready');
+      await publishVersion(db, sam, s.id!, { categories: ['notifications'] });
+    }
+    gh.push(MONO, 'notify@0.4.0', twins('0.4.0'));
+    const got = await onTag(db, deps, { repoId: 81, fullName: MONO, installationId: 42420, tag: 'notify@0.4.0' }, T0);
+    expect(got.check).toBeUndefined();
+    expect(got.ambiguous).toHaveLength(1);
+    const view = (await versionView(db, sam, got.ambiguous![0]!))!;
+    expect(view.state).toBe('rejected');
+    expect(view.pluginId).toBeNull();
+    const version = view.checks.find((c) => c.key === 'version')!;
+    expect(version.problems[0]!.why.fr).toBe(
+      'L’étiquette `notify@0.4.0` peut être celle de plusieurs plugins du dépôt (`a/notify`, `b/notify`) : elle n’est vérifiée pour aucun.',
+    );
+    expect(await q(`select count(*)::int as n from versions where state = 'checking'`)).toEqual([{ n: 0 }]);
+  });
+
+  it('an author moves a plugin from a repository of theirs, at its root, to a folder of another: noted, reviewed (ESC-313)', async () => {
+    gh.push(REPO, 'v0.3.0', pluginFiles(REPO));
+    const first = await submit(sam, REPO, 'v0.3.0');
+    await publishVersion(db, sam, first.id!, { categories: ['notifications'] });
+
+    const MONO = 'sroux/escouade-plugins';
+    gh.add(MONO, 80);
+    sam = await signInAs('sroux', 4242, [
+      { id: 77, full_name: REPO, private: false },
+      { id: 80, full_name: MONO, private: false },
+    ]);
+    const files = monorepoFiles(MONO, { ntfy: '0.4.0', slack: '0.2.0' });
+    const m = JSON.parse(String(files['plugins/ntfy/escouade-plugin.json']));
+    files['plugins/ntfy/escouade-plugin.json'] = JSON.stringify({ ...m, id: 'io.github.sroux.escouade-ntfy' });
+    gh.push(MONO, 'ntfy@0.4.0', files);
+    const moved = await submit(sam, MONO, 'ntfy@0.4.0', 'plugins/ntfy');
+    expect(moved.state).toBe('ready');
+    const id = (await versionView(db, sam, moved.id!))!.checks.find((c) => c.key === 'id')!;
+    expect(id.detail.en).toBe(
+      `io.github.sroux.escouade-ntfy is yours; its source changes, from ${REPO} to ${MONO}/plugins/ntfy: noted at publication, this version goes to the review again`,
+    );
+    // Published without asking for the review: it goes to the review all the same.
+    await publishVersion(db, sam, moved.id!, { review: false });
+    const [p] = await q('select repo_id, repo_full_name, path, source_from, source_changed_at from plugins');
+    expect(p).toMatchObject({ repo_id: '80', repo_full_name: MONO, path: 'plugins/ntfy', source_from: REPO });
+    expect(p.source_changed_at).not.toBeNull();
+    expect((await q('select review from versions where id = $1', [moved.id]))[0].review).toBe(true);
+    expect(await q(`select action from audit where action = 'plugin.source_changed'`)).toHaveLength(1);
+    // The version before keeps its own version.json, its repository and the root.
+    const [before] = await q('select version_json from versions where id = $1', [first.id]);
+    expect(JSON.parse(before.version_json)).toMatchObject({ repository: `https://github.com/${REPO}`, path: '' });
+    expect((await pluginPage(db, dir, 'io.github.sroux.escouade-ntfy'))!.status!.sourceFrom).toBe(REPO);
+    // Another account cannot take it over by naming its id in a repository of theirs.
+    gh.add('q7x/mono', 91);
+    const q7x = await signInAs('q7x', 5151, [{ id: 91, full_name: 'q7x/mono', private: false }]);
+    gh.push('q7x/mono', 'ntfy@0.5.0', files);
+    const stolen = await submit(q7x, 'q7x/mono', 'ntfy@0.5.0', 'plugins/ntfy');
+    expect(stolen.state).toBe('rejected');
   });
 
   it('a tag moved after publication is noted and told; the published version does not change', async () => {

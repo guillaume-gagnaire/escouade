@@ -14,3 +14,8 @@ export function attestation(
   digest: string,
   options: { repo: string; commit: string; workflow?: string },
 ): { bundle: { dsseEnvelope: { payload: string; payloadType: string } } };
+export function monorepoFiles(repo: string, versions?: { ntfy: string; slack: string }): Record<string, Entry>;
+export function treeOf(files: Record<string, Entry>): {
+  entries: { path: string; type: 'blob' | 'tree' | 'commit'; mode: string; sha: string; size?: number }[];
+  blobs: Map<string, Buffer>;
+};

@@ -67,6 +67,8 @@ export interface CatalogPlugin {
   description: unknown;
   author: string | null;
   repository: string;
+  /** Its folder in the repository (ESC-313); absent at the root. */
+  path?: string;
   license: string | null;
   categories: string[];
   keywords: string[];
@@ -164,6 +166,7 @@ export async function buildCatalog(db: Db, now = new Date()): Promise<Catalog> {
         description: null,
         author: login ?? null,
         repository: `https://github.com/${plugin.repoFullName}`,
+        ...(plugin.path ? { path: plugin.path } : {}),
         license: null,
         categories: plugin.categories,
         keywords: plugin.keywords,

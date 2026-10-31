@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { parseTag } from '../../shared/folder';
 
 // A version of a plugin on the store (docs/STORE.md, §3.4): one tag, one commit, one archive kept as it came, its
 // binaries; and `version.json`, the small canonical file that names them all with their SHA-256. Its own SHA-256 is
@@ -7,8 +8,11 @@ import { createHash } from 'node:crypto';
 
 export const sha256 = (b: Buffer | string) => createHash('sha256').update(b).digest('hex');
 
-/** The version a tag names: `v1.2.0` and `1.2.0` both name 1.2.0. */
-export const tagVersion = (tag: string) => tag.replace(/^v(?=\d)/, '');
+/**
+ * The version a tag names: `v1.2.0` and `1.2.0` both name 1.2.0, and so do a folder's `plugins/x/v1.2.0`, `x@1.2.0`
+ * and `x-v1.2.0` (ESC-313); for sorting the tags newest first.
+ */
+export const tagVersion = (tag: string) => parseTag(tag)?.version ?? tag.replace(/^v(?=\d)/, '');
 
 const SEMVER = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/;
 
@@ -64,6 +68,11 @@ export interface VersionFile {
   id: string;
   version: string;
   repository: string;
+  /**
+   * The plugin's folder in the repository, '' at its root (ESC-313): its archive holds that folder alone. Absent from
+   * the files written before it, which read as the root.
+   */
+  path: string;
   tag: string;
   commit: string;
   archive: { sha256: string; size: number };

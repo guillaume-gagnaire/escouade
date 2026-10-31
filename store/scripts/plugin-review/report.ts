@@ -19,6 +19,8 @@ export interface ReviewData {
   /** Set when a fingerprint or an identity did not hold: nothing else was read. */
   integrity?: string;
   repository?: string;
+  /** The plugin's folder in its repository, '' at the root (ESC-313). */
+  path?: string;
   tag?: string;
   commit?: string;
   versionSha256?: string;
@@ -135,7 +137,9 @@ export function renderReport(d: ReviewData): string {
   }
 
   out.push('## Identité', '');
-  out.push(`- Dépôt : ${d.repository}`, `- Étiquette : ${code(d.tag ?? '')}, commit ${code(d.commit ?? '')} : ${tagText(d)}`);
+  out.push(`- Dépôt : ${d.repository}`);
+  out.push(d.path ? `- Dossier : ${code(d.path)} (l’archive ne tient que lui)` : '- Dossier : la racine du dépôt');
+  out.push(`- Étiquette : ${code(d.tag ?? '')}, commit ${code(d.commit ?? '')} : ${tagText(d)}`);
   out.push(`- Empreinte de la version (SHA-256 de version.json) : ${code(d.versionSha256 ?? '')}`);
   out.push(`- Archive : ${code(d.archive?.sha256 ?? '')}, ${d.archive?.size} octets, empreinte vérifiée ; ${d.files} fichiers extraits`);
   for (const r of d.refusedEntries ?? []) out.push(`- **Entrée refusée** : ${r}`);
@@ -233,6 +237,7 @@ export function renderPublic(d: ReviewData): string {
     '',
     `Relu le ${d.date.slice(0, 10)}.`,
     '',
+    ...(d.path ? [`- Dossier relu : ${d.path}, dans ${d.repository}`] : []),
     `- Permissions relues : ${permissionLines(d.manifest).join(' ; ') || 'aucune'}`,
     `- Réseau vers : ${hosts}`,
     `- Vérifié : ${checked.join(' ; ')}`,
@@ -268,6 +273,7 @@ export function renderPublicEn(d: ReviewData): string {
     '',
     `Reviewed on ${d.date.slice(0, 10)}.`,
     '',
+    ...(d.path ? [`- Folder reviewed: ${d.path}, in ${d.repository}`] : []),
     `- Permissions read: ${perms.join('; ')}`,
     `- Network to: ${hosts}`,
     `- Checked: ${checked.join('; ')}`,

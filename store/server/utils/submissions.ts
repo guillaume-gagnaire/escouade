@@ -31,7 +31,10 @@ import { TooBig, type Source } from './source';
 import { ARCHIVE_MAX, readArchive, type ArchiveRead } from './tar';
 import { forgetCatalog } from './catalog';
 import { announce } from './discord';
-import { compareVersions, sha256, tagVersion, versionFile, type Binary, type Platform } from './versions';
+import { compareVersions, sha256, versionFile, type Binary, type Platform } from './versions';
+import { normalizePath, tagFor } from '../../shared/folder';
+import { packFolder, readFolder } from './folder';
+import { readmeSource } from './checks';
 
 // The submission of a version (docs/STORE.md, §3): an author picks a public repository the App reads and one of its
 // tags; the store resolves the tag into its commit once, downloads the commit's archive once and keeps it as it came,
@@ -108,22 +111,28 @@ export async function pickRepo(
 
 // ---- Starting a submission ----
 
-export type Started = { id: number; again: boolean } | { error: 'not-yours' | 'private' | 'suspended' | 'too-many' | 'no-tag' | 'github' };
+export type Started =
+  | { id: number; again: boolean }
+  | { error: 'not-yours' | 'private' | 'suspended' | 'too-many' | 'no-tag' | 'github' | 'path-absolute' | 'path-parent' | 'path-bad' };
 
 /**
- * Starts the submission of `tag` of `repo` by `account`: the tag resolved into its commit, the version written down,
- * `checking`. The same tag already submitted and not refused gives that version back (`again`). The caller sends the
- * job that checks it (`checkVersion`).
+ * Starts the submission of `tag` of the folder `path` (the root when left out) of `repo` by `account`: the tag
+ * resolved into its commit, the version written down, `checking`. A folder that is absolute or climbs is refused here;
+ * one that goes through a link or has no manifest, by the checks. The same tag of the same folder already submitted
+ * and not refused gives that version back (`again`). The caller sends the job that checks it (`checkVersion`).
  */
 export async function startSubmission(
   db: Db,
   deps: Pick<Deps, 'source'>,
   account: Account,
-  input: { repo: unknown; tag: unknown },
+  input: { repo: unknown; tag: unknown; path?: unknown },
   now = new Date(),
 ): Promise<Started> {
   const picked = await pickRepo(db, account.id, input.repo);
   if ('error' in picked) return picked;
+  const folder = normalizePath(input.path);
+  if ('problem' in folder) return { error: `path-${folder.problem}` };
+  const path = folder.path;
   if (typeof input.tag !== 'string' || !input.tag.trim() || input.tag.length > 200) return { error: 'no-tag' };
   const tag = input.tag.trim();
   const [recent] = await db
@@ -152,6 +161,7 @@ export async function startSubmission(
     .where(
       and(
         eq(versions.repoId, picked.repoId),
+        eq(versions.path, path),
         eq(versions.tag, tag),
         eq(versions.commit, resolved.commit),
         inArray(versions.state, ['checking', 'held', 'ready', 'published']),
@@ -166,6 +176,7 @@ export async function startSubmission(
     installationId: picked.installationId,
     repoId: picked.repoId,
     repoFullName: picked.fullName,
+    path,
     tag,
     commit: resolved.commit,
     tagDate: resolved.date ? new Date(resolved.date) : null,
@@ -175,7 +186,7 @@ export async function startSubmission(
     db,
     'version.submitted',
     { accountId: account.id, githubId: account.githubId },
-    { repository: picked.fullName, tag, commit: resolved.commit, version: id },
+    { repository: picked.fullName, path, tag, commit: resolved.commit, version: id },
     now,
   );
   return { id, again: false };
@@ -249,17 +260,37 @@ export async function checkVersion(db: Db, deps: Deps, id: number, now = () => n
       .where(eq(versions.id, id));
   try {
     // 1. The archive, once, as GitHub sends it.
+    // A plugin at the root: GitHub's archive of the commit, kept as it came. A plugin in a folder (ESC-313): that
+    // folder alone, read by the commit's tree and its files (never through a link, never the whole repository), and
+    // the store keeps that folder's archive, made by itself; the root's README and LICENSE stand in for the folder's.
+    const path = v.path;
     let gz: Buffer | null = null;
     let read: ArchiveRead;
+    let root: ArchiveRead | null = null;
+    let pathLink: string | null = null;
     let size: number;
-    try {
-      gz = await source.tarball(v.repoFullName, v.commit, ARCHIVE_MAX);
-      read = readArchive(gz);
-      size = gz.length;
-    } catch (e) {
-      if (!(e instanceof TooBig)) throw e;
-      read = { files: new Map(), dirs: new Set(), problems: [{ code: 'too-big', size: e.size }], comment: null };
-      size = e.size;
+    if (path) {
+      ({ read, root, pathLink } = await readFolder(source, v.repoFullName, v.commit, path));
+      const tooBig = read.problems.find((p) => p.code === 'too-big');
+      if (tooBig && 'size' in tooBig) size = tooBig.size;
+      else {
+        gz = packFolder(read, `${v.repoFullName.replace('/', '-')}-${v.commit.slice(0, 7)}`, v.commit);
+        size = gz.length;
+        if (whole(read) && size > ARCHIVE_MAX) {
+          read = { ...read, files: new Map(), problems: [{ code: 'too-big', size }] };
+          gz = null;
+        }
+      }
+    } else {
+      try {
+        gz = await source.tarball(v.repoFullName, v.commit, ARCHIVE_MAX);
+        read = readArchive(gz);
+        size = gz.length;
+      } catch (e) {
+        if (!(e instanceof TooBig)) throw e;
+        read = { files: new Map(), dirs: new Set(), problems: [{ code: 'too-big', size: e.size }], comment: null };
+        size = e.size;
+      }
     }
     const m = whole(read) ? manifestOf(read) : null;
     const pluginId = typeof m?.id === 'string' ? m.id : null;
@@ -286,6 +317,9 @@ export async function checkVersion(db: Db, deps: Deps, id: number, now = () => n
     const others = await otherPlugins(db, v.accountId);
     const snapshot: Snapshot = {
       repository: v.repoFullName,
+      path,
+      root,
+      pathLink,
       tag: v.tag,
       commit: v.commit,
       archive: { size, read },
@@ -293,7 +327,11 @@ export async function checkVersion(db: Db, deps: Deps, id: number, now = () => n
       binaries: [],
       releaseAssets: null,
       existing: existing
-        ? { mine: existing.accountId !== null && existing.accountId === v.accountId, repository: existing.repoFullName }
+        ? {
+            mine: existing.accountId !== null && existing.accountId === v.accountId,
+            repository: existing.repoFullName,
+            path: existing.path,
+          }
         : null,
       taken: taken.map((x) => x.version!),
       latest,
@@ -411,12 +449,19 @@ export async function checkVersion(db: Db, deps: Deps, id: number, now = () => n
       ? { '256': (await keep(deps.archives, icon['256'], '.png')).sha256, '64': (await keep(deps.archives, icon['64'], '.png')).sha256 }
       : null;
     // The README and the documentation, rendered once and cut down, their images copied (server/utils/readme.ts).
-    const docs = await renderDocs(read, { repo: v.repoFullName, commit: v.commit, keep: keepImage(deps.archives) });
+    const shown = readmeSource(read, root);
+    const docs = await renderDocs(shown.read, {
+      repo: v.repoFullName,
+      commit: v.commit,
+      path: shown.fromRoot ? '' : path,
+      keep: keepImage(deps.archives),
+    });
     const escouade = m!.escouade as { api: string; min: string; max?: string };
     const file = versionFile({
       id: pluginId!,
       version: base.version!,
       repository: `https://github.com/${v.repoFullName}`,
+      path,
       tag: v.tag,
       commit: v.commit,
       archive: { sha256: base.archiveSha256!, size },
@@ -553,6 +598,7 @@ export async function publishVersion(
         accountId: account.id,
         repoId: v.repoId,
         repoFullName: v.repoFullName,
+        path: v.path,
         installationId: v.installationId,
         categories,
         keywords,
@@ -568,14 +614,38 @@ export async function publishVersion(
       .set({ autoPublish: on(form.autoPublish) })
       .where(eq(plugins.id, plugin.id));
   }
+  // Its author moved it to another repository or folder of theirs (ESC-313): this version goes to the review, whatever
+  // the box said (no seal comes without a review of the new source).
+  const moved = !!plugin && (plugin.repoId !== v.repoId || plugin.path !== v.path);
   try {
     await db
       .update(versions)
-      .set({ state: 'published', publishedAt: now, review: form.review === undefined ? true : on(form.review) })
+      .set({ state: 'published', publishedAt: now, review: moved || form.review === undefined ? true : on(form.review) })
       .where(and(eq(versions.id, id), eq(versions.state, 'ready')));
   } catch {
     // The unique index of the published numbers: the same number published meanwhile.
     return { error: 'taken' };
+  }
+  if (moved) {
+    const from = plugin.path ? `${plugin.repoFullName}/${plugin.path}` : plugin.repoFullName;
+    await db
+      .update(plugins)
+      .set({
+        repoId: v.repoId,
+        repoFullName: v.repoFullName,
+        path: v.path,
+        installationId: v.installationId,
+        sourceChangedAt: now,
+        sourceFrom: from,
+      })
+      .where(eq(plugins.id, plugin.id));
+    await note(
+      db,
+      'plugin.source_changed',
+      { accountId: account.id, githubId: account.githubId },
+      { plugin: plugin.id, from, to: v.path ? `${v.repoFullName}/${v.path}` : v.repoFullName, version: id },
+      now,
+    );
   }
   // The catalogue of the app shows it from the next request (server/utils/catalog.ts).
   forgetCatalog();
@@ -589,25 +659,117 @@ export async function publishVersion(
   if (tell) await tellAuthor(db, tell, account.id, 'published', v.pluginId, v.version!);
   // Discord, by the queue: the author's click never waits for it.
   void announce({ kind: plugin ? 'new-version' : 'new-plugin', version: id });
-  if (form.review === undefined || on(form.review)) void announce({ kind: 'review', version: id });
+  if (moved || form.review === undefined || on(form.review)) void announce({ kind: 'review', version: id });
   return { ok: true };
 }
 
 // ---- The tags of the repositories ----
 
 /**
+ * The plugins of a repository a tag is for (ESC-313): those whose folder the tag names (`v1.2.3` the root's,
+ * `<folder>/v1.2.3`, `<name>@1.2.3` or `<name>-v1.2.3` a folder's). A repository with one plugin at its root takes
+ * every tag, as before: its checks say why a tag that names no version is refused.
+ */
+export function pluginsOfTag<P extends { path: string }>(all: P[], tag: string): P[] {
+  const named = all.filter((p) => tagFor(tag, p.path) !== null);
+  if (!named.length && all.length === 1 && all[0]!.path === '') return all;
+  return named;
+}
+
+/** What a version refused before its checks says: the tag names several plugins of the repository. */
+function ambiguousChecks(tag: string, folders: string[]): CheckResult[] {
+  const list = folders.map((f) => (f ? `\`${f}\`` : 'la racine')).join(', ');
+  const listEn = folders.map((f) => (f ? `\`${f}\`` : 'the root')).join(', ');
+  return CHECK_KEYS.map((key) =>
+    key === 'version'
+      ? {
+          key,
+          status: 'fail' as const,
+          detail: { fr: `${tag} est ambiguë`, en: `${tag} is ambiguous` },
+          problems: [
+            {
+              path: tag,
+              why: {
+                fr: `L’étiquette \`${tag}\` peut être celle de plusieurs plugins du dépôt (${list}) : elle n’est vérifiée pour aucun.`,
+                en: `The tag \`${tag}\` may be that of several plugins of the repository (${listEn}): it is checked for none.`,
+              },
+              fix: {
+                fr: `Pousse une étiquette qui nomme le dossier, \`<dossier>/v1.2.3\` (par exemple \`${folders[0]}/v1.2.3\`).`,
+                en: `Push a tag that names the folder, \`<folder>/v1.2.3\` (for instance \`${folders[0]}/v1.2.3\`).`,
+              },
+            },
+          ],
+        }
+      : {
+          key,
+          status: 'skip' as const,
+          detail: { fr: 'Étiquette ambiguë : ce contrôle attend.', en: 'Ambiguous tag: this check waits.' },
+          problems: [],
+        },
+  );
+}
+
+/**
  * A tag pushed or released on a repository the App reads (webhooks `create`, `release`, `push` of a tag). On the
  * repository of a plugin of the store: a tag of a version published (or waiting) that now names another commit is
- * noted as moved, nothing else changes; a new tag becomes a version to check, by the author of the plugin. Gives the
- * version to check, if any.
+ * noted as moved, nothing else changes; a new tag becomes a version to check of the plugin whose folder it names, by
+ * its author. A tag that may be several plugins' is checked for none: a version refused says so to each author.
+ * Gives the version to check, if any.
  */
 export async function onTag(
   db: Db,
   deps: Deps,
   hook: { repoId: number; fullName: string; installationId: number | null; tag: string },
   now = new Date(),
-): Promise<{ check?: number; moved?: number }> {
-  const [plugin] = await db.select().from(plugins).where(eq(plugins.repoId, hook.repoId)).limit(1);
+): Promise<{ check?: number; moved?: number; ambiguous?: number[] }> {
+  const all = await db.select().from(plugins).where(eq(plugins.repoId, hook.repoId));
+  const matched = pluginsOfTag(all, hook.tag);
+  if (matched.length > 1) {
+    const live = matched.filter((p) => !p.deletedAt);
+    const first = live[0] ?? matched[0]!;
+    const installationId = hook.installationId ?? first.installationId;
+    if (!installationId) return {};
+    const { commit, date } = await deps.source(installationId).resolve(hook.fullName, hook.tag);
+    const folders = matched.map((p) => p.path);
+    const ids: number[] = [];
+    for (const accountId of [...new Set(live.map((p) => p.accountId))]) {
+      const [row] = await db
+        .insert(versions)
+        .values({
+          accountId,
+          origin: 'webhook',
+          installationId,
+          repoId: hook.repoId,
+          repoFullName: hook.fullName,
+          tag: hook.tag,
+          commit,
+          tagDate: date ? new Date(date) : null,
+          state: 'rejected',
+          checks: ambiguousChecks(hook.tag, folders),
+          checkedAt: now,
+          createdAt: now,
+        })
+        .returning({ id: versions.id });
+      ids.push(row!.id);
+      await note(db, 'version.tag_ambiguous', { accountId }, { tag: hook.tag, plugins: matched.map((p) => p.id), version: row!.id }, now);
+      const [a] = accountId ? await db.select().from(accounts).where(eq(accounts.id, accountId)) : [];
+      if (a?.email && a.emailVerifiedAt) {
+        const results = ambiguousChecks(hook.tag, folders);
+        await sendMail(
+          deps.env,
+          rejectionMail(a.email, {
+            plugin: hook.fullName,
+            tag: hook.tag,
+            page: `${deps.site}/submit?version=${row!.id}`,
+            fr: rejectionText(results, 'fr'),
+            en: rejectionText(results, 'en'),
+          }),
+        );
+      }
+    }
+    return { ambiguous: ids };
+  }
+  const plugin = matched[0];
   // A plugin deleted takes no new tag: its author restores it first.
   if (!plugin || plugin.deletedAt) return {};
   const installationId = hook.installationId ?? plugin.installationId;
@@ -619,6 +781,7 @@ export async function onTag(
     .where(
       and(
         eq(versions.repoId, hook.repoId),
+        eq(versions.path, plugin.path),
         eq(versions.tag, hook.tag),
         inArray(versions.state, ['checking', 'held', 'ready', 'published']),
       ),
@@ -635,10 +798,11 @@ export async function onTag(
     installationId,
     repoId: hook.repoId,
     repoFullName: hook.fullName,
+    path: plugin.path,
     tag: hook.tag,
     commit,
     tagDate: date ? new Date(date) : null,
-    version: tagVersion(hook.tag),
+    version: tagFor(hook.tag, plugin.path) ?? hook.tag.replace(/^v(?=\d)/, ''),
     createdAt: now,
   });
   await note(db, 'version.tag_seen', { accountId: plugin.accountId }, { plugin: plugin.id, tag: hook.tag, commit, version: id }, now);
@@ -714,6 +878,7 @@ export async function versionView(db: Db, account: Account, id: number) {
     error: v.error,
     origin: v.origin,
     repository: v.repoFullName,
+    path: v.path,
     tag: v.tag,
     commit: v.commit,
     tagDate: v.tagDate,
@@ -745,6 +910,7 @@ export async function recentSubmissions(db: Db, accountId: number, limit = 10) {
     .select({
       id: versions.id,
       repository: versions.repoFullName,
+      path: versions.path,
       tag: versions.tag,
       state: versions.state,
       pluginId: versions.pluginId,
