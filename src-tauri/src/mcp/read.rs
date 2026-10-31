@@ -817,10 +817,11 @@ struct AccountUsage {
     engine: EngineId,
     /// New agents of its harness go to it now.
     current: bool,
-    /// Its quota's meters as last read (`QuotaMeter`): windows by their length, the month's
-    /// credits; none for a harness without a quota.
+    /// Its quota's meters as last read (`QuotaMeter`): windows by their length, a model's own with
+    /// its scope (`model`, ESC-312), the month's credits; none for a harness without a quota.
     meters: Vec<QuotaMeter>,
-    /// Claude Code's two windows, as before 1.8.
+    /// Claude Code's two windows of every model, as before 1.8: `five_hour` none for a plan
+    /// without one.
     five_hour: Option<RateWindow>,
     seven_day: Option<RateWindow>,
 }

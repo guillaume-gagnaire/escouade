@@ -16,6 +16,7 @@
     privateSharing,
     projectionMode,
     projectsWithoutAccount,
+    meterKey,
   } from '../../lib/accounts';
   import {
     byKey as goesByKey,
@@ -351,8 +352,8 @@
                     ><Icon name="ext" size={12} />{t('accounts.tab.usage', { site: usageSite(g.engine) })}</button
                   >
                 {/if}
-                {#each meters as m (m.minutes ?? 'credits')}
-                  <QuotaMeter minutes={m.minutes} usage={m.usage} now={app.now} />
+                {#each meters as m (meterKey(m))}
+                  <QuotaMeter minutes={m.minutes} model={m.model} usage={m.usage} now={app.now} />
                 {/each}
                 {#if a.active && noQuota(g.engine)}
                   <!-- No quota to gauge (OpenCode): what it spent today, its budget on its own row below. -->
@@ -616,9 +617,15 @@
     gap: 12px;
     min-width: 0;
   }
+  /* Its name and its state before its bars: with a meter of one model more (« Fable · semaine », ESC-312), the bars go
+     under them rather than cut the name. */
+  .l1 {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
   .nm {
     flex: 0 1 auto;
-    min-width: 60px;
+    min-width: 110px;
     max-width: 220px;
     height: 26px;
     margin: 0 -6px;

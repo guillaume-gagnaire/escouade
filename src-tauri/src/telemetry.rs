@@ -507,13 +507,15 @@ impl Telemetry {
 pub fn service(s: crate::model::Service) -> &'static str {
     use crate::model::Service;
     match s {
-        Service::Jira => "jira",
-        Service::Trello => "trello",
-        Service::Github => "github",
-        Service::Linear => "linear",
-        Service::Gitlab => "gitlab",
-        Service::Clickup => "clickup",
-        Service::Azure => "azure",
+        Service::JIRA => "jira",
+        Service::TRELLO => "trello",
+        Service::GITHUB => "github",
+        Service::LINEAR => "linear",
+        Service::GITLAB => "gitlab",
+        Service::CLICKUP => "clickup",
+        Service::AZURE => "azure",
+        // A source of a plugin: not named in the statistics.
+        _ => "other",
     }
 }
 

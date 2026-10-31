@@ -1,5 +1,7 @@
 # Index du code : sondes face à grep
 
+> **L’index du code a été retiré d’Escouade le 2026-10-31 (ESC-310).** Le verdict d’IDX-6 (§ « Changements à plusieurs endroits ») : avec de vrais agents sur des changements à plusieurs endroits, l’index + hook coûtait +1 % à Sonnet (sous le bruit), +12 % à Opus (indicatif) et −23 % à Haiku seulement, sans un oubli de moins (130 runs sur 130 justes dans tous les modes). Le seuil fixé d’avance (−15 % avec Sonnet, ou moins d’oublis, ou plus de réussites) n’est pas atteint : chaque harness trouve le code par ses propres outils. Ces rapports restent comme trace ; le code des bancs (`codeindex_probes`, `codeindex_agents`) n’existe plus, les commandes ci-dessous ne se rejouent que sur un commit d’avant le retrait (`a358fb5d`).
+
 Mesures du 2026-10-29 (ESC-294) : la justesse, la vitesse et le coût en tokens des cinq outils de l'index du code (`index_search`, `index_context`, `index_callers`, `index_callees`, `index_impact`), face à la recherche par `rg` qu'écrirait un agent, sur ce dépôt. Rien n'est corrigé ici : ces mesures sont le point de départ des tickets qui suivent, et chacun sera mesuré par le même banc, avant et après.
 
 ## Rejouer

@@ -10,6 +10,7 @@ export default defineZone('integrations', {
     clickup: 'List',
     gitlab: 'Project',
     azure: 'Project',
+    other: 'Container',
   },
   searchHint: {
     jira: 'Search by key or text…',
@@ -19,6 +20,7 @@ export default defineZone('integrations', {
     clickup: 'Search by id (#86abx3, ABC-12) or title…',
     gitlab: 'Search for an issue (#12) or by text…',
     azure: 'Search for a work item (#12) or by title…',
+    other: 'Search for a ticket…',
   },
   imported: { one: '{count} ticket imported from {from}', other: '{count} tickets imported from {from}' },
 
@@ -108,6 +110,7 @@ export default defineZone('integrations', {
       clickup: 'ClickUp list',
       gitlab: 'GitLab Issues project',
       azure: 'Azure Boards project',
+      other: 'Source container',
     },
   },
 

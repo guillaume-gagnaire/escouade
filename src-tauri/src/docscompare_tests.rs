@@ -362,3 +362,32 @@ fn a_space_with_checks_keeps_the_gaps_out_of_the_page() {
         .unwrap();
     assert!(space.spec_read("a/c").unwrap().gaps.is_empty());
 }
+
+/// The code named to the agent is found by its text (ESC-310): the files git follows that hold the
+/// page's words of code, and the names a ticket's files declare.
+#[tokio::test]
+async fn the_code_of_a_page_is_found_by_the_words_it_names() {
+    let h = harness("docs-compare-text");
+    let (p, repo) = h.project(false).await;
+    std::fs::create_dir_all(repo.join("src")).unwrap();
+    std::fs::write(
+        repo.join("src/pay.rs"),
+        "pub fn send_receipt() {}\nstruct ReceiptMail;\n",
+    )
+    .unwrap();
+    std::fs::write(repo.join("src/other.rs"), "fn nothing() {}\n").unwrap();
+    crate::core_tests::git(&repo, &["add", "-A"]);
+    crate::core_tests::git(&repo, &["commit", "-qm", "pay"]);
+    let named = page(
+        "paiement/recu",
+        "Le reçu part par `send_receipt` après le paiement.",
+    );
+    assert_eq!(h.core.docs_hints(&p, &named).await, ["src/pay.rs"]);
+    // A page that names no code: nothing named, the agent reads the code itself.
+    let prose = page("paiement/x", "Le reçu part par e-mail.");
+    assert!(h.core.docs_hints(&p, &prose).await.is_empty());
+    assert_eq!(
+        h.core.docs_symbols_of(&p, &["src/pay.rs".to_string()]),
+        ["send_receipt", "ReceiptMail"]
+    );
+}

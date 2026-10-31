@@ -431,11 +431,12 @@ describe('the pace of a quota (the figures the Rust core checks too, tests/fixtu
     pct: number;
     resetsInMin?: number;
     resetsAt?: string;
+    model?: string;
   }
   interface Fixture {
     now: string;
     projection: (FixtureMeter & { name: string; now: string; expected: number | null })[];
-    verdict: { name: string; threshold: number; now?: string; meters: FixtureMeter[]; standing: string; leave: boolean }[];
+    verdict: { name: string; threshold: number; now?: string; model?: string; meters: FixtureMeter[]; standing: string; leave: boolean }[];
   }
   const fixture = quotaPace as unknown as Fixture;
 
@@ -443,6 +444,7 @@ describe('the pace of a quota (the figures the Rust core checks too, tests/fixtu
     minutes: m.minutes,
     pct: m.pct,
     resetsAt: m.resetsInMin !== undefined ? now + m.resetsInMin * 60_000 : m.resetsAt ? Date.parse(m.resetsAt) : null,
+    ...(m.model ? { model: m.model } : {}),
   });
 
   it.each(fixture.projection)('projects $name', (c) => {
@@ -460,6 +462,7 @@ describe('the pace of a quota (the figures the Rust core checks too, tests/fixtu
         c.meters.map((m) => meterOf(m, now)),
         c.threshold,
         now,
+        c.model,
       ),
     ).toMatchObject({ standing: c.standing, leave: c.leave });
   });

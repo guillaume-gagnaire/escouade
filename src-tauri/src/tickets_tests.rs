@@ -4842,7 +4842,7 @@ async fn an_imported_ticket_gets_an_agent_and_a_branch_named_after_its_source_ke
         h.core
             .edit_ticket(id, |x| {
                 x.external = Some(ExternalRef {
-                    service: Service::Jira,
+                    service: Service::JIRA,
                     id: "PROJ-123".into(),
                     key: "PROJ-123".into(),
                     ..Default::default()
@@ -4899,7 +4899,7 @@ fn from_azure_boards(h: &Harness, id: &str) {
     h.core
         .edit_ticket(id, |x| {
             x.external = Some(ExternalRef {
-                service: Service::Azure,
+                service: Service::AZURE,
                 id: "42".into(),
                 key: "#42".into(),
                 container: "acme/Web Shop".into(),
@@ -9495,4 +9495,170 @@ async fn a_ticket_agent_goes_with_the_model_and_the_effort_of_its_form_over_the_
         (after("--model"), after("--effort")),
         ("opus".to_string(), "max".to_string())
     );
+}
+
+// ---------- A model's own quota (ESC-312) ----------
+
+/// The real answer of Claude Code 2.1.314 with Fable's week at 97 % (`fable-over`), its resets in a
+/// day from now: the fixture's dates would be past one day.
+fn fable_over_now() -> Value {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../tests/fixtures/claude-usage/fable-over.json");
+    let mut v: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let day = chrono::DateTime::from_timestamp_millis(now_ms() + 24 * 3_600_000)
+        .unwrap()
+        .to_rfc3339();
+    for row in v["limits"].as_array_mut().unwrap() {
+        row["resets_at"] = day.clone().into();
+    }
+    v
+}
+
+/// A ticket of `model`.
+fn draft_of(title: &str, model: &str) -> TicketDraft {
+    TicketDraft {
+        model: Some(model.into()),
+        ..draft(title, &[], 5)
+    }
+}
+
+/// Pro the only active account, its `claude` telling `usage` as its quota (`fake-usage.json`), read
+/// so before any ticket starts.
+async fn pro_alone_telling(h: &Harness, usage: &Value) -> Account {
+    let pro = second_account(h);
+    h.core
+        .reorder_claude_accounts(&["pro".to_string(), "principal".to_string()])
+        .unwrap();
+    std::fs::create_dir_all(&pro.config_dir).unwrap();
+    std::fs::write(
+        Path::new(&pro.config_dir).join("fake-usage.json"),
+        usage.to_string(),
+    )
+    .unwrap();
+    h.set_settings(|s| {
+        s.quota_pause = 95;
+        for a in &mut s.accounts {
+            a.active = a.id == "pro";
+        }
+    });
+    h.record_usage("pro", crate::usage::reading_of(usage)).await;
+    pro
+}
+
+#[tokio::test]
+async fn fable_past_the_threshold_holds_the_fable_ticket_back_and_the_opus_one_starts() {
+    let h = harness("tk312-fable-opus");
+    let (p, _) = h.project(false).await;
+    pro_alone_telling(&h, &fable_over_now()).await;
+    h.set_board(&p.id, |s| s.max_parallel = 2);
+    let fable = h
+        .core
+        .ticket_create(&p.id, draft_of("Sur Fable [ok]", "fable"))
+        .await
+        .unwrap();
+    let opus = h
+        .core
+        .ticket_create(&p.id, draft_of("Sur Opus [ok]", "opus"))
+        .await
+        .unwrap();
+    // Opus goes on, on the account whose week of every model is at 47 %.
+    h.wait_ticket(&opus.id, "to test", |t| t.column == Column::Review)
+        .await;
+    assert_eq!(h.agent_of(&opus.id).account, "pro");
+    // Its agent read the account's quota again: Fable's week still there, still past the threshold.
+    h.wait_board_idle().await;
+    let meters = h.core.usage.lock().account("pro").unwrap().meters.clone();
+    assert!(
+        meters
+            .iter()
+            .any(|m| m.model.as_deref() == Some("Fable") && m.pct == 97.0),
+        "{meters:?}"
+    );
+    assert_eq!(h.ticket(&fable.id).column, Column::Todo);
+    // Not every ticket is held: no pause of the autopilot is shown.
+    assert_eq!(h.core.autopilot_pause(), None);
+    // By its id, the default model of the account, or « default » resolved: Fable all the same.
+    let by_id = h
+        .core
+        .ticket_create(&p.id, draft_of("Sur Fable aussi [ok]", "claude-fable-5-1"))
+        .await
+        .unwrap();
+    h.wait_board_idle().await;
+    assert_eq!(h.ticket(&by_id.id).column, Column::Todo);
+    // Principal on again, without a Fable quota spent: the Fable tickets go there.
+    h.set_settings(|s| {
+        for a in &mut s.accounts {
+            a.active = true;
+        }
+    });
+    h.core.schedule();
+    assert_eq!(account_of_ticket(&h, &fable.id).await, "principal");
+}
+
+#[tokio::test]
+async fn a_limit_of_fables_week_pauses_no_account_and_waits_for_fables_tickets_alone() {
+    let h = harness("tk312-fable-limit");
+    let (p, _) = h.project(false).await;
+    // Under every threshold: the limit comes from the turn alone.
+    let mut usage = fable_over_now();
+    for row in usage["limits"].as_array_mut().unwrap() {
+        row["percent"] = 10.into();
+    }
+    pro_alone_telling(&h, &usage).await;
+    h.set_settings(|s| s.switch_on_limit = false);
+    let fable = h
+        .core
+        .ticket_create(&p.id, draft_of("Sur Fable [ok]", "fable"))
+        .await
+        .unwrap();
+    let agent = {
+        h.wait("the Fable ticket's agent", |h| {
+            h.ticket(&fable.id).agent_id.is_some()
+        })
+        .await;
+        h.ticket(&fable.id).agent_id.unwrap()
+    };
+    h.wait_ticket(&fable.id, "to test", |t| t.column == Column::Review)
+        .await;
+    // Claude Code tells its agent it met Fable's own week, as 2.1.314 types it.
+    let resets = now_ms() / 1000 + 3600;
+    let h2 = h.core.agent(&agent).unwrap();
+    let mut fx = crate::agent::Effects::default();
+    h2.lock().handle_frame(
+        &json!({"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":resets,
+                "rateLimitType":"seven_day_overage_included",
+                "unifiedWindows":{"seven_day_overage_included":{"utilization":1.0,"resetsAt":resets}}}}),
+        &mut fx,
+    );
+    let (pid, name) = {
+        let rt = h2.lock();
+        (rt.meta.project_id.clone(), rt.meta.name.clone())
+    };
+    h.core.apply(&agent, &pid, &name, fx, None);
+    h.core.plan_resume(&agent, Some(resets * 1000));
+    // Fable's week of Pro is told full, under its name.
+    let meters = h.core.usage.lock().account("pro").unwrap().meters.clone();
+    assert!(
+        meters
+            .iter()
+            .any(|m| m.model.as_deref() == Some("Fable") && m.pct == 100.0),
+        "{meters:?}"
+    );
+    // Its wait holds the Fable tickets alone: an Opus one starts, a Fable one waits.
+    assert!(h.core.quota_paused().is_empty());
+    let opus = h
+        .core
+        .ticket_create(&p.id, draft_of("Sur Opus [ok]", "opus"))
+        .await
+        .unwrap();
+    let other = h
+        .core
+        .ticket_create(&p.id, draft_of("Sur Fable encore [ok]", "fable"))
+        .await
+        .unwrap();
+    h.wait_ticket(&opus.id, "to test", |t| t.column == Column::Review)
+        .await;
+    h.wait_board_idle().await;
+    assert_eq!(h.ticket(&other.id).column, Column::Todo);
+    assert_eq!(h.core.autopilot_pause(), None);
 }

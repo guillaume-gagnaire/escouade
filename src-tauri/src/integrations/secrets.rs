@@ -2,7 +2,7 @@
 //! Manager, macOS' Keychain. `integrations.json` keeps the rest of the accounts, and the secrets
 //! the keychain refuses stay there, readable by their owner only.
 
-use super::{Account, Accounts, VIA_GH};
+use super::{source, Account, Accounts, VIA_GH};
 use crate::model::Service;
 use crate::paths::{self, DataDir};
 use anyhow::{bail, Context, Result};
@@ -258,7 +258,7 @@ pub(crate) fn file_keeps_copy() -> bool {
 
 /// A GitHub account that uses the CLI's token: it has none of its own.
 pub(crate) fn through_gh(service: Service, a: &Account) -> bool {
-    service == Service::Github && a.label.ends_with(VIA_GH)
+    service == Service::GITHUB && a.label.ends_with(VIA_GH)
 }
 
 /// The account's secrets, from the store. Missing (out of reach, refused, the entry gone or
@@ -323,7 +323,7 @@ pub(crate) fn load_accounts(data: &DataDir, store: &dyn SecretStore, file_copy: 
     }
     let forgot = accounts.to_forget != pending;
     let mut moved = false;
-    for service in Service::ALL {
+    for service in source::registry().services() {
         match accounts.get_mut(service) {
             None => {}
             Some(a) if !Secrets::of(a).is_empty() => {
@@ -351,7 +351,7 @@ pub(crate) fn load_accounts(data: &DataDir, store: &dyn SecretStore, file_copy: 
 /// file keeps a copy of them).
 pub(crate) fn save_accounts(data: &DataDir, accounts: &Accounts) -> Result<()> {
     let mut saved = accounts.clone();
-    for service in Service::ALL {
+    for service in source::registry().services() {
         if let Some(a) = saved
             .get_mut(service)
             .filter(|a| !a.in_file && !accounts.file_copy)
@@ -500,7 +500,11 @@ mod tests {
         assert_eq!(keychain_service(false), "dev.gagnaire.escouade");
         assert_eq!(keychain_service(true), "dev.gagnaire.escouade.sandbox");
         assert_eq!(
-            Service::ALL.map(entry),
+            source::registry()
+                .services()
+                .into_iter()
+                .map(entry)
+                .collect::<Vec<_>>(),
             [
                 "jira",
                 "trello",
@@ -752,9 +756,9 @@ mod tests {
         std::fs::write(d.integrations_file(), r#"{ "toForget": ["jira"] }"#).unwrap();
         store.refuse.store(true, Ordering::SeqCst);
         let a = load_accounts(&d, &store, false);
-        assert_eq!(a.to_forget, [Service::Jira]);
+        assert_eq!(a.to_forget, [Service::JIRA]);
         let saved: Accounts = serde_json::from_str(&file(&d)).unwrap();
-        assert_eq!(saved.to_forget, [Service::Jira]);
+        assert_eq!(saved.to_forget, [Service::JIRA]);
         store.refuse.store(false, Ordering::SeqCst);
         assert!(load_accounts(&d, &store, false).to_forget.is_empty());
         assert_eq!(store.entry("jira"), None);
@@ -801,7 +805,7 @@ mod tests {
             [false, false, false, false, false, false, false]
         );
         // Saved again (an account connected): they stay.
-        a.set(Service::Github, None);
+        a.set(Service::GITHUB, None);
         save_accounts(&d, &a).unwrap();
         let text = file(&d);
         for s in SECRETS {

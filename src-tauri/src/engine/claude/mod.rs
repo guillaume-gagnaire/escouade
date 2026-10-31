@@ -628,10 +628,6 @@ impl Engine for Claude {
         Some(crate::workflow::UserRoot::Claude)
     }
 
-    fn hook_context(&self) -> bool {
-        true
-    }
-
     fn id(&self) -> crate::model::EngineId {
         crate::model::EngineId::CLAUDE
     }

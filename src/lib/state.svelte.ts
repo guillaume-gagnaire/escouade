@@ -23,6 +23,7 @@ import type { IconName } from './icons';
 import type { SettingsTab } from './settings.svelte';
 import type { FormFile } from './ticket-files';
 import type { FormImage } from './ticket-images';
+import { setSources } from './integrations';
 import { applyTheme } from './theme';
 import { workflows } from './workflows.svelte';
 import type {
@@ -347,8 +348,6 @@ class AppState {
   gitTick = $state(0);
   /** Each project's shared memory changed this many times (ESC-255): its settings' list reads it again. */
   memoryTicks = $state<Record<string, number>>({});
-  /** A project's « Index du code » changed (ESC-293): read, erased, waiting for its reading. */
-  codeIndexTicks = $state<Record<string, number>>({});
   /** The download of the vectors' model under way (ESC-254): bytes so far, of `total`; null when none is. */
   vectorsProgress = $state<{ done: number; total: number } | null>(null);
   update = $state<UpdateInfo | null>(null);
@@ -622,6 +621,7 @@ class AppState {
     this.engineModels = s.engineModels ?? {};
     this.accountModels = s.accountModels ?? {};
     this.enginesFound = s.enginesFound ?? (s.claudeFound ? ['claude'] : []);
+    if (s.sources) setSources(s.sources);
     this.restartAt = s.restartAt ?? null;
     this.failedUpdate = s.failedUpdate ?? null;
     if (s.pageCrash) this.tellPageCrash(s.pageCrash);
@@ -754,9 +754,6 @@ class AppState {
         break;
       case 'memory':
         this.memoryTicks[e.projectId] = (this.memoryTicks[e.projectId] ?? 0) + 1;
-        break;
-      case 'codeIndex':
-        this.codeIndexTicks[e.projectId] = (this.codeIndexTicks[e.projectId] ?? 0) + 1;
         break;
       case 'vectorsDownload':
         this.vectorsProgress = { done: e.done, total: e.total };

@@ -75,10 +75,6 @@ The “By ticket” table adds up what each ticket’s agents cost: “Ticket”
 
 The agent and ticket lists show 20 rows. “Show all” unfolds the rest, “Show less” folds it back, and “20 of 57” tells you where you are.
 
-### Code index
-
-When a project has turned the [code index](code-index) on, the “Code index” table tells, per project and over the period, how many answers the index gave and what they weigh in tokens. Its last column, “File reading avoided (high estimate)”, counts the files the answers come from as if the agent had read them whole: it is not a measured saving, and the tooltip says so. It holds for every account and every harness, whatever the filter.
-
 ## Filter by harness and by account
 
 With several harnesses (accounts of several, or turns recorded on several), a “Harness” menu shows at the top: “All harnesses”, then each one. Choosing a harness narrows the indicators, the chart, the lists and the prompts to it; the “By harness” table stays complete, with its row highlighted. The “Account” menu combines with it: it only offers the accounts of that harness, and the “By account” table only lists them.

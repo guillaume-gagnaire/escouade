@@ -48,7 +48,7 @@ pub enum Standing {
 }
 
 /// What a meter says of its account.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MeterVerdict {
     pub meter: QuotaMeter,
     pub standing: Standing,
@@ -68,7 +68,7 @@ impl MeterVerdict {
 }
 
 /// What an account's meters say of it.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Verdict {
     /// The worst of its meters (good with none: a harness without a quota keeps the order alone).
     pub standing: Standing,
@@ -81,6 +81,20 @@ pub struct Verdict {
     pub leaving: Option<MeterVerdict>,
 }
 
+/// The meters that count for the model `model` (a name of it or its family): those of every
+/// model, and a model's own (`QuotaMeter::model`, ESC-312) for a model of its family alone, never
+/// for none (the account in general). What `judge` judges, and what holds the tickets back
+/// (`accounts::seen_by`).
+pub fn for_model<'a>(
+    meters: &'a [QuotaMeter],
+    model: Option<&str>,
+) -> impl Iterator<Item = &'a QuotaMeter> {
+    let family = model.and_then(crate::model::model_family);
+    meters
+        .iter()
+        .filter(move |m| m.counts_for(family.as_deref()))
+}
+
 /// Whether a window is a short pause (`SHORT_MINUTES` or less); the month's credits (no length)
 /// and the longer windows are judged by their pace.
 pub fn is_short(minutes: Option<u32>) -> bool {
@@ -90,10 +104,12 @@ pub fn is_short(minutes: Option<u32>) -> bool {
 /// The verdict on the account's meters at `now`, `threshold` being the percentage at which a short
 /// window (or a long one without a projection) is out: the use past which an account takes no new
 /// agent while another can (`board::pick_threshold`), or the one an agent leaves at. The only
-/// place that judges an account's quota for a choice.
-pub fn judge(meters: &[QuotaMeter], threshold: u32, now: i64) -> Verdict {
-    let verdicts: Vec<MeterVerdict> = meters
-        .iter()
+/// place that judges an account's quota for a choice. `model` is the model it is judged for (a
+/// name of it or its family, `model::model_family`): a meter of one model alone (« Fable »,
+/// ESC-312) counts for that model's agents and tickets only (`for_model`); none of them counts for
+/// the account in general (None: the status bar, the panel, the account new agents go to).
+pub fn judge(meters: &[QuotaMeter], threshold: u32, now: i64, model: Option<&str>) -> Verdict {
+    let verdicts: Vec<MeterVerdict> = for_model(meters, model)
         .map(|m| judge_meter(m, threshold, now))
         .collect();
     let most_used = |a: &&MeterVerdict, b: &&MeterVerdict| a.meter.pct.total_cmp(&b.meter.pct);
@@ -102,12 +118,12 @@ pub fn judge(meters: &[QuotaMeter], threshold: u32, now: i64) -> Verdict {
         .filter(|v| v.standing != Standing::Good)
         // The worst, and the most used of equals.
         .max_by(|a, b| a.standing.cmp(&b.standing).then_with(|| most_used(a, b)))
-        .copied();
+        .cloned();
     let leaving = verdicts
         .iter()
         .filter(|v| v.leave)
         .max_by(most_used)
-        .copied();
+        .cloned();
     Verdict {
         standing: verdicts
             .iter()
@@ -147,7 +163,7 @@ pub fn judge_meter(meter: &QuotaMeter, threshold: u32, now: i64) -> MeterVerdict
         }
     };
     MeterVerdict {
-        meter: *meter,
+        meter: meter.clone(),
         standing,
         leave,
         projected,
@@ -239,6 +255,8 @@ mod tests {
         threshold: u32,
         now: Option<String>,
         meters: Vec<Meter>,
+        /// The model it is judged for (ESC-312), none for the account in general.
+        model: Option<String>,
         standing: String,
         leave: bool,
     }
@@ -250,6 +268,8 @@ mod tests {
         pct: f64,
         resets_in_min: Option<i64>,
         resets_at: Option<String>,
+        /// The model it is the quota of alone (« Fable »), none for every model.
+        model: Option<String>,
     }
 
     fn at(iso: &str) -> i64 {
@@ -268,6 +288,7 @@ mod tests {
                     (None, Some(iso)) => Some(at(iso)),
                     (None, None) => None,
                 },
+                model: self.model.clone(),
             }
         }
     }
@@ -296,7 +317,7 @@ mod tests {
         for s in cases.verdict {
             let now = at(s.now.as_deref().unwrap_or(&cases.now));
             let meters: Vec<QuotaMeter> = s.meters.iter().map(|m| m.at(now)).collect();
-            let v = judge(&meters, s.threshold, now);
+            let v = judge(&meters, s.threshold, now, s.model.as_deref());
             let standing = match v.standing {
                 Standing::Good => "good",
                 Standing::Behind => "behind",
@@ -323,14 +344,25 @@ mod tests {
             minutes: Some(minutes),
             pct,
             resets_at: Some(now + min * 60_000),
+            model: None,
         };
         // A week behind (210 %), a 5 h at the threshold: it is the 5 h that holds the account back.
-        let v = judge(&[meter(10_080, 60.0, 7200), meter(300, 96.0, 100)], 95, now);
+        let v = judge(
+            &[meter(10_080, 60.0, 7200), meter(300, 96.0, 100)],
+            95,
+            now,
+            None,
+        );
         assert_eq!(v.standing, Standing::Out);
         assert_eq!(v.holding.map(|h| h.meter.minutes), Some(Some(300)));
         assert_eq!(v.leaving.map(|h| h.meter.minutes), Some(Some(300)));
         // The pace alone: the week holds it back, and says where it would end.
-        let v = judge(&[meter(10_080, 60.0, 7200), meter(300, 10.0, 100)], 95, now);
+        let v = judge(
+            &[meter(10_080, 60.0, 7200), meter(300, 10.0, 100)],
+            95,
+            now,
+            None,
+        );
         assert_eq!(v.standing, Standing::Behind);
         let held = v.holding.unwrap();
         assert!(held.by_pace());

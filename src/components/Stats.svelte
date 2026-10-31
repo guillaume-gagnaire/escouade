@@ -24,7 +24,6 @@
     type Range,
   } from '../lib/stats';
   import type { Bucket, EngineId, StatsView } from '../lib/types';
-  import { codeIndexOn } from '../lib/codeindex';
   import { tip } from '../lib/tip';
 
   // The series of the tokens, from the bottom of a column, in the palette validated in both themes.
@@ -109,9 +108,6 @@
   const unit = $derived(t(`stats.unit.${range}`));
   const projectCount = $derived(app.projects.length);
   const agentCount = $derived(Object.keys(app.agents).length);
-
-  /** What the code index saved over the period, per project (ESC-254). */
-  const indexSavings = $derived(view?.indexByProject ?? []);
 
   function projectOf(key: string) {
     const p = app.projects.find((x) => x.id === key);
@@ -455,39 +451,6 @@
               </table>
             {:else}
               <p class="none">{t('stats.noData')}</p>
-            {/if}
-          </section>
-        {/if}
-
-        {#if indexSavings.length || app.projects.some((p) => codeIndexOn(p, app.settings))}
-          <!-- What the code index answered, per project (ESC-254, ESC-307): of every account and harness, an answer of the index has neither. -->
-          <section aria-labelledby="stats-index" data-stats-index>
-            <div class="sec-h"><h2 id="stats-index">{t('codeindex.stats.title')}</h2></div>
-            <p class="none note">{t('codeindex.stats.note')}</p>
-            {#if indexSavings.length}
-              <table class="tbl" aria-labelledby="stats-index">
-                <thead>
-                  <tr>
-                    <th class="w-name">{t('codeindex.stats.project')}</th>
-                    <th class="r">{t('codeindex.stats.calls')}</th>
-                    <th class="r">{t('codeindex.stats.tokens')}</th>
-                    <th class="r w-cost" use:tip={t('codeindex.stats.avoidedTip')}>{t('codeindex.stats.avoided')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each indexSavings as s (s.projectId)}
-                    {@const p = projectOf(s.projectId)}
-                    <tr>
-                      <td class="ttl cut"><span class="psw" style:background={p.color}></span>{p.name}</td>
-                      <td class="r">{fInt(s.calls)}</td>
-                      <td class="r">{fTok(s.answerTokens)}</td>
-                      <td class="r">{fTok(s.savedTokens)}</td>
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
-            {:else}
-              <p class="none">{t('codeindex.stats.none')}</p>
             {/if}
           </section>
         {/if}
@@ -934,12 +897,6 @@
     margin: 0;
     color: var(--muted);
     font-size: 12.5px;
-  }
-  .none.note {
-    max-width: 72ch;
-    margin: -4px 0 10px;
-    font-size: 12px;
-    line-height: 1.5;
   }
   /* As the preview under 1 240 px of window: smaller figures. */
   @container st (max-width: 1180px) {

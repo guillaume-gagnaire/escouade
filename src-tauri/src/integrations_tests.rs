@@ -83,7 +83,7 @@ impl Harness {
         );
         self.core
             .integration_connect(
-                Service::Trello,
+                Service::TRELLO,
                 Account {
                     key: "k".into(),
                     token: "t".into(),
@@ -100,7 +100,7 @@ impl Harness {
         self.link(
             &p.id,
             SourceLink {
-                service: Service::Trello,
+                service: Service::TRELLO,
                 container: "b1".into(),
                 name: "Atlas".into(),
                 states,
@@ -113,7 +113,7 @@ impl Harness {
     /// The card `id` of the board b1 imported into the project.
     async fn import_card(&self, project_id: &str, id: &str) -> Ticket {
         let card = ExternalIssue {
-            service: Service::Trello,
+            service: Service::TRELLO,
             id: id.into(),
             key: format!("#{id}"),
             title: format!("Carte {id}"),
@@ -234,7 +234,7 @@ async fn a_jira_issue_is_imported_then_moved_and_commented_as_its_ticket_goes() 
     let view = h
         .core
         .integration_connect(
-            Service::Jira,
+            Service::JIRA,
             Account {
                 site: server.url.clone(),
                 email: "ada@atlas.dev".into(),
@@ -253,7 +253,7 @@ async fn a_jira_issue_is_imported_then_moved_and_commented_as_its_ticket_goes() 
     h.link(
         &p.id,
         SourceLink {
-            service: Service::Jira,
+            service: Service::JIRA,
             container: "ATL".into(),
             name: "ATL — Atlas".into(),
             states,
@@ -263,7 +263,7 @@ async fn a_jira_issue_is_imported_then_moved_and_commented_as_its_ticket_goes() 
     // Listed, then imported: the scheduler takes it at once (autopilot).
     let page = h
         .core
-        .integration_issues(&p.id, Service::Jira, Query::default())
+        .integration_issues(&p.id, Service::JIRA, Query::default())
         .await
         .unwrap();
     assert!(!page.issues[0].imported);
@@ -293,7 +293,7 @@ async fn a_jira_issue_is_imported_then_moved_and_commented_as_its_ticket_goes() 
     assert!(again.is_empty());
     let listed = h
         .core
-        .integration_issues(&p.id, Service::Jira, Query::default())
+        .integration_issues(&p.id, Service::JIRA, Query::default())
         .await
         .unwrap();
     assert!(listed.issues[0].imported);
@@ -382,7 +382,7 @@ async fn a_failed_sync_is_noted_on_the_ticket_until_one_succeeds_and_loops_can_b
     );
     h.core
         .integration_connect(
-            Service::Trello,
+            Service::TRELLO,
             Account {
                 key: "k".into(),
                 token: "t".into(),
@@ -399,7 +399,7 @@ async fn a_failed_sync_is_noted_on_the_ticket_until_one_succeeds_and_loops_can_b
     h.link(
         &p.id,
         SourceLink {
-            service: Service::Trello,
+            service: Service::TRELLO,
             container: "b1".into(),
             name: "Atlas".into(),
             states,
@@ -407,7 +407,7 @@ async fn a_failed_sync_is_noted_on_the_ticket_until_one_succeeds_and_loops_can_b
         &[],
     );
     let card = ExternalIssue {
-        service: Service::Trello,
+        service: Service::TRELLO,
         id: "c1".into(),
         key: "#151".into(),
         title: "Exporter le journal".into(),
@@ -480,7 +480,7 @@ async fn nothing_is_said_of_a_ticket_made_by_hand_nor_with_the_sync_turned_off()
     server.on("POST", "/repos/acme/api/issues/9/labels", 200, json!([]));
     h.core
         .integration_connect(
-            Service::Github,
+            Service::GITHUB,
             Account {
                 token: "ghp".into(),
                 ..Default::default()
@@ -495,7 +495,7 @@ async fn nothing_is_said_of_a_ticket_made_by_hand_nor_with_the_sync_turned_off()
     h.link(
         &p.id,
         SourceLink {
-            service: Service::Github,
+            service: Service::GITHUB,
             container: "acme/api".into(),
             name: "acme/api".into(),
             states,
@@ -503,7 +503,7 @@ async fn nothing_is_said_of_a_ticket_made_by_hand_nor_with_the_sync_turned_off()
         &[],
     );
     let issue = ExternalIssue {
-        service: Service::Github,
+        service: Service::GITHUB,
         id: "9".into(),
         key: "#9".into(),
         title: "Doc [ok]".into(),
@@ -560,7 +560,7 @@ async fn accounts_are_checked_saved_apart_and_forgotten() {
     assert_eq!(
         err(h
             .core
-            .integration_connect(Service::Jira, jira("", "a@b", "t"))
+            .integration_connect(Service::JIRA, jira("", "a@b", "t"))
             .await
             .unwrap_err()),
         "Indique l'adresse du site."
@@ -569,7 +569,7 @@ async fn accounts_are_checked_saved_apart_and_forgotten() {
     assert_eq!(
         err(h
             .core
-            .integration_connect(Service::Jira, jira("http://atlas.example.com", "a@b", "t"))
+            .integration_connect(Service::JIRA, jira("http://atlas.example.com", "a@b", "t"))
             .await
             .unwrap_err()),
         "Le site Jira doit être en https (http seulement sur cette machine)."
@@ -577,7 +577,7 @@ async fn accounts_are_checked_saved_apart_and_forgotten() {
     assert_eq!(
         err(h
             .core
-            .integration_connect(Service::Jira, jira(&server.url, "", "t"))
+            .integration_connect(Service::JIRA, jira(&server.url, "", "t"))
             .await
             .unwrap_err()),
         "Indique l'e-mail."
@@ -586,7 +586,7 @@ async fn accounts_are_checked_saved_apart_and_forgotten() {
         err(h
             .core
             .integration_connect(
-                Service::Trello,
+                Service::TRELLO,
                 Account {
                     token: "t".into(),
                     ..Default::default()
@@ -601,7 +601,7 @@ async fn accounts_are_checked_saved_apart_and_forgotten() {
     assert_eq!(
         err(h
             .core
-            .integration_connect(Service::Jira, jira(&server.url, "a@b", "bad"))
+            .integration_connect(Service::JIRA, jira(&server.url, "a@b", "bad"))
             .await
             .unwrap_err()),
         "Jira refuse ces identifiants (401)"
@@ -612,7 +612,7 @@ async fn accounts_are_checked_saved_apart_and_forgotten() {
     server.on("GET", "/user", 200, json!({ "login": "ada" }));
     let view = h
         .core
-        .integration_connect(Service::Github, Account::default())
+        .integration_connect(Service::GITHUB, Account::default())
         .await
         .unwrap();
     assert_eq!(view.label, "@ada · via gh");
@@ -633,7 +633,7 @@ async fn accounts_are_checked_saved_apart_and_forgotten() {
     let app = mock_app();
     let (reloaded, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
     assert!(reloaded.integration_accounts()[2].connected);
-    let views = h.core.integration_disconnect(Service::Github).unwrap();
+    let views = h.core.integration_disconnect(Service::GITHUB).unwrap();
     assert!(!views[2].connected);
     assert!(!std::fs::read_to_string(&file).unwrap().contains("ada"));
 }
@@ -653,7 +653,7 @@ async fn an_accounts_secrets_go_to_the_keychain_never_to_the_file_and_leave_with
     let view = h
         .core
         .integration_connect(
-            Service::Trello,
+            Service::TRELLO,
             Account {
                 key: "trello-key".into(),
                 token: "trello-secret".into(),
@@ -695,12 +695,12 @@ async fn an_accounts_secrets_go_to_the_keychain_never_to_the_file_and_leave_with
     *h.core.gh_on_path.write() = Some(fake_gh());
     server.on("GET", "/user", 200, json!({ "login": "ada" }));
     h.core
-        .integration_connect(Service::Github, Account::default())
+        .integration_connect(Service::GITHUB, Account::default())
         .await
         .unwrap();
     assert_eq!(keychain.entry("github"), None);
     // Disconnected, its secrets go.
-    h.core.integration_disconnect(Service::Trello).unwrap();
+    h.core.integration_disconnect(Service::TRELLO).unwrap();
     assert_eq!(keychain.entry("trello"), None);
 }
 
@@ -714,7 +714,7 @@ async fn a_token_the_keychain_refuses_stays_in_the_file_and_the_window_is_told()
     let view = h
         .core
         .integration_connect(
-            Service::Jira,
+            Service::JIRA,
             Account {
                 site: server.url.clone(),
                 email: "ada@atlas.dev".into(),
@@ -733,7 +733,7 @@ async fn a_token_the_keychain_refuses_stays_in_the_file_and_the_window_is_told()
     assert!(views.contains(r#""inFile":true"#), "{views}");
     assert!(!views.contains("jira-secret"), "{views}");
     // Disconnected, it leaves the file; the keychain never had it: nothing to say.
-    let views = h.core.integration_disconnect(Service::Jira).unwrap();
+    let views = h.core.integration_disconnect(Service::JIRA).unwrap();
     assert!(!views[0].connected && !views[0].in_file);
     assert!(!std::fs::read_to_string(&file)
         .unwrap()
@@ -756,7 +756,7 @@ async fn a_keychain_unreadable_at_a_start_loses_nothing_and_no_call_goes_without
     server.on("GET", "/user", 200, json!({ "login": "work" }));
     h.core
         .integration_connect(
-            Service::Trello,
+            Service::TRELLO,
             Account {
                 key: "trello-key".into(),
                 token: "trello-secret".into(),
@@ -767,7 +767,7 @@ async fn a_keychain_unreadable_at_a_start_loses_nothing_and_no_call_goes_without
         .unwrap();
     h.core
         .integration_connect(
-            Service::Github,
+            Service::GITHUB,
             Account {
                 token: "ghp-work".into(),
                 ..Default::default()
@@ -795,7 +795,7 @@ async fn a_keychain_unreadable_at_a_start_loses_nothing_and_no_call_goes_without
         "{views:?}"
     );
     let calls = server.requests().len();
-    for service in [Service::Trello, Service::Github] {
+    for service in [Service::TRELLO, Service::GITHUB] {
         let e = again
             .integration_containers(service, None)
             .await
@@ -813,7 +813,7 @@ async fn a_keychain_unreadable_at_a_start_loses_nothing_and_no_call_goes_without
     jira_routes(&server);
     let view = again
         .integration_connect(
-            Service::Jira,
+            Service::JIRA,
             Account {
                 site: server.url.clone(),
                 email: "ada@atlas.dev".into(),
@@ -850,7 +850,7 @@ async fn a_secret_the_keychain_cannot_forget_is_said_and_forgotten_at_the_next_s
     );
     h.core
         .integration_connect(
-            Service::Trello,
+            Service::TRELLO,
             Account {
                 key: "trello-key".into(),
                 token: "trello-secret".into(),
@@ -862,15 +862,15 @@ async fn a_secret_the_keychain_cannot_forget_is_said_and_forgotten_at_the_next_s
     *h.core.gh_on_path.write() = Some(fake_gh());
     server.on("GET", "/user", 200, json!({ "login": "ada" }));
     h.core
-        .integration_connect(Service::Github, Account::default())
+        .integration_connect(Service::GITHUB, Account::default())
         .await
         .unwrap();
     let keychain = secrets::memory_of(&h.core.data);
     keychain.refuse.store(true, Ordering::SeqCst);
-    let views = h.core.integration_disconnect(Service::Trello).unwrap();
+    let views = h.core.integration_disconnect(Service::TRELLO).unwrap();
     assert!(!views[1].connected);
     // GitHub through gh has no token of its own to remove: nothing to say.
-    h.core.integration_disconnect(Service::Github).unwrap();
+    h.core.integration_disconnect(Service::GITHUB).unwrap();
     let toasts: Vec<Value> = h
         .events
         .lock()
@@ -889,13 +889,13 @@ async fn a_secret_the_keychain_cannot_forget_is_said_and_forgotten_at_the_next_s
     let file = h.core.data.integrations_file();
     let saved = std::fs::read_to_string(&file).unwrap();
     let listed: integrations::Accounts = serde_json::from_str(&saved).unwrap();
-    assert_eq!(listed.to_forget, [Service::Trello, Service::Github]);
+    assert_eq!(listed.to_forget, [Service::TRELLO, Service::GITHUB]);
     assert!(!saved.contains("trello-secret"), "{saved}");
     // GitHub connected again meanwhile, with a token of its own: its entry is its own now.
     keychain.refuse.store(false, Ordering::SeqCst);
     h.core
         .integration_connect(
-            Service::Github,
+            Service::GITHUB,
             Account {
                 token: "ghp-new".into(),
                 ..Default::default()
@@ -905,7 +905,7 @@ async fn a_secret_the_keychain_cannot_forget_is_said_and_forgotten_at_the_next_s
         .unwrap();
     let listed: integrations::Accounts =
         serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
-    assert_eq!(listed.to_forget, [Service::Trello]);
+    assert_eq!(listed.to_forget, [Service::TRELLO]);
     // The next start forgets Trello's only.
     let app = mock_app();
     let (_again, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
@@ -933,7 +933,7 @@ async fn a_broken_file_then_another_account_never_costs_the_others_their_tokens(
     jira_routes(&server);
     h.core
         .integration_connect(
-            Service::Trello,
+            Service::TRELLO,
             Account {
                 key: "trello-key".into(),
                 token: "trello-secret".into(),
@@ -944,7 +944,7 @@ async fn a_broken_file_then_another_account_never_costs_the_others_their_tokens(
         .unwrap();
     h.core
         .integration_connect(
-            Service::Jira,
+            Service::JIRA,
             Account {
                 site: server.url.clone(),
                 email: "ada@atlas.dev".into(),
@@ -967,7 +967,7 @@ async fn a_broken_file_then_another_account_never_costs_the_others_their_tokens(
     *again.gh_on_path.write() = Some(fake_gh());
     server.on("GET", "/user", 200, json!({ "login": "ada" }));
     again
-        .integration_connect(Service::Github, Account::default())
+        .integration_connect(Service::GITHUB, Account::default())
         .await
         .unwrap();
     let listed: integrations::Accounts =
@@ -987,7 +987,7 @@ async fn the_token_a_switch_to_the_cli_could_not_delete_goes_at_the_next_start()
     server.on("GET", "/user", 200, json!({ "login": "ada" }));
     h.core
         .integration_connect(
-            Service::Github,
+            Service::GITHUB,
             Account {
                 token: "ghp-former".into(),
                 ..Default::default()
@@ -1000,7 +1000,7 @@ async fn the_token_a_switch_to_the_cli_could_not_delete_goes_at_the_next_start()
     *h.core.gh_on_path.write() = Some(fake_gh());
     let view = h
         .core
-        .integration_connect(Service::Github, Account::default())
+        .integration_connect(Service::GITHUB, Account::default())
         .await
         .unwrap();
     assert_eq!(view.label, "@ada · via gh");
@@ -1008,7 +1008,7 @@ async fn the_token_a_switch_to_the_cli_could_not_delete_goes_at_the_next_start()
     let file = h.core.data.integrations_file();
     let listed: integrations::Accounts =
         serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
-    assert_eq!(listed.to_forget, [Service::Github]);
+    assert_eq!(listed.to_forget, [Service::GITHUB]);
     keychain.refuse.store(false, Ordering::SeqCst);
     let app = mock_app();
     let (again, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
@@ -1031,7 +1031,7 @@ async fn a_site_behind_a_self_signed_certificate_is_reached_once_tls_verificatio
     };
     let refused = h
         .core
-        .integration_connect(Service::Jira, account())
+        .integration_connect(Service::JIRA, account())
         .await
         .unwrap_err()
         .to_string();
@@ -1043,7 +1043,7 @@ async fn a_site_behind_a_self_signed_certificate_is_reached_once_tls_verificatio
     h.core.settings.write().insecure_tls = true;
     let view = h
         .core
-        .integration_connect(Service::Jira, account())
+        .integration_connect(Service::JIRA, account())
         .await
         .unwrap();
     assert!(view.connected, "{view:?}");
@@ -1082,7 +1082,7 @@ async fn the_projects_own_repository_comes_first_and_the_states_come_with_their_
     );
     h.core
         .integration_connect(
-            Service::Github,
+            Service::GITHUB,
             Account {
                 token: "ghp".into(),
                 ..Default::default()
@@ -1097,7 +1097,7 @@ async fn the_projects_own_repository_comes_first_and_the_states_come_with_their_
     );
     let list = h
         .core
-        .integration_containers(Service::Github, Some(&p.id))
+        .integration_containers(Service::GITHUB, Some(&p.id))
         .await
         .unwrap();
     let names: Vec<&str> = list.iter().map(|c| c.name.as_str()).collect();
@@ -1105,7 +1105,7 @@ async fn the_projects_own_repository_comes_first_and_the_states_come_with_their_
     assert_eq!(list[0].id, "acme/demo");
     let v = h
         .core
-        .integration_states(Service::Github, "acme/demo")
+        .integration_states(Service::GITHUB, "acme/demo")
         .await
         .unwrap();
     assert_eq!(v.states.len(), 4);
@@ -1114,7 +1114,7 @@ async fn the_projects_own_repository_comes_first_and_the_states_come_with_their_
     // No account: said so.
     assert_eq!(
         h.core
-            .integration_containers(Service::Trello, None)
+            .integration_containers(Service::TRELLO, None)
             .await
             .unwrap_err()
             .to_string(),
@@ -1140,7 +1140,7 @@ async fn the_automatic_import_brings_the_labelled_tickets_once() {
     );
     h.core
         .integration_connect(
-            Service::Github,
+            Service::GITHUB,
             Account {
                 token: "ghp".into(),
                 ..Default::default()
@@ -1153,7 +1153,7 @@ async fn the_automatic_import_brings_the_labelled_tickets_once() {
     h.link(
         &p.id,
         SourceLink {
-            service: Service::Github,
+            service: Service::GITHUB,
             container: "acme/api".into(),
             name: "acme/api".into(),
             states: BTreeMap::new(),
@@ -1210,7 +1210,7 @@ async fn a_ticket_deleted_once_imported_by_label_is_not_brought_back() {
     );
     h.core
         .integration_connect(
-            Service::Github,
+            Service::GITHUB,
             Account {
                 token: "ghp".into(),
                 ..Default::default()
@@ -1223,7 +1223,7 @@ async fn a_ticket_deleted_once_imported_by_label_is_not_brought_back() {
     h.link(
         &p.id,
         SourceLink {
-            service: Service::Github,
+            service: Service::GITHUB,
             container: "acme/api".into(),
             name: "acme/api".into(),
             states: BTreeMap::new(),
@@ -1241,7 +1241,7 @@ async fn a_ticket_deleted_once_imported_by_label_is_not_brought_back() {
     h.link(
         &p.id,
         SourceLink {
-            service: Service::Github,
+            service: Service::GITHUB,
             container: "acme/api".into(),
             name: "acme/api".into(),
             states: BTreeMap::new(),
@@ -1252,7 +1252,7 @@ async fn a_ticket_deleted_once_imported_by_label_is_not_brought_back() {
     assert!(h.core.tickets.read().is_empty());
     // By hand, it comes back.
     let issue = ExternalIssue {
-        service: Service::Github,
+        service: Service::GITHUB,
         id: "4".into(),
         key: "#4".into(),
         title: "Mode sombre".into(),
@@ -1280,7 +1280,7 @@ async fn syncs_reach_the_service_in_the_order_of_the_changes_and_the_last_one_sa
     );
     h.core
         .integration_connect(
-            Service::Trello,
+            Service::TRELLO,
             Account {
                 key: "k".into(),
                 token: "t".into(),
@@ -1297,7 +1297,7 @@ async fn syncs_reach_the_service_in_the_order_of_the_changes_and_the_last_one_sa
     h.link(
         &p.id,
         SourceLink {
-            service: Service::Trello,
+            service: Service::TRELLO,
             container: "b1".into(),
             name: "Atlas".into(),
             states,
@@ -1305,7 +1305,7 @@ async fn syncs_reach_the_service_in_the_order_of_the_changes_and_the_last_one_sa
         &[],
     );
     let card = ExternalIssue {
-        service: Service::Trello,
+        service: Service::TRELLO,
         id: "c1".into(),
         key: "#1".into(),
         title: "Carte".into(),
@@ -1890,14 +1890,14 @@ async fn a_linear_issue_is_imported_then_moved_and_commented_as_its_ticket_goes(
     // A key is needed: Linear has no CLI to take one from.
     let refused = h
         .core
-        .integration_connect(Service::Linear, Account::default())
+        .integration_connect(Service::LINEAR, Account::default())
         .await
         .unwrap_err();
     assert!(refused.to_string().contains("jeton"), "{refused}");
     let view = h
         .core
         .integration_connect(
-            Service::Linear,
+            Service::LINEAR,
             Account {
                 token: "lin_api_k".into(),
                 ..Default::default()
@@ -1914,7 +1914,7 @@ async fn a_linear_issue_is_imported_then_moved_and_commented_as_its_ticket_goes(
     // The defaults of the columns, as the window offers them.
     let states = h
         .core
-        .integration_states(Service::Linear, "t1")
+        .integration_states(Service::LINEAR, "t1")
         .await
         .unwrap();
     assert_eq!(states.defaults[&Column::Doing].id, "s-doing");
@@ -1922,7 +1922,7 @@ async fn a_linear_issue_is_imported_then_moved_and_commented_as_its_ticket_goes(
     h.link(
         &p.id,
         SourceLink {
-            service: Service::Linear,
+            service: Service::LINEAR,
             container: "t1".into(),
             name: "Engineering (ENG)".into(),
             states: states.defaults.clone(),
@@ -1931,7 +1931,7 @@ async fn a_linear_issue_is_imported_then_moved_and_commented_as_its_ticket_goes(
     );
     let page = h
         .core
-        .integration_issues(&p.id, Service::Linear, Query::default())
+        .integration_issues(&p.id, Service::LINEAR, Query::default())
         .await
         .unwrap();
     let t = h
@@ -1945,7 +1945,7 @@ async fn a_linear_issue_is_imported_then_moved_and_commented_as_its_ticket_goes(
     let ext = t.external.clone().unwrap();
     assert_eq!(
         (ext.service, ext.id.as_str(), ext.key.as_str()),
-        (Service::Linear, "i1", "ENG-42")
+        (Service::LINEAR, "i1", "ENG-42")
     );
     h.move_to(&t.id, Column::Doing);
     h.move_to(&t.id, Column::Review);
@@ -2023,14 +2023,14 @@ async fn a_clickup_task_is_imported_with_its_checklist_then_moved_and_commented_
     // A key is needed: ClickUp has no CLI to take one from.
     let refused = h
         .core
-        .integration_connect(Service::Clickup, Account::default())
+        .integration_connect(Service::CLICKUP, Account::default())
         .await
         .unwrap_err();
     assert!(refused.to_string().contains("jeton"), "{refused}");
     let view = h
         .core
         .integration_connect(
-            Service::Clickup,
+            Service::CLICKUP,
             Account {
                 token: "pk_42_k".into(),
                 ..Default::default()
@@ -2050,7 +2050,7 @@ async fn a_clickup_task_is_imported_with_its_checklist_then_moved_and_commented_
     h.set_autopilot(&p.id, false);
     let states = h
         .core
-        .integration_states(Service::Clickup, "l1")
+        .integration_states(Service::CLICKUP, "l1")
         .await
         .unwrap();
     assert_eq!(states.defaults[&Column::Doing].id, "in progress");
@@ -2058,7 +2058,7 @@ async fn a_clickup_task_is_imported_with_its_checklist_then_moved_and_commented_
     h.link(
         &p.id,
         SourceLink {
-            service: Service::Clickup,
+            service: Service::CLICKUP,
             container: "l1".into(),
             name: "Sprint 12".into(),
             states: states.defaults.clone(),
@@ -2067,7 +2067,7 @@ async fn a_clickup_task_is_imported_with_its_checklist_then_moved_and_commented_
     );
     let page = h
         .core
-        .integration_issues(&p.id, Service::Clickup, Query::default())
+        .integration_issues(&p.id, Service::CLICKUP, Query::default())
         .await
         .unwrap();
     let t = h
@@ -2089,7 +2089,7 @@ async fn a_clickup_task_is_imported_with_its_checklist_then_moved_and_commented_
             ext.key.as_str(),
             ext.container.as_str()
         ),
-        (Service::Clickup, "86abx3", "ABC-12", "l1")
+        (Service::CLICKUP, "86abx3", "ABC-12", "l1")
     );
     h.move_to(&t.id, Column::Doing);
     h.move_to(&t.id, Column::Review);
@@ -2194,14 +2194,14 @@ async fn gitlab_issues_take_the_code_hosts_account_and_follow_their_ticket() {
     assert!(!h.core.integration_accounts()[5].connected);
     let e = h
         .core
-        .integration_containers(Service::Gitlab, None)
+        .integration_containers(Service::GITLAB, None)
         .await
         .unwrap_err();
     assert!(e.to_string().contains("Hébergeurs de code"), "{e}");
     // Its own form is the code host's.
     let e = h
         .core
-        .integration_connect(Service::Gitlab, Account::default())
+        .integration_connect(Service::GITLAB, Account::default())
         .await
         .unwrap_err();
     assert!(e.to_string().contains("Hébergeurs de code"), "{e}");
@@ -2217,7 +2217,7 @@ async fn gitlab_issues_take_the_code_hosts_account_and_follow_their_ticket() {
     let host = crate::forge::host_of(&server.url);
     // The source is connected with it, nothing asked again, its token never shown nor written.
     let view = h.core.integration_accounts()[5].clone();
-    assert_eq!(view.service, Service::Gitlab);
+    assert_eq!(view.service, Service::GITLAB);
     assert_eq!(
         (view.connected, view.label.clone()),
         (true, format!("@ada · {host}"))
@@ -2242,7 +2242,7 @@ async fn gitlab_issues_take_the_code_hosts_account_and_follow_their_ticket() {
     );
     let list = h
         .core
-        .integration_containers(Service::Gitlab, Some(&p.id))
+        .integration_containers(Service::GITLAB, Some(&p.id))
         .await
         .unwrap();
     let container = format!("{host}/acme/back/api");
@@ -2252,7 +2252,7 @@ async fn gitlab_issues_take_the_code_hosts_account_and_follow_their_ticket() {
     assert_eq!(list.len(), 2, "{list:?}");
     let states = h
         .core
-        .integration_states(Service::Gitlab, &container)
+        .integration_states(Service::GITLAB, &container)
         .await
         .unwrap();
     let ids: Vec<&str> = states.states.iter().map(|s| s.id.as_str()).collect();
@@ -2263,7 +2263,7 @@ async fn gitlab_issues_take_the_code_hosts_account_and_follow_their_ticket() {
     h.link(
         &p.id,
         SourceLink {
-            service: Service::Gitlab,
+            service: Service::GITLAB,
             container: container.clone(),
             name: "acme/back/api".into(),
             states: columns,
@@ -2272,7 +2272,7 @@ async fn gitlab_issues_take_the_code_hosts_account_and_follow_their_ticket() {
     );
     let page = h
         .core
-        .integration_issues(&p.id, Service::Gitlab, Query::default())
+        .integration_issues(&p.id, Service::GITLAB, Query::default())
         .await
         .unwrap();
     assert_eq!(page.total, Some(1));
@@ -2290,12 +2290,12 @@ async fn gitlab_issues_take_the_code_hosts_account_and_follow_their_ticket() {
     let ext = t.external.clone().unwrap();
     assert_eq!(
         (ext.service, ext.id.as_str(), ext.key.as_str()),
-        (Service::Gitlab, "42", "#42")
+        (Service::GITLAB, "42", "#42")
     );
     // Imported once: the list says so.
     let again = h
         .core
-        .integration_issues(&p.id, Service::Gitlab, Query::default())
+        .integration_issues(&p.id, Service::GITLAB, Query::default())
         .await
         .unwrap();
     assert!(again.issues[0].imported);
@@ -2326,7 +2326,7 @@ async fn gitlab_issues_take_the_code_hosts_account_and_follow_their_ticket() {
         .all(|w| w.headers["private-token"] == "glpat-secret"));
     assert_eq!(h.sync_error(&t.id), None);
     // Its source cannot be disconnected apart: the code host's « Déconnecter » does it.
-    assert!(h.core.integration_disconnect(Service::Gitlab).is_err());
+    assert!(h.core.integration_disconnect(Service::GITLAB).is_err());
     h.core.forge_disconnect(&host).await.unwrap();
     assert!(!h.core.integration_accounts()[5].connected);
 }
@@ -2400,17 +2400,17 @@ async fn azure_boards_take_the_code_hosts_account_and_follow_their_work_item() {
         json!({ "commentId": 1 }),
     );
     // Without an Azure DevOps code host, the source says where to connect it.
-    assert_eq!(h.core.integration_accounts()[6].service, Service::Azure);
+    assert_eq!(h.core.integration_accounts()[6].service, Service::AZURE);
     assert!(!h.core.integration_accounts()[6].connected);
     let e = h
         .core
-        .integration_containers(Service::Azure, None)
+        .integration_containers(Service::AZURE, None)
         .await
         .unwrap_err();
     assert!(e.to_string().contains("Hébergeurs de code"), "{e}");
     let e = h
         .core
-        .integration_connect(Service::Azure, Account::default())
+        .integration_connect(Service::AZURE, Account::default())
         .await
         .unwrap_err();
     assert!(e.to_string().contains("Azure DevOps"), "{e}");
@@ -2446,7 +2446,7 @@ async fn azure_boards_take_the_code_hosts_account_and_follow_their_work_item() {
     );
     let list = h
         .core
-        .integration_containers(Service::Azure, Some(&p.id))
+        .integration_containers(Service::AZURE, Some(&p.id))
         .await
         .unwrap();
     let container = "acme/Web Shop".to_string();
@@ -2456,7 +2456,7 @@ async fn azure_boards_take_the_code_hosts_account_and_follow_their_work_item() {
     assert_eq!(list.len(), 2, "{list:?}");
     let states = h
         .core
-        .integration_states(Service::Azure, &container)
+        .integration_states(Service::AZURE, &container)
         .await
         .unwrap();
     let ids: Vec<&str> = states.states.iter().map(|s| s.id.as_str()).collect();
@@ -2465,7 +2465,7 @@ async fn azure_boards_take_the_code_hosts_account_and_follow_their_work_item() {
     h.link(
         &p.id,
         SourceLink {
-            service: Service::Azure,
+            service: Service::AZURE,
             container: container.clone(),
             name: "Web Shop".into(),
             states: states.defaults.clone(),
@@ -2474,7 +2474,7 @@ async fn azure_boards_take_the_code_hosts_account_and_follow_their_work_item() {
     );
     let page = h
         .core
-        .integration_issues(&p.id, Service::Azure, Query::default())
+        .integration_issues(&p.id, Service::AZURE, Query::default())
         .await
         .unwrap();
     assert_eq!(page.total, Some(1));
@@ -2490,7 +2490,7 @@ async fn azure_boards_take_the_code_hosts_account_and_follow_their_work_item() {
     let ext = t.external.clone().unwrap();
     assert_eq!(
         (ext.service, ext.id.as_str(), ext.key.as_str()),
-        (Service::Azure, "42", "#42")
+        (Service::AZURE, "42", "#42")
     );
     h.move_to(&t.id, Column::Doing);
     h.move_to(&t.id, Column::Review);
@@ -2520,7 +2520,7 @@ async fn azure_boards_take_the_code_hosts_account_and_follow_their_work_item() {
         .contains("est prêt à tester"));
     assert_eq!(h.sync_error(&t.id), None);
     // Its source cannot be disconnected apart: the code host's « Déconnecter » does it.
-    assert!(h.core.integration_disconnect(Service::Azure).is_err());
+    assert!(h.core.integration_disconnect(Service::AZURE).is_err());
     h.core.forge_disconnect(&host).await.unwrap();
     assert!(!h.core.integration_accounts()[6].connected);
 }

@@ -86,6 +86,7 @@ pub struct InitialState {
     engines: Vec<crate::engine::registry::EngineDecl>,
     /// The harnesses whose program is found: the only ones the interface offers.
     engines_found: Vec<crate::model::EngineId>,
+    sources: Vec<crate::integrations::source::SourceDecl>,
     /// Why no ticket of a project's board starts, by project.
     board_issues: HashMap<String, String>,
     /// Why no ticket of a project that goes to any account starts for now (a quota, a usage
@@ -168,6 +169,7 @@ pub fn subscribe(
         account_models,
         engines: crate::engine::registry::declared(),
         engines_found: core.engines_found(),
+        sources: crate::integrations::source::declared(),
         board_issues,
         autopilot_pause,
         project_pauses,
@@ -1150,20 +1152,6 @@ pub fn set_project_logo(core: CoreState, id: String, path: Option<String>) -> Re
     core.set_project_logo(&id, path.as_deref()).map_err(err)
 }
 
-/// « Index du code » of a project (ESC-251): whether it is on, and what the index holds.
-#[tauri::command(async)]
-pub fn get_code_index(core: CoreState, id: String) -> Res<crate::codeindex::CodeIndexInfo> {
-    core.code_index_info(&id).map_err(err)
-}
-
-/// What the code index saved the agents (ESC-253), per agent and per project: the tokens of the files
-/// its answers draw on, against the answers'. `project` narrows it to one project.
-#[tauri::command(async)]
-pub fn get_index_savings(core: CoreState, project: Option<String>) -> serde_json::Value {
-    let by = |agent| core.stats.index_savings(agent, project.as_deref());
-    serde_json::json!({ "byAgent": by(true), "byProject": by(false) })
-}
-
 /// « Recherche par le sens » (ESC-254): the vectors' model, whether it is downloaded.
 #[tauri::command(async)]
 pub fn vectors_model(core: CoreState) -> crate::vectors::wiring::VectorsModelInfo {
@@ -1186,25 +1174,6 @@ pub fn vectors_model_cancel(core: CoreState) {
 #[tauri::command(async)]
 pub fn vectors_model_delete(core: CoreState) -> Res<crate::vectors::wiring::VectorsModelInfo> {
     core.vectors_model_delete().map_err(err)
-}
-
-/// Turns « Index du code » on (the project is read at once) or off (its database is erased) for
-/// the project; null follows « Index du code sur tous les projets » again (ESC-293).
-#[tauri::command]
-pub async fn set_code_index(
-    core: CoreState<'_>,
-    id: String,
-    enabled: Option<bool>,
-) -> Res<crate::codeindex::CodeIndexInfo> {
-    core.set_code_index(&id, enabled).await.map_err(err)
-}
-
-/// « Index du code sur tous les projets » turned on (the projects that follow it read one after
-/// the other, in the background) or off (their index erased), saved at once (ESC-293): how many
-/// projects follow it.
-#[tauri::command]
-pub async fn set_code_index_all(core: CoreState<'_>, enabled: bool) -> Res<usize> {
-    core.set_code_index_all(enabled).await.map_err(err)
 }
 
 /// The project's logo for its tile, as a `data:` URL; null when it has none.

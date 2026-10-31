@@ -13,7 +13,7 @@ use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 use std::time::Duration;
 
-const S: Service = Service::Clickup;
+const S: Service = Service::CLICKUP;
 
 /// The prefix of a status's chip in the import.
 const STATUS: &str = "status:";

@@ -9,8 +9,8 @@ pub struct GiteaProvider;
 const NAME: &str = "Gitea";
 
 impl Provider for GiteaProvider {
-    fn kind(&self) -> &'static str {
-        "gitea"
+    fn kind(&self) -> String {
+        "gitea".into()
     }
 
     fn name(&self) -> &'static str {
@@ -49,13 +49,17 @@ impl Provider for GiteaProvider {
     /// `/api/v1/version` answers without a token, with the version.
     fn probe(&self) -> Option<Probe> {
         Some(Probe {
-            path: "/api/v1/version",
-            matches: |status, v| status == 200 && v["version"].is_string(),
+            path: "/api/v1/version".into(),
+            key_status: 200,
+            key: "version".into(),
+            ..Default::default()
         })
     }
 
-    fn scopes(&self) -> &'static [&'static str] {
-        &["write:repository", "write:issue", "read:user"]
+    fn scopes(&self) -> Vec<String> {
+        ["write:repository", "write:issue", "read:user"]
+            .map(String::from)
+            .to_vec()
     }
 
     fn token_page(&self, url: &str) -> String {

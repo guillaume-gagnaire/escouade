@@ -2,9 +2,10 @@
 title: "Pilote auto"
 subject: "Kanban"
 sources: ["docs/SPEC.md","src-tauri/src/mcp/act_tests.rs","website/content/docs/fr/autopilot.md"]
-tickets: []
-decisions: []
-compared: null
+tickets: ["ESC-312"]
+decisions: [20,24]
+compared: "2026-10-31T17:27:51+01:00"
+gaps: [{"text":"La page dit que les cartes « À faire » en attente d'un autre ticket affichent « ⏸ après … » et que ce texte passe avant « En attente : pilote auto en pause ». Le code affiche « Après {keys} » (en anglais « After {keys} »), sans le symbole ⏸.","code":["src/lib/i18n/fr/boardSettings.ts","src/lib/board.ts"]}]
 ---
 
 ## Ce que c'est
@@ -36,10 +37,11 @@ Le pilote auto lance seul les tickets « À faire », dans l'ordre, tant qu'il r
 - Les agents déjà au travail continuent.
 - Avec plusieurs comptes, la pause se calcule compte par compte (voir *Comptes*).
 - Le plafond est celui de l'utilisateur, jugé en pourcentage fenêtre par fenêtre : il ne suit pas le rythme que le choix du compte juge (une semaine à 95 % qui se remet à zéro dans 3 h est un bon choix, mais sous un plafond de 90 % elle retient quand même le compte). Voir *Comptes*, « Pause du pilote auto, compte par compte ».
+- La fenêtre propre à un modèle (« Fable · semaine ») ne retient que les tickets de ce modèle, rapproché par sa famille (voir *Comptes*, décision 24) : au seuil, un ticket Fable part sur un autre compte ou attend, un ticket Opus ou Sonnet part. Elle ne met pas tout le pilote auto en pause, et la ligne de pause n'en parle pas. Un agent arrêté par la limite d'un modèle ne retient lui aussi que les tickets de ce modèle.
 
 ### La pause à la limite d'usage
 
-L'agent d'un ticket arrêté par la limite sans reprise prévue (reprise automatique coupée ou annulée, clé d'API, heure inconnue) bloque son ticket. Le pilote auto se met alors en pause 30 min avant que la place libérée serve, au lieu de lancer le ticket suivant sur la même limite. Cette pause retient aussi les tickets lancés à la main.
+L'agent d'un ticket arrêté par la limite sans reprise prévue (reprise automatique coupée ou annulée, clé d'API, heure inconnue) bloque son ticket. Le pilote auto se met alors en pause 30 min avant que la place libérée serve, au lieu de lancer le ticket suivant sur la même limite. Cette pause retient aussi les tickets lancés à la main. La limite d'un modèle seul (la semaine de Fable) ne la déclenche pas : la fenêtre de ce modèle retient déjà ses tickets.
 
 ### Ce que montre la pause
 
@@ -57,3 +59,4 @@ L'agent d'un ticket arrêté par la limite sans reprise prévue (reprise automat
 ## Limites
 
 - Une fenêtre de quota dont la fin n'est pas connue ne met jamais en pause.
+- Un ticket « À faire » d'un modèle retenu par sa fenêtre propre dit « En attente : pilote auto en pause » seulement quand tout le pilote auto l'est : sinon sa carte ne dit pas encore pourquoi il attend.

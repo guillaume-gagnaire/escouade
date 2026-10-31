@@ -117,7 +117,7 @@ pub(crate) struct Target {
 pub(crate) fn work_item_of(t: &crate::model::Ticket) -> Option<u64> {
     t.external
         .as_ref()
-        .filter(|e| e.service == crate::model::Service::Azure)
+        .filter(|e| e.service == crate::model::Service::AZURE)
         .and_then(|e| e.id.parse().ok())
 }
 
@@ -839,7 +839,7 @@ impl<R: Runtime> Core<R> {
             draft: form.draft && t.provider.capabilities().draft,
             ..Default::default()
         };
-        self.link_work_item(&t.meta, t.provider.kind(), &mut draft);
+        self.link_work_item(&t.meta, &t.provider.kind(), &mut draft);
         let pr = t.client.create_pr(&t.remote.repo, &draft).await?;
         let word = t.provider.request_word().to_string();
         let h = self.agent(id)?;
@@ -1283,7 +1283,7 @@ impl<R: Runtime> Core<R> {
                     draft: form.draft && t.provider.capabilities().draft,
                     ..Default::default()
                 };
-                self.link_work_item(&t.meta, t.provider.kind(), &mut draft);
+                self.link_work_item(&t.meta, &t.provider.kind(), &mut draft);
                 t.client.create_pr(&t.remote.repo, &draft).await
             };
             match step.await {

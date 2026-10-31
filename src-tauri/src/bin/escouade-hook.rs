@@ -9,7 +9,7 @@
 //!
 //! Without the token it exits at once and does nothing: a hook declared where the user's own
 //! sessions read it too leaves them alone. It always exits with 0 and writes nothing but the line of
-//! context Escouade may answer (a pointer to the code index, ESC-253), whatever
+//! context Escouade may answer (none since ESC-310), whatever
 //! happens: the harness goes on as without it, and decides nothing on its word.
 //!
 //! Only the standard library, so that it starts fast and weighs little.
@@ -32,8 +32,7 @@ fn main() {
         if let Some(url) = var(URL_VAR) {
             let url = with_event(&url, std::env::args().nth(1).as_deref());
             if let Some((200, body)) = post(&url, &token, std::io::stdin().lock()) {
-                // Only what Escouade adds to the context (a pointer to the code index): the
-                // plain `{}` of every other event says nothing.
+                // Only what Escouade adds to the context: its plain `{}` says nothing.
                 if body.starts_with('{') && body != "{}" {
                     let _ = writeln!(std::io::stdout(), "{body}");
                 }
