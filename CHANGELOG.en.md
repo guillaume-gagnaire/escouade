@@ -10,9 +10,6 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 - The High contrast, Discord, Slack and Team rules plugins are Escouade’s own, on the store as `dev.escouade.*` and kept in the app’s repository; only that repository can publish these ids. A version installed under the old `dev.exemple.*` id is replaced from the Plugins view.
 - The page of the app the agent has just built opens by itself inside Escouade when “▶ Test” is ready, in the agent’s “Page” view or in a separate “Pages” window, with its developer tools (F12) and three widths: full, tablet and mobile. It runs apart, with no access to Escouade or to your cookies; Settings › Projects keeps the system browser if you prefer.
-- In Settings › Accounts, the small square of each “Reserved for projects” chip lights up in the project’s colour when the account serves it, and turns grey otherwise. Thanks to @Metalzoid (#19).
-- A message posted while an agent works can still be edited or cancelled before it reaches it: it waits a few seconds, or until the end of the turn with Cursor and OpenCode, and can also go at once. Thanks to @Metalzoid (#18).
-- The “PR and CI” tab of the right panel shows the pull request of the agent’s branch: its CI check by check, the log of a failure, “Re-run failed jobs” in one click, its reviews and its deployments. Without an agent it lists the project’s open pull requests, and an agent’s card tells the state of its CI beside “#41 → main”.
 - Plugins have their own view, opened by the icon of the projects’ rail: install from a folder or a git repository after seeing where the plugin comes from, its fingerprint, what it adds and what it will be able to do, the strongest permission first; switch it on for the app or project by project, a private project staying off by default; take a permission back, set its secrets, read its journal, uninstall it.
 - A new version of a plugin is offered, never installed by itself, and asks for your consent again if it asks for more than the installed version.
 - A plugin can have its logo: a square PNG of 256 px at least, declared in its manifest, which the store shows in place of its two letters and Escouade reads from the installed plugin. The plugins shipped with Escouade show their brand’s logo where the brand allows it, else their category’s.
@@ -28,7 +25,6 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - A repository can hold several plugins, one per folder: the store lists its folders at submission, each plugin has its own tags (`plugins/slack/v1.2.3`) and its page leads to its folder. A plugin can also move to another repository or folder; the next version goes back to the review.
 - The documentation says how to publish a plugin on the store and prepare its review, and a new page, “Plugin security”, says what the app checks, what the “Verified by Escouade” seal covers and what the review refuses.
 - A project can propose plugins in its `.escouade.yml`: when it opens, a band of Settings › Projects names those missing, with their store page, installing nothing by itself; “Not for this project” silences it. The file can also set a plugin up for that project, never with a secret.
-- The automatic choice of the account judges each window by its length: a full 5 hours puts an account on hold until it starts again without weighing on what follows, and the week (or the month’s credits) is judged by its pace — a week at 88% that starts again in 3 hours is still a good choice, one at 60% on its second day goes behind the others. An account at 95% or more always goes behind the others. The order of the accounts stays the priority, and the messages say when it is the pace that decides. Thanks to @Metalzoid (#20).
 
 ### Removed
 
@@ -36,11 +32,23 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### Fixes
 
+- An agent saved on a harness this version doesn’t have (a later version’s, or a removed plugin’s) is read and kept with its conversation, marked “harness missing”; it doesn’t start, and no agent is created on that harness.
+
+## [2.1.2] — 2026-10-31
+
+### New
+
+- In Settings › Accounts, the small square of each “Reserved for projects” chip lights up in the project’s colour when the account serves it, and turns grey otherwise. Thanks to @Metalzoid (#19).
+- A message posted while an agent works can still be edited or cancelled before it reaches it: it waits a few seconds, or until the end of the turn with Cursor and OpenCode, and can also go at once. Thanks to @Metalzoid (#18).
+- The “PR and CI” tab of the right panel shows the pull request of the agent’s branch: its CI check by check, the log of a failure, “Re-run failed jobs” in one click, its reviews and its deployments. Without an agent it lists the project’s open pull requests, and an agent’s card tells the state of its CI beside “#41 → main”.
+- The automatic choice of the account judges each window by its length: a full 5 hours puts an account on hold until it starts again without weighing on what follows, and the week (or the month’s credits) is judged by its pace — a week at 88% that starts again in 3 hours is still a good choice, one at 60% on its second day goes behind the others. An account at 95% or more always goes behind the others. The order of the accounts stays the priority, and the messages say when it is the pace that decides. Thanks to @Metalzoid (#20).
+
+### Fixes
+
 - Starting branch `origin/x`: a new agent starts from the local `x`, moved forward if needed, no longer from another agent’s branch that tracked `origin/x`; agents’ branches no longer track their base. Thanks to @Metalzoid.
 - Fable’s own quota has its bar, “Fable · week”, and now holds back Fable’s tickets and agents alone: at the threshold they change accounts or wait, the other models go on. A Max plan without a 5-hour window no longer shows a 5-hour bar stuck on an old value.
 - Uncommitted files no longer blink at each refresh: “No file changed by this agent” and the list stay shown as long as nothing changes.
 - A workflow you delete, in Settings › Projects › Workflow or by erasing its file, no longer comes back at every reading or restart: the “Deleted” list keeps it, with “Restore”. And “No workflow for this project”, in the assistant or the settings (and in `.escouade.yml`), stops their reading and writing.
-- An agent saved on a harness this version doesn’t have (a later version’s, or a removed plugin’s) is read and kept with its conversation, marked “harness missing”; it doesn’t start, and no agent is created on that harness.
 - Two tickets worked on at once no longer propose a decision under the same number: a proposed decision has no number and gets the register’s next one when it is accepted, and the pages and tickets that cite it follow.
 - Approving a ticket is no longer refused for “uncommitted changes” after the spec was compared to the code: its gaps and date stay on this computer instead of being written in the pages, and the Docs tab still shows them.
 - “Write a first spec from the code”, and every new discussion, closes its window and opens the discussion with its first message even when new agents open in the harness terminal: a discussion always stays in its conversation, where Escouade refuses its writes.
