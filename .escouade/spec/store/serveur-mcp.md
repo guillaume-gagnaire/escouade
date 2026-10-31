@@ -3,7 +3,7 @@ title: "Le serveur MCP du store : gérer ses plugins depuis un agent"
 subject: "store"
 sources: ["docs/STORE.md","store/server/utils/oauth.ts","store/server/utils/mcp.ts"]
 tickets: ["ESC-317"]
-decisions: ["store-un-serveur-mcp-avec-oauth-2-1-pour"]
+decisions: [27]
 compared: null
 ---
 

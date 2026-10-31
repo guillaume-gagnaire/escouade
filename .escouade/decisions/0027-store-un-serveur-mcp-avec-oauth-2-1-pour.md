@@ -1,9 +1,9 @@
 ---
-number: null
+number: 27
 id: "store-un-serveur-mcp-avec-oauth-2-1-pour"
 title: "Store : un serveur MCP avec OAuth 2.1 pour gérer ses plugins depuis un agent"
 date: "2026-10-31"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-317"
 pages: ["store/serveur-mcp"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"store/serveur-mcp","added":23,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-10-31T23:29:07+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
