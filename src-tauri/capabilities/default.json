@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capabilities of the main window",
-  "windows": ["main"],
+  "description": "Capabilities of the main window and of the bars of the « Pages » windows; never of a launch’s page (devpage-*), whose webview is a child of a window but is not named here",
+  "webviews": ["main", "pagesbar-*"],
   "permissions": [
     "core:default",
     "core:window:allow-minimize",

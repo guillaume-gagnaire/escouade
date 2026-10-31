@@ -41,13 +41,20 @@ export interface Call {
 /** What a command answers when a test gives it no handler: nothing (null), except the lists the window reads on its own. */
 const ANSWERS: Record<string, unknown> = { closed_projects: [], memory_list: [], claude_memory_offer: [] };
 
+/** What the backend answers by default from the arguments of a call. */
+const DEFAULTS: Record<string, (args: any) => unknown> = {
+  // A launch's page (ESC-311): opened where it was asked.
+  devpage_open: (a) => ({ agentId: a.agentId, projectId: 'p1', title: a.title, url: a.url, detached: a.detached }),
+  devpage_detach: (a) => ({ agentId: a.agentId, projectId: 'p1', title: '', url: '', detached: a.detached }),
+};
+
 export function fakeBackend(handlers: Record<string, (args: any) => unknown> = {}) {
   const calls: Call[] = [];
   mockWindows('main');
   mockIPC(
     (cmd, args) => {
       calls.push({ cmd, args: (args ?? {}) as Record<string, any> });
-      const h = handlers[cmd];
+      const h = handlers[cmd] ?? DEFAULTS[cmd];
       return h ? h(args) : (ANSWERS[cmd] ?? null);
     },
     { shouldMockEvents: true },

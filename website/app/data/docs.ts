@@ -22,7 +22,7 @@ export const DOC_GROUPS = [
     ],
   },
   { id: 'code', pages: ['git', 'worktrees', 'branches', 'editor', 'terminals', 'launch'] },
-  { id: 'board', pages: ['board', 'autopilot', 'testing', 'integrations', 'shared-board', 'docs-space', 'mcp'] },
+  { id: 'board', pages: ['board', 'autopilot', 'testing', 'browser', 'integrations', 'shared-board', 'docs-space', 'mcp'] },
   { id: 'usage', pages: ['accounts', 'usage', 'stats'] },
   {
     id: 'settings',
