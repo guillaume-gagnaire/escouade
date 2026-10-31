@@ -9,8 +9,8 @@ pub struct GitlabProvider;
 const NAME: &str = "GitLab";
 
 impl Provider for GitlabProvider {
-    fn kind(&self) -> &'static str {
-        "gitlab"
+    fn kind(&self) -> String {
+        "gitlab".into()
     }
 
     fn name(&self) -> &'static str {
@@ -56,13 +56,15 @@ impl Provider for GitlabProvider {
     /// `/api/v4/version` answers (401 without a token on recent versions).
     fn probe(&self) -> Option<Probe> {
         Some(Probe {
-            path: "/api/v4/version",
-            matches: |status, v| status == 401 || (status == 200 && v["version"].is_string()),
+            path: "/api/v4/version".into(),
+            statuses: vec![401],
+            key_status: 200,
+            key: "version".into(),
         })
     }
 
-    fn scopes(&self) -> &'static [&'static str] {
-        &["api"]
+    fn scopes(&self) -> Vec<String> {
+        ["api"].map(String::from).to_vec()
     }
 
     fn token_page(&self, url: &str) -> String {
@@ -75,12 +77,12 @@ impl Provider for GitlabProvider {
     /// `glab` has no `auth token`: its status prints the token (`✓ Token: glpat-…`) when asked.
     fn cli(&self, host: &str) -> Option<CliToken> {
         Some(CliToken {
-            program: "glab",
+            program: "glab".into(),
             args: ["auth", "status", "--show-token", "--hostname", host]
                 .map(str::to_string)
                 .to_vec(),
-            login: "glab auth login",
-            parse: |out, err| glab_token(&format!("{out}\n{err}")),
+            login: "glab auth login".into(),
+            read: CliRead::After("Token:".into()),
         })
     }
 
@@ -98,11 +100,7 @@ impl Provider for GitlabProvider {
 
 /// The token in what `glab auth status --show-token` printed.
 pub fn glab_token(text: &str) -> Option<String> {
-    text.lines().find_map(|line| {
-        let (_, t) = line.split_once("Token:")?;
-        let t = t.trim();
-        (!t.is_empty() && !t.contains('*') && !t.contains(' ')).then(|| t.to_string())
-    })
+    CliRead::After("Token:".into()).token(text, "")
 }
 
 pub struct Gitlab {

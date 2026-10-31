@@ -176,7 +176,7 @@ fn the_board_still_reads_github_com_repositories() {
 #[test]
 fn each_host_says_its_word_and_what_it_can_do() {
     let r = Registry::standard();
-    let kinds: Vec<&str> = r.all().iter().map(|p| p.kind()).collect();
+    let kinds: Vec<String> = r.all().iter().map(|p| p.kind()).collect();
     assert_eq!(kinds, ["github", "gitlab", "bitbucket", "gitea", "azure"]);
     assert_eq!(r.get("azure").unwrap().request_word(), "PR");
     assert_eq!(r.get("gitlab").unwrap().request_word(), "MR");
@@ -446,8 +446,8 @@ struct FakeClient {
 }
 
 impl Provider for FakeHost {
-    fn kind(&self) -> &'static str {
-        "fake"
+    fn kind(&self) -> String {
+        "fake".into()
     }
     fn name(&self) -> &'static str {
         "Fake"
@@ -468,8 +468,8 @@ impl Provider for FakeHost {
     fn own_host(&self, host: &str) -> Option<String> {
         (host == "fake.dev").then(|| host.to_string())
     }
-    fn scopes(&self) -> &'static [&'static str] {
-        &["read", "write"]
+    fn scopes(&self) -> Vec<String> {
+        ["read", "write"].map(String::from).to_vec()
     }
     fn token_page(&self, url: &str) -> String {
         format!("{url}/tokens")
@@ -666,4 +666,55 @@ async fn github_com_is_one_account_for_issues_and_pull_requests() {
         .await
         .unwrap_err();
     assert_eq!(e.to_string(), "Indique l'e-mail.");
+}
+
+#[test]
+fn a_registry_is_built_from_a_list_of_hosts() {
+    let r = Registry::from_providers(vec![Arc::new(FakeHost { api: String::new() })]);
+    assert_eq!(r.all().len(), 1);
+    assert_eq!(r.get("fake").unwrap().scopes(), ["read", "write"]);
+    assert!(r.get("github").is_none());
+    // The list's order is the registry's: the standard hosts, then one more.
+    let all = Registry::from_providers(Registry::standard().all().to_vec())
+        .with(Arc::new(FakeHost { api: String::new() }));
+    let kinds: Vec<String> = all.all().iter().map(|p| p.kind()).collect();
+    assert_eq!(kinds.last().map(String::as_str), Some("fake"));
+    assert_eq!(kinds.len(), 6);
+}
+
+#[test]
+fn a_cli_says_where_its_token_is_without_code() {
+    let gh = CliRead::Stdout;
+    assert_eq!(gh.token(" ghp_x\n", ""), Some("ghp_x".into()));
+    assert_eq!(gh.token("  \n", "boom"), None);
+    let az = CliRead::StdoutWord;
+    assert_eq!(az.token("a.b.c\r\n", ""), Some("a.b.c".into()));
+    assert_eq!(az.token("two words", ""), None);
+    let after = CliRead::After("Token:".into());
+    assert_eq!(
+        after.token("", "x\n  ✓ Token: glpat-1\n"),
+        Some("glpat-1".into())
+    );
+    assert_eq!(after.token("Token: ****", ""), None);
+}
+
+#[test]
+fn a_probe_says_what_tells_its_host_without_code() {
+    let p = Probe {
+        path: "/api/v4/version".into(),
+        statuses: vec![401],
+        key_status: 200,
+        key: "version".into(),
+    };
+    assert!(p.matches(401, &Value::Null));
+    assert!(p.matches(200, &serde_json::json!({"version": "1.0"})));
+    assert!(!p.matches(200, &serde_json::json!({"version": 1})));
+    assert!(!p.matches(404, &serde_json::json!({"version": "1"})));
+    let only_key = Probe {
+        path: "/v".into(),
+        key_status: 200,
+        key: "version".into(),
+        ..Default::default()
+    };
+    assert!(!only_key.matches(401, &Value::Null));
 }

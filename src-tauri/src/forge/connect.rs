@@ -54,7 +54,7 @@ pub async fn check(
             let missing = id
                 .scopes
                 .as_deref()
-                .map(|s| missing_scopes(provider.scopes(), s))
+                .map(|s| missing_scopes(&provider.scopes(), s))
                 .unwrap_or_default();
             let health = if missing.is_empty() {
                 Health::Connected
@@ -103,7 +103,7 @@ pub async fn guess(registry: &Registry, http: &reqwest::Client, url: &str) -> Op
         };
         let status = resp.status().as_u16();
         let body: Value = resp.json().await.unwrap_or(Value::Null);
-        if (probe.matches)(status, &body) {
+        if probe.matches(status, &body) {
             return Some(p.kind().to_string());
         }
     }
@@ -219,7 +219,7 @@ impl<R: Runtime> Core<R> {
         let Some(cli) = provider.cli(host) else {
             bail!(tr!("{name} : donne un jeton.", "{name}: give a token."));
         };
-        let (program, login) = (cli.program, cli.login);
+        let (program, login) = (cli.program.as_str(), cli.login.as_str());
         let none = || {
             anyhow!(tr!(
                 "{name} : donne un jeton, ou connecte la CLI {program} à {host} ({login})",
@@ -251,7 +251,8 @@ impl<R: Runtime> Core<R> {
             String::from_utf8_lossy(&out.stdout),
             String::from_utf8_lossy(&out.stderr),
         );
-        let token = (cli.parse)(&stdout, &stderr)
+        let token = cli
+            .parse(&stdout, &stderr)
             .filter(|_| out.status.success())
             .ok_or_else(none)?;
         self.forge_cli_tokens
@@ -316,15 +317,15 @@ impl<R: Runtime> Core<R> {
             .all()
             .iter()
             .map(|p| ProviderView {
-                kind: p.kind().into(),
+                kind: p.kind(),
                 name: p.name().into(),
                 request_word: p.request_word().into(),
                 default_host: p.default_host().map(str::to_string),
                 needs_email: p.needs_email(),
-                cli: p.cli("").map(|c| c.program.to_string()),
-                cli_login: p.cli("").map(|c| c.login.to_string()),
+                cli: p.cli("").map(|c| c.program),
+                cli_login: p.cli("").map(|c| c.login),
                 address_hint: p.address_hint().map(str::to_string),
-                scopes: p.scopes().iter().map(|s| s.to_string()).collect(),
+                scopes: p.scopes(),
                 capabilities: p.capabilities(),
             })
             .collect();
@@ -484,7 +485,7 @@ impl<R: Runtime> Core<R> {
             bail!(status.error.unwrap_or_default());
         };
         let mut account = ForgeAccount {
-            kind: provider.kind().into(),
+            kind: provider.kind(),
             url,
             email,
             token,

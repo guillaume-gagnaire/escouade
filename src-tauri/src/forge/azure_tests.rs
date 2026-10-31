@@ -200,10 +200,10 @@ fn the_account_is_an_organizations_and_its_token_page_and_cli_are_azures() {
         .windows(2)
         .any(|w| w == ["--resource", "499b84ac-1321-427f-aa17-267ca6975798"]));
     assert_eq!(
-        (az.parse)("eyJ0.eyJ1.c2ln\r\n", ""),
+        az.parse("eyJ0.eyJ1.c2ln\r\n", ""),
         Some("eyJ0.eyJ1.c2ln".into())
     );
-    assert_eq!((az.parse)("", "ERROR: Please run 'az login'"), None);
+    assert_eq!(az.parse("", "ERROR: Please run 'az login'"), None);
     // A Server knows no Entra ID token.
     assert!(p.cli("tfs.acme.dev").is_none());
     let caps = p.capabilities();

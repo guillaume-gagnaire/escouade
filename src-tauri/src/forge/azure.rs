@@ -72,8 +72,8 @@ fn repo(org: &str, project: &str, name: &str) -> Option<RepoRef> {
 }
 
 impl Provider for AzureProvider {
-    fn kind(&self) -> &'static str {
-        "azure"
+    fn kind(&self) -> String {
+        "azure".into()
     }
 
     fn name(&self) -> &'static str {
@@ -177,8 +177,10 @@ impl Provider for AzureProvider {
 
     /// Code (read and write), Build (read and execute), and Work Items (read and write) for
     /// Azure Boards. Azure does not tell a token's rights: none is checked.
-    fn scopes(&self) -> &'static [&'static str] {
-        &["vso.code_write", "vso.build_execute", "vso.work_write"]
+    fn scopes(&self) -> Vec<String> {
+        ["vso.code_write", "vso.build_execute", "vso.work_write"]
+            .map(String::from)
+            .to_vec()
     }
 
     fn token_page(&self, url: &str) -> String {
@@ -191,7 +193,7 @@ impl Provider for AzureProvider {
             return None;
         }
         Some(CliToken {
-            program: "az",
+            program: "az".into(),
             args: [
                 "account",
                 "get-access-token",
@@ -204,11 +206,8 @@ impl Provider for AzureProvider {
             ]
             .map(str::to_string)
             .to_vec(),
-            login: "az login",
-            parse: |out, _| {
-                let t = out.trim();
-                (!t.is_empty() && !t.contains(char::is_whitespace)).then(|| t.to_string())
-            },
+            login: "az login".into(),
+            read: CliRead::StdoutWord,
         })
     }
 
