@@ -67,7 +67,11 @@ test('a declarative plugin is installed from a folder, and an invalid one says w
     later: { field: 'of a later Escouade' },
   });
 
-  expect(await invoke<View[]>('plugins_list')).toEqual({ ok: [] });
+  // The app gives its own (INT-4): the demonstration plugin, from the start, with the origin builtin.
+  expect(await invoke<View[]>('plugins_list')).toMatchObject({
+    ok: [{ id: 'dev.escouade.minimal', origin: { kind: 'builtin' }, state: { kind: 'ready' } }],
+  });
+  expect(await invoke('plugin_remove', { id: 'dev.escouade.minimal', keep: false })).toHaveProperty('err');
   // Read first (the install window's), then installed on the user's consent.
   const read = await invoke<{ token: string }>('plugin_inspect_folder', { path: src });
   expect('ok' in read, JSON.stringify(read)).toBe(true);
@@ -103,7 +107,12 @@ test('a declarative plugin is installed from a folder, and an invalid one says w
   // Started anew, the app finds it as it was installed.
   invoke = invokeOn(await app.restart());
   const again = await invoke<View[]>('plugins_list');
-  expect(again).toMatchObject({ ok: [{ id: 'dev.exemple.contraste', fingerprint: view.fingerprint, state: { kind: 'ready' } }] });
+  expect(again).toMatchObject({
+    ok: [
+      { id: 'dev.exemple.contraste', fingerprint: view.fingerprint, state: { kind: 'ready' } },
+      { id: 'dev.escouade.minimal', origin: { kind: 'builtin' } },
+    ],
+  });
 
   // PLG-13: its icon by its id alone, as an address the window shows; none without one; an unknown id refused.
   expect(await invoke('plugin_icon', { id: 'dev.exemple.contraste' })).toEqual({ ok: null });
@@ -129,5 +138,5 @@ test('a declarative plugin is installed from a folder, and an invalid one says w
   expect(await invoke('plugin_remove', { id: 'dev.exemple.contraste', keep: false })).toEqual({ ok: true });
   expect(fs.existsSync(copy)).toBe(false);
   expect(fs.existsSync(path.join(src, 'escouade-plugin.json'))).toBe(true);
-  expect(await invoke<View[]>('plugins_list')).toEqual({ ok: [] });
+  expect(await invoke<View[]>('plugins_list')).toMatchObject({ ok: [{ id: 'dev.escouade.minimal' }] });
 });

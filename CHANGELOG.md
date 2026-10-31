@@ -8,6 +8,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- La vue Plugins a sa section « Livrés avec Escouade » : des plugins que l’app donne, signés et mis à jour avec elle, qui se coupent pour l’app ou pour un projet mais ne se désinstallent pas ; un plugin du store de même identifiant est refusé. Le premier est un plugin de démonstration.
 - Les plugins Contraste élevé, Discord, Slack et Règles de l’équipe sont des plugins d’Escouade, sur le store sous `dev.escouade.*` et tenus dans le dépôt de l’app ; seul ce dépôt peut publier ces identifiants. Une version installée sous l’ancien identifiant `dev.exemple.*` se remplace depuis la vue Plugins.
 - La page de l’app que l’agent vient de développer s’ouvre toute seule dans Escouade quand « ▶ Tester » est prêt, dans la vue « Page » de l’agent ou dans une fenêtre « Pages » à part, avec ses outils de développement (F12) et trois largeurs : pleine, tablette et mobile. Elle tourne à part, sans accès à Escouade ni à tes cookies ; Réglages › Projets garde le navigateur du système si tu préfères.
 - Les plugins ont leur vue, ouverte par l’icône de la barre des projets : installer depuis un dossier ou un dépôt git après avoir vu d’où vient le plugin, son empreinte, ce qu’il ajoute et ce qu’il pourra faire, la permission la plus forte d’abord ; l’activer pour l’app ou projet par projet, un projet privé restant coupé d’office ; lui retirer une permission, régler ses secrets, lire son journal, le désinstaller.

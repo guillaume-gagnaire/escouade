@@ -229,6 +229,21 @@ pub(crate) fn program_path(folder: &Path, run: &manifest::Run, escouade_dir: &Pa
     }
 }
 
+/// Whether the program of `run` for this system is one of the app's (`{escouade}/…`).
+fn app_program(run: &manifest::Run) -> bool {
+    let sys = if cfg!(windows) {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else {
+        "linux"
+    };
+    run.by_system
+        .get(sys)
+        .unwrap_or(&run.command)
+        .starts_with(manifest::ESCOUADE_DIR)
+}
+
 /// Whether `word` is one of `patterns`: the same, or one a `prefix*` takes in.
 pub(crate) fn matches(pattern: &str, word: &str) -> bool {
     match pattern.strip_suffix('*') {
@@ -430,10 +445,7 @@ impl Runtime {
         app_version: &str,
         limits: Limits,
     ) -> Arc<Self> {
-        let escouade_dir = std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(Path::to_path_buf))
-            .unwrap_or_default();
+        let escouade_dir = plugins.app_dir().to_path_buf();
         let rt = Arc::new_cyclic(|me| Self {
             plugins: plugins.clone(),
             secrets,
@@ -517,7 +529,9 @@ impl Runtime {
         let mut started = Vec::new();
         for v in self.plugins.list(Lang::En) {
             let Some(m) = &v.manifest else { continue };
+            // Off for the app: nothing of it runs.
             if v.state != Loaded::Ready
+                || !v.choices.enabled
                 || m.run.is_none()
                 || !m.activation.iter().any(|a| matches(a, word))
             {
@@ -979,6 +993,15 @@ impl Host {
         };
         let run = self.manifest.run.as_ref().expect("a host has a program");
         let program = rt.program_of(&self.folder, run);
+        // The app starts no program of its own but its own: that of a plugin it gives is checked before it runs (INT-4).
+        if app_program(run) {
+            if let Err(reason) = super::builtin::check_program(&program, &rt.escouade_dir) {
+                self.stop_with(Stop::Refused {
+                    reason: format!("not the app's own program: {reason}"),
+                });
+                return;
+            }
+        }
         let conn = match self.spawn(&rt, &program, generation) {
             Ok(Some(c)) => c,
             // Stopped meanwhile.
