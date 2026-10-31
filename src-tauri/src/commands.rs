@@ -3972,3 +3972,145 @@ pub fn discussion_drop(
 pub fn deep_links_take(inbox: State<'_, crate::deeplink::Inbox>) -> Vec<crate::deeplink::DeepLink> {
     inbox.take()
 }
+
+// ---------- The launches' pages (ESC-311) ----------
+
+/// Whether an address is Escouade's own (`navigation::destination`), never loaded in a page.
+fn own_of(app: &tauri::AppHandle) -> crate::devpage::Own {
+    use tauri::Manager;
+    let dev = app
+        .try_state::<crate::navigation::Home>()
+        .and_then(|h| h.dev.clone());
+    Arc::new(move |u: &tauri::Url| {
+        crate::navigation::destination(u, dev.as_ref()) == crate::navigation::Destination::App
+    })
+}
+
+/// What happens to the pages, to the window.
+fn tell_of(core: &Arc<Core>) -> crate::devpage::Tell {
+    let hub = Arc::downgrade(core);
+    Arc::new(move |page| {
+        if let Some(core) = hub.upgrade() {
+            core.hub.emit(UiEvent::DevPage { page });
+        }
+    })
+}
+
+/// Opens the page of agent `agent_id`'s launch at `url` (or loads it in the page already open):
+/// in the agent's view at `bounds`, or in its project's « Pages » window (`detached`).
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub fn devpage_open(
+    app: tauri::AppHandle,
+    core: CoreState,
+    pages: State<Arc<crate::devpage::Pages>>,
+    agent_id: String,
+    title: String,
+    url: String,
+    detached: bool,
+    bounds: Option<crate::devpage::Bounds>,
+) -> Res<crate::devpage::PageView> {
+    let project_id = core
+        .agent(&agent_id)
+        .map_err(err)?
+        .lock()
+        .meta
+        .project_id
+        .clone();
+    let own = own_of(&app);
+    crate::devpage::open(
+        &app,
+        &pages,
+        crate::devpage::Open {
+            agent_id: &agent_id,
+            project_id: &project_id,
+            title: &title,
+            url: &url,
+            detached,
+            bounds,
+            data_root: core.data.root(),
+            visible: bounds.is_some(),
+        },
+        own,
+        tell_of(&core),
+    )?;
+    pages.get(&agent_id).ok_or_else(|| "no page".into())
+}
+
+/// The page of agent `agent_id` in its view: placed at `bounds`, or hidden (none).
+#[tauri::command]
+pub fn devpage_place(
+    app: tauri::AppHandle,
+    pages: State<Arc<crate::devpage::Pages>>,
+    agent_id: String,
+    bounds: Option<crate::devpage::Bounds>,
+) -> Res<()> {
+    crate::devpage::place(&app, &pages, &agent_id, bounds)
+}
+
+/// Back, forward, reload, or `to` (an address typed in its bar).
+#[tauri::command]
+pub fn devpage_go(
+    app: tauri::AppHandle,
+    agent_id: String,
+    action: String,
+    to: Option<String>,
+) -> Res<()> {
+    crate::devpage::go(&app, &agent_id, &action, to.as_deref())
+}
+
+/// The devtools of the page of agent `agent_id`.
+#[tauri::command]
+pub fn devpage_devtools(app: tauri::AppHandle, agent_id: String) -> Res<()> {
+    crate::devpage::devtools(&app, &agent_id)
+}
+
+/// Moves the page to its project's « Pages » window, or back to the agent's view.
+#[tauri::command]
+pub fn devpage_detach(
+    app: tauri::AppHandle,
+    pages: State<Arc<crate::devpage::Pages>>,
+    agent_id: String,
+    detached: bool,
+) -> Res<crate::devpage::PageView> {
+    crate::devpage::detach(&app, &pages, &agent_id, detached)
+}
+
+/// The « Pages » window shows the page of agent `agent_id` (its tab clicked).
+#[tauri::command]
+pub fn devpage_show(
+    app: tauri::AppHandle,
+    pages: State<Arc<crate::devpage::Pages>>,
+    agent_id: String,
+) -> Res<()> {
+    let page = pages.get(&agent_id).ok_or("no page for this agent")?;
+    crate::devpage::show_in_window(&app, &pages, &page.project_id, &agent_id)
+}
+
+/// Closes the page of agent `agent_id`.
+#[tauri::command]
+pub fn devpage_close(
+    app: tauri::AppHandle,
+    pages: State<Arc<crate::devpage::Pages>>,
+    agent_id: String,
+) -> Res<()> {
+    crate::devpage::close(&app, &pages, &agent_id)
+}
+
+/// The pages open: all of them, or those of project `project_id` (a « Pages » window's bar).
+#[tauri::command]
+pub fn devpage_list(
+    pages: State<Arc<crate::devpage::Pages>>,
+    project_id: Option<String>,
+) -> crate::devpage::PagesOf {
+    match project_id {
+        Some(p) => crate::devpage::PagesOf {
+            pages: pages.of_project(&p),
+            shown: pages.shown_in_window(&p),
+        },
+        None => crate::devpage::PagesOf {
+            pages: pages.all(),
+            shown: None,
+        },
+    }
+}

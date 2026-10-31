@@ -41,3 +41,12 @@ Tous ces textes existent en français et en anglais (`src/lib/i18n`).
 - **Devtools en version publiée** : fonctionnalité `devtools` de Tauri (sinon `open_devtools` n'existe qu'en debug). Sous macOS elle passe par des API privées de WebKit : pas de Mac App Store, sans effet pour Escouade (Developer ID, notarisée). Sous Windows (WebView2), les devtools s'ouvrent toujours dans leur propre fenêtre ; sous macOS et Linux, l'inspecteur s'attache à la page.
 - **Stockage à part** : `data_directory` (Windows, Linux) par projet ; sous macOS `data_store_identifier` (macOS 14 et plus), et en deçà une session `incognito`.
 - **Isolation** : la page est chargée en `WebviewUrl::External`, sans capacité Tauri (aucune fenêtre ni webview de ses `capabilities`), `on_navigation` refuse toute autre origine que celle du lancement et l'envoie au navigateur du système, `on_new_window` aussi.
+
+## Le choix (2026-10-31)
+
+**A, avec la fenêtre de C en plus.** « Page » dans le sélecteur de vue de l'agent par défaut ; un bouton de la barre
+« Ouvrir dans une fenêtre à part » détache la page dans la fenêtre « demo-api · Pages » (un onglet par worktree,
+déplaçable sur un second écran) ; « Ouvrir dans le navigateur du système » reste. Un réglage par projet choisit où
+s'ouvrent les pages des lancements : dans l'agent, dans une fenêtre à part, ou dans le navigateur du système. La webview
+enfant (fonctionnalité `unstable` de Tauri) est acceptée pour A : elle se masque quand un menu, la palette ou une fenêtre
+d'Escouade passe dessus, testé sur les trois systèmes (WebKitGTK sous Linux compris).

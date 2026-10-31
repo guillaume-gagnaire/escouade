@@ -1591,6 +1591,7 @@ pub(crate) fn blank_project(path: &str) -> Project {
         worktree_teardown: Vec::new(),
         integrations: ProjectIntegrations::default(),
         commit_mode: CommitMode::default(),
+        pages_open: Default::default(),
         account: String::new(),
         worktree_dir: String::new(),
         worktree_at_first_message: true,
@@ -8255,6 +8256,7 @@ impl<R: Runtime> Core<R> {
         cur.worktree_setup = p.worktree_setup;
         cur.worktree_teardown = p.worktree_teardown;
         cur.commit_mode = p.commit_mode;
+        cur.pages_open = p.pages_open;
         cur.account = account;
         cur.engine = p.engine;
         // « Projet privé »: the MCP server reads it at each call (`mcp::resolve::Sight`), the

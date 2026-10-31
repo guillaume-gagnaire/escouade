@@ -702,6 +702,10 @@ pub struct Project {
     /// "Commit": who writes the commits of the files panel's « Commit… » and « Commit tout… ».
     #[serde(default)]
     pub commit_mode: CommitMode,
+    /// « Ouvrir les pages des lancements » (ESC-311): where the page of a launch opens once it answers.
+    /// Kept on this machine, never in its `.escouade.yml`.
+    #[serde(default)]
+    pub pages_open: PagesOpen,
     /// « Compte préféré »: the Claude account its new agents and its tickets go to (an
     /// `Account`'s id); empty is « Automatique » (`accounts::pick`).
     #[serde(default)]
@@ -896,6 +900,19 @@ pub fn default_agent_branch_prefix() -> String {
 
 pub fn default_ticket_branch_prefix() -> String {
     crate::paths::TICKET_BRANCH_PREFIX.into()
+}
+
+/// Where the page of a project's launch opens once it answers (ESC-311).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum PagesOpen {
+    /// « Dans l'agent »: the agent's view « Page », inside the window.
+    #[default]
+    Agent,
+    /// « Dans une fenêtre à part »: the project's « Pages » window, one tab per worktree.
+    Window,
+    /// « Dans le navigateur du système »: as before the browser inside Escouade.
+    System,
 }
 
 /// Who writes a project's commits asked from the files panel.
@@ -2672,6 +2689,10 @@ pub enum UiEvent {
         pause: Option<AutopilotPause>,
         #[serde(skip_serializing_if = "BTreeMap::is_empty")]
         projects: BTreeMap<String, AutopilotPause>,
+    },
+    /// What happened to a launch's page (ESC-311): a load, a link opened outside, its devtools.
+    DevPage {
+        page: crate::devpage::PageEvent,
     },
     /// An address to open in the default browser (a pull request to finish on GitHub).
     OpenUrl {

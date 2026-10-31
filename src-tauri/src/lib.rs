@@ -53,6 +53,9 @@ mod deeplink;
 #[cfg(test)]
 mod deeplink_tests;
 mod desktop;
+mod devpage;
+#[cfg(test)]
+mod devpage_tests;
 mod discussion;
 #[cfg(test)]
 mod discussion_tests;
@@ -352,6 +355,9 @@ fn build_window(app: &tauri::App) -> tauri::Result<()> {
     // that would take it from the user's app, the window still hidden.
     let mut window = window.clone();
     window.focus &= !paths::hidden_window();
+    // Built with Tauri’s `devtools` for the launches’ pages (ESC-311): the window’s own stay a
+    // debug build’s.
+    window.devtools = Some(cfg!(debug_assertions));
     // Only the dev server's address is the app's besides its own.
     let dev = if tauri::is_dev() {
         config.build.dev_url.clone()
@@ -461,6 +467,8 @@ pub fn run() {
                 log::warn!("Escouade {version} did not install: the app still runs this version");
             }
             app.manage(deeplink::Inbox::default());
+            // The pages of the launches (ESC-311).
+            app.manage(Arc::new(devpage::Pages::default()));
             let (core, git_rx) = Core::load(
                 app.handle().clone(),
                 paths::DataDir::new(paths::default_data_dir()),
@@ -578,6 +586,14 @@ pub fn run() {
                 commands::subscribe,
                 commands::set_ui,
                 commands::open_url,
+                commands::devpage_open,
+                commands::devpage_place,
+                commands::devpage_go,
+                commands::devpage_devtools,
+                commands::devpage_detach,
+                commands::devpage_show,
+                commands::devpage_close,
+                commands::devpage_list,
                 commands::open_path,
                 commands::save_settings,
                 commands::claude_locate,

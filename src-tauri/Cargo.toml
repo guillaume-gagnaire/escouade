@@ -25,7 +25,7 @@ crate-type = ["rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri = { version = "2", features = ["tray-icon", "image-png", "devtools", "unstable"] }
 tauri-plugin-deep-link = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
@@ -165,7 +165,7 @@ strip = true
 [dev-dependencies]
 # Each test process's temporary folder of its own, given before `main` (`src/test_tmp.rs`).
 ctor = "1"
-tauri = { version = "2", features = ["test", "tray-icon", "image-png"] }
+tauri = { version = "2", features = ["test", "tray-icon", "image-png", "devtools", "unstable"] }
 # An https server with a self-signed certificate (a corporate proxy's), for the TLS settings.
 rcgen = { version = "0.13", default-features = false, features = ["crypto", "ring"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
