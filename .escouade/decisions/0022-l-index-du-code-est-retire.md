@@ -2,7 +2,7 @@
 number: 22
 title: "L'index du code est retiré"
 date: "2026-10-31"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-310"
 pages: ["docs/index-du-code","docs/recherche-par-le-sens","docs/spec-a-jour","docs/planifier","docs/discussions","docs/documents","harness/memoire-partagee"]
@@ -11,8 +11,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"docs/index-du-code","added":9,"removed":91},{"page":"docs/recherche-par-le-sens","added":13,"removed":0},{"page":"docs/spec-a-jour","added":3,"removed":1},{"page":"docs/planifier","added":1,"removed":1},{"page":"docs/discussions","added":1,"removed":1},{"page":"docs/documents","added":1,"removed":1},{"page":"harness/memoire-partagee","added":1,"removed":1}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-10-31T16:03:49+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
