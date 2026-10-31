@@ -2,7 +2,7 @@
 number: 26
 title: "La page d'un lancement s'ouvre dans Escouade, à part, plutôt que dans le navigateur du système"
 date: "2026-10-31"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-311"
 pages: ["kanban/page-du-lancement","kanban/lancement-de-test"]
@@ -11,8 +11,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"kanban/page-du-lancement","added":29,"removed":1},{"page":"kanban/lancement-de-test","added":4,"removed":4}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-10-31T19:00:39+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
