@@ -3,6 +3,8 @@ import { chmodSync, cpSync, existsSync, mkdirSync, statSync, writeFileSync } fro
 import { dirname, join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { inside } from './extract';
+import { firstPartyRepo, type Env } from '../../server/utils/config';
+import { RESERVED_PREFIX } from '../../../schemas/plugin-manifest.mjs';
 
 // The conformance bench (PLG-3, `escouade-plugin test`) played on the plugin in a container without network (docs/STORE.md
 // §4.2, step 4): read-only, `/tmp` in memory, bounded in memory, processes and time, no capability, an unprivileged user,
@@ -101,8 +103,21 @@ export function benchFolder(src: string, dest: string, manifest: Record<string, 
   return dest;
 }
 
+/**
+ * Whether the bench plays the plugin with `--first-party` (ESC-314): an id `dev.escouade.*` from the app's repository
+ * (`plugins/<id>/`), which the store already let through by its GitHub id. It takes the reserved ids, never the app's
+ * programs (`{escouade}/…`); any other plugin is played as a third party's.
+ */
+export function firstPartyBench(id: string, repository: string, env: Env = process.env): boolean {
+  const repo = repository
+    .replace(/^https:\/\/github\.com\//i, '')
+    .replace(/\.git$/i, '')
+    .toLowerCase();
+  return id.startsWith(RESERVED_PREFIX) && repo === firstPartyRepo(env).toLowerCase();
+}
+
 /** The arguments of `<engine> run`, every limit of the sandbox in them. */
-export function runArgs(folder: string, cli: string, image: string, name: string): string[] {
+export function runArgs(folder: string, cli: string, image: string, name: string, firstParty = false): string[] {
   return [
     'run',
     '--rm',
@@ -131,6 +146,7 @@ export function runArgs(folder: string, cli: string, image: string, name: string
     '--json',
     '--lang',
     'fr',
+    ...(firstParty ? ['--first-party'] : []),
   ];
 }
 
@@ -146,7 +162,7 @@ export function refusals(seen: Seen[], raw = ''): string[] {
 }
 
 /** Plays the bench on `folder`; the result says why when it was not played. */
-export async function playBench(setup: BenchSetup, folder: string, why?: string): Promise<BenchResult> {
+export async function playBench(setup: BenchSetup, folder: string, why?: string, firstParty = false): Promise<BenchResult> {
   if (!setup.engine) return { played: false, why: why ?? 'aucun moteur de conteneur' };
   if (!setup.cli)
     return {
@@ -154,7 +170,7 @@ export async function playBench(setup: BenchSetup, folder: string, why?: string)
       why: 'pas d’`escouade-plugin` pour Linux à mettre dans le conteneur (ESCOUADE_PLUGIN_LINUX : le binaire Linux x64, de l’AppImage ou de `cargo build --bin escouade-plugin` sous Linux)',
     };
   const name = `escouade-review-${randomBytes(6).toString('hex')}`;
-  const args = runArgs(folder, setup.cli, setup.image, name);
+  const args = runArgs(folder, setup.cli, setup.image, name, firstParty);
   const { program, prefix = [] } = setup.engine;
   const command = [program, ...args].join(' ');
   const out = await new Promise<{ code: number | null; stdout: string; stderr: string; timedOut: boolean }>((done) => {

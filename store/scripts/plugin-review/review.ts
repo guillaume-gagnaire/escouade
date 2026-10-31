@@ -1,7 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { verifyAttestation, type Runner } from './attest';
-import { benchFolder, playBench, type BenchSetup } from './bench';
+import { benchFolder, firstPartyBench, playBench, type BenchSetup } from './bench';
 import { diffFolders, grownPermissions } from './diff';
 import { baseVersion, catalog, checkTag, download, Integrity, type Source } from './download';
 import { extract, problemText } from './extract';
@@ -134,7 +134,7 @@ export async function review(o: ReviewOptions): Promise<ReviewDone> {
 
     const linux = got.binaries['linux-x64'] ?? null;
     const benchDir = data.manifest?.run ? benchFolder(unpackedAt, join(dir, 'bench'), data.manifest, linux) : unpackedAt;
-    data.bench = await playBench(o.bench, benchDir, o.benchWhy);
+    data.bench = await playBench(o.bench, benchDir, o.benchWhy, firstPartyBench(o.id, f.repository));
   } catch (e) {
     if (!(e instanceof Integrity)) throw e;
     data.integrity = e.message;
