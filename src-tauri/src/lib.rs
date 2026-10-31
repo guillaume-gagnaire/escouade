@@ -132,6 +132,8 @@ mod planfiles;
 mod planfiles_tests;
 mod plugins;
 #[cfg(test)]
+mod plugins_adapters_tests;
+#[cfg(test)]
 mod plugins_bench_tests;
 #[cfg(test)]
 mod plugins_decide_tests;

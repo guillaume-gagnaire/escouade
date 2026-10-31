@@ -50,10 +50,14 @@ pub enum Scenario {
     Crash,
     /// It answers `shutdown`, then ends.
     Shutdown,
+    /// A source of tickets: `account/me` and the lists answered, or refused by a typed error (INT-5).
+    Tickets,
+    /// A code host: `account/me` and a pull request read, or refused by a typed error (INT-5).
+    Forge,
 }
 
 impl Scenario {
-    pub const ALL: [Scenario; 9] = [
+    pub const ALL: [Scenario; 11] = [
         Scenario::Manifest,
         Scenario::Initialize,
         Scenario::Version,
@@ -63,6 +67,8 @@ impl Scenario {
         Scenario::Secret,
         Scenario::Crash,
         Scenario::Shutdown,
+        Scenario::Tickets,
+        Scenario::Forge,
     ];
 
     pub fn label(self, lang: Lang) -> &'static str {
@@ -76,6 +82,8 @@ impl Scenario {
             Scenario::Secret => ("Un secret", "A secret"),
             Scenario::Crash => ("Plantage", "Crash"),
             Scenario::Shutdown => ("Fermeture", "Shutdown"),
+            Scenario::Tickets => ("Source de tickets", "Ticket source"),
+            Scenario::Forge => ("Hébergeur", "Code host"),
         };
         match lang {
             Lang::Fr => fr,
@@ -802,6 +810,33 @@ async fn program(b: &mut Bench<'_>, m: &Manifest) -> Option<Measure> {
         }
     }
 
+    // The points it serves (INT-5): the calls of the core's adapters, answered or refused typed.
+    point(
+        b,
+        &first,
+        Scenario::Tickets,
+        declared(m, "ticketSources"),
+        &[
+            ("account/me", json!({ "point": "ticketSource" })),
+            ("tickets/containers", json!({})),
+        ],
+    )
+    .await;
+    point(
+        b,
+        &first,
+        Scenario::Forge,
+        declared(m, "forges"),
+        &[
+            ("account/me", json!({ "point": "forge" })),
+            (
+                "forge/pullRequestsOfBranch",
+                json!({ "repo": { "namespace": "bench", "name": "bench" }, "branch": "bench" }),
+            ),
+        ],
+    )
+    .await;
+
     // What it does not serve, refused at once.
     let unknown = b
         .timed(&first, UNKNOWN, &json!({}), timeout_of(UNKNOWN))
@@ -1169,4 +1204,108 @@ fn secret(b: &mut Bench, m: &Manifest) {
             ),
         );
     }
+}
+
+/// The id of the first of the manifest's `contributes.<point>`, when it has some.
+fn declared(m: &Manifest, point: &str) -> Option<String> {
+    m.contributes
+        .get(point)?
+        .as_array()?
+        .first()?
+        .get("id")?
+        .as_str()
+        .map(str::to_string)
+}
+
+/// Whether `code` is one the contract names for a refusal: an HTTP status (`-(32000 + status)`),
+/// a refusal that lasts, or a call the service does not serve.
+fn typed_code(code: i64) -> bool {
+    (-32_599..=-32_400).contains(&code)
+        || code == super::adapters::REFUSED
+        || code == METHOD_NOT_FOUND
+}
+
+/// The scenario of a point of extension (a source, a host): each call answered within its delay,
+/// by a result or a typed error. Not played when the manifest declares no such point.
+async fn point(
+    b: &mut Bench<'_>,
+    s: &Session,
+    scenario: Scenario,
+    id: Option<String>,
+    calls: &[(&str, Value)],
+) {
+    let lang = b.o.lang;
+    let Some(id) = id else {
+        b.set(
+            scenario,
+            Verdict::Skip,
+            tr_in!(
+                lang,
+                "il ne déclare pas ce point (`contributes`)",
+                "it declares no such point (`contributes`)"
+            ),
+            None,
+        );
+        return;
+    };
+    let mut done = Vec::new();
+    for (method, extra) in calls {
+        let mut params = json!({ "source": id, "forge": id, "account": {} });
+        if let (Some(p), Value::Object(extra)) = (params.as_object_mut(), extra) {
+            p.extend(extra.clone());
+        }
+        let (said, missing) = match b.timed(s, method, &params, timeout_of(method)).await {
+            Reply::Answered { result: Ok(_), .. } => {
+                done.push(format!("{method}: ok"));
+                continue;
+            }
+            Reply::Answered { result: Err(e), .. } if typed_code(e.code) => {
+                done.push(format!("{method}: {}", e.code));
+                continue;
+            }
+            Reply::Answered { result: Err(e), .. } => (
+                tr_in!(
+                    lang,
+                    "{method} : erreur {} ({}) qui n'est pas typée",
+                    "{method}: error {} ({}) which is not typed",
+                    e.message,
+                    e.code
+                ),
+                tr_in!(
+                    lang,
+                    "dire une erreur du service par `-(32000 + statut)` (-32401 : jeton refusé), un refus durable par -32010, un appel non servi par -32601.",
+                    "say a service error by `-(32000 + status)` (-32401: token refused), a lasting refusal by -32010, an unserved call by -32601."
+                ),
+            ),
+            Reply::Silent => (
+                tr_in!(
+                    lang,
+                    "{method} : aucune réponse dans son délai",
+                    "{method}: no answer within its delay"
+                ),
+                tr_in!(
+                    lang,
+                    "répondre à chaque appel, même par une erreur : sans réponse, la synchro attend en vain.",
+                    "answer every call, even by an error: without an answer, the sync waits in vain."
+                ),
+            ),
+            Reply::Ended { code, tail } => (
+                tr_in!(
+                    lang,
+                    "{method} : le programme s'est terminé ({}){}",
+                    "{method}: the program ended ({}){}",
+                    code.map_or("no code".into(), |c| format!("code {c}")),
+                    tail_of(&tail)
+                ),
+                tr_in!(
+                    lang,
+                    "ne pas planter sur un appel d'un point déclaré.",
+                    "not crash on a call of a declared point."
+                ),
+            ),
+        };
+        b.fail(scenario, said, missing);
+        return;
+    }
+    b.pass(scenario, done.join(" ; "));
 }

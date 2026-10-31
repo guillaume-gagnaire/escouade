@@ -78,7 +78,7 @@ pub fn parse(url: &str) -> Option<Address> {
 
 /// A repository on a code host: its namespace (owner, organization, GitLab group and subgroups,
 /// Bitbucket workspace) and its name.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RepoRef {
     pub namespace: String,
