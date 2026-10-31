@@ -776,6 +776,8 @@ export interface Project {
   workflowsInRepo?: boolean;
   /** « Index du code » (ESC-251): off unless turned on, by `get_code_index` / `set_code_index` (Réglages › Projets, ESC-254). */
   codeIndex?: boolean;
+  /** Off: « Pas de workflow pour ce projet » (ESC-309), nothing read nor written of its workflows; `workflows.enabled` of its .escouade.yml when shared. Absent: on. */
+  workflowsEnabled?: boolean;
 }
 
 /** What a project's code index holds (ESC-251). */
@@ -2296,6 +2298,10 @@ export interface WorkflowScan {
   files?: { id: string; path: string; local: boolean; inRepo: boolean; updated: string | null }[];
   /** The files that could not be read, with why. */
   unreadable?: { path: string; why: string }[];
+  /** The workflows the user removed (ESC-309): never written again by a reading; `changed` when what found one changed since (proposed again). */
+  removed?: { id: string; name: string; changed: boolean }[];
+  /** « Pas de workflow pour ce projet » (ESC-309): nothing was read. */
+  off?: boolean;
 }
 
 /** How an agent's stay in a step, or outside the workflow (`step` null), ended. */

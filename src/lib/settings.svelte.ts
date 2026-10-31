@@ -140,6 +140,7 @@ type ProjectFields = Pick<
   | 'workflowFixes'
   | 'workflowsAutoRead'
   | 'workflowsInRepo'
+  | 'workflowsEnabled'
   | 'userName'
   | 'shareNew'
   | 'docsBranch'
@@ -195,6 +196,8 @@ export interface ProjectDraft {
   workflowsAutoRead: boolean;
   /** « Où garder la configuration des workflows »: in the repository (`.escouade/workflows/`), or on this machine. */
   workflowsInRepo: boolean;
+  /** Off: « Pas de workflow pour ce projet » (ESC-309). */
+  workflowsEnabled: boolean;
   /** « Ton nom dans ce projet » (ESC-190): empty is the app's. */
   userName: string;
   /** « Partager chaque nouveau ticket » (ESC-190). */
@@ -231,6 +234,7 @@ function draftOf(p: Project): ProjectDraft {
     workflowFixes,
     workflowsAutoRead,
     workflowsInRepo,
+    workflowsEnabled,
     userName,
     shareNew,
     docsBranch,
@@ -271,6 +275,8 @@ function draftOf(p: Project): ProjectDraft {
     workflowFixes: workflowFixes ?? [],
     workflowsAutoRead: workflowsAutoRead ?? true,
     workflowsInRepo: workflowsInRepo ?? true,
+    // Absent from a project of the window's tests made before ESC-309.
+    workflowsEnabled: workflowsEnabled ?? true,
     // Absent from a project of the window's tests made before ESC-190.
     userName: userName ?? '',
     shareNew: !!shareNew,
@@ -336,6 +342,7 @@ function fieldsOf(d: ProjectDraft): ProjectFields {
     workflowFixes: d.workflowFixes,
     workflowsAutoRead: d.workflowsAutoRead,
     workflowsInRepo: d.workflowsInRepo,
+    workflowsEnabled: d.workflowsEnabled,
     userName: d.userName.trim(),
     shareNew: d.shareNew,
     docsBranch: d.docsBranch.trim(),

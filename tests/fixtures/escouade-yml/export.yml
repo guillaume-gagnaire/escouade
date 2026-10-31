@@ -39,3 +39,5 @@ board:
   model: opus
   effort: high
   mode: plan
+workflows:
+  enabled: false

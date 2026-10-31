@@ -344,6 +344,21 @@ pub struct Scan {
     /// not be read, with why.
     pub files: Vec<crate::workflowfiles::FileInfo>,
     pub unreadable: Vec<crate::workflowfiles::Unreadable>,
+    /// The workflows the user removed (ESC-309): never written again by a reading, proposed again
+    /// when what found them changed.
+    pub removed: Vec<crate::workflowfiles::RemovedInfo>,
+    /// « Pas de workflow pour ce projet » (ESC-309): nothing read nor written, nothing shown.
+    pub off: bool,
+}
+
+impl Scan {
+    /// The workflows of a project that has none (« Pas de workflow pour ce projet », ESC-309).
+    pub fn off() -> Self {
+        Scan {
+            off: true,
+            ..Default::default()
+        }
+    }
 }
 
 /// Where the user's own folders are, given: the tests give a throwaway one, never the real one.
@@ -2088,6 +2103,10 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
     /// never read is read now.
     pub async fn refresh_workflows(&self, project_id: &str, force: bool) -> anyhow::Result<Scan> {
         let project = self.project(project_id)?;
+        // « Pas de workflow pour ce projet » (ESC-309): neither read nor written.
+        if !project.workflows_enabled {
+            return Ok(Scan::off());
+        }
         let file = self.data.workflows_file(project_id);
         let stored: Option<Scan> = std::fs::read(&file)
             .ok()
@@ -2113,12 +2132,18 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
         // never removed; then the workflows of the files are those the project shows and follows.
         let places = crate::workflowfiles::places(&project, &self.data);
         let mut folder = crate::workflowfiles::load_all(&places);
+        // Those the user removed are not written again (ESC-309).
+        let removals_file = crate::workflowfiles::removals_file(&self.data, project_id);
+        let before = crate::workflowfiles::Removals::load(&removals_file);
+        let mut removals = before.clone();
         let written = crate::workflowfiles::merge_reading_all(
             &places,
             &folder,
             &scan.workflows,
             Path::new(&project.path).is_dir(),
+            &mut removals,
         );
+        removals.save(&removals_file, &before);
         if !written.is_empty() {
             let mut files = FILES.lock();
             let seen = files.entry(project_id.to_string()).or_default();
@@ -2162,7 +2187,13 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
             Ok(rel) => norm(rel),
             Err(_) => norm(p),
         };
-        crate::workflowfiles::scan_of(project, folder, local, shown, &updated)
+        let mut scan = crate::workflowfiles::scan_of(project, folder, local, shown, &updated);
+        scan.removed = crate::workflowfiles::Removals::load(&crate::workflowfiles::removals_file(
+            &self.data,
+            &project.id,
+        ))
+        .listed(&local.workflows);
+        scan
     }
 
     /// The workflows of the project as its files and this machine's last reading say them, read
@@ -2172,6 +2203,9 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
         let Ok(project) = self.project(project_id) else {
             return local;
         };
+        if !project.workflows_enabled {
+            return Scan::off();
+        }
         let folder =
             crate::workflowfiles::load_all(&crate::workflowfiles::places(&project, &self.data));
         self.scan_from_files(&project, &folder, &local)
@@ -2199,6 +2233,9 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
     /// The project's corrections written into the files of its workflows (Réglages › Projets ›
     /// Workflow saved).
     pub(crate) fn write_workflow_fixes(&self, project: &crate::model::Project) {
+        if !project.workflows_enabled {
+            return;
+        }
         let places = crate::workflowfiles::places(project, &self.data);
         let folder = crate::workflowfiles::load_all(&places);
         if let Err(e) = crate::workflowfiles::set_fixes(&folder, &project.workflow_fixes) {
@@ -2215,6 +2252,9 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
         let Ok(project) = self.project(project_id) else {
             return;
         };
+        if !project.workflows_enabled {
+            return;
+        }
         let folder =
             crate::workflowfiles::load_all(&crate::workflowfiles::places(&project, &self.data));
         let fingerprint = folder.fingerprint();
@@ -2229,23 +2269,49 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
         self.workflow_fixes_changed(project_id);
     }
 
-    /// « Retirer du dépôt »: the file of a workflow goes (one this machine reads would come back
-    /// at its next reading: « Ce n'est pas un workflow » is for those).
+    /// « Retirer du dépôt »: the file of a workflow goes, and is not written again (ESC-309).
     pub async fn remove_workflow_file(
         &self,
         project_id: &str,
         workflow: &str,
     ) -> anyhow::Result<Scan> {
+        self.set_workflow_removed(project_id, workflow, true).await
+    }
+
+    /// « Supprimer » (`removed`): the workflow's file goes, and no reading writes it again; one
+    /// removed already is kept removed as it is found now (« Laisser supprimé »). « Rétablir »
+    /// (not `removed`): read and written again (ESC-309).
+    pub async fn set_workflow_removed(
+        &self,
+        project_id: &str,
+        workflow: &str,
+        removed: bool,
+    ) -> anyhow::Result<Scan> {
         let project = self.project(project_id)?;
-        let folder =
-            crate::workflowfiles::load_all(&crate::workflowfiles::places(&project, &self.data));
-        if let Some((path, _)) = folder.doc(workflow) {
-            std::fs::remove_file(path)?;
+        let file = crate::workflowfiles::removals_file(&self.data, project_id);
+        let before = crate::workflowfiles::Removals::load(&file);
+        let mut removals = before.clone();
+        if removed {
+            let folder =
+                crate::workflowfiles::load_all(&crate::workflowfiles::places(&project, &self.data));
+            let doc = folder.doc(workflow);
+            if let Some((path, _)) = doc {
+                std::fs::remove_file(path)?;
+            }
+            let reading = self.cached_reading(project_id);
+            let now = reading.workflows.iter().find(|w| w.id == workflow);
+            removals.remove(workflow, doc.map(|(_, d)| d), now);
+            removals.save(&file, &before);
+            if let Some(s) = FILES.lock().get_mut(project_id) {
+                s.1.remove(workflow);
+            }
+            let scan = self.workflows_of(project_id);
+            self.workflow_fixes_changed(project_id);
+            return Ok(scan);
         }
-        if let Some(s) = FILES.lock().get_mut(project_id) {
-            s.1.remove(workflow);
-        }
-        let scan = self.workflows_of(project_id);
+        removals.removed.remove(workflow);
+        removals.save(&file, &before);
+        let scan = self.refresh_workflows(project_id, false).await?;
         self.workflow_fixes_changed(project_id);
         Ok(scan)
     }
@@ -2264,7 +2330,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
             .projects
             .read()
             .iter()
-            .filter(|p| p.workflows_auto_read)
+            .filter(|p| p.workflows_auto_read && p.workflows_enabled)
             .map(|p| p.id.clone())
             .collect();
         let core = self.clone();

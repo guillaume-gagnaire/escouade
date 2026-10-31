@@ -146,6 +146,7 @@ export default {
       agents: 'Agents des tickets',
       harness: 'Harness',
       private: 'Projet privé',
+      workflows: 'Workflows',
       commit: 'Commit',
       integrations: 'Intégrations',
     },

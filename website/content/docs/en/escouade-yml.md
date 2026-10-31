@@ -199,6 +199,14 @@ The project’s “Launch” commands (dev servers, watchers), each in its own t
 - `remove_worktree`: “Delete the worktree of a done or deleted ticket”.
 - `model`, `effort`, `mode`: the model, effort and mode of the ticket agents (Settings › Kanban, group “Agents”). An empty value (`model: ''`) leaves the account’s. `bypassPermissions` is never in the file: a repository doesn’t lift the permissions of whoever opens it. Read, it is refused (“bypassPermissions is not shared: it is set on each machine”); set in the window, it stays a local setting, which the export doesn’t write.
 
+### workflows
+
+| Key | Type | Values | Missing | Example |
+|---|---|---|---|---|
+| `workflows.enabled` | Boolean | `true`, `false` | `true` | `enabled: false` |
+
+- `enabled`: `false` stands for “No workflow for this project” (Settings › Projects › Workflow): Escouade neither reads nor writes the project’s [workflows](workflows) and follows no agent in them, on every machine that reads the file; `.escouade/workflows/` is left as it is.
+
 ## Worktree steps
 
 Each item of `worktrees.setup` and `worktrees.teardown` is a step, in one of these two forms:

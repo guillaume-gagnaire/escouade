@@ -593,6 +593,7 @@ pub fn run() {
                 commands::refine_workflows,
                 commands::effective_workflows,
                 commands::remove_workflow_file,
+                commands::set_workflow_removed,
                 commands::agent_merge_check,
                 commands::merge_agent_repos,
                 commands::forget_repo,
