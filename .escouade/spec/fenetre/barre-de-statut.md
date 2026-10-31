@@ -17,7 +17,7 @@ De gauche à droite : actifs · en attente · terminés │ quotas │ coût du 
 
 ### Quotas
 
-- Ce sont ceux du compte en cours : celui où partiraient les nouveaux agents. C'est le premier compte actif sous le plus bas des seuils « Pause au-delà du quota » et « Changer de compte à », sinon le premier compte actif. Comment ils sont lus : voir *Comptes*.
+- Ce sont ceux du compte en cours : celui où partiraient les nouveaux agents. C'est le premier compte actif « bon » au plus bas des seuils « Pause au-delà du quota » et « Changer de compte à » : une fenêtre de 5 h au seuil l'écarte jusqu'à sa remise à zéro, une semaine, 30 jours ou un mois de crédits se juge à sa projection (voir *Comptes*, « Un compte « bon », fenêtre par fenêtre »). Sinon le premier dont seul le rythme est mauvais, sinon le premier compte actif. Comment ils sont lus : voir *Comptes*.
 - Affichage : `5h <barre> reset 3h01 → 64 %` · `7j <barre> reset 4j 12h → 85 %` ; en anglais `5h … reset 3h01 → 64%` · `W … reset 4d 12h → 85%`. Pour la fenêtre de 5 h puis la fenêtre hebdomadaire : une barre, « reset » et le temps restant, puis la projection (ci-dessous).
 - Tous les harness à quota l'ont : les fenêtres de Claude Code et de Codex (5 h, 7 jours, 30 jours avec l'offre gratuite), et les crédits du mois de Copilot CLI, pris comme une fenêtre d'un mois qui finit à leur remise à zéro, le 1er à 00:00 UTC.
 - Le pourcentage n'est pas écrit. Il est dans l'infobulle, avec la remise à zéro (« 42 % · remise à zéro le 10/10 à 18:00 »), au survol de la barre et à son focus clavier.
@@ -33,6 +33,7 @@ De gauche à droite : actifs · en attente · terminés │ quotas │ coût du 
   - pour une fenêtre d'un jour ou moins, avant son dixième (30 min sur 5 h), où un tour ou deux la projetteraient bien au-delà de 100 % ;
   - pour une fenêtre plus longue (7 jours, un mois), avant une journée entière, pour que les nuits comptent : sinon le travail d'une matinée, étalé sur la semaine comme s'il continuait jour et nuit, rendrait rouge chaque début de semaine ;
   - pour une fenêtre sans remise à zéro connue.
+- La même projection, calculée par le cœur avec les mêmes chiffres, juge les fenêtres longues dans le choix du compte (voir *Comptes*) : une semaine projetée à 100 % ou moins reste un bon choix, une projetée au-delà passe derrière les autres.
 - Pour un harness sans quota (OpenCode), le coût du jour est projeté à minuit au rythme depuis minuit (« 0,75 $ / 2,00 $ → 1,00 $ »), avec les mêmes couleurs rapportées au « Budget par jour ($) ». Seulement s'il a un budget, et pas avant 2 h 24 (le dixième de la journée).
 - Où elle est écrite, selon « Projection des quotas » :
   - « Au-delà de 80 % » (défaut) : seulement les projections orange et rouges ;
@@ -49,7 +50,8 @@ De gauche à droite : actifs · en attente · terminés │ quotas │ coût du 
 - Il ouvre le panneau « Quotas des comptes », au-dessus de la barre :
   - le compte en cours en tête, marqué « en cours », puis les autres dans l'ordre des réglages ;
   - pour chacun, ses deux fenêtres (barre, pourcentage écrit, remise à zéro) et « Aujourd'hui : 1,20 $ » (« ≈ » tant qu'un tour tourne) ;
-  - « au-delà du seuil de pause ou de changement de compte » pour un compte qui a passé « Pause au-delà du quota » ou « Changer de compte à » ;
+  - « au-delà du seuil de pause ou de changement de compte » pour un compte que le choix du compte écarte : une fenêtre de 5 h au seuil de « Pause au-delà du quota » ou de « Changer de compte à », une fenêtre longue à sa limite (ou au seuil sans projection). Une semaine au-dessus du seuil mais projetée à 100 % ou moins n'est pas marquée ;
+  - « rythme trop rapide pour sa fenêtre » pour un compte que seule la projection d'une fenêtre longue met derrière les autres (au-delà de 100 %), sous le seuil comme au-dessus ; la marque d'écart l'emporte quand les deux valent ;
   - un compte inactif, pas connecté (« Pas connecté ») ou à la connexion expirée (« Connexion expirée : relance Claude Code pour ce compte. ») est grisé, avec sa raison.
 - Échap, un clic dehors ou un nouveau clic sur le groupe ferment le panneau. Le focus va dans le panneau à l'ouverture et revient au bouton à la fermeture.
 - Avec un seul compte, le groupe n'est pas un bouton et n'écrit pas de nom.

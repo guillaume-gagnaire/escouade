@@ -1101,8 +1101,12 @@ mod tests {
         assert_eq!(u.claude_current(), "pro");
         assert_eq!(u.five_hour(), window(30.0, hour));
         assert_eq!(u.updated_at(), now);
-        // Every one over it: the first active one.
+        // A week at 92 % that starts again within the hour is on pace: not over (PR #20).
         u.record("pro", Reading::claude((None, window(92.0, hour))), now);
+        u.settle(&s, now);
+        assert_eq!(u.claude_current(), "pro");
+        // Every one over it: the first active one.
+        u.record("pro", Reading::claude((window(92.0, hour), None)), now);
         u.settle(&s, now);
         assert_eq!(u.claude_current(), "principal");
         assert_eq!(u.five_hour(), window(95.0, hour));

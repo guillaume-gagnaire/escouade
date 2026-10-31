@@ -43,6 +43,23 @@ fn read_as(h: &Harness, account: &str, pct: f64) {
         .record_usage(account, Reading::claude((Some(window), None)));
 }
 
+/// `account` read as used `pct` percent of its weekly window, until in `minutes`.
+fn read_week_as(h: &Harness, account: &str, pct: f64, minutes: i64) {
+    let window = RateWindow {
+        pct,
+        resets_at: Some(now_ms() + minutes * 60_000),
+    };
+    h.core
+        .record_usage(account, Reading::claude((None, Some(window))));
+}
+
+/// The fake CLI of `account` tells its weekly window used `pct` percent, starting again in
+/// `minutes` (PR #20).
+fn week_of(account: &Account, pct: u32, minutes: u32) {
+    uses(account, "fake-week-pct", pct);
+    uses(account, "fake-week-reset-min", minutes);
+}
+
 /// What the agent's conversation says of itself (its notices), in order.
 fn notices(h: &Harness, id: &str) -> Vec<String> {
     h.items(id)
@@ -144,7 +161,7 @@ async fn the_weekly_window_past_the_threshold_moves_the_agent_too() {
         .await;
     assert_eq!(
         notices(&h, &id),
-        ["L’agent passe sur le compte Équipe : Pro est à 97 % de sa fenêtre hebdomadaire."]
+        ["L’agent passe sur le compte Équipe : Pro est à 97 % de sa fenêtre hebdomadaire (au rythme actuel, 113 % à sa remise à zéro)."]
     );
 }
 
@@ -245,7 +262,7 @@ async fn with_no_account_under_the_threshold_the_agent_stays_and_is_told_why_onc
     read_as(&h, "equipe", 97.0);
     let id = agent_on(&h, &p, "pro").await.id;
     turn_over(&h, &id, "Bonjour").await;
-    let said = "Pro est à 100 % de sa fenêtre de 5 h, mais aucun autre compte Claude Code ne peut prendre l’agent (sous le seuil, connecté, servant ce projet) : il y reste. Ce compte est en usage supplémentaire, facturé à part.";
+    let said = "Pro est à 100 % de sa fenêtre de 5 h, mais aucun autre compte Claude Code ne peut prendre l’agent (sous le seuil ou à bon rythme, connecté, servant ce projet) : il y reste. Ce compte est en usage supplémentaire, facturé à part.";
     h.wait("told why it stays", |h| notices(h, &id) == [said])
         .await;
     turn_over(&h, &id, "Encore").await;
@@ -385,4 +402,118 @@ async fn a_ticket_set_on_its_account_stays_there_past_the_threshold_and_is_told_
     assert!(!h.core.switch_if_over(&id).await);
     assert_eq!(h.agent(&id).account, "pro");
     assert_eq!(config_dirs(&h, &h.worktree_of(&t.id)).len(), 1);
+}
+
+const TWO_DAYS_GONE: u32 = 5 * 24 * 60;
+const TWO_DAYS_LEFT: u32 = 2 * 24 * 60;
+
+#[tokio::test]
+async fn a_week_at_88_percent_that_starts_again_in_3_hours_moves_nobody() {
+    // PR #20: past the threshold in percent, but at 88 % with 3 h left the week is on pace: the
+    // agent stays, and new agents still go there.
+    let h = harness("switch-at-week-on-pace");
+    let (p, _) = h.project(true).await;
+    let (pro, _) = pro_and_team(&h);
+    h.set_settings(|s| s.switch_at = 80);
+    week_of(&pro, 88, 180);
+    let id = agent_on(&h, &p, "pro").await.id;
+    turn_over(&h, &id, "Bonjour").await;
+    h.wait_quotas_read().await;
+    assert!(!h.core.switch_if_over(&id).await);
+    turn_over(&h, &id, "Encore").await;
+    assert_eq!(h.agent(&id).account, "pro");
+    assert_eq!(config_dirs(&h, &cwd(&h, &id)).len(), 1);
+    assert!(notices(&h, &id).is_empty());
+    assert_eq!(
+        h.core.account_for_new(&p.id, EngineId::CLAUDE).unwrap(),
+        "pro"
+    );
+}
+
+#[tokio::test]
+async fn a_week_that_would_not_last_moves_the_agent_at_the_threshold_and_says_the_pace() {
+    let h = harness("switch-at-week-behind");
+    let (p, _) = h.project(true).await;
+    let (pro, _) = pro_and_team(&h);
+    h.set_settings(|s| s.switch_at = 80);
+    // 85 % of the week with 2 days left: 119 % at the reset.
+    week_of(&pro, 85, TWO_DAYS_LEFT);
+    let id = agent_on(&h, &p, "pro").await.id;
+    turn_over(&h, &id, "Bonjour").await;
+    h.wait("on Équipe", |h| h.agent(&id).account == "equipe")
+        .await;
+    let said = "L’agent passe sur le compte Équipe : Pro est à 85 % de sa fenêtre hebdomadaire (au rythme actuel, 119 % à sa remise à zéro).";
+    assert_eq!(notices(&h, &id), [said]);
+    assert!(
+        h.alerts().iter().any(|a| a.ends_with(said)),
+        "{:?}",
+        h.alerts()
+    );
+}
+
+#[tokio::test]
+async fn under_the_threshold_a_bad_pace_only_moves_the_new_agents() {
+    let h = harness("switch-at-pace-under");
+    let (p, _) = h.project(true).await;
+    let (pro, _) = pro_and_team(&h);
+    week_of(&pro, 60, TWO_DAYS_GONE);
+    let id = agent_on(&h, &p, "pro").await.id;
+    turn_over(&h, &id, "Bonjour").await;
+    h.wait_quotas_read().await;
+    assert!(!h.core.switch_if_over(&id).await);
+    assert_eq!(h.agent(&id).account, "pro");
+    assert_eq!(
+        h.core.account_for_new(&p.id, EngineId::CLAUDE).unwrap(),
+        "equipe"
+    );
+}
+
+#[tokio::test]
+async fn at_the_limit_setting_new_agents_follow_the_pace_and_a_running_agent_stays() {
+    let h = harness("switch-at-limit-pace");
+    let (p, _) = h.project(true).await;
+    let (pro, _) = pro_and_team(&h);
+    h.set_settings(|s| s.switch_at = 100);
+    week_of(&pro, 60, TWO_DAYS_GONE);
+    let id = agent_on(&h, &p, "pro").await.id;
+    turn_over(&h, &id, "Bonjour").await;
+    h.wait_quotas_read().await;
+    // The choice of new agents (and tickets) is the rule, whatever « Changer de compte à »…
+    assert_eq!(
+        h.core.account_for_new(&p.id, EngineId::CLAUDE).unwrap(),
+        "equipe"
+    );
+    // … and a running agent does not move before the limit.
+    assert!(!h.core.switch_if_over(&id).await);
+    turn_over(&h, &id, "Encore").await;
+    assert_eq!(h.agent(&id).account, "pro");
+    assert!(notices(&h, &id).is_empty());
+}
+
+#[tokio::test]
+async fn an_account_the_agent_would_leave_at_once_is_no_target_but_a_slow_one_under_the_threshold_is(
+) {
+    let h = harness("switch-at-no-ping-pong");
+    let (p, _) = h.project(true).await;
+    let (pro, _) = pro_and_team(&h);
+    h.set_settings(|s| s.switch_at = 80);
+    uses(&pro, "fake-pct", 96);
+    // Équipe: 85 % of its week with 2 days left, past the threshold with a bad pace (119 %): the
+    // agent would leave it at once.
+    read_week_as(&h, "equipe", 85.0, TWO_DAYS_LEFT.into());
+    let id = agent_on(&h, &p, "pro").await.id;
+    turn_over(&h, &id, "Bonjour").await;
+    let said = "Pro est à 96 % de sa fenêtre de 5 h, mais aucun autre compte Claude Code ne peut prendre l’agent (sous le seuil ou à bon rythme, connecté, servant ce projet) : il y reste.";
+    h.wait("told why it stays", |h| notices(h, &id) == [said])
+        .await;
+    assert_eq!(h.agent(&id).account, "pro");
+    // 60 % at its second day: behind (210 %) but under the threshold, a place to stay.
+    read_week_as(&h, "equipe", 60.0, TWO_DAYS_GONE.into());
+    turn_over(&h, &id, "Encore").await;
+    h.wait("on Équipe", |h| h.agent(&id).account == "equipe")
+        .await;
+    // And it stays there, though Pro is still full: no back and forth.
+    turn_over(&h, &id, "Encore une fois").await;
+    assert_eq!(h.agent(&id).account, "equipe");
+    assert_eq!(notices(&h, &id).len(), 2, "{:?}", notices(&h, &id));
 }

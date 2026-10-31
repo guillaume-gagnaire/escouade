@@ -1,0 +1,291 @@
+{
+  "_": "The same figures for the Rust core (src-tauri/src/pace.rs) and the window (src/lib/accounts.ts): the projection of a quota window at its reset, and the verdict on an account's meters. A meter's end is `resetsInMin` (minutes from `now`, negative: past) or `resetsAt` (ISO 8601, for the month's credits); neither: unknown. `expected` null: no projection.",
+  "now": "2026-10-30T12:00:00Z",
+  "projection": [
+    { "name": "2 h of 5 gone, 40 % used", "minutes": 300, "pct": 40, "now": "1970-02-11T16:00:00Z", "resetsInMin": 180, "expected": 100 },
+    {
+      "name": "half the week gone, 30 % used",
+      "minutes": 10080,
+      "pct": 30,
+      "now": "1970-02-11T16:00:00Z",
+      "resetsInMin": 5040,
+      "expected": 60
+    },
+    { "name": "nothing used", "minutes": 300, "pct": 0, "now": "1970-02-11T16:00:00Z", "resetsInMin": 180, "expected": 0 },
+    {
+      "name": "credits: 10 days of October gone, 20 % used",
+      "minutes": null,
+      "pct": 20,
+      "now": "2026-10-11T00:00:00Z",
+      "resetsAt": "2026-11-01T00:00:00Z",
+      "expected": 62
+    },
+    {
+      "name": "credits: half a day in, too early",
+      "minutes": null,
+      "pct": 1,
+      "now": "2026-10-01T12:00:00Z",
+      "resetsAt": "2026-11-01T00:00:00Z",
+      "expected": null
+    },
+    {
+      "name": "credits reset on the 31st: the month before ends on April 30th",
+      "minutes": null,
+      "pct": 25,
+      "now": "2026-05-15T12:00:00Z",
+      "resetsAt": "2026-05-31T00:00:00Z",
+      "expected": 50
+    },
+    {
+      "name": "credits reset on March 31st: the month before ends on February 28th",
+      "minutes": null,
+      "pct": 25,
+      "now": "2026-03-15T12:00:00Z",
+      "resetsAt": "2026-03-31T00:00:00Z",
+      "expected": 50
+    },
+    {
+      "name": "credits reset on March 31st of a leap year: February 29th",
+      "minutes": null,
+      "pct": 25,
+      "now": "2028-03-15T12:00:00Z",
+      "resetsAt": "2028-03-31T00:00:00Z",
+      "expected": 50
+    },
+    { "name": "unknown end", "minutes": 300, "pct": 40, "now": "1970-02-11T16:00:00Z", "expected": null },
+    { "name": "end is now", "minutes": 300, "pct": 40, "now": "1970-02-11T16:00:00Z", "resetsInMin": 0, "expected": null },
+    { "name": "end is past", "minutes": 300, "pct": 40, "now": "1970-02-11T16:00:00Z", "resetsInMin": -5, "expected": null },
+    {
+      "name": "29 minutes of 5 h gone: too early",
+      "minutes": 300,
+      "pct": 5,
+      "now": "1970-02-11T16:00:00Z",
+      "resetsInMin": 271,
+      "expected": null
+    },
+    {
+      "name": "30 minutes of 5 h gone: a tenth",
+      "minutes": 300,
+      "pct": 5,
+      "now": "1970-02-11T16:00:00Z",
+      "resetsInMin": 270,
+      "expected": 50
+    },
+    {
+      "name": "a morning of a week (8 h): too early",
+      "minutes": 10080,
+      "pct": 15,
+      "now": "1970-02-11T16:00:00Z",
+      "resetsInMin": 9600,
+      "expected": null
+    },
+    {
+      "name": "a whole day of a week: 20 % in 24 h",
+      "minutes": 10080,
+      "pct": 20,
+      "now": "1970-02-11T16:00:00Z",
+      "resetsInMin": 8640,
+      "expected": 140
+    },
+    {
+      "name": "a reset further than the window: just started",
+      "minutes": 300,
+      "pct": 5,
+      "now": "1970-02-11T16:00:00Z",
+      "resetsInMin": 360,
+      "expected": null
+    },
+    {
+      "name": "30 days: 20 days gone, 50 % used",
+      "minutes": 43200,
+      "pct": 50,
+      "now": "1970-02-11T16:00:00Z",
+      "resetsInMin": 14400,
+      "expected": 75
+    }
+  ],
+  "verdict": [
+    {
+      "name": "a week at 88 % that resets in 3 h is not wasted (5 h at 30 %)",
+      "threshold": 80,
+      "meters": [
+        { "minutes": 300, "pct": 30, "resetsInMin": 120 },
+        { "minutes": 10080, "pct": 88, "resetsInMin": 180 }
+      ],
+      "standing": "good",
+      "leave": false
+    },
+    {
+      "name": "60 % at day 2 of the week: 210 % at the reset, behind even under the threshold",
+      "threshold": 95,
+      "meters": [{ "minutes": 10080, "pct": 60, "resetsInMin": 7200 }],
+      "standing": "behind",
+      "leave": false
+    },
+    {
+      "name": "20 % at day 2 of the week: 70 % at the reset",
+      "threshold": 95,
+      "meters": [{ "minutes": 10080, "pct": 20, "resetsInMin": 7200 }],
+      "standing": "good",
+      "leave": false
+    },
+    {
+      "name": "the same bad pace past the threshold: an agent leaves",
+      "threshold": 50,
+      "meters": [{ "minutes": 10080, "pct": 60, "resetsInMin": 7200 }],
+      "standing": "behind",
+      "leave": true
+    },
+    {
+      "name": "a 5 h window at 96 % (threshold 95): out until its reset",
+      "threshold": 95,
+      "meters": [
+        { "minutes": 300, "pct": 96, "resetsInMin": 120 },
+        { "minutes": 10080, "pct": 20, "resetsInMin": 4320 }
+      ],
+      "standing": "out",
+      "leave": true
+    },
+    {
+      "name": "the same account, its 5 h window reset (its end is past): a candidate again",
+      "threshold": 95,
+      "meters": [
+        { "minutes": 300, "pct": 96, "resetsInMin": -30 },
+        { "minutes": 10080, "pct": 20, "resetsInMin": 4320 }
+      ],
+      "standing": "good",
+      "leave": false
+    },
+    {
+      "name": "a 5 h window just under the threshold",
+      "threshold": 95,
+      "meters": [{ "minutes": 300, "pct": 94, "resetsInMin": 120 }],
+      "standing": "good",
+      "leave": false
+    },
+    {
+      "name": "a week at 100 %: out until its reset, whatever the threshold",
+      "threshold": 100,
+      "meters": [{ "minutes": 10080, "pct": 100, "resetsInMin": 1440 }],
+      "standing": "out",
+      "leave": true
+    },
+    {
+      "name": "a week at 96 %, 168 % at the reset: behind, and an agent leaves at 95",
+      "threshold": 95,
+      "meters": [{ "minutes": 10080, "pct": 96, "resetsInMin": 4320 }],
+      "standing": "behind",
+      "leave": true
+    },
+    {
+      "name": "first day of the week at 88 %, threshold 80: no projection, the threshold decides",
+      "threshold": 80,
+      "meters": [{ "minutes": 10080, "pct": 88, "resetsInMin": 9360 }],
+      "standing": "out",
+      "leave": true
+    },
+    {
+      "name": "first day of the week at 88 %, threshold 95: under it",
+      "threshold": 95,
+      "meters": [{ "minutes": 10080, "pct": 88, "resetsInMin": 9360 }],
+      "standing": "good",
+      "leave": false
+    },
+    {
+      "name": "a week whose end is unknown holds nothing back",
+      "threshold": 80,
+      "meters": [{ "minutes": 10080, "pct": 99 }],
+      "standing": "good",
+      "leave": false
+    },
+    {
+      "name": "Codex: 5 h under the threshold, a week on pace, 30 days on pace",
+      "threshold": 90,
+      "meters": [
+        { "minutes": 300, "pct": 60, "resetsInMin": 100 },
+        { "minutes": 10080, "pct": 92, "resetsInMin": 600 },
+        { "minutes": 43200, "pct": 50, "resetsInMin": 14400 }
+      ],
+      "standing": "good",
+      "leave": false
+    },
+    {
+      "name": "Codex: the 30 days at 40 % after 5 days (240 %) is behind",
+      "threshold": 90,
+      "meters": [
+        { "minutes": 300, "pct": 10, "resetsInMin": 100 },
+        { "minutes": 10080, "pct": 10, "resetsInMin": 5000 },
+        { "minutes": 43200, "pct": 40, "resetsInMin": 36000 }
+      ],
+      "standing": "behind",
+      "leave": false
+    },
+    {
+      "name": "Copilot CLI: credits at 90 % two days before the reset are on pace",
+      "threshold": 80,
+      "meters": [{ "minutes": null, "pct": 90, "resetsAt": "2026-11-01T12:00:00Z" }],
+      "standing": "good",
+      "leave": false
+    },
+    {
+      "name": "Copilot CLI: credits at 60 % after 5 days of October are behind",
+      "threshold": 80,
+      "now": "2026-10-06T00:00:00Z",
+      "meters": [{ "minutes": null, "pct": 60, "resetsAt": "2026-11-01T00:00:00Z" }],
+      "standing": "behind",
+      "leave": false
+    },
+    {
+      "name": "Copilot CLI: credits at 100 % are out until the reset",
+      "threshold": 80,
+      "meters": [{ "minutes": null, "pct": 100, "resetsAt": "2026-11-01T00:00:00Z" }],
+      "standing": "out",
+      "leave": true
+    },
+    {
+      "name": "a bad pace on the week does not hide a 5 h window at the threshold: out",
+      "threshold": 95,
+      "meters": [
+        { "minutes": 300, "pct": 97, "resetsInMin": 60 },
+        { "minutes": 10080, "pct": 60, "resetsInMin": 7200 }
+      ],
+      "standing": "out",
+      "leave": true
+    },
+    {
+      "name": "a harness without a quota has no meter",
+      "threshold": 80,
+      "meters": [],
+      "standing": "good",
+      "leave": false
+    },
+    {
+      "name": "a week at 97 % that resets in 1 h, on pace (98 % at the reset), threshold 98: behind, near its limit",
+      "threshold": 98,
+      "meters": [{ "minutes": 10080, "pct": 97, "resetsInMin": 60 }],
+      "standing": "behind",
+      "leave": false
+    },
+    {
+      "name": "the same week near its limit, threshold 90: behind, and an agent leaves",
+      "threshold": 90,
+      "meters": [{ "minutes": 10080, "pct": 97, "resetsInMin": 60 }],
+      "standing": "behind",
+      "leave": true
+    },
+    {
+      "name": "first day of the week at 96 %, threshold 99: no projection, near its limit: behind",
+      "threshold": 99,
+      "meters": [{ "minutes": 10080, "pct": 96, "resetsInMin": 9000 }],
+      "standing": "behind",
+      "leave": false
+    },
+    {
+      "name": "a week at 94 % that resets in 1 h, threshold 90: on pace and under the margin, good",
+      "threshold": 90,
+      "meters": [{ "minutes": 10080, "pct": 94, "resetsInMin": 60 }],
+      "standing": "good",
+      "leave": false
+    }
+  ]
+}

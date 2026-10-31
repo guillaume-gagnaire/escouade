@@ -261,8 +261,8 @@ export function pickThreshold(): number {
 
 /**
  * The accounts an agent stopped by the usage limit can go on on (« Reprendre sur <compte> »), in the order of the settings:
- * the active ones of its harness other than its own that are signed in and under the threshold (`pickThreshold`). One past the
- * threshold is left out: the agent would meet the limit again there. Another harness's never is (ESC-88).
+ * the active ones of its harness other than its own that are signed in and that an agent would not leave at the threshold
+ * (`pickThreshold`, `judge`). One at it is left out: the agent would meet the limit again there. Another harness's never is (ESC-88).
  */
 export function resumeTargets(agent: Pick<Agent, 'account'> & { projectId?: string; engine?: EngineId }): Account[] {
   const own = accountOf(agent);
@@ -273,7 +273,7 @@ export function resumeTargets(agent: Pick<Agent, 'account'> & { projectId?: stri
     const read = app.usage.accounts.find((u) => u.id === a.id);
     // An account not read yet counts as signed in, as the backend has it.
     if (read && !read.connected) return false;
-    return !anyOver(read ?? null, threshold, app.now);
+    return !judge(read?.meters ?? [], threshold, app.now).leave;
   });
 }
 
@@ -311,11 +311,6 @@ export function metersShown(usage: AccountUsage | null, engine: EngineId): Meter
   if (read.length) return read.map((m) => ({ minutes: m.minutes, usage: m }));
   if (caps?.quota === 'credits') return [{ minutes: null, usage: null }];
   return (caps?.quotaWindows ?? []).map((minutes) => ({ minutes, usage: null }));
-}
-
-/** Whether one of the account's meters is past « Pause au-delà du quota » (`accounts::over_threshold`). */
-export function anyOver(usage: Pick<AccountUsage, 'meters'> | null, threshold: number, now: number): boolean {
-  return (usage?.meters ?? []).some((m: QuotaMeter) => overThreshold(m, threshold, now));
 }
 
 /** A quota window as its tooltip says it: « 42 % · remise à zéro le 10/10 à 18:00 ». Also the value of its bar for a screen reader. */
@@ -357,6 +352,63 @@ export function projectedPct(minutes: number | null, w: RateWindow | null, now: 
   const gone = Math.min(length, length - left);
   if (tooEarly(gone, length)) return null;
   return (w.pct * length) / gone;
+}
+
+/** How an account stands for the choice of the account (PR #20), as the backend's `pace::Standing`: good, behind (only its pace is bad) or out. */
+export type Standing = 'good' | 'behind' | 'out';
+
+/** The use past which a long window is never good, on pace or not, as the backend's `pace::NEAR_LIMIT`. */
+export const NEAR_LIMIT = 95;
+
+/** What an account's meters say of it, as the backend's `pace::Verdict`. */
+export interface Verdict {
+  /** The worst of its meters (good with none: a harness without a quota keeps the order alone). */
+  standing: Standing;
+  /** An agent running on the account leaves it: a short window at the threshold, or a long one at the threshold whose pace is not good. */
+  leave: boolean;
+  /** Behind for being near its limit (`NEAR_LIMIT`), not for its pace. */
+  near: boolean;
+}
+
+/** Whether a window is a short pause (a day or less: the 5 hours); the month's credits (no length) and the longer windows are judged by their pace. */
+export function isShortWindow(minutes: number | null): boolean {
+  return minutes !== null && minutes <= DAY;
+}
+
+const WORST: Record<Standing, number> = { good: 0, behind: 1, out: 2 };
+
+/**
+ * The verdict on an account's meters at `now`, `threshold` being the percentage at which a short window (or a long one without
+ * a projection) is out, as the backend's `pace::judge` (the same figures, tests/fixtures/quota-pace.json). A short window at the
+ * threshold is out until it starts again; a long one is out at 100 %, good when projected at 100 % or less even past the
+ * threshold, behind when projected past it even under the threshold, and goes by the threshold without a projection.
+ */
+export function judge(meters: QuotaMeter[], threshold: number, now: number): Verdict {
+  let standing: Standing = 'good';
+  let leave = false;
+  let near = false;
+  for (const m of meters) {
+    const at = overThreshold(m, threshold, now);
+    let s: Standing = 'good';
+    if (isShortWindow(m.minutes)) {
+      if (at) s = 'out';
+      leave ||= at;
+    } else if (overThreshold(m, 100, now)) {
+      s = 'out';
+      leave = true;
+    } else {
+      const p = projectedPct(m.minutes, m, now);
+      const byPace = p !== null && p > 100;
+      const nearLimit = !byPace && !(p === null && at) && overThreshold(m, NEAR_LIMIT, now);
+      if (p === null && at) s = 'out';
+      else if (byPace || nearLimit) s = 'behind';
+      near ||= nearLimit;
+      // At the threshold with a pace that is not good (past 100 % or not known), or near its limit.
+      leave ||= at && (p === null || byPace || nearLimit);
+    }
+    if (WORST[s] > WORST[standing]) standing = s;
+  }
+  return { standing, leave, near };
 }
 
 const DAY_MS = 24 * 3_600_000;
@@ -445,8 +497,12 @@ export interface QuotaRow {
   usage: AccountUsage | null;
   /** The one new agents go to, and whose quota the status bar shows. */
   current: boolean;
-  /** Active, with a window past « Pause au-delà du quota ». */
+  /** Active, and out for the choice of the account: a window at the threshold of « Pause au-delà du quota » or « Changer de compte à » (the 5 h), or at its limit (`judge`). */
   over: boolean;
+  /** Active, and behind the others only by its pace: a long window that would not last to its reset (`judge`). */
+  behind: boolean;
+  /** Behind the others for a long window near its limit (`NEAR_LIMIT`), not for its pace. */
+  nearLimit: boolean;
   /** Why it is dimmed: switched off, not signed in, sign-in expired. */
   reasons: string[];
   /** What its turns cost today, the ones running now included (an estimate): the status bar's total, account by account. */
@@ -493,12 +549,15 @@ export function quotaRows(now: number): QuotaRow[] {
       reasons.push(usage.reason);
     }
     const threshold = pickThreshold();
-    const over = account.active && anyOver(usage, threshold, now);
+    const verdict = account.active ? judge(usage?.meters ?? [], threshold, now) : null;
+    const over = verdict?.standing === 'out';
+    const behind = verdict?.standing === 'behind';
+    const nearLimit = behind && !!verdict?.near;
     const live = liveCostOf(account.id);
     const byHarness = estimatedBy(engineOfAccount(account));
     const today = { cost: (usage?.todayCost ?? 0) + live, estimated: byHarness || live > 0, ...(byHarness ? { byHarness } : {}) };
     const current = account.id === app.usage.current[engineOfAccount(account)];
-    return { account, usage, current, over, reasons, today };
+    return { account, usage, current, over, behind, nearLimit, reasons, today };
   });
   return [...rows.filter((r) => r.current), ...rows.filter((r) => !r.current)];
 }

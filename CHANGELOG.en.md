@@ -26,6 +26,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - “Open in Escouade” on a store page opens the plugin’s page in the app, running or not: a link only shows the plugin, installing it stays your gesture.
 - The documentation says how to publish a plugin on the store and prepare its review, and a new page, “Plugin security”, says what the app checks, what the “Verified by Escouade” seal covers and what the review refuses.
 - A project can propose plugins in its `.escouade.yml`: when it opens, a band of Settings › Projects names those missing, with their store page, installing nothing by itself; “Not for this project” silences it. The file can also set a plugin up for that project, never with a secret.
+- The automatic choice of the account judges each window by its length: a full 5 hours puts an account on hold until it starts again without weighing on what follows, and the week (or the month’s credits) is judged by its pace — a week at 88% that starts again in 3 hours is still a good choice, one at 60% on its second day goes behind the others. An account at 95% or more always goes behind the others. The order of the accounts stays the priority, and the messages say when it is the pace that decides. Thanks to @Metalzoid (#20).
 
 ### Fixes
 

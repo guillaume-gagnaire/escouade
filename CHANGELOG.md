@@ -26,6 +26,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - « Ouvrir dans Escouade » sur une page du store ouvre la page du plugin dans l’app, qu’elle soit lancée ou non : un lien ne fait que montrer le plugin, l’installer reste ton geste.
 - La documentation dit comment publier un plugin sur le store et préparer sa revue, et une nouvelle page, « La sécurité des plugins », dit ce que l’app vérifie, ce que le sceau « Vérifié par Escouade » couvre et ce que la revue refuse.
 - Un projet peut proposer des plugins dans son `.escouade.yml` : à son ouverture, une bande de Réglages › Projets nomme ceux qui manquent, avec leur page du store, sans rien installer seule ; « Pas pour ce projet » la fait taire. Le fichier peut aussi régler un plugin pour ce projet, jamais avec un secret.
+- Le choix automatique du compte juge chaque fenêtre selon sa longueur : une 5 h pleine met un compte en pause jusqu’à sa remise à zéro sans peser sur la suite, et la semaine (ou les crédits du mois) se juge au rythme — une semaine à 88 % qui se remet à zéro dans 3 h reste un bon choix, une à 60 % au deuxième jour passe derrière les autres. Un compte à 95 % ou plus passe toujours derrière les autres. L’ordre des comptes reste la priorité, et les messages disent quand c’est le rythme qui décide. Merci à @Metalzoid (#20).
 
 ### Corrections
 

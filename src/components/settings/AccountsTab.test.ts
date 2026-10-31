@@ -94,10 +94,10 @@ describe('AccountsTab', () => {
     // Settings saved before it had none: the limit, as before.
     expect(within(at).getByRole('button', { name: 'À la limite' })).toHaveAttribute('aria-pressed', 'true');
     expect(
-      screen.getByText(/^Quand la fenêtre de 5 h ou la fenêtre hebdomadaire de son compte atteint ce seuil, un agent passe/),
+      screen.getByText(/^Un agent passe sur un autre compte de son harness à la fin de son tour quand une fenêtre courte \(5 h\)/),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/« Reprendre sur un autre compte… », ci-dessous, décide\. « Pause au-delà du quota » \(Kanban\)/),
+      screen.getByText(/« Reprendre sur un autre compte… », ci-dessous, décide\)\. « Pause au-delà du quota » \(Kanban\)/),
     ).toBeInTheDocument();
     await userEvent.click(within(at).getByRole('button', { name: '95 %' }));
     expect(within(at).getByRole('button', { name: '95 %' })).toHaveAttribute('aria-pressed', 'true');
@@ -146,7 +146,7 @@ describe('AccountsTab', () => {
     expect(within(row('Pro')).getByRole('button', { name: 'Supprimer' })).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Les nouveaux agents partent sur le premier compte actif de leur harness sous les seuils « Pause au-delà du quota » et « Changer de compte à », dans cet ordre.',
+        'Les nouveaux agents partent sur le premier compte actif de leur harness dont la 5 h est sous les seuils « Pause au-delà du quota » et « Changer de compte à » et dont la semaine tient son rythme, dans cet ordre.',
       ),
     ).toBeInTheDocument();
     // Saved at once: nothing left for « Enregistrer ».
@@ -652,7 +652,7 @@ describe('AccountsTab', () => {
     expect(screen.getByRole('button', { name: 'Add a Claude Code account…' })).toBeInTheDocument();
     expect(
       screen.getByText(
-        'New agents start on the first active account of their harness under the “Pause above quota” and “Switch accounts at” thresholds, in this order.',
+        'New agents start on the first active account of their harness whose 5 hours is under the “Pause above quota” and “Switch accounts at” thresholds and whose week keeps its pace, in this order.',
       ),
     ).toBeInTheDocument();
     expect(within(row('Main')).getByText('This machine’s account')).toBeInTheDocument();

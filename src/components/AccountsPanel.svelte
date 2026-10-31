@@ -99,6 +99,7 @@
           <span class="name"
             >{accountName(r.account)}{#if r.current}<span class="tag cur">{t('accounts.panel.current')}</span>{/if}{#if r.over}<span
                 class="tag over">{t('accounts.panel.over')}</span
+              >{:else if r.behind}<span class="tag over">{t(r.nearLimit ? 'accounts.panel.nearLimit' : 'accounts.panel.behind')}</span
               >{/if}</span
           >
           <!-- A harness that tells no cost (Cursor CLI) has none of the day to show. -->

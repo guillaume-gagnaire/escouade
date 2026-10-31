@@ -35,6 +35,7 @@ Le pilote auto lance seul les tickets « À faire », dans l'ordre, tant qu'il r
 - Elle ne retient que le pilote auto : un ticket lancé à la main part quand même, tant que la fenêtre n'est pas épuisée.
 - Les agents déjà au travail continuent.
 - Avec plusieurs comptes, la pause se calcule compte par compte (voir *Comptes*).
+- Le plafond est celui de l'utilisateur, jugé en pourcentage fenêtre par fenêtre : il ne suit pas le rythme que le choix du compte juge (une semaine à 95 % qui se remet à zéro dans 3 h est un bon choix, mais sous un plafond de 90 % elle retient quand même le compte). Voir *Comptes*, « Pause du pilote auto, compte par compte ».
 
 ### La pause à la limite d'usage
 

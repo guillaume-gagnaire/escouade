@@ -17,6 +17,7 @@ use crate::core::Core;
 use crate::engine::{self, Engine};
 use crate::i18n::Lang;
 use crate::model::{AgentStatus, EngineId, HandedFrom, Settings};
+use crate::pace::{self, Standing};
 use crate::plan::{PlanState, TaskStatus};
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Value};
@@ -573,21 +574,30 @@ fn separator(from: EngineId, to: EngineId, limited: bool, until: Option<i64>) ->
 }
 
 impl<R: Runtime> Core<R> {
-    /// Whether the account `id` may take an agent now: signed in (one not read yet is), no agent of
-    /// it waiting for its reset, no pause after a usage limit, no meter past « Pause au-delà du
-    /// quota » (as `account_to_switch_to` has it).
-    pub(crate) fn account_usable(&self, id: &str) -> bool {
+    /// How the account `id` stands for an agent now: out when it may not take one (not signed in,
+    /// an agent of it waiting for its reset, a pause after a usage limit, out for its quota:
+    /// `pace`, as `account_to_switch_to` has it), else how its quota stands (`accounts::standing`
+    /// under « Pause au-delà du quota »).
+    fn account_standing(&self, id: &str) -> Standing {
         let threshold = board::quota_threshold(self.settings.read().quota_pause);
         let usage = self.usage.lock().accounts.clone();
         let hold = self.hold.lock().clone();
         let now = self.pause_now();
-        usage
+        let usable = usage
             .iter()
             .find(|u| u.id == id)
             .is_none_or(|u| u.connected)
             && !self.quota_paused().contains_key(id)
-            && board::account_pause(&usage, id, threshold, &hold, now).is_none()
-            && !accounts::over_threshold(&usage, id, threshold, now)
+            && board::account_pause(&usage, id, threshold, &hold, now).is_none();
+        match usable {
+            true => accounts::standing(&usage, id, threshold, now),
+            false => Standing::Out,
+        }
+    }
+
+    /// Whether the account `id` may take an agent now (`account_standing`).
+    pub(crate) fn account_usable(&self, id: &str) -> bool {
+        self.account_standing(id) != Standing::Out
     }
 
     /// The accounts of `engine` serving `project` that may take an agent now, in the settings'
@@ -664,7 +674,7 @@ impl<R: Runtime> Core<R> {
     }
 
     /// The account an agent of `project` handed over to `engine` goes to: the project's preferred
-    /// one when it is of that harness, else the first usable one, else the first active one.
+    /// one when it is of that harness, else the first of the best usable ones, else the first active one.
     fn handover_account(&self, engine: EngineId, project: &str) -> Option<String> {
         let all = self.settings.read().clone();
         let settings = self.project_accounts(&all, engine, project);
@@ -675,8 +685,8 @@ impl<R: Runtime> Core<R> {
             .project(project)
             .ok()
             .and_then(|p| accounts::preferred(&settings, &p.account).map(str::to_string));
-        accounts::pick_where(&settings, preferred.as_deref(), |id| {
-            self.account_usable(id)
+        accounts::pick_ranked(&settings, preferred.as_deref(), |id| {
+            self.account_standing(id)
         })
     }
 
@@ -691,7 +701,7 @@ impl<R: Runtime> Core<R> {
     }
 
     /// When the quota the agent's account of its harness has spent resets: the resume it waits
-    /// for, else the end of its meters past the threshold; None when it is not spent.
+    /// for, else the end of its meters that put the account out (`pace`); None when it is not spent.
     fn spent_until(&self, id: &str) -> Option<i64> {
         let h = self.agent(id).ok()?;
         let (resume, account) = {
@@ -708,7 +718,7 @@ impl<R: Runtime> Core<R> {
         let meters = &u.account(&account)?.meters;
         meters
             .iter()
-            .filter(|m| board::over_threshold(&m.rate(), threshold, now))
+            .filter(|m| pace::judge_meter(m, threshold, now).standing == Standing::Out)
             .filter_map(|m| m.resets_at)
             .max()
     }

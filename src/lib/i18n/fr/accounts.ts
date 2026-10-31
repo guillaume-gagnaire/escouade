@@ -13,7 +13,7 @@ export default {
     /** The accounts of one harness; `{harness}`: « Claude Code ». */
     group: 'Comptes {harness}',
     order:
-      'Les nouveaux agents partent sur le premier compte actif de leur harness sous les seuils « Pause au-delà du quota » et « Changer de compte à », dans cet ordre.',
+      'Les nouveaux agents partent sur le premier compte actif de leur harness dont la 5 h est sous les seuils « Pause au-delà du quota » et « Changer de compte à » et dont la semaine tient son rythme, dans cet ordre.',
     name: 'Nom',
     folder: 'Dossier',
     executable: 'Exécutable',
@@ -220,7 +220,8 @@ export default {
     caption: 'Compte',
     auto: 'Automatique ({name})',
     autoNone: 'Automatique (aucun compte)',
-    autoDetail: 'Celui du projet, sinon le premier compte sous les seuils de pause et de changement de compte.',
+    autoDetail:
+      'Celui du projet, sinon le premier compte dont la 5 h est sous les seuils de pause et de changement de compte et dont la semaine tient son rythme.',
     inactive: '{name} (inactif)',
     locked: 'Le compte d’un agent ne change plus après son premier message (sa conversation est rangée dans ce compte).',
   },
@@ -230,7 +231,8 @@ export default {
     label: 'Compte préféré',
     desc: 'Le compte sur lequel partent les nouveaux agents et les tickets de ce projet.',
     auto: 'Automatique',
-    autoTitle: 'Le premier compte actif sous les seuils de pause et de changement de compte, dans l’ordre des comptes',
+    autoTitle:
+      'Le premier compte actif dont la 5 h est sous les seuils de pause et de changement de compte et dont la semaine tient son rythme, dans l’ordre des comptes',
     inactive: '{name} (inactif)',
   },
 
@@ -322,6 +324,10 @@ export default {
       'Après chaque quota, où il en sera à sa remise à zéro au rythme actuel : vert, orange au-delà de 80 %, rouge au-delà de 100 %.',
     current: 'en cours',
     over: 'au-delà du seuil de pause ou de changement de compte',
+    /** A long window (week, 30 days, credits) that would not last to its reset at the current pace: the account goes behind the others. */
+    behind: 'rythme trop rapide pour sa fenêtre',
+    /** A long window at 95 % or more, on pace or not: the account goes behind the others. */
+    nearLimit: 'près de la limite de sa fenêtre',
     /** What the account's turns cost today; `{amount}`: « 1,20 $ » (« ≈ 1,20 $ » while a turn is running). */
     today: "Aujourd'hui : {amount}",
   },
@@ -344,12 +350,12 @@ export default {
     /** Where an agent goes at the limit, gathered in « Comptes » (choice 2 of the 2.0 design). */
     limitTitle: 'Quand un quota est épuisé',
     limitNote:
-      'Les nouveaux agents partent sur le premier compte actif de leur harness sous les seuils « Pause au-delà du quota » et « Changer de compte à ». Ce qui suit dit où va un agent qui les atteint.',
+      'Les nouveaux agents partent sur le premier compte actif de leur harness dont la 5 h est sous les seuils « Pause au-delà du quota » et « Changer de compte à » et dont la semaine tient son rythme. Ce qui suit dit où va un agent qui les atteint.',
     /** « Changer de compte à » (ESC-148): its choices are percentages, and « À la limite ». */
     switchAt: 'Changer de compte à',
     switchAtLimit: 'À la limite',
     switchAtDesc:
-      'Quand la fenêtre de 5 h ou la fenêtre hebdomadaire de son compte atteint ce seuil, un agent passe sur un autre compte de son harness à la fin de son tour, et les nouveaux agents y partent. « À la limite » : rien ne bouge avant, puis « Reprendre sur un autre compte… », ci-dessous, décide. « Pause au-delà du quota » (Kanban) retient en plus les tickets quand tous les comptes l’ont passée.',
+      'Un agent passe sur un autre compte de son harness à la fin de son tour quand une fenêtre courte (5 h) de son compte atteint ce seuil, ou qu’une fenêtre longue (semaine, 30 jours, crédits du mois) l’atteint sans tenir jusqu’à sa remise à zéro au rythme actuel. Les nouveaux agents et les tickets partent sur le premier compte de l’ordre dont la 5 h n’est pas pleine et dont la semaine tient son rythme, même sur « À la limite » (un agent lancé ne bouge alors pas avant 100 %, puis « Reprendre sur un autre compte… », ci-dessous, décide). « Pause au-delà du quota » (Kanban) retient en plus les tickets quand tous les comptes l’ont passée.',
     projection: 'Projection des quotas',
     projectionDesc:
       'Après chaque quota, où il en sera à sa remise à zéro au rythme actuel (« → 64 % ») : vert, orange au-delà de 80 %, rouge au-delà de 100 % ; pour un harness sans quota, le coût du jour projeté à minuit, rapporté au budget. Le panneau des quotas et les infobulles les montrent toutes ; la barre d’état, celles qui passent 80 % ou toutes, sauf sous 1240 px de large, où elles restent dans les infobulles.',

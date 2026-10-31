@@ -125,6 +125,7 @@ mod notify;
 #[cfg(test)]
 mod opencode_tests;
 mod outside;
+mod pace;
 mod pagecrash;
 mod paths;
 mod plan;

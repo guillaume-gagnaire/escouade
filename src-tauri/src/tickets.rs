@@ -13,6 +13,7 @@ use crate::integrations;
 use crate::isola;
 use crate::leftovers;
 use crate::model::*;
+use crate::pace::Standing;
 use crate::switching::NoOther;
 use crate::telemetry::Event;
 use crate::testlaunch;
@@ -1373,10 +1374,11 @@ impl<R: Runtime> Core<R> {
         accounts::defaults(account.as_ref(), engine)
     }
 
-    /// `accounts::pick` as the board has it: a usable account is under the threshold, holds
-    /// nothing back (a pause after a usage limit) and has no agent waiting for its quota. When
-    /// none is, one that holds nothing back although over the threshold ("Reprendre
-    /// maintenant"), else the first active one. None without an active account.
+    /// `accounts::pick` as the board has it: a good account (`pace`: a short window under the
+    /// threshold, a long one on pace or under it), holds nothing back (a pause after a usage
+    /// limit) and has no agent waiting for its quota; failing that, the first whose only fault is
+    /// its pace. When none is, one that holds nothing back although out ("Reprendre maintenant"),
+    /// else the first active one. None without an active account.
     pub(crate) fn pick_account(
         &self,
         settings: &Settings,
@@ -1393,8 +1395,11 @@ impl<R: Runtime> Core<R> {
         };
         // Under « Changer de compte à » too, when it is the lower (ESC-148).
         let pick = board::pick_threshold(settings);
-        let usable = |id: &str| !held(id) && !accounts::over_threshold(&usage, id, pick, now);
-        let id = accounts::pick_where(settings, preferred, usable)?;
+        let rank = |id: &str| match held(id) {
+            true => Standing::Out,
+            false => accounts::standing(&usage, id, pick, now),
+        };
+        let id = accounts::pick_ranked(settings, preferred, rank)?;
         if !held(&id) {
             return Some(id);
         }
@@ -2295,12 +2300,13 @@ impl<R: Runtime> Core<R> {
         self.other_account(agent_id, threshold).ok()
     }
 
-    /// The account an agent goes on on by itself, leaving its own: the one `accounts::pick` gives
-    /// (the project's preferred account, else the first active one) when it is another than the
-    /// agent's, usable (signed in, under `threshold`, no pause after a usage limit, no agent of it
-    /// waiting for its reset), on the same side of WSL. A project that prefers the agent's account
-    /// keeps it there. Why there is none otherwise: `NoOther::Private` when only the accounts a
-    /// confined private project shares are left (ESC-141).
+    /// The account an agent goes on on by itself, leaving its own: the one `accounts::pick_ranked`
+    /// gives (the project's preferred account, else the first of the best active ones) when it is
+    /// another than the agent's, usable (signed in, one an agent would not leave at `threshold`:
+    /// `pace`, no pause after a usage limit, no agent of it waiting for its reset), on the same side
+    /// of WSL. A project that prefers the agent's account keeps it there. Why there is none
+    /// otherwise: `NoOther::Private` when only the accounts a confined private project shares are
+    /// left (ESC-141).
     pub(crate) fn other_account(
         &self,
         agent_id: &str,
@@ -2344,18 +2350,24 @@ impl<R: Runtime> Core<R> {
                 .is_some_and(|p| p.wsl().is_some())
         };
         let side = in_wsl(&current);
-        let usable = |id: &str| {
-            id != current
+        // The verdict on the account's quota, when it may take the agent at all: arriving on one
+        // it would leave at once (the same test) would send it back and forth.
+        let rank = |id: &str| {
+            let verdict = accounts::verdict(&usage, id, threshold, now);
+            let usable = id != current
                 && in_wsl(id) == side
                 // Not signed in: its first turn would only fail (an account not read yet is).
                 && usage.iter().find(|u| u.id == id).is_none_or(|u| u.connected)
                 && !waiting.contains_key(id)
                 && board::account_pause(&usage, id, threshold, &hold, now).is_none()
-                && !accounts::over_threshold(&usage, id, threshold, now)
+                && !verdict.leave;
+            usable.then_some(verdict.standing)
         };
-        let target = accounts::pick_where(&settings, preferred.as_deref(), usable)
-            .filter(|t| usable(t))
-            .ok_or(NoOther::Nobody)?;
+        let target = accounts::pick_ranked(&settings, preferred.as_deref(), |id| {
+            rank(id).unwrap_or(Standing::Out)
+        })
+        .filter(|t| rank(t).is_some())
+        .ok_or(NoOther::Nobody)?;
         // A private project goes on its own to none of the accounts it shares (ESC-141): its agent
         // stays, unless « Comptes partagés à la limite » allows it.
         let project = self.project(&project).ok();
