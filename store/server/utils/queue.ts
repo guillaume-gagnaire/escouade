@@ -3,6 +3,7 @@ import { PgBoss } from 'pg-boss';
 import { serviceState } from '../db/schema';
 import { purge } from './accounts';
 import { purgeDeleted } from './author';
+import { purgeOAuth } from './oauth';
 import { service } from './service';
 import type { Db } from './db';
 import { checkVersion, onTag, rereadTags, type Deps } from './submissions';
@@ -66,7 +67,10 @@ export async function startQueue(
   await boss.send(BEAT);
   await boss.createQueue(PURGE);
   await boss.work(PURGE, async () => {
-    console.info('[store] purged:', JSON.stringify({ ...(await purge(db)), deleted: await purgeDeleted(db, service.archives) }));
+    console.info(
+      '[store] purged:',
+      JSON.stringify({ ...(await purge(db)), deleted: await purgeDeleted(db, service.archives), oauth: await purgeOAuth(db) }),
+    );
   });
   await boss.schedule(PURGE, '40 4 * * *');
   if (discord) {

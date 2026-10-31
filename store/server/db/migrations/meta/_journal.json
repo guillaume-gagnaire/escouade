@@ -71,6 +71,13 @@
       "when": 1793440275195,
       "tag": "0009_plugin_path",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793477431969,
+      "tag": "0010_mcp_oauth",
+      "breakpoints": true
     }
   ]
 }

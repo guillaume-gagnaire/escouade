@@ -158,6 +158,8 @@ const fr = {
   },
   notices: {
     'signin-cancelled': ['warn', 'Connexion annulée sur GitHub.'],
+    'app-revoked': ['ok', 'Application déconnectée : ses jetons ne marchent plus.'],
+    'app-missing': ['warn', 'Cette application n’était déjà plus connectée.'],
     'signin-failed': ['bad', 'La connexion n’a pas abouti. Réessaie depuis ce bouton.'],
     installed: ['ok', 'L’App est installée. Les dépôts choisis apparaissent ci-dessous.'],
     'email-sent': ['ok', 'Lien envoyé. Suis-le dans les 24 heures pour garder cette adresse.'],
@@ -362,6 +364,8 @@ const en: Text = {
   },
   notices: {
     'signin-cancelled': ['warn', 'Sign-in cancelled on GitHub.'],
+    'app-revoked': ['ok', 'App disconnected: its tokens no longer work.'],
+    'app-missing': ['warn', 'This app was no longer connected.'],
     'signin-failed': ['bad', 'Signing in did not go through. Try again from this button.'],
     installed: ['ok', 'The App is installed. The repositories you chose show below.'],
     'email-sent': ['ok', 'Link sent. Follow it within 24 hours to keep this address.'],

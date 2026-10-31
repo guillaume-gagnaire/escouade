@@ -11,6 +11,9 @@ export default defineEventHandler((event) => {
   // GitHub's webhooks are signed; the app's counter of installations takes no cookie and acts for nobody; the review's
   // script brings an administration token and its routes read no cookie (server/utils/review-route.ts).
   if (path === '/api/github/webhook' || path === '/api/v1/installs' || path.startsWith('/api/v1/review/')) return;
+  // The MCP server and its OAuth endpoints (ESC-317) read no cookie: a token, a code or a refresh token stands for the
+  // client, sent by an agent that has no Origin. The consent's form (/api/oauth/consent) reads the session: checked.
+  if (path === '/mcp' || path === '/oauth/token' || path === '/oauth/register' || path === '/oauth/revoke') return;
   const origin = getHeader(event, 'origin');
   if (!origin || origin !== new URL(siteUrl()).origin) throw createError({ statusCode: 403, statusMessage: 'Cross-site request refused' });
 });
