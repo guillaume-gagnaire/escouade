@@ -1,6 +1,6 @@
 # Escouade 2.2 — à faire
 
-La 2.1.0 est sortie le 2026-10-29 : l'onglet Docs (la spec, les décisions, les documents, les discussions, « Planifier »), l'index du code, la mémoire partagée, et trois harness de plus (Mistral Vibe, Antigravity CLI, Gemini CLI). Voir `docs/TODO-2.1.md` et `docs/FACTORY.md`. La 2.2 reprend ce qui restait de la 2.1 : les hébergeurs de code, les plugins et leur place de marché.
+La 2.1.0 est sortie le 2026-10-29 : l'onglet Docs (la spec, les décisions, les documents, les discussions, « Planifier »), l'index du code (retiré depuis, ESC-310), la mémoire partagée, et trois harness de plus (Mistral Vibe, Antigravity CLI, Gemini CLI). Voir `docs/TODO-2.1.md` et `docs/FACTORY.md`. La 2.2 reprend ce qui restait de la 2.1 : les hébergeurs de code, les plugins et leur place de marché.
 
 ## Hébergeurs de code
 
@@ -332,7 +332,7 @@ Notées par l'utilisateur pour plus tard, sans ticket ni étude pour l'instant :
   - Centraliser de façon standardisée la documentation du projet dans le dépôt : la spec, le design, l'architecture, les ADR…
   - Pouvoir interagir simplement avec cette spec, voir les ADR, et tout interroger facilement, aussi par le serveur MCP.
   - Une base vectorielle qui tourne dans Escouade, pour du RAG automatique sur cette documentation, ou du RAPTOR (résumés en arbre) selon ce qui marche le mieux : à comparer sur une vraie doc de projet (noté le 2026-10-27).
-- [ ] **Un index du code pour les agents** (noté le 2026-10-27). Conçu le 2026-10-27 avec les deux autres : voir docs/FACTORY.md.
+- [x] ~~**Un index du code pour les agents**~~ (noté le 2026-10-27). Construit en 2.1, puis **retiré le 2026-10-31 (ESC-310)** : mesuré avec de vrais agents (IDX-6, `docs/archive/codeindex/CODEINDEX-PROBES.md`), il ne faisait pas économiser ; chaque harness trouve le code par ses propres outils, pas de plugin d'indexation à la place.
   - Proposer d'office, et en option, un système comme tokensave qui indexe le code du projet.
   - Les agents y trouvent le code par le serveur MCP d'Escouade, plutôt qu'en lisant à coups de grep : moins de tokens, des réponses plus justes.
   - À penser :

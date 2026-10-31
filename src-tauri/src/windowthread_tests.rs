@@ -17,7 +17,7 @@ fn a_family_shares_a_lane_and_any_other_command_has_its_own() {
     assert_eq!(lane_of("attach_chunk"), "attach");
     assert_eq!(lane_of("conversation_listen"), "voice");
     assert_eq!(lane_of("voice_start"), "voice");
-    assert_eq!(lane_of("get_code_index"), "get_code_index");
+    assert_eq!(lane_of("project_logo"), "project_logo");
     assert_eq!(lane_of("get_conversation"), "get_conversation");
 }
 
@@ -62,12 +62,12 @@ fn a_command_over_250_ms_is_written_once_in_30_s_with_the_count_between() {
 #[test]
 fn what_runs_is_told_the_longest_first_and_forgotten_once_done() {
     let running = Running::default();
-    let a = running.enter("get_code_index");
+    let a = running.enter("project_logo");
     std::thread::sleep(Duration::from_millis(30));
     {
         let _b = running.enter("stats");
         let told = running.told();
-        assert!(told.starts_with("get_code_index "), "{told}");
+        assert!(told.starts_with("project_logo "), "{told}");
         assert!(told.contains(", stats "), "{told}");
     }
     assert!(!running.told().contains("stats"));

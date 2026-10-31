@@ -72,7 +72,7 @@ Ce qui rend un point facile, c'est un **trait ou un registre déjà là**, derri
 
 ### 1.5 Les outils du serveur MCP d'Escouade
 
-**Où.** `src-tauri/src/mcp/` : `tools.rs` (la liste et les descriptions des outils : `list_projects`, `get_board`, `create_ticket`, `start_ticket`, `answer_permission`, `create_agent`, `send_message`, `get_usage`… 58 en tout, par familles : le Kanban et les agents, les `index_*` de l'index du code, la mémoire, la spec, les décisions et les documents), `read.rs` et `act.rs` (ce qu'ils lisent et font), `resolve.rs` (`Sight`, `may_act_on` : ce qu'un agent voit et sur quoi il agit, les projets privés), `http.rs` (le serveur et son jeton), `install.rs` (la déclaration dans chaque harness), `activity.rs` (le journal des appels, `McpActivity`). Dans la fenêtre : `settings/McpSection.svelte`, `src/lib/mcp.svelte.ts`, les noms en mots des outils dans `src/lib/tools.ts` (`ESCOUADE_TOOLS`).
+**Où.** `src-tauri/src/mcp/` : `tools.rs` (la liste et les descriptions des outils : `list_projects`, `get_board`, `create_ticket`, `start_ticket`, `answer_permission`, `create_agent`, `send_message`, `get_usage`… 52 en tout, par familles : le Kanban et les agents, la mémoire, la spec, les décisions et les documents ; les `index_*` de l'index du code sont retirés avec lui par ESC-310), `read.rs` et `act.rs` (ce qu'ils lisent et font), `resolve.rs` (`Sight`, `may_act_on` : ce qu'un agent voit et sur quoi il agit, les projets privés), `http.rs` (le serveur et son jeton), `install.rs` (la déclaration dans chaque harness), `activity.rs` (le journal des appels, `McpActivity`). Dans la fenêtre : `settings/McpSection.svelte`, `src/lib/mcp.svelte.ts`, les noms en mots des outils dans `src/lib/tools.ts` (`ESCOUADE_TOOLS`).
 
 **Ce qu'un plugin y ferait.** Deux sens :
 
@@ -720,7 +720,6 @@ L'ordre des harness devient : Cursor CLI, Mistral Vibe, Gemini CLI, OpenCode, Co
 
 **Les nouveaux points d'extension que suggère la 2.1.0**, pour après les étapes ci-dessus, sans ticket encore :
 - les **lecteurs de documents** (`docsextract.rs` lit texte, PDF, docx, odt ; un plugin ajouterait l'OCR, pptx, xlsx) : sans réseau, le premier candidat au WASM ;
-- les **langues de l'index du code** (11 aujourd'hui, ni C, C++, Ruby, Kotlin ni Swift), en déclaratif : une grammaire tree-sitter et ses requêtes ;
 - les **sources de documents** (Confluence, Drive, Notion), que `docs/FACTORY.md` renvoie déjà aux plugins ;
 - les **faits** des Docs, de la mémoire, des PR et des comptes sur le bus (ajoutés à PLG-5, ESC-177).
 

@@ -845,8 +845,6 @@ pub struct Core<R: Runtime = Wry> {
     /// The accounts whose models are being read (`read_account_models`): one reading at a time.
     models_reading: Mutex<HashSet<String>>,
     pub git: GitService,
-    /// The projects' code indexes (`codeindex`).
-    pub(crate) codeindex: crate::codeindex::Service,
     /// The installed plugins (`plugins`).
     pub plugins: Arc<crate::plugins::Plugins>,
     /// The store in the app (STORE-9): its catalogue and its revocation list, cached.
@@ -1599,8 +1597,6 @@ pub(crate) fn blank_project(path: &str) -> Project {
         workflows_auto_read: true,
         workflows_enabled: true,
         workflows_in_repo: true,
-        code_index: None,
-        code_index_before: false,
     }
 }
 
@@ -1730,6 +1726,11 @@ impl<R: Runtime> Core<R> {
         if let Err(e) = data.ensure() {
             log::error!("cannot create data dir: {e}");
         }
+        // What the index retired by ESC-310 left in the projects' folders, erased once.
+        let erased = data.erase_retired();
+        if erased > 0 {
+            log::info!("erased {erased} files of the retired index (ESC-310)");
+        }
         let mut settings = read_settings(&data.settings_file());
         // First: what the backend writes from now on (the menus, its texts) is in these languages.
         let lang = i18n::configure(&settings.language, &settings.claude_language);
@@ -1854,7 +1855,6 @@ impl<R: Runtime> Core<R> {
             me: me.clone(),
             telemetry,
             stats: Stats::open(&data.stats_db()),
-            codeindex: crate::codeindex::Service::new(data.clone()),
             plugin_runtime,
             facts,
             plugin_events,
@@ -2265,9 +2265,6 @@ impl<R: Runtime> Core<R> {
     pub fn save_settings(self: &Arc<Self>, mut s: Settings) -> Result<()> {
         // The MCP server's port is the backend's own (`sync_mcp`): the window's copy may be older.
         s.mcp_port = self.settings.read().mcp_port;
-        // « Index du code sur tous les projets » is `set_code_index_all`'s (ESC-293): the window's
-        // draft may be older.
-        s.code_index_all = self.settings.read().code_index_all;
         // The user's id is the backend's too (`ensure_identity`): a window's copy may be older.
         if s.user_id.is_empty() {
             s.user_id = self.settings.read().user_id.clone();
@@ -2646,8 +2643,6 @@ impl<R: Runtime> Core<R> {
             self.hub.emit(UiEvent::Agent { agent: v });
         }
         if !fx.turns.is_empty() {
-            // The end of a turn: the code it changed is read by the index (ESC-251).
-            self.code_index_event(project_id);
             self.stats
                 .record_turns(&self.account_of(id), id, project_id, &fx.turns);
             {
@@ -5924,17 +5919,10 @@ impl<R: Runtime> Core<R> {
                 && crate::engine::by_id(engine).attaches(),
             remote_off: o.remote_off || o.copy_of.as_ref().is_some_and(|c| c.remote_off),
             ticket_id: o.ticket_id.clone(),
-            // The code index's rule, for an agent that has no ticket's protocol (which carries it),
-            // then what every agent is told of the shared memory.
+            // What every agent is told of the shared memory.
             append_prompt: with_memory(
                 self.lang().claude,
-                with_follow(
-                    o.append_prompt.or_else(|| {
-                        (self.code_index_on(&project) && o.ticket_id.is_none())
-                            .then(|| crate::codeindex::hint::rule(self.lang().claude))
-                    }),
-                    follow.as_deref(),
-                ),
+                with_follow(o.append_prompt, follow.as_deref()),
             ),
             port_base: o.port_base,
             discussion: o.discussion.clone(),
@@ -8154,10 +8142,6 @@ impl<R: Runtime> Core<R> {
         let _ = self.refresh_repos(&project.id, true).await;
         let project = self.project(&project.id).unwrap_or(project);
         self.watch_project(&project);
-        // « Index du code sur tous les projets » on and followed: read like the others (ESC-293).
-        if self.code_index_on(&project) {
-            self.queue_code_index(vec![project.id.clone()]);
-        }
         if reopened {
             // Its tickets may start, its agents are counted, its Remote Control ones are
             // reachable again as they are when the app starts.
@@ -8622,8 +8606,6 @@ impl<R: Runtime> Core<R> {
         // lock, which it holds while it adds the ticket, so a ticket it adds before this is dropped
         // here, and none is added after.
         let tickets = self.drop_project_tickets(id);
-        // Recomputed from the files: not kept with a closed project.
-        self.codeindex.delete(id);
         if erase {
             // Nothing of it stays, not even a history a stop left half way (see `closed_list`).
             let tickets: Vec<String> = tickets.iter().map(|t| t.id.clone()).collect();
@@ -9517,12 +9499,9 @@ impl<R: Runtime> Core<R> {
             .clone()
     }
 
-    /// A git event of the project (a commit, a branch left): its code index reads what changed.
+    /// A git event of the project (a commit, a branch left).
     fn git_event(&self, project_id: &str) {
         self.git.refresh(project_id);
-        if let Some(me) = self.me.upgrade() {
-            me.code_index_event(project_id);
-        }
     }
 
     /// Refreshes the git state of every project in the repository at `root`.

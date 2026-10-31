@@ -817,11 +817,6 @@ pub trait Engine: Send + Sync {
     fn track_missing(&self, _view: bool) -> &'static [&'static str] {
         &[]
     }
-    /// The answer of its hooks goes into its agent's context (`additionalContext` of a
-    /// `PreToolUse`: Claude Code's HTTP hooks, Codex's commands): the index's hint (ESC-294).
-    fn hook_context(&self) -> bool {
-        false
-    }
     /// It signs in to an account of its service (OpenCode signs in to none: its providers are its
     /// own, ESC-45).
     fn signs_in(&self) -> bool {

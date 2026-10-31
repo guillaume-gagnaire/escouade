@@ -43,7 +43,6 @@ use super::background;
 use super::docs;
 use super::files;
 use super::images;
-use super::index;
 use super::memory;
 use super::read;
 use super::wait;
@@ -186,11 +185,6 @@ impl<C: AsRequestContext, R: Runtime> FromContextPart<C> for ToolCtx<R> {
     }
 }
 
-/// The blocks of an answer of the index: its text alone (no line about what it saved, ESC-307).
-fn index_blocks(text: index::Reply) -> Vec<ContentBlock> {
-    vec![ContentBlock::text(text)]
-}
-
 /// What the activity log says a call was asked: its arguments given, « name: value · … ».
 fn summary(args: &[(&str, Option<&str>)]) -> String {
     args.iter()
@@ -213,15 +207,6 @@ impl<R: Runtime> Tools<R> {
         }
     }
 
-    /// The schemas of the index's tools, as the client lists them, in tokens: what a session pays
-    /// once for them (tokensave `schema_overhead_tokens`). The same from one call to the next.
-    fn index_schemas(&self) -> u64 {
-        static TOKENS: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
-        *TOKENS.get_or_init(|| {
-            crate::codeindex::accounting::schema_overhead_tokens(&index_tools(&self.router))
-        })
-    }
-
     /// Every tool the server offers (and, in tests, the test's own).
     pub fn router() -> ToolRouter<Self> {
         let router = Self::tool_router();
@@ -229,17 +214,6 @@ impl<R: Runtime> Tools<R> {
         let router = router + Self::test_router();
         router
     }
-}
-
-/// The index's tools of `router`, as a client lists them (also served by the bench of the real
-/// agents, `codeindex::probes::agents`).
-pub(crate) fn index_tools<R: Runtime>(router: &ToolRouter<Tools<R>>) -> serde_json::Value {
-    let tools: Vec<_> = router
-        .list_all()
-        .into_iter()
-        .filter(|t| t.name.starts_with("index_"))
-        .collect();
-    serde_json::to_value(tools).unwrap_or_default()
 }
 
 // The arguments' descriptions are the model's (English, one line each: a doc comment's line
@@ -1212,164 +1186,6 @@ impl<R: Runtime> Tools<R> {
         let result = workflow::get(&ctx.core, &ctx.caller, &args.project).await;
         let asked = summary(&[("project", Some(&args.project))]);
         ctx.reply("get_workflow", &asked, result)
-    }
-
-    #[tool(
-        description = "Search for symbols (functions, structs, traits, etc.) in the code index by name or keyword, the best first: one line per symbol, file:line-end_line: name (kind) — signature. Write the words of the code (its identifiers, in English here), not a paraphrase; when a word finds nothing, ask index_context with keywords. ids: true adds the id that index_body, index_callers, index_callees and index_impact take. literal: true finds an exact text in the source (an error message, a string) and returns file:line locations. path_include and path_exclude narrow by path; persistent noise (vendored trees, docs) can be suppressed project-wide via gitignore-style patterns in .escouade/queryignore. Keep grep for a regex. Each answer ends with index_metrics: before (the files touched, read whole, capped at 4 times the answer), after (the answer, the call and, once, the tools' schemas) and saved. The project is the agent's own when left out; the code index is off until the user turns it on in the project's settings (the tool then says so). Open to every client, for the projects it sees (a private project is seen by its own agents alone, and its index holds only what its privacy allows).",
-        annotations(read_only_hint = true, open_world_hint = false)
-    )]
-    async fn index_search(
-        &self,
-        ctx: ToolCtx<R>,
-        Parameters(args): Parameters<index::SearchArgs>,
-    ) -> CallToolResult {
-        let asked = summary(&[
-            ("project", args.project.as_deref()),
-            ("query", Some(&args.query)),
-        ]);
-        let arguments = index::sent(&args);
-        let result = index::search(
-            &ctx.core,
-            &ctx.caller,
-            self.index_schemas(),
-            args,
-            arguments,
-        )
-        .await;
-        ctx.reply_blocks("index_search", &asked, result.map(index_blocks))
-    }
-
-    #[tool(
-        description = "Build an AI-ready context for a task description, in Markdown: the entry points, the related symbols by file, and the code of the entry points (5 blocks at most, of 1,500 bytes at most; a truncated one ends with the index_body call that returns the rest). Tell the task with the words of the code (its identifiers, in English here) where you know them. The output includes a `### Retrieval` section: when it lists zero-hit terms, re-query once with `keywords` synonyms for them (or use index_search); a `match: fts-only` tier means weak lexical matches, so verify entry points before building on them. Pass seen_node_ids from each answer to the next call's exclude_node_ids; path, path_include and path_exclude narrow the entry points. Each answer ends with index_metrics: before (the files touched, read whole, capped at 4 times the answer), after (the answer, the call and, once, the tools' schemas) and saved. The project is the agent's own when left out; the code index is off until the user turns it on in the project's settings (the tool then says so). Open to every client, for the projects it sees (a private project is seen by its own agents alone, and its index holds only what its privacy allows).",
-        annotations(read_only_hint = true, open_world_hint = false)
-    )]
-    async fn index_context(
-        &self,
-        ctx: ToolCtx<R>,
-        Parameters(args): Parameters<index::ContextArgs>,
-    ) -> CallToolResult {
-        let asked = summary(&[
-            ("project", args.project.as_deref()),
-            ("task", Some(&args.task)),
-        ]);
-        let arguments = index::sent(&args);
-        let result = index::context(
-            &ctx.core,
-            &ctx.caller,
-            self.index_schemas(),
-            args,
-            arguments,
-        )
-        .await;
-        ctx.reply_blocks("index_context", &asked, result.map(index_blocks))
-    }
-
-    #[tool(
-        description = "Return the full source body of a symbol by name (function, struct, const, etc.) from the code index. Collapses search + node lookup + file read into a single call. Returns a body only when exactly one definition matches; when the name is ambiguous (e.g. several methods named `refresh`), returns no body but a candidate list (qualified name, kind, file, line range, node id) — re-call with a qualified name such as `Type::Member` / `Type.Member`, or with `node_id`. A function or type definition outranks a same-named field or import. A truncated snippet of index_context names its node_id. Each answer ends with index_metrics, as the other index tools. The project is the agent's own when left out; the code index is off until the user turns it on in the project's settings (the tool then says so). Open to every client, for the projects it sees (a private project is seen by its own agents alone, and its index holds only what its privacy allows).",
-        annotations(read_only_hint = true, open_world_hint = false)
-    )]
-    async fn index_body(
-        &self,
-        ctx: ToolCtx<R>,
-        Parameters(args): Parameters<index::BodyArgs>,
-    ) -> CallToolResult {
-        let id = args.node_id.map(|i| i.to_string());
-        let asked = summary(&[
-            ("project", args.project.as_deref()),
-            ("node_id", id.as_deref()),
-            ("symbol", args.symbol.as_deref()),
-        ]);
-        let arguments = index::sent(&args);
-        let result = index::body(
-            &ctx.core,
-            &ctx.caller,
-            self.index_schemas(),
-            args,
-            arguments,
-        )
-        .await;
-        ctx.reply_blocks("index_body", &asked, result.map(index_blocks))
-    }
-
-    #[tool(
-        description = "Who calls a function or method, from the code index, as JSON: by its id, or by a name answered definition by definition (matches: each definition, its callers resolved to it (file, line, the symbol that calls, its id), and apart the calls that may mean it among others, ambiguous; more: the other definitions of the name, to ask again by id). The calls are resolved to symbols when the files are read, as tokensave does; a tie is never guessed. Each answer ends with index_metrics, as the other index tools. The project is the agent's own when left out; the code index is off until the user turns it on in the project's settings (the tool then says so). Open to every client, for the projects it sees (a private project is seen by its own agents alone, and its index holds only what its privacy allows).",
-        annotations(read_only_hint = true, open_world_hint = false)
-    )]
-    async fn index_callers(
-        &self,
-        ctx: ToolCtx<R>,
-        Parameters(args): Parameters<index::CallArgs>,
-    ) -> CallToolResult {
-        let id = args.id.map(|i| i.to_string());
-        let asked = summary(&[
-            ("project", args.project.as_deref()),
-            ("id", id.as_deref()),
-            ("name", args.name.as_deref()),
-        ]);
-        let arguments = index::sent(&args);
-        let result = index::callers(
-            &ctx.core,
-            &ctx.caller,
-            self.index_schemas(),
-            args,
-            arguments,
-        )
-        .await;
-        ctx.reply_blocks("index_callers", &asked, result.map(index_blocks))
-    }
-
-    #[tool(
-        description = "What a function or method calls, from the code index, as JSON: by its id, or by a name answered definition by definition (matches: the definitions it calls, resolved; apart the calls left to a tie, ambiguous; the names left, the language's and libraries', external; more: the other definitions of the name). Each answer ends with index_metrics, as the other index tools. The project is the agent's own when left out; the code index is off until the user turns it on in the project's settings (the tool then says so). Open to every client, for the projects it sees (a private project is seen by its own agents alone, and its index holds only what its privacy allows).",
-        annotations(read_only_hint = true, open_world_hint = false)
-    )]
-    async fn index_callees(
-        &self,
-        ctx: ToolCtx<R>,
-        Parameters(args): Parameters<index::CallArgs>,
-    ) -> CallToolResult {
-        let id = args.id.map(|i| i.to_string());
-        let asked = summary(&[
-            ("project", args.project.as_deref()),
-            ("id", id.as_deref()),
-            ("name", args.name.as_deref()),
-        ]);
-        let arguments = index::sent(&args);
-        let result = index::callees(
-            &ctx.core,
-            &ctx.caller,
-            self.index_schemas(),
-            args,
-            arguments,
-        )
-        .await;
-        ctx.reply_blocks("index_callees", &asked, result.map(index_blocks))
-    }
-
-    #[tool(
-        description = "What a change would touch, from the code index, as JSON: a symbol by its id, a name answered definition by definition, or a file by its path; for each, its callers followed by the resolved links up to depth levels, the types that extend or implement it, the files that import it, every file touched, and apart the calls that may mean it among others (ambiguous). Each answer ends with index_metrics, as the other index tools. The project is the agent's own when left out; the code index is off until the user turns it on in the project's settings (the tool then says so). Open to every client, for the projects it sees (a private project is seen by its own agents alone, and its index holds only what its privacy allows).",
-        annotations(read_only_hint = true, open_world_hint = false)
-    )]
-    async fn index_impact(
-        &self,
-        ctx: ToolCtx<R>,
-        Parameters(args): Parameters<index::ImpactArgs>,
-    ) -> CallToolResult {
-        let id = args.id.map(|i| i.to_string());
-        let asked = summary(&[
-            ("project", args.project.as_deref()),
-            ("id", id.as_deref()),
-            ("target", args.target.as_deref()),
-        ]);
-        let arguments = index::sent(&args);
-        let result = index::impact(
-            &ctx.core,
-            &ctx.caller,
-            self.index_schemas(),
-            args,
-            arguments,
-        )
-        .await;
-        ctx.reply_blocks("index_impact", &asked, result.map(index_blocks))
     }
 
     #[tool(

@@ -91,6 +91,14 @@ describe('the server', () => {
     expect(conf.match(/^\s*access_log off;$/gm)).toHaveLength(2);
   });
 
+  it('sends the page of the retired code index to the shared memory’s, in both languages (ESC-310)', () => {
+    expect(conf).toContain('location ~ ^/(en/)?docs/code-index/?$ {');
+    expect(conf).toContain('return 301 /$1docs/shared-memory/;');
+    expect(docPath('fr', 'shared-memory')).toBe('/docs/shared-memory/');
+    expect(docPath('en', 'shared-memory')).toBe('/en/docs/shared-memory/');
+    expect(DOC_SLUGS).not.toContain('code-index');
+  });
+
   it('answers an unknown address with the generated 404 page', () => {
     expect(conf).toContain('error_page 404 /404.html;');
   });

@@ -1994,8 +1994,7 @@ impl<R: Runtime> Core<R> {
     }
 
     /// The instructions added to a ticket's agent: its protocol, within the room its harness gives
-    /// it, then the code index's rule when the project has turned the index on (the room is kept
-    /// for it first, so the criteria give way before the rule does).
+    /// it.
     pub(crate) fn ticket_instructions(
         &self,
         project: &Project,
@@ -2006,25 +2005,16 @@ impl<R: Runtime> Core<R> {
         follow: Option<&str>,
     ) -> String {
         let engine = crate::engine::by_id(t.engine.unwrap_or(project.engine()));
-        let rule = self
-            .code_index_on(project)
-            .then(|| crate::codeindex::hint::rule(lang));
         let room = engine.instructions_room().map(|r| crate::engine::Room {
             max: r
                 .max
-                .saturating_sub(rule.as_deref().map_or(0, |x| (r.weigh)(&format!(" {x}"))))
                 // The shared memory's line, added after it (`core::with_memory`).
                 .saturating_sub((r.weigh)(&crate::memory::instruction(lang)) + 1)
                 // And the spec in Escouade's (ESC-278), added before it.
                 .saturating_sub(follow.map_or(0, |f| (r.weigh)(f) + 1)),
             weigh: r.weigh,
         });
-        let mut p = board::protocol_prompt_for(lang, t, ports, isola, room);
-        if let Some(rule) = rule {
-            p.push(' ');
-            p.push_str(&rule);
-        }
-        p
+        board::protocol_prompt_for(lang, t, ports, isola, room)
     }
 
     /// The ticket's agent: its worktree on `<prefix><key>` (`ticket/<key>`) from the target branch, its block of
@@ -2076,7 +2066,7 @@ impl<R: Runtime> Core<R> {
                     mode: Some(mode),
                     name: Some(board::ticket_agent_name(t)),
                     worktree: new_branch,
-                    // Within the room its harness gives it, the code index's rule included, and what
+                    // Within the room its harness gives it, and what
                     // it is told of the shared memory after it (`core::with_memory`).
                     append_prompt: Some(self.ticket_instructions(
                         project,

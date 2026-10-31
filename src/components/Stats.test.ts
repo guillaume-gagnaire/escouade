@@ -61,8 +61,7 @@ describe('Stats', () => {
     resetApp({ projects: [project()] });
   });
 
-  it('shows the code index per project: answers, their tokens and the file reading avoided as a high estimate, no dollars (ESC-307)', async () => {
-    resetApp({ projects: [project({ codeIndexChoice: true })] });
+  it('shows nothing of the retired index, even from a backend that still sends it (ESC-310)', async () => {
     fakeBackend({
       stats: (a: any) => ({
         ...view(a.range),
@@ -73,30 +72,8 @@ describe('Stats', () => {
     });
     render(Stats);
     await loaded();
-    const table = await screen.findByRole('table', { name: 'Index du code' });
-    const row = within(table).getAllByRole('row')[1];
-    expect(row).toHaveTextContent(project().name);
-    expect(row).toHaveTextContent('12');
-    const cells = within(row)
-      .getAllByRole('cell')
-      .map((c) => c.textContent?.replace(/\s/g, ' '));
-    expect(cells.slice(1)).toEqual(['12', '40,0 k', '860,0 k']);
-    await userEvent.hover(within(table).getByText('Lecture de fichiers évitée (estimation haute)'));
-    expect(await screen.findByText(/pas une économie mesurée/)).toBeInTheDocument();
-    expect(screen.queryByText(/Dollars économisés/)).toBeNull();
-  });
-
-  it('says the index answered nothing over the period, and shows nothing of it when no project has turned it on', async () => {
-    resetApp({ projects: [project({ codeIndexChoice: true })] });
-    fakeBackend({ stats: (a: any) => view(a.range) });
-    const { unmount } = render(Stats);
-    await loaded();
-    expect(screen.getByText('Aucune réponse de l’index sur la période.')).toBeInTheDocument();
-    unmount();
-    resetApp({ projects: [project()] });
-    render(Stats);
-    await loaded();
-    expect(screen.queryByText('Index du code')).toBeNull();
+    expect(screen.queryByRole('heading', { name: /index/i })).toBeNull();
+    expect(document.querySelector('[data-stats-index]')).toBeNull();
   });
 
   it('shows the KPIs of the period', async () => {

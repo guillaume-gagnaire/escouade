@@ -195,7 +195,7 @@ Fermer est refusé tant que la validation d’un ticket du projet tourne : « L
 
 | Réglage | Effet | Défaut |
 | --- | --- | --- |
-| « Index du code sur tous les projets » | Allume l’[index du code](code-index#sur-tous-les-projets) de chaque projet qui n’a pas fait son propre choix : ils sont lus un par un, en arrière-plan. La couper efface leur index, après une confirmation qui dit combien de projets le perdent. Enregistré tout de suite, sans **Enregistrer**. | Désactivé |
+| « Recherche par le sens » | Télécharge le modèle des vecteurs, un seul pour tous les projets de cette machine : la [mémoire partagée](shared-memory) et les [docs](docs-space) se cherchent alors par le sens en plus des mots. La progression s’affiche, **Annuler** garde ce qui est venu (**Reprendre** continue), **Effacer** le retire. Rien ne sort de la machine. | Pas téléchargé |
 
 ## Nouveaux projets
 
@@ -233,10 +233,6 @@ L’interrupteur « Partir d’un projet vierge » (« L’historique reste d
 
 > [!NOTE]
 > Un projet fermé avant cette version a déjà perdu son historique : il n’y a rien à retrouver pour lui.
-
-## Index du code
-
-Le groupe « Index du code » allume l’[index du code](code-index) du projet (**Indexer ce projet**) : il dit ce que l’index trouve, que tout reste sur la machine, et ce qu’il contient. Tant que le projet n’a pas fait son propre choix, il suit **Index du code sur tous les projets** (voir plus bas) et le dit ; un choix fait ici est gardé, et **Suivre le réglage de l’app** y revient. Pour un projet privé, il dit ce qui reste hors de l’index. **Recherche par le sens** télécharge le modèle des vecteurs, avec sa progression et **Annuler**.
 
 ## Mémoire partagée
 

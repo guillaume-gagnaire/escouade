@@ -98,36 +98,6 @@ fn naming_calls() -> Vec<(&'static str, Names, Value)> {
             Names::Project,
             json!({ "project": "{}", "query": "texte" }),
         ),
-        (
-            "index_search",
-            Names::Project,
-            json!({ "project": "{}", "query": "texte" }),
-        ),
-        (
-            "index_context",
-            Names::Project,
-            json!({ "project": "{}", "task": "texte" }),
-        ),
-        (
-            "index_body",
-            Names::Project,
-            json!({ "project": "{}", "symbol": "texte" }),
-        ),
-        (
-            "index_callers",
-            Names::Project,
-            json!({ "project": "{}", "name": "texte" }),
-        ),
-        (
-            "index_callees",
-            Names::Project,
-            json!({ "project": "{}", "name": "texte" }),
-        ),
-        (
-            "index_impact",
-            Names::Project,
-            json!({ "project": "{}", "target": "texte" }),
-        ),
         ("list_decisions", Names::Project, json!({ "project": "{}" })),
         (
             "read_decision",

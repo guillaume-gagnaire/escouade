@@ -2664,14 +2664,9 @@ async fn answer<R: Runtime>(
     if let (Some(event), Some(map)) = (event, hook.as_object_mut()) {
         map.insert(EVENT_KEY.into(), Value::String(event));
     }
-    // A search for a symbol is answered with a line that points to the code index: context only,
-    // never a decision (`codeindex::hint`).
-    let advice = core
-        .index_hint(&agent, &hook)
-        .map_or_else(|| "{}".to_string(), |v| v.to_string());
     // Off the connection: the interface does not wait for what Escouade makes of it.
     tauri::async_runtime::spawn_blocking(move || core.on_tui_hook(&agent, hook));
-    reply(StatusCode::OK, &advice)
+    reply(StatusCode::OK, "{}")
 }
 
 #[cfg(test)]
