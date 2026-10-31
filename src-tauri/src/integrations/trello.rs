@@ -6,7 +6,7 @@ use crate::model::{ExternalRef, ExternalState, Service};
 use anyhow::Result;
 use serde_json::Value;
 
-const S: Service = Service::Trello;
+const S: Service = Service::TRELLO;
 
 pub struct Trello {
     http: reqwest::Client,

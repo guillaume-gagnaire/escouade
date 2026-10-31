@@ -86,6 +86,7 @@ pub struct InitialState {
     engines: Vec<crate::engine::registry::EngineDecl>,
     /// The harnesses whose program is found: the only ones the interface offers.
     engines_found: Vec<crate::model::EngineId>,
+    sources: Vec<crate::integrations::source::SourceDecl>,
     /// Why no ticket of a project's board starts, by project.
     board_issues: HashMap<String, String>,
     /// Why no ticket of a project that goes to any account starts for now (a quota, a usage
@@ -168,6 +169,7 @@ pub fn subscribe(
         account_models,
         engines: crate::engine::registry::declared(),
         engines_found: core.engines_found(),
+        sources: crate::integrations::source::declared(),
         board_issues,
         autopilot_pause,
         project_pauses,

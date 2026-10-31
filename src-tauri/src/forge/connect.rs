@@ -463,7 +463,7 @@ impl<R: Runtime> Core<R> {
                 token,
                 ..Default::default()
             };
-            self.integration_connect(Service::Github, form).await?;
+            self.integration_connect(Service::GITHUB, form).await?;
             self.forge_health.lock().remove(GITHUB_COM);
             return Ok(self.forge_check_one(GITHUB_COM).await);
         }
@@ -525,7 +525,7 @@ impl<R: Runtime> Core<R> {
         self.forge_health.lock().remove(&host);
         self.forge_cli_tokens.lock().remove(&host);
         if host == GITHUB_COM {
-            self.integration_disconnect(Service::Github)?;
+            self.integration_disconnect(Service::GITHUB)?;
             return Ok(self.forges_view().await);
         }
         let had = self

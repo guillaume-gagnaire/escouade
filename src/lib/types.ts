@@ -411,7 +411,19 @@ export interface IntegrationSettings {
 }
 
 /** An external ticket system. */
-export type Service = 'jira' | 'trello' | 'github' | 'linear' | 'clickup' | 'gitlab' | 'azure';
+/** A source of tickets, by its id (`jira`, `github`…): one of the core's registry. */
+export type Service = string;
+
+/** What the core tells of a kind of source (`InitialState::sources`). */
+export interface SourceDecl {
+  id: Service;
+  name: string;
+  short: string;
+  /** The code host whose accounts serve it. */
+  host: string | null;
+  /** It has an account of its own; false when it is connected as its code host. */
+  ownAccount: boolean;
+}
 
 /** A Jira status, a Trello list, or for GitHub "open", "closed" or "label:<name>". */
 export interface ExternalState {
@@ -2467,6 +2479,8 @@ export interface InitialState {
   engines: EngineDecl[];
   /** The harnesses whose program is found: the only ones offered (absent before 1.8: Claude Code, when found). */
   enginesFound?: EngineId[];
+  /** The kinds of ticket sources the core knows (absent before INT-1: the seven of the window). */
+  sources?: SourceDecl[];
   /** Why no ticket of a project's board starts, by project (none: they may). */
   boardIssues?: Record<string, string>;
   /** Why no ticket of a project that goes to any account starts for now (none: they may). */

@@ -117,7 +117,7 @@ pub(crate) struct Target {
 pub(crate) fn work_item_of(t: &crate::model::Ticket) -> Option<u64> {
     t.external
         .as_ref()
-        .filter(|e| e.service == crate::model::Service::Azure)
+        .filter(|e| e.service == crate::model::Service::AZURE)
         .and_then(|e| e.id.parse().ok())
 }
 

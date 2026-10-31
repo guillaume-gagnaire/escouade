@@ -92,12 +92,12 @@ fn an_azure_boards_work_item_is_linked_on_azure_repos_and_named_on_github() {
     let mut t = crate::model::Ticket::default();
     assert_eq!(work_item_of(&t), None);
     t.external = Some(crate::model::ExternalRef {
-        service: crate::model::Service::Gitlab,
+        service: crate::model::Service::GITLAB,
         id: "42".into(),
         ..Default::default()
     });
     assert_eq!(work_item_of(&t), None);
-    t.external.as_mut().unwrap().service = crate::model::Service::Azure;
+    t.external.as_mut().unwrap().service = crate::model::Service::AZURE;
     assert_eq!(work_item_of(&t), Some(42));
 }
 

@@ -220,7 +220,7 @@ async fn the_issues_are_listed_with_their_labels_author_link_and_criteria() {
         ),
         ("42", "#42", "Issue", "issue")
     );
-    assert_eq!(i.service, Service::Gitlab);
+    assert_eq!(i.service, Service::GITLAB);
     assert_eq!(i.title, "Crash au paiement");
     assert_eq!(i.meta, ["bug", "backend", "@ada", "par @grace"]);
     assert_eq!(i.url, "https://gitlab.com/acme/back/api/-/issues/42");
