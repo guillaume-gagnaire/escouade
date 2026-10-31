@@ -1,6 +1,8 @@
 import { gzipSync } from 'node:zlib';
+import { parseTag, tagFor } from '../../shared/folder';
 import { TooBig, type Source, type TreeEntry } from './source';
 import { ARCHIVE_MAX, readArchive, UNPACKED_MAX, type ArchiveProblem, type ArchiveRead } from './tar';
+import { compareVersions, tagVersion } from './versions';
 
 // A plugin in a folder of its repository (ESC-313, docs/STORE.md §3.6): the folders of an archive that hold a
 // manifest, a folder taken out of the archive (its files, its own problems, never through a link), and the archive the
@@ -168,6 +170,21 @@ export async function cachedFolders(key: string, load: () => Promise<FolderList>
   lists.set(key, list);
   if (lists.size > 20) lists.delete(lists.keys().next().value!);
   return list;
+}
+
+/**
+ * The tag the folders are listed at when the page names none: the newest of the folder typed, else the newest tag of
+ * any folder, else the newest of all. A repository whose plugins live in folders tags them so, and its plain `v…` tags
+ * may be another thing's: the app's own (`v2.1.2`, on a branch without `plugins/`, ESC-314) would hide every folder.
+ */
+export function listingTag<T extends { name: string }>(tags: T[], path: string | null): T | undefined {
+  const newest = [...tags].sort((a, b) => compareVersions(tagVersion(b.name), tagVersion(a.name)));
+  const own = path !== null ? newest.find((t) => tagFor(t.name, path) !== null) : undefined;
+  const ofFolder = (t: T) => {
+    const p = parseTag(t.name);
+    return !!p && (p.folder !== null || p.name !== null);
+  };
+  return own ?? newest.find(ofFolder) ?? newest[0];
 }
 
 /** Whether a folder typed may be submitted, by the list: not through a link, with a manifest. */
