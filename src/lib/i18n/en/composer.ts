@@ -64,6 +64,8 @@ export default defineZone('composer', {
   send: {
     label: 'Send',
     titleQueued: '{engine} takes it into account at its next step · {enter} to send',
+    titleHeld: 'Sent to {engine} in {s} s, can be cancelled until then · {enter} to send',
+    titleTurnEnd: '{engine} gets it at the end of its turn, can be cancelled until then · {enter} to send',
     title: '{enter} to send · {newline} for a new line',
     alreadyWaiting: 'A message is already waiting for the setup to finish.',
     filesKept: 'Attached files don’t go with an answer: they stay ready for your next message.',

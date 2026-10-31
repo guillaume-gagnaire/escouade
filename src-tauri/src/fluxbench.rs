@@ -119,7 +119,7 @@ pub(crate) fn corpus() -> Vec<Flux> {
     let lines = lines_of(&long.join("long-turn.jsonl"));
     assert_eq!(times.len(), lines.len(), "long-turn: a time a line");
     all.push(Flux {
-        harness: EngineId::Claude,
+        harness: EngineId::CLAUDE,
         name: "claude/long-turn".into(),
         agent: Value::Null,
         lines,
@@ -554,7 +554,7 @@ async fn a_stream_is_replayed_at_its_recorded_pace() {
     assert_eq!(times_of(&lines), Some(vec![0, 40, 90, 3_090]));
     assert_eq!(times_of(&["{}".to_string()]), None);
     let flux = Flux {
-        harness: EngineId::Claude,
+        harness: EngineId::CLAUDE,
         name: "claude/paced".into(),
         agent: Value::Null,
         times: times_of(&lines),

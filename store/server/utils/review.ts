@@ -143,6 +143,8 @@ export interface QueueVersion {
   message: string | null;
   reviewedAt: string | null;
   command: string;
+  /** Where it was read from (ESC-313): its repository, its folder, and the source before it when it changed. */
+  source: { repository: string; path: string; changedFrom: string | null };
 }
 
 export interface QueueReport {
@@ -168,6 +170,8 @@ export interface QueueHeld {
   mark: string;
   hue: number;
   repository: string;
+  /** Its folder in the repository, '' at the root (ESC-313). */
+  path: string;
   author: string | null;
   why: Text;
   createdAt: string;
@@ -293,6 +297,16 @@ export async function reviewQueue(db: Db, dir: string, keys: readonly PublicKey[
       state: verifiedOf(r) ? 'verified' : r.v.reviewState === 'changes' || r.v.reviewState === 'refused' ? r.v.reviewState : null,
       message: r.v.reviewMessage,
       reviewedAt: r.v.reviewedAt?.toISOString() ?? null,
+      source: {
+        repository: r.v.repoFullName,
+        path: r.v.path,
+        changedFrom:
+          previous && (previous.v.repoId !== r.v.repoId || previous.v.path !== r.v.path)
+            ? previous.v.path
+              ? `${previous.v.repoFullName}/${previous.v.path}`
+              : previous.v.repoFullName
+            : null,
+      },
       command: `npm run plugin-review -- ${r.plugin.id}@${r.v.version}${baseRow && previous && baseRow !== previous ? ` --since ${baseRow.v.version}` : ''}`,
     };
   };
@@ -345,6 +359,7 @@ export async function reviewQueue(db: Db, dir: string, keys: readonly PublicKey[
       mark: markOf(name.en || v.pluginId || '?'),
       hue: hueOf(v.pluginId ?? ''),
       repository: v.repoFullName,
+      path: v.path,
       author: login,
       why: hold?.detail ?? { fr: 'Revue manuelle', en: 'Manual review' },
       createdAt: v.createdAt.toISOString(),

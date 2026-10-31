@@ -617,6 +617,15 @@ impl AgentRt {
         })
     }
 
+    /// The model it runs: the one its conversation last went by (`claude-fable-5-1`), else its own.
+    pub(crate) fn model_in_use(&self) -> String {
+        if self.main_model.is_empty() {
+            self.meta.model.clone()
+        } else {
+            self.main_model.clone()
+        }
+    }
+
     pub fn view(&self) -> AgentView {
         let (live_tokens, live_cost) = self.live_totals();
         AgentView {
@@ -1451,8 +1460,8 @@ impl AgentRt {
             let mut reason = stopped(i18n::ui(), harness.name(), &code);
             // A `claude` that stopped before it started: its installation may have been cut
             // half-way (ESC-133), which is said with its repair.
-            if !self.saw_init && harness.id() == EngineId::Claude {
-                if let Some(line) = crate::engine::claude_interrupted_line(i18n::ui()) {
+            if !self.saw_init {
+                if let Some(line) = harness.interrupted_line(i18n::ui()) {
                     reason = format!("{reason}. {line}");
                 }
             }
@@ -3122,6 +3131,35 @@ mod tests {
             &mut fx,
         );
         assert_eq!(a.conv.items().len(), 2);
+    }
+
+    #[test]
+    fn a_limit_of_fables_own_week_is_told_as_that_models_and_not_the_accounts() {
+        let mut a = rt();
+        a.meta.model = "fable".into();
+        let mut fx = Effects::default();
+        // As Claude Code 2.1.314 tells it: the type `seven_day_overage_included` (« Fable limit »),
+        // its window in `unifiedWindows` without the model's name.
+        a.handle_frame(
+            &json!({"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":1790800000,
+                    "rateLimitType":"seven_day_overage_included","unifiedWindows":{
+                        "seven_day":{"utilization":0.47,"resetsAt":1790900000},
+                        "seven_day_overage_included":{"utilization":1.0,"resetsAt":1790800000}}}}),
+            &mut fx,
+        );
+        assert_eq!(a.meta.limit_model.as_deref(), Some("fable"));
+        let rate = fx.rate.unwrap();
+        assert_eq!(rate.len(), 2);
+        assert_eq!(rate[1].minutes, Some(crate::model::WEEK));
+        assert_eq!(rate[1].model.as_deref(), Some(crate::model::MODEL_UNNAMED));
+        assert_eq!(rate[1].pct, 100.0);
+        // A limit of every model: the account's again.
+        let mut fx = Effects::default();
+        a.handle_frame(
+            &json!({"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":1790800000,"rateLimitType":"seven_day"}}),
+            &mut fx,
+        );
+        assert_eq!(a.meta.limit_model, None);
     }
 
     #[test]

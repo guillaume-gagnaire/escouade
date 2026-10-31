@@ -47,37 +47,36 @@ const TRANSCRIPTS: &[&str] = &["projects", "sessions"];
 /// of `outside`, `extension`, `secret`, `config`, `transcript`. Never its content.
 pub const IGNORED: &str = "ignored:";
 
-/// The folders of each harness, from a repository (`user` ones from the harness' folder), and what
-/// each holds. What a reading tells it has looked in (« l'onglet dit ce qui a été cherché »).
-pub const FOLDERS: &[(EngineId, &str, DocKind)] = &[
-    (EngineId::Claude, ".claude/commands", DocKind::Command),
-    (EngineId::Claude, ".claude/skills", DocKind::Skill),
-    (EngineId::Claude, ".claude/agents", DocKind::Agent),
-    // `.agents/`, read whole whatever the harness (ESC-195): skills, agents, commands, prompts.
-    (EngineId::Codex, ".agents/skills", DocKind::Skill),
-    (EngineId::Codex, ".agents/agents", DocKind::Agent),
-    (EngineId::Codex, ".agents/commands", DocKind::Command),
-    (EngineId::Codex, ".agents/prompts", DocKind::Command),
-    (EngineId::Opencode, ".opencode/command", DocKind::Command),
-    (EngineId::Opencode, ".opencode/commands", DocKind::Command),
-    (EngineId::Opencode, ".opencode/skill", DocKind::Skill),
-    (EngineId::Opencode, ".opencode/skills", DocKind::Skill),
-    (EngineId::Opencode, ".opencode/agent", DocKind::Agent),
-    (EngineId::Opencode, ".opencode/agents", DocKind::Agent),
-    (EngineId::Copilot, ".github/prompts", DocKind::Command),
-    (EngineId::Copilot, ".github/skills", DocKind::Skill),
-    (EngineId::Copilot, ".github/agents", DocKind::Agent),
-    (EngineId::Cursor, ".cursor/commands", DocKind::Command),
-];
+/// The folders of a harness, from a repository, and what each holds (`Engine::workflow_folders`):
+/// what a reading tells it has looked in (« l'onglet dit ce qui a été cherché »).
+pub type Folders = &'static [(&'static str, DocKind)];
+
+/// The user's own folder of a harness its workflows are read from too (`Engine::workflow_user`),
+/// as the roots of a scan have them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UserRoot {
+    /// Claude Code's (`~/.claude`, or an account's): `CLAUDE_USER`.
+    Claude,
+    /// Codex's (`CODEX_HOME`, shared between its accounts): `CODEX_USER`.
+    Codex,
+}
 
 /// The prompts and skills of Codex's folder (`CODEX_HOME`, shared between its accounts).
-const CODEX_USER: &[(&str, DocKind)] = &[("prompts", DocKind::Command), ("skills", DocKind::Skill)];
+const CODEX_USER: Folders = &[("prompts", DocKind::Command), ("skills", DocKind::Skill)];
 /// The folders of Claude Code's own folder (`~/.claude`, or an account's).
-const CLAUDE_USER: &[(&str, DocKind)] = &[
+const CLAUDE_USER: Folders = &[
     ("commands", DocKind::Command),
     ("skills", DocKind::Skill),
     ("agents", DocKind::Agent),
 ];
+
+/// The harnesses whose folders a repository is read for, in the registry's order.
+fn read_harnesses() -> Vec<&'static dyn crate::engine::Engine> {
+    crate::engine::registry::all()
+        .into_iter()
+        .filter(|e| !e.workflow_folders().is_empty())
+        .collect()
+}
 
 /// The instructions read to understand, never drawn (choice 136).
 const INSTRUCTIONS: &[&str] = &["CLAUDE.md", "AGENTS.md", ".github/copilot-instructions.md"];
@@ -344,6 +343,21 @@ pub struct Scan {
     /// not be read, with why.
     pub files: Vec<crate::workflowfiles::FileInfo>,
     pub unreadable: Vec<crate::workflowfiles::Unreadable>,
+    /// The workflows the user removed (ESC-309): never written again by a reading, proposed again
+    /// when what found them changed.
+    pub removed: Vec<crate::workflowfiles::RemovedInfo>,
+    /// « Pas de workflow pour ce projet » (ESC-309): nothing read nor written, nothing shown.
+    pub off: bool,
+}
+
+impl Scan {
+    /// The workflows of a project that has none (« Pas de workflow pour ce projet », ESC-309).
+    pub fn off() -> Self {
+        Scan {
+            off: true,
+            ..Default::default()
+        }
+    }
 }
 
 /// Where the user's own folders are, given: the tests give a throwaway one, never the real one.
@@ -1161,15 +1175,14 @@ fn load_docs(
 fn docs_of(ctx: &mut Ctx, harness: EngineId) -> Vec<Doc> {
     let mut docs = Vec::new();
     let repo_dir = ctx.repo_dir.clone();
-    for (h, rel, kind) in FOLDERS {
-        if *h == harness {
-            load_docs(ctx, &repo_dir, rel, *kind, Scope::Project, &mut docs);
-        }
+    let harness = crate::engine::by_id(harness);
+    for (rel, kind) in harness.workflow_folders() {
+        load_docs(ctx, &repo_dir, rel, *kind, Scope::Project, &mut docs);
     }
-    let user: Option<(PathBuf, &[(&str, DocKind)])> = match harness {
-        EngineId::Claude => ctx.roots.claude.clone().map(|d| (d, CLAUDE_USER)),
-        EngineId::Codex => ctx.roots.codex.clone().map(|d| (d, CODEX_USER)),
-        _ => None,
+    let user: Option<(PathBuf, Folders)> = match harness.workflow_user() {
+        Some(UserRoot::Claude) => ctx.roots.claude.clone().map(|d| (d, CLAUDE_USER)),
+        Some(UserRoot::Codex) => ctx.roots.codex.clone().map(|d| (d, CODEX_USER)),
+        None => None,
     };
     if let Some((dir, folders)) = user {
         let mut theirs = Vec::new();
@@ -1754,18 +1767,7 @@ fn read_harness(ctx: &mut Ctx, repo: &str, harness: EngineId, launched: &[String
 }
 
 fn engine_slug(e: EngineId) -> &'static str {
-    match e {
-        EngineId::Claude => "claude",
-        EngineId::Codex => "codex",
-        EngineId::Copilot => "copilot",
-        EngineId::Cursor => "cursor",
-        EngineId::Opencode => "opencode",
-        EngineId::Vibe => "vibe",
-        EngineId::Agy => "agy",
-        EngineId::Gemini => "gemini",
-        #[cfg(test)]
-        EngineId::Bench => "bench",
-    }
+    e.as_str()
 }
 
 fn slug(name: &str) -> String {
@@ -1951,14 +1953,8 @@ fn read_repo(roots: &Roots, repo_dir: &Path, repo: &str, launched: &[String], ou
         sources: Vec::new(),
         ignored: BTreeSet::new(),
     };
-    for harness in [
-        EngineId::Claude,
-        EngineId::Codex,
-        EngineId::Opencode,
-        EngineId::Copilot,
-        EngineId::Cursor,
-    ] {
-        read_harness(&mut ctx, repo, harness, launched, out);
+    for harness in read_harnesses() {
+        read_harness(&mut ctx, repo, harness.id(), launched, out);
     }
     // A prompt run over and over: `PROMPT.md`.
     for p in PROMPTS {
@@ -1993,7 +1989,10 @@ fn read_repo(roots: &Roots, repo_dir: &Path, repo: &str, launched: &[String], ou
 
 /// Where each harness looks, said from a repository (what an empty tab says it searched).
 pub fn searched() -> Vec<String> {
-    let mut v: Vec<String> = FOLDERS.iter().map(|(_, rel, _)| rel.to_string()).collect();
+    let mut v: Vec<String> = read_harnesses()
+        .iter()
+        .flat_map(|e| e.workflow_folders().iter().map(|(rel, _)| rel.to_string()))
+        .collect();
     v.extend(PROMPTS.iter().map(|p| p.to_string()));
     v.sort();
     v.dedup();
@@ -2088,6 +2087,10 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
     /// never read is read now.
     pub async fn refresh_workflows(&self, project_id: &str, force: bool) -> anyhow::Result<Scan> {
         let project = self.project(project_id)?;
+        // « Pas de workflow pour ce projet » (ESC-309): neither read nor written.
+        if !project.workflows_enabled {
+            return Ok(Scan::off());
+        }
         let file = self.data.workflows_file(project_id);
         let stored: Option<Scan> = std::fs::read(&file)
             .ok()
@@ -2113,12 +2116,18 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
         // never removed; then the workflows of the files are those the project shows and follows.
         let places = crate::workflowfiles::places(&project, &self.data);
         let mut folder = crate::workflowfiles::load_all(&places);
+        // Those the user removed are not written again (ESC-309).
+        let removals_file = crate::workflowfiles::removals_file(&self.data, project_id);
+        let before = crate::workflowfiles::Removals::load(&removals_file);
+        let mut removals = before.clone();
         let written = crate::workflowfiles::merge_reading_all(
             &places,
             &folder,
             &scan.workflows,
             Path::new(&project.path).is_dir(),
+            &mut removals,
         );
+        removals.save(&removals_file, &before);
         if !written.is_empty() {
             let mut files = FILES.lock();
             let seen = files.entry(project_id.to_string()).or_default();
@@ -2162,7 +2171,13 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
             Ok(rel) => norm(rel),
             Err(_) => norm(p),
         };
-        crate::workflowfiles::scan_of(project, folder, local, shown, &updated)
+        let mut scan = crate::workflowfiles::scan_of(project, folder, local, shown, &updated);
+        scan.removed = crate::workflowfiles::Removals::load(&crate::workflowfiles::removals_file(
+            &self.data,
+            &project.id,
+        ))
+        .listed(&local.workflows);
+        scan
     }
 
     /// The workflows of the project as its files and this machine's last reading say them, read
@@ -2172,6 +2187,9 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
         let Ok(project) = self.project(project_id) else {
             return local;
         };
+        if !project.workflows_enabled {
+            return Scan::off();
+        }
         let folder =
             crate::workflowfiles::load_all(&crate::workflowfiles::places(&project, &self.data));
         self.scan_from_files(&project, &folder, &local)
@@ -2199,6 +2217,9 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
     /// The project's corrections written into the files of its workflows (Réglages › Projets ›
     /// Workflow saved).
     pub(crate) fn write_workflow_fixes(&self, project: &crate::model::Project) {
+        if !project.workflows_enabled {
+            return;
+        }
         let places = crate::workflowfiles::places(project, &self.data);
         let folder = crate::workflowfiles::load_all(&places);
         if let Err(e) = crate::workflowfiles::set_fixes(&folder, &project.workflow_fixes) {
@@ -2215,6 +2236,9 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
         let Ok(project) = self.project(project_id) else {
             return;
         };
+        if !project.workflows_enabled {
+            return;
+        }
         let folder =
             crate::workflowfiles::load_all(&crate::workflowfiles::places(&project, &self.data));
         let fingerprint = folder.fingerprint();
@@ -2229,23 +2253,49 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
         self.workflow_fixes_changed(project_id);
     }
 
-    /// « Retirer du dépôt »: the file of a workflow goes (one this machine reads would come back
-    /// at its next reading: « Ce n'est pas un workflow » is for those).
+    /// « Retirer du dépôt »: the file of a workflow goes, and is not written again (ESC-309).
     pub async fn remove_workflow_file(
         &self,
         project_id: &str,
         workflow: &str,
     ) -> anyhow::Result<Scan> {
+        self.set_workflow_removed(project_id, workflow, true).await
+    }
+
+    /// « Supprimer » (`removed`): the workflow's file goes, and no reading writes it again; one
+    /// removed already is kept removed as it is found now (« Laisser supprimé »). « Rétablir »
+    /// (not `removed`): read and written again (ESC-309).
+    pub async fn set_workflow_removed(
+        &self,
+        project_id: &str,
+        workflow: &str,
+        removed: bool,
+    ) -> anyhow::Result<Scan> {
         let project = self.project(project_id)?;
-        let folder =
-            crate::workflowfiles::load_all(&crate::workflowfiles::places(&project, &self.data));
-        if let Some((path, _)) = folder.doc(workflow) {
-            std::fs::remove_file(path)?;
+        let file = crate::workflowfiles::removals_file(&self.data, project_id);
+        let before = crate::workflowfiles::Removals::load(&file);
+        let mut removals = before.clone();
+        if removed {
+            let folder =
+                crate::workflowfiles::load_all(&crate::workflowfiles::places(&project, &self.data));
+            let doc = folder.doc(workflow);
+            if let Some((path, _)) = doc {
+                std::fs::remove_file(path)?;
+            }
+            let reading = self.cached_reading(project_id);
+            let now = reading.workflows.iter().find(|w| w.id == workflow);
+            removals.remove(workflow, doc.map(|(_, d)| d), now);
+            removals.save(&file, &before);
+            if let Some(s) = FILES.lock().get_mut(project_id) {
+                s.1.remove(workflow);
+            }
+            let scan = self.workflows_of(project_id);
+            self.workflow_fixes_changed(project_id);
+            return Ok(scan);
         }
-        if let Some(s) = FILES.lock().get_mut(project_id) {
-            s.1.remove(workflow);
-        }
-        let scan = self.workflows_of(project_id);
+        removals.removed.remove(workflow);
+        removals.save(&file, &before);
+        let scan = self.refresh_workflows(project_id, false).await?;
         self.workflow_fixes_changed(project_id);
         Ok(scan)
     }
@@ -2264,7 +2314,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
             .projects
             .read()
             .iter()
-            .filter(|p| p.workflows_auto_read)
+            .filter(|p| p.workflows_auto_read && p.workflows_enabled)
             .map(|p| p.id.clone())
             .collect();
         let core = self.clone();

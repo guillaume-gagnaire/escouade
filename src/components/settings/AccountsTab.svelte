@@ -16,6 +16,7 @@
     privateSharing,
     projectionMode,
     projectsWithoutAccount,
+    meterKey,
   } from '../../lib/accounts';
   import {
     byKey as goesByKey,
@@ -351,8 +352,8 @@
                     ><Icon name="ext" size={12} />{t('accounts.tab.usage', { site: usageSite(g.engine) })}</button
                   >
                 {/if}
-                {#each meters as m (m.minutes ?? 'credits')}
-                  <QuotaMeter minutes={m.minutes} usage={m.usage} now={app.now} />
+                {#each meters as m (meterKey(m))}
+                  <QuotaMeter minutes={m.minutes} model={m.model} usage={m.usage} now={app.now} />
                 {/each}
                 {#if a.active && noQuota(g.engine)}
                   <!-- No quota to gauge (OpenCode): what it spent today, its budget on its own row below. -->
@@ -476,13 +477,14 @@
                 <span class="k" use:tip={t('accounts.tab.reservedHint')}>{t('accounts.tab.reserved')}</span>
                 <span class="chips">
                   {#each app.projects as p (p.id)}
+                    <!-- Nothing reserved is every project: all the squares are lit, the boxes stay unticked. -->
                     <label class="chip-t">
                       <input
                         type="checkbox"
                         checked={reserved.includes(p.id)}
                         onchange={(e) => reserve(a, p.id, e.currentTarget.checked)}
                       />
-                      <i style:background={p.color} aria-hidden="true"></i>{p.name}
+                      <i class:lit={!reserved.length || reserved.includes(p.id)} style:--dot={p.color} aria-hidden="true"></i>{p.name}
                     </label>
                   {/each}
                   <!-- Closed, but their history is kept and so is the reservation: it goes only when they are unticked or erased. -->
@@ -493,7 +495,7 @@
                         checked={reserved.includes(c.id)}
                         onchange={(e) => reserve(a, c.id, e.currentTarget.checked)}
                       />
-                      {t('accounts.tab.closedProject', { name: c.name })}
+                      <i class:lit={reserved.includes(c.id)} aria-hidden="true"></i>{t('accounts.tab.closedProject', { name: c.name })}
                     </label>
                   {/each}
                   {#if !reserved.length}<span class="hint">{t('accounts.tab.reservedAll')}</span>{/if}
@@ -615,9 +617,15 @@
     gap: 12px;
     min-width: 0;
   }
+  /* Its name and its state before its bars: with a meter of one model more (« Fable · semaine », ESC-312), the bars go
+     under them rather than cut the name. */
+  .l1 {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
   .nm {
     flex: 0 1 auto;
-    min-width: 60px;
+    min-width: 110px;
     max-width: 220px;
     height: 26px;
     margin: 0 -6px;
@@ -796,6 +804,20 @@
     width: 7px;
     height: 7px;
     border-radius: 2px;
+    /* The light of the toggle: grey when off, the project's colour (neutral for a closed one) when ticked. */
+    background: rgba(var(--fg-rgb), 0.28);
+    transition:
+      background 0.12s,
+      box-shadow 0.12s;
+  }
+  .chip-t i.lit {
+    background: var(--dot, var(--text));
+    box-shadow: 0 0 5px color-mix(in srgb, var(--dot, var(--text)) 55%, transparent);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .chip-t i {
+      transition: none;
+    }
   }
   .chip-t:has(input:checked) {
     background: rgba(var(--fg-rgb), 0.07);

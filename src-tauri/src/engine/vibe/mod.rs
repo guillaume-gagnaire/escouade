@@ -685,8 +685,82 @@ const NO_SELF_UPDATE: [(&str, &str); 2] = [
 ];
 
 impl Engine for Vibe {
+    /// Its API key is the machine's (the system's keychain, set by `vibe --setup`), not moved by
+    /// its folder, and each agent has a `VIBE_HOME` of its own (`agent_home_var`); its other
+    /// accounts go by their key (ESC-267).
+    fn store(&self) -> crate::accounts::Store {
+        crate::accounts::Store {
+            home: ".vibe",
+            var: HOME_VAR,
+            files: &[],
+            dirs: &[],
+            login: &["--setup"],
+            xdg: None,
+        }
+    }
+
+    fn keys(&self) -> crate::accounts::KeyUse {
+        crate::accounts::KeyUse::Added
+    }
+
+    /// An account added by its key goes by it, before the keychain's and a key of the app's; its
+    /// Principal as Vibe goes in the user's terminal (`MISTRAL_API_KEY` when set, else the key
+    /// `vibe --setup` kept).
+    fn account_env(
+        &self,
+        account: &crate::model::Account,
+        _inherited: &dyn Fn(&str) -> bool,
+    ) -> Vec<(String, String)> {
+        use crate::accounts::{account_key, by_key, MISTRAL_KEY_VAR};
+        account_key(account)
+            .filter(|_| by_key(account))
+            .map(|key| (MISTRAL_KEY_VAR.to_string(), key))
+            .into_iter()
+            .collect()
+    }
+
+    fn key_missing(&self, name: &str) -> String {
+        tr!(
+            "Le compte Mistral Vibe « {name} » n’a pas de clé d’API : donne-la dans Réglages › Comptes, « Changer la clé… ».",
+            "The Mistral Vibe account “{name}” has no API key: give it in Settings › Accounts, “Change the key…”."
+        )
+    }
+
+    fn key_malformed(&self) -> String {
+        tr!(
+            "Ce n’est pas une clé d’API de Mistral : copie-la entière depuis console.mistral.ai, API Keys.",
+            "That isn’t a Mistral API key: copy it whole from console.mistral.ai, API Keys."
+        )
+    }
+
+    /// Its Principal goes by the key `vibe --setup` kept in the keychain, never read: signed in as
+    /// far as can be told. Another account by its key, shown by its end.
+    fn account_status<'a>(
+        &'a self,
+        account: &'a crate::model::Account,
+        settings: &'a crate::model::Settings,
+    ) -> BoxFuture<'a, crate::accounts::AccountStatus> {
+        Box::pin(async move {
+            if !crate::accounts::by_key(account) {
+                let dir = crate::accounts::config_dir(account, settings);
+                return crate::accounts::AccountStatus {
+                    connected: true,
+                    stamp: None,
+                    email: None,
+                    dir: dir.to_string_lossy().into_owned(),
+                };
+            }
+            crate::accounts::key_status(account, settings, (false, None))
+        })
+    }
+
+    /// In the agent's own `VIBE_HOME`, whatever its account (only its key changes, ESC-267).
+    fn sessions_in_agent_home(&self) -> bool {
+        true
+    }
+
     fn id(&self) -> EngineId {
-        EngineId::Vibe
+        EngineId::VIBE
     }
 
     fn list_models<'a>(

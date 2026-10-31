@@ -172,3 +172,72 @@ export function attestation(digest, { repo, commit, workflow = '.github/workflow
     },
   };
 }
+
+/**
+ * A repository with two plugins (ESC-313): `plugins/ntfy` (its README, the root's LICENSE; `repository` names its
+ * folder) and `plugins/slack` (its own LICENSE and icon, the root's README); then the traps: `docs/` holds no manifest,
+ * `linked` is a symbolic link to `plugins/ntfy`, `escape` one that leaves the repository. `versions` gives each
+ * plugin's version at this commit.
+ */
+export function monorepoFiles(repo, versions = { ntfy: '0.3.0', slack: '0.2.0' }) {
+  const owner = repo
+    .split('/')[0]
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-');
+  const ntfy = manifest(repo, {
+    id: `io.github.${owner}.mono-ntfy`,
+    version: versions.ntfy,
+    repository: `https://github.com/${repo}/tree/main/plugins/ntfy`,
+  });
+  const slack = manifest(repo, {
+    id: `io.github.${owner}.mono-slack`,
+    name: { en: 'Slack bridge', fr: 'Pont Slack' },
+    version: versions.slack,
+    icon: './icon.png',
+    permissions: { events: ['agent.waiting'], network: ['hooks.slack.com'] },
+    contributes: { webhooks: [{ event: 'agent.waiting', url: 'https://hooks.slack.com/services/{key}' }] },
+    store: { categories: ['notifications'], keywords: ['chat'] },
+  });
+  return {
+    'README.md': '# Two plugins\n\nNtfy and a Slack bridge, side by side.\n',
+    LICENSE: MIT,
+    'plugins/ntfy/escouade-plugin.json': JSON.stringify(ntfy, null, 2),
+    'plugins/ntfy/README.md': '# Ntfy\n\nThe agents waiting, on your phone. See ![shot](store/1.png).\n',
+    'plugins/ntfy/store/1.png': png(320, 200),
+    'plugins/slack/escouade-plugin.json': JSON.stringify(slack, null, 2),
+    'plugins/slack/LICENSE': MIT,
+    'plugins/slack/icon.png': png(256, 256),
+    'docs/guide.md': '# Guide\n',
+    linked: { symlink: 'plugins/ntfy' },
+    escape: { symlink: '../../etc' },
+  };
+}
+
+/**
+ * The tree of a commit made of `files` (as `tarball` takes them), as GitHub's trees API gives it, and its blobs by
+ * their SHA: a folder per parent, `120000` for a symbolic link.
+ */
+export function treeOf(files) {
+  const entries = [];
+  const blobs = new Map();
+  const dirs = new Set();
+  for (const [p, v] of Object.entries(files)) {
+    if (v === null) continue;
+    const parts = p.split('/');
+    for (let i = 1; i < parts.length; i++) dirs.add(parts.slice(0, i).join('/'));
+    if (v && typeof v === 'object' && !Buffer.isBuffer(v) && v.symlink) {
+      const bytes = Buffer.from(v.symlink);
+      const sha = createHash('sha1').update(bytes).digest('hex');
+      blobs.set(sha, bytes);
+      entries.push({ path: p, type: 'blob', mode: '120000', sha, size: bytes.length });
+      continue;
+    }
+    if (v && typeof v === 'object' && !Buffer.isBuffer(v)) continue;
+    const bytes = Buffer.isBuffer(v) ? v : Buffer.from(String(v), 'utf8');
+    const sha = createHash('sha1').update(bytes).digest('hex');
+    blobs.set(sha, bytes);
+    entries.push({ path: p, type: 'blob', mode: '100644', sha, size: bytes.length });
+  }
+  for (const d of dirs) entries.push({ path: d, type: 'tree', mode: '040000', sha: createHash('sha1').update(d).digest('hex') });
+  return { entries: entries.sort((a, b) => a.path.localeCompare(b.path)), blobs };
+}

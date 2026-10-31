@@ -8,6 +8,7 @@ import {
   capsOf,
   choosesEngine,
   effortsOf,
+  engineName,
   engineOf,
   engineOptions,
   favoritesOf,
@@ -44,6 +45,22 @@ describe('the capabilities of a harness', () => {
     // One the backend does not declare: nothing of it is shown.
     expect(capsOf('cursor')).toBeNull();
     expect(can({ engine: 'cursor' }, 'remoteControl')).toBe(false);
+  });
+
+  it('name a harness this version lacks « harness absent », its functions hidden (INT-3)', () => {
+    setLang('fr');
+    expect(engineName('claude')).toBe('Claude Code');
+    // Written into the app, not yet declared: its usual name.
+    expect(engineName('gemini')).toBe('Gemini CLI');
+    // Neither: a later version's, a plugin's gone.
+    expect(engineName('hermes')).toBe('hermes (harness absent)');
+    expect(capsOf('hermes')).toBeNull();
+    expect(canFork({ engine: 'hermes' })).toBe(false);
+    setLang('en');
+    expect(engineName('hermes')).toBe('hermes (harness missing)');
+    // No harness yet: the default one's.
+    expect(engineName(null)).toBe('Claude Code');
+    setLang('fr');
   });
 
   it('show what Claude Code does today and hide what a bare harness lacks', () => {

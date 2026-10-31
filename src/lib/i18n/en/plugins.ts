@@ -177,6 +177,8 @@ export default defineZone('plugins', {
     devPrint: 'None: read again at each change',
     store: 'store.escouade.dev',
     repo: 'Repository',
+    folderLabel: 'Folder',
+    folderTip: 'Open the plugin’s folder on GitHub, at its tag',
     tagLabel: 'Tag',
     archiveSame: 'archive received identical',
     storePrint: '{print} · archive received identical',

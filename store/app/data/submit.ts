@@ -33,6 +33,34 @@ const fr = {
     release: 'release',
     submit: 'Lancer les contrôles',
     failed: 'GitHub n’a pas listé les étiquettes de ce dépôt. Réessaie dans un instant.',
+    titleFolder: 'Le dossier et la version',
+    folder: 'Dossier du plugin',
+    folderLead: (tag: string) =>
+      `Les dossiers du dépôt qui portent un escouade-plugin.json, lus à l’étiquette ${tag}. Un dépôt peut en porter plusieurs : chacun est un plugin à part. Par défaut, la racine.`,
+    root: 'Racine du dépôt',
+    typed: 'Ou un chemin dans le dépôt',
+    typedHint: 'Relatif à la racine, sans « .. » ni lien.',
+    read: 'Lire ce dossier',
+    moreFolders: 'Le dépôt en porte d’autres : tape le chemin.',
+    pickFolder: 'La racine du dépôt ne porte pas de plugin : choisis l’un de ses dossiers ci-dessus.',
+    noFolder:
+      'Aucun dossier de ce dépôt ne porte d’escouade-plugin.json à cette étiquette. Ajoute le manifeste, pousse une étiquette, puis reviens.',
+    foldersFailed: 'GitHub n’a pas donné l’archive du dépôt : les dossiers ne sont pas listés. Tape le chemin, ou réessaie.',
+    version: 'Version',
+    versionLead: (tags: string) =>
+      `Les étiquettes de ce dossier, la plus récente d’abord (${tags}). Le store résout l’étiquette en commit une fois, à la soumission.`,
+    noTagFolder: (tag: string) => `Ce dossier n’a pas encore d’étiquette. Pousse-en une (${tag}), puis reviens.`,
+    others: (n: number) =>
+      n > 1
+        ? `${n} autres étiquettes du dépôt, pour d’autres dossiers, ne sont pas montrées.`
+        : 'Une autre étiquette du dépôt, pour un autre dossier, n’est pas montrée.',
+    problems: {
+      absolute: 'Ce chemin est absolu : donne un dossier relatif à la racine du dépôt (plugins/slack).',
+      parent: 'Ce chemin sort du dépôt par « .. » : le store le refuse.',
+      bad: 'Ce chemin ne se lit pas (antislash, caractère de contrôle ou plus de 200 caractères).',
+      link: 'Ce dossier passe par un lien symbolique : le store ne suit pas de lien. Donne le dossier réel.',
+      'no-manifest': 'Ce dossier ne porte pas d’escouade-plugin.json à cette étiquette.',
+    } as Record<string, string>,
   },
   checks: {
     title: 'Les contrôles',
@@ -55,6 +83,7 @@ const fr = {
     refresh: 'Rafraîchir',
     moved: (commit: string) => `Étiquette déplacée sur le dépôt (elle nomme maintenant ${commit}) : la version publiée ne change pas.`,
     fromHook: 'Version venue d’une nouvelle étiquette du dépôt.',
+    folder: (path: string) => `dossier ${path}`,
   },
   publish: {
     title: 'Publier',
@@ -97,6 +126,9 @@ const fr = {
     suspended: ['bad', 'L’App est suspendue sur ce dépôt : réactive-la sur GitHub.'],
     'too-many': ['bad', 'Trop de soumissions en une heure. Réessaie plus tard.'],
     'no-tag': ['bad', 'Cette étiquette n’est pas sur le dépôt (ou ne nomme pas un commit).'],
+    'path-absolute': ['bad', 'Ce chemin est absolu : donne un dossier relatif à la racine du dépôt.'],
+    'path-parent': ['bad', 'Ce chemin sort du dépôt par « .. » : le store le refuse.'],
+    'path-bad': ['bad', 'Ce chemin ne se lit pas (antislash, caractère de contrôle ou plus de 200 caractères).'],
     github: ['bad', 'GitHub n’a pas répondu. Réessaie dans un instant.'],
     published: ['ok', 'Publiée. Elle paraît non vérifiée jusqu’à sa revue.'],
     categories: ['bad', 'Choisis une à trois catégories.'],
@@ -144,6 +176,30 @@ const en: Text = {
     release: 'release',
     submit: 'Run the checks',
     failed: 'GitHub did not list this repository’s tags. Try again in a moment.',
+    titleFolder: 'The folder and the version',
+    folder: 'Plugin folder',
+    folderLead: (tag: string) =>
+      `The repository’s folders that hold an escouade-plugin.json, read at the tag ${tag}. A repository may hold several: each one is a plugin of its own. By default, the root.`,
+    root: 'Repository root',
+    typed: 'Or a path in the repository',
+    typedHint: 'Relative to the root, without “..” nor a link.',
+    read: 'Read this folder',
+    moreFolders: 'The repository holds more: type the path.',
+    pickFolder: 'The repository’s root holds no plugin: pick one of its folders above.',
+    noFolder: 'No folder of this repository holds an escouade-plugin.json at this tag. Add the manifest, push a tag, then come back.',
+    foldersFailed: 'GitHub did not give the repository’s archive: the folders are not listed. Type the path, or try again.',
+    version: 'Version',
+    versionLead: (tags: string) =>
+      `This folder’s tags, the newest first (${tags}). The store resolves the tag into its commit once, at submission.`,
+    noTagFolder: (tag: string) => `This folder has no tag yet. Push one (${tag}), then come back.`,
+    others: (n: number) => `${n} other tag${n > 1 ? 's' : ''} of the repository, for other folders, ${n > 1 ? 'are' : 'is'} not shown.`,
+    problems: {
+      absolute: 'This path is absolute: give a folder relative to the repository’s root (plugins/slack).',
+      parent: 'This path leaves the repository with “..”: the store refuses it.',
+      bad: 'This path does not read (a backslash, a control character or more than 200 characters).',
+      link: 'This folder goes through a symbolic link: the store follows no link. Give the real folder.',
+      'no-manifest': 'This folder holds no escouade-plugin.json at this tag.',
+    },
   },
   checks: {
     title: 'The checks',
@@ -165,6 +221,7 @@ const en: Text = {
     refresh: 'Refresh',
     moved: (commit: string) => `Tag moved on the repository (it now names ${commit}): the published version does not change.`,
     fromHook: 'Version from a new tag of the repository.',
+    folder: (path: string) => `folder ${path}`,
   },
   publish: {
     title: 'Publish',
@@ -207,6 +264,9 @@ const en: Text = {
     suspended: ['bad', 'The App is suspended on this repository: turn it back on in GitHub.'],
     'too-many': ['bad', 'Too many submissions in an hour. Try again later.'],
     'no-tag': ['bad', 'This tag is not on the repository (or names no commit).'],
+    'path-absolute': ['bad', 'This path is absolute: give a folder relative to the repository’s root.'],
+    'path-parent': ['bad', 'This path leaves the repository with “..”: the store refuses it.'],
+    'path-bad': ['bad', 'This path does not read (a backslash, a control character or more than 200 characters).'],
     github: ['bad', 'GitHub did not answer. Try again in a moment.'],
     published: ['ok', 'Published. It appears unverified until its review.'],
     categories: ['bad', 'Choose one to three categories.'],

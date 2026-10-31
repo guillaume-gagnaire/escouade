@@ -12,11 +12,11 @@ use std::process::{Command, Stdio};
 #[test]
 fn a_harness_has_a_terminal_view_exactly_when_its_caps_say_so() {
     for id in [
-        EngineId::Claude,
-        EngineId::Codex,
-        EngineId::Copilot,
-        EngineId::Cursor,
-        EngineId::Opencode,
+        EngineId::CLAUDE,
+        EngineId::CODEX,
+        EngineId::COPILOT,
+        EngineId::CURSOR,
+        EngineId::OPENCODE,
     ] {
         let e = engine::by_id(id);
         // In the process's place, or joined to it (OpenCode), never both.
@@ -27,14 +27,14 @@ fn a_harness_has_a_terminal_view_exactly_when_its_caps_say_so() {
         );
         assert!(!(e.terminal().is_some() && e.attaches()), "{id:?}");
     }
-    assert!(engine::by_id(EngineId::Opencode).attaches());
+    assert!(engine::by_id(EngineId::OPENCODE).attaches());
     let minimal = &crate::engine::minimal::MINIMAL;
     assert!(minimal.terminal().is_none() && !minimal.attaches() && !minimal.caps().terminal_view);
 }
 
 #[test]
 fn claude_codes_view_pastes_sends_and_interrupts_as_before() {
-    let view = engine::by_id(EngineId::Claude).terminal().unwrap();
+    let view = engine::by_id(EngineId::CLAUDE).terminal().unwrap();
     assert_eq!(view.shell(), "claude");
     // Line breaks pasted as a terminal pastes them (xterm.js too): \r. Claude Code drops a \n
     // pasted in its interface under Windows (ESC-12, its real one).
@@ -58,7 +58,7 @@ fn claude_codes_view_pastes_sends_and_interrupts_as_before() {
 
 #[test]
 fn claude_codes_launch_is_its_arguments_and_its_settings_file() {
-    let view = engine::by_id(EngineId::Claude).terminal().unwrap();
+    let view = engine::by_id(EngineId::CLAUDE).terminal().unwrap();
     let meta = AgentMeta {
         model: "sonnet".into(),
         effort: "high".into(),
@@ -90,7 +90,7 @@ fn claude_codes_launch_is_its_arguments_and_its_settings_file() {
     let settings: serde_json::Value = serde_json::from_slice(&launch.file.unwrap()).unwrap();
     assert_eq!(
         settings,
-        crate::tui::tui_settings(4120, engine::by_id(EngineId::Claude), &access)
+        crate::tui::tui_settings(4120, engine::by_id(EngineId::CLAUDE), &access)
     );
     // Its hooks are HTTP calls: nothing in its environment for a command.
     assert!(launch.env.is_empty());
@@ -200,11 +200,14 @@ fn post_hook(port: u16, token: &str, event: &serde_json::Value) -> (String, Stri
     )
 }
 
+/// No pointer to an index any more (ESC-310): the hooks of the views stay (they tell Escouade what the agent
+/// does), but none of their answers points anywhere: a search for a symbol, by the Grep tool or a
+/// shell, gets the plain `{}` of every other event, and the settings a view is started with (written
+/// again at each start, never in the user's own files) name no index.
 #[tokio::test(flavor = "multi_thread")]
-async fn the_hook_points_a_search_for_a_symbol_to_the_index_and_lets_a_text_search_go() {
-    let h = harness("tui-index-hint");
+async fn the_hook_says_nothing_of_a_search_for_a_symbol_since_the_index_is_gone() {
+    let h = harness("tui-no-index-hint");
     let id = agent_in_tui(&h).await;
-    let project_id = h.agent(&id).project_id;
     let port = h.core.hooks_port().unwrap();
     let token = h.core.hooks.grant(&id);
     let session = h.agent(&id).session_id.unwrap();
@@ -216,54 +219,30 @@ async fn the_hook_points_a_search_for_a_symbol_to_the_index_and_lets_a_text_sear
                 "tool_name": tool, "tool_input": input }),
         )
     };
-    let symbol = serde_json::json!({ "pattern": "parse_config" });
-    let bash = serde_json::json!({ "command": "rg -n 'fn load_all' src" });
-    let text = serde_json::json!({ "pattern": "failed to connect" });
-
-    // The index is off: nothing is said, whatever is searched.
-    assert_eq!(
-        search("Grep", symbol.clone()),
-        ("HTTP/1.1 200 OK".into(), "{}".into())
-    );
-    h.core
-        .set_code_index(&project_id, Some(true))
-        .await
-        .unwrap();
-
-    // On: a search for a symbol, by the Grep tool or a shell, gets a pointer to the index, as
-    // context only: no decision, so the search runs.
-    for (tool, input) in [("Grep", symbol), ("Bash", bash)] {
-        let (status, body) = search(tool, input);
-        assert!(status.contains("200"), "{status}");
-        let answer: serde_json::Value = serde_json::from_str(&body).unwrap();
-        let out = &answer["hookSpecificOutput"];
-        assert_eq!(out["hookEventName"], "PreToolUse", "{body}");
-        assert!(out["additionalContext"]
-            .as_str()
-            .unwrap()
-            .contains("index_search"));
-        assert!(out.get("permissionDecision").is_none() && answer.get("decision").is_none());
+    for (tool, input) in [
+        ("Grep", serde_json::json!({ "pattern": "parse_config" })),
+        ("Grep", serde_json::json!({ "pattern": "fn load_all" })),
+        (
+            "Bash",
+            serde_json::json!({ "command": "rg -n 'fn load_all' src" }),
+        ),
+        (
+            "Grep",
+            serde_json::json!({ "pattern": "failed to connect" }),
+        ),
+    ] {
+        assert_eq!(search(tool, input), ("HTTP/1.1 200 OK".into(), "{}".into()));
     }
-    // A text search, or another tool, goes by with nothing said.
-    assert_eq!(search("Grep", text).1, "{}");
-    assert_eq!(
-        search("Bash", serde_json::json!({ "command": "npm test" })).1,
-        "{}"
-    );
-    assert_eq!(
-        search(
-            "Read",
-            serde_json::json!({ "file_path": "/tmp/parse_config" })
-        )
-        .1,
-        "{}"
-    );
-    // The other events say nothing either.
-    let (_, body) = post_hook(
+    let settings = crate::tui::tui_settings(
         port,
-        &token,
-        &serde_json::json!({ "hook_event_name": "PostToolUse", "session_id": session,
-            "tool_name": "Grep", "tool_input": { "pattern": "parse_config" } }),
-    );
-    assert_eq!(body, "{}");
+        &crate::engine::CLAUDE,
+        &Escouade::Granted {
+            url: "http://127.0.0.1:1/mcp".into(),
+            token: "t".into(),
+            file: None,
+        },
+    )
+    .to_string();
+    assert!(settings.contains("PreToolUse"), "{settings}");
+    assert!(!settings.contains("index"), "{settings}");
 }

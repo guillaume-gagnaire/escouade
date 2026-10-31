@@ -2,7 +2,8 @@ import { iconPath, message, RESERVED_PREFIX, validateText } from '../../../schem
 import { ICON_DECODE_MAX, imageInfo, SCREENSHOT_BYTES, SCREENSHOT_WIDTH, SCREENSHOTS_MAX } from './images';
 import { judgeLicense } from './licenses';
 import type { ArchiveProblem, ArchiveRead } from './tar';
-import { compareVersions, tagVersion, type Platform } from './versions';
+import { folderName, tagFor, tagsOf } from '../../shared/folder';
+import { compareVersions, type Platform } from './versions';
 
 // The ten checks of a submitted version (docs/STORE.md, §3.3), on the archive the store froze, read in memory:
 // nothing of the plugin runs. Each says, in French and in English, what failed, where (the field's path), why and how
@@ -78,6 +79,12 @@ export interface FetchedBinary {
 export interface Snapshot {
   /** `owner/name` of the repository submitted. */
   repository: string;
+  /** The plugin's folder in the repository, `''` at its root (ESC-313). `archive.read` is that folder alone. */
+  path?: string;
+  /** The whole repository's archive, when the plugin is in a folder: its root's README and LICENSE stand in. */
+  root?: ArchiveRead | null;
+  /** The link the folder goes through, if any: the store does not follow it. */
+  pathLink?: string | null;
   tag: string;
   commit: string;
   archive: { size: number; read: ArchiveRead };
@@ -93,8 +100,8 @@ export interface Snapshot {
   undecodable?: string[];
   /** The icon passed its header's checks but did not decode (PLG-13). */
   iconUndecodable?: boolean;
-  /** The plugin already on the store under the manifest's id, if any: whose it is, from which repository. */
-  existing: { mine: boolean; repository: string } | null;
+  /** The plugin already on the store under the manifest's id, if any: whose it is, from which repository and folder. */
+  existing: { mine: boolean; repository: string; path?: string } | null;
   /** The versions of this id already taken (published, waiting, or held): a number is never used twice. */
   taken: string[];
   /** The highest version published of this id. */
@@ -111,6 +118,10 @@ const skip = (key: CheckKey, detail: Text): CheckResult => ({ key, status: 'skip
 const NO_MANIFEST = t('Sans manifeste lisible, ce contrôle attend.', 'Without a manifest that reads, this check waits.');
 const code = (s: string) => `\`${s}\``;
 const plural = (n: number, fr: string, en: string): Text => t(`${n} ${fr}${n > 1 ? 's' : ''}`, `${n} ${en}${n > 1 ? 's' : ''}`);
+/** Where the plugin is in its repository, as a sentence says it: at its root, or in its folder. */
+const where = (path = ''): Text =>
+  path ? t(`dans le dossier ${code(path)}`, `in the folder ${code(path)}`) : t('à la racine du dépôt', 'at the root of the repository');
+const folderOrRoot = (path = ''): Text => (path ? t(`le dossier ${code(path)}`, `the folder ${code(path)}`) : t('la racine', 'the root'));
 
 /** The manifest of the archive, parsed, or null if it is missing or no JSON object. */
 export function manifestOf(read: ArchiveRead): Manifest | null {
@@ -158,20 +169,25 @@ export function iconOf(m: Manifest | null): string | null {
   return typeof m?.icon === 'string' ? iconPath(m.icon) : null;
 }
 
-function checkManifest(read: ArchiveRead, iconUndecodable = false): CheckResult {
+function checkManifest(read: ArchiveRead, iconUndecodable = false, path = ''): CheckResult {
   const raw = read.files.get(MANIFEST_FILE);
   if (!raw)
     return fail('manifest', t(`${MANIFEST_FILE} manque`, `${MANIFEST_FILE} is missing`), [
       {
-        path: MANIFEST_FILE,
+        path: path ? `${path}/${MANIFEST_FILE}` : MANIFEST_FILE,
         why: t(
-          `Le store lit ${code(MANIFEST_FILE)} à la racine du dépôt, au commit de l’étiquette ; il n’y est pas.`,
-          `The store reads ${code(MANIFEST_FILE)} at the root of the repository, at the tag’s commit; it is not there.`,
+          `Le store lit ${code(MANIFEST_FILE)} ${where(path).fr}, au commit de l’étiquette ; il n’y est pas.`,
+          `The store reads ${code(MANIFEST_FILE)} ${where(path).en}, at the tag’s commit; it is not there.`,
         ),
-        fix: t(
-          'Ajoute le manifeste à la racine, commite-le, puis pousse une nouvelle étiquette.',
-          'Add the manifest at the root, commit it, then push a new tag.',
-        ),
+        fix: path
+          ? t(
+              `Ajoute le manifeste dans ${code(path)} (ou choisis le dossier qui le porte), commite-le, puis pousse une nouvelle étiquette.`,
+              `Add the manifest in ${code(path)} (or pick the folder that holds it), commit it, then push a new tag.`,
+            )
+          : t(
+              'Ajoute le manifeste à la racine, commite-le, puis pousse une nouvelle étiquette.',
+              'Add the manifest at the root, commit it, then push a new tag.',
+            ),
       },
     ]);
   // The icon's header is the library's (a PNG, square, 256 px at least, 1 MB at most); its decoding is the store's.
@@ -224,7 +240,29 @@ function checkManifest(read: ArchiveRead, iconUndecodable = false): CheckResult 
 function checkVersion(m: Manifest | null, s: Snapshot): CheckResult {
   if (!m || typeof m.version !== 'string') return skip('version', NO_MANIFEST);
   const v = m.version;
-  const fromTag = tagVersion(s.tag);
+  const path = s.path ?? '';
+  const fromTag = tagFor(s.tag, path);
+  const advised = tagsOf(v, path)[0]!;
+  if (fromTag === null)
+    return fail(
+      'version',
+      t(`${s.tag} n’est pas une étiquette de ${folderOrRoot(path).fr}`, `${s.tag} is no tag of ${folderOrRoot(path).en}`),
+      [
+        {
+          path: 'version',
+          why: path
+            ? t(
+                `Dans un dépôt à plusieurs plugins, l’étiquette nomme son dossier : ${code(`${path}/v1.2.3`)}, ${code(`${folderName(path)}@1.2.3`)} ou ${code(`${folderName(path)}-v1.2.3`)} ; ${code(s.tag)} n’en est pas une.`,
+                `In a repository with several plugins, the tag names its folder: ${code(`${path}/v1.2.3`)}, ${code(`${folderName(path)}@1.2.3`)} or ${code(`${folderName(path)}-v1.2.3`)}; ${code(s.tag)} is none of them.`,
+              )
+            : t(
+                `La version d’un plugin à la racine est une étiquette ${code('v1.2.3')} ou ${code('1.2.3')} ; ${code(s.tag)} n’en est pas une.`,
+                `A version of a plugin at the root is a tag ${code('v1.2.3')} or ${code('1.2.3')}; ${code(s.tag)} is none.`,
+              ),
+          fix: t(`Pousse l’étiquette ${code(advised)}.`, `Push the tag ${code(advised)}.`),
+        },
+      ],
+    );
   if (v !== fromTag)
     return fail('version', t(`${v} dans le manifeste, ${s.tag} pour l’étiquette`, `${v} in the manifest, ${s.tag} for the tag`), [
       {
@@ -234,8 +272,8 @@ function checkVersion(m: Manifest | null, s: Snapshot): CheckResult {
           `The manifest says ${code(v)}, the tag ${code(s.tag)}: a version of the store is a tag, of the same number (the “v” is optional).`,
         ),
         fix: t(
-          `Mets ${code('version')} à ${code(fromTag)}, ou pousse l’étiquette ${code(`v${v}`)}.`,
-          `Set ${code('version')} to ${code(fromTag)}, or push the tag ${code(`v${v}`)}.`,
+          `Mets ${code('version')} à ${code(fromTag)}, ou pousse l’étiquette ${code(advised)}.`,
+          `Set ${code('version')} to ${code(fromTag)}, or push the tag ${code(advised)}.`,
         ),
       },
     ]);
@@ -334,20 +372,14 @@ function checkId(m: Manifest | null, s: Snapshot): CheckResult {
         fix: t('Choisis un autre identifiant.', 'Choose another id.'),
       },
     ]);
-  if (s.existing && s.existing.repository.toLowerCase() !== s.repository.toLowerCase())
-    return fail('id', t(`${id} vient d’un autre dépôt`, `${id} comes from another repository`), [
-      {
-        path: 'id',
-        why: t(
-          `${code(id)} est publié depuis ${s.existing.repository}, pas depuis ${s.repository}.`,
-          `${code(id)} is published from ${s.existing.repository}, not from ${s.repository}.`,
-        ),
-        fix: t(
-          'Soumets depuis le dépôt du plugin, ou prends un autre identifiant pour celui-ci.',
-          'Submit from the plugin’s repository, or take another id for this one.',
-        ),
-      },
-    ]);
+  // A plugin is (repository, folder). Its author may change it (ESC-313: a repository of theirs where the App is
+  // installed, a folder): the version passes, says so, and goes to the review; the store notes the change at its
+  // publication. The versions before keep their own version.json, and their repository.
+  const sourceOf = (repo: string, path = '') => (path ? `${repo}/${path}` : repo);
+  const moved =
+    s.existing && (s.existing.repository.toLowerCase() !== s.repository.toLowerCase() || (s.existing.path ?? '') !== (s.path ?? ''))
+      ? { from: sourceOf(s.existing.repository, s.existing.path), to: sourceOf(s.repository, s.path) }
+      : null;
   const close = closeNames(id, textOf(m.name), s.others);
   if (close.length)
     return {
@@ -371,6 +403,14 @@ function checkId(m: Manifest | null, s: Snapshot): CheckResult {
         },
       ],
     };
+  if (moved)
+    return pass(
+      'id',
+      t(
+        `${id} est à toi ; sa source change, de ${moved.from} à ${moved.to} : noté à la publication, cette version repasse en revue`,
+        `${id} is yours; its source changes, from ${moved.from} to ${moved.to}: noted at publication, this version goes to the review again`,
+      ),
+    );
   return pass('id', s.existing ? t(`${id} est à toi`, `${id} is yours`) : t(`${id} est libre`, `${id} is free`));
 }
 
@@ -378,14 +418,39 @@ function checkId(m: Manifest | null, s: Snapshot): CheckResult {
 
 /** `https://github.com/Owner/Name(.git)(/)` → `owner/name`. */
 export function repoOfUrl(url: string): string | null {
-  const m = /^https?:\/\/(?:www\.)?github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/i.exec(url.trim());
+  const m = /^https?:\/\/(?:www\.)?github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:\/tree\/.+?)?\/?$/i.exec(url.trim());
   return m ? `${m[1]}/${m[2]}`.toLowerCase() : null;
+}
+
+/**
+ * The folder a manifest's `repository` names (ESC-313): `https://github.com/o/r` names none (`null`, any folder of
+ * the repository); `https://github.com/o/r/tree/<ref>/<folder>` names `<folder>`, whatever the ref (a branch, the tag);
+ * `…/tree/<ref>` names the root (`''`). A ref with a slash is read as the longest one that leaves the plugin's folder.
+ */
+export function folderOfUrl(url: string, path: string): string | null | false {
+  const m = /^https?:\/\/(?:www\.)?github\.com\/[\w.-]+\/[\w.-]+?(?:\.git)?(?:\/tree\/(.+?))?\/?$/i.exec(url.trim());
+  if (!m) return false;
+  if (!m[1]) return null;
+  let rest: string;
+  try {
+    rest = decodeURIComponent(m[1]);
+  } catch {
+    return false;
+  }
+  if (path && rest.endsWith(`/${path}`) && rest.length > path.length + 1) return path;
+  return rest.includes('/') ? rest.slice(rest.indexOf('/') + 1) : '';
 }
 
 function checkRepository(m: Manifest | null, s: Snapshot): CheckResult {
   if (!m) return skip('repository', NO_MANIFEST);
+  const path = s.path ?? '';
   const want = `https://github.com/${s.repository}`;
-  const fix = t(`Mets ${code('repository')} à ${code(want)}.`, `Set ${code('repository')} to ${code(want)}.`);
+  const fix = path
+    ? t(
+        `Mets ${code('repository')} à ${code(want)} ou à ${code(`${want}/tree/main/${path}`)}.`,
+        `Set ${code('repository')} to ${code(want)} or to ${code(`${want}/tree/main/${path}`)}.`,
+      )
+    : t(`Mets ${code('repository')} à ${code(want)}.`, `Set ${code('repository')} to ${code(want)}.`);
   if (typeof m.repository !== 'string')
     return fail('repository', t('repository manque', 'repository is missing'), [
       {
@@ -408,9 +473,30 @@ function checkRepository(m: Manifest | null, s: Snapshot): CheckResult {
         fix,
       },
     ]);
+  const named = folderOfUrl(m.repository, path);
+  if (named !== null && named !== path)
+    return fail(
+      'repository',
+      t(`${m.repository} ne nomme pas ${folderOrRoot(path).fr}`, `${m.repository} does not name ${folderOrRoot(path).en}`),
+      [
+        {
+          path: 'repository',
+          why: t(
+            `Le manifeste nomme ${folderOrRoot(named || '').fr} du dépôt, la soumission vient ${path ? `du dossier ${code(path)}` : `de la racine`}.`,
+            `The manifest names ${folderOrRoot(named || '').en} of the repository, the submission comes from ${folderOrRoot(path).en}.`,
+          ),
+          fix,
+        },
+      ],
+    );
   return pass(
     'repository',
-    t(`repository du manifeste : github.com/${s.repository}`, `the manifest’s repository: github.com/${s.repository}`),
+    path
+      ? t(
+          `repository du manifeste : github.com/${s.repository}, dossier ${path}`,
+          `the manifest’s repository: github.com/${s.repository}, folder ${path}`,
+        )
+      : t(`repository du manifeste : github.com/${s.repository}`, `the manifest’s repository: github.com/${s.repository}`),
   );
 }
 
@@ -418,11 +504,37 @@ function checkRepository(m: Manifest | null, s: Snapshot): CheckResult {
 
 const LICENSE_FILE = /^(LICEN[CS]E|COPYING)(\.[A-Za-z0-9]+)?$/i;
 
+const licenseFiles = (read: ArchiveRead) => [...read.files.entries()].filter(([p]) => !p.includes('/') && LICENSE_FILE.test(p));
+
+/**
+ * The license file the plugin goes by and what is known of it (ESC-313): at the root, the one GitHub detects. In a
+ * folder, its own file if it has one, else the root's. GitHub detects the root's alone: the folder's own file is
+ * that license if it is the root's file again, or by its `SPDX-License-Identifier:` line; otherwise unrecognized.
+ */
+export function licenseOf(s: Snapshot): { hasFile: boolean; detected: string | null; inFolder: boolean } {
+  const own = licenseFiles(s.archive.read);
+  if (!s.path || !s.root) return { hasFile: own.length > 0, detected: s.license, inFolder: false };
+  const root = licenseFiles(s.root);
+  if (!own.length) return { hasFile: root.length > 0, detected: s.license, inFolder: false };
+  const text = own[0]![1].toString('utf8');
+  if (root.some(([, b]) => b.toString('utf8').trim() === text.trim())) return { hasFile: true, detected: s.license, inFolder: true };
+  const spdx = /SPDX-License-Identifier:\s*([A-Za-z0-9.+-]+)/.exec(text);
+  return { hasFile: true, detected: spdx ? spdx[1]! : 'NOASSERTION', inFolder: true };
+}
+
 function checkLicense(m: Manifest | null, s: Snapshot): CheckResult {
   if (!m) return skip('license', NO_MANIFEST);
-  const hasFile = [...s.archive.read.files.keys()].some((p) => !p.includes('/') && LICENSE_FILE.test(p));
-  const verdict = judgeLicense(m.license, s.license, hasFile);
-  if (verdict.ok) return pass('license', t(`${m.license}, comme le fichier LICENSE`, `${m.license}, as the LICENSE file`));
+  const { hasFile, detected, inFolder } = licenseOf(s);
+  const verdict = judgeLicense(m.license, detected, hasFile);
+  if (verdict.ok)
+    return pass(
+      'license',
+      s.path
+        ? inFolder
+          ? t(`${m.license}, comme le fichier LICENSE du dossier`, `${m.license}, as the folder’s LICENSE file`)
+          : t(`${m.license}, comme le fichier LICENSE de la racine`, `${m.license}, as the root’s LICENSE file`)
+        : t(`${m.license}, comme le fichier LICENSE`, `${m.license}, as the LICENSE file`),
+    );
   const choose = t(
     'Une licence reconnue par l’OSI ou la FSF, en identifiant SPDX : MIT, Apache-2.0, GPL-3.0-or-later, MPL-2.0…',
     'A license approved by the OSI or the FSF, as an SPDX id: MIT, Apache-2.0, GPL-3.0-or-later, MPL-2.0…',
@@ -453,10 +565,15 @@ function checkLicense(m: Manifest | null, s: Snapshot): CheckResult {
       );
     case 'no-file':
       return one(
-        t(
-          `Le manifeste dit ${m.license}, mais le dépôt n’a pas de fichier LICENSE ni COPYING à sa racine.`,
-          `The manifest says ${m.license}, but the repository has no LICENSE or COPYING file at its root.`,
-        ),
+        s.path
+          ? t(
+              `Le manifeste dit ${m.license}, mais ni le dossier ${code(s.path)} ni la racine du dépôt n’ont de fichier LICENSE ou COPYING.`,
+              `The manifest says ${m.license}, but neither the folder ${code(s.path)} nor the repository’s root has a LICENSE or COPYING file.`,
+            )
+          : t(
+              `Le manifeste dit ${m.license}, mais le dépôt n’a pas de fichier LICENSE ni COPYING à sa racine.`,
+              `The manifest says ${m.license}, but the repository has no LICENSE or COPYING file at its root.`,
+            ),
         t(`Ajoute le texte de la licence dans LICENSE${then.fr}`, `Add the license’s text in LICENSE${then.en}`),
         'LICENSE',
       );
@@ -466,10 +583,15 @@ function checkLicense(m: Manifest | null, s: Snapshot): CheckResult {
           `Le manifeste dit ${m.license}, mais GitHub ne reconnaît pas la licence du fichier LICENSE.`,
           `The manifest says ${m.license}, but GitHub does not recognize the license of the LICENSE file.`,
         ),
-        t(
-          `Mets dans LICENSE le texte exact de la licence (celui de spdx.org/licenses), sans le modifier${then.fr}`,
-          `Put in LICENSE the exact text of the license (spdx.org/licenses’s), unchanged${then.en}`,
-        ),
+        inFolder
+          ? t(
+              `Le LICENSE du dossier doit être celui de la racine, ou porter une ligne ${code(`SPDX-License-Identifier: ${String(m.license)}`)} ; sinon, retire-le : celui de la racine compte${then.fr}`,
+              `The folder’s LICENSE must be the root’s, or hold a line ${code(`SPDX-License-Identifier: ${String(m.license)}`)}; otherwise, remove it: the root’s counts${then.en}`,
+            )
+          : t(
+              `Mets dans LICENSE le texte exact de la licence (celui de spdx.org/licenses), sans le modifier${then.fr}`,
+              `Put in LICENSE the exact text of the license (spdx.org/licenses’s), unchanged${then.en}`,
+            ),
         'LICENSE',
       );
     case 'different':
@@ -490,10 +612,28 @@ function checkLicense(m: Manifest | null, s: Snapshot): CheckResult {
 
 const README = /^README(\.(fr|en))?\.md$/i;
 
-function checkReadme(read: ArchiveRead): CheckResult {
+const readmes = (read: ArchiveRead) =>
+  [...read.files.entries()].filter(([p, b]) => !p.includes('/') && README.test(p) && b.toString('utf8').trim() !== '');
+
+/** The README files the plugin's page is made of: the folder's, else the repository root's (ESC-313). */
+export function readmeSource(read: ArchiveRead, root?: ArchiveRead | null): { read: ArchiveRead; fromRoot: boolean } {
+  if (readmes(read).length || !root) return { read, fromRoot: false };
+  return readmes(root).length ? { read: root, fromRoot: true } : { read, fromRoot: false };
+}
+
+function checkReadme(read: ArchiveRead, s?: Snapshot): CheckResult {
   const found = [...read.files.entries()].filter(([p]) => !p.includes('/') && README.test(p));
   const filled = found.filter(([, b]) => b.toString('utf8').trim() !== '');
   if (filled.length) return pass('readme', t(filled.map(([p]) => p).join(' et '), filled.map(([p]) => p).join(' and ')));
+  const fromRoot = s?.path && s.root ? readmes(s.root) : [];
+  if (fromRoot.length)
+    return pass(
+      'readme',
+      t(
+        `${fromRoot.map(([p]) => p).join(' et ')} de la racine du dépôt (le dossier n’en a pas)`,
+        `${fromRoot.map(([p]) => p).join(' and ')} of the repository’s root (the folder has none)`,
+      ),
+    );
   return fail(
     'readme',
     found.length ? t(`${found[0]![0]} est vide`, `${found[0]![0]} is empty`) : t('README.md manque', 'README.md is missing'),
@@ -504,10 +644,15 @@ function checkReadme(read: ArchiveRead): CheckResult {
           'Le README est la page du plugin, sur le store et dans l’app : il est obligatoire, et non vide.',
           'The README is the plugin’s page, on the store and in the app: it is required, and not empty.',
         ),
-        fix: t(
-          'Ajoute un README.md à la racine (ou README.fr.md et README.en.md), puis pousse une nouvelle étiquette.',
-          'Add a README.md at the root (or README.fr.md and README.en.md), then push a new tag.',
-        ),
+        fix: s?.path
+          ? t(
+              `Ajoute un README.md dans ${code(s.path)} ou à la racine du dépôt (ou README.fr.md et README.en.md), puis pousse une nouvelle étiquette.`,
+              `Add a README.md in ${code(s.path)} or at the repository’s root (or README.fr.md and README.en.md), then push a new tag.`,
+            )
+          : t(
+              'Ajoute un README.md à la racine (ou README.fr.md et README.en.md), puis pousse une nouvelle étiquette.',
+              'Add a README.md at the root (or README.fr.md and README.en.md), then push a new tag.',
+            ),
       },
     ],
   );
@@ -646,6 +791,18 @@ function archiveProblem(p: ArchiveProblem): Problem {
 function checkArchive(s: Snapshot): CheckResult {
   const { read, size } = s.archive;
   const problems = read.problems.map(archiveProblem);
+  if (s.pathLink)
+    problems.push({
+      path: s.pathLink,
+      why: t(
+        `Le dossier ${code(s.path ?? '')} passe par ${code(s.pathLink)}, un lien : le store ne suit pas de lien.`,
+        `The folder ${code(s.path ?? '')} goes through ${code(s.pathLink)}, a link: the store follows no link.`,
+      ),
+      fix: t(
+        'Soumets le dossier réel du plugin, ou fais du lien un vrai dossier, puis pousse une nouvelle étiquette.',
+        'Submit the plugin’s real folder, or make the link a real folder, then push a new tag.',
+      ),
+    });
   if (read.files.has('.gitmodules'))
     problems.push({
       path: '.gitmodules',
@@ -838,12 +995,12 @@ export function runChecks(s: Snapshot): CheckResult[] {
   const m = clean ? manifestOf(read) : null;
   const unread = t('L’archive ne se lit pas : ce contrôle attend.', 'The archive does not read: this check waits.');
   const results: Record<CheckKey, CheckResult> = {
-    manifest: clean ? checkManifest(read, s.iconUndecodable) : skip('manifest', unread),
+    manifest: clean ? checkManifest(read, s.iconUndecodable, s.path) : skip('manifest', unread),
     version: checkVersion(m, s),
     id: checkId(m, s),
     repository: checkRepository(m, s),
     license: checkLicense(m, s),
-    readme: clean ? checkReadme(read) : skip('readme', unread),
+    readme: clean ? checkReadme(read, s) : skip('readme', unread),
     screenshots: checkScreenshots(m, read, s.undecodable),
     archive: checkArchive(s),
     permissions: checkPermissions(m),

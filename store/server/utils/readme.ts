@@ -43,7 +43,7 @@ const REL = 'nofollow ugc noopener noreferrer';
 const md = new MarkdownIt({ html: true, linkify: true, typographer: false });
 
 /** The path inside the plugin an image or a link names, from the markdown file `from`; null if it leaves the folder. */
-export function insidePath(src: string, from: string, repo: string): string | null {
+export function insidePath(src: string, from: string, repo: string, folder = ''): string | null {
   let s = src.trim();
   // The repository's own files, named by their address on GitHub: read from the frozen archive instead.
   const own = new RegExp(
@@ -52,6 +52,11 @@ export function insidePath(src: string, from: string, repo: string): string | nu
   ).exec(s.replace(/[?#].*$/, ''));
   if (own) s = `/${own[1]}`;
   else if (/^[a-z][a-z0-9+.-]*:|^\/\//i.test(s)) return null;
+  // A plugin in a folder (ESC-313): a path from the repository's root must lead into that folder.
+  if (folder && s.startsWith('/')) {
+    if (!s.startsWith(`/${folder}/`)) return null;
+    s = s.slice(folder.length + 1);
+  }
   s = s.replace(/[?#].*$/, '');
   if (!s) return null;
   try {
@@ -130,7 +135,14 @@ function options(transform: { img: sanitizeHtml.Transformer; a: sanitizeHtml.Tra
 /** Renders `markdown` (the file `from` of the plugin), its images rewritten by `images` (inside path → served name). */
 export function renderMarkdown(
   markdown: string,
-  ctx: { from: string; repo: string; commit: string; images: Map<string, { name: string; width: number; height: number }> },
+  ctx: {
+    from: string;
+    repo: string;
+    commit: string;
+    /** The plugin's folder in the repository, '' at its root (ESC-313). */
+    path?: string;
+    images: Map<string, { name: string; width: number; height: number }>;
+  },
 ): { html: string; wanted: string[] } {
   const wanted: string[] = [];
   const raw = md.render(markdown);
@@ -138,7 +150,7 @@ export function renderMarkdown(
     raw,
     options({
       img: (_tag, attribs) => {
-        const path = attribs.src ? insidePath(attribs.src, ctx.from, ctx.repo) : null;
+        const path = attribs.src ? insidePath(attribs.src, ctx.from, ctx.repo, ctx.path) : null;
         if (path) wanted.push(path);
         const kept = path ? ctx.images.get(path) : undefined;
         if (!kept) return { tagName: 'img', attribs: {} };
@@ -159,8 +171,9 @@ export function renderMarkdown(
         if (/^(https?:|mailto:)/i.test(href)) out.href = href;
         else if (href && !/^[a-z][a-z0-9+.-]*:|^\/\//i.test(href) && !href.startsWith('#')) {
           // A file of the repository: on GitHub, at the commit the store froze.
-          const path = insidePath(href, ctx.from, ctx.repo);
-          if (path) out.href = `https://github.com/${ctx.repo}/blob/${ctx.commit}/${path.split('/').map(encodeURIComponent).join('/')}`;
+          const path = insidePath(href, ctx.from, ctx.repo, ctx.path);
+          const full = ctx.path && path ? `${ctx.path}/${path}` : path;
+          if (full) out.href = `https://github.com/${ctx.repo}/blob/${ctx.commit}/${full.split('/').map(encodeURIComponent).join('/')}`;
         }
         if (out.href) out.rel = REL;
         return { tagName: 'a', attribs: out };
@@ -180,7 +193,7 @@ function titleOf(markdown: string, path: string): string {
  * Renders the README and the documentation of a version from its archive: each page twice, the first time to learn
  * which images it names, the second with them copied.
  */
-export async function renderDocs(read: ArchiveRead, ctx: { repo: string; commit: string; keep: KeepImage }): Promise<Docs> {
+export async function renderDocs(read: ArchiveRead, ctx: { repo: string; commit: string; path?: string; keep: KeepImage }): Promise<Docs> {
   const readmes = [...read.files.keys()].filter((p) => !p.includes('/') && README.test(p));
   const byLang = (l: Lang) => readmes.find((p) => README.exec(p)![1]?.toLowerCase() === l) ?? readmes.find((p) => !README.exec(p)![1]);
   const m = manifestOf(read);
@@ -200,7 +213,8 @@ export async function renderDocs(read: ArchiveRead, ctx: { repo: string; commit:
   const none = new Map();
   const wanted = new Set<string>();
   for (const p of sources)
-    for (const w of renderMarkdown(text(p), { from: p, repo: ctx.repo, commit: ctx.commit, images: none }).wanted) wanted.add(w);
+    for (const w of renderMarkdown(text(p), { from: p, repo: ctx.repo, commit: ctx.commit, path: ctx.path, images: none }).wanted)
+      wanted.add(w);
 
   // 2. Each one copied once: a PNG, JPEG or WebP of the archive, re-encoded; the others dropped.
   const images = new Map<string, { name: string; width: number; height: number }>();
@@ -219,7 +233,7 @@ export async function renderDocs(read: ArchiveRead, ctx: { repo: string; commit:
   }
 
   // 3. The pages, their images in place.
-  const render = (p: string) => renderMarkdown(text(p), { from: p, repo: ctx.repo, commit: ctx.commit, images }).html;
+  const render = (p: string) => renderMarkdown(text(p), { from: p, repo: ctx.repo, commit: ctx.commit, path: ctx.path, images }).html;
   const readme: Docs['readme'] = {};
   for (const l of ['fr', 'en'] as const) {
     const p = byLang(l);

@@ -261,10 +261,10 @@ export function pickThreshold(): number {
 
 /**
  * The accounts an agent stopped by the usage limit can go on on (« Reprendre sur <compte> »), in the order of the settings:
- * the active ones of its harness other than its own that are signed in and under the threshold (`pickThreshold`). One past the
- * threshold is left out: the agent would meet the limit again there. Another harness's never is (ESC-88).
+ * the active ones of its harness other than its own that are signed in and that an agent would not leave at the threshold
+ * (`pickThreshold`, `judge`). One at it is left out: the agent would meet the limit again there. Another harness's never is (ESC-88).
  */
-export function resumeTargets(agent: Pick<Agent, 'account'> & { projectId?: string; engine?: EngineId }): Account[] {
+export function resumeTargets(agent: Pick<Agent, 'account'> & { projectId?: string; engine?: EngineId; model?: string }): Account[] {
   const own = accountOf(agent);
   const engine = agent.engine ?? 'claude';
   const threshold = pickThreshold();
@@ -273,30 +273,47 @@ export function resumeTargets(agent: Pick<Agent, 'account'> & { projectId?: stri
     const read = app.usage.accounts.find((u) => u.id === a.id);
     // An account not read yet counts as signed in, as the backend has it.
     if (read && !read.connected) return false;
-    return !anyOver(read ?? null, threshold, app.now);
+    // For the agent's model: a model's own quota (ESC-312) counts for that model alone.
+    return !judge(read?.meters ?? [], threshold, app.now, agent.model).leave;
   });
 }
 
 const DAY = 24 * 60;
 
-/** A quota meter's label, by its length: « 5h », « 7j » (« 7d »), « 30j »; « crédits » for the month's credits. */
-export function meterLabel(minutes: number | null): string {
+/**
+ * A quota meter's label, by its length: « 5h », « 7j » (« 7d »), « 30j »; « crédits » for the month's credits. A model's own
+ * (ESC-312) by the model's name as the server gives it: « Fable · semaine ».
+ */
+export function meterLabel(minutes: number | null, model?: string): string {
+  if (model && minutes !== null) {
+    return minutes === 7 * DAY
+      ? t('accounts.quota.scoped.week', { model })
+      : t('accounts.quota.scoped.window', { model, window: meterLabel(minutes) });
+  }
   if (minutes === null) return t('accounts.quota.credits.label');
   if (minutes === 7 * DAY) return t('accounts.quota.week.label');
   if (minutes % DAY === 0) return t('accounts.quota.days.label', { n: minutes / DAY });
   return t('accounts.quota.hours.label', { n: Math.round(minutes / 60) });
 }
 
-/** The name of a quota bar, for the screen readers: « Quota sur 5 heures », « Crédits du mois ». */
-export function meterName(minutes: number | null): string {
+/** The name of a quota bar, for the screen readers: « Quota sur 5 heures », « Crédits du mois », « Quota sur 7 jours de Fable ». */
+export function meterName(minutes: number | null, model?: string): string {
+  if (model && minutes !== null) return t('accounts.quota.scoped.name', { model, name: meterName(minutes) });
   if (minutes === null) return t('accounts.quota.credits.name');
   if (minutes % DAY === 0) return t('accounts.quota.days.name', { count: minutes / DAY });
   return t('accounts.quota.hours.name', { count: Math.round(minutes / 60) });
 }
 
-/** One bar of an account's quota: its length (null: the month's credits) and its reading, null until it is read. */
+/** What tells a bar from the account's others, as the backend's `QuotaMeter::key`: its length, and its model (`10080:Fable`). */
+export function meterKey(m: { minutes: number | null; model?: string }): string {
+  const length = m.minutes === null ? 'credits' : String(m.minutes);
+  return m.model ? `${length}:${m.model}` : length;
+}
+
+/** One bar of an account's quota: its length (null: the month's credits), its model when it is one model's own, and its reading, null until it is read. */
 export interface MeterShown {
   minutes: number | null;
+  model?: string;
   usage: RateWindow | null;
 }
 
@@ -308,14 +325,27 @@ export function metersShown(usage: AccountUsage | null, engine: EngineId): Meter
   const caps = app.engines.find((e) => e.id === engine)?.caps;
   if (caps?.quota === 'none') return [];
   const read = usage?.meters ?? [];
-  if (read.length) return read.map((m) => ({ minutes: m.minutes, usage: m }));
+  // In the server's order, a model's own among them (ESC-312).
+  if (read.length) return read.map((m) => ({ minutes: m.minutes, ...(m.model ? { model: m.model } : {}), usage: m }));
   if (caps?.quota === 'credits') return [{ minutes: null, usage: null }];
   return (caps?.quotaWindows ?? []).map((minutes) => ({ minutes, usage: null }));
 }
 
-/** Whether one of the account's meters is past « Pause au-delà du quota » (`accounts::over_threshold`). */
-export function anyOver(usage: Pick<AccountUsage, 'meters'> | null, threshold: number, now: number): boolean {
-  return (usage?.meters ?? []).some((m: QuotaMeter) => overThreshold(m, threshold, now));
+/**
+ * The family of a model as a name of it says it, lower case, as the backend's `model::model_family`: `fable` for « Fable »,
+ * `claude-fable-5-1` or `fable`; the first word that is neither `claude` nor a number (no list of models). Null without one.
+ */
+export function modelFamily(name: string | undefined | null): string | null {
+  const word = (name ?? '')
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .find((w) => w && w !== 'claude' && !/^\d+$/.test(w));
+  return word ?? null;
+}
+
+/** Whether the meter counts for a model of the family `family`: one of every model always, a model's own for that model alone (ESC-312). */
+export function countsFor(m: Pick<QuotaMeter, 'model'>, family: string | null): boolean {
+  return !m.model || (family !== null && modelFamily(m.model) === family);
 }
 
 /** A quota window as its tooltip says it: « 42 % · remise à zéro le 10/10 à 18:00 ». Also the value of its bar for a screen reader. */
@@ -357,6 +387,66 @@ export function projectedPct(minutes: number | null, w: RateWindow | null, now: 
   const gone = Math.min(length, length - left);
   if (tooEarly(gone, length)) return null;
   return (w.pct * length) / gone;
+}
+
+/** How an account stands for the choice of the account (PR #20), as the backend's `pace::Standing`: good, behind (only its pace is bad) or out. */
+export type Standing = 'good' | 'behind' | 'out';
+
+/** The use past which a long window is never good, on pace or not, as the backend's `pace::NEAR_LIMIT`. */
+export const NEAR_LIMIT = 95;
+
+/** What an account's meters say of it, as the backend's `pace::Verdict`. */
+export interface Verdict {
+  /** The worst of its meters (good with none: a harness without a quota keeps the order alone). */
+  standing: Standing;
+  /** An agent running on the account leaves it: a short window at the threshold, or a long one at the threshold whose pace is not good. */
+  leave: boolean;
+  /** Behind for being near its limit (`NEAR_LIMIT`), not for its pace. */
+  near: boolean;
+}
+
+/** Whether a window is a short pause (a day or less: the 5 hours); the month's credits (no length) and the longer windows are judged by their pace. */
+export function isShortWindow(minutes: number | null): boolean {
+  return minutes !== null && minutes <= DAY;
+}
+
+const WORST: Record<Standing, number> = { good: 0, behind: 1, out: 2 };
+
+/**
+ * The verdict on an account's meters at `now`, `threshold` being the percentage at which a short window (or a long one without
+ * a projection) is out, as the backend's `pace::judge` (the same figures, tests/fixtures/quota-pace.json). A short window at the
+ * threshold is out until it starts again; a long one is out at 100 %, good when projected at 100 % or less even past the
+ * threshold, behind when projected past it even under the threshold, and goes by the threshold without a projection.
+ * `model` is the model it is judged for (a name of it or its family, `modelFamily`): a meter of one model alone (« Fable »,
+ * ESC-312) counts for that model only; none of them counts for the account in general (no model: the status bar, the panel).
+ */
+export function judge(meters: QuotaMeter[], threshold: number, now: number, model?: string | null): Verdict {
+  let standing: Standing = 'good';
+  let leave = false;
+  let near = false;
+  const family = modelFamily(model);
+  for (const m of meters.filter((x) => countsFor(x, family))) {
+    const at = overThreshold(m, threshold, now);
+    let s: Standing = 'good';
+    if (isShortWindow(m.minutes)) {
+      if (at) s = 'out';
+      leave ||= at;
+    } else if (overThreshold(m, 100, now)) {
+      s = 'out';
+      leave = true;
+    } else {
+      const p = projectedPct(m.minutes, m, now);
+      const byPace = p !== null && p > 100;
+      const nearLimit = !byPace && !(p === null && at) && overThreshold(m, NEAR_LIMIT, now);
+      if (p === null && at) s = 'out';
+      else if (byPace || nearLimit) s = 'behind';
+      near ||= nearLimit;
+      // At the threshold with a pace that is not good (past 100 % or not known), or near its limit.
+      leave ||= at && (p === null || byPace || nearLimit);
+    }
+    if (WORST[s] > WORST[standing]) standing = s;
+  }
+  return { standing, leave, near };
 }
 
 const DAY_MS = 24 * 3_600_000;
@@ -445,8 +535,12 @@ export interface QuotaRow {
   usage: AccountUsage | null;
   /** The one new agents go to, and whose quota the status bar shows. */
   current: boolean;
-  /** Active, with a window past « Pause au-delà du quota ». */
+  /** Active, and out for the choice of the account: a window at the threshold of « Pause au-delà du quota » or « Changer de compte à » (the 5 h), or at its limit (`judge`). */
   over: boolean;
+  /** Active, and behind the others only by its pace: a long window that would not last to its reset (`judge`). */
+  behind: boolean;
+  /** Behind the others for a long window near its limit (`NEAR_LIMIT`), not for its pace. */
+  nearLimit: boolean;
   /** Why it is dimmed: switched off, not signed in, sign-in expired. */
   reasons: string[];
   /** What its turns cost today, the ones running now included (an estimate): the status bar's total, account by account. */
@@ -493,12 +587,15 @@ export function quotaRows(now: number): QuotaRow[] {
       reasons.push(usage.reason);
     }
     const threshold = pickThreshold();
-    const over = account.active && anyOver(usage, threshold, now);
+    const verdict = account.active ? judge(usage?.meters ?? [], threshold, now) : null;
+    const over = verdict?.standing === 'out';
+    const behind = verdict?.standing === 'behind';
+    const nearLimit = behind && !!verdict?.near;
     const live = liveCostOf(account.id);
     const byHarness = estimatedBy(engineOfAccount(account));
     const today = { cost: (usage?.todayCost ?? 0) + live, estimated: byHarness || live > 0, ...(byHarness ? { byHarness } : {}) };
     const current = account.id === app.usage.current[engineOfAccount(account)];
-    return { account, usage, current, over, reasons, today };
+    return { account, usage, current, over, behind, nearLimit, reasons, today };
   });
   return [...rows.filter((r) => r.current), ...rows.filter((r) => !r.current)];
 }

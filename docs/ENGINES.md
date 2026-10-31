@@ -79,7 +79,7 @@ Le process lit son flux et le passe en `Value` à `on_frame`, sauf les réponses
 - les changements du bandeau « Plan » (`plan_apply`) ;
 - l'usage du tour, la fin de tour (`Effects.turn_end`), la limite (`Effects.limited`), le quota (`Effects.rate`).
 
-Le passage à lire à voix haute d'une conversation vocale (`<spoken>…</spoken>`, ESC-97) est mis à part par la partie commune, pour tout moteur : `AgentRt::push` le sort d'un texte de l'agent lui-même (pas d'un sous-agent) dès qu'il est écrit en entier (`streaming: false`), à l'ajout comme au patch. Un message envoyé pendant un tour n'est mis en file que chez un moteur qui le fait attendre (`caps.mid_turn` `queued`) ; chez Codex (`immediate`, `turn/steer`) et Copilot CLI (`immediate`, `session.send` en mode `immediate`), il entre dans le tour en cours ; OpenCode (`queued`) le garde comme Claude Code.
+Le passage à lire à voix haute d'une conversation vocale (`<spoken>…</spoken>`, ESC-97) est mis à part par la partie commune, pour tout moteur : `AgentRt::push` le sort d'un texte de l'agent lui-même (pas d'un sous-agent) dès qu'il est écrit en entier (`streaming: false`), à l'ajout comme au patch. Un message envoyé pendant un tour n'est mis en file que chez un moteur qui le fait attendre : Claude Code (`caps.mid_turn` `queued`) le lit à l'étape suivante du tour ; Cursor et OpenCode (`turnEnd`) le gardent dans le process d'Escouade jusqu'à la fin du tour, puis il en lance un ; chez Codex (`immediate`, `turn/steer`) et Copilot CLI (`immediate`, `session.send` en mode `immediate`), il entre dans le tour en cours. La fenêtre garde elle-même un message tapé dans le composer pendant un tour, le temps d'un délai ou jusqu'à la fin du tour selon cette valeur (`outbox.svelte.ts`).
 
 Le nom des outils reste celui de Claude Code pour tous les moteurs (`Bash`, `Edit`, `Write`, `Task`, `mcp__<serveur>__<outil>`…, table dans docs/TODO-1.8.md, « Un moteur par agent ») : `tools.ts`, la ligne d'activité, `convsearch.rs` et les cartes ne changent pas.
 
@@ -108,7 +108,9 @@ L'extraction s'est arrêtée là où d'autres lots reprennent :
 
 ## Les données (ESC-27)
 
-Le moteur est gardé partout où il compte, par son id (`EngineId` de `model.rs` : `claude`, `codex`, `copilot`, `cursor`, `opencode`). Ce qui a été enregistré avant la 1.8 vaut Claude Code.
+Le moteur est gardé partout où il compte, par son id (`EngineId` de `model.rs` : `claude`, `codex`, `copilot`, `cursor`, `opencode`, `vibe`, `agy`, `gemini`). Ce qui a été enregistré avant la 1.8 vaut Claude Code.
+
+Depuis INT-3 (ESC-209), `EngineId` est un **id ouvert** : une chaîne gardée telle quelle (`#[serde(transparent)]`, internée pour rester `Copy`), sérialisée à l'identique de l'énumération d'avant, sans rien à migrer. Les harness écrits ont leur constante (`EngineId::CLAUDE`, `EngineId::CODEX`…) ; un id que le registre n'a pas (celui d'une version plus récente, d'un plugin désinstallé ou désactivé) est lu et réécrit tel quel. Ses agents sont gardés, « harness absent » : `engine::by_id` rend pour lui le moteur `engine/absent.rs`, qui ne sait rien faire (aucune capacité, aucun modèle, programme introuvable), ne démarre pas (`Core::start_process_in` refuse avec `engine::absent_line`) et sur lequel aucun agent n'est créé ; la fenêtre le nomme « <id> (harness absent) » (`engineName`) et n'en montre aucune fonction.
 
 | Où | Champ | Avant la 1.8 | Ce qu'il dit |
 |---|---|---|---|
@@ -121,7 +123,9 @@ Le moteur d'un nouvel agent : celui demandé (`AgentOptions.engine`), sinon celu
 
 ## Le registre (ESC-28)
 
-`engine/registry.rs` tient ce que chaque moteur déclare et ce qu'on trouve de lui sur la machine. `registry::all()` liste les moteurs écrits (Claude Code, Codex, Copilot CLI et OpenCode aujourd'hui), le moteur par défaut en premier. Une ligne d'un moteur qu'Escouade ne pilote pas (OpenCode 2) est refusée quelle que soit la plage testée (`Engine::unsupported_line`, état `unsupported`).
+`engine/registry.rs` tient ce que chaque moteur déclare et ce qu'on trouve de lui sur la machine. `registry::all()` liste les moteurs du registre, le moteur par défaut en premier : ceux écrits dans l'app (`registry::BUILT_IN`, les huit), puis ceux ajoutés par `registry::register` (les plugins de harness d'INT-9) ; `registry::find(id)` en cherche un par son id.
+
+Hors de `engine/` et `agent/`, le cœur ne demande jamais quel harness tourne : il demande au moteur ce qu'il fait (INT-3). Ce que la fenêtre lit est dans `EngineCaps` ; ce que seul le cœur lit est une méthode d'`Engine`, avec sa valeur par défaut, que le moteur concerné remplace : ses modèles (`models_by_alias`, `told_effort`, `told_auto`, `read_told_models`, `listed_models_only`, `account_models`, `default_model`), ses comptes (`store`, `config_dir`, `settings_path`, `keys`, `account_env`, `sign_in_ready`, `key_missing`, `key_malformed`, `account_status`, `machine_key`, `signs_in`, `signs_in_later`, `signed_in_by_files`, `oauth_sign_in`, `sessions_in_agent_home`, `login_shell`, `before_login`), ses dossiers (`session_home` et `principal_sessions` pour la clôture, `memory_dir`, `session_cwd`, `workflow_folders` et `workflow_user` pour l'onglet Workflow), ses textes (`command`, `writer_priced`, `missing_repair`, `interrupted_line`) et le reste (`declares_by_program`, `track_missing`). Seul Claude Code reste nommé ailleurs, comme harness par défaut (ce qui a été enregistré avant la 1.8, ce qui n'a pas encore choisi) et pour sa mise à jour automatique (`selfupdate.rs`). Une ligne d'un moteur qu'Escouade ne pilote pas (OpenCode 2) est refusée quelle que soit la plage testée (`Engine::unsupported_line`, état `unsupported`).
 
 ### Ce que chaque moteur déclare (`Engine`)
 
@@ -142,7 +146,7 @@ Le moteur d'un nouvel agent : celui demandé (`AgentOptions.engine`), sinon celu
 | `images`, `pdf` | Images et PDF joints à un message. | `Engine::message` refuse ce qu'il ne lit pas. | oui |
 | `fork` | La copie d'une conversation et jusqu'où : `none`, `entry`, `turn`, `event`, `message`. | « Dupliquer la conversation » masqué pour `none`. | `entry` |
 | `resumeOtherAccount` | Une conversation reprise sur un autre compte du même moteur. | « Reprendre sur <compte> » ; la bascule ne quitte jamais le moteur. | oui |
-| `midTurn` | Un message envoyé pendant un tour : `queued`, `immediate` ou `refused`. | (composer, lot 4) | `queued` |
+| `midTurn` | Un message envoyé pendant un tour : `queued` (lu à l'étape suivante), `immediate`, `turnEnd` (gardé par Escouade jusqu'à la fin du tour) ou `refused`. | Le composer le garde le temps du « Délai avant l'envoi pendant un tour » (`queued`, `immediate`) ou jusqu'à la fin du tour (`turnEnd`). | `queued` |
 | `slashCommands` | Ses commandes `/` pour un client. | Le composer n'en propose pas sinon. | oui |
 | `quota` | Le quota de ses comptes : `windows`, `credits` ou `none`. | Les barres de la barre d'état et du panneau des quotas ; sans quota, aucune barre (« Pas de quota ») et jamais de pause du pilote auto. | `windows` |
 | `quotaWindows` | Les durées de ses fenêtres, en minutes. | Les barres montrées avant la première lecture (une lecture peut en donner moins : l'offre gratuite de Codex n'en a qu'une). | `[300, 10080]` |
@@ -220,7 +224,7 @@ Chaque moteur a son Principal, son installation habituelle, lancée sans dossier
 
 ### Le quota
 
-Un modèle commun : chaque compte a ses compteurs (`AccountUsage.meters`, des `QuotaMeter`), une fenêtre d'une durée (`minutes` : 300, 10 080, 43 200) en pourcentage avec sa remise à zéro, ou les crédits du mois (`minutes` : null). L'interface les libelle par leur durée (`meterLabel` : « 5h », « 7j » / « W », « 30j » ; « crédits »). Une lecture remplace les compteurs qu'elle donne et garde les autres (`model::merge_meters`). Claude Code donne ses deux fenêtres (`claude_meters`), par `get_usage`, `rate_limit_event` ou le point d'accès OAuth, que seuls ses comptes interrogent.
+Un modèle commun : chaque compte a ses compteurs (`AccountUsage.meters`, des `QuotaMeter`), une fenêtre d'une durée (`minutes` : 300, 10 080, 43 200) en pourcentage avec sa remise à zéro, ou les crédits du mois (`minutes` : null). L'interface les libelle par leur durée (`meterLabel` : « 5h », « 7j » / « W », « 30j » ; « crédits »). Un compteur peut être propre à un modèle (`QuotaMeter::model`, le nom du serveur : « Fable ») : il ne compte que pour les agents et tickets de sa famille (`QuotaMeter::counts_for`, `model::model_family`, `accounts::seen_by`), et l'interface le libelle « Fable · semaine ». Une lecture complète (`usage::Reading::Full` : `get_usage`, le point d'accès OAuth) remplace tous les compteurs du compte ; une lecture partielle (`Reading::Windows` : `rate_limit_event`, un autre harness) remplace ceux de même durée et de même modèle et garde les autres (`model::merge_meters`). Claude Code donne ses lignes `limits[]` (`session`, `weekly_all`, `weekly_scoped`), sinon `five_hour`, `seven_day` et `model_scoped[]` (`usage::parse_windows`), par `get_usage` ou le point d'accès OAuth, que seuls ses comptes interrogent, et quelques fenêtres par `rate_limit_event`.
 
 Ce qui est gardé d'un lancement à l'autre (`SavedPause`, `SavedWindows`, `Hold.lifted`) garde les deux fenêtres de Claude Code là où les versions d'avant les lisent, les autres compteurs à côté (`other`, `lifted_other`).
 
@@ -413,7 +417,7 @@ Un écart dit le cas, l'élément, le chemin de la clé, l'attendu et l'obtenu. 
 
 ## Ajouter un moteur
 
-À cocher dans l'ordre, dans le ticket du moteur. `<moteur>` est son id dans les données (`codex`), déjà dans `EngineId`.
+À cocher dans l'ordre, dans le ticket du moteur. `<moteur>` est son id dans les données (`codex`), une constante d'`EngineId`.
 
 ### L'adaptateur
 
@@ -424,7 +428,8 @@ Un écart dit le cas, l'élément, le chemin de la clé, l'attendu et l'obtenu. 
 - [ ] `message` : la forme de son message, pièces jointes comprises, et le refus d'un fichier qu'il ne lit pas (`caps.images`, `caps.pdf`).
 - [ ] `start_lost` : la session ou le point de copie perdus, lus dans son stderr.
 - [ ] `one_shot` : `Weight::Light` (son modèle le plus rapide, sans outil) et `Weight::Reading` (outils de lecture seule), sans session, sans réglages de l'utilisateur ni serveur MCP.
-- [ ] Sa ligne dans `engine::by_id`, et dans `registry::all()`.
+- [ ] Sa ligne dans `registry::BUILT_IN` (`engine::by_id` le trouve là), et sa constante dans `EngineId`.
+- [ ] Les méthodes d'`Engine` qu'il remplace parmi celles que le cœur lit (« Le registre » ci-dessus) : ses comptes, ses dossiers, ses modèles.
 
 ### Les capacités et le registre
 

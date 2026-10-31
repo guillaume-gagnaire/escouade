@@ -727,6 +727,14 @@ impl Store {
             ));
         }
         let file: VersionFile = serde_json::from_slice(&json).map_err(|e| e.to_string())?;
+        if !plain_folder(&file.path) {
+            return Err(tr_in!(
+                lang,
+                "Le version.json reçu nomme un dossier mal formé ({}) : rien n'est installé.",
+                "The version.json received names a malformed folder ({}): nothing is installed.",
+                file.path
+            ));
+        }
         if file.id != id || file.version != entry.version {
             return Err(tr_in!(
                 lang,
@@ -825,6 +833,7 @@ impl Store {
             version: entry.version.clone(),
             sha256: entry.sha256.clone(),
             repository: file.repository.clone(),
+            path: file.path.clone(),
             tag: file.tag.clone(),
             commit: file.commit.clone(),
             version_json: json,
@@ -934,6 +943,19 @@ fn list_error(e: &FetchError, lang: Lang) -> String {
     }
 }
 
+/// Whether `path`, the folder `version.json` names (ESC-313), is a plain path relative to the
+/// repository's root: empty (the root), or segments without `.`, `..`, a backslash, a control
+/// character, a leading or doubled slash, 200 characters at most.
+pub fn plain_folder(path: &str) -> bool {
+    path.is_empty()
+        || (path.len() <= 200
+            && !path.contains(['\\', ':'])
+            && !path.chars().any(char::is_control)
+            && path
+                .split('/')
+                .all(|s| !s.is_empty() && s != "." && s != ".."))
+}
+
 /// `version.json` (store/server/utils/versions.ts), what the app reads of it.
 #[derive(Debug, Clone, Deserialize)]
 pub struct VersionFile {
@@ -941,6 +963,10 @@ pub struct VersionFile {
     pub version: String,
     #[serde(default)]
     pub repository: String,
+    /// The plugin's folder in its repository (ESC-313), `""` at its root; an older
+    /// `version.json` without it reads as the root.
+    #[serde(default)]
+    pub path: String,
     #[serde(default)]
     pub tag: String,
     #[serde(default)]
@@ -965,8 +991,10 @@ pub struct Fetched {
     pub version: String,
     /// The SHA-256 of its `version.json`.
     pub sha256: String,
-    /// Where it was read from, as `version.json` says: the repository, the tag, its commit.
+    /// Where it was read from, as `version.json` says: the repository, its folder, the tag,
+    /// its commit.
     pub repository: String,
+    pub path: String,
     pub tag: String,
     pub commit: String,
     pub version_json: Vec<u8>,
@@ -1311,6 +1339,24 @@ mod tests {
         assert!(gz.len() < 1024 * 1024, "zeros compress");
         let e = read_archive(&gz).unwrap_err();
         assert!(e.contains("200 MB"), "{e}");
+    }
+
+    #[test]
+    fn a_folder_of_version_json_is_a_plain_relative_path_and_an_old_one_is_the_root() {
+        for ok in ["", "plugins/slack", "a/b.c/d-e_f", "dev.escouade.slack"] {
+            assert!(plain_folder(ok), "{ok}");
+        }
+        for bad in [
+            "/etc", "plugins/", "a//b", "./a", "a/../b", "..", "C:/x", "a\\b", "a\nb",
+        ] {
+            assert!(!plain_folder(bad), "{bad}");
+        }
+        assert!(!plain_folder(&"x".repeat(201)));
+        let old: VersionFile = serde_json::from_str(
+            r#"{"id":"a.b","version":"1.0.0","repository":"https://github.com/o/r","tag":"v1.0.0","archive":{"sha256":"","size":0}}"#,
+        )
+        .unwrap();
+        assert_eq!(old.path, "");
     }
 
     #[test]

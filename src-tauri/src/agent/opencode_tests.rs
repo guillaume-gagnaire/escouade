@@ -5,7 +5,7 @@ fn agent(cwd: &str) -> AgentRt {
     let meta = AgentMeta {
         id: new_id(),
         cwd: cwd.into(),
-        engine: EngineId::Opencode,
+        engine: EngineId::OPENCODE,
         model: "ollama/qwen3-coder:30b-32k".into(),
         mode: "default".into(),
         ..Default::default()

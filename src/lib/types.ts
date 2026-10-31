@@ -22,6 +22,8 @@ export interface Settings {
   attachBigText: 'path' | 'refuse';
   /** « Purger les copies après », in days: 0 = kept as long as their owner (agent, project, ticket). */
   attachKeepDays: number;
+  /** « Délai avant l’envoi pendant un tour », in seconds (0: off). */
+  midTurnDelaySecs: number;
   pwshPath: string;
   bashPath: string;
   wslDistro: string;
@@ -80,8 +82,6 @@ export interface Settings {
   remoteControlAll: boolean;
   /** « Nouveaux projets privés »: a project added is private (`Project.private`) from the start. */
   privateProjects: boolean;
-  /** « Index du code sur tous les projets » (ESC-293): the index of every project that made no choice of its own (`Project.codeIndexChoice`) is on. Changed by `set_code_index_all`, not by the settings modal's draft. Absent from the settings of the window's tests made before it. */
-  codeIndexAll?: boolean;
   /** « Thème »: Système (the system's, and its changes), Clair or Sombre; applied at once, the window with it (lib/appearance.ts). */
   theme: ThemeChoice;
   /** « Couleurs » (PLG-7): the theme of a plugin the window takes, `<plugin id>/<theme id>`; empty or absent, Escouade's (lib/plugin-theme.svelte.ts). */
@@ -411,7 +411,19 @@ export interface IntegrationSettings {
 }
 
 /** An external ticket system. */
-export type Service = 'jira' | 'trello' | 'github' | 'linear' | 'clickup' | 'gitlab' | 'azure';
+/** A source of tickets, by its id (`jira`, `github`…): one of the core's registry. */
+export type Service = string;
+
+/** What the core tells of a kind of source (`InitialState::sources`). */
+export interface SourceDecl {
+  id: Service;
+  name: string;
+  short: string;
+  /** The code host whose accounts serve it. */
+  host: string | null;
+  /** It has an account of its own; false when it is connected as its code host. */
+  ownAccount: boolean;
+}
 
 /** A Jira status, a Trello list, or for GitHub "open", "closed" or "label:<name>". */
 export interface ExternalState {
@@ -592,8 +604,14 @@ export interface IssuePage {
   total: number | null;
 }
 
-/** A harness that runs agents (« Harness » in the interface): Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode, Mistral Vibe, Antigravity CLI, Gemini CLI. */
-export type EngineId = 'claude' | 'codex' | 'copilot' | 'cursor' | 'opencode' | 'vibe' | 'agy' | 'gemini';
+/** The harnesses written into the app: Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode, Mistral Vibe, Antigravity CLI, Gemini CLI. */
+export type KnownEngineId = 'claude' | 'codex' | 'copilot' | 'cursor' | 'opencode' | 'vibe' | 'agy' | 'gemini';
+
+/**
+ * A harness that runs agents (« Harness » in the interface): an open id (INT-3), one of the app's or another the data names
+ * (a later version's, a plugin's), which the backend's registry declares or not (`engineOf`).
+ */
+export type EngineId = KnownEngineId | (string & {});
 
 /** A mode of Escouade a harness takes, and what it means there (null: what Escouade's menu says of it, Claude Code's meaning). */
 export interface ModeCap {
@@ -611,8 +629,8 @@ export interface EngineCaps {
   /** Copying an agent (« Dupliquer la conversation »), and up to where; 'none': hidden. */
   fork: 'none' | 'entry' | 'turn' | 'event' | 'message';
   resumeOtherAccount: boolean;
-  /** A message sent while a turn runs: queued, read at once, or refused. */
-  midTurn: 'queued' | 'immediate' | 'refused';
+  /** A message sent while a turn runs: queued, read at once, held until the turn ends, or refused. */
+  midTurn: 'queued' | 'immediate' | 'turnEnd' | 'refused';
   slashCommands: boolean;
   quota: 'windows' | 'credits' | 'none';
   /** The lengths of the windows of its quota, in minutes: the bars the status bar shows before their first reading. */
@@ -782,35 +800,8 @@ export interface Project {
   workflowsAutoRead?: boolean;
   /** « Où garder la configuration des workflows » (ESC-195): in the repository (`.escouade/workflows/`, by default) or on this machine. Absent from a project of the window’s tests made before it. */
   workflowsInRepo?: boolean;
-  /** « Index du code » (ESC-251), the project's own choice (ESC-293): absent, it follows « Index du code sur tous les projets » (`codeIndexOn`, lib/codeindex.ts). Set by `set_code_index` (Réglages › Projets, ESC-254). */
-  codeIndexChoice?: boolean;
-}
-
-/** What a project's code index holds (ESC-251). */
-export interface CodeIndexStatus {
-  files: number;
-  symbols: number;
-  links: number;
-  /** Worktrees with a delta. */
-  worktrees: number;
-  /** The database's size on the disk. */
-  bytes: number;
-  /** When the project's folder was last read, in ms; 0 for never. */
-  indexedAt: number;
-}
-
-/** « Index du code » of a project, as its settings read it (ESC-254). */
-export interface CodeIndexInfo {
-  /** On: its own choice, or the app's. */
-  enabled: boolean;
-  /** It made its own choice (ESC-293); else it follows « Index du code sur tous les projets ». */
-  chosen: boolean;
-  /** Being read for « Index du code sur tous les projets », or waiting for its turn. */
-  reading: boolean;
-  waiting: boolean;
-  status: CodeIndexStatus;
-  /** Its own folders its fence leaves out (another project inside it), relative, with `/`. */
-  excluded: string[];
+  /** Off: « Pas de workflow pour ce projet » (ESC-309), nothing read nor written of its workflows; `workflows.enabled` of its .escouade.yml when shared. Absent: on. */
+  workflowsEnabled?: boolean;
 }
 
 /** The vectors' model of « Recherche par le sens » (ESC-254): one for every project of this machine. */
@@ -822,18 +813,6 @@ export interface VectorsModelInfo {
   have: number;
   downloaded: boolean;
   downloading: boolean;
-}
-
-/** What the code index saved over the statistics' period, for a project (ESC-254). */
-export interface IndexSaving {
-  agentId: string;
-  projectId: string;
-  calls: number;
-  filesTokens: number;
-  answerTokens: number;
-  savedTokens: number;
-  /** At the input price of the model each agent ran on, in USD. */
-  savedCost: number;
 }
 
 /** What tells a step added by hand (ESC-195): a command typed, a subagent launched, a file written. */
@@ -1955,6 +1934,8 @@ export interface RateWindow {
  */
 export interface QuotaMeter extends RateWindow {
   minutes: number | null;
+  /** The model it is the quota of alone, as the server names it (« Fable », ESC-312); absent for a meter of every model. */
+  model?: string;
 }
 
 export interface Usage {
@@ -2341,6 +2322,10 @@ export interface WorkflowScan {
   files?: { id: string; path: string; local: boolean; inRepo: boolean; updated: string | null }[];
   /** The files that could not be read, with why. */
   unreadable?: { path: string; why: string }[];
+  /** The workflows the user removed (ESC-309): never written again by a reading; `changed` when what found one changed since (proposed again). */
+  removed?: { id: string; name: string; changed: boolean }[];
+  /** « Pas de workflow pour ce projet » (ESC-309): nothing was read. */
+  off?: boolean;
 }
 
 /** How an agent's stay in a step, or outside the workflow (`step` null), ended. */
@@ -2410,7 +2395,6 @@ export type UiEvent =
   | { type: 'agentRemoved'; id: string; projectId: string }
   | { type: 'conv'; agentId: string; ops: ConvOp[] }
   | { type: 'memory'; projectId: string }
-  | { type: 'codeIndex'; projectId: string }
   | { type: 'vectorsDownload'; done: number; total: number }
   | { type: 'git'; projectId: string; git: GitInfo }
   | { type: 'usage'; usage: Usage }
@@ -2529,6 +2513,8 @@ export interface InitialState {
   engines: EngineDecl[];
   /** The harnesses whose program is found: the only ones offered (absent before 1.8: Claude Code, when found). */
   enginesFound?: EngineId[];
+  /** The kinds of ticket sources the core knows (absent before INT-1: the seven of the window). */
+  sources?: SourceDecl[];
   /** Why no ticket of a project's board starts, by project (none: they may). */
   boardIssues?: Record<string, string>;
   /** Why no ticket of a project that goes to any account starts for now (none: they may). */
@@ -2622,8 +2608,6 @@ export interface StatsView {
   accounts: string[];
   /** Every harness that ever ran a turn (ids), whichever period or harness the view is for. */
   engines: string[];
-  /** What the code index saved over the period, per project (ESC-254); absent from a view of the window's tests made before it. */
-  indexByProject?: IndexSaving[];
 }
 
 /** What a harness ran over the period. */

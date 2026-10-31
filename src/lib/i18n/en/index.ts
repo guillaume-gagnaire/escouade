@@ -18,7 +18,7 @@ import handover from './handover';
 import integrations from './integrations';
 import mcp from './mcp';
 import memory from './memory';
-import codeindex from './codeindex';
+import vectors from './vectors';
 import nav from './nav';
 import plan from './plan';
 import prs from './prs';
@@ -58,7 +58,7 @@ export const en = defineCatalog({
   handover,
   mcp,
   memory,
-  codeindex,
+  vectors,
   branches,
   plan,
   prs,

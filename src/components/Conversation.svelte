@@ -25,6 +25,7 @@
     stateWord,
   } from '../lib/prs';
   import { conversationOf, type ReadingPlace } from '../lib/conversations.svelte';
+  import { heldOf } from '../lib/outbox.svelte';
   import { accountsOf } from '../lib/accounts';
   import { bgCount } from '../lib/bgtasks';
   import { splitEscouade } from '../lib/escouade';
@@ -59,6 +60,7 @@
   import Handover from './conv/Handover.svelte';
   import NoAccount from './conv/NoAccount.svelte';
   import UserMessage from './conv/UserMessage.svelte';
+  import HeldMessage from './conv/HeldMessage.svelte';
   import EngineMark from './EngineMark.svelte';
   import Icon from './Icon.svelte';
   import { tip } from '../lib/tip';
@@ -820,7 +822,7 @@
             {t('conv.loadError', { error: conv.error })}
             <button class="btn" onclick={() => conv.load()}>{t('common.retry')}</button>
           </div>
-        {:else if conv.loaded && top.length === 0 && !conv.waiting.length}
+        {:else if conv.loaded && top.length === 0 && !conv.waiting.length && !heldOf(agent.id).length}
           <div class="empty">
             <span class="t">{t('conv.empty.title')}</span>
             <span class="s"
@@ -932,6 +934,9 @@
         {/each}
         {#each conv.waiting as item (item.id)}
           <UserMessage {item} waiting engine={agent.engine} />
+        {/each}
+        {#each heldOf(agent.id) as held (held.id)}
+          <HeldMessage {held} engine={agent.engine} />
         {/each}
         {#if noAccount}
           <NoAccount {agent} engine={noAccount.engine} text={noAccount.text} />

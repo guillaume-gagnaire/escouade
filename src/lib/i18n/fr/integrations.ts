@@ -3,7 +3,16 @@ import type { Tree } from '../types';
 // Jira, Trello, GitHub, Linear, ClickUp, GitLab and Azure Boards: the integrations tab and the import of tickets.
 export default {
   // What each service calls the place its tickets are in (the project, the board, the repository).
-  container: { jira: 'Projet', trello: 'Tableau', github: 'Dépôt', linear: 'Équipe', clickup: 'Liste', gitlab: 'Projet', azure: 'Projet' },
+  container: {
+    jira: 'Projet',
+    trello: 'Tableau',
+    github: 'Dépôt',
+    linear: 'Équipe',
+    clickup: 'Liste',
+    gitlab: 'Projet',
+    azure: 'Projet',
+    other: 'Conteneur',
+  },
   // The search field of the import, by service.
   searchHint: {
     jira: 'Rechercher par clé ou par texte…',
@@ -13,6 +22,7 @@ export default {
     clickup: 'Rechercher par id (#86abx3, ABC-12) ou par titre…',
     gitlab: 'Rechercher une issue (#12) ou par texte…',
     azure: 'Rechercher un élément de travail (#12) ou par titre…',
+    other: 'Rechercher un ticket…',
   },
   // The toast after an import: « 3 tickets importés depuis Jira et Trello ».
   imported: { one: '{count} ticket importé depuis {from}', other: '{count} tickets importés depuis {from}' },
@@ -110,6 +120,7 @@ export default {
       clickup: 'Liste ClickUp',
       gitlab: 'Projet GitLab Issues',
       azure: 'Projet Azure Boards',
+      other: 'Conteneur de la source',
     },
   },
 

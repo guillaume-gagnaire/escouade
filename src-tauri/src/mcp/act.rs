@@ -1548,7 +1548,7 @@ pub(super) fn harness_choices<R: Runtime>(
         .iter()
         .map(|e| e.to_string())
         .collect();
-    if on.engine != EngineId::Claude {
+    if !crate::engine::by_id(on.engine).models_by_alias() {
         let ids = offered(core, &on).into_iter().map(|k| k.id).collect();
         return (on.engine, ids, efforts);
     }
@@ -1586,7 +1586,7 @@ fn model<R: Runtime>(
             "“{m}” is not a model name."
         )));
     }
-    if on.engine != EngineId::Claude {
+    if !crate::engine::by_id(on.engine).models_by_alias() {
         let known = offered(core, on);
         if known.is_empty() {
             return Ok(Some(m.to_string()));
@@ -1651,7 +1651,7 @@ fn check_effort<R: Runtime>(
     let Some(asked) = asked.map(str::trim).filter(|e| !e.is_empty()) else {
         return Ok(());
     };
-    if on.engine == EngineId::Claude {
+    if crate::engine::by_id(on.engine).models_by_alias() {
         return Ok(());
     }
     let per_model = model

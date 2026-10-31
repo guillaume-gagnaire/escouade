@@ -131,7 +131,6 @@ fn writes_and_commands_are_refused_and_escouades_tools_for_the_docs_let_through(
         "mcp__escouade__read_document",
         "mcp__escouade__list_decisions",
         "mcp__escouade__search_memory",
-        "mcp__escouade__index_search",
         "mcp__escouade__get_board",
     ] {
         assert!(allowed_tool(t) && !refused_tool(t), "{t}");
@@ -159,16 +158,16 @@ fn writes_and_commands_are_refused_and_escouades_tools_for_the_docs_let_through(
 #[test]
 fn a_discussion_runs_only_on_a_harness_that_keeps_it_from_writing() {
     for e in [
-        EngineId::Claude,
-        EngineId::Codex,
-        EngineId::Opencode,
-        EngineId::Copilot,
+        EngineId::CLAUDE,
+        EngineId::CODEX,
+        EngineId::OPENCODE,
+        EngineId::COPILOT,
     ] {
         assert!(holds(e), "{e:?}");
     }
     // They write the files of their folder without going through Escouade.
-    assert!(!holds(EngineId::Cursor));
-    assert!(!holds(EngineId::Vibe));
+    assert!(!holds(EngineId::CURSOR));
+    assert!(!holds(EngineId::VIBE));
 }
 
 #[test]

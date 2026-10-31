@@ -3,7 +3,16 @@
   import { COLUMNS } from '../../lib/board';
   import { t } from '../../lib/i18n';
   import Rich from '../../lib/i18n/Rich.svelte';
-  import { BY_FORGE, linkSource, SERVICE_IDS, SERVICES, setColumnState, toggleComment, trelloTokenPage } from '../../lib/integrations';
+  import {
+    BY_FORGE,
+    linkSource,
+    pickLabel,
+    SERVICE_IDS,
+    SERVICES,
+    setColumnState,
+    toggleComment,
+    trelloTokenPage,
+  } from '../../lib/integrations';
   import { api } from '../../lib/ipc';
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
@@ -340,7 +349,7 @@
         <span class="k">{SERVICES[id].container}</span>
         <select
           class="field select"
-          aria-label={t(`integrations.sources.pick.${id}`)}
+          aria-label={pickLabel(id)}
           value={linking[containersKey(id)] ?? current?.container ?? ''}
           disabled={!!linking[containersKey(id)]}
           onchange={(e) => pick(id, e.currentTarget.value)}

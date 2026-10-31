@@ -421,7 +421,6 @@ export const en: Catalog = {
       'docs-space': 'The Docs space',
       workflows: 'Workflows',
       'shared-memory': 'Shared memory',
-      'code-index': 'Code index',
       mcp: 'The MCP server',
       accounts: 'Several accounts',
       usage: 'Quotas and cost',

@@ -176,6 +176,8 @@ export default {
     devPrint: 'Aucune : relu à chaque changement',
     store: 'store.escouade.dev',
     repo: 'Dépôt',
+    folderLabel: 'Dossier',
+    folderTip: 'Ouvrir le dossier du plugin sur GitHub, à son étiquette',
     tagLabel: 'Étiquette',
     archiveSame: 'archive reçue identique',
     storePrint: '{print} · archive reçue identique',

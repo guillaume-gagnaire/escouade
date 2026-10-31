@@ -746,7 +746,7 @@ fn schema_of(f: &Field) -> Value {
                 {
                     "type": "object",
                     "properties": {
-                        "source": { "type": "string", "enum": crate::model::Service::ALL },
+                        "source": { "type": "string", "enum": crate::integrations::source::registry().services() },
                         "key": { "type": "string" },
                         "url": { "type": "string" },
                     },

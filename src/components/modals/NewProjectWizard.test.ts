@@ -317,69 +317,14 @@ describe('the new project’s assistant', () => {
     expect(be.called('create_agent')).toHaveLength(0);
   });
 
-  it('offers the code index in the summary, off, says what it does and that it stays here, and turns it on once made (ESC-254)', async () => {
-    const be = backend({ set_code_index: () => ({ enabled: true, status: { files: 3 }, excluded: [] }) });
+  it('offers nothing to index in the summary (ESC-310)', async () => {
+    backend();
     render(NewProjectModal);
     await typePath();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
     await userEvent.click(screen.getByRole('button', { name: /Récapitulatif/ }));
-    const offer = document.querySelector('[data-wizard-code-index]') as HTMLElement;
-    expect(within(offer).getByText(/trouvent le code plus vite/)).toBeInTheDocument();
-    expect(within(offer).getByText(/Tout reste sur cette machine/)).toBeInTheDocument();
-    // Not a private project: nothing said of one.
-    expect(within(offer).queryByText(/Projet privé/)).toBeNull();
-    const sw = within(offer).getByRole('switch', { name: 'Indexer le code' });
-    expect(sw).toHaveAttribute('aria-checked', 'false');
-    await userEvent.click(sw);
-    await userEvent.click(screen.getByRole('switch', { name: 'Créer un premier agent' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Créer le projet' }));
-    await waitFor(() => expect(app.modal).toBeNull());
-    await waitFor(() => expect(be.called('set_code_index')[0]?.args).toEqual({ id: 'new', enabled: true }));
-  });
-
-  it('leaves the code index off unless asked, and says what a private project keeps to itself', async () => {
-    const be = backend();
-    render(NewProjectModal);
-    await typePath();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
-    await userEvent.click(screen.getByRole('button', { name: /Compte/ }));
-    await userEvent.click(screen.getByRole('switch', { name: 'Projet privé' }));
-    await userEvent.click(screen.getByRole('button', { name: /Récapitulatif/ }));
-    const offer = document.querySelector('[data-wizard-code-index]') as HTMLElement;
-    expect(within(offer).getByText(/son index ne sert qu’à ses propres agents/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('switch', { name: 'Créer un premier agent' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Créer le projet' }));
-    await waitFor(() => expect(app.modal).toBeNull());
-    expect(be.called('set_code_index')).toHaveLength(0);
-  });
-
-  it('starts the code index from « Index du code sur tous les projets », the project following it unless changed (ESC-293)', async () => {
-    app.settings.codeIndexAll = true;
-    const be = backend({ set_code_index: () => ({ enabled: false, chosen: true, status: { files: 0 }, excluded: [] }) });
-    const { unmount } = render(NewProjectModal);
-    await typePath();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
-    await userEvent.click(screen.getByRole('button', { name: /Récapitulatif/ }));
-    const offer = () => document.querySelector('[data-wizard-code-index]') as HTMLElement;
-    expect(within(offer()).getByRole('switch', { name: 'Indexer le code' })).toHaveAttribute('aria-checked', 'true');
-    await userEvent.click(screen.getByRole('switch', { name: 'Créer un premier agent' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Créer le projet' }));
-    await waitFor(() => expect(app.modal).toBeNull());
-    // Left as the app says: no choice of its own, it follows (the backend reads it).
-    expect(be.called('set_code_index')).toHaveLength(0);
-    unmount();
-
-    // Turned off here: a choice of the project's.
-    app.modal = { kind: 'newProject' };
-    render(NewProjectModal);
-    await typePath();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
-    await userEvent.click(screen.getByRole('button', { name: /Récapitulatif/ }));
-    await userEvent.click(within(offer()).getByRole('switch', { name: 'Indexer le code' }));
-    await userEvent.click(screen.getByRole('switch', { name: 'Créer un premier agent' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Créer le projet' }));
-    await waitFor(() => expect(app.modal).toBeNull());
-    await waitFor(() => expect(be.called('set_code_index')[0]?.args).toEqual({ id: 'new', enabled: false }));
+    expect(screen.getByRole('switch', { name: 'Créer un premier agent' })).toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: /Indexer/ })).toBeNull();
   });
 
   it('says a repository without commit, and makes its first commit', async () => {
@@ -621,6 +566,42 @@ describe('the assistant’s private project and Kanban (ESC-163)', () => {
       expect(screen.getByRole('switch', { name: 'Projet privé' })).toHaveAttribute('aria-checked', 'true');
       await userEvent.click(screen.getByRole('button', { name: /Départ/ }));
     }
+  });
+
+  it('makes a project without workflows when « Pas de workflow pour ce projet » is chosen, and says so (ESC-309)', async () => {
+    const be = backend();
+    render(NewProjectModal);
+    await typePath();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
+    await userEvent.click(screen.getByRole('button', { name: /Kanban/ }));
+    const choice = screen.getByRole('radiogroup', { name: 'Workflows du projet' });
+    expect(within(choice).getByRole('radio', { name: 'Lire les workflows' })).toBeChecked();
+    await userEvent.click(within(choice).getByRole('radio', { name: 'Pas de workflow pour ce projet' }));
+    await userEvent.click(screen.getByRole('button', { name: /Récapitulatif/ }));
+    expect(screen.getByText('Workflows', { selector: 'dt' }).nextElementSibling?.textContent).toBe('Pas de workflow pour ce projet');
+    await userEvent.click(screen.getByRole('button', { name: 'Créer le projet' }));
+    await waitFor(() => expect(app.modal).toBeNull());
+    expect(be.called('update_project')[0].args.project).toMatchObject({ id: 'new', workflowsEnabled: false });
+  });
+
+  it('takes « Pas de workflow pour ce projet » from the folder’s .escouade.yml (ESC-309)', async () => {
+    const preview = project({
+      id: '',
+      path: 'C:\code\atlas',
+      workflowsEnabled: false,
+      shared: {
+        local: [],
+        trusted: '',
+        file: { keys: ['workflows.enabled'], values: {}, warnings: [], error: null, version: 1, pending: null },
+      },
+    });
+    fakeBackend({ inspect_folder: () => folder(), inspect_setup: () => setup(), shared_preview: () => preview });
+    render(NewProjectModal);
+    await typePath();
+    await waitFor(() => expect(screen.getByRole('radio', { name: /^Réglages de .escouade.yml/ })).toHaveAttribute('aria-checked', 'true'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
+    await userEvent.click(screen.getByRole('button', { name: /Kanban/ }));
+    expect(screen.getByRole('radio', { name: 'Pas de workflow pour ce projet' })).toBeChecked();
   });
 
   it('takes « Projet privé » and the Kanban from the folder’s .escouade.yml, never public when new projects are private', async () => {

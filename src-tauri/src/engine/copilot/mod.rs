@@ -699,8 +699,57 @@ static USER_CONFIG: UserConfig = UserConfig {
 };
 
 impl Engine for Copilot {
+    /// Signed in by `copilot login` in the account's folder (ESC-40).
+    fn store(&self) -> crate::accounts::Store {
+        use crate::accounts::{Store, COPILOT_SHARED_DIRS, COPILOT_SHARED_FILES};
+        Store {
+            home: ".copilot",
+            var: "COPILOT_HOME",
+            files: &COPILOT_SHARED_FILES,
+            dirs: &COPILOT_SHARED_DIRS,
+            login: &["login"],
+            xdg: None,
+        }
+    }
+
+    /// The user its folder is signed in to (`config.json`), shown `@login`; the token stays in the
+    /// keychain.
+    fn account_status<'a>(
+        &'a self,
+        account: &'a crate::model::Account,
+        settings: &'a crate::model::Settings,
+    ) -> BoxFuture<'a, crate::accounts::AccountStatus> {
+        let dir = crate::accounts::config_dir(account, settings);
+        let login = crate::accounts::copilot_sign_in(&dir);
+        Box::pin(async move {
+            crate::accounts::AccountStatus {
+                connected: login.is_some(),
+                stamp: login.clone(),
+                email: login.map(|l| format!("@{l}")),
+                dir: dir.to_string_lossy().into_owned(),
+            }
+        })
+    }
+
+    fn workflow_folders(&self) -> crate::workflow::Folders {
+        use crate::workflow::DocKind;
+        &[
+            (".github/prompts", DocKind::Command),
+            (".github/skills", DocKind::Skill),
+            (".github/agents", DocKind::Agent),
+        ]
+    }
+
     fn id(&self) -> EngineId {
-        EngineId::Copilot
+        EngineId::COPILOT
+    }
+
+    fn session_home(&self) -> Option<crate::fence::HomeKind> {
+        Some(crate::fence::HomeKind::Copilot)
+    }
+
+    fn principal_sessions(&self) -> bool {
+        true
     }
 
     fn name(&self) -> &'static str {

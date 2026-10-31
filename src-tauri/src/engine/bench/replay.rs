@@ -105,12 +105,12 @@ pub(crate) fn replay(engine: &dyn Engine, flux: &str, agent: &Value, conv: &Path
     // the turn (made up at each replay as the times are): there must be one, and it is not kept.
     let timed = matches!(
         engine.id(),
-        crate::model::EngineId::Copilot
-            | crate::model::EngineId::Opencode
-            | crate::model::EngineId::Cursor
-            | crate::model::EngineId::Vibe
-            | crate::model::EngineId::Agy
-            | crate::model::EngineId::Gemini
+        crate::model::EngineId::COPILOT
+            | crate::model::EngineId::OPENCODE
+            | crate::model::EngineId::CURSOR
+            | crate::model::EngineId::VIBE
+            | crate::model::EngineId::AGY
+            | crate::model::EngineId::GEMINI
     );
     let items = rt
         .conv

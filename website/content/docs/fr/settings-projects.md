@@ -20,7 +20,7 @@ Quand le `.escouade.yml` du projet propose des plugins (`plugins.recommended`) q
 | « Lettres de la tuile » | Ce que dit la tuile du projet dans la barre des projets : une à trois lettres ou chiffres (« API », « v2 »), ou un emoji seul. Le reste de ce que tu tapes (espaces, signes, une quatrième lettre) ne s’écrit pas. La tuile est montrée à côté du champ, telle que la barre la dessinera. | Vide : les initiales du nom (`demo-api` → « DA », `infra` → « In »), montrées en indication dans le champ |
 | « Logo » | Une image à la place des lettres : « Choisir une image… » la prend (PNG, JPEG, WebP, SVG ou ICO, 1 Mo au plus), « Retirer » revient aux lettres. Elle prend la forme de la tuile, entière, sur la couleur du projet là où elle est transparente ; les agents qui attendent, ceux qui travaillent, le cadenas d’un projet privé et l’alerte restent dessinés par-dessus. | Aucun |
 | « Libellé sous la tuile » | Un libellé sous la tuile du projet, dans la barre des projets, sur une ligne et coupé en « … » s’il est trop long (son nom entier reste dans l’infobulle). L’interrupteur l’allume ; le champ donne un texte plus court que le nom, 12 caractères au plus. Élargie au-delà de 160 px, la barre montre ce texte (ou le nom) à droite de chaque tuile, allumé ou non. | Éteint ; vide, le texte est le nom du projet |
-| « Compte préféré » | Le compte sur lequel partent les nouveaux agents et les tickets du projet. Visible seulement avec plusieurs comptes. Choix : « Automatique » (le premier compte actif sous le seuil de pause, dans l’ordre des comptes) ou un des comptes actifs qui servent ce projet. | « Automatique » |
+| « Compte préféré » | Le compte sur lequel partent les nouveaux agents et les tickets du projet. Visible seulement avec plusieurs comptes. Choix : « Automatique » (le premier compte actif « bon », dans l’ordre des comptes : 5 h sous le seuil, semaine au rythme) ou un des comptes actifs qui servent ce projet. | « Automatique » |
 
 Le logo est reconnu par son contenu, quelle que soit son extension. Une image trop lourde, illisible ou d’un autre format est refusée avec un message qui dit pourquoi (« « big.png » pèse 3 Mo : un logo pèse 1 Mo au plus. »), et la tuile reste comme elle était. Escouade en garde une copie dans son dossier de données, sous le projet : déplacer ou effacer le fichier d’origine ne change rien. Un SVG est affiché comme une image : rien de ce qu’il contient ne s’exécute. Les lettres et le logo restent sur ce poste, comme le nom et la couleur : ils ne vont pas dans `.escouade.yml`. Un projet fermé puis rouvert les retrouve ; fermé en effaçant son historique (ou son historique effacé plus tard), il efface sa copie du logo. Les mêmes champs sont dans l’assistant « Nouveau projet », sous le nom et la couleur.
 
@@ -69,9 +69,11 @@ Escouade lit le workflow du projet dans les fichiers de tes harness : leurs comm
 - **Lu par les règles à 10:12** : l’heure de la lecture, et les fichiers lus, dossier par dossier. **Relire** refait la lecture.
 - **Affiner avec un agent** : un agent court relira ce que les règles ont trouvé. Le bouton arrive dans une prochaine version.
 - **Relire quand les fichiers changent** : quand la fenêtre revient au premier plan, si un fichier lu a changé. Éteint, seul « Relire » relit.
+- **Workflows du projet** : « Lire les workflows » (par défaut) ou « Pas de workflow pour ce projet », qui coupe leur lecture et leur écriture tant qu’il est choisi ; la section le dit, avec comment le défaire. Partagé par la clé `workflows.enabled` de `.escouade.yml`. Voir [n’en avoir aucun](workflows#supprimer-un-workflow-ou-n-en-avoir-aucun).
 - **Trouvés** : les workflows du projet (le nombre d’étapes, de portes et de sous-agents), la boucle des tickets du Kanban, et les commandes seules, qui ne sont pas des workflows. Un clic choisit celui dont tu corriges les étapes.
 - **Étapes** : renomme une étape, fusionne-la avec la suivante, retire-la, déplace-la (glisse son numéro, ou Alt+↑ et Alt+↓ dans son nom), ajoute celle que la lecture a manquée avec ce qui la signale (une commande, un sous-agent, un fichier écrit). Une étape devinée, en pointillé, attend « Garder » ou « Retirer ». « Ce n’est pas un workflow » l’écarte, « Rétablir » le reprend. Tes corrections passent devant une nouvelle lecture ; celle qui ne correspond plus à rien est signalée.
 - **Où garder la configuration des workflows** : « Dans le dépôt » (par défaut) ou « Sur cette machine », pour les workflows tirés de la config du dépôt. Chaque workflow dit où il est gardé : « dans le dépôt » ou « sur cette machine (hors du dépôt) » ; ceux de tes propres dossiers (`~/.claude`, GSD…) restent toujours sur cette machine. Voir [où c’est gardé](workflows#ou-c-est-garde).
+- **Supprimer ce workflow** : son fichier est supprimé tout de suite, et la relecture ne le recrée pas (un fichier effacé à la main aussi). **Supprimés** les liste, avec « Rétablir » ; celui dont la source a changé est proposé à nouveau (« Reprendre » ou « Laisser supprimé »).
 - **Mis à jour par la relecture** : une relecture a trouvé le workflow changé et a mis son fichier à jour (l’infobulle dit ce qui a changé) ; tes corrections restent.
 - **Du dépôt** : un workflow que cette machine ne lit pas elle-même, venu du fichier d’un coéquipier ; il est montré et suivi quand même. « Retirer du dépôt » supprime son fichier.
 - Un fichier illisible est dit sous la lecture, avec son chemin et la raison.
@@ -195,7 +197,7 @@ Fermer est refusé tant que la validation d’un ticket du projet tourne : « L
 
 | Réglage | Effet | Défaut |
 | --- | --- | --- |
-| « Index du code sur tous les projets » | Allume l’[index du code](code-index#sur-tous-les-projets) de chaque projet qui n’a pas fait son propre choix : ils sont lus un par un, en arrière-plan. La couper efface leur index, après une confirmation qui dit combien de projets le perdent. Enregistré tout de suite, sans **Enregistrer**. | Désactivé |
+| « Recherche par le sens » | Télécharge le modèle des vecteurs, un seul pour tous les projets de cette machine : la [mémoire partagée](shared-memory) et les [docs](docs-space) se cherchent alors par le sens en plus des mots. La progression s’affiche, **Annuler** garde ce qui est venu (**Reprendre** continue), **Effacer** le retire. Rien ne sort de la machine. | Pas téléchargé |
 
 ## Nouveaux projets
 
@@ -233,10 +235,6 @@ L’interrupteur « Partir d’un projet vierge » (« L’historique reste d
 
 > [!NOTE]
 > Un projet fermé avant cette version a déjà perdu son historique : il n’y a rien à retrouver pour lui.
-
-## Index du code
-
-Le groupe « Index du code » allume l’[index du code](code-index) du projet (**Indexer ce projet**) : il dit ce que l’index trouve, que tout reste sur la machine, et ce qu’il contient. Tant que le projet n’a pas fait son propre choix, il suit **Index du code sur tous les projets** (voir plus bas) et le dit ; un choix fait ici est gardé, et **Suivre le réglage de l’app** y revient. Pour un projet privé, il dit ce qui reste hors de l’index. **Recherche par le sens** télécharge le modèle des vecteurs, avec sa progression et **Annuler**.
 
 ## Mémoire partagée
 

@@ -93,6 +93,10 @@ async function copyRepo() {
       {{ words.plugin.transferred(page.status.transferredFrom, words.date(page.status.transferredAt)) }}
     </p>
 
+    <p v-if="page.status?.sourceChangedAt && page.status.sourceFrom" class="band">
+      {{ words.plugin.sourceChanged(page.status.sourceFrom, words.date(page.status.sourceChangedAt)) }}
+    </p>
+
     <nav v-if="!page.builtin" class="tabs">
       <NuxtLink :class="{ on: tab === 'readme' }" :to="tabLink('readme')">{{ words.plugin.tabs.readme }}</NuxtLink>
       <NuxtLink :class="{ on: tab === 'docs' }" :to="tabLink('docs')"
@@ -198,11 +202,26 @@ async function copyRepo() {
                 ><a class="v" :href="repoUrl!" rel="nofollow noopener noreferrer">github.com/{{ page.latest.repository }}</a></span
               >
             </li>
+            <li v-if="page.latest.path">
+              <span class="dot"><StoreIcon name="box" /></span
+              ><span
+                ><span class="k">{{ words.plugin.folder }}</span
+                ><a
+                  class="v folder"
+                  :href="`${repoUrl}/tree/${encodeURIComponent(page.latest.tag)}/${page.latest.path}`"
+                  rel="nofollow noopener noreferrer"
+                  >{{ page.latest.path }}</a
+                ></span
+              >
+            </li>
             <li>
               <span class="dot"><StoreIcon name="tag" /></span
               ><span
                 ><span class="k">{{ words.plugin.tag }}</span
-                ><a class="v" :href="`${repoUrl}/tree/${page.latest.commit}`" rel="nofollow noopener noreferrer"
+                ><a
+                  class="v"
+                  :href="`${repoUrl}/tree/${page.latest.commit}${page.latest.path ? `/${page.latest.path}` : ''}`"
+                  rel="nofollow noopener noreferrer"
                   >{{ page.latest.tag }} → {{ short(page.latest.commit) }}</a
                 ></span
               >

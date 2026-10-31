@@ -138,6 +138,7 @@ export default defineZone('wizard', {
       agents: 'Ticket agents',
       harness: 'Harness',
       private: 'Private project',
+      workflows: 'Workflows',
       commit: 'Commits',
       integrations: 'Integrations',
     },

@@ -56,6 +56,8 @@ board:
   model: opus
   effort: high
   mode: plan
+workflows:
+  enabled: false
 plugins:
   recommended: [dev.exemple.slack]
 ";
@@ -117,6 +119,24 @@ fn every_key_of_version_1_is_read() {
     assert_eq!(v("board.effort"), json!("high"));
     assert_eq!(v("board.mode"), json!("plan"));
     assert_eq!(v("plugins.recommended"), json!(["dev.exemple.slack"]));
+    assert_eq!(v("workflows.enabled"), json!(false));
+}
+
+/// « Pas de workflow pour ce projet » (ESC-309): a key of the file, true when absent.
+#[test]
+fn no_workflow_for_the_project_is_a_key_of_the_file() {
+    let k = pf::key_of("workflows.enabled").unwrap();
+    assert_eq!(k.kind, pf::Kind::Bool);
+    assert!(!k.command && !k.file_only);
+    let mut p = project();
+    assert!(p.workflows_enabled);
+    assert_eq!(pf::get(&p, "workflows.enabled"), json!(true));
+    pf::set(&mut p, "workflows.enabled", &json!(false));
+    assert!(!p.workflows_enabled);
+    assert_eq!(pf::get(&p, "workflows.enabled"), json!(false));
+    let schema = pf::schema();
+    let key = &schema["properties"]["workflows"]["properties"]["enabled"];
+    assert_eq!(key["type"], "boolean");
 }
 
 /// The plugins a project proposes and their settings (PLG-14): read and kept in the file's values,
@@ -511,7 +531,7 @@ fn applied_settings_change_the_project_commands_wait_for_trust() {
     let a = pf::apply(&mut p, &r);
     // Every setting without effect on the machine applies.
     assert!(p.worktree_per_agent);
-    assert_eq!(p.engine, Some(EngineId::Codex));
+    assert_eq!(p.engine, Some(EngineId::CODEX));
     assert_eq!(p.worktree_dir, "../app-worktrees");
     assert_eq!(p.worktree_copy, [".env*", "config/local.json"]);
     assert_eq!(p.agent_branch_prefix, "agent/");
@@ -1195,6 +1215,59 @@ async fn the_file_changed_is_read_again_its_new_commands_asked_again() {
     assert_eq!(p.board.strategy, "squash");
 }
 
+/// ESC-309: `workflows.enabled: false` in the file of a project shared, read as it opens or pulled:
+/// nothing read nor written of its workflows.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_shared_file_without_workflows_stops_their_reading_and_writing() {
+    let h = harness("pf-no-workflows");
+    let (p, r) = shared_project(
+        &h,
+        "version: 1
+workflows:
+  enabled: false
+",
+    )
+    .await;
+    let cmds = r.join(".claude/commands");
+    std::fs::create_dir_all(&cmds).unwrap();
+    std::fs::write(
+        cmds.join("one.md"),
+        "Do one, then /two.
+",
+    )
+    .unwrap();
+    std::fs::write(
+        cmds.join("two.md"),
+        "Do two.
+",
+    )
+    .unwrap();
+    assert!(!h.core.project(&p.id).unwrap().workflows_enabled);
+    let scan = h.core.refresh_workflows(&p.id, true).await.unwrap();
+    assert!(scan.off && scan.workflows.is_empty());
+    assert!(!r.join(".escouade/workflows").exists());
+    // A pull takes it out: read and written again.
+    std::fs::write(
+        r.join(pf::FILE),
+        "version: 1
+",
+    )
+    .unwrap();
+    std::fs::write(
+        r.join(pf::FILE),
+        "version: 1
+workflows:
+  enabled: true
+",
+    )
+    .unwrap();
+    h.core.read_shared(&p.id, false).unwrap();
+    let scan = h.core.refresh_workflows(&p.id, false).await.unwrap();
+    assert!(!scan.off);
+    assert_eq!(scan.workflows.len(), 1);
+    assert!(r.join(".escouade/workflows").is_dir());
+}
+
 #[tokio::test]
 async fn a_setting_set_in_the_window_goes_before_the_file_until_written_into_it() {
     let h = harness("pf-local");
@@ -1421,4 +1494,34 @@ async fn a_project_that_proposes_plugins_says_so_at_its_opening_and_installs_not
         .unwrap();
     assert!(none.is_empty());
     assert!(h.core.project_plugin("gone", "dev.exemple.slack").is_none());
+}
+
+/// The index of the code's symbols is gone (ESC-310): a file that still sets it is read all the
+/// same, the key left out without a warning, and no file written sets it.
+#[test]
+fn a_file_with_the_key_of_the_retired_index_is_read_without_a_warning() {
+    for text in [
+        "version: 1\ncode_index: true\nworktrees:\n  dir: wt\n",
+        "version: 1\ncodeIndex:\n  enabled: true\nworktrees:\n  dir: wt\n",
+    ] {
+        let r = read(text);
+        assert_eq!(r.values["worktrees.dir"], json!("wt"));
+        assert_eq!(r.values.len(), 1);
+        assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    }
+    assert!(pf::KEYS
+        .iter()
+        .all(|k| !pf::RETIRED.iter().any(|r| k.path.starts_with(r))));
+    let schema = pf::schema().to_string();
+    assert!(!schema.contains("code_index") && !schema.contains("codeIndex"));
+}
+
+#[test]
+fn writing_the_file_again_takes_the_key_of_the_retired_index_away() {
+    let existing = "version: 1\n# ours\ncode_index: true\nworktrees:\n  dir: wt\n";
+    let out = pf::write(Some(existing), &[("worktrees.per_agent", json!(true))]).unwrap();
+    assert!(!out.contains("code_index"), "{out}");
+    assert!(out.contains("# ours") && out.contains("dir: wt") && out.contains("per_agent: true"));
+    let all = pf::export_values(&project());
+    assert!(all.iter().all(|(k, _)| !k.contains("index")));
 }

@@ -1,3 +1,6 @@
+import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { migrateDb, openDb, type Db } from '../../server/utils/db';
@@ -48,6 +51,33 @@ describe.skipIf(!url)('the database', () => {
       'versions',
       'webhook_deliveries',
     ]);
+  });
+
+  it('gives the plugins and versions already there the root as their folder (ESC-313, migration 0009)', async () => {
+    // The base as it was before 0009, a plugin and its version in it, then 0009 played.
+    const before = await mkdtemp(join(tmpdir(), 'store-migrations-'));
+    try {
+      await cp('./server/db/migrations', before, { recursive: true });
+      const journal = JSON.parse(await readFile(join(before, 'meta/_journal.json'), 'utf8'));
+      journal.entries = journal.entries.filter((e: { idx: number }) => e.idx < 9);
+      await writeFile(join(before, 'meta/_journal.json'), JSON.stringify(journal));
+      const admin = new pg.Client({ connectionString: url });
+      await admin.connect();
+      await admin.query(
+        'drop schema if exists drizzle cascade; drop schema if exists pgboss cascade; drop schema public cascade; create schema public;',
+      );
+      await admin.end();
+      await migrateDb(db, before);
+      await pool.query(`insert into plugins (id, repo_id, repo_full_name) values ('io.github.sam.old', 1, 'sam/old')`);
+      await pool.query(
+        `insert into versions (plugin_id, installation_id, repo_id, repo_full_name, tag, commit) values ('io.github.sam.old', 1, 1, 'sam/old', 'v1.0.0', 'c')`,
+      );
+      await migrateDb(db, './server/db/migrations');
+      expect((await pool.query('select path, source_from from plugins')).rows).toEqual([{ path: '', source_from: null }]);
+      expect((await pool.query('select path from versions')).rows).toEqual([{ path: '' }]);
+    } finally {
+      await rm(before, { recursive: true, force: true });
+    }
   });
 
   it('keeps the last beat of the queue', async () => {

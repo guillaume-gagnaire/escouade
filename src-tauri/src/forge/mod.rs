@@ -458,27 +458,80 @@ pub struct Credentials {
     pub api: Option<String>,
 }
 
+/// What a host's CLI printed and where the token is in it: declared, so that a plugin can say it
+/// without code.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CliRead {
+    /// The whole of stdout, trimmed (`gh auth token`).
+    Stdout,
+    /// Stdout, trimmed, when it is one word (`az account get-access-token`).
+    StdoutWord,
+    /// After a label, on a line of stdout then stderr, when it is one word without a `*`
+    /// (`glab auth status --show-token` prints `✓ Token: glpat-…`).
+    After(String),
+}
+
+impl CliRead {
+    /// The token in what the command printed.
+    pub fn token(&self, stdout: &str, stderr: &str) -> Option<String> {
+        match self {
+            Self::Stdout => Some(stdout.trim().to_string()).filter(|t| !t.is_empty()),
+            Self::StdoutWord => {
+                let t = stdout.trim();
+                (!t.is_empty() && !t.contains(char::is_whitespace)).then(|| t.to_string())
+            }
+            Self::After(label) => format!("{stdout}\n{stderr}").lines().find_map(|line| {
+                let (_, t) = line.split_once(label.as_str())?;
+                let t = t.trim();
+                (!t.is_empty() && !t.contains('*') && !t.contains(' ')).then(|| t.to_string())
+            }),
+        }
+    }
+}
+
 /// A command that prints the token of a host's CLI (`gh auth token --hostname <host>`).
 #[derive(Debug, Clone)]
 pub struct CliToken {
-    pub program: &'static str,
+    pub program: String,
     pub args: Vec<String>,
     /// How the user logs it in (`gh auth login`, `az login`).
-    pub login: &'static str,
-    /// The token in what the command printed (stdout, then stderr).
-    pub parse: fn(&str, &str) -> Option<String>,
+    pub login: String,
+    /// The token in what the command printed.
+    pub read: CliRead,
 }
 
-/// A path to ask an instance whose host is unknown, and what in its answer says it is this host's.
+impl CliToken {
+    /// The token in what the command printed (stdout, then stderr).
+    pub fn parse(&self, stdout: &str, stderr: &str) -> Option<String> {
+        self.read.token(stdout, stderr)
+    }
+}
+
+/// A path to ask an instance whose host is unknown, and what in its answer says it is this host's:
+/// declared (a status, or a status with a key holding a string), so that a plugin can say it
+/// without code.
+#[derive(Debug, Clone, Default)]
 pub struct Probe {
-    pub path: &'static str,
-    pub matches: fn(u16, &Value) -> bool,
+    pub path: String,
+    /// Statuses that say it by themselves (GitLab's 401 without a token).
+    pub statuses: Vec<u16>,
+    /// The status that says it with `key`.
+    pub key_status: u16,
+    /// The key of the answer that holds a string (`version`); empty: none is asked.
+    pub key: String,
+}
+
+impl Probe {
+    pub fn matches(&self, status: u16, body: &Value) -> bool {
+        self.statuses.contains(&status)
+            || (status == self.key_status && !self.key.is_empty() && body[&self.key].is_string())
+    }
 }
 
 /// A code host: what Escouade knows of it, and the client of an account.
 pub trait Provider: Send + Sync {
     /// What the accounts and the window know it by: `github`, `gitlab`, `bitbucket`, `gitea`.
-    fn kind(&self) -> &'static str;
+    fn kind(&self) -> String;
     /// As the window says it.
     fn name(&self) -> &'static str;
     /// Its word for a pull request: « MR » on GitLab, « PR » elsewhere.
@@ -522,7 +575,7 @@ pub trait Provider: Send + Sync {
         false
     }
     /// The rights its tokens need, as the host names them.
-    fn scopes(&self) -> &'static [&'static str];
+    fn scopes(&self) -> Vec<String>;
     /// The page that makes a token on `url`'s instance.
     fn token_page(&self, url: &str) -> String;
     /// The command of its CLI that gives the token of `host`, when it has one.
@@ -541,15 +594,18 @@ pub struct Registry {
 impl Registry {
     /// GitHub, GitLab, Bitbucket Cloud, Gitea and Forgejo, Azure DevOps.
     pub fn standard() -> Self {
-        Self {
-            providers: vec![
-                Arc::new(github::GithubProvider),
-                Arc::new(gitlab::GitlabProvider),
-                Arc::new(bitbucket::BitbucketProvider),
-                Arc::new(gitea::GiteaProvider),
-                Arc::new(azure::AzureProvider),
-            ],
-        }
+        Self::from_providers(vec![
+            Arc::new(github::GithubProvider),
+            Arc::new(gitlab::GitlabProvider),
+            Arc::new(bitbucket::BitbucketProvider),
+            Arc::new(gitea::GiteaProvider),
+            Arc::new(azure::AzureProvider),
+        ])
+    }
+
+    /// The hosts of a list, in its order (the first-party ones, then the plugins').
+    pub fn from_providers(providers: Vec<Arc<dyn Provider>>) -> Self {
+        Self { providers }
     }
 
     /// One more host (a later one, a fake one in tests).
@@ -602,7 +658,7 @@ impl Registry {
             None => url,
         };
         Some(Remote {
-            kind: provider.map(|p| p.kind().to_string()),
+            kind: provider.map(|p| p.kind()),
             host,
             url,
             repo,
@@ -661,10 +717,10 @@ pub fn refused(e: &anyhow::Error) -> bool {
 }
 
 /// The rights of `wanted` that `scopes` lacks.
-pub fn missing_scopes(wanted: &[&str], scopes: &[String]) -> Vec<String> {
+pub fn missing_scopes(wanted: &[String], scopes: &[String]) -> Vec<String> {
     wanted
         .iter()
-        .filter(|w| !scopes.iter().any(|s| s == *w))
+        .filter(|w| !scopes.contains(w))
         .map(|w| w.to_string())
         .collect()
 }

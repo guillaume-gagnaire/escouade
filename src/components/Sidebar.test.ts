@@ -1,7 +1,9 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { getDraft } from '../lib/drafts';
 import { buffers } from '../lib/editor/buffers.svelte';
+import { heldOf, hold } from '../lib/outbox.svelte';
 import { setLang } from '../lib/i18n';
 import { menu } from '../lib/menu.svelte';
 import { app } from '../lib/state.svelte';
@@ -732,6 +734,18 @@ describe('Sidebar remote control', () => {
       click('Archiver');
       await new Promise((r) => setTimeout(r));
       expect(order(backend, 'archive_agent')).toEqual(['term_kill', 'archive_agent']);
+    });
+
+    it('gives the messages held for it back to its draft, before archiving it', async () => {
+      const backend = fakeBackend();
+      render(Sidebar, { project: project() });
+      hold('a1', 'Pas perdu', [], 'turnEnd');
+      await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+      click('Archiver');
+      expect(heldOf('a1')).toEqual([]);
+      expect(getDraft('a1').text).toBe('Pas perdu');
+      await new Promise((r) => setTimeout(r));
+      expect(backend.called('archive_agent')).toHaveLength(1);
     });
 
     it('stops them before deleting their agent', async () => {

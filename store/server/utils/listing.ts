@@ -414,7 +414,7 @@ export async function docsOf(db: Db, dir: string, v: typeof versions.$inferSelec
   if (!v.archiveSha256) return null;
   try {
     const gz = await readFile(join(dir, 'sha256', v.archiveSha256.slice(0, 2), `${v.archiveSha256}.tar.gz`));
-    const docs = await renderDocs(readArchive(gz), { repo: v.repoFullName, commit: v.commit, keep: keepImage(dir) });
+    const docs = await renderDocs(readArchive(gz), { repo: v.repoFullName, commit: v.commit, path: v.path, keep: keepImage(dir) });
     await db.update(versions).set({ docs }).where(eq(versions.id, v.id));
     return docs;
   } catch (e) {
@@ -473,9 +473,12 @@ export async function pluginPage(db: Db | null, dir: string, id: string) {
       deletedAt: plugin.deletedAt?.toISOString() ?? null,
       transferredAt: plugin.transferredAt?.toISOString() ?? null,
       transferredFrom: plugin.transferredFrom,
+      sourceChangedAt: plugin.sourceChangedAt?.toISOString() ?? null,
+      sourceFrom: plugin.sourceFrom,
     },
     latest: {
       repository: v.repoFullName,
+      path: v.path,
       tag: v.tag,
       commit: v.commit,
       sha256: v.versionSha256,

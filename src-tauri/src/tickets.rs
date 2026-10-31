@@ -13,6 +13,7 @@ use crate::integrations;
 use crate::isola;
 use crate::leftovers;
 use crate::model::*;
+use crate::pace::Standing;
 use crate::switching::NoOther;
 use crate::telemetry::Event;
 use crate::testlaunch;
@@ -1257,6 +1258,13 @@ impl<R: Runtime> Core<R> {
     /// The accounts an agent of the app waits for the quota of (usage limit), each with when its
     /// first one resumes: no ticket starts on them meanwhile, but on another account one may.
     pub(crate) fn quota_paused(&self) -> BTreeMap<String, i64> {
+        self.quota_paused_for(None)
+    }
+
+    /// `quota_paused` as a ticket or an agent whose model is of the family `family` sees it: an
+    /// agent stopped by a model's own quota (`AgentMeta::limit_model`, ESC-312) holds that model's
+    /// alone, never one of an unknown model (None).
+    pub(crate) fn quota_paused_for(&self, family: Option<&str>) -> BTreeMap<String, i64> {
         let settings = self.settings.read().clone();
         let mut waiting = BTreeMap::new();
         for h in self.agents.read().values() {
@@ -1264,12 +1272,53 @@ impl<R: Runtime> Core<R> {
             let Some(at) = rt.meta.resume_at.filter(|_| !rt.meta.archived) else {
                 continue;
             };
+            if let Some(model) = &rt.meta.limit_model {
+                if family.is_none() || model_family(model).as_deref() != family {
+                    continue;
+                }
+            }
             let first = waiting
                 .entry(accounts::get(&settings, &rt.meta.account).id)
                 .or_insert(at);
             *first = (*first).min(at);
         }
         waiting
+    }
+
+    /// The family (`model::model_family`) of `model` on the account `account`: by the model its
+    /// `claude` told it resolves to (`default`, an alias), else by its name. None for an empty one.
+    pub(crate) fn family_on(&self, account: Option<&str>, model: &str) -> Option<String> {
+        let resolved = account.and_then(|a| {
+            let told = self.account_models.read();
+            let models = &told.get(a)?.models;
+            crate::engine::claude_told_model(models, model)
+                .map(|t| t.resolved_model.clone())
+                .filter(|r| !r.is_empty())
+        });
+        model_family(resolved.as_deref().unwrap_or(model))
+    }
+
+    /// The family of the model a ticket's agent would run (its own, else the one new agents of its
+    /// project go with): what the quota of one model holds back (ESC-312).
+    pub(crate) fn ticket_family(&self, t: &Ticket, engine: EngineId) -> Option<String> {
+        let model = if t.model.trim().is_empty() {
+            self.new_agent_defaults(&t.project_id, engine).model
+        } else {
+            t.model.clone()
+        };
+        let account = (!t.account.is_empty()).then_some(t.account.as_str());
+        self.family_on(account, &model)
+    }
+
+    /// The family of the model the agent runs: the one its conversation last went by, else its own.
+    pub(crate) fn agent_family(&self, agent_id: &str) -> Option<String> {
+        let (account, model) = {
+            let h = self.agent(agent_id).ok()?;
+            let rt = h.lock();
+            (rt.meta.account.clone(), rt.model_in_use())
+        };
+        let account = accounts::get(&self.settings.read(), &account).id;
+        self.family_on(Some(&account), &model)
     }
 
     /// The time the autopilot's pauses go by: the real one (ahead by `clock_ahead` in tests).
@@ -1303,7 +1352,8 @@ impl<R: Runtime> Core<R> {
     fn pause_for(&self, settings: &Settings, preferred: Option<&str>) -> Option<AutopilotPause> {
         let threshold = board::quota_threshold(settings.quota_pause);
         let accounts = accounts::candidates(settings, preferred);
-        let usage = self.usage.lock().accounts.clone();
+        // The pause of every ticket: a model's own quota (ESC-312) holds that model's alone.
+        let usage = accounts::seen_by(&self.usage.lock().accounts, None);
         let hold = self.hold.lock().clone();
         let waiting = self.quota_paused();
         board::autopilot_pause(
@@ -1342,6 +1392,16 @@ impl<R: Runtime> Core<R> {
     /// it, in the order of the accounts: never one of another harness. Refused when no active
     /// account of the harness serves the project (all reserved to others, Principal too).
     pub(crate) fn account_for_new(&self, project_id: &str, engine: EngineId) -> Result<String> {
+        self.account_for_new_as(project_id, engine, None)
+    }
+
+    /// `account_for_new` for an agent whose model is of the family `family` (ESC-312).
+    pub(crate) fn account_for_new_as(
+        &self,
+        project_id: &str,
+        engine: EngineId,
+        family: Option<&str>,
+    ) -> Result<String> {
         let all = self.settings.read().clone();
         let project = self.project(project_id).ok();
         // No account of the harness at all (ESC-128): one is to be added first.
@@ -1355,7 +1415,7 @@ impl<R: Runtime> Core<R> {
         let settings = self.project_accounts(&all, engine, project_id);
         let preferred =
             project.and_then(|p| accounts::preferred(&settings, &p.account).map(str::to_string));
-        self.pick_account(&settings, preferred.as_deref())
+        self.pick_account_for(&settings, preferred.as_deref(), family)
             .ok_or_else(|| accounts::no_account_of(engine))
     }
 
@@ -1373,28 +1433,46 @@ impl<R: Runtime> Core<R> {
         accounts::defaults(account.as_ref(), engine)
     }
 
-    /// `accounts::pick` as the board has it: a usable account is under the threshold, holds
-    /// nothing back (a pause after a usage limit) and has no agent waiting for its quota. When
-    /// none is, one that holds nothing back although over the threshold ("Reprendre
-    /// maintenant"), else the first active one. None without an active account.
+    /// `accounts::pick` as the board has it: a good account (`pace`: a short window under the
+    /// threshold, a long one on pace or under it), holds nothing back (a pause after a usage
+    /// limit) and has no agent waiting for its quota; failing that, the first whose only fault is
+    /// its pace. When none is, one that holds nothing back although out ("Reprendre maintenant"),
+    /// else the first active one. None without an active account.
     pub(crate) fn pick_account(
         &self,
         settings: &Settings,
         preferred: Option<&str>,
     ) -> Option<String> {
+        self.pick_account_for(settings, preferred, None)
+    }
+
+    /// `pick_account` for a model of the family `family`: a model's own quota (ESC-312) counts
+    /// for that model alone.
+    pub(crate) fn pick_account_for(
+        &self,
+        settings: &Settings,
+        preferred: Option<&str>,
+        family: Option<&str>,
+    ) -> Option<String> {
         let threshold = board::quota_threshold(settings.quota_pause);
+        // The quotas as `pace::judge` judges them for the model; what holds the tickets back beside
+        // the choice, as that model sees them (ESC-312).
         let usage = self.usage.lock().accounts.clone();
+        let seen = accounts::seen_by(&usage, family);
         let hold = self.hold.lock().clone();
-        let waiting = self.quota_paused();
+        let waiting = self.quota_paused_for(family);
         let now = self.pause_now();
         let held = |id: &str| {
             waiting.contains_key(id)
-                || board::account_pause(&usage, id, threshold, &hold, now).is_some()
+                || board::account_pause(&seen, id, threshold, &hold, now).is_some()
         };
         // Under « Changer de compte à » too, when it is the lower (ESC-148).
         let pick = board::pick_threshold(settings);
-        let usable = |id: &str| !held(id) && !accounts::over_threshold(&usage, id, pick, now);
-        let id = accounts::pick_where(settings, preferred, usable)?;
+        let rank = |id: &str| match held(id) {
+            true => Standing::Out,
+            false => accounts::standing(&usage, id, pick, now, family),
+        };
+        let id = accounts::pick_ranked(settings, preferred, rank)?;
         if !held(&id) {
             return Some(id);
         }
@@ -1408,8 +1486,15 @@ impl<R: Runtime> Core<R> {
     /// to waits for its quota (an agent waiting for its reset, a window over the threshold, a usage
     /// limit with no resume).
     /// Launched by hand (`by_hand`), by a usage limit alone (`project_limit`).
-    fn held(&self, project_id: &str, engine: EngineId, by_hand: bool) -> bool {
-        self.project_hold_as(project_id, engine, by_hand).is_some()
+    fn held(
+        &self,
+        project_id: &str,
+        engine: EngineId,
+        by_hand: bool,
+        family: Option<&str>,
+    ) -> bool {
+        self.project_hold_as(project_id, engine, by_hand, family)
+            .is_some()
     }
 
     /// What holds back the tickets, and the new agents, of the project on `engine`, if anything
@@ -1418,7 +1503,7 @@ impl<R: Runtime> Core<R> {
     /// quota is never held but by a usage limit. The tools that act refuse by it.
     #[cfg(test)]
     pub(crate) fn project_hold(&self, project_id: &str, engine: EngineId) -> Option<board::Held> {
-        self.project_hold_as(project_id, engine, false)
+        self.project_hold_as(project_id, engine, false, None)
     }
 
     /// What holds back a ticket or a new agent of the project asked for by hand, by a tool of
@@ -1426,14 +1511,16 @@ impl<R: Runtime> Core<R> {
     /// agent waiting for its reset, a pause after a limit). « Pause au-delà du quota » and the
     /// day's budget hold back the autopilot, never a hand (the user, 2026-10-28).
     pub(crate) fn project_limit(&self, project_id: &str, engine: EngineId) -> Option<board::Held> {
-        self.project_hold_as(project_id, engine, true)
+        self.project_hold_as(project_id, engine, true, None)
     }
 
+    /// A model's own quota (ESC-312) holds the tickets of a model of its family (`family`) alone.
     fn project_hold_as(
         &self,
         project_id: &str,
         engine: EngineId,
         by_hand: bool,
+        family: Option<&str>,
     ) -> Option<board::Held> {
         let settings = accounts::for_project(&self.settings.read(), engine, Some(project_id));
         let preferred = self
@@ -1442,9 +1529,12 @@ impl<R: Runtime> Core<R> {
             .and_then(|p| accounts::preferred(&settings, &p.account).map(str::to_string));
         let threshold = hold_threshold(settings.quota_pause, by_hand);
         let accounts = accounts::candidates(&settings, preferred.as_deref());
-        let usage = hold_usage(&self.usage.lock().accounts, by_hand);
+        let usage = hold_usage(
+            &accounts::seen_by(&self.usage.lock().accounts, family),
+            by_hand,
+        );
         let hold = self.hold.lock().clone();
-        let waiting = self.quota_paused();
+        let waiting = self.quota_paused_for(family);
         board::project_hold(
             &usage,
             &accounts,
@@ -1458,20 +1548,28 @@ impl<R: Runtime> Core<R> {
     /// What holds back what spends the account's quota when asked for by hand (`project_limit`),
     /// a message to one of its agents included: a usage limit alone.
     pub(crate) fn account_limit(&self, account: &str) -> Option<board::Held> {
-        self.account_hold_as(account, true)
+        self.account_hold_as(account, true, None)
     }
 
     /// What holds back anything that spends the account's quota, if anything does
     /// (`board::account_hold`): for the autopilot (`by_hand` false), « Pause au-delà du quota »
     /// and the day's budget too. An account the settings do not know is Principal, as for
     /// `quota_paused`.
-    fn account_hold_as(&self, account: &str, by_hand: bool) -> Option<board::Held> {
+    fn account_hold_as(
+        &self,
+        account: &str,
+        by_hand: bool,
+        family: Option<&str>,
+    ) -> Option<board::Held> {
         let settings = self.settings.read().clone();
         let id = accounts::get(&settings, account).id;
         let threshold = hold_threshold(settings.quota_pause, by_hand);
-        let usage = hold_usage(&self.usage.lock().accounts, by_hand);
+        let usage = hold_usage(
+            &accounts::seen_by(&self.usage.lock().accounts, family),
+            by_hand,
+        );
         let hold = self.hold.lock().clone();
-        let waiting = self.quota_paused();
+        let waiting = self.quota_paused_for(family);
         board::account_hold(&usage, &id, threshold, &hold, &waiting, self.pause_now())
     }
 
@@ -1505,6 +1603,12 @@ impl<R: Runtime> Core<R> {
     /// A ticket met the usage limit with no resume planned, on the account: the next one would
     /// meet it too, so none starts on it for a while (`board::LIMIT_PAUSE_MS`), or until
     /// "Reprendre maintenant".
+    /// The agent's last usage limit was a model's own quota (`AgentMeta::limit_model`, ESC-312).
+    fn limited_by_model(&self, agent_id: &str) -> bool {
+        self.agent(agent_id)
+            .is_ok_and(|h| h.lock().meta.limit_model.is_some())
+    }
+
     pub(crate) fn pause_after_limit(&self, account: &str) {
         self.hold_until(account, self.pause_now() + board::LIMIT_PAUSE_MS);
     }
@@ -1584,16 +1688,18 @@ impl<R: Runtime> Core<R> {
             }
             let ids = {
                 let tickets = self.tickets.read().clone();
-                let mut held: HashMap<(EngineId, bool), bool> = HashMap::new();
+                let mut held: HashMap<(EngineId, bool, Option<String>), bool> = HashMap::new();
                 board::to_start(&tickets, &p.id, &p.board, |t| {
                     let e = engine_of(t);
                     // One set on an account waits for that account alone (ESC-153).
                     if !t.account.is_empty() {
                         return self.ticket_held(&p, t, e);
                     }
+                    // A model's own quota holds that model's tickets alone (ESC-312).
+                    let family = self.ticket_family(t, e);
                     *held
-                        .entry((e, t.forced))
-                        .or_insert_with(|| self.held(&p.id, e, t.forced))
+                        .entry((e, t.forced, family.clone()))
+                        .or_insert_with(|| self.held(&p.id, e, t.forced, family.as_deref()))
                 })
             };
             // A board that told why nothing starts is looked at again even with nothing to start:
@@ -1818,7 +1924,8 @@ impl<R: Runtime> Core<R> {
                 Some(why) => self.back_to_auto(&t.id, &t.account, &why),
             }
         }
-        self.account_for_new(&project.id, engine)
+        let family = self.ticket_family(t, engine);
+        self.account_for_new_as(&project.id, engine, family.as_deref())
     }
 
     /// Why the ticket set on the account `id` may no longer go to it: gone, switched off, signed
@@ -1916,9 +2023,11 @@ impl<R: Runtime> Core<R> {
 
     /// What holds the ticket back (`ticket_held`), if anything does.
     fn ticket_hold(&self, project: &Project, t: &Ticket, engine: EngineId) -> Option<board::Held> {
+        let family = self.ticket_family(t, engine);
+        let family = family.as_deref();
         match self.pinned(project, t, engine) {
-            Some(id) => self.account_hold_as(&id, t.forced),
-            None => self.project_hold_as(&project.id, engine, t.forced),
+            Some(id) => self.account_hold_as(&id, t.forced, family),
+            None => self.project_hold_as(&project.id, engine, t.forced, family),
         }
     }
 
@@ -1994,8 +2103,7 @@ impl<R: Runtime> Core<R> {
     }
 
     /// The instructions added to a ticket's agent: its protocol, within the room its harness gives
-    /// it, then the code index's rule when the project has turned the index on (the room is kept
-    /// for it first, so the criteria give way before the rule does).
+    /// it.
     pub(crate) fn ticket_instructions(
         &self,
         project: &Project,
@@ -2006,25 +2114,16 @@ impl<R: Runtime> Core<R> {
         follow: Option<&str>,
     ) -> String {
         let engine = crate::engine::by_id(t.engine.unwrap_or(project.engine()));
-        let rule = self
-            .code_index_on(project)
-            .then(|| crate::codeindex::hint::rule(lang));
         let room = engine.instructions_room().map(|r| crate::engine::Room {
             max: r
                 .max
-                .saturating_sub(rule.as_deref().map_or(0, |x| (r.weigh)(&format!(" {x}"))))
                 // The shared memory's line, added after it (`core::with_memory`).
                 .saturating_sub((r.weigh)(&crate::memory::instruction(lang)) + 1)
                 // And the spec in Escouade's (ESC-278), added before it.
                 .saturating_sub(follow.map_or(0, |f| (r.weigh)(f) + 1)),
             weigh: r.weigh,
         });
-        let mut p = board::protocol_prompt_for(lang, t, ports, isola, room);
-        if let Some(rule) = rule {
-            p.push(' ');
-            p.push_str(&rule);
-        }
-        p
+        board::protocol_prompt_for(lang, t, ports, isola, room)
     }
 
     /// The ticket's agent: its worktree on `<prefix><key>` (`ticket/<key>`) from the target branch, its block of
@@ -2076,7 +2175,7 @@ impl<R: Runtime> Core<R> {
                     mode: Some(mode),
                     name: Some(board::ticket_agent_name(t)),
                     worktree: new_branch,
-                    // Within the room its harness gives it, the code index's rule included, and what
+                    // Within the room its harness gives it, and what
                     // it is told of the shared memory after it (`core::with_memory`).
                     append_prompt: Some(self.ticket_instructions(
                         project,
@@ -2191,7 +2290,10 @@ impl<R: Runtime> Core<R> {
         // autopilot pauses first, so that no pass starts one in the place this frees.
         let end = match end {
             TurnEnd::Limited if !resumes => {
-                self.pause_after_limit(&self.account_of(agent_id));
+                // A model's own quota (ESC-312) holds that model's tickets by its meter alone.
+                if !self.limited_by_model(agent_id) {
+                    self.pause_after_limit(&self.account_of(agent_id));
+                }
                 TurnEnd::Error(quota_lost(i18n::ui()))
             }
             end => end,
@@ -2295,12 +2397,13 @@ impl<R: Runtime> Core<R> {
         self.other_account(agent_id, threshold).ok()
     }
 
-    /// The account an agent goes on on by itself, leaving its own: the one `accounts::pick` gives
-    /// (the project's preferred account, else the first active one) when it is another than the
-    /// agent's, usable (signed in, under `threshold`, no pause after a usage limit, no agent of it
-    /// waiting for its reset), on the same side of WSL. A project that prefers the agent's account
-    /// keeps it there. Why there is none otherwise: `NoOther::Private` when only the accounts a
-    /// confined private project shares are left (ESC-141).
+    /// The account an agent goes on on by itself, leaving its own: the one `accounts::pick_ranked`
+    /// gives (the project's preferred account, else the first of the best active ones) when it is
+    /// another than the agent's, usable (signed in, one an agent would not leave at `threshold`:
+    /// `pace`, no pause after a usage limit, no agent of it waiting for its reset), on the same side
+    /// of WSL. A project that prefers the agent's account keeps it there. Why there is none
+    /// otherwise: `NoOther::Private` when only the accounts a confined private project shares are
+    /// left (ESC-141).
     pub(crate) fn other_account(
         &self,
         agent_id: &str,
@@ -2334,9 +2437,12 @@ impl<R: Runtime> Core<R> {
             .project(&project)
             .ok()
             .and_then(|p| accounts::preferred(&settings, &p.account).map(str::to_string));
+        // A model's own quota (ESC-312) counts for the agent's model alone.
+        let family = self.agent_family(agent_id);
         let usage = self.usage.lock().accounts.clone();
+        let seen = accounts::seen_by(&usage, family.as_deref());
         let hold = self.hold.lock().clone();
-        let waiting = self.quota_paused();
+        let waiting = self.quota_paused_for(family.as_deref());
         let now = self.pause_now();
         // A session does not go between Claude Code on Windows and in WSL (`move_session`).
         let in_wsl = |id: &str| {
@@ -2344,18 +2450,24 @@ impl<R: Runtime> Core<R> {
                 .is_some_and(|p| p.wsl().is_some())
         };
         let side = in_wsl(&current);
-        let usable = |id: &str| {
-            id != current
+        // The verdict on the account's quota, when it may take the agent at all: arriving on one
+        // it would leave at once (the same test) would send it back and forth.
+        let rank = |id: &str| {
+            let verdict = accounts::verdict(&usage, id, threshold, now, family.as_deref());
+            let usable = id != current
                 && in_wsl(id) == side
                 // Not signed in: its first turn would only fail (an account not read yet is).
                 && usage.iter().find(|u| u.id == id).is_none_or(|u| u.connected)
                 && !waiting.contains_key(id)
-                && board::account_pause(&usage, id, threshold, &hold, now).is_none()
-                && !accounts::over_threshold(&usage, id, threshold, now)
+                && board::account_pause(&seen, id, threshold, &hold, now).is_none()
+                && !verdict.leave;
+            usable.then_some(verdict.standing)
         };
-        let target = accounts::pick_where(&settings, preferred.as_deref(), usable)
-            .filter(|t| usable(t))
-            .ok_or(NoOther::Nobody)?;
+        let target = accounts::pick_ranked(&settings, preferred.as_deref(), |id| {
+            rank(id).unwrap_or(Standing::Out)
+        })
+        .filter(|t| rank(t).is_some())
+        .ok_or(NoOther::Nobody)?;
         // A private project goes on its own to none of the accounts it shares (ESC-141): its agent
         // stays, unless « Comptes partagés à la limite » allows it.
         let project = self.project(&project).ok();
@@ -2418,8 +2530,11 @@ impl<R: Runtime> Core<R> {
         let Some(id) = self.doing_ticket_of(agent_id) else {
             return;
         };
-        // Before its place is free: no pass starts the next ticket, which would meet the limit.
-        self.pause_after_limit(&self.account_of(agent_id));
+        // Before its place is free: no pass starts the next ticket, which would meet the limit (a
+        // model's own, ESC-312, holds that model's tickets by its meter alone).
+        if !self.limited_by_model(agent_id) {
+            self.pause_after_limit(&self.account_of(agent_id));
+        }
         let blocked = self.edit_ticket(&id, |t| {
             let waiting = t.column == Column::Doing
                 && t.blocked.is_none()

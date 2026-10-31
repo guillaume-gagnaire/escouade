@@ -298,6 +298,18 @@ describe('the Workflow tab', () => {
     expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p1' });
   });
 
+  it('says « Pas de workflow pour ce projet » and where it is undone (ESC-309)', async () => {
+    app.tickets = {};
+    await open({ ...scanOf(), off: true }, []);
+    expect(await screen.findByRole('heading', { name: 'Pas de workflow pour ce projet' })).toBeInTheDocument();
+    expect(screen.getByTestId('workflow-off')).toHaveTextContent(
+      'Escouade ne lit ni n’écrit les workflows de demo-api et n’y suit aucun agent. Pour le défaire : Réglages › Projets › Workflow, « Lire les workflows ».',
+    );
+    expect(screen.queryByRole('button', { name: 'Analyser avec un agent…' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Ouvrir les réglages du workflow' }));
+    expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p1' });
+  });
+
   it('chooses among several workflows in its menu, a repository’s named by it', async () => {
     await open(scanOf(gsd(), { ...ralph(), repo: 'web' }), gsdTracks());
     await userEvent.click(await screen.findByRole('button', { name: 'Workflow' }));

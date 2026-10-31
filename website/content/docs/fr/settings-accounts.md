@@ -6,9 +6,9 @@ L’onglet « Comptes » liste les comptes sur lesquels partent les agents, un
 
 Un compte est un harness lancé avec son propre dossier de configuration (pour Claude Code, son `CLAUDE_CONFIG_DIR`), donc avec sa connexion, ses sessions et son quota. Chaque compte appartient à un seul harness, et l’onglet les groupe par harness : « Comptes Claude Code », puis ceux des autres harness quand ils en ont. Aucun compte n’existe au départ : seuls ceux que tu ajoutes comptent. Un harness installé sans compte a son groupe, avec « Aucun compte » et « Ajouter un compte Codex… ». Le compte de la machine d’un harness, son « Principal », est ton installation habituelle : une fois ajouté, il est lancé comme toujours, sans dossier à part, et il se retire comme les autres, sans déconnecter la machine. Le fonctionnement des comptes et de leurs quotas est expliqué dans [les comptes](accounts) et dans [l’usage](usage).
 
-La note sous le titre du premier groupe le résume : « Les nouveaux agents partent sur le premier compte actif de leur harness sous les seuils « Pause au-delà du quota » et « Changer de compte à », dans cet ordre. » En détail :
+La note sous le titre du premier groupe le résume : « Les nouveaux agents partent sur le premier compte actif de leur harness dont la 5 h est sous les seuils « Pause au-delà du quota » et « Changer de compte à » et dont la semaine tient son rythme, dans cet ordre. » En détail :
 
-- Un nouvel agent part sur un compte de son harness, jamais sur celui d’un autre harness : le premier compte actif du groupe dont aucune fenêtre de quota (5 h ou hebdomadaire pour Claude Code) n’a atteint ni le seuil de pause ni celui de « Changer de compte à » (le plus bas des deux compte).
+- Un nouvel agent part sur un compte de son harness, jamais sur celui d’un autre harness : le premier compte actif du groupe qui est « bon » : aucune fenêtre courte (la 5 h) n’a atteint le seuil de pause ni celui de « Changer de compte à » (le plus bas des deux compte), et aucune fenêtre longue (la semaine, les 30 jours, les crédits du mois) n’est à sa limite ni ne finirait au-delà de 100 % à son rythme actuel. Une semaine au-dessus du seuil mais qui tient son rythme reste bonne.
 - Si tous les comptes actifs ont atteint le seuil, il part sur le premier compte actif, et le [pilote auto](autopilot) se met en pause.
 - Le « Compte préféré » d’un projet, dans l’onglet [« Projets »](settings-projects), passe devant tant qu’il est actif.
 - Un compte « Réservé aux projets » ne reçoit que les agents et les tickets de ces projets.
@@ -85,9 +85,9 @@ Dans le groupe « Quotas », en bas de l’onglet, « Changer de compte à �
 
 | Réglage | Effet | Par défaut |
 |---|---|---|
-| « Changer de compte à » | Quand la fenêtre de 5 h ou la fenêtre hebdomadaire du compte d’un agent atteint ce seuil, l’agent passe sur un autre compte de son harness à la fin de son tour, et les nouveaux agents y partent. Choix : 80 %, 90 %, 95 % ou « À la limite ». | À la limite |
+| « Changer de compte à » | Un agent passe sur un autre compte de son harness à la fin de son tour quand une fenêtre courte (5 h) de son compte atteint ce seuil, ou qu’une fenêtre longue (semaine, 30 jours, crédits du mois) l’atteint sans tenir jusqu’à sa remise à zéro au rythme actuel. Les nouveaux agents et les tickets partent sur le premier compte de l’ordre dont la 5 h n’est pas pleine et dont la semaine tient son rythme, même sur « À la limite ». Choix : 80 %, 90 %, 95 % ou « À la limite ». | À la limite |
 
-« À la limite », c’est le comportement d’avant : rien ne bouge avant la limite, puis « Reprendre sur un autre compte un agent de ticket arrêté par la limite » (onglet [« Harness »](settings-claude-code)) décide. Les deux réglages se complètent : le seuil agit à la fin d’un tour, la reprise à la limite sur un tour que la limite a arrêté en route. Le détail est dans [les comptes](accounts#changer-de-compte-avant-la-limite).
+Sur « À la limite », un agent déjà lancé ne bouge pas avant la limite (les nouveaux agents suivent la règle du choix), puis « Reprendre sur un autre compte un agent de ticket arrêté par la limite » (onglet [« Harness »](settings-claude-code)) décide. Les deux réglages se complètent : le seuil agit à la fin d’un tour, la reprise à la limite sur un tour que la limite a arrêté en route. Le détail est dans [les comptes](accounts#changer-de-compte-avant-la-limite).
 
 ## Le seuil de pause
 
@@ -97,7 +97,7 @@ Le seuil se règle dans l’onglet [« Kanban »](settings-board), pas ici, ma
 |---|---|---|
 | « Pause au-delà du quota » (pour tous les projets) | Le pilote auto ne démarre aucun ticket tant que la fenêtre de 5 h ou la fenêtre hebdomadaire atteint ou dépasse ce seuil ; un ticket lancé à la main part quand même. Choix : 80 %, 90 %, 95 % ou 100 %. | 100 % |
 
-Un compte dont une fenêtre a passé le seuil est écarté au profit du suivant de son harness, et le panneau des quotas le marque « au-delà du seuil de pause ou de changement de compte » (il compte aussi « Changer de compte à »). Le pilote auto se met en pause harness par harness : un ticket attend que l’un des comptes de son harness repasse sous le seuil, pendant que ceux d’un autre harness démarrent. Un harness sans quota ne le met jamais en pause.
+Un compte dont une fenêtre courte a passé le seuil (ou dont une fenêtre longue est à sa limite) est écarté au profit du suivant de son harness, et le panneau des quotas le marque « au-delà du seuil de pause ou de changement de compte » (il compte aussi « Changer de compte à ») ; un compte que seul son rythme met derrière est marqué « rythme trop rapide pour sa fenêtre ». Le seuil de pause lui-même reste un pourcentage, fenêtre par fenêtre. Le pilote auto se met en pause harness par harness : un ticket attend que l’un des comptes de son harness repasse sous le seuil, pendant que ceux d’un autre harness démarrent. Un harness sans quota ne le met jamais en pause.
 
 ## Reprendre sur un autre compte
 

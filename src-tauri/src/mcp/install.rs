@@ -275,11 +275,12 @@ fn accounts_in(settings: &Settings, engine: EngineId, all: bool) -> Vec<Account>
         .collect()
 }
 
-/// The harnesses that can be declared in: Claude Code, and those with a user config of theirs.
+/// The harnesses that can be declared in: those that declare a server by their program (Claude
+/// Code), and those with a user config of theirs.
 fn declarable() -> Vec<EngineId> {
     engine::registry::all()
         .into_iter()
-        .filter(|e| e.id() == EngineId::Claude || e.user_config().is_some())
+        .filter(|e| e.declares_by_program() || e.user_config().is_some())
         .map(|e| e.id())
         .collect()
 }
@@ -349,7 +350,7 @@ impl<R: Runtime> Core<R> {
         }
         let program = accounts::program(account, settings).ok_or_else(|| {
             anyhow!(crate::engine::missing_line(
-                crate::model::EngineId::Claude,
+                account.engine,
                 crate::i18n::ui()
             ))
         })?;

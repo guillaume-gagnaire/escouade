@@ -191,6 +191,16 @@
       "minimum": 1,
       "type": "integer"
     },
+    "workflows": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "description": "The project has workflows (true when absent). false: « Pas de workflow pour ce projet », Escouade neither reads nor writes its workflows (.escouade/workflows/ left as it is) and follows its agents in none.",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
     "worktrees": {
       "additionalProperties": false,
       "properties": {

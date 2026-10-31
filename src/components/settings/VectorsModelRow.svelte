@@ -42,27 +42,25 @@
 
 {#if info}
   {@const size = fBytes(info.size)}
-  <Row label={t('codeindex.vectors.label')} desc={t('codeindex.vectors.desc', { model: info.id, license: info.license, size })}>
+  <Row label={t('vectors.label')} desc={t('vectors.desc', { model: info.id, license: info.license, size })}>
     <div class="vm" data-vectors-model>
       {#if downloading}
         <span class="dl"
           ><span
             class="gauge"
             role="progressbar"
-            aria-label={t('codeindex.vectors.progress')}
+            aria-label={t('vectors.progress')}
             aria-valuemin="0"
             aria-valuemax="100"
             aria-valuenow={pct}><span class="fill" style:width="{pct}%"></span></span
           >{pct} %</span
         >
-        <button class="btn" onclick={() => api.vectorsModelCancel()}>{t('codeindex.vectors.cancel')}</button>
+        <button class="btn" onclick={() => api.vectorsModelCancel()}>{t('vectors.cancel')}</button>
       {:else if info.downloaded}
-        <span class="ok"><Icon name="check" size={14} />{t('codeindex.vectors.downloaded')}</span>
-        <button class="btn" use:tip={t('codeindex.vectors.deleteTitle', { size })} onclick={remove}>{t('codeindex.vectors.delete')}</button>
+        <span class="ok"><Icon name="check" size={14} />{t('vectors.downloaded')}</span>
+        <button class="btn" use:tip={t('vectors.deleteTitle', { size })} onclick={remove}>{t('vectors.delete')}</button>
       {:else}
-        <button class="btn" onclick={download}
-          >{started ? t('codeindex.vectors.resume', { pct: started }) : t('codeindex.vectors.download', { size })}</button
-        >
+        <button class="btn" onclick={download}>{started ? t('vectors.resume', { pct: started }) : t('vectors.download', { size })}</button>
       {/if}
     </div>
   </Row>

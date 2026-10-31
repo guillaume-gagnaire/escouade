@@ -145,6 +145,16 @@ export default {
     saidAloud: 'Dit à voix haute',
   },
 
+  /** A message held before it goes (`outbox.svelte.ts`). `{s}`: seconds left. */
+  held: {
+    delay: 'Envoi dans {s} s',
+    turnEnd: 'Attend la fin du tour',
+    turnEndHint: '{engine} le recevra au début de son prochain tour',
+    sendNow: 'Envoyer maintenant',
+    edit: 'Modifier',
+    cancel: 'Annuler',
+  },
+
   /** The files an agent sent (Claude Code's SendUserFile, ESC-171): its caption, its images, its other files. */
   sent: {
     /** The card's label: `{engine}`, who sent them (« Claude »). */

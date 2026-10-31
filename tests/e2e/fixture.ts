@@ -170,6 +170,22 @@ async function killApp(instance: Instance) {
   }
 }
 
+/**
+ * The app's page once it is there: a start shows a blank page first (`about:blank`), then the app's, seconds later on
+ * a slow runner; a page attached in between has no `__TAURI_INTERNALS__` yet, and may be navigated under a call.
+ */
+async function appReady(page: Page): Promise<Page> {
+  for (let tries = 1; ; tries++) {
+    try {
+      await page.waitForFunction(() => '__TAURI_INTERNALS__' in window && document.readyState === 'complete', null, { timeout: 60_000 });
+      return page;
+    } catch (e) {
+      if (tries === 3 || !String(e).includes('Execution context was destroyed')) throw e;
+      await page.waitForLoadState('load').catch(() => {});
+    }
+  }
+}
+
 async function connect(port: number, stopped: () => string | null): Promise<{ browser: Browser; page: Page }> {
   let lastError = '';
   let pageless = 0;
@@ -366,6 +382,8 @@ export const test = base.extend<{
         // No automatic restart for an update of Escouade: the hidden window of the tests reads as nobody there, and a
         // version published during a run would restart the app under test (a message typed then stays in its field).
         autoUpdate: false,
+        // A message sent during a turn goes at once, as the tests expect.
+        midTurnDelaySecs: 0,
         ...given,
         accounts: accountsFor(given, appEnv),
       }),
@@ -494,12 +512,12 @@ export const test = base.extend<{
             throw new Error(`something still listens on port ${port} 30 s after the app was killed: it cannot be started again`);
           }
           instance = startApp(env, stderr);
-          app.page = await attach(instance);
+          app.page = await appReady(await attach(instance));
           return app.page;
         },
         reconnect: async () => {
           await instance.browser?.close().catch(() => {});
-          app.page = await attach(instance);
+          app.page = await appReady(await attach(instance));
           return app.page;
         },
         restartAs: (other: string) => {

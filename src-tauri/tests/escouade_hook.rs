@@ -149,7 +149,7 @@ fn the_event_its_argument_names_goes_in_the_query() {
 fn the_context_escouade_answers_is_written_for_the_harness() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let url = format!("http://{}/hook", listener.local_addr().unwrap());
-    let advice = r#"{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"use index_search"}}"#;
+    let advice = r#"{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"a line of context"}}"#;
     let served = std::thread::spawn(move || {
         let (mut s, _) = listener.accept().unwrap();
         s.set_read_timeout(Some(Duration::from_secs(5))).unwrap();

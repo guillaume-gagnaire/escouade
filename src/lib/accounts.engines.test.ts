@@ -5,10 +5,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { agent, BARE_ENGINE, CLAUDE_ENGINE, project, resetApp, usageOf } from '../test/ipc';
 import {
   accountEngines,
-  anyOver,
   engineOrder,
   isPrincipal,
+  judge,
+  meterKey,
   meterLabel,
+  modelFamily,
   meterName,
   metersShown,
   newAgentAccount,
@@ -114,15 +116,49 @@ describe('the quota of an account', () => {
   });
 
   it('labels each window by its length, and the month’s credits', () => {
-    expect([300, 10080, 43200, 60].map(meterLabel)).toEqual(['5 h', '7 j', '30 j', '1 h']);
+    expect([300, 10080, 43200, 60].map((m) => meterLabel(m))).toEqual(['5 h', '7 j', '30 j', '1 h']);
     expect(meterLabel(null)).toBe('crédits');
     expect(meterName(300)).toBe('Quota sur 5 heures');
     expect(meterName(1440)).toBe('Quota sur 1 jour');
     expect(meterName(null)).toBe('Crédits du mois');
     setLang('en');
-    expect([300, 10080, 43200].map(meterLabel)).toEqual(['5h', 'W', '30d']);
+    expect([300, 10080, 43200].map((m) => meterLabel(m))).toEqual(['5h', 'W', '30d']);
     expect(meterName(10080)).toBe('7-day quota');
     expect(meterLabel(null)).toBe('credits');
+  });
+
+  it('labels a model’s own quota by the model’s name the server gives, in both languages (ESC-312)', () => {
+    expect(meterLabel(10080, 'Fable')).toBe('Fable · semaine');
+    expect(meterLabel(300, 'Fable')).toBe('Fable · 5 h');
+    expect(meterName(10080, 'Fable')).toBe('Quota sur 7 jours de Fable');
+    setLang('en');
+    expect(meterLabel(10080, 'Fable')).toBe('Fable · week');
+    expect(meterName(10080, 'Fable')).toBe('Fable 7-day quota');
+  });
+
+  it('shows the bars of the real answer in the server’s order, Fable’s week among them, each told apart (ESC-312)', () => {
+    app.engines = [CLAUDE_ENGINE];
+    const week = { minutes: 10080, pct: 47, resetsAt: NOW + HOUR };
+    const fable = { minutes: 10080, pct: 0, resetsAt: NOW + HOUR, model: 'Fable' };
+    const real = usageOf('principal', { meters: [{ minutes: 300, pct: 2, resetsAt: NOW + HOUR }, week, fable] });
+    const shown = metersShown(real, 'claude');
+    expect(shown.map((m) => meterLabel(m.minutes, m.model))).toEqual(['5 h', '7 j', 'Fable · semaine']);
+    expect(new Set(shown.map(meterKey)).size).toBe(3);
+    expect(meterKey(fable)).toBe('10080:Fable');
+    // A Max plan without a 5-hour window: no 5-hour bar.
+    const max = usageOf('principal', { meters: [week, fable] });
+    expect(metersShown(max, 'claude').map((m) => meterLabel(m.minutes, m.model))).toEqual(['7 j', 'Fable · semaine']);
+  });
+
+  it('counts a model’s own quota for that model alone, by its family (ESC-312)', () => {
+    expect(['fable', 'claude-fable-5-1', 'Fable 5.1', 'FABLE[1m]'].map(modelFamily)).toEqual(['fable', 'fable', 'fable', 'fable']);
+    expect(modelFamily('opus[1m]')).toBe('opus');
+    expect(modelFamily('')).toBeNull();
+    const fableOver = usageOf('x', { meters: [{ minutes: 10080, pct: 97, resetsAt: NOW + HOUR, model: 'Fable' }] });
+    // Judged for Fable it is out; for Opus, or for the account in general, it is not looked at.
+    expect(judge(fableOver.meters, 95, NOW, 'claude-fable-5-1').standing).toBe('behind');
+    expect(judge(fableOver.meters, 95, NOW, 'opus').standing).toBe('good');
+    expect(judge(fableOver.meters, 95, NOW).standing).toBe('good');
   });
 
   it('shows the windows read, else those the harness declares, its credits, or nothing without a quota', () => {
@@ -141,11 +177,16 @@ describe('the quota of an account', () => {
     expect(metersShown(null, 'codex')).toEqual([]);
   });
 
-  it('is past the threshold by any of its meters, credits included; never without one', () => {
-    const credits = usageOf('x', { meters: [{ minutes: null, pct: 96, resetsAt: NOW + HOUR }] });
-    expect(anyOver(credits, 95, NOW)).toBe(true);
-    expect(anyOver(credits, 97, NOW)).toBe(false);
-    expect(anyOver(usageOf('none'), 0, NOW)).toBe(false);
+  it('is out by any of its meters, credits included; never without one', () => {
+    const credits = usageOf('x', { meters: [{ minutes: null, pct: 100, resetsAt: NOW + HOUR }] });
+    expect(judge(credits.meters, 95, NOW)).toMatchObject({ standing: 'out', leave: true });
+    // The month's credits are a long window judged by their pace: 94 % an hour before the reset is on pace, past the threshold or not.
+    const early = usageOf('x', { meters: [{ minutes: null, pct: 94, resetsAt: NOW + HOUR }] });
+    expect(judge(early.meters, 90, NOW)).toMatchObject({ standing: 'good', leave: false });
+    // 96 %, on pace too: near its limit (NEAR_LIMIT), behind the others; an agent at the threshold leaves.
+    const near = usageOf('x', { meters: [{ minutes: null, pct: 96, resetsAt: NOW + HOUR }] });
+    expect(judge(near.meters, 95, NOW)).toEqual({ standing: 'behind', leave: true, near: true });
+    expect(judge(usageOf('none').meters, 0, NOW)).toMatchObject({ standing: 'good', leave: false });
   });
 
   it('pauses the autopilot by a window named by its length, or by the credits', () => {

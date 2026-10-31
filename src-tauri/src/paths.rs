@@ -405,10 +405,41 @@ impl DataDir {
         self.0.join("projects").join(name)
     }
 
-    /// The code index of a project (`codeindex`): recomputed from its files, of this machine,
-    /// never in the project.
-    pub fn code_index_db(&self, project_id: &str) -> PathBuf {
-        self.project_files(project_id).join("code-index.db")
+    /// The databases a retired feature left in each project's folder (ESC-310): those of the index of
+    /// the code's symbols (`code-index.db`, with SQLite's files beside it), recomputed from the projects' files,
+    /// so nothing of the user's.
+    const RETIRED_FILES: [&'static str; 4] = [
+        "code-index.db",
+        "code-index.db-wal",
+        "code-index.db-shm",
+        "code-index.db-journal",
+    ];
+
+    /// Written once `erase_retired` went over the folder: it is not done again.
+    const RETIRED_ERASED: &'static str = ".retired-erased-2026-10-31";
+
+    /// Erases, once, the databases of the retired index (`RETIRED_FILES`) from the folders of the
+    /// projects, open or closed, and nothing else. The number of files erased.
+    pub fn erase_retired(&self) -> usize {
+        let marker = self.0.join(Self::RETIRED_ERASED);
+        if marker.exists() {
+            return 0;
+        }
+        let mut erased = 0;
+        if let Ok(folders) = std::fs::read_dir(self.0.join("projects")) {
+            for folder in folders.flatten().filter(|e| e.path().is_dir()) {
+                for name in Self::RETIRED_FILES {
+                    let file = folder.path().join(name);
+                    if file.is_file() && std::fs::remove_file(&file).is_ok() {
+                        erased += 1;
+                    }
+                }
+            }
+        }
+        if std::fs::create_dir_all(&self.0).is_ok() {
+            let _ = std::fs::write(&marker, "");
+        }
+        erased
     }
 
     /// The embedding model's folder (`vectors`, ESC-252): downloaded once for every project, of this machine.
@@ -489,7 +520,7 @@ impl DataDir {
     /// `codex/<name>` (each its `CODEX_HOME`).
     pub fn accounts_of(&self, engine: crate::model::EngineId) -> PathBuf {
         match engine {
-            crate::model::EngineId::Claude => self.claude_accounts(),
+            crate::model::EngineId::CLAUDE => self.claude_accounts(),
             e => self.0.join(e.as_str()),
         }
     }
@@ -846,6 +877,46 @@ pub fn make_file_link(target: &Path, link: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_databases_of_the_retired_index_are_erased_once_and_nothing_else() {
+        let root = test_dir("esc310-erase-retired");
+        let data = DataDir::new(root.clone());
+        let p1 = data.project_files("p1");
+        let p2 = data.project_files("p2");
+        for d in [&p1, &p2] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+        for name in ["code-index.db", "code-index.db-wal", "code-index.db-shm"] {
+            std::fs::write(p1.join(name), "x").unwrap();
+        }
+        std::fs::write(p2.join("code-index.db"), "x").unwrap();
+        // What is not the index's stays: the docs' vectors, a logo, a file of the user's named alike.
+        let kept = [
+            p1.join("vectors.db"),
+            p1.join("logo.png"),
+            p2.join("my-code-index.db"),
+            root.join("code-index.db"),
+            root.join("stats.db"),
+        ];
+        for f in &kept {
+            std::fs::write(f, "keep").unwrap();
+        }
+        assert_eq!(data.erase_retired(), 4);
+        assert!(!p1.join("code-index.db").exists() && !p1.join("code-index.db-wal").exists());
+        assert!(!p2.join("code-index.db").exists());
+        for f in &kept {
+            assert!(f.is_file(), "{}", f.display());
+        }
+        // Once: a file of that name made afterwards is left alone.
+        std::fs::write(p2.join("code-index.db"), "x").unwrap();
+        assert_eq!(data.erase_retired(), 0);
+        assert!(p2.join("code-index.db").is_file());
+        // A data folder with no project yet: nothing to erase, and it is not done again.
+        let fresh = DataDir::new(test_dir("esc310-erase-fresh").join("data"));
+        assert_eq!(fresh.erase_retired(), 0);
+        assert!(fresh.root().join(DataDir::RETIRED_ERASED).exists());
+    }
 
     #[test]
     fn the_worktrees_go_to_claude_worktrees_unless_the_project_says_where() {

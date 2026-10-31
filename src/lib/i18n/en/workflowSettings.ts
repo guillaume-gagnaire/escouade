@@ -3,6 +3,14 @@ import { defineZone } from '../types';
 // Settings › Projects › Workflow (ESC-195): see the French catalog.
 export default defineZone('workflowSettings', {
   title: 'Workflow',
+  enabled: 'Project workflows',
+  enabledDesc:
+    'Escouade reads the project’s skills, commands and subagents to follow its agents through their steps. Without workflows, it reads and writes none.',
+  on: 'Read the workflows',
+  off: 'No workflow for this project',
+  offNote:
+    'No workflow for this project: Escouade neither reads nor writes its workflows and follows no agent in them; {dir} is left as it is. To undo it, choose “Read the workflows” and save.',
+  onNote: 'Save to read the project’s workflows again.',
   readAt: 'Read by the rules at {time}',
   readOn: 'Read by the rules on {date}',
   reading: 'Reading the files…',
@@ -78,6 +86,16 @@ export default defineZone('workflowSettings', {
   upTo: { one: '{text}, up to {count} round', other: '{text}, up to {count} rounds' },
   add: 'Add a step',
   dismiss: 'This is not a workflow',
+  delete: 'Delete this workflow',
+  deleteTip: 'Its file is deleted at once, and reading again does not make it again. “Restore”, under “Deleted”, undoes it.',
+  removedDone: '{name} deleted: reading again won’t make it again. “Restore” under “Deleted” undoes it.',
+  restoredDone: '{name} restored: read and written again.',
+  removedTitle: 'Deleted',
+  removedDesc: 'Deleted here or their file erased by hand: reading again does not make them again',
+  removedKept: 'deleted, won’t be made again',
+  removedChanged: 'deleted, but what found it changed: take it back?',
+  keepRemoved: 'Keep deleted',
+  takeBack: 'Take back',
   where: 'Where to keep the workflows’ configuration',
   whereDesc:
     'The workflows of the repository’s configuration (.claude/, .agents/, .github/…): in the repository, a file per workflow in {dir}, the team sees the same ones and their corrections. Escouade writes them and keeps them up to date, but never commits them: commit them with your work. Those of your own folders (~/.claude) always stay on this machine.',

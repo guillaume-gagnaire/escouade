@@ -1,7 +1,7 @@
 <script lang="ts">
   import { openUrl } from '../lib/opener';
   import { onMount } from 'svelte';
-  import { accountName, metersShown, projectedDayCost, projectionLevel, projectionMode, quotaGroups } from '../lib/accounts';
+  import { accountName, metersShown, projectedDayCost, projectionLevel, projectionMode, quotaGroups, meterKey } from '../lib/accounts';
   import { capsOf, showsCost, usagePage, usageSite } from '../lib/engines';
   import { trapFocus } from '../lib/focus';
   import { fUsd } from '../lib/format';
@@ -99,6 +99,7 @@
           <span class="name"
             >{accountName(r.account)}{#if r.current}<span class="tag cur">{t('accounts.panel.current')}</span>{/if}{#if r.over}<span
                 class="tag over">{t('accounts.panel.over')}</span
+              >{:else if r.behind}<span class="tag over">{t(r.nearLimit ? 'accounts.panel.nearLimit' : 'accounts.panel.behind')}</span
               >{/if}</span
           >
           <!-- A harness that tells no cost (Cursor CLI) has none of the day to show. -->
@@ -146,8 +147,8 @@
           {:else if !u || u.connected || u.meters.length}
             <!-- An account that is not signed in and was never read has no meters to show. -->
             <div class="windows">
-              {#each meters as m (m.minutes ?? 'credits')}
-                <QuotaMeter minutes={m.minutes} usage={m.usage} now={app.now} detail />
+              {#each meters as m (meterKey(m))}
+                <QuotaMeter minutes={m.minutes} model={m.model} usage={m.usage} now={app.now} detail />
               {/each}
             </div>
           {/if}

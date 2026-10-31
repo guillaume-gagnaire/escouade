@@ -76,7 +76,7 @@ Les menus de modèle, d’effort et de mode restent utilisables pendant toute la
 
 ## Le compte d’un agent
 
-Quand tu as ajouté plusieurs comptes Claude, un menu « Compte » s’ajoute aux autres. Son premier choix, « Automatique », laisse Escouade prendre le compte du projet (son « Compte préféré »), sinon le premier compte actif sous le seuil de pause ; le nom du compte choisi est écrit entre parenthèses. Le compte d’un agent ne change plus après son premier message, puisque sa conversation est rangée dans ce compte : le menu est alors en lecture seule.
+Quand tu as ajouté plusieurs comptes Claude, un menu « Compte » s’ajoute aux autres. Son premier choix, « Automatique », laisse Escouade prendre le compte du projet (son « Compte préféré »), sinon le premier compte actif « bon » (5 h sous les seuils de pause et de changement de compte, semaine au rythme) ; le nom du compte choisi est écrit entre parenthèses. Le compte d’un agent ne change plus après son premier message, puisque sa conversation est rangée dans ce compte : le menu est alors en lecture seule.
 
 La page sur [les comptes](accounts) explique comment en ajouter et ce que fait « Reprendre sur… » quand un agent atteint la limite d’usage. Les options sont dans [les réglages des comptes](settings-accounts).
 

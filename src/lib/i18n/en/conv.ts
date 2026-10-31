@@ -118,6 +118,15 @@ export default defineZone('conv', {
     saidAloud: 'Said aloud',
   },
 
+  held: {
+    delay: 'Sending in {s} s',
+    turnEnd: 'Waiting for the end of the turn',
+    turnEndHint: '{engine} gets it at the start of its next turn',
+    sendNow: 'Send now',
+    edit: 'Edit',
+    cancel: 'Cancel',
+  },
+
   sent: {
     by: 'Sent by {engine}',
     images: { one: '{count} image', other: '{count} images' },

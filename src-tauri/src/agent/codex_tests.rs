@@ -5,7 +5,7 @@ fn rt() -> AgentRt {
     AgentRt::new(
         AgentMeta {
             id: new_id(),
-            engine: EngineId::Codex,
+            engine: EngineId::CODEX,
             cwd: "C:/p".into(),
             mode: "default".into(),
             session_id: Some("thr".into()),

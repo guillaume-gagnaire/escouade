@@ -5,8 +5,8 @@
 //!   changes have no tickets (« 3 changements sans tickets · Planifier »).
 //! - **What it reads**: the pages changed and the decisions proposed since the last planning (kept
 //!   by project in `planning.json` of the data folder: a pour, a page written or a decision
-//!   proposed from the window), the code, by the index (the files it links to the changes) and by
-//!   reading the folder, and the tickets of the board, not to make one twice nor one for what is
+//!   proposed from the window), the code, by the files whose text names the changes' words of code
+//!   (`codesearch`) and by reading the folder, and the tickets of the board, not to make one twice nor one for what is
 //!   done already.
 //! - **What it does**: it is a short agent that reads without changing anything
 //!   (`Weight::Reading`, as the comparison to the code); it answers the tickets, which Escouade
@@ -38,7 +38,7 @@ pub const LIMIT: Duration = Duration::from_secs(600);
 pub const MAX_TICKETS: usize = 12;
 /// What of a page's text the planner is given.
 const MAX_BODY: usize = 12_000;
-/// The files the index links to the changes, named to the planner.
+/// The files whose text names the changes' words of code (`codesearch`), named to the planner.
 const MAX_HINTS: usize = 12;
 /// The plans kept by project (the latest ones).
 const KEPT_PLANS: usize = 20;
@@ -211,8 +211,8 @@ fn column_word(c: Column) -> &'static str {
     }
 }
 
-/// What the planner is given: the pages changed, the decisions, the board and the files the
-/// index links to them.
+/// What the planner is given: the pages changed, the decisions, the board and the files that
+/// hold their words of code.
 pub fn prompt(
     lang: Lang,
     pages: &[Page],
@@ -271,8 +271,8 @@ pub fn prompt(
     } else {
         tr_in!(
             lang,
-            "Planifie ces changements (les fichiers de <code-hints> sont ceux que l'index du code rapproche d'eux).",
-            "Plan these changes (the files in <code-hints> are those the code index links to them)."
+            "Planifie ces changements (les fichiers de <code-hints> sont ceux qui contiennent les mots de code qu'ils citent).",
+            "Plan these changes (the files in <code-hints> are those that hold the words of code they name)."
         )
     });
     p
@@ -762,45 +762,27 @@ impl<R: Runtime> Core<R> {
         Ok(plan)
     }
 
-    /// The files the index links to the changes (none when the project has it off).
+    /// The files of the project whose text names the changes' words of code (`codesearch`), none
+    /// the fence keeps out.
     async fn plan_hints(
         self: &Arc<Self>,
         project: &crate::model::Project,
         pages: &[Page],
         decisions: &[Decision],
     ) -> Vec<String> {
-        if !self.code_index_on(project) {
-            return Vec::new();
-        }
-        let Ok(reader) = self.code_index(&project.id, None).await else {
-            return Vec::new();
-        };
-        let mut out: Vec<String> = Vec::new();
-        let tasks = pages
+        let text: String = pages
             .iter()
-            .map(|p| format!("{} {}", p.title, cut(&p.body, 400)))
+            .map(|p| format!("{}\n{}\n", p.title, cut(&p.body, MAX_BODY)))
             .chain(
                 decisions
                     .iter()
-                    .map(|d| format!("{} {}", d.title, d.decision)),
-            );
-        for task in tasks {
-            let Ok(a) = reader.task_context(&task, MAX_HINTS) else {
-                continue;
-            };
-            for p in a
-                .result
-                .entry_points
-                .iter()
-                .map(|h| &h.path)
-                .chain(a.result.snippets.iter().map(|s| &s.path))
-            {
-                if !out.contains(p) && out.len() < MAX_HINTS {
-                    out.push(p.clone());
-                }
-            }
-        }
-        out
+                    .map(|d| format!("{}\n{}\n", d.title, d.decision)),
+            )
+            .collect();
+        let folder = crate::docsbranch::base_of(project);
+        let fence = self.project_fence(&project.id);
+        let terms = crate::codesearch::terms(&text);
+        crate::codesearch::related_files(&folder, &terms, |p| fence.covers(p), MAX_HINTS).await
     }
 
     /// « Annuler » of the plan `plan_id`: its tickets not started yet removed (and their key from

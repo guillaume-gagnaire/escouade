@@ -2,9 +2,10 @@
 title: "Le store dans l'app"
 subject: "store"
 sources: ["docs/STORE.md","docs/PLUGINS.md","design/plugins/maquettes-b.html","design/app-redesign/UX-NOTES.md","website/content/docs/fr/plugins/installer.md"]
-tickets: ["ESC-236","ESC-287"]
-decisions: []
-compared: "2026-10-30T04:14:52+01:00"
+tickets: ["ESC-236","ESC-287","ESC-313"]
+decisions: [21]
+compared: "2026-10-31T15:59:04+01:00"
+gaps: [{"text":"La page dit que le schéma `escouade` est enregistré par les installeurs NSIS et MSI sous Windows, et par le `.deb` et le `.rpm` sous Linux. La config de build ne produit que du NSIS sous Windows (`targets: [\"nsis\"]`) et que l'AppImage et le `.deb` sous Linux. Aucun MSI ni `.rpm` n'est généré, et la CI ne les construit pas non plus. Seul un `desktopTemplate` rpm reste déclaré.","code":["src-tauri/tauri.conf.json","src-tauri/tauri.linux.conf.json"]}]
 ---
 
 # Le store dans l'app
@@ -49,3 +50,8 @@ Référence : `docs/STORE.md` §5 et §7 (il fait foi) ; aperçu `#b1` à `#b4` 
 
 ## Ce qui part
 - Des GET sans identifiant. Avec l'accord aux statistiques seulement : `POST /api/v1/installs { id, version, event }` et l'événement Aptabase `plugin_installed` (`from_store` oui ou non, sans le nom du plugin).
+
+## Un plugin rangé dans un dossier de son dépôt (ESC-313)
+- `version.json` porte `path`, le dossier du plugin dans son dépôt (`''` à la racine). Un `version.json` d'avant, sans `path`, se lit comme la racine.
+- Un `path` qui n'est pas un chemin relatif simple (vide, ou des segments sans `.` ni `..`, sans antislash, `:` ni caractère de contrôle, 200 caractères au plus) arrête l'installation : « Le version.json reçu nomme un dossier mal formé (…) : rien n'est installé. »
+- Le dossier est gardé dans l'origine du plugin installé ; « Vient de » montre une ligne « Dossier » dont le lien ouvre `<dépôt>/tree/<étiquette>/<dossier>` sur GitHub. L'archive reçue est celle du dossier seul.

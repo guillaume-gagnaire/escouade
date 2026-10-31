@@ -10,7 +10,7 @@ use anyhow::Result;
 use base64::Engine;
 use serde_json::{json, Value};
 
-const S: Service = Service::Jira;
+const S: Service = Service::JIRA;
 
 pub struct Jira {
     http: reqwest::Client,

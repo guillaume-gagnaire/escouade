@@ -45,6 +45,14 @@ export function setDraft(agentId: string, draft: Draft) {
   );
 }
 
+/** Puts a message back in the draft of `owner`, before what was typed since; its composer reads the draft again. */
+export function giveBack(owner: string, back: string, backFiles: DraftAttachment[]) {
+  const since = getDraft(owner);
+  const text = back && since.text.trim() ? `${back}\n\n${since.text}` : back || since.text;
+  setDraft(owner, { text, files: [...backFiles, ...since.files] });
+  app.draftReturned[owner] = (app.draftReturned[owner] ?? 0) + 1;
+}
+
 /** Drops the draft of an agent that is gone, and the write it was waiting for. */
 export function forgetDraft(agentId: string) {
   live.delete(agentId);

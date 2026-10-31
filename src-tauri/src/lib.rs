@@ -24,13 +24,7 @@ mod clipboard;
 mod closed;
 #[cfg(test)]
 mod closed_tests;
-mod codeindex;
-#[cfg(test)]
-mod codeindex_links_tests;
-#[cfg(test)]
-mod codeindex_probes_tests;
-#[cfg(test)]
-mod codeindex_tests;
+mod codesearch;
 #[cfg(test)]
 mod codex_tests;
 #[cfg(test)]
@@ -129,6 +123,7 @@ mod notify;
 #[cfg(test)]
 mod opencode_tests;
 mod outside;
+mod pace;
 mod pagecrash;
 mod paths;
 mod plan;
@@ -400,18 +395,6 @@ pub fn devpage_probe_cli(args: Vec<String>) -> i32 {
     devpage_probe::cli(args, context())
 }
 
-/// `codeindex_probes` (examples): the probes bench of the code index against grep (ESC-294,
-/// `docs/CODEINDEX-PROBES.md`). Gives the exit code.
-pub fn codeindex_probes_cli(args: Vec<String>) -> i32 {
-    codeindex::probes::cli(args)
-}
-
-/// `codeindex_agents` (examples): the bench of the real agents, with and without the index (ESC-299,
-/// `docs/CODEINDEX-PROBES.md`). Gives the exit code.
-pub fn codeindex_agents_cli(args: Vec<String>) -> i32 {
-    codeindex::probes::agents::cli(args)
-}
-
 pub fn run() {
     // Before GTK starts: the window's app_id and WM_CLASS, which find its icon (ESC-239).
     #[cfg(target_os = "linux")]
@@ -596,6 +579,7 @@ pub fn run() {
             lanes,
             tauri::generate_handler![
                 commands::subscribe,
+                commands::set_held,
                 commands::set_ui,
                 commands::open_url,
                 commands::devpage_open,
@@ -695,6 +679,7 @@ pub fn run() {
                 commands::refine_workflows,
                 commands::effective_workflows,
                 commands::remove_workflow_file,
+                commands::set_workflow_removed,
                 commands::agent_merge_check,
                 commands::merge_agent_repos,
                 commands::forget_repo,
@@ -703,10 +688,6 @@ pub fn run() {
                 commands::create_project,
                 commands::update_project,
                 commands::set_project_logo,
-                commands::get_code_index,
-                commands::set_code_index,
-                commands::set_code_index_all,
-                commands::get_index_savings,
                 commands::vectors_model,
                 commands::vectors_model_download,
                 commands::vectors_model_cancel,

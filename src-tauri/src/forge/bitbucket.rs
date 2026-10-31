@@ -23,8 +23,8 @@ pub fn api_base(url: &str) -> String {
 }
 
 impl Provider for BitbucketProvider {
-    fn kind(&self) -> &'static str {
-        "bitbucket"
+    fn kind(&self) -> String {
+        "bitbucket".into()
     }
 
     fn name(&self) -> &'static str {
@@ -68,14 +68,16 @@ impl Provider for BitbucketProvider {
         true
     }
 
-    fn scopes(&self) -> &'static [&'static str] {
-        &[
+    fn scopes(&self) -> Vec<String> {
+        [
             "read:user:bitbucket",
             "read:repository:bitbucket",
             "read:pullrequest:bitbucket",
             "write:pullrequest:bitbucket",
             "read:pipeline:bitbucket",
         ]
+        .map(String::from)
+        .to_vec()
     }
 
     fn token_page(&self, _url: &str) -> String {

@@ -131,6 +131,13 @@ const BYPASS: &str = "bypassPermissions";
 /// « Projet privé »: the file may turn it on, never off.
 pub const PRIVATE: &str = "private";
 const MODE: &str = "board.mode";
+/// « Pas de workflow pour ce projet » (ESC-309) when false.
+pub const WORKFLOWS: &str = "workflows.enabled";
+
+/// The keys of a setting Escouade no longer has (the index of the code's symbols, retired by
+/// ESC-310): a file that still sets one is read all the same, the key left out with no warning,
+/// said once in the log.
+pub const RETIRED: &[&str] = &["code_index", "codeIndex"];
 
 /// Every setting of version 1, in the order the file is written.
 pub const KEYS: &[Key] = &[
@@ -254,6 +261,11 @@ pub const KEYS: &[Key] = &[
         MODE,
         Kind::Enum(MODES),
         "The permission mode of the tickets' agents (empty: the account's). Never bypassPermissions: that one is set on each machine.",
+    ),
+    key(
+        WORKFLOWS,
+        Kind::Bool,
+        "The project has workflows (true when absent). false: « Pas de workflow pour ce projet », Escouade neither reads nor writes its workflows (.escouade/workflows/ left as it is) and follows its agents in none.",
     ),
     file_key(
         RECOMMENDED,
@@ -474,6 +486,13 @@ fn read_v1(t: &Node, values: &mut BTreeMap<String, Value>, warnings: &mut Vec<Wa
         }
         if let Some(k) = key_of(name) {
             take(k, node, values, warnings);
+            continue;
+        }
+        if RETIRED.contains(&name.as_str()) {
+            static TOLD: std::sync::Once = std::sync::Once::new();
+            TOLD.call_once(|| {
+                log::info!("{FILE}: {name} is the key of a setting retired in ESC-310, ignored")
+            });
             continue;
         }
         if !top.contains(&name.as_str()) {
@@ -928,6 +947,7 @@ pub fn get(p: &Project, key: &str) -> Value {
         "board.model" => json!(b.model),
         "board.effort" => json!(b.effort),
         MODE => json!(b.mode),
+        WORKFLOWS => json!(p.workflows_enabled),
         _ => Value::Null,
     }
 }
@@ -986,7 +1006,7 @@ pub fn set(p: &mut Project, key: &str, v: &Value) {
         "agents.engine" => {
             p.engine = serde_json::from_value::<EngineId>(v.clone())
                 .ok()
-                .filter(|e| *e != EngineId::Claude)
+                .filter(|e| *e != EngineId::CLAUDE)
         }
         PRIVATE => p.private = flag,
         "worktrees.per_agent" => p.worktree_per_agent = flag,
@@ -1020,6 +1040,7 @@ pub fn set(p: &mut Project, key: &str, v: &Value) {
         "board.model" => b.model = str_of(v),
         "board.effort" => b.effort = str_of(v),
         MODE => b.mode = str_of(v),
+        WORKFLOWS => p.workflows_enabled = flag,
         _ => {}
     }
 }
@@ -1319,6 +1340,10 @@ pub fn write(existing: Option<&str>, values: &[(&str, Value)]) -> Result<String>
         .ok_or_else(|| anyhow::anyhow!("{FILE}: no mapping"))?;
     if !root.contains_key("version") {
         root.insert_at_index(0, "version", VERSION as i64);
+    }
+    // A setting Escouade no longer has is not written again.
+    for name in RETIRED {
+        root.remove(name);
     }
     for (path, v) in values {
         let Some(k) = key_of(path) else { continue };
@@ -1636,6 +1661,10 @@ impl<R: Runtime> Core<R> {
         }
         if !applied.changed.is_empty() {
             self.schedule();
+        }
+        // « Pas de workflow pour ce projet » set or undone by the file (ESC-309): followed at once.
+        if before.workflows_enabled != after.workflows_enabled {
+            self.workflow_fixes_changed(&after.id);
         }
         Some(after)
     }

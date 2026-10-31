@@ -182,14 +182,9 @@ pub struct TrackView {
 }
 
 pub fn support_of(engine: EngineId, view: bool) -> Support {
-    let (partial, missing): (bool, &[&str]) = match (engine, view) {
-        (EngineId::Codex, _) => (true, &["subagents"]),
-        (EngineId::Cursor, false) => (true, &["cost"]),
-        (EngineId::Cursor, true) => (true, &["subagents", "cost", "timing"]),
-        _ => (false, &[]),
-    };
+    let missing = crate::engine::by_id(engine).track_missing(view);
     Support {
-        partial,
+        partial: !missing.is_empty(),
         missing: missing.iter().map(|m| m.to_string()).collect(),
     }
 }
@@ -902,6 +897,10 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
         let Ok(p) = self.project(project_id) else {
             return;
         };
+        // « Pas de workflow pour ce projet » (ESC-309): nothing read.
+        if !p.workflows_enabled {
+            return;
+        }
         let scan = crate::workflow::read(
             std::path::Path::new(&p.path),
             &p.repos,
@@ -917,12 +916,18 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
         // Into the files of the workflows (ESC-195), as `refresh_workflows` puts them: what is followed.
         let places = crate::workflowfiles::places(&p, &self.data);
         let folder = crate::workflowfiles::load_all(&places);
+        // Those the user removed are not written again (ESC-309).
+        let file = crate::workflowfiles::removals_file(&self.data, project_id);
+        let before = crate::workflowfiles::Removals::load(&file);
+        let mut removals = before.clone();
         crate::workflowfiles::merge_reading_all(
             &places,
             &folder,
             &scan.workflows,
             std::path::Path::new(&p.path).is_dir(),
+            &mut removals,
         );
+        removals.save(&file, &before);
     }
 
     /// The tracks of the project's agents, read from their file the first time.

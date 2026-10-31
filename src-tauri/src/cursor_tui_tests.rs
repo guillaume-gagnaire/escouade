@@ -22,7 +22,7 @@ async fn cursor_agent(h: &Harness) -> (String, PathBuf) {
         s.accounts.push(Account {
             id: "principal-cursor".into(),
             name: "Principal".into(),
-            engine: EngineId::Cursor,
+            engine: EngineId::CURSOR,
             claude_path: fake_cursor(),
             active: true,
             ..Default::default()
@@ -33,7 +33,7 @@ async fn cursor_agent(h: &Harness) -> (String, PathBuf) {
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Cursor),
+                engine: Some(EngineId::CURSOR),
                 model: Some("default".into()),
                 mode: Some("default".into()),
                 ..Default::default()
@@ -413,7 +413,7 @@ async fn real_cursor_view() {
         s.accounts.push(Account {
             id: "principal-cursor".into(),
             name: "Principal".into(),
-            engine: EngineId::Cursor,
+            engine: EngineId::CURSOR,
             claude_path: real,
             active: true,
             ..Default::default()
@@ -424,7 +424,7 @@ async fn real_cursor_view() {
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Cursor),
+                engine: Some(EngineId::CURSOR),
                 model: Some("default".into()),
                 mode: Some("default".into()),
                 ..Default::default()

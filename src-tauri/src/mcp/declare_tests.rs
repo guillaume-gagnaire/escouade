@@ -29,15 +29,15 @@ fn principal_file(h: &Harness, engine: EngineId, file: &str) -> PathBuf {
 }
 
 fn principal_toml(h: &Harness) -> PathBuf {
-    principal_file(h, EngineId::Codex, "config.toml")
+    principal_file(h, EngineId::CODEX, "config.toml")
 }
 
 fn opencode_json(h: &Harness) -> PathBuf {
-    principal_file(h, EngineId::Opencode, "opencode.json")
+    principal_file(h, EngineId::OPENCODE, "opencode.json")
 }
 
 fn copilot_json(h: &Harness) -> PathBuf {
-    principal_file(h, EngineId::Copilot, "mcp-config.json")
+    principal_file(h, EngineId::COPILOT, "mcp-config.json")
 }
 
 fn claude_json(h: &Harness) -> PathBuf {
@@ -87,12 +87,12 @@ fn codex_accounts(h: &Harness) -> (PathBuf, PathBuf) {
     let (pro, off) = (h.dir.join("codex-pro"), h.dir.join("codex-off"));
     let mut s = h.core.settings.read().clone();
     s.accounts
-        .push(crate::accounts::principal_of(EngineId::Codex));
+        .push(crate::accounts::principal_of(EngineId::CODEX));
     for (id, dir, active) in [("codex-pro", &pro, true), ("codex-off", &off, false)] {
         s.accounts.push(Account {
             id: id.into(),
             name: id.into(),
-            engine: EngineId::Codex,
+            engine: EngineId::CODEX,
             config_dir: dir.to_string_lossy().into(),
             active,
             ..Default::default()
@@ -125,12 +125,12 @@ fn told(h: &Harness) -> Vec<(EngineId, String, bool)> {
 async fn the_one_switch_declares_the_server_in_every_harness_installed_and_each_active_account() {
     let h = harness("mcp-all-on");
     let (pro, off) = codex_accounts(&h);
-    machine_accounts(&h, &[EngineId::Opencode, EngineId::Copilot]);
+    machine_accounts(&h, &[EngineId::OPENCODE, EngineId::COPILOT]);
     write(&opencode_json(&h), USERS_OPENCODE);
     write(&copilot_json(&h), USERS_COPILOT);
     installed(
         &h,
-        &[EngineId::Codex, EngineId::Opencode, EngineId::Copilot],
+        &[EngineId::CODEX, EngineId::OPENCODE, EngineId::COPILOT],
     );
 
     after(&h, |h| h.core.set_mcp_enabled(true).unwrap()).await;
@@ -155,11 +155,11 @@ async fn the_one_switch_declares_the_server_in_every_harness_installed_and_each_
     assert_eq!(
         told(&h),
         [
-            (EngineId::Claude, "principal".into(), true),
-            (EngineId::Codex, "principal-codex".into(), true),
-            (EngineId::Codex, "codex-pro".into(), true),
-            (EngineId::Copilot, "principal-copilot".into(), true),
-            (EngineId::Opencode, "principal-opencode".into(), true),
+            (EngineId::CLAUDE, "principal".into(), true),
+            (EngineId::CODEX, "principal-codex".into(), true),
+            (EngineId::CODEX, "codex-pro".into(), true),
+            (EngineId::COPILOT, "principal-copilot".into(), true),
+            (EngineId::OPENCODE, "principal-opencode".into(), true),
         ]
     );
     let declared = h.core.mcp.declared();
@@ -202,12 +202,12 @@ async fn the_one_switch_declares_the_server_in_every_harness_installed_and_each_
 async fn turned_off_the_token_changes_first_then_every_file_is_as_it_was_byte_for_byte() {
     let h = harness("mcp-all-off");
     let (pro, off) = codex_accounts(&h);
-    machine_accounts(&h, &[EngineId::Opencode, EngineId::Copilot]);
+    machine_accounts(&h, &[EngineId::OPENCODE, EngineId::COPILOT]);
     write(&opencode_json(&h), USERS_OPENCODE);
     write(&copilot_json(&h), USERS_COPILOT);
     installed(
         &h,
-        &[EngineId::Codex, EngineId::Opencode, EngineId::Copilot],
+        &[EngineId::CODEX, EngineId::OPENCODE, EngineId::COPILOT],
     );
     after(&h, |h| h.core.set_mcp_enabled(true).unwrap()).await;
     let old = h.core.mcp.external_token().unwrap();
@@ -256,17 +256,17 @@ async fn a_harness_not_installed_gets_nothing_until_it_is_then_at_once_and_an_ac
     // Only Claude Code is installed: no file of another harness is touched, or made.
     assert_eq!(read(&copilot_json(&h)), USERS_COPILOT);
     assert!(!principal_toml(&h).exists() && !opencode_json(&h).exists());
-    assert_eq!(told(&h), [(EngineId::Claude, "principal".into(), true)]);
+    assert_eq!(told(&h), [(EngineId::CLAUDE, "principal".into(), true)]);
 
     // Copilot installed since (in a terminal), without an account: still nothing (ESC-128).
-    installed(&h, &[EngineId::Copilot]);
+    installed(&h, &[EngineId::COPILOT]);
     let before = runs(&h);
     h.core.declare_on_focus();
     run_after(&h, before).await;
     assert_eq!(read(&copilot_json(&h)), USERS_COPILOT);
     // The machine's account of it added: declared at once (back to the window, or from Réglages
     // › Harness, too).
-    after(&h, |h| machine_accounts(h, &[EngineId::Copilot])).await;
+    after(&h, |h| machine_accounts(h, &[EngineId::COPILOT])).await;
     assert_eq!(current(&COPILOT, &copilot_json(&h)), Some(now_wanted(&h)));
     // The focus again at once brings no run: one a minute at most.
     let before = runs(&h);
@@ -282,7 +282,7 @@ async fn a_harness_not_installed_gets_nothing_until_it_is_then_at_once_and_an_ac
         s.accounts.push(Account {
             id: "copilot-pro".into(),
             name: "Pro".into(),
-            engine: EngineId::Copilot,
+            engine: EngineId::COPILOT,
             config_dir: dir.to_string_lossy().into(),
             active: true,
             ..Default::default()
@@ -307,11 +307,11 @@ async fn a_config_that_cannot_be_read_is_told_with_what_to_paste_and_left_alone(
     let h = harness("mcp-invalid");
     write(&principal_toml(&h), "model = = 1\n");
     write(&copilot_json(&h), "{\"mcpServers\": [");
-    machine_accounts(&h, &[EngineId::Codex, EngineId::Copilot]);
-    installed(&h, &[EngineId::Codex, EngineId::Copilot]);
+    machine_accounts(&h, &[EngineId::CODEX, EngineId::COPILOT]);
+    installed(&h, &[EngineId::CODEX, EngineId::COPILOT]);
     after(&h, |h| h.core.set_mcp_enabled(true).unwrap()).await;
     let declared = h.core.mcp.declared();
-    for (engine, says) in [(EngineId::Codex, "TOML"), (EngineId::Copilot, "JSON")] {
+    for (engine, says) in [(EngineId::CODEX, "TOML"), (EngineId::COPILOT, "JSON")] {
         let d = declared.iter().find(|d| d.engine == engine).unwrap();
         assert!(!d.ok);
         assert!(
@@ -328,7 +328,7 @@ async fn a_config_that_cannot_be_read_is_told_with_what_to_paste_and_left_alone(
     // The other harnesses are declared all the same.
     assert!(declared
         .iter()
-        .any(|d| d.engine == EngineId::Claude && d.ok));
+        .any(|d| d.engine == EngineId::CLAUDE && d.ok));
     h.core.shutdown();
 }
 
@@ -487,11 +487,11 @@ async fn an_account_whose_config_toml_is_a_link_to_principals_keeps_its_link_and
     std::os::unix::fs::symlink(principal_toml(&h), &linked).unwrap();
     let mut s = h.core.settings.read().clone();
     s.accounts
-        .push(crate::accounts::principal_of(EngineId::Codex));
+        .push(crate::accounts::principal_of(EngineId::CODEX));
     s.accounts.push(Account {
         id: "codex-lie".into(),
         name: "Lié".into(),
-        engine: EngineId::Codex,
+        engine: EngineId::CODEX,
         config_dir: dir.to_string_lossy().into(),
         active: true,
         ..Default::default()
@@ -504,7 +504,7 @@ async fn an_account_whose_config_toml_is_a_link_to_principals_keeps_its_link_and
             .is_symlink()
     };
 
-    installed(&h, &[EngineId::Codex]);
+    installed(&h, &[EngineId::CODEX]);
     after(&h, |h| h.core.set_mcp_enabled(true).unwrap()).await;
     assert!(is_link(), "the link is still a link");
     let text = std::fs::read_to_string(principal_toml(&h)).unwrap();
@@ -516,7 +516,7 @@ async fn an_account_whose_config_toml_is_a_link_to_principals_keeps_its_link_and
         .mcp
         .declared()
         .into_iter()
-        .filter(|d| d.engine == EngineId::Codex)
+        .filter(|d| d.engine == EngineId::CODEX)
         .collect();
     assert_eq!(codex.len(), 2);
     assert!(codex.iter().all(|d| d.ok), "{codex:?}");

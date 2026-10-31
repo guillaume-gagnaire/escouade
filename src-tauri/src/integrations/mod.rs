@@ -10,6 +10,7 @@ pub mod gitlab;
 pub mod jira;
 pub mod linear;
 pub mod secrets;
+pub mod source;
 pub mod sync;
 pub mod text;
 pub mod trello;
@@ -51,42 +52,42 @@ pub struct Accounts {
 impl Accounts {
     pub fn get(&self, s: Service) -> Option<&Account> {
         match s {
-            Service::Jira => self.jira.as_ref(),
-            Service::Trello => self.trello.as_ref(),
-            Service::Github => self.github.as_ref(),
-            Service::Linear => self.linear.as_ref(),
-            Service::Clickup => self.clickup.as_ref(),
+            Service::JIRA => self.jira.as_ref(),
+            Service::TRELLO => self.trello.as_ref(),
+            Service::GITHUB => self.github.as_ref(),
+            Service::LINEAR => self.linear.as_ref(),
+            Service::CLICKUP => self.clickup.as_ref(),
             // The GitLab and Azure DevOps code hosts' accounts (`hosted_accounts`).
-            Service::Gitlab | Service::Azure => None,
+            _ => None,
         }
     }
 
     pub fn get_mut(&mut self, s: Service) -> Option<&mut Account> {
         match s {
-            Service::Jira => self.jira.as_mut(),
-            Service::Trello => self.trello.as_mut(),
-            Service::Github => self.github.as_mut(),
-            Service::Linear => self.linear.as_mut(),
-            Service::Clickup => self.clickup.as_mut(),
-            Service::Gitlab | Service::Azure => None,
+            Service::JIRA => self.jira.as_mut(),
+            Service::TRELLO => self.trello.as_mut(),
+            Service::GITHUB => self.github.as_mut(),
+            Service::LINEAR => self.linear.as_mut(),
+            Service::CLICKUP => self.clickup.as_mut(),
+            _ => None,
         }
     }
 
     pub fn set(&mut self, s: Service, a: Option<Account>) {
         match s {
-            Service::Jira => self.jira = a,
-            Service::Trello => self.trello = a,
-            Service::Github => self.github = a,
-            Service::Linear => self.linear = a,
-            Service::Clickup => self.clickup = a,
+            Service::JIRA => self.jira = a,
+            Service::TRELLO => self.trello = a,
+            Service::GITHUB => self.github = a,
+            Service::LINEAR => self.linear = a,
+            Service::CLICKUP => self.clickup = a,
             // Connected and disconnected as a code host.
-            Service::Gitlab | Service::Azure => {}
+            _ => {}
         }
     }
 
     /// The GitLab code host's accounts, one per instance: GitLab Issues' too.
     pub fn gitlab_accounts(&self) -> Vec<&crate::forge::accounts::ForgeAccount> {
-        self.hosted_accounts(Service::Gitlab)
+        self.hosted_accounts(Service::GITLAB)
     }
 
     /// The code host's accounts a source has as its own (GitLab Issues: GitLab's; Azure Boards:
@@ -108,11 +109,12 @@ impl Accounts {
 
     /// What the window knows of them.
     pub fn views(&self) -> Vec<AccountView> {
-        Service::ALL
+        source::registry()
+            .services()
             .iter()
-            .map(|&service| match service {
-                Service::Gitlab | Service::Azure => self.hosted_view(service),
-                _ => AccountView {
+            .map(|&service| match hosted_kind(service) {
+                Some(_) => self.hosted_view(service),
+                None => AccountView {
                     service,
                     connected: self.get(service).is_some(),
                     label: self
@@ -155,11 +157,8 @@ impl Accounts {
 
 /// The code host whose accounts are a source's own: GitLab Issues', Azure Boards'.
 pub fn hosted_kind(s: Service) -> Option<&'static str> {
-    match s {
-        Service::Gitlab => Some("gitlab"),
-        Service::Azure => Some("azure"),
-        _ => None,
-    }
+    let kind = source::registry().get(s)?;
+    kind.host().filter(|_| !kind.own_account())
 }
 
 /// The services of the list this version knows: one a later version added (the app rolled back)
@@ -168,7 +167,8 @@ fn known_services<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<Service>
     let names: Vec<Value> = Vec::deserialize(d)?;
     Ok(names
         .into_iter()
-        .filter_map(|n| serde_json::from_value(n).ok())
+        .filter_map(|n| serde_json::from_value::<Service>(n).ok())
+        .filter(|s| source::registry().get(*s).is_some())
         .collect())
 }
 
@@ -330,155 +330,6 @@ impl Bases {
             github: var("ESCOUADE_GITHUB_API", "https://api.github.com"),
             linear: var("ESCOUADE_LINEAR_API", "https://api.linear.app"),
             clickup: var("ESCOUADE_CLICKUP_API", "https://api.clickup.com/api/v2"),
-        }
-    }
-}
-
-/// What talks to one service for one account.
-pub enum Client {
-    Jira(jira::Jira),
-    Trello(trello::Trello),
-    Github(github::Github),
-    Linear(linear::Linear),
-    Clickup(clickup::Clickup),
-    Gitlab(gitlab::Gitlab),
-    Azure(azure::Boards),
-}
-
-impl Client {
-    /// For GitHub, `account.token` must be the token itself (the CLI's already asked for).
-    pub fn new(service: Service, account: &Account, http: reqwest::Client, bases: &Bases) -> Self {
-        match service {
-            Service::Jira => Client::Jira(jira::Jira::new(http, account)),
-            Service::Trello => Client::Trello(trello::Trello::new(http, account, &bases.trello)),
-            Service::Github => Client::Github(github::Github::new(http, account, &bases.github)),
-            Service::Linear => Client::Linear(linear::Linear::new(http, account, &bases.linear)),
-            Service::Clickup => {
-                Client::Clickup(clickup::Clickup::new(http, account, &bases.clickup))
-            }
-            // One instance: the account's site, token and user (`Core::gitlab_client` gives
-            // every one).
-            Service::Gitlab => Client::Gitlab(gitlab::Gitlab::new(
-                http,
-                vec![gitlab::Instance {
-                    host: crate::forge::host_of(&account.site),
-                    base: format!("{}/api/v4", account.site.trim_end_matches('/')),
-                    token: account.token.trim().to_string(),
-                    user: account.user.clone(),
-                    label: account.label.clone(),
-                }],
-            )),
-            // One organization: the account's address and token (`Core::azure_client` gives
-            // every one).
-            Service::Azure => {
-                let url = account.site.trim_end_matches('/').to_string();
-                Client::Azure(azure::Boards::new(vec![azure::Instance {
-                    org: url.rsplit('/').next().unwrap_or("").to_string(),
-                    client: crate::forge::azure_api::Azure::new(
-                        http,
-                        url.clone(),
-                        crate::forge::azure::api_override(&url),
-                        account.token.clone(),
-                    ),
-                    token_page: format!("{url}/_usersSettings/tokens"),
-                }]))
-            }
-        }
-    }
-
-    /// The account's label and user, once its credentials are accepted.
-    pub async fn me(&self) -> Result<(String, String)> {
-        match self {
-            Client::Jira(c) => c.me().await,
-            Client::Trello(c) => c.me().await,
-            Client::Github(c) => c.me().await,
-            Client::Linear(c) => c.me().await,
-            Client::Clickup(c) => c.me().await,
-            Client::Gitlab(c) => c.me().await,
-            Client::Azure(c) => c.me().await,
-        }
-    }
-
-    pub async fn containers(&self) -> Result<Vec<Container>> {
-        match self {
-            Client::Jira(c) => c.containers().await,
-            Client::Trello(c) => c.containers().await,
-            Client::Github(c) => c.containers().await,
-            Client::Linear(c) => c.containers().await,
-            Client::Clickup(c) => c.containers().await,
-            Client::Gitlab(c) => c.containers().await,
-            Client::Azure(c) => c.containers().await,
-        }
-    }
-
-    pub async fn states(&self, container: &str) -> Result<Vec<ExternalState>> {
-        match self {
-            Client::Jira(c) => c.states(container).await,
-            Client::Trello(c) => c.states(container).await,
-            Client::Github(c) => c.states(container).await,
-            Client::Linear(c) => c.states(container).await,
-            Client::Clickup(c) => c.states(container).await,
-            Client::Gitlab(c) => c.states(container).await,
-            Client::Azure(c) => c.states(container).await,
-        }
-    }
-
-    /// The states of a container, and those each column gives by default: guessed by their
-    /// names, and for ClickUp by their types too.
-    pub async fn states_view(&self, container: &str) -> Result<StatesView> {
-        if let Client::Clickup(c) = self {
-            return c.states_view(container).await;
-        }
-        if let Client::Azure(c) = self {
-            return c.states_view(container).await;
-        }
-        let states = self.states(container).await?;
-        Ok(StatesView {
-            defaults: text::default_states(&states),
-            states,
-        })
-    }
-
-    pub async fn issues(&self, container: &str, q: &Query) -> Result<IssuePage> {
-        match self {
-            Client::Jira(c) => c.issues(container, q).await,
-            Client::Trello(c) => c.issues(container, q).await,
-            Client::Github(c) => c.issues(container, q).await,
-            Client::Linear(c) => c.issues(container, q).await,
-            Client::Clickup(c) => c.issues(container, q).await,
-            Client::Gitlab(c) => c.issues(container, q).await,
-            Client::Azure(c) => c.issues(container, q).await,
-        }
-    }
-
-    /// Gives the external ticket `state`; `mapped`: every state the link gives a column (GitHub
-    /// and GitLab take the labels of the others off).
-    pub async fn set_state(
-        &self,
-        r: &ExternalRef,
-        state: &ExternalState,
-        mapped: &[ExternalState],
-    ) -> Result<()> {
-        match self {
-            Client::Jira(c) => c.set_state(r, state).await,
-            Client::Trello(c) => c.set_state(r, state).await,
-            Client::Github(c) => c.set_state(r, state, mapped).await,
-            Client::Linear(c) => c.set_state(r, state).await,
-            Client::Clickup(c) => c.set_state(r, state).await,
-            Client::Gitlab(c) => c.set_state(r, state, mapped).await,
-            Client::Azure(c) => c.set_state(r, state).await,
-        }
-    }
-
-    pub async fn comment(&self, r: &ExternalRef, text: &str) -> Result<()> {
-        match self {
-            Client::Jira(c) => c.comment(r, text).await,
-            Client::Trello(c) => c.comment(r, text).await,
-            Client::Github(c) => c.comment(r, text).await,
-            Client::Linear(c) => c.comment(r, text).await,
-            Client::Clickup(c) => c.comment(r, text).await,
-            Client::Gitlab(c) => c.comment(r, text).await,
-            Client::Azure(c) => c.comment(r, text).await,
         }
     }
 }
@@ -714,15 +565,15 @@ mod tests {
             (503, false),
         ] {
             server.on("GET", "/x", status, Value::Null);
-            let e = call(Service::Github, http.get(format!("{}/x", server.url)))
+            let e = call(Service::GITHUB, http.get(format!("{}/x", server.url)))
                 .await
                 .unwrap_err();
             assert_eq!(lasting(&e), lasts, "{status}");
             // It still reads as before.
-            assert_eq!(e.to_string(), http_error(Service::Github, status, ""));
+            assert_eq!(e.to_string(), http_error(Service::GITHUB, status, ""));
         }
         // Not reached: it may be, later.
-        let e = call(Service::Github, http.get("http://"))
+        let e = call(Service::GITHUB, http.get("http://"))
             .await
             .unwrap_err();
         assert!(e.to_string().starts_with("GitHub injoignable"), "{e}");
@@ -734,12 +585,12 @@ mod tests {
     #[test]
     fn an_http_error_says_what_the_service_said() {
         assert_eq!(
-            http_error(Service::Jira, 401, ""),
+            http_error(Service::JIRA, 401, ""),
             "Jira refuse ces identifiants (401)"
         );
         assert_eq!(
             http_error(
-                Service::Jira,
+                Service::JIRA,
                 400,
                 r#"{"errorMessages":["Le champ 'sprint' n'existe pas."],"errors":{}}"#
             ),
@@ -747,7 +598,7 @@ mod tests {
         );
         assert_eq!(
             http_error(
-                Service::Jira,
+                Service::JIRA,
                 400,
                 r#"{"errorMessages":[],"errors":{"jql":"JQL invalide"}}"#
             ),
@@ -755,21 +606,21 @@ mod tests {
         );
         assert_eq!(
             http_error(
-                Service::Github,
+                Service::GITHUB,
                 403,
                 r#"{"message":"Resource not accessible by personal access token"}"#
             ),
             "GitHub refuse l'accès (403) — Resource not accessible by personal access token"
         );
         assert_eq!(
-            http_error(Service::Trello, 404, "model not found\n"),
+            http_error(Service::TRELLO, 404, "model not found\n"),
             "Trello : introuvable (404) — model not found"
         );
         assert_eq!(
-            http_error(Service::Github, 502, "<html>Bad gateway</html>"),
+            http_error(Service::GITHUB, 502, "<html>Bad gateway</html>"),
             "GitHub : erreur 502"
         );
-        assert!(http_error(Service::Trello, 429, "").contains("réessaie"));
+        assert!(http_error(Service::TRELLO, 429, "").contains("réessaie"));
     }
 
     #[test]
@@ -787,11 +638,11 @@ mod tests {
         };
         let p = checked_links(ProjectIntegrations {
             links: vec![
-                link(Service::Jira, "ATL"),
-                link(Service::Trello, " "),
-                link(Service::Jira, "MOB"),
-                link(Service::Trello, "b1"),
-                link(Service::Github, "acme/api"),
+                link(Service::JIRA, "ATL"),
+                link(Service::TRELLO, " "),
+                link(Service::JIRA, "MOB"),
+                link(Service::TRELLO, "b1"),
+                link(Service::GITHUB, "acme/api"),
             ],
             comments: vec![Column::Done, Column::Review, Column::Done],
             ..Default::default()
@@ -805,7 +656,7 @@ mod tests {
     fn the_window_sees_who_is_connected_and_never_a_secret() {
         let mut a = Accounts::default();
         a.set(
-            Service::Trello,
+            Service::TRELLO,
             Some(Account {
                 key: "k".into(),
                 token: "secret".into(),

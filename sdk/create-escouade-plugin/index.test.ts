@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { validateText } from '../../schemas/plugin-manifest.mjs';
-import { create, SDK_VERSION } from './index.mjs';
+import { create, SDK_VERSION, tagOf } from './index.mjs';
 
 // npm create escouade-plugin (ESC-181, PLG-9): each template written whole, its manifest valid. The template's own
 // tests, its build, validate and the conformance bench run in CI (sdk/scripts/template-ci.mjs).
@@ -42,6 +42,31 @@ describe('create-escouade-plugin', () => {
     expect(pkg.devDependencies['@escouade-dev/plugin']).toBe('file:../sdk');
     if (process.platform !== 'win32') expect(fs.statSync(path.join(folder, 'plugin')).mode & 0o111).not.toBe(0);
     expect(fs.readFileSync(path.join(folder, 'LICENSE'), 'utf8')).toContain(`Copyright (c) ${new Date().getFullYear()}`);
+  });
+
+  it('writes a plugin in a folder of a repository with several: its repository named, its tags naming the folder (ESC-313)', () => {
+    const repo = tmp();
+    fs.mkdirSync(path.join(repo, '.git'));
+    fs.writeFileSync(
+      path.join(repo, '.git', 'config'),
+      '[core]\n\tbare = false\n[remote "origin"]\n\turl = git@github.com:sroux/escouade-plugins.git\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n',
+    );
+    const folder = path.join(repo, 'plugins', 'notify');
+    create({ folder, kind: 'program', id: 'dev.test.notify' });
+    const manifest = fs.readFileSync(path.join(folder, 'escouade-plugin.json'), 'utf8');
+    expect(validateText(manifest).ok).toBe(true);
+    expect(JSON.parse(manifest).repository).toBe('https://github.com/sroux/escouade-plugins');
+    const readme = fs.readFileSync(path.join(folder, 'README.md'), 'utf8');
+    expect(readme).toContain('This plugin is the folder `plugins/notify` of its repository.');
+    expect(readme).toContain('git tag plugins/notify/v0.1.0 && git push origin plugins/notify/v0.1.0');
+    expect(readme).toContain('`notify@0.1.0`');
+    expect(tagOf('plugins/notify', '1.2.3')).toBe('plugins/notify/v1.2.3');
+    // Outside a repository, or at its root: the plain tags of a repository with one plugin.
+    expect(tagOf('', '1.2.3')).toBe('v1.2.3');
+    const alone = path.join(tmp(), 'alone');
+    create({ folder: alone, kind: 'declarative' });
+    expect(fs.readFileSync(path.join(alone, 'README.md'), 'utf8')).toContain('git tag v0.1.0 && git push origin v0.1.0');
+    expect(JSON.parse(fs.readFileSync(path.join(alone, 'escouade-plugin.json'), 'utf8')).repository).toBeUndefined();
   });
 
   it('writes a declarative theme that runs nothing', () => {

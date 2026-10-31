@@ -38,7 +38,7 @@ impl Engine for Minimal {
     /// The id the tests of the handover run it under, beside Claude Code's fake (the bench reads
     /// none).
     fn id(&self) -> EngineId {
-        EngineId::Bench
+        EngineId::BENCH
     }
 
     fn name(&self) -> &'static str {

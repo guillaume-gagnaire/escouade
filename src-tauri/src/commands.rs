@@ -86,6 +86,7 @@ pub struct InitialState {
     engines: Vec<crate::engine::registry::EngineDecl>,
     /// The harnesses whose program is found: the only ones the interface offers.
     engines_found: Vec<crate::model::EngineId>,
+    sources: Vec<crate::integrations::source::SourceDecl>,
     /// Why no ticket of a project's board starts, by project.
     board_issues: HashMap<String, String>,
     /// Why no ticket of a project that goes to any account starts for now (a quota, a usage
@@ -121,6 +122,7 @@ pub fn subscribe(
     // A page that loads again has no dictation under way: the one of the page before stops.
     voice.cancel();
     core.reset_unsaved();
+    core.held.lock().clear();
     // One lock at a time, each guard ending with its statement: in a struct literal the guards
     // would live together (the lock order is projects before tickets, see `Core`).
     let settings = core.settings.read().clone();
@@ -167,6 +169,7 @@ pub fn subscribe(
         account_models,
         engines: crate::engine::registry::declared(),
         engines_found: core.engines_found(),
+        sources: crate::integrations::source::declared(),
         board_issues,
         autopilot_pause,
         project_pauses,
@@ -706,7 +709,7 @@ pub fn claude_found(core: CoreState) -> ClaudeFound {
 /// of it may share (those it has).
 #[tauri::command(async)]
 pub fn account_shareable(core: CoreState, engine: Option<EngineId>) -> Vec<String> {
-    core.shareable(engine.unwrap_or(EngineId::Claude))
+    core.shareable(engine.unwrap_or(EngineId::CLAUDE))
 }
 
 /// « Créer et se connecter »: a new account of `engine` (Claude Code by default), its folder made
@@ -720,7 +723,7 @@ pub fn account_create(
     mode: ShareMode,
     engine: Option<EngineId>,
 ) -> Res<ClaudeAccount> {
-    let engine = engine.unwrap_or(EngineId::Claude);
+    let engine = engine.unwrap_or(EngineId::CLAUDE);
     let r = core
         .create_account(engine, &name, &share, mode)
         .map_err(err);
@@ -1123,6 +1126,20 @@ pub async fn remove_workflow_file(
     core.remove_workflow_file(&id, &workflow).await.map_err(err)
 }
 
+/// « Supprimer » a workflow (`removed`: its file goes, never written again), « Laisser supprimé »
+/// one proposed again, or « Rétablir » it (ESC-309).
+#[tauri::command]
+pub async fn set_workflow_removed(
+    core: CoreState<'_>,
+    id: String,
+    workflow: String,
+    removed: bool,
+) -> Res<crate::workflow::Scan> {
+    core.set_workflow_removed(&id, &workflow, removed)
+        .await
+        .map_err(err)
+}
+
 /// « Oublier » a repository gone from the project's folder (ESC-169).
 #[tauri::command(async)]
 pub fn forget_repo(core: CoreState, id: String, repo: String) -> Res<Project> {
@@ -1133,20 +1150,6 @@ pub fn forget_repo(core: CoreState, id: String, repo: String) -> Res<Project> {
 #[tauri::command(async)]
 pub fn set_project_logo(core: CoreState, id: String, path: Option<String>) -> Res<Project> {
     core.set_project_logo(&id, path.as_deref()).map_err(err)
-}
-
-/// « Index du code » of a project (ESC-251): whether it is on, and what the index holds.
-#[tauri::command(async)]
-pub fn get_code_index(core: CoreState, id: String) -> Res<crate::codeindex::CodeIndexInfo> {
-    core.code_index_info(&id).map_err(err)
-}
-
-/// What the code index saved the agents (ESC-253), per agent and per project: the tokens of the files
-/// its answers draw on, against the answers'. `project` narrows it to one project.
-#[tauri::command(async)]
-pub fn get_index_savings(core: CoreState, project: Option<String>) -> serde_json::Value {
-    let by = |agent| core.stats.index_savings(agent, project.as_deref());
-    serde_json::json!({ "byAgent": by(true), "byProject": by(false) })
 }
 
 /// « Recherche par le sens » (ESC-254): the vectors' model, whether it is downloaded.
@@ -1171,25 +1174,6 @@ pub fn vectors_model_cancel(core: CoreState) {
 #[tauri::command(async)]
 pub fn vectors_model_delete(core: CoreState) -> Res<crate::vectors::wiring::VectorsModelInfo> {
     core.vectors_model_delete().map_err(err)
-}
-
-/// Turns « Index du code » on (the project is read at once) or off (its database is erased) for
-/// the project; null follows « Index du code sur tous les projets » again (ESC-293).
-#[tauri::command]
-pub async fn set_code_index(
-    core: CoreState<'_>,
-    id: String,
-    enabled: Option<bool>,
-) -> Res<crate::codeindex::CodeIndexInfo> {
-    core.set_code_index(&id, enabled).await.map_err(err)
-}
-
-/// « Index du code sur tous les projets » turned on (the projects that follow it read one after
-/// the other, in the background) or off (their index erased), saved at once (ESC-293): how many
-/// projects follow it.
-#[tauri::command]
-pub async fn set_code_index_all(core: CoreState<'_>, enabled: bool) -> Res<usize> {
-    core.set_code_index_all(enabled).await.map_err(err)
 }
 
 /// The project's logo for its tile, as a `data:` URL; null when it has none.
@@ -2537,6 +2521,12 @@ pub fn quit_app(app: tauri::AppHandle) {
 pub fn set_unsaved(core: CoreState, count: usize) {
     core.unsaved
         .store(count, std::sync::atomic::Ordering::Release);
+}
+
+/// The agents the window holds a message for (`outbox.svelte.ts`).
+#[tauri::command]
+pub fn set_held(core: CoreState, agents: Vec<String>) {
+    *core.held.lock() = agents.into_iter().collect();
 }
 
 /// Turns Remote Control on or off for the agent. True when, in the Claude Code view, the change

@@ -1,13 +1,16 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setLang } from './i18n';
 import {
   BY_FORGE,
   HOSTED,
   importedLabel,
   linkSource,
+  pickLabel,
   SERVICE_IDS,
   SERVICES,
   setColumnState,
+  setSources,
+  shortName,
   toggleComment,
   trelloTokenPage,
 } from './integrations';
@@ -111,5 +114,46 @@ describe('integrations in English', () => {
     expect(importedLabel([issue({ service: 'github' }), issue(), issue({ service: 'trello' })])).toBe(
       '3 tickets imported from GitHub, Jira, and Trello',
     );
+  });
+});
+
+describe('the registry of the sources', () => {
+  const builtIn = [...SERVICE_IDS];
+  const hosted = [...HOSTED];
+  const byForge = { ...BY_FORGE };
+
+  afterEach(() => {
+    // Back to the seven of the window, for the tests that follow.
+    setSources(
+      builtIn.map((id) => ({
+        id,
+        name: SERVICES[id].name,
+        short: shortName(id),
+        host: hosted.includes(id) ? (byForge[id] ?? id) : null,
+        ownAccount: !byForge[id],
+      })),
+    );
+  });
+
+  it('is read from what the core tells: the ids, the short names, the code hosts', () => {
+    setSources([
+      { id: 'jira', name: 'Jira', short: 'Jira', host: null, ownAccount: true },
+      { id: 'github', name: 'GitHub', short: 'GitHub', host: 'github', ownAccount: true },
+      { id: 'gitlab', name: 'GitLab', short: 'GitLab', host: 'gitlab', ownAccount: false },
+    ]);
+    expect(SERVICE_IDS).toEqual(['jira', 'github', 'gitlab']);
+    expect(HOSTED).toEqual(['github', 'gitlab']);
+    expect(BY_FORGE).toEqual({ gitlab: 'gitlab' });
+    expect(shortName('gitlab')).toBe('GitLab');
+  });
+
+  it('shows a source the window has no logo for by its initials, with the words of any source', () => {
+    setSources([{ id: 'yougile', name: 'YouGile', short: 'YouGile', host: null, ownAccount: true }]);
+    expect(SERVICE_IDS).toEqual(['yougile']);
+    expect(SERVICES.yougile).toMatchObject({ name: 'YouGile', letter: 'YO', container: 'Conteneur' });
+    expect(shortName('yougile')).toBe('YouGile');
+    expect(importedLabel([issue({ service: 'yougile' })])).toBe('1 ticket importé depuis YouGile');
+    expect(pickLabel('yougile')).toBe('Conteneur de la source');
+    expect(pickLabel('jira')).toBe('Projet Jira');
   });
 });

@@ -248,6 +248,16 @@
 <div class="wf" data-testid="workflow">
   {#if !scan}
     <div class="caption wf-cap wf-wait">{t('workflow.reading')}</div>
+  {:else if !wf && scan.off}
+    <!-- « Pas de workflow pour ce projet » (ESC-309): what it does, and where it is undone. -->
+    <div class="wf-empty" data-testid="workflow-off">
+      <span class="ic"><Icon name="flow" size={14} /></span>
+      <h3>{t('workflow.offTitle')}</h3>
+      <p>{t('workflow.offBody', { project: project.name })}</p>
+      <div class="btns">
+        <button class="btn" onclick={openSettings}>{t('workflow.offUndo')}</button>
+      </div>
+    </div>
   {:else if !wf}
     <div class="wf-empty">
       <span class="ic"><Icon name="flow" size={14} /></span>

@@ -2,7 +2,6 @@ import { Channel, invoke } from '@tauri-apps/api/core';
 import type {
   PageBounds,
   PageView,
-  CodeIndexInfo,
   Memory,
   VectorsModelInfo,
   OfferedMemory,
@@ -266,12 +265,6 @@ export const api = {
   projectLogo: (id: string) => invoke<string | null>('project_logo', { id }),
   /** The image of `path` as a logo would be taken (`data:` URL), or why it would be refused. */
   readLogo: (path: string) => invoke<string>('read_logo', { path }),
-  /** « Index du code » of a project (ESC-254): whether it is on, what it holds, what its fence leaves out. */
-  getCodeIndex: (id: string) => invoke<CodeIndexInfo>('get_code_index', { id }),
-  /** Turns it on (answers once the project is read) or off (its database erased), the project's choice; null follows the app's setting again. */
-  setCodeIndex: (id: string, enabled: boolean | null) => invoke<CodeIndexInfo>('set_code_index', { id, enabled }),
-  /** « Index du code sur tous les projets » (ESC-293), saved at once: on, the projects that follow it read one after the other; off, their index erased. How many follow it. */
-  setCodeIndexAll: (enabled: boolean) => invoke<number>('set_code_index_all', { enabled }),
   /** « Recherche par le sens »: the vectors' model, its download (progress in `vectorsDownload`), « Annuler », « Effacer ». */
   vectorsModel: () => invoke<VectorsModelInfo>('vectors_model'),
   vectorsModelDownload: () => invoke<VectorsModelInfo>('vectors_model_download'),
@@ -416,6 +409,9 @@ export const api = {
   refineWorkflows: (id: string) => invoke<WorkflowRefineOutcome>('refine_workflows', { id }),
   /** « Retirer du dépôt »: the file of a workflow this machine does not read (ESC-195). */
   removeWorkflowFile: (id: string, workflow: string) => invoke<WorkflowScan>('remove_workflow_file', { id, workflow }),
+  /** « Supprimer » a workflow (its file goes, no reading writes it again), « Laisser supprimé » or « Rétablir » it (ESC-309). */
+  setWorkflowRemoved: (id: string, workflow: string, removed: boolean) =>
+    invoke<WorkflowScan>('set_workflow_removed', { id, workflow, removed }),
   /** « Oublier » a repository gone from the project's folder. */
   forgetRepo: (id: string, repo: string) => invoke<Project>('forget_repo', { id, repo }),
   integrateBase: (id: string) => invoke<Integration>('integrate_base', { id }),
@@ -603,6 +599,7 @@ export const api = {
   codeSearch: (projectId: string, agentId: string | null, query: SearchQuery) =>
     invoke<SearchResult>('code_search', { projectId, agentId, query }),
   setUnsaved: (count: number) => invoke<void>('set_unsaved', { count }),
+  setHeld: (agents: string[]) => invoke<void>('set_held', { agents }),
   cancelResume: (id: string) => invoke<void>('cancel_resume', { id }),
   ticketCreate: (projectId: string, draft: TicketDraft) => invoke<Ticket>('ticket_create', { projectId, draft }),
   ticketUpdate: (id: string, draft: TicketDraft) => invoke<Ticket>('ticket_update', { id, draft }),

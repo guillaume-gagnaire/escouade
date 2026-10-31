@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { pathIn } from '~/data/language';
 import { SUBMIT_TEXTS } from '~/data/submit';
+import { tagsOf } from '~~/shared/folder';
 
 // The submission, as the preview draws it (design/store/, #submit): the steps on the left (repository, version,
 // checks, publish), and on the right the step being done. The repository and the tag are picked by plain links and
@@ -23,6 +24,7 @@ interface VersionData {
   error: string | null;
   origin: string;
   repository: string;
+  path: string;
   tag: string;
   commit: string;
   tagDate: string | null;
@@ -47,11 +49,22 @@ interface Repo {
 interface SubmitData {
   on: boolean;
   repos: Repo[];
-  recent: { id: number; repository: string; tag: string; state: string; pluginId: string | null }[];
+  recent: { id: number; repository: string; path: string; tag: string; state: string; pluginId: string | null }[];
 }
 interface TagsData {
   repository: string;
+  path: string | null;
   tags: { name: string; commit: string; release: boolean; date: string | null }[];
+  others: number;
+}
+interface FoldersData {
+  repository: string;
+  tag: string | null;
+  commit: string | null;
+  folders: string[];
+  more: boolean;
+  path: string | null;
+  problem: string | null;
 }
 
 const NAMES: Record<string, Words> = {
@@ -75,6 +88,7 @@ const here = computed(() => pathIn(lang.value, '/submit'));
 const query = (k: string) => (typeof route.query[k] === 'string' ? (route.query[k] as string) : '');
 const versionParam = query('version');
 const repoParam = query('repo');
+const pathParam = query('path');
 const wantsPublish = query('step') === 'publish';
 const notice = computed(() => text.value.notices[query('notice')] ?? null);
 const docs = computed(() =>
@@ -94,13 +108,30 @@ const version = await useFetch<VersionData>(`/api/submissions/${encodeURICompone
   immediate: signedIn.value && mode === 'version',
 });
 const submit = await useFetch<SubmitData>('/api/submit', { key: 'submit', immediate: signedIn.value && mode === 'repos' });
-const tags = await useFetch<TagsData>('/api/submit/tags', {
-  key: `tags-${repoParam}`,
-  query: { repo: repoParam },
+// The second step (ESC-313): the plugin's folder (the root by default, a folder listed or typed), then that folder's
+// tags. A folder refused (absolute, `..`, a link, no manifest) says why, and offers no tag to submit.
+const folders = await useFetch<FoldersData>('/api/submit/folders', {
+  key: `folders-${repoParam}-${pathParam}`,
+  query: { repo: repoParam, path: pathParam },
   immediate: signedIn.value && mode === 'tags',
 });
+const folder = computed(() => folders.data.value?.path ?? (pathParam ? null : ''));
+const serverProblem = computed(() => folders.data.value?.problem ?? null);
+// A repository without a manifest at its root (several plugins in folders): the author picks one, no error shown.
+const needFolder = computed(() => !pathParam && serverProblem.value === 'no-manifest' && !!folders.data.value?.folders.length);
+const problem = computed(() => (needFolder.value ? null : serverProblem.value));
+const tags = await useFetch<TagsData>('/api/submit/tags', {
+  key: `tags-${repoParam}-${pathParam}`,
+  query: { repo: repoParam, path: pathParam },
+  immediate: signedIn.value && mode === 'tags',
+});
+const folderLink = (path: string) =>
+  `${here.value}?repo=${encodeURIComponent(repoParam)}${path ? `&path=${encodeURIComponent(path)}` : ''}`;
+const firstTag = computed(() => tagsOf('0.1.0', folder.value ?? '')[0]!);
 const v = computed(() => version.data.value);
-const off = computed(() => [version.error.value, submit.error.value, tags.error.value].some((e) => e?.statusCode === 503));
+const off = computed(() =>
+  [version.error.value, submit.error.value, tags.error.value, folders.error.value].some((e) => e?.statusCode === 503),
+);
 
 // The checks are read again every second while they run.
 let timer: ReturnType<typeof setInterval> | undefined;
@@ -126,7 +157,11 @@ const step = computed(() => {
   return v.value && (wantsPublish || v.value.state === 'published') && v.value.state !== 'rejected' ? 3 : 2;
 });
 const stepNote = (n: number) => {
-  if (n === 0) return v.value?.repository ?? (mode === 'tags' ? repoParam : '');
+  if (n === 0) {
+    const repo = v.value?.repository ?? (mode === 'tags' ? repoParam : '');
+    const path = v.value ? v.value.path : mode === 'tags' ? (folder.value ?? '') : '';
+    return path ? `${repo} · ${path}` : repo;
+  }
   if (n === 1) return v.value?.tag ?? '';
   if (n === 2) return v.value ? text.value.stepNotes.checks(passed.value) : '';
   return text.value.stepNotes.publish;
@@ -199,7 +234,7 @@ useHead(() => ({
           <ul class="recent">
             <li v-for="s in submit.data.value.recent" :key="s.id">
               <a :href="`${here}?version=${s.id}`"
-                ><b>{{ s.pluginId ?? s.repository }}</b> <span class="mono">{{ s.tag }}</span></a
+                ><b>{{ s.pluginId ?? (s.path ? `${s.repository}/${s.path}` : s.repository) }}</b> <span class="mono">{{ s.tag }}</span></a
               >
               <span class="state" :class="s.state">{{ text.states[s.state] ?? s.state }}</span>
             </li>
@@ -210,32 +245,82 @@ useHead(() => ({
       <!-- 2. The version -->
       <template v-else-if="mode === 'tags'">
         <h1 class="page-title">
-          {{ text.tags.title }} <span class="more">{{ text.tags.more(repoParam) }}</span>
+          {{ text.tags.titleFolder }} <span class="more">{{ text.tags.more(repoParam) }}</span>
         </h1>
         <p v-if="notice" class="notice" :class="notice[0]" role="status">{{ notice[1] }}</p>
-        <p class="sub lead">{{ text.tags.lead }}</p>
-        <p v-if="tags.error.value" class="notice bad">{{ text.tags.failed }}</p>
-        <form v-else-if="tags.data.value?.tags.length" method="post" action="/api/submissions">
-          <input type="hidden" name="repo" :value="tags.data.value.repository" />
-          <input type="hidden" name="lang" :value="lang" />
-          <ul class="choices">
-            <li v-for="(t, n) in tags.data.value.tags" :key="t.name">
-              <label class="pick-tag">
-                <input type="radio" name="tag" :value="t.name" :checked="n === 0" required />
-                <span class="mono name">{{ t.name }}</span>
-                <span class="mono dim">→ {{ short(t.commit) }}</span>
-                <span v-if="t.release" class="tag">{{ text.tags.release }}</span>
+
+        <section class="part" aria-labelledby="folder-title">
+          <h2 id="folder-title" class="h2">{{ text.tags.folder }}</h2>
+          <p v-if="folders.error.value" class="notice warn">{{ text.tags.foldersFailed }}</p>
+          <template v-else-if="folders.data.value?.tag">
+            <p class="sub lead">{{ text.tags.folderLead(folders.data.value.tag) }}</p>
+            <ul v-if="folders.data.value.folders.length" class="choices folders">
+              <li v-for="f in folders.data.value.folders" :key="f" :class="{ on: f === folder }">
+                <svg class="i" viewBox="0 0 16 16" aria-hidden="true">
+                  <path
+                    d="M2 4.5C2 3.7 2.7 3 3.5 3H6.5L8 4.5H12.5C13.3 4.5 14 5.2 14 6V11.5C14 12.3 13.3 13 12.5 13H3.5C2.7 13 2 12.3 2 11.5Z"
+                  />
+                </svg>
+                <span class="mono name">{{ f || '/' }}</span>
+                <span v-if="!f" class="dim small">{{ text.tags.root }}</span>
                 <span class="grow"></span>
-                <small v-if="t.date" class="dim">{{ day(t.date) }}</small>
-              </label>
-            </li>
-          </ul>
-          <div class="foot-acts">
-            <button class="btn primary" type="submit">{{ text.tags.submit }}</button>
-            <a class="sub" :href="here">{{ text.checks.change }}</a>
-          </div>
-        </form>
-        <p v-else class="notice warn">{{ text.tags.none }}</p>
+                <span v-if="f === folder" class="tag" aria-current="true">✓</span>
+                <a v-else class="btn sm" :href="folderLink(f)">{{ text.repos.pick }}</a>
+              </li>
+            </ul>
+            <p v-else class="notice warn">{{ text.tags.noFolder }}</p>
+            <p v-if="folders.data.value.more" class="sub small">{{ text.tags.moreFolders }}</p>
+          </template>
+          <form class="typed" method="get" :action="here">
+            <input type="hidden" name="repo" :value="repoParam" />
+            <label class="field">
+              <span>{{ text.tags.typed }}</span>
+              <input
+                class="input mono"
+                name="path"
+                maxlength="200"
+                placeholder="plugins/slack"
+                :value="pathParam"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <small class="dim">{{ text.tags.typedHint }}</small>
+            </label>
+            <button class="btn sm" type="submit">{{ text.tags.read }}</button>
+          </form>
+          <p v-if="problem" class="notice bad" role="alert">{{ text.tags.problems[problem] ?? problem }}</p>
+        </section>
+
+        <p v-if="needFolder" class="notice warn">{{ text.tags.pickFolder }}</p>
+        <section v-else-if="!problem" class="part" aria-labelledby="version-title">
+          <h2 id="version-title" class="h2">{{ text.tags.version }}</h2>
+          <p class="sub lead">{{ text.tags.versionLead(tagsOf('1.2.3', folder ?? '').join(', ')) }}</p>
+          <p v-if="tags.error.value" class="notice bad">{{ text.tags.failed }}</p>
+          <form v-else-if="tags.data.value?.tags.length" method="post" action="/api/submissions">
+            <input type="hidden" name="repo" :value="tags.data.value.repository" />
+            <input type="hidden" name="path" :value="folder ?? ''" />
+            <input type="hidden" name="lang" :value="lang" />
+            <ul class="choices tags">
+              <li v-for="(t, n) in tags.data.value.tags" :key="t.name">
+                <label class="pick-tag">
+                  <input type="radio" name="tag" :value="t.name" :checked="n === 0" required />
+                  <span class="mono name">{{ t.name }}</span>
+                  <span class="mono dim">→ {{ short(t.commit) }}</span>
+                  <span v-if="t.release" class="tag">{{ text.tags.release }}</span>
+                  <span class="grow"></span>
+                  <small v-if="t.date" class="dim">{{ day(t.date) }}</small>
+                </label>
+              </li>
+            </ul>
+            <div class="foot-acts">
+              <button class="btn primary" type="submit">{{ text.tags.submit }}</button>
+              <a class="sub" :href="here">{{ text.checks.change }}</a>
+            </div>
+          </form>
+          <p v-else-if="tags.data.value?.others" class="notice warn">{{ text.tags.noTagFolder(firstTag) }}</p>
+          <p v-else class="notice warn">{{ text.tags.none }}</p>
+          <p v-if="tags.data.value?.others" class="sub small">{{ text.tags.others(tags.data.value.others) }}</p>
+        </section>
       </template>
 
       <!-- 3 and 4. The checks, then publishing -->
@@ -261,11 +346,15 @@ useHead(() => ({
                 <path d="M4.5 5.1V10.9M11.5 7.6C11.5 9.6 8 9.4 4.5 10.9" /></svg
               >{{ v.repository }}
             </div>
+            <div v-if="v.path" class="s mono path-of">{{ text.checks.folder(v.path) }}</div>
             <div class="s">{{ v.origin === 'webhook' ? text.checks.fromHook : text.checks.repoNote }}</div>
           </div>
           <div class="pick">
             <div class="k">
-              {{ text.checks.version }} <a :href="`${here}?repo=${encodeURIComponent(v.repository)}`">{{ text.checks.change }}</a>
+              {{ text.checks.version }}
+              <a :href="`${here}?repo=${encodeURIComponent(v.repository)}${v.path ? `&path=${encodeURIComponent(v.path)}` : ''}`">{{
+                text.checks.change
+              }}</a>
             </div>
             <div class="v">
               <svg class="i" viewBox="0 0 16 16" aria-hidden="true">
@@ -714,6 +803,48 @@ useHead(() => ({
 }
 .recent-title {
   margin-top: 40px;
+}
+.part {
+  margin-top: 28px;
+}
+.part > .lead {
+  margin-top: 6px;
+}
+.choices.folders {
+  margin-top: 14px;
+}
+.choices.folders > li.on {
+  border-color: var(--brand);
+  background: var(--seal-bg);
+}
+.choices.folders .i,
+.choices > li > .i {
+  flex: none;
+}
+.typed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  margin-top: 16px;
+}
+.typed .field {
+  flex: 1 1 260px;
+  max-width: 420px;
+}
+.typed .field > span {
+  color: var(--dim);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.typed .input {
+  width: 100%;
+}
+.typed .btn {
+  margin-bottom: 21px;
+}
+.path-of {
+  overflow-wrap: anywhere;
 }
 .recent {
   display: grid;

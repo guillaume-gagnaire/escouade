@@ -558,7 +558,7 @@ async fn a_ticket_is_read_whole_by_its_key_in_any_case_or_its_id() {
             after: vec![first.id.clone()],
             progress: vec!["Fichier écrit".into()],
             external: Some(ExternalRef {
-                service: Service::Jira,
+                service: Service::JIRA,
                 id: "10042".into(),
                 key: "ATL-12".into(),
                 container: "ATL".into(),
@@ -1183,6 +1183,28 @@ async fn the_usage_gives_each_account_its_windows_and_the_autopilots_pause() {
     h.core.update_usage(|_| {});
     let usage = read(&c, "get_usage", json!({})).await;
     assert_eq!(currents(&usage), (json!(false), json!(true)));
+    // Pro on a Max plan without a 5-hour window (ESC-312): its meters in the server's order, Fable's
+    // week with its scope, and no 5-hour window left of the reading before.
+    let body = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../tests/fixtures/claude-usage/max-no-five-hour.json"),
+    )
+    .unwrap();
+    h.core.record_usage(
+        "pro",
+        crate::usage::reading_of(&serde_json::from_str(&body).unwrap()),
+    );
+    let usage = read(&c, "get_usage", json!({})).await;
+    let pro = &usage["accounts"][1];
+    assert_eq!(
+        pro["meters"],
+        json!([
+            { "minutes": 10080, "pct": 47.0, "resetsAt": 1_793_829_600_147i64 },
+            { "minutes": 10080, "pct": 0.0, "resetsAt": 1_793_829_600_000i64, "model": "Fable" },
+        ])
+    );
+    assert_eq!(pro["fiveHour"], Value::Null);
+    assert_eq!(pro["sevenDay"]["pct"], 47.0);
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }

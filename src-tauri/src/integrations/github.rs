@@ -11,7 +11,7 @@ use crate::model::{ExternalRef, ExternalState, Service};
 use anyhow::Result;
 use serde_json::{json, Value};
 
-const S: Service = Service::Github;
+const S: Service = Service::GITHUB;
 
 /// The states every repository has, before its labels.
 const OPEN: &str = "open";

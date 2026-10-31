@@ -58,6 +58,8 @@ export interface WizardConfig {
    * it has already, and those to reserve. Never copied from another project.
    */
   reserved: string[];
+  /** Off: « Pas de workflow pour ce projet » (ESC-309). */
+  workflowsEnabled: boolean;
 }
 
 /** What a new project starts with besides the assistant's settings: « Nouveaux projets privés » (Réglages › Projets). */
@@ -104,6 +106,7 @@ export function blankConfig(defaults: NewProjectDefaults = {}): WizardConfig {
     private: !!defaults.private,
     sharedOnLimit: false,
     reserved: [],
+    workflowsEnabled: true,
   };
 }
 
@@ -149,6 +152,8 @@ export function configOf(p: Project, accounts: Account[] = []): WizardConfig {
     private: !!p.private,
     sharedOnLimit: !!p.sharedOnLimit,
     reserved: accounts.filter((a) => dedicated(a, p.id)).map((a) => a.id),
+    // Absent from a project of the window's tests made before ESC-309: on.
+    workflowsEnabled: p.workflowsEnabled ?? true,
   });
 }
 
@@ -181,6 +186,7 @@ export function withConfig(p: Project, c: WizardConfig): Project {
     private: c.private,
     // Only a private project's: off for one that is not.
     sharedOnLimit: c.private && c.sharedOnLimit,
+    workflowsEnabled: c.workflowsEnabled,
     board: { ...p.board, ...c.board, testCommand, testsFirst: c.board.testsFirst && !!testCommand },
   };
 }

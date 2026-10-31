@@ -14,7 +14,7 @@ fn rt(cwd: &str) -> AgentRt {
     AgentRt::new(
         AgentMeta {
             id: new_id(),
-            engine: EngineId::Agy,
+            engine: EngineId::AGY,
             cwd: cwd.into(),
             mode: "default".into(),
             ..Default::default()
@@ -253,7 +253,7 @@ fn meta(dir: &std::path::Path, mode: &str) -> AgentMeta {
     std::fs::create_dir_all(&cwd).unwrap();
     AgentMeta {
         id: new_id(),
-        engine: EngineId::Agy,
+        engine: EngineId::AGY,
         cwd: cwd.to_string_lossy().into_owned(),
         model: "gemini-3.8-flash".into(),
         effort: "high".into(),

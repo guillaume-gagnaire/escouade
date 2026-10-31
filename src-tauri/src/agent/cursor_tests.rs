@@ -10,7 +10,7 @@ fn agent(cwd: &str, mode: &str) -> AgentRt {
     let meta = AgentMeta {
         id: new_id(),
         cwd: cwd.into(),
-        engine: EngineId::Cursor,
+        engine: EngineId::CURSOR,
         model: "default".into(),
         mode: mode.into(),
         ..Default::default()

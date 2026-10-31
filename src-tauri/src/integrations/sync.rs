@@ -5,6 +5,7 @@
 //! fails.
 
 use super::secrets;
+use super::source::TicketSource;
 use super::text::{column_comment, loop_comment};
 use super::*;
 use crate::core::Core;
@@ -400,7 +401,7 @@ fn sources(lang: Lang, tickets: &[Ticket]) -> String {
 
 /// GitLab Issues and Azure Boards have no account of their own: their code host's serves.
 fn by_its_host(service: Service) -> String {
-    if service == Service::Azure {
+    if service == Service::AZURE {
         return tr!(
             "Azure Boards se connecte avec Azure DevOps dans Réglages › Intégrations › Hébergeurs de code : un seul compte pour les PR et les éléments de travail.",
             "Azure Boards is connected with Azure DevOps in Settings › Integrations › Code hosts: one account for the PRs and the work items."
@@ -416,22 +417,22 @@ fn by_its_host(service: Service) -> String {
 /// Trello's API key. None when nothing is missing (GitHub's token may be the CLI's).
 fn missing_field(lang: Lang, service: Service, account: &Account) -> Option<String> {
     Some(match service {
-        Service::Jira if account.site.is_empty() => {
+        Service::JIRA if account.site.is_empty() => {
             tr_in!(
                 lang,
                 "Indique l'adresse du site.",
                 "Give the site’s address."
             )
         }
-        Service::Jira if account.email.is_empty() => {
+        Service::JIRA if account.email.is_empty() => {
             tr_in!(lang, "Indique l'e-mail.", "Give the email.")
         }
-        Service::Jira | Service::Trello | Service::Linear | Service::Clickup
+        Service::JIRA | Service::TRELLO | Service::LINEAR | Service::CLICKUP
             if account.token.is_empty() =>
         {
             tr_in!(lang, "Indique le jeton.", "Give the token.")
         }
-        Service::Trello if account.key.is_empty() => {
+        Service::TRELLO if account.key.is_empty() => {
             tr_in!(lang, "Indique la clé d'API.", "Give the API key.")
         }
         _ => return None,
@@ -448,21 +449,25 @@ impl<R: Runtime> Core<R> {
     }
 
     /// A client of `service` for `account` (GitHub's token asked of its CLI when none was given).
-    async fn client_for(&self, service: Service, account: &Account) -> Result<Client> {
+    async fn client_for(
+        &self,
+        service: Service,
+        account: &Account,
+    ) -> Result<Box<dyn TicketSource>> {
         let http = crate::usage::http_client(&self.settings.read())?;
         let mut account = account.clone();
-        if service == Service::Github && account.token.trim().is_empty() {
+        if service == Service::GITHUB && account.token.trim().is_empty() {
             account.token = self.gh_token().await?;
         }
         let bases = self.bases.read().clone();
-        Ok(Client::new(service, &account, http, &bases))
+        source::registry().client(service, &account, http, &bases)
     }
 
-    async fn client(&self, service: Service) -> Result<Client> {
-        if service == Service::Gitlab {
+    async fn client(&self, service: Service) -> Result<Box<dyn TicketSource>> {
+        if service == Service::GITLAB {
             return self.gitlab_client().await;
         }
-        if service == Service::Azure {
+        if service == Service::AZURE {
             return self.azure_client().await;
         }
         let account = self.accounts.read().get(service).cloned().ok_or_else(|| {
@@ -487,7 +492,7 @@ impl<R: Runtime> Core<R> {
     /// GitLab Issues' client: every GitLab code host's account, its instance and token (its own
     /// from the keychain, or `glab`'s) as the code host uses them. An instance whose token cannot
     /// be had is left out while another one can.
-    async fn gitlab_client(&self) -> Result<Client> {
+    async fn gitlab_client(&self) -> Result<Box<dyn TicketSource>> {
         let list: Vec<ForgeAccount> = self
             .accounts
             .read()
@@ -529,17 +534,17 @@ impl<R: Runtime> Core<R> {
             return Err(failed.unwrap_or_else(|| anyhow!("GitLab")));
         }
         let http = crate::usage::http_client(&self.settings.read())?;
-        Ok(Client::Gitlab(gitlab::Gitlab::new(http, instances)))
+        Ok(Box::new(gitlab::Gitlab::new(http, instances)))
     }
 
     /// Azure Boards' client: every Azure DevOps code host's account (an organization's), its
     /// token (its own from the keychain, or `az`'s) as the code host uses it. An organization
     /// whose token cannot be had is left out while another one can.
-    async fn azure_client(&self) -> Result<Client> {
+    async fn azure_client(&self) -> Result<Box<dyn TicketSource>> {
         let list: Vec<ForgeAccount> = self
             .accounts
             .read()
-            .hosted_accounts(Service::Azure)
+            .hosted_accounts(Service::AZURE)
             .into_iter()
             .cloned()
             .collect();
@@ -582,7 +587,7 @@ impl<R: Runtime> Core<R> {
         if instances.is_empty() {
             return Err(failed.unwrap_or_else(|| anyhow!("Azure DevOps")));
         }
-        Ok(Client::Azure(azure::Boards::new(instances)))
+        Ok(Box::new(azure::Boards::new(instances)))
     }
 
     /// The GitHub CLI's token (`gh auth token`), asked once.
@@ -630,7 +635,7 @@ impl<R: Runtime> Core<R> {
             bail!(by_its_host(service));
         }
         let mut account = Account {
-            site: if service == Service::Jira {
+            site: if service == Service::JIRA {
                 jira::site(&form.site)
             } else {
                 String::new()
@@ -643,18 +648,18 @@ impl<R: Runtime> Core<R> {
         if let Some(missing) = missing_field(i18n::ui(), service, &account) {
             bail!(missing);
         }
-        if service == Service::Jira && !jira::secure(&account.site) {
+        if service == Service::JIRA && !jira::secure(&account.site) {
             bail!(tr!(
                 "Le site Jira doit être en https (http seulement sur cette machine).",
                 "The Jira site must use https (http only on this machine)."
             ));
         }
-        if service == Service::Github && account.token.is_empty() {
+        if service == Service::GITHUB && account.token.is_empty() {
             // The CLI may have been logged in again since its token was read.
             *self.gh_token.lock() = None;
         }
         let (mut label, user) = self.client_for(service, &account).await?.me().await?;
-        if service == Service::Github && account.token.is_empty() {
+        if service == Service::GITHUB && account.token.is_empty() {
             label.push_str(VIA_GH);
         }
         account.label = label;
@@ -709,7 +714,7 @@ impl<R: Runtime> Core<R> {
             }
             accounts.set(service, None);
         }
-        if service == Service::Github {
+        if service == Service::GITHUB {
             *self.gh_token.lock() = None;
         }
         self.save_accounts()?;
@@ -724,9 +729,9 @@ impl<R: Runtime> Core<R> {
     ) -> Result<Vec<Container>> {
         let mut list = self.client(service).await?.containers().await?;
         let own = match (service, project_id) {
-            (Service::Github, Some(id)) => self.project_repo(id).await,
-            (Service::Gitlab, Some(id)) => self.project_gitlab(id).await,
-            (Service::Azure, Some(id)) => self.project_azure(id).await,
+            (Service::GITHUB, Some(id)) => self.project_repo(id).await,
+            (Service::GITLAB, Some(id)) => self.project_gitlab(id).await,
+            (Service::AZURE, Some(id)) => self.project_azure(id).await,
             _ => None,
         };
         if let Some(repo) = own {
@@ -1174,7 +1179,11 @@ impl<R: Runtime> Core<R> {
     }
 
     /// One operation; the service's client made for the first one of the ticket.
-    async fn run_sync_op(&self, p: &PendingSync, client: &mut Option<Client>) -> Result<()> {
+    async fn run_sync_op(
+        &self,
+        p: &PendingSync,
+        client: &mut Option<Box<dyn TicketSource>>,
+    ) -> Result<()> {
         if client.is_none() {
             *client = Some(self.client(p.external.service).await?);
         }
@@ -1283,24 +1292,24 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            imported_label(En, &[t(Service::Jira)]),
+            imported_label(En, &[t(Service::JIRA)]),
             "1 ticket imported from Jira"
         );
         assert_eq!(
-            imported_label(En, &[t(Service::Jira), t(Service::Trello)]),
+            imported_label(En, &[t(Service::JIRA), t(Service::TRELLO)]),
             "2 tickets imported from Jira and Trello"
         );
         // As the window's list, with the comma of English before « and ».
         assert_eq!(
             imported_into(
                 En,
-                &[t(Service::Github), t(Service::Jira), t(Service::Trello)],
+                &[t(Service::GITHUB), t(Service::JIRA), t(Service::TRELLO)],
                 "demo"
             ),
             "3 tickets imported from GitHub, Jira, and Trello into demo"
         );
         assert_eq!(
-            missing_field(En, Service::Trello, &Account::default()).as_deref(),
+            missing_field(En, Service::TRELLO, &Account::default()).as_deref(),
             Some("Give the token.")
         );
     }
@@ -1341,7 +1350,7 @@ mod tests {
 
     fn issue() -> ExternalIssue {
         ExternalIssue {
-            service: Service::Jira,
+            service: Service::JIRA,
             id: "ATL-7".into(),
             key: "ATL-7".into(),
             title: "Pagination".into(),
@@ -1631,20 +1640,20 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            imported_label(crate::i18n::Lang::Fr, &[t(Service::Jira)]),
+            imported_label(crate::i18n::Lang::Fr, &[t(Service::JIRA)]),
             "1 ticket importé depuis Jira"
         );
         assert_eq!(
             imported_label(
                 crate::i18n::Lang::Fr,
-                &[t(Service::Jira), t(Service::Trello), t(Service::Jira)]
+                &[t(Service::JIRA), t(Service::TRELLO), t(Service::JIRA)]
             ),
             "3 tickets importés depuis Jira et Trello"
         );
         assert_eq!(
             imported_label(
                 crate::i18n::Lang::Fr,
-                &[t(Service::Github), t(Service::Jira), t(Service::Trello)]
+                &[t(Service::GITHUB), t(Service::JIRA), t(Service::TRELLO)]
             ),
             "3 tickets importés depuis GitHub, Jira et Trello"
         );

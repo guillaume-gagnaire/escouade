@@ -2,10 +2,9 @@
 title: ".escouade.yml"
 subject: "Projets"
 sources: ["docs/SPEC.md","docs/PLUGINS.md","docs/STORE.md"]
-tickets: ["ESC-146","ESC-163","ESC-156","ESC-160","ESC-167","ESC-288"]
+tickets: ["ESC-146","ESC-163","ESC-156","ESC-160","ESC-167","ESC-288","ESC-309"]
 decisions: []
-compared: "2026-10-30T17:42:22+01:00"
-gaps: [{"text":"La page dit qu'un fichier illisible, comme un fichier d'une version plus récente, n'est pas réécrit et que l'erreur dit « modifie-le à la main ». Le code ne réécrit bien aucun des deux, mais pour un fichier illisible l'erreur reprend seulement « .escouade.yml illisible : <détail> », sans « modifie-le à la main ». Seul le cas de la version plus récente donne cette consigne.","code":["src-tauri/src/projectfile.rs"]}]
+compared: "2026-10-31T10:05:41+01:00"
 ---
 
 ## Ce que c'est
@@ -39,6 +38,7 @@ Seulement ce qui vaut pour toute l'équipe. Clés en anglais, en `snake_case`, p
 | `board.test_command`, `board.tests_before_approve` | commande de tests, tests avant la validation |
 | `board.on_conflict` | `ask`, `agent`, `abort` |
 | `board.model`, `board.effort`, `board.mode` | ceux des agents des tickets ; vides : ceux du compte. `model` : un texte, tel que le harness le nomme ; `effort` : `low`, `medium`, `high`, `xhigh`, `max` ; `mode` : `auto`, `default`, `plan`, `acceptEdits` |
+| `workflows.enabled` | `false` : « Pas de workflow pour ce projet », ni lecture ni écriture de ses workflows (voir *Workflows*) ; vrai si absente |
 | `plugins.recommended` | les plugins que le projet propose : des identifiants du store (`dev.exemple.slack`) ; voir *Plugins proposés* |
 | `plugins.<id>` | les réglages que le projet donne au plugin `<id>` : des valeurs simples (texte, nombre, `true`, `false`), jamais un secret |
 
@@ -57,6 +57,7 @@ Chaque cas est tranché :
 - la clé des tickets et le numéro suivant : chaque machine a son Kanban et numérote ses tickets ; une clé partagée ferait croire à une numérotation commune, et elle est fixée par le premier ticket, que le fichier ne pourrait plus changer ;
 - le mode `bypassPermissions` : un dépôt ne lève pas les autorisations de qui l'ouvre. Refusé à la lecture (« bypassPermissions ne se partage pas : il se règle sur chaque machine »), jamais écrit, gardé sur la machine ;
 - les intégrations : liées aux comptes connectés de chacun ;
+- les workflows supprimés d'un projet : retenus par chaque machine (voir *Workflows*) ;
 - les chemins absolus, les jetons, les empreintes approuvées ; les secrets d'un plugin (ils vont au trousseau du système, par sa page).
 
 ### Projet privé
@@ -97,7 +98,7 @@ Chaque cas est tranché :
 
 ### Relu quand il change
 
-- À chaque passage de la surveillance du dossier (après un `git pull`, un changement de branche, une modification), le fichier est relu s'il a changé (l'empreinte de son texte n'est jamais enregistrée : il est relu à chaque démarrage). Les réglages changés s'appliquent : « demo : .escouade.yml relu, 2 réglages appliqués. ».
+- À chaque passage de la surveillance du dossier (après un `git pull`, un changement de branche, une modification), le fichier est relu s'il a changé (l'empreinte de son texte n'est jamais enregistrée : il est relu à chaque démarrage). Les réglages changés s'appliquent : « demo : .escouade.yml relu, 2 réglages appliqués. ». Un `workflows.enabled` changé est suivi tout de suite : les agents ne sont plus suivis dans les workflows, ou le sont à nouveau.
 - Un fichier supprimé laisse au projet ses réglages ; plus rien n'est marqué.
 
 ### Commandes : l'accord de chaque machine
@@ -110,7 +111,7 @@ Chaque cas est tranché :
 
 ### Dans la fenêtre
 
-- Chaque réglage que le fichier définit le dit sous son libellé, dans Réglages › Projets (« Projet privé » compris) et Réglages › Kanban (modèle, effort et mode compris ; ni « En parallèle » ni le pilote auto) : « Défini par .escouade.yml », ou « Défini par .escouade.yml, en attente de ton accord » pour une commande.
+- Chaque réglage que le fichier définit le dit sous son libellé, dans Réglages › Projets (« Projet privé » et « Workflows du projet » compris) et Réglages › Kanban (modèle, effort et mode compris ; ni « En parallèle » ni le pilote auto) : « Défini par .escouade.yml », ou « Défini par .escouade.yml, en attente de ton accord » pour une commande.
 - Le modifier dans la fenêtre et enregistrer le garde sur cette machine : il passe devant le fichier, relu ou pas, et c'est dit (un toast, et sous le réglage « Réglage local de cette machine : il passe devant .escouade.yml. »), avec « Écrire dans .escouade.yml » et « Reprendre la valeur du fichier ».
 - « Relancer les tests avant », éteint par la fenêtre faute de commande de tests (celle du fichier attend l'accord), n'est pas un choix : la valeur du fichier reste.
 

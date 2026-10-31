@@ -23,6 +23,7 @@ import type { IconName } from './icons';
 import type { SettingsTab } from './settings.svelte';
 import type { FormFile } from './ticket-files';
 import type { FormImage } from './ticket-images';
+import { setSources } from './integrations';
 import { applyTheme } from './theme';
 import { workflows } from './workflows.svelte';
 import type {
@@ -226,6 +227,9 @@ export interface ToastAction {
 /** Statuses that call for the user: a question, the end of a turn, an error. */
 const ALERT: ReadonlySet<AgentStatus> = new Set(['waiting', 'done', 'error']);
 
+/** Its turn is under way: working, or waiting for an answer. */
+export const atWork = (a: Pick<Agent, 'status'>) => a.status === 'running' || a.status === 'waiting';
+
 /** How many of the last lines of the step running a worktree's setup the window keeps (as the backend does). */
 const SETUP_LINES = 500;
 
@@ -306,6 +310,8 @@ class AppState {
   panelTab = $state<'files' | 'history' | 'workflow' | 'hosts'>('files');
   /** A text to put in an agent's composer without sending it (a door of the Workflow tab): taken by its composer, which then clears it. */
   composerPut = $state<{ agentId: string; text: string } | null>(null);
+  /** How many messages went back to each agent's draft (`giveBack`): its composer reads the draft again. */
+  draftReturned = $state<Record<string, number>>({});
   /** Side-by-side diffs (else unified), shared by the diff dialog and the split layout. */
   diffSplit = $state(readPref('diffSplit') === '1');
   showArchived = $state(false);
@@ -343,8 +349,6 @@ class AppState {
   gitTick = $state(0);
   /** Each project's shared memory changed this many times (ESC-255): its settings' list reads it again. */
   memoryTicks = $state<Record<string, number>>({});
-  /** A project's « Index du code » changed (ESC-293): read, erased, waiting for its reading. */
-  codeIndexTicks = $state<Record<string, number>>({});
   /** The download of the vectors' model under way (ESC-254): bytes so far, of `total`; null when none is. */
   vectorsProgress = $state<{ done: number; total: number } | null>(null);
   update = $state<UpdateInfo | null>(null);
@@ -469,11 +473,18 @@ class AppState {
   private devPageHooks = new Set<(e: PageEvent) => void>();
   /** What must be written before the app restarts by itself for an update (the composers' drafts). */
   private restartHooks = new Set<() => void>();
+  private turnEndHooks = new Set<(agentId: string) => void>();
 
   /** `f` runs when the backend removes an agent, before the state forgets it. Returns what unregisters it. */
   onAgentRemoved(f: (agentId: string) => void) {
     this.removalHooks.add(f);
     return () => void this.removalHooks.delete(f);
+  }
+
+  /** `f` runs when an agent's turn ends, after the state has its new self. Returns what unregisters it. */
+  onTurnEnded(f: (agentId: string) => void) {
+    this.turnEndHooks.add(f);
+    return () => void this.turnEndHooks.delete(f);
   }
 
   /** `f` runs when an agent the window knows gets another launch recipe. Returns what unregisters it. */
@@ -619,6 +630,7 @@ class AppState {
     this.engineModels = s.engineModels ?? {};
     this.accountModels = s.accountModels ?? {};
     this.enginesFound = s.enginesFound ?? (s.claudeFound ? ['claude'] : []);
+    if (s.sources) setSources(s.sources);
     this.restartAt = s.restartAt ?? null;
     this.failedUpdate = s.failedUpdate ?? null;
     if (s.pageCrash) this.tellPageCrash(s.pageCrash);
@@ -658,7 +670,7 @@ class AppState {
    */
   private atWork(id: string): boolean {
     const a = this.agents[id];
-    return !!a && (a.status === 'running' || a.status === 'waiting');
+    return !!a && atWork(a);
   }
 
   private onEvent(e: UiEvent) {
@@ -672,6 +684,7 @@ class AppState {
         if (shown && !bgRow(e.agent.plan, shown)) this.closeTask(e.agent.id);
         this.noteAttention(prev, e.agent);
         if (newRecipe) this.runHooks(this.recipeHooks, e.agent.id);
+        if (prev && atWork(prev) && !atWork(e.agent)) this.runHooks(this.turnEndHooks, e.agent.id);
         // Its setup is over: what it wrote is in its log (and its failure in the conversation).
         if (!e.agent.setup) this.dropSetupOutput(e.agent.id);
         break;
@@ -753,9 +766,6 @@ class AppState {
         break;
       case 'memory':
         this.memoryTicks[e.projectId] = (this.memoryTicks[e.projectId] ?? 0) + 1;
-        break;
-      case 'codeIndex':
-        this.codeIndexTicks[e.projectId] = (this.codeIndexTicks[e.projectId] ?? 0) + 1;
         break;
       case 'vectorsDownload':
         this.vectorsProgress = { done: e.done, total: e.total };
