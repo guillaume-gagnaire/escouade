@@ -82,6 +82,27 @@ Ce que voit le site en plus de la largeur (non fait, la largeur suffit aux media
   (`windowthread::off_the_window`).
 - Stockage : `data_directory` (Windows, Linux), `data_store_identifier` (macOS 14+), `incognito` avant.
 
+## Essais par système (2026-10-31)
+
+`cargo run --example devpage_probe` (`src-tauri/src/devpage_probe.rs`) ouvre la page dans la vraie webview du système :
+un serveur local sert une page qui appelle `open_url`, `plugin:opener|open_url` et `devpage_list`, écrit dans son
+localStorage, puis dit sa largeur ; la sonde ouvre ses devtools, la place à 390 px dans la fenêtre, la détache dans la
+fenêtre « Pages » à 768 px. Sortie 0 quand tout tient.
+
+| | Windows 11 (WebView2) | Linux, Ubuntu sous WSLg (WebKitGTK 2.52, Wayland) | macOS (WKWebView) |
+| --- | --- | --- | --- |
+| Appels de l'app, d'un plugin, `devpage_list` | refusés | refusés | en CI (`macos`), pas essayé ici |
+| `__TAURI__` | absent | absent | idem |
+| Stockage du projet | `pages/probe` créé | `pages/probe` créé | magasin par projet (macOS 14+) |
+| Devtools | fenêtre DevTools (e2e : titre compté) | inspecteur ouvert (`is_devtools_open` vrai) | idem |
+| 390 px dans l'agent, 768 px dans « Pages » | oui | oui, après correctif | idem |
+
+Correctif trouvé par la sonde sous Linux : Tauri 2.12 range les webviews enfants d'une fenêtre dans une `GtkBox`, l'une
+après l'autre, et n'alloue leur taille qu'une fois ; la page ne se plaçait pas, ne rétrécissait pas, et lui demander une
+taille agrandissait la fenêtre en boucle. Sous Linux, la page passe donc dans un `gtk::Layout` qui prend la place de la
+webview de la fenêtre dans la boîte (`gtk_layout_of`). La sonde tourne aussi en CI sur Linux (sous Xvfb) et sur macOS :
+c'est là que macOS sera vérifié, ce poste n'en ayant pas.
+
 ## L'accès des agents à la page (MCP), à faire
 
 Pour qu'un agent vérifie son travail lui-même, des outils MCP d'Escouade sur la page de **son** worktree :
