@@ -128,11 +128,11 @@ async fn past_the_threshold_an_agent_finishes_its_turn_then_goes_on_on_another_a
         .map(|i| i["level"].clone())
         .collect();
     assert_eq!(levels, [json!("switch")]);
-    assert!(
-        h.alerts().iter().any(|a| a.ends_with(said)),
-        "{:?}",
-        h.alerts()
-    );
+    // The notification goes just after the conversation's line: a loaded runner reads in between.
+    h.wait("told by a notification", |h| {
+        h.alerts().iter().any(|a| a.ends_with(said))
+    })
+    .await;
     let toast = h
         .events
         .lock()
@@ -444,11 +444,11 @@ async fn a_week_that_would_not_last_moves_the_agent_at_the_threshold_and_says_th
         .await;
     let said = "L’agent passe sur le compte Équipe : Pro est à 85 % de sa fenêtre hebdomadaire (au rythme actuel, 119 % à sa remise à zéro).";
     assert_eq!(notices(&h, &id), [said]);
-    assert!(
-        h.alerts().iter().any(|a| a.ends_with(said)),
-        "{:?}",
-        h.alerts()
-    );
+    // The notification goes just after the conversation's line: a loaded runner reads in between.
+    h.wait("told by a notification", |h| {
+        h.alerts().iter().any(|a| a.ends_with(said))
+    })
+    .await;
 }
 
 #[tokio::test]

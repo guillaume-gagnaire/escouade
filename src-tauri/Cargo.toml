@@ -25,7 +25,7 @@ crate-type = ["rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri = { version = "2", features = ["tray-icon", "image-png", "devtools", "unstable"] }
 tauri-plugin-deep-link = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
@@ -132,6 +132,8 @@ webkit2gtk = { version = "2.0", features = ["v2_20"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri-plugin-notification = "2"
+# The inspector of a launch's page in a window of its own (`devpage::open_devtools`): wry's version.
+objc2 = "0.6"
 # Dictation on the GPU (Metal), whisper.cpp's shaders built into the binary.
 whisper-rs = { version = "0.16", features = ["log_backend", "metal"] }
 # The integrations' secrets in the Keychain.
@@ -153,7 +155,7 @@ strip = true
 [dev-dependencies]
 # Each test process's temporary folder of its own, given before `main` (`src/test_tmp.rs`).
 ctor = "1"
-tauri = { version = "2", features = ["test", "tray-icon", "image-png"] }
+tauri = { version = "2", features = ["test", "tray-icon", "image-png", "devtools", "unstable"] }
 # An https server with a self-signed certificate (a corporate proxy's), for the TLS settings.
 rcgen = { version = "0.13", default-features = false, features = ["crypto", "ring"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }

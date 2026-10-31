@@ -441,6 +441,14 @@ export default {
     copyDesc: 'Seuls ceux que git ignore, jamais commités ; un motif par ligne : .env* à la racine, **/.env* partout.',
     commit: 'Commit',
     commitDesc: 'Direct : Escouade propose un message, tu le relis et tu commites toi-même.',
+    pagesOpen: 'Ouvrir les pages des lancements',
+    pagesOpenDesc:
+      'Quand « ▶ Tester » est prêt, la page s’ouvre toute seule. Dans l’agent, elle tourne à part : ni les commandes d’Escouade, ni tes cookies.',
+    pagesOpens: {
+      agent: 'Dans l’agent',
+      window: 'Dans une fenêtre à part',
+      system: 'Dans le navigateur du système',
+    },
     commitModes: {
       agent: "Rédigé par l'agent",
       direct: 'Direct, avec un message proposé',

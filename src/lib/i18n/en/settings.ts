@@ -380,6 +380,14 @@ export default defineZone('settings', {
     copyDesc: 'Only files git ignores, never committed. One pattern per line: .env* at the root, **/.env* everywhere.',
     commit: 'Commit',
     commitDesc: 'Direct: Escouade suggests a message, you review it, and you commit yourself.',
+    pagesOpen: 'Open the launches’ pages',
+    pagesOpenDesc:
+      'When “▶ Test” is ready, the page opens by itself. In the agent, it runs apart: neither Escouade’s commands nor your cookies.',
+    pagesOpens: {
+      agent: 'In the agent',
+      window: 'In a separate window',
+      system: 'In the system browser',
+    },
     commitModes: {
       agent: 'Written by the agent',
       direct: 'Direct, with a suggested message',
