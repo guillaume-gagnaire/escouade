@@ -907,6 +907,8 @@ pub struct Core<R: Runtime = Wry> {
     pub quitting: AtomicBool,
     /// Files left unsaved in the editor, as the window last said.
     pub unsaved: AtomicUsize,
+    /// The agents the window holds a message for (`outbox.svelte.ts`).
+    pub held: Mutex<HashSet<String>>,
     /// What the page showed when its process ended abnormally, until the page told it (ESC-290).
     pub page_crash: Mutex<Option<crate::pagecrash::PageCrash>>,
     /// Work under way outside of an agent's turn that a restart would cut (`Core::working`): a
@@ -1737,6 +1739,7 @@ impl<R: Runtime> Core<R> {
         // Principal named in them, the first time.
         accounts::normalize(&mut settings);
         settings.normalize_display();
+        settings.normalize_mid_turn_delay();
         let mut state: PersistedState = read_json(&data.state_file()).unwrap_or_default();
         // « Les agents partent de la branche cible » kept as their branch to start from (ESC-160).
         for p in &mut state.projects {
@@ -1765,6 +1768,13 @@ impl<R: Runtime> Core<R> {
             .filter(|m| m.status.is_active() && !m.archived)
             .map(|m| m.id.clone())
             .collect();
+        // An agent is told archived before its turn is stopped (the window then sends it none of the
+        // messages it holds): an archiving the app's stop cut short lets go of its planned resume and
+        // its test ports here, as it would have.
+        for m in state.agents.iter_mut().filter(|m| m.archived) {
+            m.resume_at = None;
+            m.port_base = None;
+        }
         let mut tickets = state.tickets;
         for t in &mut tickets {
             // A validation the app's stop cut: to run again by hand.
@@ -1915,6 +1925,7 @@ impl<R: Runtime> Core<R> {
             waiting: AtomicUsize::new(usize::MAX),
             quitting: AtomicBool::new(false),
             unsaved: AtomicUsize::new(0),
+            held: Mutex::default(),
             page_crash: Mutex::default(),
             works: AtomicUsize::new(0),
             board_lock: tokio::sync::Mutex::new(()),
@@ -2273,6 +2284,7 @@ impl<R: Runtime> Core<R> {
             s.user_id = self.settings.read().user_id.clone();
         }
         s.normalize_attachments();
+        s.normalize_mid_turn_delay();
         s.normalize_display();
         accounts::normalize(&mut s);
         accounts::check(&s)?;
@@ -2710,8 +2722,10 @@ impl<R: Runtime> Core<R> {
         name: &str,
     ) {
         // A ticket's agent at work: its board tells when the ticket is ready or blocked; its
-        // questions still call for the user.
-        if alert.kind == NotifyKind::Question || !self.ticket_doing(id) {
+        // questions still call for the user. Nor a turn's end the window follows with a message
+        // it holds.
+        let next = alert.kind == NotifyKind::Done && self.held.lock().contains(id);
+        if (alert.kind == NotifyKind::Question || !self.ticket_doing(id)) && !next {
             self.notify_agent(alert, project_id, id, name);
         }
     }
@@ -7432,6 +7446,8 @@ impl<R: Runtime> Core<R> {
                 let running = rt.proc.clone().filter(|_| rt.meta.status.is_active());
                 if running.is_some() {
                     rt.interrupted = true;
+                    // Told archived with its turn's end: the window sends it none of its held messages.
+                    rt.meta.archived = true;
                 }
                 running
             };

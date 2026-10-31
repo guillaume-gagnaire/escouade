@@ -9,6 +9,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ### New
 
 - In Settings › Accounts, the small square of each “Reserved for projects” chip lights up in the project’s colour when the account serves it, and turns grey otherwise. Thanks to @Metalzoid (#19).
+- A message posted while an agent works can still be edited or cancelled before it reaches it: it waits a few seconds, or until the end of the turn with Cursor and OpenCode, and can also go at once. Thanks to @Metalzoid (#18).
 - The “PR and CI” tab of the right panel shows the pull request of the agent’s branch: its CI check by check, the log of a failure, “Re-run failed jobs” in one click, its reviews and its deployments. Without an agent it lists the project’s open pull requests, and an agent’s card tells the state of its CI beside “#41 → main”.
 - Plugins have their own view, opened by the icon of the projects’ rail: install from a folder or a git repository after seeing where the plugin comes from, its fingerprint, what it adds and what it will be able to do, the strongest permission first; switch it on for the app or project by project, a private project staying off by default; take a permission back, set its secrets, read its journal, uninstall it.
 - A new version of a plugin is offered, never installed by itself, and asks for your consent again if it asks for more than the installed version.

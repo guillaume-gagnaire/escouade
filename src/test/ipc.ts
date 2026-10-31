@@ -69,6 +69,8 @@ export const SETTINGS: Settings = {
   attachOrigin: true,
   attachBigText: 'path',
   attachKeepDays: 0,
+  // The tests opt in to the delay: a message sent during a turn goes at once, as before.
+  midTurnDelaySecs: 0,
   pwshPath: '',
   bashPath: '',
   wslDistro: '',
@@ -401,6 +403,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.filesScope = 'agent';
   app.panelTab = 'files';
   app.composerPut = null;
+  app.draftReturned = {};
   workflows.reset();
   app.diffSplit = false;
   app.modal = null;
@@ -474,7 +477,7 @@ export const CURSOR_ENGINE: EngineDecl = {
   ...BARE_ENGINE,
   id: 'cursor',
   name: 'Cursor CLI',
-  caps: { ...BARE_ENGINE.caps, usagePage: 'https://cursor.com/dashboard?tab=usage', accountsByKey: true },
+  caps: { ...BARE_ENGINE.caps, midTurn: 'turnEnd', usagePage: 'https://cursor.com/dashboard?tab=usage', accountsByKey: true },
 };
 
 /** Mistral Vibe as the tests see it (ESC-267): no quota, its cost told, its usage on Mistral's console, its accounts by API key. */

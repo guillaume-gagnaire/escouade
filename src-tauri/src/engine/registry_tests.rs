@@ -124,6 +124,30 @@ fn only_codex_declares_a_sandbox() {
     }
 }
 
+#[test]
+fn the_harnesses_that_hold_a_message_until_the_turn_ends_say_so() {
+    let queued = [
+        crate::engine::CLAUDE.id(),
+        crate::engine::GEMINI.id(),
+        crate::engine::AGY.id(),
+        crate::engine::VIBE.id(),
+    ];
+    for e in all() {
+        let expected = match e.id() {
+            id if queued.contains(&id) => MidTurn::Queued,
+            id if id == crate::engine::CURSOR.id() || id == crate::engine::OPENCODE.id() => {
+                MidTurn::TurnEnd
+            }
+            _ => MidTurn::Immediate,
+        };
+        assert_eq!(e.caps().mid_turn, expected, "{}", e.name());
+    }
+    assert_eq!(
+        serde_json::to_value(MidTurn::TurnEnd).unwrap(),
+        serde_json::json!("turnEnd")
+    );
+}
+
 /// The declaration of Claude Code as the window's tests take it (`src/test/ipc.ts`): the file and
 /// the declaration stay the same.
 #[test]

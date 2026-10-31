@@ -3727,6 +3727,46 @@ async fn archiving_a_running_agent_ends_what_it_was_doing() {
 }
 
 #[tokio::test]
+async fn the_end_of_the_turn_an_archive_stops_says_the_agent_is_archived() {
+    let h = harness("archive-turn-end");
+    let (p, _) = h.project(false).await;
+    // The stopped turn's end is read before the archive goes on.
+    let id = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                append_prompt: Some("[fin-d-abord]".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    h.core
+        .send_message(&id, "slow".into(), vec![])
+        .await
+        .unwrap();
+    h.wait("the turn", |h| h.agent(&id).status == AgentStatus::Running)
+        .await;
+    let from = h.events.lock().len();
+
+    h.core.archive_agent(&id, true).await.unwrap();
+
+    let events = h.events.lock();
+    let end = events[from..]
+        .iter()
+        .find(|e| {
+            e["type"] == "agent"
+                && e["agent"]["id"] == id.as_str()
+                && e["agent"]["status"] != "running"
+        })
+        .expect("its turn was seen to end");
+    assert_eq!(end["agent"]["archived"], true, "{end}");
+}
+
+#[tokio::test]
 async fn a_message_after_a_crash_restarts_claude() {
     let h = harness("crash");
     let (p, _) = h.project(false).await;
@@ -8220,6 +8260,23 @@ async fn a_question_or_a_permission_is_told_with_its_own_words() {
 }
 
 #[tokio::test]
+async fn the_end_of_a_turn_is_not_told_while_the_window_holds_a_message_for_it() {
+    let h = harness("notify-held");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    *h.core.held.lock() = [id.clone()].into();
+    h.turn(&id, "Bonjour").await;
+    h.core.held.lock().clear();
+    h.turn(&id, "Encore").await;
+    h.wait_alerts(1).await;
+    let sent = h.alerts();
+    assert!(
+        sent.len() == 1 && sent[0].ends_with(" | Bonjour, tu as dit : Encore"),
+        "{sent:?}"
+    );
+}
+
+#[tokio::test]
 async fn the_end_of_a_turn_and_a_crash_are_told_unless_their_kind_is_off() {
     let h = harness("notify-ends");
     let (p, _) = h.project(false).await;
@@ -8863,6 +8920,32 @@ fn core_account_ids(core: &Core<MockRuntime>) -> Vec<String> {
         .iter()
         .map(|a| a.id.clone())
         .collect()
+}
+
+#[tokio::test]
+async fn an_archiving_cut_short_by_a_stop_lets_go_of_the_resume_and_the_ports_at_the_next_start() {
+    // Told archived before its turn was stopped, the app killed meanwhile: saved with its planned
+    // resume and its test ports still on it.
+    let agent = |id: &str, archived: bool| {
+        json!({ "id": id, "projectId": "p1", "name": id, "model": "sonnet", "effort": "medium",
+                "mode": "auto", "cwd": "/x", "sessionId": "s1", "archived": archived,
+                "resumeAt": 4_102_444_800_000_i64, "portBase": 41000 })
+    };
+    let (core, _dir) = core_saved_by_1_8_0(
+        "pr18-archiving-cut-short",
+        json!({ "claudePath": "" }),
+        json!({ "projects": [], "agents": [agent("gone", true), agent("kept", false)] }),
+    );
+    let meta = |id: &str| core.agent(id).unwrap().lock().meta.clone();
+    let gone = meta("gone");
+    assert!(gone.archived);
+    assert_eq!((gone.resume_at, gone.port_base), (None, None));
+    // An agent that is not archived keeps them.
+    let kept = meta("kept");
+    assert_eq!(
+        (kept.resume_at, kept.port_base),
+        (Some(4_102_444_800_000), Some(41000))
+    );
 }
 
 #[tokio::test]

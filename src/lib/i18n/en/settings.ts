@@ -151,6 +151,12 @@ export default defineZone('settings', {
     idleStop: 'Stop idle agent processes after',
     idleStopHint: 'minutes, 0 = never',
     idleStopLabel: 'Stop idle agent processes after (minutes)',
+    midTurnDelay: 'Delay before sending during a turn',
+    midTurnDelayDesc:
+      'A message sent while an agent works waits this long: you can edit or cancel it until then. Cursor and OpenCode keep it until the end of the turn, whatever this setting.',
+    midTurnDelayOff: 'Off',
+    /** `{s}`: seconds. */
+    midTurnDelaySecs: '{s} s',
     terminalView: 'New agents’ view',
     terminalViewDesc:
       'Escouade: Escouade’s conversation. Harness terminal: the harness’s own interface (Claude Code’s…), in a terminal. Each agent switches views from its header; ticket agents, and those of a harness with no terminal view, stay in Escouade’s view.',

@@ -28,6 +28,12 @@
     { value: 'path' as const, label: t('settings.claude.attachBigTextPath') },
     { value: 'refuse' as const, label: t('settings.claude.attachBigTextRefuse') },
   ]);
+  const midTurnDelayOptions = $derived(
+    [0, 5, 10, 20, 30].map((s) => ({
+      value: s,
+      label: s ? t('settings.claude.midTurnDelaySecs', { s }) : t('settings.claude.midTurnDelayOff'),
+    })),
+  );
   let checking = $state(false);
   /** The harnesses found, for « À propos ». */
   const found = $derived(offered());
@@ -332,6 +338,9 @@
     <Row label={t('settings.claude.idleStop')}>
       <input class="field input num" type="number" min="0" aria-label={t('settings.claude.idleStopLabel')} bind:value={s.idleStopMinutes} />
       <span class="hint">{t('settings.claude.idleStopHint')}</span>
+    </Row>
+    <Row label={t('settings.claude.midTurnDelay')} desc={t('settings.claude.midTurnDelayDesc')}>
+      <Chips label={t('settings.claude.midTurnDelay')} options={midTurnDelayOptions} bind:value={s.midTurnDelaySecs} />
     </Row>
   </Group>
   <Group title={t('settings.claude.attachments')} note={t('settings.claude.attachmentsNote')}>

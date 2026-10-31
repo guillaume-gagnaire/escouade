@@ -33,6 +33,8 @@ test('a declarative plugin is installed from a folder, and an invalid one says w
     async (cmd, args = {}) => {
       for (let tries = 1; ; tries++) {
         try {
+          // Attached on the blank page a start shows before the app's (a slow runner takes seconds): wait for the app's.
+          await page.waitForFunction(() => '__TAURI_INTERNALS__' in window, null, { timeout: 30_000 });
           return await call(page, cmd, args);
         } catch (e) {
           if (tries === 3 || !String(e).includes('Execution context was destroyed')) throw e;

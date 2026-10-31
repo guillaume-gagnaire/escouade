@@ -94,6 +94,7 @@ const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
     'todoTools',
     'claudeSelfUpdate',
     'idleStopMinutes',
+    'midTurnDelaySecs',
     'attachMaxMb',
     'attachWarnMb',
     'attachOrigin',

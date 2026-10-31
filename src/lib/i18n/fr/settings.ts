@@ -184,6 +184,12 @@ export default {
     idleStop: 'Arrêter les processus des agents inactifs après',
     idleStopHint: 'minutes, 0 = jamais',
     idleStopLabel: 'Arrêter les processus des agents inactifs après (minutes)',
+    midTurnDelay: 'Délai avant l’envoi pendant un tour',
+    midTurnDelayDesc:
+      'Un message envoyé pendant qu’un agent travaille attend ce délai : tu peux le modifier ou l’annuler d’ici là. Cursor et OpenCode le gardent jusqu’à la fin du tour, quel que soit ce réglage.',
+    midTurnDelayOff: 'Désactivé',
+    /** `{s}`: seconds. */
+    midTurnDelaySecs: '{s} s',
     terminalView: 'Vue des nouveaux agents',
     terminalViewDesc:
       'Escouade : la conversation d’Escouade. Terminal du harness : l’interface du harness elle-même (celle de Claude Code…), dans un terminal. Chaque agent change de vue depuis son en-tête ; les agents de ticket, et ceux d’un harness sans vue terminal, restent dans la vue d’Escouade.',

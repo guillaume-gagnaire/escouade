@@ -218,6 +218,23 @@ describe('SettingsModal', () => {
     expect(app.settings.terminalView).toBe(true);
   });
 
+  it('saves the delay before a message sent during a turn', async () => {
+    const backend = backendSaving();
+    render(SettingsModal);
+    const delay = group('Tous les harness').getByRole('group', { name: 'Délai avant l’envoi pendant un tour' });
+    expect(screen.getByText(/tu peux le modifier ou l’annuler d’ici là/)).toHaveTextContent(/Cursor et OpenCode/);
+    expect(
+      within(delay)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Désactivé', '5 s', '10 s', '20 s', '30 s']);
+    await userEvent.click(within(delay).getByRole('button', { name: '20 s' }));
+    expect(within(delay).getByRole('button', { name: '20 s' })).toHaveAttribute('aria-pressed', 'true');
+    await save();
+    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ midTurnDelaySecs: 20 });
+    expect(app.settings.midTurnDelaySecs).toBe(20);
+  });
+
   it('lets the agents keep a task list, from the group of the processes, on by default', async () => {
     const backend = backendSaving();
     render(SettingsModal);
