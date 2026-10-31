@@ -4,6 +4,29 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
+## [Unreleased]
+
+### New
+
+- In Settings › Accounts, the small square of each “Reserved for projects” chip lights up in the project’s colour when the account serves it, and turns grey otherwise. Thanks to @Metalzoid (#19).
+- A message posted while an agent works can still be edited or cancelled before it reaches it: it waits a few seconds, or until the end of the turn with Cursor and OpenCode, and can also go at once. Thanks to @Metalzoid (#18).
+- The “PR and CI” tab of the right panel shows the pull request of the agent’s branch: its CI check by check, the log of a failure, “Re-run failed jobs” in one click, its reviews and its deployments. Without an agent it lists the project’s open pull requests, and an agent’s card tells the state of its CI beside “#41 → main”.
+- The automatic choice of the account judges each window by its length: a full 5 hours puts an account on hold until it starts again without weighing on what follows, and the week (or the month’s credits) is judged by its pace — a week at 88% that starts again in 3 hours is still a good choice, one at 60% on its second day goes behind the others. An account at 95% or more always goes behind the others. The order of the accounts stays the priority, and the messages say when it is the pace that decides. Thanks to @Metalzoid (#20).
+
+### Fixes
+
+- Starting branch `origin/x`: a new agent starts from the local `x`, moved forward if needed, no longer from another agent’s branch that tracked `origin/x`; agents’ branches no longer track their base. Thanks to @Metalzoid.
+- Uncommitted files no longer blink at each refresh: “No file changed by this agent” and the list stay shown as long as nothing changes.
+- A workflow you delete, in Settings › Projects › Workflow or by erasing its file, no longer comes back at every reading or restart: the “Deleted” list keeps it, with “Restore”. And “No workflow for this project”, in the assistant or the settings (and in `.escouade.yml`), stops their reading and writing.
+- Two tickets worked on at once no longer propose a decision under the same number: a proposed decision has no number and gets the register’s next one when it is accepted, and the pages and tickets that cite it follow.
+- “Write a first spec from the code”, and every new discussion, closes its window and opens the discussion with its first message even when new agents open in the harness terminal: a discussion always stays in its conversation, where Escouade refuses its writes.
+- The card of the tickets “Plan tickets” made now matches the subjects’ cards in the Docs tab: nothing spills out of it, it says how many tickets have started, “Undo” only shows for those not started yet, and it folds once all have started or closes.
+- A discussion that can’t start no longer leaves an agent behind: the window says why and keeps your choices, to start again or switch accounts.
+- On Linux, Escouade no longer reads every project’s git in a loop while nothing changes, which could keep the window busy and freeze it; a line of several megabytes in a diff is now only partly shown.
+- The interface no longer freezes during a long operation (a big folder, git, a lock): it stays responsive while the command works, and the log notes slow commands and window pauses to diagnose them.
+- When the interface’s page stops dead, Escouade reloads it without reopening the project it showed and offers to reopen it: a project that brings the page down no longer freezes the whole app.
+- The output of a tool that read a binary file is shown cleaned (control characters made visible, terminal colours removed) instead of being lost, and a very long output is shown in parts.
+
 ## [2.1.1] — 2026-10-29
 
 ### Fixes

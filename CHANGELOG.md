@@ -4,6 +4,29 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
+## [Non publié]
+
+### Nouveautés
+
+- Dans Réglages › Comptes, le petit carré de chaque pastille « Réservé aux projets » s’allume à la couleur du projet quand le compte le sert, et passe au gris sinon. Merci à @Metalzoid (#19).
+- Un message posté pendant qu’un agent travaille peut encore être modifié ou annulé avant de lui parvenir : il attend quelques secondes, ou la fin du tour chez Cursor et OpenCode, et peut aussi partir tout de suite. Merci à @Metalzoid (#18).
+- L’onglet « PR et CI » du panneau de droite montre la PR de la branche de l’agent : sa CI vérification par vérification, le journal d’un échec, « Relancer les échecs » d’un clic, ses revues et ses déploiements. Sans agent, il liste les PR ouvertes du projet, et la carte d’un agent dit l’état de sa CI à côté de « #41 → main ».
+- Le choix automatique du compte juge chaque fenêtre selon sa longueur : une 5 h pleine met un compte en pause jusqu’à sa remise à zéro sans peser sur la suite, et la semaine (ou les crédits du mois) se juge au rythme — une semaine à 88 % qui se remet à zéro dans 3 h reste un bon choix, une à 60 % au deuxième jour passe derrière les autres. Un compte à 95 % ou plus passe toujours derrière les autres. L’ordre des comptes reste la priorité, et les messages disent quand c’est le rythme qui décide. Merci à @Metalzoid (#20).
+
+### Corrections
+
+- « Branche de départ » `origin/x` : le nouvel agent part de la locale `x`, avancée au besoin, et plus de la branche d’un autre agent qui suivait `origin/x` ; les branches des agents ne suivent plus leur base. Merci à @Metalzoid.
+- Les fichiers non commités ne clignotent plus à chaque rafraîchissement : « Aucun fichier modifié par cet agent » et la liste restent affichés tant que rien ne change.
+- Un workflow que tu supprimes, dans Réglages › Projets › Workflow ou en effaçant son fichier, ne revient plus à chaque relecture ni au redémarrage : la liste « Supprimés » le garde, avec « Rétablir ». Et « Pas de workflow pour ce projet », dans l’assistant ou les réglages (et dans `.escouade.yml`), coupe leur lecture et leur écriture.
+- Deux tickets menés en même temps ne proposent plus une décision sous le même numéro : une décision proposée n’a pas de numéro et reçoit le suivant du registre quand elle est acceptée, et les pages et tickets qui la citent suivent.
+- « Écrire une première spec depuis le code », et toute nouvelle discussion, ferme sa fenêtre et ouvre la discussion avec son premier message même quand les nouveaux agents s’ouvrent dans le terminal du harness : une discussion reste toujours dans sa conversation, où Escouade refuse ses écritures.
+- La carte des tickets créés par « Planifier » rejoint les cartes des sujets dans l’onglet Docs : rien n’en déborde plus, elle dit combien de tickets sont lancés, « Annuler » ne s’offre que pour ceux qui ne le sont pas encore, et elle se replie une fois tout lancé ou se ferme.
+- Une discussion qui ne peut pas démarrer ne laisse plus d’agent derrière elle : la fenêtre dit pourquoi et garde tes choix, pour recommencer ou changer de compte.
+- Sous Linux, Escouade ne relit plus le git de chaque projet en boucle quand rien ne change, ce qui pouvait faire tourner la fenêtre sans fin et la figer ; une ligne de plusieurs mégaoctets dans un diff n’est plus affichée qu’en partie.
+- L’interface ne se fige plus le temps d’une opération longue (gros dossier, git, verrou) : elle reste réactive pendant que la commande travaille, et le journal note les commandes lentes et les pauses de la fenêtre pour les diagnostiquer.
+- Quand la page de l’interface s’arrête net, Escouade la recharge sans rouvrir le projet qu’elle affichait et propose de le rouvrir : un projet qui fait tomber la page ne fige plus toute l’app.
+- La sortie d’un outil qui a lu un fichier binaire s’affiche nettoyée (caractères de contrôle rendus visibles, couleurs du terminal retirées) au lieu d’être perdue, et une sortie très longue s’affiche par morceaux.
+
 ## [2.1.1] — 2026-10-29
 
 ### Corrections
