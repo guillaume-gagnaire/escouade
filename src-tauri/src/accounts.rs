@@ -343,18 +343,46 @@ pub fn get(settings: &Settings, id: &str) -> Account {
 
 /// The verdict on the account's quota (`usage`) at `now`, `threshold` being the percentage at which
 /// a short window is out (`pace::judge`): the one place that says whether an account is a good one
-/// (PR #20). An account of a harness without a quota, or not read yet, has no meter: good.
-pub(crate) fn verdict(usage: &[AccountUsage], id: &str, threshold: u32, now: i64) -> pace::Verdict {
+/// (PR #20). An account of a harness without a quota, or not read yet, has no meter: good. For the
+/// model `model` (ESC-312): a meter of one model alone counts for that model only, none for the
+/// account in general (None).
+pub(crate) fn verdict(
+    usage: &[AccountUsage],
+    id: &str,
+    threshold: u32,
+    now: i64,
+    model: Option<&str>,
+) -> pace::Verdict {
     let meters = usage
         .iter()
         .find(|u| u.id == id)
         .map(|u| u.meters.as_slice());
-    pace::judge(meters.unwrap_or_default(), threshold, now)
+    pace::judge(meters.unwrap_or_default(), threshold, now, model)
 }
 
 /// How the account stands for the choice (`verdict`): good, behind (only its pace is bad) or out.
-pub(crate) fn standing(usage: &[AccountUsage], id: &str, threshold: u32, now: i64) -> Standing {
-    verdict(usage, id, threshold, now).standing
+pub(crate) fn standing(
+    usage: &[AccountUsage],
+    id: &str,
+    threshold: u32,
+    now: i64,
+    model: Option<&str>,
+) -> Standing {
+    verdict(usage, id, threshold, now, model).standing
+}
+
+/// The quotas (`usage`) as an agent or a ticket of the model `model` sees them, for what holds it
+/// back beside the choice (`board::account_pause`): a meter of one model alone (ESC-312) only for
+/// that model, as `pace::judge` has it (`pace::for_model`); none of them for the account in
+/// general (None).
+pub fn seen_by(usage: &[AccountUsage], model: Option<&str>) -> Vec<AccountUsage> {
+    usage
+        .iter()
+        .map(|u| AccountUsage {
+            meters: pace::for_model(&u.meters, model).cloned().collect(),
+            ..u.clone()
+        })
+        .collect()
 }
 
 /// Whether one of the account's quota meters (`usage`) is used `threshold` percent or more at
@@ -383,7 +411,7 @@ pub fn pick(
     now: i64,
 ) -> Option<String> {
     pick_ranked(settings, preferred, |id| {
-        standing(usage, id, threshold, now)
+        standing(usage, id, threshold, now, None)
     })
 }
 
@@ -545,7 +573,9 @@ pub fn switch_notice(
     from: &str,
     to: &str,
 ) -> Option<String> {
-    if from == to || standing(usage, to, threshold, now) >= standing(usage, from, threshold, now) {
+    if from == to
+        || standing(usage, to, threshold, now, None) >= standing(usage, from, threshold, now, None)
+    {
         return None;
     }
     let left = settings
@@ -553,7 +583,7 @@ pub fn switch_notice(
         .iter()
         .find(|a| a.active && a.id == from)?;
     // The meter that holds the account back: the worst, and the most used of those.
-    let held = verdict(usage, from, threshold, now).holding?;
+    let held = verdict(usage, from, threshold, now, None).holding?;
     let (from, to) = (name_in(lang, left), name_in(lang, &get(settings, to)));
     let what = crate::switching::meter_phrase(lang, &held.meter);
     // Under its threshold, it is the pace that puts the account behind.
@@ -4104,6 +4134,7 @@ mod tests {
             minutes,
             pct,
             resets_at: Some(NOW + min * 60_000),
+            model: None,
         }
     }
 
@@ -4144,7 +4175,7 @@ mod tests {
         }
         // Past the threshold in percent all the same: what the old rule sent away.
         assert!(over_threshold(&usage, "principal", 80, NOW));
-        assert_eq!(standing(&usage, "principal", 80, NOW), Standing::Good);
+        assert_eq!(standing(&usage, "principal", 80, NOW, None), Standing::Good);
     }
 
     #[test]
@@ -4155,7 +4186,10 @@ mod tests {
             read("principal", vec![day_two(60.0)]),
             read("pro", vec![day_two(20.0)]),
         ];
-        assert_eq!(standing(&usage, "principal", 95, NOW), Standing::Behind);
+        assert_eq!(
+            standing(&usage, "principal", 95, NOW, None),
+            Standing::Behind
+        );
         for threshold in [80, 95, 100] {
             assert_eq!(
                 pick(&s, &usage, threshold, None, NOW).as_deref(),
@@ -4213,7 +4247,7 @@ mod tests {
             read("principal", vec![win(WEEK, 100.0, 24 * 60)]),
             read("pro", vec![]),
         ];
-        assert_eq!(standing(&usage, "principal", 100, NOW), Standing::Out);
+        assert_eq!(standing(&usage, "principal", 100, NOW, None), Standing::Out);
         assert_eq!(pick(&s, &usage, 100, None, NOW).as_deref(), Some("pro"));
         // Reset (its end and the margin after it are past): a candidate again.
         let reset = [read("principal", vec![win(WEEK, 100.0, -1)])];
@@ -4243,6 +4277,7 @@ mod tests {
                 minutes: WEEK,
                 pct: 99.0,
                 resets_at: None,
+                model: None,
             }],
         )];
         assert_eq!(
@@ -4334,8 +4369,11 @@ mod tests {
             ),
         ];
         let pick_at = |usage: &[AccountUsage]| pick(&codex, usage, 90, None, NOW);
-        assert_eq!(standing(&usage, "principal-codex", 90, NOW), Standing::Out);
-        assert_eq!(standing(&usage, "work", 90, NOW), Standing::Behind);
+        assert_eq!(
+            standing(&usage, "principal-codex", 90, NOW, None),
+            Standing::Out
+        );
+        assert_eq!(standing(&usage, "work", 90, NOW, None), Standing::Behind);
         // Out against behind: the one that is only behind.
         assert_eq!(pick_at(&usage).as_deref(), Some("work"));
         // Its 5 h started again: the first account, whose week and 30 days are on pace.
@@ -4350,7 +4388,10 @@ mod tests {
             ),
             usage[1].clone(),
         ];
-        assert_eq!(standing(&after, "principal-codex", 90, NOW), Standing::Good);
+        assert_eq!(
+            standing(&after, "principal-codex", 90, NOW, None),
+            Standing::Good
+        );
         assert_eq!(pick_at(&after).as_deref(), Some("principal-codex"));
         // Never an account of another harness.
         assert_eq!(
@@ -4379,6 +4420,7 @@ mod tests {
             minutes: None,
             pct: 0.0,
             resets_at: Some(ms),
+            model: None,
         };
         // November 1st, 00:00 UTC: October has 31 days.
         let nov = chrono::DateTime::parse_from_rfc3339("2026-11-01T00:00:00Z")
@@ -4396,7 +4438,7 @@ mod tests {
         ];
         // 5 days of October gone: 60 % is 372 % of the month, 10 % is 62 %.
         let day5 = at("2026-10-06T00:00:00Z");
-        assert_eq!(standing(&usage, "first", 80, day5), Standing::Behind);
+        assert_eq!(standing(&usage, "first", 80, day5, None), Standing::Behind);
         assert_eq!(pick(&s, &usage, 80, None, day5).as_deref(), Some("second"));
         // Two days before the reset, 90 % is on pace (the month before is October, 31 days long),
         // past the threshold or not.
@@ -4420,11 +4462,11 @@ mod tests {
         ];
         // 14 days of the 28 of February gone with 50 % used: 100 % at the reset, on pace; 11 days: 127 %.
         assert_eq!(
-            standing(&usage, "first", 80, at("2026-02-15T00:00:00Z")),
+            standing(&usage, "first", 80, at("2026-02-15T00:00:00Z"), None),
             Standing::Good
         );
         assert_eq!(
-            standing(&usage, "first", 80, at("2026-02-12T00:00:00Z")),
+            standing(&usage, "first", 80, at("2026-02-12T00:00:00Z"), None),
             Standing::Behind
         );
     }
@@ -4441,7 +4483,7 @@ mod tests {
         // No meter, read or not: good, the first.
         assert_eq!(pick(&s, &[], 80, None, NOW).as_deref(), Some("one"));
         let usage = [read("one", vec![]), read("two", vec![])];
-        assert_eq!(standing(&usage, "one", 80, NOW), Standing::Good);
+        assert_eq!(standing(&usage, "one", 80, NOW, None), Standing::Good);
         assert_eq!(pick(&s, &usage, 80, None, NOW).as_deref(), Some("one"));
         assert_eq!(
             pick(&s, &usage, 80, Some("two"), NOW).as_deref(),

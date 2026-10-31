@@ -23,6 +23,7 @@
   // keyboard and to screen readers.
   let {
     minutes,
+    model,
     usage,
     now,
     detail = false,
@@ -30,6 +31,8 @@
   }: {
     /** The window's length (300: 5 hours); null for the month's credits. */
     minutes: number | null;
+    /** The model it is the quota of alone, as the server names it (« Fable », ESC-312): the bar « Fable · semaine ». */
+    model?: string;
     /** The meter as last read; null while it is not known. */
     usage: RateWindow | null;
     /** The clock (ms), to count down to the reset. */
@@ -40,8 +43,8 @@
     focusable?: boolean;
   } = $props();
 
-  const label = $derived(meterLabel(minutes));
-  const name = $derived(meterName(minutes));
+  const label = $derived(meterLabel(minutes, model));
+  const name = $derived(meterName(minutes, model));
   const pct = $derived(usage ? Math.min(100, Math.max(0, usage.pct)) : 0);
   /** Where the window would end at the pace used so far (`projectedPct`); null when too early, or « Projection des quotas » on « Jamais ». */
   const projected = $derived(projectionMode() === 'off' ? null : projectedPct(minutes, usage, now));

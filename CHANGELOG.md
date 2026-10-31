@@ -35,6 +35,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ### Corrections
 
 - « Branche de départ » `origin/x` : le nouvel agent part de la locale `x`, avancée au besoin, et plus de la branche d’un autre agent qui suivait `origin/x` ; les branches des agents ne suivent plus leur base. Merci à @Metalzoid.
+- Le quota propre à Fable a sa barre, « Fable · semaine », et ne retient plus que les tickets et agents Fable : au seuil, ils changent de compte ou attendent, les autres modèles continuent. Un forfait Max sans fenêtre de 5 h n’affiche plus de barre 5 h figée sur une vieille valeur.
 - Les fichiers non commités ne clignotent plus à chaque rafraîchissement : « Aucun fichier modifié par cet agent » et la liste restent affichés tant que rien ne change.
 - Un workflow que tu supprimes, dans Réglages › Projets › Workflow ou en effaçant son fichier, ne revient plus à chaque relecture ni au redémarrage : la liste « Supprimés » le garde, avec « Rétablir ». Et « Pas de workflow pour ce projet », dans l’assistant ou les réglages (et dans `.escouade.yml`), coupe leur lecture et leur écriture.
 - Un agent enregistré sur un harness que cette version n’a pas (celui d’une version plus récente, ou d’un plugin retiré) est lu et gardé avec sa conversation, marqué « harness absent » ; il ne démarre pas, et aucun agent n’est créé sur ce harness.

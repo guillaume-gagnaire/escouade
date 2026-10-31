@@ -1889,6 +1889,8 @@ export interface RateWindow {
  */
 export interface QuotaMeter extends RateWindow {
   minutes: number | null;
+  /** The model it is the quota of alone, as the server names it (« Fable », ESC-312); absent for a meter of every model. */
+  model?: string;
 }
 
 export interface Usage {

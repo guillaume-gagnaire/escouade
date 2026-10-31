@@ -517,3 +517,63 @@ async fn an_account_the_agent_would_leave_at_once_is_no_target_but_a_slow_one_un
     assert_eq!(h.agent(&id).account, "equipe");
     assert_eq!(notices(&h, &id).len(), 2, "{:?}", notices(&h, &id));
 }
+
+/// Pro telling Fable's week at 97 %, the others under the threshold (`fake-usage.json`, ESC-312).
+fn fable_over_on(account: &Account) -> serde_json::Value {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../tests/fixtures/claude-usage/fable-over.json");
+    let mut v: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let day = chrono::DateTime::from_timestamp_millis(now_ms() + 24 * 3_600_000)
+        .unwrap()
+        .to_rfc3339();
+    for row in v["limits"].as_array_mut().unwrap() {
+        row["resets_at"] = day.clone().into();
+    }
+    std::fs::write(
+        Path::new(&account.config_dir).join("fake-usage.json"),
+        v.to_string(),
+    )
+    .unwrap();
+    v
+}
+
+/// An agent of `model` on `account`.
+async fn agent_of_model(h: &Harness, project: &Project, account: &str, model: &str) -> String {
+    h.core
+        .create_agent_with(
+            &project.id,
+            crate::core::AgentOptions {
+                account: Some(account.into()),
+                model: Some(model.into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id
+}
+
+#[tokio::test]
+async fn fables_week_past_the_threshold_moves_a_fable_agent_and_leaves_an_opus_one() {
+    let h = harness("switch-fable");
+    let (p, _) = h.project(true).await;
+    let (pro, _) = pro_and_team(&h);
+    let usage = fable_over_on(&pro);
+    h.core.record_usage("pro", crate::usage::reading_of(&usage));
+    let opus = agent_of_model(&h, &p, "pro", "opus").await;
+    turn_over(&h, &opus, "Bonjour").await;
+    let fable = agent_of_model(&h, &p, "pro", "fable").await;
+    turn_over(&h, &fable, "Bonjour").await;
+    h.wait("Fable on Équipe", |h| h.agent(&fable).account == "equipe")
+        .await;
+    assert_eq!(
+        notices(&h, &fable),
+        ["L’agent passe sur le compte Équipe : Pro est à 97 % de sa fenêtre hebdomadaire Fable (au rythme actuel, 113 % à sa remise à zéro)."]
+    );
+    // Opus stays: Fable's week is not its quota.
+    turn_over(&h, &opus, "Encore").await;
+    assert_eq!(h.agent(&opus).account, "pro");
+    assert!(notices(&h, &opus).is_empty());
+}
