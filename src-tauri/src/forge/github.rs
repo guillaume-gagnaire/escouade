@@ -22,8 +22,8 @@ pub fn api_base(url: &str) -> String {
 }
 
 impl Provider for GithubProvider {
-    fn kind(&self) -> &'static str {
-        "github"
+    fn kind(&self) -> String {
+        "github".into()
     }
 
     fn name(&self) -> &'static str {
@@ -64,8 +64,8 @@ impl Provider for GithubProvider {
     /// A classic token's: the PR, its checks, its Actions' logs and the deployments. A
     /// fine-grained one does not say its rights (pull requests and contents in writing; checks,
     /// statuses, Actions and deployments in reading).
-    fn scopes(&self) -> &'static [&'static str] {
-        &["repo"]
+    fn scopes(&self) -> Vec<String> {
+        ["repo"].map(String::from).to_vec()
     }
 
     fn token_page(&self, url: &str) -> String {
@@ -79,12 +79,12 @@ impl Provider for GithubProvider {
 
     fn cli(&self, host: &str) -> Option<CliToken> {
         Some(CliToken {
-            program: "gh",
+            program: "gh".into(),
             args: ["auth", "token", "--hostname", host]
                 .map(str::to_string)
                 .to_vec(),
-            login: "gh auth login",
-            parse: |out, _| Some(out.trim().to_string()).filter(|t| !t.is_empty()),
+            login: "gh auth login".into(),
+            read: CliRead::Stdout,
         })
     }
 
