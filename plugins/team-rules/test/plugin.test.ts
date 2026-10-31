@@ -48,6 +48,22 @@ test('an allowed start never lets another command through', () => {
   }
 });
 
+test('an allowed command that writes a file of its own choosing goes to the user', () => {
+  // `git diff` and `git log` write where `--output` says: a redirection by another name, quoted or not.
+  for (const line of [
+    'git log -1 --format=%B --output=/home/u/.bashrc',
+    'git diff --output ~/.bashrc',
+    'git diff HEAD --output',
+    'git log "--output=/tmp/x"',
+    "git diff --out''put=/tmp/x",
+    'git status && git log --output=/tmp/x',
+  ]) {
+    assert.equal(decide(rules, line).decision, 'ask', line);
+  }
+  // Its look-alikes write nothing.
+  assert.equal(decide(rules, 'git diff --output-indicator-new=+').decision, 'allow');
+});
+
 test('through Escouade: commands decided, edits left to the user', async () => {
   const escouade = connect(teamRules(rules));
   await escouade.initialize();
