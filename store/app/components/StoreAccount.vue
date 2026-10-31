@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ACCOUNT_TEXTS } from '~/data/account';
+import type { ConnectedAppLine } from '~/data/agents';
 import { pathIn } from '~/data/language';
 import { hueOf, markOf, type Icon } from '~~/shared/tile';
 
@@ -98,6 +99,8 @@ interface AccountData {
   offers: { id: string; from: string | null; at: string | null; icon: Icon | null }[];
   claims: { id: string; repository: string; at: string | null; icon: Icon | null }[];
   selected: Selected | null;
+  /** The MCP clients the author let in (ESC-317). */
+  apps: ConnectedAppLine[];
   now: string;
 }
 
@@ -530,6 +533,8 @@ useHead(() => ({
           <button class="btn sm ghost" type="submit">{{ text.email.remove }}</button>
         </form>
       </div>
+
+      <ConnectedApps :apps="data.apps ?? []" :now="data.now" />
 
       <div class="side-card">
         <h3 class="h2">{{ text.data.title }}</h3>

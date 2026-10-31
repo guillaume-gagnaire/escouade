@@ -445,6 +445,7 @@ export const en: Catalog = {
       'plugins/testing': 'Testing a plugin',
       'plugins/themes': 'Themes',
       'plugins/publishing': 'Publishing on the store',
+      'plugins/store-mcp': 'The store from an agent',
       'plugins/security': 'Plugin security',
       'plugins/examples': 'Example plugins',
       shortcuts: 'Keyboard shortcuts',

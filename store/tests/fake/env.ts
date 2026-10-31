@@ -24,6 +24,10 @@ export const E2E_APP = {
 export const E2E_ADMIN_LOGIN = 'store-review-admin';
 export const E2E_ADMIN_ID = 100_000 + (parseInt(createHash('sha256').update(E2E_ADMIN_LOGIN).digest('hex').slice(0, 8), 16) % 900_000_000);
 
+/** The chief of the squad on the fake GitHub, and the app's repository there (STORE_FIRST_PARTY_REPO; ESC-317). */
+export const E2E_CHEF_LOGIN = 'escouade-chef';
+export const E2E_FIRST_PARTY_REPO = `${E2E_CHEF_LOGIN}/escouade-app`;
+
 /**
  * The signing key of the end-to-end tests: made once in the system's temporary folder (never in the repository),
  * the same for the runner and its workers; its public half is the store's STORE_KEYS_DIR during the run.
