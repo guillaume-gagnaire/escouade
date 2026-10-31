@@ -1127,7 +1127,19 @@ pub async fn worktree_add_from(
         Some(b) => format!("refs/heads/{b}"),
         None => "HEAD".into(),
     };
-    run_hooks(repo, &["worktree", "add", "-b", &branch, &path_s, &start]).await?;
+    run_hooks(
+        repo,
+        &[
+            "worktree",
+            "add",
+            "--no-track",
+            "-b",
+            &branch,
+            &path_s,
+            &start,
+        ],
+    )
+    .await?;
     Ok((path_s, branch, base))
 }
 
@@ -1165,7 +1177,20 @@ pub async fn worktree_add_on(
     }
     let path = dir.to_string_lossy().to_string();
     // `--`: whatever `base` is, git reads it as the commit-ish to start from.
-    run_hooks(repo, &["worktree", "add", "-b", &name, &path, "--", base]).await?;
+    run_hooks(
+        repo,
+        &[
+            "worktree",
+            "add",
+            "--no-track",
+            "-b",
+            &name,
+            &path,
+            "--",
+            base,
+        ],
+    )
+    .await?;
     Ok((path, name))
 }
 
@@ -1561,7 +1586,7 @@ pub async fn branch_list(repo: &str) -> Result<Vec<BranchInfo>> {
     let (locals, remotes) = (locals?, remotes?);
     let mut list = Vec::new();
     // The local branch that tracks each remote one.
-    let mut tracked_by: HashMap<&str, &str> = HashMap::new();
+    let mut tracked_by: HashMap<&str, Vec<(&str, &str)>> = HashMap::new();
     for line in locals.lines() {
         let fields: Vec<&str> = line.split('\0').collect();
         let [refname, upstream, track, date, head, worktree] = fields[..] else {
@@ -1571,7 +1596,10 @@ pub async fn branch_list(repo: &str) -> Result<Vec<BranchInfo>> {
             continue;
         };
         if !upstream.is_empty() {
-            tracked_by.insert(upstream, name);
+            tracked_by
+                .entry(upstream)
+                .or_default()
+                .push((name, worktree));
         }
         let (ahead, behind, upstream_gone) = parse_track(track);
         list.push(BranchInfo {
@@ -1587,6 +1615,8 @@ pub async fn branch_list(repo: &str) -> Result<Vec<BranchInfo>> {
         });
     }
     list.sort_by_key(|b| !b.current);
+    let (remote_names, paths) = (self::remotes(repo).await, worktree_paths(repo).await);
+    let main = paths.ok().and_then(|p| p.into_iter().next());
     for line in remotes.lines() {
         let fields: Vec<&str> = line.split('\0').collect();
         let [refname, symref, date] = fields[..] else {
@@ -1602,7 +1632,14 @@ pub async fn branch_list(repo: &str) -> Result<Vec<BranchInfo>> {
         list.push(BranchInfo {
             name: name.to_string(),
             remote: true,
-            tracked_by: tracked_by.get(refname).map(|b| b.to_string()),
+            tracked_by: tracked_by.get(refname).and_then(|t| {
+                let short = remote_names
+                    .iter()
+                    .filter(|r| name.starts_with(&format!("{r}/")))
+                    .max_by_key(|r| r.len())
+                    .map_or(name, |r| &name[r.len() + 1..]);
+                tracking_choice(short, t, main.as_deref()).map(str::to_string)
+            }),
             last_commit_at: date.parse::<i64>().unwrap_or(0) * 1000,
             ..BranchInfo::default()
         });
@@ -1785,8 +1822,33 @@ pub async fn upstream_of(repo: &str, name: &str) -> Option<Upstream> {
     })
 }
 
+/// Where an agent's branch is made by default (its project may name another prefix).
+const AGENT_BRANCH_PREFIX: &str = "escouade/";
+
+/// Among the local branches that track a remote branch (`short`: its name there; each with the
+/// folder of the worktree that has it checked out, if any), the one it stands for: the one of its
+/// own name, else the first that is nobody's work: no agent's (`escouade/…`), not held by a linked
+/// worktree (`main`: the repository's own folder). An agent's branch may track it, git setting that
+/// up for a branch made from a remote one.
+fn tracking_choice<'a>(
+    short: &str,
+    tracked: &[(&'a str, &str)],
+    main: Option<&str>,
+) -> Option<&'a str> {
+    let theirs = |local: &str, worktree: &str| {
+        local.starts_with(AGENT_BRANCH_PREFIX) || (!worktree.is_empty() && main != Some(worktree))
+    };
+    tracked
+        .iter()
+        .find(|(local, _)| *local == short)
+        .or_else(|| tracked.iter().find(|(l, w)| !theirs(l, w)))
+        .map(|(local, _)| *local)
+}
+
 /// The local branch `name` stands for: itself, or for a remote branch (`origin/feat`) the local one
-/// that tracks it, whatever its name; None when there is none yet (`switch_to` makes it). Refused
+/// that tracks it: the one of the same name (`master` for `origin/master`), else another that tracks
+/// it and is no agent's (`escouade/…`) nor held by a linked worktree; None when there is none yet
+/// (`switch_to` makes it). Refused
 /// when it is neither, or when the local branch it would make exists and tracks something else.
 pub async fn local_of(repo: &str, name: &str) -> Result<Option<String>> {
     if name.is_empty() || name.starts_with('-') {
@@ -1803,22 +1865,27 @@ pub async fn local_of(repo: &str, name: &str) -> Result<Option<String>> {
         repo,
         &[
             "for-each-ref",
-            "--format=%(refname)%00%(upstream)",
+            "--format=%(refname)%00%(upstream)%00%(worktreepath)",
             "refs/heads",
         ],
     )
     .await?;
-    let tracked = locals.lines().find_map(|l| {
-        let (local, upstream) = l.split_once('\0')?;
-        (upstream == tracking).then(|| short_ref(local).to_string())
-    });
-    if tracked.is_some() {
-        return Ok(tracked);
-    }
-    // `switch --track` names it after the remote's branch.
     let Some((_, short)) = split_remote(repo, name).await else {
         return Err(no_branch(name));
     };
+    let main = worktree_paths(repo).await?.into_iter().next();
+    let tracked: Vec<_> = locals
+        .lines()
+        .filter_map(|l| {
+            let mut f = l.split('\0');
+            let (local, upstream, worktree) = (f.next()?, f.next()?, f.next()?);
+            (upstream == tracking).then(|| (short_ref(local), worktree))
+        })
+        .collect();
+    if let Some(local) = tracking_choice(&short, &tracked, main.as_deref()) {
+        return Ok(Some(local.to_string()));
+    }
+    // `switch --track` names it after the remote's branch.
     check_ref_format(&short).await?;
     if branch_exists(repo, &short).await {
         bail!(tr!(
@@ -5753,6 +5820,62 @@ sleep {seconds}
         let list = branch_list(&l).await.unwrap();
         let copy = list.iter().find(|b| b.name == "copy").unwrap();
         assert_eq!(copy.upstream, None);
+    }
+
+    #[tokio::test]
+    async fn origin_x_is_the_local_x_never_a_branch_of_an_agent_that_tracks_it() {
+        let (local, other, _) = with_remote("git-esc315-local-of");
+        let l = s(&local);
+        // Sorting before main, tracking origin/main: an agent's branch by its name, then one a
+        // worktree holds whatever its name.
+        git_in(
+            &local,
+            &["branch", "-q", "--track", "escouade/old", "origin/main"],
+        );
+        git_in(
+            &local,
+            &["branch", "-q", "--track", "aaa-held", "origin/main"],
+        );
+        let held = wt_root(&l).join("held");
+        git_in(&local, &["worktree", "add", "-q", &s(&held), "aaa-held"]);
+        commit_file(&other, "b.txt", "b\n");
+        git_in(&other, &["push", "-q", "origin", "main"]);
+        git_in(&local, &["fetch", "-q"]);
+        assert_eq!(
+            local_of(&l, "origin/main").await.unwrap().as_deref(),
+            Some("main")
+        );
+        assert_eq!(switch_to(&l, "origin/main").await.unwrap(), "main");
+        // The branch picker shows the same one.
+        let list = branch_list(&l).await.unwrap();
+        let remote = list.iter().find(|b| b.name == "origin/main").unwrap();
+        assert_eq!(remote.tracked_by.as_deref(), Some("main"));
+        // No local main tracks it: a branch of nobody's that does is taken, an agent's never.
+        git_in(
+            &local,
+            &["switch", "-q", "-c", "mine", "--track", "origin/main"],
+        );
+        git_in(&local, &["branch", "-q", "-D", "main"]);
+        assert_eq!(
+            local_of(&l, "origin/main").await.unwrap().as_deref(),
+            Some("mine")
+        );
+        git_in(&local, &["switch", "-q", "--detach"]);
+        git_in(&local, &["branch", "-q", "-D", "mine"]);
+        assert_eq!(local_of(&l, "origin/main").await.unwrap(), None);
+        assert_eq!(switch_to(&l, "origin/main").await.unwrap(), "main");
+    }
+
+    #[tokio::test]
+    async fn a_worktree_branch_made_from_a_remote_base_tracks_nothing() {
+        let (local, _, _) = with_remote("git-esc315-no-track");
+        let l = s(&local);
+        let (_, branch) = worktree_add_on(&l, &wt_root(&l), &[], "ticket/dem-1", "origin/main")
+            .await
+            .unwrap();
+        assert_eq!(upstream_of(&l, &branch).await, None);
+        let tracked = text(&l, &["config", "--get", &format!("branch.{branch}.remote")]).await;
+        assert!(tracked.is_err(), "{tracked:?}");
     }
 
     #[tokio::test]
