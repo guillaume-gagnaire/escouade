@@ -1,5 +1,5 @@
 ---
-number: 20
+number: 23
 title: "origin/x prend la locale x, jamais la branche d'un agent qui la suit"
 date: "2026-10-31"
 state: "proposed"

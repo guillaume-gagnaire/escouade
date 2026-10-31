@@ -4,7 +4,8 @@ subject: "docs"
 sources: ["src-tauri/src/vectors/mod.rs","src/components/settings/VectorsModelRow.svelte","src/components/settings/VectorsSection.svelte","website/content/docs/fr/settings-projects.md"]
 tickets: ["ESC-252","ESC-254","ESC-310"]
 decisions: []
-compared: null
+compared: "2026-10-31T16:08:13+01:00"
+gaps: [{"text":"La page dit que la recherche par le sens couvre la spec, les décisions, les documents et la mémoire. Dans le code, seuls les documents du drive (docsdrive.rs) et la mémoire (memory.rs) sont indexés et cherchés avec les vecteurs. `Source::Spec` et `Source::Decision` existent dans l'énumération, mais aucun appelant ne les indexe ni ne les cherche. Il n'y a donc pas de recherche par le sens dans la spec ni dans les décisions.","code":["src-tauri/src/vectors/index.rs","src-tauri/src/docsdrive.rs","src-tauri/src/memory.rs"]},{"text":"La page dit que la recherche ne reçoit que des textes autorisés par la clôture du projet : un fichier interdit n'entre dans aucun index ni dans aucune réponse. Je n'ai trouvé aucune référence à la clôture dans le code d'indexation et de recherche (vectors/*, docsdrive.rs, memory.rs, mcp/memory.rs, mcp/docs.rs). Le contrôle annoncé n'y est pas appliqué.","code":["src-tauri/src/vectors/index.rs","src-tauri/src/docsdrive.rs","src-tauri/src/memory.rs"]},{"text":"Point secondaire : la page dit que la recherche ne sert pas au code. Le code garde pourtant `Source::Code` dans `Source::ALL` et un format de découpage `Format::Code`. Aucun appelant ne les utilise pour l'instant.","code":["src-tauri/src/vectors/index.rs","src-tauri/src/vectors/chunk.rs"]}]
 ---
 
 ## Ce que c'est

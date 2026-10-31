@@ -4,7 +4,7 @@ subject: "Docs"
 sources: ["docs/archive/codeindex/CODEINDEX-PROBES.md","src-tauri/src/paths.rs","src-tauri/src/projectfile.rs","src-tauri/src/stats.rs","src-tauri/src/tui.rs"]
 tickets: ["ESC-251","ESC-253","ESC-293","ESC-306","ESC-307","ESC-310"]
 decisions: []
-compared: "2026-10-30T21:05:05+01:00"
+compared: "2026-10-31T16:06:32+01:00"
 ---
 
 ## Ce que c'est

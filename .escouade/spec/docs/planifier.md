@@ -4,7 +4,7 @@ subject: "Docs"
 sources: ["website/content/docs/fr/docs-space.md","docs/FACTORY.md","src-tauri/src/docsplan.rs","src-tauri/src/codesearch.rs","src-tauri/src/core.rs","src/lib/i18n/fr/docs.ts"]
 tickets: ["ESC-262","ESC-291","ESC-303","ESC-310"]
 decisions: []
-compared: "2026-10-30T05:29:54+01:00"
+compared: "2026-10-31T16:07:20+01:00"
 ---
 
 ## Ce que c'est

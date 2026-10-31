@@ -4,7 +4,8 @@ subject: "Docs"
 sources: ["website/content/docs/fr/docs-space.md","docs/FACTORY.md","src-tauri/src/discussion.rs","src-tauri/src/mcp/docs.rs","src-tauri/src/engine/mod.rs","src/lib/i18n/fr/docs.ts","src/lib/shortcuts.ts","src/components/docs/SpecSpace.svelte"]
 tickets: ["ESC-261","ESC-289","ESC-310"]
 decisions: []
-compared: "2026-10-30T05:35:00+01:00"
+compared: "2026-10-31T16:04:50+01:00"
+gaps: [{"text":"La spec dit que les discussions tournent sur Claude Code, Codex, OpenCode, Copilot CLI, Antigravity CLI et Gemini CLI, tous empêchés d'écrire. Le refus côté serveur, quand le harness ne convient pas, ne conseille que « Claude Code, Codex, OpenCode ou Copilot CLI » et oublie Antigravity CLI et Gemini CLI, qui sont pourtant acceptés par `holds`.","code":["src-tauri/src/discussion.rs"]}]
 ---
 
 ## Ce que c'est
