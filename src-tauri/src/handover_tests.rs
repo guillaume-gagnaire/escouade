@@ -612,6 +612,49 @@ async fn with_the_option_an_agent_whose_harness_is_spent_goes_on_by_itself_and_i
 }
 
 #[tokio::test]
+async fn an_account_is_usable_for_a_handover_unless_out_for_its_quota_by_the_pace_of_its_windows() {
+    // PR #20: the same judgement as the choice of the account (`pace`): a week on pace is usable
+    // past the threshold, one behind too (only its pace is bad), one at its limit is spent.
+    use crate::model::{now_ms, RateWindow};
+    use crate::usage::Reading;
+    let h = harness("handover-usable");
+    let now = now_ms();
+    let window = |pct: f64, minutes: i64| {
+        Some(RateWindow {
+            pct,
+            resets_at: Some(now + minutes * 60_000),
+        })
+    };
+    let read = |five, week| {
+        h.core
+            .record_usage("principal", Reading::claude((five, week)))
+    };
+    h.set_settings(|s| s.quota_pause = 100);
+    assert!(h.core.account_usable("principal"), "nothing read");
+    // 97 % of the week, starting again in 3 h: 98.8 % at the reset.
+    read(None, window(97.0, 180));
+    assert!(h.core.account_usable("principal"));
+    // 60 % at its second day: 210 % at the reset, behind but usable.
+    read(None, window(60.0, 5 * 24 * 60));
+    assert!(h.core.account_usable("principal"));
+    // At its limit: spent, for the week as for the 5 hours.
+    read(None, window(100.0, 180));
+    assert!(!h.core.account_usable("principal"));
+    read(window(100.0, 60), window(20.0, 5 * 24 * 60));
+    assert!(!h.core.account_usable("principal"));
+    // Under « Pause au-delà du quota », the autopilot's own ceiling stays what it was: a week on
+    // pace (and under the 95 % margin, `pace::NEAR_LIMIT`) is judged good, and still held back past
+    // 90 % (PR #20 leaves the pause alone).
+    h.set_settings(|s| s.quota_pause = 90);
+    read(window(10.0, 60), window(93.0, 180));
+    assert!(!h.core.account_usable("principal"));
+    assert_eq!(
+        crate::accounts::standing(&h.core.usage.lock().accounts, "principal", 90, now),
+        crate::pace::Standing::Good
+    );
+}
+
+#[tokio::test]
 async fn a_private_projects_agent_is_handed_over_by_the_option_only_to_an_account_of_its_own() {
     let h = harness("handover-private");
     let (p, _) = two_projects(&h).await;

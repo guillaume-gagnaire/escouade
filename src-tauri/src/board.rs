@@ -553,8 +553,9 @@ pub fn switch_threshold(settings: &Settings) -> u32 {
     quota_threshold(settings.switch_at)
 }
 
-/// The use past which an account takes no new agent while another can (`accounts::pick`): the
-/// lower of « Pause au-delà du quota » and « Changer de compte à ».
+/// The use at which a short window puts an account out of the choice while another can take the
+/// agent (`accounts::pick`, `pace::judge`): the lower of « Pause au-delà du quota » and « Changer
+/// de compte à ».
 pub fn pick_threshold(settings: &Settings) -> u32 {
     quota_threshold(settings.quota_pause).min(switch_threshold(settings))
 }

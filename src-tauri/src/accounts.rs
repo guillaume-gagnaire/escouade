@@ -13,7 +13,8 @@ use crate::board;
 use crate::core::Core;
 use crate::engine::{self, Process};
 use crate::i18n::Lang;
-use crate::model::{Account, AccountUsage, EngineId, Project, QuotaMeter, Settings};
+use crate::model::{Account, AccountUsage, EngineId, Project, Settings};
+use crate::pace::{self, Standing};
 use crate::pty::TermInfo;
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
@@ -388,40 +389,40 @@ pub fn get(settings: &Settings, id: &str) -> Account {
     }
 }
 
-/// The meters of the account's quota (`usage`) used `threshold` percent or more at `now`, until an
-/// end still to come (as the autopilot counts it, `board::over_threshold`). None for an account of
-/// a harness without a quota: it has no meter.
-pub(crate) fn meters_over(
-    usage: &[AccountUsage],
-    id: &str,
-    threshold: u32,
-    now: i64,
-) -> Vec<QuotaMeter> {
+/// The verdict on the account's quota (`usage`) at `now`, `threshold` being the percentage at which
+/// a short window is out (`pace::judge`): the one place that says whether an account is a good one
+/// (PR #20). An account of a harness without a quota, or not read yet, has no meter: good.
+pub(crate) fn verdict(usage: &[AccountUsage], id: &str, threshold: u32, now: i64) -> pace::Verdict {
     let meters = usage
         .iter()
         .find(|u| u.id == id)
         .map(|u| u.meters.as_slice());
-    let over = |m: &&QuotaMeter| board::over_threshold(&m.rate(), threshold, now);
-    meters
-        .unwrap_or_default()
-        .iter()
-        .filter(over)
-        .copied()
-        .collect()
+    pace::judge(meters.unwrap_or_default(), threshold, now)
+}
+
+/// How the account stands for the choice (`verdict`): good, behind (only its pace is bad) or out.
+pub(crate) fn standing(usage: &[AccountUsage], id: &str, threshold: u32, now: i64) -> Standing {
+    verdict(usage, id, threshold, now).standing
 }
 
 /// Whether one of the account's quota meters (`usage`) is used `threshold` percent or more at
-/// `now`, until an end still to come (as the autopilot counts it, `board::over_threshold`).
+/// `now`, until an end still to come (as the autopilot counts it, `board::over_threshold`). A plain
+/// reading of the percentages, for a question about a window being full; never the choice of an
+/// account, which is `standing` (the pace of a long window counts there).
 pub fn over_threshold(usage: &[AccountUsage], id: &str, threshold: u32, now: i64) -> bool {
-    !meters_over(usage, id, threshold, now).is_empty()
+    usage.iter().find(|u| u.id == id).is_some_and(|u| {
+        u.meters
+            .iter()
+            .any(|m| board::over_threshold(&m.rate(), threshold, now))
+    })
 }
 
 /// The account a new agent goes to. The one `preferred` names (a project's, or the one asked for)
-/// when it is active; else the first active one, in the settings' order, none of whose quota
-/// meters (`usage`) is used `threshold` percent or more at `now`; when every active account is,
-/// the first active one (the autopilot then pauses). None when none is active (no account added,
-/// ESC-128). Given the settings of one harness (`for_project`), it stays among its accounts: going
-/// on another harness is a handover (ESC-88).
+/// when it is active; else the first good one (`standing`: see `pace`) in the settings' order; when
+/// none is, the first whose only fault is its pace; when every active account is out, the first
+/// active one (the autopilot then pauses). None when none is active (no account added, ESC-128).
+/// Given the settings of one harness (`for_project`), it stays among its accounts: going on another
+/// harness is a handover (ESC-88).
 pub fn pick(
     settings: &Settings,
     usage: &[AccountUsage],
@@ -429,27 +430,25 @@ pub fn pick(
     preferred: Option<&str>,
     now: i64,
 ) -> Option<String> {
-    pick_where(settings, preferred, |id| {
-        !over_threshold(usage, id, threshold, now)
+    pick_ranked(settings, preferred, |id| {
+        standing(usage, id, threshold, now)
     })
 }
 
-/// `pick`, with the accounts that may take an agent now told by `usable`: for a choice that goes
-/// by more than the quota windows (a pause after a usage limit, an agent waiting for its reset).
-pub fn pick_where(
+/// The account `preferred` names when it is active, else the first of the best active ones as
+/// `standing` ranks them, in the settings' order (the order stays the priority: a better rank only
+/// goes before a worse one); the first active one when all are out.
+pub fn pick_ranked(
     settings: &Settings,
     preferred: Option<&str>,
-    usable: impl Fn(&str) -> bool,
+    standing: impl Fn(&str) -> Standing,
 ) -> Option<String> {
-    let mut active = settings.accounts.iter().filter(|a| a.active);
+    let active = settings.accounts.iter().filter(|a| a.active);
     if let Some(a) = preferred.and_then(|id| active.clone().find(|a| a.id == id)) {
         return Some(a.id.clone());
     }
-    let first = active.clone().next();
-    active
-        .find(|a| usable(&a.id))
-        .or(first)
-        .map(|a| a.id.clone())
+    // `min_by_key` keeps the first of equals.
+    active.min_by_key(|a| standing(&a.id)).map(|a| a.id.clone())
 }
 
 /// The settings as an agent of `engine` sees them: the accounts of the other harnesses taken as
@@ -581,10 +580,10 @@ fn default_names() -> [String; 2] {
 }
 
 /// What the window is told when the account new agents go to (the current one) changed from
-/// `from` to `to`: only when `from` is an active account that passed the threshold (it is why they
-/// go elsewhere now) and `to` is one that did not (with every account past it the first one is
-/// the current again, and the autopilot's pause says so); going back to the first usable one is
-/// not told. None otherwise.
+/// `from` to `to`: only when `from` is an active account that stands worse than `to` now (it is why
+/// they go elsewhere: a window at the threshold or at its limit, or a pace that would not last to
+/// the reset, `pace`), so that with every account out the first one is the current again, and the
+/// autopilot's pause says so; going back to the first good one is not told. None otherwise.
 pub fn switch_notice(
     lang: Lang,
     settings: &Settings,
@@ -594,25 +593,36 @@ pub fn switch_notice(
     from: &str,
     to: &str,
 ) -> Option<String> {
-    if from == to || over_threshold(usage, to, threshold, now) {
+    if from == to || standing(usage, to, threshold, now) >= standing(usage, from, threshold, now) {
         return None;
     }
     let left = settings
         .accounts
         .iter()
         .find(|a| a.active && a.id == from)?;
-    // The meter that went the furthest of those that hold the account back.
-    let pct = meters_over(usage, from, threshold, now)
-        .into_iter()
-        .map(|m| m.pct)
-        .reduce(f64::max)?;
+    // The meter that holds the account back: the worst, and the most used of those.
+    let held = verdict(usage, from, threshold, now).holding?;
     let (from, to) = (name_in(lang, left), name_in(lang, &get(settings, to)));
-    let pct = pct.round();
-    Some(tr_in!(
-        lang,
-        "Le compte {from} a atteint {pct} % : les nouveaux agents partent sur {to}.",
-        "The {from} account has reached {pct}%: new agents now go to {to}."
-    ))
+    let what = crate::switching::meter_phrase(lang, &held.meter);
+    // Under its threshold, it is the pace that puts the account behind.
+    Some(match held.projected.filter(|_| held.by_pace()) {
+        Some(p) => {
+            let pct = pace::written(p);
+            tr_in!(
+                lang,
+                "Le compte {from} finirait à {pct} % de {what} au rythme actuel : les nouveaux agents partent sur {to}.",
+                "At its current pace the {from} account would end at {pct}% of {what}: new agents now go to {to}."
+            )
+        }
+        None => {
+            let pct = held.meter.pct.round();
+            tr_in!(
+                lang,
+                "Le compte {from} a atteint {pct} % : les nouveaux agents partent sur {to}.",
+                "The {from} account has reached {pct}%: new agents now go to {to}."
+            )
+        }
+    })
 }
 
 /// The app's `CLAUDE_CONFIG_DIR` (which Principal's processes inherit) and the home folder. In
@@ -2772,6 +2782,7 @@ impl<R: Runtime> Core<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::QuotaMeter;
     use crate::paths::test_dir;
 
     fn account(id: &str, dir: &str) -> Account {
@@ -3732,19 +3743,23 @@ mod tests {
         // At it (as the autopilot counts it): the next one.
         let first_over = [used("principal", 95.0, end)];
         assert_eq!(pick_at(&s, &first_over).as_deref(), Some("pro"));
-        // Its week counts as well as its 5 hours.
-        let week = AccountUsage {
+        // Its week counts as well as its 5 hours, once it is at its limit.
+        let week = |pct| AccountUsage {
             id: "principal".into(),
             meters: crate::model::claude_meters(
                 None,
                 Some(crate::model::RateWindow {
-                    pct: 99.0,
+                    pct,
                     resets_at: Some(end),
                 }),
             ),
             ..Default::default()
         };
-        assert_eq!(pick_at(&s, &[week]).as_deref(), Some("pro"));
+        assert_eq!(pick_at(&s, &[week(100.0)]).as_deref(), Some("pro"));
+        // A week at 99 % that starts again in a minute, on pace: too near its limit, behind the
+        // others (`pace::NEAR_LIMIT`); 94 %, it is not wasted.
+        assert_eq!(pick_at(&s, &[week(99.0)]).as_deref(), Some("pro"));
+        assert_eq!(pick_at(&s, &[week(94.0)]).as_deref(), Some("principal"));
         // The next one over as well: the one after.
         let two_over = [used("principal", 100.0, end), used("pro", 96.0, end)];
         assert_eq!(pick_at(&s, &two_over).as_deref(), Some("team"));
@@ -4247,21 +4262,32 @@ mod tests {
             told(En, &s, &over, "principal", "pro"),
             Some("The Main account has reached 96%: new agents now go to Pro.".into())
         );
-        // The use told is that of the window that went the furthest.
-        let week = AccountUsage {
+        // The use told is that of the window that holds the account back (the most used of those).
+        let week = |pct| AccountUsage {
             meters: crate::model::claude_meters(
-                None,
                 Some(crate::model::RateWindow {
-                    pct: 98.6,
+                    pct: 96.0,
+                    resets_at: Some(end),
+                }),
+                Some(crate::model::RateWindow {
+                    pct,
                     resets_at: Some(end),
                 }),
             ),
             ..used("principal", 96.0, end)
         };
         assert_eq!(
-            told(Fr, &s, &[week], "principal", "team"),
+            told(Fr, &s, &[week(100.0)], "principal", "team"),
             Some(
-                "Le compte Principal a atteint 99 % : les nouveaux agents partent sur Team.".into()
+                "Le compte Principal a atteint 100 % : les nouveaux agents partent sur Team."
+                    .into()
+            )
+        );
+        // A week at 98.6 % that starts again in a minute holds nothing back: it is the 5 h.
+        assert_eq!(
+            told(Fr, &s, &[week(98.6)], "principal", "team"),
+            Some(
+                "Le compte Principal a atteint 96 % : les nouveaux agents partent sur Team.".into()
             )
         );
         // No switch, no word; nor when there was no account before.
@@ -4309,20 +4335,390 @@ mod tests {
     #[test]
     fn a_choice_is_made_among_the_accounts_that_are_usable_else_the_first_active_one() {
         let s = three();
-        let only = |ok: &'static str| move |id: &str| id == ok;
-        assert_eq!(pick_where(&s, None, only("team")).as_deref(), Some("team"));
+        let only = |ok: &'static str| {
+            move |id: &str| match id == ok {
+                true => Standing::Good,
+                false => Standing::Out,
+            }
+        };
+        assert_eq!(pick_ranked(&s, None, only("team")).as_deref(), Some("team"));
         assert_eq!(
-            pick_where(&s, None, only("principal")).as_deref(),
+            pick_ranked(&s, None, only("principal")).as_deref(),
             Some("principal")
         );
         assert_eq!(
-            pick_where(&s, None, |_| false).as_deref(),
+            pick_ranked(&s, None, |_| Standing::Out).as_deref(),
             Some("principal")
         );
         // Asked for, it is taken even if it is not usable.
         assert_eq!(
-            pick_where(&s, Some("pro"), only("team")).as_deref(),
+            pick_ranked(&s, Some("pro"), only("team")).as_deref(),
             Some("pro")
+        );
+        // The best rank first, the order of the settings among equals: a better account later in
+        // the list goes before a worse one earlier, never before an equal one.
+        let rank = |id: &str| match id {
+            "principal" => Standing::Out,
+            "pro" => Standing::Behind,
+            _ => Standing::Good,
+        };
+        assert_eq!(pick_ranked(&s, None, rank).as_deref(), Some("team"));
+        let rank = |id: &str| match id {
+            "principal" => Standing::Out,
+            _ => Standing::Behind,
+        };
+        assert_eq!(pick_ranked(&s, None, rank).as_deref(), Some("pro"));
+    }
+
+    /// A meter of `minutes` (none: the month's credits) used `pct` percent, starting again in `min`
+    /// minutes from `NOW`.
+    fn win(minutes: Option<u32>, pct: f64, min: i64) -> QuotaMeter {
+        QuotaMeter {
+            minutes,
+            pct,
+            resets_at: Some(NOW + min * 60_000),
+        }
+    }
+
+    const FIVE: Option<u32> = Some(crate::model::FIVE_HOURS);
+    const WEEK: Option<u32> = Some(crate::model::WEEK);
+
+    fn read(id: &str, meters: Vec<QuotaMeter>) -> AccountUsage {
+        AccountUsage {
+            id: id.into(),
+            meters,
+            ..Default::default()
+        }
+    }
+
+    /// A week 2 days gone (5 days left): `pct` percent used.
+    fn day_two(pct: f64) -> QuotaMeter {
+        win(WEEK, pct, 5 * 24 * 60)
+    }
+
+    #[test]
+    fn a_week_on_pace_that_starts_again_soon_is_not_wasted_even_past_the_threshold() {
+        let s = three();
+        // A (first in the list): 88 % of its week, starting again in 3 h; B at 10 % of a week at its
+        // second day (35 % at the reset).
+        let usage = [
+            read(
+                "principal",
+                vec![win(FIVE, 30.0, 120), win(WEEK, 88.0, 180)],
+            ),
+            read("pro", vec![day_two(10.0)]),
+        ];
+        for threshold in [80, 90, 95, 100] {
+            assert_eq!(
+                pick(&s, &usage, threshold, None, NOW).as_deref(),
+                Some("principal"),
+                "at {threshold}"
+            );
+        }
+        // Past the threshold in percent all the same: what the old rule sent away.
+        assert!(over_threshold(&usage, "principal", 80, NOW));
+        assert_eq!(standing(&usage, "principal", 80, NOW), Standing::Good);
+    }
+
+    #[test]
+    fn a_week_that_would_not_last_to_its_reset_goes_behind_the_others_even_under_the_threshold() {
+        let s = three();
+        // A at 60 % at its second day: 210 % at the reset. B at 20 %: 70 %.
+        let usage = [
+            read("principal", vec![day_two(60.0)]),
+            read("pro", vec![day_two(20.0)]),
+        ];
+        assert_eq!(standing(&usage, "principal", 95, NOW), Standing::Behind);
+        for threshold in [80, 95, 100] {
+            assert_eq!(
+                pick(&s, &usage, threshold, None, NOW).as_deref(),
+                Some("pro"),
+                "at {threshold}"
+            );
+        }
+        // Behind is still behind the account that is good, but before the order of the list: the
+        // first of the good ones, whichever it is.
+        let third = [
+            read("principal", vec![day_two(60.0)]),
+            read("pro", vec![day_two(60.0)]),
+            read("team", vec![day_two(20.0)]),
+        ];
+        assert_eq!(pick(&s, &third, 95, None, NOW).as_deref(), Some("team"));
+    }
+
+    #[test]
+    fn a_5_hour_window_at_the_threshold_is_a_short_pause_that_leaves_no_trace() {
+        let s = three();
+        // A at 96 % of its 5 h (threshold 95) with a week at 20 % (second day: 70 %): B.
+        let before = [
+            read("principal", vec![win(FIVE, 96.0, 120), day_two(20.0)]),
+            read("pro", vec![]),
+        ];
+        assert_eq!(pick(&s, &before, 95, None, NOW).as_deref(), Some("pro"));
+        // Its 5 h started again (its end and the margin after it are past): A again, with the week
+        // as it was.
+        let after = [
+            read("principal", vec![win(FIVE, 96.0, -30), day_two(20.0)]),
+            read("pro", vec![]),
+        ];
+        assert_eq!(
+            pick(&s, &after, 95, None, NOW).as_deref(),
+            Some("principal")
+        );
+        // The 5 h of a fresh window, used 3 % : nothing.
+        let fresh = [read("principal", vec![win(FIVE, 3.0, 290), day_two(20.0)])];
+        assert_eq!(
+            pick(&s, &fresh, 95, None, NOW).as_deref(),
+            Some("principal")
+        );
+        // A 5 h that is full weighs on the choice for its own length only, not on the week.
+        let full = [
+            read("principal", vec![win(FIVE, 100.0, 60), day_two(20.0)]),
+            read("pro", vec![day_two(20.0)]),
+        ];
+        assert_eq!(pick(&s, &full, 100, None, NOW).as_deref(), Some("pro"));
+    }
+
+    #[test]
+    fn a_week_at_its_limit_is_out_until_its_reset() {
+        let s = three();
+        let usage = [
+            read("principal", vec![win(WEEK, 100.0, 24 * 60)]),
+            read("pro", vec![]),
+        ];
+        assert_eq!(standing(&usage, "principal", 100, NOW), Standing::Out);
+        assert_eq!(pick(&s, &usage, 100, None, NOW).as_deref(), Some("pro"));
+        // Reset (its end and the margin after it are past): a candidate again.
+        let reset = [read("principal", vec![win(WEEK, 100.0, -1)])];
+        assert_eq!(
+            pick(&s, &reset, 100, None, NOW).as_deref(),
+            Some("principal")
+        );
+    }
+
+    #[test]
+    fn with_no_projection_the_percentage_decides_as_before() {
+        let s = three();
+        // The first day of a week (12 h gone): too early to project.
+        let early = [
+            read("principal", vec![win(WEEK, 88.0, 7 * 24 * 60 - 12 * 60)]),
+            read("pro", vec![]),
+        ];
+        assert_eq!(pick(&s, &early, 80, None, NOW).as_deref(), Some("pro"));
+        assert_eq!(
+            pick(&s, &early, 95, None, NOW).as_deref(),
+            Some("principal")
+        );
+        // A week whose end is not known holds nothing back.
+        let unknown = [read(
+            "principal",
+            vec![QuotaMeter {
+                minutes: WEEK,
+                pct: 99.0,
+                resets_at: None,
+            }],
+        )];
+        assert_eq!(
+            pick(&s, &unknown, 80, None, NOW).as_deref(),
+            Some("principal")
+        );
+    }
+
+    #[test]
+    fn with_no_good_account_it_is_the_first_without_a_window_at_its_limit_else_the_first_active() {
+        let s = three();
+        // A is out (5 h at 100 %), B only behind (210 %), C out: B.
+        let usage = [
+            read("principal", vec![win(FIVE, 100.0, 60)]),
+            read("pro", vec![day_two(60.0)]),
+            read("team", vec![win(FIVE, 99.0, 60)]),
+        ];
+        assert_eq!(pick(&s, &usage, 95, None, NOW).as_deref(), Some("pro"));
+        // Both behind: the first in the order.
+        let both = [
+            read("principal", vec![day_two(60.0)]),
+            read("pro", vec![day_two(60.0)]),
+            read("team", vec![win(FIVE, 99.0, 60)]),
+        ];
+        assert_eq!(pick(&s, &both, 95, None, NOW).as_deref(), Some("principal"));
+        // Every one out: the first active (the autopilot then pauses).
+        let all = [
+            read("principal", vec![win(FIVE, 100.0, 60)]),
+            read("pro", vec![win(WEEK, 100.0, 60)]),
+            read("team", vec![win(FIVE, 99.0, 60)]),
+        ];
+        assert_eq!(pick(&s, &all, 95, None, NOW).as_deref(), Some("principal"));
+        let mut s = s;
+        deactivate(&mut s, "principal");
+        assert_eq!(pick(&s, &all, 95, None, NOW).as_deref(), Some("pro"));
+    }
+
+    #[test]
+    fn the_order_stays_the_priority_asked_then_preferred_then_the_first_good_one() {
+        let s = three();
+        let usage = [
+            read("principal", vec![win(FIVE, 100.0, 60)]),
+            read("pro", vec![day_two(60.0)]),
+            read("team", vec![day_two(20.0)]),
+        ];
+        // The first good one, not the best by percentage.
+        assert_eq!(pick(&s, &usage, 95, None, NOW).as_deref(), Some("team"));
+        // The account preferred (or asked for) comes first, whatever its quota.
+        assert_eq!(
+            pick(&s, &usage, 95, Some("principal"), NOW).as_deref(),
+            Some("principal")
+        );
+        assert_eq!(
+            pick(&s, &usage, 95, Some("pro"), NOW).as_deref(),
+            Some("pro")
+        );
+        // Two good ones: the order of the settings, even when the later one has used less.
+        let two = [
+            read("principal", vec![day_two(25.0)]),
+            read("pro", vec![day_two(5.0)]),
+        ];
+        assert_eq!(pick(&s, &two, 95, None, NOW).as_deref(), Some("principal"));
+    }
+
+    #[test]
+    fn codex_has_a_short_5_hour_window_and_a_week_and_thirty_days_judged_by_their_pace() {
+        let s = with_codex();
+        let codex = for_project(&s, EngineId::CODEX, None);
+        let thirty = Some(43_200);
+        let day = 24 * 60;
+        let usage = [
+            // 5 h at 96 %: out for its own length.
+            read(
+                "principal-codex",
+                vec![
+                    win(FIVE, 96.0, 100),
+                    win(WEEK, 20.0, 5 * day),
+                    win(thirty, 10.0, 20 * day),
+                ],
+            ),
+            // 5 h free, the week on pace at 92 %, the 30 days behind (40 % after 5 days: 240 %).
+            read(
+                "work",
+                vec![
+                    win(FIVE, 10.0, 100),
+                    win(WEEK, 92.0, 600),
+                    win(thirty, 40.0, 25 * day),
+                ],
+            ),
+        ];
+        let pick_at = |usage: &[AccountUsage]| pick(&codex, usage, 90, None, NOW);
+        assert_eq!(standing(&usage, "principal-codex", 90, NOW), Standing::Out);
+        assert_eq!(standing(&usage, "work", 90, NOW), Standing::Behind);
+        // Out against behind: the one that is only behind.
+        assert_eq!(pick_at(&usage).as_deref(), Some("work"));
+        // Its 5 h started again: the first account, whose week and 30 days are on pace.
+        let after = [
+            read(
+                "principal-codex",
+                vec![
+                    win(FIVE, 96.0, -31),
+                    win(WEEK, 20.0, 5 * day),
+                    win(thirty, 10.0, 20 * day),
+                ],
+            ),
+            usage[1].clone(),
+        ];
+        assert_eq!(standing(&after, "principal-codex", 90, NOW), Standing::Good);
+        assert_eq!(pick_at(&after).as_deref(), Some("principal-codex"));
+        // Never an account of another harness.
+        assert_eq!(
+            pick(
+                &for_project(&s, EngineId::CLAUDE, None),
+                &usage,
+                90,
+                None,
+                NOW
+            )
+            .as_deref(),
+            Some("principal")
+        );
+    }
+
+    #[test]
+    fn copilot_credits_are_a_window_of_the_month_before_their_reset() {
+        let mut s = Settings::default();
+        for id in ["first", "second"] {
+            s.accounts.push(Account {
+                engine: EngineId::COPILOT,
+                ..account(id, "")
+            });
+        }
+        let reset = |ms: i64| QuotaMeter {
+            minutes: None,
+            pct: 0.0,
+            resets_at: Some(ms),
+        };
+        // November 1st, 00:00 UTC: October has 31 days.
+        let nov = chrono::DateTime::parse_from_rfc3339("2026-11-01T00:00:00Z")
+            .unwrap()
+            .timestamp_millis();
+        let at = |iso: &str| {
+            chrono::DateTime::parse_from_rfc3339(iso)
+                .unwrap()
+                .timestamp_millis()
+        };
+        let credits = |pct: f64| QuotaMeter { pct, ..reset(nov) };
+        let usage = [
+            read("first", vec![credits(60.0)]),
+            read("second", vec![credits(10.0)]),
+        ];
+        // 5 days of October gone: 60 % is 372 % of the month, 10 % is 62 %.
+        let day5 = at("2026-10-06T00:00:00Z");
+        assert_eq!(standing(&usage, "first", 80, day5), Standing::Behind);
+        assert_eq!(pick(&s, &usage, 80, None, day5).as_deref(), Some("second"));
+        // Two days before the reset, 90 % is on pace (the month before is October, 31 days long),
+        // past the threshold or not.
+        let late = at("2026-10-30T12:00:00Z");
+        let usage = [read("first", vec![credits(90.0)]), read("second", vec![])];
+        assert_eq!(pick(&s, &usage, 80, None, late).as_deref(), Some("first"));
+        // At 100 %: out until the reset.
+        let usage = [read("first", vec![credits(100.0)]), read("second", vec![])];
+        assert_eq!(pick(&s, &usage, 80, None, late).as_deref(), Some("second"));
+        // The length of the month before: a reset on March 1st (28 days of February, 2026).
+        let mar = at("2026-03-01T00:00:00Z");
+        let usage = [
+            read(
+                "first",
+                vec![QuotaMeter {
+                    pct: 50.0,
+                    ..reset(mar)
+                }],
+            ),
+            read("second", vec![]),
+        ];
+        // 14 days of the 28 of February gone with 50 % used: 100 % at the reset, on pace; 11 days: 127 %.
+        assert_eq!(
+            standing(&usage, "first", 80, at("2026-02-15T00:00:00Z")),
+            Standing::Good
+        );
+        assert_eq!(
+            standing(&usage, "first", 80, at("2026-02-12T00:00:00Z")),
+            Standing::Behind
+        );
+    }
+
+    #[test]
+    fn a_harness_without_a_quota_keeps_the_order_alone() {
+        let mut s = Settings::default();
+        for id in ["one", "two"] {
+            s.accounts.push(Account {
+                engine: EngineId::OPENCODE,
+                ..account(id, "")
+            });
+        }
+        // No meter, read or not: good, the first.
+        assert_eq!(pick(&s, &[], 80, None, NOW).as_deref(), Some("one"));
+        let usage = [read("one", vec![]), read("two", vec![])];
+        assert_eq!(standing(&usage, "one", 80, NOW), Standing::Good);
+        assert_eq!(pick(&s, &usage, 80, None, NOW).as_deref(), Some("one"));
+        assert_eq!(
+            pick(&s, &usage, 80, Some("two"), NOW).as_deref(),
+            Some("two")
         );
     }
 

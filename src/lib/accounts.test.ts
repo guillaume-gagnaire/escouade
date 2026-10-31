@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { agent, project, resetApp, usageOf } from '../test/ipc';
+import quotaPace from '../../tests/fixtures/quota-pace.json';
 import {
   dedicated,
   fProjection,
+  judge,
   newAgentAccount,
   overThreshold,
   pausedAccounts,
@@ -21,7 +23,7 @@ import {
 } from './accounts';
 import { setLang } from './i18n';
 import { app } from './state.svelte';
-import type { Account, AccountUsage, AutopilotPause, RateWindow } from './types';
+import type { Account, AccountUsage, AutopilotPause, QuotaMeter, RateWindow } from './types';
 
 const PRINCIPAL: Account = { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true };
 const PRO: Account = { id: 'pro', name: 'Pro', configDir: 'C:\\claude\\pro', claudePath: '', active: true };
@@ -198,10 +200,10 @@ describe('the quota of each account', () => {
     expect(rows.find((r) => r.account.id === 'principal')?.usage).toBeNull();
   });
 
-  it('flags an active account with a window past the pause threshold', () => {
+  it('flags an active account out for the choice: a 5 h window past the pause threshold, a week at its limit', () => {
     app.usage.accounts = [
       read('principal', { fiveHour: win(95), sevenDay: win(10) }),
-      read('pro', { fiveHour: win(40), sevenDay: win(91) }),
+      read('pro', { fiveHour: win(40), sevenDay: win(100) }),
       // Switched off: nothing goes to it, the threshold does not matter.
       read('team', { fiveHour: win(100) }),
     ];
@@ -211,13 +213,41 @@ describe('the quota of each account', () => {
       ['team', false],
     ]);
     app.settings.quotaPause = 100;
-    expect(quotaRows(NOW).map((r) => r.over)).toEqual([false, false, false]);
+    expect(quotaRows(NOW).map((r) => [r.account.id, r.over])).toEqual([
+      ['principal', false],
+      ['pro', true],
+      ['team', false],
+    ]);
   });
 
-  it('flags an account past « Changer de compte à » when it is lower than the pause (ESC-148)', () => {
+  it('does not flag a week past the threshold that starts again soon on pace (PR #20)', () => {
+    // 91 % of the week, starting again in an hour: 91.5 % at the reset.
+    app.usage.accounts = [read('principal', { fiveHour: win(40), sevenDay: win(91) })];
+    expect(quotaRows(NOW).map((r) => [r.account.id, r.over, r.behind])).toEqual([
+      ['principal', false, false],
+      ['pro', false, false],
+      ['team', false, false],
+    ]);
+  });
+
+  it('flags as behind a week under the threshold whose pace would not last to its reset', () => {
+    const DAY = 24 * 3_600_000;
+    // 60 % at the end of the second day: 210 % at the reset.
+    app.usage.accounts = [read('principal', { fiveHour: win(10), sevenDay: win(60, NOW + 5 * DAY) })];
+    expect(quotaRows(NOW).map((r) => [r.account.id, r.over, r.behind])).toEqual([
+      ['principal', false, true],
+      ['pro', false, false],
+      ['team', false, false],
+    ]);
+    // Out wins over behind: a 5 h window at the threshold too.
+    app.usage.accounts = [read('principal', { fiveHour: win(95), sevenDay: win(60, NOW + 5 * DAY) })];
+    expect(quotaRows(NOW).map((r) => [r.over, r.behind])[0]).toEqual([true, false]);
+  });
+
+  it('flags an account out at « Changer de compte à » when it is lower than the pause (ESC-148)', () => {
     app.settings.quotaPause = 100;
     app.settings.switchAt = 95;
-    app.usage.accounts = [read('principal', { fiveHour: win(96) }), read('pro', { fiveHour: win(94), sevenDay: win(95) })];
+    app.usage.accounts = [read('principal', { fiveHour: win(96) }), read('pro', { fiveHour: win(94), sevenDay: win(100) })];
     expect(quotaRows(NOW).map((r) => [r.account.id, r.over])).toEqual([
       ['principal', true],
       ['pro', true],
@@ -229,7 +259,7 @@ describe('the quota of each account', () => {
     // « À la limite »: the pause alone.
     app.settings.switchAt = 100;
     app.settings.quotaPause = 100;
-    expect(quotaRows(NOW).map((r) => r.over)).toEqual([false, false, false]);
+    expect(quotaRows(NOW).map((r) => r.over)).toEqual([false, true, false]);
   });
 
   it('says why an account is dimmed: switched off, not signed in, sign-in expired', () => {
@@ -392,5 +422,45 @@ describe('« Projection des quotas »', () => {
     expect(projectionTip(300, { pct: 20, resetsAt: null }, 8 * H)).toBe('');
     app.settings.quotaProjection = 'off';
     expect(projectionTip(300, w, 8 * H)).toBe('');
+  });
+});
+
+describe('the pace of a quota (the figures the Rust core checks too, tests/fixtures/quota-pace.json)', () => {
+  interface FixtureMeter {
+    minutes: number | null;
+    pct: number;
+    resetsInMin?: number;
+    resetsAt?: string;
+  }
+  interface Fixture {
+    now: string;
+    projection: (FixtureMeter & { name: string; now: string; expected: number | null })[];
+    verdict: { name: string; threshold: number; now?: string; meters: FixtureMeter[]; standing: string; leave: boolean }[];
+  }
+  const fixture = quotaPace as unknown as Fixture;
+
+  const meterOf = (m: FixtureMeter, now: number): QuotaMeter => ({
+    minutes: m.minutes,
+    pct: m.pct,
+    resetsAt: m.resetsInMin !== undefined ? now + m.resetsInMin * 60_000 : m.resetsAt ? Date.parse(m.resetsAt) : null,
+  });
+
+  it.each(fixture.projection)('projects $name', (c) => {
+    const now = Date.parse(c.now);
+    const m = meterOf(c, now);
+    const got = projectedPct(m.minutes, m, now);
+    if (c.expected === null) expect(got).toBeNull();
+    else expect(got).toBeCloseTo(c.expected, 2);
+  });
+
+  it.each(fixture.verdict)('judges $name', (c) => {
+    const now = Date.parse(c.now ?? fixture.now);
+    expect(
+      judge(
+        c.meters.map((m) => meterOf(m, now)),
+        c.threshold,
+        now,
+      ),
+    ).toMatchObject({ standing: c.standing, leave: c.leave });
   });
 });

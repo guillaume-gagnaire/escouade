@@ -140,12 +140,14 @@ Under the list, an amber line appears when a project has no active account left 
 A new agent, or a ticket the autopilot takes, starts on:
 
 1. the project’s “Preferred account”, if it has one, that account is active and it serves the project;
-2. otherwise the first active account of the list, in order, that serves the project and whose quotas aren’t at the “Pause above quota” threshold (an account that just hit its usage limit is also left out);
-3. if no account is under the threshold, the first active account. The [autopilot](autopilot) then pauses.
+2. otherwise the first “good” account of the list, in order, that serves the project (an account that just hit its usage limit is also left out);
+3. if no account is good, first the first one whose pace alone is bad, otherwise the first active account. The [autopilot](autopilot) then pauses.
+
+A long window (the week, Codex’s 30 days, Copilot CLI’s credits of the month) is judged by its pace: projected at 100% or less at its reset it stays good, even past the threshold; projected past 100%, or used at 95% or more whatever its pace, its account goes behind the others.
 
 The order of the list therefore decides: put at the top the account you want to use up first.
 
-The threshold is set in Settings › Kanban, “Autopilot” group: 80, 90, 95 or 100% (100% by default), for all projects. It is detailed in [the Kanban settings](settings-board).
+The threshold is set in Settings › Kanban, “Autopilot” group: 80, 90, 95 or 100% (100% by default), for all projects. It is detailed in [the Kanban settings](settings-board). That ceiling stays yours: the autopilot pauses at that percentage, without looking at the pace, so with a ceiling under 100% an account judged good can still be held back by the autopilot, which then moves on to the next one.
 
 When the account that received new agents passes the threshold and another one is available, a notification says so: “The Main account has reached 91%: new agents now go to Pro.”
 
@@ -219,7 +221,7 @@ What a new account shares with Main when it is made (settings, instructions, ski
 
 ## Switch accounts before the limit
 
-The “Switch accounts at” setting (Settings › Accounts, “Quotas” group) moves an agent to another account when its own nears the limit: at 80%, 90%, or 95% of its 5-hour window or of its weekly window, whichever comes first. By default it is “At the limit”: nothing moves before it, as before this setting.
+The “Switch accounts at” setting (Settings › Accounts, “Quotas” group) moves an agent to another account when its own nears the limit: when its 5-hour window reaches 80%, 90% or 95%, or when its weekly window reaches that threshold without lasting to its reset at the current pace (a week at 88% that starts again in 3 hours doesn’t move). By default it is “At the limit”: an agent already running doesn’t move before 100%. The setting doesn’t change the choice for new agents: they always follow the rule above, “At the limit” included.
 
 At the threshold, an agent is never stopped in the middle of its work:
 
@@ -227,11 +229,11 @@ At the threshold, an agent is never stopped in the middle of its work:
 - if it waits for your answer (a question, a permission) or a task runs in the background in its process (a command, a monitor, a subagent), it stays while they are there, and moves at the first end of a turn without them;
 - ordinary agents and ticket agents both move; new agents start on the other account directly.
 
-The account it goes to is the project’s preferred account, else the first in the list, as long as it serves the project, is signed in, and is itself under the threshold. A private project that hasn’t turned on “Shared accounts at the limit” only goes to an account reserved to it alone. Only Claude Code moves an agent already running: a Codex, Copilot CLI or OpenCode agent stays on its account, while its new agents follow the threshold.
+The account it goes to is the project’s preferred account, else the first in the list, as long as it serves the project, is signed in, and the agent wouldn’t leave it at once (neither a 5-hour window at the threshold nor a week at the threshold with a bad pace). A private project that hasn’t turned on “Shared accounts at the limit” only goes to an account reserved to it alone. Only Claude Code moves an agent already running: a Codex, Copilot CLI or OpenCode agent stays on its account, while its new agents follow the threshold.
 
-The conversation says so (“The agent goes on on the Pro account: Main is at 96% of its 5-hour window.”), a notification too, and the agent’s “Account” menu shows the new account once its process has started again on it.
+The conversation says so (“The agent goes on on the Pro account: Main is at 96% of its 5-hour window.”, and for a week, “… is at 96% of its weekly window (at the current pace, 168% at its reset).”), a notification too, and the agent’s “Account” menu shows the new account once its process has started again on it.
 
-With no usable account, the agent stays where it is and its conversation says why, once: “Main is at 96% of its 5-hour window, but no other Claude Code account can take the agent (under the threshold, signed in, serving this project): it stays there.” If that account carries on in extra usage, it adds: “This account is in extra usage, billed separately.”
+With no usable account, the agent stays where it is and its conversation says why, once: “Main is at 96% of its 5-hour window, but no other Claude Code account can take the agent (under the threshold or on pace, signed in, serving this project): it stays there.” If that account carries on in extra usage, it adds: “This account is in extra usage, billed separately.”
 
 No back and forth: an agent that moved to an account only leaves it once that one reaches the threshold in turn, and the first is a choice again only when it resets.
 

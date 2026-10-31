@@ -6521,6 +6521,58 @@ async fn the_first_account_passing_the_threshold_sends_the_next_ticket_to_the_se
 }
 
 #[tokio::test]
+async fn a_ticket_follows_the_pace_of_the_week_not_its_percentage() {
+    // PR #20: a week that would not last to its reset goes behind the others even far under the
+    // pause threshold; one that starts again soon on pace is not wasted, past the threshold.
+    let h = harness("tk-account-pace");
+    let (p, _) = h.project(false).await;
+    let pro = second_account(&h);
+    h.core
+        .reorder_claude_accounts(&["pro".to_string(), "principal".to_string()])
+        .unwrap();
+    std::fs::create_dir_all(&pro.config_dir).unwrap();
+    let week = |pct: f64, minutes: i64| {
+        Some(RateWindow {
+            pct,
+            resets_at: Some(now_ms() + minutes * 60_000),
+        })
+    };
+    // Pro, the first: 60 % of its week at its second day, 210 % at the reset. Principal: 20 %.
+    h.record_usage("pro", Reading::claude((None, week(60.0, 5 * 24 * 60))))
+        .await;
+    h.record_usage(
+        "principal",
+        Reading::claude((None, week(20.0, 5 * 24 * 60))),
+    )
+    .await;
+    let a = h
+        .core
+        .ticket_create(&p.id, draft("Un [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_ticket(&a.id, "to test", |t| t.column == Column::Review)
+        .await;
+    assert_eq!(account_of_ticket(&h, &a.id).await, "principal");
+    // Told: it is the pace that moved the new agents, under any threshold.
+    assert_eq!(
+        toasts(&h),
+        ["Le compte Pro finirait à 210 % de sa fenêtre hebdomadaire au rythme actuel : les nouveaux agents partent sur Principal."]
+    );
+    // Pro's week now at 88 %, starting again in 3 h: on pace, the first account again.
+    h.record_usage("pro", Reading::claude((None, week(88.0, 180))))
+        .await;
+    let b = h
+        .core
+        .ticket_create(&p.id, draft("Deux [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_ticket(&b.id, "to test", |t| t.column == Column::Review)
+        .await;
+    assert_eq!(account_of_ticket(&h, &b.id).await, "pro");
+    assert!(h.pauses().is_empty(), "{:?}", h.pauses());
+}
+
+#[tokio::test]
 async fn with_every_account_past_the_threshold_the_autopilot_pauses_and_names_them() {
     let h = harness("tk-accounts-paused");
     let (p, _) = h.project(false).await;

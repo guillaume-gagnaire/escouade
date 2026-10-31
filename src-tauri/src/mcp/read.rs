@@ -839,8 +839,8 @@ struct Pause {
 pub(super) fn usage<R: Runtime>(core: &Core<R>) -> Result<String, ToolError> {
     let list = core.settings.read().accounts.clone();
     // Each account's windows as last read, and the account new agents go to as the status bar
-    // and the autopilot have it (`UsageSnapshot::settle`: the first active one under the
-    // threshold, else the first active one).
+    // and the autopilot have it (`UsageSnapshot::settle`: the first good one, `pace`, else the
+    // first whose only fault is its pace, else the first active one).
     let usage = core.usage.lock().clone();
     let rows = list
         .into_iter()

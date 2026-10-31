@@ -9,7 +9,7 @@ export default defineZone('accounts', {
     list: 'Accounts',
     group: '{harness} accounts',
     order:
-      'New agents start on the first active account of their harness under the “Pause above quota” and “Switch accounts at” thresholds, in this order.',
+      'New agents start on the first active account of their harness whose 5 hours is under the “Pause above quota” and “Switch accounts at” thresholds and whose week keeps its pace, in this order.',
     name: 'Name',
     folder: 'Folder',
     executable: 'Executable',
@@ -190,7 +190,8 @@ export default defineZone('accounts', {
     caption: 'Account',
     auto: 'Automatic ({name})',
     autoNone: 'Automatic (no account)',
-    autoDetail: 'The project’s, else the first account under the pause and switch thresholds.',
+    autoDetail:
+      'The project’s, else the first account whose 5 hours is under the pause and switch thresholds and whose week keeps its pace.',
     inactive: '{name} (inactive)',
     locked: 'An agent’s account can’t change after its first message (its conversation is filed in that account).',
   },
@@ -199,7 +200,8 @@ export default defineZone('accounts', {
     label: 'Preferred account',
     desc: 'The account this project’s new agents and tickets go to.',
     auto: 'Automatic',
-    autoTitle: 'The first active account under the pause and switch thresholds, in the order of the accounts',
+    autoTitle:
+      'The first active account whose 5 hours is under the pause and switch thresholds and whose week keeps its pace, in the order of the accounts',
     inactive: '{name} (inactive)',
   },
 
@@ -264,6 +266,8 @@ export default defineZone('accounts', {
     projectionNoteAlways: 'After each quota, where it will be at its reset at the current pace: green, orange past 80%, red past 100%.',
     current: 'current',
     over: 'past the pause or switch threshold',
+    behind: 'pace too fast for its window',
+    nearLimit: 'near the limit of its window',
     today: 'Today: {amount}',
   },
 
@@ -278,11 +282,11 @@ export default defineZone('accounts', {
     title: 'Quotas',
     limitTitle: 'When a quota runs out',
     limitNote:
-      'New agents start on the first active account of their harness under the thresholds “Pause above quota” and “Switch accounts at”. What follows says where an agent that reaches them goes.',
+      'New agents start on the first active account of their harness whose 5 hours is under the thresholds “Pause above quota” and “Switch accounts at” and whose week keeps its pace. What follows says where an agent that reaches them goes.',
     switchAt: 'Switch accounts at',
     switchAtLimit: 'At the limit',
     switchAtDesc:
-      'When the 5-hour or weekly window of its account reaches this threshold, an agent goes on on another account of its harness at the end of its turn, and new agents go there. “At the limit”: nothing moves before it, then “Resume a ticket’s agent stopped by the usage limit on another account”, below, decides. “Pause above quota” (Kanban) also holds the tickets back once every account has passed it.',
+      'An agent goes on on another account of its harness at the end of its turn when a short window (5 hours) of its account reaches this threshold, or a long one (week, 30 days, month’s credits) reaches it without lasting to its reset at the current pace. New agents and tickets go to the first account in the order whose 5 hours is not full and whose week keeps its pace, even on “At the limit” (a running agent then does not move before 100%, and “Resume a ticket’s agent stopped by the usage limit on another account”, below, decides). “Pause above quota” (Kanban) also holds the tickets back once every account has passed it.',
     projection: 'Quota projection',
     projectionDesc:
       'After each quota, where it will stand at its reset at the current pace (“→ 64%”): green, amber past 80%, red past 100%; for a harness without a quota, the day’s cost projected to midnight, against its budget. The quota panel and the tooltips show them all; the status bar, those past 80% or all of them, except under 1240 px wide, where they stay in the tooltips.',
