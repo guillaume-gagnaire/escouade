@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { t } from '../../lib/i18n';
   import { openUrl } from '@tauri-apps/plugin-opener';
-  import { categoriesOf, type PluginView } from '../../lib/plugins';
+  import { categoriesOf, shippedWithApp } from '../../lib/plugins';
   import { plugins } from '../../lib/plugins-view.svelte';
   import Icon from '../Icon.svelte';
   import InstallModal from './InstallModal.svelte';
@@ -22,9 +22,9 @@
   });
 
   const page = $derived(plugins.page);
-  const builtin = (p: PluginView) => p.id.startsWith('dev.escouade.');
-  const added = $derived(plugins.list.filter((p) => !builtin(p)));
-  const shipped = $derived(plugins.list.filter(builtin));
+  // By their origin, never their id: a dev.escouade.* of the store is one added (ESC-314).
+  const added = $derived(plugins.list.filter((p) => !shippedWithApp(p)));
+  const shipped = $derived(plugins.list.filter(shippedWithApp));
   const current = $derived(page.kind === 'plugin' ? plugins.byId(page.id) : null);
   const listing = $derived(page.kind === 'storePlugin' ? plugins.catalogPlugin(page.id) : null);
   /** The versions Escouade withdrew, in a red band at the head of the installed ones (choices 180 and 218). */

@@ -24,8 +24,23 @@ pub const FILE: &str = "escouade-plugin.json";
 pub const SCHEMA_URL: &str = "https://escouade.dev/schemas/plugin-1.json";
 /// The major version of the plugins' protocol this Escouade serves (`escouade.api`).
 pub const API: u64 = 1;
-/// The ids of Escouade's own plugins, which only the app gives (`builtin`).
+/// The ids of Escouade's own plugins: those the app gives (`Hand::Builtin`) and those of its
+/// repository's `plugins/<id>/` (`Hand::First`, ESC-314).
 pub const RESERVED_PREFIX: &str = "dev.escouade.";
+
+/// Whose hand a manifest is read for: what it may take of Escouade's own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Hand {
+    /// Anyone's plugin: neither the ids `dev.escouade.*` nor the app's programs.
+    #[default]
+    Third,
+    /// A plugin of Escouade's own hand that the app does not give (`plugins/<id>/` of its
+    /// repository, ESC-314): a version of the store signed for it, or its folder in development.
+    /// It may take the ids `dev.escouade.*`, never the app's programs (`{escouade}/…`).
+    First,
+    /// A plugin the app itself gives (INT-4's origin `builtin`): its ids and its programs.
+    Builtin,
+}
 /// The folder of the app's programs, in the `run` of a plugin of Escouade's own.
 pub const ESCOUADE_DIR: &str = "{escouade}";
 /// The side an icon has at least, in pixels (512 advised).
@@ -387,21 +402,20 @@ pub struct Read {
     pub ignored: Vec<String>,
 }
 
-/// Reads the text of a manifest. `builtin`: a plugin the app itself gives, which may take the ids
-/// and the programs of Escouade's own.
+/// Reads the text of a manifest, for a plugin of `hand`.
 #[cfg_attr(not(test), allow(dead_code))]
-pub fn read(text: &str, builtin: bool) -> Read {
-    read_with(text, builtin, None)
+pub fn read(text: &str, hand: Hand) -> Read {
+    read_with(text, hand, None)
 }
 
 /// Reads the text of the manifest of the folder `dir`, and its icon's file there.
-pub fn read_in(text: &str, builtin: bool, dir: &Path) -> Read {
-    read_with(text, builtin, Some(&|p: &str| icon_file(dir, p)))
+pub fn read_in(text: &str, hand: Hand, dir: &Path) -> Read {
+    read_with(text, hand, Some(&|p: &str| icon_file(dir, p)))
 }
 
-fn read_with(text: &str, builtin: bool, file: Option<FileOf>) -> Read {
+fn read_with(text: &str, hand: Hand, file: Option<FileOf>) -> Read {
     match serde_json::from_str::<Value>(text) {
-        Ok(v) => check_with(&v, builtin, file),
+        Ok(v) => check_with(&v, hand, file),
         Err(_) => Read {
             manifest: Err(vec![Problem {
                 path: String::new(),
@@ -415,17 +429,17 @@ fn read_with(text: &str, builtin: bool, file: Option<FileOf>) -> Read {
 
 /// Checks a manifest's value, field by field; its icon's field, not its file.
 #[cfg_attr(not(test), allow(dead_code))]
-pub fn check(v: &Value, builtin: bool) -> Read {
-    check_with(v, builtin, None)
+pub fn check(v: &Value, hand: Hand) -> Read {
+    check_with(v, hand, None)
 }
 
 /// The bytes of a file of a plugin's folder by its path (`icon_path`), None when it is none.
 pub type FileOf<'a> = &'a dyn Fn(&str) -> Option<Vec<u8>>;
 
 /// Checks a manifest's value, field by field, and its icon's file through `file`.
-pub fn check_with(v: &Value, builtin: bool, file: Option<FileOf>) -> Read {
+pub fn check_with(v: &Value, hand: Hand, file: Option<FileOf>) -> Read {
     let mut c = Checker::default();
-    let manifest = c.manifest(v, builtin, file);
+    let manifest = c.manifest(v, hand, file);
     Read {
         manifest: match manifest {
             Some(m) if c.problems.is_empty() => Ok(m),
@@ -732,7 +746,8 @@ impl Checker {
         self.inner_path(v, path)
     }
 
-    fn manifest(&mut self, v: &Value, builtin: bool, file: Option<FileOf>) -> Option<Manifest> {
+    fn manifest(&mut self, v: &Value, hand: Hand, file: Option<FileOf>) -> Option<Manifest> {
+        let builtin = hand == Hand::Builtin;
         let o = self.object(v, "")?;
         self.ignore_others(
             o,
@@ -767,7 +782,7 @@ impl Checker {
                 if !is_id(s) {
                     self.problem("id", Code::Id);
                     None
-                } else if s.starts_with(RESERVED_PREFIX) && !builtin {
+                } else if s.starts_with(RESERVED_PREFIX) && hand == Hand::Third {
                     self.problem("id", Code::Reserved);
                     None
                 } else {

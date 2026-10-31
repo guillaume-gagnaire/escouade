@@ -32,7 +32,8 @@ fn usage(lang: Lang) -> String {
         restart                 tue le plugin et le relance
         quit                    shutdown, puis la fin
 
-Options : --lang fr|en
+Options : --lang fr|en ; --first-party pour un plugin d'Escouade (plugins/<id>/ de son dépôt,
+  identifiants dev.escouade.*)
 ",
         "escouade-plugin: test an Escouade plugin without the app.
 
@@ -50,7 +51,8 @@ Options : --lang fr|en
         restart                  kills the plugin and starts it again
         quit                     shutdown, then the end
 
-Options: --lang fr|en
+Options: --lang fr|en; --first-party for a plugin of Escouade's own (plugins/<id>/ of its repository,
+  ids dev.escouade.*)
 "
     )
 }
@@ -90,6 +92,15 @@ pub fn main(args: Vec<String>) -> i32 {
         }
     };
     let flag = |name: &str| args.iter().any(|a| a == name);
+    // A plugin of Escouade's own hand (`plugins/<id>/` of its repository, ESC-314) takes the ids
+    // `dev.escouade.*`; one the app gives (INT-4), its programs too.
+    let hand = if flag("--builtin") {
+        manifest::Hand::Builtin
+    } else if flag("--first-party") {
+        manifest::Hand::First
+    } else {
+        manifest::Hand::Third
+    };
     match command {
         "test" => {
             let measure = args
@@ -98,7 +109,7 @@ pub fn main(args: Vec<String>) -> i32 {
                 .map(|i| args.get(i + 1).and_then(|n| n.parse().ok()).unwrap_or(1000));
             let options = Options {
                 lang,
-                builtin: flag("--builtin"),
+                hand,
                 measure: measure.unwrap_or(0),
                 ..Options::default()
             };
@@ -113,7 +124,7 @@ pub fn main(args: Vec<String>) -> i32 {
             }
             i32::from(!report.passed())
         }
-        "validate" => validate(&folder, lang, flag("--builtin")),
+        "validate" => validate(&folder, lang, hand),
         "dev" => {
             let mut secrets = HashMap::new();
             for (i, a) in args.iter().enumerate() {
@@ -123,7 +134,7 @@ pub fn main(args: Vec<String>) -> i32 {
                     }
                 }
             }
-            rt.block_on(dev(&folder, lang, secrets, flag("--builtin")))
+            rt.block_on(dev(&folder, lang, secrets, hand))
         }
         _ => {
             eprint!("{}", usage(lang));
@@ -133,7 +144,7 @@ pub fn main(args: Vec<String>) -> i32 {
 }
 
 /// The manifest of `folder`, or what is wrong with it, said on the standard error.
-fn read_manifest(folder: &Path, lang: Lang, builtin: bool) -> Option<Manifest> {
+fn read_manifest(folder: &Path, lang: Lang, hand: manifest::Hand) -> Option<Manifest> {
     let path = folder.join(manifest::FILE);
     let text = match std::fs::read_to_string(&path) {
         Ok(t) => t,
@@ -142,7 +153,7 @@ fn read_manifest(folder: &Path, lang: Lang, builtin: bool) -> Option<Manifest> {
             return None;
         }
     };
-    let read = manifest::read_in(&text, builtin, folder);
+    let read = manifest::read_in(&text, hand, folder);
     for f in &read.ignored {
         eprintln!(
             "{}",
@@ -160,8 +171,8 @@ fn read_manifest(folder: &Path, lang: Lang, builtin: bool) -> Option<Manifest> {
     }
 }
 
-fn validate(folder: &Path, lang: Lang, builtin: bool) -> i32 {
-    let Some(m) = read_manifest(folder, lang, builtin) else {
+fn validate(folder: &Path, lang: Lang, hand: manifest::Hand) -> i32 {
+    let Some(m) = read_manifest(folder, lang, hand) else {
         return 1;
     };
     if let Some(why) = m.refusal(env!("CARGO_PKG_VERSION"), lang) {
@@ -267,8 +278,13 @@ async fn begin(
     Some(s)
 }
 
-async fn dev(folder: &Path, lang: Lang, secrets: HashMap<String, String>, builtin: bool) -> i32 {
-    let Some(m) = read_manifest(folder, lang, builtin) else {
+async fn dev(
+    folder: &Path,
+    lang: Lang,
+    secrets: HashMap<String, String>,
+    hand: manifest::Hand,
+) -> i32 {
+    let Some(m) = read_manifest(folder, lang, hand) else {
         return 1;
     };
     let Some(run) = m.run.as_ref() else {

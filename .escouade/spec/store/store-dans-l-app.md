@@ -2,7 +2,7 @@
 title: "Le store dans l'app"
 subject: "store"
 sources: ["docs/STORE.md","docs/PLUGINS.md","design/plugins/maquettes-b.html","design/app-redesign/UX-NOTES.md","website/content/docs/fr/plugins/installer.md"]
-tickets: ["ESC-236","ESC-287","ESC-313"]
+tickets: ["ESC-236","ESC-287","ESC-313","ESC-314"]
 decisions: [21]
 compared: "2026-10-30T04:14:52+01:00"
 ---
@@ -54,3 +54,9 @@ Référence : `docs/STORE.md` §5 et §7 (il fait foi) ; aperçu `#b1` à `#b4` 
 - `version.json` porte `path`, le dossier du plugin dans son dépôt (`''` à la racine). Un `version.json` d'avant, sans `path`, se lit comme la racine.
 - Un `path` qui n'est pas un chemin relatif simple (vide, ou des segments sans `.` ni `..`, sans antislash, `:` ni caractère de contrôle, 200 caractères au plus) arrête l'installation : « Le version.json reçu nomme un dossier mal formé (…) : rien n'est installé. »
 - Le dossier est gardé dans l'origine du plugin installé ; « Vient de » montre une ligne « Dossier » dont le lien ouvre `<dépôt>/tree/<étiquette>/<dossier>` sur GitHub. L'archive reçue est celle du dossier seul.
+
+## Un plugin d'Escouade venu du store (ESC-314)
+- Les plugins de première main que l'app ne livre pas (`dev.escouade.high-contrast`, `dev.escouade.discord`, `dev.escouade.slack`, `dev.escouade.team-rules`, de `plugins/<id>/` du dépôt de l'app) s'installent depuis le store **comme tout plugin du store** : origine `store` (le dépôt, le dossier, l'étiquette `plugins/<id>/v…`, le commit), copie dans le dossier des plugins des données, mises à jour depuis le catalogue.
+- **Signés seulement** : une version `dev.escouade.*` sans signature du store est refusée à l'installation, « <id> v… est un plugin d'Escouade (`dev.escouade.*`) que le store n'a pas encore signé : il ne s'installe que signé. ». Un dossier copié ou un dépôt cloné qui prend un id `dev.escouade.*` reste refusé (« réservé aux plugins d'Escouade ») ; un dossier chargé « En développement » le prend, pour que l'auteur l'essaie.
+- Un tel plugin ne prend que l'id : jamais les programmes de l'app (`{escouade}/…`), réservés aux plugins qu'elle livre.
+- **Livré avec l'app ou venu du store, l'origine les distingue, jamais l'id** : un plugin livré a l'origine `builtin` (INT-4) et seul il est rangé dans « Livrés avec Escouade » ; un `dev.escouade.*` du store est rangé dans « Ajoutés », avec son sceau et sa ligne « Vient de ».

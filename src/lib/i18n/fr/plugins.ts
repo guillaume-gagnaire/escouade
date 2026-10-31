@@ -167,6 +167,7 @@ export default {
     folder: 'Dossier',
     git: 'Dépôt git',
     dev: 'Dossier en développement',
+    builtin: 'Livré avec Escouade',
     devNote: '{path} · relu à chaque changement',
     from: 'Vient de',
     version: 'Version',

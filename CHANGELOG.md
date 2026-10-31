@@ -8,6 +8,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- Les plugins Contraste élevé, Discord, Slack et Règles de l’équipe sont des plugins d’Escouade, sur le store sous `dev.escouade.*` et tenus dans le dépôt de l’app ; seul ce dépôt peut publier ces identifiants. Une version installée sous l’ancien identifiant `dev.exemple.*` se remplace depuis la vue Plugins.
 - Dans Réglages › Comptes, le petit carré de chaque pastille « Réservé aux projets » s’allume à la couleur du projet quand le compte le sert, et passe au gris sinon. Merci à @Metalzoid (#19).
 - Un message posté pendant qu’un agent travaille peut encore être modifié ou annulé avant de lui parvenir : il attend quelques secondes, ou la fin du tour chez Cursor et OpenCode, et peut aussi partir tout de suite. Merci à @Metalzoid (#18).
 - L’onglet « PR et CI » du panneau de droite montre la PR de la branche de l’agent : sa CI vérification par vérification, le journal d’un échec, « Relancer les échecs » d’un clic, ses revues et ses déploiements. Sans agent, il liste les PR ouvertes du projet, et la carte d’un agent dit l’état de sa CI à côté de « #41 → main ».

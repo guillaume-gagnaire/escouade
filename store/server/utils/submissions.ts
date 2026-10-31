@@ -21,7 +21,7 @@ import {
   type FetchedBinary,
   type Snapshot,
 } from './checks';
-import type { Env } from './config';
+import { firstPartyRepo, type Env } from './config';
 import type { Db } from './db';
 import { GithubError } from './github';
 import { imageInfo, reencode, reencodeIcon } from './images';
@@ -35,6 +35,7 @@ import { compareVersions, sha256, versionFile, type Binary, type Platform } from
 import { normalizePath, tagFor } from '../../shared/folder';
 import { packFolder, readFolder } from './folder';
 import { readmeSource } from './checks';
+import { RESERVED_PREFIX } from '../../../schemas/plugin-manifest.mjs';
 
 // The submission of a version (docs/STORE.md, §3): an author picks a public repository the App reads and one of its
 // tags; the store resolves the tag into its commit once, downloads the commit's archive once and keeps it as it came,
@@ -242,6 +243,21 @@ export const keepImage =
 
 // ---- The checks ----
 
+/**
+ * Whether the repository `repoId` is the app's (STORE_FIRST_PARTY_REPO, ESC-314), the only one whose plugins take the
+ * ids `dev.escouade.*`: compared by GitHub's id, so that a repository that takes the app's name after a rename, or a
+ * fork, is not it. A name GitHub does not know is no repository of the app's; GitHub that does not answer throws, and
+ * the version waits in `error` to be checked again.
+ */
+export async function isFirstParty(source: Source, env: Env, repoId: number): Promise<boolean> {
+  try {
+    return (await source.repo(firstPartyRepo(env))).id === repoId;
+  } catch (e) {
+    if (e instanceof GithubError && e.status === 404) return false;
+    throw e;
+  }
+}
+
 const running = (results: CheckResult[], waiting: CheckKey[]): CheckResult[] =>
   results.map((r) => (waiting.includes(r.key) ? { key: r.key, status: 'run' as const, detail: { fr: '', en: '' }, problems: [] } : r));
 
@@ -315,6 +331,7 @@ export async function checkVersion(db: Db, deps: Deps, id: number, now = () => n
     const published = taken.filter((x) => x.state === 'published').map((x) => x.version!);
     const latest = published.sort(compareVersions).at(-1) ?? null;
     const others = await otherPlugins(db, v.accountId);
+    const firstParty = !!pluginId?.startsWith(RESERVED_PREFIX) && (await isFirstParty(source, deps.env, v.repoId));
     const snapshot: Snapshot = {
       repository: v.repoFullName,
       path,
@@ -336,6 +353,7 @@ export async function checkVersion(db: Db, deps: Deps, id: number, now = () => n
       taken: taken.map((x) => x.version!),
       latest,
       others,
+      firstParty,
     };
     await step('license', running(runChecks(snapshot), ['license', 'screenshots', 'binaries']));
 

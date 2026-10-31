@@ -43,7 +43,7 @@ const USAGE = t(
                                            (--target : windows-x64, macos-arm64, linux-x64…)
 
 test et dev lancent l'escouade-plugin livré avec Escouade (ESCOUADE_PLUGIN_BIN pour un autre).
-Options : --lang fr|en
+Options : --lang fr|en ; --first-party pour un plugin d'Escouade (plugins/<id>/ de son dépôt, dev.escouade.*)
 `,
   `escouade-plugin: write and test an Escouade plugin.
 
@@ -57,7 +57,7 @@ Options : --lang fr|en
                                            (--target: windows-x64, macos-arm64, linux-x64…)
 
 test and dev run the escouade-plugin that ships with Escouade (ESCOUADE_PLUGIN_BIN for another).
-Options: --lang fr|en
+Options: --lang fr|en; --first-party for a plugin of Escouade's own (plugins/<id>/ of its repository, dev.escouade.*)
 `,
 );
 
@@ -84,7 +84,8 @@ function manifestOf(folder) {
     console.error(`${path}: ${e.message}`);
     return null;
   }
-  const v = validateText(text);
+  // --first-party: a plugin of Escouade's own hand (plugins/<id>/ of its repository, ESC-314), its ids dev.escouade.*.
+  const v = validateText(text, { firstParty: args.includes('--first-party') });
   for (const f of v.ignored) console.error(t(`champ ignoré : ${f}`, `ignored field: ${f}`));
   if (!v.ok) {
     for (const e of v.errors) console.error(`✗ ${message(e, lang)}`);

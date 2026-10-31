@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUILTINS } from '../../server/utils/builtin';
+import { BUILTINS, isBuiltinId } from '../../server/utils/builtin';
 import { asksOf, catalog, home, hueOf, localized, markOf, permissionsOf, search, type Entry } from '../../server/utils/listing';
 import { fold, highlight } from '../../shared/search';
 
@@ -150,6 +150,11 @@ describe('the home page and Escouade’s own', () => {
     expect(BUILTINS.every((b) => b.id.startsWith('dev.escouade.'))).toBe(true);
     expect(new Set(BUILTINS.map((b) => b.id)).size).toBe(BUILTINS.length);
     expect(new Set(BUILTINS.flatMap((b) => b.categories))).toEqual(new Set(['harness', 'ticket-sources', 'forges']));
+    // What the app gives, not every dev.escouade.*: those of plugins/<id>/ are published on the store (ESC-314), and
+    // listed as its plugins; none of them has a source here.
+    expect(isBuiltinId('dev.escouade.github')).toBe(true);
+    expect(isBuiltinId('dev.escouade.discord')).toBe(false);
+    expect(BUILTINS.every((b) => !('source' in b))).toBe(true);
   });
 });
 

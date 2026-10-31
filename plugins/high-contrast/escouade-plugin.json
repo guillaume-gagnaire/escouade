@@ -1,14 +1,15 @@
 {
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
-  "id": "dev.exemple.high-contrast",
+  "id": "dev.escouade.high-contrast",
   "name": { "fr": "Contraste élevé", "en": "High contrast" },
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": {
     "fr": "Un thème à fort contraste, clair et sombre : texte pur, bordures nettes, couleurs d'état franches.",
     "en": "A high-contrast theme, light and dark: pure text, sharp borders, plain status colors."
   },
   "author": { "name": "Escouade", "url": "https://escouade.dev" },
   "license": "MIT",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/high-contrast",
   "escouade": { "api": "1", "min": "2.1.0" },
   "contributes": {
     "themes": [

@@ -224,8 +224,8 @@ pub struct Options {
     pub app_version: String,
     /// The folder of the app's programs (`{escouade}/…` of a plugin of Escouade's own).
     pub escouade_dir: PathBuf,
-    /// A plugin of Escouade's own, which may take its ids and programs.
-    pub builtin: bool,
+    /// Whose hand the plugin is (`--first-party`, `--builtin`): what it may take of Escouade's own.
+    pub hand: manifest::Hand,
     /// The delay of `initialize`.
     pub initialize: Duration,
     /// How long past its delay an answer is still waited for, to say how late it came.
@@ -243,7 +243,7 @@ impl Default for Options {
                 .ok()
                 .and_then(|p| p.parent().map(Path::to_path_buf))
                 .unwrap_or_default(),
-            builtin: false,
+            hand: manifest::Hand::Third,
             initialize: timeout_of("initialize"),
             grace: Duration::from_secs(2),
             measure: 0,
@@ -582,7 +582,7 @@ fn manifest_of(b: &mut Bench) -> Option<Manifest> {
             return None;
         }
     };
-    let m = match manifest::read_in(&text, b.o.builtin, &b.folder).manifest {
+    let m = match manifest::read_in(&text, b.o.hand, &b.folder).manifest {
         Ok(m) => m,
         Err(problems) => {
             let said: Vec<String> = problems.iter().map(|p| p.message(lang)).collect();

@@ -6,7 +6,7 @@ Un plugin **déclaratif** peut donner à Escouade d’autres couleurs : des vale
 
 ```json
 {
-  "id": "dev.exemple.high-contrast",
+  "id": "dev.escouade.high-contrast",
   "name": { "fr": "Contraste élevé", "en": "High contrast" },
   "version": "1.0.0",
   "license": "MIT",
@@ -85,4 +85,4 @@ Jamais de `url()`, d’autre fonction (`image-set()`, `attr()`, `env()`…), de 
 
 ## Tester un thème
 
-`escouade-plugin validate` vérifie le manifeste. Pour voir le thème, installez le dossier du plugin en développement (vue Plugins › « En développement »), choisissez-le dans Réglages › Application et passez de Sombre à Clair. Le plugin d’exemple « Contraste élevé », celui du manifeste plus haut (`plugin-examples/high-contrast` dans le dépôt d’Escouade), est un point de départ : voir [Les plugins d’exemple](plugins/examples#contraste-eleve).
+`escouade-plugin validate` vérifie le manifeste. Pour voir le thème, installez le dossier du plugin en développement (vue Plugins › « En développement »), choisissez-le dans Réglages › Application et passez de Sombre à Clair. Le plugin d’exemple « Contraste élevé », celui du manifeste plus haut (`plugins/high-contrast` dans le dépôt d’Escouade), est un point de départ : voir [Les plugins d’exemple](plugins/examples#contraste-eleve).

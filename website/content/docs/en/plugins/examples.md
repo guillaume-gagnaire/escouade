@@ -1,15 +1,17 @@
 # Example plugins
 
-Four complete plugins to copy, read and install as they are: a theme, a Discord webhook with no code, and Slack and a team’s rules in TypeScript. Each one passes the conformance bench on every change.
+Four complete plugins to read, copy and install: a theme, a Discord webhook with no code, and Slack and a team’s rules in TypeScript. They are Escouade’s own plugins, on its store; each one passes the conformance bench on every change.
 
 ## Where to find them
 
-They are in the `plugin-examples/` folder of Escouade’s repository, one folder per plugin, each readable on its own and under the MIT license: https://github.com/guillaume-gagnaire/escouade/tree/main/plugin-examples
+They are in the `plugins/` folder of Escouade’s repository, one folder per plugin (`plugins/slack/`…), each readable on its own with its manifest, its README, its LICENSE (MIT), its CHANGELOG and its tests: https://github.com/guillaume-gagnaire/escouade/tree/main/plugins. The store publishes them as `dev.escouade.high-contrast`, `dev.escouade.discord`, `dev.escouade.slack` and `dev.escouade.team-rules`, taken from these folders at their tags `plugins/<folder>/v1.2.3` (see [Publishing a plugin](plugins/publishing)).
+
+To make one yours, copy its folder and give it an id of your own (`io.github.<your-login>.slack`): `dev.escouade.*` is kept for Escouade’s own plugins, and the store takes it from Escouade’s repository alone.
 
 | Example | What it shows | Kind |
 | --- | --- | --- |
 | High contrast | A theme, dark and light, and a palette of project colors | Declarative |
-| Discord webhook | Tickets to review and agents waiting, in a Discord channel | Declarative |
+| Discord | Tickets to review and agents waiting, in a Discord channel | Declarative |
 | Slack | The same in Slack, in each project’s channel, with a secret in the keychain | TypeScript program |
 | Team rules | The agents’ commands allowed or denied by a file of the repository | TypeScript program |
 
@@ -17,33 +19,34 @@ The code shown here is the repository’s: a test of the site checks it has not 
 
 ## Trying them
 
-In **Plugins**, “In development”, pick an example’s folder: it is loaded in place and read again when it changes. Enter its secrets in the “Settings” tab of its page.
+Install them from the store, in **Plugins**. To change one: “In development”, pick an example’s folder; it is loaded in place and read again when it changes. Enter its secrets in the “Settings” tab of its page.
 
-To check them as the repository’s CI does: the TypeScript examples pass their tests and their typecheck, their `dist/plugin.mjs` is compared to the build of `src/`, then each one passes `escouade-plugin validate` and the bench (see [Testing a plugin](plugins/testing)).
+To check them as the repository’s CI does: each one passes its tests (and, in TypeScript, its typecheck; its `dist/plugin.mjs` is compared to the build of `src/`), then `escouade-plugin validate` and the bench, with `--first-party` for their reserved ids (see [Testing a plugin](plugins/testing)).
 
 ```sh
 npx tsc -p sdk/plugin/tsconfig.json
-ESCOUADE_PLUGIN_BIN=/path/to/escouade-plugin node plugin-examples/ci.mjs
+ESCOUADE_PLUGIN_BIN=/path/to/escouade-plugin node plugins/ci.mjs
 ```
 
 ## High contrast
 
 A theme with no code: values for the window’s tokens, dark and light, and a palette for project colors. Escouade filters each value before it sets it; a token left out keeps Escouade’s. See [Themes](plugins/themes).
 
-`plugin-examples/high-contrast/escouade-plugin.json`
+`plugins/high-contrast/escouade-plugin.json`
 
 ```json
 {
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
-  "id": "dev.exemple.high-contrast",
+  "id": "dev.escouade.high-contrast",
   "name": { "fr": "Contraste élevé", "en": "High contrast" },
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": {
     "fr": "Un thème à fort contraste, clair et sombre : texte pur, bordures nettes, couleurs d'état franches.",
     "en": "A high-contrast theme, light and dark: pure text, sharp borders, plain status colors."
   },
   "author": { "name": "Escouade", "url": "https://escouade.dev" },
   "license": "MIT",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/high-contrast",
   "escouade": { "api": "1", "min": "2.1.0" },
   "contributes": {
     "themes": [
@@ -101,24 +104,25 @@ A theme with no code: values for the window’s tokens, dark and light, and a pa
 
 Pick it in Settings › Application, “Colors” row.
 
-## Discord webhook
+## Discord
 
 Two declared webhooks, no program: a ticket moved to “To review”, and an agent waiting for your answer. The Discord webhook’s address is a secret: it stays in the system’s keychain and never shows in the journal. See [Events](plugins/events#a-webhook-without-code).
 
-`plugin-examples/discord-webhook/escouade-plugin.json`
+`plugins/discord/escouade-plugin.json`
 
 ```json
 {
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
-  "id": "dev.exemple.discord",
+  "id": "dev.escouade.discord",
   "name": "Discord",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": {
     "fr": "Les tickets à tester et les agents qui attendent, dans un salon Discord : un webhook, sans code.",
     "en": "Tickets to test and agents waiting, in a Discord channel: a webhook, no code."
   },
   "author": { "name": "Escouade", "url": "https://escouade.dev" },
   "license": "MIT",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/discord",
   "escouade": { "api": "1", "min": "2.1.0" },
   "permissions": {
     "events": ["ticket.column", "agent.status"],
@@ -157,20 +161,21 @@ In Discord, create the webhook in the channel’s settings (Integrations › Web
 
 A TypeScript program, written with the [SDK](plugins/sdk). It posts in each project’s channel: the one `channels.json` gives, else `escouade-<project name>`. The bot’s token (`xoxb-…`) is asked of Escouade on each fact (`secrets/get`), never written in a file.
 
-`plugin-examples/slack/escouade-plugin.json`
+`plugins/slack/escouade-plugin.json`
 
 ```json
 {
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
-  "id": "dev.exemple.slack",
+  "id": "dev.escouade.slack",
   "name": "Slack",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": {
     "fr": "Les tickets à tester et les agents qui attendent, dans le salon Slack de chaque projet.",
     "en": "Tickets to test and agents waiting, in each project's Slack channel."
   },
   "author": { "name": "Escouade", "url": "https://escouade.dev" },
   "license": "MIT",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/slack",
   "escouade": { "api": "1", "min": "2.1.0" },
   "run": { "command": "slack", "windows": "slack.cmd" },
   "activation": ["event:ticket.column", "event:agent.status"],
@@ -185,7 +190,7 @@ A TypeScript program, written with the [SDK](plugins/sdk). It posts in each proj
 }
 ```
 
-`plugin-examples/slack/channels.json`
+`plugins/slack/channels.json`
 
 ```json
 {
@@ -193,7 +198,7 @@ A TypeScript program, written with the [SDK](plugins/sdk). It posts in each proj
 }
 ```
 
-`plugin-examples/slack/src/plugin.ts`
+`plugins/slack/src/plugin.ts`
 
 ```ts
 // Slack: the tickets to test and the agents waiting, in each project's channel. The bot's token is kept in the
@@ -271,7 +276,7 @@ export function slack(options: Options = {}): Plugin {
 }
 ```
 
-`plugin-examples/slack/src/main.ts`
+`plugins/slack/src/main.ts`
 
 ```ts
 // The program Escouade starts (run in escouade-plugin.json): speaks the protocol on stdin and stdout.
@@ -288,20 +293,21 @@ Its tests drive its handlers against the SDK’s fake Escouade and a fake Slack,
 
 A TypeScript program that decides permissions before they reach you (see [Permission rules](plugins/permission-rules)). Its rules are in `rules.json`, a file of the plugin’s repository that the team reviews like its code. A line that holds a denied command is denied, even after a `&&` or a `&`; a line made only of allowed commands is allowed, unless it holds a substitution (`$(…)`, backquotes, `$VAR`), a redirection (`>`, `<`) or an escape, which would slip something else behind an allowed start; the rest goes to the user. A rule compares the start of a command: `deny` is a safety net (`sudo rm -rf` slips past it and goes to the user), and `allow` allows any arguments.
 
-`plugin-examples/team-rules/escouade-plugin.json`
+`plugins/team-rules/escouade-plugin.json`
 
 ```json
 {
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
-  "id": "dev.exemple.team-rules",
+  "id": "dev.escouade.team-rules",
   "name": { "fr": "Règles de l'équipe", "en": "Team rules" },
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": {
     "fr": "Autorise ou refuse les commandes des agents selon les règles de l'équipe, écrites dans rules.json.",
     "en": "Allows or denies the agents' commands by the team's rules, written in rules.json."
   },
   "author": { "name": "Escouade", "url": "https://escouade.dev" },
   "license": "MIT",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/team-rules",
   "escouade": { "api": "1", "min": "2.1.0" },
   "run": { "command": "team-rules", "windows": "team-rules.cmd" },
   "activation": ["event:request.permission"],
@@ -309,7 +315,7 @@ A TypeScript program that decides permissions before they reach you (see [Permis
 }
 ```
 
-`plugin-examples/team-rules/rules.json`
+`plugins/team-rules/rules.json`
 
 ```json
 {
@@ -323,7 +329,7 @@ A TypeScript program that decides permissions before they reach you (see [Permis
 }
 ```
 
-`plugin-examples/team-rules/src/plugin.ts`
+`plugins/team-rules/src/plugin.ts`
 
 ```ts
 // Team rules: the agents' commands allowed or denied by rules.json, a file of the plugin's repository that the team
@@ -384,7 +390,7 @@ export function teamRules(rules: Rules = readRules()): Plugin {
 }
 ```
 
-`plugin-examples/team-rules/src/main.ts`
+`plugins/team-rules/src/main.ts`
 
 ```ts
 // The program Escouade starts (run in escouade-plugin.json): speaks the protocol on stdin and stdout.

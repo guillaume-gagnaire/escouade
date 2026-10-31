@@ -211,15 +211,15 @@ Les commandes de « Lancement » du projet (serveurs de développement, watche
 
 | Clé | Type | Valeurs | Absente | Exemple |
 |---|---|---|---|---|
-| `plugins.recommended` | Liste d’identifiants de plugins | les identifiants du [store](plugins/installer) (`dev.exemple.slack`) | aucun plugin proposé | `recommended: [dev.exemple.slack]` |
+| `plugins.recommended` | Liste d’identifiants de plugins | les identifiants du [store](plugins/installer) (`dev.escouade.slack`) | aucun plugin proposé | `recommended: [dev.escouade.slack]` |
 | `plugins.<id>` | Réglages du plugin `<id>` | une clé par réglage qu’il déclare : un texte, un nombre, `true` ou `false` | ses réglages de chaque machine | voir ci-dessous |
 
 ```yaml
 plugins:
   recommended:
-    - dev.exemple.slack
-    - dev.exemple.team-rules
-  dev.exemple.slack:
+    - dev.escouade.slack
+    - dev.escouade.team-rules
+  dev.escouade.slack:
     channel: '#equipe-api'
 ```
 
