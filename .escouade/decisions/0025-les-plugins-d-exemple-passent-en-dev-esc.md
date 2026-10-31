@@ -2,7 +2,7 @@
 number: 25
 title: "Les plugins d'exemple passent en dev.escouade.* dans plugins/<id>/, et le préfixe réservé est accordé au seul dépôt de l'app"
 date: "2026-10-31"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-314"
 pages: ["plugins/plugins-d-exemple","store/publier-et-securite","store/store-dans-l-app"]
@@ -11,8 +11,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/plugins-d-exemple","added":17,"removed":14},{"page":"store/publier-et-securite","added":9,"removed":4},{"page":"store/store-dans-l-app","added":5,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-10-31T19:48:24+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
