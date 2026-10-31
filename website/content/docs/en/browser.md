@@ -38,7 +38,7 @@ When a menu, a list, the palette or an Escouade window passes over the page, the
 
 ## The developer tools
 
-The “Devtools” button, `F12` or `Ctrl+Shift+I` (`⌥⌘I` on macOS) open the page’s developer tools, whether the focus is in the page or in Escouade. They are the system webview’s: Edge’s (WebView2) on Windows, in their own window; WebKit’s inspector on macOS and Linux, attached to the page. Escouade’s own developer tools stay closed.
+The “Devtools” button, `F12` or `Ctrl+Shift+I` (`⌥⌘I` on macOS) open the page’s developer tools, whether the focus is in the page or in Escouade. They are the system webview’s: Edge’s (WebView2) on Windows and WebKit’s inspector on macOS, each in their own window; WebKit’s inspector on Linux, attached to the page. Escouade’s own developer tools stay closed.
 
 ## Full width, tablet, mobile
 

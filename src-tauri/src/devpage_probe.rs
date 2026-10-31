@@ -104,6 +104,8 @@ struct Seen {
     /// None where the webview cannot say (WebView2 always answers false).
     devtools_open: Option<bool>,
     width_in_agent: Option<u32>,
+    /// The page was still at a phone's width a few seconds later (nothing laid it out again).
+    width_in_agent_held: bool,
     pages_window: bool,
     width_in_window: Option<u32>,
     /// Every width the page told, in order.
@@ -127,6 +129,7 @@ impl Seen {
             && self.storage_dir != Some(false)
             && self.devtools_open != Some(false)
             && self.width_in_agent == Some(390)
+            && self.width_in_agent_held
             && self.pages_window
             && self.width_in_window == Some(768)
     }
@@ -261,6 +264,11 @@ pub fn cli(args: Vec<String>, context: tauri::Context) -> i32 {
                     Told::Width(390) => Some(390),
                     _ => None,
                 });
+                // Still there a few seconds later: nothing (the inspector) laid it out again.
+                let before = seen.widths.len();
+                let _ = wait(&rx, &mut seen, Duration::from_secs(3), |_| None::<()>);
+                seen.width_in_agent_held = seen.width_in_agent.is_some()
+                    && seen.widths[before..].iter().all(|w| *w == 390);
                 // To the « Pages » window, a tablet's width there.
                 seen.pages_window = devpage::detach(&handle, &pages, "probe", true).is_ok()
                     && handle.get_window(&devpage::window_label("probe")).is_some();

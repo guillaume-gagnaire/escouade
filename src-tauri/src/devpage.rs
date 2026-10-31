@@ -511,7 +511,7 @@ fn act<R: Runtime>(
         Verdict::Outside => "outside",
         Verdict::Devtools => {
             if let Some(w) = app.get_webview(label) {
-                w.open_devtools();
+                open_devtools(&w);
             }
             "devtools"
         }
@@ -832,8 +832,35 @@ pub fn devtools<R: Runtime>(app: &AppHandle<R>, agent_id: &str) -> Result<(), St
     let webview = app
         .get_webview(&page_label(agent_id))
         .ok_or("no page for this agent")?;
-    webview.open_devtools();
+    open_devtools(&webview);
     Ok(())
+}
+
+/// Opens the devtools of a page. macOS: WebKit's inspector, attached to the page, lays out the
+/// page's view itself and gives it back the window's whole width after the window placed it at a
+/// tablet's or a phone's (seen by `devpage_probe` in the CI): it goes into a window of its own,
+/// as WebView2's devtools are on Windows.
+fn open_devtools<R: Runtime>(webview: &tauri::Webview<R>) {
+    webview.open_devtools();
+    #[cfg(target_os = "macos")]
+    {
+        let _ = webview.with_webview(|platform| {
+            use objc2::runtime::AnyObject;
+            let view = platform.inner() as *mut AnyObject;
+            if view.is_null() {
+                return;
+            }
+            // SAFETY: `view` is this page's live WKWebView, used on the main thread
+            // (`with_webview`); `_inspector` (macOS 10.14+) answers its `_WKInspector`, which
+            // `detach` moves into its own window.
+            unsafe {
+                let inspector: *mut AnyObject = objc2::msg_send![view, _inspector];
+                if !inspector.is_null() {
+                    let _: () = objc2::msg_send![inspector, detach];
+                }
+            }
+        });
+    }
 }
 
 /// The next page the « Pages » window of `project_id` shows, when the one it showed leaves it.

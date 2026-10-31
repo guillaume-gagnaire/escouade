@@ -38,7 +38,7 @@ Quand un menu, une liste, la palette ou une fenêtre d’Escouade passe sur la p
 
 ## Les outils de développement
 
-Le bouton « Devtools », `F12` ou `Ctrl+Maj+I` (`⌥⌘I` sous macOS) ouvrent les outils de développement de la page, que le focus soit dans la page ou dans Escouade. Ce sont ceux de la webview du système : ceux d’Edge (WebView2) sous Windows, dans leur propre fenêtre ; l’inspecteur de WebKit sous macOS et Linux, attaché à la page. Les outils de développement d’Escouade elle-même restent fermés.
+Le bouton « Devtools », `F12` ou `Ctrl+Maj+I` (`⌥⌘I` sous macOS) ouvrent les outils de développement de la page, que le focus soit dans la page ou dans Escouade. Ce sont ceux de la webview du système : ceux d’Edge (WebView2) sous Windows et l’inspecteur de WebKit sous macOS, chacun dans sa propre fenêtre ; l’inspecteur de WebKit sous Linux, attaché à la page. Les outils de développement d’Escouade elle-même restent fermés.
 
 ## Pleine largeur, tablette, mobile
 

@@ -136,13 +136,25 @@ require('node:http').createServer((req, res) => {
 
   // A phone's width: the page itself is 390 px wide, centred; a tablet's, 768; back to the whole room.
   const seen = () => (fs.existsSync(widths) ? fs.readFileSync(widths, 'utf8').trim().split('\n').at(-1) : null);
-  await page.getByRole('radio', { name: 'Mobile' }).click();
+  // In the bar, or in « … » when the view is narrow (the CI's window, 1028 px wide).
+  const choose = async (name: string) => {
+    const radio = page.getByRole('radio', { name });
+    if (await radio.isVisible()) return radio.click();
+    await page.getByRole('button', { name: 'Plus d’actions sur la page' }).click();
+    await page.getByRole('menuitemradio', { name: new RegExp(`^${name}`) }).click();
+  };
+  await choose('Mobile');
   await expect.poll(seen, { timeout: 15_000 }).toBe('390');
   await expect(page.getByText('390 px', { exact: true })).toBeVisible();
-  await page.getByRole('radio', { name: 'Tablette' }).click();
-  await expect.poll(seen, { timeout: 15_000 }).toBe('768');
-  await page.getByRole('radio', { name: 'Pleine largeur' }).click();
-  await expect.poll(() => Number(seen()), { timeout: 15_000 }).toBeGreaterThan(768);
+  // A tablet's, narrowed to the room when it is narrower (« Rétréci à 692 px » in the CI's window).
+  await choose('Tablette');
+  const said = page.getByText(/^(768 px|Rétréci à \d+ px)$/);
+  await expect(said).toBeVisible();
+  const tablet = (await said.textContent())!.match(/\d+/)![0];
+  await expect.poll(seen, { timeout: 15_000 }).toBe(tablet);
+  // The whole room again: wider than a tablet, or the room itself when it was narrowed to it.
+  await choose('Pleine largeur');
+  await expect.poll(() => Number(seen()), { timeout: 15_000 }).toBeGreaterThan(tablet === '768' ? 768 : Number(tablet) - 1);
 
   // Back to the conversation and to the page again: the same page, not loaded anew.
   await page.getByRole('button', { name: 'Vue Escouade' }).click();

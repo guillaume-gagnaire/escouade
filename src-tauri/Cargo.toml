@@ -144,6 +144,8 @@ webkit2gtk = { version = "2.0", features = ["v2_20"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri-plugin-notification = "2"
+# The inspector of a launch's page in a window of its own (`devpage::open_devtools`): wry's version.
+objc2 = "0.6"
 # Dictation on the GPU (Metal), whisper.cpp's shaders built into the binary.
 whisper-rs = { version = "0.16", features = ["log_backend", "metal"] }
 # The integrations' secrets in the Keychain.

@@ -86,22 +86,29 @@ Ce que voit le site en plus de la largeur (non fait, la largeur suffit aux media
 
 `cargo run --example devpage_probe` (`src-tauri/src/devpage_probe.rs`) ouvre la page dans la vraie webview du système :
 un serveur local sert une page qui appelle `open_url`, `plugin:opener|open_url` et `devpage_list`, écrit dans son
-localStorage, puis dit sa largeur ; la sonde ouvre ses devtools, la place à 390 px dans la fenêtre, la détache dans la
-fenêtre « Pages » à 768 px. Sortie 0 quand tout tient.
+localStorage, puis dit sa largeur ; la sonde ouvre ses devtools, la place à 390 px dans la fenêtre (et vérifie qu'elle y
+reste), la détache dans la fenêtre « Pages » à 768 px. Sortie 0 quand tout tient. Elle tourne en CI sur Linux (Xvfb) et
+macOS (devtools en dernier, puis en premier), et a été lancée à la main sous Windows et sous Linux (WSLg).
 
-| | Windows 11 (WebView2) | Linux, Ubuntu sous WSLg (WebKitGTK 2.52, Wayland) | macOS (WKWebView) |
+| | Windows 11 (WebView2) | Linux : WSLg et CI Ubuntu 22.04 (WebKitGTK) | macOS : CI macos-latest (WKWebView) |
 | --- | --- | --- | --- |
-| Appels de l'app, d'un plugin, `devpage_list` | refusés | refusés | en CI (`macos`), pas essayé ici |
-| `__TAURI__` | absent | absent | idem |
-| Stockage du projet | `pages/probe` créé | `pages/probe` créé | magasin par projet (macOS 14+) |
-| Devtools | fenêtre DevTools (e2e : titre compté) | inspecteur ouvert (`is_devtools_open` vrai) | idem |
-| 390 px dans l'agent, 768 px dans « Pages » | oui | oui, après correctif | idem |
+| Appels de l'app, d'un plugin, `devpage_list` | refusés | refusés | refusés |
+| `__TAURI__` | absent | absent | absent |
+| Stockage du projet | `pages/<projet>` | `pages/<projet>` | magasin par projet |
+| Devtools | fenêtre DevTools (e2e : titre compté) | inspecteur ouvert, attaché | inspecteur ouvert, détaché |
+| 390 px dans l'agent, 768 px dans « Pages » | oui | oui, après correctif | oui, après correctif |
 
-Correctif trouvé par la sonde sous Linux : Tauri 2.12 range les webviews enfants d'une fenêtre dans une `GtkBox`, l'une
-après l'autre, et n'alloue leur taille qu'une fois ; la page ne se plaçait pas, ne rétrécissait pas, et lui demander une
-taille agrandissait la fenêtre en boucle. Sous Linux, la page passe donc dans un `gtk::Layout` qui prend la place de la
-webview de la fenêtre dans la boîte (`gtk_layout_of`). La sonde tourne aussi en CI sur Linux (sous Xvfb) et sur macOS :
-c'est là que macOS sera vérifié, ce poste n'en ayant pas.
+Deux correctifs trouvés par la sonde :
+
+- **Linux** : Tauri 2.12 range les webviews enfants d'une fenêtre dans une `GtkBox`, l'une après l'autre, et n'alloue leur
+  taille qu'une fois ; la page ne se plaçait pas, ne rétrécissait pas, et lui demander une taille agrandissait la fenêtre
+  en boucle. La page passe dans un `gtk::Layout` qui prend la place de la webview de la fenêtre (`gtk_layout_of`).
+- **macOS** : l'inspecteur de WebKit, attaché à la page, lui redonnait toute la largeur de la fenêtre juste après qu'elle
+  avait été placée à 390 px. Il est détaché dans sa propre fenêtre (`_inspector` → `detach`, API privée de WebKit, comme
+  la fonctionnalité `devtools` elle-même).
+
+Essai réel sous Windows : le site d'Escouade (`website/`, généré) servi par la recette d'un ticket s'ouvre seul dans la
+vue « Page », passe à sa mise en page mobile à 390 px et à 768 px, et « DevTools - localhost:4101/ » s'ouvre sur la page.
 
 ## L'accès des agents à la page (MCP), à faire
 
