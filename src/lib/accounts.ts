@@ -282,13 +282,15 @@ const DAY = 24 * 60;
 
 /**
  * A quota meter's label, by its length: « 5h », « 7j » (« 7d »), « 30j »; « crédits » for the month's credits. A model's own
- * (ESC-312) by the model's name as the server gives it: « Fable · semaine ».
+ * (ESC-312) by the model's name as the server gives it, then its length in days or hours: « Fable 7 j » (« Fable 7d »).
  */
 export function meterLabel(minutes: number | null, model?: string): string {
   if (model && minutes !== null) {
-    return minutes === 7 * DAY
-      ? t('accounts.quota.scoped.week', { model })
-      : t('accounts.quota.scoped.window', { model, window: meterLabel(minutes) });
+    const window =
+      minutes % DAY === 0
+        ? t('accounts.quota.days.label', { n: minutes / DAY })
+        : t('accounts.quota.hours.label', { n: Math.round(minutes / 60) });
+    return t('accounts.quota.scoped.label', { model, window });
   }
   if (minutes === null) return t('accounts.quota.credits.label');
   if (minutes === 7 * DAY) return t('accounts.quota.week.label');

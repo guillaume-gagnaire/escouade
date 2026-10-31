@@ -32,6 +32,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Corrections
 
+- La barre du quota de Fable s’appelle « Fable 7 j », comme les autres fenêtres, par sa durée.
 - Un agent enregistré sur un harness que cette version n’a pas (celui d’une version plus récente, ou d’un plugin retiré) est lu et gardé avec sa conversation, marqué « harness absent » ; il ne démarre pas, et aucun agent n’est créé sur ce harness.
 
 ## [2.1.2] — 2026-10-31

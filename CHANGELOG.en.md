@@ -32,6 +32,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### Fixes
 
+- Fable’s quota bar is named “Fable 7d”, like the other windows, by its length.
 - An agent saved on a harness this version doesn’t have (a later version’s, or a removed plugin’s) is read and kept with its conversation, marked “harness missing”; it doesn’t start, and no agent is created on that harness.
 
 ## [2.1.2] — 2026-10-31

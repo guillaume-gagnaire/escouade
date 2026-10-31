@@ -31,7 +31,7 @@
   }: {
     /** The window's length (300: 5 hours); null for the month's credits. */
     minutes: number | null;
-    /** The model it is the quota of alone, as the server names it (« Fable », ESC-312): the bar « Fable · semaine ». */
+    /** The model it is the quota of alone, as the server names it (« Fable », ESC-312): the bar « Fable 7 j ». */
     model?: string;
     /** The meter as last read; null while it is not known. */
     usage: RateWindow | null;
