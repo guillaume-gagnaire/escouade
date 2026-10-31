@@ -7,6 +7,8 @@
 //! A local server serves a page that tries Escouade's commands (the app's and a plugin's), keeps
 //! something in its storage and tells all of it back, then tells its width at each change. The
 //! answer is a line of JSON; the exit code is 0 when the page was kept apart and every step held.
+//! Its window fits a 1024 × 768 screen (the CI's macOS runner): a bigger one is narrowed by macOS
+//! after the page is placed, and nothing here places it again, as the window's view « Page » does.
 
 use crate::devpage::{self, Bounds, Open, PageMode, Pages};
 use std::io::{BufRead, BufReader, Read, Write};
@@ -188,7 +190,7 @@ pub fn cli(args: Vec<String>, context: tauri::Context) -> i32 {
                 WebviewUrl::External(Url::parse("about:blank")?),
             )
             .title("devpage_probe")
-            .inner_size(1100.0, 760.0)
+            .inner_size(900.0, 660.0)
             .build()?;
             let own: devpage::Own = Arc::new(|u: &Url| {
                 crate::navigation::destination(u, None) == crate::navigation::Destination::App
@@ -207,8 +209,8 @@ pub fn cli(args: Vec<String>, context: tauri::Context) -> i32 {
                     bounds: Some(Bounds {
                         x: 0.0,
                         y: 0.0,
-                        width: 1100.0,
-                        height: 700.0,
+                        width: 900.0,
+                        height: 600.0,
                     }),
                     data_root: &data,
                     visible: true,
@@ -249,10 +251,10 @@ pub fn cli(args: Vec<String>, context: tauri::Context) -> i32 {
                     &pages,
                     "probe",
                     Some(Bounds {
-                        x: 355.0,
+                        x: 255.0,
                         y: 0.0,
                         width: 390.0,
-                        height: 700.0,
+                        height: 600.0,
                     }),
                 );
                 seen.width_in_agent = wait(&rx, &mut seen, Duration::from_secs(15), |t| match t {

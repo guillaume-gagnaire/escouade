@@ -134,13 +134,6 @@ require('node:http').createServer((req, res) => {
   await expect(page.getByText(`127.0.0.1:${port} s’est ouvert dans ton navigateur`)).toBeVisible();
   await expect(address).toHaveValue(`http://localhost:${port}/fonction`);
 
-  // Its devtools, from its bar: a window of their own on this page, never on Escouade's.
-  expect(windowTitles().filter((t) => t.startsWith('DevTools'))).toEqual([]);
-  await page.getByRole('button', { name: /Outils de développement de cette page/ }).click();
-  await expect
-    .poll(() => windowTitles().filter((t) => t.startsWith('DevTools')), { timeout: 15_000 })
-    .toEqual([expect.stringContaining(`localhost:${port}`)]);
-
   // A phone's width: the page itself is 390 px wide, centred; a tablet's, 768; back to the whole room.
   const seen = () => (fs.existsSync(widths) ? fs.readFileSync(widths, 'utf8').trim().split('\n').at(-1) : null);
   await page.getByRole('radio', { name: 'Mobile' }).click();
@@ -155,4 +148,13 @@ require('node:http').createServer((req, res) => {
   await page.getByRole('button', { name: 'Vue Escouade' }).click();
   await page.getByRole('button', { name: 'La page de son lancement, dans Escouade' }).click();
   await expect(address).toHaveValue(`http://localhost:${port}/fonction`);
+
+  // Its devtools, from its bar: a window of their own on this page, never on Escouade's. Last: on CI, where a
+  // policy gives every WebView2 of the app the same debugging port, the page's devtools take Playwright's
+  // connection to the window away; only the windows' titles are read after them.
+  expect(windowTitles().filter((t) => t.startsWith('DevTools'))).toEqual([]);
+  await page.getByRole('button', { name: /Outils de développement de cette page/ }).click();
+  await expect
+    .poll(() => windowTitles().filter((t) => t.startsWith('DevTools')), { timeout: 15_000 })
+    .toEqual([expect.stringContaining(`localhost:${port}`)]);
 });
