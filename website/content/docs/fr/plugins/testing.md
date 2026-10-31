@@ -16,7 +16,7 @@ escouade-plugin dev mon-plugin        # le faux Escouade
 
 ## Le banc de conformité
 
-`escouade-plugin test <dossier>` lit le manifeste, lance le programme de `run` comme Escouade le lance (dans son dossier, avec ses trois variables, avec tout ce qu’il démarre), et joue neuf scénarios. Chacun dit ce qui s’est passé ; un scénario qui échoue dit aussi **ce qui manque**.
+`escouade-plugin test <dossier>` lit le manifeste, lance le programme de `run` comme Escouade le lance (dans son dossier, avec ses trois variables, avec tout ce qu’il démarre), et joue jusqu’à onze scénarios. Chacun dit ce qui s’est passé ; un scénario qui échoue dit aussi **ce qui manque**.
 
 | Scénario | Ce que le banc fait | Ce qu’il attend |
 | --- | --- | --- |
@@ -29,8 +29,10 @@ escouade-plugin dev mon-plugin        # le faux Escouade
 | Un secret | Sert `secrets/get` pendant tout le banc, avec une valeur de test. | Seulement les clés de `permissions.secrets`, et jamais leur valeur écrite sur la sortie d’erreur ou dans un `log`. |
 | Plantage | Tue le plugin et tout ce qu’il a lancé au milieu d’un appel, puis le relance. | Un nouveau process qui s’initialise comme le premier. |
 | Fermeture | Envoie `shutdown`. | Une réponse en moins d’une seconde, puis la fin du process. |
+| Source de tickets | Seulement si `contributes.ticketSources` est déclaré : `account/me` et `tickets/containers`. | Une réponse dans le délai, ou une erreur que le contrat nomme : `-(32000 + statut HTTP)` (`-32401` : jeton refusé), `-32010` (un refus durable), `-32601` (un appel qu’il ne sert pas). |
+| Hébergeur | Seulement si `contributes.forges` est déclaré : `account/me` et `forge/pullRequestsOfBranch`. | La même. |
 
-Un scénario qui ne concerne pas le plugin n’est pas joué et le dit : pas de fait sans `permissions.events`, pas de décision sans `permissions.decide`, et rien d’un programme pour un plugin déclaratif, dont seul le manifeste est lu.
+Un scénario qui ne concerne pas le plugin n’est pas joué et le dit : pas de fait sans `permissions.events`, pas de décision sans `permissions.decide`, pas de source ni d’hébergeur sans `contributes.ticketSources` ou `contributes.forges`, et rien d’un programme pour un plugin déclaratif, dont seul le manifeste est lu.
 
 ```text
 Banc de conformité : dev.exemple.slow-rules 1.0.0

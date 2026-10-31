@@ -19,6 +19,10 @@
 //   secret / steal → asks Escouade `secrets/get` for <key>, and gives back what came: { result } or { error }
 //   settings → asks Escouade `settings/get` (of <project>, if given), and gives back what came: { result }
 //   log     → a `log` notification of <message>, then { ok }
+// It also serves a ticket source and a code host (INT-5, ESC-211): `account/me`, `tickets/*` and `forge/*`, on a
+// few fixed records. `--untyped` answers every one with an error that is not typed; `--token-from <key>` makes every one ask Escouade `secrets/get` for that key first and
+// answer 401 (-32401) unless it is `good`; a container named `gone` answers 404, `refused` a lasting refusal,
+// `crash` exits, `slow` is never answered. `forge/*` answer { value, rateLimit }; `forge/merge` is not served (-32601).
 import process from 'node:process';
 
 const args = process.argv.slice(2);
@@ -107,10 +111,78 @@ function handle(msg) {
         send({ jsonrpc: '2.0', method: 'log', params: { level: 'info', message: `fact ${params.name}` } });
       });
       return null;
+    case 'test/calls':
+      return ok(id, calls);
     case 'test/do':
       return behave(id, params);
     default:
+      if (method === 'account/me' || method.startsWith('tickets/') || method.startsWith('forge/')) return serve(id, method, params);
       return id === undefined ? null : fail(id, -32601, `unknown method ${method}`);
+  }
+}
+
+const ISSUES = [
+  { id: '1', key: 'FAKE-1', title: 'Premier', container: 'demo', url: 'https://fake.test/1' },
+  { id: '2', key: 'FAKE-2', title: 'Second', container: 'demo', url: 'https://fake.test/2' },
+];
+const PRS = [{ number: 7, url: 'https://fake.test/pr/7', title: 'Une PR', state: 'open', head: 'feat/x', base: 'main', checks: 'success' }];
+const RATE = { limit: 5000, remaining: 4990, reset: 1900000000 };
+const calls = [];
+
+// The tickets and forge calls (INT-5): the records are fixed, the failures are asked for by name.
+async function serve(id, method, p) {
+  calls.push({ method, params: p });
+  if (flag('--untyped')) return fail(id, -32000, 'boom');
+  const tokenKey = option('--token-from');
+  if (tokenKey) {
+    const answer = await ask('secrets/get', { key: tokenKey });
+    if (answer.result !== 'good') return fail(id, -32401, 'le jeton est refusé');
+  }
+  const name = p.container ?? p.repo?.name;
+  if (name === 'gone') return fail(id, -32404, 'introuvable');
+  if (name === 'refused') return fail(id, -32010, 'aucune transition ne mène là');
+  if (name === 'crash') {
+    process.stderr.write('fake-plugin: crashing on a ticket call\n');
+    process.exit(3);
+  }
+  if (name === 'slow') return null;
+  const forge = (value) => ok(id, { value, rateLimit: RATE });
+  switch (method) {
+    case 'account/me':
+      return ok(id, p.point === 'forge' ? { user: 'ada', label: '@ada', scopes: ['repo'] } : { label: 'ada@fake.test', user: 'ada' });
+    case 'tickets/containers':
+      return ok(id, [
+        { id: 'demo', name: 'Démo', own: true },
+        { id: 'other', name: 'Autre', group: 'Équipe' },
+      ]);
+    case 'tickets/states':
+      return ok(id, [
+        { id: 'open', name: 'Ouvert' },
+        { id: 'done', name: 'Fait' },
+      ]);
+    case 'tickets/issues': {
+      const q = p.query ?? {};
+      const issues = ISSUES.filter((i) => !q.text || i.title.toLowerCase().includes(q.text.toLowerCase()));
+      return ok(id, { issues, filters: [{ id: 'mine', label: 'Les miens' }], next: null, total: issues.length });
+    }
+    case 'tickets/setState':
+    case 'tickets/comment':
+      return ok(id, null);
+    case 'forge/pullRequest':
+      return forge(PRS.find((x) => x.number === p.number) ?? PRS[0]);
+    case 'forge/pullRequestsOfBranch':
+      return forge(PRS.filter((x) => x.head === p.branch));
+    case 'forge/checks':
+      return forge([{ name: 'ci', state: 'success', url: null, job: '9', started: null, finished: null, cancelled: false }]);
+    case 'forge/createPr':
+      return forge({ ...PRS[0], number: 8, title: p.pr.title, head: p.pr.head, base: p.pr.base });
+    case 'forge/comment':
+    case 'forge/parent':
+      return forge(null);
+    case 'forge/merge':
+      return fail(id, -32601, 'unknown method forge/merge');
+    default:
+      return fail(id, -32601, `unknown method ${method}`);
   }
 }
 

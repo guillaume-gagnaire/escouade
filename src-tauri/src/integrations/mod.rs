@@ -235,7 +235,7 @@ pub struct Container {
 }
 
 /// The states of a container, and those each column gives by default.
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StatesView {
     pub states: Vec<ExternalState>,
@@ -243,7 +243,7 @@ pub struct StatesView {
 }
 
 /// A filter of the import modal, shown as a chip.
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IssueFilter {
     pub id: String,
@@ -251,7 +251,7 @@ pub struct IssueFilter {
 }
 
 /// What the import asks of a source.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Query {
     /// Typed in the search field.
     pub text: String,
@@ -293,7 +293,7 @@ pub struct ExternalIssue {
 }
 
 /// A page of a source's tickets for the import modal, and the chips that filter them.
-#[derive(Debug, Clone, Serialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, PartialEq, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IssuePage {
     pub issues: Vec<ExternalIssue>,

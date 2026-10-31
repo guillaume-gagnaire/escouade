@@ -97,7 +97,11 @@ pub fn timeout_of(method: &str) -> Duration {
         "initialize" => 10_000,
         "shutdown" => 1_000,
         m if m.starts_with("permissions/") => 500,
-        m if m.starts_with("tickets/") || m.starts_with("forge/") || m == "engine/oneShot" => {
+        m if m.starts_with("tickets/")
+            || m.starts_with("forge/")
+            || m == "account/me"
+            || m == "engine/oneShot" =>
+        {
             60_000
         }
         _ => 5_000,
