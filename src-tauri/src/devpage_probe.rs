@@ -238,7 +238,8 @@ pub fn cli(args: Vec<String>, context: tauri::Context) -> i32 {
                 // Its devtools, never the window's: first, as a user would, or last (`--devtools-last`).
                 let devtools = |seen: &mut Seen| {
                     let _ = devpage::devtools(&handle, "probe");
-                    std::thread::sleep(Duration::from_secs(3));
+                    // Long enough for WebKit's inspector to settle (macOS moves it out on its own).
+                    std::thread::sleep(Duration::from_secs(5));
                     seen.devtools_open = (!cfg!(windows)).then(|| {
                         handle
                             .get_webview(&devpage::page_label("probe"))

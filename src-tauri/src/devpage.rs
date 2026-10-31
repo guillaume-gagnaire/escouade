@@ -597,8 +597,15 @@ fn window_title<R: Runtime>(app: &AppHandle<R>, project_id: &str) -> String {
     format!("{name} · Pages")
 }
 
+/// Where each webview was last placed, by label: what `open_devtools` gives it back on macOS.
+fn placed() -> &'static Mutex<HashMap<String, Bounds>> {
+    static PLACED: std::sync::OnceLock<Mutex<HashMap<String, Bounds>>> = std::sync::OnceLock::new();
+    PLACED.get_or_init(Default::default)
+}
+
 /// Places `webview` at `b`, in its window's logical pixels.
 fn set_bounds<R: Runtime>(webview: &tauri::Webview<R>, b: Bounds) -> Result<(), String> {
+    placed().lock().insert(webview.label().to_string(), b);
     webview
         .set_position(LogicalPosition::new(b.x, b.y))
         .map_err(|e| e.to_string())?;
@@ -839,7 +846,9 @@ pub fn devtools<R: Runtime>(app: &AppHandle<R>, agent_id: &str) -> Result<(), St
 /// Opens the devtools of a page. macOS: WebKit's inspector, attached to the page, lays out the
 /// page's view itself and gives it back the window's whole width after the window placed it at a
 /// tablet's or a phone's (seen by `devpage_probe` in the CI): it goes into a window of its own,
-/// as WebView2's devtools are on Windows.
+/// as WebView2's devtools are on Windows; and as WebKit gives the view back its former frame when
+/// the move ends, later and on its own, the page is placed again where it was, a few times while
+/// the inspector settles.
 fn open_devtools<R: Runtime>(webview: &tauri::Webview<R>) {
     webview.open_devtools();
     #[cfg(target_os = "macos")]
@@ -857,6 +866,16 @@ fn open_devtools<R: Runtime>(webview: &tauri::Webview<R>) {
                 let inspector: *mut AnyObject = objc2::msg_send![view, _inspector];
                 if !inspector.is_null() {
                     let _: () = objc2::msg_send![inspector, detach];
+                }
+            }
+        });
+        let page = webview.clone();
+        std::thread::spawn(move || {
+            for wait in [300, 700, 1500, 3000, 5000] {
+                std::thread::sleep(std::time::Duration::from_millis(wait));
+                let last = placed().lock().get(page.label()).copied();
+                if let Some(b) = last {
+                    let _ = set_bounds(&page, b);
                 }
             }
         });
