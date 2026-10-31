@@ -12,7 +12,7 @@ Le plugin de démonstration livré avec Escouade : le moins qu'un plugin de l'ap
 
 ## Use it
 
-Nothing to do: it is in Settings › Plugins, under « Livrés avec Escouade », on. It can be turned off for the app or for
+Nothing to do in a build of development: it is in the Plugins view, under « Livrés avec Escouade », on (a release's registry holds it not: it is a demonstration, until the real ones are given). It can be turned off for the app or for
 a project, never removed, and a plugin of the store with the same id is refused: this one is the app's.
 
 ## What it may do

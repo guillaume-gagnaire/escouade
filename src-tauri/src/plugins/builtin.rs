@@ -19,11 +19,22 @@ pub struct Entry {
 }
 
 /// The registry: the plugins the app gives, by id. Add the folder `plugins/builtin/<id>/` (manifest, README) and one
-/// line here; the CI checks that each folder has its manifest and its README, and that each is in this list.
-pub const REGISTRY: &[Entry] = &[Entry {
-    id: "dev.escouade.minimal",
-    manifest: include_str!("../../../plugins/builtin/dev.escouade.minimal/escouade-plugin.json"),
-}];
+/// line here; the test of the registry checks that each folder has its manifest and its README, and that each is in
+/// this list.
+///
+/// The demonstration plugin is in the builds of development and the tests only: a release's registry is empty until
+/// INT-7 and INT-8 give the real ones, so that nobody sees (nor runs) a plugin that does nothing. `escouade-plugins`
+/// itself is packaged and signed all the same.
+#[cfg_attr(not(any(debug_assertions, test)), allow(dead_code))]
+pub const REGISTRY: &[Entry] = &[
+    #[cfg(any(debug_assertions, test))]
+    Entry {
+        id: "dev.escouade.minimal",
+        manifest: include_str!(
+            "../../../plugins/builtin/dev.escouade.minimal/escouade-plugin.json"
+        ),
+    },
+];
 
 /// Whether `id` is the id of a plugin the app gives.
 pub fn is_builtin(id: &str) -> bool {
@@ -77,7 +88,7 @@ pub fn check_program(program: &Path, app_dir: &Path) -> Result<(), String> {
     signature::holds(&real)
 }
 
-/// The signature of the app's programs, where the system checks it. Compiled in release only: a build of development
+/// The signature of the app's programs, where the system checks it. The rule is the release's: a build of development
 /// is not signed.
 mod signature {
     use std::path::Path;
@@ -107,30 +118,83 @@ mod signature {
     }
 
     /// Windows: when the app itself carries a valid Authenticode signature (the release signs with Azure Artifact
-    /// Signing when its secrets are set), the program must carry a valid one too.
+    /// Signing when its secrets are set), the program must carry a valid one too. Fails closed: a status that cannot
+    /// be read is no signature.
     #[cfg(all(not(debug_assertions), windows))]
     pub fn holds(program: &Path) -> Result<(), String> {
-        use std::os::windows::process::CommandExt;
-        fn status(path: &Path) -> Result<String, String> {
-            let out = std::process::Command::new("powershell")
-                .args(["-NoProfile", "-NonInteractive", "-Command"])
-                .arg("(Get-AuthenticodeSignature -LiteralPath $args[0]).Status")
-                .arg(path)
-                .creation_flags(crate::proc::CREATE_NO_WINDOW)
-                .output()
-                .map_err(|e| format!("the signature cannot be read: {e}"))?;
-            Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
-        }
         let app = std::env::current_exe().map_err(|e| e.to_string())?;
-        if status(&app)? != "Valid" {
+        if authenticode_status(&app)? != "Valid" {
             // The app is not signed (a build without the release's secrets): nothing to hold the program to.
             return Ok(());
         }
-        match status(program)?.as_str() {
+        match authenticode_status(program)?.as_str() {
             "Valid" => Ok(()),
             other => Err(format!(
                 "its Authenticode signature is {other}, the app's is Valid"
             )),
         }
+    }
+
+    /// What the system says of a file's Authenticode signature (`Valid`, `NotSigned`, `HashMismatch`…), as
+    /// `Get-AuthenticodeSignature` names it. The path goes by the environment, never into the script. Kept for the
+    /// session by the file (path, size, modification date): each start of a plugin the app gives would else run
+    /// PowerShell again, for the app and for the program.
+    #[cfg(windows)]
+    pub fn authenticode_status(path: &Path) -> Result<String, String> {
+        use std::collections::HashMap;
+        use std::os::windows::process::CommandExt;
+        use std::sync::{LazyLock, Mutex};
+        use std::time::SystemTime;
+        type Key = (std::path::PathBuf, u64, Option<SystemTime>);
+        static KEPT: LazyLock<Mutex<HashMap<Key, String>>> = LazyLock::new(Default::default);
+        let meta = std::fs::metadata(path)
+            .map_err(|e| format!("{} cannot be read: {e}", path.display()))?;
+        let key: Key = (path.to_path_buf(), meta.len(), meta.modified().ok());
+        if let Some(kept) = KEPT.lock().map_err(|e| e.to_string())?.get(&key) {
+            return Ok(kept.clone());
+        }
+        let out = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command"])
+            .arg("(Get-AuthenticodeSignature -LiteralPath $env:ESCOUADE_SIGNED_PATH).Status")
+            .env("ESCOUADE_SIGNED_PATH", path)
+            .creation_flags(crate::proc::CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| format!("the signature cannot be read: {e}"))?;
+        let status = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if !out.status.success() || status.is_empty() {
+            return Err(format!(
+                "the signature of {} cannot be read: {}",
+                path.display(),
+                String::from_utf8_lossy(&out.stderr).trim()
+            ));
+        }
+        KEPT.lock()
+            .map_err(|e| e.to_string())?
+            .insert(key, status.clone());
+        Ok(status)
+    }
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::signature::authenticode_status;
+    use std::path::Path;
+
+    /// The reading itself (compiled in every profile; the rule that uses it is the release's).
+    #[test]
+    fn the_system_s_own_program_is_signed_and_an_unsigned_copy_is_not() {
+        let notepad = Path::new(r"C:\Windows\System32\notepad.exe");
+        assert_eq!(authenticode_status(notepad).unwrap(), "Valid");
+        let dir =
+            std::env::temp_dir().join(format!("authenticode-{}", uuid::Uuid::new_v4().simple()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let unsigned = dir.join("tool.exe");
+        std::fs::copy(std::env::current_exe().unwrap(), &unsigned).unwrap();
+        let status = authenticode_status(&unsigned).unwrap();
+        assert_ne!(status, "Valid");
+        // Kept: the second reading is the first's.
+        assert_eq!(authenticode_status(&unsigned).unwrap(), status);
+        // A file that is not there is no status.
+        assert!(authenticode_status(&dir.join("nope.exe")).is_err());
     }
 }
