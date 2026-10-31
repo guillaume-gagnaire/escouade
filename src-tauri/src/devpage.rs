@@ -848,37 +848,80 @@ pub fn devtools<R: Runtime>(app: &AppHandle<R>, agent_id: &str) -> Result<(), St
 /// tablet's or a phone's (seen by `devpage_probe` in the CI): it goes into a window of its own,
 /// as WebView2's devtools are on Windows; and as WebKit gives the view back its former frame when
 /// the move ends, later and on its own, the page is placed again where it was, a few times while
-/// the inspector settles.
+/// the inspector settles (asked again to leave the page each time: it ignores the first ask
+/// while it is still being shown).
 fn open_devtools<R: Runtime>(webview: &tauri::Webview<R>) {
     webview.open_devtools();
     #[cfg(target_os = "macos")]
     {
-        let _ = webview.with_webview(|platform| {
-            use objc2::runtime::AnyObject;
-            let view = platform.inner() as *mut AnyObject;
-            if view.is_null() {
-                return;
-            }
-            // SAFETY: `view` is this page's live WKWebView, used on the main thread
-            // (`with_webview`); `_inspector` (macOS 10.14+) answers its `_WKInspector`, which
-            // `detach` moves into its own window.
-            unsafe {
-                let inspector: *mut AnyObject = objc2::msg_send![view, _inspector];
-                if !inspector.is_null() {
-                    let _: () = objc2::msg_send![inspector, detach];
-                }
-            }
-        });
         let page = webview.clone();
         std::thread::spawn(move || {
-            for wait in [300, 700, 1500, 3000, 5000] {
+            for wait in [0, 300, 700, 1500, 3000, 5000, 8000] {
                 std::thread::sleep(std::time::Duration::from_millis(wait));
+                let _ = page.with_webview(|platform| {
+                    detach_inspector(platform.inner().cast());
+                });
                 let last = placed().lock().get(page.label()).copied();
                 if let Some(b) = last {
                     let _ = set_bounds(&page, b);
                 }
             }
         });
+    }
+}
+
+/// Moves the inspector of the WKWebView `view` into a window of its own when it is attached to it.
+/// Says whether it was.
+#[cfg(target_os = "macos")]
+fn detach_inspector(view: *mut objc2::runtime::AnyObject) -> bool {
+    use objc2::runtime::AnyObject;
+    if view.is_null() {
+        return false;
+    }
+    // SAFETY: `view` is a page's live WKWebView, used on the main thread (`with_webview`);
+    // `_inspector` (macOS 10.14+) answers its `_WKInspector`, whose `isAttached` and `detach` are
+    // WebKit's (private, as the `devtools` feature itself).
+    unsafe {
+        let inspector: *mut AnyObject = objc2::msg_send![view, _inspector];
+        if inspector.is_null() {
+            return false;
+        }
+        let attached: bool = objc2::msg_send![inspector, isAttached];
+        if attached {
+            let _: () = objc2::msg_send![inspector, detach];
+        }
+        attached
+    }
+}
+
+/// Whether the inspector of the page of agent `agent_id` is attached to it (macOS; None elsewhere,
+/// or when it cannot be read): for `devpage_probe`.
+pub fn inspector_attached<R: Runtime>(app: &AppHandle<R>, agent_id: &str) -> Option<bool> {
+    #[cfg(target_os = "macos")]
+    {
+        use objc2::runtime::AnyObject;
+        let webview = app.get_webview(&page_label(agent_id))?;
+        let (tx, rx) = std::sync::mpsc::channel();
+        webview
+            .with_webview(move |platform| {
+                let view: *mut AnyObject = platform.inner().cast();
+                // SAFETY: as in `detach_inspector`.
+                let attached = unsafe {
+                    let inspector: *mut AnyObject = objc2::msg_send![view, _inspector];
+                    !inspector.is_null() && {
+                        let a: bool = objc2::msg_send![inspector, isAttached];
+                        a
+                    }
+                };
+                let _ = tx.send(attached);
+            })
+            .ok()?;
+        rx.recv_timeout(std::time::Duration::from_secs(5)).ok()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (app, agent_id);
+        None
     }
 }
 
