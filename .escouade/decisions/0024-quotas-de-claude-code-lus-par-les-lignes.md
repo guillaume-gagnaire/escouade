@@ -2,7 +2,7 @@
 number: 24
 title: "Quotas de Claude Code lus par les lignes limits[] du serveur, compteur d'un modèle jugé pour ce modèle seul"
 date: "2026-10-31"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-312"
 pages: ["harness/comptes","fenetre/barre-de-statut","kanban/pilote-auto"]
@@ -11,8 +11,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"harness/comptes","added":13,"removed":7},{"page":"fenetre/barre-de-statut","added":2,"removed":0},{"page":"kanban/pilote-auto","added":3,"removed":1}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-10-31T17:23:57+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
