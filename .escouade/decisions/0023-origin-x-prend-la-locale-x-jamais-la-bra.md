@@ -2,7 +2,7 @@
 number: 23
 title: "origin/x prend la locale x, jamais la branche d'un agent qui la suit"
 date: "2026-10-31"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-315"
 pages: ["git-fichiers/git-fichiers"]
@@ -11,8 +11,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"git-fichiers/git-fichiers","added":3,"removed":1}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-10-31T16:20:05+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
