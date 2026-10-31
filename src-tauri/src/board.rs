@@ -4009,22 +4009,22 @@ mod tests {
     fn an_imported_ticket_is_named_after_its_source_key_and_its_title() {
         let name = |s, k: &str| ticket_agent_name(&imported(s, k, "Corriger la connexion"));
         assert_eq!(
-            name(Service::Jira, "PROJ-123"),
+            name(Service::JIRA, "PROJ-123"),
             "proj-123-corriger-la-connexion"
         );
         assert_eq!(
-            name(Service::Linear, "ENG-42"),
+            name(Service::LINEAR, "ENG-42"),
             "eng-42-corriger-la-connexion"
         );
-        assert_eq!(name(Service::Github, "#45"), "45-corriger-la-connexion");
-        assert_eq!(name(Service::Gitlab, "#7"), "7-corriger-la-connexion");
-        assert_eq!(name(Service::Azure, "#678"), "678-corriger-la-connexion");
-        assert_eq!(name(Service::Trello, "#12"), "12-corriger-la-connexion");
+        assert_eq!(name(Service::GITHUB, "#45"), "45-corriger-la-connexion");
+        assert_eq!(name(Service::GITLAB, "#7"), "7-corriger-la-connexion");
+        assert_eq!(name(Service::AZURE, "#678"), "678-corriger-la-connexion");
+        assert_eq!(name(Service::TRELLO, "#12"), "12-corriger-la-connexion");
         // A key with nothing readable: the title alone.
-        assert_eq!(name(Service::Clickup, ""), "corriger-la-connexion");
-        assert_eq!(name(Service::Clickup, "#"), "corriger-la-connexion");
+        assert_eq!(name(Service::CLICKUP, ""), "corriger-la-connexion");
+        assert_eq!(name(Service::CLICKUP, "#"), "corriger-la-connexion");
         // The branch is the same slug behind the project's prefix, in lower case and ASCII.
-        let t = imported(Service::Jira, "PROJ-123", "Corriger la connexion");
+        let t = imported(Service::JIRA, "PROJ-123", "Corriger la connexion");
         assert_eq!(
             ticket_branch("ticket/", &t),
             "ticket/proj-123-corriger-la-connexion"
@@ -4035,7 +4035,7 @@ mod tests {
         );
         // Special characters fold or go; a long title is cut at a word, within 40 characters.
         let t = imported(
-            Service::Jira,
+            Service::JIRA,
             "PROJ-1",
             "Réparer l'écran d'accueil !? (urgent) & co",
         );
@@ -4043,7 +4043,7 @@ mod tests {
             ticket_agent_name(&t),
             "proj-1-reparer-l-ecran-d-accueil-urgent"
         );
-        let t = imported(Service::Github, "#45", &"mot ".repeat(30));
+        let t = imported(Service::GITHUB, "#45", &"mot ".repeat(30));
         let (n, b) = (ticket_agent_name(&t), ticket_branch("ticket/", &t));
         assert!(n.len() <= 40 && n.starts_with("45-mot-mot"), "{n}");
         assert_eq!(b, format!("ticket/{n}"));
@@ -4063,7 +4063,7 @@ mod tests {
 
     #[test]
     fn the_commit_and_so_the_pr_carry_the_source_key() {
-        let t = imported(Service::Jira, "PROJ-123", "Corriger la connexion");
+        let t = imported(Service::JIRA, "PROJ-123", "Corriger la connexion");
         assert_eq!(shown_key(&t), "PROJ-123");
         assert_eq!(
             fallback_commit(&t),
@@ -4072,10 +4072,10 @@ mod tests {
         assert_eq!(plain_commit(&t), "PROJ-123 Corriger la connexion");
         let p = commit_prompt(Lang::En, &t, "");
         assert!(p.contains("[PROJ-123]") && !p.contains("DEM-12"), "{p}");
-        let t = imported(Service::Github, "#45", "Corriger");
+        let t = imported(Service::GITHUB, "#45", "Corriger");
         assert_eq!(fallback_commit(&t), "feat: Corriger [#45]");
         // A source without a key keeps the ticket's own.
-        let t = imported(Service::Clickup, " ", "Corriger");
+        let t = imported(Service::CLICKUP, " ", "Corriger");
         assert_eq!(shown_key(&t), "DEM-12");
     }
 

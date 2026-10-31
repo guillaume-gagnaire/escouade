@@ -938,46 +938,92 @@ pub struct CommitScope {
     pub left_out: Vec<String>,
 }
 
-/// An external ticket system.
-#[derive(
-    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord, Default,
-)]
-#[serde(rename_all = "lowercase")]
-pub enum Service {
-    #[default]
-    Jira,
-    Trello,
-    Github,
-    Linear,
-    Clickup,
-    /// GitLab Issues: its account is the GitLab code host's (`forge::accounts`).
-    Gitlab,
-    /// Azure Boards: its account is the Azure DevOps code host's (`forge::accounts`).
-    Azure,
-}
+/// An external ticket system, by its id (`jira`, `trello`, `github`…): one of the registry of
+/// the sources (`integrations::source::registry()`), and the data may name one this version does
+/// not have (a later version's, a plugin's gone), which it keeps as it is. Kept as the string it
+/// is, as when it was an enumeration: nothing to migrate (`ExternalRef`, the links, the accounts).
+/// Its text is interned, so that it stays `Copy`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[serde(transparent)]
+pub struct Service(&'static str);
 
 impl Service {
-    pub const ALL: [Service; 7] = [
-        Service::Jira,
-        Service::Trello,
-        Service::Github,
-        Service::Linear,
-        Service::Clickup,
-        Service::Gitlab,
-        Service::Azure,
-    ];
+    pub const JIRA: Service = Service("jira");
+    pub const TRELLO: Service = Service("trello");
+    pub const GITHUB: Service = Service("github");
+    pub const LINEAR: Service = Service("linear");
+    pub const CLICKUP: Service = Service("clickup");
+    /// GitLab Issues: its account is the GitLab code host's (`forge::accounts`).
+    pub const GITLAB: Service = Service("gitlab");
+    /// Azure Boards: its account is the Azure DevOps code host's (`forge::accounts`).
+    pub const AZURE: Service = Service("azure");
 
-    /// Its name, as the window and the comments say it.
-    pub fn label(self) -> &'static str {
-        match self {
-            Service::Jira => "Jira",
-            Service::Trello => "Trello",
-            Service::Github => "GitHub",
-            Service::Linear => "Linear",
-            Service::Clickup => "ClickUp",
-            Service::Gitlab => "GitLab",
-            Service::Azure => "Azure Boards",
+    /// The id `text` names, whether a source of this version bears it or not.
+    pub fn new(text: &str) -> Service {
+        use parking_lot::Mutex;
+        use std::collections::HashSet;
+        static SEEN: Mutex<Option<HashSet<&'static str>>> = Mutex::new(None);
+        let mut seen = SEEN.lock();
+        let seen = seen.get_or_insert_with(HashSet::new);
+        if let Some(s) = seen.get(text) {
+            return Service(s);
         }
+        let s: &'static str = Box::leak(text.to_owned().into_boxed_str());
+        seen.insert(s);
+        Service(s)
+    }
+
+    /// As the data says it (`jira`, `github`…).
+    pub fn as_str(self) -> &'static str {
+        self.0
+    }
+
+    /// Its name, as the window and the comments say it: the registry's
+    /// (`TicketSourceKind::label`), the id itself for a source this version does not have.
+    pub fn label(self) -> &'static str {
+        crate::integrations::source::registry()
+            .get(self)
+            .map_or(self.0, |k| k.label())
+    }
+}
+
+impl Default for Service {
+    fn default() -> Self {
+        Service::JIRA
+    }
+}
+
+impl PartialOrd for Service {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+/// The registry's order first (Jira, Trello…: the enumeration's), the unknown after, by id.
+impl Ord for Service {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let at = |s: &Service| {
+            crate::integrations::source::registry()
+                .position(*s)
+                .unwrap_or(usize::MAX)
+        };
+        at(self).cmp(&at(other)).then_with(|| self.0.cmp(other.0))
+    }
+}
+
+impl<'de> Deserialize<'de> for Service {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let text = std::borrow::Cow::<'de, str>::deserialize(d)?;
+        if text.is_empty() {
+            return Err(serde::de::Error::custom("an empty source id"));
+        }
+        Ok(Service::new(&text))
+    }
+}
+
+impl std::fmt::Display for Service {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0)
     }
 }
 
@@ -3984,7 +4030,7 @@ mod tests {
             },
         );
         let link = SourceLink {
-            service: Service::Jira,
+            service: Service::JIRA,
             container: "ATL".into(),
             name: "Atlas".into(),
             states,
@@ -3995,7 +4041,7 @@ mod tests {
         let back: SourceLink = serde_json::from_value(v).unwrap();
         assert_eq!(back, link);
         let r = ExternalRef {
-            service: Service::Github,
+            service: Service::GITHUB,
             id: "42".into(),
             key: "#42".into(),
             container: "acme/api".into(),

@@ -300,7 +300,7 @@ async fn the_import_queries_with_wiql_and_reads_a_page_at_a_time() {
     );
     // Its Acceptance Criteria field, not its description's.
     assert_eq!(one.criteria, ["Plus de crash", "Un test e2e"]);
-    assert_eq!(one.service, Service::Azure);
+    assert_eq!(one.service, Service::AZURE);
     assert_eq!(one.container, C);
     let chips: Vec<&str> = page.filters.iter().map(|f| f.id.as_str()).collect();
     assert_eq!(

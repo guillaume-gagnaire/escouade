@@ -17,7 +17,7 @@ use reqwest::Method;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
-const S: Service = Service::Azure;
+const S: Service = Service::AZURE;
 
 const VERSION: &str = "api-version=7.1";
 /// The tags' and the comments' APIs are still previews in 7.1.

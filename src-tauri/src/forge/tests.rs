@@ -636,7 +636,7 @@ async fn github_com_is_one_account_for_issues_and_pull_requests() {
     assert_eq!(labels, ["@ada", "@ada-corp"]);
     // Disconnected from Issues: gone as a code host too.
     h.core
-        .integration_disconnect(crate::model::Service::Github)
+        .integration_disconnect(crate::model::Service::GITHUB)
         .unwrap();
     let view = h.core.forges_view().await;
     assert_eq!(view.accounts.len(), 1);

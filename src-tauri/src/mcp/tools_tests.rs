@@ -558,7 +558,7 @@ async fn a_ticket_is_read_whole_by_its_key_in_any_case_or_its_id() {
             after: vec![first.id.clone()],
             progress: vec!["Fichier écrit".into()],
             external: Some(ExternalRef {
-                service: Service::Jira,
+                service: Service::JIRA,
                 id: "10042".into(),
                 key: "ATL-12".into(),
                 container: "ATL".into(),

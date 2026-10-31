@@ -11,7 +11,7 @@ use crate::model::{ExternalRef, ExternalState, Service};
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 
-const S: Service = Service::Linear;
+const S: Service = Service::LINEAR;
 
 /// The issues of a page of the import.
 const PAGE: u32 = 50;

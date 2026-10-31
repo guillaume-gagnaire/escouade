@@ -4842,7 +4842,7 @@ async fn an_imported_ticket_gets_an_agent_and_a_branch_named_after_its_source_ke
         h.core
             .edit_ticket(id, |x| {
                 x.external = Some(ExternalRef {
-                    service: Service::Jira,
+                    service: Service::JIRA,
                     id: "PROJ-123".into(),
                     key: "PROJ-123".into(),
                     ..Default::default()
@@ -4899,7 +4899,7 @@ fn from_azure_boards(h: &Harness, id: &str) {
     h.core
         .edit_ticket(id, |x| {
             x.external = Some(ExternalRef {
-                service: Service::Azure,
+                service: Service::AZURE,
                 id: "42".into(),
                 key: "#42".into(),
                 container: "acme/Web Shop".into(),

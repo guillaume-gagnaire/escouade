@@ -23,6 +23,7 @@ import type { IconName } from './icons';
 import type { SettingsTab } from './settings.svelte';
 import type { FormFile } from './ticket-files';
 import type { FormImage } from './ticket-images';
+import { setSources } from './integrations';
 import { applyTheme } from './theme';
 import { workflows } from './workflows.svelte';
 import type {
@@ -622,6 +623,7 @@ class AppState {
     this.engineModels = s.engineModels ?? {};
     this.accountModels = s.accountModels ?? {};
     this.enginesFound = s.enginesFound ?? (s.claudeFound ? ['claude'] : []);
+    if (s.sources) setSources(s.sources);
     this.restartAt = s.restartAt ?? null;
     this.failedUpdate = s.failedUpdate ?? null;
     if (s.pageCrash) this.tellPageCrash(s.pageCrash);

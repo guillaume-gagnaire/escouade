@@ -14,7 +14,7 @@ use anyhow::{anyhow, Result};
 use reqwest::header::HeaderMap;
 use serde_json::{json, Value};
 
-const S: Service = Service::Gitlab;
+const S: Service = Service::GITLAB;
 const NAME: &str = "GitLab";
 
 /// The states every project has, before its labels.
