@@ -16,9 +16,11 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ### Fixes
 
 - Starting branch `origin/x`: a new agent starts from the local `x`, moved forward if needed, no longer from another agent’s branch that tracked `origin/x`; agents’ branches no longer track their base. Thanks to @Metalzoid.
+- Fable’s own quota has its bar, “Fable · week”, and now holds back Fable’s tickets and agents alone: at the threshold they change accounts or wait, the other models go on. A Max plan without a 5-hour window no longer shows a 5-hour bar stuck on an old value.
 - Uncommitted files no longer blink at each refresh: “No file changed by this agent” and the list stay shown as long as nothing changes.
 - A workflow you delete, in Settings › Projects › Workflow or by erasing its file, no longer comes back at every reading or restart: the “Deleted” list keeps it, with “Restore”. And “No workflow for this project”, in the assistant or the settings (and in `.escouade.yml`), stops their reading and writing.
 - Two tickets worked on at once no longer propose a decision under the same number: a proposed decision has no number and gets the register’s next one when it is accepted, and the pages and tickets that cite it follow.
+- Approving a ticket is no longer refused for “uncommitted changes” after the spec was compared to the code: its gaps and date stay on this computer instead of being written in the pages, and the Docs tab still shows them.
 - “Write a first spec from the code”, and every new discussion, closes its window and opens the discussion with its first message even when new agents open in the harness terminal: a discussion always stays in its conversation, where Escouade refuses its writes.
 - The card of the tickets “Plan tickets” made now matches the subjects’ cards in the Docs tab: nothing spills out of it, it says how many tickets have started, “Undo” only shows for those not started yet, and it folds once all have started or closes.
 - A discussion that can’t start no longer leaves an agent behind: the window says why and keeps your choices, to start again or switch accounts.

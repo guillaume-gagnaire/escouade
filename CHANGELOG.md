@@ -16,9 +16,11 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ### Corrections
 
 - « Branche de départ » `origin/x` : le nouvel agent part de la locale `x`, avancée au besoin, et plus de la branche d’un autre agent qui suivait `origin/x` ; les branches des agents ne suivent plus leur base. Merci à @Metalzoid.
+- Le quota propre à Fable a sa barre, « Fable · semaine », et ne retient plus que les tickets et agents Fable : au seuil, ils changent de compte ou attendent, les autres modèles continuent. Un forfait Max sans fenêtre de 5 h n’affiche plus de barre 5 h figée sur une vieille valeur.
 - Les fichiers non commités ne clignotent plus à chaque rafraîchissement : « Aucun fichier modifié par cet agent » et la liste restent affichés tant que rien ne change.
 - Un workflow que tu supprimes, dans Réglages › Projets › Workflow ou en effaçant son fichier, ne revient plus à chaque relecture ni au redémarrage : la liste « Supprimés » le garde, avec « Rétablir ». Et « Pas de workflow pour ce projet », dans l’assistant ou les réglages (et dans `.escouade.yml`), coupe leur lecture et leur écriture.
 - Deux tickets menés en même temps ne proposent plus une décision sous le même numéro : une décision proposée n’a pas de numéro et reçoit le suivant du registre quand elle est acceptée, et les pages et tickets qui la citent suivent.
+- Valider un ticket n’est plus refusé pour « des modifications non commitées » après la comparaison de la spec au code : ses écarts et sa date restent sur ce poste au lieu d’être écrits dans les pages, et l’onglet Docs les montre toujours.
 - « Écrire une première spec depuis le code », et toute nouvelle discussion, ferme sa fenêtre et ouvre la discussion avec son premier message même quand les nouveaux agents s’ouvrent dans le terminal du harness : une discussion reste toujours dans sa conversation, où Escouade refuse ses écritures.
 - La carte des tickets créés par « Planifier » rejoint les cartes des sujets dans l’onglet Docs : rien n’en déborde plus, elle dit combien de tickets sont lancés, « Annuler » ne s’offre que pour ceux qui ne le sont pas encore, et elle se replie une fois tout lancé ou se ferme.
 - Une discussion qui ne peut pas démarrer ne laisse plus d’agent derrière elle : la fenêtre dit pourquoi et garde tes choix, pour recommencer ou changer de compte.
