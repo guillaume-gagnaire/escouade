@@ -515,7 +515,8 @@ jobs:
     name: macOS (lint and tests)
     needs: escouade-js
     runs-on: macos-latest
-    timeout-minutes: 45
+    # 16 to 45 min on 2026-11-01 as the plugins' tests grew (WASM, harness, voice): room above the slowest runner.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
 
