@@ -100,6 +100,8 @@ pub fn timeout_of(method: &str) -> Duration {
         "initialize" => 10_000,
         "shutdown" => 1_000,
         m if m.starts_with("permissions/") => 500,
+        // isola's own limit (60 s) comes first, with its message.
+        m if m.starts_with("launch/") => 65_000,
         m if m.starts_with("tickets/")
             || m.starts_with("forge/")
             || m.starts_with("workflow/")
@@ -686,6 +688,13 @@ impl Runtime {
             pid: inner.conn.as_ref().and_then(|c| c.pid),
             capabilities: inner.capabilities.clone(),
         }
+    }
+
+    /// What the plugin `id`'s process uses now (its job's memory and CPU), when it runs.
+    pub fn usage(&self, id: &str) -> Option<JobUsage> {
+        let h = self.hosts.lock().get(id).cloned()?;
+        let conn = h.inner.lock().conn.clone()?;
+        conn.usage()
     }
 
     /// The plugin `id`'s journal, the oldest entry first: what its process wrote since Escouade
@@ -1562,6 +1571,15 @@ impl Host {
                     "settings/get takes a project's id, or none".into(),
                 )),
             },
+            // A file of its own folder (`p.file`), for a process as for an instance in WASM (ESC-321).
+            "files/read" => {
+                super::files::read(&self.folder, &params).inspect_err(|(code, message)| {
+                    if *code == super::files::REFUSED {
+                        self.journal
+                            .push(Kind::Refused, format!("files/read: {message}"));
+                    }
+                })
+            }
             _ => {
                 self.journal.push(
                     Kind::Refused,

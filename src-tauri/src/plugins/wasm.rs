@@ -669,8 +669,10 @@ impl Instance {
                     )
                     .trim()
                     .lines()
-                    .last()
+                    // The error's own line, not a frame of the stack QuickJS prints after it.
+                    .rfind(|l| !l.trim().is_empty() && !l.trim_start().starts_with("at "))
                     .unwrap_or("")
+                    .trim()
                     .to_string();
                     let what = format!("{e:#}").lines().next().unwrap_or("").to_string();
                     Fault::Crashed(if said.is_empty() {

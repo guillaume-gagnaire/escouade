@@ -13,7 +13,6 @@ use crate::git::{self, GitService};
 use crate::hub::Hub;
 use crate::i18n::{self, LangInfo};
 use crate::integrations;
-use crate::isola;
 use crate::job::JobUsage;
 use crate::menus;
 use crate::model::*;
@@ -851,6 +850,8 @@ pub struct Core<R: Runtime = Wry> {
     pub store: Arc<crate::plugins::store::Store>,
     /// Their processes (`plugins::runtime`): started at their first activation, closed with the app.
     pub(crate) plugin_runtime: Arc<crate::plugins::runtime::Runtime>,
+    /// The launch environments of the plugins the app gives (INT-14): isola runs a worktree's services.
+    pub(crate) launch: Arc<crate::launchenv::Launch>,
     /// The facts' bus (PLG-5): what happened, told where the state changes.
     pub facts: crate::facts::Bus,
     /// What hands the facts to the plugins (`plugins::events`).
@@ -1838,10 +1839,6 @@ impl<R: Runtime> Core<R> {
                 .map(|s| s.inner().clone())
                 .unwrap_or_default()
         };
-        #[cfg(not(test))]
-        let plugins = crate::plugins::Plugins::load(data.clone(), env!("CARGO_PKG_VERSION"));
-        // GitHub is a plugin the app gives (INT-8.1): the tests' cores have them.
-        #[cfg(test)]
         let plugins =
             crate::plugins::Plugins::load_for_core(data.clone(), env!("CARGO_PKG_VERSION"));
         let store = Arc::new(crate::plugins::store::Store::load(
@@ -1859,6 +1856,7 @@ impl<R: Runtime> Core<R> {
             env!("CARGO_PKG_VERSION"),
             crate::plugins::runtime::Limits::default(),
         );
+        let launch = crate::launchenv::Launch::new(plugins.clone(), plugin_runtime.clone());
         let plugin_events = crate::plugins::events::Dispatch::new(
             plugins.clone(),
             plugin_runtime.clone(),
@@ -1872,6 +1870,7 @@ impl<R: Runtime> Core<R> {
             telemetry,
             stats: Stats::open(&data.stats_db()),
             plugin_runtime,
+            launch,
             facts,
             plugin_events,
             plugins,
@@ -2027,7 +2026,9 @@ impl<R: Runtime> Core<R> {
                 .spawn(move || rt.prepare_all());
         }
         for h in core.agents.read().values() {
-            h.lock().facts = core.facts.emitter();
+            let mut rt = h.lock();
+            rt.facts = core.facts.emitter();
+            rt.launch = Some(core.launch.clone());
         }
         // The API keys of the Cursor accounts, which their processes go by (ESC-43).
         core.load_account_keys();
@@ -6236,6 +6237,7 @@ impl<R: Runtime> Core<R> {
         {
             let mut rt = h.lock();
             rt.facts = self.facts.emitter();
+            rt.launch = Some(self.launch.clone());
             let m = &rt.meta;
             rt.fact(crate::facts::Body::AgentCreated {
                 harness: m.engine.to_string(),
@@ -6798,8 +6800,8 @@ impl<R: Runtime> Core<R> {
                 }
             }
         }
-        if isola::manages(&wt.path) {
-            if let Err(e) = isola::run(&wt.path, &["destroy"], isola::LIMIT).await {
+        if let Some(env) = self.launch.for_dir(&wt.path, &project.id) {
+            if let Err(e) = env.destroy(&wt.path).await {
                 log::warn!("{}: {e:#}", wt.path);
                 problems.push(format!("{e:#}"));
             }
@@ -6945,7 +6947,7 @@ impl<R: Runtime> Core<R> {
             lang,
             &shell.label,
             &project.worktree_copy,
-            isola::configured(&project.path),
+            self.launch.configured(&project.path, &project.id),
         );
         let answer = self
             .read_project(project, &worktrees::suggest_system(lang), &prompt)
@@ -7698,7 +7700,11 @@ impl<R: Runtime> Core<R> {
                 }
             }
             // Kept: isola's services of the worktree stop all the same.
-            (false, Some(wt), _) if isola::manages(&wt.path) => isola::down_later(wt.path),
+            (false, Some(wt), _) => {
+                if let Some(env) = self.launch.for_dir(&wt.path, &pid) {
+                    env.down_later(wt.path);
+                }
+            }
             _ => {}
         }
         let warning = (!problems.is_empty()).then(|| {
@@ -8633,8 +8639,13 @@ impl<R: Runtime> Core<R> {
             // Its test launches are the project's terminals too (killed below all the same):
             // none is kept for it. isola's services of its worktree stop too.
             self.stop_test_runs(&aid);
-            if let Some(wt) = worktree.filter(|w| isola::manages(&w.path)) {
-                isola::down_later(wt.path);
+            if let Some(env) = worktree
+                .as_ref()
+                .and_then(|w| self.launch.for_dir(&w.path, id))
+            {
+                if let Some(wt) = worktree {
+                    env.down_later(wt.path);
+                }
             }
             self.hub.emit(UiEvent::AgentRemoved {
                 id: aid,

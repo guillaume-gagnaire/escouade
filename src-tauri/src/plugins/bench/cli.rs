@@ -299,7 +299,11 @@ async fn dev(
         return 1;
     };
     let escouade_dir = Options::default().escouade_dir;
-    let program = program_path(folder, run, &escouade_dir);
+    let program = match &run.js {
+        // Its bundle, played by Node (ESC-321).
+        Some(js) => std::path::absolute(folder.join(js)).unwrap_or_else(|_| folder.join(js)),
+        None => program_path(folder, run, &escouade_dir),
+    };
     let Some(mut s) = begin(folder, &m, &program, &secrets).await else {
         return 1;
     };

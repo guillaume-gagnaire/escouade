@@ -15,7 +15,7 @@ npm run bench       # the conformance bench, on the real program
 
 The command asks for the kind of plugin; `--kind program` or `--kind declarative` chooses without asking, `--id` and `--name` give its id and its name.
 
-- **A program** (`program`): a TypeScript plugin with its tests. `src/plugin.ts` says when a ticket is ready to test and refuses force pushes; `src/main.ts` starts it; `npm run build` bundles both into `dist/plugin.mjs`, which `plugin` (macOS, Linux) and `plugin.cmd` (Windows) start, as `run` in the manifest says.
+- **A program** (`program`): a TypeScript plugin with its tests. `src/plugin.ts` says when a ticket is ready to test and refuses force pushes; `src/main.ts` starts it; `npm run build` bundles both into `dist/plugin.mjs`, which `run.js` in the manifest names: Escouade runs it inside the app, in WASM, without Node.
 - **A declarative plugin** (`declarative`): a theme, described in the manifest. Nothing runs.
 
 To try it in Escouade, load its folder in Settings › Plugins, in developer mode. Escouade runs a plugin as its repository holds it, without `npm install`: commit `dist/` before you tag a version.

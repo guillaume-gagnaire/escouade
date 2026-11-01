@@ -22,8 +22,9 @@ pub struct Entry {
 /// line here; the test of the registry checks that each folder has its manifest and its README, and that each is in
 /// this list.
 ///
-/// The demonstration plugin is in the builds of development and the tests only, so that nobody sees (nor runs) a plugin
-/// that does nothing. GitHub (INT-8.1) is the first real one: its code host and GitHub Issues.
+/// The demonstration plugin is in the builds of development and the tests only: a release's registry holds the real ones
+/// (isola, INT-14; GitHub, INT-8.1, its code host and GitHub Issues; the others come with INT-7 and INT-8), so that
+/// nobody sees (nor runs) a plugin that does nothing.
 pub const REGISTRY: &[Entry] = &[
     #[cfg(any(debug_assertions, test))]
     Entry {
@@ -31,6 +32,10 @@ pub const REGISTRY: &[Entry] = &[
         manifest: include_str!(
             "../../../plugins/builtin/dev.escouade.minimal/escouade-plugin.json"
         ),
+    },
+    Entry {
+        id: "dev.escouade.isola",
+        manifest: include_str!("../../../plugins/builtin/dev.escouade.isola/escouade-plugin.json"),
     },
     Entry {
         id: GITHUB,

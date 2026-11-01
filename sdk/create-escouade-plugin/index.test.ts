@@ -17,7 +17,7 @@ describe('create-escouade-plugin', () => {
     expect(SDK_VERSION).toBe(`^${sdk.version}`);
   });
 
-  it('writes a TypeScript program with its tests, a valid manifest and an executable program', () => {
+  it('writes a TypeScript program with its tests and a valid manifest, run in WASM by run.js without Node (ESC-321)', () => {
     const folder = path.join(tmp(), 'Mes Règles');
     const written = create({ folder, kind: 'program', id: 'dev.test.rules', name: 'Règles "de" l’équipe', sdk: 'file:../sdk' });
     const names = written.map((f) => path.relative(folder, f).split(path.sep).join('/')).sort();
@@ -27,8 +27,6 @@ describe('create-escouade-plugin', () => {
       'README.md',
       'escouade-plugin.json',
       'package.json',
-      'plugin',
-      'plugin.cmd',
       'src/main.ts',
       'src/plugin.ts',
       'test/plugin.test.ts',
@@ -36,11 +34,11 @@ describe('create-escouade-plugin', () => {
     ]);
     const manifest = fs.readFileSync(path.join(folder, 'escouade-plugin.json'), 'utf8');
     expect(validateText(manifest)).toMatchObject({ ok: true, ignored: [] });
-    expect(JSON.parse(manifest)).toMatchObject({ id: 'dev.test.rules', name: 'Règles "de" l’équipe', run: { command: 'plugin' } });
+    expect(JSON.parse(manifest)).toMatchObject({ id: 'dev.test.rules', name: 'Règles "de" l’équipe', run: { js: 'dist/plugin.mjs' } });
+    expect(JSON.parse(manifest).run.command).toBeUndefined();
     const pkg = JSON.parse(fs.readFileSync(path.join(folder, 'package.json'), 'utf8'));
     expect(pkg.name).toBe('mes-regles');
     expect(pkg.devDependencies['@escouade-dev/plugin']).toBe('file:../sdk');
-    if (process.platform !== 'win32') expect(fs.statSync(path.join(folder, 'plugin')).mode & 0o111).not.toBe(0);
     expect(fs.readFileSync(path.join(folder, 'LICENSE'), 'utf8')).toContain(`Copyright (c) ${new Date().getFullYear()}`);
   });
 

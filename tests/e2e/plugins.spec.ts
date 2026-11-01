@@ -67,10 +67,11 @@ test('a declarative plugin is installed from a folder, and an invalid one says w
     later: { field: 'of a later Escouade' },
   });
 
-  // The app gives its own (INT-4): the demonstration plugin and GitHub (INT-8.1), from the start, with the origin builtin.
+  // The app gives its own (INT-4): the demonstration plugin, isola (INT-14) and GitHub (INT-8.1), from the start, builtin.
   expect(await invoke<View[]>('plugins_list')).toMatchObject({
     ok: [
       { id: 'dev.escouade.minimal', origin: { kind: 'builtin' }, state: { kind: 'ready' } },
+      { id: 'dev.escouade.isola', origin: { kind: 'builtin' }, state: { kind: 'ready' } },
       { id: 'dev.escouade.github', origin: { kind: 'builtin' }, state: { kind: 'ready' } },
     ],
   });
@@ -115,6 +116,7 @@ test('a declarative plugin is installed from a folder, and an invalid one says w
     ok: [
       { id: 'dev.exemple.contraste', fingerprint: view.fingerprint, state: { kind: 'ready' } },
       { id: 'dev.escouade.minimal', origin: { kind: 'builtin' } },
+      { id: 'dev.escouade.isola', origin: { kind: 'builtin' } },
       { id: 'dev.escouade.github', origin: { kind: 'builtin' } },
     ],
   });
@@ -143,5 +145,7 @@ test('a declarative plugin is installed from a folder, and an invalid one says w
   expect(await invoke('plugin_remove', { id: 'dev.exemple.contraste', keep: false })).toEqual({ ok: true });
   expect(fs.existsSync(copy)).toBe(false);
   expect(fs.existsSync(path.join(src, 'escouade-plugin.json'))).toBe(true);
-  expect(await invoke<View[]>('plugins_list')).toMatchObject({ ok: [{ id: 'dev.escouade.minimal' }, { id: 'dev.escouade.github' }] });
+  expect(await invoke<View[]>('plugins_list')).toMatchObject({
+    ok: [{ id: 'dev.escouade.minimal' }, { id: 'dev.escouade.isola' }, { id: 'dev.escouade.github' }],
+  });
 });

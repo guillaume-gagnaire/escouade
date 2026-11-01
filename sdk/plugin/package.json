@@ -1,6 +1,6 @@
 {
   "name": "@escouade-dev/plugin",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Write a plugin of Escouade in TypeScript: the protocol's types, a stdio client, a fake Escouade for tests, and the escouade-plugin command.",
   "license": "MIT",
   "type": "module",

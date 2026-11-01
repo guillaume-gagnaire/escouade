@@ -80,6 +80,8 @@ struct Shared {
     /// For a key of its own with no value kept: `<made>-<key>` (the bench's), else `null`.
     made: Option<String>,
     patterns: Vec<String>,
+    /// Its folder, for `files/read`.
+    folder: std::path::PathBuf,
     /// Its exit code, once it ended (`Some(None)`: no code, killed).
     ended: Mutex<Option<Option<i32>>>,
     end: Notify,
@@ -128,9 +130,18 @@ impl Session {
         let run = manifest.run.as_ref().ok_or_else(|| {
             std::io::Error::new(std::io::ErrorKind::InvalidInput, "a declarative plugin")
         })?;
-        let mut cmd = Command::new(program);
-        cmd.args(&run.args)
-            .current_dir(folder)
+        // A bundle of `run.js` (`program` is its path) is played by Node here, the SDK speaking on stdin and stdout
+        // there as in Escouade's WASM host (ESC-321); WASM-3 plays it in WASM.
+        let mut cmd = if run.js.is_some() {
+            let mut c = Command::new("node");
+            c.arg(program);
+            c
+        } else {
+            let mut c = Command::new(program);
+            c.args(&run.args);
+            c
+        };
+        cmd.current_dir(folder)
             .env("ESCOUADE_PLUGIN_ID", &manifest.id)
             .env("ESCOUADE_PLUGIN_API", PROTOCOL.to_string())
             .env("ESCOUADE_VERSION", app_version)
@@ -159,6 +170,7 @@ impl Session {
             secrets,
             made,
             patterns: manifest.permissions.secrets.clone(),
+            folder: folder.to_path_buf(),
             ended: Mutex::new(None),
             end: Notify::new(),
             watch: Mutex::new(None),
@@ -451,6 +463,8 @@ fn request(shared: &Shared, method: &str, params: &Value) -> Result<Value, (i64,
                 ))
             }
         }
+        // As the app serves it (ESC-321).
+        "files/read" => crate::plugins::files::read(&shared.folder, params),
         _ => {
             shared.see(Seen::Unserved {
                 method: method.to_string(),

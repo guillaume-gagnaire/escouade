@@ -15,7 +15,7 @@ npm run bench       # le banc de conformité, sur le vrai programme
 
 La commande demande le genre de plugin ; `--kind program` ou `--kind declarative` le choisit sans demander, `--id` et `--name` donnent son identifiant et son nom.
 
-- **Un programme** (`program`) : un plugin en TypeScript, avec ses tests. `src/plugin.ts` dit quand un ticket est prêt à tester et refuse les push forcés ; `src/main.ts` le démarre ; `npm run build` réunit les deux dans `dist/plugin.mjs`, que lancent `plugin` (macOS, Linux) et `plugin.cmd` (Windows), comme le dit `run` dans le manifeste.
+- **Un programme** (`program`) : un plugin en TypeScript, avec ses tests. `src/plugin.ts` dit quand un ticket est prêt à tester et refuse les push forcés ; `src/main.ts` le démarre ; `npm run build` réunit les deux dans `dist/plugin.mjs`, que nomme `run.js` dans le manifeste : Escouade le fait tourner dans l’app, en WASM, sans Node.
 - **Un plugin déclaratif** (`declarative`) : un thème, décrit dans le manifeste. Rien ne s’exécute.
 
 Pour l’essayer dans Escouade, charge son dossier dans Réglages › Plugins, en mode développeur. Escouade lance un plugin tel que son dépôt le contient, sans `npm install` : commite `dist/` avant d’étiqueter une version.

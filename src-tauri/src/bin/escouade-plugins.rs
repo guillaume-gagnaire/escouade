@@ -9,15 +9,22 @@
 //! plugin that serves code hosts or Kanban sources is a crate of its own beside its manifest
 //! (`plugins/builtin/<id>/`), on the kit `escouade-plugin-kit` (its loop, the service of `forge/*` and `tickets/*`).
 
+#[path = "escouade-plugins/isola.rs"]
+mod isola;
 #[path = "escouade-plugins/minimal.rs"]
 mod minimal;
+#[path = "escouade-plugins/minimal_harness.rs"]
+mod minimal_harness;
 
 /// An entry: the name a manifest's `run.args` gives, and the function that runs the plugin and returns its exit code.
 type Entry = (&'static str, fn() -> i32);
 
-/// The plugins of this program.
+/// The plugins of this program. `minimal-harness` is none: the harness of the demonstration plugin, which the core
+/// launches from the plugin's description (INT-9).
 const ENTRIES: &[Entry] = &[
+    ("isola", isola::run_plugin),
     ("minimal", minimal::run),
+    ("minimal-harness", minimal_harness::run),
     // GitHub (INT-8.1): its code host and GitHub Issues, in its crate (plugins/builtin/dev.escouade.github).
     ("github", escouade_plugin_github::run),
 ];

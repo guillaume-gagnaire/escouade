@@ -109,6 +109,7 @@ mod integrations;
 mod integrations_tests;
 mod isola;
 mod job;
+mod launchenv;
 mod leftovers;
 mod mcp;
 mod memory;
@@ -145,6 +146,8 @@ mod plugins_bench_tests;
 mod plugins_builtin_tests;
 #[cfg(test)]
 mod plugins_decide_tests;
+#[cfg(test)]
+mod plugins_harness_tests;
 #[cfg(test)]
 mod plugins_protocol_tests;
 #[cfg(test)]

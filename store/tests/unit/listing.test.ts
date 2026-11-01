@@ -182,11 +182,13 @@ describe('the plugins of the app in their folder', () => {
   // INT-4's rule (docs/PLUGINS.md §4.3): a plugin the app gives that left the core is a folder of the repository,
   // readable alone, and its page links to it. The demonstration is not on the store.
   const root = fileURLToPath(new URL('../../../plugins/builtin/', import.meta.url));
-  const folders = readdirSync(root).filter((d) => d !== 'dev.escouade.minimal');
+  // The plugins the store lists that have a folder there (isola has no page yet, the demonstration never).
+  const folders = readdirSync(root).filter((d) => isBuiltinId(d));
 
-  it('lists each folder with its source, and each source is a folder with its manifest and its README', async () => {
+  it('links each listed folder as its source, and each source is a folder with its manifest and its README', async () => {
     const sourced = BUILTINS.filter((b) => b.source).map((b) => b.id);
     expect(sourced.sort()).toEqual([...folders].sort());
+    expect(folders).toContain('dev.escouade.github');
     for (const b of BUILTINS.filter((x) => x.source)) {
       expect(b.source).toBe(`plugins/builtin/${b.id}`);
       const manifest = JSON.parse(readFileSync(join(root, b.id, 'escouade-plugin.json'), 'utf8'));
