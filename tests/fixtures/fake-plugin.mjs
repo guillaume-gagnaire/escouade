@@ -116,7 +116,8 @@ function handle(msg) {
     case 'test/do':
       return behave(id, params);
     default:
-      if (method === 'account/me' || method.startsWith('tickets/') || method.startsWith('forge/') || method.startsWith('workflow/')) return serve(id, method, params);
+      if (method === 'account/me' || method.startsWith('tickets/') || method.startsWith('forge/') || method.startsWith('workflow/'))
+        return serve(id, method, params);
       return id === undefined ? null : fail(id, -32601, `unknown method ${method}`);
   }
 }

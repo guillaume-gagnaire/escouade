@@ -1,8 +1,8 @@
 ---
 title: "Workflows"
 subject: "Kanban"
-sources: ["docs/SPEC.md","Retour d'un utilisateur sur le Discord (2026-10-30), ticket ESC-309"]
-tickets: ["ESC-195","ESC-309"]
+sources: ["docs/SPEC.md","Retour d'un utilisateur sur le Discord (2026-10-30), ticket ESC-309","docs/PLUGINS.md §4.5, choix 158 de design/app-redesign/UX-NOTES.md"]
+tickets: ["ESC-195","ESC-309","ESC-200"]
 decisions: []
 compared: "2026-10-31T10:04:30+01:00"
 gaps: [{"text":"La page dit que rien d'une machine ni aucune empreinte n'entre dans le fichier. Quand un workflow a été affiné, le code écrit dans `workflow.refined` l'empreinte de la lecture d'origine, et cette empreinte est versionnée dans le dépôt.","code":["src-tauri/src/workflowfiles.rs","src-tauri/src/workflow.rs"]}]
@@ -56,3 +56,25 @@ Escouade lit les workflows d'un projet : les enchaînements que suivent ses agen
 
 - « Workflows du projet » : « Lire les workflows » (par défaut) ou « Pas de workflow pour ce projet » (voir plus haut).
 - « Où garder la configuration des workflows », réglage du projet : « Dans le dépôt » par défaut. Il ne porte que sur les workflows du dépôt ; changer de choix déplace leurs fichiers, sans perte ni doublon.
+
+## Les plugins
+
+### Les faits `workflow.*`
+
+Le chemin de chaque agent dans son workflow est dit aux plugins, sur le bus de faits, avec l'agent, le ticket et le projet comme les autres faits :
+
+- `workflow.step_entered` : l'agent entre dans une étape (`workflow`, `step`, `door` si une commande l'a ouverte, `pass`, son n-ième passage) ;
+- `workflow.step_left` : il la quitte, avec `durationMs`, `cost` et `outcome` (`done`, `back`, `failed`, `stopped`, `left`) ;
+- `workflow.looped_back` : il revient à une étape déjà passée (`from`, `to`, `reason`, la ligne où l'étape s'est arrêtée) ;
+- `workflow.left` : il sort du workflow, il fait autre chose (`doing`) ;
+- `workflow.changed` : une relecture des workflows du projet donne autre chose (`workflows` : les ids de ceux qui ont changé, apparu ou disparu).
+
+Ils sont émis d'après les passages du suivi des agents, pas d'après la fenêtre : un fait n'est dit qu'une fois, dans l'ordre où il est arrivé. Un projet privé n'envoie ces faits qu'aux plugins activés pour lui.
+
+### Le lecteur de workflow
+
+Un plugin peut apprendre à Escouade un workflow qu'elle ne lit pas seule : `contributes.workflowReaders[]` (un `id`, un `name`, `files`, des globs depuis le dossier du projet, sans `..` ni chemin absolu). Escouade lui donne par `workflow/read` seulement les fichiers que ses globs désignent (texte, au plus 200 de 256 Ko ; ceux du dossier de chaque dépôt pour un projet de plusieurs) ; il rend `{ workflows: [{ id, name, steps, transitions, exit }] }`.
+
+- Le workflow est suivi comme ceux qu'Escouade lit : onglet, carte, faits `workflow.*`. Son id est `plugin:<plugin>:<id>` : il ne prend jamais la place d'un workflow lu par l'app.
+- Un graphe qui ne tient pas (étape sans nom, deux étapes du même nom, transition vers une étape absente, plus de 50 workflows) est refusé en entier, avec la raison. Un plugin qui plante ne fait pas perdre ce qui était lu. Délai : 60 s.
+- Le registre qui appellera les lecteurs lit les manifestes avec INT-6 ; le lecteur et son contrat existent, sans être encore appelés par l'app.
