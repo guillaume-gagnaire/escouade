@@ -28,7 +28,7 @@ pub fn max_chars(p: Provider) -> usize {
         Provider::Groq => 200,
         Provider::Deepgram => 2000,
         Provider::OpenAi | Provider::Mistral => 4000,
-        Provider::ElevenLabs => 5000,
+        _ => 5000,
     }
 }
 
@@ -334,7 +334,7 @@ fn request(spec: &Spec, c: &SpeakChoice, sentence: &str) -> (reqwest::RequestBui
                 Decoder::Raw(Pcm::new(RATE, 1, false)),
             )
         }
-        Provider::Deepgram => {
+        _ => {
             let mut query = vec![
                 ("model", c.voice.clone()),
                 ("encoding", "linear16".to_string()),

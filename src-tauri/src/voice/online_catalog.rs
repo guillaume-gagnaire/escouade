@@ -94,6 +94,28 @@ pub struct ServiceCatalog {
     pub error: Option<String>,
 }
 
+impl ServiceCatalog {
+    /// Nothing listed: the catalog of a service whose plugin is gone.
+    pub fn empty(service: &str) -> Self {
+        Self {
+            service: service.into(),
+            transcribe: Vec::new(),
+            speak: Vec::new(),
+            default_transcribe: String::new(),
+            default_speak: String::new(),
+            voices: None,
+            default_voices: BTreeMap::new(),
+            voices_by_model: false,
+            voice_example: String::new(),
+            voices_url: String::new(),
+            speed: None,
+            listed: false,
+            listed_at: 0,
+            error: None,
+        }
+    }
+}
+
 fn opt(id: &str, label: &str, note: String) -> ModelOption {
     ModelOption {
         id: id.into(),
@@ -194,7 +216,7 @@ pub fn shipped_models(p: Provider, purpose: Purpose) -> Vec<ModelOption> {
                 tr!("stable, plus lent", "steady, slower"),
             ),
         ],
-        (Provider::Deepgram, Purpose::Speak) => vec![
+        _ => vec![
             opt("aura-2", "Aura-2", String::new()),
             ModelOption {
                 langs: vec!["en".into()],
@@ -211,7 +233,7 @@ pub fn default_speak_model(p: Provider) -> &'static str {
         Provider::Groq => "canopylabs/orpheus-v1-english",
         Provider::Mistral => "voxtral-mini-tts-2603",
         Provider::ElevenLabs => "eleven_flash_v2_5",
-        Provider::Deepgram => "aura-2",
+        _ => "aura-2",
     }
 }
 
@@ -240,7 +262,7 @@ pub fn default_voice(p: Provider, model: &str, lang: &str) -> Option<&'static st
         }
         Provider::ElevenLabs => Some("JBFqnCBsd6RMkjVDRZzb"),
         Provider::Deepgram if model == "aura" => (!fr).then_some("aura-asteria-en"),
-        Provider::Deepgram => Some(if fr {
+        _ => Some(if fr {
             "aura-2-agathe-fr"
         } else {
             "aura-2-thalia-en"
@@ -254,7 +276,7 @@ pub fn speed_range(p: Provider) -> Option<[f32; 2]> {
         Provider::OpenAi => Some([0.25, 4.0]),
         Provider::ElevenLabs => Some([0.7, 1.2]),
         Provider::Deepgram => Some([0.7, 1.5]),
-        Provider::Groq | Provider::Mistral => None,
+        _ => None,
     }
 }
 
@@ -276,7 +298,7 @@ fn voice_help(p: Provider) -> (&'static str, &'static str) {
             "JBFqnCBsd6RMkjVDRZzb",
             "https://elevenlabs.io/app/voice-library",
         ),
-        Provider::Deepgram => (
+        _ => (
             "aura-2-agathe-fr",
             "https://developers.deepgram.com/docs/tts-models",
         ),
@@ -522,7 +544,7 @@ async fn list_models(
             // Its API lists no transcription model: the documentation's.
             (None, Some(speak))
         }
-        Provider::Deepgram => {
+        _ => {
             let b = get_json(spec, "/v1/models", &[]).await?;
             let arch = |list: &str, batch_only: bool| {
                 let mut ids: Vec<String> = b
@@ -695,7 +717,7 @@ async fn list_voices(spec: &Spec) -> Result<Option<Vec<VoiceOption>>, OnlineErro
                     .collect(),
             )
         }
-        Provider::OpenAi | Provider::Groq => None,
+        _ => None,
     })
 }
 

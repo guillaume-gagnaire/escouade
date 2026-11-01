@@ -162,7 +162,7 @@ pub(crate) fn url_of(spec: &Spec, language: &str) -> String {
             }
             "/v1/listen"
         }
-        Provider::OpenAi | Provider::Groq => {
+        _ => {
             q.push(("intent", "transcription".into()));
             "/v1/realtime"
         }
@@ -283,7 +283,7 @@ fn audio_messages(p: Provider, samples: &[f32], commit: bool, end: bool) -> Vec<
                 out.push(Message::text(r#"{"type":"CloseStream"}"#));
             }
         }
-        Provider::OpenAi | Provider::Groq => {
+        _ => {
             if !samples.is_empty() {
                 out.push(Message::text(
                     serde_json::json!({"type": "input_audio_buffer.append", "audio": pcm(samples)})
@@ -458,7 +458,7 @@ impl Heard {
                 ))),
                 _ => Ok(Said::Nothing),
             },
-            Provider::OpenAi | Provider::Groq => {
+            _ => {
                 let item = str_at(&v, "/item_id").to_string();
                 let slot = |h: &mut Heard| -> usize {
                     match h.items.iter().position(|(i, _)| *i == item) {

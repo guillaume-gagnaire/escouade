@@ -153,12 +153,43 @@ impl VoiceService for CoreService {
     }
 }
 
-/// The services Escouade knows, in the order of the settings.
+/// The services of the plugins, by the registry (`register`): the core's five give way to a plugin of the same id.
+static PLUGINS: parking_lot::RwLock<Vec<Arc<dyn VoiceService>>> =
+    parking_lot::RwLock::new(Vec::new());
+
+/// Adds the service of a plugin, replacing the one of the same id (the core's or an earlier plugin's).
+pub fn register(service: Arc<dyn VoiceService>) {
+    let mut all = PLUGINS.write();
+    all.retain(|s| s.id() != service.id());
+    all.push(service);
+}
+
+/// Takes the service of this id back from the plugins (the plugin stopped or removed): the core's own, if any,
+/// answers again.
+pub fn unregister(id: &str) {
+    PLUGINS.write().retain(|s| s.id() != id);
+}
+
+/// The services Escouade knows, in the order of the settings: the core's, a plugin's of the same id in its place,
+/// then the plugins' others.
 pub fn services() -> Vec<Arc<dyn VoiceService>> {
-    online::PROVIDERS
+    let plugins = PLUGINS.read().clone();
+    let mut out: Vec<Arc<dyn VoiceService>> = online::PROVIDERS
         .into_iter()
-        .map(|p| Arc::new(CoreService(p)) as Arc<dyn VoiceService>)
-        .collect()
+        .map(|p| {
+            plugins
+                .iter()
+                .find(|s| s.id() == p.id())
+                .cloned()
+                .unwrap_or_else(|| Arc::new(CoreService(p)) as Arc<dyn VoiceService>)
+        })
+        .collect();
+    out.extend(
+        plugins
+            .into_iter()
+            .filter(|s| online::Provider::core(&s.id()).is_none()),
+    );
+    out
 }
 
 /// The service of this id.
@@ -166,9 +197,84 @@ pub fn find(id: &str) -> Option<Arc<dyn VoiceService>> {
     services().into_iter().find(|s| s.id() == id)
 }
 
-/// The service that answers for `p`.
+/// The service that answers for `p`: a plugin's, else the core's. A service whose plugin went away answers every
+/// call with an error (`Gone`) rather than a panic.
 pub fn of(p: Provider) -> Arc<dyn VoiceService> {
-    Arc::new(CoreService(p))
+    if let Some(s) = PLUGINS.read().iter().find(|s| s.id() == p.id()) {
+        return s.clone();
+    }
+    if Provider::core(p.id()).is_some() {
+        Arc::new(CoreService(p))
+    } else {
+        Arc::new(Gone(p))
+    }
+}
+
+/// A service no one answers for any more (its plugin was removed while a setting still names it).
+struct Gone(Provider);
+
+impl VoiceService for Gone {
+    fn id(&self) -> String {
+        self.0.id().into()
+    }
+    fn label(&self) -> String {
+        self.0.id().into()
+    }
+    fn provider(&self) -> Option<Provider> {
+        None
+    }
+    fn account_entry(&self) -> String {
+        self.0.entry()
+    }
+    fn default_model(&self) -> String {
+        String::new()
+    }
+    fn transcribe(
+        &self,
+        _: &Spec,
+        _: &[f32],
+        _: &str,
+        _: &Arc<AtomicBool>,
+    ) -> Result<String, OnlineError> {
+        Err(OnlineError::Network(self.0, gone()))
+    }
+    fn offers_live(&self) -> bool {
+        false
+    }
+    fn live_model(&self, chosen: &str) -> String {
+        chosen.into()
+    }
+    fn open_live(&self, spec: &Spec, language: &str, rate: u32, partial: Partial) -> LiveStream {
+        LiveStream::open(spec, language, rate, partial)
+    }
+    fn max_chars(&self) -> usize {
+        1000
+    }
+    fn speak<'a>(
+        &'a self,
+        _: &'a Spec,
+        _: &'a SpeakChoice,
+        _: &'a str,
+        _: &'a AtomicBool,
+        _: &'a mut dyn FnMut(Audio),
+    ) -> LocalFuture<'a, Result<Option<Duration>, OnlineError>> {
+        let p = self.0;
+        Box::pin(async move { Err(OnlineError::Network(p, gone())) })
+    }
+    fn catalog(&self, _: Option<&Listed>, _: Option<String>) -> ServiceCatalog {
+        ServiceCatalog::empty(&self.0.id())
+    }
+    fn list<'a>(&'a self, _: &'a Spec) -> SendFuture<'a, Result<Listed, OnlineError>> {
+        let p = self.0;
+        Box::pin(async move { Err(OnlineError::Network(p, gone())) })
+    }
+}
+
+fn gone() -> String {
+    tr!(
+        "le plugin de ce service n’est plus là",
+        "this service’s plugin is gone"
+    )
 }
 
 #[cfg(test)]
