@@ -256,7 +256,8 @@ describe('TestLaunchModal, a recipe to read before it runs', () => {
     render(TestLaunchModal, { agentId: 'a7' });
     await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
     expect(app.modal).toBeNull();
-    expect(backend.calls).toHaveLength(0);
+    // Nothing of the test asked: the window's own state (`set_ui`, saved a moment later) is not the test's.
+    expect(backend.calls.filter((c) => c.cmd !== 'set_ui')).toEqual([]);
   });
 
   it('shows no recipe to read once it is approved: the test shows its steps', () => {
