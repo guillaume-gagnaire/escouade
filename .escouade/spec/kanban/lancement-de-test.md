@@ -2,7 +2,7 @@
 title: "Lancement de test"
 subject: "Kanban"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-311"]
+tickets: ["ESC-311","ESC-286"]
 decisions: [26]
 compared: "2026-10-31T19:01:50+01:00"
 ---
@@ -44,3 +44,5 @@ Tout agent qui a un worktree peut lancer l'app de sa branche pour qu'on l'essaie
 - L'approbation garde avec l'agent le contenu entier du fichier et l'adresse. Un fichier modifié, d'une ligne ou d'un caractère, redemande. Le cœur refuse `isola up` quand le `.isola.toml` n'est plus celui qui a été approuvé.
 - Approuvé, « ▶ Tester » lance `isola up` dans un terminal en lecture seule, dans le groupe de l'agent ; isola ne demande jamais de mot de passe. Escouade lit `isola ls --json` (les services de la branche du worktree), attend que chaque service réponde sur son propre port (le proxy d'isola répond avant lui), puis ouvre l'adresse « ouvrir » de l'agent, ou celle du premier service par le proxy, comme une recette. Relancé, il revérifie tout.
 - « Tout arrêter », la validation, l'archivage et la fermeture du projet lancent `isola down`. La suppression du worktree lance `isola destroy`, après les commandes de démontage.
+
+- isola est un plugin livré avec Escouade (`dev.escouade.isola`), le premier « environnement de lancement » : un point d'extension des plugins qui prend en charge `up`, `ls`, `down` et `destroy` d'un worktree et ses services. Il est actif partout par défaut ; Réglages › Plugins le coupe pour l'app ou pour un projet (jamais désinstallé). Coupé, sans le CLI `isola` ou sans `.isola.toml`, un worktree n'est à personne : le ticket part comme sans isola, avec une recette sur les ports réservés. Seuls les plugins livrés avec l'app servent ce point pour l'instant.

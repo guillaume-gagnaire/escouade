@@ -7,6 +7,8 @@
 //!
 //! An entry is a function from the name to a `fn() -> i32`: add the plugin's module and one line to `ENTRIES`.
 
+#[path = "escouade-plugins/isola.rs"]
+mod isola;
 #[path = "escouade-plugins/minimal.rs"]
 mod minimal;
 #[path = "escouade-plugins/minimal_harness.rs"]
@@ -18,6 +20,7 @@ type Entry = (&'static str, fn() -> i32);
 /// The plugins of this program. `minimal-harness` is none: the harness of the demonstration plugin, which the core
 /// launches from the plugin's description (INT-9).
 const ENTRIES: &[Entry] = &[
+    ("isola", isola::run_plugin),
     ("minimal", minimal::run),
     ("minimal-harness", minimal_harness::run),
 ];
