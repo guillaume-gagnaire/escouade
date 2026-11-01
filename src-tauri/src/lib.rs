@@ -147,6 +147,8 @@ mod plugins_builtin_tests;
 #[cfg(test)]
 mod plugins_decide_tests;
 #[cfg(test)]
+mod plugins_harness_tests;
+#[cfg(test)]
 mod plugins_protocol_tests;
 #[cfg(test)]
 mod plugins_reader_tests;
