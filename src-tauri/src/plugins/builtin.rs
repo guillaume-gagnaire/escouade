@@ -36,15 +36,11 @@ pub const REGISTRY: &[Entry] = &[
     },
     Entry {
         id: "dev.escouade.openai",
-        manifest: include_str!(
-            "../../../plugins/builtin/dev.escouade.openai/escouade-plugin.json"
-        ),
+        manifest: include_str!("../../../plugins/builtin/dev.escouade.openai/escouade-plugin.json"),
     },
     Entry {
         id: "dev.escouade.groq",
-        manifest: include_str!(
-            "../../../plugins/builtin/dev.escouade.groq/escouade-plugin.json"
-        ),
+        manifest: include_str!("../../../plugins/builtin/dev.escouade.groq/escouade-plugin.json"),
     },
     Entry {
         id: "dev.escouade.mistral",

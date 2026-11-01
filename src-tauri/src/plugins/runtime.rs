@@ -440,11 +440,6 @@ impl Runtime {
         self.listeners.lock().insert(id.to_string(), Arc::new(f));
     }
 
-    /// Stops listening to the plugin `id`.
-    pub fn off_notification(&self, id: &str) {
-        self.listeners.lock().remove(id);
-    }
-
     /// What the account `key` (`accounts::budget_key`) has left of its calls, as last said.
     pub fn budget(&self, key: &str) -> Option<crate::forge::RateLimit> {
         self.budgets.lock().get(key).copied()

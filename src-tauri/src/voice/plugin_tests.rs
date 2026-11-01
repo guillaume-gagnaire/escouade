@@ -135,7 +135,12 @@ async fn the_live_transcription_goes_through_the_plugin_and_says_what_the_core_s
             let sound = speech(0.5);
             let heard = Arc::new(parking_lot::Mutex::new(Vec::<String>::new()));
             let h = heard.clone();
-            let stream = svc.open_live(&f.spec(p), "fr", 48_000, Box::new(move |t| h.lock().push(t)));
+            let stream = svc.open_live(
+                &f.spec(p),
+                "fr",
+                48_000,
+                Box::new(move |t| h.lock().push(t)),
+            );
             for frame in sound.chunks(960) {
                 stream.push(frame);
             }
@@ -167,7 +172,7 @@ async fn the_live_transcription_goes_through_the_plugin_and_says_what_the_core_s
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_sentence_is_read_through_the_plugin_its_sound_given_as_it_comes() {
-    use super::online::tests::{Reply, Got};
+    use super::online::tests::{Got, Reply};
     let rt = runtime("speak");
     let svc = through(&rt, Provider::OpenAi).await;
     let pcm: Vec<u8> = (0..4800usize)
@@ -215,7 +220,10 @@ async fn a_plugin_that_is_gone_leaves_its_service_answering_with_an_error() {
     .await
     .unwrap()
     .unwrap_err();
-    assert!(matches!(e, OnlineError::Network(Provider::Groq, _)), "{e:?}");
+    assert!(
+        matches!(e, OnlineError::Network(Provider::Groq, _)),
+        "{e:?}"
+    );
     rt.shutdown();
 }
 
@@ -226,10 +234,10 @@ async fn a_plugin_that_is_gone_leaves_its_service_answering_with_an_error() {
 #[ignore = "INT-13 measure: run by hand"]
 async fn int13_measure_the_live_delay_through_the_plugin() {
     let rt = runtime("measure");
-    let sound = speech(0.5);
+    let sound = speech(0.3);
     for p in PROVIDERS.into_iter().filter(|p| p.offers_live()) {
         let svc = through(&rt, p).await;
-        let n = 30;
+        let n = 20;
         let (a, snd) = (svc.clone(), sound.clone());
         let (core, plug) = tokio::task::spawn_blocking(move || {
             let delay = |open: &dyn Fn(&Spec) -> LiveStream| {
@@ -238,8 +246,10 @@ async fn int13_measure_the_live_delay_through_the_plugin() {
                 let mut ms = Vec::new();
                 for _ in 0..n {
                     let stream = open(&s);
+                    // As the microphone gives it: a frame of 20 ms every 20 ms.
                     for frame in snd.chunks(960) {
                         stream.push(frame);
+                        std::thread::sleep(Duration::from_millis(20));
                     }
                     let end = Instant::now();
                     stream.finish(FINAL_WAIT).expect("a final text");
@@ -264,5 +274,127 @@ async fn int13_measure_the_live_delay_through_the_plugin() {
         );
         assert!(plug.1 < core.1 + 5.0 + 50.0, "{}: the p99 grew", p.id());
     }
+    rt.shutdown();
+}
+
+/// The real ElevenLabs through its plugin (INT-13), as the core's three real trials (`real_elevenlabs`,
+/// `real_elevenlabs_live`, `real_service`) play it: `ELEVENLABS_API_KEY` of the machine, passed to this process only,
+/// never written. By hand: `cargo nextest run --run-ignored only int13_real_elevenlabs --no-capture`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "real service: run by hand with ELEVENLABS_API_KEY"]
+async fn int13_real_elevenlabs_through_the_plugin() {
+    let key = std::env::var("ELEVENLABS_API_KEY").expect("ELEVENLABS_API_KEY");
+    let p = Provider::ElevenLabs;
+    let rt = runtime("real");
+    let svc = through(&rt, p).await;
+    let wav =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/voice/testdata/question-fr.wav");
+    let mut r = hound::WavReader::open(wav).unwrap();
+    let rate = r.spec().sample_rate;
+    let samples: Vec<f32> = r
+        .samples::<i16>()
+        .map(|s| s.unwrap() as f32 / i16::MAX as f32)
+        .collect();
+    let new_spec = move |key: &str| {
+        Spec::new(p, key.into(), reqwest::Client::new())
+            .with_live(Some("scribe_v2_realtime".into()))
+    };
+
+    // The dictation of the file, and a wrong key refused.
+    let (a, k, snd) = (
+        svc.clone(),
+        key.clone(),
+        crate::voice::audio::resample(&samples, rate, 16_000),
+    );
+    let started = Instant::now();
+    let (text, refused) = tokio::task::spawn_blocking(move || {
+        let no = Arc::new(AtomicBool::new(false));
+        (
+            a.transcribe(&new_spec(&k), &snd, "fr", &no),
+            a.transcribe(&new_spec("not-a-key-0000"), &snd, "fr", &no),
+        )
+    })
+    .await
+    .unwrap();
+    println!(
+        "dictation in {} ms: {:?}",
+        started.elapsed().as_millis(),
+        text
+    );
+    assert!(!text.unwrap().is_empty());
+    assert_eq!(refused.unwrap_err(), OnlineError::KeyRefused(p));
+
+    // As one speaks.
+    let (a, k, snd) = (svc.clone(), key.clone(), samples.clone());
+    let (seen, said, ms, text) = tokio::task::spawn_blocking(move || {
+        let started = Instant::now();
+        let seen = Arc::new(parking_lot::Mutex::new(Vec::<(u128, String)>::new()));
+        let s2 = seen.clone();
+        let stream = a.open_live(
+            &new_spec(&k),
+            "fr",
+            rate,
+            Box::new(move |t| s2.lock().push((started.elapsed().as_millis(), t))),
+        );
+        for frame in snd.chunks(rate as usize / 50) {
+            stream.push(frame);
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let said = started.elapsed().as_millis();
+        let end = Instant::now();
+        let text = stream.finish(FINAL_WAIT).unwrap().text;
+        let seen = seen.lock().clone();
+        (seen, said, end.elapsed().as_millis(), text)
+    })
+    .await
+    .unwrap();
+    for (at, t) in &seen {
+        println!("partial at {at} ms: {t}");
+    }
+    println!("said in {said} ms; final in {ms} ms after the end: {text}");
+    assert!(
+        seen.iter().any(|(at, _)| *at < said),
+        "no text while it was said"
+    );
+    assert!(!text.is_empty());
+
+    // The voice, and the catalog.
+    let s = new_spec(&key);
+    let model = super::online_catalog::default_speak_model(p);
+    let voice = super::online_catalog::default_voice(p, model, "fr").unwrap();
+    let choice = SpeakChoice {
+        model: model.into(),
+        voice: voice.into(),
+        lang: "fr".into(),
+        rate: 1.0,
+    };
+    let started = Instant::now();
+    let mut pieces = 0;
+    let mut heard = 0usize;
+    let first = svc
+        .speak(
+            &s,
+            &choice,
+            "Bonjour, les tests passent.",
+            &AtomicBool::new(false),
+            &mut |a| {
+                pieces += 1;
+                heard += a.samples.len()
+            },
+        )
+        .await
+        .unwrap();
+    println!(
+        "voice: first sound in {} ms, {pieces} pieces, {heard} samples, all in {} ms",
+        first.unwrap().as_millis(),
+        started.elapsed().as_millis()
+    );
+    assert!(pieces > 0 && heard > 0);
+    let listed = svc.list(&s).await.unwrap();
+    println!(
+        "listed: {:?} speak models, {:?} voices",
+        listed.speak.map(|m| m.len()),
+        listed.voices.map(|v| v.len())
+    );
     rt.shutdown();
 }

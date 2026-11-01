@@ -98,9 +98,7 @@ impl ProcessVoiceService {
 fn error_of(provider: Provider, plugin: &str, e: CallError) -> OnlineError {
     match e {
         CallError::Remote { code, message } => wire::error_of(provider, code, &message)
-            .unwrap_or_else(|| {
-                OnlineError::Network(provider, format!("{message} ({code})"))
-            }),
+            .unwrap_or_else(|| OnlineError::Network(provider, format!("{message} ({code})"))),
         CallError::Invalid(why) => OnlineError::Network(
             provider,
             tr!(
@@ -351,12 +349,47 @@ impl VoiceService for ProcessVoiceService {
         Box::pin(async move {
             let v = self
                 .rt
-                .call(&self.plugin, wire::LIST, json!({ "spec": wire::spec_json(spec) }))
+                .call(
+                    &self.plugin,
+                    wire::LIST,
+                    json!({ "spec": wire::spec_json(spec) }),
+                )
                 .await
                 .map_err(|e| self.error(e))?;
-            serde_json::from_value(v).map_err(|e| {
-                self.error(CallError::Invalid(format!("{}: {e}", wire::LIST)))
-            })
+            serde_json::from_value(v)
+                .map_err(|e| self.error(CallError::Invalid(format!("{}: {e}", wire::LIST))))
         })
+    }
+}
+
+/// The ids of the services whose plugins the app gives (`dev.escouade.<id>`).
+pub const BUILTIN: [&str; 5] = ["openai", "groq", "mistral", "elevenlabs", "deepgram"];
+
+/// Puts the registry of the voice services in line with the plugins' switches: a plugin that is on serves its service
+/// (started, asked what it is, registered); one that is off takes its service away, and its process stops. A plugin
+/// that does not start leaves the core's own service for this id answering, and the journal of the plugin says why.
+pub async fn sync_builtin(rt: &Arc<Runtime>, plugins: &crate::plugins::Plugins) {
+    for id in BUILTIN {
+        let plugin = format!("dev.escouade.{id}");
+        let on = plugins.choices(&plugin).map(|c| c.enabled).unwrap_or(false);
+        if !on {
+            if super::online::Provider::core(id).is_some() && plugins.choices(&plugin).is_some() {
+                super::service::hide(id);
+            }
+            rt.stop(&plugin);
+            continue;
+        }
+        if super::service::is_plugin(id) {
+            continue;
+        }
+        match ProcessVoiceService::connect(rt.clone(), &plugin).await {
+            Ok(service) => super::service::register(service),
+            Err(e) => {
+                log::warn!(
+                    "voice: the plugin {plugin} did not start: {e}; the core's service answers"
+                );
+                super::service::unregister(id);
+            }
+        }
     }
 }

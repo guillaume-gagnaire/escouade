@@ -157,8 +157,21 @@ impl VoiceService for CoreService {
 static PLUGINS: parking_lot::RwLock<Vec<Arc<dyn VoiceService>>> =
     parking_lot::RwLock::new(Vec::new());
 
+/// The services of the core that the user turned off with their plugin: neither listed nor found.
+static HIDDEN: parking_lot::RwLock<Vec<String>> = parking_lot::RwLock::new(Vec::new());
+
+/// The service `id` is off (its plugin turned off): it is neither listed nor found, the core's own fallback included.
+pub fn hide(id: &str) {
+    PLUGINS.write().retain(|s| s.id() != id);
+    let mut hidden = HIDDEN.write();
+    if !hidden.iter().any(|h| h == id) {
+        hidden.push(id.to_string());
+    }
+}
+
 /// Adds the service of a plugin, replacing the one of the same id (the core's or an earlier plugin's).
 pub fn register(service: Arc<dyn VoiceService>) {
+    HIDDEN.write().retain(|h| *h != service.id());
     let mut all = PLUGINS.write();
     all.retain(|s| s.id() != service.id());
     all.push(service);
@@ -168,14 +181,22 @@ pub fn register(service: Arc<dyn VoiceService>) {
 /// answers again.
 pub fn unregister(id: &str) {
     PLUGINS.write().retain(|s| s.id() != id);
+    HIDDEN.write().retain(|h| h != id);
+}
+
+/// Whether a plugin serves the service `id`.
+pub fn is_plugin(id: &str) -> bool {
+    PLUGINS.read().iter().any(|s| s.id() == id)
 }
 
 /// The services Escouade knows, in the order of the settings: the core's, a plugin's of the same id in its place,
 /// then the plugins' others.
 pub fn services() -> Vec<Arc<dyn VoiceService>> {
     let plugins = PLUGINS.read().clone();
+    let hidden = HIDDEN.read().clone();
     let mut out: Vec<Arc<dyn VoiceService>> = online::PROVIDERS
         .into_iter()
+        .filter(|p| !hidden.iter().any(|h| h == p.id()))
         .map(|p| {
             plugins
                 .iter()
@@ -203,7 +224,7 @@ pub fn of(p: Provider) -> Arc<dyn VoiceService> {
     if let Some(s) = PLUGINS.read().iter().find(|s| s.id() == p.id()) {
         return s.clone();
     }
-    if Provider::core(p.id()).is_some() {
+    if Provider::core(p.id()).is_some() && !HIDDEN.read().iter().any(|h| h == p.id()) {
         Arc::new(CoreService(p))
     } else {
         Arc::new(Gone(p))
@@ -262,7 +283,7 @@ impl VoiceService for Gone {
         Box::pin(async move { Err(OnlineError::Network(p, gone())) })
     }
     fn catalog(&self, _: Option<&Listed>, _: Option<String>) -> ServiceCatalog {
-        ServiceCatalog::empty(&self.0.id())
+        ServiceCatalog::empty(self.0.id())
     }
     fn list<'a>(&'a self, _: &'a Spec) -> SendFuture<'a, Result<Listed, OnlineError>> {
         let p = self.0;
