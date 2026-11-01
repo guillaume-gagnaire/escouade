@@ -19,17 +19,11 @@
   },
   "run": {
     "command": "{escouade}/escouade-plugins",
-    "args": [
-      "minimal"
-    ]
+    "args": ["minimal"]
   },
-  "activation": [
-    "event:ticket.column"
-  ],
+  "activation": ["event:ticket.column"],
   "permissions": {
-    "events": [
-      "ticket.column"
-    ]
+    "events": ["ticket.column"]
   },
   "contributes": {
     "harnesses": [
@@ -45,9 +39,7 @@
           "newest": "0"
         },
         "caps": {
-          "modes": [
-            "default"
-          ],
+          "modes": ["default"],
           "readOnly": true
         },
         "models": [
