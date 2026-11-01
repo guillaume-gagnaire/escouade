@@ -165,7 +165,7 @@ impl Spec {
     pub fn new(provider: Provider, key: String, client: reqwest::Client) -> Self {
         Self {
             provider,
-            model: provider.model().into(),
+            model: super::service::of(provider).default_model(),
             key,
             client,
             base: provider.base_url().into(),
@@ -176,7 +176,8 @@ impl Spec {
 
     /// Streamed with `model` (ESC-136), when the service offers it.
     pub fn with_live(mut self, model: Option<String>) -> Self {
-        self.live = model.filter(|m| self.provider.offers_live() && !m.trim().is_empty());
+        let offers = super::service::of(self.provider).offers_live();
+        self.live = model.filter(|m| offers && !m.trim().is_empty());
         self
     }
 
@@ -518,7 +519,7 @@ pub fn spec_of(
     Ok(Some(
         keyed(p, settings, secrets)?
             .with_model(&model)
-            .with_live(live.then(|| p.live_model(&model))),
+            .with_live(live.then(|| super::service::of(p).live_model(&model))),
     ))
 }
 
@@ -550,16 +551,16 @@ pub fn keyed(
 
 /// The services whose key is in the keychain (never the keys).
 pub fn keys(secrets: &dyn SecretStore) -> Vec<String> {
-    PROVIDERS
+    super::service::services()
         .into_iter()
-        .filter(|p| {
+        .filter(|s| {
             secrets
-                .get(&p.entry())
+                .get(&s.account_entry())
                 .ok()
                 .flatten()
                 .is_some_and(|k| !k.trim().is_empty())
         })
-        .map(|p| p.id().to_string())
+        .map(|s| s.id())
         .collect()
 }
 
@@ -570,12 +571,12 @@ pub fn save_key(
     service: &str,
     key: &str,
 ) -> std::result::Result<(), String> {
-    let p = Provider::find(service).ok_or_else(|| format!("unknown service {service}"))?;
+    let p = super::service::find(service).ok_or_else(|| format!("unknown service {service}"))?;
     let key = key.trim();
     if key.is_empty() {
         return Err(tr!("La clé est vide.", "The key is empty."));
     }
-    crate::integrations::secrets::keep_secret(secrets, &p.entry(), key).map_err(|e| {
+    crate::integrations::secrets::keep_secret(secrets, &p.account_entry(), key).map_err(|e| {
         let e = redact(&format!("{e:#}"), key);
         log::warn!(
             "voice: the system keychain refused the key of {}: {e}",
@@ -592,12 +593,15 @@ pub fn save_key(
 
 /// Forgets the key of `service`.
 pub fn delete_key(secrets: &dyn SecretStore, service: &str) -> std::result::Result<(), String> {
-    let p = Provider::find(service).ok_or_else(|| format!("unknown service {service}"))?;
-    secrets.delete(&p.entry()).map_err(|e| format!("{e:#}"))
+    let p = super::service::find(service).ok_or_else(|| format!("unknown service {service}"))?;
+    secrets
+        .delete(&p.account_entry())
+        .map_err(|e| format!("{e:#}"))
 }
 
-/// The transcriber of a dictation on line: what `Voice` calls, as it calls Whisper. The request
-/// runs on a runtime of its own, on a thread of its own: `Voice::stop` blocks.
+/// The transcriber of a dictation on line: what `Voice` calls, as it calls Whisper. It asks the service of the
+/// contract (`service::VoiceService`), which runs the request on a runtime of its own, on a thread of its own:
+/// `Voice::stop` blocks.
 pub struct Online(pub Spec);
 
 impl Transcriber for Online {
@@ -608,20 +612,9 @@ impl Transcriber for Online {
         language: &str,
         cancel: &Arc<AtomicBool>,
     ) -> Result<String> {
-        let spec = self.0.clone();
-        let samples = samples.to_vec();
-        let language = language.to_string();
-        let cancel = cancel.clone();
-        let r = std::thread::spawn(move || {
-            tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .map_err(|e| OnlineError::Network(spec.provider, e.to_string()))?
-                .block_on(transcribe(&spec, &samples, &language, &cancel))
-        })
-        .join()
-        .map_err(|_| anyhow::anyhow!("the transcription's thread panicked"))?;
-        r.map_err(anyhow::Error::new)
+        super::service::of(self.0.provider)
+            .transcribe(&self.0, samples, language, cancel)
+            .map_err(anyhow::Error::new)
     }
 }
 
