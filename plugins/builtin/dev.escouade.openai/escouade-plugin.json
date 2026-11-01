@@ -19,16 +19,10 @@
   },
   "run": {
     "command": "{escouade}/escouade-plugins",
-    "args": [
-      "voice-openai"
-    ]
+    "args": ["voice-openai"]
   },
-  "activation": [
-    "voice:openai"
-  ],
+  "activation": ["voice:openai"],
   "permissions": {
-    "network": [
-      "api.openai.com"
-    ]
+    "network": ["api.openai.com"]
   }
 }

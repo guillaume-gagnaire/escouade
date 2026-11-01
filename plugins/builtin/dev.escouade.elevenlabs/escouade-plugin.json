@@ -19,16 +19,10 @@
   },
   "run": {
     "command": "{escouade}/escouade-plugins",
-    "args": [
-      "voice-elevenlabs"
-    ]
+    "args": ["voice-elevenlabs"]
   },
-  "activation": [
-    "voice:elevenlabs"
-  ],
+  "activation": ["voice:elevenlabs"],
   "permissions": {
-    "network": [
-      "api.elevenlabs.io"
-    ]
+    "network": ["api.elevenlabs.io"]
   }
 }

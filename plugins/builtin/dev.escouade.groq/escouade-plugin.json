@@ -19,16 +19,10 @@
   },
   "run": {
     "command": "{escouade}/escouade-plugins",
-    "args": [
-      "voice-groq"
-    ]
+    "args": ["voice-groq"]
   },
-  "activation": [
-    "voice:groq"
-  ],
+  "activation": ["voice:groq"],
   "permissions": {
-    "network": [
-      "api.groq.com"
-    ]
+    "network": ["api.groq.com"]
   }
 }

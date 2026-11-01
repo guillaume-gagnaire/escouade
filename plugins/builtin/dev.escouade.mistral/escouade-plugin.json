@@ -19,16 +19,10 @@
   },
   "run": {
     "command": "{escouade}/escouade-plugins",
-    "args": [
-      "voice-mistral"
-    ]
+    "args": ["voice-mistral"]
   },
-  "activation": [
-    "voice:mistral"
-  ],
+  "activation": ["voice:mistral"],
   "permissions": {
-    "network": [
-      "api.mistral.ai"
-    ]
+    "network": ["api.mistral.ai"]
   }
 }

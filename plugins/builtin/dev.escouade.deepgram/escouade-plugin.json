@@ -19,16 +19,10 @@
   },
   "run": {
     "command": "{escouade}/escouade-plugins",
-    "args": [
-      "voice-deepgram"
-    ]
+    "args": ["voice-deepgram"]
   },
-  "activation": [
-    "voice:deepgram"
-  ],
+  "activation": ["voice:deepgram"],
   "permissions": {
-    "network": [
-      "api.deepgram.com"
-    ]
+    "network": ["api.deepgram.com"]
   }
 }
