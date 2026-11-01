@@ -627,7 +627,7 @@ pub(crate) fn call_nano(usage: &Value, prices: &HashMap<String, Value>) -> u64 {
 }
 
 /// The first of the month after `now` (epoch ms), at midnight UTC.
-fn next_month(now: i64) -> i64 {
+pub(crate) fn next_month(now: i64) -> i64 {
     use chrono::{Datelike, TimeZone};
     let d = chrono::Utc
         .timestamp_millis_opt(now)
