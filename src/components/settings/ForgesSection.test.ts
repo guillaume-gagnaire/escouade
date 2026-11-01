@@ -138,7 +138,12 @@ describe('ForgesSection', () => {
   });
 
   it('says under its accounts that the plugin the app gives for a host is switched off, or stopped and why', async () => {
-    const off = { ...VIEW, providers: PROVIDERS.map((p) => (p.kind === 'github' ? { ...p, servedBy: { plugin: 'dev.escouade.github', name: 'GitHub', on: false, stopped: null } } : p)) };
+    const off = {
+      ...VIEW,
+      providers: PROVIDERS.map((p) =>
+        p.kind === 'github' ? { ...p, servedBy: { plugin: 'dev.escouade.github', name: 'GitHub', on: false, stopped: null } } : p,
+      ),
+    };
     fakeBackend({ forges: () => off, forge_check: () => off });
     const { unmount } = render(ForgesSection);
     const gh = await waitFor(() => row('github.com'));
@@ -149,12 +154,19 @@ describe('ForgesSection', () => {
     const stopped = {
       ...VIEW,
       providers: PROVIDERS.map((p) =>
-        p.kind === 'github' ? { ...p, servedBy: { plugin: 'dev.escouade.github', name: 'GitHub', on: true, stopped: 'stopped after 4 crashes within 5 minutes' } } : p,
+        p.kind === 'github'
+          ? {
+              ...p,
+              servedBy: { plugin: 'dev.escouade.github', name: 'GitHub', on: true, stopped: 'stopped after 4 crashes within 5 minutes' },
+            }
+          : p,
       ),
     };
     fakeBackend({ forges: () => stopped, forge_check: () => stopped });
     render(ForgesSection);
-    await waitFor(() => expect(row('github.com')).toHaveTextContent('Le plugin GitHub s’est arrêté (stopped after 4 crashes within 5 minutes)'));
+    await waitFor(() =>
+      expect(row('github.com')).toHaveTextContent('Le plugin GitHub s’est arrêté (stopped after 4 crashes within 5 minutes)'),
+    );
   });
 
   it('reads the list again when the account of GitHub Issues changes, and only then', async () => {
