@@ -53,6 +53,7 @@ const fr = {
   },
   asks: {
     run: 'Lance un programme',
+    wasm: 'Compilé en WASM par le store',
     decide: 'Décide des autorisations',
     events: 'Reçoit des événements',
     secret: 'Un secret',
@@ -204,6 +205,7 @@ const en: CatalogText = {
   },
   asks: {
     run: 'Runs a program',
+    wasm: 'Compiled to WASM by the store',
     decide: 'Decides permissions',
     events: 'Gets events',
     secret: 'A secret',

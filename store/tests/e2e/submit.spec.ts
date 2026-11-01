@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { FAKE_GITHUB } from '../fake/env';
 
 // The submission through the fake GitHub (tests/fake/github.mjs and repos.mjs): an author installs the App on their
-// repositories, picks one and a tag, follows the ten checks as they run, and publishes; a booby-trapped plugin is
+// repositories, picks one and a tag, follows the eleven checks as they run, and publishes; a booby-trapped plugin is
 // rejected with its reasons; a program's binaries are taken with their attestations; a new tag comes by webhook and
 // a moved tag is said; the page is measured against the preview (design/store/index.html, #submit). They need a
 // database (DATABASE_URL), as the accounts do.
@@ -52,7 +52,7 @@ test('a visitor is asked to sign in before submitting', async ({ page }) => {
   await expect(page.locator('h1')).toHaveText('Publish a plugin');
 });
 
-test('an author submits a tag: the commit resolved, the ten checks passed, then published unverified', async ({ page }) => {
+test('an author submits a tag: the commit resolved, the eleven checks passed, then published unverified', async ({ page }) => {
   const login = who('sam-submit');
   const ntfy = repo('ntfy');
   await author(page, login, `${ntfy}, ${repo('vault', '-private')}`);
@@ -71,8 +71,8 @@ test('an author submits a tag: the commit resolved, the ten checks passed, then 
   await expect(page).toHaveURL(/\/submit\?version=\d+$/);
   await expect(page.locator('.check.run')).toHaveCount(0, { timeout: 20_000 });
 
-  await expect(page.locator('.check.pass')).toHaveCount(10);
-  await expect(page.locator('.stepper li.on')).toContainText('10 sur 10');
+  await expect(page.locator('.check.pass')).toHaveCount(11);
+  await expect(page.locator('.stepper li.on')).toContainText('11 sur 11');
   await expect(page.locator('h1')).toHaveText(`Les contrôles de ${ntfy} v0.3.0`);
   await expect(page.locator('.pick').nth(1)).toContainText(/archive figée : sha256:[0-9a-f]{4}…[0-9a-f]{4}/);
   await expect(page.locator('.pick').nth(1)).toContainText('Étiquette du 25 oct. 2026');
@@ -118,6 +118,36 @@ test('an author submits a tag: the commit resolved, the ten checks passed, then 
   await expect(page.locator('.out .notice')).toContainText('Publiée, non vérifiée.');
 });
 
+test('a run.js plugin is compiled to WASM by the store, and a third party that runs node is refused (ESC-323)', async ({ page }) => {
+  const login = who('lea-js');
+  const rules = repo('rules', '-js');
+  const relay = repo('relay', '-node');
+  await author(page, login, `${rules}, ${relay}`);
+  await submit(page, `${login}/${rules}`);
+  await expect(page.locator('.check.pass')).toHaveCount(11);
+  await expect(check(page, 'Compilation')).toContainText('compilé en WASM par le store, deux fois, même empreinte');
+  await expect(check(page, 'Binaires')).toContainText('aucun à fournir : un plugin run.js est compilé en WASM par le store');
+  const shots = process.env.SHOTS_DIR;
+  if (shots) await page.screenshot({ path: `${shots}/submit-run-js-fr.png`, fullPage: true });
+  await page.getByRole('link', { name: 'Continuer' }).click();
+  await page.getByRole('button', { name: 'Publier, non vérifié' }).click();
+  await expect(page).toHaveURL(/notice=published$/);
+  // Its page says what runs: the module the store compiled, in Escouade.
+  await page.goto(`/plugins/io.github.${login}.${rules}`);
+  await expect(page.locator('.perm').first()).toContainText('Tourne dans Escouade, isolé');
+  await expect(page.locator('.perm').first()).toContainText('compilé en WASM par le store');
+  if (shots) await page.screenshot({ path: `${shots}/plugin-run-js-fr.png`, fullPage: true });
+
+  await page.goto('/submit');
+  await submit(page, `${login}/${relay}`);
+  await expect(check(page, 'Binaires').locator('.why')).toContainText('node nomme un interpréteur (node).');
+  await expect(check(page, 'Binaires').locator('.why')).toContainText(
+    'un programme en JS/TS se publie en run.js, le store le compile en WASM',
+  );
+  await expect(page.getByRole('button', { name: 'Continuer' })).toBeDisabled();
+  if (shots) await page.screenshot({ path: `${shots}/submit-node-refused-fr.png`, fullPage: true });
+});
+
 test('a booby-trapped plugin is rejected, each check saying what, where and how to fix it', async ({ page }) => {
   const login = who('q7x-trap');
   await author(page, login, repo('gate', '-trap'));
@@ -143,7 +173,7 @@ test('a program’s binaries are taken from the release, with their attestations
   const login = who('ada-bin');
   await author(page, login, repo('pager', '-bin'));
   await submit(page, `${login}/${repo('pager', '-bin')}`);
-  await expect(page.locator('.check.pass')).toHaveCount(10);
+  await expect(page.locator('.check.pass')).toHaveCount(11);
   await expect(check(page, 'Binaires')).toContainText(
     'windows-x64, macos-arm64, linux-x64 · sans attestation de provenance pour 1 : publiable non vérifié, ne pourra pas être vérifié',
   );
@@ -239,7 +269,7 @@ test('a plugin in a folder of a repository with several: the folders listed, a f
   await expect(await typed('docs')).toHaveText('Ce dossier ne porte pas d’escouade-plugin.json à cette étiquette.');
   await expect(page.getByRole('button', { name: 'Lancer les contrôles' })).toHaveCount(0);
 
-  // A folder picked: its tags alone, then the ten checks on that folder.
+  // A folder picked: its tags alone, then the eleven checks on that folder.
   await folders.filter({ hasText: 'plugins/slack' }).getByRole('link', { name: 'Choisir' }).click();
   await expect(page).toHaveURL(/path=plugins(%2F|\/)slack/);
   await expect(folders.filter({ hasText: 'plugins/slack' })).toHaveClass(/on/);
@@ -267,7 +297,7 @@ test('a plugin in a folder of a repository with several: the folders listed, a f
   await page.getByRole('button', { name: 'Lancer les contrôles' }).click();
   await expect(page).toHaveURL(/\/submit\?version=\d+$/);
   await expect(page.locator('.check.run')).toHaveCount(0, { timeout: 20_000 });
-  await expect(page.locator('.check.pass')).toHaveCount(10);
+  await expect(page.locator('.check.pass')).toHaveCount(11);
   await expect(page.locator('.pick').nth(0)).toContainText('dossier plugins/slack');
   await expect(check(page, 'Licence')).toContainText('MIT, comme le fichier LICENSE du dossier');
   await expect(check(page, 'README')).toContainText('README.md de la racine du dépôt (le dossier n’en a pas)');

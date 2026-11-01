@@ -87,7 +87,7 @@ const fr: { agents: AgentsTexts; consent: ConsentTexts; apps: AppsTexts } = {
     canTitle: 'Ce qu’il permet (portée « author »)',
     can: [
       'Lister tes dépôts où l’App est installée, les dossiers à manifeste d’un dépôt et ses étiquettes.',
-      'Soumettre une version et suivre ses dix contrôles ; les relancer quand le store ou GitHub a échoué.',
+      'Soumettre une version et suivre ses onze contrôles ; les relancer quand le store ou GitHub a échoué.',
       'Publier : la catégorie, « Demander la revue », la publication seule des nouvelles étiquettes.',
       'Lister tes plugins et leurs versions avec leur état ; retirer une version, retirer un plugin de la liste, changer sa source.',
     ],
@@ -170,7 +170,7 @@ const en: typeof fr = {
     canTitle: 'What it allows (scope “author”)',
     can: [
       'List your repositories where the App is installed, the folders of a repository that hold a manifest, and its tags.',
-      'Submit a version and follow its ten checks; run them again when the store or GitHub failed.',
+      'Submit a version and follow its eleven checks; run them again when the store or GitHub failed.',
       'Publish: the category, “Ask for the review”, new tags published on their own.',
       'List your plugins and their versions with their state; yank a version, unlist a plugin, move its source.',
     ],

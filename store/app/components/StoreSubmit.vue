@@ -78,6 +78,7 @@ const NAMES: Record<string, Words> = {
   archive: { fr: 'Archive', en: 'Archive' },
   permissions: { fr: 'Permissions', en: 'Permissions' },
   binaries: { fr: 'Binaires', en: 'Binaries' },
+  compile: { fr: 'Compilation', en: 'Compilation' },
 };
 const CATEGORIES = ['harness', 'ticket-sources', 'forges', 'themes', 'notifications', 'permissions', 'tools', 'languages'];
 

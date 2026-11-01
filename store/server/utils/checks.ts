@@ -5,8 +5,9 @@ import type { ArchiveProblem, ArchiveRead } from './tar';
 import { folderName, tagFor, tagsOf } from '../../shared/folder';
 import { compareVersions, type Platform } from './versions';
 
-// The ten checks of a submitted version (docs/STORE.md, §3.3), on the archive the store froze, read in memory:
-// nothing of the plugin runs. Each says, in French and in English, what failed, where (the field's path), why and how
+// The eleven checks of a submitted version (docs/STORE.md, §3.3), on the archive the store froze, read in memory:
+// nothing of the plugin runs on the store's own (the eleventh, `Compilation`, reads what Javy made of a `run.js`
+// bundle in the sandbox of compile.ts). Each says, in French and in English, what failed, where (the field's path), why and how
 // to fix it, with the page of the documentation (§3.5). They read what the worker fetched before (the archive, the
 // license GitHub detects, the release's binaries and their attestations, the plugins already on the store); they
 // fetch nothing themselves.
@@ -26,6 +27,7 @@ export const CHECK_KEYS = [
   'archive',
   'permissions',
   'binaries',
+  'compile',
 ] as const;
 export type CheckKey = (typeof CHECK_KEYS)[number];
 
@@ -57,6 +59,7 @@ export const CHECK_NAMES: Record<CheckKey, Text> = {
   archive: t('Archive', 'Archive'),
   permissions: t('Permissions', 'Permissions'),
   binaries: t('Binaires', 'Binaries'),
+  compile: t('Compilation', 'Compilation'),
 };
 
 /** The page that explains publishing, which every rejection points to. */
@@ -75,6 +78,23 @@ export interface FetchedBinary {
   /** `attested`: a provenance attestation of this file, built from this commit of this repository. */
   attestation: { state: 'attested'; workflow: string } | { state: 'none' } | { state: 'mismatch'; commit?: string; repository?: string };
 }
+
+/** What compiled the module of a `run.js` plugin (`escouade-plugin build --json`): Javy's version, the SHA-256 of
+ * escouade-js and the version of escouade-plugin, whose prelude and rewriting of the imports wrapped the bundle. */
+export interface Compiler {
+  javy: string;
+  engine: string;
+  prelude: string;
+}
+
+/** The two compilations of a `run.js` bundle (ESC-323): the same module twice, two different ones, or a refusal. */
+export type Compilation =
+  | { state: 'built'; sha256: string; size: number; compiler: Compiler }
+  | { state: 'different'; first: string; second: string }
+  | { state: 'refused'; message: string };
+
+/** A `run.js` bundle: 5 MB at most, a single file of the archive. */
+export const BUNDLE_MAX = 5 * 1024 * 1024;
 
 export interface Snapshot {
   /** `owner/name` of the repository submitted. */
@@ -111,6 +131,8 @@ export interface Snapshot {
   latest: string | null;
   /** The plugins of other accounts, for names too close (typosquatting). */
   others: { id: string; name: string }[];
+  /** The module of a `run.js` plugin, compiled twice by the store; absent until then, or for another plugin. */
+  compiled?: Compilation;
 }
 
 type Manifest = Record<string, unknown>;
@@ -157,6 +179,14 @@ export function programs(m: Manifest | null, read: ArchiveRead): { system: Syste
     const program = typeof r[system] === 'string' ? (r[system] as string) : typeof r.command === 'string' ? (r.command as string) : null;
     return program ? [{ system, program, inArchive: read.files.has(program.replace(/^\.\//, '')) }] : [];
   });
+}
+
+/** The bundle `run.js` names (`dist/plugin.mjs`), as a path of the archive; null for a plugin of another kind. */
+export function jsOf(m: Manifest | null): string | null {
+  const run = m?.run;
+  if (!run || typeof run !== 'object') return null;
+  const js = (run as Record<string, unknown>).js;
+  return typeof js === 'string' && js ? js.replace(/^\.\//, '') : null;
 }
 
 /** The system and architecture a release's file is for, from its name (`escouade-slack-1.2.0-windows-x64.zip`). */
@@ -910,7 +940,8 @@ function checkPermissions(m: Manifest | null): CheckResult {
   });
   if (problems.length) return fail('permissions', plural(problems.length, 'permission incohérente', 'inconsistent permission'), problems);
   const asks: Text[] = [];
-  if (runs) asks.push(t('Lance un programme', 'Runs a program'));
+  if (runs)
+    asks.push(jsOf(m) ? t('Tourne dans Escouade, isolé', 'Runs inside Escouade, sandboxed') : t('Lance un programme', 'Runs a program'));
   if (p.decide === true) asks.push(t('décide des autorisations', 'decides permissions'));
   if (list(p.network).length) asks.push(t(`se connecte à ${list(p.network).join(', ')}`, `connects to ${list(p.network).join(', ')}`));
   if (list(p.events).length) asks.push(t('reçoit des événements', 'gets events'));
@@ -922,11 +953,69 @@ function checkPermissions(m: Manifest | null): CheckResult {
 
 // ---- 10. The binaries ----
 
+/**
+ * The interpreters a third party's `run` may not name (docs/PLUGINS.md §5.7): a user without Node, Python… would
+ * have a plugin that does not start, and the review would read a code that is not what runs.
+ */
+const INTERPRETERS =
+  /^(node|nodejs|deno|bun|bunx|npx|npm|pnpm|pnpx|yarn|tsx|ts-node|python[0-9.]*|pythonw|py|pypy[0-9.]*|uv|uvx|pipx|ruby|perl|php|lua|java|javaw|dotnet|pwsh|powershell|cmd|sh|bash|zsh|dash|fish|wscript|cscript|osascript|rscript)$/i;
+/** The scripts a third party's `run` may not be, by their extension. */
+const SCRIPT = /\.(cmd|bat|ps1|psm1|vbs|sh|bash|js|mjs|cjs|ts|mts|py|rb|pl|php)$/i;
+
+/** Why the program `program` of `run` is a script or an interpreter; null for a program of its own. */
+export function scriptOrInterpreter(program: string, read: ArchiveRead): Text | null {
+  const name = program.replace(/\\/g, '/').split('/').pop() ?? program;
+  const bare = name.replace(/\.exe$/i, '');
+  if (INTERPRETERS.test(bare))
+    return t(`${code(program)} nomme un interpréteur (${bare}).`, `${code(program)} names an interpreter (${bare}).`);
+  if (SCRIPT.test(name)) return t(`${code(program)} est un script.`, `${code(program)} is a script.`);
+  const bytes = read.files.get(program.replace(/^\.\//, ''));
+  if (bytes && bytes[0] === 0x23 && bytes[1] === 0x21)
+    return t(
+      `${code(program)} est un script (il commence par ${code('#!')}).`,
+      `${code(program)} is a script (it starts with ${code('#!')}).`,
+    );
+  return null;
+}
+
 function checkBinaries(m: Manifest | null, s: Snapshot): CheckResult {
   if (!m) return skip('binaries', NO_MANIFEST);
+  if (jsOf(m))
+    return pass(
+      'binaries',
+      t(
+        'aucun à fournir : un plugin run.js est compilé en WASM par le store',
+        'none to bring: a run.js plugin is compiled to WASM by the store',
+      ),
+    );
   const progs = programs(m, s.archive.read);
   if (!progs.length) return pass('binaries', t('aucun : le plugin ne lance pas de programme', 'none: the plugin runs no program'));
   const problems: Problem[] = [];
+  // A plugin of Escouade's own hand (the app's repository, ESC-314) keeps its programs: they are built and signed
+  // with the app. A third party's program is a binary of its own, never a script nor an interpreter.
+  if (!s.firstParty) {
+    const run = m.run as Record<string, unknown>;
+    const seen = new Set<string>();
+    for (const { system, program } of progs) {
+      const field = typeof run[system] === 'string' ? `run.${system}` : 'run.command';
+      if (seen.has(field)) continue;
+      seen.add(field);
+      const why = scriptOrInterpreter(program, s.archive.read);
+      if (why)
+        problems.push({
+          path: field,
+          why: t(
+            `${why.fr} Un plugin du store ne lance ni script ni interpréteur : un programme en JS/TS se publie en run.js, le store le compile en WASM.`,
+            `${why.en} A plugin of the store runs neither a script nor an interpreter: a JS/TS program is published as run.js, the store compiles it to WASM.`,
+          ),
+          fix: t(
+            `Remplace ${code('command')} par ${code('"run": { "js": "dist/plugin.mjs" }')}, le bundle commité (${code('escouade-plugin build')} le vérifie) ; un programme natif se publie en binaires attestés, un par système.`,
+            `Replace ${code('command')} with ${code('"run": { "js": "dist/plugin.mjs" }')}, the committed bundle (${code('escouade-plugin build')} checks it); a native program is published as attested binaries, one per system.`,
+          ),
+        });
+    }
+    if (problems.length) return fail('binaries', plural(problems.length, 'programme refusé', 'program refused'), problems);
+  }
   for (const { system, program, inArchive } of progs) {
     if (inArchive) continue;
     if (!s.binaries.some((b) => b.platform.startsWith(`${system}-`)))
@@ -990,10 +1079,78 @@ function checkBinaries(m: Manifest | null, s: Snapshot): CheckResult {
   );
 }
 
+// ---- 11. The compilation ----
+
+const short = (sha: string) => sha.slice(0, 12);
+
+function checkCompile(m: Manifest | null, s: Snapshot): CheckResult {
+  if (!m) return skip('compile', NO_MANIFEST);
+  const js = jsOf(m);
+  if (!js) return pass('compile', t('rien à compiler : le plugin n’est pas en run.js', 'nothing to compile: the plugin is not run.js'));
+  const bundle = s.archive.read.files.get(js);
+  if (!bundle)
+    return fail('compile', t('pas de bundle', 'no bundle'), [
+      {
+        path: 'run.js',
+        why: t(`${code(js)} n’est pas dans l’archive ${where(s.path).fr}.`, `${code(js)} is not in the archive ${where(s.path).en}.`),
+        fix: t(
+          `Commite le bundle (${code('npm run build')} du SDK) : le store ne lance jamais ${code('npm install')}. Puis pousse une nouvelle étiquette.`,
+          `Commit the bundle (the SDK’s ${code('npm run build')}): the store never runs ${code('npm install')}. Then push a new tag.`,
+        ),
+      },
+    ]);
+  if (bundle.length > BUNDLE_MAX)
+    return fail('compile', t('bundle trop lourd', 'bundle too heavy'), [
+      {
+        path: js,
+        why: t(`${code(js)} pèse plus de 5 Mo.`, `${code(js)} weighs more than 5 MB.`),
+        fix: t(
+          'Allège le bundle (minifié, sans sources), puis pousse une nouvelle étiquette.',
+          'Make the bundle lighter (minified, without sources), then push a new tag.',
+        ),
+      },
+    ]);
+  const c = s.compiled;
+  if (!c) return skip('compile', t('Le bundle n’a pas été compilé.', 'The bundle was not compiled.'));
+  if (c.state === 'refused')
+    return fail('compile', t('ne se compile pas en WASM', 'does not compile to WASM'), [
+      {
+        path: js,
+        why: t(`${code(js)} ne se compile pas en WASM : ${c.message}`, `${code(js)} does not compile to WASM: ${c.message}`),
+        fix: t(
+          `Lance ${code('escouade-plugin build')} sur le dossier : il dit la même chose. Un plugin run.js n’importe que ${code('node:fs')} et ${code('node:readline')}.`,
+          `Run ${code('escouade-plugin build')} on the folder: it says the same. A run.js plugin imports only ${code('node:fs')} and ${code('node:readline')}.`,
+        ),
+      },
+    ]);
+  if (c.state === 'different')
+    return fail('compile', t('la compilation n’est pas reproductible', 'the compilation is not reproducible'), [
+      {
+        path: js,
+        why: t(
+          `La compilation n’est pas reproductible : deux compilations du même bundle ont donné deux modules (${short(c.first)}… et ${short(c.second)}…), et ce qui est publié doit être ce que la revue recompile.`,
+          `The compilation is not reproducible: two compilations of the same bundle gave two modules (${short(c.first)}… and ${short(c.second)}…), and what is published must be what the review compiles again.`,
+        ),
+        fix: t(
+          'Pousse une nouvelle étiquette pour réessayer ; si l’écart revient, signale-le à Escouade : c’est le compilateur du store.',
+          'Push a new tag to try again; if the difference comes back, tell Escouade: it is the store’s compiler.',
+        ),
+      },
+    ]);
+  const kb = Math.max(1, Math.round(c.size / 1024));
+  return pass(
+    'compile',
+    t(
+      `compilé en WASM par le store, deux fois, même empreinte · ${kb} Ko · sha256 ${short(c.sha256)}… · Javy ${c.compiler.javy}`,
+      `compiled to WASM by the store, twice, same fingerprint · ${kb} KB · sha256 ${short(c.sha256)}… · Javy ${c.compiler.javy}`,
+    ),
+  );
+}
+
 /** Whether the archive was read through: a link or a path refused leaves the rest readable, a bomb does not. */
 export const whole = (read: ArchiveRead) => !read.problems.some((p) => ['too-big', 'bomb', 'too-many', 'corrupt'].includes(p.code));
 
-/** Runs the ten checks on what the worker fetched. Nothing of the plugin runs: its files are read as bytes. */
+/** Runs the eleven checks on what the worker fetched: its files read as bytes, its bundle compiled by compile.ts. */
 export function runChecks(s: Snapshot): CheckResult[] {
   const read = s.archive.read;
   const clean = whole(read);
@@ -1010,6 +1167,7 @@ export function runChecks(s: Snapshot): CheckResult[] {
     archive: checkArchive(s),
     permissions: checkPermissions(m),
     binaries: checkBinaries(m, s),
+    compile: checkCompile(m, s),
   };
   return CHECK_KEYS.map((k) => results[k]);
 }

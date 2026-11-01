@@ -27,7 +27,7 @@ async function publish(page: Page, login: string, repo: string): Promise<string>
   await page.locator('.choices li', { hasText: repo }).getByRole('link', { name: 'Choisir' }).click();
   await page.getByRole('button', { name: 'Lancer les contrôles' }).click();
   await expect(page.locator('.check.run')).toHaveCount(0, { timeout: 20_000 });
-  await expect(page.locator('.check.pass')).toHaveCount(10);
+  await expect(page.locator('.check.pass')).toHaveCount(11);
   await page.getByRole('link', { name: 'Continuer' }).click();
   await page.getByRole('button', { name: 'Publier, non vérifié' }).click();
   await expect(page).toHaveURL(/notice=published$/);

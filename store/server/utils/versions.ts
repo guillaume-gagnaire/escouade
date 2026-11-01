@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { parseTag } from '../../shared/folder';
 
 // A version of a plugin on the store (docs/STORE.md, §3.4): one tag, one commit, one archive kept as it came, its
-// binaries; and `version.json`, the small canonical file that names them all with their SHA-256. Its own SHA-256 is
+// binaries, the module the store compiled of a `run.js` bundle; and `version.json`, the small canonical file that names them all with their SHA-256. Its own SHA-256 is
 // the version's fingerprint: what the app checks and what the review signs (§4.5), so that a signature covers the
 // identity, the number, the code and the binaries together.
 
@@ -82,6 +82,23 @@ export interface VersionFile {
   escouade: { api: string; min: string; max?: string };
   /** Its icon re-encoded by the store (PLG-13), the SHA-256 of its PNG at 256 and at 64 px; absent without one. */
   icon?: { '256': string; '64': string };
+  /**
+   * The module of a `run.js` plugin, compiled by the store twice to the same bytes (ESC-323), kept under its SHA-256
+   * like the archive, and what compiled it: Javy's version, escouade-js's SHA-256 and escouade-plugin's version (its
+   * prelude). Absent for a plugin of another kind. The fingerprint of the version covers it: what is signed runs.
+   */
+  wasm?: { sha256: string; size: number; compiler: { javy: string; engine: string; prelude: string } };
+}
+
+/** The module a `version.json` names (a `run.js` plugin's, ESC-323), or null. */
+export function wasmOf(json: string | null | undefined): VersionFile['wasm'] | null {
+  if (!json) return null;
+  try {
+    const w = (JSON.parse(json) as { wasm?: VersionFile['wasm'] }).wasm;
+    return w && /^[0-9a-f]{64}$/.test(w.sha256) ? w : null;
+  } catch {
+    return null;
+  }
 }
 
 /** `version.json` as the store serves it, and its SHA-256: the version's fingerprint. */

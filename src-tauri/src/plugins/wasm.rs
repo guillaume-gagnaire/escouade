@@ -390,6 +390,34 @@ impl Modules {
         Ok((module, made))
     }
 
+    /// Takes in the module the store compiled of `bundle` (ESC-323), once checked against its
+    /// `version.json`: kept in the cache under the bundle's key, in place of any made here, so that
+    /// `prepare` precompiles it instead of compiling the bundle again. Refused when it is no module.
+    pub fn adopt(&self, bundle: &str, bytes: &[u8]) -> Result<(), String> {
+        w(Module::validate(engine(), bytes))?;
+        let key = Self::key(&wrap(bundle)?);
+        let _one = self.busy.lock().unwrap_or_else(|e| e.into_inner());
+        std::fs::create_dir_all(&self.cache).map_err(|e| e.to_string())?;
+        if std::fs::read(self.cache.join(format!("{key}.wasm")))
+            .ok()
+            .as_deref()
+            == Some(bytes)
+        {
+            return Ok(());
+        }
+        // The precompiled modules of the one it replaces go with it.
+        if let Ok(dir) = std::fs::read_dir(&self.cache) {
+            for e in dir.flatten() {
+                let name = e.file_name().to_string_lossy().to_string();
+                if name.starts_with(&format!("{key}-")) && name.ends_with(".cwasm") {
+                    let _ = std::fs::remove_file(e.path());
+                }
+            }
+        }
+        crate::paths::write_atomic(&self.cache.join(format!("{key}.wasm")), bytes)
+            .map_err(|e| e.to_string())
+    }
+
     /// The module of a bundle, compiled now, outside the cache: what `escouade-plugin build` writes, the same bytes
     /// on every system for the same bundle (ESC-322).
     pub fn build(&self, bundle: &str) -> Result<Vec<u8>, String> {

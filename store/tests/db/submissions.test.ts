@@ -20,6 +20,7 @@ import {
   type Deps,
 } from '../../server/utils/submissions';
 import { sha256 } from '../../server/utils/versions';
+import { sandboxedCompiler } from '../../server/utils/compile';
 import { readArchive } from '../../server/utils/tar';
 import { authorPage, catalog, pluginPage, search } from '../../server/utils/listing';
 import { buildCatalog } from '../../server/utils/catalog';
@@ -29,9 +30,10 @@ import { TRAPPED } from '../fake/catalog.mjs';
 import { attestation, monorepoFiles, pluginFiles, png, tarball, treeOf } from '../fake/plugins.mjs';
 
 // The submission against a real PostgreSQL (TEST_DATABASE_URL alone, emptied first; skipped without it), with a
-// fake GitHub in memory: a tag resolved once, the archive kept as it came and fingerprinted, the ten checks, the
+// fake GitHub in memory: a tag resolved once, the archive kept as it came and fingerprinted, the eleven checks, the
 // rejections, publishing, the new tags of the webhooks and the tags moved (docs/STORE.md §3).
 const url = process.env.TEST_DATABASE_URL;
+const FAKE = join(import.meta.dirname, '../fake/fake-escouade-plugin.mjs');
 const SECRET = 's'.repeat(64);
 const T0 = new Date('2026-10-29T10:00:00Z');
 
@@ -198,7 +200,7 @@ describe.skipIf(!url)('the submission', () => {
       state: 'ready',
       origin: 'author',
     });
-    expect(v.checks.map((c: { status: string }) => c.status)).toEqual(Array(10).fill('pass'));
+    expect(v.checks.map((c: { status: string }) => c.status)).toEqual(Array(11).fill('pass'));
 
     // The archive on disk is GitHub's, byte for byte, under its SHA-256.
     const archive = gh.repos.get(REPO)!.archives[commit]!;
@@ -233,6 +235,64 @@ describe.skipIf(!url)('the submission', () => {
     const again = await startSubmission(db, deps, sam, { repo: REPO, tag: 'v0.3.0' }, T0);
     expect(again).toEqual({ id, again: true });
     expect(gh.calls.filter((c) => c.startsWith('tarball'))).toHaveLength(1);
+  });
+
+  it('compiles a run.js plugin twice, keeps its module and names it in version.json and the catalogue (ESC-323)', async () => {
+    const files = pluginFiles(REPO, {
+      manifest: { run: { js: 'dist/plugin.mjs' } },
+      files: { 'dist/plugin.mjs': 'console.log("ntfy");\n' },
+    });
+    gh.push(REPO, 'v0.3.0', files);
+    const seen: string[] = [];
+    const one = sandboxedCompiler({ command: [process.execPath, FAKE], isolation: 'none' });
+    deps.compile = async (i) => {
+      seen.push(i.bundle.toString());
+      return one(i);
+    };
+    const { id, state } = await submit(sam, REPO, 'v0.3.0');
+    expect(state).toBe('ready');
+    // Twice, from the archive's bundle: never an npm install, never the author's build.
+    expect(seen).toEqual(['console.log("ntfy");\n', 'console.log("ntfy");\n']);
+    const [v] = await q('select * from versions where id = $1', [id]);
+    expect(v.checks.map((c: { status: string }) => c.status)).toEqual(Array(11).fill('pass'));
+    const file = JSON.parse(v.version_json);
+    expect(file.wasm).toMatchObject({ size: expect.any(Number), compiler: { javy: '9.1.0', engine: 'e'.repeat(64), prelude: '2.2.0' } });
+    expect(file.binaries).toEqual({});
+    const kept = await readFile(join(dir, 'sha256', file.wasm.sha256.slice(0, 2), `${file.wasm.sha256}.wasm`));
+    expect(sha256(kept)).toBe(file.wasm.sha256);
+    expect(kept.length).toBe(file.wasm.size);
+    // The fingerprint of the version covers the module.
+    expect(v.version_sha256).toBe(sha256(v.version_json));
+    await publishVersion(db, sam, id!, { categories: ['notifications'], review: 'on' });
+    const entry = (await buildCatalog(db)).plugins[0]!.versions[0]!;
+    expect(entry.files.wasm).toBe('/api/v1/plugins/io.github.sroux.escouade-ntfy/0.3.0/plugin.wasm');
+  });
+
+  it('refuses a run.js plugin whose compiler is not deterministic, with the reason, and keeps no module (ESC-323)', async () => {
+    gh.push(
+      REPO,
+      'v0.3.0',
+      pluginFiles(REPO, { manifest: { run: { js: 'dist/plugin.mjs' } }, files: { 'dist/plugin.mjs': 'console.log(1);' } }),
+    );
+    deps.compile = sandboxedCompiler({ command: [process.execPath, FAKE, '--random'], isolation: 'none' });
+    const { id, state } = await submit(sam, REPO, 'v0.3.0');
+    expect(state).toBe('rejected');
+    const [v] = await q('select checks, version_json from versions where id = $1', [id]);
+    const compile = v.checks.find((c: { key: string }) => c.key === 'compile');
+    expect(compile).toMatchObject({ status: 'fail', detail: { fr: 'la compilation n’est pas reproductible' } });
+    expect(v.version_json).toBeNull();
+  });
+
+  it('leaves a run.js version in error, to retry, while the store has no compiler (ESC-323)', async () => {
+    gh.push(
+      REPO,
+      'v0.3.0',
+      pluginFiles(REPO, { manifest: { run: { js: 'dist/plugin.mjs' } }, files: { 'dist/plugin.mjs': 'console.log(1);' } }),
+    );
+    const { id, state } = await submit(sam, REPO, 'v0.3.0');
+    expect(state).toBe('error');
+    const [v] = await q('select error from versions where id = $1', [id]);
+    expect(v.error).toMatch(/STORE_ESCOUADE_PLUGIN/);
   });
 
   it('keeps the icon re-encoded at 256 and 64 px without its metadata, in version.json, the catalogue and the pages (PLG-13)', async () => {
@@ -481,7 +541,7 @@ describe.skipIf(!url)('the submission', () => {
     expect(own.state).toBe('ready');
     const [v] = await q('select plugin_id, checks from versions where id = $1', [own.id]);
     expect(v.plugin_id).toBe('dev.escouade.ntfy');
-    expect(v.checks.map((c: { status: string }) => c.status)).toEqual(Array(10).fill('pass'));
+    expect(v.checks.map((c: { status: string }) => c.status)).toEqual(Array(11).fill('pass'));
     // Published, it is a plugin of the store in the catalogue: not one the app gives, hidden behind builtin.ts.
     await publishVersion(db, sam, own.id!, { categories: ['notifications'] });
     expect((await catalog(db)).find((e) => e.id === 'dev.escouade.ntfy')).toMatchObject({ builtin: false });
@@ -515,7 +575,7 @@ describe.skipIf(!url)('the submission', () => {
     expect(gh.calls.filter((c) => c.startsWith('tarball'))).toEqual([]);
     const [v] = await q('select * from versions where id = $1', [slack.id]);
     expect(v).toMatchObject({ path: 'plugins/slack', plugin_id: 'io.github.sroux.mono-slack', version: '0.2.0' });
-    expect(v.checks.map((c: { status: string }) => c.status)).toEqual(Array(10).fill('pass'));
+    expect(v.checks.map((c: { status: string }) => c.status)).toEqual(Array(11).fill('pass'));
     // The archive kept holds the folder alone, its commit in the header; version.json names the folder.
     const kept = readArchive(await readFile(join(dir, 'sha256', v.archive_sha256.slice(0, 2), `${v.archive_sha256}.tar.gz`)));
     expect([...kept.files.keys()].sort()).toEqual(['LICENSE', 'escouade-plugin.json', 'icon.png']);

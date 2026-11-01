@@ -36,6 +36,8 @@ pub const UNPACKED_MAX: u64 = 200 * 1024 * 1024;
 pub const ENTRIES_MAX: usize = 20_000;
 /// A program of a release: 100 MB at most.
 pub const BINARY_MAX: u64 = 100 * 1024 * 1024;
+/// The module the store compiled of a `run.js` plugin: 32 MB at most (as `store/server/utils/compile.ts`).
+pub const MODULE_MAX: u64 = 32 * 1024 * 1024;
 /// The catalogue, `version.json`, a signature, a list: 20 MB at most.
 const SMALL_MAX: u64 = 20 * 1024 * 1024;
 
@@ -176,6 +178,9 @@ pub struct Files {
     pub archive: String,
     #[serde(default)]
     pub binaries: BTreeMap<String, String>,
+    /// The module the store compiled of a `run.js` plugin (ESC-323).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wasm: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<BTreeMap<String, String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -828,6 +833,28 @@ impl Store {
             }
             _ => None,
         };
+
+        // 5. The module the store compiled of a run.js plugin (ESC-323): the bytes version.json
+        // names, so that what was signed is what runs; the app precompiles it at the install.
+        let module = match &file.wasm {
+            Some(w) => {
+                let path = entry.files.wasm.clone().unwrap_or_else(|| {
+                    format!("/api/v1/plugins/{id}/{}/plugin.wasm", entry.version)
+                });
+                let bytes = get(&path, MODULE_MAX)
+                    .await
+                    .map_err(|e| fail("plugin.wasm", e))?;
+                if sha256(&bytes) != w.sha256 || bytes.len() as u64 != w.size {
+                    return Err(tr_in!(
+                        lang,
+                        "Le module WASM reçu ne correspond pas à celui que le store a compilé : rien n'est installé.",
+                        "The WASM module received is not the one the store compiled: nothing is installed."
+                    ));
+                }
+                Some(bytes)
+            }
+            None => None,
+        };
         Ok(Fetched {
             id: id.to_string(),
             version: entry.version.clone(),
@@ -844,6 +871,7 @@ impl Store {
                 .map(|e| e.reason.get(lang).to_string()),
             files,
             program,
+            module,
         })
     }
 
@@ -976,6 +1004,16 @@ pub struct VersionFile {
     pub binaries: BTreeMap<String, BinaryRef>,
     #[serde(default)]
     pub manifest_sha256: String,
+    /// The module the store compiled of a `run.js` plugin, twice to the same bytes (ESC-323):
+    /// its SHA-256, its size and what compiled it. Absent for a plugin of another kind.
+    #[serde(default)]
+    pub wasm: Option<WasmRef>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct WasmRef {
+    pub sha256: String,
+    pub size: u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1006,6 +1044,8 @@ pub struct Fetched {
     pub files: Vec<(String, Vec<u8>)>,
     /// This system's program from the release, when it has one.
     pub program: Option<Vec<u8>>,
+    /// The module the store compiled of a `run.js` plugin, checked against `version.json`.
+    pub module: Option<Vec<u8>>,
 }
 
 /// The bytes of an answer, `max` at most.
@@ -1383,6 +1423,7 @@ mod tests {
                 version_json: String::new(),
                 archive: String::new(),
                 binaries: BTreeMap::new(),
+                wasm: None,
                 icon: None,
                 signature: None,
             },

@@ -5,7 +5,7 @@ import type { Lang } from './language';
 
 const fr = {
   steps: ['Dépôt', 'Version', 'Contrôles', 'Publier'],
-  stepNotes: { checks: (n: number) => `${n} sur 10`, publish: 'catégorie, revue' },
+  stepNotes: { checks: (n: number) => `${n} sur 11`, publish: 'catégorie, revue' },
   guest: {
     title: 'Publier un plugin',
     lead: 'Connecte-toi avec GitHub pour soumettre un plugin depuis un dépôt public : une étiquette suffit, le store fige son commit et son archive, puis te dit champ par champ ce qui manque.',
@@ -75,7 +75,8 @@ const fr = {
     continue: 'Continuer',
     failedNote:
       'Un contrôle a échoué : rien n’est publié tant qu’il ne passe pas. Corrige, pousse une nouvelle étiquette : le store relancera les contrôles seul.',
-    runningNote: 'Les contrôles tournent sur l’archive figée ; rien du plugin ne s’exécute.',
+    runningNote:
+      'Les contrôles tournent sur l’archive figée ; rien du plugin ne s’exécute. Un plugin en JS/TS (run.js) est compilé en WASM par le store, deux fois, sans réseau : son bundle commité, jamais de npm install.',
     heldNote: 'Tout passe, mais le nom est proche de celui d’un autre plugin : une personne le regarde avant la publication.',
     errorNote: 'Le store n’a pas pu finir les contrôles (une panne de son côté ou de GitHub, pas de ton plugin).',
     retry: 'Relancer les contrôles',
@@ -148,7 +149,7 @@ type Text = typeof fr;
 
 const en: Text = {
   steps: ['Repository', 'Version', 'Checks', 'Publish'],
-  stepNotes: { checks: (n: number) => `${n} of 10`, publish: 'category, review' },
+  stepNotes: { checks: (n: number) => `${n} of 11`, publish: 'category, review' },
   guest: {
     title: 'Publish a plugin',
     lead: 'Sign in with GitHub to submit a plugin from a public repository: a tag is enough, the store freezes its commit and its archive, then tells you field by field what is missing.',
@@ -213,7 +214,8 @@ const en: Text = {
     waiting: 'waiting for the archive',
     continue: 'Continue',
     failedNote: 'A check failed: nothing is published until it passes. Fix it, push a new tag: the store runs the checks again by itself.',
-    runningNote: 'The checks run on the frozen archive; nothing of the plugin runs.',
+    runningNote:
+      'The checks run on the frozen archive; nothing of the plugin runs. A JS/TS plugin (run.js) is compiled to WASM by the store, twice, without network: its committed bundle, never an npm install.',
     heldNote: 'Everything passes, but the name is close to another plugin’s: a person looks at it before it is published.',
     errorNote: 'The store could not finish the checks (a failure on its side or GitHub’s, not your plugin’s).',
     retry: 'Run the checks again',

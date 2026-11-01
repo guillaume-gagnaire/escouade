@@ -5,7 +5,7 @@ import type { Ask } from '~~/server/utils/listing';
 // permissions' decision in red, the hosts in a fixed-width font.
 defineProps<{ asks: Ask[] }>();
 const { words } = useCatalog();
-const ICON = { run: 'run', decide: 'gavel', events: 'bolt', secret: 'key', none: 'leaf' } as const;
+const ICON = { run: 'run', wasm: 'run', decide: 'gavel', events: 'bolt', secret: 'key', none: 'leaf' } as const;
 </script>
 
 <template>

@@ -54,6 +54,8 @@ export default defineConfig({
         STORE_KEYS_DIR: e2eKey().keys,
         // The app's repository on the fake GitHub (ESC-317): its plugins/<name>/ are first-party, dev.escouade.*.
         STORE_FIRST_PARTY_REPO: E2E_FIRST_PARTY_REPO,
+        // The compiler of the run.js plugins (ESC-323): the fake escouade-plugin, run by Node.
+        STORE_ESCOUADE_PLUGIN: 'tests/fake/fake-escouade-plugin.mjs',
       },
       stdout: 'pipe',
     },

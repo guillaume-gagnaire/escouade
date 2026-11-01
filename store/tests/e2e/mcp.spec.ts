@@ -11,7 +11,7 @@ import { E2E_ADMIN_LOGIN, E2E_CHEF_LOGIN, E2E_FIRST_PARTY_REPO, FAKE_GITHUB, SIT
 // The store's MCP server (ESC-317, docs/STORE.md §2.5) with a real MCP client (@modelcontextprotocol/sdk) against the
 // built server and the fake GitHub: the metadata (RFC 9728, RFC 8414), the registration (RFC 7591), PKCE S256, the
 // sign-in with GitHub and the consent in the browser, the tools of an author on a folder of the app's repository
-// (plugins/ntfy, tag plugins/ntfy/v1.1.0: the ten checks, publishing, yanking, the list, a new tag waiting for a click),
+// (plugins/ntfy, tag plugins/ntfy/v1.1.0: the eleven checks, publishing, yanking, the list, a new tag waiting for a click),
 // the token expired then refreshed and swapped, « Applications connectées » and its revocation, the scopes (`review` to
 // an administrator alone). They need a database (DATABASE_URL).
 test.skip(!process.env.DATABASE_URL, 'the MCP server needs DATABASE_URL');
@@ -226,7 +226,7 @@ test('the chief submits, publishes and manages a folder of the app’s repositor
   const malformed = (await client.callTool({ name: 'submit_version', arguments: { repository: 'no slash', tag: 'v1' } })) as Result;
   expect(malformed.isError).toBe(true);
 
-  // The submission and its ten checks, then publishing.
+  // The submission and its eleven checks, then publishing.
   const submitted = await call(client, 'submit_version', {
     repository: E2E_FIRST_PARTY_REPO,
     path: 'plugins/ntfy',
@@ -239,7 +239,7 @@ test('the chief submits, publishes and manages a folder of the app’s repositor
   expect(v.pluginId).toBe('dev.escouade.mcp-ntfy');
   expect(v.version).toBe('1.1.0');
   expect(v.path).toBe('plugins/ntfy');
-  expect(v.checks).toHaveLength(10);
+  expect(v.checks).toHaveLength(11);
   expect(v.checks.every((c: { status: string }) => c.status === 'pass')).toBe(true);
   const noCategory = await call(client, 'publish_version', { version_id: id });
   expect(noCategory.json.error).toBe('categories');

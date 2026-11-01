@@ -1,3 +1,4 @@
+import { compilerOf } from '../utils/compile';
 import { archiveDir, invalidLines, keysDir, missingLines } from '../utils/config';
 import { migrateDb, migrationsDir, openDb } from '../utils/db';
 import { webhookProblems } from '../utils/discord';
@@ -26,6 +27,7 @@ export default defineNitroPlugin((nitro) => {
         archives: service.archives,
         env,
         site,
+        compile: compilerOf(env),
       }
     : null;
 

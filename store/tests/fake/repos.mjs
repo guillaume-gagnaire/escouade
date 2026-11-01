@@ -2,8 +2,8 @@
 // token: their tags (v0.3.0 annotated, to unwrap), the archives of their commits (by a redirect, as codeload),
 // the license GitHub detects, the releases, their files and their attestations. They hold the test plugins of
 // tests/fake/plugins.mjs, by their name: `*-private` is private, `*-trap` is booby-trapped (a license that is not
-// its file's, a symbolic link), `*-bin` runs a program built for each system, attested but for Linux; the others
-// are valid.
+// its file's, a symbolic link), `*-bin` runs a program built for each system, attested but for Linux, `*-js` is a
+// run.js plugin (its bundle committed, ESC-323), `*-node` runs `node` (refused to a third party); the others are valid.
 import { randomBytes } from 'node:crypto';
 import { attestation, monorepoFiles, pluginFiles, sha256, tarball, treeOf } from './plugins.mjs';
 
@@ -21,14 +21,22 @@ export function pushTag(fullName, tag, { extra = {}, manifest = {} } = {}) {
   const sha = sha256(`${fullName}@${tag}@${Date.now()}@${Math.random()}`).slice(0, 40);
   const trap = name.endsWith('-trap');
   const bin = name.endsWith('-bin');
+  const js = name.endsWith('-js');
+  const node = name.endsWith('-node');
   const files = pluginFiles(fullName, {
     manifest: {
       version,
       name: { en: name, fr: name },
       ...(bin ? { run: { command: 'bin/plugin', windows: 'bin/plugin.exe' } } : {}),
+      ...(js ? { run: { js: 'dist/plugin.mjs' } } : {}),
+      ...(node ? { run: { command: 'node' } } : {}),
       ...manifest,
     },
-    files: { ...(trap ? { 'docs/key': { symlink: '/home/me/.ssh/id_ed25519' } } : {}), ...extra },
+    files: {
+      ...(trap ? { 'docs/key': { symlink: '/home/me/.ssh/id_ed25519' } } : {}),
+      ...(js ? { 'dist/plugin.mjs': `console.log(${JSON.stringify(fullName)});\n` } : {}),
+      ...extra,
+    },
   });
   repo.commits[sha] = {
     files,

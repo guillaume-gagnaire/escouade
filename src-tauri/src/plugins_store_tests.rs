@@ -302,6 +302,63 @@ async fn a_plugin_in_a_folder_keeps_its_folder_and_a_folder_that_climbs_is_refus
     assert!(matches!(&root.origin, Origin::Store { path, .. } if path.is_empty()));
 }
 
+/// ESC-323: a run.js plugin of the store comes with the module the store compiled of it, checked
+/// against its version.json, kept in the cache and precompiled from there (Javy not run); a module
+/// changed after its version.json stops everything.
+#[tokio::test]
+async fn a_run_js_plugin_installs_the_module_the_store_compiled_and_a_changed_one_is_refused() {
+    let fake = Fake::start().trusted();
+    let (data, store, plugins) = ready(&fake, "wasm").await;
+    let view = install(&store, &plugins, "dev.exemple.wasm", None, false)
+        .await
+        .expect("the run.js plugin installs");
+    assert_eq!(view.version, "1.0.0");
+    let served = reqwest::get(format!(
+        "{}/api/v1/plugins/dev.exemple.wasm/1.0.0/plugin.wasm",
+        fake.url
+    ))
+    .await
+    .unwrap()
+    .bytes()
+    .await
+    .unwrap()
+    .to_vec();
+    let json: Value = reqwest::get(format!(
+        "{}/api/v1/plugins/dev.exemple.wasm/1.0.0/version.json",
+        fake.url
+    ))
+    .await
+    .unwrap()
+    .json()
+    .await
+    .unwrap();
+    assert_eq!(json["wasm"]["sha256"], store::sha256(&served));
+    let kept: Vec<Vec<u8>> = std::fs::read_dir(data.plugin_wasm_dir())
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_name().to_string_lossy().ends_with(".wasm"))
+        .map(|e| std::fs::read(e.path()).unwrap())
+        .collect();
+    assert_eq!(kept, vec![served], "the store's module, in the cache");
+    // The install precompiles the store's module: the bundle is not compiled here.
+    if crate::plugins::wasm::escouade_js().is_ok() {
+        let modules = crate::plugins::wasm::Modules::new(&data, "2.1.0");
+        let (_, made) = modules
+            .prepare(Path::new(&view.folder), "dist/plugin.mjs")
+            .expect("precompiled");
+        assert_eq!(made, crate::plugins::wasm::Made::Precompiled);
+    }
+
+    let e = install(&store, &plugins, "dev.exemple.wasm-changed", None, false)
+        .await
+        .unwrap_err();
+    assert!(
+        e.contains("Le module WASM reçu ne correspond pas à celui que le store a compilé"),
+        "{e}"
+    );
+    assert!(plugins.get("dev.exemple.wasm-changed", Lang::Fr).is_none());
+}
+
 #[tokio::test]
 async fn a_changed_archive_or_a_forged_seal_stops_everything() {
     let fake = Fake::start().trusted();

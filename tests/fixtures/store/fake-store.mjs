@@ -18,10 +18,13 @@
 // - dev.escouade.discord: 1.1.0 verified, from plugins/discord of the app's repository (Escouade's own hand, ESC-314),
 //   installed as any plugin of the store (origin store, never the app's builtin);
 // - dev.escouade.slack: 1.1.0 not signed yet (the app refuses it: Escouade's own installs signed only);
-// - dev.exemple.climbs: its version.json names a folder that climbs out (refused).
+// - dev.exemple.climbs: its version.json names a folder that climbs out (refused);
+// - dev.exemple.wasm: a run.js plugin (tests/fixtures/plugins/sdk-both), with the module the store compiled of it
+//   (ESC-323), named by its version.json; dev.exemple.wasm-changed: its module changed after its version.json (refused).
 // Its controls: POST /_fake/revocations { entries, serial? } signs and serves the next list (the mirror too);
 // POST /_fake/down { down } makes /api/v1 answer 503; GET /_fake/state says the installs counted and the requests.
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { tarball, png } from '../../../store/tests/fake/plugins.mjs';
@@ -52,6 +55,25 @@ function example(name, over = {}) {
   const m = { ...JSON.parse(String(out['escouade-plugin.json'])), ...over };
   out['escouade-plugin.json'] = JSON.stringify(m, null, 2);
   return out;
+}
+
+/** The run.js plugin of the SDK's tests, its manifest changed by `over`. */
+function runJs(over) {
+  const root = new URL('../plugins/sdk-both/', import.meta.url);
+  const m = { ...JSON.parse(readFileSync(new URL('escouade-plugin.json', root), 'utf8')), ...over };
+  return {
+    'escouade-plugin.json': JSON.stringify(m, null, 2),
+    'dist/plugin.mjs': readFileSync(new URL('dist/plugin.mjs', root)),
+    'README.md': '# SDK\n\nUn plugin run.js.\n',
+  };
+}
+
+/** A WASM module the app takes for valid: its header and a custom section that names it. */
+function wasmModule(name) {
+  const title = Buffer.from('escouade-test');
+  const payload = Buffer.from(name);
+  const body = Buffer.concat([Buffer.from([title.length]), title, payload]);
+  return Buffer.concat([Buffer.from([0, 0x61, 0x73, 0x6d, 1, 0, 0, 0, 0, body.length]), body]);
 }
 
 const SPEC = [
@@ -120,6 +142,18 @@ const SPEC = [
     repo: 'guillaume-gagnaire/escouade',
   },
   { id: 'dev.exemple.climbs', v: '1.0.0', from: 'high-contrast', cat: ['themes'], kw: [], name: 'Dossier qui remonte', path: '../escape' },
+  // ESC-323: a run.js plugin and the module the store compiled of it; then one whose module changed after its version.json.
+  { id: 'dev.exemple.wasm', v: '1.0.0', from: 'sdk-both', runJs: true, cat: ['tools'], kw: ['wasm'], name: 'En WASM' },
+  {
+    id: 'dev.exemple.wasm-changed',
+    v: '1.0.0',
+    from: 'sdk-both',
+    runJs: true,
+    cat: ['tools'],
+    kw: [],
+    name: 'WASM changé',
+    wasmChanged: true,
+  },
 ];
 
 /** The store's content: the catalogue, the files by path, signed with `key`. */
@@ -136,7 +170,7 @@ export function build(key) {
       ...(s.name ? { name: s.name } : {}),
       ...(s.min ? { escouade: { api: '1', min: s.min } } : {}),
     };
-    const f = example(s.from, over);
+    const f = s.runJs ? runJs(over) : example(s.from, over);
     if (s.icon) {
       f['icon.png'] = png(256, 256);
       const m = JSON.parse(f['escouade-plugin.json']);
@@ -156,6 +190,14 @@ export function build(key) {
         files.set(binaryPaths[p], bytes);
       }
     }
+    let wasm;
+    let wasmPath;
+    if (s.runJs) {
+      const bytes = wasmModule(s.id);
+      wasm = { sha256: sha256(bytes), size: bytes.length, compiler: { javy: '9.1.0', engine: 'e'.repeat(64), prelude: '2.2.0' } };
+      wasmPath = `${base}/plugin.wasm`;
+      files.set(wasmPath, s.wasmChanged ? Buffer.concat([bytes, wasmModule('changed').subarray(8)]) : bytes);
+    }
     const json = canonical({
       format: 1,
       id: s.id,
@@ -168,6 +210,7 @@ export function build(key) {
       binaries,
       manifest_sha256: sha256(f['escouade-plugin.json']),
       escouade: m.escouade,
+      wasm,
     });
     files.set(`${base}/version.json`, Buffer.from(json));
     files.set(`${base}/archive.tar.gz`, s.tampered ? tarball({ ...f, 'extra.js': 'evil()' }, { commit }) : archive);
@@ -216,6 +259,7 @@ export function build(key) {
         version_json: `${base}/version.json`,
         archive: `${base}/archive.tar.gz`,
         binaries: binaryPaths,
+        ...(wasmPath ? { wasm: wasmPath } : {}),
         ...(signed ? { signature: `${base}/version.json.minisig` } : {}),
       },
     });

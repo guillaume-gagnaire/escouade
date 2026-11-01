@@ -37,7 +37,7 @@ export const CATEGORY_NAMES: Record<Category, Text> = {
 };
 
 /** What a plugin asks for, in one line of a list: the strongest first (docs/PLUGINS.md §3.4). */
-export type Ask = { kind: 'run' | 'decide' | 'events' | 'secret' | 'none' } | { kind: 'net'; host: string };
+export type Ask = { kind: 'run' | 'wasm' | 'decide' | 'events' | 'secret' | 'none' } | { kind: 'net'; host: string };
 
 /** Where a plugin's version stands with the review: Escouade's own, verified (signed, STORE-8), asked, or not. */
 export type Trust = 'builtin' | 'verified' | 'review' | 'unverified';
@@ -91,7 +91,8 @@ export function localized(v: unknown): Text {
 /** What a manifest asks for, in one line. */
 export function asksOf(m: Record<string, unknown>): Ask[] {
   const p = obj(m.permissions);
-  const asks: Ask[] = [m.run ? { kind: 'run' } : { kind: 'none' }];
+  // A run.js plugin runs in Escouade, in WASM, the module compiled by the store (ESC-323): no program of its own.
+  const asks: Ask[] = [obj(m.run).js ? { kind: 'wasm' } : m.run ? { kind: 'run' } : { kind: 'none' }];
   if (p.decide === true) asks.push({ kind: 'decide' });
   for (const host of list(p.network)) asks.push({ kind: 'net', host });
   if (list(p.secrets).length) asks.push({ kind: 'secret' });
@@ -103,7 +104,15 @@ export function permissionsOf(m: Record<string, unknown>, binaries: Record<strin
   const p = obj(m.permissions);
   const run = obj(m.run);
   const out: Permission[] = [];
-  if (m.run) {
+  if (typeof run.js === 'string')
+    out.push({
+      icon: 'run',
+      tone: '',
+      text: t('Tourne dans Escouade, isolé', 'Runs inside Escouade, sandboxed'),
+      mono: run.js,
+      detail: t('compilé en WASM par le store', 'compiled to WASM by the store'),
+    });
+  else if (m.run) {
     const attested = Object.values(binaries ?? {}).some((b) => obj(b).attested === true);
     out.push({
       icon: 'run',

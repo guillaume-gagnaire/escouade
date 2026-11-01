@@ -1628,6 +1628,23 @@ impl Plugins {
                 std::fs::write(&to, bytes).map_err(fail)?;
                 make_executable(&to).map_err(fail)?;
             }
+            // A run.js plugin: the module the store compiled, checked by `fetch` against
+            // version.json, goes to the cache, where the install precompiles it (ESC-323).
+            if let (Some(bytes), Some(js)) =
+                (&f.module, m.run.as_ref().and_then(|r| r.js.as_deref()))
+            {
+                let bundle = std::fs::read_to_string(incoming.join(manifest::icon_path(js)))
+                    .map_err(fail)?;
+                wasm::Modules::new(&self.data, &self.app_version)
+                    .adopt(&bundle, bytes)
+                    .map_err(|e| {
+                        Refusal::other(tr_in!(
+                            lang,
+                            "Le module WASM du store n'a pas pu être pris : {e}",
+                            "The store's WASM module could not be taken in: {e}"
+                        ))
+                    })?;
+            }
             Ok(m)
         })();
         let m = match written {
