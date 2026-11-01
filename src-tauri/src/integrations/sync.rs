@@ -444,8 +444,18 @@ impl<R: Runtime> Core<R> {
         secrets::save_accounts(&self.data, &self.accounts.read())
     }
 
+    /// The accounts as the window knows them, with the plugins that may serve each source's
+    /// (those with an account of their own; a code host's is offered in its form).
     pub fn integration_accounts(&self) -> Vec<AccountView> {
-        self.accounts.read().views()
+        let kinds = crate::plugins::accounts::kinds_of(&self.plugins);
+        let mut views = self.accounts.read().views();
+        for v in &mut views {
+            if hosted_kind(v.service).is_none() {
+                let kind = crate::plugins::accounts::kind_of_source(v.service);
+                v.servers = crate::plugins::accounts::servers(&kinds, &kind);
+            }
+        }
+        views
     }
 
     /// A client of `service` for `account` (GitHub's token asked of its CLI when none was given).
@@ -454,6 +464,15 @@ impl<R: Runtime> Core<R> {
         service: Service,
         account: &Account,
     ) -> Result<Box<dyn TicketSource>> {
+        if !account.plugin.is_empty() {
+            // Another plugin than Escouade's own hand serves it.
+            return Ok(Box::new(crate::plugins::adapters::ProcessTicketSource::new(
+                self.plugin_runtime.clone(),
+                &account.plugin,
+                service.as_str(),
+                account,
+            )));
+        }
         let http = crate::usage::http_client(&self.settings.read())?;
         let mut account = account.clone();
         if service == Service::GITHUB && account.token.trim().is_empty() {
@@ -464,6 +483,19 @@ impl<R: Runtime> Core<R> {
     }
 
     async fn client(&self, service: Service) -> Result<Box<dyn TicketSource>> {
+        if let Some(a) = self.served_by_a_plugin(service) {
+            // One connection, every use: the plugin that serves the code host's account serves
+            // its source too.
+            let account = Account {
+                site: a.url.clone(),
+                email: a.email.clone(),
+                label: a.label.clone(),
+                user: a.user.clone(),
+                plugin: a.plugin.clone(),
+                ..Account::default()
+            };
+            return self.client_for(service, &account).await;
+        }
         if service == Service::GITLAB {
             return self.gitlab_client().await;
         }
@@ -489,6 +521,19 @@ impl<R: Runtime> Core<R> {
         self.client_for(service, &account).await
     }
 
+    /// The code host's account of a source hosted by it (GitLab Issues, Azure Boards) when
+    /// another plugin than Escouade's own hand serves every one: its first (a plugin serves its
+    /// source for one instance until the sources move into the plugins, INT-8).
+    fn served_by_a_plugin(&self, service: Service) -> Option<ForgeAccount> {
+        hosted_kind(service)?;
+        let accounts = self.accounts.read();
+        let list = accounts.hosted_accounts(service);
+        list.iter()
+            .all(|a| !a.plugin.is_empty())
+            .then(|| list.first().map(|a| (*a).clone()))
+            .flatten()
+    }
+
     /// GitLab Issues' client: every GitLab code host's account, its instance and token (its own
     /// from the keychain, or `glab`'s) as the code host uses them. An instance whose token cannot
     /// be had is left out while another one can.
@@ -498,6 +543,8 @@ impl<R: Runtime> Core<R> {
             .read()
             .gitlab_accounts()
             .into_iter()
+            // Those another plugin serves are its own (`served_by_a_plugin`).
+            .filter(|a| a.plugin.is_empty())
             .cloned()
             .collect();
         if list.is_empty() {
@@ -546,6 +593,7 @@ impl<R: Runtime> Core<R> {
             .read()
             .hosted_accounts(Service::AZURE)
             .into_iter()
+            .filter(|a| a.plugin.is_empty())
             .cloned()
             .collect();
         if list.is_empty() {
@@ -643,6 +691,13 @@ impl<R: Runtime> Core<R> {
             email: form.email.trim().to_string(),
             key: form.key.trim().to_string(),
             token: form.token.trim().to_string(),
+            // The plugin that serves it: Escouade's own hand, unless another one is chosen.
+            plugin: crate::plugins::accounts::chosen(
+                &crate::plugins::accounts::kinds_of(&self.plugins),
+                &crate::plugins::accounts::kind_of_source(service),
+                &form.plugin,
+            )
+            .map_err(|e| anyhow!(e))?,
             ..Default::default()
         };
         if let Some(missing) = missing_field(i18n::ui(), service, &account) {
@@ -658,7 +713,24 @@ impl<R: Runtime> Core<R> {
             // The CLI may have been logged in again since its token was read.
             *self.gh_token.lock() = None;
         }
-        let (mut label, user) = self.client_for(service, &account).await?.me().await?;
+        // A plugin takes the secrets from the keychain itself (`secrets/get`): they are there
+        // first, and go if it refuses them.
+        if !account.plugin.is_empty() {
+            secrets::place(&*self.secrets, service, &mut account);
+        }
+        let asked = match self.client_for(service, &account).await {
+            Ok(client) => client.me().await,
+            Err(e) => Err(e),
+        };
+        let (mut label, user) = match asked {
+            Ok(who) => who,
+            Err(e) => {
+                if !account.plugin.is_empty() {
+                    secrets::forget_of(&*self.secrets, service, &account.plugin);
+                }
+                return Err(e);
+            }
+        };
         if service == Service::GITHUB && account.token.is_empty() {
             label.push_str(VIA_GH);
         }
@@ -692,12 +764,17 @@ impl<R: Runtime> Core<R> {
         }
         // Not for GitHub through the CLI (no token of its own), nor a token the keychain refused
         // (in the file, which is written again without it).
-        let in_keychain = self
+        let (in_keychain, plugin) = self
             .accounts
             .read()
             .get(service)
-            .is_some_and(|a| !secrets::through_gh(service, a) && !a.in_file);
-        let forgotten = secrets::forget(&*self.secrets, service);
+            .map_or((false, String::new()), |a| {
+                (
+                    !secrets::through_gh(service, a) && !a.in_file,
+                    a.plugin.clone(),
+                )
+            });
+        let forgotten = secrets::forget_of(&*self.secrets, service, &plugin);
         if !forgotten && in_keychain {
             let name = service.label();
             self.hub.emit(UiEvent::Toast {

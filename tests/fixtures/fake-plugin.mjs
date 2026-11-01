@@ -23,6 +23,7 @@
 // few fixed records. `--untyped` answers every one with an error that is not typed; `--token-from <key>` makes every one ask Escouade `secrets/get` for that key first and
 // answer 401 (-32401) unless it is `good`; a container named `gone` answers 404, `refused` a lasting refusal,
 // `crash` exits, `slow` is never answered. `forge/*` answer { value, rateLimit }; `forge/merge` is not served (-32601).
+// `--ticket-budget` makes `tickets/*` answer { value, rateLimit } too, 4000 calls left (INT-6: the account's budget).
 import process from 'node:process';
 
 const args = process.argv.slice(2);
@@ -116,6 +117,9 @@ function handle(msg) {
     case 'test/do':
       return behave(id, params);
     default:
+      if (method.startsWith('tickets/') && flag('--ticket-budget')) {
+        return serve(id, method, params).then((m) => (m?.result === undefined ? m : ok(id, { value: m.result, rateLimit: { ...RATE, remaining: 4000 } })));
+      }
       if (method === 'account/me' || method.startsWith('tickets/') || method.startsWith('forge/')) return serve(id, method, params);
       return id === undefined ? null : fail(id, -32601, `unknown method ${method}`);
   }

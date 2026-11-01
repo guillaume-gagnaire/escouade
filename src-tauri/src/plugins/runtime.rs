@@ -412,10 +412,23 @@ pub struct Runtime {
     quitting: AtomicBool,
     /// Where the projects are (the core): what `settings/get` reads of a project's file.
     place: parking_lot::RwLock<Option<Weak<dyn super::events::Place>>>,
+    /// What each account has left of its calls, as its plugin's last answer said it (INT-6): by
+    /// `accounts::budget_key`, shared by all the points of the plugin that serves the account.
+    budgets: Mutex<HashMap<String, crate::forge::RateLimit>>,
     me: Weak<Self>,
 }
 
 impl Runtime {
+    /// What the account `key` (`accounts::budget_key`) has left of its calls, as last said.
+    pub fn budget(&self, key: &str) -> Option<crate::forge::RateLimit> {
+        self.budgets.lock().get(key).copied()
+    }
+
+    /// The account `key` has `left` of its calls: whichever of its plugin's points was answered.
+    pub fn spend(&self, key: &str, left: crate::forge::RateLimit) {
+        self.budgets.lock().insert(key.to_string(), left);
+    }
+
     /// The core, once made: the projects whose settings a plugin may ask for.
     pub fn place_with(&self, p: Weak<dyn super::events::Place>) {
         *self.place.write() = Some(p);
@@ -459,6 +472,7 @@ impl Runtime {
             limits,
             hosts: Mutex::new(HashMap::new()),
             journals: Mutex::new(HashMap::new()),
+            budgets: Mutex::new(HashMap::new()),
             quitting: AtomicBool::new(false),
             place: parking_lot::RwLock::new(None),
             me: me.clone(),
