@@ -9,7 +9,7 @@
   },
   "license": "MIT",
   "escouade": { "api": "1", "min": "2.1.0" },
-  "run": { "command": "plugin", "windows": "plugin.cmd" },
+  "run": { "js": "dist/plugin.mjs" },
   "activation": ["event:ticket.column"],
   "permissions": {
     "events": ["ticket.column"],

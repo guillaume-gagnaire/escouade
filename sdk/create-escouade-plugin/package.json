@@ -1,6 +1,6 @@
 {
   "name": "create-escouade-plugin",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "npm create escouade-plugin: a new plugin of Escouade, a TypeScript program with its tests or a declarative theme.",
   "license": "MIT",
   "type": "module",

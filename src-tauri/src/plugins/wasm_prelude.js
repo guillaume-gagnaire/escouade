@@ -1,20 +1,23 @@
-// The prelude of a JS/TS plugin compiled to WASM by Escouade (ESC-320, plugins/wasm.rs; the prototype of ESC-319). It goes before the bundle
-// of the plugin (dist/plugin.mjs, as committed) and gives it what Node gave it, served by Escouade instead:
-// - the protocol's lines on the standard input and output, as Node's process: `process.stdout.write`, and
-//   `createInterface` of `node:readline` whose 'line' events are the lines Escouade sends;
-// - `readFileSync` of `node:fs`, for the files of the plugin's own folder only (rules.json, channels.json), given by
-//   Escouade at the start, in the first line (`escouade/boot`);
-// - `fetch`, served by Escouade (`net/fetch`), which lets out only the hosts of `permissions.network`;
+// The prelude of a JS/TS plugin compiled to WASM by Escouade (ESC-320, plugins/wasm.rs; reduced by ESC-321 to what
+// the SDK does not do). It goes before the bundle of the plugin (dist/plugin.mjs, as committed) and gives it what Node
+// gave it and the SDK does not, served by Escouade:
+// - `globalThis.__esc`, the transport the SDK's `start()` finds here (instead of Node's stdin and stdout): `listen`
+//   for the protocol's lines Escouade sends, `write` for those the plugin sends, `trace` for its journal;
+// - `readFileSync` of `node:fs`, for the files at the root of the plugin's own folder only (rules.json,
+//   channels.json), given by Escouade at the start, in the first line (`escouade/boot`); `p.file()` of the SDK reads
+//   the others (`files/read`);
+// - `fetch`, the standard one, served by Escouade (`net/fetch`), which lets out only the hosts of permissions.network;
+// - `URL`, enough of it for `new URL('../rules.json', import.meta.url)`;
 // - `console`, which goes to the journal (standard error), never into the protocol.
-// Escouade calls the module's export `escouade-turn` each time it has written lines: the prelude hands them to the plugin,
-// and the call returns once the plugin has nothing left to run (QuickJS's job queue empty): no thread, no timer.
+// No timer: `setTimeout` is not there (the SDK does without). `node:readline` is there for the SDK's import alone.
+// Escouade calls the module's export `escouade-turn` each time it has written lines: the prelude hands them to the
+// plugin, and the call returns once the plugin has nothing left to run (QuickJS's job queue empty): no thread.
 const __esc = (globalThis.__esc ??= (() => {
   const enc = new TextEncoder();
   const dec = new TextDecoder();
   let pending = new Uint8Array(0);
   const lines = [];
-  const lineHandlers = [];
-  const closeHandlers = [];
+  const listeners = [];
   const waiting = new Map();
   let seq = 0;
   let files = {};
@@ -41,7 +44,7 @@ const __esc = (globalThis.__esc ??= (() => {
     pending = pending.slice(start);
   }
 
-  function write(fd, text) {
+  function out(fd, text) {
     Javy.IO.writeSync(fd, enc.encode(text));
   }
 
@@ -73,10 +76,20 @@ const __esc = (globalThis.__esc ??= (() => {
   class Headers {
     constructor(h = {}) {
       this.map = {};
-      for (const [k, v] of Object.entries(h)) this.map[k.toLowerCase()] = String(v);
+      const entries = h instanceof Headers ? Object.entries(h.map) : Array.isArray(h) ? h : Object.entries(h);
+      for (const [k, v] of entries) this.map[String(k).toLowerCase()] = String(v);
     }
     get(k) {
-      return this.map[k.toLowerCase()] ?? null;
+      return this.map[String(k).toLowerCase()] ?? null;
+    }
+    has(k) {
+      return String(k).toLowerCase() in this.map;
+    }
+    set(k, v) {
+      this.map[String(k).toLowerCase()] = String(v);
+    }
+    forEach(cb) {
+      for (const [k, v] of Object.entries(this.map)) cb(v, k, this);
     }
   }
 
@@ -95,16 +108,17 @@ const __esc = (globalThis.__esc ??= (() => {
     }
   }
 
+  /** A call to Escouade the prelude makes itself (`net/fetch`): its answer never reaches the plugin's listeners. */
   function call(method, params) {
     const id = `w${++seq}`;
     return new Promise((resolve, reject) => {
       waiting.set(id, { resolve, reject });
-      write(1, JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
+      out(1, JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
     });
   }
 
   function fetch(input, init = {}) {
-    const headers = init.headers instanceof Headers ? init.headers.map : (init.headers ?? {});
+    const headers = new Headers(init.headers ?? {}).map;
     return call('net/fetch', {
       url: String(input && input.href ? input.href : input),
       method: init.method ?? 'GET',
@@ -145,20 +159,15 @@ const __esc = (globalThis.__esc ??= (() => {
     'node:fs': { readFileSync },
     'node:readline': {
       createInterface() {
-        const rl = {
-          on(event, cb) {
-            if (event === 'line') lineHandlers.push(cb);
-            else if (event === 'close') closeHandlers.push(cb);
-            return rl;
-          },
-          close() {},
-        };
-        return rl;
+        throw new Error(
+          'no standard input in WASM: build the plugin with @escouade-dev/plugin 0.3 or later, whose start() speaks to Escouade',
+        );
       },
     },
   };
 
-  const text = (args) => args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ') + '\n';
+  const text = (args) =>
+    args.map((a) => (typeof a === 'string' ? a : a instanceof Error ? (a.stack ?? a.message) : JSON.stringify(a))).join(' ') + '\n';
 
   return {
     booted: false,
@@ -166,43 +175,36 @@ const __esc = (globalThis.__esc ??= (() => {
     node(name) {
       return node[name];
     },
+    /** The SDK's transport: `cb` gets each line Escouade sends, but the answers to the prelude's own calls. */
+    listen(cb) {
+      listeners.push(cb);
+    },
+    /** A line to Escouade, without its `\n`. */
+    write(line) {
+      out(1, line + '\n');
+    },
+    /** A line of its journal. */
+    trace(line) {
+      out(2, line + '\n');
+    },
+    /** After `shutdown`: nothing more is handed to the plugin. */
+    end() {
+      ended = true;
+    },
     globals() {
       globalThis.URL ??= URL;
       globalThis.fetch = fetch;
       globalThis.Headers ??= Headers;
       globalThis.Response ??= Response;
-      // No timer yet in the prototype: a timeout never fires (the SDK uses one only to bound `shutdown`).
-      globalThis.setTimeout ??= () => ({ unref() {} });
-      globalThis.clearTimeout ??= () => {};
       globalThis.console = {
-        log: (...a) => write(2, text(a)),
-        info: (...a) => write(2, text(a)),
-        warn: (...a) => write(2, text(a)),
-        error: (...a) => write(2, text(a)),
-        debug: (...a) => write(2, text(a)),
+        log: (...a) => out(2, text(a)),
+        info: (...a) => out(2, text(a)),
+        warn: (...a) => out(2, text(a)),
+        error: (...a) => out(2, text(a)),
+        debug: (...a) => out(2, text(a)),
       };
-      globalThis.process = {
-        env: {},
-        platform: 'wasi',
-        argv: [],
-        stdin: {},
-        stdout: {
-          write(s, cb) {
-            write(1, String(s));
-            if (typeof cb === 'function') cb();
-            return true;
-          },
-        },
-        stderr: {
-          write(s) {
-            write(2, String(s));
-            return true;
-          },
-        },
-        exit() {
-          ended = true;
-        },
-      };
+      // What a library reads of Node's process; no streams, no exit, no environment.
+      globalThis.process ??= { env: {}, argv: [], platform: 'wasi' };
     },
     /** The first line Escouade writes: the plugin's files. */
     boot(bundle) {
@@ -212,7 +214,13 @@ const __esc = (globalThis.__esc ??= (() => {
       files = (frame['escouade/boot'] && frame['escouade/boot'].files) || {};
       this.globals();
       this.booted = true;
-      bundle();
+      try {
+        bundle();
+      } catch (e) {
+        // Its reason in its journal (the last line of its standard error), then the instance crashes.
+        out(2, `${(e && e.stack) || ''}\n${String(e)}\n`);
+        throw e;
+      }
     },
     /** Hands Escouade's lines to the plugin. */
     pump() {
@@ -228,11 +236,14 @@ const __esc = (globalThis.__esc ??= (() => {
         if (m && m.method === undefined && typeof m.id === 'string' && waiting.has(m.id)) {
           const w = waiting.get(m.id);
           waiting.delete(m.id);
-          if (m.error) w.reject(new Error(m.error.message));
-          else w.resolve(m.result);
+          if (m.error) {
+            const e = new Error(m.error.message);
+            e.code = m.error.code;
+            w.reject(e);
+          } else w.resolve(m.result);
           continue;
         }
-        for (const cb of lineHandlers) cb(line);
+        for (const cb of listeners) cb(line);
       }
     },
   };

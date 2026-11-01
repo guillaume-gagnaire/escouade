@@ -8,14 +8,14 @@
 //
 // `program` is a TypeScript program with its tests (a fact received, a permission decided); `declarative` is a
 // theme, nothing that runs. Without --kind, it asks when it runs in a terminal, and takes `program` otherwise.
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { userInfo } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 
 /** The version of @escouade-dev/plugin a new plugin depends on (a test holds it to sdk/plugin/package.json). */
-export const SDK_VERSION = '^0.2.0';
+export const SDK_VERSION = '^0.3.0';
 export const KINDS = ['program', 'declarative'];
 const TEMPLATES = join(dirname(fileURLToPath(import.meta.url)), 'templates');
 const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)+$/;
@@ -92,8 +92,6 @@ export function create({ folder, kind = 'program', id, name, sdk = SDK_VERSION, 
     }
   };
   copy(join(TEMPLATES, kind), folder);
-  // The program of run on macOS and Linux.
-  if (kind === 'program') chmodSync(join(folder, 'plugin'), 0o755);
   // In a folder of a repository already there (several plugins in one repository, ESC-313): the manifest names the
   // repository, and its tags name the folder.
   const root = repositoryOf(folder);
