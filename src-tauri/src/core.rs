@@ -2006,6 +2006,23 @@ impl<R: Runtime> Core<R> {
             Arc::downgrade(&(core.clone() as Arc<dyn crate::plugins::events::Place>));
         core.plugin_events.place_with(place.clone());
         core.plugin_runtime.place_with(place);
+        // The pinned Javy of the run.js plugins downloads through Réglages › Réseau (ESC-320); their modules are
+        // made ready in the cache, precompiled again for this version of the app when it changed.
+        {
+            let weak = Arc::downgrade(&core);
+            core.plugin_runtime.modules().client_with(Arc::new(move || {
+                weak.upgrade()
+                    .and_then(|c| {
+                        let settings = c.settings.read().clone();
+                        crate::plugins::store::client(&settings).ok()
+                    })
+                    .unwrap_or_default()
+            }));
+            let rt = core.plugin_runtime.clone();
+            let _ = std::thread::Builder::new()
+                .name("plugins: their modules".into())
+                .spawn(move || rt.prepare_all());
+        }
         for h in core.agents.read().values() {
             let mut rt = h.lock();
             rt.facts = core.facts.emitter();

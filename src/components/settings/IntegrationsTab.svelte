@@ -214,6 +214,9 @@
         {#if a?.connected && a.unread}
           <span class="d warn">{t('integrations.accounts.keychainUnreadable')}</span>
         {/if}
+        {#if a?.connected && a.plugin}
+          <span class="d">{t('integrations.accounts.servedByPlugin', { plugin: a.plugin })}</span>
+        {/if}
         {#if BY_FORGE[id]}<span class="d">{t('integrations.accounts.byForge', { forge: forgeName(id) })}</span>{/if}
         {#if id === 'azure'}<span class="d">{t('integrations.accounts.workItems')}</span>{/if}
       </div>
@@ -238,6 +241,13 @@
           connect(id);
         }}
       >
+        {#if a?.servers && a.servers.length > 1}
+          <label
+            ><span>{t('integrations.accounts.servedBy')}</span><select class="field" bind:value={form.plugin}>
+              {#each a.servers as s (s.plugin)}<option value={s.firstHand ? '' : s.plugin}>{s.name}</option>{/each}
+            </select></label
+          >
+        {/if}
         {#if id === 'jira'}
           <label
             ><span>{t('integrations.accounts.site')}</span><input

@@ -8,11 +8,14 @@
 //! (401 is `-32401`: « reconnect the account »), a refusal that asking again would not change by
 //! `-32010`, and a call its host cannot do by `-32601`. A plugin that crashed, is stopped or is
 //! too slow is a `PluginDown`: the sync waits and tries again, the pull requests read last stay.
-//! It gets its token itself, by `secrets/get` of `account:<id>`: the adapters never put it in a
-//! call, and mask nothing because they carry nothing.
+//! It gets its token itself, by `secrets/get` of `account:<account>` (`plugins::accounts`: an
+//! instance's host, or a kind's id): the adapters never put it in a call, and mask nothing because
+//! they carry nothing. Each answer may carry the account's budget (`{ value, rateLimit }`), kept
+//! for the account: the plugin's sources and hosts spend the same (`Runtime::budget`).
 
-// Nothing in the app asks a plugin for a source or a host yet: the registries read the manifests
-// with INT-6, and the tests play these adapters until then.
+// The app asks a plugin for an account another plugin than Escouade's own hand serves
+// (`Account::plugin`, INT-6); the registries of sources and hosts read the manifests with INT-7
+// and INT-8, so that `ProcessTicketSourceKind` serves only the tests until then.
 #![allow(dead_code)]
 
 use super::runtime::{CallError, Runtime, METHOD_NOT_FOUND};
@@ -26,7 +29,6 @@ use crate::integrations::{
 };
 use crate::model::{ExternalRef, ExternalState};
 use anyhow::{anyhow, Result};
-use parking_lot::Mutex;
 use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -102,11 +104,14 @@ fn typed(plugin: &str, e: CallError, what: &'static str) -> anyhow::Error {
     }
 }
 
-/// A plugin and the runtime that talks to it.
+/// A plugin and the runtime that talks to it (for one account: `for_account`).
 #[derive(Clone)]
 pub(super) struct Line {
     rt: Arc<Runtime>,
     pub(super) plugin: String,
+    /// The account's budget of calls (`accounts::budget_key`), for a line of one account:
+    /// every point of the plugin spends the same.
+    budget: Option<String>,
 }
 
 impl Line {
@@ -114,9 +119,20 @@ impl Line {
         Self {
             rt,
             plugin: plugin.to_string(),
+            budget: None,
         }
     }
 
+    /// The line of one account (`account`: its name in the keychain's), whose budget it keeps.
+    fn for_account(rt: Arc<Runtime>, plugin: &str, account: &str) -> Self {
+        Self {
+            budget: Some(super::accounts::budget_key(plugin, account)),
+            ..Self::new(rt, plugin)
+        }
+    }
+
+    /// The answer to `method`: its value, the budget it carries (`{ value, rateLimit }`) kept as
+    /// the account's.
     pub(super) async fn call<T: DeserializeOwned>(
         &self,
         method: &str,
@@ -128,6 +144,10 @@ impl Line {
             .call(&self.plugin, method, params)
             .await
             .map_err(|e| typed(&self.plugin, e, what))?;
+        let (v, left) = super::accounts::split_budget(v);
+        if let (Some(budget), Some(left)) = (&self.budget, left) {
+            self.rt.spend(budget, left);
+        }
         serde_json::from_value(v).map_err(|e| {
             typed(
                 &self.plugin,
@@ -157,14 +177,26 @@ pub struct ProcessTicketSource {
 
 impl ProcessTicketSource {
     pub fn new(rt: Arc<Runtime>, plugin: &str, source: &str, account: &Account) -> Self {
+        // Its account: its instance's host (GitLab Issues on a GitLab's), else the source's own.
+        let name = if account.site.trim().is_empty() {
+            source.to_string()
+        } else {
+            crate::forge::host_of(&account.site)
+        };
         Self {
-            line: Line {
-                rt,
-                plugin: plugin.to_string(),
-            },
+            line: Line::for_account(rt, plugin, &name),
             source: source.to_string(),
             account: account_json(account),
         }
+    }
+
+    /// The account's budget of calls, as the last answer of any point of its plugin said it (a
+    /// source's answer may carry it as a host's does: `{ value, rateLimit }`).
+    pub fn rate_limit(&self) -> Option<RateLimit> {
+        self.line
+            .budget
+            .as_deref()
+            .and_then(|b| self.line.rt.budget(b))
     }
 
     fn params(&self, extra: Value) -> Value {
@@ -320,19 +352,14 @@ pub struct ProcessForge {
     line: Line,
     forge: String,
     account: Value,
-    rate: Mutex<Option<RateLimit>>,
 }
 
 impl ProcessForge {
     pub fn new(rt: Arc<Runtime>, plugin: &str, forge: &str, account: &Credentials) -> Self {
         Self {
-            line: Line {
-                rt,
-                plugin: plugin.to_string(),
-            },
+            line: Line::for_account(rt, plugin, &crate::forge::host_of(&account.url)),
             forge: forge.to_string(),
             account: json!({ "url": account.url, "email": account.email, "api": account.api }),
-            rate: Mutex::new(None),
         }
     }
 
@@ -346,17 +373,14 @@ impl ProcessForge {
         if let (Some(p), Value::Object(extra)) = (p.as_object_mut(), extra) {
             p.extend(extra);
         }
-        let mut answer: Value = self.line.call(method, what, p).await?;
-        if let Some(r) = answer
-            .get("rateLimit")
-            .and_then(|r| serde_json::from_value::<RateLimit>(r.clone()).ok())
-        {
-            *self.rate.lock() = Some(r);
-        }
-        let value = answer
-            .get_mut("value")
-            .map(Value::take)
-            .unwrap_or(Value::Null);
+        // `{ value, rateLimit }`: the budget is kept by `Line::call`; a bare `{ value }` too.
+        let answer: Value = self.line.call(method, what, p).await?;
+        let value = match answer {
+            Value::Object(mut o) if o.len() == 1 && o.contains_key("value") => {
+                o.remove("value").unwrap_or(Value::Null)
+            }
+            other => other,
+        };
         serde_json::from_value(value).map_err(|e| {
             typed(
                 &self.line.plugin,
@@ -593,8 +617,12 @@ impl Forge for ProcessForge {
         })
     }
 
+    /// The account's budget: what the last answer of any point of its plugin said.
     fn rate_limit(&self) -> Option<RateLimit> {
-        *self.rate.lock()
+        self.line
+            .budget
+            .as_deref()
+            .and_then(|b| self.line.rt.budget(b))
     }
 
     fn deployments<'a>(

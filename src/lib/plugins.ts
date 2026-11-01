@@ -60,7 +60,8 @@ export interface Manifest {
   license?: string;
   repository?: string;
   escouade: { api: number; min: string; max?: string };
-  run?: { command: string; args: string[] };
+  /** A command (a process), or a JS/TS bundle that Escouade runs in WASM (`js`, ESC-320). */
+  run?: { command: string; js?: string; args: string[] };
   activation: string[];
   permissions: { events: string[]; network: string[]; secrets: string[]; commands: string[]; decide: boolean };
   contributes: Record<string, unknown>;
@@ -208,6 +209,8 @@ export interface Ask {
   detail: string;
   strong: boolean;
   red: boolean;
+  /** What it says under it: whether Escouade enforces it (a host of a plugin in WASM) or only shows it. */
+  note?: string;
 }
 
 /** The title of a secret's field, or its key. */
@@ -222,6 +225,8 @@ export function askOf(word: string, m: Manifest | null, lang: string): Ask {
   const what = rest.join(':');
   switch (kind) {
     case 'run':
+      // A JS/TS bundle runs inside Escouade, isolated (ESC-320): no program of the user's machine.
+      if (m?.run?.js) return { word, icon: 'shield', text: t('plugins.ask.wasm'), detail: m.run.js, strong: false, red: false };
       return { word, icon: 'term', text: t('plugins.ask.run'), detail: m?.run?.command ?? '', strong: true, red: false };
     case 'decide':
       return { word, icon: 'shield', text: t('plugins.ask.decide'), detail: '', strong: true, red: true };
@@ -230,7 +235,15 @@ export function askOf(word: string, m: Manifest | null, lang: string): Ask {
     case 'events':
       return { word, icon: 'spark', text: t('plugins.ask.events'), detail: what, strong: false, red: false };
     case 'network':
-      return { word, icon: 'globe', text: t('plugins.ask.network'), detail: what, strong: false, red: false };
+      return {
+        word,
+        icon: 'globe',
+        text: t('plugins.ask.network'),
+        detail: what,
+        strong: false,
+        red: false,
+        note: t(m?.run?.js ? 'plugins.perms.networkApplied' : 'plugins.perms.networkNote'),
+      };
     default:
       return {
         word,

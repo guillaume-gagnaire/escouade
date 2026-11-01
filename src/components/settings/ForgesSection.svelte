@@ -156,6 +156,7 @@
         {#if a.status.error && a.status.health !== 'connected'}<span class="d why">{a.status.error}</span>{/if}
         {#if a.inFile}<span class="d warn">{t('integrations.accounts.keychainUnavailable')}</span>{/if}
         {#if a.viaCli}<span class="d">{t('integrations.forges.viaCli', { cli: provider(a.kind)?.cli ?? 'gh' })}</span>{/if}
+        {#if a.plugin}<span class="d">{t('integrations.accounts.servedByPlugin', { plugin: a.plugin })}</span>{/if}
         {#if a.issues}
           <span class="d"
             >{t('integrations.forges.issues', {
@@ -194,10 +195,22 @@
       }}
     >
       <label
-        ><span>{t('integrations.forges.kind')}</span><select class="field" bind:value={form.kind} disabled={guessing}>
+        ><span>{t('integrations.forges.kind')}</span><select
+          class="field"
+          bind:value={form.kind}
+          disabled={guessing}
+          onchange={() => form && delete form.plugin}
+        >
           {#each view?.providers ?? [] as p (p.kind)}<option value={p.kind}>{p.name}</option>{/each}
         </select></label
       >
+      {#if chosen?.servers && chosen.servers.length > 1}
+        <label
+          ><span>{t('integrations.accounts.servedBy')}</span><select class="field" bind:value={form.plugin}>
+            {#each chosen.servers as s (s.plugin)}<option value={s.firstHand ? '' : s.plugin}>{s.name}</option>{/each}
+          </select></label
+        >
+      {/if}
       <label
         ><span>{t('integrations.forges.address')}</span><input
           class="field mono"

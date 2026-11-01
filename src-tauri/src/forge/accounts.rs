@@ -5,6 +5,7 @@
 use super::{host_of, Credentials};
 use crate::integrations::secrets::{self, SecretStore};
 use crate::integrations::{Account, Accounts, VIA_GH};
+use crate::plugins::accounts;
 use serde::{Deserialize, Serialize};
 
 /// The host of github.com's account, which `Accounts::github` holds.
@@ -28,6 +29,10 @@ pub struct ForgeAccount {
     pub user: String,
     /// It has no token of its own: its CLI's (`gh`, `glab`), asked when needed.
     pub via_cli: bool,
+    /// The plugin that serves it, chosen when it was added (`plugins::accounts`); empty for
+    /// Escouade's own hand.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub plugin: String,
     /// The keychain refused its token: it stays in `integrations.json`. Never saved.
     #[serde(skip)]
     pub in_file: bool,
@@ -62,6 +67,7 @@ impl ForgeAccount {
             label: a.label.trim_end_matches(VIA_GH).to_string(),
             user: a.user.clone(),
             via_cli,
+            plugin: a.plugin.clone(),
             in_file: a.in_file,
             unread: a.unread,
         }
@@ -97,14 +103,23 @@ pub fn entry(host: &str) -> String {
 }
 
 /// The account's token goes into the keychain, read back to check, else it stays in the file
-/// (`in_file`). Without one (its CLI's), a former account's entry goes: false when it stays.
+/// (`in_file`): under its plugin's name (`plugins::accounts`), and under its former one for a
+/// version from before when Escouade's own hand serves it. Without one (its CLI's), a former
+/// account's entries go: false when they stay.
 pub fn place(store: &dyn SecretStore, a: &mut ForgeAccount) -> bool {
     a.in_file = false;
-    let name = entry(&a.host());
     if a.token.is_empty() {
-        return forget(store, &a.host());
+        return forget_of(store, &a.host(), &a.kind, &a.plugin);
     }
-    if let Err(e) = secrets::keep_secret(store, &name, &a.token) {
+    let kept =
+        secrets::keep_secret(store, &accounts::forge_vault_name(a), &a.token).and_then(|()| {
+            if accounts::is_first_hand(&a.plugin) {
+                secrets::keep_secret(store, &entry(&a.host()), &a.token)
+            } else {
+                Ok(())
+            }
+        });
+    if let Err(e) = kept {
         log::warn!(
             "{}: token left in integrations.json, the system keychain refused it: {e:#}",
             a.host()
@@ -114,19 +129,36 @@ pub fn place(store: &dyn SecretStore, a: &mut ForgeAccount) -> bool {
     true
 }
 
-/// The instance's token leaves the keychain; false when it could not (logged).
+/// The instance's token leaves the keychain, under every name it may have (`plugin`: the plugin
+/// that served it, when known); false when it could not (logged).
 pub fn forget(store: &dyn SecretStore, host: &str) -> bool {
-    if let Err(e) = store.delete(&entry(host)) {
+    forget_of(store, host, "", "")
+}
+
+/// `forget`, for an account of the kind `kind` (empty: unknown) that `plugin` served (empty:
+/// Escouade's own hand).
+pub fn forget_of(store: &dyn SecretStore, host: &str, kind: &str, plugin: &str) -> bool {
+    let mut names = vec![entry(host)];
+    names.extend(accounts::forge_vault_names(host));
+    if !kind.is_empty() {
+        names.push(accounts::vault_name(&accounts::serving(kind, plugin), host));
+    }
+    let gone = names.iter().try_for_each(|n| store.delete(n));
+    if let Err(e) = gone {
         log::warn!("{host}: the system keychain did not forget its token: {e:#}");
         return false;
     }
     true
 }
 
-/// The account's token, from the keychain; missing, the account says so (`unread`).
+/// The account's token, from the keychain (`secrets::read_entry`: its former name first while it
+/// is kept, copied under its plugin's); missing, the account says so (`unread`).
 fn fill(store: &dyn SecretStore, a: &mut ForgeAccount) {
-    match store.get(&entry(&a.host())) {
-        Ok(Some(token)) if !token.is_empty() => {
+    let former = accounts::is_first_hand(&a.plugin).then(|| entry(&a.host()));
+    let name = accounts::forge_vault_name(a);
+    let found = secrets::read_entry(store, former.as_deref(), &name, &a.host());
+    match found.map(|t| t.filter(|t| !t.is_empty())) {
+        Ok(Some(token)) => {
             a.token = token;
             return;
         }

@@ -89,6 +89,32 @@ The marketplace re-encodes it without its metadata at 256 and 64 px, and shows i
 
 One plugin can hold several points: a GitHub plugin gives its issues to the Kanban and follows its PRs on a single account.
 
+### Kinds of account
+
+A kind of account (`accounts`) says how an account is added, and that account serves every point of the plugin that names it (`account`): one connection, every use.
+
+```json
+"accounts": [{
+  "id": "gitlab",
+  "name": "GitLab",
+  "defaultHost": "gitlab.com",
+  "selfHosted": true,
+  "connect": ["token", { "cli": "glab", "login": "glab auth login" }],
+  "fields": [{ "key": "url" }, { "key": "token", "secret": true }],
+  "scopes": ["api"],
+  "tokenPage": "{url}/-/user_settings/personal_access_tokens"
+}]
+```
+
+- `defaultHost`: its public instance; `selfHosted`: it has instances of one’s own; `probe`: the path that tells an instance whose name says nothing;
+- `connect`: a typed token (`token`), or the token of the service’s CLI; a token by default;
+- `fields`: what the form asks (`site`, `email`, `key`, `token`…), `secret` for what goes to the keychain; a token alone by default;
+- `scopes`: the rights the token must have; `tokenPage`: the page that makes one.
+
+A kind with the `id` of one of Escouade’s integrations (`github`, `gitlab`, `bitbucket`, `gitea`, `azure`, `jira`, `trello`, `linear`, `clickup`) is offered beside it: “Connect…” then asks which one serves the account, Escouade first. Never silently.
+
+An account’s secret is in the keychain under `plugin:<id>:account:<account>`: the account is its instance’s host (`gitlab.com`), or the kind’s `id` for a kind without instances (`jira`). The plugin reads it with `secrets/get` of `account:<account>`, if it has `account:*` in `permissions.secrets`; never another plugin’s account. What it holds: the token, or `{ "key": …, "token": … }` for a kind with two secrets (Trello).
+
 ## What Escouade checks
 
 - **An invalid manifest loads nothing.** Escouade says why, field by field, with the field’s path: “`escouade.min` is missing.”, “`contributes.settings[0].type` is one of: string, number, boolean, select.”

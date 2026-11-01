@@ -107,11 +107,13 @@ export interface Manifest {
     secrets?: string[];
   };
   repository?: string;
-  /** Its program; without one, the plugin is declarative: nothing runs. */
+  /** Its program; without one, the plugin is declarative: nothing runs. A command (`command`, a process) or a JS/TS bundle of its folder that Escouade runs in WASM (`js`), not both. */
   run?: {
     args?: string[];
     /** A path in the plugin's folder: relative, without `..`. */
-    command: string;
+    command?: string;
+    /** A path in the plugin's folder: relative, without `..`. */
+    js?: string;
     /** A path in the plugin's folder: relative, without `..`. */
     linux?: string;
     /** A path in the plugin's folder: relative, without `..`. */

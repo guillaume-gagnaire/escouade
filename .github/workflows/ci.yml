@@ -142,6 +142,38 @@ jobs:
         working-directory: .
         run: docker build -f store/Dockerfile -t escouade-store:ci .
 
+  # escouade-js, the Javy plugin of the run.js plugins (ESC-320, docs/PLUGINS.md §5): built once for wasm32-wasip1 with the
+  # pinned Javy (scripts/escouade-js.sh), its SHA-256 noted, then handed to every job that builds the app, which embeds it.
+  escouade-js:
+    name: escouade-js (the JS/TS plugins' engine)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust toolchain (pinned in src-tauri/escouade-js/rust-toolchain.toml) and wasm32-wasip1
+        working-directory: src-tauri/escouade-js
+        run: |
+          rustup toolchain install
+          rustup target add wasm32-wasip1
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri/escouade-js
+
+      - name: Build escouade-js
+        run: |
+          sh scripts/escouade-js.sh
+          echo "escouade-js.wasm: $(wc -c < src-tauri/escouade-js/target/escouade-js.wasm) bytes, SHA-256 $(cat src-tauri/escouade-js/target/escouade-js.wasm.sha256)" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: escouade-js
+          path: |
+            src-tauri/escouade-js/target/escouade-js.wasm
+            src-tauri/escouade-js/target/escouade-js.wasm.sha256
+          retention-days: 7
+
   windows-lint:
     name: Windows (Rust format and Clippy)
     runs-on: windows-latest
@@ -172,10 +204,18 @@ jobs:
 
   windows-build:
     name: Windows (build)
+    needs: escouade-js
     runs-on: windows-latest
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
+
+      # escouade-js, embedded in the app (src-tauri/build.rs).
+      - name: Download escouade-js
+        uses: actions/download-artifact@v7
+        with:
+          name: escouade-js
+          path: src-tauri/escouade-js/target
 
       - uses: actions/setup-node@v7
         with:
@@ -353,10 +393,18 @@ jobs:
 
   linux:
     name: Linux (lint, tests and packages)
+    needs: escouade-js
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+
+      # escouade-js, embedded in the app (src-tauri/build.rs).
+      - name: Download escouade-js
+        uses: actions/download-artifact@v7
+        with:
+          name: escouade-js
+          path: src-tauri/escouade-js/target
 
       - uses: actions/setup-node@v7
         with:
@@ -465,10 +513,18 @@ jobs:
 
   macos:
     name: macOS (lint and tests)
+    needs: escouade-js
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+
+      # escouade-js, embedded in the app (src-tauri/build.rs).
+      - name: Download escouade-js
+        uses: actions/download-artifact@v7
+        with:
+          name: escouade-js
+          path: src-tauri/escouade-js/target
 
       - uses: actions/setup-node@v7
         with:
@@ -524,10 +580,18 @@ jobs:
 
   macos-bundle:
     name: macOS (app bundle)
+    needs: escouade-js
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+
+      # escouade-js, embedded in the app (src-tauri/build.rs).
+      - name: Download escouade-js
+        uses: actions/download-artifact@v7
+        with:
+          name: escouade-js
+          path: src-tauri/escouade-js/target
 
       - uses: actions/setup-node@v7
         with:
