@@ -146,7 +146,12 @@
         "decision.proposed",
         "decision.accepted",
         "pr.opened",
-        "account.switched"
+        "account.switched",
+        "workflow.step_entered",
+        "workflow.step_left",
+        "workflow.looped_back",
+        "workflow.left",
+        "workflow.changed"
       ]
     },
     "Project": {

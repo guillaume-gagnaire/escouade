@@ -148,6 +148,8 @@ mod plugins_harness_tests;
 #[cfg(test)]
 mod plugins_protocol_tests;
 #[cfg(test)]
+mod plugins_reader_tests;
+#[cfg(test)]
 mod plugins_runtime_tests;
 #[cfg(test)]
 mod plugins_store_tests;
