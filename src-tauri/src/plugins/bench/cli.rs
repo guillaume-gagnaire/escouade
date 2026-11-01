@@ -21,9 +21,11 @@ fn usage(lang: Lang) -> String {
         lang,
         "escouade-plugin : tester un plugin d'Escouade sans l'app.
 
-  escouade-plugin test <dossier> [--json] [--measure [n]]
+  escouade-plugin test <dossier> [--json] [--measure [n]] [--wasm <module>] [--offline]
       Joue le banc de conformité : initialisation, version refusée, délais, un fait reçu,
       une décision, un secret, plantage, fermeture. Code de sortie 1 si un scénario échoue.
+      --wasm joue ce module d'un plugin `run.js` (celui du store) au lieu de compiler son
+      bundle ; --offline refuse tout fetch, quoi que dise permissions.network.
   escouade-plugin validate <dossier>
       Lit le manifeste (escouade-plugin.json) et dit ce qui ne va pas, champ par champ ; pour un
       plugin `run.js`, que son bundle peut tourner en WASM.
@@ -47,9 +49,11 @@ Options : --lang fr|en ; --first-party pour un plugin d'Escouade (plugins/<id>/ 
 ",
         "escouade-plugin: test an Escouade plugin without the app.
 
-  escouade-plugin test <folder> [--json] [--measure [n]]
+  escouade-plugin test <folder> [--json] [--measure [n]] [--wasm <module>] [--offline]
       Plays the conformance bench: initialization, version refused, delays, a fact received,
       a decision, a secret, crash, shutdown. Exit code 1 when a scenario fails.
+      --wasm plays this module of a `run.js` plugin (the store's) instead of compiling its
+      bundle; --offline refuses every fetch, whatever permissions.network says.
   escouade-plugin validate <folder>
       Reads the manifest (escouade-plugin.json) and says what is wrong, field by field; for a
       `run.js` plugin, that its bundle can run in WASM.
@@ -151,6 +155,12 @@ pub fn main(args: Vec<String>) -> i32 {
                 lang,
                 hand,
                 measure: measure.unwrap_or(0),
+                module: args
+                    .iter()
+                    .position(|a| a == "--wasm")
+                    .and_then(|i| args.get(i + 1))
+                    .map(PathBuf::from),
+                offline: flag("--offline"),
                 ..Options::default()
             };
             let report = rt.block_on(run(&folder, &options));

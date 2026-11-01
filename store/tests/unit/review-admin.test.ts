@@ -17,6 +17,7 @@ import {
 } from '../../scripts/plugin-review/admin';
 import { parseTarget } from '../../scripts/plugin-review/download';
 import { review } from '../../scripts/plugin-review/review';
+import { sandboxedCompiler } from '../../server/utils/compile';
 import { readPublicKey } from '../../server/utils/minisign';
 import { checkRevocations, type RevocationList } from '../../server/utils/revocation-list';
 import { checkVersionSignature } from '../../server/utils/signature';
@@ -31,6 +32,7 @@ import { FAKE_ADMIN_TOKEN, startReviewStore } from '../fake/review-store.mjs';
 const here = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(here, '../../..');
 const MINISIGN = join(here, '../fake/fake-minisign.mjs');
+const FAKE_CLI = join(here, '../fake/fake-escouade-plugin.mjs');
 
 let root: string;
 let store: Awaited<ReturnType<typeof startReviewStore>>;
@@ -48,13 +50,20 @@ beforeAll(async () => {
     ['stranger.key', stranger],
   ] as const)
     writeFileSync(join(root, name), k.secret);
-  for (const t of ['dev.exemple.team-rules@1.0.0', 'io.github.q7x.slak-notify@0.0.1'])
+  // The run.js plugin compiled again by the fake escouade-plugin: the same module (1.0.0), another compiler (1.0.2).
+  for (const t of [
+    'dev.exemple.team-rules@1.0.0',
+    'io.github.q7x.slak-notify@0.0.1',
+    'dev.exemple.rules-js@1.0.0',
+    'dev.exemple.rules-js@1.0.2',
+  ])
     await review({
       ...parseTarget(t)!,
       source: { store: store.url, githubApi: store.githubApi },
       work: join(root, 'work'),
       reports: join(root, 'reports'),
-      bench: { engine: null, cli: null, image: 'img', timeout: 10_000 },
+      bench: { engine: null, cli: null, image: 'img', timeout: 10_000, local: FAKE_CLI },
+      compile: sandboxedCompiler({ command: [process.execPath, FAKE_CLI], isolation: 'none' }),
       benchWhy: 'aucun moteur de conteneur (test)',
       repo: REPO,
       now: new Date('2026-10-29T10:00:00Z'),
@@ -121,6 +130,37 @@ describe('the signature of a version', () => {
       await expect(signVersion(admin(), 'dev.exemple.team-rules', '1.0.0')).rejects.toThrow(/minisign a échoué/);
     } finally {
       delete process.env.FAKE_MINISIGN_FAIL;
+    }
+    expect(sent()).toBe(before);
+  });
+
+  it('signs a run.js plugin whose module the review compiled again to the same fingerprint (ESC-324)', async () => {
+    const done = await signVersion(admin(), 'dev.exemple.rules-js', '1.0.0');
+    expect(done.keyId).toBe(key.id);
+    expect(last('signature')).toMatchObject({ id: 'dev.exemple.rules-js', version: '1.0.0' });
+    expect((last('signature')!.summary as { fr: string }).fr).toContain('module WASM recompilé, même empreinte');
+  });
+
+  it('refuses a run.js plugin whose module was not compiled again, or not to the same fingerprint (ESC-324)', async () => {
+    const before = sent();
+    // Another escouade-plugin than the store's: not compiled again.
+    await expect(signVersion(admin(), 'dev.exemple.rules-js', '1.0.2')).rejects.toThrow(
+      /la recompilation du module WASM n’a pas donné la même empreinte : .*escouade-plugin 2.1.9/,
+    );
+    const data = join(root, 'reports', 'dev.exemple.rules-js', '1.0.0.json');
+    const kept = readFileSync(data, 'utf8');
+    try {
+      // A review written before the recompilation, or by hand: none is noted.
+      const j = JSON.parse(kept);
+      delete j.recompile;
+      writeFileSync(data, JSON.stringify(j));
+      await expect(signVersion(admin(), 'dev.exemple.rules-js', '1.0.0')).rejects.toThrow(/elle n’a pas été faite/);
+      // Its module noted, but another than version.json's.
+      j.recompile = { ...JSON.parse(kept).recompile, sha256: sha256('other') };
+      writeFileSync(data, JSON.stringify(j));
+      await expect(signVersion(admin(), 'dev.exemple.rules-js', '1.0.0')).rejects.toThrow(/n’a pas été recompilé à la même empreinte/);
+    } finally {
+      writeFileSync(data, kept);
     }
     expect(sent()).toBe(before);
   });

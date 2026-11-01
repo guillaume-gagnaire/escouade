@@ -2,6 +2,8 @@ import type { Attested } from './attest';
 import type { BenchResult } from './bench';
 import type { Grown } from './diff';
 import type { TagCheck } from './download';
+import type { Recompiled } from './recompile';
+import type { VersionFile } from '../../server/utils/versions';
 import { KINDS, type Lead, type LeadKind } from './leads';
 
 // The review's report (docs/STORE.md §4.2, step 6), in French, the user's language: written outside the repository
@@ -36,7 +38,14 @@ export interface ReviewData {
   leads?: Lead[];
   base?: { version: string; grown: Grown[]; files: number; added: number; removed: number; diff: string } | null;
   bench?: BenchResult;
+  /** The module the store compiled of a `run.js` plugin, as `version.json` names it (ESC-323). */
+  wasm?: VersionFile['wasm'];
+  /** Its bundle compiled again here and compared (ESC-324); absent for a plugin that is not `run.js`. */
+  recompile?: Recompiled;
 }
+
+/** Whether the version is a `run.js` plugin's, whose module must be compiled again to be signed. */
+export const isRunJs = (d: ReviewData) => !!d.wasm || typeof ((d.manifest?.run ?? null) as { js?: unknown } | null)?.js === 'string';
 
 const PERMISSION_WORDS: Record<string, (v: unknown) => string> = {
   events: (v) => `reçoit les faits ${list(v)}`,
@@ -57,7 +66,8 @@ export function permissionLines(manifest: Record<string, unknown> | null | undef
   const out = Object.entries(p)
     .filter(([, v]) => (Array.isArray(v) ? v.length > 0 : v === true))
     .map(([k, v]) => (PERMISSION_WORDS[k] ? PERMISSION_WORDS[k]!(v) : `\`${k}\` : ${JSON.stringify(v)}`));
-  if (manifest?.run) out.push('lance un programme');
+  if (typeof (manifest?.run as { js?: unknown } | undefined)?.js === 'string') out.push('tourne en WASM (`run.js`)');
+  else if (manifest?.run) out.push('lance un programme');
   else if (manifest) out.push('déclaratif : aucun programme');
   const contributes = Object.keys((manifest?.contributes ?? {}) as object);
   if (contributes.length) out.push(`ajoute ${contributes.map((c) => `\`${c}\``).join(', ')}`);
@@ -74,6 +84,12 @@ export function blockers(d: ReviewData): string[] {
   for (const b of d.binaries ?? [])
     if (b.attested.state !== 'verified') out.push(`le binaire ${b.platform} n’a pas d’attestation vérifiée pour ce commit`);
   if (d.bench?.played && !d.bench.passed) out.push('le banc de conformité échoue');
+  if (isRunJs(d) && d.recompile?.state !== 'same')
+    out.push(
+      `la recompilation du module WASM n’a pas donné la même empreinte : ${
+        d.recompile?.state === 'not-done' ? d.recompile.why : 'elle n’a pas été faite'
+      }`,
+    );
   return out;
 }
 
@@ -146,6 +162,20 @@ export function renderReport(d: ReviewData): string {
   if (d.binaries?.length)
     for (const b of d.binaries) out.push(`- Binaire ${b.platform} : ${code(b.sha256)}, empreinte vérifiée ; ${attestedText(b.attested)}`);
   else out.push('- Binaires : aucun');
+  if (d.wasm) {
+    const c = d.wasm.compiler;
+    out.push(
+      `- Module WASM : ${code(d.wasm.sha256)}, ${d.wasm.size} octets, empreinte vérifiée ; compilé par le store avec Javy ${c.javy}, escouade-js ${code(c.engine.slice(0, 12))}…, escouade-plugin ${c.prelude}`,
+    );
+  }
+  if (d.recompile)
+    out.push(
+      d.recompile.state === 'same'
+        ? '- Recompilé ici avec les mêmes versions : **même empreinte**, ce qui a été lu est ce qui tourne'
+        : d.recompile.state === 'different'
+          ? `- **Recompilé ici : autre empreinte** (${code(d.recompile.local)})`
+          : `- **Pas recompilé** : ${d.recompile.why}`,
+    );
   out.push('');
 
   out.push('## Permissions', '');
@@ -185,13 +215,22 @@ export function renderReport(d: ReviewData): string {
   if (!b) out.push('Non lancé.');
   else if (!b.played) out.push(`Non lancé : ${b.why}.`);
   else {
-    out.push(`${b.passed ? 'Passé' : '**Échoué**'}, dans ${code(b.command)}.`, '');
+    out.push(
+      b.where === 'wasm'
+        ? `${b.passed ? 'Passé' : '**Échoué**'}, le module publié joué dans l’hôte WASM d’Escouade, sans conteneur ni réseau : ${code(b.command)}.`
+        : `${b.passed ? 'Passé' : '**Échoué**'}, dans ${code(b.command)}.`,
+      '',
+    );
     for (const o of b.outcomes)
       out.push(
         `- ${o.verdict === 'pass' ? '✓' : o.verdict === 'fail' ? '✗' : '–'} ${o.scenario} : ${o.said}${o.missing ? ` — manque : ${o.missing}` : ''}`,
       );
     if (b.refused.length) {
-      out.push('', 'Refusé par le bac à sable (connexions, écritures) :', '');
+      out.push(
+        '',
+        b.where === 'wasm' ? 'Refusé par l’hôte WASM (fetch hors ligne) :' : 'Refusé par le bac à sable (connexions, écritures) :',
+        '',
+      );
       for (const r of b.refused) out.push(`- ${code(r)}`);
     }
     const said = b.seen.filter((s) => s.kind === 'stderr' || s.kind === 'log');
@@ -212,6 +251,7 @@ export function renderReport(d: ReviewData): string {
   if (b && !b.played) unverified.push('le comportement du plugin (banc non lancé)');
   for (const x of d.binaries ?? []) if (x.attested.state !== 'verified') unverified.push(`la provenance du binaire ${x.platform}`);
   if (d.tagCheck?.state === 'unknown') unverified.push('l’étiquette sur GitHub');
+  if (isRunJs(d) && d.recompile?.state !== 'same') unverified.push('que le module WASM publié soit le build du bundle relu');
   unverified.push('les dépendances que le plugin téléchargerait à l’installation (elles ne sont pas dans l’archive)');
   for (const u of unverified) out.push(`- ${u}`);
   out.push(
@@ -229,7 +269,9 @@ export function renderPublic(d: ReviewData): string {
   const network = ((d.manifest?.permissions ?? {}) as { network?: unknown }).network;
   const hosts = Array.isArray(network) && network.length ? network.join(', ') : 'aucun';
   const checked = ['empreintes de l’archive et de version.json', `commit ${d.commit?.slice(0, 12)} comparé à l’étiquette ${d.tag}`];
-  if (d.bench?.played) checked.push('banc de conformité sans réseau');
+  if (d.recompile?.state === 'same') checked.push('module WASM recompilé, même empreinte');
+  if (d.bench?.played)
+    checked.push(d.bench.where === 'wasm' ? 'banc de conformité dans l’hôte WASM, sans réseau' : 'banc de conformité sans réseau');
   if (d.binaries?.some((b) => b.attested.state === 'verified')) checked.push('provenance des binaires');
   if (d.base) checked.push(`diff depuis la v${d.base.version}`);
   return [
@@ -261,11 +303,19 @@ export function renderPublicEn(d: ReviewData): string {
   const perms = Object.entries(p)
     .filter(([, v]) => (Array.isArray(v) ? v.length > 0 : v === true))
     .map(([k, v]) => (PERMISSION_WORDS_EN[k] ? PERMISSION_WORDS_EN[k]!(v) : `\`${k}\`: ${JSON.stringify(v)}`));
-  perms.push(d.manifest?.run ? 'runs a program' : 'declarative: no program');
+  perms.push(
+    typeof (d.manifest?.run as { js?: unknown } | undefined)?.js === 'string'
+      ? 'runs in WASM (`run.js`)'
+      : d.manifest?.run
+        ? 'runs a program'
+        : 'declarative: no program',
+  );
   const contributes = Object.keys((d.manifest?.contributes ?? {}) as object);
   if (contributes.length) perms.push(`adds ${contributes.map((c) => `\`${c}\``).join(', ')}`);
   const checked = ['fingerprints of the archive and of version.json', `commit ${d.commit?.slice(0, 12)} compared to the tag ${d.tag}`];
-  if (d.bench?.played) checked.push('conformance bench without network');
+  if (d.recompile?.state === 'same') checked.push('WASM module compiled again, same fingerprint');
+  if (d.bench?.played)
+    checked.push(d.bench.where === 'wasm' ? 'conformance bench in the WASM host, without network' : 'conformance bench without network');
   if (d.binaries?.some((b) => b.attested.state === 'verified')) checked.push('provenance of the binaries');
   if (d.base) checked.push(`diff since v${d.base.version}`);
   return [

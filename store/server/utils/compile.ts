@@ -84,6 +84,11 @@ export interface SandboxOptions {
   command: string[];
   /** The pinned Javy the image holds, given to escouade-plugin by `ESCOUADE_JAVY`. */
   javy?: string;
+  /**
+   * escouade-plugin's data folder (its downloaded Javy): a new one per compilation when left out, as the store wants;
+   * the local review keeps one of its own, so that Javy is downloaded once (ESC-324).
+   */
+  data?: string;
   /** `auto` (an empty network namespace when the kernel allows it), `require` (never without), `none`. */
   isolation?: 'auto' | 'require' | 'none';
   timeoutMs?: number;
@@ -133,13 +138,13 @@ function groupMemory(pgid: number): number {
 }
 
 /** The environment of a compilation: its own folders, nothing of the store's variables. */
-function envOf(dir: string, javy: string | undefined): Env {
+function envOf(dir: string, javy: string | undefined, data?: string): Env {
   const env: Env = {
     PATH: process.platform === 'win32' ? process.env.PATH : '/usr/local/bin:/usr/bin:/bin',
     HOME: dir,
     TMPDIR: dir,
     LANG: 'C.UTF-8',
-    ESCOUADE_DATA_DIR: join(dir, 'data'),
+    ESCOUADE_DATA_DIR: data ?? join(dir, 'data'),
   };
   if (javy) env.ESCOUADE_JAVY = javy;
   if (process.platform === 'win32') {
@@ -181,7 +186,7 @@ export function sandboxedCompiler(o: SandboxOptions): CompileOne {
       const [program, ...before] = o.command;
       const words = [...before, 'build', plugin, '--out', out, '--json', '--lang', 'en', ...(input.firstParty ? ['--first-party'] : [])];
       const [exe, args] = isolation === 'unshare' ? ['unshare', ['-rn', '--', program!, ...words]] : [program!, words];
-      const { code, stdout, stderr, killed } = await run(exe, args, envOf(dir, o.javy), dir, timeout, memory);
+      const { code, stdout, stderr, killed } = await run(exe, args, envOf(dir, o.javy, o.data), dir, timeout, memory);
       if (killed === 'time') throw new Refused(`the compilation took more than ${Math.round(timeout / 1000)} s`);
       if (killed === 'memory') throw new Refused(`the compilation took more than ${Math.round(memory / 1024 / 1024)} MiB`);
       // escouade-plugin says why it refuses a bundle on a line of its own that starts with ✗; anything else (a crash,

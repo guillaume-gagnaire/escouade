@@ -270,6 +270,7 @@ impl Session {
         secrets: HashMap<String, String>,
         made: Option<String>,
         limits: wasm::Limits,
+        offline: bool,
     ) -> std::io::Result<Self> {
         let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
         let shared = Shared::new(tx, folder, manifest, secrets, made, true);
@@ -285,9 +286,14 @@ impl Session {
                 }
             })?;
         let files = wasm::files_of(folder);
+        // Offline (the review's bench), no host is covered: every fetch is refused, as the container's `--network=none`.
         let fetcher = wasm::Fetcher::new(
             &manifest.id,
-            &manifest.permissions.network,
+            if offline {
+                &[]
+            } else {
+                &manifest.permissions.network
+            },
             &wasm::Net::default(),
         );
         let (s1, s2, s3, s4) = (

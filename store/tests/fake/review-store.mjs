@@ -3,12 +3,15 @@
 // GitHub's API, on one port. It holds the files of Escouade's own plugins (plugins/<id>/ of its repository, ESC-314):
 // dev.escouade.discord from its folder of the app's repository, as the chief reviews it, and the others under a third
 // party's id at the root of a repository of their own (a 1.0.0 verified and a 1.1.0 of Slack that asks for more), a plugin booby-trapped on purpose, and a version whose archive was changed after
-// its fingerprint. Run alone (`node tests/fake/review-store.mjs`, FAKE_REVIEW_STORE_PORT), it serves them for a trial
+// its fingerprint; and a `run.js` plugin (team-rules' bundle) with the module the store compiled of it (ESC-324): the
+// one tests/fake/fake-escouade-plugin.mjs makes again (1.0.0), another one (1.0.1), one of another compiler (1.0.2). Run alone (`node tests/fake/review-store.mjs`, FAKE_REVIEW_STORE_PORT), it serves them for a trial
 // of `npm run plugin-review` (ESCOUADE_STORE_URL, ESCOUADE_REVIEW_GITHUB_API). Nothing here is ever run: bytes.
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { join, relative } from 'node:path';
+import { tmpdir } from 'node:os';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MIT, tarball } from './plugins.mjs';
 
@@ -105,6 +108,38 @@ const THIRD = (name) => ({ id: `dev.exemple.${name}`, repository: undefined });
 
 const COMMIT = (n) => createHash('sha1').update(String(n)).digest('hex');
 
+/** What tests/fake/fake-escouade-plugin.mjs compiles a bundle to, and says compiled it. */
+export const FAKE_COMPILER = { javy: '9.1.0', engine: 'e'.repeat(64), prelude: '2.2.0' };
+export const fakeModule = (bundle) => Buffer.concat([Buffer.from([0, 0x61, 0x73, 0x6d, 1, 0, 0, 0]), Buffer.from(bundle)]);
+
+/**
+ * FAKE_REVIEW_ESCOUADE_PLUGIN names a real `escouade-plugin` (a trial by hand of the review, ESC-324): the modules of
+ * the `run.js` plugin are then compiled by it, as the store compiles them, with the compiler it says.
+ */
+const realCompiler = process.env.FAKE_REVIEW_ESCOUADE_PLUGIN || null;
+
+function realBuild(cli, manifest, js, bundle) {
+  const dir = mkdtempSync(join(tmpdir(), 'fake-review-store-'));
+  try {
+    mkdirSync(join(dir, 'plugin', dirname(js)), { recursive: true });
+    writeFileSync(join(dir, 'plugin', 'escouade-plugin.json'), manifest);
+    writeFileSync(join(dir, 'plugin', js), bundle);
+    const r = spawnSync(cli, ['build', join(dir, 'plugin'), '--out', join(dir, 'out'), '--json', '--lang', 'en'], { encoding: 'utf8' });
+    if (r.status !== 0) throw new Error(`${cli} build: ${r.stderr}`);
+    const said = JSON.parse(r.stdout);
+    return { bytes: readFileSync(said.file), compiler: said.compiler };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** team-rules' files on `run.js`, under a third party's id, at `version`. */
+function runJs(version) {
+  const f = exampleFiles('team-rules', { ...THIRD('team-rules'), id: 'dev.exemple.rules-js', version, run: { js: 'dist/plugin.mjs' } });
+  for (const k of Object.keys(f)) if (/^(?:team-rules(?:\.cmd)?|bin\/)/.test(k)) delete f[k];
+  return f;
+}
+
 /** The versions the fake store holds, by plugin; each one's archive, version.json and binaries as the store keeps them. */
 export function buildStore() {
   const spec = [
@@ -160,6 +195,10 @@ export function buildStore() {
       version: '0.0.1',
       files: exampleFiles('high-contrast', THIRD('high-contrast')),
     },
+    // A `run.js` plugin: its module the one the bundle compiles to, another one, one of another escouade-plugin.
+    { id: 'dev.exemple.rules-js', repo: 'escouade-dev/plugin-rules-js', version: '1.0.0', files: runJs('1.0.0'), wasm: 'same' },
+    { id: 'dev.exemple.rules-js', repo: 'escouade-dev/plugin-rules-js', version: '1.0.1', files: runJs('1.0.1'), wasm: 'other' },
+    { id: 'dev.exemple.rules-js', repo: 'escouade-dev/plugin-rules-js', version: '1.0.2', files: runJs('1.0.2'), wasm: 'old' },
     { id: 'io.github.q7x.slak-notify', repo: 'q7x/slak-notify', version: '0.0.1', files: TRAPPED, raw: TRAPPED_RAW, moved: true },
     {
       id: 'io.github.q7x.slak-notify',
@@ -185,6 +224,17 @@ export function buildStore() {
       binaryPaths[platform] = `${base}/binaries/${platform}`;
       files.set(binaryPaths[platform], bytes);
     }
+    let wasm = null;
+    let compiler = FAKE_COMPILER;
+    if (s.wasm) {
+      const m = JSON.parse(String(s.files['escouade-plugin.json']));
+      let bytes;
+      if (realCompiler) ({ bytes, compiler } = realBuild(realCompiler, s.files['escouade-plugin.json'], m.run.js, s.files[m.run.js]));
+      else bytes = fakeModule(s.files[m.run.js]);
+      wasm = s.wasm === 'other' ? Buffer.concat([bytes, Buffer.from('changed')]) : bytes;
+      if (s.wasm === 'old') compiler = { ...compiler, prelude: '2.1.9' };
+      files.set(`${base}/plugin.wasm`, wasm);
+    }
     const tag = s.path ? `${s.path}/v${s.version}` : `v${s.version}`;
     const json = canonical({
       format: 1,
@@ -198,6 +248,15 @@ export function buildStore() {
       binaries,
       manifest_sha256: sha256(String(s.files['escouade-plugin.json'])),
       escouade: { api: '1', min: '2.1.0' },
+      ...(wasm
+        ? {
+            wasm: {
+              sha256: sha256(wasm),
+              size: wasm.length,
+              compiler,
+            },
+          }
+        : {}),
     });
     // A tampered version: the archive the store hands out is not the one its version.json names.
     files.set(`${base}/archive.tar.gz`, s.tampered ? tarball({ ...s.files, 'extra.js': 'evil()' }, { commit }) : archive);
@@ -232,7 +291,12 @@ export function buildStore() {
       permissions: m.permissions ?? {},
       run: !!m.run,
       contributes: Object.keys(m.contributes ?? {}),
-      files: { version_json: `${base}/version.json`, archive: `${base}/archive.tar.gz`, binaries: binaryPaths },
+      files: {
+        version_json: `${base}/version.json`,
+        archive: `${base}/archive.tar.gz`,
+        binaries: binaryPaths,
+        ...(wasm ? { wasm: `${base}/plugin.wasm` } : {}),
+      },
     });
   });
   const catalog = {

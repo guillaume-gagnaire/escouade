@@ -1,5 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { chmodSync, cpSync, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { inside } from './extract';
@@ -11,6 +12,11 @@ import { RESERVED_PREFIX } from '../../../schemas/plugin-manifest.mjs';
 // the plugin's folder and the Linux `escouade-plugin` mounted read-only. It is the only place the plugin's code runs
 // during a review. Without a container engine, or without a Linux `escouade-plugin` to put in it, the bench is not
 // played and the report says so first.
+//
+// A `run.js` plugin (ESC-324) is played without a container: the module the store published, by this machine's
+// `escouade-plugin test --wasm <module> --offline`, in the app's WASM host, which gives it no file but its folder's
+// read, no process, no environment and, offline, no network (every `net/fetch` refused). Its code never runs as a
+// process here.
 
 export interface Engine {
   /** `docker`, `podman`, or the program the tests give. */
@@ -26,6 +32,8 @@ export interface BenchSetup {
   image: string;
   /** How long the bench may take, in ms. */
   timeout: number;
+  /** This machine's `escouade-plugin`: it plays a `run.js` plugin's module in WASM and compiles its bundle again. */
+  local?: string | null;
 }
 
 export interface Seen {
@@ -54,6 +62,8 @@ export type BenchResult =
       refused: string[];
       /** The command, as it ran: the report shows its limits. */
       command: string;
+      /** Where it ran: a container without network, or the app's WASM host, offline (a `run.js` plugin). */
+      where?: 'container' | 'wasm';
       /** What came out when the bench did not answer its JSON (a crash, the time out). */
       raw?: string;
     };
@@ -83,6 +93,29 @@ export function findCli(env = process.env, platform = process.platform, arch = p
   const r = spawnSync('sh', ['-c', 'command -v escouade-plugin'], { encoding: 'utf8' });
   return r.status === 0 && r.stdout.trim() ? r.stdout.trim() : null;
 }
+
+/**
+ * This machine's `escouade-plugin`: `ESCOUADE_PLUGIN` (a `.mjs` runs with node, for the tests), else the one on the
+ * PATH, else the one built in the repository (`src-tauri/target/release`, then `debug`).
+ */
+export function findLocalCli(env = process.env, repo?: string, platform = process.platform): string | null {
+  if (env.ESCOUADE_PLUGIN) return existsSync(env.ESCOUADE_PLUGIN) ? env.ESCOUADE_PLUGIN : null;
+  const exe = platform === 'win32' ? 'escouade-plugin.exe' : 'escouade-plugin';
+  const r =
+    platform === 'win32'
+      ? spawnSync('where', ['escouade-plugin'], { encoding: 'utf8', windowsHide: true })
+      : spawnSync('sh', ['-c', 'command -v escouade-plugin'], { encoding: 'utf8' });
+  const onPath = r.status === 0 ? ((r.stdout ?? '').split(/\r?\n/)[0] ?? '').trim() : '';
+  if (onPath) return onPath;
+  for (const profile of ['release', 'debug']) {
+    const at = repo ? join(repo, 'src-tauri', 'target', profile, exe) : '';
+    if (at && existsSync(at)) return at;
+  }
+  return null;
+}
+
+/** How the local `escouade-plugin` is run: a `.mjs` with this node (the tests' fake). */
+export const localCommand = (cli: string): string[] => (/\.m?js$/.test(cli) ? [process.execPath, cli] : [cli]);
 
 /**
  * Makes the folder the bench plays: the plugin's files, and its Linux program from the release where its manifest
@@ -156,12 +189,44 @@ export function runArgs(folder: string, cli: string, image: string, name: string
  */
 export function refusals(seen: Seen[], raw = ''): string[] {
   const re =
-    /ENETUNREACH|EAI_AGAIN|ENOTFOUND|ECONNREFUSED|getaddrinfo|Network is unreachable|network unreachable|EROFS|Read-only file system|EACCES|Permission denied|EPERM/i;
+    /is not in permissions\.network|ENETUNREACH|EAI_AGAIN|ENOTFOUND|ECONNREFUSED|getaddrinfo|Network is unreachable|network unreachable|EROFS|Read-only file system|EACCES|Permission denied|EPERM/i;
   const lines = [...seen.map((s) => s.line ?? s.message ?? ''), ...raw.split(/\n| \| | — /)];
   return [...new Set(lines.map((l) => l.trim()).filter((l) => l && re.test(l)))];
 }
 
-/** Plays the bench on `folder`; the result says why when it was not played. */
+/** The arguments of the local `escouade-plugin` that plays a `run.js` plugin's module, offline. */
+export function wasmArgs(folder: string, module: string, firstParty = false): string[] {
+  return ['test', folder, '--wasm', module, '--offline', '--json', '--lang', 'fr', ...(firstParty ? ['--first-party'] : [])];
+}
+
+/**
+ * Plays the bench on the module `module` of a `run.js` plugin in `folder`, by this machine's `escouade-plugin`, in the
+ * app's WASM host, offline, without a container; in an environment of its own (none of the review's variables, the
+ * administration token among them).
+ */
+export async function playWasm(setup: BenchSetup, folder: string, module: string, firstParty = false): Promise<BenchResult> {
+  if (!setup.local)
+    return {
+      played: false,
+      why: 'pas d’`escouade-plugin` sur ce poste pour jouer le module WASM (ESCOUADE_PLUGIN, le PATH ou src-tauri/target)',
+    };
+  const [program, ...before] = localCommand(setup.local);
+  const args = wasmArgs(folder, module, firstParty);
+  const home = mkdtempSync(join(tmpdir(), 'escouade-review-bench-'));
+  const env: NodeJS.ProcessEnv = { PATH: process.env.PATH, HOME: home, TMPDIR: home, LANG: 'C.UTF-8' };
+  if (process.platform === 'win32') {
+    for (const k of ['SystemRoot', 'SYSTEMROOT', 'windir', 'PATHEXT', 'COMSPEC']) if (process.env[k]) env[k] = process.env[k];
+    env.TEMP = env.TMP = env.USERPROFILE = env.LOCALAPPDATA = env.APPDATA = home;
+  }
+  try {
+    const out = await spawnBench(program!, [...before, ...args], setup.timeout, env);
+    return withWhere(readBench(out, `escouade-plugin ${args.join(' ')}`, setup.timeout), 'wasm');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+
+/** Plays the bench on `folder` in a container; the result says why when it was not played. */
 export async function playBench(setup: BenchSetup, folder: string, why?: string, firstParty = false): Promise<BenchResult> {
   if (!setup.engine) return { played: false, why: why ?? 'aucun moteur de conteneur' };
   if (!setup.cli)
@@ -173,8 +238,25 @@ export async function playBench(setup: BenchSetup, folder: string, why?: string,
   const args = runArgs(folder, setup.cli, setup.image, name, firstParty);
   const { program, prefix = [] } = setup.engine;
   const command = [program, ...args].join(' ');
-  const out = await new Promise<{ code: number | null; stdout: string; stderr: string; timedOut: boolean }>((done) => {
-    const child = spawn(program, [...prefix, ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const out = await spawnBench(program, [...prefix, ...args], setup.timeout, undefined, () => {
+    spawnSync(program, [...prefix, 'kill', name], { timeout: 20_000 });
+  });
+  return withWhere(readBench(out, command, setup.timeout), 'container');
+}
+
+const withWhere = (r: BenchResult, where: 'container' | 'wasm'): BenchResult => (r.played ? { ...r, where } : r);
+
+interface Ran {
+  code: number | null;
+  stdout: string;
+  stderr: string;
+  timedOut: boolean;
+}
+
+/** Runs the bench's program, its outputs bounded, stopped past `timeout` (`onTimeout` first: the container's kill). */
+function spawnBench(program: string, args: string[], timeout: number, env?: NodeJS.ProcessEnv, onTimeout?: () => void): Promise<Ran> {
+  return new Promise<Ran>((done) => {
+    const child = spawn(program, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, ...(env ? { env } : {}) });
     let stdout = '';
     let stderr = '';
     let timedOut = false;
@@ -182,9 +264,9 @@ export async function playBench(setup: BenchSetup, folder: string, why?: string,
     child.stderr.on('data', (d) => (stderr = (stderr + d).slice(-200_000)));
     const timer = setTimeout(() => {
       timedOut = true;
-      spawnSync(program, [...prefix, 'kill', name], { timeout: 20_000 });
+      onTimeout?.();
       child.kill();
-    }, setup.timeout);
+    }, timeout);
     child.on('error', (e) => {
       clearTimeout(timer);
       done({ code: null, stdout, stderr: `${stderr}${e.message}`, timedOut });
@@ -194,6 +276,10 @@ export async function playBench(setup: BenchSetup, folder: string, why?: string,
       done({ code, stdout, stderr, timedOut });
     });
   });
+}
+
+/** What the bench answered: its report, or what came out when it gave none. */
+function readBench(out: Ran, command: string, timeout: number): BenchResult {
   const raw = `${out.stdout}\n${out.stderr}`.trim();
   type Answer = { outcomes?: BenchOutcome[]; seen?: Seen[] } | null;
   let report: Answer;
@@ -204,7 +290,7 @@ export async function playBench(setup: BenchSetup, folder: string, why?: string,
   }
   if (!report?.outcomes) {
     const said = out.timedOut
-      ? `arrêté au bout de ${Math.round(setup.timeout / 1000)} s`
+      ? `arrêté au bout de ${Math.round(timeout / 1000)} s`
       : `le banc n’a pas rendu son rapport (code ${out.code})`;
     return {
       played: true,

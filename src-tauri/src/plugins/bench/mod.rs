@@ -247,6 +247,11 @@ pub struct Options {
     pub data: PathBuf,
     /// The limits of an instance in WASM: the app's.
     pub wasm: super::wasm::Limits,
+    /// The module of a `run.js` plugin to play as it is, in place of its bundle compiled here: the one the store
+    /// published, played by the local review (`--wasm`, ESC-324).
+    pub module: Option<PathBuf>,
+    /// No `net/fetch` reaches the network, whatever `permissions.network` says (`--offline`): the review's bench.
+    pub offline: bool,
 }
 
 impl Default for Options {
@@ -264,6 +269,8 @@ impl Default for Options {
             measure: 0,
             data: crate::paths::tools_data_dir(),
             wasm: super::wasm::Limits::default(),
+            module: None,
+            offline: false,
         }
     }
 }
@@ -350,7 +357,7 @@ impl Program {
         match self {
             Program::Process(p) => Session::start(folder, m, p, &o.app_version, secrets, made),
             Program::Wasm { module, .. } => {
-                Session::start_wasm(folder, m, module.clone(), secrets, made, o.wasm)
+                Session::start_wasm(folder, m, module.clone(), secrets, made, o.wasm, o.offline)
             }
         }
     }
@@ -380,6 +387,28 @@ pub fn program_of(folder: &Path, m: &Manifest, o: &Options) -> Result<Program, (
     })?;
     if let Err(r) = super::wasm::script_of(&text) {
         return Err((r.message(lang), one_file()));
+    }
+    // The module given (`--wasm`): played as it is, never compiled again here.
+    if let Some(path) = &o.module {
+        let bytes = std::fs::read(path).map_err(|e| {
+            (
+                tr_in!(lang, "{} : {e}", "{}: {e}", path.display()),
+                one_file(),
+            )
+        })?;
+        return wasmtime::Module::new(super::wasm::engine(), &bytes)
+            .map(|module| Program::Wasm { bundle, module })
+            .map_err(|e| {
+                (
+                    tr_in!(
+                        lang,
+                        "{} n'est pas un module WASM : {e:#}",
+                        "{} is not a WASM module: {e:#}",
+                        path.display()
+                    ),
+                    one_file(),
+                )
+            });
     }
     let modules =
         super::wasm::Modules::new(&crate::paths::DataDir::new(o.data.clone()), &o.app_version);

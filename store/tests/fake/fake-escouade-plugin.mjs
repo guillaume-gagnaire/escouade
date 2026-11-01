@@ -4,6 +4,10 @@
 // behaviour: `--random` makes a compiler that is not deterministic (a different module each time). A bundle that
 // imports node:net is refused as the real one refuses it; one holding `LOOP` never ends; one holding `GREEDY` takes
 // memory. It fails when it is given a variable of the store's (the compilation's environment is its own).
+//
+// `test <folder> --wasm <module> --offline --json` answers as the bench of the local review (ESC-324) does when the
+// module passes, after writing its arguments beside it (<module>.args.json: the bench's environment is its own, so no
+// variable of the tests reaches it); it fails when it is given a variable of the review's (a token above all).
 import { createHash, randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -11,6 +15,28 @@ import { join } from 'node:path';
 const args = process.argv.slice(2);
 const random = args[0] === '--random';
 const words = random ? args.slice(1) : args;
+if (words[0] === 'test') {
+  for (const k of Object.keys(process.env))
+    if (/TOKEN|SECRET|STORE_|ESCOUADE_REVIEW/.test(k)) {
+      console.error(`✗ the review's variable ${k} reached the bench`);
+      process.exit(3);
+    }
+  const module = words[words.indexOf('--wasm') + 1];
+  const wasm = readFileSync(module);
+  writeFileSync(`${module}.args.json`, JSON.stringify(words));
+  console.log(
+    JSON.stringify({
+      plugin: 'x 1.0.0',
+      outcomes: [
+        { scenario: 'manifest', verdict: 'pass', said: 'valide, en WASM' },
+        { scenario: 'initialize', verdict: 'pass', said: `répond en 3 ms (module de ${wasm.length} octets)` },
+      ],
+      timings: [],
+      seen: [],
+    }),
+  );
+  process.exit(0);
+}
 if (words[0] !== 'build') {
   console.error(`✗ fake escouade-plugin: ${words.join(' ')}`);
   process.exit(2);

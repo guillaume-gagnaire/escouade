@@ -1,7 +1,9 @@
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { verifyAttestation, type Runner } from './attest';
-import { benchFolder, firstPartyBench, playBench, type BenchSetup } from './bench';
+import { benchFolder, firstPartyBench, playBench, playWasm, type BenchSetup } from './bench';
+import { recompile } from './recompile';
+import type { CompileOne } from '../../server/utils/compile';
 import { diffFolders, grownPermissions } from './diff';
 import { baseVersion, catalog, checkTag, download, Integrity, type Source } from './download';
 import { extract, problemText } from './extract';
@@ -10,9 +12,11 @@ import { normalizePath } from '../../shared/folder';
 import { renderPublic, renderPublicEn, renderReport, proposed, type ReviewData } from './report';
 
 // The local review of a version (docs/STORE.md §4.2), the deterministic part, without AI: download and check, unpack
-// without danger in a new folder outside the repository, prepare the leads, play the bench in a container without
-// network, diff with the last verified version, write the report outside the repository. The plugin's folder is passed
-// as an argument, never made the current folder of a program; nothing of the plugin runs outside the container.
+// without danger in a new folder outside the repository, compile a `run.js` bundle again and compare its module with
+// the published one (ESC-324), prepare the leads, play the bench (in a container without network; a `run.js` plugin's
+// module in the app's WASM host, offline), diff with the last verified version, write the report outside the
+// repository. The plugin's folder is passed as an argument, never made the current folder of a program; nothing of
+// the plugin runs outside the container or the WASM host.
 
 export interface ReviewOptions {
   id: string;
@@ -26,6 +30,8 @@ export interface ReviewOptions {
   bench: BenchSetup;
   /** Why there is no engine, when there is none. */
   benchWhy?: string;
+  /** Compiles a `run.js` bundle again, by this machine's `escouade-plugin`; null without one. */
+  compile?: CompileOne | null;
   /** Runs `gh` (the tests give a fake). */
   gh?: Runner;
   /** The repository the script lives in: neither the work nor the reports may be in it. */
@@ -91,6 +97,29 @@ export async function review(o: ReviewOptions): Promise<ReviewDone> {
     } catch {
       data.manifest = null;
     }
+    // A `run.js` plugin: its bundle compiled again here must give the module the store published, byte for byte; an
+    // other one stops the review, as an archive changed (ESC-324).
+    const firstParty = firstPartyBench(o.id, f.repository);
+    const js = ((data.manifest?.run ?? null) as { js?: unknown } | null)?.js;
+    let module: string | null = null;
+    if (typeof js === 'string') {
+      const at = js.replace(/^\.\//, '');
+      const bundle = unpacked.files.get(at);
+      if (!bundle) throw new Integrity(`le bundle ${js} que nomme le manifeste n’est pas dans l’archive`);
+      if (!f.wasm || !got.wasm)
+        data.recompile = { state: 'not-done', why: 'version.json ne nomme aucun module : le store n’a pas compilé ce bundle' };
+      else {
+        data.wasm = f.wasm;
+        module = join(dir, 'plugin.wasm');
+        writeFileSync(module, got.wasm);
+        data.recompile = await recompile(o.compile ?? null, { manifest: manifestBytes!, js: at, bundle, firstParty }, f.wasm);
+        if (data.recompile.state === 'different')
+          throw new Integrity(
+            `le module publié (${data.recompile.published}) n’est pas la recompilation du bundle ${js} (${data.recompile.local}), avec les mêmes versions du compilateur`,
+          );
+      }
+    }
+
     const network = ((data.manifest?.permissions ?? {}) as { network?: unknown }).network;
     data.leads = findLeads(unpacked.files, Array.isArray(network) ? network.map(String) : []);
 
@@ -132,9 +161,14 @@ export async function review(o: ReviewOptions): Promise<ReviewDone> {
       };
     } else data.base = null;
 
-    const linux = got.binaries['linux-x64'] ?? null;
-    const benchDir = data.manifest?.run ? benchFolder(unpackedAt, join(dir, 'bench'), data.manifest, linux) : unpackedAt;
-    data.bench = await playBench(o.bench, benchDir, o.benchWhy, firstPartyBench(o.id, f.repository));
+    if (typeof js === 'string')
+      // The module published, in the WASM host, never in a container; not played when the review has none to play.
+      data.bench = module ? await playWasm(o.bench, unpackedAt, module, firstParty) : { played: false, why: 'aucun module publié à jouer' };
+    else {
+      const linux = got.binaries['linux-x64'] ?? null;
+      const benchDir = data.manifest?.run ? benchFolder(unpackedAt, join(dir, 'bench'), data.manifest, linux) : unpackedAt;
+      data.bench = await playBench(o.bench, benchDir, o.benchWhy, firstParty);
+    }
   } catch (e) {
     if (!(e instanceof Integrity)) throw e;
     data.integrity = e.message;

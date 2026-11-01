@@ -216,3 +216,138 @@ fn a_javy_changed_on_the_disk_is_never_run_and_is_downloaded_again() {
     assert_eq!(wasm::sha256(&std::fs::read(&again).unwrap()), sum);
     let _ = std::fs::remove_dir_all(base);
 }
+
+/// The module of the plugin in `dir` (a copy on `run.js`), compiled as `escouade-plugin build` compiles it.
+fn built(dir: &Path) -> PathBuf {
+    let bundle = std::fs::read_to_string(dir.join("dist/plugin.mjs")).unwrap();
+    let bytes = wasm::Modules::new(&DataDir::new(shared_data()), "tests")
+        .build(&bundle)
+        .unwrap();
+    let at = dir.join("built.wasm");
+    std::fs::write(&at, bytes).unwrap();
+    at
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_bench_plays_the_module_it_is_given_as_it_is() {
+    if !ready() {
+        return;
+    }
+    // The review plays the module the store published (ESC-324): team-rules' own passes…
+    let rules = as_run_js("team-rules");
+    let module = built(&rules);
+    let r = run(
+        &rules,
+        &Options {
+            module: Some(module.clone()),
+            offline: true,
+            ..options(Lang::En)
+        },
+    )
+    .await;
+    assert!(r.passed(), "{}", r.render(Lang::En));
+    assert!(said(&r, Scenario::Decision).contains("\"allow\""));
+
+    // …and another's, given in its place, is the one that runs: Slack's module does not decide.
+    let slack = as_run_js("slack");
+    let other = built(&slack);
+    let r = run(
+        &rules,
+        &Options {
+            module: Some(other),
+            offline: true,
+            ..options(Lang::En)
+        },
+    )
+    .await;
+    assert!(
+        !said(&r, Scenario::Decision).contains("\"allow\""),
+        "{}",
+        r.render(Lang::En)
+    );
+
+    // A file that is no module is said, never compiled from the bundle instead.
+    let junk = rules.join("junk.wasm");
+    std::fs::write(&junk, b"not a module").unwrap();
+    let r = run(
+        &rules,
+        &Options {
+            module: Some(junk),
+            ..options(Lang::Fr)
+        },
+    )
+    .await;
+    assert_eq!(r.outcome(Scenario::Initialize).verdict, Verdict::Fail);
+    assert!(
+        said(&r, Scenario::Initialize).contains("n'est pas un module WASM"),
+        "{}",
+        r.render(Lang::Fr)
+    );
+}
+
+#[test]
+fn the_cli_reads_wasm_and_offline() {
+    if !ready() {
+        return;
+    }
+    let rules = as_run_js("team-rules");
+    let module = built(&rules);
+    let (d, m) = (
+        rules.to_string_lossy().into_owned(),
+        module.to_string_lossy().into_owned(),
+    );
+    assert_eq!(
+        cli::main(args(&[
+            "test",
+            &d,
+            "--first-party",
+            "--wasm",
+            &m,
+            "--offline",
+            "--json"
+        ])),
+        0
+    );
+    assert_eq!(
+        cli::main(args(&["test", &d, "--first-party", "--wasm", &d, "--json"])),
+        1
+    );
+}
+
+/// A bundle that tries slack.com, which its permissions.network names, when it is initialized, and says what came of it.
+const FETCHER: &str = r#"
+const out = (m) => __esc.write(JSON.stringify(m));
+__esc.listen((line) => {
+  const m = JSON.parse(line);
+  if (m.method === "initialize")
+    fetch("https://slack.com/api/api.test", { method: "POST", body: "{}" })
+      .then((r) => console.error(`fetched ${r.status}`), (e) => console.error(`fetch: ${e.message}`))
+      .then(() => out({ jsonrpc: "2.0", id: m.id, result: { protocolVersion: 1, capabilities: {} } }));
+  if (m.method === "shutdown") out({ jsonrpc: "2.0", id: m.id, result: null });
+});
+"#;
+
+#[tokio::test(flavor = "multi_thread")]
+async fn offline_the_bench_refuses_every_fetch_even_to_the_hosts_of_permissions_network() {
+    if !ready() {
+        return;
+    }
+    let dir = as_run_js("slack");
+    std::fs::write(dir.join("dist/plugin.mjs"), FETCHER).unwrap();
+    let r = run(
+        &dir,
+        &Options {
+            module: Some(built(&dir)),
+            offline: true,
+            ..options(Lang::En)
+        },
+    )
+    .await;
+    let seen = serde_json::to_string(&r.seen).unwrap();
+    assert!(
+        seen.contains("slack.com is not in permissions.network"),
+        "{seen}\n{}",
+        r.render(Lang::En)
+    );
+    assert!(!seen.contains("fetched"), "{seen}");
+}

@@ -1,15 +1,15 @@
 ---
 title: "La revue « Vérifié par Escouade » : la file, la signature, la révocation"
 subject: "store"
-sources: ["docs/STORE.md","design/store/index.html","design/app-redesign/UX-NOTES.md","store/server/utils/review.ts","store/server/utils/discord.ts"]
-tickets: ["ESC-235","ESC-295","ESC-302"]
-decisions: []
+sources: ["docs/STORE.md","design/store/index.html","design/app-redesign/UX-NOTES.md","store/server/utils/review.ts","store/server/utils/discord.ts","store/scripts/plugin-review/","docs/PLUGINS.md §5.6","Consignes du chef au lancement d'ESC-324 (2026-11-01)"]
+tickets: ["ESC-235","ESC-295","ESC-302","ESC-324"]
+decisions: ["la-revue-locale-recompile-un-plugin-run"]
 compared: "2026-10-30T03:23:39+01:00"
 ---
 
 # La revue « Vérifié par Escouade » : la file, la signature, la révocation
 
-Détail et procédure : `docs/STORE.md` §4.1, §4.5, §4.6 (il fait foi).
+Détail et procédure : `docs/STORE.md` §4.1, §4.2, §4.5, §4.6 (il fait foi).
 
 ## La file `/review`
 - Visible des seuls comptes de `STORE_ADMINS` ; pour les autres, la page « n'existe pas ». Le lien « File de revue » et son nombre dans l'en-tête.
@@ -21,9 +21,17 @@ Détail et procédure : `docs/STORE.md` §4.1, §4.5, §4.6 (il fait foi).
 - Créé dans le compte (« Jetons d'administration »), montré une fois, gardé haché, cinq au plus, révocable ; il n'agit que tant que son compte est dans `STORE_ADMINS`.
 - Il permet de lire la file, de déposer un rapport, une signature, une liste de révocation ; ni publier ni supprimer.
 
+## La revue locale d'un plugin `run.js` (ESC-324)
+- La revue télécharge aussi le module `.wasm` que le store a compilé et vérifie sa taille et son SHA-256 contre `version.json` ; un écart arrête tout.
+- Elle **recompile** le bundle de l'archive relue par l'`escouade-plugin` du poste (`ESCOUADE_PLUGIN`, sinon celui du `PATH`, sinon celui construit dans le dépôt), comme le store le compile : un dossier neuf, un environnement à lui. Cet `escouade-plugin` doit compiler avec les versions que nomme `version.json` (`compiler` : Javy, escouade-js, escouade-plugin).
+- **La même empreinte** : le rapport dit « même empreinte, ce qui a été lu est ce qui tourne », et le résumé public « module WASM recompilé, même empreinte ». **Une autre empreinte** : la revue s'arrête là, code 1, verdict « Refuser », comme pour une archive changée. **Pas de recompilation** (pas d'`escouade-plugin` sur le poste, un autre compilateur que celui du store, un bundle qu'il refuse) : la revue continue, le rapport dit lequel installer, et le verdict proposé est « Demander des changements » tant qu'elle n'est pas relancée.
+- **Le banc** d'un plugin `run.js` joue le module publié dans l'hôte WASM d'Escouade, hors ligne (`escouade-plugin test --wasm <module> --offline` : tout `fetch` refusé, même vers les hôtes de `permissions.network`), sans conteneur, dans un environnement à lui (ni le jeton d'administration ni rien de la revue). Le rapport dit « le module publié joué dans l'hôte WASM d'Escouade, sans conteneur ni réseau ». Le conteneur sans réseau reste pour un plugin à binaire.
+- La lecture (`/review-plugin`) part du bundle (ce qui tourne), puis `src/`, et vérifie que le bundle est le build de `src/` quand le plugin dit comment le faire. Les programmes lancés, `net` et les `import` autres que `node:fs` et `node:readline` ne sont plus à chercher (la compilation les refuse) ; restent les hôtes appelés, comparés à `permissions.network`, et ce que le code fait de ses secrets.
+
 ## La signature
 - Deux paires minisign créées par l'utilisateur seul (tous les jours + secours), chiffrées, sauvegardées hors ligne ; les deux clés publiques dans `store/keys/` et dans l'app. Sans elles, l'app refuse tout badge et le store ne prend aucune signature.
 - `npm run plugin-review -- sign <id>@<version>` signe le `version.json` relu (commentaire `escouade-verified-v1 <id>@<version> <date>`), vérifie localement, dépose avec le résumé public fr/en.
+- `sign` refuse une version dont la revue a relevé un bloqueur ; pour un plugin `run.js`, une recompilation qui n'a pas été faite ou n'a pas donné la même empreinte en est un. `sign` relit aussi le `wasm` du `version.json` servi et refuse si la revue n'a pas recompilé ce module-là : la signature couvre `version.json`, donc le module.
 - Le store vérifie avec ses clés publiques avant d'accepter ; refuse une version avec un binaire non attesté ou désactivée. La version devient `verified` au catalogue, sa page montre « Relu par Escouade le … » et le résumé, l'auteur est prévenu.
 
 ## La révocation et le retrait d'urgence

@@ -946,7 +946,7 @@ Chacun livrable seul, chacun après le précédent :
 2. **WASM-2, le SDK** (fait, ESC-321) : `start()` qui choisit le transport, `p.file()`, `fetch`, le prélude réduit ; `create-escouade-plugin` qui écrit `run.js`.
 3. **WASM-3, `escouade-plugin` sans Node** (fait, ESC-322) : `dev`, `test`, `validate` et `pack` sur `run.js`, la Javy téléchargée et vérifiée, le banc qui joue le WASM, `build`.
 4. **WASM-4, le store** : le onzième contrôle (la compilation isolée, deux fois), `wasm` dans `version.json`, le contrôle des binaires qui refuse script et interpréteur pour un tiers, l'app qui télécharge et vérifie le `.wasm`.
-5. **WASM-5, la revue locale** : la recompilation et la comparaison des empreintes, les pistes de lecture revues, le conteneur réservé aux binaires.
+5. **WASM-5, la revue locale** : la recompilation et la comparaison des empreintes, les pistes de lecture revues, le conteneur réservé aux binaires. **Fait le 2026-11-01** (ESC-324, docs/STORE.md §4.2).
 6. **WASM-6, la doc du site** (fr et en) : `plugins/api` (le transport WASM, `net/fetch`, les fichiers, les limites, ce qu'un plugin ne peut pas faire), `plugins/sdk`, `plugins/publish` (`run.js`, la compilation, plus de Node), `plugins/examples`.
 7. **WASM-7, la migration** de `dev.escouade.slack` et `dev.escouade.team-rules` en 2.0.0 sur `run.js`, revues, signées et publiées par le chef.
 
