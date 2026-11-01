@@ -26,7 +26,7 @@ fn root() -> PathBuf {
 }
 
 /// Whether the WASM plugins can run here: escouade-js built into this test binary, and the pinned Javy.
-fn ready() -> bool {
+pub(crate) fn ready() -> bool {
     if let Err(e) = wasm::escouade_js() {
         assert!(std::env::var_os("CI").is_none(), "{e}");
         eprintln!("skipped: {e}");

@@ -71,6 +71,26 @@ describe('escouade-plugin of the SDK', () => {
     const r = cli(['validate', dir, '--first-party']);
     expect(r.code).toBe(1);
     expect(r.err).toContain('slack is not in the folder');
+    // A run.js plugin's bundle too (ESC-322).
+    const m = JSON.parse(fs.readFileSync(path.join(dir, 'escouade-plugin.json'), 'utf8'));
+    m.run = { js: 'dist/plugin.mjs' };
+    fs.writeFileSync(path.join(dir, 'escouade-plugin.json'), JSON.stringify(m));
+    const js = cli(['validate', dir, '--first-party']);
+    expect(js.code).toBe(1);
+    expect(js.err).toContain('dist/plugin.mjs is not in the folder');
+  });
+
+  it('hands build to the app’s escouade-plugin (ESC-322)', () => {
+    const dir = tmp();
+    fs.writeFileSync(path.join(dir, 'build'), 'console.log(JSON.stringify(process.argv.slice(2)))');
+    const folder = path.join(EXAMPLES, 'team-rules');
+    const r = spawnSync(process.execPath, [CLI, 'build', folder, '--json'], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: { ...process.env, ESCOUADE_PLUGIN_BIN: process.execPath, LANG: 'en_US.UTF-8' },
+    });
+    expect(r.status, r.stderr).toBe(0);
+    expect(JSON.parse(r.stdout)).toEqual([folder, '--json', '--lang', 'en']);
   });
 
   it('packs the same bytes twice, programs executable, without node_modules, .git or packs', () => {
