@@ -301,6 +301,8 @@ Les tickets s'appellent ici INT-0, INT-1… ; le chef d'escouade leur donne leur
 
 Ordre : INT-0, INT-1, INT-2, INT-3 (dès maintenant, en parallèle) → ESC-173, ESC-174, ESC-175 → INT-4 → INT-5 → INT-6 → INT-7.1 à 7.4 et INT-8.1 à 8.5 → INT-9 → ESC-178 → INT-10.1 à 10.8 (Cursor CLI, Mistral Vibe, Gemini CLI, OpenCode, Copilot CLI, Codex, Antigravity CLI, Claude Code) ; INT-12 → INT-13 et INT-14 après INT-5 ; INT-11 suit.
 
+- **Fait le 2026-10-31** (ESC-210, INT-4) : voir `docs/PLUGINS.md` §4.3. Le manifeste à plusieurs points et `accounts` étaient faits (ESC-173) ; ce ticket pose l'origine `builtin`, le registre, `escouade-plugins` et la crate `escouade-plugin-protocol`, l'empaquetage signé, la désactivation, et le plugin de démonstration `dev.escouade.minimal` (`plugins/builtin/`). Le faux moteur minimal complet viendra avec INT-9.
+
 ### Les tickets PLG à modifier
 
 | Ticket | Ce qui change |

@@ -6,7 +6,8 @@ authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"
 edition = "2021"
 rust-version = "1.88"
-# The app; `escouade-hook` (src/bin) is the other program the installers ship beside it.
+# The app; `escouade-hook`, `escouade-plugin` and `escouade-plugins` (src/bin) are the other programs the installers ship
+# beside it.
 default-run = "escouade"
 
 [features]
@@ -57,6 +58,8 @@ os_info = { version = "3", default-features = false }
 sha2 = "0.10"
 # The store's signatures of the verified plugins (docs/STORE.md §4.5), as the updater checks its own.
 minisign-verify = "0.2"
+# The protocol spoken to the plugins, shared with `escouade-plugins`, the program of the plugins the app gives (INT-4).
+escouade-plugin-protocol = { path = "../crates/escouade-plugin-protocol" }
 # A version's archive from the store (STORE-9): read in memory, its links and climbing paths refused.
 flate2 = "1"
 tar = { version = "0.4", default-features = false }

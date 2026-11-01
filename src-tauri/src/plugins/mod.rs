@@ -18,6 +18,8 @@ pub mod adapters;
 pub mod bench;
 // The permission rules: the plugins that decide before the user is asked (PLG-8).
 pub mod decide;
+// The plugins the app gives, their registry and the check of their program (INT-4).
+pub mod builtin;
 // The facts handed to the plugins, their webhooks and their commands (PLG-5).
 pub mod events;
 pub mod manifest;
@@ -59,6 +61,9 @@ pub enum Origin {
     Git { url: String, tag: String },
     /// A folder in development, loaded in place.
     Dev { path: String },
+    /// A plugin the app gives (INT-4): shipped with it, its version Escouade's, read from the app and never from the
+    /// plugins' folder. Never written by an install: the registry (`builtin`) makes it.
+    Builtin,
     /// A version of store.escouade.dev (STORE-9), pinned by the SHA-256 of its `version.json`;
     /// `verified`: its seal held when it was installed (it is checked again at each reading).
     Store {
@@ -87,6 +92,7 @@ pub enum Origin {
 /// their id: a `dev.escouade.*` of the store is `Origin::Store`, kept in `<data>/plugins/<id>`.
 pub(crate) fn hand_of(origin: &Origin) -> manifest::Hand {
     match origin {
+        Origin::Builtin => manifest::Hand::Builtin,
         Origin::Store { verified: true, .. } | Origin::Dev { .. } => manifest::Hand::First,
         _ => manifest::Hand::Third,
     }
@@ -478,6 +484,8 @@ pub struct Plugins {
     reloaded: Mutex<Vec<ReloadHook>>,
     /// The store's revocation list, as last taken (STORE-9).
     revocations: RwLock<Option<store::RevocationList>>,
+    /// The folder of the app's programs (`{escouade}`): where the plugins the app gives run from.
+    app_dir: PathBuf,
     /// What the store offers, by id (`Store::offers`).
     offers: RwLock<HashMap<String, store::Offer>>,
 }
@@ -533,6 +541,22 @@ struct Staged {
 impl Plugins {
     /// The plugins of `data`, read once, the folders in development watched.
     pub fn load(data: DataDir, app_version: &str) -> Arc<Self> {
+        let app_dir = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(Path::to_path_buf))
+            .unwrap_or_default();
+        // The tests of the installs and of the runtime count on a list that holds what they put there: the registry
+        // is loaded by `load_in`, which the tests of INT-4 use.
+        Self::load_with(data, app_version, app_dir, !cfg!(test))
+    }
+
+    /// As `load`, the app's programs in `app_dir` (the tests').
+    #[cfg(test)]
+    pub fn load_in(data: DataDir, app_version: &str, app_dir: PathBuf) -> Arc<Self> {
+        Self::load_with(data, app_version, app_dir, true)
+    }
+
+    fn load_with(data: DataDir, app_version: &str, app_dir: PathBuf, builtin: bool) -> Arc<Self> {
         let me = Arc::new_cyclic(|me| Self {
             me: me.clone(),
             data,
@@ -546,10 +570,15 @@ impl Plugins {
             staged: Mutex::new(HashMap::new()),
             reloaded: Mutex::new(Vec::new()),
             revocations: RwLock::new(None),
+            app_dir,
             offers: RwLock::new(HashMap::new()),
         });
         let index = me.index();
-        let loaded: Vec<Loaded> = index.plugins.into_iter().map(|i| me.read(i)).collect();
+        let loaded: Vec<Loaded> = me
+            .with_builtin(index.plugins, builtin)
+            .into_iter()
+            .map(|i| me.read(i))
+            .collect();
         for l in &loaded {
             if let Origin::Dev { path } = &l.installed.origin {
                 me.watch(&l.installed.id, Path::new(path));
@@ -557,6 +586,54 @@ impl Plugins {
         }
         *me.loaded.write() = loaded;
         me
+    }
+
+    /// The folder of the app's programs (`{escouade}`).
+    pub(crate) fn app_dir(&self) -> &Path {
+        &self.app_dir
+    }
+
+    /// The list `installed` with the plugins the app gives (`builtin::REGISTRY`) as the app has them now: those
+    /// that left the registry gone, those it adds there with the user's choices kept, and a copy of the same id
+    /// from elsewhere (a version of the store installed before the app gave it) replaced, its choices kept: the
+    /// plugin the app gives wins, and its version is the app's.
+    fn with_builtin(&self, installed: Vec<Installed>, registry: bool) -> Vec<Installed> {
+        if !registry {
+            return installed;
+        }
+        let mut out: Vec<Installed> = Vec::new();
+        for i in installed {
+            if i.origin == Origin::Builtin && !builtin::is_builtin(&i.id) {
+                continue;
+            }
+            if builtin::is_builtin(&i.id) && i.origin != Origin::Builtin {
+                remove_dir(&self.data.plugins_dir().join(&i.id));
+                remove_dir(&self.proof_dir(&i.id));
+            }
+            out.push(i);
+        }
+        for e in builtin::REGISTRY {
+            let choices = out
+                .iter()
+                .find(|i| i.id == e.id)
+                .map(|i| i.choices.clone())
+                .unwrap_or_default();
+            let installed_at = out
+                .iter()
+                .find(|i| i.id == e.id && i.origin == Origin::Builtin)
+                .map(|i| i.installed_at.clone())
+                .unwrap_or_else(now);
+            out.retain(|i| i.id != e.id);
+            out.push(Installed {
+                id: e.id.to_string(),
+                origin: Origin::Builtin,
+                fingerprint: builtin::fingerprint(&self.app_version),
+                digest: String::new(),
+                installed_at,
+                choices,
+            });
+        }
+        out
     }
 
     fn index(&self) -> Index {
@@ -585,6 +662,7 @@ impl Plugins {
     fn folder_of(&self, i: &Installed) -> PathBuf {
         match &i.origin {
             Origin::Dev { path } => PathBuf::from(path),
+            Origin::Builtin => self.app_dir.clone(),
             _ => self.data.plugins_dir().join(&i.id),
         }
     }
@@ -592,7 +670,12 @@ impl Plugins {
     fn read(&self, installed: Installed) -> Loaded {
         let folder = self.folder_of(&installed);
         let hand = hand_of(&installed.origin);
-        let read = std::fs::read_to_string(folder.join(manifest::FILE))
+        let text = match installed.origin {
+            Origin::Builtin => builtin::manifest_text(&installed.id, &self.app_version)
+                .ok_or(std::io::ErrorKind::NotFound.into()),
+            _ => std::fs::read_to_string(folder.join(manifest::FILE)),
+        };
+        let read = text
             .map(|t| manifest::read_in(&t, hand, &folder))
             .map_err(|_| Fault::Missing);
         let changed = read.is_ok()
@@ -773,9 +856,12 @@ impl Plugins {
             update: self.updates.read().get(&i.id).cloned(),
             verified: self.sealed(l),
             withdrawn: self.withdrawn_in(l, lang),
-            in_store: (!matches!(i.origin, Origin::Store { .. } | Origin::Dev { .. }))
-                .then(|| self.offers.read().get(&i.id).cloned())
-                .flatten(),
+            in_store: (!matches!(
+                i.origin,
+                Origin::Store { .. } | Origin::Dev { .. } | Origin::Builtin
+            ))
+            .then(|| self.offers.read().get(&i.id).cloned())
+            .flatten(),
             manifest,
         }
     }
@@ -1022,7 +1108,11 @@ impl Plugins {
             origin: installed.origin.clone(),
             fingerprint: installed.fingerprint.clone(),
             declarative: m.declarative(),
-            refusal: m.refusal(&self.app_version, lang),
+            refusal: if builtin::is_builtin(&m.id) {
+                Some(Self::given_with_the_app(&m.id, lang))
+            } else {
+                m.refusal(&self.app_version, lang)
+            },
             asks: wanted,
             previous,
             grown,
@@ -1048,6 +1138,17 @@ impl Plugins {
         preview
     }
 
+    /// Why a plugin of the id of one the app gives is refused (INT-4): the one shipped with the app is the app's, and
+    /// is updated with it.
+    fn given_with_the_app(id: &str, lang: Lang) -> String {
+        tr_in!(
+            lang,
+            "{} est livré avec Escouade et mis à jour avec elle : un plugin du même id, d'où qu'il vienne, est refusé.",
+            "{} is shipped with Escouade and updated with it: a plugin of the same id, wherever it comes from, is refused.",
+            id
+        )
+    }
+
     /// Forgets what the inspection `token` set aside.
     pub fn discard(&self, token: &str) {
         if let Some(s) = self.staged.lock().remove(token) {
@@ -1068,6 +1169,15 @@ impl Plugins {
                 "This install is no longer current: choose the plugin again."
             ))
         })?;
+        if builtin::is_builtin(&staged.installed.id) {
+            if let Some(dir) = &staged.dir {
+                remove_dir(dir);
+            }
+            return Err(Refusal::other(Self::given_with_the_app(
+                &staged.installed.id,
+                lang,
+            )));
+        }
         let _w = self.writing.lock();
         let mut installed = staged.installed;
         installed.installed_at = now();
@@ -1198,6 +1308,11 @@ impl Plugins {
     /// its settings with it; `keep`: its choices kept for a later install of the same id. Its
     /// secrets are the caller's (`secret_keys`).
     pub fn remove(&self, id: &str, keep: bool) -> std::io::Result<bool> {
+        if builtin::is_builtin(id) {
+            return Err(std::io::Error::other(format!(
+                "{id} is given with Escouade: turn it off, it cannot be removed"
+            )));
+        }
         let _w = self.writing.lock();
         let gone = {
             let mut loaded = self.loaded.write();
@@ -1257,7 +1372,7 @@ impl Plugins {
                             verified: None,
                         })
                 }
-                Origin::Dev { .. } => None,
+                Origin::Dev { .. } | Origin::Builtin => None,
                 Origin::Store { .. } => self
                     .offers
                     .read()
@@ -1319,7 +1434,7 @@ impl Plugins {
     fn running_version(l: &Loaded) -> Option<String> {
         match &l.installed.origin {
             Origin::Store { version, .. } => Some(version.clone()),
-            Origin::Dev { .. } => None,
+            Origin::Dev { .. } | Origin::Builtin => None,
             _ => l
                 .read
                 .as_ref()
@@ -1338,6 +1453,10 @@ impl Plugins {
     }
 
     fn withdrawn_in(&self, l: &Loaded, lang: Lang) -> Option<Withdrawn> {
+        // No revocation list for the plugins the app gives: a fix comes with a release.
+        if l.installed.origin == Origin::Builtin {
+            return None;
+        }
         let version = Self::running_version(l)?;
         let list = self.revocations.read();
         let list = list.as_ref()?;

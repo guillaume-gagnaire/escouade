@@ -18,3 +18,5 @@ store/.data
 store/server/db/migrations/meta
 # Written by the probes bench of the retired index (ESC-294, archived by ESC-310): its own layout.
 docs/archive/codeindex/codeindex-probes-reference*.json
+crates
+prototypes/**/target
