@@ -828,6 +828,141 @@
       },
       "errors": ["contributes.webhooks[0].url network"],
       "ignored": []
+    },
+    {
+      "name": "a JS/TS bundle that Escouade runs in WASM (ESC-320)",
+      "manifest": {
+        "id": "dev.exemple.slack",
+        "name": "Slack",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "dist/plugin.mjs"
+        },
+        "permissions": {
+          "network": ["slack.com"]
+        }
+      },
+      "files": {
+        "dist/plugin.mjs": {
+          "text": "createPlugin().start();\n"
+        }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "a JS/TS bundle, read without its folder",
+      "manifest": {
+        "id": "dev.exemple.slack",
+        "name": "Slack",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "./dist/plugin.mjs"
+        },
+        "permissions": {
+          "network": ["slack.com"]
+        }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "a command and a bundle: one or the other",
+      "manifest": {
+        "id": "dev.exemple.slack",
+        "name": "Slack",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "command": "bin/slack",
+          "js": "dist/plugin.mjs",
+          "windows": "bin/slack.exe"
+        },
+        "permissions": {
+          "network": ["slack.com"]
+        }
+      },
+      "files": {
+        "dist/plugin.mjs": {
+          "text": "createPlugin().start();\n"
+        }
+      },
+      "errors": ["run.js exclusive"],
+      "ignored": []
+    },
+    {
+      "name": "a bundle out of the folder, or not a file of it",
+      "manifest": {
+        "id": "dev.exemple.slack",
+        "name": "Slack",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "../other/plugin.mjs"
+        },
+        "permissions": {
+          "network": ["slack.com"]
+        }
+      },
+      "files": {},
+      "errors": ["run.js path"],
+      "ignored": []
+    },
+    {
+      "name": "a bundle that is not in the folder",
+      "manifest": {
+        "id": "dev.exemple.slack",
+        "name": "Slack",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "dist/plugin.mjs",
+          "args": ["x", ""]
+        },
+        "permissions": {
+          "network": ["slack.com"]
+        }
+      },
+      "files": {},
+      "errors": ["run.js file", "run.args[1] empty"],
+      "ignored": []
+    },
+    {
+      "name": "a bundle that is no text",
+      "manifest": {
+        "id": "dev.exemple.slack",
+        "name": "Slack",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": 3
+        },
+        "permissions": {
+          "network": ["slack.com"]
+        }
+      },
+      "errors": ["run.js type"],
+      "ignored": []
     }
   ],
   "hosts": {

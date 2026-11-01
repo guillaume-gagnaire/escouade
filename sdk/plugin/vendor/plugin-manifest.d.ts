@@ -23,7 +23,8 @@ export interface ManifestError {
     | 'heavy'
     | 'square'
     | 'small'
-    | 'network';
+    | 'network'
+    | 'exclusive';
   /** The type, or the values, the field takes, for `type` and `enum`. */
   expected?: string;
 }
