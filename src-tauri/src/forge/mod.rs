@@ -13,6 +13,8 @@ pub mod azure_api;
 #[cfg(test)]
 mod azure_tests;
 pub mod bitbucket;
+#[cfg(test)]
+mod bitbucket_tests;
 pub mod connect;
 pub mod gitea;
 pub mod github;

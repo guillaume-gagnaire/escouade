@@ -11,7 +11,8 @@ Depuis ESC-203, chaque hébergeur est un plugin de première main, et le plugin 
 - [x] Interface commune, comptes par instance et analyse des remotes (ESC-54).
 - [x] Client GitHub : github.com, GHE.com, GitHub Enterprise Server (ESC-55).
 - [x] Ouvrir une PR depuis un agent ordinaire, et la suivre sur sa carte (ESC-64).
-- [ ] Clients GitLab (ESC-56), Bitbucket Cloud (ESC-57), Gitea et Forgejo (ESC-58).
+- [x] Client Bitbucket Cloud (ESC-57, fait le 2026-11-01) : le plugin de première main `dev.escouade.bitbucket` (jeton d'API Atlassian et e-mail ; PR et brouillons, merge, statuts, pipelines et journaux d'étapes, commentaires et fils, déploiements ; pas d'auto-merge, déclaré absent ; limite horaire comptée). **À essayer en vrai plus tard** (décidé le 2026-10-16, écrit d'après la documentation de l'API 2.0, testé sur un faux serveur aux réponses écrites à sa forme, `tests/fixtures/forges/bitbucket/`) : le champ `draft` d'une PR ; les réviseurs d'une création (identifiant de compte ou `{uuid}`, jamais un pseudo) ; `request-changes` et `comments/{id}/resolve` ; le nom du pipeline par son numéro (`pipelines/<n>/steps`) et le journal d'une étape ; les scopes d'un jeton (déploiements et environnements : `read:pipeline:bitbucket` suffit-il ?) ; les en-têtes de limite (`X-RateLimit-Limit`, `-NearLimit`) ; un merge en 202 et sa tâche ; le `parent` d'un fork. Comme les autres hébergeurs, sa relance de jobs reste absente (aucun appel connu).
+- [ ] Clients GitLab (ESC-56), Gitea et Forgejo (ESC-58).
 - [ ] PR des tickets : ouverture par l'API, colonne « En revue », suivi jusqu'au merge (ESC-59). Puis la CI en échec corrigée par l'agent (ESC-60), les retours de relecture et les conflits (ESC-61), le merge depuis Escouade (ESC-62).
 - [ ] CI de la branche cible et des branches poussées (ESC-63).
 - [ ] Vue « Pull requests » du projet (ESC-65), et la relecture d'une PR par un agent (ESC-66).

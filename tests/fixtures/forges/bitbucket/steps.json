@@ -1,0 +1,15 @@
+{
+  "pagelen": 100,
+  "page": 1,
+  "size": 3,
+  "values": [
+    {
+      "type": "pipeline_step",
+      "uuid": "{step-build}",
+      "name": "Build",
+      "state": { "name": "COMPLETED", "result": { "name": "SUCCESSFUL" } }
+    },
+    { "type": "pipeline_step", "uuid": "{step-test}", "name": "Test", "state": { "name": "COMPLETED", "result": { "name": "FAILED" } } },
+    { "type": "pipeline_step", "uuid": "{step-deploy}", "name": "Deploy", "state": { "name": "PENDING" } }
+  ]
+}

@@ -8,6 +8,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- Bitbucket Cloud est un hébergeur de code d’Escouade, par un jeton d’API Atlassian : tes PR, leurs statuts, leurs pipelines et leurs journaux, les commentaires et les déploiements se suivent comme sur GitHub, et le merge se fait depuis Escouade. Bitbucket n’a pas d’auto-merge : Escouade le dit.
 - Les plugins Contraste élevé, Discord, Slack et Règles de l’équipe sont des plugins d’Escouade, sur le store sous `dev.escouade.*` et tenus dans le dépôt de l’app ; seul ce dépôt peut publier ces identifiants. Une version installée sous l’ancien identifiant `dev.exemple.*` se remplace depuis la vue Plugins.
 - La page de l’app que l’agent vient de développer s’ouvre toute seule dans Escouade quand « ▶ Tester » est prêt, dans la vue « Page » de l’agent ou dans une fenêtre « Pages » à part, avec ses outils de développement (F12) et trois largeurs : pleine, tablette et mobile. Elle tourne à part, sans accès à Escouade ni à tes cookies ; Réglages › Projets garde le navigateur du système si tu préfères.
 - Les plugins ont leur vue, ouverte par l’icône de la barre des projets : installer depuis un dossier ou un dépôt git après avoir vu d’où vient le plugin, son empreinte, ce qu’il ajoute et ce qu’il pourra faire, la permission la plus forte d’abord ; l’activer pour l’app ou projet par projet, un projet privé restant coupé d’office ; lui retirer une permission, régler ses secrets, lire son journal, le désinstaller.

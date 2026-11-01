@@ -1,0 +1,40 @@
+{
+  "pagelen": 100,
+  "page": 1,
+  "size": 3,
+  "values": [
+    {
+      "type": "deployment",
+      "uuid": "{dep-3}",
+      "environment": { "uuid": "{env-prod}" },
+      "state": { "name": "IN_PROGRESS" },
+      "release": {
+        "name": "release-9",
+        "commit": { "hash": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678" },
+        "url": "https://bitbucket.org/acme/demo/pipelines/results/9"
+      }
+    },
+    {
+      "type": "deployment",
+      "uuid": "{dep-2}",
+      "environment": { "uuid": "{env-test}" },
+      "state": { "name": "COMPLETED", "status": { "name": "SUCCESSFUL" } },
+      "release": {
+        "name": "release-8",
+        "commit": { "hash": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678" },
+        "url": "https://bitbucket.org/acme/demo/pipelines/results/8"
+      }
+    },
+    {
+      "type": "deployment",
+      "uuid": "{dep-1}",
+      "environment": { "uuid": "{env-test}" },
+      "state": { "name": "COMPLETED", "status": { "name": "FAILED" } },
+      "release": {
+        "name": "release-5",
+        "commit": { "hash": "ffffffffffffffffffffffffffffffffffffffff" },
+        "url": "https://bitbucket.org/acme/demo/pipelines/results/5"
+      }
+    }
+  ]
+}

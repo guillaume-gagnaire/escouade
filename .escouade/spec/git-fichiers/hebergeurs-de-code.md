@@ -2,7 +2,7 @@
 title: "Hébergeurs de code"
 subject: "Git & fichiers"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-54","ESC-55","ESC-58","ESC-70","ESC-241","ESC-212"]
+tickets: ["ESC-54","ESC-55","ESC-58","ESC-70","ESC-241","ESC-212","ESC-57"]
 decisions: []
 compared: null
 ---
@@ -59,7 +59,8 @@ Réglages › Intégrations › « Hébergeurs de code » :
 
 ## Limites
 
-- GitLab, Bitbucket Cloud et Gitea / Forgejo : Escouade ne fait que vérifier le compte. Elle n'y ouvre ni ne lit aucune PR, et « Ouvrir une PR » n'y est pas proposé.
+- Bitbucket Cloud : rien n'a été essayé pour de vrai (écrit d'après la documentation de l'API, testé sur un faux serveur ; la liste des essais à faire est dans `docs/TODO-2.2.md`) ; pas d'auto-merge (l'API n'en a pas), pas d'étiquettes, pas de relance de jobs.
+- GitLab et Gitea / Forgejo : Escouade ne fait que vérifier le compte. Elle n'y ouvre ni ne lit aucune PR, et « Ouvrir une PR » n'y est pas proposé.
 - Les droits d'un jeton ne sont lus que pour un jeton GitHub classique et sur GitLab ; un jeton GitHub à droits fins, Bitbucket, Gitea et Azure DevOps ne les disent pas.
 - GitHub : les écritures (créer, merger, auto-merge, commenter) n'ont pas encore été essayées pour de vrai (voir `docs/TODO-1.8.md`).
 - Azure DevOps : pas de déploiements ; le jeton de `az` ne vaut que pour dev.azure.com ; un essai réel avec un jeton reste à faire (ouvrir une PR brouillon, la lire, commenter, répondre, résoudre, l'abandonner).
@@ -68,3 +69,14 @@ Réglages › Intégrations › « Hébergeurs de code » :
 
 - Le jeton d'une instance est aussi sous `plugin:<id>:account:<hôte>` ; `forge:<hôte>` reste tenu à côté pour une version d'avant (voir *Les comptes partagés par plugin*).
 - Quand un plugin installé sert le même hébergeur, le formulaire demande « Servi par » ; ses PR, sa CI et sa source de tickets passent alors par ce plugin. « Sert aussi à … » suit les points du compte.
+
+## Ce qu'Escouade fait sur Bitbucket Cloud (ESC-57)
+
+Servi par le plugin livré `dev.escouade.bitbucket` ; compte : e-mail et jeton d'API Atlassian (les mots de passe d'application sont retirés).
+
+- **Ouvrir une PR** : brouillon si demandé (le champ `draft`), `Closes #n` ajouté à la description s'il manque, relecteurs par identifiant de compte ou `{uuid}` ; si Bitbucket refuse un relecteur (un pseudo n'en est pas un), la PR s'ouvre sans eux. Pas d'étiquettes sur Bitbucket.
+- **Lire les PR**, une par une (une PR disparue est laissée de côté), celles d'une branche (tous états) et les ouvertes d'un dépôt : état (fusionnée, refusée ou remplacée = fermée), brouillon, approbations et changements demandés (les participants), fils de lignes ouverts, fork. Les fils et les checks ne sont lus que pour une PR ouverte. Bitbucket ne dit pas d'avance si une PR a des conflits : « inconnu ».
+- **Merger** (merge commit, squash, rebase fast-forward, rebase puis merge) ; un merge que Bitbucket fait en tâche de fond est attendu. **Pas d'auto-merge** : l'API n'en a pas, la capacité est déclarée absente ; Escouade attend la CI et merge elle-même, et le dit.
+- **Checks** : les statuts de commit de la PR, un par clé (le dernier mot) ; un run de Bitbucket Pipelines a un journal, lu étape après étape sous le nom de l'étape (la fin de chacune, 256 Ko au plus). Une autre CI ne donne qu'un statut et une adresse. Pas de relance.
+- **Relectures** (approuvé, changements demandés), **commentaires** (fils de lignes et leur état résolu, la conversation, les supprimés écartés), commenter, répondre, résoudre un fil, publier une relecture (commentaires de ligne, texte, puis approbation ou changements demandés), et les déploiements d'un commit par environnement.
+- **Limite horaire** : 1000 appels par heure (plus pour un gros espace de travail) sans compteur dans les réponses : Escouade compte ses appels, croit `X-RateLimit-Limit`, prend `X-RateLimit-NearLimit` pour « un cinquième restant », étale ce qui reste de l'heure (30 s au plus d'un coup) ; un 429 est attendu (`Retry-After`) puis renvoyé une fois.

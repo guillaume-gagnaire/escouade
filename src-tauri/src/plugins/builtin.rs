@@ -68,10 +68,19 @@ pub const REGISTRY: &[Entry] = &[
         id: GITHUB,
         manifest: include_str!("../../../plugins/builtin/dev.escouade.github/escouade-plugin.json"),
     },
+    Entry {
+        id: BITBUCKET,
+        manifest: include_str!(
+            "../../../plugins/builtin/dev.escouade.bitbucket/escouade-plugin.json"
+        ),
+    },
 ];
 
 /// The plugin « GitHub »: github.com, GHE.com and GitHub Enterprise Server, their pull requests and GitHub Issues.
 pub const GITHUB: &str = "dev.escouade.github";
+
+/// The plugin « Bitbucket »: Bitbucket Cloud, its pull requests, pipelines and deployments.
+pub const BITBUCKET: &str = "dev.escouade.bitbucket";
 
 /// Whether `id` is the id of a plugin the app gives.
 pub fn is_builtin(id: &str) -> bool {

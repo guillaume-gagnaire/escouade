@@ -1,0 +1,31 @@
+{
+  "pagelen": 30,
+  "page": 1,
+  "size": 2,
+  "values": [
+    {
+      "id": 43,
+      "title": "Draft: payments",
+      "state": "OPEN",
+      "draft": true,
+      "created_on": "2026-10-22T08:00:00.000000+00:00",
+      "author": { "nickname": "ada" },
+      "source": { "branch": { "name": "feature/pay" }, "repository": { "full_name": "ada/demo-fork" } },
+      "destination": { "branch": { "name": "main" }, "repository": { "full_name": "acme/demo" } },
+      "participants": [],
+      "links": { "html": { "href": "https://bitbucket.org/acme/demo/pull-requests/43" } }
+    },
+    {
+      "id": 42,
+      "title": "Add the login page",
+      "state": "OPEN",
+      "draft": false,
+      "created_on": "2026-10-20T09:15:30.123456+00:00",
+      "author": { "nickname": "ada" },
+      "source": { "branch": { "name": "feature/login" }, "repository": { "full_name": "acme/demo" } },
+      "destination": { "branch": { "name": "main" }, "repository": { "full_name": "acme/demo" } },
+      "participants": [{ "role": "REVIEWER", "approved": true, "state": "approved", "user": { "nickname": "grace" } }],
+      "links": { "html": { "href": "https://bitbucket.org/acme/demo/pull-requests/42" } }
+    }
+  ]
+}

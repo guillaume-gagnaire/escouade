@@ -1,0 +1,52 @@
+{
+  "pagelen": 100,
+  "page": 1,
+  "size": 5,
+  "values": [
+    {
+      "id": 101,
+      "content": { "raw": "Why not a constant?" },
+      "user": { "nickname": "grace" },
+      "deleted": false,
+      "inline": { "path": "src/login.ts", "from": null, "to": 12 },
+      "parent": null,
+      "resolution": null
+    },
+    {
+      "id": 102,
+      "content": { "raw": "Because it moves." },
+      "user": { "nickname": "ada" },
+      "deleted": false,
+      "inline": { "path": "src/login.ts", "from": null, "to": 12 },
+      "parent": { "id": 101 },
+      "resolution": null
+    },
+    {
+      "id": 103,
+      "content": { "raw": "Typo" },
+      "user": { "nickname": "linus" },
+      "deleted": false,
+      "inline": { "path": "README.md", "from": 3, "to": null },
+      "parent": null,
+      "resolution": { "type": "comment_resolution", "user": { "nickname": "ada" }, "created_on": "2026-10-21T12:00:00.000000+00:00" }
+    },
+    {
+      "id": 104,
+      "content": { "raw": "Looks good overall." },
+      "user": { "nickname": "grace" },
+      "deleted": false,
+      "inline": null,
+      "parent": null,
+      "resolution": null
+    },
+    {
+      "id": 105,
+      "content": { "raw": "(removed)" },
+      "user": { "nickname": "grace" },
+      "deleted": true,
+      "inline": { "path": "src/login.ts", "to": 30 },
+      "parent": null,
+      "resolution": null
+    }
+  ]
+}

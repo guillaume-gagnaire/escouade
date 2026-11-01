@@ -147,6 +147,7 @@ export const BUILTINS: Builtin[] = [
     secrets: true,
     docs: doc('integrations'),
     logo: { category: 'forge' },
+    source: 'plugins/builtin/dev.escouade.bitbucket',
   },
   {
     id: 'dev.escouade.gitea',

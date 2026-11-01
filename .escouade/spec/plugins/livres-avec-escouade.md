@@ -18,6 +18,7 @@ Certains plugins sont donnés par l'app : livrés avec elle, signés avec elle, 
 - Le tri par l'origine, jamais par l'identifiant. Seule l'origine `builtin` peut lancer les programmes `{escouade}/…`.
 - `dev.escouade.minimal` est une démonstration, dans le registre des builds de développement et des tests seulement : la poignée de main du protocole, deux méthodes d'essai, et le harness « Minimal », qui prouve le contrat des harness en process (voir *Le contrat des harness en process*). Sa fiche dit qu'il ajoute un harness ; ce harness n'est pas proposé à la création d'un agent.
 - `dev.escouade.github` (« GitHub », INT-8.1) est dans les releases : l'hébergeur GitHub (github.com, GHE.com, GitHub Enterprise Server : PR, merge et auto-merge, CI et journaux, relance, relectures et fils, déploiements) et la source GitHub Issues, sur le même compte. Son dossier porte aussi sa crate (son code et ses tests unitaires) ; sa page du store pointe vers ce dossier.
+- `dev.escouade.bitbucket` (« Bitbucket », INT-8.3, ESC-57) est dans les releases : l'hébergeur Bitbucket Cloud (PR et brouillons, merge sans auto-merge, statuts, pipelines et journaux d'étapes, commentaires et fils, déploiements), sur un compte e-mail et jeton d'API Atlassian. Même forme que GitHub : un dossier avec sa crate et ses tests.
 
 ## Ce que l'utilisateur peut
 

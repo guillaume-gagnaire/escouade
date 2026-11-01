@@ -1,0 +1,4 @@
+Cloning into /opt/atlassian/pipelines/agent/build...
+Installing dependencies
+npm ci
+added 412 packages in 9s

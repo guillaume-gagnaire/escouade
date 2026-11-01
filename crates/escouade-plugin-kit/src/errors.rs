@@ -82,6 +82,8 @@ pub fn said(body: &str) -> Option<String> {
             .or_else(|| v["errors"][0]["message"].as_str().map(str::to_string))
             .or_else(|| v["message"].as_str().map(str::to_string))
             .or_else(|| v["error"].as_str().map(str::to_string))
+            // Bitbucket's `{"type": "error", "error": {"message": …}}`.
+            .or_else(|| v["error"]["message"].as_str().map(str::to_string))
             .or_else(|| v["err"].as_str().map(str::to_string))?,
         Err(_) if body.starts_with('<') => return None,
         Err(_) => body.lines().next()?.to_string(),

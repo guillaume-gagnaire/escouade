@@ -1,0 +1,48 @@
+{
+  "type": "pullrequest",
+  "id": 42,
+  "title": "Add the login page",
+  "description": "Adds /login.",
+  "state": "OPEN",
+  "draft": false,
+  "created_on": "2026-10-20T09:15:30.123456+00:00",
+  "updated_on": "2026-10-21T14:02:11.000000+00:00",
+  "author": { "type": "user", "nickname": "ada", "display_name": "Ada Lovelace", "account_id": "557058:ada" },
+  "source": {
+    "branch": { "name": "feature/login" },
+    "commit": { "hash": "a1b2c3d4e5f6" },
+    "repository": { "type": "repository", "full_name": "acme/demo", "name": "demo" }
+  },
+  "destination": {
+    "branch": { "name": "main" },
+    "commit": { "hash": "0f9e8d7c6b5a" },
+    "repository": { "type": "repository", "full_name": "acme/demo", "name": "demo" }
+  },
+  "participants": [
+    {
+      "type": "participant",
+      "role": "REVIEWER",
+      "approved": true,
+      "state": "approved",
+      "participated_on": "2026-10-21T10:00:00.000000+00:00",
+      "user": { "nickname": "grace", "display_name": "Grace Hopper" }
+    },
+    {
+      "type": "participant",
+      "role": "REVIEWER",
+      "approved": false,
+      "state": "changes_requested",
+      "participated_on": "2026-10-21T11:00:00.000000+00:00",
+      "user": { "nickname": "linus", "display_name": "Linus T" }
+    },
+    {
+      "type": "participant",
+      "role": "REVIEWER",
+      "approved": false,
+      "state": null,
+      "participated_on": null,
+      "user": { "display_name": "Margaret Hamilton" }
+    }
+  ],
+  "links": { "html": { "href": "https://bitbucket.org/acme/demo/pull-requests/42" } }
+}

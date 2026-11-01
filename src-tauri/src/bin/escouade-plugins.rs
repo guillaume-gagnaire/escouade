@@ -34,6 +34,8 @@ const ENTRIES: &[Entry] = &[
     ("voice-deepgram", voice::deepgram),
     // GitHub (INT-8.1): its code host and GitHub Issues, in its crate (plugins/builtin/dev.escouade.github).
     ("github", escouade_plugin_github::run),
+    // Bitbucket Cloud (INT-8.3, ESC-57): its code host, in its crate (plugins/builtin/dev.escouade.bitbucket).
+    ("bitbucket", escouade_plugin_bitbucket::run),
 ];
 
 fn main() {
