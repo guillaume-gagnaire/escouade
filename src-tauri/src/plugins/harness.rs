@@ -1,0 +1,1259 @@
+//! The in-process adapter of a harness (INT-9, `docs/PLUGINS.md` §4.5 and §4.6): `ProcessEngine: Engine` and
+//! `ProcessEngineProcess: EngineProcess` speak the contract of `escouade_plugin_protocol::engine` to the plugin's
+//! process, so that the rest of the core does not see the difference (the conformance bench plays them as it plays
+//! the harnesses written in the core).
+//!
+//! - **The launch stays the core's.** The plugin describes it (`engine/launch`): arguments, variables, files of the
+//!   agent's own, first lines. The core checks the description (`check_launch`: the fence of private projects applied
+//!   and every refused path in it, read-only held, Escouade's token never among the arguments, files only in the
+//!   agent's own folder), then starts the program it found itself (`locate`) in its Job object, under WSL when need
+//!   be. The harness outlives a crash of its plugin.
+//! - **The frames go in batches**, as raw lines the core never reads again: what was read while the last batch
+//!   was with the plugin, up to 64 KiB, a lone line at once (`agent/frames`). The plugin answers normalized items and effects, which the core applies
+//!   to the agent (`AgentRt::apply_items`, through `Engine::translate`); its `write` items, and the `writes` of its
+//!   other answers, go to the harness's input, in their order.
+//! - **A crash in the middle of a turn**: the runtime starts the plugin again (three times within five minutes, PLG-2)
+//!   and gives it the agent again (`agent/attach`); the batch it had not answered is given again, the frames read
+//!   meanwhile wait in their queue, and the conversation says « Le plugin … a redémarré ». What was being translated
+//!   may be lost: a call under way stays so until the turn's end, where the core closes it. After the last crash the
+//!   plugin is stopped: the agent's harness is stopped too, the conversation and its end say why, and its session
+//!   is kept for the next message once the plugin is started again.
+//! - **The terminal view** keeps its PTY in the core: the plugin describes its launch (`terminal/launch`, checked
+//!   as the agent's) and reads its hooks (`terminal/hook`), whose answer it puts in its harness's form (the code
+//!   index's context, a refusal).
+
+// The harnesses' plugins are registered from their manifests as each harness comes out in process (INT-10); the
+// tests play this adapter on the demonstration plugin until then.
+#![allow(dead_code)]
+
+use super::runtime::{CallError, Runtime, Stop};
+use crate::agent::{AgentRt, Effects};
+use crate::core::Attachment;
+use crate::engine::registry::{
+    AccountStore, CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind,
+    Tested,
+};
+use crate::engine::{
+    mcp, terminal, BoxFuture, Engine, EngineProcess, Escouade, Message, OnExit, OnFrame, OneShot,
+    PermissionAnswer, Process, Program, Ready, Remote, Room, Spawn, Start, StartLost, Weight,
+};
+use crate::job::{Job, JobUsage};
+use crate::model::EngineId;
+use anyhow::{anyhow, bail, Context, Result};
+use escouade_plugin_protocol::engine::{self as proto, method};
+use parking_lot::Mutex;
+use serde::Serialize;
+use serde_json::{json, Value};
+use std::collections::VecDeque;
+use std::path::{Component, Path, PathBuf};
+use std::process::Stdio;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::sync::{mpsc, oneshot, watch};
+
+/// How many lines wait for the plugin at most while it starts again; past them the oldest are dropped, and said.
+pub const FRAME_QUEUE: usize = 20_000;
+
+/// How long a batch of frames waits for its answer.
+const FRAMES_WITHIN: Duration = Duration::from_secs(10);
+
+/// How many times a call is given again to a plugin that crashed before it answered.
+const RETRIES: usize = 8;
+
+fn leak(s: &str) -> &'static str {
+    Box::leak(s.to_owned().into_boxed_str())
+}
+
+/// The harnesses a manifest declares (`contributes.harnesses`), those that read.
+pub fn harnesses_of(contributes: &serde_json::Map<String, Value>) -> Vec<proto::HarnessDecl> {
+    contributes
+        .get("harnesses")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|h| match serde_json::from_value(h.clone()) {
+            Ok(d) => Some(d),
+            Err(e) => {
+                log::warn!("a harness of a plugin's manifest left aside: {e}");
+                None
+            }
+        })
+        .collect()
+}
+
+/// Registers the harnesses of the plugin `plugin` (its manifest's `contributes`), each one once: answers their ids.
+pub fn register(
+    rt: &Arc<Runtime>,
+    plugin: &str,
+    contributes: &serde_json::Map<String, Value>,
+    escouade_dir: &Path,
+) -> Vec<EngineId> {
+    harnesses_of(contributes)
+        .into_iter()
+        .map(|decl| {
+            let engine: &'static ProcessEngine = Box::leak(Box::new(ProcessEngine::new(
+                rt.clone(),
+                plugin,
+                decl,
+                escouade_dir,
+            )));
+            crate::engine::registry::register(engine);
+            engine.id
+        })
+        .collect()
+}
+
+/// A harness whose plugin runs in its own process.
+pub struct ProcessEngine {
+    rt: Arc<Runtime>,
+    plugin: String,
+    decl: proto::HarnessDecl,
+    id: EngineId,
+    name: &'static str,
+    speaker: &'static str,
+    caps: EngineCaps,
+    models: Vec<ModelDecl>,
+    efforts: &'static [&'static str],
+    version_args: &'static [&'static str],
+    tested: Tested,
+    account_var: &'static str,
+    escouade_dir: PathBuf,
+}
+
+impl ProcessEngine {
+    /// The harness `decl` of the plugin `plugin`; `escouade_dir` is the folder of the app's programs (`{escouade}`).
+    pub fn new(
+        rt: Arc<Runtime>,
+        plugin: &str,
+        decl: proto::HarnessDecl,
+        escouade_dir: &Path,
+    ) -> Self {
+        let c = &decl.caps;
+        let caps = EngineCaps {
+            modes: c
+                .modes
+                .iter()
+                .map(|m| ModeCap {
+                    id: leak(m),
+                    meaning: None,
+                })
+                .collect(),
+            effort: !decl.efforts.is_empty(),
+            images: c.images,
+            pdf: c.pdf,
+            fork: ForkPoint::None,
+            resume_other_account: false,
+            mid_turn: MidTurn::Refused,
+            slash_commands: c.slash_commands,
+            quota: QuotaKind::None,
+            quota_windows: Vec::new(),
+            cost: CostKind::None,
+            // Its view's PTY stays in the core: wired with the first harness in process that has one (INT-10.1).
+            terminal_view: false,
+            remote_control: false,
+            background_tasks: false,
+            todo_tools: false,
+            default_refusal: false,
+            sandbox: false,
+            usage_page: None,
+            accounts_by_key: c.accounts_by_key,
+            read_only: c.read_only,
+        };
+        let models = decl
+            .models
+            .iter()
+            .map(|m| ModelDecl {
+                id: leak(&m.id),
+                label: leak(m.label.as_deref().unwrap_or(&m.id)),
+                effort: m.effort,
+                auto: false,
+            })
+            .collect();
+        let efforts: Vec<&'static str> = decl.efforts.iter().map(|e| leak(e)).collect();
+        let version_args: Vec<&'static str> = decl.version_args.iter().map(|a| leak(a)).collect();
+        Self {
+            rt,
+            plugin: plugin.to_string(),
+            id: EngineId::new(&decl.id),
+            name: leak(&decl.name),
+            speaker: leak(decl.speaker.as_deref().unwrap_or(&decl.name)),
+            caps,
+            models,
+            efforts: Box::leak(efforts.into_boxed_slice()),
+            version_args: Box::leak(version_args.into_boxed_slice()),
+            tested: Tested {
+                oldest: leak(&decl.tested.oldest),
+                newest: leak(&decl.tested.newest),
+            },
+            account_var: leak(
+                decl.account_var
+                    .as_deref()
+                    .unwrap_or("ESCOUADE_HARNESS_HOME"),
+            ),
+            escouade_dir: escouade_dir.to_path_buf(),
+            decl,
+        }
+    }
+
+    /// The plugin it is served by.
+    pub fn plugin(&self) -> &str {
+        &self.plugin
+    }
+
+    async fn call<T: serde::de::DeserializeOwned>(
+        &self,
+        method: &str,
+        params: impl Serialize,
+    ) -> Result<T> {
+        let params = serde_json::to_value(params)?;
+        let v = self
+            .rt
+            .call(&self.plugin, method, params)
+            .await
+            .map_err(|e| down(self.name, e))?;
+        serde_json::from_value(v).map_err(|e| anyhow!("{}: {method}: {e}", self.name))
+    }
+
+    /// The launch of its interface in a terminal (`terminal/launch`), checked as an agent's launch is.
+    pub async fn terminal_launch(&self, params: proto::TerminalParams) -> Result<proto::Launch> {
+        let launch: proto::Launch = self.call(method::TERMINAL_LAUNCH, &params).await?;
+        check_launch(
+            self.name,
+            params.escouade.as_ref().map(|g| g.token.as_str()),
+            &params.fence,
+            params.read_only,
+            params.home.as_deref(),
+            &launch,
+        )
+        .map_err(|e| anyhow!(e))?;
+        Ok(launch)
+    }
+
+    /// One of its interface's hooks, with what the core answers it (`reply`): the items for the agent, and the answer
+    /// in its harness's form.
+    pub async fn terminal_hook(
+        &self,
+        agent: &str,
+        hook: Value,
+        reply: Option<proto::HookReply>,
+    ) -> Result<proto::HookAnswer> {
+        let h = proto::Hook {
+            agent: agent.to_string(),
+            hook,
+            reply,
+        };
+        self.call(method::TERMINAL_HOOK, &h).await
+    }
+
+    fn program_at(&self, path: &str) -> Option<PathBuf> {
+        let path = match path.strip_prefix("{escouade}/") {
+            Some(rest) => {
+                let p = self.escouade_dir.join(rest);
+                // Only the app's own program, in the folder of the app.
+                super::builtin::check_program(&p, &self.escouade_dir).ok()?;
+                p
+            }
+            None => PathBuf::from(path),
+        };
+        with_exe(&path).filter(|p| p.is_file())
+    }
+}
+
+/// `path`, or under Windows the same with `.exe` when that is the file.
+fn with_exe(path: &Path) -> Option<PathBuf> {
+    if path.is_file() {
+        return Some(path.to_path_buf());
+    }
+    if cfg!(windows) && path.extension().is_none() {
+        let exe = path.with_extension("exe");
+        if exe.is_file() {
+            return Some(exe);
+        }
+    }
+    None
+}
+
+/// What a call that got no answer is in the core.
+fn down(name: &str, e: CallError) -> anyhow::Error {
+    match e {
+        CallError::Remote { message, .. } => anyhow!("{name} : {message}"),
+        e => anyhow!(tr!(
+            "Le plugin de {name} ne répond pas : {e}",
+            "The plugin of {name} is not answering: {e}"
+        )),
+    }
+}
+
+/// The checks of a launch's description (`engine/launch`, `terminal/launch`): what the core guarantees whatever the
+/// plugin. Answers why it is refused.
+pub fn check_launch(
+    name: &str,
+    token: Option<&str>,
+    fence: &[String],
+    read_only: bool,
+    home: Option<&str>,
+    launch: &proto::Launch,
+) -> std::result::Result<(), String> {
+    if let Some(token) = token.filter(|t| !t.is_empty()) {
+        if launch.args.iter().any(|a| a.contains(token)) {
+            return Err(tr!(
+                "Le plugin de {name} met le jeton d’Escouade dans les arguments de son harness, que tout le monde peut lire : l’agent ne démarre pas.",
+                "The plugin of {name} puts Escouade’s token among its harness’s arguments, which anyone can read: the agent doesn’t start."
+            ));
+        }
+    }
+    if !fence.is_empty() {
+        let said = |p: &str| {
+            launch.args.iter().any(|a| a.contains(p))
+                || launch.env.iter().any(|v| v.value.contains(p))
+                || launch.files.iter().any(|f| f.text.contains(p))
+        };
+        if !launch.fence_applied || !fence.iter().all(|p| said(p)) {
+            return Err(tr!(
+                "Le plugin de {name} n’applique pas la clôture des projets privés : l’agent ne démarre pas.",
+                "The plugin of {name} doesn’t apply the fence of private projects: the agent doesn’t start."
+            ));
+        }
+    }
+    if read_only && !launch.read_only {
+        return Err(tr!(
+            "Le plugin de {name} ne tient pas son harness en lecture seule : la discussion ne démarre pas.",
+            "The plugin of {name} doesn’t hold its harness read-only: the discussion doesn’t start."
+        ));
+    }
+    for f in &launch.files {
+        let path = Path::new(&f.path);
+        let inside = home.is_some_and(|home| {
+            path.is_absolute()
+                && path.starts_with(home)
+                && !path.components().any(|c| matches!(c, Component::ParentDir))
+        });
+        if !inside {
+            let file = &f.path;
+            return Err(tr!(
+                "Le plugin de {name} veut écrire {file}, hors du dossier de l’agent : l’agent ne démarre pas.",
+                "The plugin of {name} wants to write {file}, outside the agent’s folder: the agent doesn’t start."
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// The variables of `base` with those of `more` over them.
+fn merged(base: &[(String, String)], more: &[proto::EnvVar]) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = base
+        .iter()
+        .filter(|(k, _)| !more.iter().any(|v| &v.name == k))
+        .cloned()
+        .collect();
+    out.extend(more.iter().map(|v| (v.name.clone(), v.value.clone())));
+    out
+}
+
+fn command_of(
+    program: &Program,
+    cwd: &str,
+    args: &[String],
+    env: &[(String, String)],
+    remove: &[String],
+) -> Result<tokio::process::Command> {
+    let launch = program.launch(cwd, args, env)?;
+    let mut cmd = tokio::process::Command::new(&launch.program);
+    cmd.args(&launch.args)
+        .current_dir(cwd)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    for (k, v) in &launch.env {
+        cmd.env(k, v);
+    }
+    for k in remove {
+        cmd.env_remove(k);
+    }
+    #[cfg(windows)]
+    cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
+    crate::job::isolate(&mut cmd);
+    crate::proc::no_inherited_fds(&mut cmd);
+    Ok(cmd)
+}
+
+impl Engine for ProcessEngine {
+    fn id(&self) -> EngineId {
+        self.id
+    }
+    fn name(&self) -> &'static str {
+        self.name
+    }
+    fn speaker(&self) -> &'static str {
+        self.speaker
+    }
+    fn instructions_room(&self) -> Option<Room> {
+        None
+    }
+    fn subagent_relay(&self, _: crate::i18n::Lang, _: &str, _: &str, _: &str) -> Option<String> {
+        None
+    }
+
+    fn locate(&self, configured: &str, _wsl_distro: &str) -> Option<Program> {
+        if !configured.trim().is_empty() {
+            return with_exe(Path::new(configured.trim())).map(Program::Native);
+        }
+        if let Some(p) = self.decl.locate.program.as_deref() {
+            return self.program_at(p).map(Program::Native);
+        }
+        let path = std::env::var_os("PATH")?;
+        std::env::split_paths(&path)
+            .flat_map(|dir| self.decl.locate.names.iter().map(move |n| dir.join(n)))
+            .find_map(|p| with_exe(&p))
+            .map(Program::Native)
+    }
+
+    fn tested(&self) -> Tested {
+        self.tested
+    }
+    fn oldest_reason(&self, lang: crate::i18n::Lang) -> String {
+        let (name, oldest) = (self.name, self.tested.oldest);
+        tr_in!(
+            lang,
+            "{name} est plus ancien que la version {oldest}, la plus ancienne que son plugin tient.",
+            "{name} is older than version {oldest}, the oldest its plugin holds."
+        )
+    }
+    fn update_command(&self) -> &'static str {
+        ""
+    }
+    fn version_args(&self) -> &'static [&'static str] {
+        self.version_args
+    }
+    fn caps(&self) -> EngineCaps {
+        self.caps.clone()
+    }
+    fn accounts(&self) -> AccountStore {
+        AccountStore::ConfigDir {
+            var: self.account_var,
+        }
+    }
+    fn terminal(&self) -> Option<&'static dyn terminal::TerminalView> {
+        None
+    }
+    fn install(&self) -> Install {
+        Install {
+            windows: "",
+            unix: "",
+        }
+    }
+    fn models(&self) -> Vec<ModelDecl> {
+        self.models.clone()
+    }
+    fn efforts(&self) -> &'static [&'static str] {
+        self.efforts
+    }
+    fn supports_effort(&self, model: &str) -> bool {
+        self.models.iter().any(|m| m.id == model && m.effort)
+    }
+    fn supports_auto(&self, _: &str) -> bool {
+        false
+    }
+
+    fn spawn(&self, spawn: Spawn, on_frame: OnFrame, on_exit: OnExit) -> Result<Process> {
+        let key = format!("{}-{}", self.id, uuid::Uuid::new_v4().simple());
+        let session = match &spawn.start {
+            Start::Resume { session } => Some(session.clone()),
+            _ => None,
+        };
+        let attach = proto::Attach {
+            agent: key.clone(),
+            cwd: spawn.cwd.clone(),
+            session,
+            model: spawn.model.clone(),
+            effort: spawn.effort.clone(),
+            mode: spawn.mode.clone(),
+            pending: Vec::new(),
+        };
+        let (stdin_tx, stdin_rx) = mpsc::unbounded_channel();
+        let (control_tx, control_rx) = mpsc::unbounded_channel();
+        let (ready_tx, _) = watch::channel(None);
+        let p = Arc::new(ProcessEngineProcess {
+            rt: self.rt.clone(),
+            plugin: self.plugin.clone(),
+            name: self.name,
+            account_var: self.account_var,
+            key,
+            attach: Mutex::new(attach),
+            stdin: Mutex::new(Some(stdin_tx)),
+            control: Mutex::new(Some(control_tx)),
+            ready: ready_tx,
+            alive: AtomicBool::new(true),
+            job: Mutex::new(None),
+            kill_tx: Mutex::new(None),
+            tail: Mutex::new(VecDeque::new()),
+        });
+        tokio::spawn(control(Arc::downgrade(&p), control_rx));
+        tokio::spawn(p.clone().run(spawn, stdin_rx, on_frame, on_exit));
+        Ok(p)
+    }
+
+    fn message(&self, text: &str, attachments: &[Attachment]) -> Result<Message> {
+        if !attachments.is_empty() {
+            let name = self.name;
+            bail!(tr!(
+                "{name} ne prend pas de fichier joint.",
+                "{name} takes no attached file."
+            ));
+        }
+        Ok(Message(json!(text)))
+    }
+
+    fn translate(&self, rt: &mut AgentRt, frame: &Value, fx: &mut Effects) {
+        if let Some(items) = frame["items"].as_array() {
+            rt.apply_items(items, fx);
+        }
+    }
+
+    fn start_lost(&self, _stderr: &str) -> Option<StartLost> {
+        None
+    }
+
+    fn one_shot<'a>(&'a self, ask: OneShot<'a>) -> BoxFuture<'a, Result<String>> {
+        Box::pin(async move {
+            let cwd = ask.cwd.to_string_lossy().into_owned();
+            let params = proto::OneShotParams {
+                weight: match ask.weight {
+                    Weight::Light => "light",
+                    Weight::Reading => "reading",
+                }
+                .into(),
+                cwd: cwd.clone(),
+                system: ask.system.into(),
+                prompt: ask.prompt.into(),
+                model: ask.model.clone(),
+            };
+            let launch: proto::OneShotLaunch = self.call(method::ONE_SHOT, &params).await?;
+            let env = merged(&ask.env, &launch.env);
+            let mut cmd = command_of(&ask.program, &cwd, &launch.args, &env, &launch.remove_env)?;
+            if launch.input.is_none() {
+                cmd.stdin(Stdio::null());
+            }
+            let mut child = cmd
+                .spawn()
+                .with_context(|| format!("{}: {}", self.name, ask.program.describe()))?;
+            let _job = Job::for_child(&child);
+            if let (Some(input), Some(mut stdin)) = (launch.input, child.stdin.take()) {
+                stdin.write_all(input.as_bytes()).await?;
+            }
+            let out = tokio::time::timeout(ask.limit, crate::proc::wait_output(child))
+                .await
+                .map_err(|_| {
+                    anyhow!(
+                        "{}: still not done after {} s",
+                        self.name,
+                        ask.limit.as_secs()
+                    )
+                })??;
+            let read = proto::OneShotOutput {
+                stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
+                stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+                code: out.status.code(),
+            };
+            let text: proto::OneShotText = self.call(method::ONE_SHOT_READ, &read).await?;
+            Ok(text.text)
+        })
+    }
+
+    fn writer(&self, _: Weight) -> &'static str {
+        self.name
+    }
+    fn grant_file(&self, _: &str, _: &str) -> Option<Vec<u8>> {
+        None
+    }
+    fn refusal(&self) -> Option<Value> {
+        None
+    }
+    /// The description of its launch carries Escouade's server (`engine/launch`).
+    fn escouade_launch(&self, _: &Escouade) -> mcp::Launch {
+        mcp::Launch {
+            args: Vec::new(),
+            env: Vec::new(),
+        }
+    }
+    fn memory_dir(&self, config_dir: &Path, project_path: &str) -> Option<PathBuf> {
+        let dir = &self.decl.memory.as_ref()?.dir;
+        let key: String = project_path
+            .trim_end_matches(['/', '\\'])
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+            .collect();
+        let dir = dir
+            .replace("{configDir}", &config_dir.to_string_lossy())
+            .replace("{projectKey}", &key);
+        Some(PathBuf::from(dir))
+    }
+    fn session_home(&self) -> Option<crate::fence::HomeKind> {
+        None
+    }
+}
+
+/// A call the control task makes, in order, and who waits for it.
+struct Control {
+    method: &'static str,
+    params: Value,
+    done: Option<oneshot::Sender<Result<()>>>,
+}
+
+/// The live process of an agent whose harness's plugin runs apart.
+pub struct ProcessEngineProcess {
+    rt: Arc<Runtime>,
+    plugin: String,
+    name: &'static str,
+    /// The variable that gives the agent its own folder (`HarnessDecl::account_var`): where its launch may write.
+    account_var: &'static str,
+    /// The agent's process, as `agent/*` names it.
+    key: String,
+    /// What the plugin is given again after a restart: the session, the model, the mode, the requests waiting.
+    attach: Mutex<proto::Attach>,
+    stdin: Mutex<Option<mpsc::UnboundedSender<Vec<u8>>>>,
+    control: Mutex<Option<mpsc::UnboundedSender<Control>>>,
+    /// The end of its launch: Ok once its harness runs.
+    ready: watch::Sender<Option<std::result::Result<(), String>>>,
+    alive: AtomicBool,
+    job: Mutex<Option<Arc<Job>>>,
+    kill_tx: Mutex<Option<oneshot::Sender<()>>>,
+    /// The end of what its harness wrote on its stderr.
+    tail: Mutex<VecDeque<String>>,
+}
+
+/// The calls of the control task, one after the other: their `writes` go to the harness in their order.
+async fn control(
+    p: std::sync::Weak<ProcessEngineProcess>,
+    mut rx: mpsc::UnboundedReceiver<Control>,
+) {
+    while let Some(c) = rx.recv().await {
+        let Some(p) = p.upgrade() else { break };
+        let result = p.call_writing(c.method, c.params).await;
+        if let Some(done) = c.done {
+            let _ = done.send(result);
+        } else if let Err(e) = result {
+            log::warn!("{}: {e:#}", p.key);
+        }
+    }
+}
+
+impl ProcessEngineProcess {
+    /// Writes `line` on its harness's input.
+    fn write(&self, line: &str) {
+        let mut bytes = Vec::with_capacity(line.len() + 1);
+        bytes.extend_from_slice(line.as_bytes());
+        bytes.push(b'\n');
+        if let Some(tx) = self.stdin.lock().as_ref() {
+            let _ = tx.send(bytes);
+        }
+    }
+
+    fn attach_params(&self) -> Value {
+        serde_json::to_value(&*self.attach.lock()).unwrap_or_default()
+    }
+
+    /// Gives the agent again to a plugin that started again; Err when it is stopped.
+    async fn reattach(&self) -> std::result::Result<(), CallError> {
+        match self
+            .rt
+            .attach(
+                &self.plugin,
+                &self.key,
+                method::ATTACH,
+                self.attach_params(),
+            )
+            .await
+        {
+            Err(e @ CallError::Stopped(_)) => Err(e),
+            _ => Ok(()),
+        }
+    }
+
+    /// Calls `method`, given again after a crash; writes its `writes` to the harness.
+    async fn call_writing(&self, method: &str, params: Value) -> Result<()> {
+        for _ in 0..RETRIES {
+            match self.rt.call(&self.plugin, method, params.clone()).await {
+                Ok(v) => {
+                    let writes: proto::Writes = serde_json::from_value(v).unwrap_or_default();
+                    for w in &writes.writes {
+                        self.write(w);
+                    }
+                    return Ok(());
+                }
+                Err(CallError::Crashed | CallError::Dropped) => {
+                    self.reattach().await.map_err(|e| down(self.name, e))?;
+                }
+                Err(e) => return Err(down(self.name, e)),
+            }
+        }
+        Err(down(self.name, CallError::Crashed))
+    }
+
+    /// Asks the control task to call `method`, in order; `wait`: until it is done.
+    async fn ordered(
+        &self,
+        method: &'static str,
+        params: impl Serialize,
+        wait: bool,
+    ) -> Result<()> {
+        let params = serde_json::to_value(params)?;
+        let (done, rx) = if wait {
+            let (tx, rx) = oneshot::channel();
+            (Some(tx), Some(rx))
+        } else {
+            (None, None)
+        };
+        let sent = self.control.lock().as_ref().map(|tx| {
+            tx.send(Control {
+                method,
+                params,
+                done,
+            })
+            .is_ok()
+        });
+        if sent != Some(true) {
+            bail!("{} is gone", self.name);
+        }
+        match rx {
+            Some(rx) => rx.await.map_err(|_| anyhow!("{} is gone", self.name))?,
+            None => Ok(()),
+        }
+    }
+
+    fn agent(&self) -> String {
+        self.key.clone()
+    }
+
+    /// Launches its harness from the plugin's description, checked: its child.
+    async fn launch(&self, spawn: &Spawn) -> Result<(tokio::process::Child, Option<Arc<Job>>)> {
+        self.rt
+            .attach(
+                &self.plugin,
+                &self.key,
+                method::ATTACH,
+                self.attach_params(),
+            )
+            .await
+            .map_err(|e| down(self.name, e))?;
+        let fence = crate::fence::spelled(&spawn.fence, &spawn.program);
+        let token = spawn.escouade.token().map(str::to_string);
+        let home = spawn
+            .env
+            .iter()
+            .find(|(k, _)| k == self.account_var)
+            .map(|(_, v)| v.clone());
+        let params = proto::LaunchParams {
+            agent: self.key.clone(),
+            cwd: spawn.cwd.clone(),
+            model: spawn.model.clone(),
+            effort: spawn.effort.clone(),
+            mode: spawn.mode.clone(),
+            append_prompt: spawn.append_prompt.clone(),
+            start: match &spawn.start {
+                Start::New => proto::StartAt::New,
+                Start::Resume { session } => proto::StartAt::Resume {
+                    session: session.clone(),
+                },
+                Start::Fork { of, at } => proto::StartAt::Fork {
+                    of: of.clone(),
+                    at: at.clone(),
+                },
+            },
+            read_dirs: spawn
+                .read_dirs
+                .iter()
+                .map(|d| d.to_string_lossy().into_owned())
+                .collect(),
+            escouade: match &spawn.escouade {
+                Escouade::Granted { url, token, .. } => Some(proto::Grant {
+                    url: url.clone(),
+                    token: token.clone(),
+                }),
+                Escouade::Denied { .. } => None,
+            },
+            fence: fence.clone(),
+            read_only: spawn.read_only,
+            program: spawn.program.describe(),
+            home: home.clone(),
+        };
+        let v = self
+            .rt
+            .call(&self.plugin, method::LAUNCH, serde_json::to_value(&params)?)
+            .await
+            .map_err(|e| down(self.name, e))?;
+        let launch: proto::Launch = serde_json::from_value(v)?;
+        check_launch(
+            self.name,
+            token.as_deref(),
+            &fence,
+            spawn.read_only,
+            home.as_deref(),
+            &launch,
+        )
+        .map_err(|e| anyhow!(e))?;
+        for f in &launch.files {
+            let path = Path::new(&f.path);
+            if let Some(dir) = path.parent() {
+                std::fs::create_dir_all(dir)?;
+            }
+            std::fs::write(path, &f.text)?;
+        }
+        log::info!(
+            "{}: starting {} ({}) in {} (account {})",
+            spawn.label,
+            spawn.program.describe(),
+            self.name,
+            spawn.cwd,
+            spawn.account
+        );
+        let env = merged(&spawn.env, &launch.env);
+        let mut cmd = command_of(
+            &spawn.program,
+            &spawn.cwd,
+            &launch.args,
+            &env,
+            &launch.remove_env,
+        )?;
+        let child = cmd.spawn().with_context(|| {
+            let program = spawn.program.describe();
+            tr!("impossible de lancer {program}", "can’t start {program}")
+        })?;
+        let job = Job::for_child(&child).map(Arc::new);
+        for w in &launch.writes {
+            self.write(w);
+        }
+        Ok((child, job))
+    }
+
+    /// The process's life: its launch, its frames, its end.
+    async fn run(
+        self: Arc<Self>,
+        spawn: Spawn,
+        mut stdin_rx: mpsc::UnboundedReceiver<Vec<u8>>,
+        on_frame: OnFrame,
+        on_exit: OnExit,
+    ) {
+        let (mut child, job) = match self.launch(&spawn).await {
+            Ok(c) => c,
+            Err(e) => {
+                let why = format!("{e:#}");
+                self.alive.store(false, Ordering::Release);
+                self.control.lock().take();
+                let _ = self.ready.send(Some(Err(why.clone())));
+                self.rt.detach(&self.plugin, &self.key);
+                on_exit(None, why);
+                return;
+            }
+        };
+        *self.job.lock() = job.clone();
+        let (kill_tx, mut kill_rx) = oneshot::channel();
+        *self.kill_tx.lock() = Some(kill_tx);
+        if let Some(mut stdin) = child.stdin.take() {
+            tokio::spawn(async move {
+                while let Some(bytes) = stdin_rx.recv().await {
+                    if stdin.write_all(&bytes).await.is_err() || stdin.flush().await.is_err() {
+                        break;
+                    }
+                }
+            });
+        }
+        if let Some(stderr) = child.stderr.take() {
+            let me = Arc::downgrade(&self);
+            tokio::spawn(async move {
+                let mut lines = BufReader::new(stderr).lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    let Some(p) = me.upgrade() else { break };
+                    let mut tail = p.tail.lock();
+                    tail.push_back(line);
+                    if tail.len() > 20 {
+                        tail.pop_front();
+                    }
+                }
+            });
+        }
+        let (lines_tx, lines_rx) = mpsc::channel::<String>(FRAME_QUEUE);
+        let stdout = child.stdout.take();
+        let reader = tokio::spawn(async move {
+            let Some(stdout) = stdout else { return };
+            let mut lines = BufReader::new(stdout).split(b'\n');
+            while let Ok(Some(bytes)) = lines.next_segment().await {
+                let text = String::from_utf8_lossy(&bytes);
+                let text = text.trim();
+                if !text.is_empty() && lines_tx.send(text.to_string()).await.is_err() {
+                    break;
+                }
+            }
+        });
+        let _ = self.ready.send(Some(Ok(())));
+        let pump = {
+            let me = self.clone();
+            tokio::spawn(async move { me.pump(lines_rx, &on_frame).await })
+        };
+        let code = tokio::select! {
+            status = child.wait() => status.ok().and_then(|s| s.code()),
+            _ = &mut kill_rx => {
+                let _ = child.start_kill();
+                if let Some(job) = &job { job.terminate(); }
+                child.wait().await.ok().and_then(|s| s.code())
+            }
+        };
+        let _ = reader.await;
+        let stopped = pump.await.ok().flatten();
+        self.alive.store(false, Ordering::Release);
+        self.control.lock().take();
+        let _ = self
+            .rt
+            .notify(&self.plugin, method::DETACH, json!({ "agent": self.key }));
+        self.rt.detach(&self.plugin, &self.key);
+        let said = stopped.unwrap_or_else(|| {
+            self.tail
+                .lock()
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join("\n")
+        });
+        on_exit(code, said);
+    }
+
+    /// Reads its harness's lines in batches and gives them to the plugin; answers why it stopped the harness, if it
+    /// did (its plugin stopped).
+    async fn pump(&self, mut lines: mpsc::Receiver<String>, on_frame: &OnFrame) -> Option<String> {
+        let mut stopped = None;
+        while let Some(first) = lines.recv().await {
+            // What was read meanwhile goes with it, up to 64 KiB; nothing waits for more: under a fast stream the
+            // lines gather while the last batch is with the plugin, and a lone line goes at once.
+            let mut bytes = first.len();
+            let mut batch = vec![first];
+            while bytes < proto::BATCH_BYTES {
+                match lines.try_recv() {
+                    Ok(l) => {
+                        bytes += l.len();
+                        batch.push(l);
+                    }
+                    Err(_) => break,
+                }
+            }
+            // Once its plugin is stopped, what its harness still says before it ends is left aside.
+            if stopped.is_some() {
+                continue;
+            }
+            if let Err(why) = self.translate_batch(batch, on_frame).await {
+                on_frame(json!({ "items": [{ "op": "notice", "level": "error", "text": why }] }));
+                self.kill();
+                stopped = Some(why);
+            }
+        }
+        stopped
+    }
+
+    /// One batch, given to the plugin until it answers (again after a crash); its items applied. Err: the plugin is
+    /// stopped, and why.
+    async fn translate_batch(
+        &self,
+        batch: Vec<String>,
+        on_frame: &OnFrame,
+    ) -> std::result::Result<(), String> {
+        let params = serde_json::value::to_raw_value(&proto::Frames {
+            agent: self.key.clone(),
+            frames: batch,
+        })
+        .map_err(|e| e.to_string())?;
+        let name = self.name;
+        let mut told = false;
+        for _ in 0..RETRIES {
+            match self
+                .rt
+                .call_raw(&self.plugin, method::FRAMES, &params, FRAMES_WITHIN)
+                .await
+            {
+                Ok(answer) => {
+                    let items: Value = serde_json::from_str(answer.get()).unwrap_or_default();
+                    self.deliver(
+                        items["items"].as_array().cloned().unwrap_or_default(),
+                        on_frame,
+                    );
+                    return Ok(());
+                }
+                Err(CallError::Crashed | CallError::Dropped) => {
+                    if !told {
+                        told = true;
+                        let text = tr!(
+                            "Le plugin de {name} a redémarré.",
+                            "The plugin of {name} started again."
+                        );
+                        on_frame(
+                            json!({ "items": [{ "op": "notice", "level": "warning", "text": text }] }),
+                        );
+                    }
+                    if let Err(e) = self.reattach().await {
+                        return Err(stopped_line(name, &e));
+                    }
+                }
+                Err(e @ CallError::Stopped(_)) => return Err(stopped_line(name, &e)),
+                Err(e) => {
+                    let n = params.get().len();
+                    log::warn!("{}: a batch of {n} bytes left untranslated: {e}", self.key);
+                    let text = tr!(
+                        "Le plugin de {name} n’a pas traduit ce que son harness a dit ({e}).",
+                        "The plugin of {name} didn’t translate what its harness said ({e})."
+                    );
+                    on_frame(
+                        json!({ "items": [{ "op": "notice", "level": "warning", "text": text }] }),
+                    );
+                    return Ok(());
+                }
+            }
+        }
+        Err(stopped_line(name, &CallError::Crashed))
+    }
+
+    /// The items of a batch: its writes to the harness, what the plugin is to be told again after a restart, the rest
+    /// to the agent.
+    fn deliver(&self, items: Vec<Value>, on_frame: &OnFrame) {
+        let mut out = Vec::with_capacity(items.len());
+        for item in items {
+            match item["op"].as_str().unwrap_or_default() {
+                "write" => {
+                    if let Some(line) = item["line"].as_str() {
+                        self.write(line);
+                    }
+                    continue;
+                }
+                "start" => {
+                    if let Some(s) = item["session"].as_str() {
+                        self.attach.lock().session = Some(s.to_string());
+                    }
+                }
+                "permission" | "question" => {
+                    if let Some(r) = item["request"].as_str() {
+                        self.attach.lock().pending.push(r.to_string());
+                    }
+                }
+                "turn" => self.attach.lock().pending.clear(),
+                _ => {}
+            }
+            out.push(item);
+        }
+        if !out.is_empty() {
+            on_frame(json!({ "items": out }));
+        }
+    }
+
+    fn answered(&self, request: &str) {
+        self.attach.lock().pending.retain(|r| r != request);
+    }
+}
+
+/// Why the agent stops with its plugin.
+fn stopped_line(name: &str, e: &CallError) -> String {
+    match e {
+        CallError::Stopped(Stop::Crashed { times }) => tr!(
+            "Le plugin de {name} s’est arrêté après {times} plantages : l’agent s’arrête, sa session est gardée. Relance le plugin dans Réglages › Plugins, puis envoie un message.",
+            "The plugin of {name} stopped after {times} crashes: the agent stops, its session kept. Start the plugin again in Settings › Plugins, then send a message."
+        ),
+        e => tr!(
+            "Le plugin de {name} est arrêté ({e}) : l’agent s’arrête, sa session est gardée.",
+            "The plugin of {name} is stopped ({e}): the agent stops, its session kept."
+        ),
+    }
+}
+
+fn ready<'a, T: Send + 'a>(v: T) -> BoxFuture<'a, T> {
+    Box::pin(std::future::ready(v))
+}
+
+impl EngineProcess for ProcessEngineProcess {
+    fn is_alive(&self) -> bool {
+        self.alive.load(Ordering::Acquire)
+    }
+    fn usage(&self) -> Option<JobUsage> {
+        self.job.lock().as_ref().and_then(|j| j.usage())
+    }
+    fn still_running(&self) -> u32 {
+        u32::from(self.is_alive())
+    }
+    fn pids(&self) -> Vec<u32> {
+        self.job
+            .lock()
+            .as_ref()
+            .map(|j| j.pids())
+            .unwrap_or_default()
+    }
+    fn close_input(&self) {
+        self.stdin.lock().take();
+    }
+    fn kill(&self) {
+        self.stdin.lock().take();
+        if let Some(k) = self.kill_tx.lock().take() {
+            let _ = k.send(());
+        }
+        if let Some(job) = self.job.lock().as_ref() {
+            job.terminate();
+        }
+    }
+    fn wait_exit(&self, within: Duration) -> BoxFuture<'_, bool> {
+        Box::pin(async move {
+            let deadline = Instant::now() + within;
+            while self.is_alive() && Instant::now() < deadline {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            !self.is_alive()
+        })
+    }
+    fn wait_gone(&self, within: Duration) -> BoxFuture<'_, bool> {
+        self.wait_exit(within)
+    }
+
+    fn initialize(&self) -> BoxFuture<'_, Result<Ready>> {
+        let mut rx = self.ready.subscribe();
+        Box::pin(async move {
+            let done = rx
+                .wait_for(Option::is_some)
+                .await
+                .map_err(|_| anyhow!("{} is gone", self.name))?
+                .clone();
+            match done {
+                Some(Ok(())) => Ok(Ready::default()),
+                Some(Err(why)) => Err(anyhow!(why)),
+                None => unreachable!("waited for"),
+            }
+        })
+    }
+    fn send_message(&self, uuid: &str, message: &Message) -> Result<()> {
+        let s = proto::SendMessage {
+            agent: self.agent(),
+            uuid: uuid.to_string(),
+            text: message.0.as_str().unwrap_or_default().to_string(),
+        };
+        let params = serde_json::to_value(s)?;
+        let sent = self.control.lock().as_ref().map(|tx| {
+            tx.send(Control {
+                method: method::SEND_MESSAGE,
+                params,
+                done: None,
+            })
+            .is_ok()
+        });
+        if sent != Some(true) {
+            bail!("{} is gone", self.name);
+        }
+        Ok(())
+    }
+    fn interrupt(&self, _cancel_queued: bool, timeout: Duration) -> BoxFuture<'_, Result<()>> {
+        Box::pin(async move {
+            let a = proto::AgentRef {
+                agent: self.agent(),
+            };
+            tokio::time::timeout(timeout, self.ordered(method::INTERRUPT, a, true))
+                .await
+                .map_err(|_| anyhow!("{}: no answer to the interruption", self.name))?
+        })
+    }
+    fn set_model<'a>(&'a self, model: &'a str) -> BoxFuture<'a, Result<()>> {
+        self.attach.lock().model = model.to_string();
+        let v = proto::SetValue {
+            agent: self.agent(),
+            value: model.into(),
+        };
+        Box::pin(self.ordered(method::SET_MODEL, v, true))
+    }
+    fn set_effort<'a>(&'a self, effort: &'a str) -> BoxFuture<'a, Result<()>> {
+        self.attach.lock().effort = effort.to_string();
+        let v = proto::SetValue {
+            agent: self.agent(),
+            value: effort.into(),
+        };
+        Box::pin(self.ordered(method::SET_EFFORT, v, true))
+    }
+    fn set_mode<'a>(&'a self, mode: &'a str) -> BoxFuture<'a, Result<()>> {
+        self.attach.lock().mode = mode.to_string();
+        let v = proto::SetValue {
+            agent: self.agent(),
+            value: mode.into(),
+        };
+        Box::pin(self.ordered(method::SET_MODE, v, true))
+    }
+    fn answer_permission(&self, request_id: &str, answer: PermissionAnswer) -> Result<()> {
+        self.answered(request_id);
+        let (allow, always, input, message) = match answer {
+            PermissionAnswer::Allow { input, .. } => (true, false, input, None),
+            PermissionAnswer::Always { input, .. } => (true, true, input, None),
+            PermissionAnswer::Deny { message, .. } => (false, false, Value::Null, Some(message)),
+        };
+        let a = proto::AnswerPermission {
+            agent: self.agent(),
+            request: request_id.to_string(),
+            allow,
+            always,
+            input,
+            message,
+        };
+        self.send_ordered(method::ANSWER_PERMISSION, serde_json::to_value(a)?)
+    }
+    fn answer_question(&self, request_id: &str, call: &str, input: Value) -> Result<()> {
+        self.answered(request_id);
+        let a = proto::AnswerQuestion {
+            agent: self.agent(),
+            request: request_id.to_string(),
+            call: call.to_string(),
+            answers: input["answers"].clone(),
+        };
+        self.send_ordered(method::ANSWER_QUESTION, serde_json::to_value(a)?)
+    }
+    fn read_usage(&self) -> BoxFuture<'_, Result<Option<Value>>> {
+        Box::pin(async move {
+            let v = self
+                .rt
+                .call(
+                    &self.plugin,
+                    method::READ_USAGE,
+                    json!({ "agent": self.key }),
+                )
+                .await
+                .map_err(|e| down(self.name, e))?;
+            let u: proto::Usage = serde_json::from_value(v)?;
+            Ok((!u.usage.is_null()).then_some(u.usage))
+        })
+    }
+    fn rename<'a>(&'a self, _: &'a str) -> BoxFuture<'a, Result<()>> {
+        ready(Ok(()))
+    }
+    fn stop_task<'a>(&'a self, _: &'a str) -> BoxFuture<'a, Result<()>> {
+        ready(Err(anyhow!("not supported")))
+    }
+    fn task_output<'a>(&'a self, _: &'a str) -> BoxFuture<'a, Result<Value>> {
+        ready(Err(anyhow!("not supported")))
+    }
+    fn remote_control(&self, _: Remote, _: Duration) -> BoxFuture<'_, Result<Value>> {
+        ready(Err(anyhow!("not supported")))
+    }
+    fn control(&self, _: Value, _: Duration) -> BoxFuture<'_, Result<Value>> {
+        ready(Err(anyhow!("not supported")))
+    }
+    fn reply(&self, _: &str, _: std::result::Result<Value, String>) -> Result<()> {
+        bail!("not supported")
+    }
+}
+
+impl ProcessEngineProcess {
+    /// `ordered` without waiting, from a method that does not wait.
+    fn send_ordered(&self, method: &'static str, params: Value) -> Result<()> {
+        let sent = self.control.lock().as_ref().map(|tx| {
+            tx.send(Control {
+                method,
+                params,
+                done: None,
+            })
+            .is_ok()
+        });
+        if sent != Some(true) {
+            bail!("{} is gone", self.name);
+        }
+        Ok(())
+    }
+}

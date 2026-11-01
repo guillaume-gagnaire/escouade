@@ -31,6 +31,8 @@ mod localcmd;
 // The translation of the minimal fake engine of the conformance bench (`engine/minimal/`).
 mod gemini;
 mod gemini_tui;
+// The items of a harness's plugin in process (INT-9).
+mod items;
 #[cfg(test)]
 mod minimal;
 mod opencode;
