@@ -7,14 +7,15 @@ import { requireAccount } from '../utils/session';
 
 // What the account's page shows: the author, their address, the App's installations they manage, whether the store
 // can send an e-mail at all; their plugins and their states, the versions waiting for a click, the plugins offered to
-// them or whose repository moved to them; and the plugin chosen by `?plugin=` (else the first): its versions and stats.
+// them or whose repository moved to them; and the plugin named by `?plugin=`, whose modal the page opens: its versions
+// and stats (none when it names no plugin of theirs, or one still being submitted).
 export default defineEventHandler(async (event) => {
   setResponseHeader(event, 'cache-control', 'no-store');
   const { db, account } = await requireAccount(event);
   const now = new Date();
   const plugins = await authorPlugins(db, account, now);
   const asked = getQuery(event).plugin;
-  const chosen = plugins.find((p) => p.id === asked && p.submission === null) ?? plugins.find((p) => p.submission === null);
+  const chosen = plugins.find((p) => p.id === asked && p.submission === null);
   return {
     ...(await accountView(db, account, now)),
     mail: mailOn(process.env),

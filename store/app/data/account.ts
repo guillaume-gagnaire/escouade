@@ -10,6 +10,10 @@ const fr = {
   author: {
     manage: (name: string) => `Gérer ${name}`,
     finish: 'Reprendre la soumission',
+    close: 'Fermer',
+    sections: { versions: 'Versions', publishing: 'Publication', danger: 'Céder ou supprimer' },
+    publishShort: 'Publier',
+    publicPage: 'Voir sa page publique',
     states: {
       deleted: ['bad', 'Supprimé'],
       unlisted: ['', 'Retiré de la liste'],
@@ -45,7 +49,7 @@ const fr = {
     frozenUntil: (d: string) => `Publications gelées jusqu’au ${d}, le temps d’un signalement.`,
     deletedOn: (d: string) => `Supprimé : sa page et ses archives partent le ${d}. Son identifiant reste à ton compte.`,
     restore: 'Annuler la suppression',
-    versions: ['Version', 'État', 'Publiée', 'Installations', 'Mises à jour', ''],
+    versions: ['Version', 'État', 'Publiée', 'Installations', ''],
     vstates: {
       published: 'Publiée',
       review: 'Publiée · en revue',
@@ -82,6 +86,7 @@ const fr = {
       title: 'Transférer',
       about: 'À un autre compte du store, qui l’accepte. Ses publications sont alors gelées 7 jours ; ses signatures restent valables.',
       label: 'Login GitHub du compte',
+      open: 'Transférer…',
       send: 'Proposer le transfert',
       waiting: (to: string) => `Proposé à ${to}, en attente de sa réponse.`,
       cancel: 'Annuler',
@@ -96,8 +101,7 @@ const fr = {
       now: 'Supprimer',
     },
     stats: {
-      title: (name: string) => `${name} · installations`,
-      recent: (n: string) => `dont ${n} ces 30 jours`,
+      installs: (n: string) => `installations, dont ${n} ces 30 jours`,
       updates: (n: string) => `${n} mises à jour`,
       first: 'il y a 12 semaines',
       last: 'cette semaine',
@@ -213,6 +217,10 @@ const en: Text = {
   author: {
     manage: (name: string) => `Manage ${name}`,
     finish: 'Back to the submission',
+    close: 'Close',
+    sections: { versions: 'Versions', publishing: 'Publishing', danger: 'Hand over or delete' },
+    publishShort: 'Publish',
+    publicPage: 'See its public page',
     states: {
       deleted: ['bad', 'Deleted'],
       unlisted: ['', 'Off the list'],
@@ -248,7 +256,7 @@ const en: Text = {
     frozenUntil: (d: string) => `Publications frozen until ${d}, the time for a report.`,
     deletedOn: (d: string) => `Deleted: its page and archives go on ${d}. Its id stays your account’s.`,
     restore: 'Undo the deletion',
-    versions: ['Version', 'State', 'Published', 'Installs', 'Updates', ''],
+    versions: ['Version', 'State', 'Published', 'Installs', ''],
     vstates: {
       published: 'Published',
       review: 'Published · in review',
@@ -285,6 +293,7 @@ const en: Text = {
       title: 'Transfer',
       about: 'To another account of the store, which accepts it. Its publications then freeze for 7 days; its signatures stay valid.',
       label: 'GitHub login of the account',
+      open: 'Transfer…',
       send: 'Offer the transfer',
       waiting: (to: string) => `Offered to ${to}, waiting for their answer.`,
       cancel: 'Cancel',
@@ -299,8 +308,7 @@ const en: Text = {
       now: 'Delete',
     },
     stats: {
-      title: (name: string) => `${name} · installs`,
-      recent: (n: string) => `${n} of them in the last 30 days`,
+      installs: (n: string) => `installs, ${n} of them in the last 30 days`,
       updates: (n: string) => `${n} updates`,
       first: '12 weeks ago',
       last: 'this week',

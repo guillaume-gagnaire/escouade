@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Store · espace de l'auteur · trois directions pour « ⋯ » (ESC-318)</title>
+    <!--
+      ESC-318 : trois directions pour les détails d'un plugin ouverts par « ⋯ » dans « Mes plugins ».
+      ?d=a|b|c choisit la direction, &modal=0 montre la liste seule, &step=delete montre la suppression ouverte,
+      &theme=light. Données fictives. Captures : node design/store-account/render.mjs.
+    -->
+    <style>
+      @font-face {
+        font-family: 'Inter Variable';
+        src: url('../../website/node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2');
+        font-weight: 100 900;
+      }
+      @font-face {
+        font-family: 'JetBrains Mono';
+        src: url('../../website/node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2') format('woff2');
+        font-weight: 400;
+      }
+      :root {
+        --bg: #08090a;
+        --surface: #0f1012;
+        --surface-2: #15161a;
+        --hover: rgba(255, 255, 255, 0.035);
+        --line: rgba(255, 255, 255, 0.08);
+        --line-strong: rgba(255, 255, 255, 0.14);
+        --text: #f7f8f8;
+        --soft: #c9ccd1;
+        --muted: #8a8f98;
+        --dim: #7b8089;
+        --brand: #35c1bd;
+        --brand-hi: #5ad3cf;
+        --brand-ink: #5ad3cf;
+        --ink: #041413;
+        --seal-bg: rgba(53, 193, 189, 0.1);
+        --seal-line: rgba(53, 193, 189, 0.32);
+        --danger: oklch(0.72 0.15 25);
+        --danger-bg: oklch(0.72 0.15 25 / 0.1);
+        --warn: oklch(0.82 0.12 80);
+        --warn-bg: oklch(0.82 0.12 80 / 0.09);
+        --ok: oklch(0.78 0.12 155);
+        --scrim: rgba(4, 5, 6, 0.66);
+        --pop: 0 40px 100px -20px rgba(0, 0, 0, 0.8), 0 0 0 1px var(--line-strong);
+        --font: 'Inter Variable', Inter, system-ui, 'Segoe UI', sans-serif;
+        --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+        color-scheme: dark;
+      }
+      :root[data-theme='light'] {
+        --bg: #ffffff;
+        --surface: #f7f7f8;
+        --surface-2: #eff0f2;
+        --hover: rgba(15, 17, 22, 0.035);
+        --line: rgba(15, 17, 22, 0.09);
+        --line-strong: rgba(15, 17, 22, 0.16);
+        --text: #101216;
+        --soft: #343840;
+        --muted: #5a5f68;
+        --dim: #62676f;
+        --brand-hi: #2bb0ac;
+        --brand-ink: #0b6f6c;
+        --seal-bg: rgba(11, 111, 108, 0.07);
+        --seal-line: rgba(11, 111, 108, 0.3);
+        --danger: oklch(0.5 0.18 25);
+        --danger-bg: oklch(0.5 0.18 25 / 0.07);
+        --warn: oklch(0.5 0.11 70);
+        --warn-bg: oklch(0.6 0.12 75 / 0.1);
+        --ok: oklch(0.47 0.12 155);
+        --scrim: rgba(15, 17, 22, 0.36);
+        --pop: 0 30px 80px -24px rgba(15, 17, 22, 0.35), 0 0 0 1px var(--line-strong);
+        color-scheme: light;
+      }
+      * { box-sizing: border-box; }
+      html { background: var(--bg); }
+      body { margin: 0; color: var(--text); font: 15px/1.55 var(--font); font-feature-settings: 'cv11', 'ss03'; -webkit-font-smoothing: antialiased; }
+      a { color: inherit; text-decoration: none; }
+      h1, h2, h3, p { margin: 0; }
+      button, input { font: inherit; color: inherit; }
+      .mono { font-family: var(--mono); font-size: 0.86em; }
+      .num { font-variant-numeric: tabular-nums; }
+      .muted { color: var(--muted); }
+      .dim { color: var(--dim); }
+      svg.i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+      svg.i.fill { fill: currentColor; stroke: none; }
+
+      /* L'en-tête du store, comme la page d'aujourd'hui. */
+      .top { position: sticky; top: 0; z-index: 1; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--bg) 88%, transparent); }
+      .top .wrap { display: flex; align-items: center; gap: 22px; height: 60px; }
+      .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; letter-spacing: -0.01em; }
+      .brand i { width: 24px; height: 24px; border-radius: 7px; background: var(--brand); display: grid; place-items: center; color: var(--ink); font: 700 13px var(--mono); font-style: normal; }
+      .brand span { color: var(--muted); font-weight: 500; }
+      .top nav { margin-left: auto; display: flex; align-items: center; gap: 20px; font-size: 14px; color: var(--muted); }
+      .top nav .me { display: flex; align-items: center; gap: 8px; color: var(--text); }
+      .avatar { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 10.5px; font-weight: 700; background: oklch(0.4 0.09 300); color: oklch(0.93 0.05 300); }
+      .wrap { width: min(1200px, 100% - 2 * clamp(16px, 4vw, 40px)); margin-inline: auto; }
+
+      .btn { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); font-size: 14px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+      .btn.sm { height: 30px; padding: 0 11px; font-size: 13px; border-radius: 7px; }
+      .btn.primary { border-color: transparent; background: var(--brand); color: var(--ink); }
+      .btn.ghost { border-color: transparent; background: none; color: var(--muted); }
+      .btn.danger { color: var(--danger); }
+      .btn.danger.solid { background: var(--danger); color: #fff; border-color: transparent; }
+      :root[data-theme='light'] .btn.danger.solid { color: #fff; }
+      .btn.icon { width: 30px; padding: 0; justify-content: center; }
+      .btn.focus { outline: 2px solid var(--brand); outline-offset: 2px; }
+      .btn[disabled] { opacity: 0.45; }
+
+      .tile { --s: 40px; width: var(--s); height: var(--s); flex: none; display: grid; place-items: center; border-radius: calc(var(--s) * 0.26); background: oklch(0.36 0.07 var(--h)); color: oklch(0.93 0.05 var(--h)); font-weight: 680; font-size: calc(var(--s) * 0.38); letter-spacing: -0.02em; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+      :root[data-theme='light'] .tile { background: oklch(0.9 0.05 var(--h)); color: oklch(0.35 0.09 var(--h)); }
+      .tile.sm { --s: 28px; }
+      .tile.md { --s: 44px; }
+      .seal { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px 0 3px; border: 1px solid var(--seal-line); border-radius: 6px; background: var(--seal-bg); color: var(--brand-ink); font-size: 12px; font-weight: 600; white-space: nowrap; line-height: 1; }
+      .seal .spark { width: 16px; height: 16px; border-radius: 4px; background: var(--brand); display: grid; place-items: center; }
+      .seal .spark svg { width: 10px; height: 10px; }
+      .tag { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border: 1px solid var(--line-strong); border-radius: 6px; color: var(--muted); font-size: 12px; font-weight: 550; white-space: nowrap; }
+      .tag.ok { border-color: color-mix(in oklch, var(--ok) 40%, transparent); color: var(--ok); }
+      .tag.warn { border-color: color-mix(in oklch, var(--warn) 45%, transparent); background: var(--warn-bg); color: var(--warn); }
+      .tag.bad { border-color: color-mix(in oklch, var(--danger) 45%, transparent); background: var(--danger-bg); color: var(--danger); }
+      .tag.review { border-style: dashed; }
+
+      /* La page : la liste à gauche, la colonne du compte à droite. */
+      .acct { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 56px; padding: 36px 0 60px; }
+      .page-title { font-size: 32px; font-weight: 620; letter-spacing: -0.03em; line-height: 1.15; }
+      .page-title span { color: var(--muted); }
+      .banner { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; margin-top: 24px; padding: 14px 16px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); font-size: 14px; }
+      .banner .sub { color: var(--muted); font-size: 13px; }
+      .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+      .notice { margin-top: 20px; padding: 12px 14px; border: 1px solid color-mix(in oklch, var(--ok) 40%, transparent); border-radius: 10px; background: var(--surface); font-size: 14px; }
+
+      table.t { width: 100%; margin-top: 28px; border-collapse: collapse; table-layout: fixed; font-size: 14px; }
+      table.t th { padding: 0 12px 10px; border-bottom: 1px solid var(--line); color: var(--dim); font-size: 12.5px; font-weight: 600; text-align: left; white-space: nowrap; }
+      table.t td { padding: 14px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+      table.t th:first-child, table.t td:first-child { padding-left: 4px; }
+      table.t .r { text-align: right; }
+      table.t td.act { padding-right: 0; text-align: right; }
+      table.t tr.sel td { background: var(--surface); }
+      table.t tr.hoverable:hover td { background: var(--hover); }
+      .pl { display: flex; align-items: center; gap: 12px; min-width: 0; }
+      .pl > span { min-width: 0; }
+      .pl b { font-weight: 600; }
+      .pl small { display: block; color: var(--dim); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .pl .also { display: block; margin-top: 2px; font-size: 12.5px; color: var(--warn); }
+      .pl .also.neutral { color: var(--muted); }
+      .why { margin: 0 0 0 40px; padding: 12px 14px; max-width: 60ch; border: 1px solid color-mix(in oklch, var(--danger) 35%, transparent); border-radius: 10px; background: var(--danger-bg); color: var(--soft); font-size: 13.5px; }
+      .why b { color: var(--danger); font-weight: 600; }
+      code { font-family: var(--mono); font-size: 0.86em; padding: 1px 5px; border-radius: 5px; background: var(--surface-2); }
+      .note { margin-top: 14px; color: var(--muted); font-size: 13px; }
+
+      .side-card { display: grid; gap: 12px; padding: 20px; border: 1px solid var(--line); border-radius: 12px; font-size: 14px; }
+      .side-card + .side-card { margin-top: 16px; }
+      .side-card h3 { font-size: 15px; font-weight: 620; }
+      .side-card p { color: var(--muted); font-size: 13.5px; }
+      .side-card.slot { border-style: dashed; }
+      .side-card.slot .tagline { color: var(--dim); font-size: 12px; font-weight: 600; letter-spacing: 0.01em; }
+      .field { display: flex; align-items: center; height: 36px; padding: 0 11px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); font-size: 14px; }
+      .field .ok { margin-left: auto; color: var(--ok); font-size: 12.5px; }
+
+      /* ===== Les fenêtres ===== */
+      .scrim { position: fixed; inset: 0; z-index: 10; background: var(--scrim); }
+      .dlg { position: fixed; z-index: 11; background: var(--bg); box-shadow: var(--pop); display: flex; flex-direction: column; overflow: hidden; }
+      .dlg-head { display: flex; align-items: center; gap: 14px; padding: 20px 22px 16px; }
+      .dlg-head h2 { font-size: 19px; font-weight: 640; letter-spacing: -0.02em; line-height: 1.2; }
+      .dlg-head small { display: block; color: var(--dim); font-size: 12.5px; font-family: var(--mono); margin-top: 2px; }
+      .dlg-head .close { margin-left: auto; align-self: flex-start; }
+      .dlg-body { overflow: auto; padding: 0 22px 22px; }
+      .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; color: var(--muted); font-size: 13.5px; }
+      .meta .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--dim); }
+      h3.sec { margin: 26px 0 8px; font-size: 13px; font-weight: 620; color: var(--soft); letter-spacing: 0; }
+      .vt { width: 100%; border-collapse: collapse; font-size: 13.5px; table-layout: fixed; }
+      .vt td { padding: 10px 8px; border-top: 1px solid var(--line); vertical-align: middle; }
+      .vt td:first-child { padding-left: 0; width: 15%; }
+      .vt td:nth-child(2) { width: 38%; }
+      .vt td:nth-child(3) { white-space: nowrap; font-size: 13px; }
+      .vt td.r { text-align: right; }
+      .vt td.act { width: 90px; text-align: right; padding-right: 0; }
+      .rows { border-top: 1px solid var(--line); }
+      .row { display: flex; align-items: center; justify-content: space-between; gap: 10px 20px; flex-wrap: wrap; padding: 14px 0; border-bottom: 1px solid var(--line); }
+      .row > div { flex: 1 1 260px; min-width: 0; }
+      .row b { font-size: 14px; font-weight: 600; }
+      .row p { margin-top: 2px; color: var(--muted); font-size: 13px; max-width: 58ch; }
+      .row .state { font-size: 13px; color: var(--soft); }
+      .input { height: 34px; padding: 0 11px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); font-size: 14px; width: 100%; }
+      .input.focus { border-color: var(--brand); }
+      .chart { display: flex; align-items: flex-end; gap: 3px; height: 34px; width: 132px; }
+      .chart i { flex: 1; background: color-mix(in srgb, var(--text) 22%, transparent); border-radius: 1px; }
+      .chart i:last-child { background: var(--brand); }
+      .notice-in { margin-top: 14px; padding: 10px 12px; border-radius: 10px; font-size: 13.5px; border: 1px solid color-mix(in oklch, var(--warn) 45%, transparent); background: var(--warn-bg); }
+
+      /* A — la fiche : une fenêtre centrée, une colonne, les gestes dangereux dans leur cadre en bas. */
+      .d-a .dlg { left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(640px, 100% - 32px); max-height: calc(100% - 64px); border-radius: 14px; }
+      .zone { margin-top: 26px; border: 1px solid color-mix(in oklch, var(--danger) 32%, transparent); border-radius: 12px; }
+      .zone h3 { margin: 0; padding: 12px 14px 0; font-size: 13px; font-weight: 620; color: var(--danger); }
+      .zone .row { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+      .zone .row:last-child { border-bottom: 0; }
+      .confirm { flex-basis: 100%; display: grid; gap: 8px; margin-top: 4px; padding: 12px; border-radius: 10px; background: var(--danger-bg); }
+      .confirm label { font-size: 13px; color: var(--soft); }
+      .confirm .acts { justify-content: flex-end; }
+      .foot { display: flex; align-items: center; gap: 8px; padding: 12px 22px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+      .foot a { display: inline-flex; gap: 6px; align-items: center; }
+
+      /* B — les onglets : une fenêtre large, trois onglets, l'aperçu chiffré à droite. */
+      .d-b .dlg { left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(820px, 100% - 32px); height: min(620px, 100% - 64px); border-radius: 14px; }
+      .tabs { display: flex; gap: 2px; padding: 0 22px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+      .tabs a { padding: 10px 12px 11px; font-size: 13.5px; font-weight: 560; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+      .tabs a.on { color: var(--text); border-color: var(--brand); }
+      .tabs a .n { margin-left: 6px; color: var(--dim); font-weight: 500; }
+      .tabs a.danger { margin-left: auto; color: var(--danger); }
+      .split { display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: 28px; padding-top: 18px; }
+      .kpis { display: grid; gap: 14px; align-content: start; padding-left: 22px; border-left: 1px solid var(--line); }
+      .kpis .n { font-size: 24px; font-weight: 640; letter-spacing: -0.03em; line-height: 1; }
+      .kpis small { color: var(--muted); font-size: 12.5px; }
+
+      /* C — le tiroir : un panneau à droite, la liste reste lisible, chaque geste une ligne qui s'ouvre. */
+      .d-c .scrim { background: color-mix(in srgb, var(--scrim) 60%, transparent); }
+      .d-c .dlg { top: 0; right: 0; bottom: 0; width: 480px; border-left: 1px solid var(--line-strong); box-shadow: -30px 0 80px -30px rgba(0, 0, 0, 0.7); }
+      .d-c .dlg-head { padding-top: 22px; border-bottom: 1px solid var(--line); padding-bottom: 18px; }
+      .stat-line { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin: 18px 0 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--line); }
+      .stat-line div { background: var(--bg); padding: 10px 12px; }
+      .stat-line b { display: block; font-size: 18px; font-weight: 640; letter-spacing: -0.02em; }
+      .stat-line small { color: var(--muted); font-size: 12px; }
+      .acts-list { margin: 8px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+      .acts-list li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+      .acts-list li .what { min-width: 0; }
+      .acts-list li .what small { display: block; color: var(--muted); font-size: 12.5px; }
+      .acts-list li .go { color: var(--dim); }
+      .acts-list li.bad { color: var(--danger); }
+      .acts-list li.bad small { color: color-mix(in srgb, var(--danger) 70%, var(--muted)); }
+      .acts-list li.open { grid-template-columns: 18px minmax(0, 1fr) auto; }
+      .acts-list li .confirm { grid-column: 2 / -1; }
+
+      /* Le téléphone. */
+      @media (max-width: 720px) {
+        .acct { grid-template-columns: 1fr; gap: 32px; padding-top: 24px; }
+        .page-title { font-size: 26px; }
+        .top nav .hide-sm, .hide-sm { display: none; }
+        table.t thead { display: none; }
+        table.t tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; border-bottom: 1px solid var(--line); }
+        table.t td { border: 0; }
+        table.t td.st { grid-row: 2; padding: 0 12px 14px 44px; }
+        table.t td.act { grid-column: 2; grid-row: 1; }
+        table.t tr.why-row { display: block; }
+        .why { margin-left: 0; }
+        .banner { grid-template-columns: auto minmax(0, 1fr); }
+        .banner .acts { grid-column: 1 / -1; }
+        .d-a .dlg, .d-b .dlg { left: 0; right: 0; top: auto; bottom: 0; transform: none; width: 100%; height: auto; max-height: calc(100% - 24px); border-radius: 16px 16px 0 0; }
+        .d-b .dlg { height: calc(100% - 24px); }
+        .d-c .dlg { left: 0; width: 100%; top: 40px; border-left: 0; border-radius: 16px 16px 0 0; border-top: 1px solid var(--line-strong); }
+        .dlg-head { padding: 16px 16px 12px; }
+        .dlg-body { padding: 0 16px 20px; }
+        .tabs { padding: 0 10px; }
+        .split { grid-template-columns: 1fr; }
+        .kpis { display: none; }
+        .vt td.hide-sm { display: none; }
+        .grab { display: block; width: 36px; height: 4px; margin: 8px auto 0; border-radius: 2px; background: var(--line-strong); }
+      }
+      .grab { display: none; }
+      @media (max-width: 720px) { .grab { display: block; } }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      const q = new URLSearchParams(location.search);
+      const D = q.get('d') ?? 'a';
+      const MODAL = q.get('modal') !== '0';
+      const STEP = q.get('step') ?? '';
+      if (q.get('theme') === 'light') document.documentElement.dataset.theme = 'light';
+      document.body.className = `d-${D}`;
+
+      const ic = {
+        dots: '<svg class="i fill" viewBox="0 0 16 16"><circle cx="3.5" cy="8" r="1.2"/><circle cx="8" cy="8" r="1.2"/><circle cx="12.5" cy="8" r="1.2"/></svg>',
+        x: '<svg class="i" viewBox="0 0 16 16"><path d="M4 4L12 12M12 4L4 12"/></svg>',
+        chev: '<svg class="i" viewBox="0 0 16 16"><path d="M6 3.5L10.5 8L6 12.5"/></svg>',
+        out: '<svg class="i" viewBox="0 0 16 16"><path d="M9 3H13V7M13 3L7.5 8.5M11.5 9.5V13H3V4.5H6.5"/></svg>',
+        tag: '<svg class="i" viewBox="0 0 16 16"><path d="M2.5 8.5V2.5H8.5L13.5 7.5L7.5 13.5Z"/><circle cx="5.5" cy="5.5" r="0.8"/></svg>',
+        eye: '<svg class="i" viewBox="0 0 16 16"><path d="M1.5 8C3 5 5.3 3.5 8 3.5S13 5 14.5 8C13 11 10.7 12.5 8 12.5S3 11 1.5 8Z"/><circle cx="8" cy="8" r="2"/></svg>',
+        send: '<svg class="i" viewBox="0 0 16 16"><path d="M2.5 8H12.5M9 4.5L12.5 8L9 11.5"/></svg>',
+        trash: '<svg class="i" viewBox="0 0 16 16"><path d="M3 4.5H13M6.5 4.5V3H9.5V4.5M4.5 4.5L5 13.5H11L11.5 4.5"/></svg>',
+        box: '<svg class="i" viewBox="0 0 16 16"><path d="M2.5 5L8 2.5L13.5 5V11L8 13.5L2.5 11Z"/><path d="M2.5 5L8 7.5L13.5 5M8 7.5V13.5"/></svg>',
+      };
+      const spark = '<span class="spark"><svg viewBox="0 0 10 10"><path d="M5 0.5L6 4L9.5 5L6 6L5 9.5L4 6L0.5 5L4 4Z" fill="#041413"/></svg></span>';
+      const tile = (p, cls = '') => `<span class="tile ${cls}" style="--h:${p.h}" aria-hidden="true">${p.m}</span>`;
+      const seal = (v) => `<span class="seal">${spark}Vérifié · v${v}</span>`;
+
+      const P = [
+        { id: 'dev.lmartin.standup', name: 'Notes de standup', m: 'NS', h: 200, st: seal('1.4.0'), v: 'v1.4.0', inst: '1 284', d30: '+212', also: 'v1.5.0 attend ton clic', alsoWarn: true },
+        { id: 'dev.lmartin.slack', name: 'Slack', m: 'SL', h: 300, st: '<span class="tag">Publié · non vérifié</span>', v: 'v1.2.1', inst: '96', d30: '+18', also: 'Proposé à sam-ortiz' },
+        { id: 'dev.lmartin.jira', name: 'Jira sync', m: 'JS', h: 30, st: '<span class="tag">Retiré de la liste</span>', v: 'v2.0.0', inst: '410', d30: '0' },
+        { id: 'dev.lmartin.theme', name: 'Thème nuit', m: 'TN', h: 260, st: '<span class="tag bad">Supprimé</span>', v: 'v0.4.0', inst: '37', d30: '0', also: 'Annulable jusqu’au 30 novembre', alsoWarn: false },
+        { id: 'dev.lmartin.linear', name: 'Linear bridge', m: 'LB', h: 140, st: '<span class="tag bad">Rejetée</span>', v: 'v0.1.0', inst: '—', d30: '—', sub: true },
+      ];
+      const S = P[0];
+
+      const header = `<header class="top"><div class="wrap"><a class="brand" href="#"><i>›</i>Escouade <span>Store</span></a>
+        <nav><a class="hide-sm" href="#">Documentation</a><a href="#">Mes plugins</a><a class="btn sm primary hide-sm" href="#">Soumettre</a><span class="me"><span class="avatar">LM</span><span class="hide-sm">lea-martin</span></span></nav></div></header>`;
+
+      const dotsBtn = (p, focus) =>
+        p.sub
+          ? `<a class="btn sm ghost icon" href="#" aria-label="Reprendre la soumission" title="Reprendre la soumission">${ic.chev}</a>`
+          : `<a class="btn sm ghost icon${focus ? ' focus' : ''}" href="#" aria-label="Gérer ${p.name}" title="Gérer ${p.name}">${ic.dots}</a>`;
+
+      // La ligne de la liste, selon la direction.
+      function rowOf(p) {
+        const sel = MODAL && p === S;
+        const alsoLine = D !== 'a' && p.also ? `<span class="also${p.alsoWarn ? '' : ' neutral'}">${p.also}</span>` : '';
+        const name = `<div class="pl">${tile(p, 'sm')}<span><b>${p.name}</b><small class="mono">${p.id}</small>${alsoLine}</span></div>`;
+        const why = p.sub
+          ? `<tr class="why-row"><td colspan="6" style="padding-top:0"><div class="why"><b>La v0.1.0 est refusée par le contrôle « Licence ».</b> Le fichier <code>LICENSE</code> manque à la racine du dépôt. <div style="margin-top:6px;color:var(--muted)">Ajoute une licence reconnue par SPDX, puis pousse une nouvelle étiquette. <a href="#" style="color:var(--text);text-decoration:underline;text-underline-offset:3px">Ce que le store contrôle</a></div></div></td></tr>`
+          : '';
+        return `<tr class="${sel ? 'sel' : ''} ${D === 'b' ? 'hoverable' : ''}"><td>${name}</td><td class="st">${p.st}</td><td class="mono hide-sm">${p.v}</td><td class="r num hide-sm">${p.inst}</td><td class="r num hide-sm dim">${p.d30}</td><td class="act">${dotsBtn(p, sel)}</td></tr>${why}`;
+      }
+
+      const banner =
+        D === 'a'
+          ? `<div class="banner">${tile(S, 'sm')}<div><b>Notes de standup v1.5.0</b> trouvée sur GitHub, contrôles passés<div class="sub">Étiquette poussée il y a 12 min · <span class="mono">3f9c2e1 → 81d0a4b</span> · elle demande une permission de plus : <span class="mono">agent.created</span></div></div><div class="acts"><a class="btn sm ghost" href="#">Ignorer</a><a class="btn sm primary" href="#">Publier la v1.5.0</a></div></div>`
+          : '';
+
+      const list = `<table class="t"><thead><tr><th>Plugin</th><th style="width:24%">État</th><th class="hide-sm" style="width:15%">Dernière version</th><th class="r hide-sm" style="width:13%">Installations</th><th class="r hide-sm" style="width:10%">30 jours</th><th style="width:52px"></th></tr></thead><tbody>${P.map(rowOf).join('')}</tbody></table>
+        <p class="note">Les installations ne comptent que celles dont l’utilisateur a accepté les statistiques d’Escouade : elles sont en dessous de la réalité.</p>`;
+
+      const aside = `<aside>
+        <div class="side-card"><h3>Avis par e-mail</h3><div class="field"><span>lea@martin.dev</span><span class="ok">vérifiée</span></div><p>Rejets, revues faites, signalements. Facultatif : sans adresse, ils restent ici.</p></div>
+        <div class="side-card slot"><span class="tagline">ESC-317 · sa place</span><h3>Applications connectées</h3><p>Les agents à qui tu as ouvert ton compte par le MCP du store, et le bouton pour leur fermer la porte.</p></div>
+        <div class="side-card"><h3>Mes données</h3><p>Ton identifiant GitHub, ton nom et ton avatar viennent de GitHub ; rien d’autre sans toi.</p><div class="acts"><a class="btn sm" href="#">Exporter</a><a class="btn sm" href="#">Se déconnecter</a></div></div>
+      </aside>`;
+
+      const app = `<section style="margin-top:40px"><div style="display:flex;justify-content:space-between;align-items:center"><h2 style="font-size:17px;font-weight:620">L’App sur tes dépôts</h2><a class="btn sm" href="#">Changer les dépôts</a></div></section>`;
+
+      const page = `${header}<main class="wrap acct"><section><h1 class="page-title">Mes plugins <span>· lea-martin</span></h1>${banner}${list}${app}</section>${aside}</main>`;
+
+      const bars = [3, 5, 4, 7, 6, 9, 8, 11, 10, 14, 12, 16].map((h) => `<i style="height:${h * 2}px"></i>`).join('');
+      const versions = (withAct = true) => `<table class="vt"><tbody>
+        <tr><td class="mono">v1.5.0</td><td><span class="tag warn">Attend ton clic</span></td><td class="hide-sm dim">—</td><td class="r num">—</td>${withAct ? '<td class="act"><a class="btn sm primary" href="#">Publier</a></td>' : ''}</tr>
+        <tr><td class="mono">v1.4.0</td><td><span class="tag ok">Vérifiée par Escouade</span></td><td class="hide-sm dim">12 octobre 2026</td><td class="r num">1 102</td>${withAct ? '<td class="act"><a class="btn sm ghost" href="#">Retirer</a></td>' : ''}</tr>
+        <tr><td class="mono">v1.3.2</td><td><span class="tag">Publiée</span></td><td class="hide-sm dim">28 septembre 2026</td><td class="r num">160</td>${withAct ? '<td class="act"><a class="btn sm ghost" href="#">Retirer</a></td>' : ''}</tr>
+        <tr><td class="mono">v1.3.0</td><td><span class="tag">Retirée</span></td><td class="hide-sm dim">2 septembre 2026</td><td class="r num">22</td>${withAct ? '<td class="act"></td>' : ''}</tr>
+      </tbody></table>`;
+
+      const deleteConfirm = `<div class="confirm"><label for="c">Tape son identifiant, <span class="mono">dev.lmartin.standup</span>, pour confirmer. Il quitte le catalogue tout de suite ; tu as 30 jours pour annuler.</label><input id="c" class="input focus" value="dev.lmartin.stand" /><div class="acts"><a class="btn sm ghost" href="#">Garder le plugin</a><a class="btn sm danger solid" href="#" aria-disabled="true" style="opacity:.5">Supprimer</a></div></div>`;
+
+      const head = (extra = '') => `<div class="grab"></div><div class="dlg-head">${tile(S, 'md')}<div><h2 id="dlg-title">Notes de standup</h2><small>dev.lmartin.standup</small></div>${extra}<a class="btn sm ghost icon close" href="#" aria-label="Fermer">${ic.x}</a></div>`;
+
+      // A — la fiche.
+      const modalA = `<div class="scrim"></div><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dlg-title">${head()}
+        <div class="dlg-body">
+          <div class="meta">${seal('1.4.0')}<span>Publié depuis <span class="mono">lea-martin/standup</span></span></div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-top:18px">
+            <div><div style="font-size:24px;font-weight:640;letter-spacing:-0.03em;line-height:1" class="num">1 284</div><div class="muted" style="font-size:13px;margin-top:4px">installations, dont 212 ces 30 jours · 348 mises à jour</div></div>
+            <div class="chart" role="img" aria-label="Installations des 12 dernières semaines">${bars}</div>
+          </div>
+          <h3 class="sec">Versions</h3>${versions()}
+          <h3 class="sec">Publication</h3>
+          <div class="rows">
+            <div class="row"><div><b>Nouvelles étiquettes</b><p>Elles attendent ton clic, ici et par e-mail.</p></div><a class="btn sm" href="#">Les publier seules</a></div>
+            <div class="row"><div><b>Dans la liste</b><p>Le plugin paraît dans la recherche et le catalogue de l’app.</p></div><a class="btn sm" href="#">Retirer de la liste</a></div>
+          </div>
+          <section class="zone"><h3>Céder ou supprimer</h3>
+            <div class="row"><div><b>Transférer</b><p>À un autre compte du store, qui l’accepte. Ses publications sont alors gelées 7 jours.</p></div><a class="btn sm" href="#">Transférer…</a></div>
+            <div class="row"><div><b>Supprimer</b><p>Il quitte le catalogue ; sa page et ses archives partent après 30 jours, le temps de te raviser.</p></div>${STEP === 'delete' ? '' : '<a class="btn sm danger" href="#">Supprimer…</a>'}${STEP === 'delete' ? deleteConfirm : ''}</div>
+          </section>
+        </div>
+        <div class="foot"><a href="#">${ic.out}Voir sa page publique</a></div></div>`;
+
+      // B — les onglets.
+      const tabB = STEP === 'delete' ? 'danger' : 'versions';
+      const tabs = `<nav class="tabs" role="tablist"><a class="${tabB === 'versions' ? 'on' : ''}" href="#">Versions<span class="n">4</span></a><a href="#">Publication</a><a class="danger ${tabB === 'danger' ? 'on' : ''}" href="#">Céder ou supprimer</a></nav>`;
+      const bodyB =
+        tabB === 'versions'
+          ? `<div class="split"><div>
+              <div class="notice-in"><b>v1.5.0</b> trouvée sur GitHub, contrôles passés · elle demande <span class="mono">agent.created</span> en plus.</div>
+              <div style="margin-top:14px">${versions()}</div></div>
+              <div class="kpis"><div><div class="n num">1 284</div><small>installations</small></div><div><div class="n num">+212</div><small>ces 30 jours</small></div><div class="chart" style="width:100%">${bars}</div><div><div class="n num">348</div><small>mises à jour</small></div></div></div>`
+          : `<div style="padding-top:8px">
+              <div class="rows" style="border-top:0">
+                <div class="row"><div><b>Transférer</b><p>À un autre compte du store, qui l’accepte. Ses publications sont alors gelées 7 jours ; ses signatures restent valables.</p></div>
+                  <div style="display:flex;gap:8px;flex:1 1 100%"><input class="input" placeholder="Login GitHub du compte" /><a class="btn sm" href="#" style="height:34px">Proposer</a></div></div>
+                <div class="row"><div><b>Supprimer</b><p>Il quitte le catalogue tout de suite ; sa page et ses archives partent après 30 jours, le temps de te raviser. Les installations gardent ce qu’elles ont.</p></div>${deleteConfirm}</div>
+              </div></div>`;
+      const modalB = `<div class="scrim"></div><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dlg-title">${head(`<span class="hide-sm" style="margin-left:6px">${seal('1.4.0')}</span>`)}${tabs}<div class="dlg-body">${bodyB}</div></div>`;
+
+      // C — le tiroir.
+      const modalC = `<div class="scrim"></div><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dlg-title">${head()}
+        <div class="dlg-body">
+          <div class="meta" style="margin-top:16px">${seal('1.4.0')}<span>depuis <span class="mono">lea-martin/standup</span></span></div>
+          <div class="stat-line"><div><b class="num">1 284</b><small>installations</small></div><div><b class="num">+212</b><small>ces 30 jours</small></div><div><b class="num">348</b><small>mises à jour</small></div></div>
+          <div class="notice-in" style="display:flex;align-items:center;gap:12px;justify-content:space-between"><span><b>v1.5.0</b> attend ton clic · <span class="mono">agent.created</span> en plus</span><a class="btn sm primary" href="#">Publier</a></div>
+          <h3 class="sec">Gérer</h3>
+          <ul class="acts-list">
+            <li>${ic.box}<span class="what">Versions<small>4 versions, la v1.4.0 vérifiée</small></span><span class="go">${ic.chev}</span></li>
+            <li>${ic.tag}<span class="what">Nouvelles étiquettes<small>Elles attendent ton clic</small></span><span class="go">${ic.chev}</span></li>
+            <li>${ic.eye}<span class="what">Dans la liste<small>Dans la recherche et le catalogue</small></span><span class="go">${ic.chev}</span></li>
+          </ul>
+          <h3 class="sec" style="color:var(--danger)">Céder ou supprimer</h3>
+          <ul class="acts-list">
+            <li>${ic.send}<span class="what">Transférer à un autre compte<small>Ses publications gelées 7 jours</small></span><span class="go">${ic.chev}</span></li>
+            <li class="bad ${STEP === 'delete' ? 'open' : ''}">${ic.trash}<span class="what">Supprimer le plugin<small>30 jours pour annuler</small></span><span class="go">${STEP === 'delete' ? '' : ic.chev}</span>${STEP === 'delete' ? deleteConfirm : ''}</li>
+          </ul>
+        </div></div>`;
+
+      document.getElementById('app').innerHTML = page + (MODAL ? { a: modalA, b: modalB, c: modalC }[D] : '');
+    </script>
+  </body>
+</html>
