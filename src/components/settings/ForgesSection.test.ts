@@ -177,6 +177,46 @@ describe('ForgesSection', () => {
     expect(row('gitlab.acme.dev')).toHaveTextContent('Droits manquants : api');
   });
 
+  it('offers the plugins that serve a kind of account, and says which one serves an account (INT-6)', async () => {
+    const servers = [
+      { plugin: 'dev.escouade.gitlab', name: 'Escouade', firstHand: true },
+      { plugin: 'acme.gitlab', name: "GitLab d'entreprise", firstHand: false },
+    ];
+    const view = {
+      ...VIEW,
+      providers: PROVIDERS.map((p) => (p.kind === 'gitlab' ? { ...p, servers } : { ...p, servers: [servers[0]] })),
+      accounts: [
+        account({ kind: 'gitlab', name: 'GitLab', host: 'gitlab.com', url: 'https://gitlab.com', issues: true, plugin: 'acme.gitlab' }),
+      ],
+      unknown: [],
+    };
+    const be = fakeBackend({ forges: () => view, forge_check: () => view, forge_connect: () => view });
+    render(ForgesSection);
+    expect(await waitFor(() => row('gitlab.com'))).toHaveTextContent('Servi par le plugin acme.gitlab');
+    await userEvent.click(screen.getByRole('button', { name: 'Connecter un hébergeur…' }));
+    const form = screen.getByRole('form', { name: 'Connexion à un hébergeur' });
+    // One plugin only for GitHub: nothing to choose.
+    expect(within(form).queryByLabelText('Servi par')).toBeNull();
+    await userEvent.selectOptions(within(form).getByLabelText('Hébergeur'), 'gitlab');
+    const by = within(form).getByLabelText('Servi par');
+    expect(
+      within(by)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['Escouade', "GitLab d'entreprise"]);
+    await userEvent.selectOptions(by, 'acme.gitlab');
+    await userEvent.type(within(form).getByLabelText(/^Jeton/), 'glpat-x');
+    await userEvent.click(within(form).getByRole('button', { name: 'Connecter' }));
+    await waitFor(() => expect(be.called('forge_connect')).toHaveLength(1));
+    expect(be.called('forge_connect')[0].args.form).toEqual({
+      kind: 'gitlab',
+      url: '',
+      email: '',
+      token: 'glpat-x',
+      plugin: 'acme.gitlab',
+    });
+  });
+
   it('asks Bitbucket for its e-mail', async () => {
     fakeBackend({ forges: () => VIEW, forge_check: () => VIEW });
     render(ForgesSection);

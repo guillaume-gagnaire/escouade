@@ -27,6 +27,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - A repository can hold several plugins, one per folder: the store lists its folders at submission, each plugin has its own tags (`plugins/slack/v1.2.3`) and its page leads to its folder. A plugin can also move to another repository or folder; the next version goes back to the review.
 - The documentation says how to publish a plugin on the store and prepare its review, and a new page, “Plugin security”, says what the app checks, what the “Verified by Escouade” seal covers and what the review refuses.
 - A project can propose plugins in its `.escouade.yml`: when it opens, a band of Settings › Projects names those missing, with their store page, installing nothing by itself; “Not for this project” silences it. The file can also set a plugin up for that project, never with a secret.
+- A plugin can serve an account in place of Escouade’s integration (a company GitLab, an in-house Jira): when several offer it, “Connect…” asks which one serves it, and that account serves every use of the plugin, its tickets and its PRs alike. Accounts already connected stay as they are.
 
 ### Removed
 

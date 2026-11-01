@@ -13,6 +13,8 @@
 // after); until then, the app only starts and closes them.
 #[cfg_attr(not(test), allow(dead_code))]
 pub mod journal;
+// The kinds of accounts, which plugin serves an account, its name in the keychain (INT-6).
+pub mod accounts;
 // The conformance bench and the fake Escouade, for `escouade-plugin` and the tests (PLG-3).
 pub mod adapters;
 pub mod bench;

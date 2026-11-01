@@ -43,6 +43,11 @@ pub struct Accounts {
     /// token of its own again. Their names only, never a secret.
     #[serde(deserialize_with = "known_services")]
     pub to_forget: Vec<Service>,
+    /// `plugins::accounts::VAULT` once the secrets are also under the plugins' names
+    /// (`plugin:<id>:account:<account>`, INT-6); 0 (left out) while they are under the former
+    /// ones only. A version from before ignores it, and finds its entries as they were.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub vault: u32,
     /// The file keeps a copy of the secrets the keychain holds (`secrets::file_keeps_copy`).
     /// Known while the app runs, never saved.
     #[serde(skip)]
@@ -123,6 +128,11 @@ impl Accounts {
                         .unwrap_or_default(),
                     in_file: self.get(service).is_some_and(|a| a.in_file),
                     unread: self.get(service).is_some_and(|a| a.unread),
+                    plugin: self
+                        .get(service)
+                        .map(|a| a.plugin.clone())
+                        .unwrap_or_default(),
+                    servers: Vec::new(),
                 },
             })
             .collect()
@@ -151,8 +161,14 @@ impl Accounts {
             label,
             in_file: list.iter().any(|a| a.in_file),
             unread: !list.is_empty() && list.iter().all(|a| a.unread),
+            plugin: String::new(),
+            servers: Vec::new(),
         }
     }
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
 }
 
 /// The code host whose accounts are a source's own: GitLab Issues', Azure Boards'.
@@ -190,6 +206,10 @@ pub struct Account {
     /// Who it is for the service (Jira account id, Trello member id, GitHub login): what "mine"
     /// filters on.
     pub user: String,
+    /// The plugin that serves it, chosen when it was added (`plugins::accounts`); empty for
+    /// Escouade's own hand.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub plugin: String,
     /// The system's keychain refused its key and token: they stay in `integrations.json` (they
     /// move at the next start that it takes them). Known while the app runs, never saved.
     #[serde(skip)]
@@ -216,6 +236,13 @@ pub struct AccountView {
     pub in_file: bool,
     /// The system's keychain did not give its token at this start (`Account::unread`).
     pub unread: bool,
+    /// The plugin that serves it, when another than Escouade's own hand (`Account::plugin`).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub plugin: String,
+    /// The plugins that may serve a new account of it, Escouade's first: the form offers the
+    /// choice when there are several (`Core::integration_accounts`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub servers: Vec<crate::plugins::accounts::Server>,
 }
 
 /// Where an account's tickets live: a Jira project, a Trello board, a GitHub repository, a Linear
