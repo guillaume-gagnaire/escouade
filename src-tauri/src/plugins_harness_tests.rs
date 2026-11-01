@@ -296,6 +296,12 @@ async fn a_plugin_stopped_after_its_crashes_stops_its_agents_and_says_why() {
     let dir = bench_dir("int9-stopped-run");
     let mut a = Agent::spawn_with(engine, &dir, |_| {});
     a.proc().initialize().await.unwrap();
+    // A first turn makes the session known: in the turn that crashes, its `start` may come in the same batch as the
+    // crash, which the plugin never translates (under macOS, every time).
+    a.send("bonjour");
+    a.until("the first turn", |a| a.ends.len() == 1).await;
+    let session = a.rt.meta.session_id.clone();
+    assert!(session.is_some(), "the session of the first turn");
     a.send("plantage-toujours");
     a.until("the end of the process", |a| a.exit.is_some())
         .await;
@@ -313,7 +319,7 @@ async fn a_plugin_stopped_after_its_crashes_stops_its_agents_and_says_why() {
             .any(|i| i["kind"] == "notice" && i["level"] == "error"),
         "{items:#?}"
     );
-    assert!(a.rt.meta.session_id.is_some(), "its session is kept");
+    assert_eq!(a.rt.meta.session_id, session, "its session is kept");
     assert!(!a.proc().is_alive());
     rt.shutdown();
 }
