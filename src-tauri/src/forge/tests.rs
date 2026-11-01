@@ -761,3 +761,39 @@ async fn the_bitbucket_plugin_switched_off_is_said_by_the_view_and_by_its_calls(
         .unwrap();
     assert_eq!(served(&h.core.forges_view().await), Some(true));
 }
+
+/// The plugin « Gitea et Forgejo » switched off (INT-8.4), like Bitbucket's: the view of the code
+/// hosts reads it from the registry, and a call to its process says the plugin is down.
+#[tokio::test]
+async fn the_gitea_plugin_switched_off_is_said_by_the_view_and_by_its_calls() {
+    use crate::plugins::builtin::GITEA;
+    let h = harness("forge-gitea-off");
+    let served = |view: &super::connect::ForgesView| {
+        view.providers
+            .iter()
+            .find(|p| p.kind == "gitea")
+            .and_then(|p| p.served_by.as_ref().map(|s| s.on))
+    };
+    assert_eq!(served(&h.core.forges_view().await), Some(true));
+
+    h.core.plugins.choose(GITEA, |c| c.enabled = false).unwrap();
+    h.core.plugin_runtime.forget(GITEA);
+    assert_eq!(served(&h.core.forges_view().await), Some(false));
+    let creds = Credentials {
+        url: "https://git.acme.dev".into(),
+        email: String::new(),
+        token: "gitea_test".into(),
+        api: None,
+    };
+    let client = crate::plugins::adapters::ProcessForge::new(
+        h.core.plugin_runtime.clone(),
+        GITEA,
+        "gitea",
+        &creds,
+    );
+    let e = client.me().await.unwrap_err();
+    assert!(crate::plugins::adapters::is_down(&e), "{e:#}");
+
+    h.core.plugins.choose(GITEA, |c| c.enabled = true).unwrap();
+    assert_eq!(served(&h.core.forges_view().await), Some(true));
+}
