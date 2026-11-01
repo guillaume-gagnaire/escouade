@@ -81,6 +81,7 @@ The marketplace re-encodes it without its metadata at 256 and 64 px, and shows i
 - `secrets`: the secrets it keeps, each with a key and a title;
 - `accounts`: a kind of account, shared by its other points;
 - `ticketSources`, `forges` and `harnesses`: a source of the Kanban, a code host, a harness; each with an `id`, and the account it uses (`account`) among those of `accounts`;
+- `workflowReaders`: a reader of workflows, to teach Escouade a workflow it does not read by itself. Each has an `id` and `files`, the globs (from the project’s folder, without `..`) of the files it is given; see [The workflow reader](plugins/events#the-workflow-reader);
 - `themes`: themes, described in [Themes](plugins/themes);
 - `webhooks` and `commands`: a webhook or a command on a fact, described in [Events](plugins/events);
 - `menus`, `statusBar`, `badges`, `projectTemplates` and `escouadeYml`: described with the versions that bring them in.

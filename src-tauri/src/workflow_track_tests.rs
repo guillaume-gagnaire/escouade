@@ -1059,3 +1059,105 @@ async fn corrections_changed_empty_the_tracking_s_reading_and_keep_the_history_a
         Some("Deux")
     );
 }
+
+// ---------- told to the plugins (ESC-200) ----------
+
+#[test]
+fn what_a_batch_of_facts_did_is_said_as_facts_for_the_plugins() {
+    use crate::facts::Body;
+    let mut a = Fake::new(gsd());
+    let mark = a.track.mark();
+    a.says("/gsd:verify-work 3");
+    let said = a.track.facts_since(mark);
+    assert_eq!(
+        said,
+        [Body::WorkflowStepEntered {
+            workflow: a.track.workflow.clone().unwrap(),
+            step: "gsd:verify-work".into(),
+            door: Some("/gsd:verify-work".into()),
+            pass: 1,
+        }]
+    );
+    // The turn ends, then a way back: the step is left with its time and cost, the way back says why.
+    let mark = a.track.mark();
+    a.ends(0.25, "2 gaps: the login test is missing");
+    a.says("/gsd:plan-phase 3 --gaps");
+    let said = a.track.facts_since(mark);
+    let names: Vec<String> = said.iter().map(Body::name).collect();
+    assert_eq!(
+        names,
+        [
+            "workflow.step_left",
+            "workflow.looped_back",
+            "workflow.step_entered"
+        ]
+    );
+    match &said[0] {
+        Body::WorkflowStepLeft {
+            step,
+            duration_ms,
+            cost,
+            outcome,
+            ..
+        } => {
+            assert_eq!(step, "gsd:verify-work");
+            assert!(*duration_ms > 0);
+            assert!((cost - 0.25).abs() < 1e-9);
+            assert_eq!(outcome, "back");
+        }
+        other => panic!("{other:?}"),
+    }
+    match &said[1] {
+        Body::WorkflowLoopedBack {
+            from, to, reason, ..
+        } => {
+            assert_eq!(from, "gsd:verify-work");
+            assert_eq!(to, "gsd:plan-phase");
+            assert_eq!(reason.as_deref(), Some("2 gaps: the login test is missing"));
+        }
+        other => panic!("{other:?}"),
+    }
+    // Nothing happened: nothing is said.
+    let mark = a.track.mark();
+    a.tool("Bash", json!({"command": "ls"}));
+    assert!(a.track.facts_since(mark).is_empty());
+}
+
+#[test]
+fn an_agent_that_goes_to_do_something_else_leaves_the_workflow() {
+    use crate::facts::Body;
+    let mut a = Fake::new(gsd());
+    a.says("/gsd:plan-phase");
+    let mark = a.track.mark();
+    a.says("lance les tests");
+    a.tool("Bash", json!({"command": "npm test"}));
+    a.ends(0.1, "ok");
+    let said = a.track.facts_since(mark);
+    let names: Vec<String> = said.iter().map(Body::name).collect();
+    assert_eq!(names, ["workflow.step_left", "workflow.left"]);
+    match &said[0] {
+        Body::WorkflowStepLeft { outcome, .. } => assert_eq!(outcome, "left"),
+        other => panic!("{other:?}"),
+    }
+    match &said[1] {
+        Body::WorkflowLeft { doing, .. } => assert_eq!(doing.as_deref(), Some("lance les tests")),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn a_new_reading_names_the_workflows_that_changed_appeared_or_went() {
+    let both = gsd();
+    assert!(changed_workflows(&both, &both).is_empty());
+    let none = Scan::default();
+    let all = changed_workflows(&none, &both);
+    assert_eq!(all.len(), both.workflows.len());
+    assert!(!all.is_empty());
+    assert_eq!(changed_workflows(&both, &none), all);
+    let mut edited = both.clone();
+    edited.workflows[0].steps[0].name.push_str("-2");
+    assert_eq!(
+        changed_workflows(&both, &edited),
+        [both.workflows[0].id.clone()]
+    );
+}

@@ -57,7 +57,7 @@ Chaque appel d’Escouade a un délai. Passé ce délai, Escouade n’attend plu
 | `initialize` | 10 s |
 | `shutdown` | 1 s |
 | `permissions/…` (une décision qui fait attendre un agent) | 500 ms |
-| `tickets/…`, `forge/…`, `engine/oneShot` (un import, un appel à un service) | 60 s |
+| `tickets/…`, `forge/…`, `workflow/…`, `engine/oneShot` (un import, un appel à un service) | 60 s |
 | Les autres | 5 s |
 
 Chaque délai dépassé est noté au journal : « test/do: no answer within 300 ms ».

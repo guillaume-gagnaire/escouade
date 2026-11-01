@@ -1203,3 +1203,87 @@ async fn a_tickets_docs_poured_on_the_docs_branch_are_a_fact() {
     assert_eq!(filed["data"], json!({ "pages": 1 }));
     assert_eq!(filed["ticket"]["key"], t.key.as_str());
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_agents_way_through_its_workflow_is_told_as_facts() {
+    let h = harness("facts-workflow");
+    let l = listen(&h);
+    let (p, dir) = h.project(false).await;
+    let cmds = dir.join(".claude/commands");
+    std::fs::create_dir_all(&cmds).unwrap();
+    std::fs::write(cmds.join("one.md"), "Do one, then /two.\n").unwrap();
+    std::fs::write(
+        cmds.join("two.md"),
+        "Do two. Back to /one when red, up to 3 times.\n",
+    )
+    .unwrap();
+    h.core.refresh_workflows(&p.id, true).await.unwrap();
+    let id = agent_on(&h, &p, "principal").await.id;
+    let say = |text: &str| {
+        let ops = vec![ConvOp::Append {
+            item: json!({"kind": "user", "id": format!("u{text}"), "text": text}),
+        }];
+        h.core.track_workflow(&id, &p.id, &ops, 0.0, None);
+    };
+    say("/one");
+    h.core.track_workflow(
+        &id,
+        &p.id,
+        &[],
+        0.5,
+        Some(&crate::board::TurnEnd::Finished("red: x".into())),
+    );
+    say("/two");
+    say("/one");
+    // The workflow is edited: its next reading says which one changed.
+    std::fs::write(cmds.join("two.md"), "Do two differently, then /three.\n").unwrap();
+    h.core.refresh_workflows(&p.id, true).await.unwrap();
+    let facts = l
+        .heard(
+            &h,
+            &[
+                "workflow.step_entered",
+                "workflow.step_left",
+                "workflow.looped_back",
+                "workflow.changed",
+            ],
+        )
+        .await;
+    let entered = of(&facts, "workflow.step_entered");
+    assert_eq!(entered.len(), 3);
+    assert_eq!(entered[0]["data"]["step"], "one");
+    assert_eq!(entered[0]["data"]["door"], "/one");
+    assert_eq!(entered[0]["agent"]["id"], id.as_str());
+    let left = of(&facts, "workflow.step_left");
+    assert_eq!(left[0]["data"]["step"], "one");
+    assert_eq!(left[0]["data"]["outcome"], "done");
+    assert!((left[0]["data"]["cost"].as_f64().unwrap() - 0.5).abs() < 1e-9);
+    assert!(left[0]["data"]["durationMs"].is_u64());
+    let back = of(&facts, "workflow.looped_back")[0];
+    assert_eq!(back["data"]["from"], "two");
+    assert_eq!(back["data"]["to"], "one");
+    let changed = of(&facts, "workflow.changed")[0];
+    assert!(!changed["data"]["workflows"].as_array().unwrap().is_empty());
+    assert_eq!(changed["project"]["id"], p.id.as_str());
+    // « workflow.left »: an agent that does something else after a door.
+    let ops = vec![ConvOp::Append {
+        item: json!({"kind": "user", "id": "u-else", "text": "fais autre chose"}),
+    }];
+    h.core.track_workflow(&id, &p.id, &ops, 0.0, None);
+    let ops = vec![ConvOp::Append {
+        item: json!({"kind": "tool", "id": "c-bash", "name": "Bash", "input": {"command": "ls"}, "parent": null}),
+    }];
+    h.core.track_workflow(&id, &p.id, &ops, 0.0, None);
+    h.core.track_workflow(
+        &id,
+        &p.id,
+        &[],
+        0.0,
+        Some(&crate::board::TurnEnd::Finished("fait".into())),
+    );
+    let facts = l.heard(&h, &["workflow.left"]).await;
+    assert_eq!(
+        of(&facts, "workflow.left")[0]["data"]["doing"],
+        "fais autre chose"
+    );
+}

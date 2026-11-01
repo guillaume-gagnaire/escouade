@@ -104,13 +104,20 @@ fn typed(plugin: &str, e: CallError, what: &'static str) -> anyhow::Error {
 
 /// A plugin and the runtime that talks to it.
 #[derive(Clone)]
-struct Line {
+pub(super) struct Line {
     rt: Arc<Runtime>,
-    plugin: String,
+    pub(super) plugin: String,
 }
 
 impl Line {
-    async fn call<T: DeserializeOwned>(
+    pub(super) fn new(rt: Arc<Runtime>, plugin: &str) -> Self {
+        Self {
+            rt,
+            plugin: plugin.to_string(),
+        }
+    }
+
+    pub(super) async fn call<T: DeserializeOwned>(
         &self,
         method: &str,
         what: &'static str,

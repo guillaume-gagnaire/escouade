@@ -149,6 +149,46 @@ pub enum Body {
     /// An agent's account changed past « Changer de compte à ».
     #[serde(rename = "account.switched")]
     AccountSwitched { from: String, to: String },
+    /// An agent went into a step of its project's workflow (`door`: the command typed that opened
+    /// it; `pass`: the nth stay of the agent in this step).
+    #[serde(rename = "workflow.step_entered")]
+    WorkflowStepEntered {
+        workflow: String,
+        step: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        door: Option<String>,
+        pass: u32,
+    },
+    /// It left the step: how long it stayed, what it cost, and how it ended (`done`, `back`,
+    /// `failed`, `stopped`, `left`).
+    #[serde(rename = "workflow.step_left")]
+    WorkflowStepLeft {
+        workflow: String,
+        step: String,
+        duration_ms: u64,
+        cost: f64,
+        outcome: String,
+    },
+    /// It went back to a step already passed, for this reason (the line the step ended on).
+    #[serde(rename = "workflow.looped_back")]
+    WorkflowLoopedBack {
+        workflow: String,
+        from: String,
+        to: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
+    },
+    /// It went out of the workflow (`doing`: what it does instead).
+    #[serde(rename = "workflow.left")]
+    WorkflowLeft {
+        workflow: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        doing: Option<String>,
+    },
+    /// A reading of the project's workflows came out different: the ids of those that changed,
+    /// appeared or went.
+    #[serde(rename = "workflow.changed")]
+    WorkflowChanged { workflows: Vec<String> },
 }
 
 /// Every fact's name, in the order of the docs: the protocol's schema lists the same
@@ -188,6 +228,11 @@ pub const NAMES: &[&str] = &[
     "decision.accepted",
     "pr.opened",
     "account.switched",
+    "workflow.step_entered",
+    "workflow.step_left",
+    "workflow.looped_back",
+    "workflow.left",
+    "workflow.changed",
 ];
 
 impl Body {
