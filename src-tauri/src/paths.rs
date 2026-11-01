@@ -344,6 +344,17 @@ impl DataDir {
         self.0.join("plugin-logs")
     }
 
+    /// The modules of the `run.js` plugins, compiled and precompiled (`plugins::wasm::Modules`): a cache, made
+    /// again when it is gone.
+    pub fn plugin_wasm_dir(&self) -> PathBuf {
+        self.0.join("cache").join("plugins-wasm")
+    }
+
+    /// The programs Escouade downloads for itself (the pinned Javy of the `run.js` plugins).
+    pub fn tools_dir(&self) -> PathBuf {
+        self.0.join("tools")
+    }
+
     /// The list of the installed plugins: where each comes from and its fingerprint.
     pub fn plugins_file(&self) -> PathBuf {
         self.0.join("plugins.json")

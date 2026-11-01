@@ -153,6 +153,22 @@ describe('the install window', () => {
     expect(d.getByRole('button', { name: 'Installer quand même' })).toBeTruthy();
   });
 
+  it('says a JS/TS plugin runs inside Escouade, isolated, and that its hosts are enforced (ESC-320)', () => {
+    const wasm = { ...MANIFEST, run: { command: '', js: 'dist/plugin.mjs', args: [] } };
+    plugins.install = { kind: 'preview', preview: preview({ manifest: wasm }), busy: false, error: null };
+    render(InstallModal, { step: plugins.install });
+    const dialog = screen.getByRole('dialog', { name: 'Installer Slack ?' });
+    const first = dialog.querySelector('.asks li');
+    expect(first?.textContent).toContain('Tourne dans Escouade, isolé');
+    expect(first?.textContent).toContain('dist/plugin.mjs');
+    expect(first?.classList.contains('strong')).toBe(false);
+    expect(dialog.textContent).not.toContain('Lance un programme');
+    expect(dialog.textContent).toContain(
+      'appliqué par Escouade : il ne joint aucun autre hôte, ni une adresse de ta machine ou de ton réseau local',
+    );
+    expect(dialog.textContent).not.toContain('ne filtre pas encore');
+  });
+
   it('installs nothing before « Installer », then the plugin; cancelled, what was set aside is discarded', async () => {
     const backend = fakeBackend({ plugin_install: () => view() });
     plugins.install = { kind: 'preview', preview: preview(), busy: false, error: null };
