@@ -264,6 +264,16 @@ pub fn default_data_dir() -> PathBuf {
     data_dir_in(&home, cfg!(debug_assertions), &mut notes)
 }
 
+/// The app's data folder as `escouade-plugin` reads it (the pinned Javy, the modules of the `run.js` plugins), moving
+/// nothing: the sandboxed folder, else `~/.escouade`.
+pub fn tools_data_dir() -> PathBuf {
+    sandbox_dir().unwrap_or_else(|| {
+        dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join(DATA_DIR_NAME)
+    })
+}
+
 /// Moves the WebView and window-state folders, named after the app identifier, to the new
 /// identifier. Runs before the window is created; sandboxed runs and development builds leave
 /// them alone.

@@ -5,12 +5,18 @@
 //! only, as `runtime` serves them), its `log` lines, its standard error, what it sends that answers
 //! nothing. The bench plays its scenarios through it; `escouade-plugin dev` lets an author drive it
 //! by hand.
+//!
+//! A `run.js` plugin is played in WASM (ESC-322), in the app's own host (`plugins::wasm`): its module, an instance on a
+//! thread of its own, `net/fetch` served by the host and closed to what `permissions.network` does not name; no Node.
+//! As in the app, its instance ends once it answered `shutdown`, and a fault (its time, its memory, an exception) ends
+//! it as a crash ends a process.
 
 use crate::job::Job;
 use crate::plugins::manifest::Manifest;
 use crate::plugins::runtime::{
     matches, notification_line, request_line, METHOD_NOT_FOUND, NOT_YOURS, PROTOCOL,
 };
+use crate::plugins::wasm;
 use parking_lot::Mutex;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -87,14 +93,62 @@ struct Shared {
     end: Notify,
     /// Each new thing seen: for `escouade-plugin dev`, which shows them as they come.
     watch: Mutex<Option<mpsc::UnboundedSender<Seen>>>,
+    /// An instance in WASM: the id of the `shutdown` asked, whose answer ends it, as Escouade ends it.
+    wasm: bool,
+    shutdown: Mutex<Option<u64>>,
 }
 
 impl Shared {
+    fn new(
+        tx: mpsc::UnboundedSender<Vec<u8>>,
+        folder: &Path,
+        manifest: &Manifest,
+        secrets: HashMap<String, String>,
+        made: Option<String>,
+        wasm: bool,
+    ) -> Arc<Self> {
+        Arc::new(Shared {
+            tx: Mutex::new(Some(tx)),
+            pending: Mutex::new(HashMap::new()),
+            next: AtomicU64::new(1),
+            seen: Mutex::new(Vec::new()),
+            tail: Mutex::new(VecDeque::new()),
+            secrets,
+            made,
+            patterns: manifest.permissions.secrets.clone(),
+            folder: folder.to_path_buf(),
+            ended: Mutex::new(None),
+            end: Notify::new(),
+            watch: Mutex::new(None),
+            wasm,
+            shutdown: Mutex::new(None),
+        })
+    }
+
     fn see(&self, s: Seen) {
         if let Some(w) = self.watch.lock().as_ref() {
             let _ = w.send(s.clone());
         }
         self.seen.lock().push(s);
+    }
+
+    fn tell(&self, line: String) {
+        {
+            let mut t = self.tail.lock();
+            t.push_back(line.clone());
+            while t.len() > TAIL {
+                t.pop_front();
+            }
+        }
+        self.see(Seen::Stderr { line });
+    }
+
+    /// It ended (`code`: none when it was killed): what still waits gets no answer.
+    fn end(&self, code: Option<i32>) {
+        self.tx.lock().take();
+        *self.ended.lock() = Some(code);
+        self.pending.lock().clear();
+        self.end.notify_waiters();
     }
 
     fn write(&self, line: &str) -> bool {
@@ -130,18 +184,9 @@ impl Session {
         let run = manifest.run.as_ref().ok_or_else(|| {
             std::io::Error::new(std::io::ErrorKind::InvalidInput, "a declarative plugin")
         })?;
-        // A bundle of `run.js` (`program` is its path) is played by Node here, the SDK speaking on stdin and stdout
-        // there as in Escouade's WASM host (ESC-321); WASM-3 plays it in WASM.
-        let mut cmd = if run.js.is_some() {
-            let mut c = Command::new("node");
-            c.arg(program);
-            c
-        } else {
-            let mut c = Command::new(program);
-            c.args(&run.args);
-            c
-        };
-        cmd.current_dir(folder)
+        let mut cmd = Command::new(program);
+        cmd.args(&run.args)
+            .current_dir(folder)
             .env("ESCOUADE_PLUGIN_ID", &manifest.id)
             .env("ESCOUADE_PLUGIN_API", PROTOCOL.to_string())
             .env("ESCOUADE_VERSION", app_version)
@@ -161,20 +206,7 @@ impl Session {
         let stderr = child.stderr.take().expect("piped");
         let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
         let (kill_tx, mut kill_rx) = oneshot::channel::<()>();
-        let shared = Arc::new(Shared {
-            tx: Mutex::new(Some(tx)),
-            pending: Mutex::new(HashMap::new()),
-            next: AtomicU64::new(1),
-            seen: Mutex::new(Vec::new()),
-            tail: Mutex::new(VecDeque::new()),
-            secrets,
-            made,
-            patterns: manifest.permissions.secrets.clone(),
-            folder: folder.to_path_buf(),
-            ended: Mutex::new(None),
-            end: Notify::new(),
-            watch: Mutex::new(None),
-        });
+        let shared = Shared::new(tx, folder, manifest, secrets, made, false);
 
         tokio::spawn(async move {
             while let Some(bytes) = rx.recv().await {
@@ -193,14 +225,7 @@ impl Session {
                     let line = String::from_utf8_lossy(&line)
                         .trim_end_matches('\r')
                         .to_string();
-                    {
-                        let mut t = shared.tail.lock();
-                        t.push_back(line.clone());
-                        while t.len() > TAIL {
-                            t.pop_front();
-                        }
-                    }
-                    shared.see(Seen::Stderr { line });
+                    shared.tell(line);
                 }
                 let _ = err_tx.send(());
             });
@@ -224,11 +249,7 @@ impl Session {
                 }
                 let code = child.wait().await.ok().and_then(|s| s.code());
                 let _ = tokio::time::timeout(Duration::from_millis(500), err_rx).await;
-                shared.tx.lock().take();
-                *shared.ended.lock() = Some(code);
-                // What still waits gets no answer: its sender dropped.
-                shared.pending.lock().clear();
-                shared.end.notify_waiters();
+                shared.end(code);
             });
         }
 
@@ -237,6 +258,71 @@ impl Session {
             job,
             kill: Mutex::new(Some(kill_tx)),
             pid,
+        })
+    }
+
+    /// Starts the instance of `module`, the WASM of the `run.js` plugin of `manifest` in `folder`, in Escouade's host,
+    /// with its limits; `secrets` and `made` as for a process.
+    pub fn start_wasm(
+        folder: &Path,
+        manifest: &Manifest,
+        module: wasmtime::Module,
+        secrets: HashMap<String, String>,
+        made: Option<String>,
+        limits: wasm::Limits,
+    ) -> std::io::Result<Self> {
+        let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
+        let shared = Shared::new(tx, folder, manifest, secrets, made, true);
+        let (ftx, frames) = mpsc::unbounded_channel::<wasm::Frame>();
+        // What the bench writes, to the instance's thread; closed when the bench closes it (`kill`, `shutdown`).
+        std::thread::Builder::new()
+            .name(format!("bench {} input", manifest.id))
+            .spawn(move || {
+                while let Some(bytes) = rx.blocking_recv() {
+                    if ftx.send((bytes, None)).is_err() {
+                        break;
+                    }
+                }
+            })?;
+        let files = wasm::files_of(folder);
+        let fetcher = wasm::Fetcher::new(
+            &manifest.id,
+            &manifest.permissions.network,
+            &wasm::Net::default(),
+        );
+        let (s1, s2, s3, s4) = (
+            shared.clone(),
+            shared.clone(),
+            shared.clone(),
+            shared.clone(),
+        );
+        std::thread::Builder::new()
+            .name(format!("bench {}", manifest.id))
+            .spawn(move || {
+                let fault = match wasm::Instance::start(&module, &files, limits) {
+                    Err(f) => Some(f),
+                    Ok(instance) => {
+                        let wiring = wasm::Wiring {
+                            rx: frames,
+                            line: Box::new(move |l| incoming(&s1, l)),
+                            stderr: Box::new(move |l| s2.tell(l.to_string())),
+                            refused: Box::new(move |l| s3.tell(l.to_string())),
+                        };
+                        wasm::serve(instance, fetcher, wiring)
+                    }
+                };
+                // A fault ends it as a crash ends a process (code 1); its input closed, it was stopped.
+                let code = fault.map(|f| {
+                    s4.tell(f.to_string());
+                    1
+                });
+                s4.end(code);
+            })?;
+        Ok(Self {
+            shared,
+            job: None,
+            kill: Mutex::new(None),
+            pid: None,
         })
     }
 
@@ -276,6 +362,9 @@ impl Session {
     ) -> Option<oneshot::Receiver<Result<Value, RemoteError>>> {
         let params = serde_json::value::to_raw_value(params).ok()?;
         let id = self.shared.next.fetch_add(1, Ordering::Relaxed);
+        if method == "shutdown" && self.shared.wasm {
+            *self.shared.shutdown.lock() = Some(id);
+        }
         let (tx, rx) = oneshot::channel();
         self.shared.pending.lock().insert(id, tx);
         if self.shared.write(&request_line(id, method, &params)) {
@@ -346,6 +435,10 @@ impl Session {
         if let Some(k) = self.kill.lock().take() {
             let _ = k.send(());
         }
+        // An instance: its input closed, its thread ends it.
+        if self.shared.wasm {
+            self.shared.tx.lock().take();
+        }
     }
 }
 
@@ -400,6 +493,10 @@ fn message(shared: &Shared, msg: Value) {
                 None => Ok(msg.get("result").cloned().unwrap_or(Value::Null)),
             };
             let _ = tx.send(result);
+            // Its answer to `shutdown`: Escouade ends its instance.
+            if shared.wasm && id.as_u64().is_some() && *shared.shutdown.lock() == id.as_u64() {
+                shared.tx.lock().take();
+            }
         }
         (Some(method), Some(id)) => {
             let params = msg.get("params").cloned().unwrap_or(Value::Null);

@@ -286,6 +286,15 @@ jobs:
           # Only a warning: the build already requires the notarization, and Gatekeeper's reading must not keep a release a draft.
           if [ -n "$APPLE_ID" ]; then spctl --assess --type execute --verbose=2 "$app" || echo "::warning::spctl does not accept $app (the notarization is required by the build itself)"; fi
 
+      # escouade-plugin, the authors' command, compiles and plays the run.js plugins without Node (ESC-322): it embeds the
+      # escouade-js of the `escouade-js` job, the same as the app's. A build without it keeps the release a draft.
+      - name: Check escouade-plugin embeds escouade-js
+        shell: bash
+        run: |
+          bin=$(ls src-tauri/target/universal-apple-darwin/release/escouade-plugin src-tauri/target/release/escouade-plugin src-tauri/target/release/escouade-plugin.exe 2>/dev/null | head -n 1)
+          "$bin" --version
+          "$bin" --version | grep -qx "escouade-js $(cat src-tauri/escouade-js/target/escouade-js.wasm.sha256)"
+
       - name: Check escouade-plugins is in the Linux packages
         if: runner.os == 'Linux'
         run: |
