@@ -1,0 +1,11 @@
+# ESC-319: the prototype of the WASM runtime of the JS/TS plugins, and its measures. Not built by the app.
+[workspace]
+resolver = "2"
+members = ["host", "extism", "component", "weight"]
+
+[profile.release]
+# Escouade's own (src-tauri/Cargo.toml), so that the weights measured are the app's.
+codegen-units = 1
+lto = true
+opt-level = 3
+strip = true

@@ -8,6 +8,7 @@ Ce document est l'analyse. Il ne change pas l'app. Le découpage en tickets, le 
 - §2 : l'architecture, comparée sur ce que font VS Code, Zed, Obsidian, Raycast, JetBrains, Claude Code, Tauri et MCP, et trois expériences jetables ;
 - §3 : le modèle de confiance et de distribution ;
 - §4 : tout ce qui est externe devient un plugin (ESC-203, 2026-10-26) : les harness, les sources du Kanban, les hébergeurs et leurs PR, en plugins de première main, tous en process ; un plugin qui tient plusieurs points (GitHub : tickets et PR) ; les options comparées et ce que coûte le « tout en process » décidé, l'ordre de migration, l'effet sur les tickets en cours.
+- §5 : les programmes en JS/TS sans Node (ESC-319, 2026-11-01) : Javy, Extism et componentize-js comparés et mesurés, le runtime WASM retenu et son prototype, le contrat de l'hôte, le pipeline du store, le sort du `run` natif, la migration de Slack et de Règles de l'équipe.
 
 **Depuis ESC-203, la règle est : tout ce qui est externe est un plugin.** Les intégrations d'aujourd'hui deviennent des plugins de première main, livrés et signés avec l'app, et, comme les plugins tiers, des process qui parlent le même protocole (§4, décidé le 2026-10-26).
 
@@ -15,7 +16,7 @@ Ce document est l'analyse. Il ne change pas l'app. Le découpage en tickets, le 
 
 - **Un plugin est un dossier avec un manifeste** (`escouade-plugin.json`). Il apporte des **contributions déclarées** : un thème, une langue, un harness ACP, un webhook, des modèles de projet, des entrées de menu… Escouade les lit et les montre avec ses propres composants. Il peut aussi apporter un **programme**, qui parle à Escouade en **JSON-RPC 2.0 sur stdio**, comme un serveur MCP ou un agent ACP : il réagit aux événements, décide d'une autorisation, fournit une source du Kanban.
 - **Pas de HTML libre dans la fenêtre en 2.1** : l'interface d'un plugin est déclarée (manifeste et blocs), rendue par Escouade. Une vue libre viendra plus tard, dans une iframe isolée (le modèle de MCP Apps).
-- **WASM plus tard, pour le même protocole** : un module WASM (wasmtime) servira les plugins sans droits, ceux qu'on peut installer depuis un `.escouade.yml` sans risque. Les mêmes messages, un autre transport.
+- **Les programmes en JS/TS tournent en WASM, sans Node** (révisé le 2026-11-01, ESC-319, §5) : le store compile le bundle commité en WASM (Javy et le QuickJS d'Escouade, reproductible), l'app le fait tourner par wasmtime, dans son process. Les mêmes messages, un autre transport ; le réseau et les fichiers y sont appliqués, plus seulement déclarés. Les programmes natifs restent pour la première main et pour les binaires tiers attestés.
 - **La 2.1.0** : le socle (manifeste, chargement, Réglages › Plugins, permissions, journal, faux Escouade pour les tests), puis trois points : les **événements** (webhooks, Slack, Discord, commandes), les **harness ACP déclarés**, les **thèmes**. Les **règles d'autorisation** suivent, si la 2.1.0 a la place. Les sources du Kanban, les hébergeurs, les outils MCP, l'interface et les langues viennent après.
 - **La place de marché store.escouade.dev arrive avec la 2.1** (ESC-202, `docs/STORE.md`) : soumission depuis un dépôt public, comptes GitHub, revue en local par l'utilisateur et badge « Vérifié par Escouade » signé hors du serveur. L'installation depuis un dossier ou un dépôt git reste permise, « non vérifié ».
 
@@ -304,6 +305,8 @@ Le bac à sable de WASM tient ce qu'il promet, à un coût d'appel négligeable.
 ### 2.4 La recommandation
 
 **D : un protocole des plugins en JSON-RPC 2.0, servi en 2.1 par un process à côté (A), avec une interface déclarée (D1) et un niveau déclaratif sans code (D4) ; un runtime WASM du même protocole plus tard (D3), puis des vues libres en iframe isolée (D2).**
+
+> **Révisé le 2026-11-01 (ESC-319, §5).** Le WASM n'attend plus : il devient **le runtime des programmes en JS et en TS**, pour que Node ne soit jamais un prérequis. Le store compile le bundle commité (`run.js`) en WASM par Javy et le plugin Javy d'Escouade, de façon reproductible ; l'app le fait tourner par wasmtime, dans son process, et **applique** ce que le tableau du §2.3 disait seulement déclaré : le réseau (`permissions.network`, par `net/fetch` servi par l'hôte), les fichiers (ceux du dossier du plugin seulement), la mémoire et le temps. Le protocole, le SDK et l'interface déclarée ne changent pas (D3 : un protocole, deux transports). Le process (A) reste pour la première main en Rust et pour les binaires tiers attestés ; `node` n'est plus une commande d'un plugin tiers du store. La webview est écartée (§5.1). Les raisons 2 et 3 ci-dessous valent toujours pour les plugins qui lancent des programmes ; pour les autres, le §5.3 montre qu'un interpréteur embarqué coûte moins qu'on ne le craignait (1,3 Mo par plugin, 71 µs par décision, 2 ms pour démarrer).
 
 Pourquoi :
 
@@ -729,7 +732,149 @@ L'ordre des harness devient : Cursor CLI, Mistral Vibe, Gemini CLI, OpenCode, Co
 
 Les docs elles-mêmes (§1.1, §1.5, §4.7, §4.8, §4.10, le tableau des versions de `docs/TODO-2.2.md`, `docs/STORE.md` §5.1) sont remises d'accord avec la 2.1.0 par ESC-279, avant INT-0.
 
-## 5. Sources
+## 5. Les programmes en JS/TS sans Node : un runtime WASM (ESC-319)
+
+Demandé par l'utilisateur le 2026-11-01, en apprenant qu'un plugin en TypeScript (`dev.escouade.slack`, `dev.escouade.team-rules`) se lance par `node dist/plugin.mjs` : « je veux pas rendre node obligatoire, donc soit tu les exécutes dans la partie navigateur de tauri, soit tu prends en compte wasm directement et chaque plugin ts qui est soumis sera buildé en wasm ».
+
+Ce chapitre est l'étude, avec un prototype mesuré (`prototypes/wasm-plugins/`, son README dit comment refaire chaque mesure). Il ne change pas encore l'app : les tickets du §5.9 le font, dans l'ordre. Il révise la recommandation D du §2.4 (voir la révision en tête du §2.4).
+
+**En bref.** Un plugin en JS ou en TS se publie comme aujourd'hui, son bundle commité (`dist/plugin.mjs`). Le store le compile en WASM avec **Javy** et le **plugin Javy d'Escouade** (`escouade-js`, QuickJS), dans un conteneur sans réseau, avec des outils épinglés ; deux compilations, sous Windows comme sous Linux, donnent le même module à l'octet. L'app le fait tourner dans son propre process par **wasmtime**, une instance par plugin qui vit comme le process d'avant. Le protocole ne change pas : les mêmes lignes JSON-RPC, portées par l'entrée et la sortie standard du module. Escouade sert en plus le réseau (`net/fetch`, seulement vers `permissions.network`) et les fichiers du dossier du plugin. Les `dist/plugin.mjs` de team-rules et de slack tournent ainsi **sans aucune retouche** : team-rules décide en 71 µs (médiane), slack poste par le `fetch` de l'hôte et se voit refuser tout autre hôte.
+
+### 5.1 Pourquoi pas la webview
+
+La webview a été écartée avant l'étude, pour faire tourner la logique des plugins :
+
+- elle vit et meurt avec la fenêtre, alors qu'Escouade tourne aussi fenêtre cachée, dans le plateau (§2.3, C) ;
+- elle n'existe ni dans le mode serveur (`docs/REMOTE.md`) ni dans le banc en ligne de commande (`escouade-plugin test`), ni dans la revue du store ;
+- elle partage son moteur et l'IPC de Tauri avec l'interface : un plugin y côtoie ce qui peut tout faire (CVE-2024-35222 pour une iframe) ;
+- il y a trois moteurs selon le système (WebView2, WKWebView, WebKitGTK et ses plantages connus, ESC-290) : trois comportements à essayer, trois isolations différentes ;
+- une liste d'hôtes **par plugin** y est difficile à tenir : la CSP est celle de la page, pas celle d'un plugin.
+
+### 5.2 Les candidats, vérifiés le 2026-11-01
+
+| | Javy | Extism | componentize-js |
+|---|---|---|---|
+| Ce que c'est | un compilateur JS → WASM de la Bytecode Alliance : QuickJS (rquickjs) précompilé par Wizer, un module WASI preview 1 | un cadre de plugins : un hôte Rust (crate `extism`, sur wasmtime) et des PDK ; celui de JS compile par QuickJS-ng, Wizer et binaryen | un module ESM → un composant du Component Model, SpiderMonkey par StarlingMonkey, interface en WIT |
+| Version | **javy 9.1.0** (CLI, 2026-07-30) ; `javy-plugin-api` 7.1.0 ; `javy-codegen` 4.0.0 (2026-03-22, sur wasmtime 42, en retard sur la CLI) | **extism 1.41.0** (2026-10-09, sur wasmtime 49) ; **js-pdk 1.7.0** (2026-08-17 ; son binaire se dit « 1.6.1 ») | **componentize-js 0.23.0** (2026-09-21) ; StarlingMonkey v0.4.0 (2026-10-26) ; jco |
+| Dépôt, licence | <https://github.com/bytecodealliance/javy>, Apache-2.0, 2 775 étoiles, poussé le 2026-10-30 | <https://github.com/extism/extism>, <https://github.com/extism/js-pdk>, BSD-3-Clause, 5 822 et 94 étoiles | <https://github.com/bytecodealliance/ComponentizeJS>, <https://github.com/bytecodealliance/StarlingMonkey>, Apache-2.0, 399 et 295 étoiles |
+| Docs lues | `docs/docs-using-exports.md`, `-dynamic-linking.md`, `-extending.md`, `-invoking.md`, `-js-api-support.md` | le README du js-pdk (« Synchronous execution model… no `setTimeout`… `fetch()` … completes synchronously »), <https://extism.org/docs/concepts/runtime-apis> | le README (« This is an experimental project, no guarantees are provided for stability ») |
+| Ce qu'il faut pour compiler | un exécutable (31,7 Mo Windows, 45,6 Mo Linux, glibc ≥ 2.35) ; **pas de Node** | `extism-js` (16,6 Mo) **et** `wasm-merge`, `wasm-opt` de binaryen (version_133) ; pas de Node | **Node** et le paquet npm (343 Mo de `node_modules` : jco, wizer, weval, le moteur de 10,5 Mo) |
+| L'asynchrone | les promesses, avec la boucle d'événements de Javy ; pas de minuteur ; l'hôte n'a pas de fonction asynchrone : le réseau passe par le protocole | synchrone : une promesse ne se résout que sur une valeur déjà là ; `fetch` est fait par l'hôte, bloquant, avec ses `allowed_hosts` | SpiderMonkey complet, `fetch` par `wasi:http` (coupé ici) |
+
+Ce que les essais ont appris, au-delà des docs :
+
+- **Javy, tel quel, ne sait pas vivre longtemps.** Ses exports (`-C wit`) sont faits pour un appel : chacun copie le bytecode d'un segment de données puis le jette (`data.drop`), si bien qu'un deuxième appel lit un segment jeté et s'arrête (« out of bounds memory access »). Et chaque appel évalue à nouveau le module, que QuickJS ne libère jamais : en retirant les `data.drop`, l'instance a tenu environ 1 500 décisions avant de manquer de mémoire à 64 Mio. **D'où `escouade-js`** (`prototypes/wasm-plugins/escouade-js/`) : un plugin Javy écrit avec `javy-plugin-api` 7.1, le QuickJS de Javy avec la boucle d'événements, `TextEncoder` et `Javy.IO`, plus un export, `escouade-turn`, qui appelle `globalThis.__esc.pump()` puis fait tourner les tâches en attente, sans rien évaluer à nouveau. Le module est évalué une fois par `_start`. 24 000 appels plus tard, sa mémoire n'a pas bougé d'un octet.
+- Le construire sous Windows demande deux contournements : bindgen de `rquickjs-sys` ne trouve pas les en-têtes du clang du WASI SDK qu'il télécharge (`BINDGEN_EXTRA_CLANG_ARGS=-I<wasi-sdk>/lib/clang/18/include`), et `javy init-plugin` lit la section `target_features` du module (garder `strip = false`, sinon binaryen refuse la mémoire en bloc et le SIMD). Le script `build-escouade-js.sh` les fait.
+- **Extism garde ses instances** sans rien de tel : ses exports s'appellent autant de fois qu'on veut. Mais ses deux compilations du même bundle **diffèrent** (de 13 octets en taille, d'un million d'octets en contenu) : rien à comparer à la revue.
+- **componentize-js** produit un composant de 12 Mo, différent à chaque compilation, et ne compile que sous Node : ce que l'utilisateur veut éviter, au moins chez l'auteur (`escouade-plugin dev`).
+
+### 5.3 Les mesures
+
+Sous Windows 11 (la machine de développement, chargée par d'autres agents d'Escouade), hôtes construits au profil release de l'app (`lto`, `codegen-units = 1`, `strip`), wasmtime 50.0.1 pour Javy et componentize-js, 49 pour Extism. Les mêmes `dist/plugin.mjs`, le même prélude, les mêmes lignes ; 2 000 appels par mesure. Node 24.14 pour la référence, le process d'aujourd'hui.
+
+| | Javy + `escouade-js` | Extism | componentize-js | Node (aujourd'hui) |
+|---|---|---|---|---|
+| **Poids ajouté à l'app** (exécutable minimal contre un témoin de 2,10 Mo avec les mêmes crates) | **+13,3 Mo** (15,36 Mo) | +18,6 Mo (20,74 Mo) | +13,8 Mo (15,88 Mo) | 0, mais Node chez l'utilisateur |
+| **Taille d'un plugin** (team-rules ; slack à 1 ko près) | **1 265 886 o** (490 ko en gzip -9) ; en lien dynamique, 14 189 o (8 ko) plus `escouade-js` une fois pour tous (1,79 Mo, 565 ko) | 2 495 850 o | 12 082 028 o | 9 833 o (le bundle) + Node |
+| **Compilation** du bundle | 1,15 s | 1,6 s | 4,2 à 5,3 s | — |
+| **Deux compilations** | **la même empreinte** (`7c8fb54d…` pour team-rules), **sous Windows et sous Linux** (WSL Ubuntu 24.04, la Javy Linux) ; sans `-C deterministic`, deux empreintes | deux empreintes | deux empreintes | — |
+| **Compilation par Cranelift** (à l'installation) | 152 ms ; précompilé : 3,98 Mo, chargé en 0,7 ms | 156 ms à chaque `Plugin::new` (12,9 ms ensuite, cache de wasmtime) | 733 ms ; précompilé : 35,6 Mo, chargé en 5,6 ms | — |
+| **Démarrage à froid** (des octets à la réponse à `initialize`) | 153 ms ; **1,9 ms** depuis le précompilé | 156 ms | 1,8 ms depuis le précompilé (+ 5,6 ms de chargement) | **42 ms** (le process et Node) |
+| **Démarrage à chaud** (module en mémoire : instance + `initialize`) | **1,06 ms** | 12,9 ms | 1,34 ms | — |
+| **Mémoire** | **1,5 Mio** de mémoire linéaire, stable ; le working set du process gagne **0,5 Mio par instance** (65 → 70 Mio pour 10 de plus), le code compilé étant partagé | non lue par Extism ; le working set gagne **11 Mio par instance** (56 → 165 Mio pour 10 de plus : chaque `Plugin::new` a son module) | non lue ; le working set gagne **8 Mio par instance** (159 → 241 Mio), après 159 Mio pour le premier composant chargé | 37 à 44 Mio par plugin (working set de node) |
+| **`permissions/decide`** (team-rules, médiane / p99) | **71 µs / 136 µs** | 91 µs / 160 µs | 81 µs / 169 µs | 129 µs / 223 µs |
+| **`events/fact`** ignoré (médiane / p99) | 34 µs / 55 µs | 31 µs / 73 µs | 30 µs / 60 µs | — |
+| **Un fait de slack qui poste** (secret, puis `fetch` vers le faux Slack) | 2,8 ms (test, build de debug) | non mesuré | non mesuré | — |
+| **Après 24 000 appels** | mémoire inchangée (1,5 Mio) | répond toujours | répond toujours | — |
+
+Ce qu'on en tire :
+
+1. **La mémoire** : une instance Javy coûte un demi-mégaoctet, contre 37 à 44 Mio pour un process Node par plugin ; Extism et componentize-js en coûtent 16 à 22 fois plus que Javy.
+2. **Les trois tiennent le délai de 500 ms par trois ordres de grandeur**, et décident plus vite que Node (pas de tube entre deux process). Le coût n'est pas là.
+3. **La reproductibilité tranche.** Seul Javy donne la même empreinte d'une compilation à l'autre et d'un système à l'autre, condition pour que la revue sur le poste du chef retrouve ce que le store a compilé sous Linux (§5.6). Javy compile aussi sans Node, en un exécutable.
+4. **Le poids** : environ 13 Mo pour wasmtime 50 avec Cranelift et WASI preview 1 (qui tire le Component Model et l'asynchrone), contre 11 Mo pour wasmtime 38 seul en ESC-170. L'app a déjà tokio et serde : le surcoût réel sera un peu moindre, à mesurer dans le premier ticket. Pulley (l'interpréteur de wasmtime, sans Cranelift) le réduirait, au prix de la vitesse : non essayé.
+5. **La taille d'un plugin** : 1,27 Mo, dont presque tout est QuickJS. Le lien dynamique la ramène à 14 ko, mais lie chaque plugin au bytecode d'une version d'`escouade-js` : à chaque nouvelle version du moteur, le store devrait recompiler et le chef resigner tous les plugins. **Retenu : le lien statique** (un module se suffit à lui-même, ce qui tourne est ce qui a été signé) ; le dynamique reste une optimisation possible plus tard.
+6. **Précompiler à l'installation vaut le coup** : 152 ms de Cranelift une fois, puis 1,9 ms par démarrage. Le précompilé (`Module::serialize`, 4 Mo) est propre à la machine et à la version de wasmtime : l'app le garde dans son cache, le refait à chaque mise à jour, et ne le reçoit jamais d'ailleurs (`Module::deserialize` fait confiance à ses octets).
+
+### 5.4 Le contrat de l'hôte
+
+**Le même protocole, un autre transport.** Les mêmes méthodes, les mêmes délais (`schemas/plugin-protocol-1.json`) : `initialize`, `shutdown`, `events/fact`, `permissions/decide`, les points d'extension qui viendront ; et du plugin vers Escouade, `secrets/get`, `settings/get`, `log`. Les lignes ne passent plus par les tubes d'un process mais par l'entrée et la sortie standard WASI du module, que l'hôte tient en mémoire :
+
+- l'entrée ne bloque jamais : ce qui est là, ou rien (une lecture vide est « rien pour l'instant », jamais une fin) ;
+- l'hôte écrit ses lignes, puis appelle `escouade-turn` : le plugin les lit, y répond, et le tour finit quand QuickJS n'a plus aucune tâche en attente. L'hôte lit ce qu'il a écrit, sert ses demandes, et refait un tour avec les réponses, jusqu'à ce que le plugin n'ait plus rien à dire. Un tour borné par l'époque (§ limites) ; aucun fil, aucun minuteur dans le plugin ;
+- la sortie d'erreur et `console.*` vont au journal du plugin (comme sa sortie d'erreur aujourd'hui), jamais dans le protocole ;
+- la première ligne, avant tout, est `{"escouade/boot": {"files": {…}}}` (§ fichiers), lue par le prélude avant que le bundle ne commence.
+
+**Les fonctions servies.**
+
+- `secrets/get` : seulement les secrets du plugin (`plugin:<id>:<clé>`, une clé de `permissions.secrets`), comme aujourd'hui ; masqués au journal.
+- `settings/get` : comme aujourd'hui, avec `project`.
+- `log` : comme aujourd'hui.
+- **`net/fetch`** (nouveau) : `{ url, method, headers, body }` → `{ status, headers, body }`. L'hôte n'appelle que **https**, et seulement un hôte de `permissions.network` ou l'un de ses sous-domaines (`slack.com` permet `api.slack.com`, pas `slack.com.evil.example`, ni `evilslack.com`, ni `xoxb@evil.example`, ni une adresse IP). La décision porte sur le nom d'hôte de l'URL, avant toute résolution ; les redirections ne sont pas suivies (le plugin reçoit la réponse 3xx, et refait un `fetch`, jugé à son tour) ; 10 s au plus, 1 Mio de réponse au plus ; un refus est une erreur JSON-RPC (`-32003`) que le plugin voit comme un `fetch` qui rejette (« slack.com is not in permissions.network of dev.escouade.slack »), et que le journal garde. Le prélude en fait le `fetch` standard (`Response`, `.json()`, `.text()`, `Headers`).
+- **Les fichiers du dossier du plugin.** Au démarrage, l'hôte donne au plugin les fichiers JSON à la racine de son dossier (`rules.json`, `channels.json` ; 256 Kio chacun, 1 Mio en tout), jamais son manifeste, jamais un lien, jamais rien hors du dossier. Le prélude les sert par `readFileSync` de `node:fs` (un chemin, ou `new URL('../rules.json', import.meta.url)`), qui répond `ENOENT` pour tout le reste (`/etc/passwd`, `../../slack/channels.json`). Le SDK y ajoutera `p.file(nom)` (`files/read`, asynchrone, pour un fichier d'un sous-dossier). Rien n'est écrit : un plugin qui veut garder un état le demande à l'hôte (un point d'extension à venir, pas de disque).
+- **Les commandes** de `permissions.commands` : pas en WASM. Un plugin qui lance un programme reste un process (§5.7).
+
+**Les limites.**
+
+- **Mémoire** : 64 Mio de mémoire linéaire par instance (`StoreLimits`), une seule instance par plugin ; au-delà, `memory.grow` est refusé, QuickJS lève « out of memory » et l'instance s'arrête (essayé avec 32 Mio).
+- **Temps** : l'époque de wasmtime, incrémentée toutes les 10 ms par un fil de l'app. Un tour a 2 s ; une décision a ses 500 ms (l'hôte répond `ask` au-delà, comme pour un process) ; une boucle sans fin est arrêtée (`Trap::Interrupt`, essayé à 300 ms : arrêtée avant 700 ms, l'hôte vivant). L'époque plutôt que le carburant : elle ne ralentit pas le code, et un plugin qui attend le réseau n'est pas en train de tourner.
+- **Plantage** : un trap, une exception non rattrapée de QuickJS, une limite dépassée finissent l'instance ; l'hôte en fait une nouvelle depuis le module précompilé (1 ms) et rejoue `initialize`, avec le même budget de redémarrages que pour un process (trois fois, puis arrêté, et le journal le dit).
+- **Concurrence** : une instance ne fait qu'un tour à la fois ; l'hôte sert un plugin depuis un fil à lui (ou une tâche bloquante de tokio). Un `fetch` lent n'arrête que son plugin.
+
+**Ce qu'un plugin WASM ne peut pas faire.** Lire ou écrire un fichier hors de ce qu'on lui donne ; ouvrir une socket ; résoudre un nom ; atteindre un hôte qui n'est pas dans son manifeste, ou en http ; lancer un programme ; lire l'environnement, la ligne de commande, l'heure exacte au-delà de celle de WASI ; charger un module npm qui n'est pas dans son bundle, ni un module natif (`.node`) ; faire `import()` d'une URL ; utiliser `setTimeout` (pas de minuteur dans le prototype ; l'hôte pourra en servir), `child_process`, `net`, `worker_threads`. Son bundle n'importe que `node:fs` (pour `readFileSync`) et `node:readline` (pour le SDK) : un autre `import` refuse la compilation, avec la raison.
+
+### 5.5 Le SDK `@escouade-dev/plugin`
+
+Son API ne change pas : `createPlugin().onEvent(...)`, `decidePermission(...)`, `p.secret`, `p.settings`, `p.log`, `start()`. Le prototype le montre en faisant tourner les deux bundles **tels qu'ils sont commités** : c'est le prélude qui donne au bundle ce que Node lui donnait (`process.stdout.write`, `createInterface` de `node:readline`, `readFileSync` de `node:fs`, `fetch`, `URL`). Le ticket du SDK en fait une API propre : `start()` choisit le transport (`globalThis.Javy` ou Node), `p.file(nom)` lit un fichier du plugin, `fetch` reste le standard, et le prélude se réduit à ce que le SDK ne fait pas. Un plugin écrit pour le SDK ne change pas, ou d'un import : `readFileSync(new URL('../rules.json', import.meta.url))` continue de marcher.
+
+### 5.6 Le pipeline du store
+
+**Le manifeste.** Un programme en JS/TS se déclare par **`"run": { "js": "dist/plugin.mjs" }`**, un champ de `run` à côté de `command` : le bundle commité est la source de vérité, le `.wasm` est un produit du store, jamais commité. Un `run.wasm` (un module écrit en Rust ou en Go, compilé par son auteur) n'est pas ouvert : le store ne pourrait pas le reproduire. Un manifeste a `command` **ou** `js`, pas les deux.
+
+**À la soumission** (STORE-3, un onzième contrôle, « Compilation ») :
+
+1. le store prend le bundle de l'archive figée, au chemin de `run.js` (un fichier, 5 Mo au plus) ; **jamais de `npm install`**, comme aujourd'hui ;
+2. il le compile dans un **conteneur sans réseau** (`--network=none --read-only`, utilisateur sans droits, 2 minutes et 1 Gio au plus), qui ne contient que les outils épinglés : la Javy de la version notée (aujourd'hui 9.1.0, son archive Linux x64 de SHA-256 `a68b122d…`) et `escouade-js.wasm` (son SHA-256 noté avec l'app qui le livre), avec `-C deterministic=y -C source=omitted` ; le prélude et la réécriture des `import` sont ceux d'`escouade-plugin`, de la même version ;
+3. il compile **deux fois**, dans deux conteneurs neufs, et refuse la version si les deux empreintes diffèrent (« la compilation n'est pas reproductible ») ;
+4. il publie le `.wasm`, gardé sous son SHA-256 comme l'archive, et l'ajoute à `version.json` : `wasm: { sha256, size, compiler: { javy: "9.1.0", engine: "<sha256 d'escouade-js>", prelude: "<version>" } }`. L'empreinte de la version couvre donc le module.
+
+**Le contrôle des binaires** (n° 10) le couvre : un plugin `run.js` n'a aucun binaire à fournir ni à attester ; le seul exécutable est le `.wasm`, que le store a fait lui-même. Un `run.command` vers un script (`#!`, `.cmd`, `.bat`, `.ps1`) ou un interpréteur (`node`, `deno`, `bun`, `npx`, `python`…) est refusé pour un plugin tiers (§5.7).
+
+**La revue locale** (`npm run plugin-review`, STORE-7) recompile le bundle de l'archive avec les mêmes outils épinglés, sur le poste du chef, et compare l'empreinte à celle de `version.json` : un écart arrête tout (« Refuser », comme une archive changée). Mesuré : la Javy de Windows et celle de Linux donnent la même empreinte. Puis elle lit, comme aujourd'hui, le bundle (ce qui tourne) et `src/` (ce qu'on comprend), et vérifie que le bundle est le build de `src/` quand le plugin dit comment le faire (le `ci.mjs` des plugins de première main le fait déjà). Les pistes de lecture changent : `child_process`, `net`, un `import` autre que `node:fs` et `node:readline` ne peuvent plus tourner (la compilation les refuse) ; restent les hôtes appelés, comparés à `permissions.network`, et ce que le code fait de ses secrets.
+
+**La signature** couvre `version.json`, donc l'empreinte du `.wasm` : ce qui est signé est ce qui tourne. L'app vérifie le `.wasm` reçu contre `version.json` avant de le précompiler.
+
+**Le banc et son conteneur.** Le banc (`escouade-plugin test`) joue le `.wasm` publié dans l'hôte WASM. Le conteneur sans réseau de la revue ne garde plus rien pour ces plugins : le bac à sable est wasmtime, et le réseau est déjà fermé par l'hôte ; il reste pour les plugins à binaire (§5.7), et pour la compilation au store.
+
+### 5.7 L'app, `escouade-plugin`, et ce que devient le `run` natif
+
+**L'app** lit `run.js` : elle télécharge le `.wasm` de `version.json` (le store) ou le compile elle-même (un dossier, un dépôt git, « non vérifié »), le vérifie, le **précompile à l'installation** et garde le précompilé dans son cache (refait après une mise à jour de l'app), puis le fait tourner comme un process d'aujourd'hui : même `Runtime`, même journal, même budget de redémarrages, mêmes délais ; seul le transport change (`plugins/wasm.rs` à côté du process de `runtime.rs`). Réglages › Plugins dit « Tourne dans Escouade, isolé » au lieu de « Lance un programme sur votre ordinateur, avec vos droits », et « Se connecte à : slack.com » devient une permission **appliquée**.
+
+**`escouade-plugin`** (le binaire natif livré avec l'app) compile sans Node : `dev` et `test` compilent le `dist/plugin.mjs` du dossier avec la Javy épinglée, qu'il télécharge à son premier besoin depuis la release de Javy et vérifie par son SHA-256 (comme le WASI SDK de rquickjs ; `ESCOUADE_JAVY` en nomme une autre), et `escouade-js.wasm`, qu'il embarque. `javy-codegen` en bibliothèque l'éviterait, mais sa version publiée (4.0.0) est en retard sur la CLI, tire wasmtime 42 et binaryen en C++ : à revoir quand il rattrapera. Construire le bundle (`esbuild`) reste l'affaire de l'auteur, avec ses outils ; le SDK le fait par `npm run build`, mais un bundle fait autrement vaut autant.
+
+**Le `run` natif, tranché :**
+
+1. **La première main le garde.** Les plugins `dev.escouade.*` qui sont des programmes Rust du dépôt de l'app (les harness, les sources du Kanban, les hébergeurs, la voix : §4), construits et signés avec l'app (`{escouade}/escouade-plugins`), restent des process : ils lancent des CLI, parlent à des API avec des comptes, et leur confiance est celle de l'app. Slack et Règles de l'équipe, eux, passent en `run.js` (§5.8) : rien ne les oblige à être des process.
+2. **Les binaires tiers attestés restent permis**, inchangés : un exécutable par système, son attestation de provenance GitHub, « Lance un programme sur votre ordinateur, avec vos droits » en rouge. C'est la seule voie pour un plugin tiers qui doit lancer un programme (un harness ACP, une commande) ; ils ne seront jamais « sans crainte ». Un auteur en Go ou en Rust qui n'a besoin d'aucun droit du système est invité à `run.js`… ou à attendre `run.wasm`.
+3. **`node` (et tout interpréteur) n'est plus une commande d'un plugin tiers du store.** Un `run.command` qui est un script ou qui nomme un interpréteur hors du dossier du plugin est refusé à la soumission, avec la raison (« un programme en JS/TS se publie en `run.js` : le store le compile en WASM ») : sinon, l'utilisateur sans Node aurait un plugin qui ne démarre pas, et la revue lirait un code qui n'est pas ce qui tourne (les `node_modules` de la machine). Installé depuis un dossier ou un dépôt git, « non vérifié », un tel plugin reste permis, et Réglages › Plugins dit qu'il lui faut Node.
+
+### 5.8 La migration de Slack et de Règles de l'équipe
+
+`dev.escouade.slack` 2.0.0 et `dev.escouade.team-rules` 2.0.0 : `"run": { "js": "dist/plugin.mjs" }` à la place de `command` et `windows`, leurs scripts `slack`, `slack.cmd`, `team-rules`, `team-rules.cmd` retirés, `engines.node` réservé au build et aux tests, `escouade.min` relevé à la version de l'app qui sert le WASM. Le code ne change pas (le prototype le prouve) ; le SDK de la version WASM se rebâtit dans leur `dist/`. Ce qu'ils gagnent : plus de Node chez l'utilisateur, et `permissions.network: ["slack.com"]` appliqué. La version 1.x reste au store pour les apps d'avant (sa compatibilité, `escouade.max`). C'est le chef qui revoit, signe et publie ces versions (`first-party-plugin-signing`).
+
+### 5.9 Les tickets, dans l'ordre
+
+Chacun livrable seul, chacun après le précédent :
+
+1. **WASM-1, le runtime dans l'app** : `plugins/wasm.rs` (l'hôte du prototype, `escouade-js` construit en CI et livré avec l'app), `run.js` lu par les deux lecteurs du manifeste, la compilation par la Javy épinglée, la précompilation et son cache, `net/fetch` et les fichiers, les limites, le redémarrage ; le poids mesuré dans l'exécutable de l'app.
+2. **WASM-2, le SDK** : `start()` qui choisit le transport, `p.file()`, `fetch`, le prélude réduit ; `create-escouade-plugin` qui écrit `run.js`.
+3. **WASM-3, `escouade-plugin` sans Node** : `dev`, `test`, `validate` et `pack` sur `run.js`, la Javy téléchargée et vérifiée, le banc qui joue le WASM.
+4. **WASM-4, le store** : le onzième contrôle (la compilation isolée, deux fois), `wasm` dans `version.json`, le contrôle des binaires qui refuse script et interpréteur pour un tiers, l'app qui télécharge et vérifie le `.wasm`.
+5. **WASM-5, la revue locale** : la recompilation et la comparaison des empreintes, les pistes de lecture revues, le conteneur réservé aux binaires.
+6. **WASM-6, la doc du site** (fr et en) : `plugins/api` (le transport WASM, `net/fetch`, les fichiers, les limites, ce qu'un plugin ne peut pas faire), `plugins/sdk`, `plugins/publish` (`run.js`, la compilation, plus de Node), `plugins/examples`.
+7. **WASM-7, la migration** de `dev.escouade.slack` et `dev.escouade.team-rules` en 2.0.0 sur `run.js`, revues, signées et publiées par le chef.
+
+## 6. Sources
 
 - VS Code, _Workspace Trust_ : <https://code.visualstudio.com/docs/editor/workspace-trust> et le guide des extensions <https://code.visualstudio.com/api/extension-guides/workspace-trust>.
 - VS Code, les _webviews_ (iframes d'une autre origine, service workers) : <https://blog.mattbierner.com/vscode-webview-web-learnings/>.
@@ -741,4 +886,5 @@ Les docs elles-mêmes (§1.1, §1.5, §4.7, §4.8, §4.10, le tableau des versio
 - Tauri, les capabilities : <https://v2.tauri.app/security/capabilities/> ; les iframes et l'IPC : CVE-2024-35222.
 - MCP Apps (SEP-1865), des vues en iframe isolée : <https://modelcontextprotocol.io/extensions/apps/overview>, <https://blog.modelcontextprotocol.io/posts/2025-11-21-mcp-apps/>.
 - Extism, les limites de mémoire, de temps et les hôtes permis : <https://extism.org/docs/concepts/runtime-apis>.
+- ESC-319 (§5) : Javy <https://github.com/bytecodealliance/javy> (v9.1.0, ses `docs/docs-using-*.md`), `javy-plugin-api` 7.1.0 <https://crates.io/crates/javy-plugin-api> ; Extism <https://github.com/extism/extism> (1.41.0) et son PDK JS <https://github.com/extism/js-pdk> (1.7.0) ; ComponentizeJS <https://github.com/bytecodealliance/ComponentizeJS> (0.23.0) et StarlingMonkey <https://github.com/bytecodealliance/StarlingMonkey> (v0.4.0) ; wasmtime 50.0.1 <https://github.com/bytecodealliance/wasmtime> ; binaryen version_133 <https://github.com/WebAssembly/binaryen>. Le prototype et ses mesures : `prototypes/wasm-plugins/`.
 - Escouade : `docs/ENGINES.md` (les traits, le registre, le banc, « Ajouter un moteur »), `docs/PROTOCOL.md`, `docs/SPEC.md`.
