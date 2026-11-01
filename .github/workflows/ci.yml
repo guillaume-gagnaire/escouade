@@ -268,7 +268,8 @@ jobs:
           retention-days: 1
           compression-level: 0
 
-      # The app and its hook (looked for beside it): what the end-to-end tests drive.
+      # The app, its hook and the program of the plugins it gives (each looked for beside it): what the end-to-end tests
+      # drive. Without escouade-plugins, a plugin of the first hand (GitHub, isola, the voice…) has no process to start.
       - name: Upload the app
         uses: actions/upload-artifact@v7
         with:
@@ -276,6 +277,7 @@ jobs:
           path: |
             src-tauri/target/debug/escouade.exe
             src-tauri/target/debug/escouade-hook.exe
+            src-tauri/target/debug/escouade-plugins.exe
           retention-days: 1
 
   windows-rust:
