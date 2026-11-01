@@ -1,9 +1,9 @@
 ---
-number: null
+number: 29
 id: "les-programmes-js-ts-des-plugins-tournen"
 title: "Les programmes JS/TS des plugins tournent en WASM sans Node : le store les compile (Javy + escouade-js), l'app les fait tourner par wasmtime"
 date: "2026-11-01"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-319"
 pages: ["plugins/programmes-js-ts-en-wasm"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/programmes-js-ts-en-wasm","added":24,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-01T09:50:27+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
