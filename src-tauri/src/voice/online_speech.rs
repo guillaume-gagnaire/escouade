@@ -481,7 +481,8 @@ impl Blocking {
         cancel: &AtomicBool,
         on: &mut dyn FnMut(Audio),
     ) -> Result<Option<Duration>, OnlineError> {
-        self.rt.block_on(speak(spec, choice, sentence, cancel, on))
+        self.rt
+            .block_on(super::service::of(spec.provider).speak(spec, choice, sentence, cancel, on))
     }
 }
 
