@@ -1,9 +1,9 @@
 ---
-number: null
+number: 46
 id: "la-revue-locale-recompile-un-plugin-run"
 title: "La revue locale recompile un plugin run.js et le joue dans l'hôte WASM, hors ligne"
 date: "2026-11-02"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-324"
 pages: ["store/revue-et-signature","plugins/programmes-js-ts-en-wasm"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"store/revue-et-signature","added":8,"removed":1},{"page":"plugins/programmes-js-ts-en-wasm","added":4,"removed":4}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-02T00:50:19+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

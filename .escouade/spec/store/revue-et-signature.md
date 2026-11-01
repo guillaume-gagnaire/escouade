@@ -3,7 +3,7 @@ title: "La revue « Vérifié par Escouade » : la file, la signature, la révoc
 subject: "store"
 sources: ["docs/STORE.md","design/store/index.html","design/app-redesign/UX-NOTES.md","store/server/utils/review.ts","store/server/utils/discord.ts","store/scripts/plugin-review/","docs/PLUGINS.md §5.6","Consignes du chef au lancement d'ESC-324 (2026-11-01)"]
 tickets: ["ESC-235","ESC-295","ESC-302","ESC-324"]
-decisions: ["la-revue-locale-recompile-un-plugin-run"]
+decisions: [46]
 compared: "2026-10-30T03:23:39+01:00"
 ---
 
