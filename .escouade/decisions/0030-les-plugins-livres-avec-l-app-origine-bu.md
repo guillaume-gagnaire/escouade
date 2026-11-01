@@ -1,9 +1,9 @@
 ---
-number: null
+number: 30
 id: "les-plugins-livres-avec-l-app-origine-bu"
 title: "Les plugins livrés avec l'app : origine builtin, registre embarqué, l'identifiant de l'app l'emporte"
 date: "2026-10-31"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-210"
 pages: ["plugins/livres-avec-escouade"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/livres-avec-escouade","added":15,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-01T10:45:22+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
