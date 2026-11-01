@@ -16,7 +16,7 @@ let nextAsset = 1;
 export function pushTag(fullName, tag, { extra = {}, manifest = {} } = {}) {
   const repo = code.get(fullName);
   const name = fullName.split('/')[1];
-  if (name.endsWith('-mono')) return pushMono(fullName, tag);
+  if (name.endsWith('-mono') || name.endsWith('-app')) return pushMono(fullName, tag);
   const version = tag.replace(/^v/, '');
   const sha = sha256(`${fullName}@${tag}@${Date.now()}@${Math.random()}`).slice(0, 40);
   const trap = name.endsWith('-trap');
@@ -51,11 +51,13 @@ export function pushTag(fullName, tag, { extra = {}, manifest = {} } = {}) {
  */
 function pushMono(fullName, tag) {
   const repo = code.get(fullName);
-  repo.versions ??= { ntfy: '0.3.0', slack: '0.2.0' };
-  const m = /^(?:plugins\/(ntfy|slack)\/v|(ntfy|slack)@|(ntfy|slack)-v)(.+)$/.exec(tag);
-  if (m) repo.versions[m[1] ?? m[2] ?? m[3]] = m[4];
+  const app = fullName.endsWith('-app');
+  repo.versions ??= app ? { ntfy: '1.0.0', slack: '1.0.0' } : { ntfy: '0.3.0', slack: '0.2.0' };
+  const m = /^(?:plugins\/(ntfy-moved|ntfy|slack)\/v|(ntfy|slack)@|(ntfy|slack)-v)(.+)$/.exec(tag);
+  const which = m && (m[1] ?? m[2] ?? m[3]);
+  if (m) repo.versions[which === 'ntfy-moved' ? 'moved' : which] = m[4];
   const sha = sha256(`${fullName}@${tag}@${Date.now()}@${Math.random()}`).slice(0, 40);
-  const files = monorepoFiles(fullName, repo.versions);
+  const files = monorepoFiles(fullName, repo.versions, { firstParty: app });
   repo.commits[sha] = {
     gz: tarball(files, { commit: sha, top: `${fullName.replace('/', '-')}-${sha.slice(0, 7)}` }),
     files,
@@ -69,6 +71,14 @@ function pushMono(fullName, tag) {
 export function seedRepo(r) {
   if (code.has(r.full_name)) return;
   code.set(r.full_name, { id: r.id, private: r.private, tags: {}, commits: {}, releases: {} });
+  if (r.full_name.endsWith('-app')) {
+    // The app's repository (ESC-317, as STORE_FIRST_PARTY_REPO names it in the e2e): its first-party plugins in
+    // plugins/<name>/, their tags plugins/<name>/v1.0.0; v2.1.0 is the app's own release, no plugin's.
+    const sha = pushMono(r.full_name, 'plugins/ntfy/v1.0.0');
+    code.get(r.full_name).tags['plugins/slack/v1.0.0'] = { sha, annotated: false };
+    code.get(r.full_name).tags['v2.1.0'] = { sha, annotated: false };
+    return;
+  }
   if (r.full_name.endsWith('-mono')) {
     const sha = pushMono(r.full_name, 'plugins/ntfy/v0.3.0');
     code.get(r.full_name).tags['slack@0.2.0'] = { sha, annotated: false };

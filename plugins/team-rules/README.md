@@ -20,8 +20,8 @@ or copy this folder under an id of your own and write your team's `rules.json`:
 ```
 
 Each command of a line is judged: one denied denies the line, with its message; every one allowed allows it. A line
-with a substitution (`$(…)`, backquotes, `$VAR`), a redirection or an escape is never allowed: it goes to you, as does
-anything the rules do not name.
+with a substitution (`$(…)`, backquotes, `$VAR`), a redirection, an escape or an `--output` (with it, `git diff` and
+`git log` write a file) is never allowed: it goes to you, as does anything the rules do not name.
 
 ## What it may do
 

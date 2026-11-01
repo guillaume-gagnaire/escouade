@@ -52,6 +52,7 @@ export const DOC_GROUPS = [
       'plugins/sdk',
       'plugins/testing',
       'plugins/publishing',
+      'plugins/store-mcp',
       'plugins/security',
       'plugins/examples',
     ],

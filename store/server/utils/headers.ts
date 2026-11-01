@@ -17,7 +17,13 @@ export const STATIC_HEADERS: Record<string, string> = {
 };
 
 /** A page's policy: its own files, and the inline scripts and styles of this answer only (its nonce). */
-export function pagePolicy(nonce: string): string {
+export function pagePolicy(nonce: string, formAction?: unknown): string {
+  // The consent page of the MCP server (ESC-317) sends the browser back to the client's address after its form: that
+  // origin alone is added, and only when it is an origin (https, or http on the loopback, as registered).
+  const extra =
+    typeof formAction === 'string' && /^(https:\/\/[a-z0-9.-]+|http:\/\/(localhost|127\.0\.0\.1|\[::1\]))(:\d{1,5})?$/i.test(formAction)
+      ? ` ${formAction}`
+      : '';
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}'`,
@@ -28,7 +34,7 @@ export function pagePolicy(nonce: string): string {
     "object-src 'none'",
     "base-uri 'self'",
     // The sign-in leaves for GitHub by a link, not a form; GitHub is allowed all the same, should a form lead there.
-    "form-action 'self' https://github.com",
+    `form-action 'self' https://github.com${extra}`,
     "frame-ancestors 'none'",
   ].join('; ');
 }

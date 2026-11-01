@@ -179,19 +179,22 @@ export function attestation(digest, { repo, commit, workflow = '.github/workflow
  * `linked` is a symbolic link to `plugins/ntfy`, `escape` one that leaves the repository. `versions` gives each
  * plugin's version at this commit.
  */
-export function monorepoFiles(repo, versions = { ntfy: '0.3.0', slack: '0.2.0' }) {
+export function monorepoFiles(repo, versions = { ntfy: '0.3.0', slack: '0.2.0' }, { firstParty = false } = {}) {
   const owner = repo
     .split('/')[0]
     .toLowerCase()
     .replace(/[^a-z0-9-]/g, '-');
   const ntfy = manifest(repo, {
-    id: `io.github.${owner}.mono-ntfy`,
+    // The app's own repository (ESC-317) holds first-party plugins: dev.escouade.*, which it alone may submit.
+    id: firstParty ? 'dev.escouade.mcp-ntfy' : `io.github.${owner}.mono-ntfy`,
+    // Names of their own: the e2e base keeps them from run to run, and a name too close holds another test's plugin.
+    ...(firstParty ? { name: { en: 'Chief beacon', fr: 'Balise du chef' } } : {}),
     version: versions.ntfy,
     repository: `https://github.com/${repo}/tree/main/plugins/ntfy`,
   });
   const slack = manifest(repo, {
-    id: `io.github.${owner}.mono-slack`,
-    name: { en: 'Slack bridge', fr: 'Pont Slack' },
+    id: firstParty ? 'dev.escouade.mcp-slack' : `io.github.${owner}.mono-slack`,
+    name: firstParty ? { en: 'Squad relay', fr: 'Relais d’escouade' } : { en: 'Slack bridge', fr: 'Pont Slack' },
     version: versions.slack,
     icon: './icon.png',
     permissions: { events: ['agent.waiting'], network: ['hooks.slack.com'] },
@@ -210,6 +213,23 @@ export function monorepoFiles(repo, versions = { ntfy: '0.3.0', slack: '0.2.0' }
     'docs/guide.md': '# Guide\n',
     linked: { symlink: 'plugins/ntfy' },
     escape: { symlink: '../../etc' },
+    // The app's repository: the same first-party plugin in another folder, where its author moves it (ESC-317).
+    ...(firstParty
+      ? {
+          'plugins/ntfy-moved/escouade-plugin.json': JSON.stringify(
+            manifest(repo, {
+              id: 'dev.escouade.mcp-ntfy',
+              name: { en: 'Chief beacon', fr: 'Balise du chef' },
+              version: versions.moved ?? '1.0.0',
+              repository: `https://github.com/${repo}/tree/main/plugins/ntfy-moved`,
+            }),
+            null,
+            2,
+          ),
+          'plugins/ntfy-moved/README.md': '# Ntfy\n\nMoved to its new folder.\n',
+          'plugins/ntfy-moved/store/1.png': png(320, 200),
+        }
+      : {}),
   };
 }
 

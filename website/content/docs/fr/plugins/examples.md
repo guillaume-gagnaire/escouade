@@ -291,7 +291,7 @@ Ses tests jouent ses gestionnaires contre le faux Escouade du SDK et un faux Sla
 
 ## Règles de l’équipe
 
-Un programme en TypeScript qui décide des autorisations avant qu’elles n’arrivent jusqu’à toi (voir [Les règles d’autorisation](plugins/permission-rules)). Ses règles sont dans `rules.json`, un fichier du dépôt du plugin que l’équipe relit comme son code. Une ligne qui contient une commande refusée est refusée, même après un `&&` ou un `&` ; une ligne faite seulement de commandes permises est autorisée, sauf si elle contient une substitution (`$(…)`, accents graves, `$VAR`), une redirection (`>`, `<`) ou un échappement, qui feraient passer autre chose derrière un début permis ; le reste va à l’utilisateur. Une règle compare le début d’une commande : `deny` est un filet (`sudo rm -rf` lui échappe et va à l’utilisateur), et `allow` permet tous les arguments.
+Un programme en TypeScript qui décide des autorisations avant qu’elles n’arrivent jusqu’à toi (voir [Les règles d’autorisation](plugins/permission-rules)). Ses règles sont dans `rules.json`, un fichier du dépôt du plugin que l’équipe relit comme son code. Une ligne qui contient une commande refusée est refusée, même après un `&&` ou un `&` ; une ligne faite seulement de commandes permises est autorisée, sauf si elle contient une substitution (`$(…)`, accents graves, `$VAR`), une redirection (`>`, `<`), un échappement, qui feraient passer autre chose derrière un début permis, ou un `--output` (avec lui, `git diff` et `git log` écrivent un fichier) ; le reste va à l’utilisateur. Une règle compare le début d’une commande : `deny` est un filet (`sudo rm -rf` lui échappe et va à l’utilisateur), et `allow` permet tous les arguments.
 
 `plugins/team-rules/escouade-plugin.json`
 
@@ -300,7 +300,7 @@ Un programme en TypeScript qui décide des autorisations avant qu’elles n’ar
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.team-rules",
   "name": { "fr": "Règles de l'équipe", "en": "Team rules" },
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": {
     "fr": "Autorise ou refuse les commandes des agents selon les règles de l'équipe, écrites dans rules.json.",
     "en": "Allows or denies the agents' commands by the team's rules, written in rules.json."
@@ -363,6 +363,12 @@ export function commandsOf(line: string): string[] {
  * `git diff > ~/.bashrc` starts like `git diff`. */
 const HIDDEN = /[`$<>\\]/;
 
+/** An option that makes a command write a file of its own choosing: `git diff --output=~/.bashrc`, `git log --output …`
+ * (git takes no abbreviation of it). A redirection by another name: a line that holds it, its quotes taken out as the
+ * shell takes them out, is never allowed. */
+const WRITES = /(^|\s)--output(=|\s|$)/;
+const writes = (line: string) => WRITES.test(line.replace(/["']/g, ''));
+
 /** Whether `command` starts with `rule`, word for word (`npm testing` is not `npm test`). */
 const startsWith = (command: string, rule: string) => command === rule || command.startsWith(rule + ' ');
 
@@ -374,7 +380,8 @@ export function decide(rules: Rules, line: string): Decision {
       return { decision: 'deny', message: message ?? `The team's rules forbid \`${command}\`.` };
     }
   }
-  if (!HIDDEN.test(line) && commands.length > 0 && commands.every((c) => rules.allow.some((rule) => startsWith(c, rule)))) {
+  const plain = !HIDDEN.test(line) && !writes(line);
+  if (plain && commands.length > 0 && commands.every((c) => rules.allow.some((rule) => startsWith(c, rule)))) {
     return { decision: 'allow' };
   }
   return { decision: 'ask' };

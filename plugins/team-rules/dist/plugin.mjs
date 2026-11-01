@@ -247,6 +247,8 @@ function commandsOf(line) {
   return line.split(/&&|\|\||[;|&\n]/).map((c) => c.trim().replace(/\s+/g, " ")).filter(Boolean);
 }
 var HIDDEN = /[`$<>\\]/;
+var WRITES = /(^|\s)--output(=|\s|$)/;
+var writes = (line) => WRITES.test(line.replace(/["']/g, ""));
 var startsWith = (command, rule) => command === rule || command.startsWith(rule + " ");
 function decide(rules, line) {
   const commands = commandsOf(line);
@@ -256,7 +258,8 @@ function decide(rules, line) {
       return { decision: "deny", message: message ?? `The team's rules forbid \`${command}\`.` };
     }
   }
-  if (!HIDDEN.test(line) && commands.length > 0 && commands.every((c) => rules.allow.some((rule) => startsWith(c, rule)))) {
+  const plain = !HIDDEN.test(line) && !writes(line);
+  if (plain && commands.length > 0 && commands.every((c) => rules.allow.some((rule) => startsWith(c, rule)))) {
     return { decision: "allow" };
   }
   return { decision: "ask" };

@@ -22,6 +22,10 @@ export const RULES = {
   installs: { name: 'installs', max: 60, windowMs: 3_600_000 },
   /** Submissions, retries and publications from one address (on top of 20 submissions an hour by account). */
   submissions: { name: 'submissions', max: 60, windowMs: 3_600_000 },
+  /** The MCP clients registered from one address (ESC-317): one per agent set up, a few more for a retry. */
+  registrations: { name: 'registrations', max: 30, windowMs: 3_600_000 },
+  /** The MCP server's calls and its tokens: an agent at work calls often, never this much. */
+  mcp: { name: 'mcp', max: 300, windowMs: 60_000 },
 } as const satisfies Record<string, Rule>;
 
 /** Past this many keys, the windows gone by are swept; if that is not enough, everything is forgotten (fail open). */
@@ -83,6 +87,9 @@ export function ruleFor(method: string, path: string): Rule | null {
     if (/\/(archive\.tar\.gz|binaries\/[^/]+)$/.test(path)) return RULES.downloads;
     return RULES.api;
   }
+  if (method === 'POST' && path === '/oauth/register') return RULES.registrations;
+  if (method !== 'OPTIONS' && (path === '/mcp' || path === '/oauth/token' || path === '/oauth/revoke' || path === '/oauth/authorize'))
+    return RULES.mcp;
   if (method === 'POST' && (path === '/api/submissions' || /^\/api\/submissions\/[^/]+\/(retry|publish)$/.test(path)))
     return RULES.submissions;
   return null;

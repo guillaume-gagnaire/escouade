@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1 (2026-11-01)
+
+- A line with `--output` is never allowed: with it, `git diff` and `git log` write a file of the agent's choosing,
+  a redirection by another name. It goes to the user, quoted or not.
+
 ## 1.1.0 (2026-10-31)
 
 - A plugin of Escouade's own hand: its id is `dev.escouade.team-rules` (it was `dev.exemple.team-rules`), and it lives in `plugins/team-rules/` of

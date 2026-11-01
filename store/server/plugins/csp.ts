@@ -10,6 +10,6 @@ export default defineNitroPlugin((nitro) => {
   nitro.hooks.hook('render:html', (html, { event }) => {
     const nonce = randomBytes(16).toString('base64');
     nonceChunks(html, nonce);
-    setResponseHeader(event, 'content-security-policy', pagePolicy(nonce));
+    setResponseHeader(event, 'content-security-policy', pagePolicy(nonce, event.context.formAction));
   });
 });

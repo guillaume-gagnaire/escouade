@@ -9,6 +9,7 @@ import {
   DEFAULT_IMAGE,
   findCli,
   findEngine,
+  firstPartyBench,
   playBench,
   refusals,
   runArgs,
@@ -245,6 +246,17 @@ describe('the bench in a container', () => {
     expect(a).toContain('/opt/escouade-plugin:/usr/local/bin/escouade-plugin:ro');
     expect(a.slice(a.indexOf('img'))).toEqual(['img', 'escouade-plugin', 'test', '/plugin', '--json', '--lang', 'fr']);
     expect(a.join(' ')).not.toMatch(/--privileged|--network=host|:rw\b(?!,size)/);
+  });
+
+  it('plays a plugin of Escouade’s own with --first-party, from the app’s repository alone (ESC-314)', () => {
+    const own = runArgs('/r/bench', '/opt/escouade-plugin', 'img', 'escouade-review-1', true);
+    expect(own.slice(own.indexOf('img'))).toEqual(['img', 'escouade-plugin', 'test', '/plugin', '--json', '--lang', 'fr', '--first-party']);
+    const app = 'https://github.com/guillaume-gagnaire/escouade';
+    expect(firstPartyBench('dev.escouade.slack', app, {})).toBe(true);
+    expect(firstPartyBench('dev.escouade.slack', 'https://github.com/Guillaume-Gagnaire/Escouade.git', {})).toBe(true);
+    expect(firstPartyBench('dev.escouade.slack', 'https://github.com/lea-martin/escouade', {})).toBe(false);
+    expect(firstPartyBench('dev.exemple.slack', app, {})).toBe(false);
+    expect(firstPartyBench('dev.escouade.slack', 'https://github.com/me/fork', { STORE_FIRST_PARTY_REPO: 'me/fork' })).toBe(true);
   });
 
   it('is not played without an engine or a Linux escouade-plugin, and says why', async () => {

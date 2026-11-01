@@ -29,6 +29,12 @@ export function commandsOf(line: string): string[] {
  * `git diff > ~/.bashrc` starts like `git diff`. */
 const HIDDEN = /[`$<>\\]/;
 
+/** An option that makes a command write a file of its own choosing: `git diff --output=~/.bashrc`, `git log --output …`
+ * (git takes no abbreviation of it). A redirection by another name: a line that holds it, its quotes taken out as the
+ * shell takes them out, is never allowed. */
+const WRITES = /(^|\s)--output(=|\s|$)/;
+const writes = (line: string) => WRITES.test(line.replace(/["']/g, ''));
+
 /** Whether `command` starts with `rule`, word for word (`npm testing` is not `npm test`). */
 const startsWith = (command: string, rule: string) => command === rule || command.startsWith(rule + ' ');
 
@@ -40,7 +46,8 @@ export function decide(rules: Rules, line: string): Decision {
       return { decision: 'deny', message: message ?? `The team's rules forbid \`${command}\`.` };
     }
   }
-  if (!HIDDEN.test(line) && commands.length > 0 && commands.every((c) => rules.allow.some((rule) => startsWith(c, rule)))) {
+  const plain = !HIDDEN.test(line) && !writes(line);
+  if (plain && commands.length > 0 && commands.every((c) => rules.allow.some((rule) => startsWith(c, rule)))) {
     return { decision: 'allow' };
   }
   return { decision: 'ask' };
