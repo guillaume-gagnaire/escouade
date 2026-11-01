@@ -323,6 +323,7 @@ async fn isola_is_the_launch_environment_of_its_worktrees_unless_it_is_off_or_mi
 {
     use crate::launchenv::Launch;
     // The test double is a script of node's.
+    #[cfg(windows)]
     crate::paths::trim_test_path();
     let id = "dev.escouade.isola";
     let data = DataDir::new(base("isola").join("data"));
