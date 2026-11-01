@@ -76,11 +76,11 @@ const failed = (results: CheckResult[]): CheckKey[] => results.filter((r) => r.s
 const manifestOf = (name: string) => JSON.parse(readFileSync(join(ROOT, 'plugins', name, 'escouade-plugin.json'), 'utf8'));
 
 describe('Escouade’s own plugins submitted to the store from their folder (ESC-314)', () => {
-  it('are dev.escouade.<folder> 1.1.0, their repository the folder of the app’s, each with its README, LICENSE and tests', () => {
+  it('are dev.escouade.<folder> at a version of their own, their repository the folder of the app’s, each with its README, LICENSE and tests', () => {
     for (const name of PLUGINS) {
       const m = manifestOf(name);
       expect(m.id).toBe(`dev.escouade.${name}`);
-      expect(m.version).toBe('1.1.0');
+      expect(m.version).toMatch(/^\d+\.\d+\.\d+$/);
       expect(m.repository).toBe(`https://github.com/${APP}/tree/main/plugins/${name}`);
       for (const f of ['README.md', 'LICENSE', 'CHANGELOG.md', 'escouade-plugin.json'])
         expect(repository[`plugins/${name}/${f}`], f).toBeTruthy();
@@ -96,7 +96,7 @@ describe('Escouade’s own plugins submitted to the store from their folder (ESC
 
   it.each(PLUGINS)('%s from its folder of the app’s repository passes the ten checks, and its signed version.json checks', (name) => {
     const path = `plugins/${name}`;
-    const tag = `${path}/v1.1.0`;
+    const tag = `${path}/v${manifestOf(name).version}`;
     const snap = snapshot(APP, path, tag, { firstParty: true });
     const results = runChecks(snap);
     expect(results.filter((r) => r.status !== 'pass')).toEqual([]);
@@ -131,7 +131,7 @@ describe('Escouade’s own plugins submitted to the store from their folder (ESC
 
   it.each(PLUGINS)('%s from another repository (a fork, a copy): its id is refused as today', (name) => {
     const path = `plugins/${name}`;
-    const results = runChecks(snapshot('lea-martin/escouade', path, `${path}/v1.1.0`, { firstParty: false }));
+    const results = runChecks(snapshot('lea-martin/escouade', path, `${path}/v${manifestOf(name).version}`, { firstParty: false }));
     const id = results.find((r) => r.key === 'id')!;
     expect(id.status).toBe('fail');
     expect(id.detail.en).toBe(`dev.escouade.${name} is reserved`);
