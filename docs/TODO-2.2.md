@@ -414,7 +414,7 @@ L'adaptateur, ses comptes et sa vue terminal sont sortis en 2.1.0 (ESC-273 à 27
 
 ## Demandés pendant le redesign (2026-10-24)
 
-- [ ] **Wispr Flow** pour la transcription vocale, comme service en ligne et comme app de bureau (ESC-164).
+- [ ] **Wispr Flow** pour la transcription vocale, comme service en ligne et comme app de bureau (ESC-164). **Pas pour l'instant**, dit l'utilisateur le 2026-11-01 : à ne lancer que s'il le redemande.
 
 ## Conçus le 2026-10-28, à découper en tickets
 
