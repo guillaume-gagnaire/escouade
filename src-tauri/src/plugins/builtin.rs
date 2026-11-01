@@ -22,9 +22,9 @@ pub struct Entry {
 /// line here; the test of the registry checks that each folder has its manifest and its README, and that each is in
 /// this list.
 ///
-/// The demonstration plugin is in the builds of development and the tests only: a release's registry is empty until
-/// INT-7 and INT-8 give the real ones, so that nobody sees (nor runs) a plugin that does nothing. `escouade-plugins`
-/// itself is packaged and signed all the same.
+/// The demonstration plugin is in the builds of development and the tests only, so that nobody sees (nor runs) a
+/// plugin that does nothing; the five voice services (INT-13) are in every build. `escouade-plugins` itself is
+/// packaged and signed all the same.
 #[cfg_attr(not(any(debug_assertions, test)), allow(dead_code))]
 pub const REGISTRY: &[Entry] = &[
     #[cfg(any(debug_assertions, test))]
