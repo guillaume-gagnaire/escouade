@@ -1,9 +1,9 @@
 ---
-number: null
+number: 36
 id: "le-sdk-parle-les-deux-transports-p-file"
 title: "Le SDK parle les deux transports ; p.file() pour les fichiers du plugin"
 date: "2026-11-01"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-321"
 pages: ["plugins/programmes-js-ts-en-wasm"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/programmes-js-ts-en-wasm","added":12,"removed":5}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-01T16:53:10+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
