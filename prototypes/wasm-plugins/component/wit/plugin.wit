@@ -1,0 +1,10 @@
+package escouade:plugin;
+
+interface host {
+  send: func(line: string);
+}
+
+world plugin {
+  import host;
+  export turn: func(input: string);
+}
