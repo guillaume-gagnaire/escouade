@@ -1,9 +1,9 @@
 ---
-number: null
+number: 47
 id: "azure-devops-et-azure-boards-sortent-du"
 title: "Azure DevOps et Azure Boards sortent du cœur et deviennent un plugin de première main"
 date: "2026-11-01"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-280"
 pages: ["plugins/livres-avec-escouade"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/livres-avec-escouade","added":2,"removed":1}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-02T00:57:58+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
