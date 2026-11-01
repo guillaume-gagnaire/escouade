@@ -10,6 +10,10 @@ export default {
   openHint: 'Pousse la branche {branch} et ouvre sa {word}, titre et description proposés.',
   /** The item of the menus once one is open. */
   see: 'Voir la {word} #{number}',
+  /** On the card when the plugin that serves its code host does not answer (switched off, stopped): its pull requests
+   * read last stay. The tooltip says why. */
+  down: 'Hébergeur arrêté : {word} plus suivies',
+  downHint: '{why}. Les {word} lues en dernier restent ; Réglages › Plugins le rallume.',
 
   modal: {
     title: 'Ouvrir une {word} sur {host}',

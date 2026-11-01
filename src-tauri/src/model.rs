@@ -1750,6 +1750,10 @@ pub struct AgentMeta {
     pub prs: Vec<crate::forge::PullRequest>,
     /// The code host's word for them: « MR » on GitLab, « PR » elsewhere. None until read.
     pub pr_word: Option<String>,
+    /// The plugin that serves its code host does not answer (switched off, stopped, crashed): what
+    /// its card says, its pull requests read last kept. Gone at the next read that works.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pr_down: Option<String>,
     /// Its worktree was switched to another branch by the user (the status bar's picker): the
     /// agent is told with the next message it gets, then this goes.
     #[serde(skip_serializing_if = "Option::is_none")]

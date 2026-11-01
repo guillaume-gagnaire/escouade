@@ -560,7 +560,8 @@ impl Plugins {
         Self::load_with(data, app_version, app_dir, false)
     }
 
-    /// The plugins of the app's core, the ones the app gives with them (the core uses them: a launch environment). In
+    /// The plugins of the app's core, the ones the app gives with them (the core uses them: a launch environment, GitHub's
+    /// accounts). In
     /// the tests their program is the one the build made beside the tests (`deps/`'s parent).
     pub fn load_for_core(data: DataDir, app_version: &str) -> Arc<Self> {
         let mut app_dir = std::env::current_exe()

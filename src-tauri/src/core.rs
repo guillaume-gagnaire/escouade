@@ -2014,6 +2014,8 @@ impl<R: Runtime> Core<R> {
             Arc::downgrade(&(core.clone() as Arc<dyn crate::plugins::events::Place>));
         core.plugin_events.place_with(place.clone());
         core.plugin_runtime.place_with(place);
+        // What the plugins the app gives are told when they start: the language, the network.
+        core.plugin_runtime.set_builtin_env(core.builtin_env());
         // The pinned Javy of the run.js plugins downloads through Réglages › Réseau (ESC-320); their modules are
         // made ready in the cache, precompiled again for this version of the app when it changed.
         {
@@ -2389,7 +2391,30 @@ impl<R: Runtime> Core<R> {
         self.schedule();
         // « Claude et les agents peuvent piloter Escouade » may have changed.
         self.sync_mcp();
+        // The plugins the app gives start again with the language and the network of now.
+        let env = self.builtin_env();
+        if env != self.plugin_runtime.builtin_env() {
+            self.plugin_runtime.set_builtin_env(env);
+            for e in crate::plugins::builtin::REGISTRY {
+                self.plugin_runtime.forget(e.id);
+            }
+        }
         Ok(())
+    }
+
+    /// What a plugin the app gives is told when it starts (`escouade_plugin_kit`): the language the backend writes in,
+    /// and the network of Réglages › Réseau (its proxy, the hosts it skips, the certificates not checked).
+    pub(crate) fn builtin_env(&self) -> Vec<(String, String)> {
+        let s = self.settings.read();
+        vec![
+            ("ESCOUADE_LANG".into(), i18n::kit(i18n::ui()).code().into()),
+            ("ESCOUADE_PROXY".into(), s.proxy_url.trim().to_string()),
+            ("ESCOUADE_NO_PROXY".into(), s.no_proxy.clone()),
+            (
+                "ESCOUADE_INSECURE_TLS".into(),
+                if s.insecure_tls { "1" } else { "0" }.into(),
+            ),
+        ]
     }
 
     // ---------- lookups ----------

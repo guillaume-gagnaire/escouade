@@ -16,7 +16,6 @@ pub mod bitbucket;
 pub mod connect;
 pub mod gitea;
 pub mod github;
-pub mod github_api;
 #[cfg(test)]
 mod github_tests;
 pub mod gitlab;
@@ -26,34 +25,22 @@ mod tests;
 
 use anyhow::{anyhow, Result};
 use reqwest::header::HeaderMap;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::Value;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 
 pub use remote::RepoRef;
 
 /// What a client's calls give back.
-pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+pub use escouade_plugin_kit::forge::BoxFuture;
 
-/// How a pull request merges.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum MergeStrategy {
-    Merge,
-    Squash,
-    Rebase,
-    /// Rebased onto its base, then merged with a merge commit (Azure DevOps' « semi-linear »).
-    SemiLinear,
-}
-
-/// The most open pull requests of a project its side panel lists (`Forge::open_pull_requests`).
-pub const OPEN_PRS: usize = 30;
-
-fn is_zero(n: &u64) -> bool {
-    *n == 0
-}
+// The data of the hosts, shared with the plugins that serve them (docs/PLUGINS.md §4.5).
+#[cfg(test)]
+pub use escouade_plugin_protocol::forge::ReviewLine;
+pub use escouade_plugin_protocol::forge::{
+    Check, CheckState, Deployment, Identity, MergeStrategy, PrState, PullRequest, PullRequestDraft,
+    RateLimit, Review, ReviewComment, ReviewDraft, ReviewState, OPEN_PRS,
+};
 
 /// What a host can do, declared by its provider: the window and the PR's cycle offer only these.
 #[derive(Debug, Clone, PartialEq, Serialize, Default)]
@@ -82,367 +69,9 @@ pub struct Capabilities {
     pub merge_strategies: Vec<MergeStrategy>,
 }
 
-/// A pull request (a merge request on GitLab) to open.
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
-pub struct PullRequestDraft {
-    pub title: String,
-    pub body: String,
-    /// The branch that brings the changes.
-    pub head: String,
-    /// The branch it merges into.
-    pub base: String,
-    pub draft: bool,
-    /// Who is asked for a review (logins).
-    pub reviewers: Vec<String>,
-    pub labels: Vec<String>,
-    /// The issue the pull request closes once merged: « Closes #n » ends its description.
-    pub closes: Option<u64>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub enum PrState {
-    #[default]
-    Open,
-    Closed,
-    Merged,
-}
-
-/// A pull request as its host tells it (kept with an agent's data: `AgentMeta::prs`).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase", default)]
-pub struct PullRequest {
-    pub number: u64,
-    pub url: String,
-    pub title: String,
-    pub state: PrState,
-    pub draft: bool,
-    pub head: String,
-    pub base: String,
-    /// Conflicts with its base: `Some(false)`; not known yet: none.
-    pub mergeable: Option<bool>,
-    /// Reviewers whose last say is an approval.
-    pub approvals: u32,
-    /// A reviewer's last say asks for changes.
-    pub changes_requested: bool,
-    /// Threads of comments on lines not resolved yet.
-    pub open_threads: u32,
-    /// The host merges it by itself once the checks pass.
-    pub auto_merge: bool,
-    /// Who opened it (a login, a name on Azure DevOps); empty when the host does not say.
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub author: String,
-    /// When it was opened (seconds since 1970); 0 when the host does not say.
-    #[serde(skip_serializing_if = "is_zero")]
-    pub created: u64,
-    /// The checks of its last commit, in one word; none when it has none.
-    pub checks: Option<CheckState>,
-    /// Its branch is a fork's: another repository's branch that only bears the same name.
-    pub fork: bool,
-    /// Of an agent of several repositories (ESC-169): the repository it was opened in.
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub repo: String,
-    /// The repository on the host its branch is in (`ada/demo`), when the host tells it: a
-    /// fork's, for one opened from a fork.
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub head_repo: String,
-    /// The repository on the host it is in (`acme/demo`), when it was read elsewhere than on the
-    /// remote of the project's target: on the remote the agent's branch tracks, or on the
-    /// repository that one was forked from. Empty: the target's.
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub host_repo: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub enum CheckState {
-    #[default]
-    Pending,
-    Success,
-    Failure,
-    Skipped,
-}
-
-/// A check or a status of a pull request's last commit (a CI job).
-#[derive(Debug, Clone, PartialEq, Serialize, Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Check {
-    pub name: String,
-    pub state: CheckState,
-    pub url: Option<String>,
-    /// What `Forge::job_log` asks for, when the host keeps its log.
-    pub job: Option<String>,
-    /// When it started (seconds since 1970), when the host says it: a pending one that started
-    /// is running, the others wait.
-    pub started: Option<u64>,
-    /// When it ended, when the host says it.
-    pub finished: Option<u64>,
-    /// Stopped before its end: a failure to the rest of Escouade, cancelled to the window.
-    pub cancelled: bool,
-}
-
-/// An instant of a host's answer (RFC 3339) in seconds since 1970; none when absent or unread.
-pub fn instant(v: &Value) -> Option<u64> {
-    let t = chrono::DateTime::parse_from_rfc3339(v.as_str()?)
-        .ok()?
-        .timestamp();
-    // Azure's « 0001-01-01T00:00:00 » of a build not started yet.
-    u64::try_from(t).ok().filter(|t| *t > 0)
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum ReviewState {
-    Approved,
-    ChangesRequested,
-    Commented,
-}
-
-/// A comment on a line of a review to publish.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ReviewLine {
-    pub path: String,
-    pub line: u32,
-    pub body: String,
-}
-
-/// A review to publish on a pull request, as the user validated it.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ReviewDraft {
-    pub state: ReviewState,
-    pub body: String,
-    pub lines: Vec<ReviewLine>,
-}
-
-/// How much of its calls a host leaves, as its answers say.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RateLimit {
-    pub limit: u32,
-    pub remaining: u32,
-    /// When it starts over (seconds since 1970).
-    pub reset: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Review {
-    pub author: String,
-    pub state: ReviewState,
-    pub body: String,
-}
-
-/// A comment of a pull request, on one of its lines or not.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReviewComment {
-    pub id: String,
-    pub author: String,
-    pub body: String,
-    pub path: Option<String>,
-    pub line: Option<u32>,
-    pub resolved: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Deployment {
-    pub environment: String,
-    pub state: String,
-    pub url: Option<String>,
-}
-
-/// Who an account is on its host, as its token says.
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
-pub struct Identity {
-    /// The login.
-    pub user: String,
-    /// As the window shows it: "@ada".
-    pub label: String,
-    /// The rights the token has, when the host tells them (GitHub's classic tokens, GitLab);
-    /// none when it does not (fine-grained tokens, Bitbucket, Gitea).
-    pub scopes: Option<Vec<String>>,
-}
-
-/// What a host was asked and cannot do (`Capabilities`), or its client does not do yet.
-#[derive(Debug)]
-pub struct Unsupported(pub &'static str);
-
-impl std::fmt::Display for Unsupported {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let what = self.0;
-        f.write_str(&tr!(
-            "Cet hébergeur ne sait pas faire : {what}",
-            "This code host can’t do it: {what}"
-        ))
-    }
-}
-
-impl std::error::Error for Unsupported {}
-
-fn unsupported<'a, T: Send + 'a>(what: &'static str) -> BoxFuture<'a, Result<T>> {
-    Box::pin(async move { Err(Unsupported(what).into()) })
-}
-
-/// A client of one host for one account. Its provider's `Capabilities` say which calls it
-/// answers; the others say `Unsupported`.
-pub trait Forge: Send + Sync {
-    /// Who the token is, and its rights when the host tells them.
-    fn me(&self) -> BoxFuture<'_, Result<Identity>>;
-
-    fn create_pr<'a>(
-        &'a self,
-        _repo: &'a RepoRef,
-        _pr: &'a PullRequestDraft,
-    ) -> BoxFuture<'a, Result<PullRequest>> {
-        unsupported("create_pr")
-    }
-
-    fn pull_request<'a>(
-        &'a self,
-        _repo: &'a RepoRef,
-        _number: u64,
-    ) -> BoxFuture<'a, Result<PullRequest>> {
-        unsupported("pull_request")
-    }
-
-    /// The pull requests (open, merged or closed) whose branch is `branch`, newest first.
-    fn pull_requests_of_branch<'a>(
-        &'a self,
-        _repo: &'a RepoRef,
-        _branch: &'a str,
-    ) -> BoxFuture<'a, Result<Vec<PullRequest>>> {
-        unsupported("pull_requests_of_branch")
-    }
-
-    /// The repository `repo` was forked from; none when it is no fork, or the host does not say.
-    fn parent<'a>(&'a self, _repo: &'a RepoRef) -> BoxFuture<'a, Result<Option<RepoRef>>> {
-        Box::pin(async { Ok(None) })
-    }
-
-    /// The open pull requests of a repository, the most recently updated first (`OPEN_PRS` at
-    /// most).
-    fn open_pull_requests<'a>(
-        &'a self,
-        _repo: &'a RepoRef,
-    ) -> BoxFuture<'a, Result<Vec<PullRequest>>> {
-        unsupported("open_pull_requests")
-    }
-
-    /// Several pull requests of a repository, in as few calls as the host allows.
-    fn pull_requests<'a>(
-        &'a self,
-        _repo: &'a RepoRef,
-        _numbers: &'a [u64],
-    ) -> BoxFuture<'a, Result<Vec<PullRequest>>> {
-        unsupported("pull_requests")
-    }
-
-    fn merge<'a>(
-        &'a self,
-        _repo: &'a RepoRef,
-        _number: u64,
-        _strategy: MergeStrategy,
-    ) -> BoxFuture<'a, Result<()>> {
-        unsupported("merge")
-    }
-
-    /// Merge once the checks pass.
-    fn auto_merge<'a>(
-        &'a self,
-        _repo: &'a RepoRef,
-        _number: u64,
-        _strategy: MergeStrategy,
-    ) -> BoxFuture<'a, Result<()>> {
-        unsupported("auto_merge")
-    }
-
-    fn checks<'a>(&'a self, _repo: &'a RepoRef, _number: u64) -> BoxFuture<'a, Result<Vec<Check>>> {
-        unsupported("checks")
-    }
-
-    fn job_log<'a>(&'a self, _repo: &'a RepoRef, _job: &'a str) -> BoxFuture<'a, Result<String>> {
-        unsupported("job_log")
-    }
-
-    fn reviews<'a>(
-        &'a self,
-        _repo: &'a RepoRef,
-        _number: u64,
-    ) -> BoxFuture<'a, Result<Vec<Review>>> {
-        unsupported("reviews")
-    }
-
-    fn comments<'a>(
-        &'a self,
-        _repo: &'a RepoRef,
-        _number: u64,
-    ) -> BoxFuture<'a, Result<Vec<ReviewComment>>> {
-        unsupported("comments")
-    }
-
-    fn comment<'a>(
-        &'a self,
-        _repo: &'a RepoRef,
-        _number: u64,
-        _body: &'a str,
-    ) -> BoxFuture<'a, Result<()>> {
-        unsupported("comment")
-    }
-
-    /// Run the failed jobs of a pull request's last commit again; how many runs started.
-    fn rerun_failed<'a>(
-        &'a self,
-        _repo: &'a RepoRef,
-        _number: u64,
-    ) -> BoxFuture<'a, Result<usize>> {
-        unsupported("rerun_failed")
-    }
-
-    /// Publish a review the user validated.
-    fn review<'a>(
-        &'a self,
-        _repo: &'a RepoRef,
-        _number: u64,
-        _review: &'a ReviewDraft,
-    ) -> BoxFuture<'a, Result<()>> {
-        unsupported("review")
-    }
-
-    /// Answer under a comment of a line (`ReviewComment::id`).
-    fn reply<'a>(
-        &'a self,
-        _repo: &'a RepoRef,
-        _number: u64,
-        _comment: &'a str,
-        _body: &'a str,
-    ) -> BoxFuture<'a, Result<()>> {
-        unsupported("reply")
-    }
-
-    /// Resolves the thread of a comment of a line (`ReviewComment::id`).
-    fn resolve<'a>(
-        &'a self,
-        _repo: &'a RepoRef,
-        _number: u64,
-        _comment: &'a str,
-    ) -> BoxFuture<'a, Result<()>> {
-        unsupported("resolve")
-    }
-
-    /// What the host's last answer said of its limit, when it says it.
-    fn rate_limit(&self) -> Option<RateLimit> {
-        None
-    }
-
-    fn deployments<'a>(
-        &'a self,
-        _repo: &'a RepoRef,
-        _git_ref: &'a str,
-    ) -> BoxFuture<'a, Result<Vec<Deployment>>> {
-        unsupported("deployments")
-    }
-}
+// The contract of a code host's client, shared with the plugins that serve one (`escouade_plugin_kit::forge`): the
+// core's adapter of a plugin (`plugins::adapters::ProcessForge`) and the hosts still in the core implement it.
+pub use escouade_plugin_kit::forge::{instant, Forge, Pace, Unsupported};
 
 /// What an account gives its client: where its instance is, and its credentials.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -582,7 +211,27 @@ pub trait Provider: Send + Sync {
     fn cli(&self, _host: &str) -> Option<CliToken> {
         None
     }
+    /// The plugin of Escouade's own hand that serves its accounts, once its client left the core (GitHub's:
+    /// `dev.escouade.github`, INT-8.1): the core asks that plugin (`ProcessForge`), and `client` is not called.
+    fn plugin(&self) -> Option<&'static str> {
+        None
+    }
     fn client(&self, http: reqwest::Client, account: &Credentials) -> Box<dyn Forge>;
+}
+
+/// A host the core does not serve itself: its plugin does (`Provider::plugin`).
+pub struct Unserved(pub &'static str);
+
+impl Forge for Unserved {
+    fn me(&self) -> BoxFuture<'_, Result<Identity>> {
+        let name = self.0;
+        Box::pin(async move {
+            Err(anyhow!(tr!(
+                "{name} est servi par son plugin, pas par le cœur d'Escouade",
+                "{name} is served by its plugin, not by the core of Escouade"
+            )))
+        })
+    }
 }
 
 /// The code hosts Escouade knows.

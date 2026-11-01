@@ -61,6 +61,11 @@ pub trait TicketSourceKind: Send + Sync {
     fn own_account(&self) -> bool {
         true
     }
+    /// The plugin of Escouade's own hand that serves it, once it left the core (GitHub Issues: `dev.escouade.github`,
+    /// INT-8.1): the core asks that plugin (`ProcessTicketSource`), and `build` is not called.
+    fn plugin(&self) -> Option<&'static str> {
+        None
+    }
     /// A client for `account` (for GitHub, `account.token` is the token itself: the CLI's
     /// already asked for).
     fn build(
@@ -219,7 +224,6 @@ macro_rules! ticket_source {
 
 ticket_source!(jira::Jira, set_state: plain, view: default);
 ticket_source!(trello::Trello, set_state: plain, view: default);
-ticket_source!(github::Github, set_state: mapped, view: default);
 ticket_source!(linear::Linear, set_state: plain, view: default);
 ticket_source!(clickup::Clickup, set_state: plain, view: own);
 ticket_source!(gitlab::Gitlab, set_state: mapped, view: default);
@@ -266,9 +270,68 @@ kind!(JiraKind, "jira", "Jira", "Jira", |a, http, _b| {
 kind!(TrelloKind, "trello", "Trello", "Trello", |a, http, b| {
     trello::Trello::new(http, a, &b.trello)
 });
-kind!(GithubKind, "github", "GitHub", "GitHub", |a, http, b| github::Github::new(
-    http, a, &b.github
-), host: "github");
+// GitHub Issues: out of the core, served by the plugin « GitHub » (INT-8.1).
+pub struct GithubKind;
+
+impl TicketSourceKind for GithubKind {
+    fn id(&self) -> &'static str {
+        "github"
+    }
+    fn label(&self) -> &'static str {
+        "GitHub"
+    }
+    fn short(&self) -> &'static str {
+        "GitHub"
+    }
+    fn host(&self) -> Option<&'static str> {
+        Some("github")
+    }
+    fn plugin(&self) -> Option<&'static str> {
+        Some(crate::plugins::builtin::GITHUB)
+    }
+    fn build(&self, _: &Account, _: reqwest::Client, _: &Bases) -> Box<dyn TicketSource> {
+        Box::new(Unserved("GitHub"))
+    }
+}
+
+/// A source the core does not serve itself: its plugin does (`TicketSourceKind::plugin`).
+pub struct Unserved(pub &'static str);
+
+impl Unserved {
+    fn said<T>(&self) -> Result<T> {
+        let name = self.0;
+        Err(anyhow::anyhow!(tr!(
+            "{name} est servi par son plugin, pas par le cœur d'Escouade",
+            "{name} is served by its plugin, not by the core of Escouade"
+        )))
+    }
+}
+
+impl TicketSource for Unserved {
+    fn me(&self) -> BoxFuture<'_, Result<(String, String)>> {
+        Box::pin(async move { self.said() })
+    }
+    fn containers(&self) -> BoxFuture<'_, Result<Vec<Container>>> {
+        Box::pin(async move { self.said() })
+    }
+    fn states<'a>(&'a self, _: &'a str) -> BoxFuture<'a, Result<Vec<ExternalState>>> {
+        Box::pin(async move { self.said() })
+    }
+    fn issues<'a>(&'a self, _: &'a str, _: &'a Query) -> BoxFuture<'a, Result<IssuePage>> {
+        Box::pin(async move { self.said() })
+    }
+    fn set_state<'a>(
+        &'a self,
+        _: &'a ExternalRef,
+        _: &'a ExternalState,
+        _: &'a [ExternalState],
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(async move { self.said() })
+    }
+    fn comment<'a>(&'a self, _: &'a ExternalRef, _: &'a str) -> BoxFuture<'a, Result<()>> {
+        Box::pin(async move { self.said() })
+    }
+}
 kind!(LinearKind, "linear", "Linear", "Linear", |a, http, b| {
     linear::Linear::new(http, a, &b.linear)
 });

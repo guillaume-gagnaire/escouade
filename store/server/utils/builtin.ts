@@ -7,7 +7,8 @@ import type { Text } from './checks';
 // Nothing here is downloaded; « Ouvrir dans Escouade » opens their page in the app. Their ids are in the reserve
 // `dev.escouade.*`, which the store grants to the app's repository alone (STORE_FIRST_PARTY_REPO, ESC-314): a plugin of
 // that repository's `plugins/<id>/` is submitted as anyone's (decision 21), its link to its folder from its `path`, and
-// listed as a plugin of the store. No `source` here: what is listed below is what the app gives, nothing more.
+// listed as a plugin of the store. What is listed below is what the app gives, nothing more; `source` is the folder of
+// one that left the core, `plugins/builtin/<id>/` (INT-4's rule, decided on 2026-10-29), which its page links to.
 
 export interface Builtin {
   id: string;
@@ -23,7 +24,13 @@ export interface Builtin {
   /** Its tile (PLG-13): its brand's mark where the brand's published rules allow it without asking, else its
    * category's glyph (shared/marks.ts, docs/PLUGINS.md §3.1). */
   logo: Logo;
+  /** Its folder in the app's repository, once it is a plugin of its own there (`plugins/builtin/<id>`, INT-4's rule:
+   * manifest, README, tests): its page links to it. None for those still in the core. */
+  source?: string;
 }
+
+/** Where a folder of the app's repository is read. */
+export const sourceUrl = (path: string) => `https://github.com/guillaume-gagnaire/escouade/tree/main/${path}`;
 
 const t = (fr: string, en: string): Text => ({ fr, en });
 const doc = (page: string): Text => t(`https://escouade.dev/docs/${page}`, `https://escouade.dev/en/docs/${page}`);
@@ -100,6 +107,7 @@ export const BUILTINS: Builtin[] = [
     secrets: true,
     docs: doc('integrations'),
     logo: { brand: 'github' },
+    source: 'plugins/builtin/dev.escouade.github',
   },
   {
     id: 'dev.escouade.gitlab',

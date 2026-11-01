@@ -2819,6 +2819,26 @@ describe('Sidebar — an agent’s pull requests (ESC-64)', () => {
     expect(menu.open!.items.map((i) => i.label)).not.toContain('Ouvrir une PR…');
   });
 
+  it('says under the card that its code host’s plugin is stopped, and keeps the pull requests read last (INT-8.1)', async () => {
+    resetApp({
+      projects: [project()],
+      agents: [
+        agent({
+          worktree: WT,
+          prs: [pullRequest({ number: 12 })],
+          prWord: 'PR',
+          prDown: 'Le plugin dev.escouade.github ne répond pas : dev.escouade.github is switched off',
+        }),
+      ],
+    });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const down = document.querySelector('[data-pr-down]')!;
+    expect(down).toHaveTextContent('Hébergeur arrêté : PR plus suivies');
+    expect(down).toHaveAttribute('data-pr-down');
+    expect(within(screen.getByRole('group', { name: 'Pull requests de refacto-auth' })).getByText(/#12/)).toBeInTheDocument();
+  });
+
   it('says it in English', async () => {
     setLang('en');
     resetApp({

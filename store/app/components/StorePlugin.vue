@@ -114,6 +114,9 @@ async function copyRepo() {
           <p>
             <a class="arrow" :href="page.builtin.docs[lang]">{{ words.plugin.builtinDocs }}</a>
           </p>
+          <p v-if="page.builtin.source">
+            <a class="arrow" :href="page.builtin.source" rel="noopener noreferrer">{{ words.plugin.builtinSource }}</a>
+          </p>
         </div>
       </article>
       <article v-else-if="tab === 'readme'" class="readme">

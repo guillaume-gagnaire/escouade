@@ -475,12 +475,29 @@ impl<R: Runtime> Core<R> {
                 ),
             ));
         }
-        let http = crate::usage::http_client(&self.settings.read())?;
         let mut account = account.clone();
         if service == Service::GITHUB && account.token.trim().is_empty() {
             account.token = self.gh_token().await?;
         }
         let bases = self.bases.read().clone();
+        if let Some(own) = source::registry().get(service).and_then(|k| k.plugin()) {
+            // Out of the core (GitHub Issues): its plugin serves it, on github.com's account, its
+            // token lent as the core holds it.
+            let host = crate::plugins::accounts::source_account(service);
+            self.plugin_runtime
+                .lend(own, &format!("account:{host}"), &account.token);
+            account.site = format!("https://{host}");
+            return Ok(Box::new(
+                crate::plugins::adapters::ProcessTicketSource::new(
+                    self.plugin_runtime.clone(),
+                    own,
+                    service.as_str(),
+                    &account,
+                )
+                .with_api(&bases.github),
+            ));
+        }
+        let http = crate::usage::http_client(&self.settings.read())?;
         source::registry().client(service, &account, http, &bases)
     }
 

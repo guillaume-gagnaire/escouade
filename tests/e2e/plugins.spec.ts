@@ -18,7 +18,7 @@ function plugin(dir: string, manifest: unknown) {
 // one: the test reads them as a set that holds the demonstration plugin and isola, never as these alone.
 const builtin = (list: { ok: View[] } | { err: unknown }) => ('ok' in list ? list.ok : []).filter((p) => p.origin.kind === 'builtin');
 const others = (list: { ok: View[] } | { err: unknown }) => ('ok' in list ? list.ok : []).filter((p) => p.origin.kind !== 'builtin');
-const OURS = ['dev.escouade.minimal', 'dev.escouade.isola'];
+const OURS = ['dev.escouade.minimal', 'dev.escouade.isola', 'dev.escouade.github'];
 
 interface View {
   id: string;
@@ -78,6 +78,7 @@ test('a declarative plugin is installed from a folder, and an invalid one says w
   expect(others(first)).toEqual([]);
   expect(builtin(first).map((p) => p.id)).toEqual(expect.arrayContaining(OURS));
   for (const p of builtin(first).filter((p) => OURS.includes(p.id))) expect(p.state, p.id).toMatchObject({ kind: 'ready' });
+  expect(await invoke('plugin_remove', { id: 'dev.escouade.github', keep: false })).toHaveProperty('err');
   expect(await invoke('plugin_remove', { id: 'dev.escouade.minimal', keep: false })).toHaveProperty('err');
   // Read first (the install window's), then installed on the user's consent.
   const read = await invoke<{ token: string }>('plugin_inspect_folder', { path: src });

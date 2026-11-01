@@ -318,7 +318,10 @@ pub fn of_manifest(m: &Manifest) -> Vec<AccountKind> {
                 token_page: text(a, "tokenPage"),
                 forge: serving("forges", &id).into_iter().next(),
                 sources,
-                sources_public_only: false,
+                sources_public_only: a
+                    .get("sourcesPublicOnly")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
                 id,
             })
         })

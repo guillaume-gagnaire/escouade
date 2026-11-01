@@ -1,11 +1,15 @@
 //! GitHub's client against a fake server fed with answers recorded from github.com (a merged pull
 //! request of a public repository, `tests/fixtures/forges/github/`, see `record.mjs`), and with
 //! small made-up ones for what the recording does not hold (a failing job, a refusal).
+//!
+//! Since INT-8.1 the client is the plugin « GitHub »'s (`plugins/builtin/dev.escouade.github`): an
+//! account's calls go to its process (`escouade-plugins github`) by `ProcessForge`, as the core
+//! makes them, and the plugin calls the fake server. What only the client itself shows (its pace,
+//! the answers it keeps) is read on it directly.
 
-use super::github::GithubProvider;
-use super::github_api::{graphql_url, Github, Pace, CACHE_MAX};
 use super::*;
 use crate::integrations::fake::FakeServer;
+use escouade_plugin_github::pulls::{graphql_url, Github, CACHE_MAX};
 use serde_json::json;
 use std::time::Duration;
 
@@ -40,6 +44,15 @@ fn repo() -> RepoRef {
     RepoRef {
         namespace: "cli".into(),
         name: "cli".into(),
+    }
+}
+
+/// GitHub's accounts as the core serves them: by the plugin « GitHub », in its process.
+struct GithubProvider;
+
+impl GithubProvider {
+    fn client(&self, _http: reqwest::Client, creds: &Credentials) -> Box<dyn Forge> {
+        crate::plugins::builtin::served_forge(crate::plugins::builtin::GITHUB, "github", creds)
     }
 }
 
@@ -1304,10 +1317,15 @@ async fn real_github_reads() {
         .output()
         .unwrap();
     let token = String::from_utf8(token.stdout).unwrap();
-    let github = Github::new(
+    // github.com's account, served by the plugin as the core serves it.
+    let github = GithubProvider.client(
         reqwest::Client::new(),
-        "https://api.github.com".into(),
-        token,
+        &Credentials {
+            url: "https://github.com".into(),
+            token,
+            api: Some("https://api.github.com".into()),
+            ..Default::default()
+        },
     );
     let repo = repo();
     let me = github.me().await.unwrap();

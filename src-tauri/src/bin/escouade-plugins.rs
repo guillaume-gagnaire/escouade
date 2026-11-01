@@ -5,7 +5,9 @@
 //! It is shipped beside the app and signed with it; the app starts no other (`plugins::builtin`). It speaks the
 //! protocol of `escouade-plugin-protocol` and nothing of the app's own, but the voice services (INT-13), which run the code of the core's services through `escouade_lib`.
 //!
-//! An entry is a function from the name to a `fn() -> i32`: add the plugin's module and one line to `ENTRIES`.
+//! An entry is a function from the name to a `fn() -> i32`: add the plugin's module and one line to `ENTRIES`. A
+//! plugin that serves code hosts or Kanban sources is a crate of its own beside its manifest
+//! (`plugins/builtin/<id>/`), on the kit `escouade-plugin-kit` (its loop, the service of `forge/*` and `tickets/*`).
 
 #[path = "escouade-plugins/isola.rs"]
 mod isola;
@@ -30,6 +32,8 @@ const ENTRIES: &[Entry] = &[
     ("voice-mistral", voice::mistral),
     ("voice-elevenlabs", voice::elevenlabs),
     ("voice-deepgram", voice::deepgram),
+    // GitHub (INT-8.1): its code host and GitHub Issues, in its crate (plugins/builtin/dev.escouade.github).
+    ("github", escouade_plugin_github::run),
 ];
 
 fn main() {

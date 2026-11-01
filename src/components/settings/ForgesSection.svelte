@@ -147,6 +147,7 @@
   {/if}
   {#each view?.accounts ?? [] as a (a.host)}
     {@const st = standing(a)}
+    {@const served = a.plugin ? null : provider(a.kind)?.servedBy}
     <div class="acct" role="group" aria-label={a.host}>
       {@render badge(a.kind)}
       <div class="txt">
@@ -157,6 +158,13 @@
         {#if a.inFile}<span class="d warn">{t('integrations.accounts.keychainUnavailable')}</span>{/if}
         {#if a.viaCli}<span class="d">{t('integrations.forges.viaCli', { cli: provider(a.kind)?.cli ?? 'gh' })}</span>{/if}
         {#if a.plugin}<span class="d">{t('integrations.accounts.servedByPlugin', { plugin: a.plugin })}</span>{/if}
+        {#if served && !served.on}
+          <span class="d warn" data-plugin-off={served.plugin}>{t('integrations.forges.pluginOff', { plugin: served.name })}</span>
+        {:else if served?.stopped}
+          <span class="d warn" data-plugin-stopped={served.plugin}
+            >{t('integrations.forges.pluginStopped', { plugin: served.name, why: served.stopped })}</span
+          >
+        {/if}
         {#if a.issues}
           <span class="d"
             >{t('integrations.forges.issues', {

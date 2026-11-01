@@ -10,7 +10,7 @@
 //! `Pace::max_wait`; the `X-RateLimit-*` headers slow the calls down as for GitHub.
 
 use super::azure::{parts, NAME};
-use super::github_api::Pace;
+use super::Pace;
 use super::*;
 use parking_lot::Mutex;
 use serde_json::json;

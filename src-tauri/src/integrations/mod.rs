@@ -5,7 +5,8 @@ pub mod azure;
 pub mod clickup;
 #[cfg(test)]
 pub(crate) mod fake;
-pub mod github;
+#[cfg(test)]
+mod github_tests;
 pub mod gitlab;
 pub mod jira;
 pub mod linear;
@@ -367,21 +368,6 @@ pub(crate) async fn call(service: Service, rb: reqwest::RequestBuilder) -> Resul
     Ok(send(service, rb).await?.0)
 }
 
-/// `call`, and whether the answer's `Link` header points to a next page (GitHub's lists).
-pub(crate) async fn call_page(
-    service: Service,
-    rb: reqwest::RequestBuilder,
-) -> Result<(Value, bool)> {
-    let (v, headers) = send(service, rb).await?;
-    let next = headers
-        .get_all(reqwest::header::LINK)
-        .iter()
-        .filter_map(|h| h.to_str().ok())
-        .flat_map(|h| h.split(','))
-        .any(|link| link.contains("rel=\"next\""));
-    Ok((v, next))
-}
-
 async fn send(service: Service, rb: reqwest::RequestBuilder) -> Result<(Value, HeaderMap)> {
     send_named(service.label(), rb).await
 }
@@ -420,34 +406,9 @@ pub(crate) async fn send_named(
     Ok((v, headers))
 }
 
-/// A service's answer other than a success: its status, and what `http_error` says of it (the
-/// error's text).
-#[derive(Debug)]
-pub struct HttpError {
-    pub status: u16,
-    pub message: String,
-}
-
-impl std::fmt::Display for HttpError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.message)
-    }
-}
-
-impl std::error::Error for HttpError {}
-
-/// A refusal that asking again would not change (Jira: no transition leads from where the issue
-/// is to the state).
-#[derive(Debug)]
-pub struct Refused(pub String);
-
-impl std::fmt::Display for Refused {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-impl std::error::Error for Refused {}
+// A service's answer other than a success, and a refusal that asking again would not change: the same types as the
+// plugins' (`escouade_plugin_kit::errors`), so that a source or a host in a plugin fails as one in the core.
+pub use escouade_plugin_kit::errors::{HttpError, Refused};
 
 /// The failure stays however often the call is made again: a request refused as it is (400, 422),
 /// a ticket gone (404, 410), no transition to the state. Tried again later, it would only hold
@@ -470,59 +431,7 @@ pub(crate) fn http_error_in(
     status: u16,
     body: &str,
 ) -> String {
-    let tail = said(body).map(|m| format!(" — {m}")).unwrap_or_default();
-    match status {
-        401 => tr_in!(
-            lang,
-            "{name} refuse ces identifiants (401){tail}",
-            "{name} refuses these credentials (401){tail}"
-        ),
-        403 => tr_in!(
-            lang,
-            "{name} refuse l'accès (403){tail}",
-            "{name} denies access (403){tail}"
-        ),
-        404 => tr_in!(
-            lang,
-            "{name} : introuvable (404){tail}",
-            "{name}: not found (404){tail}"
-        ),
-        429 => tr_in!(
-            lang,
-            "{name} limite les requêtes (429) : réessaie dans un moment",
-            "{name} limits the requests (429): try again in a moment"
-        ),
-        _ => tr_in!(
-            lang,
-            "{name} : erreur {status}{tail}",
-            "{name}: error {status}{tail}"
-        ),
-    }
-}
-
-/// The message of an error's body: Jira's `errorMessages` or `errors`, the first of GraphQL's
-/// `errors` (Linear), GitHub's `message`, ClickUp's `err`, or Trello's text.
-fn said(body: &str) -> Option<String> {
-    let body = body.trim();
-    let msg = match serde_json::from_str::<Value>(body) {
-        Ok(Value::String(s)) => s,
-        Ok(v) => v["errorMessages"][0]
-            .as_str()
-            .map(str::to_string)
-            .or_else(|| {
-                v["errors"]
-                    .as_object()
-                    .and_then(|o| o.values().find_map(|e| e.as_str().map(str::to_string)))
-            })
-            .or_else(|| v["errors"][0]["message"].as_str().map(str::to_string))
-            .or_else(|| v["message"].as_str().map(str::to_string))
-            .or_else(|| v["error"].as_str().map(str::to_string))
-            .or_else(|| v["err"].as_str().map(str::to_string))?,
-        Err(_) if body.starts_with('<') => return None,
-        Err(_) => body.lines().next()?.to_string(),
-    };
-    let msg = msg.trim();
-    (!msg.is_empty()).then(|| crate::board::first_line(msg))
+    escouade_plugin_kit::errors::http_error_in(crate::i18n::kit(lang), name, status, body)
 }
 
 /// A path segment or a query value, percent-encoded.

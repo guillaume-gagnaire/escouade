@@ -7,9 +7,14 @@
 //! the limit, the answer kept from before is served), and it slows down as the limit comes near
 //! (`X-RateLimit-*`).
 
-use super::*;
+use anyhow::{anyhow, Result};
+use escouade_plugin_kit::errors::{http_error_in, HttpError};
+use escouade_plugin_kit::forge::*;
+use escouade_plugin_kit::tr;
 use parking_lot::Mutex;
+use reqwest::header::HeaderMap;
 use serde_json::json;
+use serde_json::Value;
 use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -24,42 +29,6 @@ pub const CACHE_MAX: usize = 500;
 
 /// How long a secondary limit is waited for when GitHub says nothing about when (its advice).
 const SECONDARY_WAIT: Duration = Duration::from_secs(60);
-
-/// When and how long the client slows down.
-#[derive(Debug, Clone, Copy)]
-pub struct Pace {
-    /// Below this share of the limit left, calls are spread over what remains of the window.
-    pub slow_below: f64,
-    /// The longest a call waits (an hour's window is not waited for).
-    pub max_wait: Duration,
-}
-
-impl Default for Pace {
-    fn default() -> Self {
-        Self {
-            slow_below: 0.1,
-            max_wait: Duration::from_secs(30),
-        }
-    }
-}
-
-impl Pace {
-    /// How long to wait before the next call, `now` being seconds since 1970: none while the limit
-    /// is far; then what remains of the window shared among the calls that remain; the whole rest
-    /// of the window when none remains.
-    pub fn delay(&self, rl: &RateLimit, now: u64) -> Duration {
-        let left = rl.reset.saturating_sub(now);
-        let wait = if rl.remaining == 0 {
-            left.saturating_add(1) as f64
-        } else if rl.limit == 0 || f64::from(rl.remaining) / f64::from(rl.limit) >= self.slow_below
-        {
-            return Duration::ZERO;
-        } else {
-            left as f64 / f64::from(rl.remaining + 1)
-        };
-        Duration::from_secs_f64(wait).min(self.max_wait)
-    }
-}
 
 /// What a call answered.
 struct Reply {
@@ -264,10 +233,10 @@ impl Github {
             reply = self.transmit(resource, again).await?;
         }
         if !(200..300).contains(&reply.status) && reply.status != 304 {
-            return Err(crate::integrations::HttpError {
+            return Err(HttpError {
                 status: reply.status,
-                message: crate::integrations::http_error_in(
-                    crate::i18n::ui(),
+                message: http_error_in(
+                    escouade_plugin_kit::i18n::ui(),
                     NAME,
                     reply.status,
                     &reply.text,

@@ -1,0 +1,21 @@
+[package]
+name = "escouade-plugin-kit"
+version = "1.0.0"
+description = "Ce que partagent les plugins Rust de première main d'Escouade : la boucle en process, le service des hébergeurs et des sources du Kanban, leurs erreurs typées et leurs limites d'appels"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+workspace = "../../src-tauri"
+
+# Shared by the plugins of `escouade-plugins` (docs/PLUGINS.md §4.3) and by the core, which takes from it the contract of
+# a code host (`Forge`) and its errors, so that a plugin's client and the core's adapters speak the same.
+[dependencies]
+escouade-plugin-protocol = { path = "../escouade-plugin-protocol" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+parking_lot = "0.12"
+chrono = "0.4"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-util", "io-std", "sync", "time"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }

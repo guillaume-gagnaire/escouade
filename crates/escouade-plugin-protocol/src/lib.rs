@@ -4,6 +4,8 @@
 //! in Rust runs (`escouade-plugins`, the program of the plugins the app gives, INT-4).
 
 pub mod engine;
+pub mod forge;
+pub mod tickets;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -24,6 +26,21 @@ pub mod method {
 pub mod code {
     pub const PARSE: i64 = -32700;
     pub const METHOD_NOT_FOUND: i64 = -32601;
+    /// A refusal of the service that asking again would not change (a ticket's state no transition leads to).
+    pub const REFUSED: i64 = -32010;
+
+    /// The code with which a plugin says the HTTP error `status` of its service: `-(32000 + status)` (401 is
+    /// -32401, « reconnect the account »).
+    pub fn http(status: u16) -> i64 {
+        -(32_000 + i64::from(status))
+    }
+
+    /// The HTTP status `code` says, when it is one of `http`'s.
+    pub fn http_status(code: i64) -> Option<u16> {
+        u16::try_from(-code - 32_000)
+            .ok()
+            .filter(|s| (400..600).contains(s))
+    }
 }
 
 /// What Escouade says first (`initialize`).

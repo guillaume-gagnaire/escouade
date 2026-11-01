@@ -1031,3 +1031,52 @@ async fn an_agents_pull_request_goes_to_the_branch_its_worktree_started_from() {
         );
     }
 }
+
+/// The plugin « GitHub » switched off (INT-8.1): the card says its code host is stopped, the pull
+/// requests read last stay; on again, the next read takes the word back.
+#[tokio::test]
+async fn a_code_host_whose_plugin_is_off_says_so_on_the_card_and_keeps_its_pull_requests() {
+    use crate::plugins::builtin::GITHUB;
+    let h = harness("prs-plugin-off");
+    let server = FakeServer::start().await;
+    let (id, _, branch) = github_agent(&h, &server).await;
+    server.on(
+        "POST",
+        "/graphql#PullsOfBranch",
+        200,
+        json!({ "data": { "repository": { "pullRequests": { "nodes": [node(7, &branch, "SUCCESS", false)] } } } }),
+    );
+    h.core.agent_prs_refresh(&id, true).await.unwrap();
+    assert_eq!(h.agent(&id).prs.len(), 1);
+    assert_eq!(h.agent(&id).pr_down, None);
+
+    h.core
+        .plugins
+        .choose(GITHUB, |c| c.enabled = false)
+        .unwrap();
+    h.core.plugin_runtime.forget(GITHUB);
+    let e = h.core.agent_prs_refresh(&id, true).await.unwrap_err();
+    assert!(crate::plugins::adapters::is_down(&e), "{e:#}");
+    let a = h.agent(&id);
+    assert!(
+        a.pr_down.as_deref().is_some_and(|d| d.contains(GITHUB)),
+        "{:?}",
+        a.pr_down
+    );
+    assert_eq!(
+        a.prs.iter().map(|p| p.number).collect::<Vec<_>>(),
+        [7],
+        "what was read last stays"
+    );
+    // The view of the code hosts reads it from the registry.
+    let view = h.core.forges_view().await;
+    let github = view.providers.iter().find(|p| p.kind == "github").unwrap();
+    assert_eq!(github.served_by.as_ref().map(|s| s.on), Some(false));
+
+    h.core.plugins.choose(GITHUB, |c| c.enabled = true).unwrap();
+    h.core.agent_prs_refresh(&id, true).await.unwrap();
+    assert_eq!(h.agent(&id).pr_down, None);
+    let view = h.core.forges_view().await;
+    let github = view.providers.iter().find(|p| p.kind == "github").unwrap();
+    assert_eq!(github.served_by.as_ref().map(|s| s.on), Some(true));
+}

@@ -136,6 +136,16 @@ pub fn set(info: LangInfo) {
     }
     UI.store(info.ui.code(), Ordering::Relaxed);
     CLAUDE.store(info.claude.code(), Ordering::Relaxed);
+    // What the kit of the plugins writes in the core (an error of a code host, `Unsupported`).
+    escouade_plugin_kit::i18n::set_ui(kit(info.ui));
+}
+
+/// `lang` as the kit of the plugins names it.
+pub fn kit(lang: Lang) -> escouade_plugin_kit::i18n::Lang {
+    match lang {
+        Lang::Fr => escouade_plugin_kit::i18n::Lang::Fr,
+        Lang::En => escouade_plugin_kit::i18n::Lang::En,
+    }
 }
 
 /// Writes from now on in the languages the settings stand for, and returns them.

@@ -32,6 +32,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Un plugin peut servir un compte à la place de l’intégration d’Escouade (un GitLab d’entreprise, un Jira maison) : quand plusieurs le proposent, « Connecter… » demande lequel le sert, et ce compte sert tous les usages du plugin, ses tickets comme ses PR. Tes comptes déjà connectés restent tels quels.
 - Les cinq services de voix en ligne (OpenAI, Groq, Mistral, ElevenLabs, Deepgram) sont des plugins livrés avec Escouade : chacun se coupe dans la vue Plugins, et ta clé reste dans le trousseau. La dictée, le direct et la voix de l’agent s’y comportent comme avant.
 - isola est un plugin livré avec Escouade, le premier « environnement de lancement » : il lance les services de chaque worktree sur ses ports et ses adresses. Tu peux le couper dans Réglages › Plugins, pour toute l’app ou un projet ; sans lui, un ticket part comme avant, avec une recette.
+- GitHub est un plugin livré avec Escouade, rangé dans « Livrés avec Escouade » : ses issues dans le Kanban, ses PR, sa CI, ses relectures et ses déploiements tournent à part, sur le même compte, et rien ne change à l’usage. Coupé ou arrêté, il le dit sur la carte de l’agent et dans Réglages › Intégrations, et les PR lues en dernier restent.
 
 ### Retiré
 
