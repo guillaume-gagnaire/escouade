@@ -2,7 +2,7 @@
 title: "Hébergeurs de code"
 subject: "Git & fichiers"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-54","ESC-55","ESC-58","ESC-70","ESC-241"]
+tickets: ["ESC-54","ESC-55","ESC-58","ESC-70","ESC-241","ESC-212"]
 decisions: []
 compared: null
 ---
@@ -63,3 +63,8 @@ Réglages › Intégrations › « Hébergeurs de code » :
 - Les droits d'un jeton ne sont lus que pour un jeton GitHub classique et sur GitLab ; un jeton GitHub à droits fins, Bitbucket, Gitea et Azure DevOps ne les disent pas.
 - GitHub : les écritures (créer, merger, auto-merge, commenter) n'ont pas encore été essayées pour de vrai (voir `docs/TODO-1.8.md`).
 - Azure DevOps : pas de déploiements ; le jeton de `az` ne vaut que pour dev.azure.com ; un essai réel avec un jeton reste à faire (ouvrir une PR brouillon, la lire, commenter, répondre, résoudre, l'abandonner).
+
+## Les comptes servis par un plugin (ESC-212)
+
+- Le jeton d'une instance est aussi sous `plugin:<id>:account:<hôte>` ; `forge:<hôte>` reste tenu à côté pour une version d'avant (voir *Les comptes partagés par plugin*).
+- Quand un plugin installé sert le même hébergeur, le formulaire demande « Servi par » ; ses PR, sa CI et sa source de tickets passent alors par ce plugin. « Sert aussi à … » suit les points du compte.

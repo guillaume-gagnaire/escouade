@@ -130,13 +130,23 @@ describe('IntegrationsTab', () => {
     await userEvent.click(p.getAllByRole('button', { name: 'Connecter…' })[0]);
     const form = p.getByRole('form', { name: 'Connexion à Trello' });
     const by = within(form).getByLabelText('Servi par');
-    expect(within(by).getAllByRole('option').map((o) => o.textContent)).toEqual(['Escouade', 'Trello maison']);
+    expect(
+      within(by)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['Escouade', 'Trello maison']);
     await userEvent.selectOptions(by, 'acme.trello');
     await userEvent.type(within(form).getByLabelText("Clé d'API"), 'k1');
     await userEvent.type(within(form).getByLabelText('Jeton'), 'tok');
     await userEvent.click(within(form).getByRole('button', { name: 'Connecter' }));
     await waitFor(() => expect(b.called('integration_connect')).toHaveLength(1));
-    expect(b.called('integration_connect')[0].args.account).toEqual({ site: '', email: '', key: 'k1', token: 'tok', plugin: 'acme.trello' });
+    expect(b.called('integration_connect')[0].args.account).toEqual({
+      site: '',
+      email: '',
+      key: 'k1',
+      token: 'tok',
+      plugin: 'acme.trello',
+    });
   });
 
   it('disconnects an account at once', async () => {

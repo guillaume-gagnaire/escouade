@@ -480,6 +480,8 @@ export interface AccountView {
 /** A plugin that can serve the accounts of a kind (INT-6). */
 export interface AccountServer {
   plugin: string;
+  /** The plugin's name, as the form offers it. */
+  name: string;
   /** Of Escouade's own hand: offered first. */
   firstHand: boolean;
 }

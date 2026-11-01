@@ -118,7 +118,9 @@ function handle(msg) {
       return behave(id, params);
     default:
       if (method.startsWith('tickets/') && flag('--ticket-budget')) {
-        return serve(id, method, params).then((m) => (m?.result === undefined ? m : ok(id, { value: m.result, rateLimit: { ...RATE, remaining: 4000 } })));
+        return serve(id, method, params).then((m) =>
+          m?.result === undefined ? m : ok(id, { value: m.result, rateLimit: { ...RATE, remaining: 4000 } }),
+        );
       }
       if (method === 'account/me' || method.startsWith('tickets/') || method.startsWith('forge/') || method.startsWith('workflow/'))
         return serve(id, method, params);

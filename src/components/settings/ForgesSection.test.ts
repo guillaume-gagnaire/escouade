@@ -185,7 +185,9 @@ describe('ForgesSection', () => {
     const view = {
       ...VIEW,
       providers: PROVIDERS.map((p) => (p.kind === 'gitlab' ? { ...p, servers } : { ...p, servers: [servers[0]] })),
-      accounts: [account({ kind: 'gitlab', name: 'GitLab', host: 'gitlab.com', url: 'https://gitlab.com', issues: true, plugin: 'acme.gitlab' })],
+      accounts: [
+        account({ kind: 'gitlab', name: 'GitLab', host: 'gitlab.com', url: 'https://gitlab.com', issues: true, plugin: 'acme.gitlab' }),
+      ],
       unknown: [],
     };
     const be = fakeBackend({ forges: () => view, forge_check: () => view, forge_connect: () => view });
@@ -197,12 +199,22 @@ describe('ForgesSection', () => {
     expect(within(form).queryByLabelText('Servi par')).toBeNull();
     await userEvent.selectOptions(within(form).getByLabelText('Hébergeur'), 'gitlab');
     const by = within(form).getByLabelText('Servi par');
-    expect(within(by).getAllByRole('option').map((o) => o.textContent)).toEqual(['Escouade', "GitLab d'entreprise"]);
+    expect(
+      within(by)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['Escouade', "GitLab d'entreprise"]);
     await userEvent.selectOptions(by, 'acme.gitlab');
     await userEvent.type(within(form).getByLabelText(/^Jeton/), 'glpat-x');
     await userEvent.click(within(form).getByRole('button', { name: 'Connecter' }));
     await waitFor(() => expect(be.called('forge_connect')).toHaveLength(1));
-    expect(be.called('forge_connect')[0].args.form).toEqual({ kind: 'gitlab', url: '', email: '', token: 'glpat-x', plugin: 'acme.gitlab' });
+    expect(be.called('forge_connect')[0].args.form).toEqual({
+      kind: 'gitlab',
+      url: '',
+      email: '',
+      token: 'glpat-x',
+      plugin: 'acme.gitlab',
+    });
   });
 
   it('asks Bitbucket for its e-mail', async () => {

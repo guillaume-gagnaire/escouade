@@ -110,7 +110,7 @@ Un genre de compte (`accounts`) dit comment on ajoute un compte, et ce compte se
 - `fields` : ce que demande le formulaire (`site`, `email`, `key`, `token`…), `secret` pour ce qui va au trousseau ; un jeton seul par défaut ;
 - `scopes` : les droits que le jeton doit avoir ; `tokenPage` : la page qui en crée un.
 
-Un genre qui porte l’`id` d’une intégration d’Escouade (`github`, `gitlab`, `bitbucket`, `gitea`, `azure`, `jira`, `trello`, `linear`, `clickup`) lui est proposé à côté : « Connecter… » demande alors lequel sert le compte, Escouade d’abord. Jamais en silence.
+Un genre qui porte l’`id` d’une intégration d’Escouade (`github`, `gitlab`, `bitbucket`, `gitea`, `azure`, `jira`, `trello`, `linear`, `clickup`) lui est proposé à côté : « Connecter… » demande alors lequel sert le compte, Escouade d’abord. Jamais en silence.
 
 Le secret d’un compte est au trousseau sous `plugin:<id>:account:<compte>` : le compte est l’hôte de son instance (`gitlab.com`), ou l’`id` du genre pour un genre sans instances (`jira`). Le plugin le lit par `secrets/get` de `account:<compte>`, s’il a `account:*` dans `permissions.secrets` ; jamais le compte d’un autre plugin. Ce qu’il tient : le jeton, ou `{ "key": …, "token": … }` pour un genre à deux secrets (Trello).
 

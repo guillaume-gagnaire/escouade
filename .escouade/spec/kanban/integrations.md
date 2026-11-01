@@ -2,7 +2,7 @@
 title: "Intégrations"
 subject: "Kanban"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-165","ESC-201","ESC-242"]
+tickets: ["ESC-165","ESC-201","ESC-242","ESC-212"]
 decisions: []
 compared: null
 ---
@@ -146,3 +146,8 @@ Dans Réglages › Intégrations › « Sources du Kanban » :
 - GitLab Issues : un groupe n'est pas une source, seulement un projet.
 - Azure Boards : ni zone ni itération ; une itération courante demanderait une équipe.
 - ClickUp : une clé personnelle seulement. L'OAuth de ClickUp (une app enregistrée, un jeton par espace de travail autorisé) n'est pas fait ; il servirait à une équipe qui ne veut pas de clés personnelles.
+
+## Les comptes servis par un plugin (ESC-212)
+
+- Chaque compte est d'un genre déclaré par le plugin qui le sert, et sert tous ses points ; le secret est aussi au trousseau sous `plugin:<id>:account:<compte>`, les anciennes entrées tenues à côté (voir *Les comptes partagés par plugin*).
+- Quand plusieurs plugins servent le même genre, le formulaire « Connecter… » demande « Servi par » ; le compte connecté dit « Servi par le plugin <id> ».
