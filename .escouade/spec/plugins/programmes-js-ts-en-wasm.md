@@ -1,13 +1,13 @@
 ---
 title: "Les programmes JS/TS des plugins, en WASM sans Node"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §5 (ESC-319, ESC-320, ESC-321)","prototypes/wasm-plugins/","Demande de l'utilisateur du 2026-11-01 : « je veux pas rendre node obligatoire… chaque plugin ts qui est soumis sera buildé en wasm »","Revue d'ESC-319 par le chef (2026-11-01) : l'adresse résolue","src-tauri/src/plugins/wasm.rs","src-tauri/src/plugins/files.rs","sdk/plugin/src/index.ts","schemas/plugin-protocol-1.json"]
-tickets: ["ESC-319","ESC-320","ESC-321"]
-decisions: [29,32,36]
+sources: ["docs/PLUGINS.md §5 (ESC-319, ESC-320, ESC-321, ESC-322)","prototypes/wasm-plugins/","Demande de l'utilisateur du 2026-11-01 : « je veux pas rendre node obligatoire… chaque plugin ts qui est soumis sera buildé en wasm »","Revue d'ESC-319 par le chef (2026-11-01) : l'adresse résolue","src-tauri/src/plugins/wasm.rs","src-tauri/src/plugins/files.rs","src-tauri/src/plugins/bench/","sdk/plugin/src/index.ts","sdk/plugin/bin/escouade-plugin.mjs","schemas/plugin-protocol-1.json"]
+tickets: ["ESC-319","ESC-320","ESC-321","ESC-322"]
+decisions: [29,32,36,"escouade-plugin-joue-et-compile-les-plug"]
 compared: null
 ---
 
-Un plugin dont le programme est écrit en JavaScript ou en TypeScript tourne **dans Escouade**, en WASM, sans que Node soit installé chez l'utilisateur. Décidé le 2026-11-01 (ESC-319) ; construit par les tickets WASM-1 à WASM-7, dans l'ordre : le runtime dans l'app (WASM-1, ESC-320) et le SDK sur les deux transports (WASM-2, ESC-321) sont faits. L'étude, les mesures et le prototype : `docs/PLUGINS.md` §5, `prototypes/wasm-plugins/`.
+Un plugin dont le programme est écrit en JavaScript ou en TypeScript tourne **dans Escouade**, en WASM, sans que Node soit installé chez l'utilisateur. Décidé le 2026-11-01 (ESC-319) ; construit par les tickets WASM-1 à WASM-7, dans l'ordre : le runtime dans l'app (WASM-1, ESC-320), le SDK sur les deux transports (WASM-2, ESC-321) et `escouade-plugin` sans Node (WASM-3, ESC-322) sont faits. L'étude, les mesures et le prototype : `docs/PLUGINS.md` §5, `prototypes/wasm-plugins/`.
 
 ## Le manifeste
 
@@ -16,7 +16,8 @@ Un plugin dont le programme est écrit en JavaScript ou en TypeScript tourne **d
 
 ## Ce qui tourne
 
-- Le bundle est compilé par la Javy épinglée (aujourd'hui 9.1.0, téléchargée par l'app à son premier besoin et vérifiée par le SHA-256 de son archive) avec le plugin Javy d'Escouade (`escouade-js`, QuickJS), après le prélude d'Escouade, en mode déterministe : le même bundle donne le même `.wasm` à l'octet, sous Windows, macOS ou Linux. `escouade-js` est construit par la CI, son SHA-256 noté, et livré **dans l'exécutable de l'app** ; une app construite sans lui ne lance aucun plugin `run.js` et dit pourquoi.
+- Le bundle est compilé par la Javy épinglée (aujourd'hui 9.1.0, téléchargée à son premier besoin et vérifiée par le SHA-256 de son archive) avec le plugin Javy d'Escouade (`escouade-js`, QuickJS), après le prélude d'Escouade, en mode déterministe : le même bundle donne le même `.wasm` à l'octet, sous Windows, macOS ou Linux. `escouade-js` est construit une fois par la CI, son SHA-256 noté, et livré **dans l'exécutable de l'app** et dans celui d'`escouade-plugin` ; une app construite sans lui ne lance aucun plugin `run.js` et dit pourquoi.
+- **La Javy téléchargée** : son archive est vérifiée par le SHA-256 noté dans le code pour chaque système ; une archive dont l'empreinte diffère est refusée (« not the pinned Javy, refused »), rien n'est lancé. Le programme extrait est vérifié à son tour **à chaque usage**, contre l'empreinte notée à côté de lui après la vérification de l'archive : une Javy changée sur le disque n'est jamais lancée, elle est téléchargée à nouveau et vérifiée. `ESCOUADE_JAVY` en nomme une autre (développement, tests).
 - L'app compile et précompile le module **à l'installation**, et le garde dans son cache ; elle le recharge de là à chaque démarrage du plugin, et le précompile à nouveau après une mise à jour de l'app (les précompilés d'une autre version sont retirés au démarrage). Elle le fait tourner par wasmtime dans son propre process : une instance par plugin, sur un fil à elle, qui garde son état d'un appel à l'autre comme le process d'avant.
 - Le protocole ne change pas : les mêmes méthodes et les mêmes délais (`initialize`, `events/fact`, `permissions/decide` en 500 ms, `secrets/get`, `settings/get`, `log`), portés par l'entrée et la sortie standard du module ; le même journal, le même budget de redémarrages. S'y ajoutent `net/fetch` (en WASM seulement) et `files/read` (aux deux transports), décrits avec leurs délais et leurs erreurs dans `schemas/plugin-protocol-1.json`.
 - Le poids ajouté à l'exécutable de l'app : environ 15 Mo (wasmtime et Cranelift, et `escouade-js` embarqué), mesuré dans `docs/PLUGINS.md` §5.3.
@@ -28,7 +29,7 @@ Un plugin dont le programme est écrit en JavaScript ou en TypeScript tourne **d
 - `fetch` reste le `fetch` standard ; en WASM, Escouade le sert (`net/fetch`) avec les règles ci-dessous.
 - Le prélude d'Escouade ne fait plus que ce que le SDK ne fait pas (les lignes, `fetch`, `readFileSync`, `URL`, `console`). Un bundle construit avec le SDK d'avant (0.2) ne tourne pas en WASM : le plugin s'arrête et son journal dit de le reconstruire avec le SDK 0.3 ou plus récent.
 - Il n'y a pas de minuteur en WASM : `setTimeout` n'y est pas défini (une bibliothèque qui l'appelle échoue avec la raison). Le SDK n'en a pas besoin : en WASM, le délai d'une seconde d'Escouade borne `shutdown`.
-- `npm create escouade-plugin` écrit un plugin en `run.js`, sans script `node` à lancer, qui passe `escouade-plugin validate`. En attendant WASM-3, le banc d'`escouade-plugin` (`test`, `dev`) joue un plugin `run.js` par Node ; il faut donc Node à l'auteur, jamais à l'utilisateur.
+- `npm create escouade-plugin` écrit un plugin en `run.js`, sans script `node` à lancer, qui passe `escouade-plugin validate`.
 
 ## Ce que l'hôte sert, et applique
 
@@ -37,7 +38,7 @@ Un plugin dont le programme est écrit en JavaScript ou en TypeScript tourne **d
 - **Les fichiers** : seulement ceux du dossier du plugin, en lecture ; rien d'écrit. Les fichiers JSON de sa racine (`rules.json`, `channels.json` : 256 Kio chacun, 1 Mio en tout, jamais son manifeste) lui sont donnés au démarrage ; `p.file()` lit les autres, 256 Kio au plus, en UTF-8. Est refusé, et gardé au journal : un chemin absolu, avec `..` ou un lecteur, un lien qui mène hors du dossier, un nom caché (`.env`, `.git`), le manifeste. Un plugin lancé par une commande a les mêmes règles pour `p.file()` (il garde par ailleurs les droits de son process).
 - **Les secrets et les réglages** : comme pour un process, seulement les siens ; ses secrets masqués dans son journal.
 - **Les limites** : 64 Mio de mémoire, 2 s par tour (500 ms pour une décision), une boucle sans fin arrêtée ; une boucle sans fin, une mémoire qui grossit ou une exception non rattrapée finissent l'instance, qui est refaite avec le budget de redémarrages d'un process (trois fois en cinq minutes, puis arrêtée) ; le journal dit chaque fois pourquoi (« a turn ran past 2000 ms », « out of memory », l'exception).
-- Un plugin WASM ne peut ni lancer un programme, ni ouvrir une socket, ni lire l'environnement ou un fichier hors de son dossier, ni charger un module natif ou distant. Un bundle qui importe autre chose que `node:fs` et `node:readline` n'est pas compilé, et le plugin s'arrête avec la raison.
+- Un plugin WASM ne peut ni lancer un programme, ni ouvrir une socket, ni lire l'environnement ou un fichier hors de son dossier, ni charger un module natif ou distant. Un bundle qui importe autre chose que `node:fs` et `node:readline`, ou qui a des `export`, n'est pas compilé, et le plugin s'arrête avec la raison.
 - Réglages › Plugins dit « Tourne dans Escouade, isolé » pour un tel plugin (au lieu de « Lance un programme sur ton ordinateur, avec tes droits »), et ses hôtes comme une permission appliquée (« appliqué par Escouade : il ne joint aucun autre hôte, ni une adresse de ta machine ou de ton réseau local »).
 
 ## Le store
@@ -46,11 +47,18 @@ Un plugin dont le programme est écrit en JavaScript ou en TypeScript tourne **d
 - Un plugin tiers du store ne peut pas avoir pour `run.command` un script ou un interpréteur (`node`, `deno`, `bun`, `python`…) : il se publie en `run.js`. Les binaires tiers attestés restent permis. Installé depuis un dossier ou un dépôt git, un plugin lancé par Node reste permis, non vérifié, et Escouade dit qu'il lui faut Node.
 - La revue locale recompile le bundle et compare l'empreinte à celle de `version.json` avant de lire le bundle et `src/`.
 
-## Les outils de l'auteur
+## Les outils de l'auteur : `escouade-plugin` sans Node
 
-- `escouade-plugin dev`, `test`, `validate` et `pack` compilent en local sans Node : la Javy épinglée est téléchargée à son premier besoin et vérifiée par son SHA-256, `escouade-js` est embarqué (WASM-3).
+- `escouade-plugin` (le binaire livré avec l'app) n'a pas besoin de Node pour un plugin `run.js` : il compile le bundle avec la Javy épinglée (téléchargée à son premier besoin dans le dossier de données d'Escouade, `~/.escouade/tools`, et vérifiée comme plus haut), l'`escouade-js` qu'il embarque, le prélude et la réécriture des `import` de l'app de la même version. Il partage avec l'app la Javy et le cache des modules.
+- `test` joue le banc de conformité **en WASM**, dans l'hôte de l'app, avec les mêmes scénarios qu'un process : initialisation, version refusée, délais, un fait, une décision, un secret, plantage (l'instance arrêtée au milieu d'un appel, puis refaite), fermeture (l'instance finie après sa réponse à `shutdown`, comme dans l'app). `dev` lance le faux Escouade sur l'instance. Un bundle qui ne peut pas tourner en WASM fait échouer l'initialisation, avec la raison.
+- `validate` lit le manifeste et, pour un plugin `run.js`, refuse un bundle qui ne pourrait pas tourner en WASM.
+- `build <dossier> [--out <dossier>] [--json]` compile le bundle comme le store : `packs/<id>-<version>.wasm` et son `.sha256` (`<empreinte>  <nom>`). Le même bundle donne la même empreinte deux fois, et sous Windows comme sous Linux (mesuré : `8ed14c1c…` pour Règles de l'équipe 1.1.1, `f2436ffb…` pour Slack 1.1.0, avec le même `escouade-js`). `--json` dit aussi le compilateur : la version de Javy, l'empreinte d'`escouade-js` (`engine`) et la version du prélude.
+- `--version` dit la version d'`escouade-plugin`, de Javy, l'empreinte d'`escouade-js` et celle du prélude ; il sort en erreur si `escouade-js` manque, ce que la release vérifie sur chaque système.
+- **Le refus d'un bundle** est dit dans la langue de l'auteur (`--lang fr|en`, sinon celle du système) : « le bundle importe node:child_process, qu'un plugin en WASM n'a pas (seulement node:fs, node:readline) » / « the bundle imports node:child_process, which a plugin in WASM does not have (only node:fs, node:readline) » ; de même pour un `export` (« le bundle doit tenir en un fichier, sans export »).
+- Le `escouade-plugin` du SDK (en Node, pour les scripts npm) fait `validate` et `pack` lui-même et passe `test`, `dev` et `build` à celui de l'app.
+- `javy-codegen` (la bibliothèque, qui éviterait de télécharger la CLI) est toujours en 4.0.0 au 2026-11-01, en retard sur la CLI 9.1.0 : la CLI reste.
 
 ## La première main
 
 - Les plugins `dev.escouade.*` écrits en Rust (harness, sources, hébergeurs) restent des programmes natifs, construits et signés avec l'app.
-- `dev.escouade.slack` et `dev.escouade.team-rules` passent en 2.0.0 sur `run.js`, revus, signés et publiés par le chef ; leurs 1.x restent pour les apps d'avant. Leurs `dist/plugin.mjs` sont reconstruits avec le SDK 0.3 (ESC-321) et tournent dans le runtime de l'app.
+- `dev.escouade.slack` et `dev.escouade.team-rules` passent en 2.0.0 sur `run.js`, revus, signés et publiés par le chef ; leurs 1.x restent pour les apps d'avant. Leurs `dist/plugin.mjs` sont reconstruits avec le SDK 0.3 (ESC-321), tournent dans le runtime de l'app et passent le banc d'`escouade-plugin` en WASM, sans Node.
