@@ -115,16 +115,24 @@ pub(crate) mod tests {
     /// The calls the fake isola got in `dir`: their arguments (its log is kept out of the folder,
     /// which may go).
     pub(crate) fn calls(dir: &Path) -> Vec<String> {
-        let key: String = dir
-            .to_string_lossy()
-            .chars()
-            .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
-            .collect();
-        std::fs::read_to_string(std::env::temp_dir().join(format!("fake-isola-{key}.log")))
-            .unwrap_or_default()
-            .lines()
-            .map(str::to_string)
-            .collect()
+        let log = |dir: &Path| {
+            let key: String = dir
+                .to_string_lossy()
+                .chars()
+                .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+                .collect();
+            std::fs::read_to_string(std::env::temp_dir().join(format!("fake-isola-{key}.log")))
+                .unwrap_or_default()
+        };
+        // The fake names its log after node's `process.cwd()`, the real path: under macOS a temporary folder
+        // (/var/folders/…) is a link to /private/var/folders/….
+        let mut text = log(dir);
+        if text.is_empty() {
+            if let Ok(real) = dir.canonicalize() {
+                text = log(&real);
+            }
+        }
+        text.lines().map(str::to_string).collect()
     }
 
     #[tokio::test]
