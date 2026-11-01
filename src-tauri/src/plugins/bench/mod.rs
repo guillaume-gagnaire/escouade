@@ -6,6 +6,9 @@
 //! A scenario that the manifest says does not concern the plugin is not played: no fact without
 //! `permissions.events`, no decision without `permissions.decide`, nothing of a program for a
 //! declarative plugin.
+//!
+//! A `run.js` plugin is played in WASM (ESC-322), as the app runs it: its bundle compiled by the pinned Javy with the
+//! app's escouade-js and prelude (`plugins::wasm`), then its instance in the app's host, without Node.
 
 pub mod cli;
 pub mod fake;
@@ -240,6 +243,10 @@ pub struct Options {
     pub grace: Duration,
     /// Round trips to measure; none when 0.
     pub measure: usize,
+    /// Where the pinned Javy is downloaded and the modules of the `run.js` plugins kept: the app's data folder.
+    pub data: PathBuf,
+    /// The limits of an instance in WASM: the app's.
+    pub wasm: super::wasm::Limits,
 }
 
 impl Default for Options {
@@ -255,6 +262,8 @@ impl Default for Options {
             initialize: timeout_of("initialize"),
             grace: Duration::from_secs(2),
             measure: 0,
+            data: crate::paths::tools_data_dir(),
+            wasm: super::wasm::Limits::default(),
         }
     }
 }
@@ -308,6 +317,83 @@ fn fact_of(patterns: &[String]) -> Option<String> {
             Some(p.clone())
         }
     })
+}
+
+/// The program the bench plays: a process, or the module of a `run.js` plugin.
+#[derive(Clone)]
+pub enum Program {
+    Process(PathBuf),
+    Wasm {
+        /// Its bundle, for what the bench says.
+        bundle: PathBuf,
+        module: wasmtime::Module,
+    },
+}
+
+impl Program {
+    pub fn path(&self) -> &Path {
+        match self {
+            Program::Process(p) => p,
+            Program::Wasm { bundle, .. } => bundle,
+        }
+    }
+
+    /// Starts it under the fake Escouade.
+    pub fn start(
+        &self,
+        folder: &Path,
+        m: &Manifest,
+        o: &Options,
+        secrets: HashMap<String, String>,
+        made: Option<String>,
+    ) -> std::io::Result<Session> {
+        match self {
+            Program::Process(p) => Session::start(folder, m, p, &o.app_version, secrets, made),
+            Program::Wasm { module, .. } => {
+                Session::start_wasm(folder, m, module.clone(), secrets, made, o.wasm)
+            }
+        }
+    }
+}
+
+/// The program of the plugin of `m` in `folder`: its process, or its bundle compiled to its module (in the cache of
+/// `o.data`); why not, in words, and what the author should do.
+pub fn program_of(folder: &Path, m: &Manifest, o: &Options) -> Result<Program, (String, String)> {
+    let lang = o.lang;
+    let run = m.run.as_ref().expect("a program");
+    let Some(js) = &run.js else {
+        return Ok(Program::Process(program_path(folder, run, &o.escouade_dir)));
+    };
+    let bundle = std::path::absolute(folder.join(js)).unwrap_or_else(|_| folder.join(js));
+    let one_file = || {
+        tr_in!(
+            lang,
+            "un bundle en un fichier (esbuild, `npm run build` du SDK), qui n'importe que node:fs et node:readline.",
+            "a bundle of one file (esbuild, the SDK's `npm run build`), which imports only node:fs and node:readline."
+        )
+    };
+    let text = std::fs::read_to_string(&bundle).map_err(|e| {
+        (
+            tr_in!(lang, "{} : {e}", "{}: {e}", bundle.display()),
+            one_file(),
+        )
+    })?;
+    if let Err(r) = super::wasm::script_of(&text) {
+        return Err((r.message(lang), one_file()));
+    }
+    let modules =
+        super::wasm::Modules::new(&crate::paths::DataDir::new(o.data.clone()), &o.app_version);
+    match modules.prepare(folder, js) {
+        Ok((module, _)) => Ok(Program::Wasm { bundle, module }),
+        Err(e) => Err((
+            tr_in!(
+                lang,
+                "{js} ne se compile pas en WASM : {e}",
+                "{js} does not compile to WASM: {e}"
+            ),
+            one_file(),
+        )),
+    }
 }
 
 fn ms(d: Duration) -> u64 {
@@ -373,12 +459,11 @@ impl Bench<'_> {
             .collect()
     }
 
-    fn start(&self, m: &Manifest, program: &Path) -> std::io::Result<Session> {
-        Session::start(
+    fn start(&self, m: &Manifest, program: &Program) -> std::io::Result<Session> {
+        program.start(
             &self.folder,
             m,
-            program,
-            &self.o.app_version,
+            self.o,
             self.secrets(m),
             Some(format!("bench-secret-{}", self.nonce)),
         )
@@ -403,7 +488,7 @@ impl Bench<'_> {
     async fn initialized(
         &mut self,
         m: &Manifest,
-        program: &Path,
+        program: &Program,
     ) -> Result<(Session, String), (String, String)> {
         let lang = self.o.lang;
         let s = self.start(m, program).map_err(|e| {
@@ -412,7 +497,7 @@ impl Bench<'_> {
                     lang,
                     "{} ne démarre pas : {e}",
                     "{} does not start: {e}",
-                    program.display()
+                    program.path().display()
                 ),
                 tr_in!(
                     lang,
@@ -630,11 +715,22 @@ fn manifest_of(b: &mut Bench) -> Option<Manifest> {
 /// The scenarios of a program; the round trips measured when asked.
 async fn program(b: &mut Bench<'_>, m: &Manifest) -> Option<Measure> {
     let lang = b.o.lang;
-    let run = m.run.as_ref().expect("a program");
-    let program = match &run.js {
-        // Its bundle, which the fake Escouade plays by Node (ESC-321).
-        Some(js) => std::path::absolute(b.folder.join(js)).unwrap_or_else(|_| b.folder.join(js)),
-        None => program_path(&b.folder, run, &b.o.escouade_dir),
+    // Its process, or its module (made off the runtime's threads: Javy takes a second or two).
+    let (folder, manifest, o) = (b.folder.clone(), m.clone(), b.o.clone());
+    let made = tokio::task::spawn_blocking(move || program_of(&folder, &manifest, &o))
+        .await
+        .unwrap_or_else(|e| Err((e.to_string(), String::new())));
+    let program = match made {
+        Ok(p) => p,
+        Err((said, missing)) => {
+            b.fail(Scenario::Initialize, said, missing);
+            b.skip_rest(&tr_in!(
+                lang,
+                "l'initialisation doit passer d'abord",
+                "the initialization must pass first"
+            ));
+            return None;
+        }
     };
 
     // Initialization.
@@ -1047,7 +1143,7 @@ async fn program(b: &mut Bench<'_>, m: &Manifest) -> Option<Measure> {
 }
 
 /// Offered a version it does not speak, it must say its own or refuse: never take it.
-async fn version(b: &mut Bench<'_>, m: &Manifest, program: &Path) {
+async fn version(b: &mut Bench<'_>, m: &Manifest, program: &Program) {
     let lang = b.o.lang;
     let missing = tr_in!(
         lang,
@@ -1059,7 +1155,7 @@ async fn version(b: &mut Bench<'_>, m: &Manifest, program: &Path) {
         Err(e) => {
             b.fail(
                 Scenario::Version,
-                format!("{}: {e}", program.display()),
+                format!("{}: {e}", program.path().display()),
                 missing,
             );
             return;

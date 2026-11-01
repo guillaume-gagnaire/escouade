@@ -101,10 +101,42 @@ impl Default for Limits {
 
 // ---- The module ------------------------------------------------------------------------------------------------
 
+/// Why a bundle cannot run in WASM (ESC-322: said by `escouade-plugin` in the author's language).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Refusal {
+    /// It imports a module a plugin in WASM does not have.
+    Import(String),
+    /// It is not one file without exports: the line that says so.
+    NotOneFile(String),
+}
+
+impl Refusal {
+    pub fn message(&self, lang: crate::i18n::Lang) -> String {
+        let only = NODE.join(", ");
+        match self {
+            Refusal::Import(module) => tr_in!(
+                lang,
+                "le bundle importe {module}, qu'un plugin en WASM n'a pas (seulement {only})",
+                "the bundle imports {module}, which a plugin in WASM does not have (only {only})"
+            ),
+            Refusal::NotOneFile(line) => tr_in!(
+                lang,
+                "le bundle doit tenir en un fichier, sans export : {line}",
+                "the bundle must be one file, without exports: {line}"
+            ),
+        }
+    }
+}
+
 /// The bundle made a script after the prelude: its `import … from "node:…"` taken from the prelude, its body run
 /// once by `_start`, after the first line (`escouade/boot`). A bundle that imports anything else, or exports, is
 /// refused, with the reason.
 pub fn wrap(bundle: &str) -> Result<String, String> {
+    script_of(bundle).map_err(|r| r.message(crate::i18n::Lang::En))
+}
+
+/// [`wrap`], its refusal kept to be said in another language.
+pub fn script_of(bundle: &str) -> Result<String, Refusal> {
     let mut body = String::new();
     for line in bundle.lines() {
         let t = line.trim();
@@ -115,10 +147,7 @@ pub fn wrap(bundle: &str) -> Result<String, String> {
                 .trim_end_matches(';')
                 .trim_matches(|c| c == '"' || c == '\'');
             if !NODE.contains(&module) {
-                return Err(format!(
-                    "the bundle imports {module}, which a plugin in WASM does not have (only {})",
-                    NODE.join(", ")
-                ));
+                return Err(Refusal::Import(module.to_string()));
             }
             let what = what.trim();
             let binding =
@@ -140,7 +169,7 @@ pub fn wrap(bundle: &str) -> Result<String, String> {
                 };
             body.push_str(&format!("const {binding} = __esc.node({module:?});\n"));
         } else if t.starts_with("import ") || t.starts_with("import(") || t.starts_with("export ") {
-            return Err(format!("the bundle must be one file, without exports: {t}"));
+            return Err(Refusal::NotOneFile(t.to_string()));
         } else {
             body.push_str(&line.replace("import.meta.url", "__esc.url"));
             body.push('\n');
@@ -230,11 +259,18 @@ impl Modules {
         &self.cache
     }
 
-    /// The pinned Javy: `ESCOUADE_JAVY`, else the one downloaded into the app's tools, checked by its SHA-256.
+    /// The pinned Javy: `ESCOUADE_JAVY`, else the one downloaded into the app's tools, its archive checked by its
+    /// SHA-256 (the release's, noted here), then the program itself at each use, against the SHA-256 noted beside it
+    /// once its archive was checked (ESC-322): a Javy changed since is never run, and is downloaded again.
     pub fn javy(&self) -> Result<PathBuf, String> {
         if let Some(p) = std::env::var_os("ESCOUADE_JAVY") {
             return Ok(PathBuf::from(p));
         }
+        self.pinned_javy()
+    }
+
+    /// The pinned Javy of the app's tools, whatever `ESCOUADE_JAVY` says.
+    pub fn pinned_javy(&self) -> Result<PathBuf, String> {
         let (asset, sum) = javy_asset().ok_or_else(|| {
             format!(
                 "no Javy {JAVY_VERSION} for {}-{}",
@@ -244,8 +280,19 @@ impl Modules {
         })?;
         let dir = self.tools.join(format!("javy-{JAVY_VERSION}"));
         let exe = dir.join(if cfg!(windows) { "javy.exe" } else { "javy" });
+        let noted = dir.join(format!("javy-{JAVY_VERSION}.sha256"));
         if exe.is_file() {
-            return Ok(exe);
+            let same = match (std::fs::read(&exe), std::fs::read_to_string(&noted)) {
+                (Ok(bytes), Ok(sum)) => sha256(&bytes) == sum.trim(),
+                _ => false,
+            };
+            if same {
+                return Ok(exe);
+            }
+            log::warn!(
+                "{}: not the Javy checked at its download; downloaded again",
+                exe.display()
+            );
         }
         let url = format!(
             "https://github.com/bytecodealliance/javy/releases/download/v{JAVY_VERSION}/{asset}"
@@ -264,14 +311,9 @@ impl Modules {
                 .map(|b| b.to_vec())
                 .map_err(|e| format!("{url}: {e}"))
         })?;
-        let got = sha256(&gz);
-        if got != sum {
-            return Err(format!("{asset}: its SHA-256 is {got}, not {sum}"));
-        }
-        let mut bytes = Vec::new();
-        std::io::Read::read_to_end(&mut flate2::read::GzDecoder::new(&gz[..]), &mut bytes)
-            .map_err(|e| format!("{asset}: {e}"))?;
+        let bytes = unpack_javy(&gz, asset, sum)?;
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let _ = std::fs::remove_file(&noted);
         let tmp = dir.join(format!(".javy-{}", uuid::Uuid::new_v4().simple()));
         std::fs::write(&tmp, &bytes).map_err(|e| e.to_string())?;
         #[cfg(unix)]
@@ -279,11 +321,14 @@ impl Modules {
             use std::os::unix::fs::PermissionsExt;
             let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755));
         }
-        if std::fs::rename(&tmp, &exe).is_err() && !exe.is_file() {
-            let _ = std::fs::remove_file(&tmp);
+        let _ = std::fs::rename(&tmp, &exe);
+        let _ = std::fs::remove_file(&tmp);
+        // What is there now must be what was checked (another process may have put the same there meanwhile).
+        let sum = sha256(&bytes);
+        if std::fs::read(&exe).map(|b| sha256(&b)).ok().as_deref() != Some(sum.as_str()) {
             return Err(format!("could not keep Javy at {}", exe.display()));
         }
-        let _ = std::fs::remove_file(&tmp);
+        crate::paths::write_atomic(&noted, sum.as_bytes()).map_err(|e| e.to_string())?;
         Ok(exe)
     }
 
@@ -343,6 +388,13 @@ impl Modules {
         let pre = w(module.serialize())?;
         crate::paths::write_atomic(&native, &pre).map_err(|e| e.to_string())?;
         Ok((module, made))
+    }
+
+    /// The module of a bundle, compiled now, outside the cache: what `escouade-plugin build` writes, the same bytes
+    /// on every system for the same bundle (ESC-322).
+    pub fn build(&self, bundle: &str) -> Result<Vec<u8>, String> {
+        escouade_js()?;
+        self.compile(&wrap(bundle)?)
     }
 
     /// The bundle's script to a module, by the pinned Javy, in a folder of its own.
@@ -406,8 +458,22 @@ impl Modules {
     }
 }
 
+/// The program in Javy's archive `asset` (gzip), once the archive's SHA-256 is `sum`; a changed archive is refused.
+pub fn unpack_javy(gz: &[u8], asset: &str, sum: &str) -> Result<Vec<u8>, String> {
+    let got = sha256(gz);
+    if got != sum {
+        return Err(format!(
+            "{asset}: its SHA-256 is {got}, not {sum}: not the pinned Javy, refused"
+        ));
+    }
+    let mut bytes = Vec::new();
+    std::io::Read::read_to_end(&mut flate2::read::GzDecoder::new(gz), &mut bytes)
+        .map_err(|e| format!("{asset}: {e}"))?;
+    Ok(bytes)
+}
+
 /// The pinned Javy's archive for this system, and its SHA-256 (the release's own digests).
-fn javy_asset() -> Option<(&'static str, &'static str)> {
+pub fn javy_asset() -> Option<(&'static str, &'static str)> {
     Some(match (std::env::consts::OS, std::env::consts::ARCH) {
         ("windows", "x86_64") => (
             "javy-x86_64-windows-v9.1.0.gz",
