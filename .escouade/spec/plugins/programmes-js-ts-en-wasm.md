@@ -3,7 +3,7 @@ title: "Les programmes JS/TS des plugins, en WASM sans Node"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §5 (ESC-319, ESC-320)","prototypes/wasm-plugins/","Demande de l'utilisateur du 2026-11-01 : « je veux pas rendre node obligatoire… chaque plugin ts qui est soumis sera buildé en wasm »","Revue d'ESC-319 par le chef (2026-11-01) : l'adresse résolue","src-tauri/src/plugins/wasm.rs"]
 tickets: ["ESC-319","ESC-320"]
-decisions: [29,"net-fetch-juge-les-adresses-resolues-a-l"]
+decisions: [29,32]
 compared: null
 ---
 
