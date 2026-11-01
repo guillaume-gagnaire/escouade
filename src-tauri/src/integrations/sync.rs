@@ -414,8 +414,24 @@ fn by_its_host(service: Service) -> String {
 }
 
 /// What the form of a service's account lacks, in a sentence: Jira's site, its e-mail, the token,
-/// Trello's API key. None when nothing is missing (GitHub's token may be the CLI's).
+/// the API key of the sources whose plugin asks for one (Trello's). None when nothing is missing (GitHub's token may
+/// be the CLI's).
 fn missing_field(lang: Lang, service: Service, account: &Account) -> Option<String> {
+    if let Some(plugin) = source::registry().get(service).and_then(|k| k.plugin()) {
+        // The texts of a source that has left the core are its plugin's (its manifest).
+        if let Some(said) = crate::plugins::builtin::missing(
+            plugin,
+            service.as_str(),
+            |field| match field {
+                "key" => account.key.clone(),
+                "token" => account.token.clone(),
+                _ => String::new(),
+            },
+            lang,
+        ) {
+            return Some(said);
+        }
+    }
     Some(match service {
         Service::JIRA if account.site.is_empty() => {
             tr_in!(
@@ -427,13 +443,8 @@ fn missing_field(lang: Lang, service: Service, account: &Account) -> Option<Stri
         Service::JIRA if account.email.is_empty() => {
             tr_in!(lang, "Indique l'e-mail.", "Give the email.")
         }
-        Service::JIRA | Service::TRELLO | Service::LINEAR | Service::CLICKUP
-            if account.token.is_empty() =>
-        {
+        Service::JIRA | Service::LINEAR | Service::CLICKUP if account.token.is_empty() => {
             tr_in!(lang, "Indique le jeton.", "Give the token.")
-        }
-        Service::TRELLO if account.key.is_empty() => {
-            tr_in!(lang, "Indique la clé d'API.", "Give the API key.")
         }
         _ => return None,
     })
@@ -481,12 +492,22 @@ impl<R: Runtime> Core<R> {
         }
         let bases = self.bases.read().clone();
         if let Some(own) = source::registry().get(service).and_then(|k| k.plugin()) {
-            // Out of the core (GitHub Issues): its plugin serves it, on github.com's account, its
-            // token lent as the core holds it.
+            // Out of the core (GitHub Issues, Trello): its plugin serves it, its secret lent as the core
+            // holds it (Trello's is the key and the token), on github.com's account for GitHub.
             let host = crate::plugins::accounts::source_account(service);
+            let (secret, api) = if service == Service::TRELLO {
+                (
+                    serde_json::json!({ "key": account.key, "token": account.token }).to_string(),
+                    &bases.trello,
+                )
+            } else {
+                (account.token.clone(), &bases.github)
+            };
             self.plugin_runtime
-                .lend(own, &format!("account:{host}"), &account.token);
-            account.site = format!("https://{host}");
+                .lend(own, &format!("account:{host}"), &secret);
+            if service == Service::GITHUB {
+                account.site = format!("https://{host}");
+            }
             return Ok(Box::new(
                 crate::plugins::adapters::ProcessTicketSource::new(
                     self.plugin_runtime.clone(),
@@ -494,7 +515,7 @@ impl<R: Runtime> Core<R> {
                     service.as_str(),
                     &account,
                 )
-                .with_api(&bases.github),
+                .with_api(api),
             ));
         }
         let http = crate::usage::http_client(&self.settings.read())?;

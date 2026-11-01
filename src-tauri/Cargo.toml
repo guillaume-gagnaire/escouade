@@ -66,6 +66,7 @@ escouade-plugin-kit = { path = "../crates/escouade-plugin-kit" }
 escouade-plugin-github = { path = "../plugins/builtin/dev.escouade.github" }
 escouade-plugin-bitbucket = { path = "../plugins/builtin/dev.escouade.bitbucket" }
 escouade-plugin-gitea = { path = "../plugins/builtin/dev.escouade.gitea" }
+escouade-plugin-trello = { path = "../plugins/builtin/dev.escouade.trello" }
 # A version's archive from the store (STORE-9): read in memory, its links and climbing paths refused.
 flate2 = "1"
 tar = { version = "0.4", default-features = false }
@@ -165,6 +166,7 @@ members = [
     "../plugins/builtin/dev.escouade.github",
     "../plugins/builtin/dev.escouade.bitbucket",
     "../plugins/builtin/dev.escouade.gitea",
+    "../plugins/builtin/dev.escouade.trello",
 ]
 default-members = [
     ".",
@@ -173,6 +175,7 @@ default-members = [
     "../plugins/builtin/dev.escouade.github",
     "../plugins/builtin/dev.escouade.bitbucket",
     "../plugins/builtin/dev.escouade.gitea",
+    "../plugins/builtin/dev.escouade.trello",
 ]
 
 [profile.dev.package."*"]

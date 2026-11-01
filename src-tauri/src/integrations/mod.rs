@@ -14,7 +14,6 @@ pub mod secrets;
 pub mod source;
 pub mod sync;
 pub mod text;
-pub mod trello;
 
 use crate::model::*;
 use anyhow::{anyhow, bail, Result};

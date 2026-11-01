@@ -78,6 +78,10 @@ pub const REGISTRY: &[Entry] = &[
         id: GITEA,
         manifest: include_str!("../../../plugins/builtin/dev.escouade.gitea/escouade-plugin.json"),
     },
+    Entry {
+        id: TRELLO,
+        manifest: include_str!("../../../plugins/builtin/dev.escouade.trello/escouade-plugin.json"),
+    },
 ];
 
 /// The plugin « GitHub »: github.com, GHE.com and GitHub Enterprise Server, their pull requests and GitHub Issues.
@@ -88,6 +92,9 @@ pub const BITBUCKET: &str = "dev.escouade.bitbucket";
 
 /// The plugin « Gitea / Forgejo »: Gitea, Forgejo and Codeberg, their pull requests, statuses and Actions.
 pub const GITEA: &str = "dev.escouade.gitea";
+
+/// The plugin « Trello »: the Kanban's source of Trello cards (INT-7.1).
+pub const TRELLO: &str = "dev.escouade.trello";
 
 /// Whether `id` is the id of a plugin the app gives.
 pub fn is_builtin(id: &str) -> bool {
@@ -100,6 +107,34 @@ pub fn manifest_text(id: &str, app_version: &str) -> Option<String> {
     let mut v: serde_json::Value = serde_json::from_str(entry.manifest).ok()?;
     v["version"] = app_version.into();
     serde_json::to_string_pretty(&v).ok()
+}
+
+/// What a form of an account of the plugin `plugin` lacks, in a sentence: the first of the fields of its kind of account
+/// (`kind`, in `contributes.accounts`) that is empty and has a `missing` text, in the language `lang`. `value` says
+/// what the form gave for a field. The texts are the plugin's own (its manifest), so that the core writes none of them.
+pub fn missing(
+    plugin: &str,
+    kind: &str,
+    value: impl Fn(&str) -> String,
+    lang: crate::i18n::Lang,
+) -> Option<String> {
+    let entry = REGISTRY.iter().find(|e| e.id == plugin)?;
+    let v: serde_json::Value = serde_json::from_str(entry.manifest).ok()?;
+    let account = v["contributes"]["accounts"]
+        .as_array()?
+        .iter()
+        .find(|a| a["id"] == kind)?;
+    let code = match lang {
+        crate::i18n::Lang::Fr => "fr",
+        crate::i18n::Lang::En => "en",
+    };
+    account["fields"].as_array()?.iter().find_map(|f| {
+        let key = f["key"].as_str()?;
+        if !value(key).trim().is_empty() {
+            return None;
+        }
+        f["missing"][code].as_str().map(str::to_string)
+    })
 }
 
 /// What pins a builtin plugin: the app's version.

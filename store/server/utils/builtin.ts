@@ -203,6 +203,8 @@ export const BUILTINS: Builtin[] = [
     secrets: true,
     docs: doc('integrations'),
     logo: { category: 'source' },
+    // Trello is the first source to have left the core (INT-7.1); Linear, Jira and ClickUp follow.
+    ...(id === 'trello' ? { source: 'plugins/builtin/dev.escouade.trello' } : {}),
   })),
 ];
 

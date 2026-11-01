@@ -1,0 +1,44 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.trello",
+  "name": "Trello",
+  "version": "0.0.0",
+  "description": {
+    "fr": "Les cartes de Trello dans le Kanban, leurs listes comme colonnes.",
+    "en": "Trello cards in the Kanban, their lists as columns."
+  },
+  "author": { "name": "Escouade", "url": "https://escouade.dev" },
+  "license": "GPL-3.0-or-later",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/builtin/dev.escouade.trello",
+  "escouade": { "api": "1", "min": "2.1.0" },
+  "run": { "command": "{escouade}/escouade-plugins", "args": ["trello"] },
+  "activation": ["account:trello"],
+  "permissions": {
+    "network": ["api.trello.com"],
+    "secrets": ["account:trello"]
+  },
+  "contributes": {
+    "accounts": [
+      {
+        "id": "trello",
+        "name": "Trello",
+        "defaultHost": "trello.com",
+        "connect": ["token"],
+        "fields": [
+          {
+            "key": "token",
+            "secret": true,
+            "missing": { "fr": "Indique le jeton.", "en": "Give the token." }
+          },
+          {
+            "key": "key",
+            "secret": true,
+            "missing": { "fr": "Indique la clé d'API.", "en": "Give the API key." }
+          }
+        ],
+        "tokenPage": "https://trello.com/power-ups/admin"
+      }
+    ],
+    "ticketSources": [{ "id": "trello", "name": "Trello", "account": "trello" }]
+  }
+}

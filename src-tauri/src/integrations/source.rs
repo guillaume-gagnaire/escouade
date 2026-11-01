@@ -223,7 +223,6 @@ macro_rules! ticket_source {
 }
 
 ticket_source!(jira::Jira, set_state: plain, view: default);
-ticket_source!(trello::Trello, set_state: plain, view: default);
 ticket_source!(linear::Linear, set_state: plain, view: default);
 ticket_source!(clickup::Clickup, set_state: plain, view: own);
 ticket_source!(gitlab::Gitlab, set_state: mapped, view: default);
@@ -267,9 +266,26 @@ macro_rules! kind {
 kind!(JiraKind, "jira", "Jira", "Jira", |a, http, _b| {
     jira::Jira::new(http, a)
 });
-kind!(TrelloKind, "trello", "Trello", "Trello", |a, http, b| {
-    trello::Trello::new(http, a, &b.trello)
-});
+// Trello: out of the core, served by the plugin « Trello » (INT-7.1).
+pub struct TrelloKind;
+
+impl TicketSourceKind for TrelloKind {
+    fn id(&self) -> &'static str {
+        "trello"
+    }
+    fn label(&self) -> &'static str {
+        "Trello"
+    }
+    fn short(&self) -> &'static str {
+        "Trello"
+    }
+    fn plugin(&self) -> Option<&'static str> {
+        Some(crate::plugins::builtin::TRELLO)
+    }
+    fn build(&self, _: &Account, _: reqwest::Client, _: &Bases) -> Box<dyn TicketSource> {
+        Box::new(Unserved("Trello"))
+    }
+}
 // GitHub Issues: out of the core, served by the plugin « GitHub » (INT-8.1).
 pub struct GithubKind;
 

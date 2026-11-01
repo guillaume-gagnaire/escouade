@@ -2,7 +2,7 @@
 title: "Intégrations"
 subject: "Kanban"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-165","ESC-201","ESC-242","ESC-212"]
+tickets: ["ESC-213"]
 decisions: []
 compared: null
 ---
@@ -151,3 +151,11 @@ Dans Réglages › Intégrations › « Sources du Kanban » :
 
 - Chaque compte est d'un genre déclaré par le plugin qui le sert, et sert tous ses points ; le secret est aussi au trousseau sous `plugin:<id>:account:<compte>`, les anciennes entrées tenues à côté (voir *Les comptes partagés par plugin*).
 - Quand plusieurs plugins servent le même genre, le formulaire « Connecter… » demande « Servi par » ; le compte connecté dit « Servi par le plugin <id> ».
+
+## Trello, plugin de première main (ESC-213, INT-7.1)
+
+- Trello n'est plus dans le cœur : c'est le plugin `dev.escouade.trello`, livré avec Escouade et signé avec elle (dossier `plugins/builtin/dev.escouade.trello/`), un process `escouade-plugins trello`. Le Kanban, l'import, la correspondance des statuts et la synchronisation se comportent comme avant ; le compte, les projets liés et le trousseau (ancien nom tenu à côté) sont inchangés.
+- Il se voit dans la vue Plugins, sous « Livrés avec Escouade », et se coupe pour l'app ou pour un projet. Arrêté ou coupé, la synchro le dit (« Le plugin dev.escouade.trello ne répond pas : … ») et recommence plus tard ; rien n'est perdu.
+- « Connecter » vérifie la clé et le jeton par le plugin, à qui Escouade les prête le temps de l'appel (même quand le trousseau du système les refuse) ; ils vont ensuite au trousseau comme avant. Les textes « Indique le jeton. » et « Indique la clé d'API. » sont ceux du manifeste du plugin.
+- Le plugin reçoit de l'app l'adresse de l'API (`ESCOUADE_TRELLO_API`), la langue, le proxy et la vérification TLS des réglages.
+- Linear, Jira et ClickUp suivent le même modèle (une crate `plugins/builtin/<id>/` sur le kit `escouade-plugin-kit`).

@@ -1,0 +1,16 @@
+[package]
+name = "escouade-plugin-trello"
+version = "1.0.0"
+description = "Le plugin Trello livré avec Escouade : les cartes d'un tableau dans le Kanban, leurs listes comme colonnes"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+workspace = "../../../src-tauri"
+
+# One of the plugins of `escouade-plugins` (docs/PLUGINS.md §4.3): its program is `escouade-plugins trello`.
+[dependencies]
+escouade-plugin-kit = { path = "../../../crates/escouade-plugin-kit" }
+serde_json = "1"
+anyhow = "1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }

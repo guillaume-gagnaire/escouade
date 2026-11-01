@@ -38,6 +38,8 @@ pub struct Credentials {
     /// The e-mail some hosts' tokens go with (Bitbucket's).
     pub email: String,
     pub token: String,
+    /// Who the account is for the service (a source's « mine » filters on it); empty when the core does not say.
+    pub user: String,
     /// Where its API is, in place of where the address says (github.com's as the core reaches it, a fake one).
     pub api: Option<String>,
 }
@@ -93,6 +95,7 @@ struct Named {
     /// A source's account: its instance (GitLab Issues on a GitLab's).
     site: String,
     email: String,
+    user: String,
     api: Option<String>,
 }
 
@@ -187,6 +190,7 @@ impl Hosts {
             url,
             email: account.email,
             token,
+            user: account.user,
             api: account.api,
         };
         let client: Arc<dyn Forge> = Arc::from(kind.client(self.http()?, &creds));
@@ -221,6 +225,7 @@ impl Hosts {
             url,
             email: account.email,
             token,
+            user: account.user,
             api: account.api,
         };
         let client: Arc<dyn TicketSource> = Arc::from(kind.client(self.http()?, &creds));

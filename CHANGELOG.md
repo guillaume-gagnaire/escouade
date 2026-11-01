@@ -35,6 +35,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - isola est un plugin livré avec Escouade, le premier « environnement de lancement » : il lance les services de chaque worktree sur ses ports et ses adresses. Tu peux le couper dans Réglages › Plugins, pour toute l’app ou un projet ; sans lui, un ticket part comme avant, avec une recette.
 - GitHub est un plugin livré avec Escouade, rangé dans « Livrés avec Escouade » : ses issues dans le Kanban, ses PR, sa CI, ses relectures et ses déploiements tournent à part, sur le même compte, et rien ne change à l’usage. Coupé ou arrêté, il le dit sur la carte de l’agent et dans Réglages › Intégrations, et les PR lues en dernier restent.
 - Gitea, Forgejo et Codeberg ont leur plugin livré avec Escouade : PR en brouillon, merge, auto-merge sur une branche protégée, statuts, journaux des Actions, relectures et fils. Les déploiements n’existent pas chez eux, et les journaux et la relance des Actions dépendent de la version de l’instance : l’app le dit au lieu d’échouer.
+- Trello est un plugin livré avec Escouade : il se voit dans la vue Plugins, sous « Livrés avec Escouade », s’arrête pour l’app ou pour un projet, et la synchronisation dit quand il ne répond pas. Ton compte Trello et tes projets liés restent tels quels.
 
 ### Retiré
 

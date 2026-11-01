@@ -1,12 +1,24 @@
-//! Trello (REST API 1), with an API key and a token.
+//! Trello (REST API 1), with an API key and a token: the Kanban's source of Trello cards, a board's lists as the
+//! columns' states. The account's secret is `{"key":…,"token":…}` (`secrets/get` of `account:trello`).
 
-use super::text::{criteria_of, names_criteria};
-use super::{call, encode, Account, Container, ExternalIssue, IssueFilter, IssuePage, Query};
-use crate::model::{ExternalRef, ExternalState, Service};
 use anyhow::Result;
+use escouade_plugin_kit::forge::BoxFuture;
+use escouade_plugin_kit::hosts::{Credentials, SourceKind, TicketSource};
+use escouade_plugin_kit::http::{call, encode};
+use escouade_plugin_kit::i18n::{self, Lang};
+use escouade_plugin_kit::protocol::tickets::{
+    Container, ExternalIssue, ExternalRef, ExternalState, IssueFilter, IssuePage, Query,
+};
+use escouade_plugin_kit::text::{criteria_of, names_criteria};
+use escouade_plugin_kit::tr_in;
 use serde_json::Value;
 
-const S: Service = Service::TRELLO;
+/// The source's id, and its name in what it says.
+pub const ID: &str = "trello";
+const S: &str = "Trello";
+
+/// Where the API is, unless Escouade says otherwise (`ESCOUADE_TRELLO_API`: tests, demos).
+const API: &str = "https://api.trello.com/1";
 
 pub struct Trello {
     http: reqwest::Client,
@@ -43,13 +55,16 @@ fn card_criteria(checklists: &[&Value], desc: &str) -> Vec<String> {
 }
 
 impl Trello {
-    pub fn new(http: reqwest::Client, a: &Account, base: &str) -> Self {
+    pub fn new(http: reqwest::Client, account: &Credentials, base: &str) -> Self {
+        // The secret is the key and the token, as the core keeps them.
+        let secret: Value = serde_json::from_str(&account.token).unwrap_or(Value::Null);
+        let text = |k: &str| secret[k].as_str().unwrap_or("").trim().to_string();
         Self {
             http,
             base: base.trim_end_matches('/').to_string(),
-            key: a.key.trim().to_string(),
-            token: a.token.trim().to_string(),
-            user: a.user.clone(),
+            key: text("key"),
+            token: text("token"),
+            user: account.user.clone(),
         }
     }
 
@@ -189,11 +204,11 @@ impl Trello {
                 let mut meta = vec![list];
                 meta.extend(labels);
                 ExternalIssue {
-                    service: S,
+                    service: S.to_lowercase(),
                     id: id.to_string(),
                     key: format!("#{}", c["idShort"]),
                     title: c["name"].as_str().unwrap_or_default().to_string(),
-                    kind: card(crate::i18n::ui()),
+                    kind: card(i18n::ui()),
                     kind_code: "card".into(),
                     meta: meta.into_iter().filter(|m| !m.is_empty()).collect(),
                     url: c["shortUrl"].as_str().unwrap_or_default().to_string(),
@@ -204,7 +219,7 @@ impl Trello {
                 }
             })
             .collect();
-        let mut filters = vec![mine_filter(crate::i18n::ui())];
+        let mut filters = vec![mine_filter(i18n::ui())];
         filters.extend(lists.iter().map(|l| IssueFilter {
             id: format!("list:{}", l.id),
             label: l.name.clone(),
@@ -244,214 +259,90 @@ impl Trello {
 }
 
 /// What a Trello card is called in the import's list.
-fn card(lang: crate::i18n::Lang) -> String {
+fn card(lang: Lang) -> String {
     tr_in!(lang, "Carte", "Card")
 }
 
 /// The filter of the cards the account is a member of.
-fn mine_filter(lang: crate::i18n::Lang) -> IssueFilter {
+fn mine_filter(lang: Lang) -> IssueFilter {
     IssueFilter {
         id: "mine".into(),
         label: tr_in!(lang, "Mes cartes", "My cards"),
     }
 }
 
+impl TicketSource for Trello {
+    fn me(&self) -> BoxFuture<'_, Result<(String, String)>> {
+        Box::pin(Trello::me(self))
+    }
+    fn containers(&self) -> BoxFuture<'_, Result<Vec<Container>>> {
+        Box::pin(Trello::containers(self))
+    }
+    fn states<'a>(&'a self, container: &'a str) -> BoxFuture<'a, Result<Vec<ExternalState>>> {
+        Box::pin(Trello::states(self, container))
+    }
+    fn issues<'a>(&'a self, container: &'a str, q: &'a Query) -> BoxFuture<'a, Result<IssuePage>> {
+        Box::pin(Trello::issues(self, container, q))
+    }
+    fn set_state<'a>(
+        &'a self,
+        r: &'a ExternalRef,
+        state: &'a ExternalState,
+        _mapped: &'a [ExternalState],
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(Trello::set_state(self, r, state))
+    }
+    fn comment<'a>(&'a self, r: &'a ExternalRef, text: &'a str) -> BoxFuture<'a, Result<()>> {
+        Box::pin(Trello::comment(self, r, text))
+    }
+}
+
+/// The Kanban's source, Trello.
+pub struct TrelloSource;
+
+impl SourceKind for TrelloSource {
+    fn id(&self) -> &str {
+        ID
+    }
+    fn name(&self) -> &str {
+        S
+    }
+    fn client(&self, http: reqwest::Client, account: &Credentials) -> Box<dyn TicketSource> {
+        let base = account.api.clone().filter(|a| !a.trim().is_empty());
+        Box::new(Trello::new(http, account, base.as_deref().unwrap_or(API)))
+    }
+}
+
+/// What `escouade-plugins trello` runs.
+pub fn run() -> i32 {
+    escouade_plugin_kit::serve::run(
+        "trello",
+        escouade_plugin_kit::hosts::Hosts::new(vec![], vec![Box::new(TrelloSource)]),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::integrations::fake::FakeServer;
-    use serde_json::json;
 
     #[test]
     fn the_filter_of_trello_reads_in_english() {
-        assert_eq!(mine_filter(crate::i18n::Lang::En).label, "My cards");
-        assert_eq!(card(crate::i18n::Lang::En), "Card");
+        assert_eq!(mine_filter(Lang::En).label, "My cards");
+        assert_eq!(card(Lang::En), "Card");
     }
 
-    async fn trello() -> (FakeServer, Trello) {
-        let server = FakeServer::start().await;
-        let account = Account {
-            key: "k1".into(),
-            token: "t 1".into(),
+    #[test]
+    fn the_secret_is_the_key_and_the_token() {
+        let account = Credentials {
+            token: r#"{"key":" k1 ","token":"t 1"}"#.into(),
             user: "me".into(),
             ..Default::default()
         };
-        let t = Trello::new(reqwest::Client::new(), &account, &server.url);
-        (server, t)
-    }
-
-    fn board(server: &FakeServer) {
-        server.on(
-            "GET",
-            "/boards/b1/lists",
-            200,
-            json!([{ "id": "l1", "name": "Prêt pour Claude" }, { "id": "l2", "name": "En cours" }, { "id": "l3", "name": "Recette" }]),
-        );
-        server.on(
-            "GET",
-            "/boards/b1/cards/open",
-            200,
-            json!([
-                { "id": "c1", "idShort": 151, "name": "Exporter le journal", "desc": "Export CSV.", "idList": "l1",
-                  "shortUrl": "https://trello.com/c/abc", "labels": [{ "name": "claude-ready" }], "idMembers": ["me"] },
-                { "id": "c2", "idShort": 156, "name": "Email de bienvenue", "desc": "## Critères\n- Template HTML", "idList": "l2",
-                  "shortUrl": "https://trello.com/c/def", "labels": [], "idMembers": [] }
-            ]),
-        );
-        server.on(
-            "GET",
-            "/boards/b1/checklists",
-            200,
-            json!([
-                { "id": "k1", "idCard": "c1", "name": "Tâches", "checkItems": [{ "name": "Préparer" }] },
-                { "id": "k2", "idCard": "c1", "name": "Critères d'acceptation", "checkItems": [{ "name": "Filtre par date" }, { "name": "Colonnes IP" }] }
-            ]),
-        );
-    }
-
-    #[tokio::test]
-    async fn the_key_and_token_go_with_every_call() {
-        let (server, t) = trello().await;
-        server.on(
-            "GET",
-            "/members/me",
-            200,
-            json!({ "id": "me", "username": "ada" }),
-        );
+        let t = Trello::new(reqwest::Client::new(), &account, "https://x/1/");
+        assert_eq!((t.key.as_str(), t.token.as_str()), ("k1", "t 1"));
         assert_eq!(
-            t.me().await.unwrap(),
-            ("@ada".to_string(), "me".to_string())
+            t.url("/members/me?fields=a"),
+            "https://x/1/members/me?fields=a&key=k1&token=t%201"
         );
-        let req = &server.requests()[0];
-        assert_eq!(req.query("key").as_deref(), Some("k1"));
-        assert_eq!(req.query("token").as_deref(), Some("t 1"));
-        assert_eq!(req.query("fields").as_deref(), Some("username,fullName"));
-        server.on(
-            "GET",
-            "/members/me",
-            401,
-            Value::String("invalid token".into()),
-        );
-        assert_eq!(
-            t.me().await.unwrap_err().to_string(),
-            "Trello refuse ces identifiants (401) — invalid token"
-        );
-    }
-
-    #[tokio::test]
-    async fn the_boards_and_their_lists_are_listed() {
-        let (server, t) = trello().await;
-        board(&server);
-        server.on(
-            "GET",
-            "/members/me/boards",
-            200,
-            json!([{ "id": "b1", "name": "Atlas" }]),
-        );
-        assert_eq!(
-            t.containers().await.unwrap(),
-            [Container {
-                id: "b1".into(),
-                name: "Atlas".into(),
-                group: None,
-                own: false,
-            }]
-        );
-        let lists: Vec<String> = t
-            .states("b1")
-            .await
-            .unwrap()
-            .into_iter()
-            .map(|s| s.name)
-            .collect();
-        assert_eq!(lists, ["Prêt pour Claude", "En cours", "Recette"]);
-    }
-
-    #[tokio::test]
-    async fn the_cards_come_with_their_list_and_criteria_and_are_filtered() {
-        let (server, t) = trello().await;
-        board(&server);
-        let page = t.issues("b1", &Query::default()).await.unwrap();
-        let c1 = &page.issues[0];
-        assert_eq!(
-            (c1.key.as_str(), c1.kind.as_str(), c1.id.as_str()),
-            ("#151", "Carte", "c1")
-        );
-        assert_eq!(c1.kind_code, "card");
-        assert_eq!(c1.meta, ["Prêt pour Claude", "claude-ready"]);
-        assert_eq!(c1.criteria, ["Filtre par date", "Colonnes IP"]);
-        assert_eq!(c1.url, "https://trello.com/c/abc");
-        // Without a checklist: its description's.
-        assert_eq!(page.issues[1].criteria, ["Template HTML"]);
-        let ids: Vec<&str> = page.filters.iter().map(|f| f.id.as_str()).collect();
-        assert_eq!(ids, ["mine", "list:l1", "list:l2", "list:l3"]);
-        // A board's open cards come all at once: no next page.
-        assert_eq!((&page.next, page.total), (&None, None));
-        let keys = |p: IssuePage| p.issues.into_iter().map(|i| i.key).collect::<Vec<_>>();
-        let q = |text: &str, filters: &[&str], label: Option<&str>| Query {
-            text: text.into(),
-            filters: filters.iter().map(|f| f.to_string()).collect(),
-            label: label.map(str::to_string),
-            ..Default::default()
-        };
-        assert_eq!(
-            keys(t.issues("b1", &q("bienvenue", &[], None)).await.unwrap()),
-            ["#156"]
-        );
-        assert_eq!(
-            keys(t.issues("b1", &q("156", &[], None)).await.unwrap()),
-            ["#156"]
-        );
-        assert_eq!(
-            keys(t.issues("b1", &q("", &["mine"], None)).await.unwrap()),
-            ["#151"]
-        );
-        assert_eq!(
-            keys(
-                t.issues("b1", &q("", &["list:l2", "list:l3"], None))
-                    .await
-                    .unwrap()
-            ),
-            ["#156"]
-        );
-        assert_eq!(
-            keys(
-                t.issues("b1", &q("", &[], Some("Claude-Ready")))
-                    .await
-                    .unwrap()
-            ),
-            ["#151"]
-        );
-    }
-
-    #[tokio::test]
-    async fn a_card_moves_to_its_list_and_is_commented() {
-        let (server, t) = trello().await;
-        server.on("PUT", "/cards/c1", 200, json!({}));
-        server.on("POST", "/cards/c1/actions/comments", 200, json!({}));
-        let r = ExternalRef {
-            service: S,
-            id: "c1".into(),
-            ..Default::default()
-        };
-        t.set_state(
-            &r,
-            &ExternalState {
-                id: "l3".into(),
-                name: "Recette".into(),
-            },
-        )
-        .await
-        .unwrap();
-        t.comment(&r, "Escouade : prêt & fini").await.unwrap();
-        let w = server.writes();
-        assert_eq!(
-            (w[0].method.as_str(), w[0].query("idList").as_deref()),
-            ("PUT", Some("l3"))
-        );
-        // In the body: a long comment would not fit in an address.
-        assert_eq!(w[1].json(), json!({ "text": "Escouade : prêt & fini" }));
-        assert_eq!(w[1].query("text"), None);
-        assert_eq!(w[1].query("token").as_deref(), Some("t 1"));
     }
 }

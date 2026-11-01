@@ -161,6 +161,8 @@ mod plugins_store_tests;
 #[cfg(test)]
 mod plugins_tests;
 #[cfg(test)]
+mod plugins_trello_tests;
+#[cfg(test)]
 mod plugins_wasm_tests;
 mod pricing;
 #[cfg(test)]

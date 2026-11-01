@@ -38,6 +38,8 @@ const ENTRIES: &[Entry] = &[
     ("bitbucket", escouade_plugin_bitbucket::run),
     // Gitea and Forgejo (INT-8.4): its code host, in its crate (plugins/builtin/dev.escouade.gitea).
     ("gitea", escouade_plugin_gitea::run),
+    // Trello (INT-7.1): the Kanban's source of Trello cards, in its crate (plugins/builtin/dev.escouade.trello).
+    ("trello", escouade_plugin_trello::run),
 ];
 
 fn main() {
