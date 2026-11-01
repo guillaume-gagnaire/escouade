@@ -69,6 +69,16 @@ Ce qui rend un point facile, c'est un **trait ou un registre déjà là**, derri
 
 **Exemple.** Wispr Flow (déjà demandé, ESC-164), AssemblyAI, Azure Speech, ou un serveur Whisper de l'équipe.
 
+**Le contrat (INT-12, ESC-284, fait le 2026-11-01).** `src-tauri/src/voice/service.rs` : le trait `VoiceService` porte les cinq usages d'un service en ligne, et le cœur n'appelle plus que lui :
+
+- **le compte** : `account_entry` (l'entrée du trousseau, `dictation-<id>`, une clé comme INT-6), lue par `keys`, `save_key` et `delete_key` ;
+- **la dictée d'un fichier** : `default_model`, `transcribe` (bloquant, annulable) ;
+- **le direct** : `offers_live`, `live_model`, `open_live` (un `LiveStream` : l'audio poussé, le texte partiel par rappel, le texte final à `finish`) ;
+- **la synthèse** : `max_chars`, `speak` (le son rendu par morceaux à un rappel, annulable) ;
+- **le catalogue** : `catalog` (la documentation, ou ce que l'API a listé) et `list` (relit les modèles et les voix).
+
+`CoreService(Provider)` répond pour OpenAI, Groq, Mistral, ElevenLabs et Deepgram avec le code d'avant, sans changement de comportement ; `services()`, `find(id)` et `of(provider)` sont le registre. Whisper et Piper n'en font pas partie : hors ligne, sans compte, ils restent au cœur. Un plugin répondra au même trait (INT-13 : un adaptateur de process comme `ProcessTicketSource`, et Wispr Flow, ESC-164, écrit dessus). **Mesure d'INT-0 pour la voix** (`voice::service::tests`, faux serveurs WebSocket, 20 phrases par service, Windows 11, build de debug) : le délai du texte final après la fin de la phrase, en médiane, **avant** 2,4 ms (OpenAI), 2,0 ms (Mistral), 2,0 ms (ElevenLabs), 1,5 ms (Deepgram) ; **après**, par le contrat, les mêmes (2,4 ; 2,0 ; 2,0 ; 1,5 ms). Le test refuse plus de 5 ms de plus en médiane. Le passage par un plugin (la file du process) se mesurera de même avec INT-13 : seuil, pas plus de 5 ms de plus au 99e centile.
+
 **Valeur 2.** **Difficulté 2** pour le fichier entier (une requête, une réponse), **3** pour le direct (de l'audio en continu, des délais de quelques centaines de millisecondes mesurés en ESC-136 et ESC-137 : un process par stdio tient le débit, mais le passage par un plugin s'ajoute au délai). **Risque 2** : le plugin entend ce que l'utilisateur dicte ; il a besoin du réseau et d'une clé.
 
 ### 1.5 Les outils du serveur MCP d'Escouade
