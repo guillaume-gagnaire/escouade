@@ -9,12 +9,18 @@
 
 #[path = "escouade-plugins/minimal.rs"]
 mod minimal;
+#[path = "escouade-plugins/minimal_harness.rs"]
+mod minimal_harness;
 
 /// An entry: the name a manifest's `run.args` gives, and the function that runs the plugin and returns its exit code.
 type Entry = (&'static str, fn() -> i32);
 
-/// The plugins of this program.
-const ENTRIES: &[Entry] = &[("minimal", minimal::run)];
+/// The plugins of this program. `minimal-harness` is none: the harness of the demonstration plugin, which the core
+/// launches from the plugin's description (INT-9).
+const ENTRIES: &[Entry] = &[
+    ("minimal", minimal::run),
+    ("minimal-harness", minimal_harness::run),
+];
 
 fn main() {
     let name = std::env::args().nth(1).unwrap_or_default();
