@@ -37,6 +37,12 @@ export interface Manifest {
       /** One text, or a text by language (`en` first, then `fr`). */
       name?: string | Record<string, string>;
     }>;
+    /** Launch environments: the up, ls, down and destroy of a worktree. */
+    launchEnvironments?: Array<{
+      id: string;
+      /** One text, or a text by language (`en` first, then `fr`). */
+      name?: string | Record<string, string>;
+    }>;
     /** Menus. */
     menus?: Array<Record<string, unknown>>;
     /** Templates of the project wizard. */
