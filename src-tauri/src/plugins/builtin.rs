@@ -23,8 +23,8 @@ pub struct Entry {
 /// this list.
 ///
 /// The demonstration plugin is in the builds of development and the tests only: a release's registry holds the real ones
-/// (the five voice services, INT-13; isola, INT-14; GitHub, INT-8.1, its code host and GitHub Issues; the
-/// generic ACP plugin, PLG-6, which serves the harnesses other plugins describe; the others come
+/// (the five voice services, INT-13; isola, INT-14; GitHub, INT-8.1, its code host and GitHub Issues; GitLab, ESC-56, its
+/// code host; the generic ACP plugin, PLG-6, which serves the harnesses other plugins describe; the others come
 /// with INT-7 and INT-8), so that nobody sees (nor runs) a plugin that does nothing. `escouade-plugins` itself is
 /// packaged and signed all the same.
 pub const REGISTRY: &[Entry] = &[
@@ -70,6 +70,10 @@ pub const REGISTRY: &[Entry] = &[
         manifest: include_str!("../../../plugins/builtin/dev.escouade.github/escouade-plugin.json"),
     },
     Entry {
+        id: GITLAB,
+        manifest: include_str!("../../../plugins/builtin/dev.escouade.gitlab/escouade-plugin.json"),
+    },
+    Entry {
         id: BITBUCKET,
         manifest: include_str!(
             "../../../plugins/builtin/dev.escouade.bitbucket/escouade-plugin.json"
@@ -91,6 +95,10 @@ pub const REGISTRY: &[Entry] = &[
 
 /// The plugin « GitHub »: github.com, GHE.com and GitHub Enterprise Server, their pull requests and GitHub Issues.
 pub const GITHUB: &str = "dev.escouade.github";
+
+/// The plugin « GitLab »: gitlab.com and the self-managed instances, their merge requests (ESC-56); GitLab Issues is
+/// still the core's, on the same accounts, until INT-8.2.
+pub const GITLAB: &str = "dev.escouade.gitlab";
 
 /// The plugin « Bitbucket »: Bitbucket Cloud, its pull requests, pipelines and deployments.
 pub const BITBUCKET: &str = "dev.escouade.bitbucket";

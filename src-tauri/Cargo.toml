@@ -66,6 +66,7 @@ escouade-acp = { path = "../crates/escouade-acp" }
 escouade-plugin-kit = { path = "../crates/escouade-plugin-kit" }
 # The plugins of `escouade-plugins` (its entries): the core runs none of their code, it starts their process.
 escouade-plugin-github = { path = "../plugins/builtin/dev.escouade.github" }
+escouade-plugin-gitlab = { path = "../plugins/builtin/dev.escouade.gitlab" }
 escouade-plugin-bitbucket = { path = "../plugins/builtin/dev.escouade.bitbucket" }
 escouade-plugin-gitea = { path = "../plugins/builtin/dev.escouade.gitea" }
 escouade-plugin-trello = { path = "../plugins/builtin/dev.escouade.trello" }
@@ -168,6 +169,7 @@ members = [
     "../crates/escouade-plugin-kit",
     "../crates/escouade-acp",
     "../plugins/builtin/dev.escouade.github",
+    "../plugins/builtin/dev.escouade.gitlab",
     "../plugins/builtin/dev.escouade.bitbucket",
     "../plugins/builtin/dev.escouade.gitea",
     "../plugins/builtin/dev.escouade.trello",
@@ -179,6 +181,7 @@ default-members = [
     "../crates/escouade-plugin-kit",
     "../crates/escouade-acp",
     "../plugins/builtin/dev.escouade.github",
+    "../plugins/builtin/dev.escouade.gitlab",
     "../plugins/builtin/dev.escouade.bitbucket",
     "../plugins/builtin/dev.escouade.gitea",
     "../plugins/builtin/dev.escouade.trello",

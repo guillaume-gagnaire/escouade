@@ -1,0 +1,37 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.gitlab",
+  "name": "GitLab",
+  "version": "0.0.0",
+  "description": {
+    "fr": "Les MR, les pipelines, les discussions et les déploiements de tes projets GitLab, sur gitlab.com et tes instances.",
+    "en": "Merge requests, pipelines, discussions and deployments of your GitLab projects, on gitlab.com and your instances."
+  },
+  "author": { "name": "Escouade", "url": "https://escouade.dev" },
+  "license": "GPL-3.0-or-later",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/builtin/dev.escouade.gitlab",
+  "categories": ["forges"],
+  "escouade": { "api": "1", "min": "2.1.0" },
+  "run": { "command": "{escouade}/escouade-plugins", "args": ["gitlab"] },
+  "activation": ["account:gitlab"],
+  "permissions": {
+    "network": ["gitlab.com"],
+    "secrets": ["account:*"]
+  },
+  "contributes": {
+    "accounts": [
+      {
+        "id": "gitlab",
+        "name": "GitLab",
+        "defaultHost": "gitlab.com",
+        "selfHosted": true,
+        "probe": "/api/v4/version",
+        "connect": ["token", { "cli": "glab", "login": "glab auth login" }],
+        "fields": [{ "key": "url" }, { "key": "token", "secret": true }],
+        "scopes": ["api"],
+        "tokenPage": "https://gitlab.com/-/user_settings/personal_access_tokens?name=Escouade&scopes=api"
+      }
+    ],
+    "forges": [{ "id": "gitlab", "name": "GitLab", "account": "gitlab" }]
+  }
+}

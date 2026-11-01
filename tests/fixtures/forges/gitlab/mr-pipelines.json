@@ -1,0 +1,62 @@
+[
+  {
+    "id": 3004244757,
+    "iid": 4378,
+    "project_id": 65271576,
+    "sha": "807c5cf95a4ab9b9da1f6ac4d965eebd19a894f3",
+    "ref": "refs/merge-requests/3101/train",
+    "status": "success",
+    "source": "merge_request_event",
+    "created_at": "2026-10-29T14:08:21.521Z",
+    "updated_at": "2026-10-29T14:21:58.260Z",
+    "web_url": "https://gitlab.com/gitlab-org/api/client-go/-/pipelines/3004244757"
+  },
+  {
+    "id": 2969404097,
+    "iid": 1333,
+    "project_id": 65275361,
+    "sha": "24c5c32eb4f7dae8f76fb33a02204ab46509d63c",
+    "ref": "cancel-auto-merge",
+    "status": "success",
+    "source": "merge_request_event",
+    "created_at": "2026-10-20T21:03:32.544Z",
+    "updated_at": "2026-10-20T21:10:53.430Z",
+    "web_url": "https://gitlab.com/gitlab-community/gitlab-org/api/client-go/-/pipelines/2969404097"
+  },
+  {
+    "id": 2946684199,
+    "iid": 1281,
+    "project_id": 65275361,
+    "sha": "e5689789e51efdec9c5ebe98b5c621fc77db28f2",
+    "ref": "cancel-auto-merge",
+    "status": "success",
+    "source": "merge_request_event",
+    "created_at": "2026-10-14T11:53:21.085Z",
+    "updated_at": "2026-10-14T12:00:10.436Z",
+    "web_url": "https://gitlab.com/gitlab-community/gitlab-org/api/client-go/-/pipelines/2946684199"
+  },
+  {
+    "id": 2942727006,
+    "iid": 1274,
+    "project_id": 65275361,
+    "sha": "bfe0f5be85ba5c8176e0a180696d8f1ef67090c8",
+    "ref": "cancel-auto-merge",
+    "status": "success",
+    "source": "merge_request_event",
+    "created_at": "2026-10-13T13:48:55.796Z",
+    "updated_at": "2026-10-13T13:57:39.513Z",
+    "web_url": "https://gitlab.com/gitlab-community/gitlab-org/api/client-go/-/pipelines/2942727006"
+  },
+  {
+    "id": 2933424219,
+    "iid": 1230,
+    "project_id": 65275361,
+    "sha": "29f59ddc2057792765197662dd33ef1181e22018",
+    "ref": "cancel-auto-merge",
+    "status": "success",
+    "source": "merge_request_event",
+    "created_at": "2026-10-10T12:06:18.538Z",
+    "updated_at": "2026-10-10T12:13:24.981Z",
+    "web_url": "https://gitlab.com/gitlab-community/gitlab-org/api/client-go/-/pipelines/2933424219"
+  }
+]

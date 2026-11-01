@@ -329,11 +329,19 @@ pub fn of_manifest(m: &Manifest) -> Vec<AccountKind> {
 }
 
 /// The kinds Escouade knows: its integrations', then those the plugins `manifests` declare (a
-/// plugin of the first hand that declares one of the core's takes its place).
+/// plugin of the first hand that declares one of the core's takes its place, with the sources of the core its accounts
+/// still serve: GitLab Issues on the accounts of the plugin « GitLab » until it carries them, INT-8.2).
 pub fn kinds(manifests: &[Manifest]) -> Vec<AccountKind> {
     let mut all = standard();
     for m in manifests {
-        for k in of_manifest(m) {
+        for mut k in of_manifest(m) {
+            if let Some(core) = all.iter().find(|x| x.id == k.id && x.plugin == k.plugin) {
+                for s in &core.sources {
+                    if !k.sources.contains(s) {
+                        k.sources.push(s.clone());
+                    }
+                }
+            }
             all.retain(|x| !(x.id == k.id && x.plugin == k.plugin));
             all.push(k);
         }

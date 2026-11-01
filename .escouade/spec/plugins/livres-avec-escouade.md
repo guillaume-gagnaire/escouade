@@ -1,8 +1,8 @@
 ---
 title: "Les plugins livrés avec Escouade"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §4.3, §4.4","docs/TODO-2.2.md (INT-4, INT-8.1)","src-tauri/src/plugins/builtin.rs","docs/PLUGINS.md §4.13","plugins/builtin/dev.escouade.github/README.md","plugins/builtin/dev.escouade.gitea/README.md"]
-tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-58"]
+sources: ["docs/PLUGINS.md §4.3, §4.4","docs/TODO-2.2.md (INT-4, INT-8.1)","src-tauri/src/plugins/builtin.rs","docs/PLUGINS.md §4.13","plugins/builtin/dev.escouade.github/README.md","plugins/builtin/dev.escouade.gitlab/README.md","plugins/builtin/dev.escouade.gitea/README.md"]
+tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58"]
 decisions: []
 compared: null
 ---
@@ -18,6 +18,7 @@ Certains plugins sont donnés par l'app : livrés avec elle, signés avec elle, 
 - Le tri par l'origine, jamais par l'identifiant. Seule l'origine `builtin` peut lancer les programmes `{escouade}/…`.
 - `dev.escouade.minimal` est une démonstration, dans le registre des builds de développement et des tests seulement : la poignée de main du protocole, deux méthodes d'essai, et le harness « Minimal », qui prouve le contrat des harness en process (voir *Le contrat des harness en process*). Sa fiche dit qu'il ajoute un harness ; ce harness n'est pas proposé à la création d'un agent.
 - `dev.escouade.github` (« GitHub », INT-8.1) est dans les releases : l'hébergeur GitHub (github.com, GHE.com, GitHub Enterprise Server : PR, merge et auto-merge, CI et journaux, relance, relectures et fils, déploiements) et la source GitHub Issues, sur le même compte. Son dossier porte aussi sa crate (son code et ses tests unitaires) ; sa page du store pointe vers ce dossier.
+- `dev.escouade.gitlab` (« GitLab », ESC-56) est dans les releases : l'hébergeur GitLab (gitlab.com et les instances auto-hébergées : MR, merge et merge quand le pipeline passe, jobs et journaux, relance du pipeline, approbations et discussions, déploiements ; voir *Hébergeurs de code*). Son dossier porte sa crate ; sa page du store pointe vers ce dossier. GitLab Issues reste dans le cœur, sur les mêmes comptes, jusqu'à ce que ce plugin la porte (INT-8.2) : le compte d'une instance continue de servir les deux.
 - `dev.escouade.bitbucket` (« Bitbucket », INT-8.3, ESC-57) est dans les releases : l'hébergeur Bitbucket Cloud (PR et brouillons, merge sans auto-merge, statuts, pipelines et journaux d'étapes, commentaires et fils, déploiements), sur un compte e-mail et jeton d'API Atlassian. Même forme que GitHub : un dossier avec sa crate et ses tests.
 - `dev.escouade.gitea` (« Gitea / Forgejo », INT-8.4, ESC-58) est dans les releases : l'hébergeur de Gitea, de Forgejo et de Codeberg (PR, merge, auto-merge sur branche protégée, statuts et Actions, relectures et fils). Il n'a pas de source de tickets ni de déploiements (aucune API chez eux), et ce que la version de l'instance ne permet pas (journaux, relance des Actions, réponses dans les fils) est dit appel par appel (voir *Hébergeurs de code*). Même forme que GitHub : sa crate dans son dossier, le kit en dessous.
 
@@ -30,7 +31,7 @@ Certains plugins sont donnés par l'app : livrés avec elle, signés avec elle, 
 ## Un hébergeur ou une source servi par un plugin livré
 
 - Rien ne change à l'usage : les comptes, les formulaires, les PR sur la carte, l'import et la synchro des issues sont les mêmes. Les comptes déjà connectés restent tels quels.
-- Le jeton d'un compte reste au coffre ; le cœur le prête au plugin qui le demande (`secrets/get` de `account:<hôte>`), celui de la CLI (`gh auth token`) compris, que le cœur demande lui-même. Le plugin n'a que les siens et ne lance aucune commande.
+- Le jeton d'un compte reste au coffre ; le cœur le prête au plugin qui le demande (`secrets/get` de `account:<hôte>`), celui de la CLI (`gh auth token`, `glab auth status --show-token`) compris, que le cœur demande lui-même. Le plugin n'a que les siens et ne lance aucune commande.
 - Le plugin reçoit à son lancement la langue de l'interface et les réglages réseau (proxy, hôtes exclus, certificats non vérifiés) ; un changement le relance.
 - **Coupé ou arrêté**, il le dit : la carte de l'agent porte « Hébergeur arrêté : PR plus suivies » (la raison en infobulle) et garde les PR lues en dernier ; Réglages › Intégrations › Hébergeurs de code dit sous chaque compte que le plugin est coupé, ou qu'il s'est arrêté et pourquoi. La première lecture qui marche efface le message.
 

@@ -1,0 +1,19 @@
+2026-10-29T14:08:39.080968Z 00O [0KRunning with gitlab-runner 19.6.0~pre.2364.gcc7d9535 (cc7d9535)[0;m
+2026-10-29T14:08:39.081000Z 00O [0K  on k8s.private.runners-manager.gitlab.com/gitlab.com/gitlab-org KVJMJq9V9, system ID: r_j4vCJfDhibbP[0;m
+2026-10-29T14:08:39.081003Z 00O [0K  UUID: 019f42aa-de46-7dfa-8900-c61558fa7954[0;m
+2026-10-29T14:08:39.081011Z 00O [0K  feature flags: FF_NETWORK_PER_BUILD:true, FF_USE_GIT_PROACTIVE_AUTH:true, FF_HASH_CACHE_KEYS:true, FF_USE_JOB_ROUTER:true, FF_MACHINE_OPTIONS_EXPAND_ENV:true, FF_DOCKER_MACHINE_JSON_OUTPUT:true[0;m
+2026-10-29T14:08:39.081037Z 00O [0K[36;1mResolving secrets[0;m[0;m
+2026-10-29T14:08:39.081198Z 00O section_start:1793282919:prepare_executor[0K
+2026-10-29T14:08:39.081201Z 00O+[0K[36;1mPreparing the "docker+machine" executor[0;m[0;m
+2026-10-29T14:08:39.155739Z 00O [0KUsing Docker executor with image golang:1.27-bookworm ...[0;m
+2026-10-29T14:08:39.187791Z 00O [0KUsing helper image:  us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535  (overridden, default would be  registry.gitlab.com/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v19.6.0 )[0;m
+2026-10-29T14:08:39.187802Z 00O [0KUsing effective pull policy of [always] for container us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535[0;m
+2026-10-29T14:08:39.188546Z 00O [0KPulling docker image us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535 ...[0;m
+2026-10-29T14:08:39.265532Z 00O [0KUsing docker image sha256:e516a5247b58c0dc65b851e6182e8e82adb95c17e9e1c7296766587e65d20e20 for us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535 with digest us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper@sha256:594cc89134ef76aa73685eba2879d66e742c61917fb7fb0921f3f939e61d4e2d ...[0;m
+2026-10-29T14:08:40.657079Z 00O [0KStarting service docker:29.9.2-dind...[0;m
+2026-10-29T14:08:40.657087Z 00O [0KUsing effective pull policy of [always] for container docker:29.9.2-dind[0;m
+2026-10-29T14:08:40.657571Z 00O [0KPulling docker image docker:29.9.2-dind ...[0;m
+2026-10-29T14:08:45.001188Z 00O [0KUsing docker image sha256:9a5d43f7d02971b15763b4b88d0e44cfaa858ec8a04b2fd84057b03c6f0e0f96 for docker:29.9.2-dind with digest docker@sha256:9e79b879b177fbd72c34376a3dd3d91747da5db49e1f560f76aea59561471977 ...[0;m
+2026-10-29T14:08:47.360596Z 00O [0KWaiting for services to be up and running (timeout 30 seconds)...[0;m
+2026-10-29T14:08:47.360628Z 00O [0KUsing helper image:  us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535  (overridden, default would be  registry.gitlab.com/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v19.6.0 )[0;m
+2026-10-29T14:08:47.360646Z 00O [0KUsing effective pull policy of [always] for container us-east1-docker.pkg.dev/

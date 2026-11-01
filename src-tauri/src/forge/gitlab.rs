@@ -1,6 +1,8 @@
 //! GitLab: gitlab.com and the self-hosted instances. Its token is a personal one (`api`), or the
-//! `glab` CLI's. Its word is « MR ». The MR's calls come with its client (ESC-56), written from
-//! its documentation: to try for real later.
+//! `glab` CLI's. Its word is « MR ». What the core knows of it is declared here (its hosts, its
+//! rights, its CLI): its client is in the plugin « GitLab » (`plugins/builtin/dev.escouade.gitlab`,
+//! ESC-56), which serves its accounts in a process of its own; written from GitLab's documentation,
+//! to try on a real instance later (docs/TODO-2.2.md).
 
 use super::*;
 
@@ -23,9 +25,9 @@ impl Provider for GitlabProvider {
 
     fn capabilities(&self) -> Capabilities {
         Capabilities {
-            // Its client comes later (ESC-56 to ESC-58).
-            pull_requests: false,
-            rerun: false,
+            pull_requests: true,
+            // A pipeline's failed jobs, in one call.
+            rerun: true,
             // `Draft:` before the title.
             draft: true,
             // `merge_when_pipeline_succeeds` (`auto_merge` in later versions).
@@ -86,56 +88,16 @@ impl Provider for GitlabProvider {
         })
     }
 
-    fn client(&self, http: reqwest::Client, account: &Credentials) -> Box<dyn Forge> {
-        Box::new(Gitlab {
-            http,
-            base: account
-                .api
-                .clone()
-                .unwrap_or_else(|| format!("{}/api/v4", account.url.trim_end_matches('/'))),
-            token: account.token.trim().to_string(),
-        })
+    fn plugin(&self) -> Option<&'static str> {
+        Some(crate::plugins::builtin::GITLAB)
+    }
+
+    fn client(&self, _http: reqwest::Client, _account: &Credentials) -> Box<dyn Forge> {
+        Box::new(Unserved(NAME))
     }
 }
 
 /// The token in what `glab auth status --show-token` printed.
 pub fn glab_token(text: &str) -> Option<String> {
     CliRead::After("Token:".into()).token(text, "")
-}
-
-pub struct Gitlab {
-    http: reqwest::Client,
-    base: String,
-    token: String,
-}
-
-impl Gitlab {
-    fn get(&self, path: &str) -> reqwest::RequestBuilder {
-        self.http
-            .get(format!("{}{path}", self.base))
-            .header("PRIVATE-TOKEN", &self.token)
-    }
-}
-
-impl Forge for Gitlab {
-    fn me(&self) -> BoxFuture<'_, Result<Identity>> {
-        Box::pin(async move {
-            let (me, _) = call(NAME, self.get("/user")).await?;
-            let login = me["username"].as_str().unwrap_or("?").to_string();
-            // A personal token tells its rights; glab's OAuth token does not.
-            let scopes = match call(NAME, self.get("/personal_access_tokens/self")).await {
-                Ok((t, _)) => t["scopes"].as_array().map(|a| {
-                    a.iter()
-                        .filter_map(|s| s.as_str().map(str::to_string))
-                        .collect()
-                }),
-                Err(_) => None,
-            };
-            Ok(Identity {
-                label: format!("@{login}"),
-                user: login,
-                scopes,
-            })
-        })
-    }
 }

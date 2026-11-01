@@ -636,8 +636,25 @@ async fn nothing_to_correct_and_nothing_to_propose_are_said() {
     );
 }
 
+/// Every code host has its client now (GitHub, GitLab, Bitbucket Cloud, Gitea and Forgejo, Azure DevOps): without an
+/// account, none offers « Ouvrir une PR » and each says why when asked.
 #[tokio::test]
-async fn a_host_without_a_client_yet_shows_nothing_and_says_so_when_asked() {
+async fn a_host_without_an_account_shows_nothing_and_says_so_when_asked() {
+    let h = harness("agent-pr-gitea");
+    let (p, r) = h.project(true).await;
+    git(
+        &r,
+        &["remote", "add", "origin", "git@codeberg.org:acme/demo.git"],
+    );
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    // A word left from before (an account since disconnected…) is taken back: no « Ouvrir une PR ».
+    h.core.agent(&id).unwrap().lock().meta.pr_word = Some("PR".into());
+    h.core.agent_prs_refresh(&id, true).await.unwrap();
+    assert!(h.agent(&id).prs.is_empty());
+    assert_eq!(h.agent(&id).pr_word, None);
+    let e = h.core.agent_pr_propose(&id).await.unwrap_err();
+    assert_eq!(e.to_string(), "Aucun compte connecté pour codeberg.org");
+    // GitLab (ESC-56) the same, in its word: no « Ouvrir une MR ».
     let h = harness("agent-pr-gitlab");
     let (p, r) = h.project(true).await;
     git(
@@ -645,16 +662,11 @@ async fn a_host_without_a_client_yet_shows_nothing_and_says_so_when_asked() {
         &["remote", "add", "origin", "git@gitlab.com:acme/demo.git"],
     );
     let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
-    // A word left from before (an account since disconnected…) is taken back: no « Ouvrir une PR ».
     h.core.agent(&id).unwrap().lock().meta.pr_word = Some("MR".into());
     h.core.agent_prs_refresh(&id, true).await.unwrap();
-    assert!(h.agent(&id).prs.is_empty());
     assert_eq!(h.agent(&id).pr_word, None);
     let e = h.core.agent_pr_propose(&id).await.unwrap_err();
-    assert_eq!(
-        e.to_string(),
-        "Escouade n'ouvre pas encore de MR sur GitLab."
-    );
+    assert_eq!(e.to_string(), "Aucun compte connecté pour gitlab.com");
     // No remote, then a github.com remote without an account: no word either.
     let h = harness("agent-pr-noremote");
     let (p, r) = h.project(true).await;

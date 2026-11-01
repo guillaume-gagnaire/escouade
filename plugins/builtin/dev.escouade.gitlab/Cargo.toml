@@ -1,0 +1,18 @@
+[package]
+name = "escouade-plugin-gitlab"
+version = "1.0.0"
+description = "Le plugin GitLab livré avec Escouade : les MR, les pipelines, les discussions et les déploiements, sur gitlab.com et les instances auto-hébergées"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+workspace = "../../../src-tauri"
+
+# One of the plugins of `escouade-plugins` (docs/PLUGINS.md §4.3): its program is `escouade-plugins gitlab`.
+[dependencies]
+escouade-plugin-kit = { path = "../../../crates/escouade-plugin-kit" }
+serde_json = "1"
+anyhow = "1"
+parking_lot = "0.12"
+tokio = { version = "1", features = ["time"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }

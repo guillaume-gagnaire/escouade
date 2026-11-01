@@ -1,0 +1,114 @@
+[
+  {
+    "id": 702410900,
+    "iid": 318,
+    "ref": "cancel-auto-merge",
+    "sha": "24c5c32eb4f7dae8f76fb33a02204ab46509d63c",
+    "created_at": "2026-10-29T14:20:02.000Z",
+    "updated_at": "2026-10-29T14:20:40.000Z",
+    "status": "running",
+    "user": {
+      "id": 30770856,
+      "username": "frank"
+    },
+    "environment": {
+      "id": 18820500,
+      "name": "docs-preview",
+      "slug": "docs-preview",
+      "external_url": null,
+      "tier": "testing"
+    },
+    "deployable": {
+      "id": 17577084480,
+      "status": "running",
+      "stage": "deploy",
+      "name": "docs",
+      "ref": "cancel-auto-merge",
+      "web_url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084480"
+    }
+  },
+  {
+    "id": 702411883,
+    "iid": 317,
+    "ref": "cancel-auto-merge",
+    "sha": "24c5c32eb4f7dae8f76fb33a02204ab46509d63c",
+    "created_at": "2026-10-29T14:10:02.000Z",
+    "updated_at": "2026-10-29T14:12:40.000Z",
+    "status": "success",
+    "user": {
+      "id": 30770856,
+      "username": "frank"
+    },
+    "environment": {
+      "id": 18820412,
+      "name": "review/cancel-auto-merge",
+      "slug": "review-cancel-a-8x2k1m",
+      "external_url": "https://cancel-auto-merge.review.example.dev",
+      "tier": "development"
+    },
+    "deployable": {
+      "id": 17577084470,
+      "status": "success",
+      "stage": "deploy",
+      "name": "review",
+      "ref": "cancel-auto-merge",
+      "web_url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084470"
+    }
+  },
+  {
+    "id": 702400100,
+    "iid": 316,
+    "ref": "main",
+    "sha": "07637978489e826011c6100aeee62a003f8513da",
+    "created_at": "2026-10-29T14:05:02.000Z",
+    "updated_at": "2026-10-29T14:06:40.000Z",
+    "status": "success",
+    "user": {
+      "id": 8095268,
+      "username": "bob"
+    },
+    "environment": {
+      "id": 18820001,
+      "name": "production",
+      "slug": "production",
+      "external_url": "https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go",
+      "tier": "production"
+    },
+    "deployable": {
+      "id": 17577089999,
+      "status": "success",
+      "stage": "release",
+      "name": "release",
+      "ref": "main",
+      "web_url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577089999"
+    }
+  },
+  {
+    "id": 702390001,
+    "iid": 315,
+    "ref": "cancel-auto-merge",
+    "sha": "807c5cf95a4ab9b9da1f6ac4d965eebd19a894f3",
+    "created_at": "2026-10-29T13:50:02.000Z",
+    "updated_at": "2026-10-29T13:52:40.000Z",
+    "status": "failed",
+    "user": {
+      "id": 30770856,
+      "username": "frank"
+    },
+    "environment": {
+      "id": 18820412,
+      "name": "review/cancel-auto-merge",
+      "slug": "review-cancel-a-8x2k1m",
+      "external_url": "https://cancel-auto-merge.review.example.dev",
+      "tier": "development"
+    },
+    "deployable": {
+      "id": 17577084001,
+      "status": "failed",
+      "stage": "deploy",
+      "name": "review",
+      "ref": "cancel-auto-merge",
+      "web_url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084001"
+    }
+  }
+]

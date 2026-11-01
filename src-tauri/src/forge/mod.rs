@@ -23,6 +23,8 @@ pub mod github;
 #[cfg(test)]
 mod github_tests;
 pub mod gitlab;
+#[cfg(test)]
+mod gitlab_tests;
 pub mod remote;
 #[cfg(test)]
 mod tests;
