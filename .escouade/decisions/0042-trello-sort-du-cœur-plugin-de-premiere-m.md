@@ -1,9 +1,9 @@
 ---
-number: null
+number: 42
 id: "trello-sort-du-cœur-plugin-de-premiere-m"
 title: "Trello sort du cœur : plugin de première main en process, sur le kit des plugins"
 date: "2026-11-01"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-213"
 pages: ["kanban/integrations"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"kanban/integrations","added":6,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-01T22:20:03+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
