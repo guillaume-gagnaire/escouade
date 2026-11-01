@@ -446,7 +446,7 @@
       "type": "string"
     },
     "run": {
-      "description": "Its program; without one, the plugin is declarative: nothing runs.",
+      "description": "Its program; without one, the plugin is declarative: nothing runs. A command (`command`, a process) or a JS/TS bundle of its folder that Escouade runs in WASM (`js`), not both.",
       "properties": {
         "args": {
           "items": {
@@ -456,6 +456,12 @@
           "type": "array"
         },
         "command": {
+          "description": "A path in the plugin's folder: relative, without `..`.",
+          "minLength": 1,
+          "pattern": "^(?![/\\\\]|[A-Za-z]:)(?!(.*[/\\\\])?\\.\\.([/\\\\]|$)).*$",
+          "type": "string"
+        },
+        "js": {
           "description": "A path in the plugin's folder: relative, without `..`.",
           "minLength": 1,
           "pattern": "^(?![/\\\\]|[A-Za-z]:)(?!(.*[/\\\\])?\\.\\.([/\\\\]|$)).*$",
@@ -480,7 +486,6 @@
           "type": "string"
         }
       },
-      "required": ["command"],
       "type": "object"
     },
     "store": {

@@ -217,8 +217,14 @@ export function validate(manifest, options = {}) {
   if ('run' in o) {
     const r = object(o.run, 'run');
     if (r) {
-      ignoreOthers(r, 'run', ['command', 'args', 'windows', 'macos', 'linux']);
-      required(r, 'command', 'run.command', program);
+      ignoreOthers(r, 'run', ['command', 'js', 'args', 'windows', 'macos', 'linux']);
+      // A JS/TS bundle of the folder, run by Escouade in WASM (ESC-320): never beside a command.
+      if ('js' in r && 'command' in r) problem('run.js', 'exclusive');
+      else if ('js' in r) {
+        const s = string(r.js, 'run.js');
+        if (s !== null && !isInnerPath(s)) problem('run.js', 'path');
+        else if (s !== null && options.file && !options.file(iconPath(s))) problem('run.js', 'file');
+      } else required(r, 'command', 'run.command', program);
       if ('args' in r) words(r.args, 'run.args');
       for (const sys of ['windows', 'macos', 'linux']) if (sys in r) program(r[sys], `run.${sys}`);
     }
@@ -389,6 +395,7 @@ const WHAT = {
     png: () => "n'est pas un PNG (ni SVG, ni JPEG : un PNG carré de 256 px au moins).",
     heavy: () => 'pèse plus de 1 Mo.',
     network: () => "va vers un hôte que `permissions.network` ne déclare pas : l'utilisateur ne le verrait pas.",
+    exclusive: () => 'ne va pas avec `run.command` : un programme est une commande ou un bundle JS/TS, pas les deux.',
     square: () => "n'est pas carrée (un PNG carré de 256 px au moins, 512 conseillé).",
     small: () => 'fait moins de 256 px de côté (512 conseillé).',
   },
@@ -411,6 +418,7 @@ const WHAT = {
     png: () => 'is no PNG (no SVG nor JPEG: a square PNG of 256 px at least).',
     heavy: () => 'weighs over 1 MB.',
     network: () => 'goes to a host `permissions.network` does not declare: the user would not see it.',
+    exclusive: () => 'does not go with `run.command`: a program is a command or a JS/TS bundle, not both.',
     square: () => 'is not square (a square PNG of 256 px at least, 512 advised).',
     small: () => 'is under 256 px a side (512 advised).',
   },

@@ -228,6 +228,7 @@ export default defineZone('plugins', {
     granted: '{text}: allowed',
     runNote: 'To stop it, switch the plugin off.',
     networkNote: 'declared by the plugin: Escouade does not filter its network yet',
+    networkApplied: 'enforced by Escouade: it reaches no other host, nor an address of your machine or local network',
     none: 'It asks for nothing: its contributions are read, nothing of it runs.',
     revoked: 'taken back',
   },
@@ -343,6 +344,7 @@ export default defineZone('plugins', {
 
   ask: {
     run: 'Runs a program on your computer, with your rights',
+    wasm: 'Runs inside Escouade, isolated',
     decide: 'Decides your agents’ permissions',
     commands: 'Runs commands',
     events: 'Gets these events',

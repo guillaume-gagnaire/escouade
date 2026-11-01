@@ -75,6 +75,8 @@ pub struct Limits {
     pub initialize: Duration,
     /// How long it has to answer `shutdown` before its job ends.
     pub shutdown: Duration,
+    /// What the instance of a `run.js` plugin may take (its memory, its turns).
+    pub wasm: super::wasm::Limits,
 }
 
 impl Default for Limits {
@@ -87,6 +89,7 @@ impl Default for Limits {
             queue: 256,
             initialize: Duration::from_secs(10),
             shutdown: Duration::from_secs(1),
+            wasm: super::wasm::Limits::default(),
         }
     }
 }
@@ -274,7 +277,7 @@ fn null() -> Box<RawValue> {
 type Answer = Result<Box<RawValue>, CallError>;
 
 /// A line for a plugin's input, and who waits for it to be written.
-type Frame = (Vec<u8>, Option<oneshot::Sender<()>>);
+type Frame = super::wasm::Frame;
 
 /// A message the plugin sent: an answer, a request or a notification.
 #[derive(Deserialize)]
@@ -397,6 +400,10 @@ pub struct Runtime {
     quitting: AtomicBool,
     /// Where the projects are (the core): what `settings/get` reads of a project's file.
     place: parking_lot::RwLock<Option<Weak<dyn super::events::Place>>>,
+    /// The modules of the `run.js` plugins, in the app's cache (ESC-320).
+    modules: Arc<super::wasm::Modules>,
+    /// What the tests change of `net/fetch`'s network.
+    net: parking_lot::RwLock<super::wasm::Net>,
     me: Weak<Self>,
 }
 
@@ -449,6 +456,8 @@ impl Runtime {
             journals: Mutex::new(HashMap::new()),
             quitting: AtomicBool::new(false),
             place: parking_lot::RwLock::new(None),
+            modules: Arc::new(super::wasm::Modules::new(data, app_version)),
+            net: parking_lot::RwLock::new(super::wasm::Net::default()),
             me: me.clone(),
         });
         // A folder in development read again: its process stops, and the next one is given the
@@ -460,6 +469,63 @@ impl Runtime {
             }
         });
         rt
+    }
+
+    /// The modules of the `run.js` plugins.
+    pub fn modules(&self) -> &Arc<super::wasm::Modules> {
+        &self.modules
+    }
+
+    /// The tests' network for `net/fetch` (a fake service, the resolver's answer), for the instances to come.
+    #[cfg(test)]
+    pub fn set_net(&self, net: super::wasm::Net) {
+        *self.net.write() = net;
+    }
+
+    /// Makes the module of the `run.js` plugin `id` ready in the cache, on a thread of its own (its
+    /// installation, an update of the app): none for a plugin of another kind.
+    pub fn prepare(
+        &self,
+        id: &str,
+    ) -> Option<std::thread::JoinHandle<Result<super::wasm::Made, String>>> {
+        let view = self.plugins.get(id, Lang::En)?;
+        let js = view.manifest?.run?.js?;
+        let folder = PathBuf::from(&view.folder);
+        let modules = self.modules.clone();
+        let journal = self.journal_of(id);
+        let id = id.to_string();
+        std::thread::Builder::new()
+            .name(format!("plugin {id}: its module"))
+            .spawn(move || {
+                let made = modules.prepare(&folder, &js).map(|(_, made)| made);
+                match &made {
+                    Ok(super::wasm::Made::Cache) => {}
+                    Ok(m) => journal.push(Kind::Message, format!("ready: {}", m.describe())),
+                    Err(e) => {
+                        log::warn!("plugin {id}: its module: {e}");
+                        journal.push(Kind::Refused, format!("its module: {e}"));
+                    }
+                }
+                made
+            })
+            .ok()
+    }
+
+    /// Makes ready the modules of every `run.js` plugin installed, those of another version of the app taken
+    /// out of the cache: at the start of the app, once its version may have changed.
+    pub fn prepare_all(&self) {
+        self.modules.prune();
+        for v in self.plugins.list(Lang::En) {
+            let js = v
+                .manifest
+                .as_ref()
+                .is_some_and(|m| m.run.as_ref().is_some_and(|r| r.js.is_some()));
+            if v.state == Loaded::Ready && js {
+                if let Some(h) = self.prepare(&v.id) {
+                    let _ = h.join();
+                }
+            }
+        }
     }
 
     /// The plugin `id`'s host, made at its first use: only a plugin that loaded, with a program.
@@ -982,26 +1048,63 @@ impl Host {
             inner.generation
         };
         let run = self.manifest.run.as_ref().expect("a host has a program");
-        let program = rt.program_of(&self.folder, run);
-        let conn = match self.spawn(&rt, &program, generation) {
-            Ok(Some(c)) => c,
-            // Stopped meanwhile.
-            Ok(None) => return,
-            Err(e) => {
-                self.stop_with(Stop::Refused {
-                    reason: format!("cannot start {}: {e}", program.display()),
-                });
-                return;
-            }
+        let conn = if let Some(js) = &run.js {
+            // A bundle (ESC-320): its module from the cache, or made now, off the runtime's threads.
+            let (modules, folder, bundle) = (rt.modules.clone(), self.folder.clone(), js.clone());
+            let prepared = tokio::task::spawn_blocking(move || modules.prepare(&folder, &bundle))
+                .await
+                .unwrap_or_else(|e| Err(e.to_string()));
+            let (module, made) = match prepared {
+                Ok(m) => m,
+                Err(e) => {
+                    self.stop_with(Stop::Refused {
+                        reason: format!("cannot make the module of {js}: {e}"),
+                    });
+                    return;
+                }
+            };
+            let conn = match self.spawn_wasm(&rt, module, generation) {
+                Ok(Some(c)) => c,
+                Ok(None) => return,
+                Err(e) => {
+                    self.stop_with(Stop::Refused {
+                        reason: format!("cannot start {js} in WASM: {e}"),
+                    });
+                    return;
+                }
+            };
+            self.journal.push(
+                Kind::Start,
+                format!(
+                    "started {} in WASM, isolated: {}",
+                    self.folder.join(js).display(),
+                    made.describe()
+                ),
+            );
+            conn
+        } else {
+            let program = rt.program_of(&self.folder, run);
+            let conn = match self.spawn(&rt, &program, generation) {
+                Ok(Some(c)) => c,
+                // Stopped meanwhile.
+                Ok(None) => return,
+                Err(e) => {
+                    self.stop_with(Stop::Refused {
+                        reason: format!("cannot start {}: {e}", program.display()),
+                    });
+                    return;
+                }
+            };
+            self.journal.push(
+                Kind::Start,
+                format!(
+                    "started {} (pid {})",
+                    program.display(),
+                    conn.pid.map(|p| p.to_string()).unwrap_or_default()
+                ),
+            );
+            conn
         };
-        self.journal.push(
-            Kind::Start,
-            format!(
-                "started {} (pid {})",
-                program.display(),
-                conn.pid.map(|p| p.to_string()).unwrap_or_default()
-            ),
-        );
         let hello = json!({
             "protocolVersion": PROTOCOL,
             "escouade": { "version": rt.app_version },
@@ -1232,6 +1335,64 @@ impl Host {
                 }
             });
         }
+        Ok(Some(conn))
+    }
+
+    /// Its instance in WASM (`run.js`), on a thread of its own, which reads what the host writes and serves
+    /// `net/fetch`; none when it was stopped meanwhile. A fault of the instance ends it as a crash ends a
+    /// process: `exited` makes another while its budget of restarts lasts.
+    fn spawn_wasm(
+        self: &Arc<Self>,
+        rt: &Runtime,
+        module: wasmtime::Module,
+        generation: u64,
+    ) -> std::io::Result<Option<Arc<Conn>>> {
+        let (tx, rx) = mpsc::unbounded_channel::<Frame>();
+        let conn = Arc::new(Conn {
+            generation,
+            pid: None,
+            tx: Mutex::new(Some(tx)),
+            job: None,
+            kill_tx: Mutex::new(None),
+            exited: AtomicBool::new(false),
+        });
+        {
+            let mut inner = self.inner.lock();
+            if inner.generation != generation
+                || !matches!(inner.phase, Phase::Starting | Phase::Restarting)
+            {
+                return Ok(None);
+            }
+            inner.conn = Some(conn.clone());
+        }
+        let files = super::wasm::files_of(&self.folder);
+        let fetcher =
+            super::wasm::Fetcher::new(&self.id, &self.manifest.permissions.network, &rt.net.read());
+        let limits = rt.limits.wasm;
+        let (host, c) = (self.clone(), conn.clone());
+        std::thread::Builder::new()
+            .name(format!("plugin {}", self.id))
+            .spawn(move || {
+                let fault = match super::wasm::Instance::start(&module, &files, limits) {
+                    Err(f) => Some(f),
+                    Ok(instance) => {
+                        let (h1, c1) = (host.clone(), c.clone());
+                        let (h2, h3) = (host.clone(), host.clone());
+                        let wiring = super::wasm::Wiring {
+                            rx,
+                            line: Box::new(move |l| h1.incoming(&c1, l)),
+                            stderr: Box::new(move |l| h2.journal.push(Kind::Stderr, l)),
+                            refused: Box::new(move |l| h3.journal.push(Kind::Refused, l)),
+                        };
+                        super::wasm::serve(instance, fetcher, wiring)
+                    }
+                };
+                c.exited.store(true, Ordering::Release);
+                // Its input closed: it was stopped, and that was dealt with.
+                if let Some(f) = fault {
+                    host.exited(&c, None, vec![f.to_string()]);
+                }
+            })?;
         Ok(Some(conn))
     }
 

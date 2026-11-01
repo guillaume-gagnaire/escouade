@@ -96,6 +96,11 @@ yaml-edit = "0.3"
 pdf-extract = "0.12"
 zip = { version = "4.6", default-features = false, features = ["deflate"] }
 quick-xml = "0.42"
+# The JS/TS plugins (`run.js`, ESC-320, docs/PLUGINS.md §5): their module compiled by Javy, run by wasmtime in the
+# app's process (Cranelift, WASI preview 1 alone: no folder, no socket, only the three standard streams).
+wasmtime = { version = "=50.0.1", default-features = false, features = ["cranelift", "runtime", "std", "parallel-compilation"] }
+wasmtime-wasi = { version = "=50.0.1", default-features = false, features = ["p1"] }
+bytes = "1"
 
 # The embeddings of `vectors` (ESC-252): the model's own tokenizer (HF tokenizer.json), no regex engine to build (fancy-regex).
 tokenizers = { version = "0.22", default-features = false, features = ["unstable_wasm"] }

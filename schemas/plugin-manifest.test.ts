@@ -75,6 +75,11 @@ describe('plugin-manifest', () => {
       "`icon` n'est pas carrée (un PNG carré de 256 px au moins, 512 conseillé).",
       '`icon` fait moins de 256 px de côté (512 conseillé).',
     ]);
+    const both = validate({ run: { command: 'bin/slack', js: 'dist/plugin.mjs' } }).errors.find((e) => e.path === 'run.js')!;
+    expect(message(both, 'fr')).toBe(
+      '`run.js` ne va pas avec `run.command` : un programme est une commande ou un bundle JS/TS, pas les deux.',
+    );
+    expect(message(both, 'en')).toBe('`run.js` does not go with `run.command`: a program is a command or a JS/TS bundle, not both.');
     const svg = validate({ icon: 'logo.svg' }).errors.find((e) => e.path === 'icon')!;
     expect(message(svg, 'en')).toBe('`icon` is no PNG (no SVG nor JPEG: a square PNG of 256 px at least).');
   });

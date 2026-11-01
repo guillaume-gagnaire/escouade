@@ -420,6 +420,8 @@ pub fn plugin_install(
     let staged = core.plugins.staged(&token);
     let view = core.plugins.install(&token, crate::i18n::ui())?;
     core.plugin_runtime.forget(&view.id);
+    // A run.js plugin's module compiled and precompiled now, in the cache, off this thread (ESC-320).
+    core.plugin_runtime.prepare(&view.id);
     let from_store = matches!(view.origin, crate::plugins::Origin::Store { .. });
     core.telemetry
         .track(crate::telemetry::Event::PluginInstalled { from_store });

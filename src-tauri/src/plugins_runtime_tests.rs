@@ -688,6 +688,7 @@ async fn an_event_that_changed_nothing_leaves_its_process_running() {
 fn a_relative_folder_gives_an_absolute_program() {
     let run = crate::plugins::manifest::Run {
         command: "slack".into(),
+        js: None,
         args: vec![],
         by_system: Default::default(),
     };

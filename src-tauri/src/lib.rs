@@ -149,6 +149,8 @@ mod plugins_runtime_tests;
 mod plugins_store_tests;
 #[cfg(test)]
 mod plugins_tests;
+#[cfg(test)]
+mod plugins_wasm_tests;
 mod pricing;
 #[cfg(test)]
 mod private_tests;
