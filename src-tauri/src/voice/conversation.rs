@@ -431,7 +431,7 @@ impl Voice {
         let sentences = match &reader.online {
             Some(o) => super::online_speech::sentences(
                 text,
-                super::online_speech::max_chars(o.spec.provider),
+                super::service::of(o.spec.provider).max_chars(),
             ),
             None => engine.sentences(text),
         };
@@ -744,7 +744,7 @@ impl Ears {
         let spec = self.live(s)?;
         let language = s.reader.lock().language.clone();
         let (session, emit) = (s.id, emit.clone());
-        let stream = LiveStream::open(
+        let stream = super::service::of(spec.provider).open_live(
             &spec,
             &language,
             rate,
