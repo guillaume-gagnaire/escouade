@@ -1,9 +1,9 @@
 ---
-number: null
+number: 34
 id: "le-contrat-des-harness-en-process-lancem"
 title: "Le contrat des harness en process : lancement vérifié par le cœur, lots sans attente, mémoire déclarée"
 date: "2026-11-01"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-221"
 pages: ["plugins/harness-en-process","plugins/livres-avec-escouade"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/harness-en-process","added":17,"removed":0},{"page":"plugins/livres-avec-escouade","added":2,"removed":2}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-01T15:42:22+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

@@ -3,7 +3,7 @@ title: "Le contrat des harness en process"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.5 et §4.6","docs/TODO-2.2.md (INT-9)","crates/escouade-plugin-protocol/src/engine.rs","src-tauri/src/plugins/harness.rs"]
 tickets: ["ESC-221"]
-decisions: ["le-contrat-des-harness-en-process-lancem"]
+decisions: [34]
 compared: null
 ---
 
