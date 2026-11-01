@@ -28,6 +28,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - The documentation says how to publish a plugin on the store and prepare its review, and a new page, “Plugin security”, says what the app checks, what the “Verified by Escouade” seal covers and what the review refuses.
 - A project can propose plugins in its `.escouade.yml`: when it opens, a band of Settings › Projects names those missing, with their store page, installing nothing by itself; “Not for this project” silences it. The file can also set a plugin up for that project, never with a secret.
 - A plugin can serve an account in place of Escouade’s integration (a company GitLab, an in-house Jira): when several offer it, “Connect…” asks which one serves it, and that account serves every use of the plugin, its tickets and its PRs alike. Accounts already connected stay as they are.
+- isola is a plugin shipped with Escouade, the first “launch environment”: it runs each worktree’s services on its own ports and addresses. You can turn it off in Settings › Plugins, for the whole app or one project; without it, a ticket starts as before, with a recipe.
 
 ### Removed
 

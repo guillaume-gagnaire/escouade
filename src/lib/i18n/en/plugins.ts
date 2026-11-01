@@ -359,6 +359,10 @@ export default defineZone('plugins', {
     },
     harnesses: { one: 'A harness, in « New agent »: {names}', other: '{count} harnesses, in « New agent »: {names}' },
     ticketSources: { one: 'A Kanban source: {names}', other: '{count} Kanban sources: {names}' },
+    launchEnvironments: {
+      one: 'A launch environment, for the test launches: {names}',
+      other: '{count} launch environments, for the test launches: {names}',
+    },
     forges: { one: 'A code host: {names}', other: '{count} code hosts: {names}' },
     accounts: {
       one: 'A kind of account, in Settings › Accounts: {names}',
