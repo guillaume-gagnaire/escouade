@@ -40,7 +40,7 @@ const CHUNK_MS: usize = 100;
 /// Told the text understood so far, the whole of it, as it changes.
 pub type Partial = Box<dyn Fn(String) + Send + 'static>;
 
-enum Cmd {
+pub(super) enum Cmd {
     Audio(Vec<f32>),
     /// The sentence is over: all that was sent is committed, its text asked for.
     End,
@@ -61,6 +61,19 @@ pub struct LiveStream {
 }
 
 impl LiveStream {
+    /// A stream that a plugin serves (INT-13): its commands go to `tx`, whose end answers on `result`.
+    pub(super) fn bridged(
+        provider: Provider,
+        tx: tokio::sync::mpsc::UnboundedSender<Cmd>,
+        result: std::sync::mpsc::Receiver<Result<Final, OnlineError>>,
+    ) -> LiveStream {
+        LiveStream {
+            provider,
+            tx,
+            result,
+        }
+    }
+
     /// Opens the stream of `spec` (its `live` model) for sound at `rate`, in `language` (Whisper's code, or "auto"),
     /// on a thread of its own; what is pushed meanwhile waits for it.
     pub fn open(spec: &Spec, language: &str, rate: u32, partial: Partial) -> LiveStream {
@@ -162,7 +175,7 @@ pub(crate) fn url_of(spec: &Spec, language: &str) -> String {
             }
             "/v1/listen"
         }
-        Provider::OpenAi | Provider::Groq => {
+        _ => {
             q.push(("intent", "transcription".into()));
             "/v1/realtime"
         }
@@ -283,7 +296,7 @@ fn audio_messages(p: Provider, samples: &[f32], commit: bool, end: bool) -> Vec<
                 out.push(Message::text(r#"{"type":"CloseStream"}"#));
             }
         }
-        Provider::OpenAi | Provider::Groq => {
+        _ => {
             if !samples.is_empty() {
                 out.push(Message::text(
                     serde_json::json!({"type": "input_audio_buffer.append", "audio": pcm(samples)})
@@ -458,7 +471,7 @@ impl Heard {
                 ))),
                 _ => Ok(Said::Nothing),
             },
-            Provider::OpenAi | Provider::Groq => {
+            _ => {
                 let item = str_at(&v, "/item_id").to_string();
                 let slot = |h: &mut Heard| -> usize {
                     match h.items.iter().position(|(i, _)| *i == item) {

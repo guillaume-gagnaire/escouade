@@ -496,6 +496,7 @@ pub fn plugin_set_enabled(
         .choose(&id, |c| c.enabled = on)
         .map_err(|e| e.to_string())?;
     core.plugin_runtime.forget(&id);
+    core.sync_voice_plugins();
     plugin_view(&core, &id)
 }
 

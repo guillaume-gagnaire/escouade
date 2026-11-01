@@ -301,7 +301,7 @@ fn refusal(p: Provider) -> (u16, String) {
         Provider::Groq => (401, r#"{"error":{"message":"Invalid API Key","type":"invalid_request_error","code":"invalid_api_key"}}"#.into()),
         Provider::Mistral => (401, r#"{"message":"Unauthorized","request_id":"x"}"#.into()),
         Provider::ElevenLabs => (401, r#"{"detail":{"status":"invalid_api_key","message":"Invalid API key"}}"#.into()),
-        Provider::Deepgram => (401, r#"{"err_code":"INVALID_AUTH","err_msg":"Invalid credentials.","request_id":"x"}"#.into()),
+        _ => (401, r#"{"err_code":"INVALID_AUTH","err_msg":"Invalid credentials.","request_id":"x"}"#.into()),
     }
 }
 

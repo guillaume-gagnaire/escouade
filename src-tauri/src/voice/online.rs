@@ -15,14 +15,19 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-/// The services the dictation can go to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Provider {
-    OpenAi,
-    Groq,
-    Mistral,
-    ElevenLabs,
-    Deepgram,
+/// A service the dictation can go to, by its id (INT-13): the five of the core are the constants below, a plugin's
+/// is `Provider::of(id)`. The id is interned (a plugin's service lives as long as the app), so that a `Provider` is
+/// `Copy` and a pattern like `Provider::OpenAi` reads as before.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Provider(&'static str);
+
+#[allow(non_upper_case_globals)]
+impl Provider {
+    pub const OpenAi: Provider = Provider("openai");
+    pub const Groq: Provider = Provider("groq");
+    pub const Mistral: Provider = Provider("mistral");
+    pub const ElevenLabs: Provider = Provider("elevenlabs");
+    pub const Deepgram: Provider = Provider("deepgram");
 }
 
 pub const PROVIDERS: [Provider; 5] = [
@@ -34,19 +39,34 @@ pub const PROVIDERS: [Provider; 5] = [
 ];
 
 impl Provider {
-    /// Its id in the settings, the keychain and the statistics.
-    pub fn id(self) -> &'static str {
-        match self {
-            Provider::OpenAi => "openai",
-            Provider::Groq => "groq",
-            Provider::Mistral => "mistral",
-            Provider::ElevenLabs => "elevenlabs",
-            Provider::Deepgram => "deepgram",
+    /// The service of this id, a plugin's included.
+    pub fn of(id: &str) -> Provider {
+        if let Some(p) = PROVIDERS.into_iter().find(|p| p.0 == id) {
+            return p;
         }
+        static SEEN: std::sync::Mutex<Vec<&'static str>> = std::sync::Mutex::new(Vec::new());
+        let mut seen = SEEN.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(s) = seen.iter().find(|s| **s == id) {
+            return Provider(s);
+        }
+        let leaked: &'static str = Box::leak(id.to_string().into_boxed_str());
+        seen.push(leaked);
+        Provider(leaked)
     }
 
+    /// Its id in the settings, the keychain and the statistics.
+    pub fn id(self) -> &'static str {
+        self.0
+    }
+
+    /// The core's own service of this id.
+    pub fn core(id: &str) -> Option<Provider> {
+        PROVIDERS.into_iter().find(|p| p.0 == id)
+    }
+
+    /// The service of this id, the core's or a plugin's registered one.
     pub fn find(id: &str) -> Option<Provider> {
-        PROVIDERS.into_iter().find(|p| p.id() == id)
+        Self::core(id).or_else(|| super::service::find(id).map(|_| Provider::of(id)))
     }
 
     pub fn label(self) -> &'static str {
@@ -56,6 +76,7 @@ impl Provider {
             Provider::Mistral => "Mistral",
             Provider::ElevenLabs => "ElevenLabs",
             Provider::Deepgram => "Deepgram",
+            other => other.0,
         }
     }
 
@@ -67,6 +88,7 @@ impl Provider {
             Provider::Mistral => "https://api.mistral.ai",
             Provider::ElevenLabs => "https://api.elevenlabs.io",
             Provider::Deepgram => "https://api.deepgram.com",
+            _ => "",
         }
     }
 
@@ -78,6 +100,7 @@ impl Provider {
             Provider::Mistral => "voxtral-mini-latest",
             Provider::ElevenLabs => "scribe_v2",
             Provider::Deepgram => "nova-3",
+            _ => "",
         }
     }
 
@@ -88,7 +111,7 @@ impl Provider {
 
     /// Whether it transcribes as one speaks (ESC-136), its text coming while the sound goes: Groq does not.
     pub fn offers_live(self) -> bool {
-        !matches!(self, Provider::Groq)
+        self != Provider::Groq
     }
 
     /// The model it transcribes with as one speaks, `chosen` being the one of the settings: ElevenLabs, Mistral and
@@ -98,7 +121,7 @@ impl Provider {
             Provider::ElevenLabs => "scribe_v2_realtime".into(),
             Provider::Mistral => "voxtral-mini-transcribe-realtime-2602".into(),
             Provider::OpenAi => "gpt-live-transcribe".into(),
-            Provider::Deepgram | Provider::Groq => chosen.into(),
+            _ => chosen.into(),
         }
     }
 }
@@ -346,7 +369,7 @@ fn request(spec: &Spec, audio: &[u8], language: &str) -> reqwest::RequestBuilder
                 .header(reqwest::header::CONTENT_TYPE, ct)
                 .body(body)
         }
-        Provider::Deepgram => {
+        _ => {
             let mut query = vec![("model", model), ("smart_format", "true")];
             match lang {
                 Some(l) => query.push(("language", l)),
