@@ -1,9 +1,9 @@
 ---
-number: null
+number: 44
 id: "les-harness-acp-decrits-par-un-plugin-se"
 title: "Les harness ACP décrits par un plugin, servis par dev.escouade.acp"
 date: "2026-11-01"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-178"
 pages: ["plugins/harness-acp-decrits"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/harness-acp-decrits","added":19,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-01T23:12:32+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
