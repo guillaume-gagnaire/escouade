@@ -718,3 +718,46 @@ fn a_probe_says_what_tells_its_host_without_code() {
     };
     assert!(!only_key.matches(401, &Value::Null));
 }
+
+/// The plugin « Bitbucket » switched off (INT-8.3), as GitHub's is on the card of an agent
+/// (`agentprs_tests`): the view of the code hosts reads it from the registry, and a call to its
+/// process says the plugin is down instead of failing anywhere else.
+#[tokio::test]
+async fn the_bitbucket_plugin_switched_off_is_said_by_the_view_and_by_its_calls() {
+    use crate::plugins::builtin::BITBUCKET;
+    let h = harness("forge-bitbucket-off");
+    let served = |view: &super::connect::ForgesView| {
+        view.providers
+            .iter()
+            .find(|p| p.kind == "bitbucket")
+            .and_then(|p| p.served_by.as_ref().map(|s| s.on))
+    };
+    assert_eq!(served(&h.core.forges_view().await), Some(true));
+
+    h.core
+        .plugins
+        .choose(BITBUCKET, |c| c.enabled = false)
+        .unwrap();
+    h.core.plugin_runtime.forget(BITBUCKET);
+    assert_eq!(served(&h.core.forges_view().await), Some(false));
+    let creds = Credentials {
+        url: "https://bitbucket.org".into(),
+        email: "ada@atlas.dev".into(),
+        token: "ATATT_test".into(),
+        api: None,
+    };
+    let client = crate::plugins::adapters::ProcessForge::new(
+        h.core.plugin_runtime.clone(),
+        BITBUCKET,
+        "bitbucket",
+        &creds,
+    );
+    let e = client.me().await.unwrap_err();
+    assert!(crate::plugins::adapters::is_down(&e), "{e:#}");
+
+    h.core
+        .plugins
+        .choose(BITBUCKET, |c| c.enabled = true)
+        .unwrap();
+    assert_eq!(served(&h.core.forges_view().await), Some(true));
+}

@@ -18,7 +18,7 @@ function plugin(dir: string, manifest: unknown) {
 // one: the test reads them as a set that holds the demonstration plugin and isola, never as these alone.
 const builtin = (list: { ok: View[] } | { err: unknown }) => ('ok' in list ? list.ok : []).filter((p) => p.origin.kind === 'builtin');
 const others = (list: { ok: View[] } | { err: unknown }) => ('ok' in list ? list.ok : []).filter((p) => p.origin.kind !== 'builtin');
-const OURS = ['dev.escouade.minimal', 'dev.escouade.isola', 'dev.escouade.github', 'dev.escouade.gitea'];
+const OURS = ['dev.escouade.minimal', 'dev.escouade.isola', 'dev.escouade.github', 'dev.escouade.bitbucket', 'dev.escouade.gitea'];
 
 interface View {
   id: string;
