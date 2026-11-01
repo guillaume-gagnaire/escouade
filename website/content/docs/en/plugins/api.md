@@ -57,7 +57,7 @@ Every call of Escouade has a delay. Past it, Escouade stops waiting: **its defau
 | `initialize` | 10 s |
 | `shutdown` | 1 s |
 | `permissions/…` (a decision an agent waits for) | 500 ms |
-| `tickets/…`, `forge/…`, `engine/oneShot` (an import, a call to a service) | 60 s |
+| `tickets/…`, `forge/…`, `workflow/…`, `engine/oneShot` (an import, a call to a service) | 60 s |
 | The others | 5 s |
 
 Every delay that runs out is noted in the journal: “test/do: no answer within 300 ms”.

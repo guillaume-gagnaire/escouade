@@ -28,7 +28,9 @@
           "type": "string"
         }
       },
-      "required": ["name"],
+      "required": [
+        "name"
+      ],
       "type": "object"
     },
     "contributes": {
@@ -55,10 +57,14 @@
                     },
                     "anyOf": [
                       {
-                        "required": ["en"]
+                        "required": [
+                          "en"
+                        ]
                       },
                       {
-                        "required": ["fr"]
+                        "required": [
+                          "fr"
+                        ]
                       }
                     ],
                     "type": "object"
@@ -66,7 +72,9 @@
                 ]
               }
             },
-            "required": ["id"],
+            "required": [
+              "id"
+            ],
             "type": "object"
           },
           "type": "array"
@@ -114,10 +122,14 @@
                     },
                     "anyOf": [
                       {
-                        "required": ["en"]
+                        "required": [
+                          "en"
+                        ]
                       },
                       {
-                        "required": ["fr"]
+                        "required": [
+                          "fr"
+                        ]
                       }
                     ],
                     "type": "object"
@@ -125,7 +137,9 @@
                 ]
               }
             },
-            "required": ["id"],
+            "required": [
+              "id"
+            ],
             "type": "object"
           },
           "type": "array"
@@ -151,10 +165,14 @@
                     },
                     "anyOf": [
                       {
-                        "required": ["en"]
+                        "required": [
+                          "en"
+                        ]
                       },
                       {
-                        "required": ["fr"]
+                        "required": [
+                          "fr"
+                        ]
                       }
                     ],
                     "type": "object"
@@ -162,7 +180,9 @@
                 ]
               }
             },
-            "required": ["id"],
+            "required": [
+              "id"
+            ],
             "type": "object"
           },
           "type": "array"
@@ -201,10 +221,14 @@
                     },
                     "anyOf": [
                       {
-                        "required": ["en"]
+                        "required": [
+                          "en"
+                        ]
                       },
                       {
-                        "required": ["fr"]
+                        "required": [
+                          "fr"
+                        ]
                       }
                     ],
                     "type": "object"
@@ -212,7 +236,10 @@
                 ]
               }
             },
-            "required": ["key", "title"],
+            "required": [
+              "key",
+              "title"
+            ],
             "type": "object"
           },
           "type": "array"
@@ -237,10 +264,14 @@
                     },
                     "anyOf": [
                       {
-                        "required": ["en"]
+                        "required": [
+                          "en"
+                        ]
                       },
                       {
-                        "required": ["fr"]
+                        "required": [
+                          "fr"
+                        ]
                       }
                     ],
                     "type": "object"
@@ -248,10 +279,19 @@
                 ]
               },
               "type": {
-                "enum": ["string", "number", "boolean", "select"]
+                "enum": [
+                  "string",
+                  "number",
+                  "boolean",
+                  "select"
+                ]
               }
             },
-            "required": ["key", "type", "title"],
+            "required": [
+              "key",
+              "type",
+              "title"
+            ],
             "type": "object"
           },
           "type": "array"
@@ -295,10 +335,14 @@
                     },
                     "anyOf": [
                       {
-                        "required": ["en"]
+                        "required": [
+                          "en"
+                        ]
                       },
                       {
-                        "required": ["fr"]
+                        "required": [
+                          "fr"
+                        ]
                       }
                     ],
                     "type": "object"
@@ -306,7 +350,9 @@
                 ]
               }
             },
-            "required": ["id"],
+            "required": [
+              "id"
+            ],
             "type": "object"
           },
           "type": "array"
@@ -314,6 +360,58 @@
         "webhooks": {
           "description": "Webhooks, without code.",
           "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "workflowReaders": {
+          "description": "Readers of workflows Escouade does not read by itself (it gives them the project's files).",
+          "items": {
+            "properties": {
+              "files": {
+                "description": "The files of the project it is given, as globs from the project's folder (`.planning/**`).",
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "id": {
+                "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$",
+                "type": "string"
+              },
+              "name": {
+                "description": "One text, or a text by language (`en` first, then `fr`).",
+                "oneOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "anyOf": [
+                      {
+                        "required": [
+                          "en"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "fr"
+                        ]
+                      }
+                    ],
+                    "type": "object"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "files"
+            ],
             "type": "object"
           },
           "type": "array"
@@ -334,10 +432,14 @@
           },
           "anyOf": [
             {
-              "required": ["en"]
+              "required": [
+                "en"
+              ]
             },
             {
-              "required": ["fr"]
+              "required": [
+                "fr"
+              ]
             }
           ],
           "type": "object"
@@ -361,7 +463,10 @@
           "type": "string"
         }
       },
-      "required": ["api", "min"],
+      "required": [
+        "api",
+        "min"
+      ],
       "type": "object"
     },
     "icon": {
@@ -394,10 +499,14 @@
           },
           "anyOf": [
             {
-              "required": ["en"]
+              "required": [
+                "en"
+              ]
             },
             {
-              "required": ["fr"]
+              "required": [
+                "fr"
+              ]
             }
           ],
           "type": "object"
@@ -480,7 +589,9 @@
           "type": "string"
         }
       },
-      "required": ["command"],
+      "required": [
+        "command"
+      ],
       "type": "object"
     },
     "store": {
@@ -524,7 +635,12 @@
       "type": "string"
     }
   },
-  "required": ["id", "name", "version", "escouade"],
+  "required": [
+    "id",
+    "name",
+    "version",
+    "escouade"
+  ],
   "title": "The manifest of an Escouade plugin (escouade-plugin.json)",
   "type": "object"
 }

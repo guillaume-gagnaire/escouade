@@ -125,7 +125,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ### Nouveautés
 
 - Escouade lit le workflow de ton projet dans les skills, commandes et sous-agents de tes harness (`.claude`, `.agents`, GSD, Superpowers, une boucle `PROMPT.md`…), sans rien dépenser, et suit chaque agent dedans en temps réel, avec son historique.
-- L’onglet Workflow du panneau de droite montre ses étapes, leurs retours et chaque agent sur la sienne. La carte d’un agent dit son étape, sa conversation marque chaque entrée dans une étape, et la boucle des tickets s’y suit comme un workflow « Tickets ».
+- L’onglet Workflow du panneau de droite montre ses étapes, leurs retours et chaque agent sur la sienne. La carte d’un agent dit son étape, sa conversation marque chaque entrée dans une étape, et la boucle des tickets s’y suit comme un workflow « Tickets ». Un plugin reçoit le chemin de chaque agent (étape entrée, étape quittée avec sa durée et son coût, retour en arrière et sa raison) et peut apprendre à Escouade un workflow qu’elle ne lit pas seule.
 - Dans Réglages › Projets › Workflow, tu corriges les étapes, et « Affiner… » les fait préciser par un court agent, à la demande et coût annoncé. La configuration est gardée dans `.escouade/workflows/` du dépôt : commite-la pour que toute l’équipe voie la même.
 - Le serveur MCP lit les workflows : `get_workflow`, et `workflow` dans `list_agents` et `get_agent_summary`.
 - Un ticket du Kanban se partage avec l’équipe : Escouade en écrit un fichier dans le dépôt, tient son statut à jour, et tu le commites avec ton travail. Chez tes coéquipiers, il arrive dans « À faire » avec ton nom ; leur pilote auto ne le lance jamais, mais ils peuvent le lancer à la main.

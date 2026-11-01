@@ -224,7 +224,7 @@ Les tickets s'appellent ici LOOP-1, LOOP-2… ; le chef d'escouade leur donne le
 | LOOP-5. Affiner avec un agent | L'agent court, son schéma JSON validé par les règles, modèle, compte et coût dits avant, la clôture d'un projet privé | 134, 156 | Sonnet medium | LOOP-1, LOOP-4 |
 | LOOP-6. La carte, la conversation et les tickets | L'étape sur la carte, le séparateur dans la conversation, le workflow « Tickets » d'Escouade, un agent de ticket dans deux workflows | 145, 159 | Opus medium (interface) | LOOP-2, LOOP-3 |
 | LOOP-7. MCP et documentation | `get_workflow`, `workflow` dans `list_agents` et `get_agent_summary`, la vue `Sight` des projets privés ; `docs/PROTOCOL.md`, `docs/SPEC.md`, une page du site en deux langues | 156, 157 | Sonnet medium | LOOP-2 |
-| LOOP-8. Les faits et le lecteur de workflow des plugins | Les faits `workflow.*` sur le bus, le point d'extension « lecteur de workflow » | 158 | Sonnet medium | LOOP-2, ESC-177 (PLG-5) |
+| LOOP-8. Les faits et le lecteur de workflow des plugins (ESC-200, fait le 2026-11-01) | Les faits `workflow.*` sur le bus, le point d'extension « lecteur de workflow » | 158 | Sonnet medium | LOOP-2, ESC-177 (PLG-5) |
 | LOOP-9. Essais réels | GSD et Ralph sur Claude Code (chat et vue), un prompt de Codex, OpenCode, Copilot CLI, Cursor CLI (chat et vue) ; les tableaux de `docs/LOOPS.md` corrigés d'après ce qui est vu | 150 | Sonnet medium | LOOP-1 à LOOP-7 |
 
 LOOP-3 et LOOP-4 peuvent avancer en même temps une fois LOOP-1 fait (LOOP-3 sur des faits joués par le faux agent en attendant LOOP-2). LOOP-8 attend le bus de faits des plugins ; s'il n'est pas dans la 2.1.0, il passe à la 2.1.x sans rien retarder.

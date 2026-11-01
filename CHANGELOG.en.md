@@ -125,7 +125,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ### New
 
 - Escouade reads your project’s workflow from the skills, commands and sub-agents of your harnesses (`.claude`, `.agents`, GSD, Superpowers, a `PROMPT.md` loop…), at no cost, and follows each agent through it in real time, with its history.
-- The Workflow tab of the right panel shows its steps, their ways back and each agent on its own. An agent’s card says its step, its conversation marks each entry in a step, and the loop of the tickets is followed there as a “Tickets” workflow.
+- The Workflow tab of the right panel shows its steps, their ways back and each agent on its own. An agent’s card says its step, its conversation marks each entry in a step, and the loop of the tickets is followed there as a “Tickets” workflow. A plugin gets each agent’s way (step entered, step left with its duration and cost, way back and its reason) and can teach Escouade a workflow it does not read by itself.
 - In Settings › Projects › Workflow, you correct the steps, and “Refine…” has a short agent make them more precise, on request and with its cost said first. The configuration is kept in the repository’s `.escouade/workflows/`: commit it for the whole team to see the same.
 - The MCP server reads the workflows: `get_workflow`, and `workflow` in `list_agents` and `get_agent_summary`.
 - A ticket of the Kanban can be shared with the team: Escouade writes a file of it in the repository, keeps its status up to date, and you commit it with your work. For your teammates, it lands in “To do” with your name; their autopilot never starts it, but they can start it by hand.
