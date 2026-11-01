@@ -1714,6 +1714,14 @@ fn below_root(root: &str, path: &str) -> Option<String> {
 }
 
 impl<R: Runtime> Core<R> {
+    /// The voice services in line with the plugins that serve them (INT-13): started in the background.
+    pub(crate) fn sync_voice_plugins(&self) {
+        let (rt, plugins) = (self.plugin_runtime.clone(), self.plugins.clone());
+        tauri::async_runtime::spawn(async move {
+            crate::voice::plugin_host::sync_builtin(&rt, &plugins).await;
+        });
+    }
+
     /// Reads the store's catalogue and revocation list again (through Réglages › Réseau), and
     /// hands them to the plugins: a version withdrawn stops, the updates of the store are offered.
     pub async fn refresh_store(&self) {
@@ -2077,6 +2085,10 @@ impl<R: Runtime> Core<R> {
                 c.ensure_identity().await;
                 c.sync_all_shared();
             });
+        }
+        // The voice services as the plugins that serve them (INT-13).
+        if !cfg!(test) {
+            self.sync_voice_plugins();
         }
         // The newer versions of the installed plugins, looked for once at the start (PLG-4): offered in
         // the view Plugins, never installed by themselves.

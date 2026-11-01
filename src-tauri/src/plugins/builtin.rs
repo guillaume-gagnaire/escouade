@@ -23,14 +23,41 @@ pub struct Entry {
 /// this list.
 ///
 /// The demonstration plugin is in the builds of development and the tests only: a release's registry holds the real ones
-/// (isola, INT-14; GitHub, INT-8.1, its code host and GitHub Issues; the others come with INT-7 and INT-8), so that
-/// nobody sees (nor runs) a plugin that does nothing.
+/// (the five voice services, INT-13; isola, INT-14; GitHub, INT-8.1, its code host and GitHub Issues; the others come
+/// with INT-7 and INT-8), so that nobody sees (nor runs) a plugin that does nothing. `escouade-plugins` itself is
+/// packaged and signed all the same.
 pub const REGISTRY: &[Entry] = &[
     #[cfg(any(debug_assertions, test))]
     Entry {
         id: "dev.escouade.minimal",
         manifest: include_str!(
             "../../../plugins/builtin/dev.escouade.minimal/escouade-plugin.json"
+        ),
+    },
+    Entry {
+        id: "dev.escouade.openai",
+        manifest: include_str!("../../../plugins/builtin/dev.escouade.openai/escouade-plugin.json"),
+    },
+    Entry {
+        id: "dev.escouade.groq",
+        manifest: include_str!("../../../plugins/builtin/dev.escouade.groq/escouade-plugin.json"),
+    },
+    Entry {
+        id: "dev.escouade.mistral",
+        manifest: include_str!(
+            "../../../plugins/builtin/dev.escouade.mistral/escouade-plugin.json"
+        ),
+    },
+    Entry {
+        id: "dev.escouade.elevenlabs",
+        manifest: include_str!(
+            "../../../plugins/builtin/dev.escouade.elevenlabs/escouade-plugin.json"
+        ),
+    },
+    Entry {
+        id: "dev.escouade.deepgram",
+        manifest: include_str!(
+            "../../../plugins/builtin/dev.escouade.deepgram/escouade-plugin.json"
         ),
     },
     Entry {

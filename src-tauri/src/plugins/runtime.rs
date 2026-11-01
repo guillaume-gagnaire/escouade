@@ -105,6 +105,7 @@ pub fn timeout_of(method: &str) -> Duration {
         m if m.starts_with("tickets/")
             || m.starts_with("forge/")
             || m.starts_with("workflow/")
+            || m.starts_with("voice/")
             || m == "account/me"
             || m == "engine/oneShot" =>
         {
@@ -421,6 +422,9 @@ pub struct Runtime {
     /// What each account has left of its calls, as its plugin's last answer said it (INT-6): by
     /// `accounts::budget_key`, shared by all the points of the plugin that serves the account.
     budgets: Mutex<HashMap<String, crate::forge::RateLimit>>,
+    /// Who listens to the notifications a plugin sends beyond `log` (`on_notification`): the voice services' text and
+    /// sound while they work (INT-13).
+    listeners: Mutex<HashMap<String, Listener>>,
     /// The modules of the `run.js` plugins, in the app's cache (ESC-320).
     modules: Arc<super::wasm::Modules>,
     /// What the tests change of `net/fetch`'s network.
@@ -434,7 +438,16 @@ pub struct Runtime {
     me: Weak<Self>,
 }
 
+/// What listens to a plugin's notifications.
+type Listener = Arc<dyn Fn(&str, Value) + Send + Sync>;
+
 impl Runtime {
+    /// Listens to the notifications of the plugin `id` (but `log`), in place of the one before. The listener runs on
+    /// the thread that reads the plugin's output, in the order the plugin wrote: it must not wait.
+    pub fn on_notification(&self, id: &str, f: impl Fn(&str, Value) + Send + Sync + 'static) {
+        self.listeners.lock().insert(id.to_string(), Arc::new(f));
+    }
+
     /// What the account `key` (`accounts::budget_key`) has left of its calls, as last said.
     pub fn budget(&self, key: &str) -> Option<crate::forge::RateLimit> {
         self.budgets.lock().get(key).copied()
@@ -510,6 +523,7 @@ impl Runtime {
             hosts: Mutex::new(HashMap::new()),
             journals: Mutex::new(HashMap::new()),
             budgets: Mutex::new(HashMap::new()),
+            listeners: Mutex::new(HashMap::new()),
             quitting: AtomicBool::new(false),
             place: parking_lot::RwLock::new(None),
             modules: Arc::new(super::wasm::Modules::new(data, app_version)),
@@ -1681,9 +1695,18 @@ impl Host {
                     rt.spend(&super::accounts::budget_key(&self.id, account), left);
                 }
             }
-            _ => self
-                .journal
-                .push(Kind::Message, format!("a notification {method}")),
+            _ => {
+                let listener = self
+                    .rt
+                    .upgrade()
+                    .and_then(|rt| rt.listeners.lock().get(&self.id).cloned());
+                match listener {
+                    Some(f) => f(method, params),
+                    None => self
+                        .journal
+                        .push(Kind::Message, format!("a notification {method}")),
+                }
+            }
         }
     }
 
