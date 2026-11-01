@@ -157,6 +157,8 @@ pub struct AgentRt {
     /// Where its facts go (PLG-5): its status, its requests and their answers, told where they
     /// change; nowhere outside the core.
     pub(crate) facts: crate::facts::Emitter,
+    /// The launch environments (INT-14): whether a plugin runs its worktree's services. Set by the core.
+    pub(crate) launch: Option<std::sync::Arc<crate::launchenv::Launch>>,
     pub proc: Option<Process>,
     pub gen: u64,
     pub conv: Conv,
@@ -513,6 +515,7 @@ impl AgentRt {
             conv: Conv::new(conv_dir, &meta.id),
             meta,
             facts: crate::facts::Emitter::default(),
+            launch: None,
             proc: None,
             gen: 0,
             active_since: None,
@@ -649,11 +652,11 @@ impl AgentRt {
             remote_state: self.remote_state.clone(),
             activity: self.activity.clone(),
             setup: self.setup.clone(),
-            isola: self
-                .meta
-                .worktree
-                .as_ref()
-                .is_some_and(|w| crate::isola::manages(&w.path)),
+            isola: self.meta.worktree.as_ref().is_some_and(|w| {
+                self.launch
+                    .as_ref()
+                    .is_some_and(|l| l.manages(&w.path, &self.meta.project_id))
+            }),
         }
     }
 

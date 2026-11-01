@@ -109,6 +109,7 @@ mod integrations;
 mod integrations_tests;
 mod isola;
 mod job;
+mod launchenv;
 mod leftovers;
 mod mcp;
 mod memory;

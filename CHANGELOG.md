@@ -26,6 +26,8 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - La documentation dit comment publier un plugin sur le store et préparer sa revue, et une nouvelle page, « La sécurité des plugins », dit ce que l’app vérifie, ce que le sceau « Vérifié par Escouade » couvre et ce que la revue refuse.
 - Un projet peut proposer des plugins dans son `.escouade.yml` : à son ouverture, une bande de Réglages › Projets nomme ceux qui manquent, avec leur page du store, sans rien installer seule ; « Pas pour ce projet » la fait taire. Le fichier peut aussi régler un plugin pour ce projet, jamais avec un secret.
 
+- isola est un plugin livré avec Escouade, le premier « environnement de lancement » : il lance les services de chaque worktree sur ses ports et ses adresses. Tu peux le couper dans Réglages › Plugins, pour toute l’app ou un projet ; sans lui, un ticket part comme avant, avec une recette.
+
 ### Retiré
 
 - L’index du code est retiré : mesuré avec de vrais agents sur des changements à plusieurs endroits, il ne faisait pas économiser de tokens ni éviter d’oubli, et chaque harness trouve le code par ses propres outils. Ses bases sont effacées de ta machine à la mise à jour, et la recherche par le sens de la mémoire et des docs se règle maintenant dans Réglages › Projets › Tous les projets.

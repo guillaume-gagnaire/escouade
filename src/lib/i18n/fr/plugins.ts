@@ -358,6 +358,10 @@ export default {
     },
     harnesses: { one: 'Un harness, dans « Nouvel agent » : {names}', other: '{count} harness, dans « Nouvel agent » : {names}' },
     ticketSources: { one: 'Une source du Kanban : {names}', other: '{count} sources du Kanban : {names}' },
+    launchEnvironments: {
+      one: 'Un environnement de lancement, pour les lancements de test : {names}',
+      other: '{count} environnements de lancement, pour les lancements de test : {names}',
+    },
     forges: { one: 'Un hébergeur de code : {names}', other: '{count} hébergeurs de code : {names}' },
     accounts: {
       one: 'Un type de compte, dans Réglages › Comptes : {names}',

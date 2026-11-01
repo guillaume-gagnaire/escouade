@@ -10,7 +10,6 @@ use crate::engine::{self, Process};
 use crate::git;
 use crate::i18n::{self, Lang};
 use crate::integrations;
-use crate::isola;
 use crate::leftovers;
 use crate::model::*;
 use crate::pace::Standing;
@@ -2160,7 +2159,7 @@ impl<R: Runtime> Core<R> {
         };
         // As its worktree will be: the branch it is on has isola's configuration.
         let from = taken_up.as_deref().unwrap_or(&target);
-        let isola = isola::cli().is_some() && isola::configured_on(&project.path, from).await;
+        let isola = self.launch.on_rev(&project.path, from, &project.id).await;
         // Reserved at once: no other start or launch preparation gets this block meanwhile.
         let ports = if isola { None } else { self.reserve_ports() };
         let follow = self.docs_follow(project, lang).await;
@@ -3729,18 +3728,19 @@ impl<R: Runtime> Core<R> {
     /// Only for an agent with a worktree, and not archived (it would hold a block for nothing).
     pub async fn agent_prepare_launch(self: &Arc<Self>, id: &str) -> Result<()> {
         let h = self.agent(id)?;
-        let (worktree, archived, base) = {
+        let (worktree, archived, base, project_id) = {
             let rt = h.lock();
             (
                 rt.meta.worktree.clone(),
                 rt.meta.archived,
                 rt.meta.port_base,
+                rt.meta.project_id.clone(),
             )
         };
         let Some(worktree) = worktree else {
             bail!(Refusal::NoWorktree);
         };
-        if isola::manages(&worktree.path) {
+        if self.launch.manages(&worktree.path, &project_id) {
             bail!(tr!(
                 "isola lance ce worktree : « ▶ Tester » suffit, sans recette.",
                 "isola runs this worktree: “▶ Test” is enough, without a recipe."
@@ -3875,8 +3875,8 @@ impl<R: Runtime> Core<R> {
     /// The `.isola.toml` of the agent's worktree as isola will read it, to show before it runs.
     pub fn isola_config(&self, agent_id: &str) -> Result<String> {
         let meta = self.agent(agent_id)?.lock().meta.clone();
-        let wt = isola_worktree(&meta)?;
-        isola::read_config(&wt.path)
+        let (wt, env) = self.isola_worktree(&meta)?;
+        env.read_config(&wt.path)
     }
 
     /// The user read `config` (the worktree's `.isola.toml`) and `open` (the address the agent gave) in
@@ -3885,8 +3885,8 @@ impl<R: Runtime> Core<R> {
     pub fn approve_isola(&self, agent_id: &str, config: String, open: String) -> Result<()> {
         let h = self.agent(agent_id)?;
         let meta = h.lock().meta.clone();
-        let wt = isola_worktree(&meta)?;
-        if isola::read_config(&wt.path)? != config {
+        let (wt, env) = self.isola_worktree(&meta)?;
+        if env.read_config(&wt.path)? != config {
             bail!(Refusal::IsolaConfigChanged);
         }
         {
@@ -3915,11 +3915,11 @@ impl<R: Runtime> Core<R> {
             bail!(why);
         }
         if kind == "isola" {
-            let wt = isola_worktree(&meta)?;
-            testlaunch::check_isola_approved(&meta, &isola::read_config(&wt.path)?)?;
+            let (wt, env) = self.isola_worktree(&meta)?;
+            testlaunch::check_isola_approved(&meta, &env.read_config(&wt.path)?)?;
             return Ok(testlaunch::RunSpec {
                 name: "isola up".into(),
-                command: isola::UP.into(),
+                command: env.up_command(),
                 cwd: wt.path,
                 env: Vec::new(),
             });
@@ -3929,27 +3929,40 @@ impl<R: Runtime> Core<R> {
 
     /// The services isola runs for the agent's worktree (`isola ls --json`), when it may launch
     /// them now.
-    pub async fn isola_services(&self, agent_id: &str) -> Result<Vec<isola::Service>> {
-        let wt = self.isola_launch(agent_id)?;
-        isola::services(&wt.path, &wt.branch).await
+    pub async fn isola_services(&self, agent_id: &str) -> Result<Vec<crate::isola::Service>> {
+        let (wt, env) = self.isola_launch(agent_id)?;
+        env.services(&wt.path, &wt.branch).await
     }
 
     /// Stops the services isola runs for the agent's worktree (`isola down`).
     pub async fn isola_down(&self, agent_id: &str) -> Result<()> {
         let meta = self.agent(agent_id)?.lock().meta.clone();
-        let wt = isola_worktree(&meta)?;
-        isola::run(&wt.path, &["down"], isola::LIMIT)
-            .await
-            .map(|_| ())
+        let (wt, env) = self.isola_worktree(&meta)?;
+        env.down(&wt.path).await
+    }
+
+    /// The agent's worktree, when a launch environment (isola) runs its services, and that environment.
+    fn isola_worktree(&self, meta: &AgentMeta) -> Result<(Worktree, crate::launchenv::Env)> {
+        let wt = meta
+            .worktree
+            .clone()
+            .ok_or_else(|| anyhow!(Refusal::NoWorktree))?;
+        let Some(env) = self.launch.for_dir(&wt.path, &meta.project_id) else {
+            bail!(tr!(
+                "isola ne lance pas ce worktree (isola introuvable, ou pas de .isola.toml).",
+                "isola doesn’t run this worktree (isola not found, or no .isola.toml)."
+            ));
+        };
+        Ok((wt, env))
     }
 
     /// The agent's worktree, whose services isola runs, when it may launch them now.
-    fn isola_launch(&self, agent_id: &str) -> Result<Worktree> {
+    fn isola_launch(&self, agent_id: &str) -> Result<(Worktree, crate::launchenv::Env)> {
         let meta = self.agent(agent_id)?.lock().meta.clone();
         if let Some(why) = self.launch_refusal(&meta) {
             bail!(why);
         }
-        isola_worktree(&meta)
+        self.isola_worktree(&meta)
     }
 
     /// The terminal `term_id` is one of the agent's test launches, kept to be stopped with them.
@@ -4030,29 +4043,19 @@ impl<R: Runtime> Core<R> {
                 self.about_agent(agent_id),
             );
         }
-        let dir = self
-            .agent(agent_id)
-            .ok()
-            .and_then(|h| h.lock().meta.worktree.as_ref().map(|w| w.path.clone()));
-        if let Some(dir) = dir.filter(|d| isola::manages(d)) {
-            isola::down_later(dir);
+        let dir = self.agent(agent_id).ok().and_then(|h| {
+            let rt = h.lock();
+            rt.meta
+                .worktree
+                .as_ref()
+                .map(|w| (w.path.clone(), rt.meta.project_id.clone()))
+        });
+        if let Some((dir, project)) = dir {
+            if let Some(env) = self.launch.for_dir(&dir, &project) {
+                env.down_later(dir);
+            }
         }
     }
-}
-
-/// The agent's worktree, when isola runs its services.
-fn isola_worktree(meta: &AgentMeta) -> Result<Worktree> {
-    let wt = meta
-        .worktree
-        .clone()
-        .ok_or_else(|| anyhow!(Refusal::NoWorktree))?;
-    if !isola::manages(&wt.path) {
-        bail!(tr!(
-            "isola ne lance pas ce worktree (isola introuvable, ou pas de .isola.toml).",
-            "isola doesn’t run this worktree (isola not found, or no .isola.toml)."
-        ));
-    }
-    Ok(wt)
 }
 
 /// How long `gh pr create` may take.

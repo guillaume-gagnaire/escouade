@@ -81,6 +81,7 @@ La place de marché la réencode sans ses métadonnées en 256 et 64 px, et la m
 - `secrets` : les secrets qu’il garde, chacun avec une clé et un titre ;
 - `accounts` : un genre de compte, partagé par ses autres points ;
 - `ticketSources`, `forges` et `harnesses` : une source du Kanban, un hébergeur de code, un harness ; chacun avec un `id`, et le compte qu’il utilise (`account`) parmi ceux de `accounts` ;
+- `launchEnvironments` : un environnement de lancement, qui prend en charge `up`, `ls`, `down` et `destroy` d’un worktree et ses services ; pour l’instant réservé aux plugins livrés avec Escouade (isola) ;
 - `themes` : des thèmes, décrits dans [Les thèmes](plugins/themes) ;
 - `webhooks` et `commands` : un webhook ou une commande sur un fait, décrits dans [Les événements](plugins/events) ;
 - `menus`, `statusBar`, `badges`, `projectTemplates` et `escouadeYml` : décrits avec les versions qui les mettent en service.

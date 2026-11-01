@@ -314,3 +314,86 @@ async fn a_program_of_the_app_that_is_not_the_app_s_own_is_not_started() {
     assert!(stop.contains("not the app's own program"), "{stop}");
     rt.shutdown();
 }
+
+/// The isola plugin is the launch environment of a worktree with an `.isola.toml` while it is on for the app and for
+/// the project, and its program is installed; else the worktree is nobody's. Its process answers `launch/ls`, `down`
+/// and `destroy` (INT-14).
+#[tokio::test(flavor = "multi_thread")]
+async fn isola_is_the_launch_environment_of_its_worktrees_unless_it_is_off_or_missing_its_program()
+{
+    use crate::launchenv::Launch;
+    // The test double is a script of node's.
+    crate::paths::trim_test_path();
+    let id = "dev.escouade.isola";
+    let data = DataDir::new(base("isola").join("data"));
+    let plugins = plugins_in(&data);
+    let rt = Runtime::new(
+        plugins.clone(),
+        Arc::new(MemoryStore::default()),
+        &data,
+        VERSION,
+        limits(),
+    );
+    let launch = Launch::new(plugins.clone(), rt.clone());
+    let wt = base("isola-worktree");
+    let dir = wt.to_string_lossy().to_string();
+    // No fake isola, no program: nobody's, with the file or without.
+    *crate::isola::TEST_CLI.lock().unwrap() = None;
+    std::fs::write(wt.join(".isola.toml"), "").unwrap();
+    assert!(!launch.manages(&dir, "p1"));
+    assert!(
+        launch.configured(&dir, "p1"),
+        "the file alone says what the recipe should leave"
+    );
+    crate::isola::tests::use_fake();
+    assert!(launch.manages(&dir, "p1"));
+    let env = launch.for_dir(&dir, "p1").unwrap();
+    assert_eq!(
+        env.up_command(),
+        crate::isola::UP,
+        "the command is the manifest's, the input closed where the system has no terminal for it"
+    );
+    std::fs::write(wt.join(".isola-branch"), "feat").unwrap();
+    assert!(env.services(&dir, "feat").await.unwrap().is_empty());
+    crate::isola::run(&dir, &["up"], crate::isola::LIMIT)
+        .await
+        .unwrap();
+    let services = env.services(&dir, "feat").await.unwrap();
+    assert_eq!(services[0].name, "web");
+    assert_eq!(services[0].url, "http://feat.demo.localhost:3000");
+    env.down(&dir).await.unwrap();
+    assert!(env.services(&dir, "feat").await.unwrap().is_empty());
+    env.destroy(&dir).await.unwrap();
+    assert_eq!(
+        crate::isola::tests::calls(&wt),
+        [
+            "ls --json",
+            "up",
+            "ls --json",
+            "down",
+            "ls --json",
+            "destroy"
+        ]
+    );
+    // Its failure says why, in the language of the interface (the fake fails when it is told to).
+    std::fs::write(wt.join(".isola-fail"), "").unwrap();
+    let e = env.down(&dir).await.unwrap_err().to_string();
+    assert!(e.contains("the fake isola fails"), "{e}");
+    std::fs::remove_file(wt.join(".isola-fail")).unwrap();
+    // Off for one project: nobody's there, still isola's elsewhere; off for the app: nobody's anywhere, and the
+    // process is not asked.
+    plugins
+        .choose(id, |c| {
+            c.projects.insert("p2".into(), false);
+        })
+        .unwrap();
+    assert!(!launch.manages(&dir, "p2") && launch.manages(&dir, "p1"));
+    plugins.choose(id, |c| c.enabled = false).unwrap();
+    assert!(!launch.manages(&dir, "p1") && !launch.configured(&dir, "p1"));
+    // Without the file, it is not isola's.
+    plugins.choose(id, |c| c.enabled = true).unwrap();
+    std::fs::remove_file(wt.join(".isola.toml")).unwrap();
+    assert!(!launch.manages(&dir, "p1"));
+    // A path or an option is no file name: the manifest of a plugin cannot reach outside the worktree.
+    rt.shutdown();
+}

@@ -167,6 +167,43 @@
           },
           "type": "array"
         },
+        "launchEnvironments": {
+          "description": "Launch environments: the up, ls, down and destroy of a worktree.",
+          "items": {
+            "properties": {
+              "id": {
+                "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$",
+                "type": "string"
+              },
+              "name": {
+                "description": "One text, or a text by language (`en` first, then `fr`).",
+                "oneOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "anyOf": [
+                      {
+                        "required": ["en"]
+                      },
+                      {
+                        "required": ["fr"]
+                      }
+                    ],
+                    "type": "object"
+                  }
+                ]
+              }
+            },
+            "required": ["id"],
+            "type": "object"
+          },
+          "type": "array"
+        },
         "menus": {
           "description": "Menus.",
           "items": {

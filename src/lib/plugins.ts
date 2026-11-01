@@ -265,6 +265,7 @@ export function contributionsOf(m: Manifest | null, lang: string): string[] {
       | 'commands'
       | 'ticketSources'
       | 'forges'
+      | 'launchEnvironments'
       | 'accounts'
       | 'menus'
       | 'statusBar'
@@ -278,6 +279,7 @@ export function contributionsOf(m: Manifest | null, lang: string): string[] {
     ['harnesses', 'harnesses'],
     ['ticketSources', 'ticketSources'],
     ['forges', 'forges'],
+    ['launchEnvironments', 'launchEnvironments'],
     ['accounts', 'accounts'],
     ['webhooks', 'webhooks'],
     ['commands', 'commands'],
@@ -311,7 +313,7 @@ export function categoriesOf(p: PluginView): Category[] {
   if (has('themes')) out.push('themes');
   if (has('webhooks') || has('notifications')) out.push('notifications');
   if (m.permissions.decide || has('permissionRules')) out.push('permissions');
-  if (has('commands') || has('menus') || has('statusBar') || has('badges')) out.push('tools');
+  if (has('commands') || has('menus') || has('statusBar') || has('badges') || has('launchEnvironments')) out.push('tools');
   if (has('languages')) out.push('languages');
   return out;
 }

@@ -51,7 +51,13 @@ pub const ICON_BYTES: u64 = 1024 * 1024;
 /// The values `contributes.settings[].type` takes.
 const SETTING_TYPES: [&str; 4] = ["string", "number", "boolean", "select"];
 /// The extension points whose items carry an `id`, unique in the list.
-const POINTS_WITH_ID: [&str; 4] = ["accounts", "ticketSources", "forges", "harnesses"];
+const POINTS_WITH_ID: [&str; 5] = [
+    "accounts",
+    "ticketSources",
+    "forges",
+    "harnesses",
+    "launchEnvironments",
+];
 /// The extension points whose items are left to their own tickets (PLG-5, PLG-7…): a list of
 /// objects.
 const OPEN_POINTS: [&str; 7] = [
@@ -1315,6 +1321,7 @@ pub fn schema() -> Value {
                     "ticketSources": with_id("Sources of the Kanban.", true),
                     "forges": with_id("Code hosts: pull requests, CI, deployments.", true),
                     "harnesses": with_id("Harnesses.", false),
+                    "launchEnvironments": with_id("Launch environments: the up, ls, down and destroy of a worktree.", false),
                     "themes": open("Themes."),
                     "webhooks": open("Webhooks, without code."),
                     "commands": open("Commands run on an event."),

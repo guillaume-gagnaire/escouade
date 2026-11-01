@@ -22,7 +22,7 @@ export const ICON_MIN = 256;
 export const ICON_BYTES = 1024 * 1024;
 
 const SETTING_TYPES = ['string', 'number', 'boolean', 'select'];
-const POINTS_WITH_ID = ['accounts', 'ticketSources', 'forges', 'harnesses'];
+const POINTS_WITH_ID = ['accounts', 'ticketSources', 'forges', 'harnesses', 'launchEnvironments'];
 const OPEN_POINTS = ['themes', 'webhooks', 'commands', 'menus', 'statusBar', 'badges', 'projectTemplates'];
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);

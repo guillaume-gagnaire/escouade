@@ -66,6 +66,8 @@ Quand [isola](https://github.com/cyucelen/isola) est installé et que le worktre
 
 « ▶ Tester » montre alors le `.isola.toml` sous « Configuration isola (.isola.toml) » (isola lance les commandes de ce fichier dans ton shell, hors du mode de permission de Claude Code, et l’agent peut l’avoir écrit ou modifié) et l’adresse qui s’ouvrira. Comme pour une recette, rien ne tourne avant « Lancer » et un fichier modifié est montré de nouveau. Le test lance `isola up`, attend que chaque service réponde, puis ouvre l’adresse. « Tout arrêter » lance `isola down`.
 
+isola est un plugin livré avec Escouade, `dev.escouade.isola` : le premier « environnement de lancement », un point d’extension des plugins qui prend en charge `up`, l’adresse, `down` et `destroy` d’un worktree. Réglages › Plugins le liste sous « Livrés avec Escouade » ; tu peux le couper pour toute l’app ou pour un projet, et sans lui un ticket part comme s’il n’y avait pas d’isola, avec une recette sur les ports réservés. Un plugin installé ailleurs ne peut pas encore servir ce point.
+
 ## Valider un ticket
 
 Le bouton de la carte porte le nom de ce que la validation fait. Cela se règle dans le premier groupe de Réglages › Kanban, « Quand je valide un ticket « À tester » » ; le bouton « Après validation : … » de l’en-tête y mène (voir [Réglages du Kanban](settings-board)).

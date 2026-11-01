@@ -26,6 +26,8 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - The documentation says how to publish a plugin on the store and prepare its review, and a new page, “Plugin security”, says what the app checks, what the “Verified by Escouade” seal covers and what the review refuses.
 - A project can propose plugins in its `.escouade.yml`: when it opens, a band of Settings › Projects names those missing, with their store page, installing nothing by itself; “Not for this project” silences it. The file can also set a plugin up for that project, never with a secret.
 
+- isola is a plugin shipped with Escouade, the first “launch environment”: it runs each worktree’s services on its own ports and addresses. You can turn it off in Settings › Plugins, for the whole app or one project; without it, a ticket starts as before, with a recipe.
+
 ### Removed
 
 - The code index is removed: measured with real agents on changes in several places, it saved neither tokens nor oversights, and each harness finds the code with its own tools. Its databases are erased from your machine at the update, and the search by meaning of the memory and the docs is now set in Settings › Projects › Every project.

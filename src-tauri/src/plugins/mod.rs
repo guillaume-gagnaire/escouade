@@ -537,7 +537,9 @@ struct Staged {
 }
 
 impl Plugins {
-    /// The plugins of `data`, read once, the folders in development watched.
+    /// The plugins of `data`, read once, the folders in development watched; in the tests, without the ones the app
+    /// gives (the core's own are `load_for_core`).
+    #[cfg(test)]
     pub fn load(data: DataDir, app_version: &str) -> Arc<Self> {
         let app_dir = std::env::current_exe()
             .ok()
@@ -545,7 +547,20 @@ impl Plugins {
             .unwrap_or_default();
         // The tests of the installs and of the runtime count on a list that holds what they put there: the registry
         // is loaded by `load_in`, which the tests of INT-4 use.
-        Self::load_with(data, app_version, app_dir, !cfg!(test))
+        Self::load_with(data, app_version, app_dir, false)
+    }
+
+    /// The plugins of the app's core, the ones the app gives with them (the core uses them: a launch environment). In
+    /// the tests their program is the one the build made beside the tests (`deps/`'s parent).
+    pub fn load_for_core(data: DataDir, app_version: &str) -> Arc<Self> {
+        let mut app_dir = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(Path::to_path_buf))
+            .unwrap_or_default();
+        if cfg!(test) && app_dir.file_name().is_some_and(|n| n == "deps") {
+            app_dir.pop();
+        }
+        Self::load_with(data, app_version, app_dir, true)
     }
 
     /// As `load`, the app's programs in `app_dir` (the tests').
@@ -722,6 +737,22 @@ impl Plugins {
             .iter()
             .find(|l| l.installed.id == id)
             .map(|l| self.view(l, lang))
+    }
+
+    /// What the plugins the app gives contribute to `point` (INT-14): for each that holds, its id, the user's choices
+    /// and the items of the point. For the points the core serves itself with a plugin it gives (a launch
+    /// environment), never one from the store or a folder: those are not asked to run a command of the core's.
+    pub fn builtin_contributions(&self, point: &str) -> Vec<(String, Choices, Vec<Value>)> {
+        self.loaded
+            .read()
+            .iter()
+            .filter(|l| l.installed.origin == Origin::Builtin)
+            .filter_map(|l| {
+                let m = l.read.as_ref().ok()?.manifest.as_ref().ok()?;
+                let items = m.contributes.get(point)?.as_array()?.clone();
+                (m.id == l.installed.id).then(|| (m.id.clone(), l.installed.choices.clone(), items))
+            })
+            .collect()
     }
 
     /// The icon of the installed plugin `id`, as a `data:image/png` address the window shows:

@@ -7,6 +7,8 @@
 //!
 //! An entry is a function from the name to a `fn() -> i32`: add the plugin's module and one line to `ENTRIES`.
 
+#[path = "escouade-plugins/isola.rs"]
+mod isola;
 #[path = "escouade-plugins/minimal.rs"]
 mod minimal;
 
@@ -14,7 +16,7 @@ mod minimal;
 type Entry = (&'static str, fn() -> i32);
 
 /// The plugins of this program.
-const ENTRIES: &[Entry] = &[("minimal", minimal::run)];
+const ENTRIES: &[Entry] = &[("isola", isola::run_plugin), ("minimal", minimal::run)];
 
 fn main() {
     let name = std::env::args().nth(1).unwrap_or_default();
