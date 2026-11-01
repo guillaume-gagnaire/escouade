@@ -354,6 +354,51 @@
             "type": "object"
           },
           "type": "array"
+        },
+        "workflowReaders": {
+          "description": "Readers of workflows Escouade does not read by itself (it gives them the project's files).",
+          "items": {
+            "properties": {
+              "files": {
+                "description": "The files of the project it is given, as globs from the project's folder (`.planning/**`).",
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "id": {
+                "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$",
+                "type": "string"
+              },
+              "name": {
+                "description": "One text, or a text by language (`en` first, then `fr`).",
+                "oneOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "anyOf": [
+                      {
+                        "required": ["en"]
+                      },
+                      {
+                        "required": ["fr"]
+                      }
+                    ],
+                    "type": "object"
+                  }
+                ]
+              }
+            },
+            "required": ["id", "files"],
+            "type": "object"
+          },
+          "type": "array"
         }
       },
       "type": "object"

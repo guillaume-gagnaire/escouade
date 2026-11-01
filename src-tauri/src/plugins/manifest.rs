@@ -51,11 +51,12 @@ pub const ICON_BYTES: u64 = 1024 * 1024;
 /// The values `contributes.settings[].type` takes.
 const SETTING_TYPES: [&str; 4] = ["string", "number", "boolean", "select"];
 /// The extension points whose items carry an `id`, unique in the list.
-const POINTS_WITH_ID: [&str; 5] = [
+const POINTS_WITH_ID: [&str; 6] = [
     "accounts",
     "ticketSources",
     "forges",
     "harnesses",
+    "workflowReaders",
     "launchEnvironments",
 ];
 /// The extension points whose items are left to their own tickets (PLG-5, PLG-7…): a list of
@@ -1120,6 +1121,26 @@ impl Checker {
                 accounts = ids;
                 continue;
             }
+            // A workflow reader says which files of the project it is given (ESC-200).
+            if point == "workflowReaders" {
+                for (at, item) in &items {
+                    let p = join(at, "files");
+                    match item.get("files") {
+                        None => self.problem(&p, Code::Required),
+                        Some(Value::Array(list)) => {
+                            for (i, f) in list.iter().enumerate() {
+                                let at = format!("{p}[{i}]");
+                                if let Some(f) = self.filled(f, &at) {
+                                    if !is_inner_path(f) {
+                                        self.problem(&at, Code::Path);
+                                    }
+                                }
+                            }
+                        }
+                        Some(_) => self.wrong_type(&p, "array"),
+                    }
+                }
+            }
             for (at, item) in &items {
                 let p = join(at, "account");
                 if let Some(a) = item.get("account") {
@@ -1226,6 +1247,17 @@ pub fn schema() -> Value {
             "items": { "type": "object", "required": ["id"], "properties": props },
         })
     };
+    // A reader of workflows: the files of the project it is given, as globs from its folder.
+    let mut readers = with_id(
+        "Readers of workflows Escouade does not read by itself (it gives them the project's files).",
+        false,
+    );
+    readers["items"]["required"] = json!(["id", "files"]);
+    readers["items"]["properties"]["files"] = json!({
+        "type": "array",
+        "description": "The files of the project it is given, as globs from the project's folder (`.planning/**`).",
+        "items": { "type": "string", "minLength": 1 },
+    });
     let open = |about: &str| json!({ "type": "array", "description": about, "items": { "type": "object" } });
     json!({
         "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1322,6 +1354,7 @@ pub fn schema() -> Value {
                     "forges": with_id("Code hosts: pull requests, CI, deployments.", true),
                     "harnesses": with_id("Harnesses.", false),
                     "launchEnvironments": with_id("Launch environments: the up, ls, down and destroy of a worktree.", false),
+                    "workflowReaders": readers,
                     "themes": open("Themes."),
                     "webhooks": open("Webhooks, without code."),
                     "commands": open("Commands run on an event."),

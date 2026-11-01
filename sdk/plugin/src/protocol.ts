@@ -37,7 +37,12 @@ export type FactName =
   | 'decision.proposed'
   | 'decision.accepted'
   | 'pr.opened'
-  | 'account.switched';
+  | 'account.switched'
+  | 'workflow.step_entered'
+  | 'workflow.step_left'
+  | 'workflow.looped_back'
+  | 'workflow.left'
+  | 'workflow.changed';
 
 /** A project, by its id and its name. */
 export interface Project {
@@ -187,6 +192,11 @@ export const FACT_NAMES: readonly FactName[] = [
   'decision.accepted',
   'pr.opened',
   'account.switched',
+  'workflow.step_entered',
+  'workflow.step_left',
+  'workflow.looped_back',
+  'workflow.left',
+  'workflow.changed',
 ];
 
 /** What Escouade sends to the plugin: each method, its parameters and its answer (`void` for a notification). */
