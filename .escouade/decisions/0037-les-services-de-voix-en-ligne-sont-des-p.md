@@ -1,9 +1,9 @@
 ---
-number: null
+number: 37
 id: "les-services-de-voix-en-ligne-sont-des-p"
 title: "Les services de voix en ligne sont des plugins de première main ; le compte Mistral est celui du plugin « Mistral »"
 date: "2026-11-01"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-285"
 pages: ["plugins/livres-avec-escouade"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/livres-avec-escouade","added":6,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-01T18:07:18+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
