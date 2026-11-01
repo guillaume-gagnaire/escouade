@@ -1,0 +1,1 @@
+{ "endpoint": "https://hooks.example.dev", "deny": "rm -rf" }

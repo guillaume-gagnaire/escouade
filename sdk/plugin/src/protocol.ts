@@ -151,6 +151,31 @@ export interface SettingsGetParams {
   project?: string;
 }
 
+export interface FilesReadParams {
+  /** The file's path in the plugin's folder: rules.json, data/words.txt. */
+  path: string;
+}
+
+export interface NetFetchParams {
+  /** An https URL to a host of permissions.network. */
+  url: string;
+  /** GET when left out. */
+  method?: string;
+  /** The headers of the request (Host is set by Escouade). */
+  headers?: Record<string, string>;
+  /** The body of the request, as text. */
+  body?: string | null;
+}
+
+export interface NetFetchResult {
+  /** The HTTP status; a 3xx is given as it is, never followed. */
+  status: number;
+  /** Its headers, by lower case name; a repeated one joined by ", ". */
+  headers: Record<string, string>;
+  /** Its body, as text (UTF-8, what is not replaced). */
+  body: string;
+}
+
 export interface LogParams {
   level: 'debug' | 'info' | 'warn' | 'error';
   message: string;
@@ -217,15 +242,21 @@ export interface ToEscouade {
   'secrets/get': { params: SecretsGetParams; result: string | null };
   /** The values of its settings (contributes.settings), as the user set them; with a project, those its .escouade.yml gives the plugin (plugins.<id>) over them, where the plugin is on. */
   'settings/get': { params: SettingsGetParams; result: Record<string, string | number | boolean> };
+  /** A file of the plugin's own folder, as text (UTF-8): a path relative to the folder, with / between its parts. Refused (refused) for a path that leaves the folder (absolute, .., a link that goes out of it), a hidden file or folder (.env, .git) and the manifest; notFound for a file that is not there; failed for a file over 256 KiB or not UTF-8. Both transports: the SDK's p.file(path). */
+  'files/read': { params: FilesReadParams; result: string };
+  /** An HTTP request, for a plugin in WASM (run.js): the SDK's standard fetch goes by it. Escouade sends it in https only, to a host of permissions.network or one of its subdomains, never to an address of the machine or of the local network (judged on the addresses the name resolves to), without a proxy; it follows no redirection (the plugin gets the 3xx). The answer comes within 10 s and holds 1 MiB at most (failed past either). A plugin run by a command uses its own network, and is answered methodNotFound. */
+  'net/fetch': { params: NetFetchParams; result: NetFetchResult };
   /** A line of its journal. */
   log: { params: LogParams; result: void };
 }
 
-/** The delay of each of Escouade's calls, in milliseconds; past it, its default answer applies. */
+/** The delay of each call that has one, in milliseconds: past it, Escouade gives up a call to the plugin (its default answer applies), and answers a call of the plugin at the latest. */
 export const TIMEOUTS_MS = {
   initialize: 10000,
   shutdown: 1000,
   'permissions/decide': 500,
+  'files/read': 5000,
+  'net/fetch': 10000,
 } as const;
 
 /** The delay of the other calls, in milliseconds. */
@@ -247,4 +278,10 @@ export const ERRORS = {
   notYours: -32001,
   /** The system's keychain cannot be reached. */
   keychain: -32002,
+  /** What the plugin may not reach: a host outside permissions.network, http, an address of the machine or of the local network (net/fetch); a path outside its folder, hidden, or its manifest (files/read). */
+  refused: -32003,
+  /** A request that failed on the way: no answer within its delay, an answer or a file too big, a file that is not UTF-8. */
+  failed: -32004,
+  /** No such file in the plugin's folder (files/read). */
+  notFound: -32005,
 } as const;

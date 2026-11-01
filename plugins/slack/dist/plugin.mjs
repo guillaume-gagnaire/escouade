@@ -20,7 +20,13 @@ var ERRORS = {
   /** A secret that is not one of the plugin's own. */
   notYours: -32001,
   /** The system's keychain cannot be reached. */
-  keychain: -32002
+  keychain: -32002,
+  /** What the plugin may not reach: a host outside permissions.network, http, an address of the machine or of the local network (net/fetch); a path outside its folder, hidden, or its manifest (files/read). */
+  refused: -32003,
+  /** A request that failed on the way: no answer within its delay, an answer or a file too big, a file that is not UTF-8. */
+  failed: -32004,
+  /** No such file in the plugin's folder (files/read). */
+  notFound: -32005
 };
 
 // ../../sdk/plugin/dist/index.js
@@ -34,6 +40,11 @@ var RpcError = class extends Error {
     this.name = "RpcError";
   }
 };
+function wasmHost() {
+  const g = globalThis;
+  const h = g.__esc;
+  return typeof g.Javy === "object" && g.Javy !== null && typeof h?.listen === "function" && typeof h.write === "function" ? h : void 0;
+}
 var matches = (pattern, name) => pattern.endsWith("*") ? name.startsWith(pattern.slice(0, -1)) : pattern === name;
 var Plugin = class {
   options;
@@ -91,6 +102,14 @@ var Plugin = class {
   settings(project) {
     return this.call("settings/get", project ? { project } : {});
   }
+  /**
+   * A file of the plugin's own folder, as text: `rules.json`, `data/words.txt` (`files/read`, 256 KiB at most). A path
+   * that leaves the folder (`..`, absolute, a link out of it), a hidden one (`.env`) or the manifest is refused
+   * (`RpcError` `ERRORS.refused`); a missing file is `ERRORS.notFound`. The same under Node and in WASM.
+   */
+  file(path) {
+    return this.call("files/read", { path });
+  }
   /** A line of its journal, in Réglages › Plugins. */
   log = {
     debug: (message) => this.notify("log", { level: "debug", message }),
@@ -110,8 +129,18 @@ var Plugin = class {
   notify(method, params) {
     this.send({ jsonrpc: "2.0", method, params });
   }
-  /** Speaks the protocol on the process's standard input and output; ends the process after `shutdown`. */
+  /**
+   * Speaks the protocol to Escouade: inside the app (`run.js`), through its WASM host, never resolved; under Node, on the
+   * process's standard input and output, resolved when its input closes, the process ended after `shutdown`.
+   */
   start() {
+    const host = wasmHost();
+    if (host) {
+      this.listen({ write: (line) => host.write(line), trace: (text) => host.trace(text), end: () => host.end() });
+      host.listen((line) => void this.receive(line));
+      return new Promise(() => {
+      });
+    }
     const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
     this.listen({
       write: (line) => process.stdout.write(line + "\n"),
@@ -209,7 +238,8 @@ var Plugin = class {
       }
       case "shutdown": {
         const all = Promise.allSettled(this.closing.map((h) => h()));
-        await Promise.race([all, new Promise((r) => setTimeout(r, this.options.shutdownMs ?? 800).unref?.())]);
+        const bound = typeof setTimeout === "function" ? [new Promise((r) => setTimeout(r, this.options.shutdownMs ?? 800).unref?.())] : [];
+        await Promise.race([all, ...bound]);
         return null;
       }
       case "events/fact": {

@@ -336,13 +336,13 @@ async fn slack_is_refused_any_host_but_those_of_its_permissions() {
     w.rt.shutdown();
 }
 
-/// A bundle of the tests, without the SDK: it answers `initialize`, `ping`, and what makes it misbehave.
+/// A bundle of the tests, without the SDK, on the host's own transport (`__esc` of the prelude, ESC-321): it
+/// answers `initialize`, `ping`, and what makes it misbehave.
 const PROBE: &str = r#"
 import { readFileSync } from "node:fs";
-import { createInterface } from "node:readline";
-const out = (m) => process.stdout.write(JSON.stringify(m) + "\n");
+const out = (m) => __esc.write(JSON.stringify(m));
 let calls = 0;
-createInterface({ input: process.stdin }).on("line", (line) => {
+__esc.listen((line) => {
   const m = JSON.parse(line);
   calls++;
   if (m.method === "initialize") out({ jsonrpc: "2.0", id: m.id, result: { protocolVersion: 1, capabilities: {} } });
@@ -796,6 +796,181 @@ async fn a_redirection_is_never_followed_out_of_the_permitted_hosts() {
     assert!(
         elsewhere.accept().is_err(),
         "nothing reached the other host"
+    );
+    w.rt.shutdown();
+}
+
+// ---- The SDK on both transports (ESC-321) ----------------------------------------------------------------------
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Transport {
+    Node,
+    Wasm,
+}
+
+/// tests/fixtures/plugins/sdk-both, a plugin written for the SDK (its committed bundle), copied to a folder of the
+/// test's own: run by Node (`run.command`) or in WASM (`run.js`), its rules.json pointed at a fake hook.
+fn sdk_both(t: Transport) -> (W, Seen) {
+    // Else cmd.exe may no longer find node (see `trim_test_path`).
+    #[cfg(windows)]
+    crate::paths::trim_test_path();
+    let src = root().join("tests/fixtures/plugins/sdk-both");
+    let base = std::env::temp_dir().join(format!(
+        "plugin-sdk-{t:?}-{}",
+        uuid::Uuid::new_v4().simple()
+    ));
+    let folder = base.join("plugin");
+    for f in ["dist/plugin.mjs", "data/words.txt", "run", "run.cmd"] {
+        let to = folder.join(f);
+        std::fs::create_dir_all(to.parent().unwrap()).unwrap();
+        std::fs::copy(src.join(f), to).unwrap();
+    }
+    let (hook, seen) = fake_slack();
+    let endpoint = match t {
+        Transport::Node => hook.clone(),
+        // In WASM, by net/fetch: the host of permissions.network, routed to the fake hook.
+        Transport::Wasm => "https://hooks.example.dev".to_string(),
+    };
+    std::fs::write(
+        folder.join("rules.json"),
+        json!({ "endpoint": endpoint, "deny": "rm -rf" }).to_string(),
+    )
+    .unwrap();
+    let mut m: Value =
+        serde_json::from_str(&std::fs::read_to_string(src.join("escouade-plugin.json")).unwrap())
+            .unwrap();
+    if t == Transport::Node {
+        m["run"] = json!({ "command": "run", "windows": "run.cmd" });
+    }
+    std::fs::write(
+        folder.join("escouade-plugin.json"),
+        serde_json::to_string_pretty(&m).unwrap(),
+    )
+    .unwrap();
+    let data = DataDir::new(base.join("data"));
+    let plugins = Plugins::load(data.clone(), "2.2.0");
+    plugins.load_dev(&folder, Lang::En).unwrap();
+    let store = Arc::new(MemoryStore::default());
+    let rt = Runtime::new(
+        plugins.clone(),
+        store.clone(),
+        &data,
+        "2.2.0",
+        Limits::default(),
+    );
+    let id = m["id"].as_str().unwrap().to_string();
+    if t == Transport::Wasm {
+        rt.set_net(Net {
+            routes: HashMap::from([("hooks.example.dev".to_string(), hook)]),
+            dns: None,
+        });
+        if let Some(h) = rt.prepare(&id) {
+            let _ = h.join();
+        }
+    }
+    store.set(&secret_name(&id, "token"), "s3cret").unwrap();
+    (
+        W {
+            rt,
+            store,
+            data,
+            plugins,
+            id,
+            folder,
+        },
+        seen,
+    )
+}
+
+/// The same scenario on either transport: a decision by its rules.json (readFileSync), a fact that reads its files
+/// (p.file, one refused, one missing), its secret, and posts by the standard fetch; its journal; shutdown.
+async fn the_sdk_plays(t: Transport) {
+    let (w, seen) = sdk_both(t);
+    w.rt.start(&w.id).unwrap();
+    until("running", || w.rt.status(&w.id).phase == PhaseName::Running).await;
+    assert_eq!(w.rt.status(&w.id).pid.is_some(), t == Transport::Node);
+    let denied =
+        w.rt.call(&w.id, "permissions/decide", ask("rm -rf build"))
+            .await
+            .unwrap();
+    assert_eq!(
+        denied,
+        json!({ "decision": "deny", "message": "no rm -rf here" })
+    );
+    let asked =
+        w.rt.call(&w.id, "permissions/decide", ask("npm test"))
+            .await
+            .unwrap();
+    assert_eq!(asked, json!({ "decision": "ask" }));
+
+    w.rt.notify(&w.id, "events/fact", to_review()).unwrap();
+    until("posted", || !seen.lock().unwrap().is_empty()).await;
+    let (line, auth, body) = seen.lock().unwrap()[0].clone();
+    assert_eq!(line, "POST /hook HTTP/1.1");
+    assert_eq!(auth, "Bearer s3cret");
+    assert_eq!(
+        serde_json::from_str::<Value>(&body).unwrap(),
+        json!({ "ticket": "ESC-320", "words": ["un", "deux"], "refused": -32003, "missing": -32005 })
+    );
+    until("its log", || {
+        journal_has(&w, Kind::Message, "[info] posted 200 ok=true")
+    })
+    .await;
+    assert!(journal_has(
+        &w,
+        Kind::Refused,
+        "files/read: \"../escouade-plugin.json\" is not a file of the plugin's folder"
+    ));
+    assert!(!w
+        .rt
+        .journal(&w.id)
+        .iter()
+        .any(|e| e.text.contains("s3cret")));
+    w.rt.shutdown();
+    assert!(journal_has(&w, Kind::Stop, "answered shutdown"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_plugin_written_for_the_sdk_runs_unchanged_by_node() {
+    the_sdk_plays(Transport::Node).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_plugin_written_for_the_sdk_runs_unchanged_in_wasm() {
+    if !ready() {
+        return;
+    }
+    the_sdk_plays(Transport::Wasm).await;
+}
+
+/// An old bundle, built with the SDK before 0.3 (its own stdin), is not run in WASM: the reason is in its journal.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_bundle_that_reads_stdin_itself_says_to_build_it_again() {
+    if !ready() {
+        return;
+    }
+    let w = plugin(
+        "old-sdk",
+        json!({ "id": "dev.test.old", "name": "Vieux", "version": "1.0.0", "escouade": { "api": "1", "min": "2.1.0" } }),
+        "import { createInterface } from \"node:readline\";\ncreateInterface({ input: process.stdin }).on(\"line\", () => {});\n",
+        &[],
+        Limits::default(),
+    );
+    let _ = w.rt.start(&w.id);
+    until("it stopped", || {
+        w.rt.status(&w.id).phase == PhaseName::Stopped
+    })
+    .await;
+    let journal: Vec<String> =
+        w.rt.journal(&w.id)
+            .iter()
+            .map(|e| format!("{:?} {}", e.kind, e.text))
+            .collect();
+    assert!(
+        journal
+            .iter()
+            .any(|l| l.contains("build the plugin with @escouade-dev/plugin 0.3 or later")),
+        "{journal:#?}"
     );
     w.rt.shutdown();
 }

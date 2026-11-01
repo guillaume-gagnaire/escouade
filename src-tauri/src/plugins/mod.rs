@@ -24,6 +24,8 @@ pub mod decide;
 pub mod builtin;
 // The facts handed to the plugins, their webhooks and their commands (PLG-5).
 pub mod events;
+// `files/read`: a file of the plugin's own folder, for both transports (ESC-321).
+pub mod files;
 pub mod manifest;
 // The reader of workflows a plugin brings (ESC-200).
 pub mod reader;

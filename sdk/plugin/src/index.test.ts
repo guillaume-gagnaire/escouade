@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { createPlugin, ERRORS, FACT_NAMES, PROTOCOL_VERSION, RpcError, type Fact } from './index';
-import { connect, decisionRequest, fact } from './testing';
+import { connect, decisionRequest, fact, refusedPath } from './testing';
 
 // The SDK's client (ESC-181, PLG-9), driven line by line as Escouade drives it: the handshake, batches, facts by name
 // and by pattern, decisions, secrets, logs, errors, shutdown.
@@ -157,5 +157,74 @@ describe('@escouade-dev/plugin', () => {
     });
     expect(decisionRequest().request).toEqual({ id: 'bench-request', kind: 'command', tool: 'Bash', input: { command: 'npm test' } });
     expect(FACT_NAMES).toContain('turn.ended');
+  });
+
+  it('reads a file of its folder by files/read, and is refused any path out of it (ESC-321)', async () => {
+    const plugin = createPlugin();
+    const escouade = connect(plugin, { files: { 'rules.json': '{"a":1}', 'data/words.txt': 'un' } });
+    await escouade.initialize();
+    await expect(plugin.file('rules.json')).resolves.toBe('{"a":1}');
+    await expect(plugin.file('data/words.txt')).resolves.toBe('un');
+    for (const path of ['../x.json', '/etc/passwd', 'C:/x', 'data/../../x', '.env', '.git/config', 'escouade-plugin.json', '']) {
+      await expect(plugin.file(path), path).rejects.toMatchObject({ code: ERRORS.refused });
+    }
+    await expect(plugin.file('nope.json')).rejects.toMatchObject({ code: ERRORS.notFound });
+    expect(refusedPath('data/words.txt')).toBeNull();
+    expect(escouade.received.filter((m) => (m as { method?: string }).method === 'files/read')).toHaveLength(11);
+  });
+
+  it("speaks through Escouade's WASM host when it is there, without a timer for shutdown (ESC-321)", async () => {
+    const g = globalThis as Record<string, unknown>;
+    const sent: string[] = [];
+    const traces: string[] = [];
+    let listener: ((line: string) => void) | undefined;
+    let ended = false;
+    const timer = g.setTimeout;
+    g.Javy = { IO: {} };
+    g.__esc = {
+      listen: (cb: (line: string) => void) => (listener = cb),
+      write: (line: string) => sent.push(line),
+      trace: (line: string) => traces.push(line),
+      end: () => (ended = true),
+    };
+    try {
+      const plugin = createPlugin();
+      let closed = false;
+      plugin.onShutdown(() => void (closed = true));
+      plugin.onEvent('app.started', () => {
+        throw new Error('boom');
+      });
+      let resolved = false;
+      void plugin.start().then(() => (resolved = true));
+      expect(listener).toBeDefined();
+      listener!(
+        '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1,"escouade":{"version":"2.2.0"},"plugin":{"id":"a.b","version":"1.0.0"},"capabilities":{}}}',
+      );
+      listener!(JSON.stringify({ jsonrpc: '2.0', method: 'events/fact', params: fact('app.started') }));
+      const asked = plugin.file('rules.json');
+      await plugin.idle();
+      listener!('{"jsonrpc":"2.0","id":"p1","result":"{}"}');
+      await expect(asked).resolves.toBe('{}');
+      // No setTimeout in WASM: shutdown is answered once its handlers are done.
+      g.setTimeout = undefined;
+      listener!('{"jsonrpc":"2.0","id":2,"method":"shutdown"}');
+      await plugin.idle();
+      expect(sent.map((l) => JSON.parse(l))).toEqual(
+        expect.arrayContaining([
+          { jsonrpc: '2.0', id: 1, result: { protocolVersion: PROTOCOL_VERSION, capabilities: { batch: true } } },
+          { jsonrpc: '2.0', id: 'p1', method: 'files/read', params: { path: 'rules.json' } },
+          { jsonrpc: '2.0', id: 2, result: null },
+        ]),
+      );
+      expect(sent).toHaveLength(3);
+      expect(traces.join('\n')).toContain('events/fact app.started: Error: boom');
+      expect(closed).toBe(true);
+      expect(ended).toBe(true);
+      expect(resolved).toBe(false);
+    } finally {
+      g.setTimeout = timer;
+      delete g.Javy;
+      delete g.__esc;
+    }
   });
 });
