@@ -1,9 +1,9 @@
 ---
-number: null
+number: 39
 id: "github-sort-du-cœur-en-plugin-livre-le-j"
 title: "GitHub sort du cœur en plugin livré, le jeton prêté par le cœur"
 date: "2026-11-01"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-217"
 pages: ["plugins/livres-avec-escouade"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/livres-avec-escouade","added":8,"removed":2}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-01T19:46:39+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
