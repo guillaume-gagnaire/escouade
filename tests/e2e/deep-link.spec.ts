@@ -39,10 +39,11 @@ test.describe('a link to a plugin of the store, and a bad one', () => {
     const asked: string[] = (await state()).requests;
     expect(asked.filter((r) => !/^GET \/(api\/v1\/(catalog|revocations)\.json|_fake\/state)/.test(r))).toEqual([]);
     expect((await state()).installs).toEqual([]);
-    const installed = await page.evaluate(() =>
+    const installed = (await page.evaluate(() =>
       (window as unknown as { __TAURI_INTERNALS__: { invoke(c: string): Promise<unknown> } }).__TAURI_INTERNALS__.invoke('plugins_list'),
-    );
-    expect(installed).toEqual([]);
+    )) as { id: string; origin: { kind: string } }[];
+    // The plugins the app gives (INT-4) are there from the start: nothing else is installed.
+    expect(installed.filter((p) => p.origin.kind !== 'builtin')).toEqual([]);
   });
 });
 
