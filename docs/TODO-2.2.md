@@ -224,7 +224,7 @@ Les tickets s'appellent ici LOOP-1, LOOP-2… ; le chef d'escouade leur donne le
 | LOOP-5. Affiner avec un agent | L'agent court, son schéma JSON validé par les règles, modèle, compte et coût dits avant, la clôture d'un projet privé | 134, 156 | Sonnet medium | LOOP-1, LOOP-4 |
 | LOOP-6. La carte, la conversation et les tickets | L'étape sur la carte, le séparateur dans la conversation, le workflow « Tickets » d'Escouade, un agent de ticket dans deux workflows | 145, 159 | Opus medium (interface) | LOOP-2, LOOP-3 |
 | LOOP-7. MCP et documentation | `get_workflow`, `workflow` dans `list_agents` et `get_agent_summary`, la vue `Sight` des projets privés ; `docs/PROTOCOL.md`, `docs/SPEC.md`, une page du site en deux langues | 156, 157 | Sonnet medium | LOOP-2 |
-| LOOP-8. Les faits et le lecteur de workflow des plugins | Les faits `workflow.*` sur le bus, le point d'extension « lecteur de workflow » | 158 | Sonnet medium | LOOP-2, ESC-177 (PLG-5) |
+| LOOP-8. Les faits et le lecteur de workflow des plugins (ESC-200, fait le 2026-11-01) | Les faits `workflow.*` sur le bus, le point d'extension « lecteur de workflow » | 158 | Sonnet medium | LOOP-2, ESC-177 (PLG-5) |
 | LOOP-9. Essais réels | GSD et Ralph sur Claude Code (chat et vue), un prompt de Codex, OpenCode, Copilot CLI, Cursor CLI (chat et vue) ; les tableaux de `docs/LOOPS.md` corrigés d'après ce qui est vu | 150 | Sonnet medium | LOOP-1 à LOOP-7 |
 
 LOOP-3 et LOOP-4 peuvent avancer en même temps une fois LOOP-1 fait (LOOP-3 sur des faits joués par le faux agent en attendant LOOP-2). LOOP-8 attend le bus de faits des plugins ; s'il n'est pas dans la 2.1.0, il passe à la 2.1.x sans rien retarder.
@@ -300,6 +300,8 @@ Les tickets s'appellent ici INT-0, INT-1… ; le chef d'escouade leur donne leur
 | INT-14. L'environnement de lancement (ESC-286) | Le point « environnement de lancement » (`up`, `ls`, `down`, `destroy`), isola en premier plugin, ses tests et son faux (`fake-isola.mjs`) inchangés. | Sonnet medium | INT-4, INT-5 |
 
 Ordre : INT-0, INT-1, INT-2, INT-3 (dès maintenant, en parallèle) → ESC-173, ESC-174, ESC-175 → INT-4 → INT-5 → INT-6 → INT-7.1 à 7.4 et INT-8.1 à 8.5 → INT-9 → ESC-178 → INT-10.1 à 10.8 (Cursor CLI, Mistral Vibe, Gemini CLI, OpenCode, Copilot CLI, Codex, Antigravity CLI, Claude Code) ; INT-12 → INT-13 et INT-14 après INT-5 ; INT-11 suit.
+
+- **Fait le 2026-10-31** (ESC-210, INT-4) : voir `docs/PLUGINS.md` §4.3. Le manifeste à plusieurs points et `accounts` étaient faits (ESC-173) ; ce ticket pose l'origine `builtin`, le registre, `escouade-plugins` et la crate `escouade-plugin-protocol`, l'empaquetage signé, la désactivation, et le plugin de démonstration `dev.escouade.minimal` (`plugins/builtin/`). Le faux moteur minimal complet viendra avec INT-9.
 
 ### Les tickets PLG à modifier
 
@@ -412,7 +414,7 @@ L'adaptateur, ses comptes et sa vue terminal sont sortis en 2.1.0 (ESC-273 à 27
 
 ## Demandés pendant le redesign (2026-10-24)
 
-- [ ] **Wispr Flow** pour la transcription vocale, comme service en ligne et comme app de bureau (ESC-164).
+- [ ] **Wispr Flow** pour la transcription vocale, comme service en ligne et comme app de bureau (ESC-164). **Pas pour l'instant**, dit l'utilisateur le 2026-11-01 : à ne lancer que s'il le redemande.
 
 ## Conçus le 2026-10-28, à découper en tickets
 

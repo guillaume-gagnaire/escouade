@@ -83,6 +83,71 @@
       "ignored": []
     },
     {
+      "name": "a workflow reader lists the files of the project it is given (ESC-200)",
+      "manifest": {
+        "id": "dev.exemple.lecteur",
+        "name": "Lecteur",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2"
+        },
+        "run": {
+          "command": "bin/lecteur"
+        },
+        "contributes": {
+          "workflowReaders": [
+            {
+              "id": "bmad",
+              "name": "BMAD",
+              "files": ["_bmad/**", "docs/*.md"]
+            }
+          ]
+        }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "a workflow reader without files, with a wrong list or a path out of the project",
+      "manifest": {
+        "id": "dev.exemple.lecteur",
+        "name": "Lecteur",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2"
+        },
+        "run": {
+          "command": "bin/lecteur"
+        },
+        "contributes": {
+          "workflowReaders": [
+            {
+              "id": "a"
+            },
+            {
+              "id": "b",
+              "files": "x"
+            },
+            {
+              "id": "c",
+              "files": ["", "../x", "/abs", 3]
+            }
+          ]
+        }
+      },
+      "errors": [
+        "contributes.workflowReaders[0].files required",
+        "contributes.workflowReaders[1].files type",
+        "contributes.workflowReaders[2].files[0] empty",
+        "contributes.workflowReaders[2].files[1] path",
+        "contributes.workflowReaders[2].files[2] path",
+        "contributes.workflowReaders[2].files[3] type"
+      ],
+      "ignored": []
+    },
+    {
       "name": "a first-hand plugin with several points (docs/PLUGINS.md §4.4), from the app",
       "builtin": true,
       "manifest": {

@@ -387,7 +387,11 @@ async fn a_codex_turn_stopped_by_the_limit_waits_for_the_reset_then_goes_on_by_i
     assert_eq!(turn["limited"], true);
     // Its resume is planned after the reset Codex told of its full window (`account/rateLimits/
     // updated`, in an hour with the fake), not from the quota the core reads besides: a reading
-    // asked before the turn may be answered after it.
+    // asked before the turn may be answered after it. The turn is seen over (item and status, under
+    // the agent's lock) a moment before the core, which applies its effects after releasing it,
+    // plans the resume: waited for, as the window gets it with the agent's next event.
+    h.wait("its resume planned", |h| h.agent(&id).resume_at.is_some())
+        .await;
     let at = h.agent(&id).resume_at.expect("its resume planned");
     assert!(at >= now_ms() + 3_500_000, "after the reset: {at}");
     // Not due yet: nothing sent.

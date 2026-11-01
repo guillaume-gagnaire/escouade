@@ -22,7 +22,7 @@ export const ICON_MIN = 256;
 export const ICON_BYTES = 1024 * 1024;
 
 const SETTING_TYPES = ['string', 'number', 'boolean', 'select'];
-const POINTS_WITH_ID = ['accounts', 'ticketSources', 'forges', 'harnesses'];
+const POINTS_WITH_ID = ['accounts', 'ticketSources', 'forges', 'harnesses', 'workflowReaders'];
 const OPEN_POINTS = ['themes', 'webhooks', 'commands', 'menus', 'statusBar', 'badges', 'projectTemplates'];
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -299,6 +299,25 @@ export function validate(manifest, options = {}) {
         if (point === 'accounts') {
           accounts = ids;
           continue;
+        }
+        // A workflow reader says which files of the project it is given.
+        if (point === 'workflowReaders') {
+          for (const [at, it] of list) {
+            const p = join(at, 'files');
+            if (!('files' in it)) {
+              problem(p, 'required');
+              continue;
+            }
+            if (!Array.isArray(it.files)) {
+              problem(p, 'type', 'array');
+              continue;
+            }
+            it.files.forEach((f, i) => {
+              const fp = `${p}[${i}]`;
+              const s = filled(f, fp);
+              if (s !== null && !isInnerPath(s)) problem(fp, 'path');
+            });
+          }
         }
         for (const [at, it] of list) {
           if (!('account' in it)) continue;

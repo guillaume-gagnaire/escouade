@@ -3180,12 +3180,14 @@ pub async fn voice_online_catalog(
     service: String,
     refresh: bool,
 ) -> Res<crate::voice::online_catalog::ServiceCatalog> {
-    use crate::voice::online_catalog::{catalog, fetch};
-    let p = crate::voice::online::Provider::find(&service)
+    let svc = crate::voice::service::find(&service)
+        .ok_or_else(|| format!("unknown service {service}"))?;
+    let p = svc
+        .provider()
         .ok_or_else(|| format!("unknown service {service}"))?;
     let kept = voice.catalog.get(p);
     if !refresh && kept.is_some() {
-        return Ok(catalog(p, kept.as_ref(), None));
+        return Ok(svc.catalog(kept.as_ref(), None));
     }
     let settings = core.settings.read().clone();
     let spec = match crate::voice::online::keyed(p, &settings, &*core.secrets) {
@@ -3193,17 +3195,17 @@ pub async fn voice_online_catalog(
         // No key: the documentation's, said only when asked.
         Err(e) => {
             let error = refresh.then(|| voice_err(e));
-            return Ok(catalog(p, kept.as_ref(), error));
+            return Ok(svc.catalog(kept.as_ref(), error));
         }
     };
-    match fetch(&spec).await {
+    match svc.list(&spec).await {
         Ok(listed) => {
             if let Err(e) = voice.catalog.put(p, &listed) {
                 log::warn!("voice: the catalog of {} not kept: {e:#}", p.label());
             }
-            Ok(catalog(p, Some(&listed), None))
+            Ok(svc.catalog(Some(&listed), None))
         }
-        Err(e) => Ok(catalog(p, kept.as_ref(), Some(e.message(i18n::ui())))),
+        Err(e) => Ok(svc.catalog(kept.as_ref(), Some(e.message(i18n::ui())))),
     }
 }
 

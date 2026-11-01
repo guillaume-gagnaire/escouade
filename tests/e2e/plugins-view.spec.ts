@@ -51,7 +51,9 @@ const projectId = (data: string) => JSON.parse(fs.readFileSync(path.join(data, '
 const installed = (data: string) => {
   const file = path.join(data, 'plugins.json');
   return fs.existsSync(file)
-    ? (JSON.parse(fs.readFileSync(file, 'utf8')).plugins as { id: string; projects?: Record<string, boolean> }[])
+    ? (JSON.parse(fs.readFileSync(file, 'utf8')).plugins as { id: string; origin: { kind: string }; projects?: Record<string, boolean> }[])
+        // Those the app gives (INT-4) are in the file too, but are not installed.
+        .filter((p) => p.origin.kind !== 'builtin')
     : [];
 };
 

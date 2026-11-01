@@ -156,7 +156,7 @@
               <button class="btn" onclick={() => plugins.openPlugin(w.id)}>{t('plugins.page.uninstall')}</button>
             </div>
           {/each}
-          {#if !plugins.list.length && plugins.loaded}
+          {#if !added.length && plugins.loaded}
             <div class="soon">
               <Icon name="puzzle" size={20} />
               <div>
@@ -164,14 +164,14 @@
                 <p>{t('plugins.installed.emptyHint')}</p>
               </div>
             </div>
-          {:else}
-            {#if added.length}<PluginRows rows={added} group={t('plugins.installed.added')} />{/if}
-            {#if shipped.length}<PluginRows
-                rows={shipped}
-                group={t('plugins.installed.builtin')}
-                note={t('plugins.installed.builtinNote')}
-              />{/if}
+          {:else if added.length}
+            <PluginRows rows={added} group={t('plugins.installed.added')} />
           {/if}
+          {#if shipped.length}<PluginRows
+              rows={shipped}
+              group={t('plugins.installed.builtin')}
+              note={t('plugins.installed.builtinNote')}
+            />{/if}
           <p class="hint list">
             {list?.serial
               ? t('plugins.installed.revocations', {

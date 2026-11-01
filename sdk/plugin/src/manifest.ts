@@ -66,6 +66,14 @@ export interface Manifest {
     }>;
     /** Webhooks, without code. */
     webhooks?: Array<Record<string, unknown>>;
+    /** Readers of workflows Escouade does not read by itself (it gives them the project's files). */
+    workflowReaders?: Array<{
+      /** The files of the project it is given, as globs from the project's folder (`.planning/**`). */
+      files: string[];
+      id: string;
+      /** One text, or a text by language (`en` first, then `fr`). */
+      name?: string | Record<string, string>;
+    }>;
   };
   /** One text, or a text by language (`en` first, then `fr`). */
   description?: string | Record<string, string>;
