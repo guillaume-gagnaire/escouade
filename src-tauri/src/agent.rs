@@ -295,6 +295,8 @@ pub struct AgentRt {
     copilot: copilot::CopilotState,
     /// What the translation of Cursor keeps between its updates (`agent/cursor.rs`).
     cursor: cursor::CursorState,
+    /// How many task lists a harness of a plugin gave (`Item::Todos`): the id of the next one.
+    todo_writes: u32,
     /// What the translation of OpenCode keeps between its events (`agent/opencode.rs`).
     opencode: opencode::OpencodeState,
     /// What the translation of Mistral Vibe keeps between its updates (`agent/vibe.rs`).
@@ -576,6 +578,7 @@ impl AgentRt {
             codex: codex::CodexState::default(),
             copilot: copilot::CopilotState::default(),
             cursor: cursor::CursorState::default(),
+            todo_writes: 0,
             opencode: opencode::OpencodeState::default(),
             vibe: vibe::VibeState::default(),
             agy: agy::AgyState::default(),
@@ -1401,6 +1404,15 @@ impl AgentRt {
         self.patch(&p.item_id, patch, fx);
         self.after_answer(fx);
         Ok(())
+    }
+
+    /// A recorded stream's answer to the request `request_id`, as its card says it (`decision`).
+    #[cfg(test)]
+    pub(crate) fn recorded_answer(&mut self, request_id: &str, decision: &str, fx: &mut Effects) {
+        if let Some(req) = self.take_pending(request_id) {
+            self.patch(&req.item_id, json!({ "decision": decision }), fx);
+            self.after_answer(fx);
+        }
     }
 
     fn after_answer(&mut self, fx: &mut Effects) {

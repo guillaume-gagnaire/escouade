@@ -23,7 +23,8 @@ pub struct Entry {
 /// this list.
 ///
 /// The demonstration plugin is in the builds of development and the tests only: a release's registry holds the real ones
-/// (the five voice services, INT-13; isola, INT-14; GitHub, INT-8.1, its code host and GitHub Issues; the others come
+/// (the five voice services, INT-13; isola, INT-14; GitHub, INT-8.1, its code host and GitHub Issues; the
+/// generic ACP plugin, PLG-6, which serves the harnesses other plugins describe; the others come
 /// with INT-7 and INT-8), so that nobody sees (nor runs) a plugin that does nothing. `escouade-plugins` itself is
 /// packaged and signed all the same.
 pub const REGISTRY: &[Entry] = &[
@@ -82,6 +83,10 @@ pub const REGISTRY: &[Entry] = &[
         id: TRELLO,
         manifest: include_str!("../../../plugins/builtin/dev.escouade.trello/escouade-plugin.json"),
     },
+    Entry {
+        id: ACP,
+        manifest: include_str!("../../../plugins/builtin/dev.escouade.acp/escouade-plugin.json"),
+    },
 ];
 
 /// The plugin « GitHub »: github.com, GHE.com and GitHub Enterprise Server, their pull requests and GitHub Issues.
@@ -95,6 +100,9 @@ pub const GITEA: &str = "dev.escouade.gitea";
 
 /// The plugin « Trello »: the Kanban's source of Trello cards (INT-7.1).
 pub const TRELLO: &str = "dev.escouade.trello";
+
+/// The generic ACP plugin, which serves the harnesses a manifest describes (`contributes.harnesses[].acp`, PLG-6).
+pub const ACP: &str = "dev.escouade.acp";
 
 /// Whether `id` is the id of a plugin the app gives.
 pub fn is_builtin(id: &str) -> bool {

@@ -36,11 +36,15 @@ impl AgentRt {
                     self.set_status(AgentStatus::Running, fx);
                 }
             }
-            Item::Thinking { text, parent } => {
+            Item::Thinking { text, parent, id } => {
+                if let Some(id) = id.filter(|id| self.conv.contains(id)) {
+                    self.patch(&id, json!({ "text": text, "streaming": false }), fx);
+                    return;
+                }
                 let item = json!({ "kind": "thinking", "id": new_id(), "text": text, "parent": parent, "streaming": false });
                 self.append(item, fx);
             }
-            Item::Text { text, parent } => {
+            Item::Text { text, parent, id } => {
                 if parent.is_none() {
                     if !self.turn_text.is_empty() {
                         self.turn_text.push_str("\n\n");
@@ -48,9 +52,30 @@ impl AgentRt {
                     self.turn_text.push_str(&text);
                     self.final_text = text.clone();
                 }
+                if let Some(id) = id.filter(|id| self.conv.contains(id)) {
+                    self.patch(&id, json!({ "text": text, "streaming": false }), fx);
+                    return;
+                }
                 let item = json!({ "kind": "text", "id": new_id(), "text": text, "parent": parent, "streaming": false });
                 self.append(item, fx);
             }
+            Item::Delta {
+                id,
+                text,
+                thinking,
+                parent,
+            } => {
+                let kind = if thinking { "thinking" } else { "text" };
+                if !self.conv.contains(&id) {
+                    let item = json!({ "kind": kind, "id": id, "text": "", "parent": parent, "streaming": true });
+                    self.append(item, fx);
+                }
+                if parent.is_none() {
+                    self.set_activity(block_activity(i18n::ui(), kind), fx);
+                }
+                self.push(ConvOp::Delta { id, text }, fx);
+            }
+            Item::Subagent { call, model } => self.child_model(&call, &model, fx),
             Item::Tool {
                 id,
                 name,
@@ -68,11 +93,33 @@ impl AgentRt {
                     fx,
                 );
             }
-            Item::ToolDone { id, output, error } => {
+            Item::ToolInput { id, name, input } => {
+                let Some(known) = self.conv.get(&id).cloned() else {
+                    return;
+                };
+                let mut patch = json!({});
+                let name = match name {
+                    Some(name) => {
+                        patch["name"] = json!(name);
+                        name
+                    }
+                    None => known["name"].as_str().unwrap_or_default().to_string(),
+                };
+                if !input.is_null() {
+                    patch["input"] = item_input(&name, &input);
+                }
+                self.patch(&id, patch, fx);
+            }
+            Item::ToolDone {
+                id,
+                output,
+                error,
+                result: tur,
+            } => {
                 self.plan_apply(fx, |plan| {
-                    plan.on_tool_result(&id, error, &output, &Value::Null, now_ms())
+                    plan.on_tool_result(&id, error, &output, &tur, now_ms())
                 });
-                let result = tool_result(output, error, &Value::Null);
+                let result = tool_result(output, error, &tur);
                 self.patch(
                     &id,
                     json!({ "status": if error { "error" } else { "ok" }, "result": result }),
@@ -80,15 +127,53 @@ impl AgentRt {
                 );
             }
             Item::Touched { path } => self.touch(&path, fx),
-            Item::Permission { request, call } => {
+            Item::Permission {
+                request,
+                call,
+                tool,
+                input,
+                description,
+                reason,
+                diff,
+                can_always,
+                parent,
+            } => {
+                if self.conv.contains(&request) {
+                    return;
+                }
                 let asked = self.conv.get(&call).cloned().unwrap_or_default();
-                let tool = asked["name"].as_str().unwrap_or_default().to_string();
-                let item = json!({
+                let tool =
+                    tool.unwrap_or_else(|| asked["name"].as_str().unwrap_or_default().to_string());
+                let input = input.unwrap_or_else(|| asked["input"].clone());
+                let mut item = json!({
                     "kind": "permission", "id": request, "toolUseId": call, "toolName": tool,
-                    "input": asked["input"], "canAlways": false, "defaultNo": false,
-                    "decision": null, "ts": now_ms(),
+                    "description": description, "input": trim_strings(&input), "reason": reason,
+                    "canAlways": can_always, "defaultNo": false, "decision": null, "ts": now_ms(),
                 });
-                self.ask(&request, &call, tool, asked["input"].clone(), item, fx);
+                if can_always {
+                    item["alwaysScope"] = json!("agent");
+                }
+                if let Some(d) = &diff {
+                    let hunks = escouade_acp::line_hunks(
+                        d.old_text.as_deref().unwrap_or_default(),
+                        &d.new_text,
+                    );
+                    let shown = tool_result(
+                        String::new(),
+                        false,
+                        &json!({ "filePath": d.path, "structuredPatch": hunks }),
+                    );
+                    item["patch"] = shown["patch"].clone();
+                }
+                if let Some(sub) = parent {
+                    item["sub"] = sub.into();
+                }
+                let req = json!({ "description": description, "decision_reason": reason });
+                fx.notify = Some(AgentAlert::new(
+                    NotifyKind::Question,
+                    notify::permission_body(&tool, &input, &self.meta.cwd),
+                ));
+                self.ask_with(&request, &call, tool, input, &req, item, fx);
             }
             Item::Question {
                 request,
@@ -102,10 +187,26 @@ impl AgentRt {
                 let input = json!({ "questions": questions });
                 self.ask(&request, &call, "AskUserQuestion".into(), input, item, fx);
             }
+            Item::Todos { todos } => {
+                self.todo_writes += 1;
+                let block = json!({
+                    "id": format!("plugin-todo-{}", self.todo_writes),
+                    "name": "TodoWrite",
+                    "input": { "todos": todos },
+                });
+                self.plan_tool_use(None, &block, fx);
+            }
+            Item::Mode { mode } => {
+                if self.meta.set_mode(&mode) {
+                    fx.agent_changed = true;
+                    fx.save = true;
+                }
+            }
             Item::Turn {
                 interrupted,
                 limited,
                 usage,
+                error,
             } => {
                 let interrupted = std::mem::take(&mut self.interrupted) || interrupted;
                 let text = std::mem::take(&mut self.turn_text);
@@ -124,16 +225,26 @@ impl AgentRt {
                     });
                     self.meta.tokens += tokens;
                 }
+                let error = error.filter(|_| !interrupted);
+                let failed = error.is_some();
+                let took = self.active_since.map(|since| (now_ms() - since).max(0));
                 let item = json!({
-                    "kind": "turn", "id": new_id(), "ts": now_ms(), "durationMs": null, "cost": usage.cost,
-                    "tokens": tokens, "isError": false, "interrupted": interrupted, "error": null,
+                    "kind": "turn", "id": new_id(), "ts": now_ms(), "durationMs": took, "cost": usage.cost,
+                    "tokens": tokens, "isError": failed, "interrupted": interrupted, "error": error,
                     "limited": limited.is_some(), "engine": self.meta.engine,
                 });
                 self.append(item, fx);
                 if !self.pending.is_empty() {
                     self.clear_pending(fx);
                 }
-                self.set_status(AgentStatus::Done, fx);
+                self.set_status(
+                    if failed {
+                        AgentStatus::Error
+                    } else {
+                        AgentStatus::Done
+                    },
+                    fx,
+                );
                 fx.agent_changed = true;
                 fx.save = true;
                 fx.turn_end = Some(if let Some(reset) = limited {
@@ -141,6 +252,8 @@ impl AgentRt {
                     TurnEnd::Limited
                 } else if interrupted {
                     TurnEnd::Interrupted
+                } else if let Some(reason) = error {
+                    TurnEnd::Error(reason)
                 } else {
                     TurnEnd::Finished(text)
                 });
@@ -168,8 +281,23 @@ impl AgentRt {
         item: Value,
         fx: &mut Effects,
     ) {
+        self.ask_with(request, call, tool, input, &Value::Null, item, fx);
+    }
+
+    /// `ask`, with what the card says of it (`req`: its `description` and `decision_reason`).
+    #[allow(clippy::too_many_arguments)]
+    fn ask_with(
+        &mut self,
+        request: &str,
+        call: &str,
+        tool: String,
+        input: Value,
+        req: &Value,
+        item: Value,
+        fx: &mut Effects,
+    ) {
+        let view = pending_view(request, &tool, req, &input, &self.meta.cwd).always_as(&item);
         self.append(item, fx);
-        let view = pending_view(request, &tool, &Value::Null, &input, &self.meta.cwd);
         self.add_pending(
             PendingReq {
                 item_id: request.to_string(),

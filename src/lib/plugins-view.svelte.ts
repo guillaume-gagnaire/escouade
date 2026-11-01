@@ -231,6 +231,8 @@ class PluginsStore {
     this.error = null;
     try {
       this.put(await run());
+      // A harness the plugin describes comes or goes with it (PLG-6).
+      void app.refreshEngines();
     } catch (e) {
       this.error = errorText(e);
     }
@@ -246,6 +248,7 @@ class PluginsStore {
     this.error = null;
     try {
       await pluginsApi.remove(id, keep);
+      void app.refreshEngines();
       this.list = this.list.filter((p) => p.id !== id);
       delete this.icons[id];
       if (this.page.kind === 'plugin' && this.page.id === id) this.show({ kind: 'installed' });
@@ -335,6 +338,7 @@ class PluginsStore {
       // Installed anew (an update): its icon may have changed.
       delete this.icons[view.id];
       this.put(view);
+      void app.refreshEngines();
       this.install = null;
       if (this.queue.length) await this.next();
       else this.openPlugin(view.id);

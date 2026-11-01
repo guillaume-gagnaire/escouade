@@ -10,6 +10,7 @@ which it takes from this repository alone, submitted from their folder like anyo
 | `discord/`       | `dev.escouade.discord`       | The tickets to test and the agents waiting, in a Discord channel (`contributes.webhooks`) | Declarative        |
 | `slack/`         | `dev.escouade.slack`         | The same in Slack, in each project's channel, the bot's token in the keychain         | TypeScript program |
 | `team-rules/`    | `dev.escouade.team-rules`    | The agents' commands allowed or denied by `rules.json` (`permissions/decide`)         | TypeScript program |
+| `goose/`         | `dev.escouade.goose`         | Goose as a harness, described over ACP (`contributes.harnesses[].acp`)               | Declarative        |
 
 A version is a tag `plugins/<folder>/v1.2.3` (never `v1.2.3`, the app's releases), then its submission on the store
 from its folder, its review and its signature.
@@ -37,4 +38,6 @@ their version is Escouade's. `dev.escouade.minimal` is the demonstration (in dev
 `dev.escouade.github` is the first real one, GitHub's code host and GitHub Issues, then `dev.escouade.bitbucket`,
 Bitbucket Cloud's, and `dev.escouade.gitea`, the code host of Gitea and Forgejo, each with its crate (`Cargo.toml`,
 `src/`) on the kit of the Rust plugins (`crates/escouade-plugin-kit`). `ci.mjs` does not run them: it is for the folders above,
-which are the store's; their tests run with the app's (`cargo nextest run` in `src-tauri/`).
+which are the store's; their tests run with the app's (`cargo nextest run` in `src-tauri/`). `dev.escouade.acp` serves the
+harnesses a manifest describes over ACP (PLG-6, Goose's among them), in its crate on the ACP client
+(`crates/escouade-acp`).

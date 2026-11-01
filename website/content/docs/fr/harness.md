@@ -263,6 +263,10 @@ Pour un projet privé, ses outils de fichiers et ses commandes qui nomment les c
 
 Gemini donne les tokens de chaque tour, pas leur coût ni son quota : son usage se lit par `/stats` dans son interface, et « Usage sur aistudio.google.com », dans Réglages › Comptes et le panneau des quotas, ouvre la page d’usage des clés d’API. Sa limite arrête le tour « limité » sur une carte qui le dit ; l’agent reprend seul quand Gemini le dit (« Please retry in 30s »), sinon une minute plus tard, ou une heure plus tard pour son quota du jour, ou passe sur un autre compte selon « Changer de compte à » et « Continuer sur le harness suivant ». Les textes qu’il rédige (nom d’un agent, message de commit…) passent par `gemini -p`, tous ses outils refusés. La « Vue Gemini CLI » fait tourner l’agent dans l’interface de Gemini, sur la même session (voir [la vue terminal](claude-code-view#avec-gemini-cli)). Pas de mode Auto, de PDF joints, de « Dupliquer la conversation », de commandes `/` dans Escouade (`/compact` : son `/compress`, dans son interface), ni de remote control ni de tâches de fond. Il reçoit le serveur MCP d’Escouade par sa session ; l’interrupteur ne le déclare pas encore dans ta config.
 
+## D’autres harness, par un plugin
+
+Un agent qui parle ACP (Goose, par exemple) se décrit dans le manifeste d’un plugin, sans code : voir [un harness ACP décrit](plugins/harnesses).
+
 ## Le serveur MCP
 
 Quel que soit leur harness, les agents d’Escouade reçoivent son serveur MCP, chacun avec son propre jeton, quand « Les agents peuvent piloter Escouade » est allumé. Le même interrupteur le déclare dans chaque harness installé, pour que Claude Code, Codex, OpenCode ou Copilot CLI lancés hors d’Escouade, dans un terminal ou leur app, pilotent Escouade : voir [le serveur MCP](mcp).

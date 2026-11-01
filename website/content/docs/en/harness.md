@@ -263,6 +263,10 @@ For a private project, its file tools and its commands that name the other proje
 
 Gemini gives each turn’s tokens, not their cost nor its quota: its usage is read by `/stats` in its interface, and “Usage on aistudio.google.com”, in Settings › Accounts and the quota panel, opens the usage page of the API keys. Its limit ends the turn “limited” on a card that says so; the agent goes on by itself when Gemini says (“Please retry in 30s”), else a minute later, or an hour later for its daily quota, or moves to another account as “Switch accounts at” and “Go on with the next harness” say. The texts it writes (an agent’s name, a commit message…) go through `gemini -p`, every tool of it refused. The “Gemini CLI view” runs the agent in Gemini’s interface, on the same session (see [the terminal view](claude-code-view#with-gemini-cli)). No Auto mode, attached PDFs, “Duplicate the conversation”, `/` commands in Escouade (`/compact`: its `/compress`, in its interface), remote control nor background tasks. It gets Escouade’s MCP server by its session; the switch doesn’t declare it in your config yet.
 
+## Other harnesses, by a plugin
+
+An agent that speaks ACP (Goose, say) is described in a plugin’s manifest, without code: see [a described ACP harness](plugins/harnesses).
+
 ## The MCP server
 
 Whatever their harness, Escouade’s agents get its MCP server, each with its own token, when “Agents can drive Escouade” is on. The same switch declares it in each installed harness, so that Claude Code, Codex, OpenCode or Copilot CLI started outside Escouade, in a terminal or their app, drive Escouade: see [the MCP server](mcp).

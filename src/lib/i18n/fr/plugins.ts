@@ -347,6 +347,7 @@ export default {
     run: 'Lance un programme sur ton ordinateur, avec tes droits',
     wasm: 'Tourne dans Escouade, isolé',
     decide: 'Décide des autorisations de tes agents',
+    harness: 'Lance pour ses agents ce programme de ton ordinateur, avec tes droits',
     commands: 'Lance des commandes',
     events: 'Reçoit ces événements',
     network: 'Se connecte à',

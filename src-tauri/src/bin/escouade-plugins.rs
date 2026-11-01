@@ -3,7 +3,8 @@
 //! `escouade-plugins minimal`. One program costs its runtime once, where one a plugin would cost it a dozen times.
 //!
 //! It is shipped beside the app and signed with it; the app starts no other (`plugins::builtin`). It speaks the
-//! protocol of `escouade-plugin-protocol` and nothing of the app's own, but the voice services (INT-13), which run the code of the core's services through `escouade_lib`.
+//! protocol of `escouade-plugin-protocol` and nothing of the app's own, but the voice services (INT-13), which run the
+//! code of the core's services through `escouade_lib`; the ACP client (PLG-6) is the crate `escouade-acp`.
 //!
 //! An entry is a function from the name to a `fn() -> i32`: add the plugin's module and one line to `ENTRIES`. A
 //! plugin that serves code hosts or Kanban sources is a crate of its own beside its manifest
@@ -40,6 +41,8 @@ const ENTRIES: &[Entry] = &[
     ("gitea", escouade_plugin_gitea::run),
     // Trello (INT-7.1): the Kanban's source of Trello cards, in its crate (plugins/builtin/dev.escouade.trello).
     ("trello", escouade_plugin_trello::run),
+    // The generic ACP plugin (PLG-6): the harnesses a manifest describes, in its crate (plugins/builtin/dev.escouade.acp).
+    ("acp", escouade_plugin_acp::run),
 ];
 
 fn main() {

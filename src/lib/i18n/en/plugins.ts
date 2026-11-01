@@ -346,6 +346,7 @@ export default defineZone('plugins', {
     run: 'Runs a program on your computer, with your rights',
     wasm: 'Runs inside Escouade, isolated',
     decide: 'Decides your agents’ permissions',
+    harness: 'Runs this program of your computer for its agents, with your rights',
     commands: 'Runs commands',
     events: 'Gets these events',
     network: 'Connects to',

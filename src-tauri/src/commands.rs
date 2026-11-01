@@ -239,12 +239,21 @@ pub async fn engines(core: CoreState<'_>) -> Res<Vec<crate::engine::registry::En
     Ok(engines)
 }
 
+/// The harnesses the registry has now, as the window got them at its start (`InitialState::engines`): those the
+/// plugins describe change with them (PLG-6).
+#[tauri::command(async)]
+pub fn engines_declared(core: CoreState) -> Vec<crate::engine::registry::EngineDecl> {
+    core.sync_harnesses();
+    crate::engine::registry::declared()
+}
+
 /// The harnesses found now, the PATH of today read first (ESC-186): the window back in front, the
 /// menu « Harness » opened. A harness found since gets Escouade's server, and its accounts' models
 /// are read.
 #[tauri::command(async)]
 pub fn engines_found_now(core: CoreState) -> Vec<crate::model::EngineId> {
     let before = core.engines_found();
+    core.sync_harnesses();
     crate::syspath::refresh();
     let now = core.engines_found();
     if now != before {

@@ -96,6 +96,16 @@ export const BUILTINS: Builtin[] = [
     'Gemini CLI as a harness, over ACP: the conversation, its terminal view, permissions and accounts.',
   ),
   {
+    ...harness(
+      'acp',
+      'ACP',
+      'Les harness qui parlent ACP, décrits par un plugin sans code (Goose, par exemple) : Escouade les lance, leur parle et montre leur conversation.',
+      'The harnesses that speak ACP, described by a plugin without code (Goose, say): Escouade launches them, speaks to them and shows their conversation.',
+    ),
+    docs: doc('plugins/harnesses'),
+    source: 'plugins/builtin/dev.escouade.acp',
+  },
+  {
     id: 'dev.escouade.github',
     name: 'GitHub',
     categories: ['ticket-sources', 'forges'],

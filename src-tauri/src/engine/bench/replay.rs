@@ -38,7 +38,7 @@ use std::path::{Path, PathBuf};
 const TIMES: [&str; 3] = ["ts", "startedAt", "endedAt"];
 
 /// `v` without the times of the replay (`TIMES`), at any depth.
-fn strip_times(v: &mut Value) {
+pub(crate) fn strip_times(v: &mut Value) {
     match v {
         Value::Object(o) => {
             for k in TIMES {

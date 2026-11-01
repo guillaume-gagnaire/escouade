@@ -341,9 +341,9 @@ impl GeminiProcess {
         if !msg["id"].is_null() {
             if method == "session/request_permission" {
                 // « Projet privé »: refused at once, never a card the user could accept.
-                if crate::engine::cursor::fenced(&params, &self.fence) {
+                if escouade_acp::fenced(&params, &self.fence) {
                     log::info!("gemini: a permission naming a path of another project refused (private project)");
-                    let option = crate::engine::cursor::option_of(&params, "reject_once");
+                    let option = escouade_acp::option_of(&params, "reject_once");
                     self.answer_gemini(
                         &msg["id"],
                         json!({ "outcome": { "outcome": "selected", "optionId": option } }),
@@ -540,7 +540,11 @@ impl GeminiProcess {
     }
 
     fn mcp_servers(&self) -> Value {
-        crate::engine::cursor::mcp_servers(self.escouade.as_ref())
+        escouade_acp::mcp_servers(
+            self.escouade
+                .as_ref()
+                .map(|(u, t)| (u.as_str(), t.as_str())),
+        )
     }
 
     /// Opens the agent's session as `start` says: its id, how it was opened (`new`, `resume`), and
@@ -857,7 +861,7 @@ impl EngineProcess for GeminiProcess {
             PermissionAnswer::Always { .. } => ("allow_always", false),
             PermissionAnswer::Deny { .. } => ("reject_once", true),
         };
-        let option = crate::engine::cursor::option_of(&asked.params, kind);
+        let option = escouade_acp::option_of(&asked.params, kind);
         self.answer(
             request_id,
             json!({ "outcome": { "outcome": "selected", "optionId": option } }),

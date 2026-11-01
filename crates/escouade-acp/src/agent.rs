@@ -1,0 +1,1446 @@
+//! One agent on an ACP harness, as the client sees it: what it asked of the agent and waits for, what the agent asks
+//! and waits for (a permission, a question), the session, the turn under way, the calls and their diffs.
+//!
+//! - **The session.** The launch's first line is `initialize`; its answer opens the session (`session/load` of the one
+//!   to resume when the agent can, else `session/new`, Escouade's MCP server given with its token in a header), then
+//!   the mode and the model are set. A message sent before the session is open, or while a turn runs (a second
+//!   `session/prompt` would cancel it), waits for it. The instructions go before the first message (`preamble`).
+//! - **The turn.** Its texts and reasonings gathered and given whole when the next thing begins; its calls under Claude
+//!   Code's names (`tools`), their input as it comes, their end with their result (a write's diff); the end of the
+//!   prompt ends the turn (`cancelled`: interrupted).
+//! - **The permissions** go to the user, but those Escouade's rules answer: a call that names a path of a private
+//!   project is refused at once; in « Tout accepter » all is accepted; in « Accepter les modifications » the writes in
+//!   the agent's folder; a read-only agent writes and runs nothing.
+//! - **The files** the agent reads and writes through the client (`fs/read_text_file`, `fs/write_text_file`): those of a
+//!   private project are refused, which is the fence that holds; a read or a write the agent made by itself on a path
+//!   while a fence is set is said in the conversation, once (the fence does not hold for it).
+
+use crate::{cursor, texts, tools};
+use escouade_plugin_protocol::engine::{
+    AcpDecl, Attach, Diff, EnvVar, HarnessDecl, Item, Launch, LaunchParams, StartAt, TurnUsage,
+};
+use serde_json::{json, Value};
+use std::collections::{HashMap, VecDeque};
+
+/// A request of the client to the agent, waiting for its answer.
+#[derive(Debug, Clone)]
+enum Ours {
+    Initialize,
+    New,
+    Load(String),
+    Prompt,
+    /// A setting (`session/set_mode`, `session/set_model`…): only an error of it is said.
+    Setting(String),
+}
+
+/// A request of the agent waiting for the user's answer.
+#[derive(Debug, Clone)]
+struct Asked {
+    id: Value,
+    method: String,
+    params: Value,
+}
+
+/// A text or a reasoning being written: who writes it (`""` the agent, else the call of its subagent), its kind, its
+/// item's id, what was written, and how much of it went out as `Delta`s.
+#[derive(Debug, Clone)]
+struct Writing {
+    who: String,
+    kind: &'static str,
+    id: String,
+    text: String,
+    sent: usize,
+}
+
+/// A call of the agent's, as it was shown.
+#[derive(Debug, Clone)]
+struct Call {
+    name: String,
+    input: Value,
+    kind: String,
+    done: bool,
+}
+
+/// The agent of an ACP harness.
+pub struct Agent {
+    name: String,
+    lang: String,
+    version: String,
+    acp: AcpDecl,
+    /// It speaks Cursor's extensions (`cursor/*`).
+    cursor: bool,
+    cwd: String,
+    mode: String,
+    model: String,
+    effort: String,
+    start: StartAt,
+    session: Option<String>,
+    /// The session was given to the core (`Item::Start`).
+    told: bool,
+    escouade: Option<(String, String)>,
+    fence: Vec<String>,
+    /// The fence as the files through the client are compared to it (`paths::fence_of`).
+    fence_keys: Vec<std::path::PathBuf>,
+    read_only: bool,
+    instructions: Option<String>,
+    next: u64,
+    ours: HashMap<u64, Ours>,
+    asked: HashMap<String, Asked>,
+    seq: u64,
+    queue: VecDeque<String>,
+    busy: bool,
+    open: bool,
+    can_load: bool,
+    /// `session/load` replays the history: what comes meanwhile is the conversation's already.
+    loading: bool,
+    /// What the session told of its configuration (`configOptions` of `session/new`).
+    options: Value,
+    /// The texts and reasonings being written, in the order they began: who (`""` the agent, else the call of its
+    /// subagent), the kind, the text.
+    writing: Vec<Writing>,
+    calls: HashMap<String, Call>,
+    /// The sessions of its subagents, and the call of each (Cursor's).
+    children: HashMap<String, String>,
+    /// What each subagent said last, by its call: its report.
+    reports: HashMap<String, String>,
+    /// The diff of a write, by its call: its file, before and after.
+    diffs: HashMap<String, (String, Option<String>, String)>,
+    /// The writes through the client, by their path: before and after.
+    written: HashMap<String, (Option<String>, String)>,
+    /// The paths read or written through the client.
+    through: Vec<String>,
+    leak_said: bool,
+    /// The agent's text of the turn (Cursor's refusals are its last words).
+    turn_text: String,
+    error: Option<String>,
+    todos: cursor::Todos,
+    /// The question's block the agent's text ended on (`questions_in_text`).
+    block: Option<String>,
+    /// A mode Escouade set by the agent's answer (a plan approved), to tell the core with the next frames.
+    told_mode: Option<String>,
+    /// What the turn spent, as the answer to its prompt told it.
+    usage: TurnUsage,
+}
+
+fn line(v: Value) -> String {
+    v.to_string()
+}
+
+fn reply(id: &Value, result: Value) -> String {
+    line(json!({ "jsonrpc": "2.0", "id": id, "result": result }))
+}
+
+fn reply_error(id: &Value, code: i64, message: &str) -> String {
+    line(json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } }))
+}
+
+fn write(line: String) -> Item {
+    Item::Write { line }
+}
+
+fn notice(text: String, level: &str) -> Item {
+    Item::Notice {
+        text,
+        level: level.into(),
+    }
+}
+
+impl Agent {
+    /// The agent `a` of the harness `decl`, for Escouade `version`.
+    pub fn new(a: &Attach, decl: &HarnessDecl, version: &str) -> Self {
+        let acp = decl.acp.clone().unwrap_or_default();
+        let mut agent = Agent {
+            name: decl.speaker.clone().unwrap_or_else(|| decl.name.clone()),
+            lang: String::new(),
+            version: version.into(),
+            cursor: acp.extensions.iter().any(|e| e == "cursor"),
+            acp,
+            cwd: String::new(),
+            mode: String::new(),
+            model: String::new(),
+            effort: String::new(),
+            start: StartAt::New,
+            session: None,
+            told: false,
+            escouade: None,
+            fence: Vec::new(),
+            fence_keys: Vec::new(),
+            read_only: false,
+            instructions: None,
+            next: 0,
+            ours: HashMap::new(),
+            asked: HashMap::new(),
+            seq: 0,
+            queue: VecDeque::new(),
+            busy: false,
+            open: false,
+            can_load: false,
+            loading: false,
+            options: Value::Null,
+            writing: Vec::new(),
+            calls: HashMap::new(),
+            children: HashMap::new(),
+            reports: HashMap::new(),
+            diffs: HashMap::new(),
+            written: HashMap::new(),
+            through: Vec::new(),
+            leak_said: false,
+            turn_text: String::new(),
+            error: None,
+            todos: cursor::Todos::default(),
+            block: None,
+            told_mode: None,
+            usage: TurnUsage::default(),
+        };
+        agent.attach(a);
+        agent
+    }
+
+    /// What the core tells of the agent, again after a restart.
+    pub fn attach(&mut self, a: &Attach) {
+        self.cwd = a.cwd.clone();
+        self.mode = a.mode.clone();
+        self.model = a.model.clone();
+        self.effort = a.effort.clone();
+        if !a.lang.is_empty() {
+            self.lang = a.lang.clone();
+        }
+        if let Some(s) = &a.session {
+            if self.session.is_none() {
+                self.start = StartAt::Resume { session: s.clone() };
+            }
+        }
+    }
+
+    /// A recorded stream replayed (`tests/fixtures/cursor/`): the request `msg` its client sent, taken as this
+    /// client's own, so that the agent's answer to it reads as it would have.
+    pub fn recorded(&mut self, msg: &Value) {
+        let (Some(id), Some(method)) = (msg["id"].as_u64(), msg["method"].as_str()) else {
+            return;
+        };
+        let ours = match method {
+            "session/new" => Ours::New,
+            "session/load" => {
+                self.loading = true;
+                Ours::Load(
+                    msg["params"]["sessionId"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_string(),
+                )
+            }
+            "session/prompt" => {
+                self.busy = true;
+                self.turn_text.clear();
+                Ours::Prompt
+            }
+            other => Ours::Setting(other.to_string()),
+        };
+        self.ours.insert(id, ours);
+    }
+
+    /// Whether this agent speaks Cursor's extensions.
+    pub fn speaks_cursor(&self) -> bool {
+        self.cursor
+    }
+
+    fn request(&mut self, method: &str, params: Value, ours: Ours) -> String {
+        self.next += 1;
+        let id = self.next;
+        self.ours.insert(id, ours);
+        line(json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }))
+    }
+
+    /// How its harness is launched: its arguments and variables as its manifest says them, and `initialize` first.
+    /// Refused when it cannot hold what the launch asks (the fence of a private project, read-only).
+    pub fn launch(&mut self, p: &LaunchParams) -> Result<Launch, String> {
+        if !p.lang.is_empty() {
+            self.lang = p.lang.clone();
+        }
+        self.cwd = p.cwd.clone();
+        self.mode = p.mode.clone();
+        self.model = p.model.clone();
+        self.effort = p.effort.clone();
+        self.start = p.start.clone();
+        self.escouade = p
+            .escouade
+            .as_ref()
+            .map(|g| (g.url.clone(), g.token.clone()));
+        self.fence = p.fence.clone();
+        self.fence_keys = crate::paths::fence_of(&self.fence);
+        self.read_only = p.read_only;
+        let mut instructions = p.append_prompt.clone().unwrap_or_default();
+        if self.acp.questions_in_text {
+            instructions = format!(
+                "{}
+
+{}",
+                instructions.trim(),
+                crate::questions::QUESTIONS
+            );
+        }
+        self.instructions =
+            Some(instructions).filter(|i| !i.trim().is_empty() && matches!(p.start, StartAt::New));
+        if !self.fence.is_empty() && !self.acp.fs {
+            return Err(texts::fence_missing(&self.lang, &self.name));
+        }
+        if self.read_only && self.acp.read_only_mode.is_none() {
+            return Err(texts::read_only_missing(&self.lang, &self.name));
+        }
+        let mut meta = json!({});
+        if self.cursor {
+            meta["subagents"] = json!(true);
+        }
+        let hello = self.request(
+            "initialize",
+            json!({
+                "protocolVersion": crate::PROTOCOL,
+                "clientCapabilities": {
+                    "fs": { "readTextFile": self.acp.fs, "writeTextFile": self.acp.fs },
+                    "terminal": false,
+                    "_meta": meta,
+                },
+                "clientInfo": { "name": "escouade", "version": self.version },
+            }),
+            Ours::Initialize,
+        );
+        Ok(Launch {
+            args: self.acp.args.clone(),
+            env: self
+                .acp
+                .env
+                .iter()
+                .map(|(k, v)| EnvVar {
+                    name: k.clone(),
+                    value: v.clone(),
+                })
+                .collect(),
+            remove_env: self.acp.remove_env.clone(),
+            fence_by_client: !self.fence.is_empty(),
+            read_only: self.read_only,
+            writes: vec![hello],
+            ..Launch::default()
+        })
+    }
+
+    /// What the agent wrote: the items for the conversation, and the lines to write back to it (`Item::Write`).
+    pub fn frames(&mut self, lines: &[String]) -> Vec<Item> {
+        let mut out = Vec::new();
+        if let Some(mode) = self.told_mode.take() {
+            out.push(Item::Mode { mode });
+        }
+        for l in lines {
+            match serde_json::from_str::<Value>(l) {
+                Ok(msg) => self.read(msg, &mut out),
+                // What is no JSON (a log line on its output) is left aside.
+                Err(_) => continue,
+            }
+        }
+        out
+    }
+
+    fn read(&mut self, msg: Value, out: &mut Vec<Item>) {
+        let Some(method) = msg["method"].as_str().map(str::to_string) else {
+            if let Some(id) = msg["id"].as_u64() {
+                if let Some(ours) = self.ours.remove(&id) {
+                    let error = msg
+                        .get("error")
+                        .filter(|e| !e.is_null())
+                        .map(|e| e["message"].as_str().unwrap_or("error").to_string());
+                    self.answered(ours, msg["result"].clone(), error, out);
+                }
+            }
+            return;
+        };
+        let params = msg["params"].clone();
+        if !msg["id"].is_null() {
+            self.asks(&method, msg["id"].clone(), params, out);
+        } else if method == "session/update" {
+            self.update(&params, out);
+        }
+    }
+
+    /// The answer to a request of the client.
+    fn answered(&mut self, ours: Ours, result: Value, error: Option<String>, out: &mut Vec<Item>) {
+        match ours {
+            Ours::Initialize => {
+                if let Some(e) = error {
+                    return self.refused(texts::session_refused(&self.lang, &self.name, &e), out);
+                }
+                if result["protocolVersion"].as_u64() != Some(crate::PROTOCOL) {
+                    let v = result["protocolVersion"].to_string();
+                    return self.refused(texts::protocol_refused(&self.lang, &self.name, &v), out);
+                }
+                self.can_load = result["agentCapabilities"]["loadSession"] == true;
+                let mcp = crate::mcp_servers(
+                    self.escouade
+                        .as_ref()
+                        .map(|(u, t)| (u.as_str(), t.as_str())),
+                );
+                let line = match self.start.clone() {
+                    StartAt::Resume { session } if self.can_load => {
+                        self.loading = true;
+                        self.request(
+                            "session/load",
+                            json!({ "sessionId": session, "cwd": self.cwd, "mcpServers": mcp }),
+                            Ours::Load(session),
+                        )
+                    }
+                    _ => self.request(
+                        "session/new",
+                        json!({ "cwd": self.cwd, "mcpServers": mcp }),
+                        Ours::New,
+                    ),
+                };
+                out.push(write(line));
+            }
+            Ours::Load(session) => {
+                self.loading = false;
+                match error {
+                    None => self.opened(session, &result, out),
+                    Some(e) => {
+                        // Gone: a new session, said.
+                        out.push(notice(
+                            texts::not_resumed(&self.lang, &self.name),
+                            "warning",
+                        ));
+                        let _ = e;
+                        self.instructions = None;
+                        let mcp = crate::mcp_servers(
+                            self.escouade
+                                .as_ref()
+                                .map(|(u, t)| (u.as_str(), t.as_str())),
+                        );
+                        let line = self.request(
+                            "session/new",
+                            json!({ "cwd": self.cwd, "mcpServers": mcp }),
+                            Ours::New,
+                        );
+                        out.push(write(line));
+                    }
+                }
+            }
+            Ours::New => match (error, result["sessionId"].as_str()) {
+                (None, Some(id)) => self.opened(id.to_string(), &result, out),
+                (e, _) => {
+                    let e = e.unwrap_or_else(|| "no session".into());
+                    self.refused(texts::session_refused(&self.lang, &self.name, &e), out)
+                }
+            },
+            Ours::Prompt => {
+                if let Some(e) = error {
+                    self.error = Some(texts::not_translated(&self.lang, &self.name, &e));
+                }
+                let cancelled = result["stopReason"] == "cancelled";
+                // What the turn spent, when the agent tells it (`usage` of the answer, unstable in ACP).
+                let n = |k: &str| result["usage"][k].as_u64().unwrap_or(0);
+                self.usage = TurnUsage {
+                    input: n("inputTokens"),
+                    output: n("outputTokens"),
+                    cache: n("cachedReadTokens") + n("cachedWriteTokens"),
+                    cost: 0.0,
+                };
+                self.turn_end(cancelled, out);
+            }
+            Ours::Setting(what) => {
+                if let Some(e) = error {
+                    let text =
+                        texts::not_translated(&self.lang, &self.name, &format!("{what}: {e}"));
+                    out.push(notice(text, "warning"));
+                }
+            }
+        }
+    }
+
+    /// No session: the messages waiting end in error.
+    fn refused(&mut self, why: String, out: &mut Vec<Item>) {
+        out.push(notice(why.clone(), "error"));
+        self.queue.clear();
+        out.push(Item::Turn {
+            interrupted: false,
+            limited: None,
+            usage: TurnUsage::default(),
+            error: Some(why),
+        });
+    }
+
+    /// The session is open: its mode and model set, the first message waiting sent.
+    fn opened(&mut self, session: String, result: &Value, out: &mut Vec<Item>) {
+        self.session = Some(session);
+        self.open = true;
+        self.options = result["configOptions"].clone();
+        if !self.queue.is_empty() {
+            self.tell(out);
+        }
+        let current = result["modes"]["currentModeId"]
+            .as_str()
+            .map(str::to_string);
+        for l in self.mode_lines(current.as_deref()) {
+            out.push(write(l));
+        }
+        for l in self.model_lines() {
+            out.push(write(l));
+        }
+        if let Some(text) = self.queue.pop_front() {
+            let l = self.prompt(&text);
+            out.push(write(l));
+        }
+    }
+
+    /// The session given to the core, once.
+    fn tell(&mut self, out: &mut Vec<Item>) {
+        if !self.told {
+            if let Some(s) = &self.session {
+                self.told = true;
+                out.push(Item::Start {
+                    session: Some(s.clone()),
+                });
+            }
+        }
+    }
+
+    /// The ACP mode for Escouade's `mode`: read-only's when the agent is, else the manifest's.
+    fn acp_mode(&self, mode: &str) -> Option<String> {
+        if self.read_only {
+            return self.acp.read_only_mode.clone();
+        }
+        self.acp.modes.get(mode).cloned()
+    }
+
+    fn mode_lines(&mut self, current: Option<&str>) -> Vec<String> {
+        let Some(session) = self.session.clone() else {
+            return Vec::new();
+        };
+        match self.acp_mode(&self.mode.clone()) {
+            Some(m) if current != Some(m.as_str()) => vec![self.request(
+                "session/set_mode",
+                json!({ "sessionId": session, "modeId": m }),
+                Ours::Setting("session/set_mode".into()),
+            )],
+            _ => Vec::new(),
+        }
+    }
+
+    /// The value of the model option for `model`: the one listed whose id is it or starts with it and its options
+    /// (`model[…]`), else Cursor's own for Auto, else the model.
+    fn model_value(&self, key: &str) -> String {
+        let model = &self.model;
+        let listed = self
+            .options
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|o| o["id"] == key)
+            .and_then(|o| o["options"].as_array().cloned())
+            .unwrap_or_default();
+        listed
+            .iter()
+            .filter_map(|o| o["value"].as_str())
+            .find(|v| *v == model || v.starts_with(&format!("{model}[")))
+            .map(str::to_string)
+            .unwrap_or_else(|| {
+                if self.cursor {
+                    cursor::full_id(model)
+                } else {
+                    model.clone()
+                }
+            })
+    }
+
+    fn model_lines(&mut self) -> Vec<String> {
+        let Some(session) = self.session.clone() else {
+            return Vec::new();
+        };
+        if self.model.is_empty() {
+            return Vec::new();
+        }
+        match self.acp.model_option.clone() {
+            Some(key) => {
+                let value = self.model_value(&key);
+                vec![self.request(
+                    "session/set_config_option",
+                    json!({ "sessionId": session, "configId": key, "value": value }),
+                    Ours::Setting("session/set_config_option".into()),
+                )]
+            }
+            None => vec![self.request(
+                "session/set_model",
+                json!({ "sessionId": session, "modelId": self.model }),
+                Ours::Setting("session/set_model".into()),
+            )],
+        }
+    }
+
+    fn prompt(&mut self, text: &str) -> String {
+        let session = self.session.clone().unwrap_or_default();
+        let mut blocks = Vec::new();
+        if let Some(i) = self.instructions.take() {
+            blocks.push(json!({ "type": "text", "text": crate::preamble(&i) }));
+        }
+        blocks.push(json!({ "type": "text", "text": text }));
+        self.busy = true;
+        self.turn_text.clear();
+        self.request(
+            "session/prompt",
+            json!({ "sessionId": session, "prompt": blocks }),
+            Ours::Prompt,
+        )
+    }
+
+    /// A message: sent now, or once the session is open and the turn under way is over.
+    pub fn send(&mut self, text: &str) -> Vec<String> {
+        if !self.open || self.busy {
+            self.queue.push_back(text.to_string());
+            return Vec::new();
+        }
+        vec![self.prompt(text)]
+    }
+
+    /// `session/cancel`; what the agent waits the user for is answered cancelled, as ACP wants it.
+    pub fn interrupt(&mut self) -> Vec<String> {
+        self.queue.clear();
+        let Some(session) = self.session.clone() else {
+            return Vec::new();
+        };
+        let mut out: Vec<String> = self
+            .asked
+            .drain()
+            .filter(|(_, a)| a.method == "session/request_permission")
+            .map(|(_, a)| reply(&a.id, json!({ "outcome": { "outcome": "cancelled" } })))
+            .collect();
+        out.push(line(json!({
+            "jsonrpc": "2.0", "method": "session/cancel", "params": { "sessionId": session },
+        })));
+        out
+    }
+
+    pub fn set_mode(&mut self, mode: &str) -> Vec<String> {
+        self.mode = mode.to_string();
+        self.mode_lines(None)
+    }
+
+    pub fn set_model(&mut self, model: &str) -> Vec<String> {
+        self.model = model.to_string();
+        self.model_lines()
+    }
+
+    pub fn set_effort(&mut self, effort: &str) -> Vec<String> {
+        self.effort = effort.to_string();
+        Vec::new()
+    }
+
+    /// The user's answer to the permission `request`.
+    pub fn answer_permission(
+        &mut self,
+        request: &str,
+        allow: bool,
+        always: bool,
+        message: Option<&str>,
+        resume: Option<&str>,
+    ) -> Result<Vec<String>, String> {
+        let asked = self
+            .asked
+            .remove(request)
+            .ok_or_else(|| format!("{} no longer waits for this answer", self.name))?;
+        if asked.method == "cursor/create_plan" {
+            let (outcome, mode) = cursor::plan_answer(allow, always, message);
+            let mut out = vec![reply(&asked.id, json!({ "outcome": outcome }))];
+            if let Some(mode) = mode {
+                let mode = if always { mode } else { resume.unwrap_or(mode) };
+                out.extend(self.set_mode(mode));
+                self.told_mode = Some(mode.to_string());
+            }
+            return Ok(out);
+        }
+        let kind = match (allow, always) {
+            (true, true) => "allow_always",
+            (true, false) => "allow_once",
+            _ => "reject_once",
+        };
+        let option = crate::option_of(&asked.params, kind);
+        Ok(vec![reply(
+            &asked.id,
+            json!({ "outcome": { "outcome": "selected", "optionId": option } }),
+        )])
+    }
+
+    /// The user's answers (by question) to the question `request`.
+    pub fn answer_question(
+        &mut self,
+        request: &str,
+        answers: &Value,
+    ) -> Result<Vec<String>, String> {
+        let asked = self
+            .asked
+            .remove(request)
+            .ok_or_else(|| format!("{} no longer waits for this answer", self.name))?;
+        if asked.method == "escouade/question" {
+            let text = crate::questions::answers_message(&asked.params, answers);
+            return Ok(vec![self.prompt(&text)]);
+        }
+        let outcome = cursor::question_outcome(&asked.params, answers);
+        Ok(vec![reply(&asked.id, json!({ "outcome": outcome }))])
+    }
+
+    fn rid(&mut self, id: &Value) -> String {
+        self.seq += 1;
+        format!("acp-{}-{}", self.seq, id.to_string().trim_matches('"'))
+    }
+
+    /// A request of the agent to the client.
+    fn asks(&mut self, method: &str, id: Value, params: Value, out: &mut Vec<Item>) {
+        match method {
+            "session/request_permission" => self.permission(id, &params, out),
+            "fs/read_text_file" => {
+                let path = params["path"].as_str().unwrap_or_default().to_string();
+                self.through.push(path.clone());
+                let l = match self.file_of(&path) {
+                    Err(why) => reply_error(&id, -32000, &why),
+                    Ok(real) => match std::fs::read(&real) {
+                        Ok(bytes) => {
+                            let text = String::from_utf8_lossy(&bytes);
+                            let from = params["line"].as_u64().unwrap_or(1).max(1) as usize - 1;
+                            let limit = params["limit"].as_u64().map(|l| l as usize);
+                            let content = if from == 0 && limit.is_none() {
+                                text.into_owned()
+                            } else {
+                                let lines = text.split_inclusive('\n').skip(from);
+                                match limit {
+                                    Some(n) => lines.take(n).collect(),
+                                    None => lines.collect(),
+                                }
+                            };
+                            reply(&id, json!({ "content": content }))
+                        }
+                        Err(e) => reply_error(&id, -32002, &format!("{path}: {e}")),
+                    },
+                };
+                out.push(write(l));
+            }
+            "fs/write_text_file" => {
+                let path = params["path"].as_str().unwrap_or_default().to_string();
+                let content = params["content"].as_str().unwrap_or_default().to_string();
+                self.through.push(path.clone());
+                let file = self.file_of(&path);
+                let l = if let Err(why) = &file {
+                    reply_error(&id, -32000, why)
+                } else if self.read_only {
+                    reply_error(&id, -32000, &texts::read_only_file(&path))
+                } else {
+                    let real = file.unwrap_or_default();
+                    let before = std::fs::read_to_string(&real).ok();
+                    let made = real
+                        .parent()
+                        .map_or(Ok(()), std::fs::create_dir_all)
+                        .and_then(|_| std::fs::write(&real, &content));
+                    match made {
+                        Ok(()) => {
+                            self.written.insert(path.clone(), (before, content));
+                            if crate::inside(&path, &self.cwd) {
+                                out.push(Item::Touched { path: path.clone() });
+                            }
+                            reply(&id, Value::Null)
+                        }
+                        Err(e) => reply_error(&id, -32002, &format!("{path}: {e}")),
+                    }
+                };
+                out.push(write(l));
+            }
+            m if self.cursor && m.starts_with("cursor/") => self.cursor_asks(m, id, params, out),
+            other => out.push(write(reply_error(
+                &id,
+                -32601,
+                &format!("unsupported: {other}"),
+            ))),
+        }
+    }
+
+    /// The real path of a file the agent asks to read or write through the client, the one to open; Err and why when it
+    /// is refused: not absolute (ACP asks it), or in a private project (by its components, its links followed:
+    /// `paths`).
+    fn file_of(&self, path: &str) -> Result<std::path::PathBuf, String> {
+        let real = crate::paths::resolve(path).ok_or_else(|| texts::not_absolute(path))?;
+        if crate::paths::within(&real, &self.fence_keys) {
+            return Err(texts::fenced_file(path));
+        }
+        Ok(real)
+    }
+
+    /// Who an update is of: the agent (`Some(None)`), one of its subagents (its call), or none of them.
+    fn owner(&self, session: Option<&str>) -> Option<Option<String>> {
+        let session = session?;
+        if self.session.as_deref() == Some(session) {
+            return Some(None);
+        }
+        self.children.get(session).map(|c| Some(c.clone()))
+    }
+
+    /// A permission the agent asks.
+    fn permission(&mut self, id: Value, p: &Value, out: &mut Vec<Item>) {
+        let tc = &p["toolCall"];
+        let kind = self.kind_of(tc);
+        let reject = |me: &Self| {
+            let option = crate::option_of(p, "reject_once");
+            let _ = me;
+            reply(
+                &id,
+                json!({ "outcome": { "outcome": "selected", "optionId": option } }),
+            )
+        };
+        // « Projet privé »: refused at once, never a card the user could accept.
+        if crate::fenced(p, &self.fence) {
+            out.push(write(reject(self)));
+            return;
+        }
+        if self.read_only && matches!(kind.as_str(), "edit" | "delete" | "move" | "execute") {
+            out.push(write(reject(self)));
+            return;
+        }
+        self.tell(out);
+        let call = tc["toolCallId"]
+            .as_str()
+            .map(tools::call_id)
+            .unwrap_or_else(|| self.rid(&id));
+        let parent = self.owner(p["sessionId"].as_str()).flatten();
+        let diff = tools::diff_of(&tc["content"]).or_else(|| self.whole_write(tc));
+        if let Some(d) = &diff {
+            self.diffs.insert(call.clone(), d.clone());
+        }
+        let known = self.calls.get(&call).cloned();
+        let (mut tool, mut input) = match &known {
+            Some(c) => (c.name.clone(), c.input.clone()),
+            None => self.tool_of(tc),
+        };
+        if known.is_none() {
+            self.close(parent.as_deref().unwrap_or_default(), out);
+            self.calls.insert(
+                call.clone(),
+                Call {
+                    name: tool.clone(),
+                    input: input.clone(),
+                    kind: kind.clone(),
+                    done: false,
+                },
+            );
+            out.push(Item::Tool {
+                id: call.clone(),
+                name: tool.clone(),
+                input: input.clone(),
+                parent: parent.clone(),
+            });
+        }
+        let mut paths: Vec<String> = diff.iter().map(|d| d.0.clone()).collect();
+        paths.extend(input["file_path"].as_str().map(str::to_string));
+        if let Some((path, old, _)) = &diff {
+            let named = if old.as_deref().unwrap_or_default().is_empty() {
+                "Write"
+            } else {
+                "Edit"
+            };
+            input = json!({ "file_path": path });
+            if tool != named {
+                tool = named.to_string();
+                if let Some(c) = self.calls.get_mut(&call) {
+                    c.name = tool.clone();
+                    c.input = input.clone();
+                }
+                out.push(Item::ToolInput {
+                    id: call.clone(),
+                    name: Some(tool.clone()),
+                    input: input.clone(),
+                });
+            }
+        }
+        let safe = match self.mode.as_str() {
+            "bypassPermissions" => true,
+            "acceptEdits" => {
+                matches!(kind.as_str(), "edit" | "delete")
+                    && !paths.is_empty()
+                    && paths.iter().all(|f| crate::inside(f, &self.cwd))
+            }
+            _ => false,
+        };
+        if safe {
+            let option = crate::option_of(p, "allow_once");
+            out.push(write(reply(
+                &id,
+                json!({ "outcome": { "outcome": "selected", "optionId": option } }),
+            )));
+            return;
+        }
+        let mut said = Vec::new();
+        if paths.iter().any(|f| !crate::inside(f, &self.cwd)) {
+            said.push(texts::outside(&self.lang));
+        }
+        if let Some((server, t)) = cursor::mcp_of(tc, &tool) {
+            said.push(texts::mcp_tool(&self.lang, &server, &t));
+        }
+        let reason = Some(tools::content_text(&tc["content"])).filter(|t| !t.trim().is_empty());
+        let rid = self.rid(&id);
+        self.asked.insert(
+            rid.clone(),
+            Asked {
+                id,
+                method: "session/request_permission".into(),
+                params: p.clone(),
+            },
+        );
+        let can_always = p["options"]
+            .as_array()
+            .is_none_or(|o| o.iter().any(|x| x["kind"] == "allow_always"));
+        out.push(Item::Permission {
+            request: rid,
+            call,
+            tool: None,
+            input: None,
+            description: (!said.is_empty()).then(|| said.join("\n")),
+            reason,
+            diff: diff.map(|(path, old_text, new_text)| Diff {
+                path,
+                old_text,
+                new_text,
+            }),
+            can_always,
+            parent,
+        });
+    }
+
+    /// The kind of ACP of the call `u`: its own, or the one of the name its manifest gives a tool of the kind `other`.
+    fn kind_of(&self, u: &Value) -> String {
+        let kind = u["kind"].as_str().unwrap_or_default();
+        if !matches!(kind, "" | "other") {
+            return kind.to_string();
+        }
+        match self.named(u) {
+            Some(name) => tools::kind_of(&name).to_string(),
+            None => kind.to_string(),
+        }
+    }
+
+    /// The name of Claude Code's its manifest gives the tool of `u` (`acp.tools`).
+    fn named(&self, u: &Value) -> Option<String> {
+        if self.acp.tools.is_empty() {
+            return None;
+        }
+        let own = u["_meta"]
+            .as_object()
+            .into_iter()
+            .flatten()
+            .find_map(|(_, m)| m["toolCall"]["toolName"].as_str())
+            .map(str::to_string)
+            .or_else(|| {
+                u["title"]
+                    .as_str()
+                    .and_then(|t| t.split(" · ").next())
+                    .map(|t| t.trim().to_string())
+            })?;
+        self.acp.tools.get(&own).cloned()
+    }
+
+    /// A write that tells no diff but its whole content (`rawInput.content`, Goose's `write`): its diff against the
+    /// file as it is now.
+    fn whole_write(&self, u: &Value) -> Option<(String, Option<String>, String)> {
+        let (name, input) = self.tool_of(u);
+        let content = u["rawInput"]["content"].as_str()?;
+        if name != "Write" {
+            return None;
+        }
+        let path = input["file_path"].as_str()?.to_string();
+        let before = std::fs::read_to_string(&path).ok();
+        Some((path, before, content.to_string()))
+    }
+
+    fn tool_of(&self, u: &Value) -> (String, Value) {
+        let raw = &u["rawInput"];
+        if let Some(name) = self.named(u) {
+            let mut v = u.clone();
+            v["kind"] = json!(tools::kind_of(&name));
+            let (_, input) = tools::tool_of(&v, &self.cwd);
+            return (name, input);
+        }
+        let named = u["title"]
+            .as_str()
+            .or(raw["tool"].as_str())
+            .unwrap_or_default();
+        if !named.is_empty() && self.acp.subagent_tools.iter().any(|t| t == named) {
+            let mut input = json!({
+                "description": raw["description"].as_str().or(u["title"].as_str()),
+                "prompt": raw["prompt"], "subagent_type": raw["subagent_type"].as_str().or(raw["agent"].as_str()),
+            });
+            if let Some(o) = input.as_object_mut() {
+                o.retain(|_, v| !v.is_null());
+            }
+            return ("Task".into(), input);
+        }
+        if self.cursor {
+            if let Some(t) = cursor::tool_of(u, &self.cwd) {
+                return t;
+            }
+        }
+        tools::tool_of(u, &self.cwd)
+    }
+
+    /// One update of a session (`session/update`).
+    fn update(&mut self, p: &Value, out: &mut Vec<Item>) {
+        if self.loading {
+            return;
+        }
+        let u = &p["update"];
+        let kind = u["sessionUpdate"].as_str().unwrap_or_default();
+        if self.cursor && kind == "subagent_spawned" {
+            if let (Some(child), Some(call)) = cursor::spawned(u) {
+                if let Some(model) = u["_meta"]["cursor"]["model"].as_str() {
+                    out.push(Item::Subagent {
+                        call: call.clone(),
+                        model: model.to_string(),
+                    });
+                }
+                self.children.insert(child, call);
+            }
+            return;
+        }
+        let Some(parent) = self.owner(p["sessionId"].as_str()) else {
+            return;
+        };
+        self.tell(out);
+        match kind {
+            "agent_message_chunk" | "agent_thought_chunk" => {
+                let Some(text) = u["content"]["text"].as_str().filter(|t| !t.is_empty()) else {
+                    return;
+                };
+                let k = if kind == "agent_message_chunk" {
+                    "text"
+                } else {
+                    "thinking"
+                };
+                self.write_piece(parent.unwrap_or_default(), k, text, out);
+            }
+            "tool_call" => self.tool_start(u, parent, out),
+            "tool_call_update" => self.tool_update(u, out),
+            "plan" if parent.is_none() => {
+                let todos: Vec<Value> = u["entries"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .enumerate()
+                    .map(|(i, e)| json!({ "id": i.to_string(), "content": e["content"], "status": e["status"] }))
+                    .collect();
+                let todos = self.todos.set(&Value::Array(todos), false);
+                out.push(Item::Todos { todos });
+            }
+            "current_mode_update" if parent.is_none() => {
+                let acp = u["currentModeId"].as_str().unwrap_or_default();
+                let mode = if self.cursor {
+                    cursor::mode_of(acp, &self.mode)
+                } else {
+                    self.acp
+                        .modes
+                        .iter()
+                        .find(|(_, v)| v.as_str() == acp)
+                        .map(|(k, _)| k.clone())
+                };
+                if let Some(mode) = mode.filter(|m| *m != self.mode) {
+                    self.mode = mode.clone();
+                    out.push(Item::Mode { mode });
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// A piece of text or reasoning of `who`: into the one being written, or a new one (the others of `who` closed).
+    fn write_piece(&mut self, who: String, kind: &'static str, text: &str, out: &mut Vec<Item>) {
+        let at = match self
+            .writing
+            .iter()
+            .position(|w| w.who == who && w.kind == kind)
+        {
+            Some(at) => at,
+            None => {
+                self.close(&who, out);
+                self.seq += 1;
+                self.writing.push(Writing {
+                    who,
+                    kind,
+                    id: format!("acp-text-{}", self.seq),
+                    text: String::new(),
+                    sent: 0,
+                });
+                self.writing.len() - 1
+            }
+        };
+        let hold = self.acp.questions_in_text && kind == "text";
+        let w = &mut self.writing[at];
+        w.text.push_str(text);
+        // What can go out now: all of it, but a question's block (and what could start its tag) held back.
+        let mut ready = w.text.len();
+        if hold {
+            let open = crate::questions::OPEN;
+            ready = match w.text.find(open) {
+                Some(i) => i,
+                None => {
+                    let keep = (1..open.len())
+                        .rev()
+                        .find(|&n| {
+                            w.text.len() >= n
+                                && w.text.is_char_boundary(w.text.len() - n)
+                                && open.starts_with(&w.text[w.text.len() - n..])
+                        })
+                        .unwrap_or(0);
+                    w.text.len() - keep
+                }
+            };
+        }
+        if ready > w.sent && w.text.is_char_boundary(ready) {
+            let piece = w.text[w.sent..ready].to_string();
+            w.sent = ready;
+            out.push(Item::Delta {
+                id: w.id.clone(),
+                text: piece,
+                thinking: kind == "thinking",
+                parent: (!w.who.is_empty()).then(|| w.who.clone()),
+            });
+        }
+    }
+
+    /// What `who` was writing is whole: given, the agent's text kept for the turn, a subagent's as its report.
+    fn close(&mut self, who: &str, out: &mut Vec<Item>) {
+        let Some(at) = self.writing.iter().position(|w| w.who == who) else {
+            return;
+        };
+        let Writing {
+            who,
+            kind,
+            mut text,
+            id,
+            ..
+        } = self.writing.remove(at);
+        let id = Some(id);
+        let parent = (!who.is_empty()).then(|| who.clone());
+        if kind == "text" && who.is_empty() && self.acp.questions_in_text {
+            let (before, block) = crate::questions::split(&text);
+            if block.is_some() {
+                self.block = block;
+                text = before;
+                if text.trim().is_empty() {
+                    // Its item, if some of it went out, stays empty: given so, closed.
+                    out.push(Item::Text { text, parent, id });
+                    return;
+                }
+            }
+        }
+        if kind == "text" && !text.trim().is_empty() {
+            if who.is_empty() {
+                if !self.turn_text.is_empty() {
+                    self.turn_text.push_str("\n\n");
+                }
+                self.turn_text.push_str(&text);
+            } else {
+                self.reports.insert(who.clone(), text.clone());
+            }
+        }
+        out.push(match kind {
+            "text" => Item::Text { text, parent, id },
+            _ => Item::Thinking { text, parent, id },
+        });
+    }
+
+    fn tool_start(&mut self, u: &Value, parent: Option<String>, out: &mut Vec<Item>) {
+        let Some(call) = u["toolCallId"].as_str().map(tools::call_id) else {
+            return;
+        };
+        if u["kind"] == "think" || self.calls.contains_key(&call) {
+            return;
+        }
+        if self.cursor && cursor::own_tool(u) {
+            return;
+        }
+        self.close(parent.as_deref().unwrap_or_default(), out);
+        let (name, input) = self.tool_of(u);
+        self.calls.insert(
+            call.clone(),
+            Call {
+                name: name.clone(),
+                input: input.clone(),
+                kind: self.kind_of(u),
+                done: false,
+            },
+        );
+        out.push(Item::Tool {
+            id: call,
+            name,
+            input,
+            parent,
+        });
+        // A call that ends as it starts (some agents say it whole at once).
+        if matches!(u["status"].as_str(), Some("completed" | "failed")) {
+            self.tool_update(u, out);
+        }
+    }
+
+    /// What the agent says of a call as it goes: its file or command once known, then its end.
+    fn tool_update(&mut self, u: &Value, out: &mut Vec<Item>) {
+        let Some(id) = u["toolCallId"].as_str().map(tools::call_id) else {
+            return;
+        };
+        let Some(call) = self.calls.get(&id).cloned() else {
+            return;
+        };
+        if call.done {
+            return;
+        }
+        let mut input = call.input.clone();
+        if u["rawInput"].is_object() || u["locations"].is_array() {
+            let kind = u["kind"]
+                .as_str()
+                .map(str::to_string)
+                .unwrap_or_else(|| call.kind.clone());
+            let kind = if kind.is_empty() {
+                tools::kind_of(&call.name).to_string()
+            } else {
+                kind
+            };
+            let (_, told) = self.tool_of(&json!({
+                "kind": kind, "title": u["title"], "rawInput": u["rawInput"], "locations": u["locations"],
+                "toolCallId": u["toolCallId"],
+            }));
+            let something = told
+                .as_object()
+                .is_some_and(|o| o.values().any(|v| !v.is_null()));
+            if something && told != call.input && !call.name.starts_with("mcp__") {
+                input = told;
+                if let Some(c) = self.calls.get_mut(&id) {
+                    c.input = input.clone();
+                }
+                out.push(Item::ToolInput {
+                    id: id.clone(),
+                    name: None,
+                    input: input.clone(),
+                });
+            }
+        }
+        let status = u["status"].as_str().unwrap_or_default();
+        if !matches!(status, "completed" | "failed") {
+            return;
+        }
+        if let Some(c) = self.calls.get_mut(&id) {
+            c.done = true;
+        }
+        let name = call.name.clone();
+        let out_raw = &u["rawOutput"];
+        let mut failed = status == "failed" || out_raw["exitCode"].as_i64().is_some_and(|c| c != 0);
+        if let Some(d) = tools::diff_of(&u["content"]) {
+            self.diffs.insert(id.clone(), d);
+        }
+        let path = input["file_path"].as_str().unwrap_or_default().to_string();
+        // A write through the client is its diff, when the agent tells none.
+        if !self.diffs.contains_key(&id) && matches!(name.as_str(), "Edit" | "Write") {
+            if let Some((old, new)) = self.written.remove(&path) {
+                self.diffs.insert(id.clone(), (path.clone(), old, new));
+            }
+        }
+        let unwritten = self.cursor
+            && !failed
+            && matches!(name.as_str(), "Edit" | "Write")
+            && !self.diffs.contains_key(&id);
+        let mut text = out_raw["content"]
+            .as_str()
+            .or(out_raw["error"].as_str())
+            .or(out_raw["output"].as_str())
+            .or(out_raw.as_str())
+            .unwrap_or_default()
+            .to_string();
+        if text.is_empty() {
+            text = tools::content_text(&u["content"]);
+        }
+        if unwritten {
+            failed = true;
+            text = cursor::write_not_done(&self.lang);
+        }
+        let result = match name.as_str() {
+            "Bash" => json!({
+                "stdout": out_raw["stdout"].as_str().unwrap_or_default(),
+                "stderr": out_raw["stderr"].as_str().unwrap_or_default(),
+            }),
+            "Edit" | "Write" if !failed => match self.diffs.remove(&id) {
+                Some((file, old, new)) => {
+                    if old.is_none() && name == "Edit" {
+                        out.push(Item::ToolInput {
+                            id: id.clone(),
+                            name: Some("Write".into()),
+                            input: input.clone(),
+                        });
+                    }
+                    if crate::inside(&file, &self.cwd) {
+                        out.push(Item::Touched { path: file.clone() });
+                    }
+                    json!({
+                        "filePath": file,
+                        "structuredPatch": tools::line_hunks(old.as_deref().unwrap_or_default(), &new),
+                    })
+                }
+                None => {
+                    if !path.is_empty() && crate::inside(&path, &self.cwd) {
+                        out.push(Item::Touched { path: path.clone() });
+                    }
+                    json!({ "filePath": path, "structuredPatch": [] })
+                }
+            },
+            "Task" => {
+                self.close(&id, out);
+                if let Some(report) = self.reports.remove(&id) {
+                    if text.trim().is_empty() {
+                        text = report;
+                    }
+                }
+                Value::Null
+            }
+            _ => Value::Null,
+        };
+        // A read or a write made by the agent itself while a fence is set: said once.
+        if !self.fence.is_empty()
+            && !self.leak_said
+            && matches!(call.kind.as_str(), "read" | "edit" | "delete")
+        {
+            let gone_through = path.is_empty()
+                || self
+                    .through
+                    .iter()
+                    .any(|t| crate::names(t, &path) && crate::names(&path, t));
+            if !gone_through {
+                self.leak_said = true;
+                out.push(notice(
+                    texts::fence_leak(&self.lang, &self.name, &path),
+                    "warning",
+                ));
+            }
+        }
+        out.push(Item::ToolDone {
+            id,
+            output: text,
+            error: failed,
+            result,
+        });
+    }
+
+    /// The end of the prompt: what was being written given, the turn closed; the next message waiting sent.
+    fn turn_end(&mut self, cancelled: bool, out: &mut Vec<Item>) {
+        self.tell(out);
+        while let Some(w) = self.writing.first().cloned() {
+            self.close(&w.who, out);
+        }
+        self.busy = false;
+        self.reports.clear();
+        // A turn that ends on a question: its card, and the turn goes on with the answers.
+        if let Some(block) = self
+            .block
+            .take()
+            .filter(|_| !cancelled && self.error.is_none())
+        {
+            let rid = self.rid(&json!("question"));
+            if let Some(params) = crate::questions::question_params(&rid, &block) {
+                let questions = cursor::questions(&params);
+                self.asked.insert(
+                    rid.clone(),
+                    Asked {
+                        id: Value::Null,
+                        method: "escouade/question".into(),
+                        params,
+                    },
+                );
+                out.push(Item::Question {
+                    request: rid.clone(),
+                    call: rid,
+                    questions,
+                });
+                return;
+            }
+        }
+        let mut error = self.error.take().filter(|_| !cancelled);
+        let mut limited = None;
+        if self.cursor && !cancelled && error.is_none() {
+            if let Some(refusal) = cursor::refusal(&self.turn_text) {
+                if cursor::at_limit(refusal) {
+                    limited = Some(None);
+                }
+                error = Some(cursor::refusal_error(&self.lang, refusal, &self.model));
+            }
+        }
+        out.push(Item::Turn {
+            interrupted: cancelled,
+            limited,
+            usage: std::mem::take(&mut self.usage),
+            error,
+        });
+        if let Some(text) = self.queue.pop_front() {
+            let l = self.prompt(&text);
+            out.push(write(l));
+        }
+    }
+
+    /// A request of Cursor's own (`cursor/*`).
+    fn cursor_asks(&mut self, method: &str, id: Value, params: Value, out: &mut Vec<Item>) {
+        self.tell(out);
+        match method {
+            "cursor/ask_question" => {
+                let rid = self.rid(&id);
+                let call = params["toolCallId"]
+                    .as_str()
+                    .map(tools::call_id)
+                    .unwrap_or_else(|| rid.clone());
+                let questions = cursor::questions(&params);
+                self.asked.insert(
+                    rid.clone(),
+                    Asked {
+                        id,
+                        method: method.into(),
+                        params,
+                    },
+                );
+                out.push(Item::Question {
+                    request: rid,
+                    call,
+                    questions,
+                });
+            }
+            "cursor/create_plan" => {
+                if params["todos"].as_array().is_some_and(|t| !t.is_empty()) {
+                    let todos = self.todos.set(&params["todos"], false);
+                    out.push(Item::Todos { todos });
+                }
+                let rid = self.rid(&id);
+                let plan = cursor::plan_text(&params);
+                self.asked.insert(
+                    rid.clone(),
+                    Asked {
+                        id,
+                        method: method.into(),
+                        params,
+                    },
+                );
+                out.push(Item::Permission {
+                    request: rid.clone(),
+                    call: rid,
+                    tool: Some("ExitPlanMode".into()),
+                    input: Some(json!({ "plan": plan })),
+                    description: None,
+                    reason: None,
+                    diff: None,
+                    can_always: true,
+                    parent: None,
+                });
+            }
+            "cursor/update_todos" => {
+                out.push(write(reply(&id, json!({}))));
+                let todos = self.todos.set(&params["todos"], params["merge"] == true);
+                out.push(Item::Todos { todos });
+            }
+            "cursor/task" | "cursor/generate_image" => out.push(write(reply(&id, json!({})))),
+            other => out.push(write(reply_error(
+                &id,
+                -32601,
+                &format!("unsupported: {other}"),
+            ))),
+        }
+    }
+}

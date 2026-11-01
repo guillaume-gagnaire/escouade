@@ -42,11 +42,16 @@ pub fn all() -> Vec<&'static dyn Engine> {
 
 /// Adds `engine` to the registry, after the others; one added before under the same id gives it
 /// its place. A built-in one keeps its own.
-#[allow(dead_code)] // The plugins of a harness come with INT-9; the tests add one.
 pub fn register(engine: &'static dyn Engine) {
     let mut added = ADDED.write();
     added.retain(|e| e.id() != engine.id());
     added.push(engine);
+}
+
+/// Takes the harness `id` added before out of the registry: its agents are « harness absent » until it comes back
+/// (a plugin uninstalled or turned off). A built-in one stays.
+pub fn unregister(id: EngineId) {
+    ADDED.write().retain(|e| e.id() != id);
 }
 
 /// The harness of the registry that bears `id`, if any.

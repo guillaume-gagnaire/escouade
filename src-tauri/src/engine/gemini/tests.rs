@@ -73,7 +73,9 @@ fn a_question_is_kept_out_of_the_thread_even_cut_in_pieces() {
         answers,
         "The user answered your questions:\n- Rouge ou bleu ? → rouge"
     );
-    assert!(QUESTIONS.contains(QUESTION_OPEN) && QUESTIONS.contains(QUESTION_CLOSE));
+    assert!(
+        QUESTIONS.contains(QUESTION_OPEN) && QUESTIONS.contains(escouade_acp::questions::CLOSE)
+    );
 }
 
 #[test]

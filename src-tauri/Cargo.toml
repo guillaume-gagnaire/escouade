@@ -60,6 +60,8 @@ sha2 = "0.10"
 minisign-verify = "0.2"
 # The protocol spoken to the plugins, shared with `escouade-plugins`, the program of the plugins the app gives (INT-4).
 escouade-plugin-protocol = { path = "../crates/escouade-plugin-protocol" }
+# The ACP client (PLG-6), which the core's ACP harnesses share until they come out in process (INT-10).
+escouade-acp = { path = "../crates/escouade-acp" }
 # The contract of a code host and its errors, shared with the Rust plugins of the first hand (docs/PLUGINS.md §4.5).
 escouade-plugin-kit = { path = "../crates/escouade-plugin-kit" }
 # The plugins of `escouade-plugins` (its entries): the core runs none of their code, it starts their process.
@@ -67,6 +69,7 @@ escouade-plugin-github = { path = "../plugins/builtin/dev.escouade.github" }
 escouade-plugin-bitbucket = { path = "../plugins/builtin/dev.escouade.bitbucket" }
 escouade-plugin-gitea = { path = "../plugins/builtin/dev.escouade.gitea" }
 escouade-plugin-trello = { path = "../plugins/builtin/dev.escouade.trello" }
+escouade-plugin-acp = { path = "../plugins/builtin/dev.escouade.acp" }
 # A version's archive from the store (STORE-9): read in memory, its links and climbing paths refused.
 flate2 = "1"
 tar = { version = "0.4", default-features = false }
@@ -163,19 +166,23 @@ keyring = { version = "3.6", features = ["apple-native"] }
 members = [
     "../crates/escouade-plugin-protocol",
     "../crates/escouade-plugin-kit",
+    "../crates/escouade-acp",
     "../plugins/builtin/dev.escouade.github",
     "../plugins/builtin/dev.escouade.bitbucket",
     "../plugins/builtin/dev.escouade.gitea",
     "../plugins/builtin/dev.escouade.trello",
+    "../plugins/builtin/dev.escouade.acp",
 ]
 default-members = [
     ".",
     "../crates/escouade-plugin-protocol",
     "../crates/escouade-plugin-kit",
+    "../crates/escouade-acp",
     "../plugins/builtin/dev.escouade.github",
     "../plugins/builtin/dev.escouade.bitbucket",
     "../plugins/builtin/dev.escouade.gitea",
     "../plugins/builtin/dev.escouade.trello",
+    "../plugins/builtin/dev.escouade.acp",
 ]
 
 [profile.dev.package."*"]

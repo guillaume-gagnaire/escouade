@@ -896,6 +896,9 @@ class AppState {
    * without a restart. The window back in front, the menu « Harness » opened. Nothing said when it fails: what was found stays.
    */
   async refreshEngines(): Promise<void> {
+    // The harnesses a plugin describes (PLG-6): one installed, removed or turned off since.
+    const declared = await api.enginesDeclared().catch(() => null);
+    if (declared && declared.map((e) => e.id).join() !== this.engines.map((e) => e.id).join()) this.engines = declared;
     const found = await api.enginesFoundNow().catch(() => null);
     if (found && found.join() !== this.enginesFound.join()) this.enginesFound = found;
   }

@@ -105,10 +105,94 @@ pub fn register(
         .collect()
 }
 
+/// The harnesses the manifests of the plugins on describe (`acp`), in the registry: by id, their plugin and their
+/// description, so that one changed is made again and one gone is taken out.
+static DESCRIBED: Mutex<Vec<(EngineId, String, proto::HarnessDecl)>> = Mutex::new(Vec::new());
+
+/// The harnesses described by the plugins `plugins` (each its id and its manifest's `contributes`), served by the
+/// generic ACP plugin when it is on (`acp_on`): those not yet in the registry are put there, those whose plugin is
+/// gone, off or changed are taken out (their agents « harness absent », their data kept) or made again. Answers the
+/// ids in the registry.
+pub fn sync_described(
+    rt: &Arc<Runtime>,
+    acp_on: bool,
+    plugins: &[(String, serde_json::Map<String, Value>)],
+    escouade_dir: &Path,
+) -> Vec<EngineId> {
+    let wanted: Vec<(EngineId, String, proto::HarnessDecl)> = if acp_on {
+        plugins
+            .iter()
+            .flat_map(|(id, contributes)| {
+                harnesses_of(contributes)
+                    .into_iter()
+                    .filter(|d| d.acp.is_some())
+                    .map(move |d| (described_id(id, &d.id), id.clone(), d))
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let mut have = DESCRIBED.lock();
+    have.retain(|(id, owner, decl)| {
+        let keep = wanted
+            .iter()
+            .any(|(i, o, d)| i == id && o == owner && d == decl);
+        if !keep {
+            crate::engine::registry::unregister(*id);
+        }
+        keep
+    });
+    for (id, owner, decl) in wanted {
+        if have.iter().any(|(i, _, _)| *i == id) {
+            continue;
+        }
+        // A built-in harness keeps its place: a plugin does not take its id.
+        if crate::engine::registry::BUILT_IN
+            .iter()
+            .any(|e| e.id() == id)
+        {
+            log::warn!(
+                "plugin {owner}: its harness {id} has the id of a harness of the app, left aside"
+            );
+            continue;
+        }
+        let engine: &'static ProcessEngine = Box::leak(Box::new(ProcessEngine::described(
+            rt.clone(),
+            &owner,
+            decl.clone(),
+            escouade_dir,
+        )));
+        crate::engine::registry::register(engine);
+        have.push((id, owner, decl));
+    }
+    have.iter().map(|(id, _, _)| *id).collect()
+}
+
+/// `sync_described` from the plugins installed: those that loaded and are on for the app.
+pub fn sync(rt: &Arc<Runtime>, plugins: &super::Plugins) -> Vec<EngineId> {
+    let on = |v: &super::PluginView| v.state == super::State::Ready && v.choices.enabled;
+    let list = plugins.list(crate::i18n::Lang::En);
+    let acp_on = list.iter().any(|v| v.id == super::builtin::ACP && on(v));
+    let described: Vec<(String, serde_json::Map<String, Value>)> = list
+        .iter()
+        .filter(|v| on(v))
+        .filter_map(|v| Some((v.id.clone(), v.manifest.as_ref()?.contributes.clone())))
+        .collect();
+    sync_described(rt, acp_on, &described, plugins.app_dir())
+}
+
 /// A harness whose plugin runs in its own process.
 pub struct ProcessEngine {
     rt: Arc<Runtime>,
+    /// The plugin that serves it: its own, or `dev.escouade.acp` for a harness a manifest describes.
     plugin: String,
+    /// The plugin whose manifest declares it.
+    owner: String,
+    /// It is described (`acp`), served by the generic ACP plugin: the description goes with each agent.
+    described: bool,
+    install: Install,
+    update_command: &'static str,
+    writer: &'static str,
     decl: proto::HarnessDecl,
     id: EngineId,
     name: &'static str,
@@ -136,8 +220,8 @@ impl ProcessEngine {
                 .modes
                 .iter()
                 .map(|m| ModeCap {
-                    id: leak(m),
-                    meaning: None,
+                    id: leak(&m.id),
+                    meaning: m.meaning.as_ref().map(|t| t.get(crate::i18n::ui().tag())),
                 })
                 .collect(),
             effort: !decl.efforts.is_empty(),
@@ -173,9 +257,18 @@ impl ProcessEngine {
             .collect();
         let efforts: Vec<&'static str> = decl.efforts.iter().map(|e| leak(e)).collect();
         let version_args: Vec<&'static str> = decl.version_args.iter().map(|a| leak(a)).collect();
+        let install = decl.install.clone().unwrap_or_default();
         Self {
             rt,
             plugin: plugin.to_string(),
+            owner: plugin.to_string(),
+            described: false,
+            install: Install {
+                windows: leak(&install.windows),
+                unix: leak(&install.unix),
+            },
+            update_command: leak(decl.update_command.as_deref().unwrap_or_default()),
+            writer: leak(decl.writer.as_deref().unwrap_or(&decl.name)),
             id: EngineId::new(&decl.id),
             name: leak(&decl.name),
             speaker: leak(decl.speaker.as_deref().unwrap_or(&decl.name)),
@@ -197,9 +290,41 @@ impl ProcessEngine {
         }
     }
 
+    /// The harness `decl` the plugin `owner` describes (`acp`, PLG-6), served by the generic ACP plugin: its id is
+    /// `plugin:<owner>:<harness>` (the bare one for a plugin of Escouade's own, whose harness keeps the id it had in
+    /// the core), and its program is looked for by its names alone unless its plugin is Escouade's (a declarative
+    /// plugin names no path to run).
+    pub fn described(
+        rt: Arc<Runtime>,
+        owner: &str,
+        mut decl: proto::HarnessDecl,
+        escouade_dir: &Path,
+    ) -> Self {
+        let first = owner.starts_with("dev.escouade.");
+        if !first {
+            decl.locate.program = None;
+        }
+        let id = described_id(owner, &decl.id);
+        let mut e = Self::new(rt, super::builtin::ACP, decl, escouade_dir);
+        e.owner = owner.to_string();
+        e.described = true;
+        e.id = id;
+        e
+    }
+
     /// The plugin it is served by.
     pub fn plugin(&self) -> &str {
         &self.plugin
+    }
+
+    /// The plugin whose manifest declares it.
+    pub fn owner(&self) -> &str {
+        &self.owner
+    }
+
+    /// What the plugin is told of the harness with each agent: its description, for the generic ACP plugin.
+    fn description(&self) -> Option<proto::HarnessDecl> {
+        self.described.then(|| self.decl.clone())
     }
 
     async fn call<T: serde::de::DeserializeOwned>(
@@ -221,6 +346,7 @@ impl ProcessEngine {
         let launch: proto::Launch = self.call(method::TERMINAL_LAUNCH, &params).await?;
         check_launch(
             self.name,
+            super::builtin::is_builtin(&self.plugin),
             params.escouade.as_ref().map(|g| g.token.as_str()),
             &params.fence,
             params.read_only,
@@ -261,18 +387,28 @@ impl ProcessEngine {
     }
 }
 
-/// `path`, or under Windows the same with `.exe` when that is the file.
-fn with_exe(path: &Path) -> Option<PathBuf> {
-    if path.is_file() {
-        return Some(path.to_path_buf());
+/// The id of the harness `harness` the plugin `owner` describes.
+pub fn described_id(owner: &str, harness: &str) -> EngineId {
+    if owner.starts_with("dev.escouade.") {
+        EngineId::new(harness)
+    } else {
+        EngineId::new(&format!("plugin:{owner}:{harness}"))
     }
+}
+
+/// `path`, or under Windows the same with `.exe` (or `.cmd`, the launcher npm leaves) when that is a file.
+fn with_exe(path: &Path) -> Option<PathBuf> {
+    // Under Windows the `.exe` or `.cmd` first: a file without extension beside them is a shell script, which
+    // Windows does not run.
     if cfg!(windows) && path.extension().is_none() {
-        let exe = path.with_extension("exe");
-        if exe.is_file() {
-            return Some(exe);
+        for ext in ["exe", "cmd"] {
+            let p = path.with_extension(ext);
+            if p.is_file() {
+                return Some(p);
+            }
         }
     }
-    None
+    path.is_file().then(|| path.to_path_buf())
 }
 
 /// What a call that got no answer is in the core.
@@ -287,9 +423,12 @@ fn down(name: &str, e: CallError) -> anyhow::Error {
 }
 
 /// The checks of a launch's description (`engine/launch`, `terminal/launch`): what the core guarantees whatever the
-/// plugin. Answers why it is refused.
+/// plugin. Answers why it is refused. `builtin`: the plugin is one the app gives, the only one whose word that it holds
+/// the fence itself (`fence_by_client`, the generic ACP plugin) is taken; any other's launch must spell the fence.
+#[allow(clippy::too_many_arguments)]
 pub fn check_launch(
     name: &str,
+    builtin: bool,
     token: Option<&str>,
     fence: &[String],
     read_only: bool,
@@ -310,7 +449,11 @@ pub fn check_launch(
                 || launch.env.iter().any(|v| v.value.contains(p))
                 || launch.files.iter().any(|f| f.text.contains(p))
         };
-        if !launch.fence_applied || !fence.iter().all(|p| said(p)) {
+        // Held by the plugin on what its harness reads and writes through it (ACP's `fs/*`), or by the launch, every
+        // path in it.
+        let held = (builtin && launch.fence_by_client)
+            || (launch.fence_applied && fence.iter().all(|p| said(p)));
+        if !held {
             return Err(tr!(
                 "Le plugin de {name} n’applique pas la clôture des projets privés : l’agent ne démarre pas.",
                 "The plugin of {name} doesn’t apply the fence of private projects: the agent doesn’t start."
@@ -423,13 +566,19 @@ impl Engine for ProcessEngine {
         )
     }
     fn update_command(&self) -> &'static str {
-        ""
+        self.update_command
     }
     fn version_args(&self) -> &'static [&'static str] {
         self.version_args
     }
     fn caps(&self) -> EngineCaps {
-        self.caps.clone()
+        let mut caps = self.caps.clone();
+        // The meanings in the app's language of now.
+        let lang = crate::i18n::ui().tag();
+        for (m, d) in caps.modes.iter_mut().zip(&self.decl.caps.modes) {
+            m.meaning = d.meaning.as_ref().map(|t| t.get(lang));
+        }
+        caps
     }
     fn accounts(&self) -> AccountStore {
         AccountStore::ConfigDir {
@@ -440,10 +589,7 @@ impl Engine for ProcessEngine {
         None
     }
     fn install(&self) -> Install {
-        Install {
-            windows: "",
-            unix: "",
-        }
+        self.install
     }
     fn models(&self) -> Vec<ModelDecl> {
         self.models.clone()
@@ -472,6 +618,8 @@ impl Engine for ProcessEngine {
             effort: spawn.effort.clone(),
             mode: spawn.mode.clone(),
             pending: Vec::new(),
+            described: self.description(),
+            lang: crate::i18n::ui().tag().to_string(),
         };
         let (stdin_tx, stdin_rx) = mpsc::unbounded_channel();
         let (control_tx, control_rx) = mpsc::unbounded_channel();
@@ -564,7 +712,7 @@ impl Engine for ProcessEngine {
     }
 
     fn writer(&self, _: Weight) -> &'static str {
-        self.name
+        self.writer
     }
     fn grant_file(&self, _: &str, _: &str) -> Option<Vec<u8>> {
         None
@@ -779,6 +927,8 @@ impl ProcessEngineProcess {
             read_only: spawn.read_only,
             program: spawn.program.describe(),
             home: home.clone(),
+            described: self.attach.lock().described.clone(),
+            lang: crate::i18n::ui().tag().to_string(),
         };
         let v = self
             .rt
@@ -788,6 +938,7 @@ impl ProcessEngineProcess {
         let launch: proto::Launch = serde_json::from_value(v)?;
         check_launch(
             self.name,
+            super::builtin::is_builtin(&self.plugin),
             token.as_deref(),
             &fence,
             spawn.read_only,
@@ -1180,10 +1331,12 @@ impl EngineProcess for ProcessEngineProcess {
     }
     fn answer_permission(&self, request_id: &str, answer: PermissionAnswer) -> Result<()> {
         self.answered(request_id);
-        let (allow, always, input, message) = match answer {
-            PermissionAnswer::Allow { input, .. } => (true, false, input, None),
-            PermissionAnswer::Always { input, .. } => (true, true, input, None),
-            PermissionAnswer::Deny { message, .. } => (false, false, Value::Null, Some(message)),
+        let (allow, always, input, message, resume) = match answer {
+            PermissionAnswer::Allow { input, resume, .. } => (true, false, input, None, resume),
+            PermissionAnswer::Always { input, .. } => (true, true, input, None, None),
+            PermissionAnswer::Deny { message, .. } => {
+                (false, false, Value::Null, Some(message), None)
+            }
         };
         let a = proto::AnswerPermission {
             agent: self.agent(),
@@ -1192,6 +1345,7 @@ impl EngineProcess for ProcessEngineProcess {
             always,
             input,
             message,
+            resume,
         };
         self.send_ordered(method::ANSWER_PERMISSION, serde_json::to_value(a)?)
     }

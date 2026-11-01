@@ -245,6 +245,7 @@ fn hook(h: Hook) -> HookAnswer {
                 interrupted: false,
                 limited: None,
                 usage: TurnUsage::default(),
+                error: None,
             }],
             answer: None,
         },
@@ -272,10 +273,12 @@ impl Agent {
             "thinking" => items.push(Item::Thinking {
                 text: s("text").unwrap_or_default(),
                 parent,
+                id: None,
             }),
             "say" => items.push(Item::Text {
                 text: s("text").unwrap_or_default(),
                 parent,
+                id: None,
             }),
             "call" => {
                 let (Some(id), Some(tool)) = (s("id"), s("tool")) else {
@@ -316,6 +319,7 @@ impl Agent {
                     id,
                     output: s("output").unwrap_or_default(),
                     error,
+                    result: Value::Null,
                 });
                 if let (Some(path), false) = (touched, error) {
                     items.push(Item::Touched { path });
@@ -323,7 +327,17 @@ impl Agent {
             }
             "ask" => {
                 if let (Some(request), Some(call)) = (s("request"), s("call")) {
-                    items.push(Item::Permission { request, call });
+                    items.push(Item::Permission {
+                        request,
+                        call,
+                        tool: None,
+                        input: None,
+                        description: None,
+                        reason: None,
+                        diff: None,
+                        can_always: false,
+                        parent: None,
+                    });
                 }
             }
             "question" => {
@@ -356,6 +370,7 @@ impl Agent {
                         output: n("output"),
                         ..TurnUsage::default()
                     },
+                    error: None,
                 });
             }
             // The scenario « plantage »: the plugin crashes in the middle of a turn, once (its flag written) or each

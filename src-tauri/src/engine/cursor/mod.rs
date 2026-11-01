@@ -281,21 +281,14 @@ pub(crate) fn catalog(told: &[ToldOf]) -> Vec<ToldModel> {
 
 /// What `session/new` and `session/load` are given of MCP servers: Escouade's, as the agent (its
 /// address and token; the token in a header, on the process's input, never its command line), or
-/// none. An entry of the user's of that name is replaced by it (tried).
+/// none. The ACP client's (`escouade_acp`, PLG-6), which Mistral Vibe and Gemini CLI share.
 pub(crate) fn mcp_servers(escouade: Option<&(String, String)>) -> Value {
-    match escouade {
-        Some((url, token)) => json!([{
-            "type": "http", "name": mcp::SERVER, "url": url,
-            "headers": [{ "name": "Authorization", "value": format!("Bearer {token}") }],
-        }]),
-        None => json!([]),
-    }
+    escouade_acp::mcp_servers(escouade.map(|(u, t)| (u.as_str(), t.as_str())))
 }
 
-/// The instructions added to an agent (a ticket's protocol), as they go before its first message:
-/// ACP has no system message, and `session/load` keeps them (tried).
+/// The instructions added to an agent, as they go before its first message (`escouade_acp`).
 pub(crate) fn preamble(instructions: &str) -> String {
-    format!("<instructions>\n{}\n</instructions>", instructions.trim())
+    escouade_acp::preamble(instructions)
 }
 
 /// What was said in the agent's interface (« Vue Cursor », `handover::relay`), as it goes before its
@@ -309,17 +302,9 @@ pub(crate) fn relayed(relay: &str) -> String {
     )
 }
 
-/// The option of a permission (`session/request_permission`) of `kind` (`allow_once`,
-/// `allow_always`, `reject_once`), by the id Cursor gave it.
+/// The option of a permission (`session/request_permission`) of `kind` (`escouade_acp`).
 pub(crate) fn option_of(params: &Value, kind: &str) -> String {
-    params["options"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .find(|o| o["kind"] == kind)
-        .and_then(|o| o["optionId"].as_str())
-        .map(str::to_string)
-        .unwrap_or_else(|| kind.replace('_', "-"))
+    escouade_acp::option_of(params, kind)
 }
 
 /// The answer to `cursor/ask_question` (its `params`) from a card's `answers` (by question, its
@@ -362,36 +347,10 @@ pub(crate) fn question_outcome(params: &Value, answers: &Value) -> Value {
     }
 }
 
-/// « Projet privé » (ESC-140): whether the permission Cursor asks (`params` of
-/// `session/request_permission`) names a path of `fence` (as Cursor names them): its command, its
-/// title, the files it writes or reads. Cursor reads without asking, and a command can reach a path
-/// it does not name: a guard of Escouade's, not a barrier.
+/// « Projet privé » (ESC-140): whether the permission an ACP agent asks names a path of `fence`
+/// (`escouade_acp::fenced`): a guard of Escouade's, not a barrier.
 pub(crate) fn fenced(params: &Value, fence: &[String]) -> bool {
-    if fence.is_empty() {
-        return false;
-    }
-    let tc = &params["toolCall"];
-    let mut texts: Vec<&str> = tc["title"].as_str().into_iter().collect();
-    for v in tc["rawInput"]
-        .as_object()
-        .into_iter()
-        .flatten()
-        .map(|(_, v)| v)
-    {
-        texts.extend(v.as_str());
-    }
-    for k in ["content", "locations"] {
-        texts.extend(
-            tc[k]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(|c| c["path"].as_str()),
-        );
-    }
-    texts
-        .iter()
-        .any(|t| fence.iter().any(|p| crate::fence::names(t, p)))
+    escouade_acp::fenced(params, fence)
 }
 
 /// Refused: the ACP of the process is not the one Escouade speaks.

@@ -37,6 +37,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - GitHub is a plugin shipped with Escouade, listed under “Shipped with Escouade”: its issues in the Kanban, its pull requests, CI, reviews and deployments run apart, on the same account, and nothing changes in use. Switched off or stopped, it says so on the agent’s card and in Settings › Integrations, and the pull requests read last stay.
 - Gitea, Forgejo and Codeberg have a plugin shipped with Escouade: draft pull requests, merge, auto-merge on a protected branch, statuses, Actions logs, reviews and threads. They have no deployments, and the Actions logs and reruns depend on the instance’s version: the app says so instead of failing.
 - Trello is a plugin shipped with Escouade: it shows in the Plugins view under “Shipped with Escouade”, can be turned off for the app or for a project, and the sync says when it is not answering. Your Trello account and linked projects stay as they are.
+- An agent that speaks ACP, such as Goose, becomes a harness of Escouade through a plugin without code: its manifest describes it, and Escouade launches it, speaks to it and shows its conversation, its permissions with their diff and the end of its turns. The Goose plugin is the first; its agents stay, “harness missing”, when its plugin is turned off.
 
 ### Removed
 

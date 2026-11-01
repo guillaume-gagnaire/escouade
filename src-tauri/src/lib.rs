@@ -139,6 +139,8 @@ mod plugins;
 #[cfg(test)]
 mod plugins_accounts_tests;
 #[cfg(test)]
+mod plugins_acp_tests;
+#[cfg(test)]
 mod plugins_adapters_tests;
 #[cfg(test)]
 mod plugins_bench_tests;
@@ -657,6 +659,7 @@ pub fn run() {
                 commands::account_status,
                 commands::account_models_refresh,
                 commands::engines_found_now,
+                commands::engines_declared,
                 commands::account_key,
                 commands::account_login,
                 commands::set_agent_view,

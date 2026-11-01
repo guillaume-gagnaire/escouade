@@ -174,11 +174,10 @@ pub(crate) const DEFAULT: &str = "auto";
 const MODELS: [(&str, &str); 1] = [(DEFAULT, "Auto")];
 
 /// What the first message tells the model of its questions: Gemini has no tool to ask in ACP.
-pub(crate) const QUESTIONS: &str = "<escouade>\nYou have no tool to ask the user a question here. When you need the user to choose or answer before going on, end your turn with one block, and nothing after it:\n<escouade_question>{\"questions\": [{\"question\": \"…\", \"options\": [\"…\", \"…\"], \"multiSelect\": false}]}</escouade_question>\nEscouade shows it to the user and sends the answers as the next message.\n</escouade>";
+pub(crate) const QUESTIONS: &str = escouade_acp::questions::QUESTIONS;
 
 /// The tags of a question's block.
-pub(crate) const QUESTION_OPEN: &str = "<escouade_question>";
-pub(crate) const QUESTION_CLOSE: &str = "</escouade_question>";
+pub(crate) const QUESTION_OPEN: &str = escouade_acp::questions::OPEN;
 
 /// How Gemini says it changed its mode: a text of its own (« [MODE_UPDATE] default »).
 pub(crate) const MODE_UPDATE: &str = "[MODE_UPDATE] ";
@@ -421,61 +420,13 @@ impl QuestionFilter {
 /// Cursor's `cursor/ask_question` gives them, under the call `call`; None for a block that is not
 /// questions.
 pub(crate) fn question_params(call: &str, block: &str) -> Option<Value> {
-    let inner = block
-        .trim()
-        .strip_prefix(QUESTION_OPEN)?
-        .split(QUESTION_CLOSE)
-        .next()?
-        .trim();
-    let inner = inner
-        .trim_start_matches("```json")
-        .trim_start_matches("```")
-        .trim_end_matches("```")
-        .trim();
-    let parsed: Value = serde_json::from_str(inner).ok()?;
-    let list = match &parsed {
-        Value::Array(_) => &parsed,
-        _ => &parsed["questions"],
-    };
-    let questions: Vec<Value> = list
-        .as_array()?
-        .iter()
-        .enumerate()
-        .filter_map(|(i, q)| {
-            let text = q["question"].as_str()?.trim();
-            if text.is_empty() {
-                return None;
-            }
-            let options: Vec<Value> = q["options"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(|o| o.as_str().or(o["label"].as_str()))
-                .map(|l| json!({ "id": l, "label": l }))
-                .collect();
-            Some(json!({
-                "id": format!("q{i}"), "prompt": text, "options": options,
-                "allowMultiple": q["multiSelect"] == true,
-            }))
-        })
-        .collect();
-    (!questions.is_empty()).then(|| json!({ "toolCallId": call, "questions": questions }))
+    escouade_acp::questions::question_params(call, block)
 }
 
 /// The message that gives the model the user's answers to the questions `params` (a card's
 /// `answers`, by question).
 pub(crate) fn answers_message(params: &Value, answers: &Value) -> String {
-    let lines: Vec<String> = params["questions"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .map(|q| {
-            let text = q["prompt"].as_str().unwrap_or_default();
-            let a = answers[text].as_str().unwrap_or_default().trim();
-            format!("- {text} → {a}")
-        })
-        .collect();
-    format!("The user answered your questions:\n{}", lines.join("\n"))
+    escouade_acp::questions::answers_message(params, answers)
 }
 
 /// The tools of Gemini that read, search or write files: those the rules of a private project
@@ -1187,7 +1138,7 @@ impl Engine for Gemini {
         env.push((TRUST.0.into(), TRUST.1.into()));
         let mut instructions = spawn.append_prompt.unwrap_or_default();
         if !instructions.trim().is_empty() {
-            instructions = crate::engine::cursor::preamble(&instructions);
+            instructions = escouade_acp::preamble(&instructions);
             instructions.push_str("\n\n");
         }
         instructions.push_str(QUESTIONS);

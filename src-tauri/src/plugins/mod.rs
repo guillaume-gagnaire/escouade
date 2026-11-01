@@ -222,13 +222,24 @@ pub fn project_settings(
 }
 
 /// What a plugin may do, a word each, the strongest first (§3.4): `run` (it runs a program),
-/// `decide` (it decides the agents' permissions), then `commands:<c>`, `events:<e>`,
-/// `network:<host>` and `secrets:<key>`.
+/// `harness:<program> <args>` (an ACP harness it describes, which its agents run: PLG-6), `decide`
+/// (it decides the agents' permissions), then `commands:<c>`, `events:<e>`, `network:<host>` and
+/// `secrets:<key>`.
 pub fn asks(m: &Manifest) -> Vec<String> {
     let p = &m.permissions;
     let mut out = Vec::new();
     if m.run.is_some() {
         out.push("run".to_string());
+    }
+    for h in harness::harnesses_of(&m.contributes) {
+        if let Some(acp) = &h.acp {
+            let program = h.locate.names.first().cloned().unwrap_or(h.id);
+            let line = std::iter::once(program)
+                .chain(acp.args.iter().cloned())
+                .collect::<Vec<_>>()
+                .join(" ");
+            out.push(format!("harness:{line}"));
+        }
     }
     if p.decide {
         out.push("decide".to_string());
@@ -247,7 +258,7 @@ pub fn asks(m: &Manifest) -> Vec<String> {
 /// Whether the permission `word` can be taken back: all but the program itself (switched off
 /// with the plugin).
 pub fn revocable(word: &str) -> bool {
-    word != "run"
+    word != "run" && !word.starts_with("harness:")
 }
 
 /// `m` without the permissions of `revoked`: what its process is given.

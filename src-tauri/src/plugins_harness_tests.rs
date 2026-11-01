@@ -358,9 +358,9 @@ fn launch(args: &[&str]) -> proto::Launch {
 #[test]
 fn the_core_refuses_a_launch_with_the_token_among_its_arguments() {
     let ok = launch(&["minimal-harness"]);
-    assert!(check_launch("Minimal", Some("tok-123"), &[], false, None, &ok).is_ok());
+    assert!(check_launch("Minimal", true, Some("tok-123"), &[], false, None, &ok).is_ok());
     let bad = launch(&["minimal-harness", "--token=tok-123"]);
-    let why = check_launch("Minimal", Some("tok-123"), &[], false, None, &bad).unwrap_err();
+    let why = check_launch("Minimal", true, Some("tok-123"), &[], false, None, &bad).unwrap_err();
     assert!(why.contains("jeton"), "{why}");
     let mut in_env = ok.clone();
     in_env.env.push(EnvVar {
@@ -368,7 +368,7 @@ fn the_core_refuses_a_launch_with_the_token_among_its_arguments() {
         value: "tok-123".into(),
     });
     assert!(
-        check_launch("Minimal", Some("tok-123"), &[], false, None, &in_env).is_ok(),
+        check_launch("Minimal", true, Some("tok-123"), &[], false, None, &in_env).is_ok(),
         "a variable may hold it"
     );
 }
@@ -381,9 +381,9 @@ fn the_core_refuses_a_launch_that_does_not_apply_the_fence() {
     ];
     let mut not_said = launch(&["minimal-harness"]);
     not_said.fence_applied = false;
-    assert!(check_launch("Minimal", None, &fence, false, None, &not_said).is_err());
+    assert!(check_launch("Minimal", true, None, &fence, false, None, &not_said).is_err());
     let one = launch(&["minimal-harness", "--deny", "C:/projets/prive"]);
-    let why = check_launch("Minimal", None, &fence, false, None, &one).unwrap_err();
+    let why = check_launch("Minimal", true, None, &fence, false, None, &one).unwrap_err();
     assert!(why.contains("clôture"), "a refused path left out: {why}");
     let home = if cfg!(windows) {
         r"C:\agents\a1"
@@ -399,19 +399,37 @@ fn the_core_refuses_a_launch_that_does_not_apply_the_fence() {
         text: r#"{"deny":["C:/projets/autre"]}"#.into(),
     });
     assert!(
-        check_launch("Minimal", None, &fence, false, Some(home), &all).is_ok(),
+        check_launch("Minimal", true, None, &fence, false, Some(home), &all).is_ok(),
         "spelled in its arguments and its files"
     );
+}
+
+/// The word of a plugin that it holds the fence itself, on the files its harness reads and writes through it
+/// (`fence_by_client`), is taken from a plugin the app gives only (the generic ACP plugin): a plugin of anyone else's
+/// that says it keeps the rule, the fence applied and each of its paths in the launch.
+#[test]
+fn only_a_plugin_the_app_gives_may_hold_the_fence_itself() {
+    let fence = vec!["C:/projets/prive".to_string()];
+    let mut by_client = launch(&["agent", "acp"]);
+    by_client.fence_applied = false;
+    by_client.fence_by_client = true;
+    assert!(check_launch("ACP", true, None, &fence, false, None, &by_client).is_ok());
+    let why = check_launch("Tiers", false, None, &fence, false, None, &by_client).unwrap_err();
+    assert!(why.contains("clôture"), "{why}");
+    // Spelled in its launch, as any plugin's, it goes.
+    let mut spelled = launch(&["agent", "--deny", "C:/projets/prive"]);
+    spelled.fence_by_client = true;
+    assert!(check_launch("Tiers", false, None, &fence, false, None, &spelled).is_ok());
 }
 
 #[test]
 fn the_core_refuses_a_launch_that_does_not_hold_read_only() {
     let plain = launch(&["minimal-harness"]);
-    let why = check_launch("Minimal", None, &[], true, None, &plain).unwrap_err();
+    let why = check_launch("Minimal", true, None, &[], true, None, &plain).unwrap_err();
     assert!(why.contains("lecture seule"), "{why}");
     let mut held = plain.clone();
     held.read_only = true;
-    assert!(check_launch("Minimal", None, &[], true, None, &held).is_ok());
+    assert!(check_launch("Minimal", true, None, &[], true, None, &held).is_ok());
 }
 
 #[test]
@@ -432,6 +450,7 @@ fn the_core_refuses_a_file_written_outside_the_agent_s_own_folder() {
     let inside = Path::new(home).join("config.json");
     assert!(check_launch(
         "M",
+        true,
         None,
         &[],
         false,
@@ -442,6 +461,7 @@ fn the_core_refuses_a_file_written_outside_the_agent_s_own_folder() {
     let above = Path::new(home).join("..").join("a2").join("config.json");
     assert!(check_launch(
         "M",
+        true,
         None,
         &[],
         false,
@@ -451,6 +471,7 @@ fn the_core_refuses_a_file_written_outside_the_agent_s_own_folder() {
     .is_err());
     assert!(check_launch(
         "M",
+        true,
         None,
         &[],
         false,
@@ -458,7 +479,16 @@ fn the_core_refuses_a_file_written_outside_the_agent_s_own_folder() {
         &file(&inside.to_string_lossy())
     )
     .is_err());
-    assert!(check_launch("M", None, &[], false, Some(home), &file("config.json")).is_err());
+    assert!(check_launch(
+        "M",
+        true,
+        None,
+        &[],
+        false,
+        Some(home),
+        &file("config.json")
+    )
+    .is_err());
 }
 
 #[tokio::test(flavor = "multi_thread")]

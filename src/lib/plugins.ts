@@ -230,6 +230,9 @@ export function askOf(word: string, m: Manifest | null, lang: string): Ask {
       return { word, icon: 'term', text: t('plugins.ask.run'), detail: m?.run?.command ?? '', strong: true, red: false };
     case 'decide':
       return { word, icon: 'shield', text: t('plugins.ask.decide'), detail: '', strong: true, red: true };
+    case 'harness':
+      // A harness it describes (PLG-6): the program of the user's machine its agents run, with its arguments.
+      return { word, icon: 'term', text: t('plugins.ask.harness'), detail: what, strong: true, red: false };
     case 'commands':
       return { word, icon: 'bash', text: t('plugins.ask.commands'), detail: what, strong: false, red: false };
     case 'events':

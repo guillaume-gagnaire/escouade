@@ -37,6 +37,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - GitHub est un plugin livré avec Escouade, rangé dans « Livrés avec Escouade » : ses issues dans le Kanban, ses PR, sa CI, ses relectures et ses déploiements tournent à part, sur le même compte, et rien ne change à l’usage. Coupé ou arrêté, il le dit sur la carte de l’agent et dans Réglages › Intégrations, et les PR lues en dernier restent.
 - Gitea, Forgejo et Codeberg ont leur plugin livré avec Escouade : PR en brouillon, merge, auto-merge sur une branche protégée, statuts, journaux des Actions, relectures et fils. Les déploiements n’existent pas chez eux, et les journaux et la relance des Actions dépendent de la version de l’instance : l’app le dit au lieu d’échouer.
 - Trello est un plugin livré avec Escouade : il se voit dans la vue Plugins, sous « Livrés avec Escouade », s’arrête pour l’app ou pour un projet, et la synchronisation dit quand il ne répond pas. Ton compte Trello et tes projets liés restent tels quels.
+- Un agent qui parle ACP, comme Goose, devient un harness d’Escouade par un plugin sans code : son manifeste le décrit, et Escouade le lance, lui parle et montre sa conversation, ses permissions avec leur diff et ses fins de tour. Le plugin Goose est le premier ; ses agents restent, « harness absent », quand son plugin est désactivé.
 
 ### Retiré
 

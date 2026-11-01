@@ -444,6 +444,7 @@ export const en: Catalog = {
       'plugins/sdk': 'The SDK',
       'plugins/testing': 'Testing a plugin',
       'plugins/themes': 'Themes',
+      'plugins/harnesses': 'A described ACP harness',
       'plugins/publishing': 'Publishing on the store',
       'plugins/store-mcp': 'The store from an agent',
       'plugins/security': 'Plugin security',

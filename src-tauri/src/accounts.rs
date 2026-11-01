@@ -2458,6 +2458,15 @@ impl<R: Runtime> Core<R> {
             .collect()
     }
 
+    /// The harnesses the plugins on describe (PLG-6), put in the registry or taken out of it: at the start, and after
+    /// a plugin is installed, removed, turned on or off. Answers whether the registry changed.
+    pub fn sync_harnesses(&self) -> bool {
+        let before: Vec<_> = engine::registry::all().iter().map(|e| e.id()).collect();
+        crate::plugins::harness::sync(&self.plugin_runtime, &self.plugins);
+        let now: Vec<_> = engine::registry::all().iter().map(|e| e.id()).collect();
+        before != now
+    }
+
     /// Whether the account is signed in, and with which email.
     pub async fn claude_account_status(&self, id: &str) -> Result<AccountStatus> {
         let account = self.claude_account(id)?;

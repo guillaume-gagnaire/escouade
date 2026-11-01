@@ -439,7 +439,7 @@ describe('the page of the example plugins', () => {
     const examples = readdirSync(new URL('plugins/', REPO), { withFileTypes: true })
       .filter((d) => d.isDirectory() && existsSync(new URL(`plugins/${d.name}/escouade-plugin.json`, REPO)))
       .map((d) => `plugins/${d.name}/escouade-plugin.json`);
-    expect(examples.length).toBe(4);
+    expect(examples.length).toBe(5);
     for (const lang of LANGS) {
       const shown = blocks(lang).map((b) => b.path);
       for (const manifest of examples) expect(shown, lang).toContain(manifest);

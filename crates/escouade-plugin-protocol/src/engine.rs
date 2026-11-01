@@ -116,6 +116,13 @@ pub struct LaunchParams {
     /// The folder of the agent's own, where the files of the launch may be written; None: no file may be.
     #[serde(default)]
     pub home: Option<String>,
+    /// For a plugin that serves the harnesses other plugins describe (`dev.escouade.acp`, PLG-6): the harness as its
+    /// manifest declares it (`HarnessDecl`, its `acp` included). None for a plugin's own harness.
+    #[serde(default)]
+    pub described: Option<HarnessDecl>,
+    /// The language of the app (`fr`, `en`), for the lines the plugin writes in the conversation.
+    #[serde(default)]
+    pub lang: String,
 }
 
 /// A variable of a launch.
@@ -158,6 +165,11 @@ pub struct Launch {
     /// The harness is held read-only by this launch.
     #[serde(default)]
     pub read_only: bool,
+    /// The fence of `LaunchParams::fence` is held by the plugin itself, on the reads and writes the harness makes
+    /// through it (ACP's `fs/read_text_file`, `fs/write_text_file` and the permissions it asks), not by the launch:
+    /// the core then takes the launch without the paths in it (PLG-6).
+    #[serde(default)]
+    pub fence_by_client: bool,
     /// The first lines written on its input, once it started.
     #[serde(default)]
     pub writes: Vec<String>,
@@ -183,6 +195,12 @@ pub struct Attach {
     /// The requests of the harness waiting for the user's answer, by their ids.
     #[serde(default)]
     pub pending: Vec<String>,
+    /// As `LaunchParams::described`.
+    #[serde(default)]
+    pub described: Option<HarnessDecl>,
+    /// As `LaunchParams::lang`.
+    #[serde(default)]
+    pub lang: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -239,6 +257,9 @@ pub struct AnswerPermission {
     /// What the agent is told, when refused.
     #[serde(default)]
     pub message: Option<String>,
+    /// A plan approved: the mode its work goes on in (the one the agent was in before Plan).
+    #[serde(default)]
+    pub resume: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -281,18 +302,34 @@ pub enum Item {
         #[serde(default)]
         session: Option<String>,
     },
-    /// Its text; a subagent's under `parent`.
+    /// Its text; a subagent's under `parent`. With `id`, the whole of the text streamed under that id (`Delta`).
     #[serde(rename_all = "camelCase")]
     Text {
         text: String,
         #[serde(default)]
         parent: Option<String>,
+        #[serde(default)]
+        id: Option<String>,
     },
     Thinking {
         text: String,
         #[serde(default)]
         parent: Option<String>,
+        #[serde(default)]
+        id: Option<String>,
     },
+    /// A piece of a text (or a reasoning) as it is written, under `id`: the first one makes its item, the others add to
+    /// it; `Text` (`Thinking`) of the same id ends it.
+    Delta {
+        id: String,
+        text: String,
+        #[serde(default)]
+        thinking: bool,
+        #[serde(default)]
+        parent: Option<String>,
+    },
+    /// The model a subagent runs on, under its call.
+    Subagent { call: String, model: String },
     /// A tool called, named as Escouade names them (Claude Code's names: `Bash`, `Edit`, `Task`…).
     Tool {
         id: String,
@@ -302,33 +339,79 @@ pub enum Item {
         #[serde(default)]
         parent: Option<String>,
     },
-    /// Its result.
+    /// What is known later of a call: its input (an edit's file), or the name it turns out to have (`Write` for a
+    /// file added).
+    ToolInput {
+        id: String,
+        #[serde(default)]
+        name: Option<String>,
+        #[serde(default)]
+        input: Value,
+    },
+    /// Its result; `result` the structured one Claude Code gives (`{ filePath, structuredPatch }` of an edit,
+    /// `{ stdout, stderr }` of a command), which shows its diff.
     ToolDone {
         id: String,
         #[serde(default)]
         output: String,
         #[serde(default)]
         error: bool,
+        #[serde(default)]
+        result: Value,
     },
     /// A file it changed (the effect `files_changed`).
     Touched { path: String },
-    /// The approval of the call `call`, asked as the request `request`.
-    Permission { request: String, call: String },
+    /// The approval of the call `call`, asked as the request `request`: the call's tool and input unless `tool`
+    /// says another (`ExitPlanMode` and its `plan`), what the card says of it (`description`, `reason`), the
+    /// write it would make (`diff`, shown on the card), and whether « Pour cet agent » is offered.
+    #[serde(rename_all = "camelCase")]
+    Permission {
+        request: String,
+        call: String,
+        #[serde(default)]
+        tool: Option<String>,
+        #[serde(default)]
+        input: Option<Value>,
+        #[serde(default)]
+        description: Option<String>,
+        #[serde(default)]
+        reason: Option<String>,
+        #[serde(default)]
+        diff: Option<Diff>,
+        #[serde(default)]
+        can_always: bool,
+        /// The call of the subagent that asks it.
+        #[serde(default)]
+        parent: Option<String>,
+    },
     /// Questions to the user (each `{question, header, multiSelect, options: [{label, description}]}`).
     Question {
         request: String,
         call: String,
         questions: Value,
     },
+    /// The task list of the agent, as Claude Code's `TodoWrite` gives it (`[{ content, status, activeForm }]`),
+    /// for its plan.
+    Todos { todos: Value },
+    /// The harness changed its mode by itself (out of its mode Plan): Escouade's mode it is in now.
+    Mode { mode: String },
     /// The turn is over.
     Turn {
         #[serde(default)]
         interrupted: bool,
-        /// Stopped by the usage limit, which resets then (ms), if told.
-        #[serde(default)]
+        /// Stopped by the usage limit, which resets then (ms), if told: `null` for a limit whose reset is not told,
+        /// left out for none.
+        #[serde(
+            default,
+            deserialize_with = "present",
+            skip_serializing_if = "Option::is_none"
+        )]
         limited: Option<Option<i64>>,
         #[serde(default)]
         usage: TurnUsage,
+        /// It ended in error, and why (a model refused, a key refused).
+        #[serde(default)]
+        error: Option<String>,
     },
     /// A line of the conversation from Escouade or the harness, not the model (`info`, `warning`, `error`).
     Notice {
@@ -345,6 +428,22 @@ pub enum Item {
 
 fn info() -> String {
     "info".into()
+}
+
+/// A field that is there, `null` included (`Some(None)`); left out, it is `None` (`default`).
+fn present<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<i64>>, D::Error> {
+    Ok(Some(Option::<i64>::deserialize(d)?))
+}
+
+/// A write a permission would make: its file, before (None for a file added) and after.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Diff {
+    pub path: String,
+    #[serde(default)]
+    pub old_text: Option<String>,
+    #[serde(default)]
+    pub new_text: String,
 }
 
 /// What `engine/oneShot` is told: one question, no session, no settings of the user's, no MCP server.
@@ -473,6 +572,138 @@ pub struct HarnessDecl {
     /// `{configDir}` and `{projectKey}` (the project's path, every character but a letter or a digit a dash).
     #[serde(default)]
     pub memory: Option<MemoryDecl>,
+    /// A harness that speaks ACP, described: how the plugin `dev.escouade.acp` drives it (PLG-6). A plugin that only
+    /// describes such a harness runs no program of its own.
+    #[serde(default)]
+    pub acp: Option<AcpDecl>,
+    /// How to install it, shown when it is not found.
+    #[serde(default)]
+    pub install: Option<InstallDecl>,
+    /// The command that updates it.
+    #[serde(default)]
+    pub update_command: Option<String>,
+    /// Who writes the texts it drafts (« rédigé par … »), its name when left out.
+    #[serde(default)]
+    pub writer: Option<String>,
+}
+
+/// A text in the languages of the app: one for all, or by language (`{ "fr": "…", "en": "…" }`, English when the
+/// language is missing).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Text {
+    One(String),
+    ByLang(std::collections::BTreeMap<String, String>),
+}
+
+impl Text {
+    /// In `lang`, else English, else any.
+    pub fn get(&self, lang: &str) -> String {
+        match self {
+            Text::One(t) => t.clone(),
+            Text::ByLang(m) => m
+                .get(lang)
+                .or_else(|| m.get("en"))
+                .or_else(|| m.values().next())
+                .cloned()
+                .unwrap_or_default(),
+        }
+    }
+}
+
+/// A mode of Escouade a harness takes (`default`, `plan`, `acceptEdits`, `bypassPermissions`), and what it means
+/// there, as the menu says it. Written as its id alone, or `{ "id", "meaning" }`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ModeDecl {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub meaning: Option<Text>,
+}
+
+impl<'de> Deserialize<'de> for ModeDecl {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Form {
+            Id(String),
+            Full {
+                id: String,
+                #[serde(default)]
+                meaning: Option<Text>,
+            },
+        }
+        Ok(match Form::deserialize(d)? {
+            Form::Id(id) => ModeDecl { id, meaning: None },
+            Form::Full { id, meaning } => ModeDecl { id, meaning },
+        })
+    }
+}
+
+impl From<&str> for ModeDecl {
+    fn from(id: &str) -> Self {
+        ModeDecl {
+            id: id.into(),
+            meaning: None,
+        }
+    }
+}
+
+/// Its installers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct InstallDecl {
+    #[serde(default)]
+    pub windows: String,
+    #[serde(default)]
+    pub unix: String,
+}
+
+/// How an ACP agent is driven (ACP v1: JSON-RPC 2.0, one message a line on its input and output).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpDecl {
+    /// Its arguments (`["acp"]`).
+    #[serde(default)]
+    pub args: Vec<String>,
+    /// Variables of its own (never a secret: a manifest is read by all).
+    #[serde(default)]
+    pub env: std::collections::BTreeMap<String, String>,
+    /// Variables of the app's environment it must not get.
+    #[serde(default)]
+    pub remove_env: Vec<String>,
+    /// It reads and writes files through the client (`fs/read_text_file`, `fs/write_text_file`): the fence of
+    /// private projects is then held there. False: it reads and writes by itself, and no private project is open to it.
+    #[serde(default = "yes")]
+    pub fs: bool,
+    /// The ACP mode (`session/set_mode`) of each mode of Escouade; a mode left out sets none.
+    #[serde(default)]
+    pub modes: std::collections::BTreeMap<String, String>,
+    /// Its ACP mode that changes nothing (`ask`): with it, it holds a read-only launch (a discussion of the Docs tab).
+    #[serde(default)]
+    pub read_only_mode: Option<String>,
+    /// The id of the configuration option that picks the model (`session/set_config_option`); left out, the model
+    /// goes by `session/set_model`.
+    #[serde(default)]
+    pub model_option: Option<String>,
+    /// The extensions of the protocol it speaks beside ACP (`cursor`: `cursor/ask_question`, `cursor/create_plan`,
+    /// `cursor/update_todos`, its subagents).
+    #[serde(default)]
+    pub extensions: Vec<String>,
+    /// It has no tool to ask the user: its first message tells it to end its turn on a block
+    /// `<escouade_question>`, shown as a question's card, the answers sent as the next message (as for Gemini CLI).
+    #[serde(default)]
+    pub questions_in_text: bool,
+    /// The names of its tools that run a subagent (by their title or `rawInput.tool`): shown as Claude Code's `Task`,
+    /// a row of the plan.
+    #[serde(default)]
+    pub subagent_tools: Vec<String>,
+    /// Its tools of the kind `other` under the name Claude Code gives them (`{ "shell": "Bash", "write": "Write" }`),
+    /// by their own name: `_meta.<agent>.toolCall.toolName`, else their title before « · ».
+    #[serde(default)]
+    pub tools: std::collections::BTreeMap<String, String>,
+}
+
+fn yes() -> bool {
+    true
 }
 
 fn version_args() -> Vec<String> {
@@ -507,7 +738,7 @@ impl Default for TestedDecl {
 #[serde(rename_all = "camelCase")]
 pub struct CapsDecl {
     #[serde(default)]
-    pub modes: Vec<String>,
+    pub modes: Vec<ModeDecl>,
     #[serde(default)]
     pub effort: bool,
     #[serde(default)]
@@ -558,7 +789,8 @@ mod tests {
             items.items[0],
             Item::Text {
                 text: "Bonjour".into(),
-                parent: None
+                parent: None,
+                id: None,
             }
         );
         assert_eq!(items.items[1], Item::Unknown);
@@ -584,5 +816,48 @@ mod tests {
         assert_eq!(d.version_args, ["--version"]);
         assert_eq!(d.tested.oldest, "0");
         assert!(!d.caps.read_only && d.models.is_empty());
+        assert!(d.acp.is_none() && d.install.is_none());
+    }
+
+    #[test]
+    fn an_acp_harness_reads_with_its_modes_by_id_or_with_their_meaning() {
+        let d: HarnessDecl = serde_json::from_value(json!({
+            "id": "goose", "name": "Goose",
+            "caps": { "modes": ["default", { "id": "bypassPermissions", "meaning": { "fr": "Tout", "en": "All" } }] },
+            "acp": { "args": ["acp"], "modes": { "bypassPermissions": "auto" } },
+            "install": { "unix": "curl …" },
+        }))
+        .unwrap();
+        assert_eq!(d.caps.modes[0], ModeDecl::from("default"));
+        assert_eq!(d.caps.modes[1].meaning.as_ref().unwrap().get("fr"), "Tout");
+        assert_eq!(d.caps.modes[1].meaning.as_ref().unwrap().get("de"), "All");
+        let acp = d.acp.unwrap();
+        assert!(acp.fs, "the files go through the client unless it says not");
+        assert_eq!(acp.args, ["acp"]);
+        assert_eq!(acp.modes["bypassPermissions"], "auto");
+        // Items of the contract it adds read too, and the old ones still.
+        let items: Items = serde_json::from_value(json!({ "items": [
+            { "op": "toolInput", "id": "c", "input": { "file_path": "a" } },
+            { "op": "permission", "request": "r", "call": "c", "canAlways": true, "diff": { "path": "a", "newText": "x" } },
+            { "op": "permission", "request": "r2", "call": "c2" },
+            { "op": "todos", "todos": [] },
+            { "op": "turn", "error": "refusé" },
+        ] }))
+        .unwrap();
+        assert!(
+            matches!(&items.items[1], Item::Permission { can_always: true, diff: Some(d), .. } if d.old_text.is_none())
+        );
+        assert!(matches!(&items.items[4], Item::Turn { error: Some(e), .. } if e == "refusé"));
+        // A limit without its reset goes and comes back as one, none as none.
+        for limited in [None, Some(None), Some(Some(5))] {
+            let turn = Item::Turn {
+                interrupted: false,
+                limited,
+                usage: TurnUsage::default(),
+                error: None,
+            };
+            let back: Item = serde_json::from_value(serde_json::to_value(&turn).unwrap()).unwrap();
+            assert_eq!(back, turn);
+        }
     }
 }

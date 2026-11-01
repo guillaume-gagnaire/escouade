@@ -84,12 +84,12 @@ describe('the search', () => {
     const n = search(all, { cat: 'notifications' });
     expect(n.results.map((e) => e.id)).toEqual(['dev.lmartin.slack', 'dev.sroux.ntfy']);
     expect(n.counts.themes).toBe(1);
-    expect(n.counts.harness).toBe(8);
+    expect(n.counts.harness).toBe(9);
     expect(search(all, { cat: 'notifications', verified: true }).results).toEqual([]);
     expect(search(all, { verified: true }).results.every((e) => e.builtin)).toBe(true);
     expect(search(all, { noProgram: true }).results.map((e) => e.id)).toEqual(['io.github.amoreau.nord']);
     expect(search(all, { cat: 'notifications', noSecret: true }).results.map((e) => e.id)).toEqual(['dev.sroux.ntfy']);
-    expect(search(all, { noNetwork: true, cat: 'harness' }).results).toHaveLength(8);
+    expect(search(all, { noNetwork: true, cat: 'harness' }).results).toHaveLength(9);
   });
 
   it('sorts by installations or by the last update when asked', () => {

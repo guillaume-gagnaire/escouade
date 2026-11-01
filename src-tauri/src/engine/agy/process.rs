@@ -643,7 +643,7 @@ impl AgyProcess {
             let mut s = self.state.lock();
             let mut heads: Vec<String> = Vec::new();
             if let Some(i) = s.instructions.take() {
-                heads.push(crate::engine::cursor::preamble(&i));
+                heads.push(escouade_acp::preamble(&i));
             }
             let text = if heads.is_empty() {
                 text

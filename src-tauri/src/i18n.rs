@@ -39,6 +39,14 @@ impl Lang {
         }
     }
 
+    /// As a setting names it (`fr`, `en`): what a plugin is told.
+    pub const fn tag(self) -> &'static str {
+        match self {
+            Lang::Fr => "fr",
+            Lang::En => "en",
+        }
+    }
+
     const fn of_code(code: u8) -> Self {
         match code {
             1 => Lang::En,

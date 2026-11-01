@@ -2016,6 +2016,8 @@ impl<R: Runtime> Core<R> {
         core.plugin_runtime.place_with(place);
         // What the plugins the app gives are told when they start: the language, the network.
         core.plugin_runtime.set_builtin_env(core.builtin_env());
+        // The harnesses the plugins describe (PLG-6), before the window asks for the registry.
+        core.sync_harnesses();
         // The pinned Javy of the run.js plugins downloads through Réglages › Réseau (ESC-320); their modules are
         // made ready in the cache, precompiled again for this version of the app when it changed.
         {

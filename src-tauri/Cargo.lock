@@ -1628,6 +1628,8 @@ dependencies = [
  "cpal",
  "ctor",
  "dirs 6.0.0",
+ "escouade-acp",
+ "escouade-plugin-acp",
  "escouade-plugin-bitbucket",
  "escouade-plugin-gitea",
  "escouade-plugin-github",
@@ -1697,6 +1699,26 @@ dependencies = [
  "windows-sys 0.60.2",
  "yaml-edit",
  "zip",
+]
+
+[[package]]
+name = "escouade-acp"
+version = "1.0.0"
+dependencies = [
+ "dunce",
+ "escouade-plugin-protocol",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "escouade-plugin-acp"
+version = "1.0.0"
+dependencies = [
+ "escouade-acp",
+ "escouade-plugin-protocol",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

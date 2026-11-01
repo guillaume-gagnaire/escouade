@@ -4,7 +4,7 @@ Four complete plugins to read, copy and install: a theme, a Discord webhook with
 
 ## Where to find them
 
-They are in the `plugins/` folder of Escouade’s repository, one folder per plugin (`plugins/slack/`…), each readable on its own with its manifest, its README, its LICENSE (MIT), its CHANGELOG and its tests: https://github.com/guillaume-gagnaire/escouade/tree/main/plugins. The store publishes them as `dev.escouade.high-contrast`, `dev.escouade.discord`, `dev.escouade.slack` and `dev.escouade.team-rules`, taken from these folders at their tags `plugins/<folder>/v1.2.3` (see [Publishing a plugin](plugins/publishing)).
+They are in the `plugins/` folder of Escouade’s repository, one folder per plugin (`plugins/slack/`…), each readable on its own with its manifest, its README, its LICENSE (MIT), its CHANGELOG and its tests: https://github.com/guillaume-gagnaire/escouade/tree/main/plugins. The store publishes them as `dev.escouade.high-contrast`, `dev.escouade.discord`, `dev.escouade.slack`, `dev.escouade.team-rules` and `dev.escouade.goose`, taken from these folders at their tags `plugins/<folder>/v1.2.3` (see [Publishing a plugin](plugins/publishing)).
 
 To make one yours, copy its folder and give it an id of your own (`io.github.<your-login>.slack`): `dev.escouade.*` is kept for Escouade’s own plugins, and the store takes it from Escouade’s repository alone.
 
@@ -407,3 +407,79 @@ void teamRules().start();
 ```
 
 The rules are read once, at start: a decision has 500 ms. An edit or a file read is not a command, and goes to the user.
+
+## Goose
+
+A harness without code: Goose, Block’s open source agent, described over ACP. The ACP plugin shipped with Escouade launches it and shows its conversation; the manifest says its modes, its mode that changes nothing, its model option and the names of its tools. Goose writes its files itself: no agent of a private project starts on it. See [A described ACP harness](plugins/harnesses).
+
+`plugins/goose/escouade-plugin.json`
+
+```json
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.goose",
+  "name": "Goose",
+  "version": "1.0.0",
+  "description": {
+    "fr": "Goose, l'agent open source de Block, comme harness : décrit par ACP, sans code.",
+    "en": "Goose, Block's open source agent, as a harness: described over ACP, no code."
+  },
+  "author": { "name": "Escouade", "url": "https://escouade.dev" },
+  "license": "MIT",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/goose",
+  "escouade": { "api": "1", "min": "2.1.0" },
+  "contributes": {
+    "harnesses": [
+      {
+        "id": "goose",
+        "name": "Goose",
+        "speaker": "Goose",
+        "writer": "Goose",
+        "locate": { "names": ["goose"] },
+        "tested": { "oldest": "1.57.0", "newest": "1.57.0" },
+        "caps": {
+          "modes": [
+            {
+              "id": "default",
+              "meaning": {
+                "fr": "Goose demande avant chaque outil (son mode approve). Il écrit les fichiers lui-même, sans les faire passer par Escouade.",
+                "en": "Goose asks before each tool (its approve mode). It writes files by itself, without passing them through Escouade."
+              }
+            },
+            {
+              "id": "acceptEdits",
+              "meaning": {
+                "fr": "Goose ne demande que pour ce qu'il juge sensible (son mode smart_approve) ; Escouade accepte ses écritures dans le dossier de l'agent.",
+                "en": "Goose asks only for what it deems sensitive (its smart_approve mode); Escouade accepts its writes in the agent's folder."
+              }
+            },
+            {
+              "id": "bypassPermissions",
+              "meaning": {
+                "fr": "Goose ne demande rien (son mode auto) : commandes, fichiers, tout le disque. Pas de bac à sable.",
+                "en": "Goose asks nothing (its auto mode): commands, files, the whole disk. No sandbox."
+              }
+            }
+          ],
+          "readOnly": true
+        },
+        "accountVar": "GOOSE_PATH_ROOT",
+        "install": {
+          "windows": "Invoke-WebRequest -Uri https://raw.githubusercontent.com/aaif-goose/goose/main/download_cli.ps1 -OutFile download_cli.ps1; ./download_cli.ps1",
+          "unix": "curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | CONFIGURE=false bash"
+        },
+        "updateCommand": "goose update",
+        "acp": {
+          "args": ["acp"],
+          "fs": false,
+          "modes": { "default": "approve", "acceptEdits": "smart_approve", "bypassPermissions": "auto" },
+          "readOnlyMode": "chat",
+          "modelOption": "model",
+          "questionsInText": true,
+          "tools": { "shell": "Bash", "write": "Write", "edit": "Edit", "text_editor": "Edit", "read": "Read", "tree": "Glob" }
+        }
+      }
+    ]
+  }
+}
+```
