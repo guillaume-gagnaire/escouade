@@ -27,3 +27,11 @@ cd slack && npm install && npm test && npm run bench         # one of them
 To try one in Escouade: Plugins view › “In development”, then its folder. To make one yours, copy its folder and give it
 an id of your own (`io.github.<your-login>.<plugin>`). The documentation shows each one whole:
 https://escouade.dev/en/docs/plugins/examples
+
+## `builtin/`: the plugins the app gives
+
+`builtin/<id>/` holds the plugins shipped **with** the app, not published on the store: each with its manifest and its
+README, embedded in the app and listed in its registry (`src-tauri/src/plugins/builtin.rs`); a test of the app checks
+that each folder has both and is in the registry. Their program is `escouade-plugins <name>`, signed with the app, and
+their version is Escouade's. The first is `dev.escouade.minimal`, the demonstration. `ci.mjs` does not run them: it is
+for the folders above, which are the store's.
