@@ -3,6 +3,8 @@
 //! names of the methods every plugin answers, the messages of the handshake, and `serve`, the loop a plugin written
 //! in Rust runs (`escouade-plugins`, the program of the plugins the app gives, INT-4).
 
+pub mod engine;
+
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::io::{BufRead, Write};
