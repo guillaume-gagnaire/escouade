@@ -85,6 +85,8 @@ pub struct AccountKind {
     pub id: String,
     /// The plugin that declares it.
     pub plugin: String,
+    /// That plugin's name (« Escouade » for its own hand's).
+    pub plugin_name: String,
     /// As the window says it.
     pub name: String,
     /// Its public instance (`github.com`), if it has one.
@@ -154,6 +156,7 @@ fn of_provider(p: &dyn Provider) -> AccountKind {
     fields.push(Field::new("token", true));
     AccountKind {
         plugin: first_hand(&kind),
+        plugin_name: "Escouade".into(),
         name: p.name().into(),
         default_host: p.default_host().map(str::to_string),
         self_hosted: fields.iter().any(|f| f.key == "url"),
@@ -161,7 +164,9 @@ fn of_provider(p: &dyn Provider) -> AccountKind {
         connect,
         fields,
         scopes: p.scopes(),
-        token_page: p.default_host().map(|h| p.token_page(&format!("https://{h}"))),
+        token_page: p
+            .default_host()
+            .map(|h| p.token_page(&format!("https://{h}"))),
         sources_public_only: kind == "github",
         sources,
         forge: Some(kind.clone()),
@@ -198,6 +203,7 @@ fn of_source(s: &dyn source::TicketSourceKind) -> AccountKind {
     AccountKind {
         id: id.into(),
         plugin: first_hand(id),
+        plugin_name: "Escouade".into(),
         name: s.label().into(),
         default_host: host.map(str::to_string),
         self_hosted: host.is_none(),
@@ -295,8 +301,12 @@ pub fn of_manifest(m: &Manifest) -> Vec<AccountKind> {
             Some(AccountKind {
                 name: text(a, "name").unwrap_or_else(|| id.clone()),
                 plugin: m.id.clone(),
+                plugin_name: m.name.get(crate::i18n::ui()).to_string(),
                 default_host: text(a, "defaultHost"),
-                self_hosted: a.get("selfHosted").and_then(Value::as_bool).unwrap_or(false),
+                self_hosted: a
+                    .get("selfHosted")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
                 probe: text(a, "probe"),
                 connect: if connect.is_empty() {
                     vec![Connect::Token]
@@ -344,6 +354,8 @@ pub fn kinds_of(plugins: &super::Plugins) -> Vec<AccountKind> {
 #[serde(rename_all = "camelCase")]
 pub struct Server {
     pub plugin: String,
+    /// The plugin's name, as the form offers it.
+    pub name: String,
     /// Of Escouade's own hand: the one offered first.
     pub first_hand: bool,
 }
@@ -356,10 +368,11 @@ pub fn servers(kinds: &[AccountKind], id: &str) -> Vec<Server> {
         .map(|k| Server {
             first_hand: is_first_hand(&k.plugin),
             plugin: k.plugin.clone(),
+            name: k.plugin_name.clone(),
         })
         .collect();
     list.sort_by(|a, b| (!a.first_hand, &a.plugin).cmp(&(!b.first_hand, &b.plugin)));
-    list.dedup();
+    list.dedup_by(|a, b| a.plugin == b.plugin);
     list
 }
 
@@ -493,7 +506,11 @@ pub fn shared(accounts: &Accounts, kinds: &[AccountKind]) -> Vec<Shared> {
         let Some(a) = accounts.get(service) else {
             continue;
         };
-        if source::registry().get(service).and_then(|k| k.host()).is_some() {
+        if source::registry()
+            .get(service)
+            .and_then(|k| k.host())
+            .is_some()
+        {
             // A code host's account, listed above (github.com's).
             continue;
         }
@@ -548,9 +565,7 @@ pub fn budget_key(plugin: &str, account: &str) -> String {
 pub fn split_budget(v: Value) -> (Value, Option<RateLimit>) {
     match v {
         Value::Object(mut o)
-            if o.contains_key("value")
-                && o.contains_key("rateLimit")
-                && o.len() == 2 =>
+            if o.contains_key("value") && o.contains_key("rateLimit") && o.len() == 2 =>
         {
             let rate = o
                 .remove("rateLimit")

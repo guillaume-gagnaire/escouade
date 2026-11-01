@@ -466,12 +466,14 @@ impl<R: Runtime> Core<R> {
     ) -> Result<Box<dyn TicketSource>> {
         if !account.plugin.is_empty() {
             // Another plugin than Escouade's own hand serves it.
-            return Ok(Box::new(crate::plugins::adapters::ProcessTicketSource::new(
-                self.plugin_runtime.clone(),
-                &account.plugin,
-                service.as_str(),
-                account,
-            )));
+            return Ok(Box::new(
+                crate::plugins::adapters::ProcessTicketSource::new(
+                    self.plugin_runtime.clone(),
+                    &account.plugin,
+                    service.as_str(),
+                    account,
+                ),
+            ));
         }
         let http = crate::usage::http_client(&self.settings.read())?;
         let mut account = account.clone();
@@ -764,16 +766,16 @@ impl<R: Runtime> Core<R> {
         }
         // Not for GitHub through the CLI (no token of its own), nor a token the keychain refused
         // (in the file, which is written again without it).
-        let (in_keychain, plugin) = self
-            .accounts
-            .read()
-            .get(service)
-            .map_or((false, String::new()), |a| {
-                (
-                    !secrets::through_gh(service, a) && !a.in_file,
-                    a.plugin.clone(),
-                )
-            });
+        let (in_keychain, plugin) =
+            self.accounts
+                .read()
+                .get(service)
+                .map_or((false, String::new()), |a| {
+                    (
+                        !secrets::through_gh(service, a) && !a.in_file,
+                        a.plugin.clone(),
+                    )
+                });
         let forgotten = secrets::forget_of(&*self.secrets, service, &plugin);
         if !forgotten && in_keychain {
             let name = service.label();

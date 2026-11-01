@@ -3,9 +3,9 @@
 //! the keychain refuses stay there, readable by their owner only.
 
 use super::{source, Account, Accounts, VIA_GH};
-use crate::plugins::accounts;
 use crate::model::Service;
 use crate::paths::{self, DataDir};
+use crate::plugins::accounts;
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;

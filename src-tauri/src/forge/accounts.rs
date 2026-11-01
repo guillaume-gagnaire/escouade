@@ -111,13 +111,14 @@ pub fn place(store: &dyn SecretStore, a: &mut ForgeAccount) -> bool {
     if a.token.is_empty() {
         return forget_of(store, &a.host(), &a.kind, &a.plugin);
     }
-    let kept = secrets::keep_secret(store, &accounts::forge_vault_name(a), &a.token).and_then(|()| {
-        if accounts::is_first_hand(&a.plugin) {
-            secrets::keep_secret(store, &entry(&a.host()), &a.token)
-        } else {
-            Ok(())
-        }
-    });
+    let kept =
+        secrets::keep_secret(store, &accounts::forge_vault_name(a), &a.token).and_then(|()| {
+            if accounts::is_first_hand(&a.plugin) {
+                secrets::keep_secret(store, &entry(&a.host()), &a.token)
+            } else {
+                Ok(())
+            }
+        });
     if let Err(e) = kept {
         log::warn!(
             "{}: token left in integrations.json, the system keychain refused it: {e:#}",

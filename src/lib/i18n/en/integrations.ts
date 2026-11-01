@@ -42,6 +42,8 @@ export default defineZone('integrations', {
     notConnected: 'Not connected',
     keychainUnavailable: 'System keychain unavailable: the token stays in ~/.escouade/integrations.json.',
     keychainUnreadable: 'System keychain unreadable: restart Escouade or reconnect the account.',
+    servedBy: 'Served by',
+    servedByPlugin: 'Served by the plugin {plugin}',
     disconnect: 'Disconnect',
     connectEllipsis: 'Connect…',
     connect: 'Connect',

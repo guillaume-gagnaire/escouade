@@ -31,7 +31,17 @@ fn the_kinds_of_the_core_say_hosts_connections_fields_rights_and_token_page() {
     let ids: Vec<&str> = kinds.iter().map(|k| k.id.as_str()).collect();
     assert_eq!(
         ids,
-        ["github", "gitlab", "bitbucket", "gitea", "azure", "jira", "trello", "linear", "clickup"]
+        [
+            "github",
+            "gitlab",
+            "bitbucket",
+            "gitea",
+            "azure",
+            "jira",
+            "trello",
+            "linear",
+            "clickup"
+        ]
     );
 
     let gh = kind(&kinds, "github");
@@ -41,7 +51,10 @@ fn the_kinds_of_the_core_say_hosts_connections_fields_rights_and_token_page() {
         program: "gh".into(),
         login: "gh auth login".into()
     }));
-    assert_eq!(gh.scopes, crate::forge::Provider::scopes(&crate::forge::github::GithubProvider));
+    assert_eq!(
+        gh.scopes,
+        crate::forge::Provider::scopes(&crate::forge::github::GithubProvider)
+    );
     assert_eq!(
         gh.token_page.as_deref(),
         Some("https://github.com/settings/personal-access-tokens/new")
@@ -142,7 +155,10 @@ fn a_plugin_declares_its_kind_and_the_points_that_share_it() {
         ]
     );
     assert_eq!(k.scopes, ["read:jira-work"]);
-    assert_eq!(k.token_page.as_deref(), Some("{url}/secure/ViewProfile.jspa"));
+    assert_eq!(
+        k.token_page.as_deref(),
+        Some("{url}/secure/ViewProfile.jspa")
+    );
     // Its account serves its source and its host alike.
     assert_eq!(k.sources, ["jira-dc"]);
     assert_eq!(k.forge.as_deref(), Some("bitbucket-dc"));
@@ -160,7 +176,10 @@ fn the_plugin_that_serves_an_account_is_chosen_when_it_is_added_never_in_silence
         .iter()
         .map(|s| (s.plugin.as_str(), s.first_hand))
         .collect();
-    assert_eq!(plugins, [("dev.escouade.jira", true), ("acme.jira-dc", false)]);
+    assert_eq!(
+        plugins,
+        [("dev.escouade.jira", true), ("acme.jira-dc", false)]
+    );
     // Escouade's own hand is the one kept by default, and not written.
     assert_eq!(accounts::chosen(&kinds, "jira", "").unwrap(), "");
     assert_eq!(
@@ -250,7 +269,9 @@ async fn a_gitlab_account_serves_issues_and_merge_requests_on_the_fakes() {
     account.token = "good".into();
     assert!(forge_accounts::place(&*f.store, &mut account));
     assert_eq!(
-        f.store.entry("plugin:dev.test.fake:account:gitlab.com").as_deref(),
+        f.store
+            .entry("plugin:dev.test.fake:account:gitlab.com")
+            .as_deref(),
         Some("good")
     );
     // Another plugin than Escouade's own hand: no former name for a version from before.
@@ -295,8 +316,16 @@ async fn a_gitlab_account_serves_issues_and_merge_requests_on_the_fakes() {
     assert!(other.rate_limit().is_none());
 
     // Disconnected: the secret goes, and both points are refused.
-    assert!(forge_accounts::forget_of(&*f.store, "gitlab.com", "gitlab", ID));
-    assert_eq!(f.store.entry("plugin:dev.test.fake:account:gitlab.com"), None);
+    assert!(forge_accounts::forget_of(
+        &*f.store,
+        "gitlab.com",
+        "gitlab",
+        ID
+    ));
+    assert_eq!(
+        f.store.entry("plugin:dev.test.fake:account:gitlab.com"),
+        None
+    );
     assert!(issues.containers().await.is_err());
     assert!(mrs.pull_request(&repo(), 7).await.is_err());
 }
@@ -306,7 +335,10 @@ async fn the_keychain_never_gives_a_plugin_another_plugins_account() {
     let f = fake("vault-other", &[], quick());
     // GitLab's account, served by Escouade's own hand, and its former name.
     f.store
-        .set("plugin:dev.escouade.gitlab:account:gitlab.com", "theirs-1234")
+        .set(
+            "plugin:dev.escouade.gitlab:account:gitlab.com",
+            "theirs-1234",
+        )
         .unwrap();
     f.store.set("forge:gitlab.com", "theirs-1234").unwrap();
     for key in [
@@ -555,9 +587,17 @@ async fn an_account_added_through_another_plugin_is_served_by_it_for_issues_and_
         plugin: plugin.into(),
         ..Default::default()
     };
-    assert!(h.core.forge_connect(form("good", "acme.none")).await.is_err());
+    assert!(h
+        .core
+        .forge_connect(form("good", "acme.none"))
+        .await
+        .is_err());
     // Refused by the plugin: nothing kept.
-    assert!(h.core.forge_connect(form("bad", "acme.gitlab")).await.is_err());
+    assert!(h
+        .core
+        .forge_connect(form("bad", "acme.gitlab"))
+        .await
+        .is_err());
     assert!(store.all().is_empty(), "{:?}", store.all().keys());
 
     let view = h

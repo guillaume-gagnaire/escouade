@@ -591,7 +591,11 @@ impl<R: Runtime> Core<R> {
             .iter()
             .find(|a| a.host() == host)
             .map_or((None, String::new(), String::new()), |a| {
-                (Some(!a.via_cli && !a.in_file), a.kind.clone(), a.plugin.clone())
+                (
+                    Some(!a.via_cli && !a.in_file),
+                    a.kind.clone(),
+                    a.plugin.clone(),
+                )
             });
         let forgotten = accounts::forget_of(&*self.secrets, &host, &kind, &plugin);
         if !forgotten && had == Some(true) {

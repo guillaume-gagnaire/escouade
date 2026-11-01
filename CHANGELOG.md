@@ -25,6 +25,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Un dépôt peut porter plusieurs plugins, un par dossier : le store liste ses dossiers à la soumission, chaque plugin a ses étiquettes (`plugins/slack/v1.2.3`) et sa page mène à son dossier. Un plugin peut aussi changer de dépôt ou de dossier ; la version qui suit repasse en revue.
 - La documentation dit comment publier un plugin sur le store et préparer sa revue, et une nouvelle page, « La sécurité des plugins », dit ce que l’app vérifie, ce que le sceau « Vérifié par Escouade » couvre et ce que la revue refuse.
 - Un projet peut proposer des plugins dans son `.escouade.yml` : à son ouverture, une bande de Réglages › Projets nomme ceux qui manquent, avec leur page du store, sans rien installer seule ; « Pas pour ce projet » la fait taire. Le fichier peut aussi régler un plugin pour ce projet, jamais avec un secret.
+- Un plugin peut servir un compte à la place de l’intégration d’Escouade (un GitLab d’entreprise, un Jira maison) : quand plusieurs le proposent, « Connecter… » demande lequel le sert, et ce compte sert tous les usages du plugin, ses tickets comme ses PR. Tes comptes déjà connectés restent tels quels.
 
 ### Retiré
 
