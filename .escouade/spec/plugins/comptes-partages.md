@@ -3,7 +3,7 @@ title: "Les comptes partagés par plugin"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.3, §4.4, §4.8","docs/TODO-2.2.md (INT-6)","src-tauri/src/plugins/accounts.rs"]
 tickets: ["ESC-212"]
-decisions: ["comptes-partages-par-plugin-anciens-noms"]
+decisions: [33]
 compared: null
 ---
 
