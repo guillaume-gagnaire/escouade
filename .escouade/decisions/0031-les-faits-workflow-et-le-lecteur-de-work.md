@@ -1,9 +1,9 @@
 ---
-number: null
+number: 31
 id: "les-faits-workflow-et-le-lecteur-de-work"
 title: "Les faits workflow.* et le lecteur de workflow des plugins"
 date: "2026-11-01"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-200"
 pages: ["kanban/workflows"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"kanban/workflows","added":14,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-01T11:32:32+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
