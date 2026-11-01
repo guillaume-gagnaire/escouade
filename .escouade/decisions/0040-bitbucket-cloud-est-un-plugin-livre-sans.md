@@ -1,9 +1,9 @@
 ---
-number: null
+number: 40
 id: "bitbucket-cloud-est-un-plugin-livre-sans"
 title: "Bitbucket Cloud est un plugin livré, sans auto-merge, écrit d'après la documentation"
 date: "2026-11-01"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-57"
 pages: ["git-fichiers/hebergeurs-de-code","plugins/livres-avec-escouade"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"git-fichiers/hebergeurs-de-code","added":10,"removed":1},{"page":"plugins/livres-avec-escouade","added":1,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-01T21:35:17+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
