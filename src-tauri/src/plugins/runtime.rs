@@ -578,6 +578,13 @@ impl Runtime {
         }
     }
 
+    /// What the plugin `id`'s process uses now (its job's memory and CPU), when it runs.
+    pub fn usage(&self, id: &str) -> Option<JobUsage> {
+        let h = self.hosts.lock().get(id).cloned()?;
+        let conn = h.inner.lock().conn.clone()?;
+        conn.usage()
+    }
+
     /// The plugin `id`'s journal, the oldest entry first: what its process wrote since Escouade
     /// started, or, before it ran, what its file kept of the earlier runs.
     pub fn journal(&self, id: &str) -> Vec<Entry> {

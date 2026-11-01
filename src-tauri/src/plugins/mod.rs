@@ -16,6 +16,8 @@ pub mod journal;
 // The conformance bench and the fake Escouade, for `escouade-plugin` and the tests (PLG-3).
 pub mod adapters;
 pub mod bench;
+/// The adapter of a harness in process (INT-9).
+pub mod harness;
 // The permission rules: the plugins that decide before the user is asked (PLG-8).
 pub mod decide;
 // The plugins the app gives, their registry and the check of their program (INT-4).
