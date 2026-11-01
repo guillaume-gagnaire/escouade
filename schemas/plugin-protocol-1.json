@@ -69,6 +69,30 @@
         }
       }
     },
+    "files/read": {
+      "description": "A file of the plugin's own folder, as text (UTF-8): a path relative to the folder, with / between its parts. Refused (refused) for a path that leaves the folder (absolute, .., a link that goes out of it), a hidden file or folder (.env, .git) and the manifest; notFound for a file that is not there; failed for a file over 256 KiB or not UTF-8. Both transports: the SDK's p.file(path).",
+      "direction": "toEscouade",
+      "params": {
+        "$ref": "#/definitions/FilesReadParams"
+      },
+      "result": {
+        "type": "string"
+      },
+      "errors": ["invalidParams", "refused", "notFound", "failed"],
+      "timeoutMs": 5000
+    },
+    "net/fetch": {
+      "description": "An HTTP request, for a plugin in WASM (run.js): the SDK's standard fetch goes by it. Escouade sends it in https only, to a host of permissions.network or one of its subdomains, never to an address of the machine or of the local network (judged on the addresses the name resolves to), without a proxy; it follows no redirection (the plugin gets the 3xx). The answer comes within 10 s and holds 1 MiB at most (failed past either). A plugin run by a command uses its own network, and is answered methodNotFound.",
+      "direction": "toEscouade",
+      "params": {
+        "$ref": "#/definitions/NetFetchParams"
+      },
+      "result": {
+        "$ref": "#/definitions/NetFetchResult"
+      },
+      "errors": ["invalidParams", "refused", "failed"],
+      "timeoutMs": 10000
+    },
     "log": {
       "description": "A line of its journal.",
       "direction": "toEscouade",
@@ -107,6 +131,18 @@
     "keychain": {
       "code": -32002,
       "description": "The system's keychain cannot be reached."
+    },
+    "refused": {
+      "code": -32003,
+      "description": "What the plugin may not reach: a host outside permissions.network, http, an address of the machine or of the local network (net/fetch); a path outside its folder, hidden, or its manifest (files/read)."
+    },
+    "failed": {
+      "code": -32004,
+      "description": "A request that failed on the way: no answer within its delay, an answer or a file too big, a file that is not UTF-8."
+    },
+    "notFound": {
+      "code": -32005,
+      "description": "No such file in the plugin's folder (files/read)."
     }
   },
   "definitions": {
@@ -383,6 +419,62 @@
           "type": "string"
         }
       }
+    },
+    "FilesReadParams": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "description": "The file's path in the plugin's folder: rules.json, data/words.txt.",
+          "type": "string"
+        }
+      },
+      "required": ["path"]
+    },
+    "NetFetchParams": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "description": "An https URL to a host of permissions.network.",
+          "type": "string"
+        },
+        "method": {
+          "description": "GET when left out.",
+          "type": "string"
+        },
+        "headers": {
+          "description": "The headers of the request (Host is set by Escouade).",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "body": {
+          "description": "The body of the request, as text.",
+          "type": ["string", "null"]
+        }
+      },
+      "required": ["url"]
+    },
+    "NetFetchResult": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "description": "The HTTP status; a 3xx is given as it is, never followed.",
+          "type": "integer"
+        },
+        "headers": {
+          "description": "Its headers, by lower case name; a repeated one joined by \", \".",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "body": {
+          "description": "Its body, as text (UTF-8, what is not replaced).",
+          "type": "string"
+        }
+      },
+      "required": ["status", "headers", "body"]
     },
     "LogParams": {
       "type": "object",

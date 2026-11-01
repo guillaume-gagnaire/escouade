@@ -1,7 +1,9 @@
 // @escouade-dev/plugin: write a plugin of Escouade in TypeScript (ESC-181, PLG-9).
 //
-// A plugin with a program speaks JSON-RPC 2.0 to Escouade on its standard input and output, one message per
-// line (https://escouade.dev/en/docs/plugins/api). `createPlugin()` gives a client that speaks it: it answers
+// A plugin with a program speaks JSON-RPC 2.0 to Escouade, one message per line
+// (https://escouade.dev/en/docs/plugins/api): on its standard input and output when Node runs it (`run.command`), or
+// through Escouade's WASM host when it runs inside the app (`run.js`, ESC-321); `start()` finds which, the plugin's
+// code is the same. `createPlugin()` gives a client that speaks it: it answers
 // `initialize` and `shutdown`, serves batches, routes each fact to its handlers (`onEvent`), each permission to
 // decide to its rule (`decidePermission`), and asks Escouade for secrets (`secret`) and journal lines (`log`).
 import { createInterface } from 'node:readline';
@@ -33,6 +35,23 @@ export class RpcError extends Error {
   }
 }
 
+/** Escouade's WASM host, as its prelude gives it (src-tauri/src/plugins/wasm_prelude.js). */
+interface WasmHost {
+  listen(cb: (line: string) => void): void;
+  write(line: string): void;
+  trace(line: string): void;
+  end(): void;
+}
+
+/** The WASM host of Escouade, when the plugin runs inside the app (`run.js`); none under Node. */
+export function wasmHost(): WasmHost | undefined {
+  const g = globalThis as { Javy?: unknown; __esc?: Partial<WasmHost> };
+  const h = g.__esc;
+  return typeof g.Javy === 'object' && g.Javy !== null && typeof h?.listen === 'function' && typeof h.write === 'function'
+    ? (h as WasmHost)
+    : undefined;
+}
+
 /** Where the plugin's lines go, and where its traces go: the process's own, or a test's. */
 export interface Connection {
   /** One line of the protocol, without its `\n`. */
@@ -52,7 +71,10 @@ export type Handler = (params: unknown, plugin: Plugin) => unknown;
 export interface PluginOptions {
   /** The capabilities it answers `initialize` with, beside `batch`. */
   capabilities?: Record<string, unknown>;
-  /** How long its `onShutdown` handlers have, in milliseconds (Escouade waits 1 s for the answer). */
+  /**
+   * How long its `onShutdown` handlers have, in milliseconds (Escouade waits 1 s for the answer). In WASM, where there
+   * is no timer, Escouade's own second bounds them.
+   */
   shutdownMs?: number;
 }
 
@@ -128,6 +150,15 @@ export class Plugin {
     return this.call('settings/get', project ? { project } : {});
   }
 
+  /**
+   * A file of the plugin's own folder, as text: `rules.json`, `data/words.txt` (`files/read`, 256 KiB at most). A path
+   * that leaves the folder (`..`, absolute, a link out of it), a hidden one (`.env`) or the manifest is refused
+   * (`RpcError` `ERRORS.refused`); a missing file is `ERRORS.notFound`. The same under Node and in WASM.
+   */
+  file(path: string): Promise<string> {
+    return this.call('files/read', { path });
+  }
+
   /** A line of its journal, in Réglages › Plugins. */
   readonly log = {
     debug: (message: string) => this.notify('log', { level: 'debug', message }),
@@ -155,8 +186,17 @@ export class Plugin {
     this.send({ jsonrpc: '2.0', method, params });
   }
 
-  /** Speaks the protocol on the process's standard input and output; ends the process after `shutdown`. */
+  /**
+   * Speaks the protocol to Escouade: inside the app (`run.js`), through its WASM host, never resolved; under Node, on the
+   * process's standard input and output, resolved when its input closes, the process ended after `shutdown`.
+   */
   start(): Promise<void> {
+    const host = wasmHost();
+    if (host) {
+      this.listen({ write: (line) => host.write(line), trace: (text) => host.trace(text), end: () => host.end() });
+      host.listen((line) => void this.receive(line));
+      return new Promise(() => {});
+    }
     const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
     this.listen({
       write: (line) => process.stdout.write(line + '\n'),
@@ -256,7 +296,12 @@ export class Plugin {
       }
       case 'shutdown': {
         const all = Promise.allSettled(this.closing.map((h) => h()));
-        await Promise.race([all, new Promise((r) => setTimeout(r, this.options.shutdownMs ?? 800).unref?.())]);
+        // No timer in WASM: Escouade's delay of shutdown bounds them there.
+        const bound =
+          typeof setTimeout === 'function'
+            ? [new Promise((r) => (setTimeout(r, this.options.shutdownMs ?? 800) as { unref?: () => void }).unref?.())]
+            : [];
+        await Promise.race([all, ...bound]);
         return null;
       }
       case 'events/fact': {

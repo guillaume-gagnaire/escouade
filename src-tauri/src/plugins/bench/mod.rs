@@ -631,7 +631,11 @@ fn manifest_of(b: &mut Bench) -> Option<Manifest> {
 async fn program(b: &mut Bench<'_>, m: &Manifest) -> Option<Measure> {
     let lang = b.o.lang;
     let run = m.run.as_ref().expect("a program");
-    let program = program_path(&b.folder, run, &b.o.escouade_dir);
+    let program = match &run.js {
+        // Its bundle, which the fake Escouade plays by Node (ESC-321).
+        Some(js) => std::path::absolute(b.folder.join(js)).unwrap_or_else(|_| b.folder.join(js)),
+        None => program_path(&b.folder, run, &b.o.escouade_dir),
+    };
 
     // Initialization.
     let first = match b.initialized(m, &program).await {

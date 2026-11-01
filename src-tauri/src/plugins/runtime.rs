@@ -1549,6 +1549,15 @@ impl Host {
                     "settings/get takes a project's id, or none".into(),
                 )),
             },
+            // A file of its own folder (`p.file`), for a process as for an instance in WASM (ESC-321).
+            "files/read" => {
+                super::files::read(&self.folder, &params).inspect_err(|(code, message)| {
+                    if *code == super::files::REFUSED {
+                        self.journal
+                            .push(Kind::Refused, format!("files/read: {message}"));
+                    }
+                })
+            }
             _ => {
                 self.journal.push(
                     Kind::Refused,
