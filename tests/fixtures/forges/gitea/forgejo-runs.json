@@ -1,0 +1,41 @@
+{
+  "total_count": 1,
+  "workflow_runs": [
+    {
+      "id": 900,
+      "index_in_repo": 41,
+      "title": "Add search",
+      "workflow_id": "ci.yaml",
+      "event": "pull_request",
+      "trigger_event": "pull_request",
+      "commit_sha": "3f2a9c1d5e7b84a6f0c2d9e8b7a6543210fedcba",
+      "prettyref": "feat/search",
+      "status": "failure",
+      "started": "2026-10-31T15:00:10Z",
+      "stopped": "2026-10-31T15:09:00Z",
+      "created": "2026-10-31T15:00:00Z",
+      "html_url": "https://codeberg.org/ada/notes/actions/runs/41",
+      "repository": {
+        "id": 5,
+        "name": "notes",
+        "full_name": "ada/notes",
+        "owner": {
+          "id": 5,
+          "login": "ada",
+          "login_name": "",
+          "full_name": "ada",
+          "email": "ada@noreply.codeberg.org",
+          "avatar_url": "https://codeberg.org/avatars/5",
+          "html_url": "https://codeberg.org/ada",
+          "is_admin": false,
+          "created": "2024-01-02T10:00:00Z"
+        },
+        "fork": false,
+        "html_url": "https://codeberg.org/ada/notes",
+        "default_branch": "main",
+        "has_actions": true,
+        "has_pull_requests": true
+      }
+    }
+  ]
+}

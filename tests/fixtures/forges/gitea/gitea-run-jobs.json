@@ -1,0 +1,35 @@
+{
+  "total_count": 2,
+  "jobs": [
+    {
+      "id": 5001,
+      "run_id": 900,
+      "name": "build",
+      "head_sha": "3f2a9c1d5e7b84a6f0c2d9e8b7a6543210fedcba",
+      "head_branch": "feat/search",
+      "status": "completed",
+      "conclusion": "success",
+      "run_attempt": 1,
+      "started_at": "2026-10-31T15:00:10Z",
+      "completed_at": "2026-10-31T15:05:00Z",
+      "labels": ["ubuntu-latest"],
+      "steps": [],
+      "html_url": "https://codeberg.org/ada/notes/actions/runs/41/jobs/0"
+    },
+    {
+      "id": 5002,
+      "run_id": 900,
+      "name": "test",
+      "head_sha": "3f2a9c1d5e7b84a6f0c2d9e8b7a6543210fedcba",
+      "head_branch": "feat/search",
+      "status": "completed",
+      "conclusion": "failure",
+      "run_attempt": 1,
+      "started_at": "2026-10-31T15:05:10Z",
+      "completed_at": "2026-10-31T15:09:00Z",
+      "labels": ["ubuntu-latest"],
+      "steps": [],
+      "html_url": "https://codeberg.org/ada/notes/actions/runs/41/jobs/1"
+    }
+  ]
+}

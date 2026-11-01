@@ -2,7 +2,7 @@
 title: "Pull requests"
 subject: "Git & fichiers"
 sources: ["docs/SPEC.md","docs/TODO-1.8.md","src/components/PrPanel.svelte","src-tauri/src/prview.rs"]
-tickets: ["ESC-64","ESC-161","ESC-305"]
+tickets: ["ESC-64","ESC-161","ESC-305","ESC-58"]
 decisions: [15]
 compared: "2026-10-30T18:20:19+01:00"
 ---
@@ -16,7 +16,7 @@ Escouade ouvre la pull request d'un agent ordinaire et suit celles de tout agent
 ### Quel agent peut ouvrir une PR
 
 - Un agent ordinaire (pas celui d'un ticket), non archivé, qui a un worktree d'Escouade (sa branche), ou qui travaille dans un autre worktree du dépôt : créé par Claude Code ou rejoint par un `cd`. Ce dossier est celui de la dernière entrée de sa session Claude Code, relu à chaque lecture de ses PR. Sa racine doit être un worktree du projet (`git worktree list`), ni le dossier du projet ni le worktree d'un autre agent, et sur une branche. L'en-tête de la conversation dit alors cette branche, et sa PR vise la cible du Kanban, sinon la branche du dossier du projet. Changer de branche ou revenir au dossier du projet oublie les PR de l'ancienne.
-- « Ouvrir une PR » n'est offert que si l'hébergeur du projet en ouvre : le projet a un dépôt distant chez GitHub ou Azure DevOps, et un compte y est connecté. Le bouton reste quand l'hébergeur ne répond pas. Sans dépôt distant, chez un autre hébergeur, ou sans compte : ni bouton ni entrée, aucune erreur (l'onglet « PR et CI » dit pourquoi).
+- « Ouvrir une PR » n'est offert que si l'hébergeur du projet en ouvre : le projet a un dépôt distant chez GitHub, Gitea / Forgejo ou Azure DevOps, et un compte y est connecté. Le bouton reste quand l'hébergeur ne répond pas. Sans dépôt distant, chez un autre hébergeur, ou sans compte : ni bouton ni entrée, aucune erreur (l'onglet « PR et CI » dit pourquoi).
 
 ### Où
 
@@ -34,7 +34,7 @@ Escouade ouvre la pull request d'un agent ordinaire et suit celles de tout agent
 ### Quelles PR sont celles d'un agent
 
 - Celles de la branche où il est réellement, quel qu'en soit l'auteur : celle de son worktree (agent de ticket compris, en lecture seule : ni « Ouvrir une PR » ni correction, son Kanban la suit), celle du worktree où il est entré seul, sinon celle du dossier du projet. Pas celle du dossier quand il est sur la cible du Kanban ou la branche par défaut d'un dépôt distant (`main` ou `master` faute de mieux) : une PR `main → prod` irait sinon à tous les agents du dossier.
-- Elles sont cherchées sur le dépôt de la cible (là où « Ouvrir une PR » ouvre), sur celui que suit la branche (sinon `origin`), et sur GitHub sur le dépôt dont ce dernier est un fork. Un dépôt autre que celui de la cible qui ne répond pas garde ce qui y a été lu en dernier ; un dépôt parent que l'hébergeur n'a pas dit est redemandé 10 min plus tard.
+- Elles sont cherchées sur le dépôt de la cible (là où « Ouvrir une PR » ouvre), sur celui que suit la branche (sinon `origin`), et sur GitHub, Gitea et Forgejo sur le dépôt dont ce dernier est un fork. Un dépôt autre que celui de la cible qui ne répond pas garde ce qui y a été lu en dernier ; un dépôt parent que l'hébergeur n'a pas dit est redemandé 10 min plus tard.
 - Deux PR de dépôts différents peuvent avoir le même numéro : elles se distinguent par leur dépôt. La PR d'un fork est gardée quand sa branche de tête est celle de l'agent (une branche poussée sur ton fork, la PR ouverte vers l'original), écartée sinon (un autre fork qui a une branche du même nom). Lue ailleurs que sur le dépôt de la cible, elle garde son dépôt, où « L'agent corrige » et l'onglet « PR et CI » lisent ses checks et ses retours.
 - Elles sont lues à l'affichage de l'agent, puis chaque minute tant qu'il est affiché, au plus toutes les 20 s, et plus du tout une fois toutes mergées. Elles sont gardées avec l'agent, dans l'ordre : ouvertes prêtes, brouillons, mergées, fermées, la plus récente d'abord. L'hébergeur dit aussi leur auteur et leur date de création, quand il les donne.
 
@@ -53,10 +53,10 @@ Pour l'agent ouvert :
 
 - **Sa PR**, la première de la liste de ses PR : son signe, son numéro, son état (ouverte, brouillon, mergée, fermée), son titre, « <branche> → <cible> », « Conflit avec <cible> » quand l'hébergeur le dit, « créée il y a 2 h par <auteur> », et l'icône qui l'ouvre dans le navigateur. « L'agent corrige » et « L'agent corrige les retours » y sont offerts aux mêmes conditions que sous la carte, sur un clic seulement. Ses autres PR sont listées en bas (« Ses autres PR »), chacune avec son état, sa CI, son âge et son auteur.
 - **La CI** : un résumé (« 1 échec sur 11 », « 3 en cours sur 14 », « 10 vérifications réussies · 1 annulée »), puis chaque vérification du dernier commit, les échecs d'abord, puis en cours, en attente, annulées, réussies, ignorées. Chacune a son signe, son état (en attente, en cours, réussie, échouée, annulée, ignorée), sa durée (« 2m 30s », jusqu'à maintenant pendant qu'elle tourne, quand l'hébergeur dit son début) et l'icône vers sa page chez l'hébergeur. Le nom d'une vérification échouée dont l'hébergeur garde le journal s'ouvre sur « La fin du journal » : ses 20 derniers Ko coupés à une ligne, en monospace, dans un cadre qui défile. « Aucune vérification sur le dernier commit. » sinon.
-- **« Relancer les échecs »** (GitHub, Azure DevOps), sur une PR ouverte dont une vérification a échoué ou été annulée : relance chez l'hébergeur les jobs en échec du dernier commit, au clic seulement. Un toast dit « N exécutions relancées. », ou « Aucun job à relancer : l'hébergeur ne relance que ses propres jobs. », puis la CI est relue.
+- **« Relancer les échecs »** (GitHub, Azure DevOps, Gitea de la 1.26), sur une PR ouverte dont une vérification a échoué ou été annulée : relance chez l'hébergeur les jobs en échec du dernier commit, au clic seulement. Un toast dit « N exécutions relancées. », ou « Aucun job à relancer : l'hébergeur ne relance que ses propres jobs. », puis la CI est relue. Chez Forgejo et un Gitea plus ancien, l'hébergeur répond qu'il ne sait pas le faire.
 - **La relecture** : la CI est relue toutes les 20 s tant qu'une vérification est en attente ou en cours, que l'onglet est affiché et que la fenêtre est visible ; jamais en arrière-plan. Les PR de l'agent sont relues à l'affichage de l'onglet (au plus toutes les 20 s) ; quand l'état de la CI d'une PR change, sa CI est relue aussitôt. Une lecture refaite qui échoue garde ce qui était affiché et dit pourquoi.
 - **Les revues et commentaires**, en lecture : chaque relecteur qui approuve (« a approuvé ») ou demande des changements, avec son texte ; une relecture qui ne fait que commenter n'apparaît que si elle dit quelque chose. Puis les commentaires, les fils ouverts d'abord : auteur, « fichier:ligne » pour un commentaire de ligne, « résolu », le texte (6 lignes au plus). « En lecture : Escouade ne publie rien en ton nom. » : aucun champ, aucune réponse, aucune résolution (décision du 2026-10-16).
-- **Les déploiements** de la branche, quand l'hébergeur les donne (GitHub ; pas pour la branche d'un fork) : l'environnement, son état (déployé, échoué, en erreur, en attente, en file, en cours, remplacé) et son adresse, ouverte dans le navigateur par un clic.
+- **Les déploiements** de la branche, quand l'hébergeur les donne (GitHub ; pas pour la branche d'un fork ; ni Gitea ni Forgejo n'en ont) : l'environnement, son état (déployé, échoué, en erreur, en attente, en file, en cours, remplacé) et son adresse, ouverte dans le navigateur par un clic.
 - Sans PR sur sa branche : « Pas de PR sur cette branche », puis « Ouvrir une PR… » quand l'agent peut en ouvrir une, sinon la raison (pas de branche à lui, agent de ticket, pas de dépôt distant, hébergeur sans client, pas de compte), avec « Réglages › Intégrations » quand c'est là que ça se règle (hébergeur inconnu, pas de compte).
 
 Sans agent ouvert (un projet sans agent : « PR et CI du projet » sous « Nouvel agent », ou `Ctrl+Maj+B`) : « PR ouvertes du projet » et leur nombre, les 30 plus récemment mises à jour du dépôt de la cible, chacune avec son signe, son numéro, son titre, son état, sa CI, un conflit, son âge et son auteur. Un clic sur celle d'un agent du projet (une PR qu'il a lue, ou de sa branche) ouvre cet agent ; sur une autre, la PR dans le navigateur. L'icône à droite ouvre toujours la PR dans le navigateur.
@@ -79,8 +79,8 @@ Sous la carte et dans l'onglet « PR et CI », sur une PR ouverte, jamais d'elle
 
 ## Limites
 
-- « Ouvrir une PR », la lecture des PR et l'onglet « PR et CI » : GitHub et Azure DevOps seulement (voir *Hébergeurs de code*). GitLab, Bitbucket et Gitea montrent la raison en attendant leurs clients.
-- Azure DevOps ne donne ni déploiements ni durée des évaluations de stratégie (seulement celle des builds).
+- « Ouvrir une PR », la lecture des PR et l'onglet « PR et CI » : GitHub, Gitea / Forgejo et Azure DevOps (voir *Hébergeurs de code*). GitLab et Bitbucket montrent la raison en attendant leurs clients.
+- Azure DevOps ne donne ni déploiements ni durée des évaluations de stratégie (seulement celle des builds). Gitea et Forgejo ne donnent pas de déploiements, et leurs journaux et leur relance dépendent de la version de l'instance.
 - La vue « Pull requests » du projet à côté du Kanban, ses filtres et « Lancer un agent sur cette PR » ne sont pas faits (ESC-65).
 - Un agent qui travaille dans un worktree qui n'est pas d'Escouade n'est suivi que sur Claude Code.
 - Le cycle des PR hors tickets et ce qui en reste à faire : `docs/TODO-1.8.md`, chapitre 2 (« Les PR hors tickets »).

@@ -1,6 +1,7 @@
 //! Gitea and Forgejo (Codeberg, gitea.com and the self-hosted instances): an access token with
-//! scopes. Their API is the same for what Escouade asks. The PR's calls come with their client
-//! (ESC-58), written from their documentation: to try for real later.
+//! scopes. What the core knows of them is declared here (their hosts, their rights, what they can
+//! do): their client is in the plugin « Gitea / Forgejo » (`plugins/builtin/dev.escouade.gitea`,
+//! INT-8.4, ESC-58), which serves their accounts in a process of its own.
 
 use super::*;
 
@@ -19,16 +20,20 @@ impl Provider for GiteaProvider {
 
     fn capabilities(&self) -> Capabilities {
         Capabilities {
-            // Its client comes later (ESC-56 to ESC-58).
-            pull_requests: false,
-            rerun: false,
+            pull_requests: true,
+            // Gitea's Actions only, from its 1.26; the plugin says `Unsupported` to an instance
+            // that cannot (and to every Forgejo).
+            rerun: true,
+            // A title that starts with `WIP:`.
             draft: true,
             // `merge_when_checks_succeed`, on a protected branch only.
             auto_merge: true,
             checks: true,
-            job_logs: false,
+            // From Gitea 1.25 and Forgejo 12: the plugin says `Unsupported` before.
+            job_logs: true,
             reviews: true,
             review_threads: true,
+            // Neither has an API for deployments: absent.
             deployments: false,
             merge_strategies: vec![
                 MergeStrategy::Merge,
@@ -66,38 +71,11 @@ impl Provider for GiteaProvider {
         format!("{}/user/settings/applications", url.trim_end_matches('/'))
     }
 
-    fn client(&self, http: reqwest::Client, account: &Credentials) -> Box<dyn Forge> {
-        Box::new(Gitea {
-            http,
-            base: account
-                .api
-                .clone()
-                .unwrap_or_else(|| format!("{}/api/v1", account.url.trim_end_matches('/'))),
-            token: account.token.trim().to_string(),
-        })
+    fn plugin(&self) -> Option<&'static str> {
+        Some(crate::plugins::builtin::GITEA)
     }
-}
 
-pub struct Gitea {
-    http: reqwest::Client,
-    base: String,
-    token: String,
-}
-
-impl Forge for Gitea {
-    fn me(&self) -> BoxFuture<'_, Result<Identity>> {
-        Box::pin(async move {
-            let rb = self
-                .http
-                .get(format!("{}/user", self.base))
-                .header("Authorization", format!("token {}", self.token));
-            let (me, _) = call(NAME, rb).await?;
-            let login = me["login"].as_str().unwrap_or("?").to_string();
-            Ok(Identity {
-                label: format!("@{login}"),
-                user: login,
-                scopes: None,
-            })
-        })
+    fn client(&self, _http: reqwest::Client, _account: &Credentials) -> Box<dyn Forge> {
+        Box::new(Unserved(NAME))
     }
 }

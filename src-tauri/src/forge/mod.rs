@@ -17,6 +17,8 @@ pub mod bitbucket;
 mod bitbucket_tests;
 pub mod connect;
 pub mod gitea;
+#[cfg(test)]
+mod gitea_tests;
 pub mod github;
 #[cfg(test)]
 mod github_tests;

@@ -1,7 +1,7 @@
 ---
 title: "Hébergeurs de code"
 subject: "Git & fichiers"
-sources: ["docs/SPEC.md"]
+sources: ["docs/SPEC.md","plugins/builtin/dev.escouade.gitea/README.md","tests/fixtures/forges/gitea/README.md"]
 tickets: ["ESC-54","ESC-55","ESC-58","ESC-70","ESC-241","ESC-212","ESC-57"]
 decisions: []
 compared: null
@@ -9,7 +9,7 @@ compared: null
 
 ## Ce que c'est
 
-Escouade reconnaît chez quel hébergeur est le dépôt distant d'un projet : GitHub (github.com, GHE.com, GitHub Enterprise Server), GitLab, Bitbucket Cloud, Gitea / Forgejo ou Azure DevOps. Elle s'y connecte par un compte, pour ouvrir et suivre les pull requests et leur CI (voir *Pull requests*, et *Validation* pour celles d'un ticket). Chaque hébergeur déclare ce qu'il sait faire (brouillon, auto-merge, checks, journaux de jobs, relectures, fils, déploiements, stratégies de merge) ; l'interface ne propose que cela. Une PR s'appelle « MR » sur GitLab, « PR » ailleurs.
+Escouade reconnaît chez quel hébergeur est le dépôt distant d'un projet : GitHub (github.com, GHE.com, GitHub Enterprise Server), GitLab, Bitbucket Cloud, Gitea / Forgejo (Codeberg compris) ou Azure DevOps. Elle s'y connecte par un compte, pour ouvrir et suivre les pull requests et leur CI (voir *Pull requests*, et *Validation* pour celles d'un ticket). Chaque hébergeur déclare ce qu'il sait faire (brouillon, auto-merge, checks, journaux de jobs, relectures, fils, déploiements, stratégies de merge) ; l'interface ne propose que cela. Une PR s'appelle « MR » sur GitLab, « PR » ailleurs.
 
 ## Comportement
 
@@ -27,8 +27,8 @@ Escouade reconnaît chez quel hébergeur est le dépôt distant d'un projet : Gi
 - Celui de github.com est aussi le compte de GitHub Issues : le connecter ou le déconnecter d'un côté le fait de l'autre (voir *Intégrations*).
 - Le jeton est gardé dans le trousseau du système, sous `forge:<hôte>`, avec les mêmes règles que les jetons des intégrations (voir *Intégrations*).
 - Jeton vide : celui de la CLI de l'hébergeur, demandé quand il sert (`gh auth token --hostname <hôte>`, `glab auth status --show-token --hostname <hôte>`). Sur dev.azure.com, celui du CLI `az` (`az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798`), redemandé cinq minutes avant qu'il expire.
-- Bitbucket Cloud : l'e-mail du compte Atlassian et un jeton d'API à scopes. Azure DevOps : un jeton d'accès personnel, droits demandés `vso.code_write`, `vso.build_execute`, `vso.work_write`, créé sur `<organisation>/_usersSettings/tokens`.
-- L'adresse est en https (http seulement vers cette machine). API : api.github.com, `api.<nom>.ghe.com`, `/api/v3` d'un GitHub Enterprise Server ; `/api/v4` de GitLab ; api.bitbucket.org/2.0 ; `/api/v1` de Gitea ; dev.azure.com. `ESCOUADE_GITHUB_API`, `ESCOUADE_BITBUCKET_API` et `ESCOUADE_AZURE_DEVOPS_API` remplacent l'adresse publique.
+- Bitbucket Cloud : l'e-mail du compte Atlassian et un jeton d'API à scopes. Azure DevOps : un jeton d'accès personnel, droits demandés `vso.code_write`, `vso.build_execute`, `vso.work_write`, créé sur `<organisation>/_usersSettings/tokens`. Gitea / Forgejo : un jeton d'accès à scopes (`write:repository`, `write:issue`, `read:user`), créé sur `/user/settings/applications` de l'instance.
+- L'adresse est en https (http seulement vers cette machine). API : api.github.com, `api.<nom>.ghe.com`, `/api/v3` d'un GitHub Enterprise Server ; `/api/v4` de GitLab ; api.bitbucket.org/2.0 ; `/api/v1` de Gitea et de Forgejo ; dev.azure.com. `ESCOUADE_GITHUB_API`, `ESCOUADE_BITBUCKET_API` et `ESCOUADE_AZURE_DEVOPS_API` remplacent l'adresse publique.
 - La vérification d'un compte lit qui il est : sur Azure DevOps, l'e-mail du compte de l'organisation, sinon son nom (un utilisateur anonyme est un refus).
 
 ### Ce qu'Escouade fait sur GitHub
@@ -39,6 +39,18 @@ Escouade reconnaît chez quel hébergeur est le dépôt distant d'un projet : Gi
 - **Checks** : check runs et statuts ; le journal d'un job de GitHub Actions ; « relancer ce qui a échoué » relance une exécution entière, pas un job.
 - **Relectures** (le dernier mot de chacun), **commentaires** (fils de lignes avec leur état résolu, et la conversation), commenter, répondre, publier une relecture, et le dernier statut de chaque déploiement.
 - **Économie du quota** : les lectures sont conditionnelles (une réponse inchangée ne compte pas dans la limite) ; les listes suivent les pages, 10 au plus. Sous 10 % du quota restant, Escouade étale ce qui reste de la fenêtre sur les appels restants ; à zéro, elle attend la remise à zéro, jamais plus de 30 s d'un coup. Les requêtes passent par le proxy des réglages (voir *Réglages*).
+
+### Ce qu'Escouade fait sur Gitea et Forgejo (Codeberg compris, ESC-58)
+
+Le client est le plugin livré `dev.escouade.gitea`. Gitea et Forgejo partagent leur API pour ce dont Escouade a besoin ; le client lit la version de l'instance (`/api/v1/version`, une fois par compte ; celle de Forgejo porte `+gitea-<version>`) pour ce qui les distingue.
+
+- **Ouvrir une PR** : un brouillon est un titre préfixé `WIP:` (ni l'un ni l'autre n'a de champ brouillon à écrire) ; `Closes #n` est ajouté à la description s'il manque ; les étiquettes sont données par leur identifiant (une étiquette inconnue est laissée de côté) ; les relecteurs sont demandés ensuite, et un refus ne reprend pas la PR.
+- **Lire les PR** : état, brouillon, conflit (d'une PR ouverte), fork, approbations et changements demandés (le dernier mot de chacun ; un commentaire seul ne reprend pas une approbation, une relecture en attente ou écartée ne compte pas), fils ouverts (commentaires de relecture sans résolution) et état combiné des statuts de la dernière révision. Aussi les PR d'une branche, la plus récente d'abord. L'auto-merge déjà programmé n'est pas dit par l'API : il n'est pas affiché.
+- **Merger** (merge, squash, rebase ; le rebase suivi d'un commit de merge existe aussi) et **auto-merge** (`merge_when_checks_succeed`) : l'instance ne le programme que sur une branche protégée ; le client lit la branche avant et, si elle ne l'est pas, refuse sans rien envoyer en disant laquelle. Une erreur de l'instance (contrôles non verts…) est rendue telle quelle.
+- **Checks** : les statuts de la dernière révision (le plus récent de chaque contexte) ; ceux qu'Actions poste sont reliés à leur job par leur adresse, avec ses heures chez Gitea. Une CI tierce n'a qu'un statut et une adresse. Le **journal** d'un job se télécharge, et « relancer ce qui a échoué » relance chaque exécution en échec.
+- **Relectures et fils** : le dernier mot de chacun, les commentaires de lignes avec leur état résolu et la conversation, commenter, publier une relecture avec ses lignes ; répondre dans un fil et le résoudre.
+- **Capacités absentes, déclarées comme telles** : les **déploiements** n'existent ni chez Gitea ni chez Forgejo (aucune API) : la capacité est absente, rien n'est demandé. Ce qui dépend de la version est dit appel par appel (« Cet hébergeur ne sait pas faire »), jamais une erreur ni une réponse fausse, et l'interface n'affiche rien pour cela : le **journal** et les jobs des Actions (Gitea 1.25 et plus, Forgejo 12 et plus ; en dessous, des statuts sans job), la **relance** (Gitea 1.26 et plus ; aucune chez Forgejo), **répondre dans un fil et le résoudre** (Gitea 1.26 et plus ; aucun chez Forgejo). Ces versions viennent des sources et des notes de version, pas d'un essai.
+- **Écarts relevés entre les deux** (d'après les swagger de Forgejo 16 et de la branche principale de Gitea) : le corps du merge (`do` / `Do`), les relecteurs à la création (Gitea seul), les exécutions et leurs jobs (`run_number`, `conclusion`, `{ jobs }` chez Gitea ; `index_in_repo`, un statut, une liste chez Forgejo).
 
 ### Ce qu'Escouade fait sur Azure DevOps
 
@@ -60,9 +72,10 @@ Réglages › Intégrations › « Hébergeurs de code » :
 ## Limites
 
 - Bitbucket Cloud : rien n'a été essayé pour de vrai (écrit d'après la documentation de l'API, testé sur un faux serveur ; la liste des essais à faire est dans `docs/TODO-2.2.md`) ; pas d'auto-merge (l'API n'en a pas), pas d'étiquettes, pas de relance de jobs.
-- GitLab et Gitea / Forgejo : Escouade ne fait que vérifier le compte. Elle n'y ouvre ni ne lit aucune PR, et « Ouvrir une PR » n'y est pas proposé.
-- Les droits d'un jeton ne sont lus que pour un jeton GitHub classique et sur GitLab ; un jeton GitHub à droits fins, Bitbucket, Gitea et Azure DevOps ne les disent pas.
+- GitLab : Escouade ne fait que vérifier le compte. Elle n'y ouvre ni ne lit aucune MR, et « Ouvrir une MR » n'y est pas proposé.
+- Les droits d'un jeton ne sont lus que pour un jeton GitHub classique et sur GitLab ; un jeton GitHub à droits fins, Bitbucket, Gitea / Forgejo et Azure DevOps ne les disent pas.
 - GitHub : les écritures (créer, merger, auto-merge, commenter) n'ont pas encore été essayées pour de vrai (voir `docs/TODO-1.8.md`).
+- Gitea / Forgejo : aucun essai réel (décidé le 2026-10-16) ; le client est écrit d'après les swagger des deux et testé sur un faux serveur nourri de réponses écrites d'après eux. Restent à essayer sur Codeberg et un Gitea, les routes des Actions d'abord (`docs/TODO-2.2.md`).
 - Azure DevOps : pas de déploiements ; le jeton de `az` ne vaut que pour dev.azure.com ; un essai réel avec un jeton reste à faire (ouvrir une PR brouillon, la lire, commenter, répondre, résoudre, l'abandonner).
 
 ## Les comptes servis par un plugin (ESC-212)

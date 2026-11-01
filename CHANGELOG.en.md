@@ -34,6 +34,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - The five online voice services (OpenAI, Groq, Mistral, ElevenLabs, Deepgram) are plugins shipped with Escouade: each can be turned off in the Plugins view, and your key stays in the keychain. Dictation, live transcription and the agent’s voice behave as before.
 - isola is a plugin shipped with Escouade, the first “launch environment”: it runs each worktree’s services on its own ports and addresses. You can turn it off in Settings › Plugins, for the whole app or one project; without it, a ticket starts as before, with a recipe.
 - GitHub is a plugin shipped with Escouade, listed under “Shipped with Escouade”: its issues in the Kanban, its pull requests, CI, reviews and deployments run apart, on the same account, and nothing changes in use. Switched off or stopped, it says so on the agent’s card and in Settings › Integrations, and the pull requests read last stay.
+- Gitea, Forgejo and Codeberg have a plugin shipped with Escouade: draft pull requests, merge, auto-merge on a protected branch, statuses, Actions logs, reviews and threads. They have no deployments, and the Actions logs and reruns depend on the instance’s version: the app says so instead of failing.
 
 ### Removed
 

@@ -151,16 +151,17 @@ export const BUILTINS: Builtin[] = [
   },
   {
     id: 'dev.escouade.gitea',
-    name: 'Gitea et Forgejo',
+    name: 'Gitea / Forgejo',
     categories: ['forges'],
     description: t(
-      'Les pull requests et les actions de ton instance Gitea ou Forgejo.',
-      'Pull requests and actions of your Gitea or Forgejo instance.',
+      'Les PR, la CI (statuts et Actions), les relectures et le merge de tes dépôts Gitea, Forgejo et Codeberg, sur un seul compte.',
+      'Pull requests, CI (statuses and Actions), reviews and merging of your Gitea, Forgejo and Codeberg repositories, on one account.',
     ),
-    network: [],
+    network: ['codeberg.org', 'gitea.com'],
     secrets: true,
     docs: doc('integrations'),
     logo: { brand: 'gitea' },
+    source: 'plugins/builtin/dev.escouade.gitea',
   },
   ...(
     [

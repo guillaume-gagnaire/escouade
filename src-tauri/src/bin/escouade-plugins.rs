@@ -36,6 +36,8 @@ const ENTRIES: &[Entry] = &[
     ("github", escouade_plugin_github::run),
     // Bitbucket Cloud (INT-8.3, ESC-57): its code host, in its crate (plugins/builtin/dev.escouade.bitbucket).
     ("bitbucket", escouade_plugin_bitbucket::run),
+    // Gitea and Forgejo (INT-8.4): its code host, in its crate (plugins/builtin/dev.escouade.gitea).
+    ("gitea", escouade_plugin_gitea::run),
 ];
 
 fn main() {

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.gitea",
+  "name": "Gitea / Forgejo",
+  "version": "0.0.0",
+  "description": {
+    "fr": "Les PR, la CI (statuts et Actions), les relectures et le merge de tes dépôts Gitea, Forgejo et Codeberg, sur un seul compte.",
+    "en": "Pull requests, CI (statuses and Actions), reviews and merging of your Gitea, Forgejo and Codeberg repositories, on one account."
+  },
+  "author": { "name": "Escouade", "url": "https://escouade.dev" },
+  "license": "GPL-3.0-or-later",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/builtin/dev.escouade.gitea",
+  "categories": ["forges"],
+  "escouade": { "api": "1", "min": "2.1.0" },
+  "run": { "command": "{escouade}/escouade-plugins", "args": ["gitea"] },
+  "activation": ["account:gitea"],
+  "permissions": {
+    "network": ["codeberg.org", "gitea.com"],
+    "secrets": ["account:*"]
+  },
+  "contributes": {
+    "accounts": [
+      {
+        "id": "gitea",
+        "name": "Gitea / Forgejo",
+        "selfHosted": true,
+        "connect": ["token"],
+        "fields": [{ "key": "url" }, { "key": "token", "secret": true }],
+        "scopes": ["write:repository", "write:issue", "read:user"],
+        "tokenPage": "https://codeberg.org/user/settings/applications"
+      }
+    ],
+    "forges": [{ "id": "gitea", "name": "Gitea / Forgejo", "account": "gitea" }]
+  }
+}
