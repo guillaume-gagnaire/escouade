@@ -6,7 +6,7 @@
 //   npx esbuild tests/fixtures/plugins/sdk-both/src/main.ts --bundle --platform=node --format=esm --target=node20 \
 //     --outfile=tests/fixtures/plugins/sdk-both/dist/plugin.mjs
 import { readFileSync } from 'node:fs';
-import { createPlugin, RpcError } from '../../../../../sdk/plugin/src/index.ts';
+import { createPlugin, RpcError } from '../../../../../sdk/plugin/src/index';
 
 const rules = JSON.parse(readFileSync(new URL('../rules.json', import.meta.url), 'utf8')) as { endpoint: string; deny: string };
 const plugin = createPlugin();
