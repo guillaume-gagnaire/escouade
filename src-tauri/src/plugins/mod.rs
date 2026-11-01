@@ -25,6 +25,8 @@ pub mod builtin;
 // The facts handed to the plugins, their webhooks and their commands (PLG-5).
 pub mod events;
 pub mod manifest;
+// The reader of workflows a plugin brings (ESC-200).
+pub mod reader;
 #[cfg_attr(not(test), allow(dead_code))]
 pub mod runtime;
 // The store in the app: its catalogue, its revocation list, a version downloaded and checked (STORE-9).

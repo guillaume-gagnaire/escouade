@@ -120,7 +120,8 @@ function handle(msg) {
       if (method.startsWith('tickets/') && flag('--ticket-budget')) {
         return serve(id, method, params).then((m) => (m?.result === undefined ? m : ok(id, { value: m.result, rateLimit: { ...RATE, remaining: 4000 } })));
       }
-      if (method === 'account/me' || method.startsWith('tickets/') || method.startsWith('forge/')) return serve(id, method, params);
+      if (method === 'account/me' || method.startsWith('tickets/') || method.startsWith('forge/') || method.startsWith('workflow/'))
+        return serve(id, method, params);
       return id === undefined ? null : fail(id, -32601, `unknown method ${method}`);
   }
 }
@@ -142,7 +143,7 @@ async function serve(id, method, p) {
     const answer = await ask('secrets/get', { key: tokenKey });
     if (answer.result !== 'good') return fail(id, -32401, 'le jeton est refusé');
   }
-  const name = p.container ?? p.repo?.name;
+  const name = p.container ?? p.repo?.name ?? p.reader;
   if (name === 'gone') return fail(id, -32404, 'introuvable');
   if (name === 'refused') return fail(id, -32010, 'aucune transition ne mène là');
   if (name === 'crash') {
@@ -154,6 +155,37 @@ async function serve(id, method, p) {
   switch (method) {
     case 'account/me':
       return ok(id, p.point === 'forge' ? { user: 'ada', label: '@ada', scopes: ['repo'] } : { label: 'ada@fake.test', user: 'ada' });
+    // The reader of workflows (ESC-200): a graph of two steps named after the files it is given, or
+    // one that does not hold (`broken`), or an answer too big (`many`).
+    case 'workflow/read': {
+      const files = (p.files ?? []).map((x) => x.path);
+      if (p.reader === 'broken') {
+        return ok(id, { workflows: [{ id: 'bad', name: 'Bad', steps: [{ name: 'a' }], transitions: [{ from: 'a', to: 'nowhere' }] }] });
+      }
+      if (p.reader === 'many') {
+        return ok(id, { workflows: Array.from({ length: 51 }, (_, i) => ({ id: `w${i}`, name: 'W', steps: [{ name: 'a' }] })) });
+      }
+      return ok(id, {
+        workflows: [
+          {
+            id: 'bmad',
+            name: 'BMAD',
+            repo: p.repos?.[0] ?? '',
+            steps: [
+              { name: 'brief', command: '/bmad:brief', description: files.join(','), writes: ['docs/brief.md'] },
+              { name: 'build', command: '/bmad:build', agents: ['dev'] },
+              { name: 'review', command: '/bmad:review' },
+            ],
+            transitions: [
+              { from: 'brief', to: 'build' },
+              { from: 'build', to: 'review' },
+              { from: 'review', to: 'build', back: true, condition: 'when it finds gaps', max: 3 },
+            ],
+            exit: 'the review is clean',
+          },
+        ],
+      });
+    }
     case 'tickets/containers':
       return ok(id, [
         { id: 'demo', name: 'Démo', own: true },

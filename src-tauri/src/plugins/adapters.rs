@@ -104,28 +104,36 @@ fn typed(plugin: &str, e: CallError, what: &'static str) -> anyhow::Error {
     }
 }
 
-/// A plugin and the runtime that talks to it, for one account.
+/// A plugin and the runtime that talks to it (for one account: `for_account`).
 #[derive(Clone)]
-struct Line {
+pub(super) struct Line {
     rt: Arc<Runtime>,
-    plugin: String,
-    /// The account's budget of calls (`accounts::budget_key`): every point of the plugin spends
-    /// the same.
-    budget: String,
+    pub(super) plugin: String,
+    /// The account's budget of calls (`accounts::budget_key`), for a line of one account:
+    /// every point of the plugin spends the same.
+    budget: Option<String>,
 }
 
 impl Line {
-    fn new(rt: Arc<Runtime>, plugin: &str, account: &str) -> Self {
+    pub(super) fn new(rt: Arc<Runtime>, plugin: &str) -> Self {
         Self {
             rt,
             plugin: plugin.to_string(),
-            budget: super::accounts::budget_key(plugin, account),
+            budget: None,
+        }
+    }
+
+    /// The line of one account (`account`: its name in the keychain's), whose budget it keeps.
+    fn for_account(rt: Arc<Runtime>, plugin: &str, account: &str) -> Self {
+        Self {
+            budget: Some(super::accounts::budget_key(plugin, account)),
+            ..Self::new(rt, plugin)
         }
     }
 
     /// The answer to `method`: its value, the budget it carries (`{ value, rateLimit }`) kept as
     /// the account's.
-    async fn call<T: DeserializeOwned>(
+    pub(super) async fn call<T: DeserializeOwned>(
         &self,
         method: &str,
         what: &'static str,
@@ -137,8 +145,8 @@ impl Line {
             .await
             .map_err(|e| typed(&self.plugin, e, what))?;
         let (v, left) = super::accounts::split_budget(v);
-        if let Some(left) = left {
-            self.rt.spend(&self.budget, left);
+        if let (Some(budget), Some(left)) = (&self.budget, left) {
+            self.rt.spend(budget, left);
         }
         serde_json::from_value(v).map_err(|e| {
             typed(
@@ -176,7 +184,7 @@ impl ProcessTicketSource {
             crate::forge::host_of(&account.site)
         };
         Self {
-            line: Line::new(rt, plugin, &name),
+            line: Line::for_account(rt, plugin, &name),
             source: source.to_string(),
             account: account_json(account),
         }
@@ -185,7 +193,10 @@ impl ProcessTicketSource {
     /// The account's budget of calls, as the last answer of any point of its plugin said it (a
     /// source's answer may carry it as a host's does: `{ value, rateLimit }`).
     pub fn rate_limit(&self) -> Option<RateLimit> {
-        self.line.rt.budget(&self.line.budget)
+        self.line
+            .budget
+            .as_deref()
+            .and_then(|b| self.line.rt.budget(b))
     }
 
     fn params(&self, extra: Value) -> Value {
@@ -346,7 +357,7 @@ pub struct ProcessForge {
 impl ProcessForge {
     pub fn new(rt: Arc<Runtime>, plugin: &str, forge: &str, account: &Credentials) -> Self {
         Self {
-            line: Line::new(rt, plugin, &crate::forge::host_of(&account.url)),
+            line: Line::for_account(rt, plugin, &crate::forge::host_of(&account.url)),
             forge: forge.to_string(),
             account: json!({ "url": account.url, "email": account.email, "api": account.api }),
         }
@@ -608,7 +619,10 @@ impl Forge for ProcessForge {
 
     /// The account's budget: what the last answer of any point of its plugin said.
     fn rate_limit(&self) -> Option<RateLimit> {
-        self.line.rt.budget(&self.line.budget)
+        self.line
+            .budget
+            .as_deref()
+            .and_then(|b| self.line.rt.budget(b))
     }
 
     fn deployments<'a>(
