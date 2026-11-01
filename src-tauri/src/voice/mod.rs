@@ -16,6 +16,7 @@ pub mod models;
 pub mod online;
 pub mod online_catalog;
 pub mod online_speech;
+pub mod service;
 pub mod source;
 pub mod speech;
 pub mod spoken;
@@ -487,7 +488,7 @@ impl Voice {
         {
             let kept = samples.lock();
             let emit = self.emit.clone();
-            let opened = live::LiveStream::open(
+            let opened = service::of(spec.provider).open_live(
                 spec,
                 &choice.language,
                 rate,
@@ -849,7 +850,7 @@ impl Voice {
             .map_err(|e| online::OnlineError::Network(p, e.to_string()))?;
         let never = AtomicBool::new(false);
         self.play_preview(volume, |push| {
-            for sentence in online_speech::sentences(text, online_speech::max_chars(p)) {
+            for sentence in online_speech::sentences(text, service::of(p).max_chars()) {
                 let mut failed = None;
                 b.speak(spec, choice, &sentence, &never, &mut |audio| {
                     if failed.is_none() {
