@@ -33,5 +33,7 @@ https://escouade.dev/en/docs/plugins/examples
 `builtin/<id>/` holds the plugins shipped **with** the app, not published on the store: each with its manifest and its
 README, embedded in the app and listed in its registry (`src-tauri/src/plugins/builtin.rs`); a test of the app checks
 that each folder has both and is in the registry. Their program is `escouade-plugins <name>`, signed with the app, and
-their version is Escouade's. The first is `dev.escouade.minimal`, the demonstration. `ci.mjs` does not run them: it is
-for the folders above, which are the store's.
+their version is Escouade's. `dev.escouade.minimal` is the demonstration (in development builds only);
+`dev.escouade.github` is the first real one, GitHub's code host and GitHub Issues, with its crate (`Cargo.toml`, `src/`)
+on the kit of the Rust plugins (`crates/escouade-plugin-kit`). `ci.mjs` does not run them: it is for the folders above,
+which are the store's; their tests run with the app's (`cargo nextest run` in `src-tauri/`).

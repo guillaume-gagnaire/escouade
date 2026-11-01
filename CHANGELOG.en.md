@@ -28,6 +28,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - The documentation says how to publish a plugin on the store and prepare its review, and a new page, “Plugin security”, says what the app checks, what the “Verified by Escouade” seal covers and what the review refuses.
 - A project can propose plugins in its `.escouade.yml`: when it opens, a band of Settings › Projects names those missing, with their store page, installing nothing by itself; “Not for this project” silences it. The file can also set a plugin up for that project, never with a secret.
 - A plugin can serve an account in place of Escouade’s integration (a company GitLab, an in-house Jira): when several offer it, “Connect…” asks which one serves it, and that account serves every use of the plugin, its tickets and its PRs alike. Accounts already connected stay as they are.
+- GitHub is a plugin shipped with Escouade, listed under “Shipped with Escouade”: its issues in the Kanban, its pull requests, CI, reviews and deployments run apart, on the same account, and nothing changes in use. Switched off or stopped, it says so on the agent’s card and in Settings › Integrations, and the pull requests read last stay.
 
 ### Removed
 

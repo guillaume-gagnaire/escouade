@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { and, eq, isNull, lt, sql } from 'drizzle-orm';
 import { accounts, installsDaily, plugins, reports, versions } from '../db/schema';
-import { BUILTINS, isBuiltinId, type Builtin } from './builtin';
+import { BUILTINS, isBuiltinId, sourceUrl, type Builtin } from './builtin';
 import { textOf, type Lang, type Text } from './checks';
 import type { Db } from './db';
 import { renderDocs, type Docs } from './readme';
@@ -429,7 +429,7 @@ export async function pluginPage(db: Db | null, dir: string, id: string) {
   if (b)
     return {
       entry: builtinEntry(b),
-      builtin: { docs: b.docs },
+      builtin: { docs: b.docs, source: b.source ? sourceUrl(b.source) : null },
       permissions: builtinPermissions(b),
       versions: [],
       latest: null,

@@ -82,6 +82,8 @@ export default defineZone('integrations', {
     viaCli: '{cli} token',
     issues: 'Also used for {source}',
     noTickets: 'No tickets: PRs and CI only',
+    pluginOff: 'The plugin {plugin} is switched off (Settings › Plugins): this account serves nothing, its PRs are no longer followed',
+    pluginStopped: 'The plugin {plugin} stopped ({why}): its PRs are no longer followed until it starts again',
     projects: { one: 'Project: {list}', other: 'Projects: {list}' },
     noAccount: { one: 'No account, for the project {list}', other: 'No account, for the projects {list}' },
     connectHost: 'Connect {host}',

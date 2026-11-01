@@ -4,7 +4,7 @@
 
 use super::azure::{AzureProvider, CLOUD};
 use super::azure_api::{allowed_by, Azure};
-use super::github_api::Pace;
+use super::Pace;
 use super::*;
 use crate::integrations::fake::FakeServer;
 use base64::Engine;

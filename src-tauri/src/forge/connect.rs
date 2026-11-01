@@ -43,13 +43,19 @@ pub struct Status {
     pub error: Option<String>,
 }
 
-/// Asks the host who the token is: its state, and who it is when it answered.
+/// Asks the host who the token is: its state, and who it is when it answered. A host whose client
+/// left the core (`Provider::plugin`) is asked through its plugin, as the core does (the tests').
+#[cfg(test)]
 pub async fn check(
     provider: &dyn Provider,
     http: reqwest::Client,
     creds: &Credentials,
 ) -> (Status, Option<Identity>) {
-    check_client(&*provider.client(http, creds), &provider.scopes()).await
+    let client = match provider.plugin() {
+        Some(plugin) => crate::plugins::builtin::served_forge(plugin, &provider.kind(), creds),
+        None => provider.client(http, creds),
+    };
+    check_client(&*client, &provider.scopes()).await
 }
 
 /// `check`, with the client of the account (a plugin's, `plugins::adapters::ProcessForge`) and
@@ -150,6 +156,23 @@ pub struct ProviderView {
     /// The plugins that may serve a new account of it, Escouade's first: the form offers the
     /// choice when there are several.
     pub servers: Vec<crate::plugins::accounts::Server>,
+    /// The plugin the app gives that serves its accounts, once its client left the core (GitHub's,
+    /// INT-8.1), read from the plugins' registry: whether it is on, and why it stopped.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub served_by: Option<ServedBy>,
+}
+
+/// A plugin the app gives, as the view of the code hosts shows it.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ServedBy {
+    pub plugin: String,
+    pub name: String,
+    /// Switched on for the app (Réglages › Plugins).
+    pub on: bool,
+    /// It stopped by itself (crashes, memory, a start refused), in words; none while it runs or
+    /// waits for its first call.
+    pub stopped: Option<String>,
 }
 
 /// An account as the window knows it: never its token.
@@ -314,8 +337,19 @@ impl<R: Runtime> Core<R> {
 
     /// The client of an account of the code host `kind`: its plugin's (`ProcessForge`) when
     /// another than Escouade's own hand serves it (`plugin`), else the core's.
+    /// A host whose client left the core (`Provider::plugin`: GitHub's) is its plugin's too, the
+    /// account's token lent to it as the core holds it (the user's, or its CLI's).
     fn client_of(&self, kind: &str, plugin: &str, creds: &Credentials) -> Result<Box<dyn Forge>> {
-        if !plugin.is_empty() {
+        let provider = self.provider(kind)?;
+        let first_hand = provider.plugin().filter(|_| plugin.is_empty());
+        if let Some(own) = first_hand {
+            self.plugin_runtime.lend(
+                own,
+                &format!("account:{}", host_of(&creds.url)),
+                &creds.token,
+            );
+        }
+        if let Some(plugin) = first_hand.or((!plugin.is_empty()).then_some(plugin)) {
             return Ok(Box::new(crate::plugins::adapters::ProcessForge::new(
                 self.plugin_runtime.clone(),
                 plugin,
@@ -323,7 +357,28 @@ impl<R: Runtime> Core<R> {
                 creds,
             )));
         }
-        Ok(self.provider(kind)?.client(self.http()?, creds))
+        Ok(provider.client(self.http()?, creds))
+    }
+
+    /// The plugin the app gives `id`, as the code hosts' view shows it.
+    fn served_by(&self, id: &str) -> ServedBy {
+        use crate::plugins::runtime::Stop;
+        let v = self.plugins.get(id, crate::i18n::ui());
+        let on = v
+            .as_ref()
+            .is_some_and(|v| v.choices.enabled && v.state == crate::plugins::State::Ready);
+        let stopped = self
+            .plugin_runtime
+            .status(id)
+            .stop
+            .filter(|s| !matches!(s, Stop::Asked | Stop::Shutdown))
+            .map(|s| s.describe(Duration::from_secs(300)));
+        ServedBy {
+            plugin: id.to_string(),
+            name: v.map_or_else(|| id.to_string(), |v| v.name),
+            on,
+            stopped,
+        }
     }
 
     /// What a project's remote names (the remote of its target branch, else origin, else the
@@ -359,6 +414,7 @@ impl<R: Runtime> Core<R> {
                 address_hint: p.address_hint().map(str::to_string),
                 scopes: p.scopes(),
                 capabilities: p.capabilities(),
+                served_by: p.plugin().map(|id| self.served_by(id)),
             })
             .collect();
         let list = accounts::all(&self.accounts.read());

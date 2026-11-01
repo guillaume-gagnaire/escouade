@@ -423,6 +423,12 @@ pub struct Runtime {
     modules: Arc<super::wasm::Modules>,
     /// What the tests change of `net/fetch`'s network.
     net: parking_lot::RwLock<super::wasm::Net>,
+    /// The secrets the core lends a plugin the app gives, by plugin and key (`account:github.com`): the token of an
+    /// account of the first hand as the core holds it, the user's or its CLI's (`gh auth token`), read before the
+    /// keychain. Never another plugin's.
+    lent: Mutex<HashMap<(String, String), String>>,
+    /// What a plugin the app gives is told when it starts (`ESCOUADE_LANG`, the network of Réglages › Réseau).
+    builtin_env: parking_lot::RwLock<Vec<(String, String)>>,
     me: Weak<Self>,
 }
 
@@ -435,6 +441,27 @@ impl Runtime {
     /// The account `key` has `left` of its calls: whichever of its plugin's points was answered.
     pub fn spend(&self, key: &str, left: crate::forge::RateLimit) {
         self.budgets.lock().insert(key.to_string(), left);
+    }
+
+    /// Lends the plugin of the app `id` its secret `key` (`account:<host>`): what `secrets/get` gives it first.
+    /// An empty one takes the loan back.
+    pub fn lend(&self, id: &str, key: &str, secret: &str) {
+        let at = (id.to_string(), key.to_string());
+        if secret.trim().is_empty() {
+            self.lent.lock().remove(&at);
+        } else {
+            self.lent.lock().insert(at, secret.trim().to_string());
+        }
+    }
+
+    /// What a plugin the app gives is told when it starts: the interface's language and the network's settings. A
+    /// change applies to its next process: the core stops the running ones (`forget`).
+    pub fn set_builtin_env(&self, env: Vec<(String, String)>) {
+        *self.builtin_env.write() = env;
+    }
+
+    pub fn builtin_env(&self) -> Vec<(String, String)> {
+        self.builtin_env.read().clone()
     }
 
     /// The core, once made: the projects whose settings a plugin may ask for.
@@ -485,6 +512,8 @@ impl Runtime {
             place: parking_lot::RwLock::new(None),
             modules: Arc::new(super::wasm::Modules::new(data, app_version)),
             net: parking_lot::RwLock::new(super::wasm::Net::default()),
+            lent: Mutex::new(HashMap::new()),
+            builtin_env: parking_lot::RwLock::new(Vec::new()),
             me: me.clone(),
         });
         // A folder in development read again: its process stops, and the next one is given the
@@ -1244,6 +1273,13 @@ impl Host {
             .env("ESCOUADE_PLUGIN_ID", &self.id)
             .env("ESCOUADE_PLUGIN_API", PROTOCOL.to_string())
             .env("ESCOUADE_VERSION", &rt.app_version)
+            .envs(
+                rt.builtin_env
+                    .read()
+                    .iter()
+                    .filter(|_| super::builtin::is_builtin(&self.id))
+                    .cloned(),
+            )
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -1568,6 +1604,17 @@ impl Host {
         let Some(rt) = self.rt.upgrade() else {
             return Err((KEYCHAIN, "Escouade is closing".into()));
         };
+        let lent = rt
+            .lent
+            .lock()
+            .get(&(self.id.clone(), key.to_string()))
+            .cloned();
+        if let Some(s) = lent {
+            self.journal.mask(&s);
+            self.journal
+                .push(Kind::Message, format!("was given its secret {key:?}"));
+            return Ok(Some(s));
+        }
         match rt.secrets.get(&secret_name(&self.id, key)) {
             Ok(Some(s)) => {
                 self.journal.mask(&s);
@@ -1603,6 +1650,18 @@ impl Host {
                 let message = params.get("message").and_then(Value::as_str).unwrap_or("");
                 self.journal
                     .push(Kind::Message, format!("[{level}] {message}"));
+            }
+            // What an account has left, said before a refusal (which carries none): kept as an answer's
+            // `rateLimit` is (INT-8.1).
+            "account/budget" => {
+                let account = params.get("account").and_then(Value::as_str);
+                let left = params
+                    .get("rateLimit")
+                    .cloned()
+                    .and_then(|r| serde_json::from_value::<crate::forge::RateLimit>(r).ok());
+                if let (Some(account), Some(left), Some(rt)) = (account, left, self.rt.upgrade()) {
+                    rt.spend(&super::accounts::budget_key(&self.id, account), left);
+                }
             }
             _ => self
                 .journal

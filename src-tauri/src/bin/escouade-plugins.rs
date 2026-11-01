@@ -5,7 +5,9 @@
 //! It is shipped beside the app and signed with it; the app starts no other (`plugins::builtin`). It speaks the
 //! protocol of `escouade-plugin-protocol` and nothing of the app's own: no `escouade_lib`, so that it stays light.
 //!
-//! An entry is a function from the name to a `fn() -> i32`: add the plugin's module and one line to `ENTRIES`.
+//! An entry is a function from the name to a `fn() -> i32`: add the plugin's module and one line to `ENTRIES`. A
+//! plugin that serves code hosts or Kanban sources is a crate of its own beside its manifest
+//! (`plugins/builtin/<id>/`), on the kit `escouade-plugin-kit` (its loop, the service of `forge/*` and `tickets/*`).
 
 #[path = "escouade-plugins/minimal.rs"]
 mod minimal;
@@ -14,7 +16,11 @@ mod minimal;
 type Entry = (&'static str, fn() -> i32);
 
 /// The plugins of this program.
-const ENTRIES: &[Entry] = &[("minimal", minimal::run)];
+const ENTRIES: &[Entry] = &[
+    ("minimal", minimal::run),
+    // GitHub (INT-8.1): its code host and GitHub Issues, in its crate (plugins/builtin/dev.escouade.github).
+    ("github", escouade_plugin_github::run),
+];
 
 fn main() {
     let name = std::env::args().nth(1).unwrap_or_default();

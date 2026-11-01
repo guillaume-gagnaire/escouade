@@ -190,6 +190,13 @@ impl ProcessTicketSource {
         }
     }
 
+    /// The account where its API is when the core says it (github.com's as GitHub Issues reaches
+    /// it: `ESCOUADE_GITHUB_API`, a fake one).
+    pub fn with_api(mut self, api: &str) -> Self {
+        self.account["api"] = json!(api);
+        self
+    }
+
     /// The account's budget of calls, as the last answer of any point of its plugin said it (a
     /// source's answer may carry it as a host's does: `{ value, rateLimit }`).
     pub fn rate_limit(&self) -> Option<RateLimit> {

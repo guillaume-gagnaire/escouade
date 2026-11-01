@@ -22,10 +22,8 @@ pub struct Entry {
 /// line here; the test of the registry checks that each folder has its manifest and its README, and that each is in
 /// this list.
 ///
-/// The demonstration plugin is in the builds of development and the tests only: a release's registry is empty until
-/// INT-7 and INT-8 give the real ones, so that nobody sees (nor runs) a plugin that does nothing. `escouade-plugins`
-/// itself is packaged and signed all the same.
-#[cfg_attr(not(any(debug_assertions, test)), allow(dead_code))]
+/// The demonstration plugin is in the builds of development and the tests only, so that nobody sees (nor runs) a plugin
+/// that does nothing. GitHub (INT-8.1) is the first real one: its code host and GitHub Issues.
 pub const REGISTRY: &[Entry] = &[
     #[cfg(any(debug_assertions, test))]
     Entry {
@@ -34,7 +32,14 @@ pub const REGISTRY: &[Entry] = &[
             "../../../plugins/builtin/dev.escouade.minimal/escouade-plugin.json"
         ),
     },
+    Entry {
+        id: GITHUB,
+        manifest: include_str!("../../../plugins/builtin/dev.escouade.github/escouade-plugin.json"),
+    },
 ];
+
+/// The plugin « GitHub »: github.com, GHE.com and GitHub Enterprise Server, their pull requests and GitHub Issues.
+pub const GITHUB: &str = "dev.escouade.github";
 
 /// Whether `id` is the id of a plugin the app gives.
 pub fn is_builtin(id: &str) -> bool {
@@ -199,4 +204,38 @@ mod tests {
         // A file that is not there is no status.
         assert!(authenticode_status(&dir.join("nope.exe")).is_err());
     }
+}
+
+/// The runtime of the plugins the app gives, as a test has it: their programs those the build made beside the tests
+/// (`target/debug/escouade-plugins`), its keychain empty. A test lends the tokens (`Runtime::lend`).
+#[cfg(test)]
+pub fn test_runtime(name: &str) -> std::sync::Arc<super::runtime::Runtime> {
+    let data =
+        crate::paths::DataDir::new(crate::paths::test_dir(&format!("builtin-{name}")).join("data"));
+    data.ensure().unwrap();
+    let plugins = super::Plugins::load_for_core(data.clone(), env!("CARGO_PKG_VERSION"));
+    super::runtime::Runtime::new(
+        plugins,
+        std::sync::Arc::new(crate::integrations::secrets::MemoryStore::default()),
+        &data,
+        env!("CARGO_PKG_VERSION"),
+        super::runtime::Limits::default(),
+    )
+}
+
+/// A client of the code host `kind` for the account `creds`, served by the plugin the app gives for it (`plugin`), its
+/// token lent: what the core does for an account of the first hand.
+#[cfg(test)]
+pub fn served_forge(
+    plugin: &str,
+    kind: &str,
+    creds: &crate::forge::Credentials,
+) -> Box<dyn crate::forge::Forge> {
+    let rt = test_runtime(kind);
+    rt.lend(
+        plugin,
+        &format!("account:{}", crate::forge::host_of(&creds.url)),
+        &creds.token,
+    );
+    Box::new(super::adapters::ProcessForge::new(rt, plugin, kind, creds))
 }

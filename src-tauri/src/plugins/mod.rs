@@ -554,6 +554,17 @@ impl Plugins {
         Self::load_with(data, app_version, app_dir, !cfg!(test))
     }
 
+    /// The core's in the tests: with the plugins the app gives (GitHub serves github.com's accounts), their program the
+    /// one the build made beside the tests (`target/debug/escouade-plugins`).
+    #[cfg(test)]
+    pub fn load_for_core(data: DataDir, app_version: &str) -> Arc<Self> {
+        let app_dir = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent()?.parent().map(Path::to_path_buf))
+            .unwrap_or_default();
+        Self::load_with(data, app_version, app_dir, true)
+    }
+
     /// As `load`, the app's programs in `app_dir` (the tests').
     #[cfg(test)]
     pub fn load_in(data: DataDir, app_version: &str, app_dir: PathBuf) -> Arc<Self> {

@@ -6,6 +6,7 @@ authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"
 edition = "2021"
 rust-version = "1.88"
+workspace = "../../src-tauri"
 
 # Shared by the core (the app speaks this protocol to every plugin) and by `escouade-plugins`, the program of the
 # plugins the app gives (docs/PLUGINS.md §4.3). Light on purpose: that program is one more binary beside the app.

@@ -1628,6 +1628,8 @@ dependencies = [
  "cpal",
  "ctor",
  "dirs 6.0.0",
+ "escouade-plugin-github",
+ "escouade-plugin-kit",
  "escouade-plugin-protocol",
  "espeak-ng",
  "flate2",
@@ -1692,6 +1694,32 @@ dependencies = [
  "windows-sys 0.60.2",
  "yaml-edit",
  "zip",
+]
+
+[[package]]
+name = "escouade-plugin-github"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "escouade-plugin-kit",
+ "parking_lot",
+ "reqwest 0.12.28",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "escouade-plugin-kit"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "escouade-plugin-protocol",
+ "parking_lot",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]

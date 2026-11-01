@@ -1012,6 +1012,12 @@
           {/if}
         </div>
         {@const prs = cardPrs(a)}
+        {#if a.prDown && !a.ticketId}
+          <!-- Its code host's plugin does not answer (INT-8.1): said under the card, the pull requests read last kept. -->
+          <div class="prdown" role="status" data-pr-down={a.id} use:tip={t('prs.downHint', { why: a.prDown, word: prWord(a) })}>
+            <Icon name="plug" size={12} />{t('prs.down', { word: prWord(a) })}
+          </div>
+        {/if}
         {#if prs.length}
           <!-- Under the card, not in it (the card is a button): its pull requests (ESC-64), the ones to merge first; a number
              opens it, the corrections go to the agent on a click only. -->
@@ -1968,6 +1974,14 @@
   }
   .prnum.dim {
     color: var(--muted);
+  }
+  .prdown {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    margin: -2px 6px 4px 30px;
+    color: var(--warn-ink);
+    font-size: 11px;
   }
   .prto {
     min-width: 0;

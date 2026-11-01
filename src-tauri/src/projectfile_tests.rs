@@ -1484,7 +1484,13 @@ async fn a_project_that_proposes_plugins_says_so_at_its_opening_and_installs_not
             .any(|t| t.contains("demo") && t.contains("2 plugins")),
         "{said:?}"
     );
-    assert!(h.core.plugins.list(crate::i18n::Lang::En).is_empty());
+    // Nothing installed: only the plugins the app gives are there.
+    assert!(h
+        .core
+        .plugins
+        .list(crate::i18n::Lang::En)
+        .iter()
+        .all(|v| v.origin == crate::plugins::Origin::Builtin));
     let (private, settings) = h.core.project_plugin(&p.id, "dev.exemple.slack").unwrap();
     assert!(!private);
     assert_eq!(Value::Object(settings), json!({ "channel": "#equipe" }));

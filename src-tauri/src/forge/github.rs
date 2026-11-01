@@ -1,7 +1,8 @@
 //! GitHub: github.com, GHE.com (`<name>.ghe.com`) and GitHub Enterprise Server. Its token is the
-//! `gh` CLI's, else one the user makes. The PR's calls are in `github_api`.
+//! `gh` CLI's, else one the user makes. What the core knows of it is declared here (its hosts, its
+//! rights, its CLI): its client is in the plugin « GitHub » (`plugins/builtin/dev.escouade.github`,
+//! INT-8.1), which serves its accounts in a process of its own.
 
-use super::github_api::Github;
 use super::*;
 
 pub struct GithubProvider;
@@ -88,14 +89,11 @@ impl Provider for GithubProvider {
         })
     }
 
-    fn client(&self, http: reqwest::Client, account: &Credentials) -> Box<dyn Forge> {
-        Box::new(Github::new(
-            http,
-            account
-                .api
-                .clone()
-                .unwrap_or_else(|| api_base(&account.url)),
-            account.token.clone(),
-        ))
+    fn plugin(&self) -> Option<&'static str> {
+        Some(crate::plugins::builtin::GITHUB)
+    }
+
+    fn client(&self, _http: reqwest::Client, _account: &Credentials) -> Box<dyn Forge> {
+        Box::new(Unserved(NAME))
     }
 }

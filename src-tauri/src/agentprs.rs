@@ -861,6 +861,30 @@ impl<R: Runtime> Core<R> {
     /// merged. Silent for an agent without one to have (no branch of its own but the trunk, no
     /// host, no account, no client yet): nothing shows.
     pub async fn agent_prs_refresh(self: &Arc<Self>, id: &str, now: bool) -> Result<()> {
+        let read = self.prs_refresh(id, now).await;
+        // A host whose plugin does not answer says it on the card (INT-8.1); the next read that
+        // works takes it back.
+        let down = match &read {
+            Err(e) if crate::plugins::adapters::is_down(e) => Some(format!("{e:#}")),
+            Err(_) => return read,
+            Ok(()) => None,
+        };
+        if let Ok(h) = self.agent(id) {
+            let changed = {
+                let mut rt = h.lock();
+                let changed = rt.meta.pr_down != down;
+                rt.meta.pr_down = down;
+                changed
+            };
+            if changed {
+                self.emit_agent(&h);
+                self.request_save();
+            }
+        }
+        read
+    }
+
+    async fn prs_refresh(self: &Arc<Self>, id: &str, now: bool) -> Result<()> {
         let h = self.agent(id)?;
         self.follow_found_worktree(&h).await;
         let meta = h.lock().meta.clone();

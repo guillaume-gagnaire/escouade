@@ -1,6 +1,9 @@
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { BUILTINS, isBuiltinId } from '../../server/utils/builtin';
-import { asksOf, catalog, home, hueOf, localized, markOf, permissionsOf, search, type Entry } from '../../server/utils/listing';
+import { asksOf, catalog, home, hueOf, localized, markOf, permissionsOf, pluginPage, search, type Entry } from '../../server/utils/listing';
 import { fold, highlight } from '../../shared/search';
 
 // The public pages' catalog without a database: the search made on the server (relevance, accents and case set
@@ -151,10 +154,10 @@ describe('the home page and Escouade’s own', () => {
     expect(new Set(BUILTINS.map((b) => b.id)).size).toBe(BUILTINS.length);
     expect(new Set(BUILTINS.flatMap((b) => b.categories))).toEqual(new Set(['harness', 'ticket-sources', 'forges']));
     // What the app gives, not every dev.escouade.*: those of plugins/<id>/ are published on the store (ESC-314), and
-    // listed as its plugins; none of them has a source here.
+    // listed as its plugins. A source here is the folder of a plugin the app gives (plugins/builtin/<id>, below).
     expect(isBuiltinId('dev.escouade.github')).toBe(true);
     expect(isBuiltinId('dev.escouade.discord')).toBe(false);
-    expect(BUILTINS.every((b) => !('source' in b))).toBe(true);
+    expect(BUILTINS.filter((b) => b.source).every((b) => b.source!.startsWith('plugins/builtin/'))).toBe(true);
   });
 });
 
@@ -172,5 +175,25 @@ describe('the logos of Escouade’s own (PLG-13)', () => {
     }
     const own = (await catalog(null)).filter((e) => e.builtin);
     expect(own.every((e) => e.logo && !e.icon)).toBe(true);
+  });
+});
+
+describe('the plugins of the app in their folder', () => {
+  // INT-4's rule (docs/PLUGINS.md §4.3): a plugin the app gives that left the core is a folder of the repository,
+  // readable alone, and its page links to it. The demonstration is not on the store.
+  const root = fileURLToPath(new URL('../../../plugins/builtin/', import.meta.url));
+  const folders = readdirSync(root).filter((d) => d !== 'dev.escouade.minimal');
+
+  it('lists each folder with its source, and each source is a folder with its manifest and its README', async () => {
+    const sourced = BUILTINS.filter((b) => b.source).map((b) => b.id);
+    expect(sourced.sort()).toEqual([...folders].sort());
+    for (const b of BUILTINS.filter((x) => x.source)) {
+      expect(b.source).toBe(`plugins/builtin/${b.id}`);
+      const manifest = JSON.parse(readFileSync(join(root, b.id, 'escouade-plugin.json'), 'utf8'));
+      expect(manifest.id).toBe(b.id);
+      expect(existsSync(join(root, b.id, 'README.md'))).toBe(true);
+      const page = await pluginPage(null, '', b.id);
+      expect(page?.builtin?.source).toBe(`https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/builtin/${b.id}`);
+    }
   });
 });

@@ -67,10 +67,14 @@ test('a declarative plugin is installed from a folder, and an invalid one says w
     later: { field: 'of a later Escouade' },
   });
 
-  // The app gives its own (INT-4): the demonstration plugin, from the start, with the origin builtin.
+  // The app gives its own (INT-4): the demonstration plugin and GitHub (INT-8.1), from the start, with the origin builtin.
   expect(await invoke<View[]>('plugins_list')).toMatchObject({
-    ok: [{ id: 'dev.escouade.minimal', origin: { kind: 'builtin' }, state: { kind: 'ready' } }],
+    ok: [
+      { id: 'dev.escouade.minimal', origin: { kind: 'builtin' }, state: { kind: 'ready' } },
+      { id: 'dev.escouade.github', origin: { kind: 'builtin' }, state: { kind: 'ready' } },
+    ],
   });
+  expect(await invoke('plugin_remove', { id: 'dev.escouade.github', keep: false })).toHaveProperty('err');
   expect(await invoke('plugin_remove', { id: 'dev.escouade.minimal', keep: false })).toHaveProperty('err');
   // Read first (the install window's), then installed on the user's consent.
   const read = await invoke<{ token: string }>('plugin_inspect_folder', { path: src });
@@ -111,6 +115,7 @@ test('a declarative plugin is installed from a folder, and an invalid one says w
     ok: [
       { id: 'dev.exemple.contraste', fingerprint: view.fingerprint, state: { kind: 'ready' } },
       { id: 'dev.escouade.minimal', origin: { kind: 'builtin' } },
+      { id: 'dev.escouade.github', origin: { kind: 'builtin' } },
     ],
   });
 
@@ -138,5 +143,5 @@ test('a declarative plugin is installed from a folder, and an invalid one says w
   expect(await invoke('plugin_remove', { id: 'dev.exemple.contraste', keep: false })).toEqual({ ok: true });
   expect(fs.existsSync(copy)).toBe(false);
   expect(fs.existsSync(path.join(src, 'escouade-plugin.json'))).toBe(true);
-  expect(await invoke<View[]>('plugins_list')).toMatchObject({ ok: [{ id: 'dev.escouade.minimal' }] });
+  expect(await invoke<View[]>('plugins_list')).toMatchObject({ ok: [{ id: 'dev.escouade.minimal' }, { id: 'dev.escouade.github' }] });
 });

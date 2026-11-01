@@ -520,6 +520,9 @@ export interface ForgeProvider {
   capabilities: ForgeCapabilities;
   /** The plugins that may serve a new account of it, Escouade's first. */
   servers?: AccountServer[];
+  /** The plugin the app gives that serves its accounts, once its client left the core (GitHub's), read from the
+   * plugins' registry: whether it is on, and why it stopped by itself. */
+  servedBy?: { plugin: string; name: string; on: boolean; stopped: string | null };
 }
 
 export type ForgeHealth = 'unchecked' | 'connected' | 'expired' | 'missingScopes' | 'unreachable' | 'unread';
@@ -1415,6 +1418,9 @@ export interface Agent {
   prs: PullRequest[];
   /** The code host's word for them: « MR » on GitLab, « PR » elsewhere; null until read. */
   prWord: string | null;
+  /** The plugin that serves its code host does not answer (switched off, stopped, crashed): why, said on its card; its
+   * pull requests read last stay. Absent when it answers. */
+  prDown?: string;
   /** The ticket's protocol, appended to Claude Code's system prompt. */
   appendPrompt: string | null;
   /** First of the 10 ports reserved for its test launches. */

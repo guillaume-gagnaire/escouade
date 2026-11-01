@@ -90,6 +90,9 @@ export default {
     viaCli: 'Jeton de {cli}',
     issues: 'Sert aussi à {source}',
     noTickets: 'Pas de tickets : PR et CI seulement',
+    /** The plugin the app gives that serves the account (GitHub's, INT-8.1), switched off or stopped by itself. */
+    pluginOff: 'Le plugin {plugin} est coupé (Réglages › Plugins) : ce compte ne sert plus rien, ses PR ne sont plus suivies',
+    pluginStopped: 'Le plugin {plugin} s’est arrêté ({why}) : ses PR ne sont plus suivies jusqu’à sa relance',
     projects: { one: 'Projet : {list}', other: 'Projets : {list}' },
     noAccount: { one: 'Aucun compte, pour le projet {list}', other: 'Aucun compte, pour les projets {list}' },
     connectHost: 'Connecter {host}',

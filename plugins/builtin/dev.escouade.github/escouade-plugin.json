@@ -1,0 +1,38 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.github",
+  "name": "GitHub",
+  "version": "0.0.0",
+  "description": {
+    "fr": "Les issues dans le Kanban, les PR, la CI, les relectures et les déploiements de tes dépôts GitHub, sur un seul compte.",
+    "en": "Issues in the Kanban, pull requests, CI, reviews and deployments of your GitHub repositories, on one account."
+  },
+  "author": { "name": "Escouade", "url": "https://escouade.dev" },
+  "license": "GPL-3.0-or-later",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/builtin/dev.escouade.github",
+  "categories": ["ticket-sources", "forges"],
+  "escouade": { "api": "1", "min": "2.1.0" },
+  "run": { "command": "{escouade}/escouade-plugins", "args": ["github"] },
+  "activation": ["account:github"],
+  "permissions": {
+    "network": ["api.github.com", "*.ghe.com", "api.*.ghe.com"],
+    "secrets": ["account:*"]
+  },
+  "contributes": {
+    "accounts": [
+      {
+        "id": "github",
+        "name": "GitHub",
+        "defaultHost": "github.com",
+        "selfHosted": true,
+        "connect": ["token", { "cli": "gh", "login": "gh auth login" }],
+        "fields": [{ "key": "url" }, { "key": "token", "secret": true }],
+        "scopes": ["repo"],
+        "tokenPage": "https://github.com/settings/personal-access-tokens/new",
+        "sourcesPublicOnly": true
+      }
+    ],
+    "ticketSources": [{ "id": "github", "name": "GitHub Issues", "account": "github" }],
+    "forges": [{ "id": "github", "name": "GitHub", "account": "github" }]
+  }
+}
