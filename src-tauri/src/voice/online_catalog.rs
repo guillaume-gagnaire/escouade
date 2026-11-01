@@ -67,7 +67,7 @@ pub struct Listed {
 }
 
 /// What Réglages › Voix shows of a service.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServiceCatalog {
     pub service: String,

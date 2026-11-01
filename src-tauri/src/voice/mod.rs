@@ -16,14 +16,19 @@ pub mod models;
 pub mod online;
 pub mod online_catalog;
 pub mod online_speech;
+pub mod plugin_guest;
+pub mod plugin_host;
 pub mod service;
 pub mod source;
 pub mod speech;
 pub mod spoken;
 #[cfg(test)]
+mod plugin_tests;
+#[cfg(test)]
 mod tests;
 pub mod transcribe;
 pub mod vad;
+pub mod wire;
 
 use crate::i18n::Lang;
 use models::{ModelView, Store};

@@ -3,7 +3,7 @@
 //! `escouade-plugins minimal`. One program costs its runtime once, where one a plugin would cost it a dozen times.
 //!
 //! It is shipped beside the app and signed with it; the app starts no other (`plugins::builtin`). It speaks the
-//! protocol of `escouade-plugin-protocol` and nothing of the app's own: no `escouade_lib`, so that it stays light.
+//! protocol of `escouade-plugin-protocol` and nothing of the app's own, but the voice services (INT-13), which run the code of the core's services through `escouade_lib`.
 //!
 //! An entry is a function from the name to a `fn() -> i32`: add the plugin's module and one line to `ENTRIES`.
 
@@ -11,6 +11,8 @@
 mod minimal;
 #[path = "escouade-plugins/minimal_harness.rs"]
 mod minimal_harness;
+#[path = "escouade-plugins/voice.rs"]
+mod voice;
 
 /// An entry: the name a manifest's `run.args` gives, and the function that runs the plugin and returns its exit code.
 type Entry = (&'static str, fn() -> i32);
@@ -20,6 +22,11 @@ type Entry = (&'static str, fn() -> i32);
 const ENTRIES: &[Entry] = &[
     ("minimal", minimal::run),
     ("minimal-harness", minimal_harness::run),
+    ("voice-openai", voice::openai),
+    ("voice-groq", voice::groq),
+    ("voice-mistral", voice::mistral),
+    ("voice-elevenlabs", voice::elevenlabs),
+    ("voice-deepgram", voice::deepgram),
 ];
 
 fn main() {

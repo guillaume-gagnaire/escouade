@@ -34,6 +34,36 @@ pub const REGISTRY: &[Entry] = &[
             "../../../plugins/builtin/dev.escouade.minimal/escouade-plugin.json"
         ),
     },
+    Entry {
+        id: "dev.escouade.openai",
+        manifest: include_str!(
+            "../../../plugins/builtin/dev.escouade.openai/escouade-plugin.json"
+        ),
+    },
+    Entry {
+        id: "dev.escouade.groq",
+        manifest: include_str!(
+            "../../../plugins/builtin/dev.escouade.groq/escouade-plugin.json"
+        ),
+    },
+    Entry {
+        id: "dev.escouade.mistral",
+        manifest: include_str!(
+            "../../../plugins/builtin/dev.escouade.mistral/escouade-plugin.json"
+        ),
+    },
+    Entry {
+        id: "dev.escouade.elevenlabs",
+        manifest: include_str!(
+            "../../../plugins/builtin/dev.escouade.elevenlabs/escouade-plugin.json"
+        ),
+    },
+    Entry {
+        id: "dev.escouade.deepgram",
+        manifest: include_str!(
+            "../../../plugins/builtin/dev.escouade.deepgram/escouade-plugin.json"
+        ),
+    },
 ];
 
 /// Whether `id` is the id of a plugin the app gives.
