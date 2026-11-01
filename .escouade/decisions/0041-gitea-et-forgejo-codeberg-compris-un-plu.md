@@ -1,9 +1,9 @@
 ---
-number: null
+number: 41
 id: "gitea-et-forgejo-codeberg-compris-un-plu"
 title: "Gitea et Forgejo (Codeberg compris) : un plugin livré, des capacités dites par version"
 date: "2026-11-01"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-58"
 pages: ["git-fichiers/hebergeurs-de-code","git-fichiers/pull-requests","plugins/livres-avec-escouade"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"git-fichiers/hebergeurs-de-code","added":15,"removed":5},{"page":"git-fichiers/pull-requests","added":6,"removed":6},{"page":"plugins/livres-avec-escouade","added":1,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-01T21:53:18+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
