@@ -40,8 +40,13 @@ pub struct File {
 /// The files of the project that `patterns` match (globs from the project's folder and from each
 /// repository's, for a project of several): the text ones, under `MAX_FILE_BYTES`, at most
 /// `MAX_FILES`, in the order of their paths. A pattern that is absolute or leaves the project finds
-/// nothing.
+/// nothing; nor does a link (a file, or a folder on the way, that leads out of the project: the
+/// real path must stay under it), nor anything under `.git` (its config may hold a remote's
+/// credentials).
 pub fn files_of(root: &Path, repos: &[String], patterns: &[String]) -> Vec<File> {
+    let Ok(real_root) = std::fs::canonicalize(root) else {
+        return Vec::new();
+    };
     let mut found: BTreeMap<String, File> = BTreeMap::new();
     for base in std::iter::once("").chain(repos.iter().map(String::as_str)) {
         for pattern in patterns {
@@ -57,14 +62,25 @@ pub fn files_of(root: &Path, repos: &[String], patterns: &[String]) -> Vec<File>
                 continue;
             };
             for path in paths.flatten() {
-                let Ok(meta) = std::fs::metadata(&path) else {
+                // The entry itself, never what a link points to.
+                let Ok(meta) = std::fs::symlink_metadata(&path) else {
                     continue;
                 };
                 if !meta.is_file() || meta.len() > MAX_FILE_BYTES {
                     continue;
                 }
-                let (Ok(text), Ok(rel)) = (std::fs::read_to_string(&path), path.strip_prefix(root))
-                else {
+                let Ok(rel) = path.strip_prefix(root) else {
+                    continue;
+                };
+                if rel.components().any(|c| c.as_os_str() == ".git") {
+                    continue;
+                }
+                // A folder on the way may be a link: the file must really be in the project.
+                match std::fs::canonicalize(&path) {
+                    Ok(real) if real.starts_with(&real_root) => {}
+                    _ => continue,
+                }
+                let Ok(text) = std::fs::read_to_string(&path) else {
                     continue;
                 };
                 let rel = rel.to_string_lossy().replace('\\', "/");

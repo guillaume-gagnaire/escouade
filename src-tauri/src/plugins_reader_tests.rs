@@ -50,6 +50,34 @@ fn a_reader_is_given_the_files_it_declared_and_nothing_else() {
     assert_eq!(files[0].path, "api/_bmad/plan.md");
 }
 
+#[test]
+fn a_reader_is_never_given_git_s_files_nor_what_a_link_leads_to() {
+    let root = crate::paths::test_dir("reader-links");
+    std::fs::create_dir_all(root.join(".git")).unwrap();
+    std::fs::write(
+        root.join(".git/config"),
+        "[remote]\nurl = https://me:token@host/x\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("plan.md"), "plan").unwrap();
+    let outside = crate::paths::test_dir("reader-outside");
+    std::fs::write(outside.join("id_ed25519"), "secret").unwrap();
+    // A link to a file and to a folder outside the project. Making one may need rights the
+    // machine does not give (Windows without the developer mode): then only `.git` is tried.
+    #[cfg(unix)]
+    let linked = std::os::unix::fs::symlink(outside.join("id_ed25519"), root.join("key.md"))
+        .is_ok()
+        && std::os::unix::fs::symlink(&outside, root.join("away")).is_ok();
+    #[cfg(windows)]
+    let linked =
+        std::os::windows::fs::symlink_file(outside.join("id_ed25519"), root.join("key.md")).is_ok()
+            && std::os::windows::fs::symlink_dir(&outside, root.join("away")).is_ok();
+    let files = files_of(&root, &[], &globs(&["**/*", "*", "away/*"]));
+    let paths: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
+    assert_eq!(paths, ["plan.md"], "linked: {linked}");
+    assert!(files.iter().all(|f| f.text != "secret"));
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn the_graph_a_reader_answers_is_a_workflow_the_core_follows() {
     let f = fake("reader", &[], quick());
