@@ -13,6 +13,8 @@
 // after); until then, the app only starts and closes them.
 #[cfg_attr(not(test), allow(dead_code))]
 pub mod journal;
+// The kinds of accounts, which plugin serves an account, its name in the keychain (INT-6).
+pub mod accounts;
 // The conformance bench and the fake Escouade, for `escouade-plugin` and the tests (PLG-3).
 pub mod adapters;
 pub mod bench;
@@ -33,6 +35,8 @@ pub mod runtime;
 pub mod store;
 // The seal of a version from the store, checked with the keys the app embeds (STORE-8).
 pub mod store_keys;
+/// The JS/TS plugins (`run.js`) in WASM, inside the app (ESC-320).
+pub mod wasm;
 
 use crate::i18n::Lang;
 use crate::paths::DataDir;
@@ -1577,7 +1581,10 @@ impl Plugins {
                     f.version
                 )));
             }
-            if let (Some(bytes), Some(program)) = (&f.program, m.run.as_ref().map(program_here)) {
+            if let (Some(bytes), Some(program)) = (
+                &f.program,
+                m.run.as_ref().filter(|r| r.js.is_none()).map(program_here),
+            ) {
                 let to = inside(&incoming, &program).ok_or_else(|| {
                     Refusal::other(format!("{program}: a path out of the plugin's folder"))
                 })?;

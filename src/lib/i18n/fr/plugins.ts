@@ -227,6 +227,7 @@ export default {
     granted: '{text} : permise',
     runNote: 'Pour l’arrêter, désactive le plugin.',
     networkNote: 'déclaré par le plugin : Escouade ne filtre pas encore son réseau',
+    networkApplied: 'appliqué par Escouade : il ne joint aucun autre hôte, ni une adresse de ta machine ou de ton réseau local',
     none: 'Il ne demande rien : ses contributions sont lues, rien de lui ne s’exécute.',
     revoked: 'retirée',
   },
@@ -344,6 +345,7 @@ export default {
 
   ask: {
     run: 'Lance un programme sur ton ordinateur, avec tes droits',
+    wasm: 'Tourne dans Escouade, isolé',
     decide: 'Décide des autorisations de tes agents',
     commands: 'Lance des commandes',
     events: 'Reçoit ces événements',

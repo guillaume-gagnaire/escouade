@@ -136,6 +136,8 @@ mod planfiles;
 mod planfiles_tests;
 mod plugins;
 #[cfg(test)]
+mod plugins_accounts_tests;
+#[cfg(test)]
 mod plugins_adapters_tests;
 #[cfg(test)]
 mod plugins_bench_tests;
@@ -155,6 +157,8 @@ mod plugins_runtime_tests;
 mod plugins_store_tests;
 #[cfg(test)]
 mod plugins_tests;
+#[cfg(test)]
+mod plugins_wasm_tests;
 mod pricing;
 #[cfg(test)]
 mod private_tests;

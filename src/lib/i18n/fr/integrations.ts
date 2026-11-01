@@ -47,6 +47,8 @@ export default {
     notConnected: 'Non connecté',
     keychainUnavailable: 'Trousseau du système indisponible : le jeton reste dans ~/.escouade/integrations.json.',
     keychainUnreadable: 'Trousseau du système illisible : relance Escouade ou reconnecte le compte.',
+    servedBy: 'Servi par',
+    servedByPlugin: 'Servi par le plugin {plugin}',
     disconnect: 'Déconnecter',
     connectEllipsis: 'Connecter…',
     connect: 'Connecter',

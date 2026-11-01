@@ -178,6 +178,30 @@ fn each_problem_says_its_field_and_why_in_both_languages() {
     );
 }
 
+/// ESC-320: a bundle of the folder (`run.js`), run in WASM; never beside a command, and why.
+#[test]
+fn a_bundle_is_a_program_of_its_own_never_beside_a_command() {
+    let mut v = valid();
+    v["run"] = json!({ "js": "dist/plugin.mjs" });
+    let m = manifest::check(&v, manifest::Hand::Third).manifest.unwrap();
+    let run = m.run.as_ref().unwrap();
+    assert_eq!(run.js.as_deref(), Some("dist/plugin.mjs"));
+    assert_eq!(run.command, "");
+    assert!(!m.declarative());
+    v["run"]["command"] = json!("bin/slack");
+    let p = manifest::check(&v, manifest::Hand::Third)
+        .manifest
+        .unwrap_err();
+    assert_eq!(
+        p.iter().map(|p| p.message(Lang::Fr)).collect::<Vec<_>>(),
+        ["`run.js` ne va pas avec `run.command` : un programme est une commande ou un bundle JS/TS, pas les deux."]
+    );
+    assert_eq!(
+        p[0].message(Lang::En),
+        "`run.js` does not go with `run.command`: a program is a command or a JS/TS bundle, not both."
+    );
+}
+
 fn with_range(api: &str, min: &str, max: Option<&str>) -> manifest::Manifest {
     let mut v = valid();
     v["escouade"] = json!({ "api": api, "min": min });

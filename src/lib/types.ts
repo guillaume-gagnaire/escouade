@@ -471,6 +471,19 @@ export interface AccountView {
   inFile?: boolean;
   /** The system keychain did not give its token at this start: no call goes out for it. */
   unread?: boolean;
+  /** The plugin that serves it, when another than Escouade's own hand. */
+  plugin?: string;
+  /** The plugins that may serve a new account of it, Escouade's first: chosen in the form when there are several. */
+  servers?: AccountServer[];
+}
+
+/** A plugin that can serve the accounts of a kind (INT-6). */
+export interface AccountServer {
+  plugin: string;
+  /** The plugin's name, as the form offers it. */
+  name: string;
+  /** Of Escouade's own hand: offered first. */
+  firstHand: boolean;
 }
 
 /** The form of « Connecter… »: the fields its service asks for. */
@@ -505,6 +518,8 @@ export interface ForgeProvider {
   /** The rights its tokens need. */
   scopes: string[];
   capabilities: ForgeCapabilities;
+  /** The plugins that may serve a new account of it, Escouade's first. */
+  servers?: AccountServer[];
 }
 
 export type ForgeHealth = 'unchecked' | 'connected' | 'expired' | 'missingScopes' | 'unreachable' | 'unread';
@@ -518,8 +533,10 @@ export interface ForgeAccountView {
   label: string;
   viaCli: boolean;
   inFile: boolean;
-  /** github.com's: GitHub Issues' account too. */
+  /** It serves its plugin's ticket source too: github.com's GitHub Issues, a GitLab's GitLab Issues, an Azure DevOps organization's Azure Boards. */
   issues: boolean;
+  /** The plugin that serves it, when another than Escouade's own hand. */
+  plugin?: string;
   status: { health: ForgeHealth; missing: string[]; error: string | null };
   /** The projects whose remote is on its instance. */
   projects: string[];
@@ -547,6 +564,8 @@ export interface ForgeForm {
   url: string;
   email: string;
   token: string;
+  /** The plugin chosen to serve it; empty or left out: Escouade's own hand. */
+  plugin?: string;
 }
 
 export interface AccountForm {
@@ -554,6 +573,8 @@ export interface AccountForm {
   email: string;
   key: string;
   token: string;
+  /** The plugin chosen to serve it; empty or left out: Escouade's own hand. */
+  plugin?: string;
 }
 
 /** A Jira project, a Trello board, a GitHub repository. */

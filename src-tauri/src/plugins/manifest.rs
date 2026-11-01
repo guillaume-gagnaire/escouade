@@ -114,6 +114,8 @@ pub enum Code {
     Small,
     /// A webhook to a host `permissions.network` does not cover (`host_covered`).
     Network,
+    /// `run.js` beside `run.command`: a program is one or the other (ESC-320).
+    Exclusive,
 }
 
 /// A field that is wrong, by its path (`contributes.settings[0].key`; empty for the whole file).
@@ -212,6 +214,11 @@ impl Problem {
                 "va vers un hôte que `permissions.network` ne déclare pas : l'utilisateur ne le verrait pas.",
                 "goes to a host `permissions.network` does not declare: the user would not see it."
             ),
+            Code::Exclusive => tr_in!(
+                lang,
+                "ne va pas avec `run.command` : un programme est une commande ou un bundle JS/TS, pas les deux.",
+                "does not go with `run.command`: a program is a command or a JS/TS bundle, not both."
+            ),
             Code::Square => tr_in!(
                 lang,
                 "n'est pas carrée (un PNG carré de 256 px au moins, 512 conseillé).",
@@ -284,11 +291,16 @@ pub struct Range {
     pub max: Option<String>,
 }
 
-/// Its program (`run`): none for a declarative plugin.
+/// Its program (`run`): none for a declarative plugin. A command (`command`, a process of its
+/// own), or a JS/TS bundle of its folder (`js`, run in WASM inside Escouade, ESC-320): one or the
+/// other, never both; `command` is empty for a bundle.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Run {
     pub command: String,
+    /// The bundle (`dist/plugin.mjs`), a file of the plugin's folder.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub js: Option<String>,
     pub args: Vec<String>,
     /// The program of each system that has its own (`windows`, `macos`, `linux`).
     pub by_system: std::collections::BTreeMap<String, String>,
@@ -830,7 +842,7 @@ impl Checker {
             }
             Some(v) => self.range(v),
         };
-        let run = o.get("run").and_then(|v| self.run(v, builtin));
+        let run = o.get("run").and_then(|v| self.run(v, builtin, file));
         let activation = o
             .get("activation")
             .map(|v| self.words(v, "activation"))
@@ -959,16 +971,37 @@ impl Checker {
         })
     }
 
-    fn run(&mut self, v: &Value, builtin: bool) -> Option<Run> {
+    fn run(&mut self, v: &Value, builtin: bool, file: Option<FileOf>) -> Option<Run> {
         let o = self.object(v, "run")?;
         let systems = ["windows", "macos", "linux"];
-        self.ignore_others(o, "run", &["command", "args", "windows", "macos", "linux"]);
-        let command = match o.get("command") {
-            None => {
+        self.ignore_others(
+            o,
+            "run",
+            &["command", "js", "args", "windows", "macos", "linux"],
+        );
+        // A bundle (ESC-320): a file of the folder, never beside a command.
+        let both = o.contains_key("js") && o.contains_key("command");
+        if both {
+            self.problem("run.js", Code::Exclusive);
+        }
+        let js = match o.get("js") {
+            Some(j) if !both => self.inner_path(j, "run.js").filter(|path| {
+                let found = file.is_none_or(|file| file(&icon_path(path)).is_some());
+                if !found {
+                    self.problem("run.js", Code::File);
+                }
+                found
+            }),
+            _ => None,
+        };
+        let command = match (o.get("command"), o.contains_key("js")) {
+            _ if both => None,
+            (None, true) => js.as_ref().map(|_| String::new()),
+            (None, false) => {
                 self.problem("run.command", Code::Required);
                 None
             }
-            Some(c) => self.program(c, "run.command", builtin),
+            (Some(c), _) => self.program(c, "run.command", builtin),
         };
         let args = o
             .get("args")
@@ -984,6 +1017,7 @@ impl Checker {
         }
         Some(Run {
             command: command?,
+            js,
             args,
             by_system,
         })
@@ -1302,10 +1336,10 @@ pub fn schema() -> Value {
             },
             "run": {
                 "type": "object",
-                "required": ["command"],
-                "description": "Its program; without one, the plugin is declarative: nothing runs.",
+                "description": "Its program; without one, the plugin is declarative: nothing runs. A command (`command`, a process) or a JS/TS bundle of its folder that Escouade runs in WASM (`js`), not both.",
                 "properties": {
                     "command": inner_path,
+                    "js": inner_path,
                     "args": words,
                     "windows": inner_path,
                     "macos": inner_path,
