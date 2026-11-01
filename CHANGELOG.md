@@ -30,6 +30,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - La documentation dit comment publier un plugin sur le store et préparer sa revue, et une nouvelle page, « La sécurité des plugins », dit ce que l’app vérifie, ce que le sceau « Vérifié par Escouade » couvre et ce que la revue refuse.
 - Un projet peut proposer des plugins dans son `.escouade.yml` : à son ouverture, une bande de Réglages › Projets nomme ceux qui manquent, avec leur page du store, sans rien installer seule ; « Pas pour ce projet » la fait taire. Le fichier peut aussi régler un plugin pour ce projet, jamais avec un secret.
 - Un plugin peut servir un compte à la place de l’intégration d’Escouade (un GitLab d’entreprise, un Jira maison) : quand plusieurs le proposent, « Connecter… » demande lequel le sert, et ce compte sert tous les usages du plugin, ses tickets comme ses PR. Tes comptes déjà connectés restent tels quels.
+- Les cinq services de voix en ligne (OpenAI, Groq, Mistral, ElevenLabs, Deepgram) sont des plugins livrés avec Escouade : chacun se coupe dans la vue Plugins, et ta clé reste dans le trousseau. La dictée, le direct et la voix de l’agent s’y comportent comme avant.
 - isola est un plugin livré avec Escouade, le premier « environnement de lancement » : il lance les services de chaque worktree sur ses ports et ses adresses. Tu peux le couper dans Réglages › Plugins, pour toute l’app ou un projet ; sans lui, un ticket part comme avant, avec une recette.
 
 ### Retiré

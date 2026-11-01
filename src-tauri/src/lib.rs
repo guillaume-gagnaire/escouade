@@ -393,6 +393,12 @@ fn build_window(app: &tauri::App) -> tauri::Result<()> {
     Ok(())
 }
 
+/// The plugin of the voice service `service` (`escouade-plugins voice-<service>`, INT-13): answers `voice/*` on its input
+/// and output until it ends.
+pub fn voice_plugin(service: &str) -> i32 {
+    voice::plugin_guest::run(service)
+}
+
 /// `escouade-plugin` (src/bin): the conformance bench, the manifest's check and the fake Escouade,
 /// for the plugins' authors (PLG-3). Gives the exit code.
 pub fn plugin_cli(args: Vec<String>) -> i32 {
