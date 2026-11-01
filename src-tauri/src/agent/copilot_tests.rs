@@ -497,14 +497,18 @@ fn each_call_tells_the_months_credits_and_its_cost_comes_from_its_nano_aiu() {
     assert_eq!(last.len(), 1);
     assert_eq!(last[0].minutes, None, "the month's credits");
     assert!(last[0].pct > 0.0 && last[0].pct < 5.0, "{:?}", last[0]);
-    assert_eq!(
-        last[0].resets_at,
-        Some(
-            chrono::DateTime::parse_from_rfc3339("2026-11-01T00:00:00Z")
-                .unwrap()
-                .timestamp_millis()
-        )
-    );
+    // The run was recorded in October: the date it tells is kept while it is ahead, else the
+    // first of the month after now takes its place (`engine::copilot::credits`).
+    let told = chrono::DateTime::parse_from_rfc3339("2026-11-01T00:00:00Z")
+        .unwrap()
+        .timestamp_millis();
+    let now = chrono::Utc::now().timestamp_millis();
+    let expected = if told > now + 60_000 {
+        told
+    } else {
+        crate::engine::copilot::next_month(now)
+    };
+    assert_eq!(last[0].resets_at, Some(expected));
     // The cost of its turns: its nano-AIU, a credit (10⁹) for a cent.
     let rows: Vec<_> = fxs.iter().flat_map(|f| f.turns.clone()).collect();
     assert!(!rows.is_empty());
@@ -558,7 +562,9 @@ fn credits_spent_stop_the_turn_until_they_are_given_again() {
     start(&mut rt);
     let mut fx = Effects::default();
     rt.push_user("u1", "x", 0, &[], &mut fx);
-    let reset = "2026-11-01T00:00:00Z";
+    // A reset ahead of any run of this test: one already past would be replaced by the first
+    // of next month (`engine::copilot::credits`).
+    let reset = "2099-11-01T00:00:00Z";
     let fxs = feed(
         &mut rt,
         &[
