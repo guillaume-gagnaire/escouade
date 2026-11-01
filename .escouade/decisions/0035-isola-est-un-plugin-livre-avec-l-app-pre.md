@@ -1,9 +1,9 @@
 ---
-number: null
+number: 35
 id: "isola-est-un-plugin-livre-avec-l-app-pre"
 title: "isola est un plugin livré avec l'app, premier « environnement de lancement »"
 date: "2026-11-01"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-286"
 pages: ["kanban/lancement-de-test"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"kanban/lancement-de-test","added":1,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-01T16:12:55+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
