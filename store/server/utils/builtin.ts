@@ -141,10 +141,11 @@ export const BUILTINS: Builtin[] = [
       'Azure Boards dans le Kanban, les PR d’Azure Repos et leurs pipelines, sur le compte de ton organisation.',
       'Azure Boards in the Kanban, Azure Repos pull requests and their pipelines, on your organization’s account.',
     ),
-    network: ['dev.azure.com'],
+    network: ['dev.azure.com', '*.dev.azure.com', '*.visualstudio.com'],
     secrets: true,
     docs: doc('integrations'),
     logo: { category: 'forge' },
+    source: 'plugins/builtin/dev.escouade.azure-devops',
   },
   {
     id: 'dev.escouade.bitbucket',

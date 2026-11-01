@@ -36,9 +36,9 @@ README, embedded in the app and listed in its registry (`src-tauri/src/plugins/b
 that each folder has both and is in the registry. Their program is `escouade-plugins <name>`, signed with the app, and
 their version is Escouade's. `dev.escouade.minimal` is the demonstration (in development builds only);
 `dev.escouade.github` is the first real one, GitHub's code host and GitHub Issues, then `dev.escouade.gitlab`,
-GitLab's code host, `dev.escouade.bitbucket`, Bitbucket Cloud's, and `dev.escouade.gitea`, the code host of Gitea and
-Forgejo, each with its crate (`Cargo.toml`, `src/`) on the kit of the Rust plugins (`crates/escouade-plugin-kit`).
-`ci.mjs` does not run them: it is for the folders above,
+GitLab's code host, `dev.escouade.bitbucket`, Bitbucket Cloud's, `dev.escouade.gitea`, the code host of Gitea and
+Forgejo, and `dev.escouade.azure-devops`, Azure DevOps' code host and Azure Boards, each with its crate (`Cargo.toml`,
+`src/`) on the kit of the Rust plugins (`crates/escouade-plugin-kit`). `ci.mjs` does not run them: it is for the folders above,
 which are the store's; their tests run with the app's (`cargo nextest run` in `src-tauri/`).
 `dev.escouade.acp` serves the harnesses a manifest describes over ACP (PLG-6, Goose's among them), in its crate
 on the ACP client (`crates/escouade-acp`).

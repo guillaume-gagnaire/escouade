@@ -1,25 +1,56 @@
 //! Azure Boards against the fake server, its answers as the REST API 7.1's documentation gives
-//! them: two organizations of dev.azure.com, and the processes Agile, Scrum and Basic.
+//! them: two organizations, and the processes Agile, Scrum and Basic.
+//!
+//! Since INT-8.5 the client is the plugin « Azure DevOps »'s (`plugins/builtin/dev.escouade.azure-devops`): each
+//! organization's account is a `ProcessTicketSource` to its process (`escouade-plugins azure-devops`), as the core
+//! makes them, and `ByOrganization` sends a call to the organization its container names; the real trial uses the
+//! plugin's client in process.
 
 use super::*;
 use crate::integrations::fake::FakeServer;
 use crate::integrations::lasting;
+use crate::integrations::source::TicketSource;
+use crate::plugins::adapters::{ByOrganization, ProcessTicketSource};
+use crate::plugins::builtin::{test_runtime, AZURE_DEVOPS};
+use escouade_plugin_azure_devops::boards::{no_right, target_state, v, Boards, Instance, VERSION};
+use escouade_plugin_azure_devops::pulls::Azure;
+use escouade_plugin_kit::i18n::Lang;
+use escouade_plugin_kit::protocol::tickets as plugin_tickets;
+use reqwest::Method;
+use serde_json::{json, Value};
 
-/// The organizations acme and globex, both on the fake server (dev.azure.com's API under
-/// `/azure`, as `ESCOUADE_AZURE_DEVOPS_API` puts it).
-async fn boards() -> (FakeServer, Boards) {
+const S: Service = Service::AZURE;
+
+/// The organizations acme (on dev.azure.com) and globex (a Server's collection), both on the fake server (dev.azure.com's
+/// API under `/azure`, as `ESCOUADE_AZURE_DEVOPS_API` puts it), each with the token lent as the core lends it.
+async fn boards() -> (FakeServer, ByOrganization) {
     let server = FakeServer::start().await;
-    let inst = |org: &str, token: &str| Instance {
-        org: org.into(),
-        client: Azure::new(
-            reqwest::Client::new(),
-            format!("https://dev.azure.com/{org}"),
-            Some(format!("{}/azure", server.url)),
-            token.into(),
-        ),
-        token_page: format!("https://dev.azure.com/{org}/_usersSettings/tokens"),
+    let rt = test_runtime("azure-boards");
+    let source = |site: &str, token: &str| -> Box<dyn TicketSource> {
+        rt.lend(
+            AZURE_DEVOPS,
+            &format!("account:{}", crate::forge::host_of(site)),
+            token,
+        );
+        let account = Account {
+            site: site.into(),
+            ..Account::default()
+        };
+        Box::new(
+            ProcessTicketSource::new(rt.clone(), AZURE_DEVOPS, "azure", &account)
+                .with_api(&format!("{}/azure", server.url)),
+        )
     };
-    let b = Boards::new(vec![inst("acme", "pat-acme"), inst("globex", "pat-globex")]);
+    let b = ByOrganization::new(vec![
+        (
+            "acme".into(),
+            source("https://dev.azure.com/acme", "pat-acme"),
+        ),
+        (
+            "globex".into(),
+            source("https://tfs.example.com/tfs/globex", "pat-globex"),
+        ),
+    ]);
     (server, b)
 }
 
@@ -496,7 +527,7 @@ async fn a_state_is_pushed_in_json_patch_and_a_comment_in_markdown() {
         json!({ "id": 42, "fields": { "System.State": "New", "System.WorkItemType": "User Story" } }),
     );
     server.on("PATCH", &at, 200, json!({ "id": 42, "rev": 4 }));
-    b.set_state(&r("42"), &named("Active")).await.unwrap();
+    b.set_state(&r("42"), &named("Active"), &[]).await.unwrap();
     let w = server.writes();
     assert_eq!(w.len(), 1);
     assert_eq!(w[0].method, "PATCH");
@@ -517,7 +548,7 @@ async fn a_state_is_pushed_in_json_patch_and_a_comment_in_markdown() {
     );
 
     // Already in it: nothing written.
-    b.set_state(&r("42"), &named("New")).await.unwrap();
+    b.set_state(&r("42"), &named("New"), &[]).await.unwrap();
     assert_eq!(server.writes().len(), 1);
 
     server.on(
@@ -549,7 +580,9 @@ async fn a_state_its_type_lacks_is_its_first_of_the_same_category() {
     );
     server.on("PATCH", &at, 200, json!({ "id": 5 }));
     // « Committed » is a backlog item's: a task's in progress is « In Progress ».
-    b.set_state(&r("5"), &named("Committed")).await.unwrap();
+    b.set_state(&r("5"), &named("Committed"), &[])
+        .await
+        .unwrap();
     assert_eq!(server.writes()[0].json()[0]["value"], json!("In Progress"));
     // A state no type has goes as it is: Azure says why it refuses it.
     assert_eq!(
@@ -621,7 +654,10 @@ async fn azure_refusing_a_state_or_a_work_item_gone_is_lasting() {
         400,
         json!({ "message": "TF401320: Rule Error for field State. Error code: Required, InvalidEmpty." }),
     );
-    let e = b.set_state(&r("42"), &named("Resolved")).await.unwrap_err();
+    let e = b
+        .set_state(&r("42"), &named("Resolved"), &[])
+        .await
+        .unwrap_err();
     assert!(lasting(&e));
     assert!(e.to_string().contains("TF401320"), "{e}");
     server.on(
@@ -713,7 +749,7 @@ async fn real_azure_boards() {
         let page = b
             .issues(
                 &container,
-                &Query {
+                &plugin_tickets::Query {
                     text: format!("#{id}"),
                     ..Default::default()
                 },
@@ -730,7 +766,7 @@ async fn real_azure_boards() {
         let page = b
             .issues(
                 &container,
-                &Query {
+                &plugin_tickets::Query {
                     label: Some("escouade-essai".into()),
                     ..Default::default()
                 },
@@ -742,7 +778,7 @@ async fn real_azure_boards() {
         );
         let doing = view
             .defaults
-            .get(&Column::Doing)
+            .get("doing")
             .cloned()
             .ok_or_else(|| anyhow!("no state in progress"))?;
         b.set_state(&r_of(&container, &id), &doing).await?;
@@ -780,9 +816,9 @@ async fn real_azure_boards() {
     outcome.unwrap();
 }
 
-fn r_of(container: &str, id: &str) -> ExternalRef {
-    ExternalRef {
-        service: S,
+fn r_of(container: &str, id: &str) -> plugin_tickets::ExternalRef {
+    plugin_tickets::ExternalRef {
+        service: "azure".into(),
         id: id.into(),
         key: format!("#{id}"),
         container: container.into(),

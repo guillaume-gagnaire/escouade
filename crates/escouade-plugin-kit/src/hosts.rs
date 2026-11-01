@@ -58,12 +58,24 @@ pub trait ForgeKind: Send + Sync {
     fn client(&self, http: reqwest::Client, account: &Credentials) -> Box<dyn Forge>;
 }
 
+/// The states of a container and the state each column gives by default (`doing`, `review`, `done`).
+#[derive(Debug, Clone, PartialEq, Default, serde::Serialize)]
+pub struct StatesView {
+    pub states: Vec<ExternalState>,
+    pub defaults: std::collections::BTreeMap<String, ExternalState>,
+}
+
 /// A source's client for one account, the plugin's side of `tickets/*`.
 pub trait TicketSource: Send + Sync {
     /// The account as the window shows it (`@ada`) and its login.
     fn me(&self) -> BoxFuture<'_, Result<(String, String)>>;
     fn containers(&self) -> BoxFuture<'_, Result<Vec<Container>>>;
     fn states<'a>(&'a self, container: &'a str) -> BoxFuture<'a, Result<Vec<ExternalState>>>;
+    /// The states with the state each column gives by default, for a source that knows better than the names Escouade
+    /// guesses them by (Azure Boards: by its categories). None: Escouade guesses, and `states` is what is answered.
+    fn states_view<'a>(&'a self, _container: &'a str) -> BoxFuture<'a, Result<Option<StatesView>>> {
+        Box::pin(async { Ok(None) })
+    }
     fn issues<'a>(&'a self, container: &'a str, q: &'a Query) -> BoxFuture<'a, Result<IssuePage>>;
     fn set_state<'a>(
         &'a self,
@@ -390,7 +402,10 @@ async fn source_call(s: &dyn TicketSource, name: &str, p: &Value) -> Result<Valu
     let r = || arg::<ExternalRef>(p, "ref");
     match name {
         "containers" => to_value(s.containers().await.map_err(refusal)?),
-        "states" => to_value(s.states(&container()?).await.map_err(refusal)?),
+        "states" => match s.states_view(&container()?).await.map_err(refusal)? {
+            Some(view) => to_value(view),
+            None => to_value(s.states(&container()?).await.map_err(refusal)?),
+        },
         "issues" => {
             let q: Query = arg(p, "query")?;
             to_value(s.issues(&container()?, &q).await.map_err(refusal)?)

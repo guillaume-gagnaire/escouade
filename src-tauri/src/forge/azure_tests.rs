@@ -1,13 +1,16 @@
 //! Azure DevOps against a fake server fed with answers shaped after Microsoft's documentation
 //! (`tests/fixtures/forges/azure/`): its remotes in every form, its account (a PAT in Basic, `az`'s
 //! token in Bearer), each call of its pull requests' client, and its refusals.
+//!
+//! Since INT-8.5 the client is the plugin « Azure DevOps »'s (`plugins/builtin/dev.escouade.azure-devops`): an account's
+//! calls go to its process (`escouade-plugins azure-devops`) by `ProcessForge`, as the core makes them, and the plugin
+//! calls the fake server; the tests that set the client's pace use it in process.
 
 use super::azure::{AzureProvider, CLOUD};
-use super::azure_api::{allowed_by, Azure};
-use super::Pace;
 use super::*;
 use crate::integrations::fake::FakeServer;
 use base64::Engine;
+use escouade_plugin_azure_devops::pulls::{allowed_by, Azure};
 use serde_json::json;
 use std::time::Duration;
 
@@ -44,21 +47,23 @@ fn repo() -> RepoRef {
     }
 }
 
+/// The client of an account, served by the plugin the app gives for Azure DevOps, its token lent as the core lends it.
+fn served(creds: &Credentials) -> Box<dyn Forge> {
+    crate::plugins::builtin::served_forge(crate::plugins::builtin::AZURE_DEVOPS, "azure", creds)
+}
+
 /// The client of the organization acme on dev.azure.com, its API being the fake server.
 fn client(server: &FakeServer) -> Box<dyn Forge> {
     client_with(server, "pat-secret")
 }
 
 fn client_with(server: &FakeServer, token: &str) -> Box<dyn Forge> {
-    AzureProvider.client(
-        reqwest::Client::new(),
-        &Credentials {
-            url: "https://dev.azure.com/acme".into(),
-            token: token.into(),
-            api: Some(server.url.clone()),
-            ..Default::default()
-        },
-    )
+    served(&Credentials {
+        url: "https://dev.azure.com/acme".into(),
+        token: token.into(),
+        api: Some(server.url.clone()),
+        ..Default::default()
+    })
 }
 
 /// The pull request 22 and what is read with it: its threads and its checks.
@@ -272,15 +277,12 @@ async fn an_account_without_an_organization_reads_the_profile() {
         200,
         json!({"displayName": "Ada Lovelace", "publicAlias": "6f7e", "emailAddress": "ada@acme.dev", "id": "6f7e"}),
     );
-    let forge = AzureProvider.client(
-        reqwest::Client::new(),
-        &Credentials {
-            url: "https://dev.azure.com".into(),
-            token: "pat".into(),
-            api: Some(server.url.clone()),
-            ..Default::default()
-        },
-    );
+    let forge = served(&Credentials {
+        url: "https://dev.azure.com".into(),
+        token: "pat".into(),
+        api: Some(server.url.clone()),
+        ..Default::default()
+    });
     assert_eq!(forge.me().await.unwrap().label, "ada@acme.dev");
     assert_eq!(
         server.requests()[0].query("api-version").as_deref(),
@@ -1081,14 +1083,11 @@ async fn a_server_is_reached_under_its_collection() {
         200,
         json!({"value": []}),
     );
-    let forge = AzureProvider.client(
-        reqwest::Client::new(),
-        &Credentials {
-            url: format!("{}/tfs/DefaultCollection", server.url),
-            token: "pat".into(),
-            ..Default::default()
-        },
-    );
+    let forge = served(&Credentials {
+        url: format!("{}/tfs/DefaultCollection", server.url),
+        token: "pat".into(),
+        ..Default::default()
+    });
     assert_eq!(forge.me().await.unwrap().label, "ada@acme.dev");
     let repo = RepoRef {
         namespace: "DefaultCollection/Demo Project".into(),
@@ -1155,14 +1154,11 @@ async fn real_azure_devops() {
         namespace: format!("{org}/{project}"),
         name: name.into(),
     };
-    let forge = AzureProvider.client(
-        reqwest::Client::new(),
-        &Credentials {
-            url: AzureProvider.instance(instance_url(&url)),
-            token,
-            ..Default::default()
-        },
-    );
+    let forge = served(&Credentials {
+        url: AzureProvider.instance(instance_url(&url)),
+        token,
+        ..Default::default()
+    });
     let me = forge.me().await.unwrap();
     println!("me: {me:?}");
     let pr = forge

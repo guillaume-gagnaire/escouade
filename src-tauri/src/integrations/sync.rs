@@ -10,7 +10,6 @@ use super::text::{column_comment, loop_comment};
 use super::*;
 use crate::core::Core;
 use crate::forge::accounts::{self as forge_accounts, ForgeAccount};
-use crate::forge::Provider as _;
 use crate::i18n::{self, Lang};
 use crate::paths;
 use crate::tickets::TicketDraft;
@@ -624,8 +623,8 @@ impl<R: Runtime> Core<R> {
         Ok(Box::new(gitlab::Gitlab::new(http, instances)))
     }
 
-    /// Azure Boards' client: every Azure DevOps code host's account (an organization's), its
-    /// token (its own from the keychain, or `az`'s) as the code host uses it. An organization
+    /// Azure Boards' client: every Azure DevOps code host's account (an organization's), served by the plugin « Azure
+    /// DevOps », its token (its own from the keychain, or `az`'s) lent as the code host lends it. An organization
     /// whose token cannot be had is left out while another one can.
     async fn azure_client(&self) -> Result<Box<dyn TicketSource>> {
         let list: Vec<ForgeAccount> = self
@@ -642,8 +641,8 @@ impl<R: Runtime> Core<R> {
                 "No Azure DevOps account connected: connect it in Settings › Integrations › Code hosts."
             ));
         }
-        let http = crate::usage::http_client(&self.settings.read())?;
-        let mut instances = Vec::new();
+        let plugin = crate::plugins::builtin::AZURE_DEVOPS;
+        let mut sources: Vec<(String, Box<dyn TicketSource>)> = Vec::new();
         let mut failed = None;
         for a in list {
             let host = a.host();
@@ -657,25 +656,37 @@ impl<R: Runtime> Core<R> {
             match self.credentials(&a).await {
                 Ok(c) => {
                     let url = c.url.trim_end_matches('/').to_string();
-                    let api = c.api.or_else(|| crate::forge::azure::api_override(&url));
-                    instances.push(azure::Instance {
-                        org: crate::forge::azure::decode(url.rsplit('/').next().unwrap_or("")),
-                        token_page: crate::forge::azure::AzureProvider.token_page(&url),
-                        client: crate::forge::azure_api::Azure::new(
-                            http.clone(),
-                            url,
-                            api,
-                            c.token,
-                        ),
-                    });
+                    self.plugin_runtime
+                        .lend(plugin, &format!("account:{host}"), &c.token);
+                    let account = Account {
+                        site: url.clone(),
+                        label: a.label.clone(),
+                        user: a.user.clone(),
+                        ..Account::default()
+                    };
+                    let mut source = crate::plugins::adapters::ProcessTicketSource::new(
+                        self.plugin_runtime.clone(),
+                        plugin,
+                        Service::AZURE.as_str(),
+                        &account,
+                    );
+                    if let Some(api) = &c.api {
+                        source = source.with_api(api);
+                    }
+                    sources.push((
+                        crate::forge::azure::decode(url.rsplit('/').next().unwrap_or("")),
+                        Box::new(source),
+                    ));
                 }
                 Err(e) => failed = Some(e),
             }
         }
-        if instances.is_empty() {
+        if sources.is_empty() {
             return Err(failed.unwrap_or_else(|| anyhow!("Azure DevOps")));
         }
-        Ok(Box::new(azure::Boards::new(instances)))
+        Ok(Box::new(crate::plugins::adapters::ByOrganization::new(
+            sources,
+        )))
     }
 
     /// The GitHub CLI's token (`gh auth token`), asked once.

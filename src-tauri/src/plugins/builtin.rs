@@ -88,6 +88,12 @@ pub const REGISTRY: &[Entry] = &[
         manifest: include_str!("../../../plugins/builtin/dev.escouade.trello/escouade-plugin.json"),
     },
     Entry {
+        id: AZURE_DEVOPS,
+        manifest: include_str!(
+            "../../../plugins/builtin/dev.escouade.azure-devops/escouade-plugin.json"
+        ),
+    },
+    Entry {
         id: ACP,
         manifest: include_str!("../../../plugins/builtin/dev.escouade.acp/escouade-plugin.json"),
     },
@@ -108,6 +114,9 @@ pub const GITEA: &str = "dev.escouade.gitea";
 
 /// The plugin « Trello »: the Kanban's source of Trello cards (INT-7.1).
 pub const TRELLO: &str = "dev.escouade.trello";
+
+/// The plugin « Azure DevOps »: Azure DevOps (dev.azure.com and Server), its pull requests, checks and Azure Boards.
+pub const AZURE_DEVOPS: &str = "dev.escouade.azure-devops";
 
 /// The generic ACP plugin, which serves the harnesses a manifest describes (`contributes.harnesses[].acp`, PLG-6).
 pub const ACP: &str = "dev.escouade.acp";

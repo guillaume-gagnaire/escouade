@@ -9,11 +9,15 @@
 //! refusal. A limit (429, or 503 with `Retry-After`) is waited out once, at most
 //! `Pace::max_wait`; the `X-RateLimit-*` headers slow the calls down as for GitHub.
 
-use super::azure::{parts, NAME};
-use super::Pace;
-use super::*;
+use crate::{decode, parts, CLOUD, NAME};
+use anyhow::{anyhow, Result};
+use escouade_plugin_kit::errors::{http_error_in, HttpError, Refused};
+use escouade_plugin_kit::forge::*;
+use escouade_plugin_kit::http::{encode as enc, host_of};
+use escouade_plugin_kit::tr;
 use parking_lot::Mutex;
-use serde_json::json;
+use reqwest::header::HeaderMap;
+use serde_json::{json, Value};
 use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -31,10 +35,6 @@ const MERGE_POLICY: &str = "fa4e907d-c16b-4a4c-9dfa-4916e5d171ab";
 
 /// Azure refuses a description longer than this.
 const MAX_DESCRIPTION: usize = 4000;
-
-fn enc(s: &str) -> String {
-    crate::board::encode(s, false)
-}
 
 /// `url` with the API's version.
 fn v(url: String, version: &str) -> String {
@@ -61,9 +61,9 @@ struct Reply {
 }
 
 fn refusal() -> anyhow::Error {
-    crate::integrations::HttpError {
+    HttpError {
         status: 401,
-        message: crate::integrations::http_error_in(crate::i18n::ui(), NAME, 401, ""),
+        message: http_error_in(escouade_plugin_kit::i18n::ui(), NAME, 401, ""),
     }
     .into()
 }
@@ -278,7 +278,7 @@ impl Azure {
 
     /// The organization (or collection) the account's address names, if it names one.
     fn own_org(&self) -> Option<String> {
-        self.split_url().1.last().map(|s| super::azure::decode(s))
+        self.split_url().1.last().map(|s| decode(s))
     }
 
     /// Where an organization (a collection) is: the account's own, or another one beside it.
@@ -311,8 +311,8 @@ impl Azure {
 
     /// Where an organization's identities are: vssps.dev.azure.com, a Server's collection.
     fn identities_url(&self, org: &str) -> String {
-        if self.api.is_none() && host_of(&self.url) == super::azure::CLOUD {
-            format!("https://vssps.{}/{}", super::azure::CLOUD, enc(org))
+        if self.api.is_none() && host_of(&self.url) == CLOUD {
+            format!("https://vssps.{}/{}", CLOUD, enc(org))
         } else {
             self.org_url(org)
         }
@@ -398,10 +398,10 @@ impl Azure {
             return Err(refusal());
         }
         if !(200..300).contains(&reply.status) {
-            return Err(crate::integrations::HttpError {
+            return Err(HttpError {
                 status: reply.status,
-                message: crate::integrations::http_error_in(
-                    crate::i18n::ui(),
+                message: http_error_in(
+                    escouade_plugin_kit::i18n::ui(),
                     NAME,
                     reply.status,
                     &reply.text,
@@ -745,7 +745,7 @@ impl Azure {
 }
 
 fn bail_refused(text: String) -> Result<()> {
-    Err(crate::integrations::Refused(text).into())
+    Err(Refused(text).into())
 }
 
 impl Forge for Azure {
@@ -769,7 +769,7 @@ impl Forge for Azure {
                 None => {
                     let root = match &self.api {
                         Some(api) => api.clone(),
-                        None if host_of(&self.url) == super::azure::CLOUD => {
+                        None if host_of(&self.url) == CLOUD => {
                             "https://app.vssps.visualstudio.com".to_string()
                         }
                         None => self.url.clone(),
@@ -937,7 +937,7 @@ impl Forge for Azure {
                 match read {
                     Ok(pr) => out.push(pr),
                     Err(e)
-                        if e.downcast_ref::<crate::integrations::HttpError>()
+                        if e.downcast_ref::<HttpError>()
                             .is_some_and(|h| h.status == 404) => {}
                     Err(e) => return Err(e),
                 }

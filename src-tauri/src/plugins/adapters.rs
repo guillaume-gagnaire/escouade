@@ -240,15 +240,7 @@ impl TicketSource for ProcessTicketSource {
     }
 
     fn states<'a>(&'a self, container: &'a str) -> BoxFuture<'a, Result<Vec<ExternalState>>> {
-        Box::pin(async move {
-            self.line
-                .call(
-                    "tickets/states",
-                    "states",
-                    self.params(json!({ "container": container })),
-                )
-                .await
-        })
+        Box::pin(async move { Ok(self.states_view(container).await?.states) })
     }
 
     /// The plugin may answer the states with the columns' defaults (`{states, defaults}`); a
@@ -315,6 +307,83 @@ impl TicketSource for ProcessTicketSource {
                 .await
                 .map(|_| ())
         })
+    }
+}
+
+/// A source whose accounts are organizations (Azure Boards: an Azure DevOps organization, a Server's collection), each
+/// served by its own client: its containers are `<organization>/<project>`, so that a call goes to the organization
+/// its container names. The containers of all are listed together.
+pub struct ByOrganization {
+    sources: Vec<(String, Box<dyn TicketSource>)>,
+}
+
+impl ByOrganization {
+    pub fn new(sources: Vec<(String, Box<dyn TicketSource>)>) -> Self {
+        Self { sources }
+    }
+
+    /// The client of the organization a container (`<organization>/<project>`) names.
+    fn of(&self, container: &str) -> Result<&dyn TicketSource> {
+        let org = container.split_once('/').map_or(container, |(o, _)| o);
+        self.sources
+            .iter()
+            .find(|(o, _)| o.eq_ignore_ascii_case(org))
+            .map(|(_, s)| &**s)
+            .ok_or_else(|| {
+                anyhow!(tr!(
+                    "Aucun compte Azure DevOps connecté pour l'organisation {org}",
+                    "No Azure DevOps account connected for the {org} organization"
+                ))
+            })
+    }
+}
+
+impl TicketSource for ByOrganization {
+    fn me(&self) -> BoxFuture<'_, Result<(String, String)>> {
+        Box::pin(async move {
+            match self.sources.first() {
+                Some((_, s)) => s.me().await,
+                None => Err(anyhow!(tr!(
+                    "Aucun compte Azure DevOps connecté",
+                    "No Azure DevOps account connected"
+                ))),
+            }
+        })
+    }
+
+    fn containers(&self) -> BoxFuture<'_, Result<Vec<Container>>> {
+        Box::pin(async move {
+            let mut out = Vec::new();
+            for (_, s) in &self.sources {
+                out.extend(s.containers().await?);
+            }
+            Ok(out)
+        })
+    }
+
+    fn states<'a>(&'a self, container: &'a str) -> BoxFuture<'a, Result<Vec<ExternalState>>> {
+        Box::pin(async move { self.of(container)?.states(container).await })
+    }
+
+    fn states_view<'a>(&'a self, container: &'a str) -> BoxFuture<'a, Result<StatesView>> {
+        Box::pin(async move { self.of(container)?.states_view(container).await })
+    }
+
+    fn issues<'a>(&'a self, container: &'a str, q: &'a Query) -> BoxFuture<'a, Result<IssuePage>> {
+        Box::pin(async move { self.of(container)?.issues(container, q).await })
+    }
+
+    fn set_state<'a>(
+        &'a self,
+        r: &'a ExternalRef,
+        state: &'a ExternalState,
+        mapped: &'a [ExternalState],
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(async move { self.of(&r.container)?.set_state(r, state, mapped).await })
+    }
+
+    fn comment<'a>(&'a self, r: &'a ExternalRef, text: &'a str) -> BoxFuture<'a, Result<()>> {
+        Box::pin(async move { self.of(&r.container)?.comment(r, text).await })
     }
 }
 

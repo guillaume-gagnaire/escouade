@@ -1,7 +1,8 @@
 //! External ticket systems (Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues, Azure Boards): their accounts, the tickets a project
 //! imports from them, and the sync of their states with the Kanban's columns.
 
-pub mod azure;
+#[cfg(test)]
+mod azure_tests;
 pub mod clickup;
 #[cfg(test)]
 pub(crate) mod fake;

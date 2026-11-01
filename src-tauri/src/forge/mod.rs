@@ -9,7 +9,6 @@
 
 pub mod accounts;
 pub mod azure;
-pub mod azure_api;
 #[cfg(test)]
 mod azure_tests;
 pub mod bitbucket;
@@ -45,7 +44,7 @@ pub use escouade_plugin_kit::forge::BoxFuture;
 pub use escouade_plugin_protocol::forge::ReviewLine;
 pub use escouade_plugin_protocol::forge::{
     Check, CheckState, Deployment, Identity, MergeStrategy, PrState, PullRequest, PullRequestDraft,
-    RateLimit, Review, ReviewComment, ReviewDraft, ReviewState, OPEN_PRS,
+    RateLimit, Review, ReviewComment, ReviewDraft, ReviewState,
 };
 
 /// What a host can do, declared by its provider: the window and the PR's cycle offer only these.
@@ -77,7 +76,9 @@ pub struct Capabilities {
 
 // The contract of a code host's client, shared with the plugins that serve one (`escouade_plugin_kit::forge`): the
 // core's adapter of a plugin (`plugins::adapters::ProcessForge`) and the hosts still in the core implement it.
-pub use escouade_plugin_kit::forge::{instant, Forge, Pace, Unsupported};
+#[cfg(test)]
+pub use escouade_plugin_kit::forge::Pace;
+pub use escouade_plugin_kit::forge::{Forge, Unsupported};
 
 /// What an account gives its client: where its instance is, and its credentials.
 #[derive(Debug, Clone, PartialEq, Default)]

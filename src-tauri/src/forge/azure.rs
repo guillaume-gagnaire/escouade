@@ -2,9 +2,10 @@
 //! (`https://server/tfs/<collection>`). An account is an organization's (a Server's collection):
 //! a personal access token (sent in Basic, `:token`), or the `az` CLI's (an Entra ID token, in
 //! Bearer). Its repositories are an organization, a project and a repository: `RepoRef` keeps
-//! `org/project` as its namespace. The pull requests' calls are in `azure_api`.
+//! `org/project` as its namespace. What the core knows of it is declared here (its addresses, its rights, what it can
+//! do, the `az` CLI's token): its client, and Azure Boards', are in the plugin « Azure DevOps »
+//! (`plugins/builtin/dev.escouade.azure-devops`, INT-8.5, ESC-280), which serves its accounts in a process of its own.
 
-use super::azure_api::Azure;
 use super::*;
 
 pub struct AzureProvider;
@@ -211,12 +212,11 @@ impl Provider for AzureProvider {
         })
     }
 
-    fn client(&self, http: reqwest::Client, account: &Credentials) -> Box<dyn Forge> {
-        Box::new(Azure::new(
-            http,
-            account.url.clone(),
-            account.api.clone().or_else(|| api_override(&account.url)),
-            account.token.clone(),
-        ))
+    fn plugin(&self) -> Option<&'static str> {
+        Some(crate::plugins::builtin::AZURE_DEVOPS)
+    }
+
+    fn client(&self, _http: reqwest::Client, _account: &Credentials) -> Box<dyn Forge> {
+        Box::new(Unserved(NAME))
     }
 }

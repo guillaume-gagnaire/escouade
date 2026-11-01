@@ -312,6 +312,10 @@ impl<R: Runtime> Core<R> {
             // Where GitHub Issues reaches it.
             creds.api = Some(self.bases.read().github.clone());
         }
+        if a.kind == "azure" {
+            // Where dev.azure.com's API is when a fake one stands in (`ESCOUADE_AZURE_DEVOPS_API`).
+            creds.api = creds.api.or_else(|| azure::api_override(&creds.url));
+        }
         Ok(creds)
     }
 
@@ -581,7 +585,8 @@ impl<R: Runtime> Core<R> {
             url: url.clone(),
             email: email.clone(),
             token: used,
-            api: None,
+            // Where dev.azure.com's API is when a fake one stands in (`ESCOUADE_AZURE_DEVOPS_API`).
+            api: azure::api_override(&url),
         };
         let mut account = ForgeAccount {
             kind: provider.kind(),

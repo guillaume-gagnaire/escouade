@@ -43,6 +43,9 @@ const ENTRIES: &[Entry] = &[
     ("gitea", escouade_plugin_gitea::run),
     // Trello (INT-7.1): the Kanban's source of Trello cards, in its crate (plugins/builtin/dev.escouade.trello).
     ("trello", escouade_plugin_trello::run),
+    // Azure DevOps and Azure Boards (INT-8.5, ESC-280): its code host and its source, in its crate
+    // (plugins/builtin/dev.escouade.azure-devops).
+    ("azure-devops", escouade_plugin_azure_devops::run),
     // The generic ACP plugin (PLG-6): the harnesses a manifest describes, in its crate (plugins/builtin/dev.escouade.acp).
     ("acp", escouade_plugin_acp::run),
 ];

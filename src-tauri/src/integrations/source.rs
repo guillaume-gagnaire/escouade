@@ -226,7 +226,6 @@ ticket_source!(jira::Jira, set_state: plain, view: default);
 ticket_source!(linear::Linear, set_state: plain, view: default);
 ticket_source!(clickup::Clickup, set_state: plain, view: own);
 ticket_source!(gitlab::Gitlab, set_state: mapped, view: default);
-ticket_source!(azure::Boards, set_state: plain, view: own);
 
 /// One kind of source whose client is built from the account, with `$base` the address of its
 /// API in `Bases` (Jira's is the account's site).
@@ -369,20 +368,32 @@ kind!(GitlabKind, "gitlab", "GitLab", "GitLab", |a, http, _b| gitlab::Gitlab::ne
         label: a.label.clone(),
     }],
 ), host: "gitlab", own: false);
-// One organization: the account's address and token (`Core::azure_client` gives every one).
-kind!(BoardsKind, "azure", "Azure Boards", "Azure Boards", |a, http, _b| {
-    let url = a.site.trim_end_matches('/').to_string();
-    azure::Boards::new(vec![azure::Instance {
-        org: url.rsplit('/').next().unwrap_or("").to_string(),
-        client: crate::forge::azure_api::Azure::new(
-            http,
-            url.clone(),
-            crate::forge::azure::api_override(&url),
-            a.token.clone(),
-        ),
-        token_page: format!("{url}/_usersSettings/tokens"),
-    }])
-}, host: "azure", own: false);
+// Azure Boards: out of the core, served by the plugin « Azure DevOps » (INT-8.5), on its code host's accounts.
+pub struct BoardsKind;
+
+impl TicketSourceKind for BoardsKind {
+    fn id(&self) -> &'static str {
+        "azure"
+    }
+    fn label(&self) -> &'static str {
+        "Azure Boards"
+    }
+    fn short(&self) -> &'static str {
+        "Azure Boards"
+    }
+    fn host(&self) -> Option<&'static str> {
+        Some("azure")
+    }
+    fn own_account(&self) -> bool {
+        false
+    }
+    fn plugin(&self) -> Option<&'static str> {
+        Some(crate::plugins::builtin::AZURE_DEVOPS)
+    }
+    fn build(&self, _: &Account, _: reqwest::Client, _: &Bases) -> Box<dyn TicketSource> {
+        Box::new(Unserved("Azure Boards"))
+    }
+}
 
 #[cfg(test)]
 mod tests {

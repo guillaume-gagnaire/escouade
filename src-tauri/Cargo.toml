@@ -70,6 +70,7 @@ escouade-plugin-gitlab = { path = "../plugins/builtin/dev.escouade.gitlab" }
 escouade-plugin-bitbucket = { path = "../plugins/builtin/dev.escouade.bitbucket" }
 escouade-plugin-gitea = { path = "../plugins/builtin/dev.escouade.gitea" }
 escouade-plugin-trello = { path = "../plugins/builtin/dev.escouade.trello" }
+escouade-plugin-azure-devops = { path = "../plugins/builtin/dev.escouade.azure-devops" }
 escouade-plugin-acp = { path = "../plugins/builtin/dev.escouade.acp" }
 # A version's archive from the store (STORE-9): read in memory, its links and climbing paths refused.
 flate2 = "1"
@@ -173,6 +174,7 @@ members = [
     "../plugins/builtin/dev.escouade.bitbucket",
     "../plugins/builtin/dev.escouade.gitea",
     "../plugins/builtin/dev.escouade.trello",
+    "../plugins/builtin/dev.escouade.azure-devops",
     "../plugins/builtin/dev.escouade.acp",
 ]
 default-members = [
@@ -185,6 +187,7 @@ default-members = [
     "../plugins/builtin/dev.escouade.bitbucket",
     "../plugins/builtin/dev.escouade.gitea",
     "../plugins/builtin/dev.escouade.trello",
+    "../plugins/builtin/dev.escouade.azure-devops",
     "../plugins/builtin/dev.escouade.acp",
 ]
 

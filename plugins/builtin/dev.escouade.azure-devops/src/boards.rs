@@ -1,25 +1,32 @@
 //! Azure Boards (REST API 7.1), on dev.azure.com and Azure DevOps Server. It has no account of its
-//! own: the Azure DevOps code host's (`forge::accounts`, an organization's, its token personal or
-//! `az`'s) serves both uses, through the code host's client (`forge::azure_api::Azure`). A
+//! own: the Azure DevOps code host's (an organization's, its token personal or `az`'s, which Escouade lends) serves
+//! both uses, through the code host's client (`pulls::Azure`). A
 //! container is a project, `<org>/<project>`, so that the organization goes with it. A work
 //! item's states are those of its type, by its project's process (Basic, Agile, Scrum, CMMI or
 //! one inherited from them): the Kanban's are those of every type, each with its category.
 
-use super::text::{criteria_in, criteria_of, html_to_markdown};
-use super::{
-    encode, Container, ExternalIssue, HttpError, IssueFilter, IssuePage, Query, StatesView,
-};
-use crate::forge::azure_api::Azure;
-use crate::i18n::{self, Lang};
-use crate::model::{Column, ExternalRef, ExternalState, Service};
+use crate::html::html_to_markdown;
+use crate::pulls::Azure;
 use anyhow::{anyhow, Result};
+use escouade_plugin_kit::errors::HttpError;
+use escouade_plugin_kit::forge::BoxFuture;
+use escouade_plugin_kit::hosts::{StatesView, TicketSource};
+use escouade_plugin_kit::http::encode;
+use escouade_plugin_kit::i18n::{self, Lang};
+use escouade_plugin_kit::protocol::tickets::{
+    Container, ExternalIssue, ExternalRef, ExternalState, IssueFilter, IssuePage, Query,
+};
+use escouade_plugin_kit::text::{criteria_in, criteria_of};
+use escouade_plugin_kit::{tr, tr_in};
 use reqwest::Method;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
-const S: Service = Service::AZURE;
+/// The source's id.
+pub const ID: &str = "azure";
+const S: &str = ID;
 
-const VERSION: &str = "api-version=7.1";
+pub const VERSION: &str = "api-version=7.1";
 /// The tags' and the comments' APIs are still previews in 7.1.
 const TAGS_VERSION: &str = "api-version=7.1-preview.1";
 const COMMENTS_VERSION: &str = "api-version=7.1-preview.4";
@@ -64,14 +71,14 @@ pub struct Instance {
 /// A state of a type, and its category (`Proposed`, `InProgress`, `Resolved`, `Completed`,
 /// `Removed`).
 #[derive(Debug, Clone, PartialEq)]
-struct TypeState {
+pub struct TypeState {
     name: String,
     category: String,
 }
 
 /// A work item type of the project, and its states in their order.
 #[derive(Debug, Clone, PartialEq)]
-struct WorkType {
+pub struct WorkType {
     name: String,
     states: Vec<TypeState>,
 }
@@ -84,7 +91,7 @@ fn closed(category: &str) -> bool {
 }
 
 pub struct Boards {
-    instances: Vec<Instance>,
+    pub instances: Vec<Instance>,
 }
 
 /// A text in a query, between its quotes.
@@ -93,7 +100,7 @@ fn quoted(s: &str) -> String {
 }
 
 /// `url` with the API's version.
-fn v(url: String, version: &str) -> String {
+pub fn v(url: String, version: &str) -> String {
     let sep = if url.contains('?') { '&' } else { '?' };
     format!("{url}{sep}{version}")
 }
@@ -119,7 +126,7 @@ impl Boards {
         Ok((inst, project))
     }
 
-    fn project_api(inst: &Instance, project: &str) -> String {
+    pub fn project_api(inst: &Instance, project: &str) -> String {
         format!(
             "{}/{}/_apis",
             inst.client.org_url(&inst.org),
@@ -129,7 +136,7 @@ impl Boards {
 
     /// A call on the work items: a token without their right is told so, and where to make
     /// another one.
-    async fn call(
+    pub async fn call(
         &self,
         inst: &Instance,
         method: Method,
@@ -148,7 +155,7 @@ impl Boards {
         })
     }
 
-    async fn get(&self, inst: &Instance, url: String) -> Result<Value> {
+    pub async fn get(&self, inst: &Instance, url: String) -> Result<Value> {
         Ok(self.call(inst, Method::GET, url, None).await?.0)
     }
 
@@ -477,7 +484,7 @@ impl Boards {
 
 /// What Azure said of a token it refused on the work items, and what to do: the right Work
 /// Items, on a new token made on its page.
-fn no_right(lang: Lang, said: &str, page: &str) -> String {
+pub fn no_right(lang: Lang, said: &str, page: &str) -> String {
     tr_in!(
         lang,
         "{said}. Le jeton d'Azure DevOps doit avoir le droit Work Items (lecture et écriture) : crée-en un sur {page}, puis remplace-le dans Réglages › Intégrations › Hébergeurs de code.",
@@ -511,10 +518,39 @@ fn all_states(types: &[WorkType]) -> Vec<TypeState> {
     out
 }
 
+/// What the names Escouade guesses « En cours » by look like (`integrations::text`): the in-progress state called so.
+const DOING: &[&str] = &[
+    "in-progress",
+    "en-cours",
+    "doing",
+    "wip",
+    "in-development",
+    "en-developpement",
+    "progress",
+    "started",
+];
+
+fn looks_like_doing(states: &[ExternalState]) -> Option<&ExternalState> {
+    DOING.iter().find_map(|p| {
+        states.iter().find(|s| {
+            let slug = s
+                .name
+                .trim()
+                .to_lowercase()
+                .replace('é', "e")
+                .replace(|c: char| !c.is_ascii_alphanumeric(), "-");
+            slug == *p
+                || slug.starts_with(&format!("{p}-"))
+                || slug.ends_with(&format!("-{p}"))
+                || slug.contains(&format!("-{p}-"))
+        })
+    })
+}
+
 /// What each column gives by default: « En cours » and « À tester » an in-progress state (the
 /// one named like it, else the first), « Terminé » a resolved one (« Resolved »), when the
 /// process has one: the other columns leave the work item as it is until the ticket is done.
-fn defaults_of(states: &[TypeState]) -> BTreeMap<Column, ExternalState> {
+fn defaults_of(states: &[TypeState]) -> BTreeMap<String, ExternalState> {
     let as_state = |s: &TypeState| ExternalState {
         id: s.name.clone(),
         name: s.name.clone(),
@@ -525,20 +561,19 @@ fn defaults_of(states: &[TypeState]) -> BTreeMap<Column, ExternalState> {
         .filter(|s| s.category == "InProgress")
         .map(as_state)
         .collect();
-    let by_name = super::text::default_states(&doing);
-    if let Some(d) = by_name.get(&Column::Doing).or(doing.first()) {
-        out.insert(Column::Doing, d.clone());
-        out.insert(Column::Review, d.clone());
+    if let Some(d) = looks_like_doing(&doing).or(doing.first()) {
+        out.insert("doing".to_string(), d.clone());
+        out.insert("review".to_string(), d.clone());
     }
     if let Some(r) = states.iter().find(|s| s.category == "Resolved") {
-        out.insert(Column::Done, as_state(r));
+        out.insert("done".to_string(), as_state(r));
     }
     out
 }
 
 /// The state a work item of type `kind` takes for `wanted`: itself when its type has it, else its
 /// type's first state of the same category, else `wanted` (Azure says why it refuses it).
-fn target_state(types: &[WorkType], kind: &str, wanted: &str) -> String {
+pub fn target_state(types: &[WorkType], kind: &str, wanted: &str) -> String {
     let Some(t) = types.iter().find(|t| t.name.eq_ignore_ascii_case(kind)) else {
         return wanted.to_string();
     };
@@ -672,7 +707,7 @@ fn issue(lang: Lang, container: &str, web: &str, project: &str, w: &Value) -> Ex
         meta.push(tr_in!(lang, "par {a}", "by {a}"));
     }
     ExternalIssue {
-        service: S,
+        service: S.into(),
         id: id.to_string(),
         key: format!("#{id}"),
         title: f["System.Title"].as_str().unwrap_or_default().to_string(),
@@ -687,6 +722,32 @@ fn issue(lang: Lang, container: &str, web: &str, project: &str, w: &Value) -> Ex
     }
 }
 
-#[cfg(test)]
-#[path = "azure_tests.rs"]
-mod tests;
+impl TicketSource for Boards {
+    fn me(&self) -> BoxFuture<'_, Result<(String, String)>> {
+        Box::pin(Boards::me(self))
+    }
+    fn containers(&self) -> BoxFuture<'_, Result<Vec<Container>>> {
+        Box::pin(Boards::containers(self))
+    }
+    fn states<'a>(&'a self, container: &'a str) -> BoxFuture<'a, Result<Vec<ExternalState>>> {
+        Box::pin(Boards::states(self, container))
+    }
+    /// By the categories of the process, which the names alone do not tell.
+    fn states_view<'a>(&'a self, container: &'a str) -> BoxFuture<'a, Result<Option<StatesView>>> {
+        Box::pin(async move { Boards::states_view(self, container).await.map(Some) })
+    }
+    fn issues<'a>(&'a self, container: &'a str, q: &'a Query) -> BoxFuture<'a, Result<IssuePage>> {
+        Box::pin(Boards::issues(self, container, q))
+    }
+    fn set_state<'a>(
+        &'a self,
+        r: &'a ExternalRef,
+        state: &'a ExternalState,
+        _mapped: &'a [ExternalState],
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(Boards::set_state(self, r, state))
+    }
+    fn comment<'a>(&'a self, r: &'a ExternalRef, text: &'a str) -> BoxFuture<'a, Result<()>> {
+        Box::pin(Boards::comment(self, r, text))
+    }
+}
