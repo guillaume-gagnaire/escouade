@@ -97,7 +97,19 @@ describe('Escouade’s own plugins submitted to the store from their folder (ESC
   it.each(PLUGINS)('%s from its folder of the app’s repository passes the ten checks, and its signed version.json checks', (name) => {
     const path = `plugins/${name}`;
     const tag = `${path}/v${manifestOf(name).version}`;
-    const snap = snapshot(APP, path, tag, { firstParty: true });
+    // A run.js plugin (slack and team-rules since 2.0.0, ESC-326) has its bundle compiled by the worker before the
+    // checks (compile.ts, played by compile.test.ts): here that compilation stands done.
+    const compiled = manifestOf(name).run?.js
+      ? {
+          compiled: {
+            state: 'built' as const,
+            sha256: 'a'.repeat(64),
+            size: 1_500_000,
+            compiler: { javy: '9.1.0', engine: 'e'.repeat(64), prelude: '2.2.0' },
+          },
+        }
+      : {};
+    const snap = snapshot(APP, path, tag, { firstParty: true, ...compiled });
     const results = runChecks(snap);
     expect(results.filter((r) => r.status !== 'pass')).toEqual([]);
     expect(verdict(results)).toBe('ready');
