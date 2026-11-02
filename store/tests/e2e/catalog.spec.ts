@@ -378,6 +378,12 @@ for (const scheme of ['dark', 'light'] as const)
     await page.goto('/plugins/dev.escouade.claude-code');
     await expect(page.locator('.plug-head .tile.glyph.harness')).toBeVisible();
     await page.goto('/authors/escouade');
-    await expect(page.locator('.rows .row .tile.brand, .rows .row .tile.glyph')).toHaveCount(17);
+    // Each of Escouade's own rows has its tile, brand or glyph, and no image: their number grows with the plugins the
+    // app gives (one more each time a host, a source or a harness leaves the core), so it is read, never written here.
+    const rows = page.locator('.rows .row');
+    await expect(rows.first()).toBeVisible();
+    const count = await rows.count();
+    expect(count).toBeGreaterThanOrEqual(17);
+    await expect(page.locator('.rows .row .tile.brand, .rows .row .tile.glyph')).toHaveCount(count);
     expect(await page.locator('.rows .row img').count()).toBe(0);
   });
