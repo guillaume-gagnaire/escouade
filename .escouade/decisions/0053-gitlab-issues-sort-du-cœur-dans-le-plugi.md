@@ -1,9 +1,9 @@
 ---
-number: null
+number: 53
 id: "gitlab-issues-sort-du-cœur-dans-le-plugi"
 title: "GitLab Issues sort du cœur dans le plugin GitLab, un client par instance"
 date: "2026-11-02"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-218"
 pages: ["escouade/spec/plugins/livres-avec-escouade"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: []
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-02T05:49:48+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
