@@ -68,7 +68,7 @@ void plugin.start();
 | `secret(key)` | Asks Escouade for one of its secrets (`secrets/get`); `null` when none is kept. Another key rejects with the error `-32001`. |
 | `settings(project?)` | Asks for its settings (`settings/get`); with a project’s id, those its `.escouade.yml` gives it (`plugins.<id>`) go first. |
 | `log.debug/info/warn/error(message)` | A line of its journal (`log`). |
-| `file(path)` | Reads a file of its folder (`files/read`), 256 KB at most: never its manifest, a hidden file or a path that leaves it. |
+| `file(path)` | Reads a file of its folder as text (`files/read`), a subfolder included (`data/words.txt`), 256 KB at most, under Node as in WASM: never its manifest, a hidden file or a path that leaves it (`RpcError` `ERRORS.refused`); a missing file fails with `ERRORS.notFound`. |
 | `handle(method, handler)` | Serves another method (a later extension point). Throw `new RpcError(code, message)` to answer an error. |
 | `onInitialize(handler)`, `onShutdown(handler)` | Runs at `initialize`, or before the answer to `shutdown` (800 ms at most: Escouade waits a second). |
 | `call(method, params)`, `notify(method, params)` | A call or a notification to Escouade, typed for its methods. |
@@ -162,8 +162,11 @@ A plugin in JS or TypeScript ships as its bundle, named by `run.js`:
 
 Escouade runs it **inside the app, in WASM**, with no Node on the user’s machine: one isolated instance per plugin, which keeps its state from one call to the next like a process. The store compiles the bundle when it is submitted, and the app downloads that module and checks it against the version’s `version.json`; a plugin installed from a folder or a git repository is compiled by the app. The install window says “Runs inside Escouade, isolated”, and `permissions.network` is enforced there: `fetch` goes through Escouade, over https, to those hosts only (see [the protocol](plugins/api#a-program-in-js-or-typescript)).
 
-- The bundle imports only `node:fs` and `node:readline`, which Escouade serves; any other `import` fails its compilation, and `escouade-plugin validate` says so.
-- `escouade-plugin build` makes the module as the store does, to check that it compiles; `test` and `dev` play the bundle in WASM, without Node. The Javy that compiles it is downloaded the first time it is needed and checked by its hash.
+- **The same code on both transports**: `start()` speaks to Escouade’s WASM host when the app runs the plugin, on standard input and output under Node (its tests, a plugin started by a command). A plugin written for the SDK runs unchanged on both sides.
+- **Its files**: `readFileSync(new URL('../rules.json', import.meta.url), 'utf8')` still reads a JSON file at the root of its folder; `p.file()` reads the others. The standard `fetch` serves the network, through Escouade in WASM.
+- **What the bundle may import**: `node:fs` and `node:readline`, which Escouade serves, and nothing else; it is one file, without `export`. Any other `import` fails its compilation, and `escouade-plugin validate` says so in your language (“the bundle imports node:child_process, which a plugin in WASM does not have (only node:fs, node:readline)”). `setTimeout` is not defined there.
+- **SDK 0.3 or later**: a bundle made with SDK 0.2 does not run in WASM; rebuild it (`npm run build`).
+- **The tools, without Node**: `escouade-plugin build` makes the module as the store does, to check that it compiles; `test` and `dev` play the bundle in WASM, in the app’s host. The Javy that compiles it (9.1.0) is downloaded the first time it is needed into `~/.escouade/tools` and checked by its hash; the app and `escouade-plugin` share it. Node only serves the author, for `npm run build` and the plugin’s tests; whoever installs it never needs it. No more need to make it an executable (`deno compile`, `bun build --compile`) for people without Node.
 - A plugin that must start a program of the computer (a harness, a command) keeps a `run.command`: one executable per system, in its folder or attached to its release with its provenance attestation (see [publishing](plugins/publishing)). Its install window says “Runs a program on your computer, with your rights”. The store refuses a `run.command` that is a script or names an interpreter (`node`…): a program in JS or TypeScript ships as `run.js`.
 
 ## In CI

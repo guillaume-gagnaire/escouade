@@ -1,6 +1,6 @@
 # The protocol
 
-A plugin with a program talks to Escouade in JSON-RPC 2.0, on its standard input and output. This page describes that transport: when the program starts, the handshake, the delays, the restarts, the memory, the secrets and the journal.
+A plugin with a program talks to Escouade in JSON-RPC 2.0: on its standard input and output if it is a process (`run.command`), inside the app in WASM, without Node, if it is in JS or TypeScript (`run.js`, [below](#a-program-in-js-or-typescript)). The protocol is the same; this page describes the process, then what changes in WASM.
 
 ## When the program starts
 
@@ -69,8 +69,10 @@ Every delay that runs out is noted in the journal: “test/do: no answer within 
 | `secrets/get` | `{ "key": "webhook" }` | The secret, or `null` if none is kept under that key. |
 | `settings/get` | `{}`, or `{ "project": "<id>" }` | Its settings, as the user chose them in the Settings tab of its page: an object by key of `contributes.settings`, without those left to their default. With a project (the `project.id` of a fact), those its [`.escouade.yml`](escouade-yml) gives it under `plugins.<id>` go first, if it is on in that project: only the keys it declares, with a value of their type, never a secret. |
 | `log` (notification) | `{ "level": "info", "message": "…" }` | None: the line goes to the plugin’s journal. |
+| `files/read` | `{ "path": "data/words.txt" }` | `"…"`, the text of a file of its folder, as UTF-8 text, 256 KB at most, on both transports. Refused (`-32003`, kept in the journal): an absolute path, with `..` or a drive, a link that leads out of the folder, a hidden name (`.env`, `.git`), the manifest. `-32005` for a missing file, `-32004` for a file too big or that is not text. |
+| `net/fetch` | `{ "url": "https://…", "method": "POST", "headers": {}, "body": "…" }` | `{ "status": 200, "headers": {}, "body": "…" }`, for a plugin in WASM only: see [the network](#the-network-through-escouade). |
 
-Any other method answers the error `-32601` and notes it in the journal. Escouade’s own errors: `-32001` for a secret that is not the plugin’s, `-32002` for a keychain out of reach, `-32602` for parameters that do not hold.
+Any other method answers the error `-32601` and notes it in the journal. Escouade’s own errors: `-32001` for a secret that is not the plugin’s, `-32002` for a keychain out of reach, `-32003` for what the plugin may not reach (a host, a file), `-32004` for a request that fails on the way, `-32005` for a missing file, `-32602` for parameters that do not hold.
 
 ## The secrets
 
@@ -111,12 +113,41 @@ Its methods, their parameters, their answers and their delays are described by a
 
 ## A program in JS or TypeScript
 
-A plugin whose manifest says `"run": { "js": "dist/plugin.mjs" }` starts no process: Escouade runs its bundle **inside the app, in WASM**, one instance per plugin, which keeps its state from one call to the next. The messages, the handshake, the delays, the restarts and the journal are those of a process; the [SDK](plugins/sdk) speaks either without the plugin knowing.
+A plugin whose manifest says `"run": { "js": "dist/plugin.mjs" }` starts no process: Escouade runs its bundle **inside the app, in WASM**, with no Node on the machine. One instance per plugin, on a thread of its own, which keeps its state from one call to the next like a process. The protocol is the same: the same messages, carried by the module’s standard input and output, the same handshake, the same delays, the same journal and the same restarts; the [SDK](plugins/sdk) speaks either without the plugin knowing.
 
-- **Its limits**: 64 MB of memory, 2 s per turn of work, 500 ms while it holds a decision. Past them, Escouade ends the instance and the journal says so (“a turn ran past 2000 ms: Escouade stopped its instance”); a new one is made, as after a crash, with the same three restarts in five minutes.
-- **The network, through Escouade only**: `net/fetch` (the SDK’s `fetch`), over https, to a host of `permissions.network` or one of its subdomains, following no redirect, within 10 s and 1 MB, and never to an address of the machine or of the local network, judged on the addresses the name leads to. A refused call answers `-32003`, a call that fails on the way `-32004`.
-- **The files of its folder**: `files/read` (the SDK’s `file()`), 256 KB per file and 1 MB in all; never its manifest, a hidden file, a link or a path that leaves the folder.
-- **Nothing else**: it starts no program and reads no disk outside its folder. That is why the install window says “Runs inside Escouade, isolated”, not “Runs a program on your computer”.
+The module is compiled once: by the store for a plugin of the store (the app downloads it and checks its fingerprint against `version.json`), by the app for a plugin installed from a folder or a git repository. The app precompiles it at install, keeps it in its cache and precompiles it again after an update of Escouade. It needs Escouade 2.2.0 or later.
+
+### The network, through Escouade
+
+A plugin in WASM opens no connection: its `fetch` (the standard `fetch`) goes through Escouade, by `net/fetch`, which only a plugin in WASM gets (a process has its own network, and `net/fetch` answers it `-32601`). Escouade sends the request:
+
+- **over https only**, to a host of `permissions.network` or one of its subdomains (`slack.com` covers `api.slack.com`); never to an IP address written in the URL, which `permissions.network` does not name;
+- **following no redirect**: the plugin gets the 3xx answer;
+- **within 10 s, for an answer of 1 MB at most**;
+- **never to an address of the machine or of the local network**, even for a declared host: loopback, private, link-local, unspecified, multicast or broadcast, in IPv4 as in IPv6. Escouade judges the addresses the connection itself uses, once the name is resolved, not a separate lookup the DNS could contradict;
+- **without a proxy**: a proxy would resolve the name where its address is not judged.
+
+A refused call answers `-32003` and the journal keeps it (“slack.com resolves to 127.0.0.1, an address of this machine or of the local network”, “example.org is not in permissions.network of …”); a call that fails on the way (no answer within 10 s, an answer over 1 MB, a host out of reach) answers `-32004`. The plugin sees a `fetch` that rejects.
+
+> [!WARNING]
+> On a machine whose traffic must go through a proxy (the one of Settings › Network), the `fetch` of a `run.js` plugin fails: `net/fetch` never goes through it.
+
+### The files of its folder
+
+- **The JSON files at its root** (`rules.json`, `channels.json`) are given to it at its start: 256 KB each, 1 MB in all, never its manifest. `readFileSync` of `node:fs` reads them, as under Node (`readFileSync(new URL('../rules.json', import.meta.url), 'utf8')`).
+- **The others** are read by `files/read` (the SDK’s `p.file()`), as UTF-8 text, 256 KB at most, a subfolder included (`data/words.txt`).
+- **Nothing is written.**
+
+### The limits
+
+- **64 MB of memory, 2 s per turn of work**, 500 ms while it holds a decision.
+- **An endless loop, a growing memory or an uncaught exception** end the instance, and the journal says why (“a turn ran past 2000 ms: Escouade stopped its instance”, “its instance crashed: …”); a new one is made, as after a process crashes, with the same three restarts in five minutes, then the plugin is stopped.
+- **No timer**: `setTimeout` is not defined, and a library that calls it fails. The SDK does not need one; when closing, Escouade waits for its answer to `shutdown` one second at most.
+- **A bundle made with SDK 0.2** does not run in WASM: the plugin stops and its journal says to rebuild it with `@escouade-dev/plugin` 0.3 or later.
+
+### What a plugin in WASM cannot do
+
+It starts no program, opens no socket, reads neither the environment nor a file outside its folder, writes nothing to the disk and loads no native or remote module. A bundle that imports anything other than `node:fs` and `node:readline`, or that has `export`s, is not compiled, and the plugin stops with the reason. Its secrets and settings are its own only, as for a process. That is why the install window says “Runs inside Escouade, isolated”, not “Runs a program on your computer, with your rights”.
 
 ## What the user changes
 

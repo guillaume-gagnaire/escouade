@@ -19,7 +19,7 @@ To make one yours, copy its folder and give it an id of your own (`io.github.<yo
 The code shown here is the repository’s: a test of the site checks it has not changed since.
 
 > [!NOTE]
-> Slack and Team rules still start through Node (`node dist/plugin.mjs`, by their `slack` and `team-rules` scripts): they need Node on the machine. A new TypeScript plugin rather ships as `run.js`, which Escouade runs without Node (see [the SDK](plugins/sdk#without-node)).
+> Slack and Team rules are `run.js` plugins since their 2.0.0: Escouade runs their `dist/plugin.mjs` inside the app, in WASM, with no Node on the machine (see [the protocol](plugins/api#a-program-in-js-or-typescript)). They need Escouade 2.2.0 or later (`escouade.min`); their 1.x versions, started through Node, stay on the store for the versions before. Node only serves their authors, to build and test them.
 
 ## Trying them
 
@@ -172,7 +172,7 @@ A TypeScript program, written with the [SDK](plugins/sdk). It posts in each proj
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.slack",
   "name": "Slack",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "description": {
     "fr": "Les tickets à tester et les agents qui attendent, dans le salon Slack de chaque projet.",
     "en": "Tickets to test and agents waiting, in each project's Slack channel."
@@ -180,8 +180,8 @@ A TypeScript program, written with the [SDK](plugins/sdk). It posts in each proj
   "author": { "name": "Escouade", "url": "https://escouade.dev" },
   "license": "MIT",
   "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/slack",
-  "escouade": { "api": "1", "min": "2.1.0" },
-  "run": { "command": "slack", "windows": "slack.cmd" },
+  "escouade": { "api": "1", "min": "2.2.0" },
+  "run": { "js": "dist/plugin.mjs" },
   "activation": ["event:ticket.column", "event:agent.status"],
   "permissions": {
     "events": ["ticket.column", "agent.status"],
@@ -291,7 +291,7 @@ void slack().start();
 
 In Slack, create an app with a bot that has the `chat:write` scope, invite it to the channels, then paste its token in the plugin’s “Settings” tab. Without a token, the journal says so and nothing is sent. A ticket’s title is escaped (`&`, `<`, `>`) as Slack asks: a `<!channel>` from a public issue shows without notifying anyone.
 
-Its tests drive its handlers against the SDK’s fake Escouade and a fake Slack, with no network (`npm test`). `npm run build` bundles `src/` into `dist/plugin.mjs`, which `slack` and `slack.cmd` start: Escouade runs the plugin as the repository holds it, without `npm install`.
+Its tests drive its handlers against the SDK’s fake Escouade and a fake Slack, with no network (`npm test`). `npm run build` bundles `src/` into `dist/plugin.mjs`, which `run.js` names: committed, it is the bundle the store compiles to WASM, without `npm install`. `start()` speaks to Escouade’s WASM host, or on standard input and output under Node (its tests, the bench). Its `fetch` to `slack.com/api/chat.postMessage` goes through Escouade, which lets it reach `slack.com` and its subdomains only, over https; `channels.json`, a JSON file at the root of its folder, is given to it at its start, and `readFileSync` reads it as under Node.
 
 ## Team rules
 
@@ -304,7 +304,7 @@ A TypeScript program that decides permissions before they reach you (see [Permis
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.team-rules",
   "name": { "fr": "Règles de l'équipe", "en": "Team rules" },
-  "version": "1.1.1",
+  "version": "2.0.0",
   "description": {
     "fr": "Autorise ou refuse les commandes des agents selon les règles de l'équipe, écrites dans rules.json.",
     "en": "Allows or denies the agents' commands by the team's rules, written in rules.json."
@@ -312,8 +312,8 @@ A TypeScript program that decides permissions before they reach you (see [Permis
   "author": { "name": "Escouade", "url": "https://escouade.dev" },
   "license": "MIT",
   "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/team-rules",
-  "escouade": { "api": "1", "min": "2.1.0" },
-  "run": { "command": "team-rules", "windows": "team-rules.cmd" },
+  "escouade": { "api": "1", "min": "2.2.0" },
+  "run": { "js": "dist/plugin.mjs" },
   "activation": ["event:request.permission"],
   "permissions": { "decide": true }
 }
@@ -410,7 +410,7 @@ import { teamRules } from './plugin.ts';
 void teamRules().start();
 ```
 
-The rules are read once, at start: a decision has 500 ms. An edit or a file read is not a command, and goes to the user.
+The rules are read once, at start: a decision has 500 ms. In WASM, `rules.json` is given to it at its start with the other JSON files at the root of its folder; it starts nothing and reaches no network (it has no `permissions.network`). An edit or a file read is not a command, and goes to the user.
 
 ## Goose
 

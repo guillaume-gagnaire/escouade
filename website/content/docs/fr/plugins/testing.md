@@ -4,7 +4,7 @@ Escouade donne aux auteurs de plugins une commande, `escouade-plugin`, qui fait 
 
 ## La commande
 
-`escouade-plugin` est livrée avec Escouade, à côté de son programme : `%LOCALAPPDATA%\Escouade\escouade-plugin.exe` sous Windows, `Escouade.app/Contents/MacOS/escouade-plugin` sous macOS, `/usr/bin/escouade-plugin` avec le paquet `.deb`. Elle n’a besoin que de ce qu’il faut au programme du plugin pour démarrer (Node pour un plugin en JavaScript).
+`escouade-plugin` est livrée avec Escouade, à côté de son programme : `%LOCALAPPDATA%\Escouade\escouade-plugin.exe` sous Windows, `Escouade.app/Contents/MacOS/escouade-plugin` sous macOS, `/usr/bin/escouade-plugin` avec le paquet `.deb`. Pour un plugin `run.js`, elle n’a pas besoin de Node : elle compile son bundle et le joue en WASM, dans l’hôte de l’app. Pour un plugin lancé par une commande, il lui faut ce qu’il faut à ce programme pour démarrer.
 
 ```sh
 escouade-plugin validate mon-plugin   # le manifeste, champ par champ

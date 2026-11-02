@@ -6,7 +6,7 @@ The questions that come back about plugins, for those who install them and for t
 
 ### Do I need Node to run a plugin?
 
-No, for a plugin published as `run.js`: Escouade runs it inside the app, in WASM. A plugin published as a program (`run.command`) brings its executable. Only a plugin installed from a folder or a git repository whose command names `node` needs it; the store refuses that form. Slack and Team rules, two of the [example plugins](plugins/examples), still start through Node.
+No, for a plugin published as `run.js`: Escouade runs it inside the app, in WASM. A plugin published as a program (`run.command`) brings its executable. Only a plugin installed from a folder or a git repository whose command names `node` needs it; the store refuses that form. Slack and Team rules, two of the [example plugins](plugins/examples), run as `run.js` since their 2.0.0.
 
 ### “Verified by Escouade”, “Unverified”: what is the difference?
 

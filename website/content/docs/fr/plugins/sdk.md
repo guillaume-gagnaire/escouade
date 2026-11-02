@@ -68,7 +68,7 @@ void plugin.start();
 | `secret(clé)` | Demande à Escouade l’un de ses secrets (`secrets/get`) ; `null` si aucun n’est gardé. Une autre clé échoue par l’erreur `-32001`. |
 | `settings(projet?)` | Demande ses réglages (`settings/get`) ; avec l’id d’un projet, ceux que son `.escouade.yml` lui donne (`plugins.<id>`) passent devant. |
 | `log.debug/info/warn/error(message)` | Une ligne de son journal (`log`). |
-| `file(chemin)` | Lit un fichier de son dossier (`files/read`), 256 Ko au plus : jamais son manifeste, un fichier caché ou un chemin qui en sort. |
+| `file(chemin)` | Lit un fichier de son dossier en texte (`files/read`), un sous-dossier compris (`data/words.txt`), 256 Ko au plus, sous Node comme en WASM : jamais son manifeste, un fichier caché ou un chemin qui en sort (`RpcError` `ERRORS.refused`) ; un fichier absent échoue par `ERRORS.notFound`. |
 | `handle(méthode, fonction)` | Sert une autre méthode (un point d’extension à venir). Lance `new RpcError(code, message)` pour répondre une erreur. |
 | `onInitialize(fonction)`, `onShutdown(fonction)` | Appelée à `initialize`, ou avant la réponse à `shutdown` (800 ms au plus : Escouade attend une seconde). |
 | `call(méthode, params)`, `notify(méthode, params)` | Un appel ou une notification à Escouade, typés pour ses méthodes. |
@@ -162,8 +162,11 @@ Un plugin en JS ou en TypeScript se publie par son bundle, nommé par `run.js` :
 
 Escouade le fait tourner **dans l’app, en WASM**, sans Node chez l’utilisateur : une instance isolée par plugin, qui garde son état d’un appel à l’autre comme un process. Le store compile le bundle à la soumission, et l’app télécharge ce module et le vérifie contre le `version.json` de la version ; un plugin installé depuis un dossier ou un dépôt git est compilé par l’app. La fenêtre d’installation dit « Tourne dans Escouade, isolé », et `permissions.network` y est appliquée : `fetch` passe par Escouade, en https, vers ces hôtes seulement (voir [le protocole](plugins/api#un-programme-en-js-ou-en-typescript)).
 
-- Le bundle n’importe que `node:fs` et `node:readline`, que sert Escouade ; un autre `import` refuse sa compilation, et `escouade-plugin validate` le dit.
-- `escouade-plugin build` fait le module comme le store, pour vérifier qu’il compile ; `test` et `dev` jouent le bundle en WASM, sans Node. La Javy qui compile est téléchargée au premier besoin et vérifiée par son empreinte.
+- **Le même code sur les deux transports** : `start()` parle à l’hôte WASM d’Escouade quand l’app fait tourner le plugin, sur l’entrée et la sortie standard sous Node (ses tests, un plugin lancé par une commande). Un plugin écrit pour le SDK tourne sans changement des deux côtés.
+- **Ses fichiers** : `readFileSync(new URL('../rules.json', import.meta.url), 'utf8')` lit toujours un JSON de la racine de son dossier ; `p.file()` lit les autres. Le `fetch` standard sert le réseau, par Escouade en WASM.
+- **Ce que le bundle peut importer** : `node:fs` et `node:readline`, que sert Escouade, et rien d’autre ; il tient en un fichier, sans `export`. Un autre `import` refuse sa compilation, et `escouade-plugin validate` le dit dans ta langue (« le bundle importe node:child_process, qu’un plugin en WASM n’a pas (seulement node:fs, node:readline) »). `setTimeout` n’y est pas défini.
+- **Le SDK 0.3 ou plus récent** : un bundle fait avec le SDK 0.2 ne tourne pas en WASM ; reconstruis-le (`npm run build`).
+- **Les outils, sans Node** : `escouade-plugin build` fait le module comme le store, pour vérifier qu’il compile ; `test` et `dev` jouent le bundle en WASM, dans l’hôte de l’app. La Javy qui compile (9.1.0) est téléchargée au premier besoin dans `~/.escouade/tools` et vérifiée par son empreinte ; l’app et `escouade-plugin` la partagent. Node ne sert qu’à l’auteur, pour `npm run build` et les tests du plugin ; celui qui l’installe n’en a jamais besoin. Plus besoin d’en faire un exécutable (`deno compile`, `bun build --compile`) pour qui n’a pas Node.
 - Un plugin qui doit lancer un programme de l’ordinateur (un harness, une commande) garde un `run.command` : un exécutable par système, dans son dossier ou attaché à sa release avec son attestation de provenance (voir [publier](plugins/publishing)). Sa fenêtre d’installation dit « Lance un programme sur ton ordinateur, avec tes droits ». Le store refuse un `run.command` qui est un script ou qui nomme un interpréteur (`node`…) : un programme en JS ou en TypeScript se publie en `run.js`.
 
 ## En CI

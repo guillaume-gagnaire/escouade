@@ -37,8 +37,20 @@ Each published version has its `version.json` file: the id, the number, the repo
 | Screenshots | Those of `store.screenshots`: 6 at most, in PNG, JPEG or WebP, 1600 px wide and 1 MB each at most. The store re-encodes them, without their metadata. |
 | Archive | 50 MB at most, no symbolic link, no absolute path nor `..`, no submodule nor unresolved Git LFS file. |
 | Permissions | Consistent with the plugin: with no program and no webhook, it asks for no network, no events, no secrets; a secret it asks for is declared in `contributes.secrets`; a host is written alone (`hooks.slack.com`). |
-| Binaries | The program of `run.command` is in the repository, or in the tag’s release for each system (see below). A script or an interpreter (`node`, `deno`, `python`…) is refused: a program in JS or TypeScript ships as `run.js`. A `run.js` plugin has nothing to provide. |
-| Compilation | For a `run.js` plugin: its bundle, taken from the archive (5 MB at most, never an `npm install`), compiled to WASM twice by `escouade-plugin build`, isolated, each time in a fresh folder. Two different modules refuse the version; so does an `import` other than `node:fs` and `node:readline`. The module kept is the one the app downloads and checks. |
+| Binaries | The program of `run.command` (or of `run.windows`, `run.macos`, `run.linux`) is in the repository, or in the tag’s release for each system (see below). A script (`.cmd`, `.bat`, `.ps1`, `.sh`, `.js`…, or a file that starts with `#!`) or an interpreter (`node`, `deno`, `bun`, `npx`, `python`…) is refused at the faulty field: a program in JS or TypeScript ships as `run.js`. A `run.js` plugin has nothing to provide. |
+| Compilation | For a `run.js` plugin: its bundle, taken from the archive (5 MB at most, never an `npm install`), compiled to WASM twice by `escouade-plugin build`, isolated, each time in a fresh folder. Two different modules refuse the version; so does an `import` other than `node:fs` and `node:readline`. The module kept is the one the app downloads and checks (see below). |
+
+## A plugin in JS or TypeScript
+
+A plugin written in JS or TypeScript ships as `run.js`: its manifest names its bundle, `"run": { "js": "dist/plugin.mjs" }`, a file of its folder committed with the rest (without `node_modules`). You publish no `.wasm`: the store makes it.
+
+- **The store compiles the bundle as the archive holds it**: never an `npm install`, never your build. It compiles it twice, each time in a fresh folder, with no cache, with no network when the server’s kernel allows it, by the pinned Javy and Escouade’s engine, deterministically; the compiler is stopped after 2 minutes or past 1 GB of memory, and the version is refused.
+- **Reproducible**: the same bundle gives the same module to the byte, on Windows, macOS or Linux. Two different modules refuse the version (“the compilation is not reproducible”), with their two fingerprints. `escouade-plugin build` makes the same module on your machine: `packs/<id>-<version>.wasm` and its `.sha256`, with `--json` for the compiler (the Javy version, the engine’s fingerprint, the prelude’s).
+- **What the store keeps**: the module, under its SHA-256, and what made it, in `version.json` (`wasm: { sha256, size, compiler }`); the version’s fingerprint, hence its signature, covers it. The app downloads it, compares its size and fingerprint to `version.json` and installs nothing if they differ; Javy does not run on the user’s machine.
+- **The “Verified by Escouade” review** recompiles the bundle it read and compares the fingerprint to the published module’s: what was read is what runs. Another fingerprint refuses the version.
+- **The plugin’s page** says “Runs inside Escouade, sandboxed · compiled to WASM by the store”, and its list row “Compiled to WASM by the store”.
+
+A third-party plugin does not publish a program started by Node: the “Binaries” check refuses `node` (like any interpreter or script) at the field of `run` that names it, with the reason (“A plugin of the store runs neither a script nor an interpreter: a JS/TS program is published as run.js, the store compiles it to WASM.”). A program that is not in JS or TypeScript stays a binary, attested (see [the binaries](#the-binaries)). Installed from a folder or a git repository, outside the store, a plugin started by Node is still allowed, unverified.
 
 ## The plugin’s page
 

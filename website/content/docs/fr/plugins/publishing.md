@@ -37,8 +37,20 @@ Chaque version publiée a son fichier `version.json` : l’identifiant, le numé
 | Captures | Celles de `store.screenshots` : 6 au plus, en PNG, JPEG ou WebP, 1600 px de large et 1 Mo chacune au plus. Le store les réencode, sans leurs métadonnées. |
 | Archive | 50 Mo au plus, sans lien symbolique, sans chemin absolu ni `..`, sans sous-module ni fichier Git LFS non résolu. |
 | Permissions | Cohérentes avec le plugin : sans programme ni webhook, il ne demande ni réseau, ni événements, ni secrets ; un secret demandé est déclaré dans `contributes.secrets` ; un hôte s’écrit seul (`hooks.slack.com`). |
-| Binaires | Le programme de `run.command` est dans le dépôt, ou dans la release de l’étiquette pour chaque système (voir plus bas). Un script ou un interpréteur (`node`, `deno`, `python`…) est refusé : un programme en JS ou en TypeScript se publie en `run.js`. Un plugin `run.js` n’a rien à fournir. |
-| Compilation | Pour un plugin `run.js` : son bundle, pris dans l’archive (5 Mo au plus, jamais de `npm install`), compilé en WASM deux fois par `escouade-plugin build`, isolé, chaque fois dans un dossier neuf. Deux modules différents refusent la version ; un `import` hors de `node:fs` et `node:readline` aussi. Le module gardé est celui que l’app télécharge et vérifie. |
+| Binaires | Le programme de `run.command` (ou de `run.windows`, `run.macos`, `run.linux`) est dans le dépôt, ou dans la release de l’étiquette pour chaque système (voir plus bas). Un script (`.cmd`, `.bat`, `.ps1`, `.sh`, `.js`…, ou un fichier qui commence par `#!`) ou un interpréteur (`node`, `deno`, `bun`, `npx`, `python`…) est refusé au champ fautif : un programme en JS ou en TypeScript se publie en `run.js`. Un plugin `run.js` n’a rien à fournir. |
+| Compilation | Pour un plugin `run.js` : son bundle, pris dans l’archive (5 Mo au plus, jamais de `npm install`), compilé en WASM deux fois par `escouade-plugin build`, isolé, chaque fois dans un dossier neuf. Deux modules différents refusent la version ; un `import` hors de `node:fs` et `node:readline` aussi. Le module gardé est celui que l’app télécharge et vérifie (voir plus bas). |
+
+## Un plugin en JS ou en TypeScript
+
+Un plugin écrit en JS ou en TypeScript se publie en `run.js` : son manifeste nomme son bundle, `"run": { "js": "dist/plugin.mjs" }`, un fichier de son dossier commité avec le reste (sans `node_modules`). Tu ne publies pas de `.wasm` : le store le fait.
+
+- **Le store compile le bundle tel que l’archive le contient** : jamais de `npm install`, jamais ton build. Il le compile deux fois, chaque fois dans un dossier neuf, sans cache, sans réseau quand le noyau du serveur le permet, par la Javy épinglée et le moteur d’Escouade, en mode déterministe ; le compilateur est arrêté au bout de 2 minutes ou au-delà de 1 Go de mémoire, et la version est refusée.
+- **Reproductible** : le même bundle donne le même module à l’octet, sous Windows, macOS ou Linux. Deux modules différents refusent la version (« la compilation n’est pas reproductible »), avec leurs deux empreintes. `escouade-plugin build` fait le même module chez toi : `packs/<id>-<version>.wasm` et son `.sha256`, avec `--json` pour le compilateur (la version de Javy, l’empreinte du moteur, celle du prélude).
+- **Ce que garde le store** : le module, sous son SHA-256, et ce qui l’a fait, dans `version.json` (`wasm: { sha256, size, compiler }`) ; l’empreinte de la version, donc sa signature, le couvre. L’app le télécharge, compare sa taille et son empreinte à `version.json` et n’installe rien s’ils diffèrent ; Javy ne tourne pas sur la machine de l’utilisateur.
+- **La revue « Vérifié par Escouade »** recompile le bundle relu et compare l’empreinte à celle du module publié : ce qui a été lu est ce qui tourne. Une autre empreinte refuse la version.
+- **La page du plugin** dit « Tourne dans Escouade, isolé · compilé en WASM par le store », et sa ligne de liste « Compilé en WASM par le store ».
+
+Un plugin tiers ne publie pas un programme lancé par Node : le contrôle « Binaires » refuse `node` (comme tout interpréteur ou script) au champ de `run` qui le nomme, avec la raison (« Un plugin du store ne lance ni script ni interpréteur : un programme en JS/TS se publie en run.js, le store le compile en WASM. »). Un programme qui n’est pas en JS ou en TypeScript reste un binaire, attesté (voir [les binaires](#les-binaires)). Installé depuis un dossier ou un dépôt git, hors du store, un plugin lancé par Node reste permis, non vérifié.
 
 ## La page du plugin
 
