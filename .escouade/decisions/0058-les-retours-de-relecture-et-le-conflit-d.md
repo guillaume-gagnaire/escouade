@@ -1,9 +1,9 @@
 ---
-number: null
+number: 58
 id: "les-retours-de-relecture-et-le-conflit-d"
 title: "Les retours de relecture et le conflit d'une PR de ticket vont à son agent sur un clic seulement"
 date: "2026-11-02"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-61"
 pages: ["kanban/en-revue","kanban/validation"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"kanban/en-revue","added":21,"removed":4},{"page":"kanban/validation","added":1,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-02T11:29:14+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

@@ -3,7 +3,7 @@ title: "Validation"
 subject: "Kanban"
 sources: ["docs/SPEC.md"]
 tickets: ["ESC-143","ESC-259","ESC-263","ESC-59","ESC-61"]
-decisions: ["les-retours-de-relecture-et-le-conflit-d"]
+decisions: [58]
 compared: null
 ---
 

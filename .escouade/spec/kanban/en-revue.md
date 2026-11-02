@@ -3,7 +3,7 @@ title: "En revue"
 subject: "kanban"
 sources: ["docs/TODO-1.8.md"]
 tickets: ["ESC-59","ESC-60","ESC-61","ESC-62"]
-decisions: [55,56,"les-retours-de-relecture-et-le-conflit-d"]
+decisions: [55,56,58]
 compared: null
 ---
 
