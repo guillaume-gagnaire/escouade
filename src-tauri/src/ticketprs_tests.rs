@@ -342,20 +342,12 @@ async fn a_tickets_pull_request_opens_by_the_api_and_its_merge_ends_the_ticket()
             Ok(())
         })
         .unwrap();
-    // The next one waits for it (« Après »), the autopilot on once it does: turned on before, it could start the
-    // next one between its creation and its « Après » (the CI's Windows, 2026-11-02).
-    let next = h
-        .core
-        .ticket_create(&p.id, crate::tickets_tests::draft("Suite [ok]", &[], 5))
-        .await
-        .unwrap();
-    h.core
-        .edit_ticket(&next.id, |x| {
-            x.after = vec![t.id.clone()];
-            Ok(())
-        })
-        .unwrap();
-    h.set_board(&p.id, |s| s.autopilot = true);
+    // The next one waits for it (« Après »), set at its creation: the autopilot is on (a board's default), and an
+    // « Après » set just after could come once it started the next one (the CI's Windows, 2026-11-02, twice).
+    let mut after_it = crate::tickets_tests::draft("Suite [ok]", &[], 5);
+    after_it.after = vec![t.id.clone()];
+    let next = h.core.ticket_create(&p.id, after_it).await.unwrap();
+    assert_eq!(h.ticket(&next.id).after, vec![t.id.clone()]);
     h.core.ticket_approve(&t.id).await.unwrap();
     let u = h.ticket(&t.id);
     assert_eq!(u.column, Column::Pr, "{:?}", u.blocked);
