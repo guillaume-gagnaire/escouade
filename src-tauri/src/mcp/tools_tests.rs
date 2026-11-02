@@ -298,7 +298,7 @@ async fn the_projects_are_listed_with_their_branch_agents_and_tickets_by_column(
             "branch": "main",
             // The archived one left out.
             "agents": 1,
-            "tickets": { "todo": 2, "doing": 1, "review": 0, "done": 1 },
+            "tickets": { "todo": 2, "doing": 1, "review": 0, "inReview": 0, "done": 1 },
             "remoteControl": false,
             "remoteControlAll": false,
             // Its harness, and what the tools take for it (ESC-248): no model told yet.
@@ -317,7 +317,7 @@ async fn the_projects_are_listed_with_their_branch_agents_and_tickets_by_column(
         (
             &json!(other.id),
             &json!(0),
-            &json!({ "todo": 0, "doing": 0, "review": 0, "done": 0 })
+            &json!({ "todo": 0, "doing": 0, "review": 0, "inReview": 0, "done": 0 })
         )
     );
     // The call is in the activity log.

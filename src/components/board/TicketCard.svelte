@@ -35,6 +35,8 @@
   import { shareTicket } from '../../lib/share-actions';
   import { docsStore } from '../../lib/docs.svelte';
   import { pageTitle } from '../../lib/planning';
+  import { prIcon, prTone } from '../../lib/prs';
+  import { asPull, ciLine, prErrorLine, prFacts, prStateKey, prStateWord } from '../../lib/ticket-prs';
 
   const uid = $props.id();
 
@@ -390,6 +392,8 @@
       <span class="sum" use:tip={used?.estimated ? estimateHint(used) : undefined}
         ><span class="sr">{t('board.card.costLabel')}{' '}</span><span>{reviewMeta(ticket, used)}</span></span
       >
+    {:else if ticket.column === 'pr' && ticket.pr}
+      <span class="sum">{t('prs.to', { base: ticket.pr.target })}</span>
     {:else if ticket.column === 'done'}
       <span class="sum">{doneMeta(ticket)}</span>
     {/if}
@@ -460,6 +464,32 @@
   {#if ticket.partial && (ticket.column === 'review' || ticket.column === 'done')}<span class="partial">{t('board.card.partial')}</span
     >{/if}
 
+  {#if ticket.column === 'pr' && ticket.pr}
+    <!-- « En revue » (ESC-59): its pull request as its host last told it; its number opens it in the browser. -->
+    {@const p = ticket.pr}
+    {@const pull = asPull(p)}
+    {@const ci = ciLine(p)}
+    {@const facts = prFacts(p)}
+    {@const down = prErrorLine(p, app.now)}
+    <div class="prline" data-ticket-pr={p.number}>
+      <button
+        class="prnum {prTone(pull)}"
+        aria-label={t('prs.chipLabel', { word: p.word, number: p.number, state: prStateWord(p) })}
+        onclick={(e) => act(e, () => app.run(openUrl(p.url)))}><Icon name={prIcon(pull)} size={12} />{p.word} #{p.number}</button
+      >
+      <span class="prstate {prStateKey(p)}">{prStateWord(p)}</span>
+      {#if ci}<span class="prci {p.checks}">{ci}</span>{/if}
+    </div>
+    {#if facts.length}
+      <!-- The conflict with its target is always the last, in red: what to fix first. -->
+      <span class="prfacts"
+        >{#each facts as f, i (f)}{#if i}{' · '}{/if}<span class:conflicting={p.mergeable === false && i === facts.length - 1}>{f}</span
+          >{/each}</span
+      >
+    {/if}
+    {#if down}<span class="lost" role="status" data-pr-error use:tip={{ text: down, cut: true }}>{down}</span>{/if}
+  {/if}
+
   {#if ticket.column === 'done' && outcome}
     {#if ticket.outcomeUrl}
       <button class="outcome link" onclick={(e) => act(e, () => app.run(openUrl(ticket.outcomeUrl!)))}
@@ -472,7 +502,7 @@
     {/if}
   {/if}
 
-  {#if ticket.column !== 'done' && ticket.criteria.length}
+  {#if ticket.column !== 'done' && ticket.column !== 'pr' && ticket.criteria.length}
     <ul class="crit" aria-label={t('board.card.criteriaLabel')}>
       {#each ticket.criteria as c, i (i)}
         <li class:met={c.ok} use:tip={c.note || undefined}>
@@ -523,6 +553,16 @@
       {#if ticket.column === 'doing'}
         <div class="row">
           <button class="btn small" onclick={(e) => act(e, () => app.run(api.ticketResume(ticket.id)))}>{t('board.card.resume')}</button>
+        </div>
+      {:else if ticket.column === 'pr' && ticket.pr?.closed}
+        <!-- Its pull request closed without a merge (ESC-59): back to do (its branch taken up), or done all the same. -->
+        <div class="row">
+          <button class="btn small" onclick={(e) => act(e, () => app.run(api.ticketPrBackToTodo(ticket.id)))}
+            >{t('board.pr.backToTodo')}</button
+          >
+          <button class="btn small" onclick={(e) => act(e, () => app.run(api.ticketFinishAnyway(ticket.id)))}
+            >{t('board.pr.finishAnyway')}</button
+          >
         </div>
       {:else if ticket.conflict}
         <div class="row">
@@ -965,6 +1005,81 @@
   .lost {
     color: var(--wait);
     font-size: 12px;
+  }
+  /* « En revue » (ESC-59): its pull request's number as the sidebar draws an agent's, then its state and its CI. */
+  .prline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    min-width: 0;
+    font-size: 12px;
+  }
+  .prnum {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 20px;
+    padding: 0 6px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--soft);
+    font: 11.5px var(--mono);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .prnum:hover {
+    color: var(--text);
+    box-shadow: inset 0 0 0 1px var(--line-3, var(--line-2));
+  }
+  .prnum.ok :global(.icon) {
+    color: var(--run);
+  }
+  .prnum.fail :global(.icon) {
+    color: var(--del);
+  }
+  .prnum.wait :global(.icon) {
+    color: var(--wait);
+  }
+  .prnum.merged :global(.icon) {
+    color: var(--syn-k);
+  }
+  .prnum.dim {
+    color: var(--muted);
+  }
+  .prstate {
+    color: var(--soft);
+  }
+  .prstate.approved {
+    color: var(--run);
+  }
+  .prstate.changes {
+    color: var(--wait);
+  }
+  .prstate.draft,
+  .prstate.closed {
+    color: var(--muted);
+  }
+  .prci {
+    color: var(--muted);
+  }
+  .prci.success {
+    color: var(--run);
+  }
+  .prci.failure {
+    color: var(--del);
+  }
+  .prci.pending {
+    color: var(--wait);
+  }
+  .prfacts {
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .prfacts .conflicting {
+    color: var(--del);
   }
   /* The last line, under a hairline: a dot of the agent's state, what it does, its cost. */
   .act {

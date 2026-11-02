@@ -26,6 +26,7 @@ import type {
   RateWindow,
   Settings,
   Ticket,
+  TicketPr,
   Usage,
 } from '../lib/types';
 import claudeEngine from '../../tests/fixtures/engines/claude.json';
@@ -263,6 +264,8 @@ export function board(over: Partial<BoardSettings> = {}): BoardSettings {
     target: '',
     strategy: 'squash',
     draft: false,
+    reviewers: [],
+    labels: [],
     testsFirst: false,
     testCommand: '',
     cleanup: true,
@@ -575,3 +578,30 @@ export function usageWith(
   }
   return { todayCost, accounts: list, current: { ...(typeof current === 'object' ? current : {}), claude: id } };
 }
+
+/** The pull request of a ticket « En revue » (ESC-59). */
+export const ticketPr = (over: Partial<TicketPr> = {}): TicketPr => ({
+  number: 12,
+  url: 'https://github.com/acme/demo/pull/12',
+  kind: 'github',
+  host: 'github.com',
+  namespace: 'acme',
+  name: 'demo',
+  target: 'main',
+  branch: 'ticket/dem-1',
+  word: 'PR',
+  state: 'open',
+  draft: false,
+  checks: null,
+  checksTotal: 0,
+  checksFailed: 0,
+  approvals: 0,
+  changesRequested: false,
+  openThreads: 0,
+  mergeable: null,
+  checkedAt: 1,
+  error: null,
+  errorSince: null,
+  closed: false,
+  ...over,
+});

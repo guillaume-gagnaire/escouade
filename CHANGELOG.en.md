@@ -8,6 +8,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### New
 
+- “Approve + PR” opens the ticket's pull request through its host's API (GitHub, GitLab, Bitbucket, Gitea, Azure DevOps), without `gh`, as a draft if you like and with your reviewers and labels. The ticket then waits in the new “In review” column, which shows the pull request's state, CI, approvals and conflicts, and moves to “Done” as soon as it's merged.
 - The High contrast, Discord, Slack and Team rules plugins are Escouade’s own, on the store as `dev.escouade.*` and kept in the app’s repository; only that repository can publish these ids. A version installed under the old `dev.exemple.*` id is replaced from the Plugins view.
 - The page of the app the agent has just built opens by itself inside Escouade when “▶ Test” is ready, in the agent’s “Page” view or in a separate “Pages” window, with its developer tools (F12) and three widths: full, tablet and mobile. It runs apart, with no access to Escouade or to your cookies; Settings › Projects keeps the system browser if you prefer.
 - Plugins have their own view, opened by the icon of the projects’ rail: install from a folder or a git repository after seeing where the plugin comes from, its fingerprint, what it adds and what it will be able to do, the strongest permission first; switch it on for the app or project by project, a private project staying off by default; take a permission back, set its secrets, read its journal, uninstall it.

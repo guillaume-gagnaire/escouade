@@ -207,6 +207,7 @@ fn column_word(c: Column) -> &'static str {
         Column::Todo => "todo",
         Column::Doing => "doing",
         Column::Review => "review",
+        Column::Pr => "in review",
         Column::Done => "done",
     }
 }

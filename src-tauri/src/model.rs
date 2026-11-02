@@ -1130,6 +1130,8 @@ pub enum Column {
     Doing,
     /// « À tester »
     Review,
+    /// « En revue » (ESC-59): its pull request is open on its host, until it is merged.
+    Pr,
     /// « Terminé »
     Done,
 }
@@ -1242,6 +1244,49 @@ pub struct Ticket {
     pub pages: Vec<String>,
     /// The decisions it implements, the same way: by number, or by id while they are proposals.
     pub decisions: Vec<crate::docs::Ref>,
+    /// Its pull request, opened by its validation through its host's API (ESC-59): what its card
+    /// « En revue » shows, as last read. Kept once it is done.
+    pub pr: Option<TicketPr>,
+}
+
+/// The pull request of a ticket « En revue » (ESC-59), as its host last told it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TicketPr {
+    pub number: u64,
+    pub url: String,
+    /// The code host's kind (`github`, `gitlab`…) and its instance's host, which give its client.
+    pub kind: String,
+    pub host: String,
+    /// The repository on the host (`acme/demo`, `group/sub/demo`).
+    pub namespace: String,
+    pub name: String,
+    /// The branch it merges into, and the one it brings.
+    pub target: String,
+    pub branch: String,
+    /// The host's word for it: « MR » on GitLab, « PR » elsewhere.
+    pub word: String,
+    pub state: crate::forge::PrState,
+    pub draft: bool,
+    /// Its checks in one word; none while it has none.
+    pub checks: Option<crate::forge::CheckState>,
+    /// How many checks it has, and how many of them failed.
+    pub checks_total: u32,
+    pub checks_failed: u32,
+    pub approvals: u32,
+    pub changes_requested: bool,
+    pub open_threads: u32,
+    /// Conflicts with its target: `Some(false)`; not known: none.
+    pub mergeable: Option<bool>,
+    /// When it was last read well (ms).
+    pub checked_at: Option<i64>,
+    /// Why the last reading failed (host out of reach, token expired), and since when (ms): the
+    /// card says it, the ticket does not move.
+    pub error: Option<String>,
+    pub error_since: Option<i64>,
+    /// Closed without a merge: the ticket is blocked with « Remettre à faire » and « Terminer
+    /// quand même ».
+    pub closed: bool,
 }
 
 /// Someone of the team, as the files of the shared tickets name them (ESC-190): the name they
@@ -1356,6 +1401,9 @@ pub struct BoardSettings {
     /// "merge" (merge commit), "squash" or "rebase".
     pub strategy: String,
     pub draft: bool,
+    /// Who its pull requests ask for a review, and the labels they get (ESC-59).
+    pub reviewers: Vec<String>,
+    pub labels: Vec<String>,
     pub tests_first: bool,
     pub test_command: String,
     pub cleanup: bool,
@@ -1384,6 +1432,8 @@ impl Default for BoardSettings {
             agents_from_target: false,
             strategy: "squash".into(),
             draft: false,
+            reviewers: Vec::new(),
+            labels: Vec::new(),
             tests_first: false,
             test_command: String::new(),
             cleanup: true,

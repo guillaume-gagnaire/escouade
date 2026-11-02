@@ -16,7 +16,7 @@ import { menu } from '../../lib/menu.svelte';
 import { estimateHint } from '../../lib/spend';
 import { app } from '../../lib/state.svelte';
 import type { LaunchState, Project, TestRecipe, Ticket } from '../../lib/types';
-import { agent, BARE_ENGINE, board, CLAUDE_ENGINE, fakeBackend, project, resetApp, ticket } from '../../test/ipc';
+import { agent, BARE_ENGINE, board, CLAUDE_ENGINE, fakeBackend, project, resetApp, ticket, ticketPr } from '../../test/ipc';
 import TicketCard from './TicketCard.svelte';
 
 const doing = (over: Partial<Ticket> = {}) =>
@@ -1135,5 +1135,42 @@ describe('TicketCard with an account of its own', () => {
     fakeBackend();
     show(ticket({ accountLost: 'Le compte Pro n’existe plus : repassé en « Auto ».' }));
     expect(screen.getByRole('status')).toHaveTextContent('Le compte Pro n’existe plus : repassé en « Auto ».');
+  });
+
+  it('shows a ticket « En revue » with its pull request, its state, its CI, its approvals and its conflict (ESC-59)', async () => {
+    fakeBackend();
+    const pr = ticketPr({ approvals: 1, checks: 'failure', checksTotal: 3, checksFailed: 1, openThreads: 2, mergeable: false });
+    const { container } = show(ticket({ column: 'pr', agentId: 'a1', pr, outcome: '⇡ PR #12 → main' }));
+    const line = container.querySelector('[data-ticket-pr="12"]')!;
+    expect(line).toHaveTextContent('PR #12');
+    expect(line).toHaveTextContent('approuvée');
+    expect(line).toHaveTextContent('1/3 jobs en échec');
+    expect(container.querySelector('.prfacts')).toHaveTextContent('1 approbation · 2 fils ouverts · conflit avec main');
+    expect(container.querySelector('.prfacts .conflicting')).toHaveTextContent('conflit avec main');
+    // Its criteria are behind it now: the card stays short.
+    expect(screen.queryByRole('list', { name: 'Critères' })).toBeNull();
+    // Its number opens it in the browser, not the ticket.
+    await userEvent.click(screen.getByRole('button', { name: /Ouvrir la PR #12 dans le navigateur/ }));
+    expect(app.modal).toBeNull();
+  });
+
+  it('says on the card that its host cannot be read, the ticket staying in review', () => {
+    fakeBackend();
+    app.now = 1_000_000_000;
+    const pr = ticketPr({ error: 'GitLab injoignable : délai dépassé', errorSince: app.now - 3 * 60_000, word: 'MR' });
+    const { container } = show(ticket({ column: 'pr', pr }));
+    expect(container.querySelector('[data-pr-error]')).toHaveTextContent('GitLab injoignable : délai dépassé · depuis 3 min');
+    expect(container.querySelector('[data-ticket-pr]')).toHaveTextContent('MR #12');
+  });
+
+  it('offers « Remettre à faire » and « Terminer quand même » once its pull request was closed without a merge', async () => {
+    const backend = fakeBackend();
+    const pr = ticketPr({ state: 'closed', closed: true });
+    show(ticket({ column: 'pr', pr, blocked: 'PR #12 fermée sans merge' }));
+    expect(screen.getByText('PR #12 fermée sans merge')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Terminer quand même' }));
+    expect(backend.called('ticket_finish_anyway')).toEqual([{ cmd: 'ticket_finish_anyway', args: { id: 't1' } }]);
+    await userEvent.click(screen.getByRole('button', { name: 'Remettre à faire' }));
+    expect(backend.called('ticket_pr_back_to_todo')).toEqual([{ cmd: 'ticket_pr_back_to_todo', args: { id: 't1' } }]);
   });
 });

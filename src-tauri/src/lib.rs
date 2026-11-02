@@ -216,6 +216,7 @@ mod testlaunch;
 mod text;
 mod ticketfiles;
 mod ticketimages;
+mod ticketprs;
 mod tickets;
 #[cfg(test)]
 mod tickets_tests;
@@ -590,6 +591,13 @@ pub fn run() {
                     // A repository added or removed in a project's folder meanwhile (ESC-169).
                     core.refresh_all_repos();
                     core.refresh_all_workflows();
+                    // The pull requests of the tickets « En revue », read again at once (ESC-59).
+                    core.window_front(true);
+                }
+            }
+            if let WindowEvent::Focused(false) = event {
+                if let Some(core) = window.try_state::<Arc<Core>>() {
+                    core.window_front(false);
                 }
             }
             if let WindowEvent::CloseRequested { api, .. } = event {
@@ -845,6 +853,9 @@ pub fn run() {
                 commands::ticket_reject,
                 commands::ticket_resolve_conflict,
                 commands::ticket_dismiss,
+                commands::ticket_prs_refresh,
+                commands::ticket_finish_anyway,
+                commands::ticket_pr_back_to_todo,
                 commands::board_set,
                 commands::autopilot_resume,
                 commands::forges,

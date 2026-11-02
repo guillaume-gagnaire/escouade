@@ -73,6 +73,8 @@ const DEFAULT_BOARD: WizardConfig['board'] = {
   target: '',
   strategy: 'squash',
   draft: false,
+  reviewers: [],
+  labels: [],
   testsFirst: false,
   testCommand: '',
   cleanup: true,

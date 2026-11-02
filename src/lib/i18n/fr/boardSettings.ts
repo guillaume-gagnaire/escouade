@@ -87,7 +87,7 @@ export default {
       },
       pr: {
         label: 'Ouvrir une pull request',
-        desc: 'Pousse {prefix}<clé> et ouvre une PR vers la branche cible pour relecture.',
+        desc: 'Pousse {prefix}<clé>, ouvre sa PR vers la branche cible et la suit « En revue » jusqu’au merge.',
       },
       push: {
         label: 'Pousser la branche du ticket',
@@ -103,6 +103,10 @@ export default {
     strategy: 'Stratégie',
     strategies: { merge: 'Merge commit', squash: 'Squash', rebase: 'Rebase' },
     draftPr: 'PR en brouillon',
+    reviewers: 'Relecteurs',
+    reviewersPlaceholder: 'ada, grace',
+    labels: 'Étiquettes',
+    labelsPlaceholder: 'escouade, à relire',
 
     beforeAfter: 'Avant et après',
     testCommand: 'Commande de tests',

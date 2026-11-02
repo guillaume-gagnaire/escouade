@@ -73,7 +73,7 @@ export default defineZone('boardSettings', {
       },
       pr: {
         label: 'Open a pull request',
-        desc: 'Pushes {prefix}<key> and opens a PR to the target branch for review.',
+        desc: 'Pushes {prefix}<key>, opens its PR to the target branch and follows it “In review” until it’s merged.',
       },
       push: {
         label: 'Push the ticket’s branch',
@@ -89,6 +89,10 @@ export default defineZone('boardSettings', {
     strategy: 'Strategy',
     strategies: { merge: 'Merge commit', squash: 'Squash', rebase: 'Rebase' },
     draftPr: 'Draft PR',
+    reviewers: 'Reviewers',
+    reviewersPlaceholder: 'ada, grace',
+    labels: 'Labels',
+    labelsPlaceholder: 'escouade, needs-review',
 
     beforeAfter: 'Before and after',
     testCommand: 'Test command',

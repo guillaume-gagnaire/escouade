@@ -10,6 +10,7 @@ export default {
     theirsTodo: 'Ajouté par {name} · le pilote auto ne le lance pas',
     takenBy: 'Pris par {name}',
     reviewAt: 'À tester chez {name}',
+    prAt: 'En revue chez {name}',
     doneBy: 'Fait par {name}',
     alsoOn: '{name} y travaille aussi d’après son fichier. Ton agent continue ; ton prochain statut réécrit le fichier.',
     left: '{name} ne le partage plus. Ton agent l’avait pris : il reste chez toi.',

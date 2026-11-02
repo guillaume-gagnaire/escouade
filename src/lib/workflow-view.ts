@@ -336,8 +336,9 @@ export const followers = (tracks: WorkflowTrack[]) => new Set(tracks.filter((tr)
 /** The id of Escouade's own workflow, the loop of the tickets: no reading has it, the Kanban does. */
 export const TICKETS = 'escouade:tickets';
 
-/** The columns of the Kanban, the steps of « Tickets » in their order. */
+/** The columns of the Kanban, the steps of « Tickets » in their order; « En revue » (ESC-59) while a ticket is there. */
 const COLUMNS: Column[] = ['todo', 'doing', 'review', 'done'];
+const WITH_PR: Column[] = ['todo', 'doing', 'review', 'pr', 'done'];
 
 /**
  * « Tickets », the loop of the Kanban drawn as a workflow of Escouade's (choice 159): À faire → En cours (loop n/max, the
@@ -348,6 +349,7 @@ export function ticketsWorkflow(tickets: Ticket[]): Workflow | null {
   if (!tickets.length) return null;
   const name = (c: Column) => t(`board.columns.${c}`);
   const max = Math.max(...tickets.map((tk) => tk.maxLoops));
+  const pr = tickets.some((tk) => tk.column === 'pr');
   const step = (c: Column, order: number): WorkflowStep => ({
     name: name(c),
     command: c === 'todo' ? t('workflow.ticketsDoor') : '',
@@ -374,11 +376,11 @@ export function ticketsWorkflow(tickets: Ticket[]): Workflow | null {
     harness: null,
     repo: '',
     doors: [],
-    steps: COLUMNS.map(step),
+    steps: (pr ? WITH_PR : COLUMNS).map(step),
     transitions: [
       go('todo', 'doing'),
       go('doing', 'review'),
-      go('review', 'done'),
+      ...(pr ? [go('review', 'pr'), go('pr', 'done')] : [go('review', 'done')]),
       {
         from: name('review'),
         to: name('doing'),

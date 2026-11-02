@@ -4705,22 +4705,48 @@ async fn without_gh_a_github_pull_request_is_finished_in_the_browser() {
     assert!(!wt.exists() && has_branch(&r, "ticket/dem-1"));
 }
 
+/// A board on github.com/acme/demo with the GitHub account connected on a fake server that opens
+/// pull request #12 (ESC-59: no `gh` any more).
+async fn github_board(
+    h: &Harness,
+    server: &crate::integrations::fake::FakeServer,
+) -> (Project, PathBuf) {
+    let (p, r, _) = crate::agentprs_tests::github_project(h, server, false).await;
+    h.set_board(&p.id, |s| s.action = "pr".into());
+    server.on(
+        "POST",
+        "/repos/acme/demo/pulls",
+        201,
+        json!({
+            "number": 12, "html_url": "https://github.com/acme/demo/pull/12", "title": "t",
+            "state": "open", "draft": false, "head": {"ref": "ticket/dem-1"}, "base": {"ref": "main"},
+        }),
+    );
+    (p, r)
+}
+
+/// What the board asked GitHub to open.
+fn pull_asked(server: &crate::integrations::fake::FakeServer) -> Value {
+    server
+        .writes()
+        .into_iter()
+        .find(|w| w.path() == "/repos/acme/demo/pulls")
+        .expect("the pull request asked of GitHub")
+        .json()
+}
+
 #[tokio::test]
-async fn with_gh_a_pull_request_is_opened_with_the_criteria() {
-    let h = harness("tk-pr-gh");
-    let (p, r) = h.project(false).await;
-    github_remote(&h, &r);
-    *h.core.gh.write() = Some(fake_gh());
-    h.set_board(&p.id, |s| {
-        s.action = "pr".into();
-        s.draft = true;
-    });
-    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+async fn a_pull_request_is_opened_by_the_api_with_the_criteria() {
+    let h = harness("tk-pr-api");
+    let server = crate::integrations::fake::FakeServer::start().await;
+    let (p, _) = github_board(&h, &server).await;
+    h.set_board(&p.id, |s| s.draft = true);
+    let (t, _) = reviewed(&h, &p.id, "Fichier [ok]").await;
     h.core.ticket_approve(&t.id).await.unwrap();
     let t = h.ticket(&t.id);
     assert_eq!(
-        t.outcome.as_deref(),
-        Some("⇡ PR #12 → main"),
+        (t.column, t.outcome.as_deref()),
+        (Column::Pr, Some("⇡ PR #12 → main")),
         "{:?}",
         t.blocked
     );
@@ -4728,34 +4754,11 @@ async fn with_gh_a_pull_request_is_opened_with_the_criteria() {
         t.outcome_url.as_deref(),
         Some("https://github.com/acme/demo/pull/12")
     );
-    let call = gh_calls(&wt).pop().expect("gh called in the worktree");
-    let argv: Vec<&str> = call["argv"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|a| a.as_str().unwrap())
-        .collect();
+    let sent = pull_asked(&server);
+    assert_eq!(sent["title"], "feat: travail du faux claude [DEM-1]");
+    assert_eq!(sent["draft"], true);
     assert_eq!(
-        argv,
-        [
-            "pr",
-            "create",
-            "--repo",
-            "acme/demo",
-            "--base",
-            "main",
-            "--head",
-            "ticket/dem-1",
-            "--title",
-            "feat: travail du faux claude [DEM-1]",
-            "--body-file",
-            "-",
-            "--draft"
-        ]
-    );
-    // The description through the standard input: what was done, then the criteria.
-    assert_eq!(
-        call["body"],
+        sent["body"],
         "Ce qui a été fait :\n- Fichier dem-1.txt écrit\n- Boucle 1 faite\n\nCritères :\n- [x] Implémentation conforme au ticket\n- [x] Tests verts"
     );
     // The page is not opened as well.
@@ -4764,13 +4767,11 @@ async fn with_gh_a_pull_request_is_opened_with_the_criteria() {
 
 #[tokio::test]
 async fn a_pull_request_and_its_commit_are_written_in_the_language_of_the_texts_for_claude() {
-    let h = harness("tk-pr-gh-en");
-    let (p, r) = h.project(false).await;
-    github_remote(&h, &r);
-    *h.core.gh.write() = Some(fake_gh());
+    let h = harness("tk-pr-api-en");
+    let server = crate::integrations::fake::FakeServer::start().await;
+    let (p, _) = github_board(&h, &server).await;
     h.set_settings(|s| s.claude_language = "en".into());
-    h.set_board(&p.id, |s| s.action = "pr".into());
-    let (t, wt) = reviewed(&h, &p.id, "File [ok]").await;
+    let (t, _) = reviewed(&h, &p.id, "File [ok]").await;
     h.core.ticket_approve(&t.id).await.unwrap();
     let done = h.ticket(&t.id);
     assert_eq!(
@@ -4779,43 +4780,15 @@ async fn a_pull_request_and_its_commit_are_written_in_the_language_of_the_texts_
         "{:?}",
         done.blocked
     );
-    let call = gh_calls(&wt).pop().expect("gh called in the worktree");
-    let argv: Vec<&str> = call["argv"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|a| a.as_str().unwrap())
-        .collect();
+    let sent = pull_asked(&server);
     // The title is the commit message Haiku wrote when it was asked in English (the fake says it).
-    let title = argv.iter().position(|a| *a == "--title").unwrap() + 1;
-    assert_eq!(argv[title], "feat: work of the fake claude (en) [DEM-1]");
-    // The description: what was done, then the criteria, under English headings.
-    let body = call["body"].as_str().unwrap();
+    assert_eq!(sent["title"], "feat: work of the fake claude (en) [DEM-1]");
+    let body = sent["body"].as_str().unwrap();
     assert!(
         body.starts_with("What was done:\n- ") && body.contains("\n\nCriteria:\n- [x] "),
         "{body}"
     );
     assert!(!body.contains("Ce qui a été fait") && !body.contains("Critères"));
-}
-
-#[tokio::test]
-async fn a_gh_installed_while_the_app_runs_opens_the_pull_request() {
-    let h = harness("tk-pr-gh-later");
-    let (p, r) = h.project(false).await;
-    github_remote(&h, &r);
-    // Not there when the app started; on the PATH by the time of the validation.
-    *h.core.gh.write() = None;
-    *h.core.gh_on_path.write() = Some(fake_gh());
-    h.set_board(&p.id, |s| s.action = "pr".into());
-    let (t, _) = reviewed(&h, &p.id, "Fichier [ok]").await;
-    h.core.ticket_approve(&t.id).await.unwrap();
-    assert_eq!(
-        h.ticket(&t.id).outcome.as_deref(),
-        Some("⇡ PR #12 → main"),
-        "{:?}",
-        h.ticket(&t.id).blocked
-    );
-    assert_eq!(h.core.gh.read().clone(), Some(fake_gh()));
 }
 
 #[tokio::test]
@@ -4913,16 +4886,13 @@ fn from_azure_boards(h: &Harness, id: &str) {
 #[tokio::test]
 async fn a_github_pull_request_names_the_azure_boards_work_item_it_fixes() {
     let h = harness("tk-pr-gh-ab");
-    let (p, r) = h.project(false).await;
-    github_remote(&h, &r);
-    *h.core.gh.write() = Some(fake_gh());
-    h.set_board(&p.id, |s| s.action = "pr".into());
-    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    let server = crate::integrations::fake::FakeServer::start().await;
+    let (p, _) = github_board(&h, &server).await;
+    let (t, _) = reviewed(&h, &p.id, "Fichier [ok]").await;
     from_azure_boards(&h, &t.id);
     h.core.ticket_approve(&t.id).await.unwrap();
     assert_eq!(h.ticket(&t.id).outcome.as_deref(), Some("⇡ PR #12 → main"));
-    let call = gh_calls(&wt).pop().expect("gh called in the worktree");
-    let body = call["body"].as_str().unwrap();
+    let body = pull_asked(&server)["body"].as_str().unwrap().to_string();
     assert!(body.ends_with("- [x] Tests verts\n\nFixes AB#42"), "{body}");
 }
 
@@ -5014,7 +4984,8 @@ async fn an_azure_repos_pull_request_is_opened_with_its_work_item() {
     assert!(gh_calls(&wt).is_empty());
     assert_eq!(git(&bare, &["show", "ticket/dem-1:dem-1.txt"]), "Boucle 1");
 
-    // Refused: pushed only, as on another host.
+    assert_eq!(done.column, Column::Pr);
+    // Refused: its page opens, to finish it there.
     server.on(
         "POST",
         &at,
@@ -5025,7 +4996,7 @@ async fn an_azure_repos_pull_request_is_opened_with_its_work_item() {
     h.core.ticket_approve(&u.id).await.unwrap();
     assert_eq!(
         h.ticket(&u.id).outcome.as_deref(),
-        Some("⇡ ticket/dem-2 poussée · PR à ouvrir sur ton hébergeur")
+        Some("⇡ ticket/dem-2 poussée · PR à finaliser")
     );
 }
 

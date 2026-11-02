@@ -8,7 +8,7 @@ import { fSpentUsd, spent, type Spent } from './spend';
 import type { Agent, AutopilotPause, BoardAction, BoardSettings, Column, Ticket } from './types';
 
 /**
- * The four columns in order, with the tone of their ring and how far it is filled (as in the preview: empty to do, half
+ * The columns in order (« En revue » only when the board opens pull requests or holds one: `prColumnShown`), with the tone of their ring and how far it is filled (as in the preview: empty to do, half
  * under way, three quarters to test, whole once done); their names and what they say while empty are in the `board`
  * zone, by `id`.
  */
@@ -16,6 +16,8 @@ export const COLUMNS: { id: Column; tone: string; fill: number }[] = [
   { id: 'todo', tone: 'var(--code-dim)', fill: 0 },
   { id: 'doing', tone: 'var(--run)', fill: 50 },
   { id: 'review', tone: 'var(--wait)', fill: 75 },
+  // « En revue » (ESC-59): its pull request open on its host, the hue of a merge; shown when the board opens them.
+  { id: 'pr', tone: 'var(--syn-k)', fill: 90 },
   { id: 'done', tone: 'var(--done)', fill: 100 },
 ];
 
@@ -30,7 +32,7 @@ export function columnTickets(tickets: Ticket[], column: Column): Ticket[] {
   const list = tickets.filter((ticket) => ticket.column === column);
   if (column === 'todo') return list.sort((a, b) => a.rank - b.rank || a.createdAt - b.createdAt);
   if (column === 'done') return list.sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0));
-  if (column === 'review') return list.sort((a, b) => (a.reviewAt ?? 0) - (b.reviewAt ?? 0));
+  if (column === 'review' || column === 'pr') return list.sort((a, b) => (a.reviewAt ?? 0) - (b.reviewAt ?? 0));
   return list.sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0));
 }
 

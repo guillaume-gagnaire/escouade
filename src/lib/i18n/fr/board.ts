@@ -3,15 +3,38 @@ import type { Tree } from '../types';
 // The Kanban: its columns, tickets and criteria.
 export default {
   // The four columns (glossary): their names and what one says while it holds nothing.
-  columns: { todo: 'À faire', doing: 'En cours', review: 'À tester', done: 'Terminé' },
+  columns: { todo: 'À faire', doing: 'En cours', review: 'À tester', pr: 'En revue', done: 'Terminé' },
   empty: {
     todo: "Ajoute un ticket : un agent le prendra dès qu'une place se libère.",
     doing: 'Aucun agent en boucle',
     review: 'Rien à tester',
+    pr: 'Aucune PR en revue',
     done: 'Aucun ticket terminé',
   },
 
-  column: { newTicket: 'Nouveau ticket' },
+  column: {
+    newTicket: 'Nouveau ticket',
+    /** The column « En revue » (ESC-59): its pull requests are read now rather than at the next minute. */
+    refresh: 'Rafraîchir',
+    refreshHint: 'Relire maintenant les PR en revue sur leur hébergeur',
+  },
+
+  /** A card « En revue » (ESC-59): its pull request as its host last told it. `{word}`: « PR », « MR » on GitLab. */
+  pr: {
+    /** Its state, in a word. */
+    state: { draft: 'brouillon', open: 'ouverte', approved: 'approuvée', changes: 'changements demandés', closed: 'fermée' },
+    /** Its CI, with how many jobs it has. */
+    ci: {
+      success: { one: 'CI verte · {count} job', other: 'CI verte · {count} jobs' },
+      failure: '{failed}/{count} jobs en échec',
+      pending: { one: 'CI en cours · {count} job', other: 'CI en cours · {count} jobs' },
+      skipped: 'CI ignorée',
+    },
+    /** The host could not be read: said, the ticket stays where it is. */
+    error: '{error} · depuis {since}',
+    finishAnyway: 'Terminer quand même',
+    backToTodo: 'Remettre à faire',
+  },
 
   // The header of the board.
   header: {

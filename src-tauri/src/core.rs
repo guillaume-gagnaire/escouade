@@ -1025,6 +1025,10 @@ pub struct Core<R: Runtime = Wry> {
     /// The names that came for an agent gone meanwhile and were dropped (tests only).
     #[cfg(test)]
     pub(crate) names_dropped: AtomicU64,
+    /// The pull requests of the tickets « En revue » (ESC-59): the window is in front (read every
+    /// minute, else every 5), and what wakes their reading at once (a push, the window's return).
+    pub(crate) window_in_front: AtomicBool,
+    pub(crate) ticket_prs_wake: tokio::sync::Notify,
     /// Notifications sent, as "<title> | <text>" (tests only).
     #[cfg(test)]
     pub alerts: Mutex<Vec<String>>,
@@ -1990,6 +1994,8 @@ impl<R: Runtime> Core<R> {
             conv_ops: AtomicU64::new(0),
             #[cfg(test)]
             names_dropped: AtomicU64::new(0),
+            window_in_front: AtomicBool::new(true),
+            ticket_prs_wake: tokio::sync::Notify::new(),
             #[cfg(test)]
             alerts: Mutex::default(),
             #[cfg(test)]
@@ -2159,6 +2165,8 @@ impl<R: Runtime> Core<R> {
                 c.retry_due_syncs();
             }
         });
+        // The pull requests of the tickets « En revue » (ESC-59), without a webhook.
+        self.clone().follow_ticket_prs();
         let c = self.clone();
         tauri::async_runtime::spawn(async move {
             let mut shown = false;
@@ -9597,7 +9605,7 @@ impl<R: Runtime> Core<R> {
     }
 
     /// Refreshes the git state of every project in the repository at `root`.
-    async fn refresh_repo(&self, root: &str) {
+    pub(crate) async fn refresh_repo(&self, root: &str) {
         let projects: Vec<(String, String)> = self
             .projects
             .read()

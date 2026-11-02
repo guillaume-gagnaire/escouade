@@ -14,6 +14,7 @@
   import Row from './Row.svelte';
   import SharedMark from './SharedMark.svelte';
   import Switch from './Switch.svelte';
+  import { joinNames, splitNames } from '../../lib/ticket-prs';
 
   // A project's Kanban: what validating a ticket does, and the agents that take its tickets (its draft:
   // the modal's project).
@@ -88,6 +89,27 @@
           <Switch label={t('boardSettings.tab.draftPr')} bind:on={b.draft} />
         </div>
         <SharedMark keys="board.draft_pr" />
+        <!-- Who its pull requests ask for a review, and their labels (ESC-59): logins and names, by commas. -->
+        <label class="line">
+          <span class="k">{t('boardSettings.tab.reviewers')}</span>
+          <input
+            class="field mono input names"
+            placeholder={t('boardSettings.tab.reviewersPlaceholder')}
+            spellcheck="false"
+            value={joinNames(b.reviewers)}
+            onchange={(e) => (b.reviewers = splitNames(e.currentTarget.value))}
+          />
+        </label>
+        <label class="line">
+          <span class="k">{t('boardSettings.tab.labels')}</span>
+          <input
+            class="field mono input names"
+            placeholder={t('boardSettings.tab.labelsPlaceholder')}
+            spellcheck="false"
+            value={joinNames(b.labels)}
+            onchange={(e) => (b.labels = splitNames(e.currentTarget.value))}
+          />
+        </label>
       {/if}
     </div>
   {/if}
@@ -193,6 +215,10 @@
   .k {
     color: var(--muted);
     font-size: 12px;
+  }
+  .names {
+    flex: 1 1 200px;
+    min-width: 0;
   }
   .pick {
     display: inline-flex;

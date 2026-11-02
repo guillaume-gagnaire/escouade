@@ -143,6 +143,24 @@ pub fn column_comment(lang: Lang, t: &Ticket, column: Column, branch: Option<&st
             }
             s
         }
+        // Its pull request opened (ESC-59): where it is reviewed.
+        Column::Pr => match &t.pr {
+            Some(pr) => {
+                let (word, n, url) = (&pr.word, pr.number, &pr.url);
+                tr_in!(
+                    lang,
+                    "Escouade : {key} est en revue — {word} #{n}
+{url}",
+                    "Escouade: {key} is in review — {word} #{n}
+{url}"
+                )
+            }
+            None => tr_in!(
+                lang,
+                "Escouade : {key} est en revue.",
+                "Escouade: {key} is in review."
+            ),
+        },
         Column::Done => {
             // Its outcome in `lang`'s language (a ticket done before 1.7 only has the card's).
             let outcome = t

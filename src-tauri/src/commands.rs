@@ -1718,6 +1718,10 @@ pub async fn git_push(
         .git_sync_in(&project_id, repo.as_deref(), SyncOp::Push)
         .await
         .map_err(err);
+    // A push of Escouade: the pull requests of the tickets « En revue » are read at once (ESC-59).
+    if r.is_ok() {
+        core.wake_ticket_prs();
+    }
     counted(&core, Event::GitSync { op: "push" }, r)
 }
 
@@ -2662,6 +2666,26 @@ pub async fn ticket_resolve_conflict(core: CoreState<'_>, id: String) -> Res<()>
 #[tauri::command(async)]
 pub fn ticket_dismiss(core: CoreState, id: String) -> Res<()> {
     core.ticket_dismiss(&id).map_err(err)
+}
+
+/// « Rafraîchir » of the column « En revue » (ESC-59): its pull requests are read now.
+#[tauri::command]
+pub async fn ticket_prs_refresh(core: CoreState<'_>, project_id: String) -> Res<usize> {
+    core.ticket_prs_refresh(Some(&project_id))
+        .await
+        .map_err(err)
+}
+
+/// « Terminer quand même »: a ticket whose pull request was closed without a merge is done.
+#[tauri::command(async)]
+pub fn ticket_finish_anyway(core: CoreState, id: String) -> Res<()> {
+    core.ticket_finish_anyway(&id).map_err(err)
+}
+
+/// « Remettre à faire »: a ticket whose pull request was closed without a merge goes back to do.
+#[tauri::command]
+pub async fn ticket_pr_back_to_todo(core: CoreState<'_>, id: String) -> Res<()> {
+    core.ticket_pr_back_to_todo(&id).await.map_err(err)
 }
 
 #[tauri::command(async)]

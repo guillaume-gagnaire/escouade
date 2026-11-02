@@ -707,13 +707,15 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
       isDraft: x.draft,
       headRefName: x.head,
       baseRefName: x.base,
-      mergeable: 'MERGEABLE',
+      mergeable: x.mergeable ?? 'MERGEABLE',
       isCrossRepository: (x.headRepo ?? x.repo ?? 'acme/demo') !== (x.repo ?? 'acme/demo'),
       headRepository: { nameWithOwner: x.headRepo ?? x.repo ?? 'acme/demo' },
       autoMergeRequest: null,
       author: { login: x.author ?? 'ada' },
       createdAt: x.createdAt ?? new Date(Date.now() - 2 * 3600_000).toISOString(),
-      latestOpinionatedReviews: { nodes: x.changesRequested ? [{ state: 'CHANGES_REQUESTED' }] : [] },
+      latestOpinionatedReviews: {
+        nodes: x.changesRequested ? [{ state: 'CHANGES_REQUESTED' }] : x.approved ? [{ state: 'APPROVED' }] : [],
+      },
       reviewThreads: { nodes: x.changesRequested ? [{ isResolved: false }] : [] },
       commits: { nodes: [{ commit: { statusCheckRollup: { state: x.checks } } }] },
     });
@@ -732,6 +734,15 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
             },
           },
         });
+      // Pull requests by their numbers (the tickets « En revue », ESC-59): one alias each, `p<n>: pullRequest(number: n)`.
+      if (q.operationName === 'Pulls') {
+        const repository = {};
+        for (const [, n] of (q.query ?? '').matchAll(/p(\d+): pullRequest\(number:/g)) {
+          const x = g.pulls.find((y) => y.number === Number(n));
+          repository[`p${n}`] = x ? node(x) : null;
+        }
+        return send(200, { data: { repository } });
+      }
       // The project's open pull requests (ESC-305), the most recent first.
       if (q.operationName === 'OpenPulls')
         return send(200, {

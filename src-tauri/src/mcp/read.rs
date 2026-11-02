@@ -172,6 +172,9 @@ struct ColumnCounts {
     todo: usize,
     doing: usize,
     review: usize,
+    /// « En revue » (ESC-59).
+    #[serde(rename = "inReview")]
+    in_review: usize,
     done: usize,
 }
 
@@ -181,6 +184,7 @@ impl ColumnCounts {
             Column::Todo => self.todo += 1,
             Column::Doing => self.doing += 1,
             Column::Review => self.review += 1,
+            Column::Pr => self.in_review += 1,
             Column::Done => self.done += 1,
         }
     }
@@ -484,7 +488,7 @@ fn kanban_order(list: &mut [&Ticket]) {
         a.column.cmp(&b.column).then_with(|| match a.column {
             Column::Todo => (a.rank, a.created_at).cmp(&(b.rank, b.created_at)),
             Column::Doing => a.started_at.unwrap_or(0).cmp(&b.started_at.unwrap_or(0)),
-            Column::Review => a.review_at.unwrap_or(0).cmp(&b.review_at.unwrap_or(0)),
+            Column::Review | Column::Pr => a.review_at.unwrap_or(0).cmp(&b.review_at.unwrap_or(0)),
             Column::Done => b.done_at.unwrap_or(0).cmp(&a.done_at.unwrap_or(0)),
         })
     });

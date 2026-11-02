@@ -8,6 +8,7 @@ export default defineZone('share', {
     theirsTodo: 'Added by {name} · the autopilot never starts it',
     takenBy: 'Taken by {name}',
     reviewAt: 'To review at {name}’s',
+    prAt: 'In review at {name}’s',
     doneBy: 'Done by {name}',
     alsoOn: '{name} works on it too, says their file. Your agent goes on; your next status writes the file again.',
     left: '{name} no longer shares it. Your agent had taken it: it stays with you.',

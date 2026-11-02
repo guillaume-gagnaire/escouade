@@ -626,6 +626,11 @@ export const api = {
   ticketReject: (id: string, comment: string) => invoke<void>('ticket_reject', { id, comment }),
   ticketResolveConflict: (id: string) => invoke<void>('ticket_resolve_conflict', { id }),
   ticketDismiss: (id: string) => invoke<void>('ticket_dismiss', { id }),
+  /** « Rafraîchir » of the column « En revue » (ESC-59): how many pull requests were read. */
+  ticketPrsRefresh: (projectId: string) => invoke<number>('ticket_prs_refresh', { projectId }),
+  /** A ticket whose pull request was closed without a merge: done all the same, or back to do. */
+  ticketFinishAnyway: (id: string) => invoke<void>('ticket_finish_anyway', { id }),
+  ticketPrBackToTodo: (id: string) => invoke<void>('ticket_pr_back_to_todo', { id }),
   boardSet: (projectId: string, settings: BoardSettings) => invoke<Project>('board_set', { projectId, settings }),
   /** « Reprendre maintenant »: the autopilot's pause (a quota, a usage limit) is lifted. */
   autopilotResume: () => invoke<void>('autopilot_resume'),

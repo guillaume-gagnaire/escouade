@@ -10,6 +10,7 @@
   import Icon from '../Icon.svelte';
   import BoardColumn from './BoardColumn.svelte';
   import { tip } from '../../lib/tip';
+  import { prColumnShown } from '../../lib/ticket-prs';
 
   let { project: given }: { project: Project } = $props();
 
@@ -22,6 +23,8 @@
   const hiddenCount = $derived(all.filter((x) => x.shared?.hidden).length);
   const tickets = $derived(shownOnBoard(all, showHidden));
   const busyCount = $derived(busy(tickets));
+  /** « En revue » (ESC-59) only when the board opens pull requests, or while a ticket is in it. */
+  const columns = $derived(COLUMNS.filter((c) => c.id !== 'pr' || prColumnShown(s, all)));
   const looping = $derived(tickets.filter((x) => x.column === 'doing').length);
   /** When the agents waiting for their quota resume, if every account this project could use waits for its own. */
   const quota = $derived(quotaOf(project));
@@ -126,8 +129,8 @@
       >
     </div>
   {/if}
-  <div class="cols">
-    {#each COLUMNS as c (c.id)}
+  <div class="cols" style:--n={columns.length}>
+    {#each columns as c (c.id)}
       <BoardColumn column={c} tickets={columnTickets(tickets, c.id)} {project} {busyCount} {quota} />
     {/each}
   </div>
@@ -353,7 +356,7 @@
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-columns: repeat(4, minmax(220px, 1fr));
+    grid-template-columns: repeat(var(--n, 4), minmax(220px, 1fr));
     gap: 14px;
     padding: 16px 16px 16px 18px;
     overflow: auto;

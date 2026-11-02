@@ -24,7 +24,9 @@ describe('BoardTab in English', () => {
     render(BoardTab, { project: app.projects[0] });
     const actions = screen.getByRole('radiogroup', { name: 'When I approve a ticket in “To review”' });
     expect(within(actions).getByRole('radio', { name: /Merge into a branch/ })).toHaveAttribute('aria-checked', 'true');
-    expect(within(actions).getByText('Pushes ticket/<key> and opens a PR to the target branch for review.')).toBeInTheDocument();
+    expect(
+      within(actions).getByText('Pushes ticket/<key>, opens its PR to the target branch and follows it “In review” until it’s merged.'),
+    ).toBeInTheDocument();
     expect(within(actions).getByRole('radio', { name: /Leave as is/ })).toBeInTheDocument();
     expect(screen.getByText('Target branch')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Squash' })).toHaveAttribute('aria-pressed', 'true');

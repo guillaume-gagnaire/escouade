@@ -22,7 +22,6 @@ use anyhow::{anyhow, bail, Result};
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
@@ -2998,6 +2997,7 @@ impl<R: Runtime> Core<R> {
         // The files copied from the project into the worktree (`.env`…), the list the copy took:
         // never committed, merged or pushed. Git ignores them, so only an agent that forced one in
         // could; checked all the same.
+        let mut pr: Option<TicketPr> = None;
         let (outcome, nothing) = if wt.is_multi() {
             // Of several repositories (ESC-169): each one's, checked first, all or nothing.
             match self.validate_repos(t, &s, &project, &wt, &agent_id).await? {
@@ -3073,7 +3073,8 @@ impl<R: Runtime> Core<R> {
                 }
                 "pr" => {
                     self.set_step(&t.id, "Push…");
-                    let o = self.open_pr(t, &s, &wt, &target, message).await?;
+                    let (o, opened) = self.open_pr(t, &s, &wt, &target, message).await?;
+                    pr = opened;
                     if let Some(url) = &o.url {
                         self.facts.emit(
                             crate::facts::Body::PrOpened {
@@ -3094,6 +3095,9 @@ impl<R: Runtime> Core<R> {
             };
             (outcome, nothing)
         };
+        // Opened through its host's API: the ticket waits « En revue » for its merge there
+        // (ESC-59), and its pull request is read at once.
+        let in_review = pr.is_some();
         // What every agent of the ticket cost, archived ones included (a ticket sent back and taken
         // over has several), as « À tester » and the statistics add it up; at least its own.
         let own = self
@@ -3116,7 +3120,7 @@ impl<R: Runtime> Core<R> {
             if !validating(x, &agent_id) {
                 bail!(Refusal::Changed);
             }
-            x.column = Column::Done;
+            x.column = if in_review { Column::Pr } else { Column::Done };
             x.step = None;
             x.blocked = None;
             x.conflict = false;
@@ -3124,10 +3128,14 @@ impl<R: Runtime> Core<R> {
             x.outcome_claude = Some(outcome.claude);
             x.outcome_url = outcome.url;
             x.outcome_commit = outcome.commit;
-            x.done_at = Some(now_ms());
+            x.done_at = (!in_review).then(now_ms);
+            x.pr = pr;
             x.cost = cost;
             Ok(())
         })?;
+        if in_review {
+            self.wake_ticket_prs();
+        }
         if let Some(merged) = merged {
             self.facts.emit(merged, crate::facts::About::ticket(&t.id));
         }
@@ -3406,8 +3414,11 @@ impl<R: Runtime> Core<R> {
         found
     }
 
-    /// Pushes the ticket's branch, then opens its PR with `gh` on GitHub; without `gh` (or when it
-    /// fails), GitHub's page to finish it opens in the browser; another host: pushed only.
+    /// Pushes the ticket's branch, then opens its PR through the API of its code host (its plugin,
+    /// with the account of its instance), as a draft when the board says so, with the board's
+    /// reviewers and labels and the issue it closes (ESC-59): the ticket keeps it, and waits « En
+    /// revue » for its merge. Without an account (or when the host refuses), the host's page to
+    /// open it opens in the browser, filled in; a host Escouade does not know: pushed only.
     pub(crate) async fn open_pr(
         self: &Arc<Self>,
         t: &Ticket,
@@ -3415,109 +3426,85 @@ impl<R: Runtime> Core<R> {
         wt: &Worktree,
         target: &str,
         message: Option<String>,
-    ) -> Result<board::Outcome> {
-        let remote = git::push_branch(&wt.path, &wt.branch).await?;
+    ) -> Result<(board::Outcome, Option<TicketPr>)> {
+        let pushed_to = git::push_branch(&wt.path, &wt.branch).await?;
         let title = match message {
             Some(m) => m,
             None => self.commit_message(t, s, &wt.path, target).await,
         };
         let lang = self.lang().claude;
-        let mut body = board::pr_body(lang, t);
-        let item = crate::agentprs::work_item_of(t);
-        let github = git::remote_url(&wt.path, &remote)
-            .await
-            .as_deref()
-            .and_then(board::github_repo);
-        let Some((owner, repo)) = github else {
-            if let Some(outcome) = self
-                .open_azure_pr(t, s, wt, target, &title, &body, item)
-                .await
-            {
-                return Ok(outcome);
-            }
-            return Ok(board::Outcome::of(lang, |l| {
-                board::pushed_elsewhere_outcome(l, &wt.branch)
-            }));
+        let elsewhere =
+            || board::Outcome::of(lang, |l| board::pushed_elsewhere_outcome(l, &wt.branch));
+        let Some(remote) = self.remote_named(&wt.path, &pushed_to).await else {
+            return Ok((elsewhere(), None));
         };
+        let Some(kind) = remote.kind.clone() else {
+            return Ok((elsewhere(), None));
+        };
+        let word = self
+            .forges
+            .read()
+            .get(&kind)
+            .map_or("PR", |p| p.request_word())
+            .to_string();
         let mut draft = crate::forge::PullRequestDraft {
-            body,
-            ..Default::default()
-        };
-        crate::agentprs::link_work_item(item, "github", &mut draft);
-        body = draft.body;
-        if let Some(gh) = self.gh_cli() {
-            let pr = PullRequest {
-                repo: &format!("{owner}/{repo}"),
-                base: target,
-                head: &wt.branch,
-                title: &title,
-                body: &body,
-                draft: s.draft,
-            };
-            match gh_pr_create(&gh, &wt.path, &pr).await {
-                Ok(out) => {
-                    if let Some((n, url)) = board::pr_number(&out) {
-                        let outcome = board::Outcome::of(lang, |_| board::pr_outcome(n, target));
-                        return Ok(outcome.with_url(url));
-                    }
-                    log::warn!("ticket {}: no pull request in gh's answer: {out}", t.key);
-                }
-                Err(e) => log::warn!("ticket {}: gh pr create failed: {e:#}", t.key),
-            }
-        }
-        let url = board::compare_url(&owner, &repo, target, &wt.branch, &title, &body);
-        self.hub.emit(UiEvent::OpenUrl { url: url.clone() });
-        let outcome = board::Outcome::of(lang, |l| board::pushed_for_pr_outcome(l, &wt.branch));
-        Ok(outcome.with_url(url))
-    }
-
-    /// The ticket's PR on Azure Repos, opened with the Azure DevOps account (`open_pr` asks it of
-    /// a remote not on GitHub), its Azure Boards work item linked (`workItemRefs`). None on
-    /// another host, without an account, or when Azure refuses: the branch is pushed only.
-    #[allow(clippy::too_many_arguments)]
-    async fn open_azure_pr(
-        &self,
-        t: &Ticket,
-        s: &BoardSettings,
-        wt: &Worktree,
-        target: &str,
-        title: &str,
-        body: &str,
-        item: Option<u64>,
-    ) -> Option<board::Outcome> {
-        let remote = self.remote_of(&wt.path, target).await?;
-        if remote.kind.as_deref() != Some("azure") {
-            return None;
-        }
-        let (client, account) = match self.forge_client(&remote.host).await {
-            Ok(c) => c,
-            Err(e) => {
-                log::warn!("ticket {}: no Azure DevOps client: {e:#}", t.key);
-                return None;
-            }
-        };
-        let mut draft = crate::forge::PullRequestDraft {
-            title: title.to_string(),
-            body: body.to_string(),
+            title,
+            body: board::pr_body(lang, t),
             head: wt.branch.clone(),
             base: target.to_string(),
             draft: s.draft,
-            ..Default::default()
+            reviewers: s.reviewers.clone(),
+            labels: s.labels.clone(),
+            closes: crate::ticketprs::closes_issue(t, &kind, &remote.repo),
         };
-        crate::agentprs::link_work_item(item, &account.kind, &mut draft);
-        match client.create_pr(&remote.repo, &draft).await {
-            Ok(pr) => {
-                let n = pr.number as u32;
-                Some(
-                    board::Outcome::of(self.lang().claude, |_| board::pr_outcome(n, target))
-                        .with_url(pr.url),
-                )
-            }
-            Err(e) => {
-                log::warn!("ticket {}: Azure DevOps pull request failed: {e:#}", t.key);
-                None
-            }
+        crate::agentprs::link_work_item(crate::agentprs::work_item_of(t), &kind, &mut draft);
+        match self.forge_client(&remote.host).await {
+            Ok((client, _)) => match client.create_pr(&remote.repo, &draft).await {
+                Ok(pr) => {
+                    let tp = crate::ticketprs::ticket_pr(
+                        &pr,
+                        &kind,
+                        &remote.host,
+                        &remote.repo,
+                        &word,
+                        target,
+                        &wt.branch,
+                        now_ms(),
+                    );
+                    let outcome = board::Outcome::of(lang, |_| {
+                        crate::ticketprs::opened_outcome(&word, pr.number, target)
+                    })
+                    .with_url(pr.url.clone());
+                    return Ok((outcome, Some(tp)));
+                }
+                Err(e) => log::warn!("ticket {}: {word} not opened by the API: {e:#}", t.key),
+            },
+            Err(e) => log::info!("ticket {}: no account to open its {word}: {e:#}", t.key),
         }
+        let page = crate::ticketprs::creation_page(
+            &kind,
+            &remote.url,
+            &remote.repo,
+            target,
+            &wt.branch,
+            &draft.title,
+            &draft.body,
+        );
+        let Some(url) = page else {
+            return Ok((elsewhere(), None));
+        };
+        self.hub.emit(UiEvent::OpenUrl { url: url.clone() });
+        let outcome =
+            board::Outcome::of(lang, |l| board::pushed_for_pr_outcome(l, &word, &wt.branch));
+        Ok((outcome.with_url(url), None))
+    }
+
+    /// What the remote `name` of the repository at `path` names: its code host and repository.
+    async fn remote_named(&self, path: &str, name: &str) -> Option<crate::forge::Remote> {
+        let url = git::remote_url(path, name).await?;
+        let list = crate::forge::accounts::all(&self.accounts.read());
+        let registry = self.forges.read().clone();
+        registry.analyze(&url, |host| crate::forge::accounts::kind_for(&list, host))
     }
 
     /// A merge stopped on conflicts (undone): blocked with "L'agent résout" / "Annuler" ("ask"),
@@ -4056,77 +4043,6 @@ impl<R: Runtime> Core<R> {
             }
         }
     }
-}
-
-/// How long `gh pr create` may take.
-const GH_LIMIT: Duration = Duration::from_secs(120);
-
-/// A pull request to open on GitHub.
-struct PullRequest<'a> {
-    /// `owner/repo`, the repository the branch was pushed to.
-    repo: &'a str,
-    base: &'a str,
-    head: &'a str,
-    title: &'a str,
-    body: &'a str,
-    draft: bool,
-}
-
-/// `gh pr create` in `cwd`, on the repository the branch was pushed to (whatever `gh repo
-/// set-default` says), its description through the standard input (an argument with line breaks
-/// cannot go through a `.cmd`): what it printed.
-async fn gh_pr_create(gh: &Path, cwd: &str, pr: &PullRequest<'_>) -> Result<String> {
-    use tokio::io::AsyncWriteExt;
-    let mut cmd = tokio::process::Command::new(gh);
-    cmd.args([
-        "pr",
-        "create",
-        "--repo",
-        pr.repo,
-        "--base",
-        pr.base,
-        "--head",
-        pr.head,
-        "--title",
-        pr.title,
-        "--body-file",
-        "-",
-    ]);
-    if pr.draft {
-        cmd.arg("--draft");
-    }
-    cmd.current_dir(cwd)
-        .env("GH_PROMPT_DISABLED", "1")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true);
-    #[cfg(windows)]
-    cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
-    crate::job::isolate(&mut cmd);
-    let mut child = cmd.spawn()?;
-    // Dropped when this returns: whatever it left running (a `.cmd`'s node…) ends with it.
-    let _job = crate::job::Job::for_child(&child);
-    let created = async move {
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(pr.body.as_bytes()).await?;
-            // Dropped here: the description ends.
-        }
-        anyhow::Ok(child.wait_with_output().await?)
-    };
-    let out = tokio::time::timeout(GH_LIMIT, created)
-        .await
-        .map_err(|_| {
-            anyhow!(tr!(
-                "gh pr create toujours pas terminé après {s} s",
-                "gh pr create still not done after {s} s",
-                s = GH_LIMIT.as_secs()
-            ))
-        })??;
-    if !out.status.success() {
-        bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
-    }
-    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
 /// Of the files copied from the project, those the branch checked out in `cwd` has not

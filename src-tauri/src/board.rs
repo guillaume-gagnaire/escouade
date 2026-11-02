@@ -1334,16 +1334,13 @@ pub fn merged_outcome(lang: Lang, target: &str, strategy: &str) -> String {
     )
 }
 
-pub fn pr_outcome(number: u32, target: &str) -> String {
-    format!("⇡ PR #{number} → {target}")
-}
-
-/// Pushed to GitHub without `gh`: the PR is finished in the browser.
-pub fn pushed_for_pr_outcome(lang: Lang, branch: &str) -> String {
+/// Pushed without an account of its host (or refused by it): the PR (`word`, « MR » on GitLab) is
+/// finished on the host's page, in the browser.
+pub fn pushed_for_pr_outcome(lang: Lang, word: &str, branch: &str) -> String {
     tr_in!(
         lang,
-        "⇡ {branch} poussée · PR à finaliser",
-        "⇡ {branch} pushed · PR to finish"
+        "⇡ {branch} poussée · {word} à finaliser",
+        "⇡ {branch} pushed · {word} to finish"
     )
 }
 
@@ -1400,13 +1397,14 @@ pub(crate) fn encode(s: &str, keep_slash: bool) -> String {
 /// What the compare page's address keeps of the title and of the description, in bytes before
 /// encoding (each may triple): the address stays a few KB, which browsers and the system's opener
 /// take (a longer one meets "414 URI Too Long").
-const COMPARE_TITLE_MAX: usize = 200;
-const COMPARE_BODY_MAX: usize = 1500;
+pub(crate) const COMPARE_TITLE_MAX: usize = 200;
+pub(crate) const COMPARE_BODY_MAX: usize = 1500;
 
-/// GitHub's page that opens a pull request of `branch` into `target`, filled in (the title and
-/// the description cut, with a "…", when long).
+/// The page of GitHub (or of Gitea, `base` its instance's address) that opens a pull request of
+/// `branch` into `target` of `repo` (`acme/demo`), filled in (the title and the description cut,
+/// with a "…", when long).
 pub fn compare_url(
-    owner: &str,
+    base: &str,
     repo: &str,
     target: &str,
     branch: &str,
@@ -1414,20 +1412,12 @@ pub fn compare_url(
     body: &str,
 ) -> String {
     format!(
-        "https://github.com/{owner}/{repo}/compare/{}...{}?expand=1&title={}&body={}",
+        "{base}/{repo}/compare/{}...{}?expand=1&title={}&body={}",
         encode(target, true),
         encode(branch, true),
         encode(&truncate(title, COMPARE_TITLE_MAX), false),
         encode(&truncate(body, COMPARE_BODY_MAX), false)
     )
-}
-
-/// The number and address of the PR `gh pr create` printed.
-pub fn pr_number(gh_output: &str) -> Option<(u32, String)> {
-    gh_output.split_whitespace().find_map(|w| {
-        let (_, n) = w.rsplit_once("/pull/")?;
-        Some((n.trim_end_matches('/').parse().ok()?, w.to_string()))
-    })
 }
 
 /// A PR's description, in `lang`: the ticket's, what its agent says it did (when it said), then
@@ -4333,7 +4323,7 @@ mod tests {
         assert_eq!(
             [
                 merged_outcome(En, "main", "squash"),
-                pushed_for_pr_outcome(En, "ticket/a"),
+                pushed_for_pr_outcome(En, "PR", "ticket/a"),
                 pushed_elsewhere_outcome(En, "ticket/a"),
                 pushed_outcome(En, "ticket/a"),
                 kept_outcome(En),
@@ -4381,10 +4371,10 @@ mod tests {
             merged_outcome(Lang::Fr, "main", "rebase"),
             "⤵ Mergé dans main · rebase"
         );
-        assert_eq!(pr_outcome(12, "main"), "⇡ PR #12 → main");
+
         assert_eq!(
-            pushed_for_pr_outcome(Lang::Fr, "ticket/atl-42"),
-            "⇡ ticket/atl-42 poussée · PR à finaliser"
+            pushed_for_pr_outcome(Lang::Fr, "MR", "ticket/atl-42"),
+            "⇡ ticket/atl-42 poussée · MR à finaliser"
         );
         assert_eq!(
             pushed_elsewhere_outcome(Lang::Fr, "ticket/atl-42"),
@@ -4425,8 +4415,8 @@ mod tests {
     fn the_compare_address_opens_a_pull_request_to_finalize() {
         assert_eq!(
             compare_url(
-                "acme",
-                "demo",
+                "https://github.com",
+                "acme/demo",
                 "main",
                 "ticket/atl-42",
                 "feat: x & y [ATL-42]",
@@ -4434,11 +4424,6 @@ mod tests {
             ),
             "https://github.com/acme/demo/compare/main...ticket/atl-42?expand=1&title=feat%3A%20x%20%26%20y%20%5BATL-42%5D&body=Ligne%201%0ACrit%C3%A8res"
         );
-        assert_eq!(
-            pr_number("Creating pull request…\nhttps://github.com/acme/demo/pull/12\n"),
-            Some((12, "https://github.com/acme/demo/pull/12".to_string()))
-        );
-        assert_eq!(pr_number("rien"), None);
         let mut t = ticket(2, 5);
         t.description = "Contexte".into();
         t.criteria[0].ok = true;
@@ -4467,7 +4452,14 @@ mod tests {
     #[test]
     fn the_compare_address_stays_short_whatever_the_ticket_says() {
         let long = "é".repeat(20_000);
-        let url = compare_url("acme", "demo", "main", "ticket/atl-42", &long, &long);
+        let url = compare_url(
+            "https://github.com",
+            "acme/demo",
+            "main",
+            "ticket/atl-42",
+            &long,
+            &long,
+        );
         assert!(url.len() < 6 * 1024, "{}", url.len());
         let (head, body) = url.split_once("&body=").unwrap();
         // Cut on a character, and said so.

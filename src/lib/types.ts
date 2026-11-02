@@ -1022,7 +1022,8 @@ export interface IsolaService {
   probe: string;
 }
 
-export type Column = 'todo' | 'doing' | 'review' | 'done';
+/** `pr`: « En revue » (ESC-59), its pull request open on its host until it is merged there. */
+export type Column = 'todo' | 'doing' | 'review' | 'pr' | 'done';
 
 export interface Criterion {
   text: string;
@@ -1092,6 +1093,37 @@ export interface Ticket {
   /** The pages of the spec and the decisions it implements, as « Planifier » made it (ESC-262). */
   pages?: string[];
   decisions?: DecisionRef[];
+  /** Its pull request, opened through its host's API by its validation (ESC-59), as last read. */
+  pr?: TicketPr | null;
+}
+
+/** The pull request of a ticket « En revue » (ESC-59), as its host last told it. */
+export interface TicketPr {
+  number: number;
+  url: string;
+  kind: string;
+  host: string;
+  namespace: string;
+  name: string;
+  target: string;
+  branch: string;
+  /** The host's word: « MR » on GitLab, « PR » elsewhere. */
+  word: string;
+  state: PrState;
+  draft: boolean;
+  checks: CheckState | null;
+  checksTotal: number;
+  checksFailed: number;
+  approvals: number;
+  changesRequested: boolean;
+  openThreads: number;
+  mergeable: boolean | null;
+  checkedAt: number | null;
+  /** Why its last reading failed (host out of reach, token expired), and since when (ms). */
+  error: string | null;
+  errorSince: number | null;
+  /** Closed without a merge: « Remettre à faire » and « Terminer quand même ». */
+  closed: boolean;
 }
 
 /** Someone of the team, as the shared tickets' files name them (ESC-190). */
@@ -1177,6 +1209,9 @@ export interface BoardSettings {
   target: string;
   strategy: 'merge' | 'squash' | 'rebase';
   draft: boolean;
+  /** Who its pull requests ask for a review, and their labels (ESC-59). */
+  reviewers: string[];
+  labels: string[];
   testsFirst: boolean;
   testCommand: string;
   cleanup: boolean;

@@ -2,15 +2,33 @@ import { defineZone } from '../types';
 
 // The Kanban: its columns, tickets and criteria.
 export default defineZone('board', {
-  columns: { todo: 'To do', doing: 'In progress', review: 'To review', done: 'Done' },
+  columns: { todo: 'To do', doing: 'In progress', review: 'To review', pr: 'In review', done: 'Done' },
   empty: {
     todo: 'Add a ticket: an agent will pick it up as soon as a slot is free.',
     doing: 'No agents looping',
     review: 'Nothing to review',
+    pr: 'No pull requests in review',
     done: 'No finished tickets',
   },
 
-  column: { newTicket: 'New ticket' },
+  column: {
+    newTicket: 'New ticket',
+    refresh: 'Refresh',
+    refreshHint: 'Read the pull requests in review on their host now',
+  },
+
+  pr: {
+    state: { draft: 'draft', open: 'open', approved: 'approved', changes: 'changes requested', closed: 'closed' },
+    ci: {
+      success: { one: 'CI passed · {count} job', other: 'CI passed · {count} jobs' },
+      failure: '{failed}/{count} jobs failed',
+      pending: { one: 'CI running · {count} job', other: 'CI running · {count} jobs' },
+      skipped: 'CI skipped',
+    },
+    error: '{error} · since {since}',
+    finishAnyway: 'Finish anyway',
+    backToTodo: 'Back to do',
+  },
 
   header: {
     sub: {

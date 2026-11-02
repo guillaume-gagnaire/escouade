@@ -23,6 +23,14 @@
     quota: number | null;
   } = $props();
 
+  let refreshing = $state(false);
+  async function refresh() {
+    if (refreshing) return;
+    refreshing = true;
+    await app.run(api.ticketPrsRefresh(project.id));
+    refreshing = false;
+  }
+
   /** Each ticket's place in the queue: one that waits for others is passed over, as the autopilot does. */
   const queue = $derived(column.id === 'todo' ? queueIndices(tickets, app.tickets) : {});
 
@@ -70,6 +78,17 @@
     ></i>
     <span class="label">{t(`board.columns.${column.id}`)}</span>
     <span class="count">{tickets.length}</span>
+    {#if column.id === 'pr'}
+      <!-- Its pull requests read now, rather than at the next minute (ESC-59). -->
+      <button
+        class="add"
+        class:spin={refreshing}
+        use:tip={t('board.column.refreshHint')}
+        aria-label={t('board.column.refresh')}
+        aria-busy={refreshing}
+        onclick={refresh}><Icon name="restart" size={14} /></button
+      >
+    {/if}
     {#if column.id === 'todo'}
       <button class="add" use:tip={t('board.column.newTicket')} aria-label={t('board.column.newTicket')} onclick={() => openForm()}
         ><Icon name="plus" size={14} /></button
@@ -140,6 +159,20 @@
   .add:hover {
     background: var(--hover);
     color: var(--text);
+  }
+  /* « Rafraîchir » while its pull requests are read. */
+  .add.spin :global(.icon) {
+    animation: turn 0.9s linear infinite;
+  }
+  @keyframes turn {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .add.spin :global(.icon) {
+      animation: none;
+    }
   }
   /* The cards scroll in their column, the header stays; the room around them keeps their shadow and focus ring. */
   .cards {
