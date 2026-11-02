@@ -1415,6 +1415,15 @@ impl AgentRt {
         }
     }
 
+    /// A question answered in a recorded stream (`answers`, by question): its card says it, as when the user answers.
+    #[cfg(test)]
+    pub(crate) fn recorded_answers(&mut self, request_id: &str, answers: Value, fx: &mut Effects) {
+        if let Some(req) = self.take_pending(request_id) {
+            self.patch(&req.item_id, json!({ "answers": answers }), fx);
+            self.after_answer(fx);
+        }
+    }
+
     fn after_answer(&mut self, fx: &mut Effects) {
         if self.pending.is_empty() && self.meta.status == AgentStatus::Waiting {
             self.set_status(AgentStatus::Running, fx);

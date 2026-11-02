@@ -117,6 +117,12 @@ pub const REGISTRY: &[Entry] = &[
             "../../../plugins/builtin/dev.escouade.clickup/escouade-plugin.json"
         ),
     },
+    Entry {
+        id: VIBE,
+        manifest: include_str!(
+            "../../../plugins/builtin/dev.escouade.mistral-vibe/escouade-plugin.json"
+        ),
+    },
 ];
 
 /// The plugin « GitHub »: github.com, GHE.com and GitHub Enterprise Server, their pull requests and GitHub Issues.
@@ -152,6 +158,9 @@ pub const CURSOR: &str = "dev.escouade.cursor-cli";
 
 /// The plugin « ClickUp »: the Kanban's source of ClickUp tasks (INT-7.4).
 pub const CLICKUP: &str = "dev.escouade.clickup";
+
+/// The plugin « Mistral Vibe »: Mistral Vibe as a harness, over ACP (INT-10.6).
+pub const VIBE: &str = "dev.escouade.mistral-vibe";
 
 /// Whether `id` is the id of a plugin the app gives.
 pub fn is_builtin(id: &str) -> bool {

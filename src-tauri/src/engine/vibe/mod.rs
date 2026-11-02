@@ -510,6 +510,39 @@ pub(crate) fn fenced_config(before: &str, fence: &[String]) -> Result<String> {
     Ok(doc.to_string())
 }
 
+/// The harness of the plugin Mistral Vibe (`dev.escouade.mistral-vibe`, INT-10.6), if it is on: the conversation of
+/// Vibe's agents goes through it (`plugins::harness::BUILTIN_HARNESSES`).
+#[cfg(test)]
+pub fn plugged() -> Option<&'static crate::plugins::harness::ProcessEngine> {
+    crate::plugins::harness::plugged(crate::plugins::builtin::VIBE)
+}
+
+/// What the core writes in the agent's own `VIBE_HOME` before its launch (`plugins::harness::Prepare`), never in the
+/// user's: the trust of its folder, its view's hooks taken out (they are its interface's alone), and the refusals of
+/// its fence (`fence`, as Vibe names the paths) for its file tools. A fence that cannot be written keeps the agent from
+/// starting.
+pub(crate) fn prepare(home: Option<&std::path::Path>, cwd: &str, fence: &[String]) -> Result<()> {
+    let Some(home) = home else {
+        if fence.is_empty() {
+            return Ok(());
+        }
+        bail!(tr!(
+            "Mistral Vibe n’a pas de dossier de configuration où refuser les chemins des projets privés : l’agent ne démarre pas.",
+            "Mistral Vibe has no configuration folder where to refuse the private projects’ paths: the agent doesn’t start."
+        ));
+    };
+    if let Err(e) = trust(home, cwd) {
+        log::warn!("vibe: the trust of {cwd} not written: {e}");
+    }
+    terminal::forget_hooks(home);
+    fence_config(home, fence).map_err(|e| {
+        anyhow!(tr!(
+            "Les chemins des projets privés n’ont pas pu être refusés à Mistral Vibe ({e}) : l’agent ne démarre pas.",
+            "The private projects’ paths couldn’t be refused to Mistral Vibe ({e}): the agent doesn’t start."
+        ))
+    })
+}
+
 /// A message to Vibe: its text, the images joined to it (ACP's `image` blocks), the text files
 /// joined to it as text. A PDF is refused.
 fn message(text: &str, attachments: &[Attachment]) -> Result<Value> {
@@ -872,65 +905,26 @@ impl Engine for Vibe {
         on_frame: super::OnFrame,
         on_exit: super::OnExit,
     ) -> Result<Process> {
-        let escouade = match &spawn.escouade {
-            Escouade::Granted { url, token, .. } => Some((url.clone(), token.clone())),
-            Escouade::Denied { .. } => None,
-        };
-        log::info!(
-            "{}: starting {} in {} (account {})",
-            spawn.label,
-            spawn.program.describe(),
-            spawn.cwd,
-            spawn.account
-        );
-        let fence = crate::fence::spelled(&spawn.fence, &spawn.program);
-        // The trust of its folder and the refusals of its fence in its own `VIBE_HOME`, never the
-        // user's. A fence that cannot be written keeps the agent from starting.
-        if let Some((_, home)) = spawn.env.iter().find(|(k, _)| k == HOME_VAR) {
-            let home = std::path::Path::new(home);
-            if let Err(e) = trust(home, &spawn.cwd) {
-                log::warn!("vibe: the trust of {} not written: {e}", spawn.cwd);
-            }
-            // The hooks of its view are its interface's alone (`terminal`).
-            terminal::forget_hooks(home);
-            fence_config(home, &fence).map_err(|e| {
-                anyhow!(tr!(
-                    "Les chemins des projets privés n’ont pas pu être refusés à Mistral Vibe ({e}) : l’agent ne démarre pas.",
-                    "The private projects’ paths couldn’t be refused to Mistral Vibe ({e}): the agent doesn’t start."
-                ))
-            })?;
-        } else if !fence.is_empty() {
-            bail!(tr!(
-                "Mistral Vibe n’a pas de dossier de configuration où refuser les chemins des projets privés : l’agent ne démarre pas.",
-                "Mistral Vibe has no configuration folder where to refuse the private projects’ paths: the agent doesn’t start."
-            ));
-        }
-        let mut env = spawn.env;
-        env.push(("VIBE_ENABLE_TELEMETRY".into(), "false".into()));
-        let opts = process::Opts {
-            program: spawn.program,
-            cwd: spawn.cwd,
-            env,
-            start: spawn.start,
-            settings: Settings {
-                model: spawn.model,
-                effort: spawn.effort,
-                mode: spawn.mode,
-            },
-            instructions: spawn.append_prompt,
-            escouade,
-            fence,
-        };
-        let p: Process = VibeProcess::spawn(opts, on_frame, on_exit)?;
-        Ok(p)
+        // Its conversation goes through its plugin (INT-10.6): the launch it describes, checked and started by the
+        // core after `prepare`, what Vibe writes translated there.
+        crate::plugins::harness::spawn_plugged(
+            crate::plugins::builtin::VIBE,
+            self.name(),
+            spawn,
+            on_frame,
+            on_exit,
+        )
     }
 
     fn message(&self, text: &str, attachments: &[Attachment]) -> Result<Message> {
         message(text, attachments).map(Message)
     }
 
+    /// The items its plugin made of what Vibe wrote (`agent/items`).
     fn translate(&self, rt: &mut AgentRt, frame: &Value, fx: &mut Effects) {
-        rt.vibe_frame(frame, fx);
+        if let Some(items) = frame["items"].as_array() {
+            rt.apply_items(items, fx);
+        }
     }
 
     /// A session that cannot be loaded gives a new one (`process::open`), said by the conversation.

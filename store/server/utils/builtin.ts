@@ -81,12 +81,16 @@ export const BUILTINS: Builtin[] = [
     'OpenCode comme harness : un serveur par compte, ses modèles (locaux compris), son budget par jour.',
     'OpenCode as a harness: one server per account, its models (local ones too), its daily budget.',
   ),
-  harness(
-    'mistral-vibe',
-    'Mistral Vibe',
-    'Mistral Vibe comme harness, par ACP : la conversation, sa vue terminal, la clé et le coût par compte.',
-    'Mistral Vibe as a harness, over ACP: the conversation, its terminal view, the key and the cost per account.',
-  ),
+  {
+    ...harness(
+      'mistral-vibe',
+      'Mistral Vibe',
+      'Mistral Vibe comme harness, par ACP : la conversation, sa vue terminal, la clé et le coût par compte.',
+      'Mistral Vibe as a harness, over ACP: the conversation, its terminal view, the key and the cost per account.',
+    ),
+    // Out of the core since INT-10.6.
+    source: 'plugins/builtin/dev.escouade.mistral-vibe',
+  },
   harness(
     'antigravity-cli',
     'Antigravity CLI',

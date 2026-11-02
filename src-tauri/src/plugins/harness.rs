@@ -177,55 +177,117 @@ pub fn sync(rt: &Arc<Runtime>, plugins: &super::Plugins) -> Vec<EngineId> {
     let on = |v: &super::PluginView| v.state == super::State::Ready && v.choices.enabled;
     let list = plugins.list(crate::i18n::Lang::En);
     let acp_on = list.iter().any(|v| v.id == super::builtin::ACP && on(v));
-    let cursor_on = list.iter().any(|v| v.id == super::builtin::CURSOR && on(v));
-    sync_cursor(rt, cursor_on, plugins.app_dir());
-    // The harnesses of Escouade's own plugins keep their place in the registry (Cursor CLI's, above): only the others
-    // are described.
+    for h in BUILTIN_HARNESSES {
+        let plugin_on = list.iter().any(|v| v.id == h.plugin && on(v));
+        sync_builtin(rt, h, plugin_on, plugins.app_dir());
+    }
+    // The harnesses of Escouade's own plugins keep their place in the registry (above): only the others are described.
     let described: Vec<(String, serde_json::Map<String, Value>)> = list
         .iter()
-        .filter(|v| on(v) && v.id != super::builtin::CURSOR)
+        .filter(|v| on(v) && !BUILTIN_HARNESSES.iter().any(|h| h.plugin == v.id))
         .filter_map(|v| Some((v.id.clone(), v.manifest.as_ref()?.contributes.clone())))
         .collect();
     sync_described(rt, acp_on, &described, plugins.app_dir())
 }
 
-/// The harness of the plugin Cursor CLI, made once for each runtime (by its address): a test makes several.
-static CURSOR_ENGINE: Mutex<Option<(usize, &'static ProcessEngine)>> = Mutex::new(None);
+/// What the core writes in the agent's own folder before its harness is launched, from that folder (`home`, the
+/// variable of `HarnessDecl::account_var`), the agent's folder and the fence as its program spells it: Mistral Vibe's
+/// trust of the folder and the refusals of a private project in its `config.toml`, which the rules its « Toujours »
+/// wrote there keep beside them.
+pub type Prepare = fn(home: Option<&Path>, cwd: &str, fence: &[String]) -> Result<()>;
 
-/// The harness of the plugin Cursor CLI (INT-10.1) put behind Cursor's agents when the plugin is on (`on`), taken
-/// away when it is not: its agents are then told so at their start (`engine::cursor::plug`).
-pub fn sync_cursor(rt: &Arc<Runtime>, on: bool, escouade_dir: &Path) {
-    if !on {
-        crate::engine::cursor::plug(None);
+/// A harness of a plugin the app gives (INT-10), behind the core's engine of the same id: the engine keeps its place
+/// in the registry (its accounts, its models, its texts, its terminal view), its agents' conversation goes through the
+/// plugin's `ProcessEngine`, and an agent started while the plugin is off is told so (`spawn_plugged`).
+pub struct BuiltinHarness {
+    /// The plugin, by its id.
+    pub plugin: &'static str,
+    /// How the launcher of its program is run (`ProcessEngine::with_native`).
+    pub native: Option<Native>,
+    /// What the core writes in the agent's folder before the launch (`ProcessEngine::with_prepare`).
+    pub prepare: Option<Prepare>,
+}
+
+/// The harnesses that left the core: a line each.
+pub const BUILTIN_HARNESSES: &[BuiltinHarness] = &[
+    // Cursor CLI (INT-10.1): its installer's launcher run as its `node` and `index.js`.
+    BuiltinHarness {
+        plugin: super::builtin::CURSOR,
+        native: Some(crate::engine::cursor::native),
+        prepare: None,
+    },
+    // Mistral Vibe (INT-10.6): the trust and the `denylist` of a private project in its `VIBE_HOME`.
+    BuiltinHarness {
+        plugin: super::builtin::VIBE,
+        native: None,
+        prepare: Some(crate::engine::vibe::prepare),
+    },
+];
+
+/// The harnesses of the plugins the app gives that are on, by their plugin, each made once for each runtime (by its
+/// address: a test makes several).
+static PLUGGED: Mutex<Vec<(&'static str, usize, &'static ProcessEngine, bool)>> =
+    Mutex::new(Vec::new());
+
+/// The harness of `h` put behind its engine's agents when its plugin is on (`on`), taken away when it is not: its
+/// agents are then told so at their start (`spawn_plugged`).
+pub fn sync_builtin(rt: &Arc<Runtime>, h: &BuiltinHarness, on: bool, escouade_dir: &Path) {
+    let key = Arc::as_ptr(rt) as usize;
+    let mut plugged = PLUGGED.lock();
+    // One in force for each plugin: the runtime synced last's (a test's, the app's).
+    for p in plugged.iter_mut().filter(|p| p.0 == h.plugin) {
+        p.3 = on && p.1 == key;
+    }
+    if !on || plugged.iter().any(|p| p.0 == h.plugin && p.1 == key) {
         return;
     }
-    let key = Arc::as_ptr(rt) as usize;
-    let mut made = CURSOR_ENGINE.lock();
-    let engine = match *made {
-        Some((k, e)) if k == key => e,
-        _ => {
-            let Some(decl) = super::builtin::manifest_text(super::builtin::CURSOR, "")
-                .and_then(|m| serde_json::from_str::<Value>(&m).ok())
-                .and_then(|m| {
-                    serde_json::from_value::<proto::HarnessDecl>(
-                        m["contributes"]["harnesses"][0].clone(),
-                    )
-                    .ok()
-                })
-            else {
-                log::warn!("the plugin Cursor CLI declares no harness that reads");
-                crate::engine::cursor::plug(None);
-                return;
-            };
-            let e: &'static ProcessEngine = Box::leak(Box::new(
-                ProcessEngine::new(rt.clone(), super::builtin::CURSOR, decl, escouade_dir)
-                    .with_native(crate::engine::cursor::native),
-            ));
-            *made = Some((key, e));
-            e
-        }
+    let Some(decl) = super::builtin::manifest_text(h.plugin, "")
+        .and_then(|m| serde_json::from_str::<Value>(&m).ok())
+        .and_then(|m| {
+            serde_json::from_value::<proto::HarnessDecl>(m["contributes"]["harnesses"][0].clone())
+                .ok()
+        })
+    else {
+        log::warn!("the plugin {} declares no harness that reads", h.plugin);
+        return;
     };
-    crate::engine::cursor::plug(Some(engine));
+    let mut engine = ProcessEngine::new(rt.clone(), h.plugin, decl, escouade_dir);
+    if let Some(native) = h.native {
+        engine = engine.with_native(native);
+    }
+    if let Some(prepare) = h.prepare {
+        engine = engine.with_prepare(prepare);
+    }
+    let e: &'static ProcessEngine = Box::leak(Box::new(engine));
+    plugged.push((h.plugin, key, e, true));
+}
+
+/// The harness of the plugin `plugin` the app gives, if it is on.
+pub fn plugged(plugin: &str) -> Option<&'static ProcessEngine> {
+    PLUGGED
+        .lock()
+        .iter()
+        .rev()
+        .find(|(p, _, _, on)| *p == plugin && *on)
+        .map(|(_, _, e, _)| *e)
+}
+
+/// Starts an agent of the engine `name` through the harness of its plugin `plugin`; told when the plugin is off or not
+/// loaded (its session kept for the next message).
+pub fn spawn_plugged(
+    plugin: &str,
+    name: &str,
+    spawn: Spawn,
+    on_frame: OnFrame,
+    on_exit: OnExit,
+) -> Result<Process> {
+    let Some(engine) = plugged(plugin) else {
+        bail!(tr!(
+            "Le plugin {name} ({plugin}) est coupé ou n’est pas chargé : rallume-le dans la vue Plugins pour lancer un agent de {name}.",
+            "The {name} plugin ({plugin}) is switched off or not loaded: turn it back on in the Plugins view to start a {name} agent."
+        ));
+    };
+    engine.spawn(spawn, on_frame, on_exit)
 }
 
 /// A harness whose plugin runs in its own process.
@@ -258,6 +320,8 @@ pub struct ProcessEngine {
     /// The program its harness's launcher runs, and its first arguments (Cursor CLI's `node` and `index.js`: the
     /// launcher its installer leaves is a script), when the launcher is one.
     native: Option<Native>,
+    /// What the core writes in the agent's folder before the launch (`with_prepare`).
+    prepare: Option<Prepare>,
 }
 
 /// What a harness's launcher runs: the program and its first arguments, if it is a launcher it knows.
@@ -346,6 +410,7 @@ impl ProcessEngine {
             close_grace: decl.close_grace_ms.map(Duration::from_millis),
             escouade_dir: escouade_dir.to_path_buf(),
             native: None,
+            prepare: None,
             decl,
         }
     }
@@ -375,6 +440,12 @@ impl ProcessEngine {
     /// The same, its launcher run as `native` says (Cursor CLI's, INT-10.1).
     pub fn with_native(mut self, native: Native) -> Self {
         self.native = Some(native);
+        self
+    }
+
+    /// The same, what `prepare` writes in the agent's folder done before each launch (Mistral Vibe's, INT-10.6).
+    pub fn with_prepare(mut self, prepare: Prepare) -> Self {
+        self.prepare = Some(prepare);
         self
     }
 
@@ -696,6 +767,7 @@ impl Engine for ProcessEngine {
             close_grace: self.close_grace,
             me: std::sync::OnceLock::new(),
             native: self.native,
+            prepare: self.prepare,
             plugin: self.plugin.clone(),
             name: self.name,
             account_var: self.account_var,
@@ -833,6 +905,8 @@ pub struct ProcessEngineProcess {
     key_var: Option<&'static str>,
     /// What its harness's launcher runs (`ProcessEngine::with_native`).
     native: Option<Native>,
+    /// What the core writes in the agent's folder before the launch (`ProcessEngine::with_prepare`).
+    prepare: Option<Prepare>,
     plugin: String,
     name: &'static str,
     /// The variable that gives the agent its own folder (`HarnessDecl::account_var`): where its launch may write.
@@ -1031,6 +1105,9 @@ impl ProcessEngineProcess {
             &launch,
         )
         .map_err(|e| anyhow!(e))?;
+        if let Some(prepare) = self.prepare {
+            prepare(home.as_deref().map(Path::new), &spawn.cwd, &fence)?;
+        }
         for f in &launch.files {
             let path = Path::new(&f.path);
             if let Some(dir) = path.parent() {

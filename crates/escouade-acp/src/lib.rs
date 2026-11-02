@@ -17,6 +17,7 @@ pub mod paths;
 pub mod questions;
 mod texts;
 pub mod tools;
+pub mod vibe;
 
 pub use agent::Agent;
 pub use tools::{call_id, content_text, diff_of, line_hunks, tool_of};

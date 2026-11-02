@@ -290,14 +290,101 @@ async fn the_fake_cursor_replayed_by_the_generic_client_passes_the_bench() {
     rt.shutdown();
 }
 
-/// The recorded streams of Cursor CLI 2026.10.22 (tests/fixtures/cursor/), what Cursor said read by the generic
-/// client with its extension `cursor` and its items applied to the agent; what the app said (a message, an answer)
-/// done as the core does it. The conversation is the one the core's own translation makes
-/// (tests/fixtures/replays/cursor/), compared by `replay::within`.
-#[test]
-fn the_recorded_streams_of_cursor_make_through_the_generic_client_the_items_of_the_core() {
-    for case in ["full-turn", "load-modes-model"] {
-        let path = crate::engine::bench::replay::cases_of("cursor").join(format!("{case}.json"));
+/// The recorded stream `lines` (`{"dir", "msg"}` a line: `s2c` or `in` what the harness said, `c2s` or `out` what its
+/// client said) through the client of `escouade_acp` for the harness `decl`, its items applied to an agent of `meta` in
+/// `conv`; what the app said (a message, an answer) done as the core does it.
+pub(crate) fn replayed_through_the_client(
+    decl: &Value,
+    meta: AgentMeta,
+    lines: &[Value],
+    conv: &Path,
+) -> AgentRt {
+    let decl: proto::HarnessDecl = serde_json::from_value(decl.clone()).unwrap();
+    let attach = proto::Attach {
+        agent: "a".into(),
+        cwd: meta.cwd.clone(),
+        session: meta.session_id.clone(),
+        model: meta.model.clone(),
+        mode: meta.mode.clone(),
+        lang: "fr".into(),
+        ..proto::Attach::default()
+    };
+    let mut client = escouade_acp::Agent::new(&attach, &decl, VERSION);
+    let mut rt = AgentRt::new(meta, conv);
+    // The ids of the recording's requests, as the client named them; the forms of Vibe's questions, by them.
+    let mut asked: std::collections::HashMap<String, String> = Default::default();
+    let mut forms: std::collections::HashMap<String, Value> = Default::default();
+    for f in lines {
+        let msg = &f["msg"];
+        let mut fx = Effects::default();
+        let harness = matches!(f["dir"].as_str(), Some("s2c" | "in"));
+        let client_said = matches!(f["dir"].as_str(), Some("c2s" | "out"));
+        if harness {
+            let items = client.frames(&[msg.to_string()]);
+            for i in &items {
+                if let Item::Permission { request, .. } | Item::Question { request, .. } = i {
+                    asked.insert(msg["id"].to_string(), request.clone());
+                    if msg["method"] == "elicitation/create" {
+                        forms.insert(request.clone(), msg["params"].clone());
+                    }
+                }
+            }
+            let items: Vec<Value> = items
+                .into_iter()
+                .filter(|i| !matches!(i, Item::Write { .. }))
+                .map(|i| serde_json::to_value(i).unwrap())
+                .collect();
+            rt.apply_items(&items, &mut fx);
+        } else if client_said && msg["method"] == "session/prompt" {
+            let text = msg["params"]["prompt"][0]["text"]
+                .as_str()
+                .unwrap_or_default();
+            let id = crate::model::new_id();
+            rt.push_user(&id, text, 0, &[], &mut fx);
+            client.recorded(msg);
+        } else if client_said && msg["method"].is_string() {
+            client.recorded(msg);
+        } else if client_said && msg["method"].is_null() && msg["result"]["outcome"].is_object() {
+            if let Some(rid) = asked.get(&msg["id"].to_string()) {
+                let decision = match msg["result"]["outcome"]["optionId"].as_str() {
+                    Some(o) if o.starts_with("allow-always") || o.starts_with("allow_always") => {
+                        "always"
+                    }
+                    Some(o) if o.starts_with("allow") => "allow",
+                    _ => "deny",
+                };
+                rt.recorded_answer(rid, decision, &mut fx);
+            }
+        } else if client_said && msg["method"].is_null() && msg["result"]["action"].is_string() {
+            // The trial's answer to Vibe's form: its card says it, by question.
+            if let Some(rid) = asked.get(&msg["id"].to_string()) {
+                let form = forms.get(rid).cloned().unwrap_or_default();
+                let mut answers = serde_json::Map::new();
+                for (key, q) in escouade_acp::vibe::elicitation_questions(&form) {
+                    let given = &msg["result"]["content"][&key];
+                    let text = match given.as_array() {
+                        Some(list) => list
+                            .iter()
+                            .filter_map(Value::as_str)
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                        None => given.as_str().unwrap_or_default().to_string(),
+                    };
+                    let question = q["question"].as_str().unwrap_or_default().to_string();
+                    answers.insert(question, json!(text));
+                }
+                rt.recorded_answers(rid, Value::Object(answers), &mut fx);
+            }
+        }
+    }
+    rt
+}
+
+/// The recorded streams of `harness` (its cases of tests/fixtures/replays/), through the client of the harness `decl`:
+/// the conversation is the one the core's own translation made, compared by `replay::within`, and the agent after it.
+fn check_replays_through_the_client(harness: &str, decl: &Value, cases: &[&str]) {
+    for case in cases {
+        let path = crate::engine::bench::replay::cases_of(harness).join(format!("{case}.json"));
         let c: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         let flux =
             std::fs::read_to_string(path.parent().unwrap().join(c["flux"].as_str().unwrap()))
@@ -311,63 +398,13 @@ fn the_recorded_streams_of_cursor_make_through_the_generic_client_the_items_of_t
             meta[k] = v.clone();
         }
         let meta: AgentMeta = serde_json::from_value(meta).unwrap();
-        let decl: proto::HarnessDecl = serde_json::from_value(cursor_decl()).unwrap();
-        let attach = proto::Attach {
-            agent: "a".into(),
-            cwd: meta.cwd.clone(),
-            session: meta.session_id.clone(),
-            model: meta.model.clone(),
-            mode: meta.mode.clone(),
-            lang: "fr".into(),
-            ..proto::Attach::default()
-        };
-        let mut client = escouade_acp::Agent::new(&attach, &decl, VERSION);
-        let conv = crate::paths::test_dir(&format!("plg6-replay-{case}"));
-        let mut rt = AgentRt::new(meta, &conv);
-        // The ids of the recording's requests, as the client named them.
-        let mut asked: std::collections::HashMap<String, String> = Default::default();
-        for line in flux.lines().filter(|l| !l.trim().is_empty()) {
-            let f: Value = serde_json::from_str(line).unwrap();
-            let msg = &f["msg"];
-            let mut fx = Effects::default();
-            match f["dir"].as_str() {
-                Some("s2c") => {
-                    let items = client.frames(&[msg.to_string()]);
-                    for i in &items {
-                        if let Item::Permission { request, .. } | Item::Question { request, .. } = i
-                        {
-                            asked.insert(msg["id"].to_string(), request.clone());
-                        }
-                    }
-                    let items: Vec<Value> = items
-                        .into_iter()
-                        .filter(|i| !matches!(i, Item::Write { .. }))
-                        .map(|i| serde_json::to_value(i).unwrap())
-                        .collect();
-                    rt.apply_items(&items, &mut fx);
-                }
-                Some("c2s") if msg["method"] == "session/prompt" => {
-                    let text = msg["params"]["prompt"][0]["text"]
-                        .as_str()
-                        .unwrap_or_default();
-                    let id = crate::model::new_id();
-                    rt.push_user(&id, text, 0, &[], &mut fx);
-                    client.recorded(msg);
-                }
-                Some("c2s") if msg["method"].is_string() => client.recorded(msg),
-                Some("c2s") if msg["method"].is_null() && msg["result"]["outcome"].is_object() => {
-                    if let Some(rid) = asked.get(&msg["id"].to_string()) {
-                        let decision = match msg["result"]["outcome"]["optionId"].as_str() {
-                            Some(o) if o.starts_with("allow-always") => "always",
-                            Some(o) if o.starts_with("allow") => "allow",
-                            _ => "deny",
-                        };
-                        rt.recorded_answer(rid, decision, &mut fx);
-                    }
-                }
-                _ => {}
-            }
-        }
+        let lines: Vec<Value> = flux
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect();
+        let conv = crate::paths::test_dir(&format!("int10-replay-{harness}-{case}"));
+        let mut rt = replayed_through_the_client(decl, meta, &lines, &conv);
         let made: Vec<Value> = rt
             .conv
             .items()
@@ -409,6 +446,40 @@ fn the_recorded_streams_of_cursor_make_through_the_generic_client_the_items_of_t
             assert_eq!(&after[k], v, "{case}: the agent's {k}");
         }
     }
+}
+
+/// The recorded streams of Cursor CLI 2026.10.22 (tests/fixtures/cursor/), what Cursor said read by the generic
+/// client with its extension `cursor` and its items applied to the agent; what the app said (a message, an answer)
+/// done as the core does it. The conversation is the one the core's own translation makes
+/// (tests/fixtures/replays/cursor/), compared by `replay::within`.
+#[test]
+fn the_recorded_streams_of_cursor_make_through_the_generic_client_the_items_of_the_core() {
+    check_replays_through_the_client("cursor", &cursor_decl(), &["full-turn", "load-modes-model"]);
+}
+
+/// Mistral Vibe as the manifest of its plugin declares it (INT-10.6): an ACP harness with its extension `vibe`.
+pub(crate) fn vibe_decl() -> Value {
+    let v: Value = serde_json::from_str(escouade_plugin_vibe::MANIFEST).unwrap();
+    v["contributes"]["harnesses"][0].clone()
+}
+
+/// The recorded streams of Mistral Vibe 3.0.3 (tests/fixtures/vibe/), what Vibe said read by the client of its plugin
+/// with its extension `vibe` (INT-10.6): the conversation is the one the core's own translation made
+/// (tests/fixtures/replays/vibe/), its cost and tokens included, and the agent after it.
+#[test]
+fn the_recorded_streams_of_vibe_make_through_its_plugin_s_client_the_items_of_the_core() {
+    check_replays_through_the_client(
+        "vibe",
+        &vibe_decl(),
+        &[
+            "full-turn",
+            "question-elicitation",
+            "todo-subagent",
+            "load-fork-reject",
+            "cancel-config-options",
+            "error-invalid-key",
+        ],
+    );
 }
 
 /// What a process says, as the engine's callbacks pass it on.
@@ -1034,4 +1105,16 @@ fn the_items_of_two_processes_of_an_agent_have_ids_of_their_own() {
             .expect("a text")
     };
     assert_ne!(text_id("cursor-0a1b2c3d4e"), text_id("cursor-9f8e7d6c5b"));
+}
+
+/// What the core tells an agent of a refusal without a word (`agent::refused_action`) is not a message Vibe's client sends
+/// once the turn is cut: it would start a turn nobody asked for (INT-10.6).
+#[test]
+fn a_refusal_without_a_word_starts_no_turn_of_vibe() {
+    for lang in [crate::i18n::Lang::Fr, crate::i18n::Lang::En] {
+        assert!(!escouade_acp::vibe::worded(&crate::agent::refused_action(
+            lang
+        )));
+    }
+    assert!(escouade_acp::vibe::worded("Pas ce dossier"));
 }

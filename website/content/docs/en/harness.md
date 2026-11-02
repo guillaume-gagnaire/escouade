@@ -172,6 +172,8 @@ Cursor tells neither the tokens nor the cost of a turn when Escouade drives it: 
 
 ## Mistral Vibe
 
+Mistral Vibe is a plugin shipped with Escouade (`dev.escouade.mistral-vibe`): its agents talk through a program of its own that Escouade starts and watches. It shows in the Plugins view, under “Shipped with Escouade”; turned off, a Vibe agent says at its start that it needs turning back on, and keeps its session.
+
 ### Installation and account
 
 Install Mistral Vibe with `uv tool install mistral-vibe`, then give it your Mistral API key with `vibe --setup`: it is kept in the system’s keychain, and Escouade never reads it. Escouade finds its `vibe-acp` on the `PATH`, or in `~/.local/bin` where `uv` puts it. Each agent has its `vibe-acp` and its own `VIBE_HOME` folder, removed with it: its rules, its sessions and the trust of its folder are kept there, never in your `~/.vibe`. Its updates and its telemetry are turned off there.

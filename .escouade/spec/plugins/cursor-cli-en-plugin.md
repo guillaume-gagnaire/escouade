@@ -2,7 +2,7 @@
 title: "Cursor CLI en plugin"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4 (INT-10.1)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-222"]
-tickets: ["ESC-222"]
+tickets: ["ESC-222","ESC-281"]
 decisions: []
 compared: null
 ---
@@ -32,3 +32,7 @@ Coupé pour l'app ou pas chargé, le plugin n'est plus branché derrière Cursor
 
 - `agent acp` ne sort pas quand son entrée se ferme : le manifeste le dit (`closeGraceMs` : 2000) et le cœur l'arrête ce délai après, comme son client le faisait (un agent au repos arrêté, puis repris par `session/load`).
 - Chaque process d'un agent numérote ses éléments depuis 1 : leurs ids portent la fin de la clé du process, pour qu'une session reprise n'écrase pas la conversation d'avant.
+
+## Depuis INT-10.6
+
+Le branchement de Cursor CLI n'est plus propre à lui : il est une ligne de la table des harness livrés, avec Mistral Vibe (*Mistral Vibe en plugin*). La traduction de `agent/cursor.rs` reste pour Gemini CLI et Antigravity CLI.

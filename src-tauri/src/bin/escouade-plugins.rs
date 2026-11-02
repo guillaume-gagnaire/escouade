@@ -56,6 +56,8 @@ const ENTRIES: &[Entry] = &[
     ("cursor", escouade_plugin_cursor::run),
     // ClickUp (INT-7.4): the Kanban's source of ClickUp tasks, in its crate (plugins/builtin/dev.escouade.clickup).
     ("clickup", escouade_plugin_clickup::run),
+    // Mistral Vibe (INT-10.6): its harness on the ACP client, in its crate (plugins/builtin/dev.escouade.mistral-vibe).
+    ("vibe", escouade_plugin_vibe::run),
 ];
 
 fn main() {

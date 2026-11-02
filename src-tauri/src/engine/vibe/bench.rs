@@ -1,9 +1,10 @@
 //! Mistral Vibe on the bench, through the fake `vibe-acp` (tests/fixtures/fake-vibe.mjs), whose
-//! message picks the scenario; and the real streams of Mistral Vibe 3.0.3 (tests/fixtures/vibe/),
-//! replayed from tests/fixtures/replays/vibe/.
+//! message picks the scenario, its conversation through its plugin (INT-10.6). The real streams of
+//! Mistral Vibe 3.0.3 (tests/fixtures/vibe/) are replayed by the plugin's client against
+//! tests/fixtures/replays/vibe/ (`plugins_acp_tests`).
 
 use super::VIBE;
-use crate::engine::bench::{bench_dir, replay, run, Scenario, Target};
+use crate::engine::bench::{bench_dir, run, Scenario, Target};
 use crate::engine::{Engine, Program};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -96,8 +97,12 @@ impl Target for OnBench {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn the_fake_vibe_passes_the_bench() {
+    // Its conversation goes through its plugin (INT-10.6): the plugins the app gives, in a runtime of their own.
+    let (rt, plugins, _) = crate::plugins_acp_tests::runtime("int10-vibe-bench");
+    crate::plugins::harness::sync(&rt, &plugins);
+    assert!(super::plugged().is_some(), "the plugin Mistral Vibe is on");
     let dir = bench_dir("esc266-bench-vibe");
     let played = run(&OnBench, &dir).await;
     // No quota in ACP: neither its limit nor its reading asked of it.
@@ -116,9 +121,5 @@ async fn the_fake_vibe_passes_the_bench() {
             Scenario::Fork,
         ]
     );
-}
-
-#[test]
-fn the_recorded_streams_of_vibe_make_the_items_expected() {
-    replay::check_all(&VIBE, "vibe");
+    rt.shutdown();
 }

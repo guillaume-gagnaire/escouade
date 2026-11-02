@@ -36,6 +36,20 @@ impl AgentRt {
                     self.set_status(AgentStatus::Running, fx);
                 }
             }
+            Item::Session { session } => {
+                if self.meta.session_id.as_deref() != Some(session.as_str()) {
+                    if self.meta.session_id.is_some() {
+                        self.reset_plan(fx);
+                    }
+                    self.meta.session_id = Some(session);
+                    self.meta.last_entry = None;
+                    fx.save = true;
+                }
+                if self.meta.fork_of.take().is_some() {
+                    self.meta.fork_at = None;
+                    fx.save = true;
+                }
+            }
             Item::Thinking { text, parent, id } => {
                 if let Some(id) = id.filter(|id| self.conv.contains(id)) {
                     self.patch(&id, json!({ "text": text, "streaming": false }), fx);
@@ -224,9 +238,23 @@ impl AgentRt {
                         cost: usage.cost,
                     });
                     self.meta.tokens += tokens;
+                    // What the harness says the turn cost (Mistral Vibe's `usage_update`, INT-10.6).
+                    self.meta.cost += usage.cost;
                 }
                 let error = error.filter(|_| !interrupted);
                 let failed = error.is_some();
+                // A resume planned is over (the core plans the next one, `fx.limited`), as is a move once a turn
+                // went well after it; the plan's files are read again (as the core's own translations do).
+                if self.meta.resume_at.take().is_some() {
+                    fx.save = true;
+                    fx.agent_changed = true;
+                }
+                if !failed && self.meta.moved_from.take().is_some() {
+                    self.meta.moved_resume_at = None;
+                    fx.save = true;
+                    fx.agent_changed = true;
+                }
+                fx.plan_files = true;
                 let took = self.active_since.map(|since| (now_ms() - since).max(0));
                 let item = json!({
                     "kind": "turn", "id": new_id(), "ts": now_ms(), "durationMs": took, "cost": usage.cost,

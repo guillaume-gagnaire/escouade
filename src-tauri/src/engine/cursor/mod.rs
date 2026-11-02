@@ -39,28 +39,11 @@ use crate::model::EngineId;
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Value};
 
-/// The harness of the plugin Cursor CLI (`dev.escouade.cursor-cli`, INT-10.1): the conversation of Cursor's agents
-/// goes through it, on the contract of the harnesses in process; None while the plugin is off or not loaded.
-static PLUGGED: parking_lot::RwLock<Option<&'static crate::plugins::harness::ProcessEngine>> =
-    parking_lot::RwLock::new(None);
-
-/// Puts the harness of the plugin Cursor CLI behind Cursor's agents (`plugins::harness::sync`), or takes it away.
-pub fn plug(engine: Option<&'static crate::plugins::harness::ProcessEngine>) {
-    *PLUGGED.write() = engine;
-}
-
-/// The harness of the plugin Cursor CLI, if it is on.
+/// The harness of the plugin Cursor CLI (`dev.escouade.cursor-cli`, INT-10.1), if it is on: the conversation of
+/// Cursor's agents goes through it (`plugins::harness::BUILTIN_HARNESSES`).
+#[cfg(test)]
 pub fn plugged() -> Option<&'static crate::plugins::harness::ProcessEngine> {
-    *PLUGGED.read()
-}
-
-/// What an agent of Cursor is told when its plugin is off or not loaded.
-fn unplugged() -> anyhow::Error {
-    let id = crate::plugins::builtin::CURSOR;
-    anyhow!(tr!(
-        "Le plugin Cursor CLI ({id}) est coupé ou n’est pas chargé : rallume-le dans la vue Plugins pour lancer un agent de Cursor CLI.",
-        "The Cursor CLI plugin ({id}) is switched off or not loaded: turn it back on in the Plugins view to start a Cursor CLI agent."
-    ))
+    crate::plugins::harness::plugged(crate::plugins::builtin::CURSOR)
 }
 
 /// What the launcher Cursor's installer leaves runs: the `node` and the `index.js` of its newest version
@@ -885,9 +868,13 @@ impl Engine for Cursor {
     ) -> Result<Process> {
         // Its conversation goes through its plugin (INT-10.1): the launch it describes, checked and started by the
         // core, what Cursor writes translated there.
-        plugged()
-            .ok_or_else(unplugged)?
-            .spawn(spawn, on_frame, on_exit)
+        crate::plugins::harness::spawn_plugged(
+            crate::plugins::builtin::CURSOR,
+            self.name(),
+            spawn,
+            on_frame,
+            on_exit,
+        )
     }
 
     fn message(&self, text: &str, attachments: &[Attachment]) -> Result<Message> {

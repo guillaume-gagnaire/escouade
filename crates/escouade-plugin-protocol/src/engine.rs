@@ -313,6 +313,9 @@ pub enum Item {
         #[serde(default)]
         session: Option<String>,
     },
+    /// The agent's session, opened (new, resumed or copied) before any turn: the agent's from now on, its status left
+    /// as it is (INT-10.6: a copy of Mistral Vibe's has its own session as soon as its process starts).
+    Session { session: String },
     /// Its text; a subagent's under `parent`. With `id`, the whole of the text streamed under that id (`Delta`).
     #[serde(rename_all = "camelCase")]
     Text {

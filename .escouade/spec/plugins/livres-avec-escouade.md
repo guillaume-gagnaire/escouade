@@ -2,7 +2,7 @@
 title: "Les plugins livrés avec Escouade"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.3, §4.4","docs/TODO-2.2.md (INT-4, INT-8.1)","src-tauri/src/plugins/builtin.rs","docs/PLUGINS.md §4.13","plugins/builtin/dev.escouade.github/README.md","plugins/builtin/dev.escouade.gitlab/README.md","plugins/builtin/dev.escouade.gitea/README.md","plugins/builtin/dev.escouade.azure-devops/README.md"]
-tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280"]
+tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281"]
 decisions: []
 compared: null
 ---
@@ -49,3 +49,5 @@ Certains plugins sont donnés par l'app : livrés avec elle, signés avec elle, 
 - Un plugin d'un autre auteur peut servir un nouveau service de voix ou prendre la place de l'un des cinq (même identifiant de service).
 - Délais : le plugin ajoute moins de 1 ms au texte final du direct (médiane et 99e centile), son poussé au rythme du micro ; détail et protocole `voice/*` dans `docs/PLUGINS.md` §4.13.
 - Le compte Mistral : un plugin « Mistral » porte la voix et, plus tard, Mistral Vibe, avec une seule clé.
+
+- Mistral Vibe est pour l'instant un plugin livré à part, `dev.escouade.mistral-vibe` (INT-10.6, voir *Mistral Vibe en plugin*), ses comptes par clé inchangés ; il rejoint « Mistral » et sa clé avant la release 2.2, dans un ticket à part.

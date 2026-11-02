@@ -49,6 +49,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Linear est un plugin livré avec Escouade, comme Trello : il se voit dans la vue Plugins, s’arrête pour l’app ou pour un projet, et la synchronisation dit quand il ne répond pas. Ta clé Linear et tes projets liés restent tels quels.
 - Jira est un plugin livré avec Escouade, comme Trello et Linear : il se voit dans la vue Plugins, s’arrête pour l’app ou pour un projet, et la synchronisation dit quand il ne répond pas. Ton compte Jira et tes projets liés restent tels quels.
 - Cursor CLI est un plugin livré avec Escouade : ses agents conversent comme avant, mais par un programme à part qu’Escouade lance et surveille. Il se voit dans la vue Plugins, sous « Livrés avec Escouade » ; coupé, un agent de Cursor dit au lancement qu’il faut le rallumer, et sa session est gardée.
+- Mistral Vibe est à son tour un plugin livré avec Escouade : ses agents conversent comme avant, par un programme à part qu’Escouade lance et surveille. Coupé dans la vue Plugins, un agent de Vibe dit au lancement qu’il faut le rallumer, et garde sa session.
 - ClickUp est un plugin livré avec Escouade, comme Trello, Linear et Jira : il se voit dans la vue Plugins, s’arrête pour l’app ou pour un projet, et la synchronisation dit quand il ne répond pas. Ton jeton ClickUp, tes listes liées et les statuts de chaque liste restent tels quels.
 
 ### Retiré

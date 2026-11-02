@@ -15,7 +15,7 @@
 //!   private project are refused, which is the fence that holds; a read or a write the agent made by itself on a path
 //!   while a fence is set is said in the conversation, once (the fence does not hold for it).
 
-use crate::{cursor, texts, tools};
+use crate::{cursor, texts, tools, vibe};
 use escouade_plugin_protocol::engine::{
     AcpDecl, Attach, Diff, EnvVar, HarnessDecl, Item, Launch, LaunchParams, StartAt, TurnUsage,
 };
@@ -29,6 +29,10 @@ enum Ours {
     New,
     Load(String),
     Prompt,
+    /// Vibe's `session/fork` of a session (a copy of all of it).
+    Fork,
+    /// A request whose answer ends the turn a plan held (Vibe's mode Plan, played here): interrupted or not.
+    EndHeld(bool),
     /// A setting (`session/set_mode`, `session/set_model`…): only an error of it is said.
     Setting(String),
     /// Cursor's `cursor/list_available_models`: the option of each model's effort.
@@ -71,6 +75,23 @@ pub struct Agent {
     acp: AcpDecl,
     /// It speaks Cursor's extensions (`cursor/*`).
     cursor: bool,
+    /// It is Mistral Vibe (the extension `vibe`): its tools, its forms, Escouade's mode Plan played here, its cost.
+    vibe: bool,
+    /// Vibe's calls as their `tool_call` told them, in Cursor's form, by their own id (the last `VIBE_CALLS`).
+    vibe_calls: HashMap<String, Value>,
+    vibe_order: VecDeque<String>,
+    /// What Vibe's session had spent when its turn began, and what it has spent so far (`usage_update`).
+    spent_base: Option<vibe::Spent>,
+    spent_last: vibe::Spent,
+    /// The prompt under way was cut by a refusal (Vibe): no plan is asked of it.
+    cut: bool,
+    /// The code of the error of the last answer to a request of the client (Vibe's rate limit).
+    error_code: Option<i64>,
+    /// When the agent goes on after its harness's rate limit (ms), for the turn's end.
+    limited_at: Option<i64>,
+    /// A recorded stream is replayed (`recorded`): its permissions were answered by the trial, never by Escouade's
+    /// rules in its place.
+    replaying: bool,
     cwd: String,
     mode: String,
     model: String,
@@ -165,6 +186,20 @@ fn tag_of(key: &str) -> String {
     }
 }
 
+/// The request of the client's own that holds the plan of a turn in Vibe's mode Plan, played here.
+const PLAN: &str = "escouade/plan";
+
+/// The most of Vibe's calls kept for the permissions and results that name them.
+const VIBE_CALLS: usize = 200;
+
+/// The time (ms since the epoch).
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or_default()
+}
+
 fn notice(text: String, level: &str) -> Item {
     Item::Notice {
         text,
@@ -181,6 +216,15 @@ impl Agent {
             lang: String::new(),
             version: version.into(),
             cursor: acp.extensions.iter().any(|e| e == "cursor"),
+            vibe: acp.extensions.iter().any(|e| e == "vibe"),
+            vibe_calls: HashMap::new(),
+            vibe_order: VecDeque::new(),
+            spent_base: None,
+            spent_last: vibe::Spent::default(),
+            cut: false,
+            error_code: None,
+            limited_at: None,
+            replaying: false,
             acp,
             cwd: String::new(),
             mode: String::new(),
@@ -246,6 +290,7 @@ impl Agent {
     /// A recorded stream replayed (`tests/fixtures/cursor/`): the request `msg` its client sent, taken as this
     /// client's own, so that the agent's answer to it reads as it would have.
     pub fn recorded(&mut self, msg: &Value) {
+        self.replaying = true;
         let (Some(id), Some(method)) = (msg["id"].as_u64(), msg["method"].as_str()) else {
             return;
         };
@@ -260,14 +305,25 @@ impl Agent {
                         .to_string(),
                 )
             }
+            "session/fork" => Ours::Fork,
             "session/prompt" => {
                 self.busy = true;
+                self.cut = false;
                 self.turn_text.clear();
                 Ours::Prompt
             }
             other => Ours::Setting(other.to_string()),
         };
         self.ours.insert(id, ours);
+    }
+
+    /// What the conversation says of a session not opened: Vibe's words for it, else the client's.
+    fn session_refused(&self, e: &str) -> String {
+        if self.vibe {
+            vibe::session_refused(&self.lang, e)
+        } else {
+            texts::session_refused(&self.lang, &self.name, e)
+        }
     }
 
     /// Whether this agent speaks Cursor's extensions.
@@ -324,15 +380,20 @@ impl Agent {
         if self.cursor {
             meta["subagents"] = json!(true);
         }
+        let mut caps = json!({
+            "fs": { "readTextFile": self.acp.fs, "writeTextFile": self.acp.fs },
+            "terminal": false,
+            "_meta": meta,
+        });
+        // Vibe's questions are forms: without them its model has no `ask_user_question` (tried).
+        if self.vibe {
+            caps["elicitation"] = json!({ "form": {} });
+        }
         let hello = self.request(
             "initialize",
             json!({
                 "protocolVersion": crate::PROTOCOL,
-                "clientCapabilities": {
-                    "fs": { "readTextFile": self.acp.fs, "writeTextFile": self.acp.fs },
-                    "terminal": false,
-                    "_meta": meta,
-                },
+                "clientCapabilities": caps,
                 "clientInfo": { "name": "escouade", "version": self.version },
             }),
             Ours::Initialize,
@@ -376,6 +437,7 @@ impl Agent {
         let Some(method) = msg["method"].as_str().map(str::to_string) else {
             if let Some(id) = msg["id"].as_u64() {
                 if let Some(ours) = self.ours.remove(&id) {
+                    self.error_code = msg["error"]["code"].as_i64();
                     let error = msg
                         .get("error")
                         .filter(|e| !e.is_null())
@@ -398,11 +460,17 @@ impl Agent {
         match ours {
             Ours::Initialize => {
                 if let Some(e) = error {
-                    return self.refused(texts::session_refused(&self.lang, &self.name, &e), out);
+                    let why = self.session_refused(&e);
+                    return self.refused(why, out);
                 }
                 if result["protocolVersion"].as_u64() != Some(crate::PROTOCOL) {
                     let v = result["protocolVersion"].to_string();
-                    return self.refused(texts::protocol_refused(&self.lang, &self.name, &v), out);
+                    let why = if self.vibe {
+                        vibe::protocol_refused(&self.lang, &v)
+                    } else {
+                        texts::protocol_refused(&self.lang, &self.name, &v)
+                    };
+                    return self.refused(why, out);
                 }
                 self.can_load = result["agentCapabilities"]["loadSession"] == true;
                 let mcp = crate::mcp_servers(
@@ -419,6 +487,12 @@ impl Agent {
                             Ours::Load(session),
                         )
                     }
+                    // A copy of all of it: Vibe's `session/fork` takes no point (the original is idle).
+                    StartAt::Fork { of, .. } if self.vibe => self.request(
+                        "session/fork",
+                        json!({ "sessionId": of, "cwd": self.cwd, "mcpServers": mcp }),
+                        Ours::Fork,
+                    ),
                     _ => self.request(
                         "session/new",
                         json!({ "cwd": self.cwd, "mcpServers": mcp }),
@@ -464,12 +538,39 @@ impl Agent {
                 (None, Some(id)) => self.opened(id.to_string(), &result, out),
                 (e, _) => {
                     let e = e.unwrap_or_else(|| "no session".into());
-                    self.refused(texts::session_refused(&self.lang, &self.name, &e), out)
+                    let why = self.session_refused(&e);
+                    self.refused(why, out)
                 }
             },
+            // Not copied: a new session.
+            Ours::Fork => match (error, result["sessionId"].as_str()) {
+                (None, Some(id)) => self.opened(id.to_string(), &result, out),
+                _ => {
+                    let mcp = crate::mcp_servers(
+                        self.escouade
+                            .as_ref()
+                            .map(|(u, t)| (u.as_str(), t.as_str())),
+                    );
+                    let line = self.request(
+                        "session/new",
+                        json!({ "cwd": self.cwd, "mcpServers": mcp }),
+                        Ours::New,
+                    );
+                    out.push(write(line));
+                }
+            },
+            Ours::EndHeld(cancelled) => self.close_turn(cancelled, out),
             Ours::Prompt => {
                 if let Some(e) = error {
-                    self.error = Some(texts::not_translated(&self.lang, &self.name, &e));
+                    // Vibe's own words (an API key refused, a rate limit), as the core's client said them.
+                    self.error = Some(match (self.vibe, self.error_code) {
+                        (true, Some(vibe::RATE_LIMITED)) => {
+                            self.limited_at = Some(now_ms() + vibe::RATE_RESUME_MS);
+                            vibe::rate_limited(&self.lang, Some(&e))
+                        }
+                        (true, _) => e,
+                        _ => texts::not_translated(&self.lang, &self.name, &e),
+                    });
                 }
                 let cancelled = result["stopReason"] == "cancelled";
                 // What the turn spent, when the agent tells it (`usage` of the answer, unstable in ACP).
@@ -515,6 +616,10 @@ impl Agent {
 
     /// The session is open: its mode and model set, the first message waiting sent.
     fn opened(&mut self, session: String, result: &Value, out: &mut Vec<Item>) {
+        // The session is the agent's from now on, a turn or not (a copy has its own as soon as it starts).
+        out.push(Item::Session {
+            session: session.clone(),
+        });
         self.session = Some(session);
         self.open = true;
         self.options = result["configOptions"].clone();
@@ -523,6 +628,7 @@ impl Agent {
         }
         let current = result["modes"]["currentModeId"]
             .as_str()
+            .or(vibe::option_value(&self.options, "mode"))
             .map(str::to_string);
         for l in self.mode_lines(current.as_deref()) {
             out.push(write(l));
@@ -553,7 +659,11 @@ impl Agent {
         if self.read_only {
             return self.acp.read_only_mode.clone();
         }
-        self.acp.modes.get(mode).cloned()
+        let m = self.acp.modes.get(mode).cloned();
+        if self.vibe {
+            return m.map(|m| vibe::agent_of(&m, !self.fence.is_empty()));
+        }
+        m
     }
 
     fn mode_lines(&mut self, current: Option<&str>) -> Vec<String> {
@@ -603,6 +713,16 @@ impl Agent {
         if self.model.is_empty() {
             return Vec::new();
         }
+        // A model Vibe's session does not offer (another harness's, after a handover) is left to its default.
+        let unlisted = self.vibe
+            && !self
+                .acp
+                .model_option
+                .as_deref()
+                .is_some_and(|k| vibe::option_values(&self.options, k).contains(&self.model));
+        if unlisted {
+            return self.effort_lines();
+        }
         let mut lines = match self.acp.model_option.clone() {
             Some(key) => {
                 let value = self.model_value(&key);
@@ -625,6 +745,21 @@ impl Agent {
     /// The effort of Cursor's model, by the option its models' list gives it (`cursor/list_available_models`), once the
     /// session is open: nothing while the list is not there, or for Auto (it picks its effort itself).
     fn effort_lines(&mut self) -> Vec<String> {
+        // Vibe's thinking (`off`, `high`), by the option its session offers.
+        if self.vibe {
+            let Some(session) = self.session.clone() else {
+                return Vec::new();
+            };
+            let levels = vibe::option_values(&self.options, "thinking");
+            let Some(thinking) = vibe::thinking_of(&self.effort, &levels) else {
+                return Vec::new();
+            };
+            return vec![self.request(
+                "session/set_config_option",
+                json!({ "sessionId": session, "configId": "thinking", "value": thinking }),
+                Ours::Setting("session/set_config_option".into()),
+            )];
+        }
         let Some(session) = self.session.clone().filter(|_| self.cursor) else {
             return Vec::new();
         };
@@ -647,6 +782,11 @@ impl Agent {
         if let Some(i) = self.instructions.take() {
             blocks.push(json!({ "type": "text", "text": crate::preamble(&i) }));
         }
+        // Vibe has no mode Plan: each prompt of Escouade's says what it asks.
+        if self.vibe && self.mode == "plan" {
+            blocks.push(json!({ "type": "text", "text": vibe::PLAN_MODE }));
+        }
+        self.cut = false;
         if let Some(r) = self.relay.take() {
             blocks.push(json!({ "type": "text", "text": crate::relayed(&r) }));
         }
@@ -685,6 +825,11 @@ impl Agent {
         let Some(session) = self.session.clone() else {
             return Vec::new();
         };
+        // A plan waiting for its answer (Vibe's mode Plan): no prompt runs, the turn ends.
+        if self.asked.values().any(|a| a.method == PLAN) {
+            self.asked.retain(|_, a| a.method != PLAN);
+            return self.end_held(true);
+        }
         let mut out: Vec<String> = self
             .asked
             .drain()
@@ -735,16 +880,90 @@ impl Agent {
             }
             return Ok(out);
         }
+        if asked.method == PLAN {
+            return Ok(self.answer_plan(allow, always, message, resume));
+        }
         let kind = match (allow, always) {
             (true, true) => "allow_always",
             (true, false) => "allow_once",
             _ => "reject_once",
         };
-        let option = crate::option_of(&asked.params, kind);
-        Ok(vec![reply(
+        // « Toujours » for this agent: Vibe writes its rule in the agent's own `VIBE_HOME` (`allow_always_permanent`);
+        // its other `allow_always` is for the session alone.
+        let permanent = self.vibe
+            && kind == "allow_always"
+            && asked.params["options"]
+                .as_array()
+                .is_some_and(|o| o.iter().any(|x| x["optionId"] == vibe::PERMANENT));
+        let option = if permanent {
+            vibe::PERMANENT.to_string()
+        } else {
+            crate::option_of(&asked.params, kind)
+        };
+        let mut out = vec![reply(
             &asked.id,
             json!({ "outcome": { "outcome": "selected", "optionId": option } }),
-        )])
+        )];
+        // Vibe: a refusal cuts the turn, its word (if any) sent once it has ended; else Vibe tries the command again
+        // under other forms, each asking again.
+        if self.vibe && !allow {
+            if let Some(m) = message.filter(|m| vibe::worded(m)) {
+                self.queue
+                    .push_front(vec![json!({ "type": "text", "text": m })]);
+            }
+            self.cut = true;
+            if let Some(session) = self.session.clone() {
+                out.push(line(json!({
+                    "jsonrpc": "2.0", "method": "session/cancel", "params": { "sessionId": session },
+                })));
+            }
+        }
+        Ok(out)
+    }
+
+    /// The plan of Vibe's mode Plan answered: approved, it is carried out in the mode chosen, in the same turn; sent
+    /// back with a word, the planning goes on with it; without, the turn ends.
+    fn answer_plan(
+        &mut self,
+        allow: bool,
+        always: bool,
+        message: Option<&str>,
+        resume: Option<&str>,
+    ) -> Vec<String> {
+        let (mode, text) = match (allow, always) {
+            (true, true) => (Some("acceptEdits".to_string()), vibe::PLAN_GO.to_string()),
+            (true, false) => (
+                Some(resume.unwrap_or("default").to_string()),
+                vibe::PLAN_GO.to_string(),
+            ),
+            _ => (None, message.unwrap_or_default().to_string()),
+        };
+        if mode.is_none() && text.trim().is_empty() {
+            return self.end_held(false);
+        }
+        let mut out = Vec::new();
+        if let Some(mode) = mode {
+            out.extend(self.set_mode(&mode));
+            self.told_mode = Some(mode);
+        }
+        out.push(self.prompt(vec![json!({ "type": "text", "text": text })]));
+        out
+    }
+
+    /// Ends the turn a plan held, by a request whose answer closes it (the core is given items with frames alone): the
+    /// mode Vibe is in, set again.
+    fn end_held(&mut self, cancelled: bool) -> Vec<String> {
+        let Some(session) = self.session.clone() else {
+            return Vec::new();
+        };
+        let agent = self
+            .acp_mode(&self.mode.clone())
+            .unwrap_or_else(|| "ask".into());
+        vec![self.request(
+            "session/set_mode",
+            json!({ "sessionId": session, "modeId": agent }),
+            Ours::EndHeld(cancelled),
+        )]
     }
 
     /// The user's answers (by question) to the question `request`.
@@ -762,6 +981,14 @@ impl Agent {
             return Ok(vec![
                 self.prompt(vec![json!({ "type": "text", "text": text })])
             ]);
+        }
+        // Vibe's form, by its keys (`q0`…), a choice by its value.
+        if asked.method == "elicitation/create" {
+            let content = vibe::elicitation_content(&asked.params, answers);
+            return Ok(vec![reply(
+                &asked.id,
+                json!({ "action": "accept", "content": content }),
+            )]);
         }
         let outcome = cursor::question_outcome(&asked.params, answers);
         Ok(vec![reply(&asked.id, json!({ "outcome": outcome }))])
@@ -837,6 +1064,32 @@ impl Agent {
                 out.push(write(l));
             }
             m if self.cursor && m.starts_with("cursor/") => self.cursor_asks(m, id, params, out),
+            // Vibe's question: a form, shown as a question's card.
+            "elicitation/create" if self.vibe => {
+                self.tell(out);
+                let rid = self.rid(&id);
+                let call = params["toolCallId"]
+                    .as_str()
+                    .map(tools::call_id)
+                    .unwrap_or_else(|| rid.clone());
+                let questions: Vec<Value> = vibe::elicitation_questions(&params)
+                    .into_iter()
+                    .map(|(_, q)| q)
+                    .collect();
+                self.asked.insert(
+                    rid.clone(),
+                    Asked {
+                        id,
+                        method: "elicitation/create".into(),
+                        params,
+                    },
+                );
+                out.push(Item::Question {
+                    request: rid,
+                    call,
+                    questions: Value::Array(questions),
+                });
+            }
             other => out.push(write(reply_error(
                 &id,
                 -32601,
@@ -867,6 +1120,27 @@ impl Agent {
 
     /// A permission the agent asks.
     fn permission(&mut self, id: Value, p: &Value, out: &mut Vec<Item>) {
+        // Vibe's names its call alone: the call as its `tool_call` told it, what the permission tells added.
+        let vibe_p;
+        let p = if self.vibe {
+            let mut params = p.clone();
+            let call = p["toolCall"]["toolCallId"].as_str().unwrap_or_default();
+            if let Some(known) = self.vibe_calls.get(call) {
+                let mut tc = known.clone();
+                for (k, v) in p["toolCall"].as_object().into_iter().flatten() {
+                    if tc.get(k).is_none_or(Value::is_null) {
+                        tc[k] = v.clone();
+                    }
+                }
+                params["toolCall"] = tc;
+            } else if let Some(n) = vibe::normalized(&p["toolCall"], &self.cwd) {
+                params["toolCall"] = n;
+            }
+            vibe_p = params;
+            &vibe_p
+        } else {
+            p
+        };
         let tc = &p["toolCall"];
         let kind = self.kind_of(tc);
         let reject = |me: &Self| {
@@ -883,6 +1157,11 @@ impl Agent {
             return;
         }
         if self.read_only && matches!(kind.as_str(), "edit" | "delete" | "move" | "execute") {
+            out.push(write(reject(self)));
+            return;
+        }
+        // Escouade's mode Plan, played for Vibe, changes nothing: a write is refused, the model told so.
+        if self.vibe && self.mode == "plan" && matches!(kind.as_str(), "edit" | "delete" | "move") {
             out.push(write(reject(self)));
             return;
         }
@@ -943,14 +1222,16 @@ impl Agent {
         }
         let safe = match self.mode.as_str() {
             "bypassPermissions" => true,
-            "acceptEdits" => {
+            // Vibe's agent `ask` asks for each write: in « Demander » too, its writes in the agent's folder go through
+            // (the meaning of its mode, as the core's rules had it).
+            "acceptEdits" | "default" if self.mode == "acceptEdits" || self.vibe => {
                 matches!(kind.as_str(), "edit" | "delete")
                     && !paths.is_empty()
                     && paths.iter().all(|f| crate::inside(f, &self.cwd))
             }
             _ => false,
         };
-        if safe {
+        if safe && !self.replaying {
             let option = crate::option_of(p, "allow_once");
             out.push(write(reply(
                 &id,
@@ -1062,7 +1343,8 @@ impl Agent {
             }
             return ("Task".into(), input);
         }
-        if self.cursor {
+        // Vibe's calls are put in Cursor's form (`vibe::normalized`).
+        if self.cursor || self.vibe {
             if let Some(t) = cursor::tool_of(u, &self.cwd) {
                 return t;
             }
@@ -1072,11 +1354,36 @@ impl Agent {
 
     /// One update of a session (`session/update`).
     fn update(&mut self, p: &Value, out: &mut Vec<Item>) {
+        let u = &p["update"];
+        let kind = u["sessionUpdate"].as_str().unwrap_or_default();
+        // What Vibe's session spent so far, told as it opens too (before its id is known, or while it is loaded):
+        // where its first turn's cost starts (ESC-267).
+        if self.vibe && kind == "usage_update" {
+            let ours = self.session.is_none()
+                || self.loading
+                || p["sessionId"].as_str() == self.session.as_deref();
+            if ours {
+                let spent = vibe::Spent::of(u);
+                self.spent_base.get_or_insert(spent);
+                self.spent_last = spent;
+            }
+            return;
+        }
         if self.loading {
             return;
         }
-        let u = &p["update"];
-        let kind = u["sessionUpdate"].as_str().unwrap_or_default();
+        if self.vibe {
+            match kind {
+                "tool_call" => return self.vibe_tool_start(p, out),
+                "tool_call_update" => return self.vibe_tool_update(p, out),
+                // Its mode is Escouade's to set (`ask` is « Demander » and « Plan » both); the invite it echoes is the
+                // conversation's already.
+                "current_mode_update" | "user_message_chunk" => return,
+                // Told outside a turn too (after `session/load`, a mode set): no turn begins with them.
+                "available_commands_update" | "session_info_update" => return,
+                _ => {}
+            }
+        }
         if self.cursor && kind == "subagent_spawned" {
             if let (Some(child), Some(call)) = cursor::spawned(u) {
                 if let Some(model) = u["_meta"]["cursor"]["model"].as_str() {
@@ -1415,14 +1722,125 @@ impl Agent {
         });
     }
 
+    /// Vibe's call started, put in Cursor's form and kept for its permission and its result.
+    fn vibe_tool_start(&mut self, p: &Value, out: &mut Vec<Item>) {
+        let u = &p["update"];
+        let Some(parent) = self.owner(p["sessionId"].as_str()) else {
+            return;
+        };
+        let (Some(id), Some(n)) = (u["toolCallId"].as_str(), vibe::normalized(u, &self.cwd)) else {
+            return;
+        };
+        self.tell(out);
+        if !self.vibe_calls.contains_key(id) {
+            self.vibe_order.push_back(id.to_string());
+            if self.vibe_order.len() > VIBE_CALLS {
+                if let Some(old) = self.vibe_order.pop_front() {
+                    self.vibe_calls.remove(&old);
+                }
+            }
+        }
+        self.vibe_calls.insert(id.to_string(), n.clone());
+        // A call told once it is over (its search of tools, a hook's refusal) ends there too (`tool_start`).
+        self.tool_start(&n, parent, out);
+    }
+
+    /// What Vibe says of its call as it goes: its name kept from its `tool_call`, a write's diff too (told there only).
+    fn vibe_tool_update(&mut self, p: &Value, out: &mut Vec<Item>) {
+        let u = &p["update"];
+        if self.owner(p["sessionId"].as_str()).is_none() {
+            return;
+        }
+        let Some(id) = u["toolCallId"].as_str() else {
+            return;
+        };
+        let known = self.vibe_calls.get(id).cloned();
+        let mut whole = u.clone();
+        if whole["_meta"]["tool_name"].is_null() {
+            if let Some(k) = &known {
+                whole["_meta"] = k["_meta"].clone();
+            }
+        }
+        let Some(mut n) = vibe::normalized(&whole, &self.cwd) else {
+            return;
+        };
+        self.tell(out);
+        let done = n["status"] == "completed";
+        if done && vibe::diff_in(&n["content"]).is_none() {
+            if let Some(d) = known
+                .as_ref()
+                .and_then(|k| vibe::diff_in(&k["content"]))
+                .cloned()
+            {
+                match n["content"].as_array_mut() {
+                    Some(list) => list.insert(0, d),
+                    None => n["content"] = json!([d]),
+                }
+            }
+        }
+        if done || n["status"] == "failed" {
+            self.vibe_calls.remove(id);
+            self.vibe_order.retain(|c| c != id);
+        }
+        self.tool_update(&n, out);
+    }
+
     /// The end of the prompt: what was being written given, the turn closed; the next message waiting sent.
     fn turn_end(&mut self, cancelled: bool, out: &mut Vec<Item>) {
         self.tell(out);
         while let Some(w) = self.writing.first().cloned() {
             self.close(&w.who, out);
         }
+        // Vibe in Escouade's mode Plan: a turn that ended on its words has its plan approved first (the card « Plan à
+        // approuver »), the turn held until it is answered.
+        let plan = self.turn_text.trim().to_string();
+        if self.vibe
+            && !cancelled
+            && self.mode == "plan"
+            && !self.cut
+            && self.error.is_none()
+            && !plan.is_empty()
+        {
+            let rid = self.rid(&json!("plan"));
+            self.asked.insert(
+                rid.clone(),
+                Asked {
+                    id: Value::Null,
+                    method: PLAN.into(),
+                    params: json!({ "plan": plan }),
+                },
+            );
+            out.push(Item::Permission {
+                request: rid.clone(),
+                call: rid,
+                tool: Some("ExitPlanMode".into()),
+                input: Some(json!({ "plan": plan })),
+                description: None,
+                reason: None,
+                diff: None,
+                can_always: true,
+                parent: None,
+            });
+            return;
+        }
+        self.close_turn(cancelled, out);
+    }
+
+    /// The turn closed: its question asked if it ended on one, else its end given; the next message waiting sent.
+    fn close_turn(&mut self, cancelled: bool, out: &mut Vec<Item>) {
         self.busy = false;
         self.reports.clear();
+        // What Vibe's session spent in the turn: what it grew by since the turn began.
+        if self.vibe {
+            let base = self.spent_base.replace(self.spent_last).unwrap_or_default();
+            let d = self.spent_last.since(base);
+            self.usage = TurnUsage {
+                input: d.prompt.saturating_sub(d.cached),
+                output: d.completion,
+                cache: d.cached,
+                cost: d.cost,
+            };
+        }
         // A turn that ends on a question: its card, and the turn goes on with the answers.
         if let Some(block) = self
             .block
@@ -1449,7 +1867,8 @@ impl Agent {
             }
         }
         let mut error = self.error.take().filter(|_| !cancelled);
-        let mut limited = None;
+        // Vibe's rate limit: the agent goes on a minute later.
+        let mut limited = self.limited_at.take().filter(|_| !cancelled).map(Some);
         if self.cursor && !cancelled && error.is_none() {
             if let Some(refusal) = cursor::refusal(&self.turn_text) {
                 if cursor::at_limit(refusal) {

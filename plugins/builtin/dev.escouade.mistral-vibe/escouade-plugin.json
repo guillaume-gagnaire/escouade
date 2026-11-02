@@ -1,0 +1,63 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.mistral-vibe",
+  "name": "Mistral Vibe",
+  "version": "0.0.0",
+  "description": {
+    "fr": "Mistral Vibe comme harness, par ACP : la conversation, sa vue terminal, la clé et le coût par compte.",
+    "en": "Mistral Vibe as a harness, over ACP: the conversation, its terminal view, the key and the cost per account."
+  },
+  "author": {
+    "name": "Escouade",
+    "url": "https://escouade.dev"
+  },
+  "license": "GPL-3.0-or-later",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/builtin/dev.escouade.mistral-vibe",
+  "escouade": {
+    "api": "1",
+    "min": "2.1.0"
+  },
+  "run": {
+    "command": "{escouade}/escouade-plugins",
+    "args": ["vibe"]
+  },
+  "contributes": {
+    "harnesses": [
+      {
+        "id": "vibe",
+        "name": "Mistral Vibe",
+        "speaker": "Vibe",
+        "writer": "Mistral Vibe",
+        "locate": { "names": ["vibe-acp"] },
+        "versionArgs": ["--version"],
+        "tested": { "oldest": "3.0.3", "newest": "3.0.3" },
+        "caps": {
+          "modes": ["default", "plan", "acceptEdits", "bypassPermissions"],
+          "effort": true,
+          "images": true,
+          "terminalView": true,
+          "accountsByKey": true
+        },
+        "models": [{ "id": "mistral-medium-3.5", "label": "Mistral Medium 3.5", "effort": true }],
+        "efforts": ["low", "high"],
+        "accountVar": "VIBE_HOME",
+        "keyVar": "MISTRAL_API_KEY",
+        "closeGraceMs": 2000,
+        "install": {
+          "windows": "uv tool install mistral-vibe",
+          "unix": "uv tool install mistral-vibe"
+        },
+        "updateCommand": "uv tool upgrade mistral-vibe",
+        "acp": {
+          "args": [],
+          "env": { "VIBE_ENABLE_TELEMETRY": "false" },
+          "fs": false,
+          "fenceOnPermissions": true,
+          "modes": { "default": "ask", "plan": "ask", "acceptEdits": "accept-edits", "bypassPermissions": "auto-approve" },
+          "modelOption": "model",
+          "extensions": ["vibe"]
+        }
+      }
+    ]
+  }
+}

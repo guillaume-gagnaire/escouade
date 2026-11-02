@@ -46,7 +46,11 @@ const HARNESSES: [&str; 8] = [
 /// The plugin a harness's conversation goes through, for those that left the core (INT-10): their streams are replayed
 /// through its process (`Bench::play_plugged`).
 fn plugged_by(harness: EngineId) -> Option<&'static str> {
-    (harness == EngineId::CURSOR).then_some(crate::plugins::builtin::CURSOR)
+    match harness {
+        EngineId::CURSOR => Some(crate::plugins::builtin::CURSOR),
+        EngineId::VIBE => Some(crate::plugins::builtin::VIBE),
+        _ => None,
+    }
 }
 
 /// The longest silence of a stream replayed at its recorded pace (a model thinking, a person
@@ -367,6 +371,8 @@ impl Bench {
         };
         let agent = id.clone();
         let tokio = tokio::runtime::Handle::current();
+        // The client's settings of a Vibe recording are the ones it made itself at the session's start.
+        let own_settings = flux.harness == EngineId::VIBE;
         let cpu = usage().cpu;
         let read = tokio::task::spawn_blocking(move || {
             let handle = core.agent(&agent).unwrap();
@@ -377,6 +383,8 @@ impl Bench {
             // their ids, as the plugin named them.
             let mut methods: HashMap<String, String> = HashMap::new();
             let mut asked: HashMap<String, String> = HashMap::new();
+            // The questions of each request of a question, as the plugin gave them (Vibe's forms).
+            let mut questions: HashMap<String, Value> = HashMap::new();
             let call = |method: &str, params: Value| -> Value {
                 tokio
                     .block_on(rt.call(plugin, method, params))
@@ -399,7 +407,7 @@ impl Bench {
                     .unwrap_or_else(|e| panic!("line {} is no JSON: {e}", n + 1));
                 let mut msg = f["msg"].clone();
                 let writes = match f["dir"].as_str() {
-                    Some("s2c") => {
+                    Some("s2c" | "in") => {
                         if msg["method"].is_null() && !msg["id"].is_null() {
                             // An answer to a request of the client: under the id the plugin gave it.
                             let method = methods.get(&msg["id"].to_string()).cloned();
@@ -425,6 +433,9 @@ impl Bench {
                                 Some("permission") | Some("question") => {
                                     let request = i["request"].as_str().unwrap_or_default();
                                     asked.insert(msg["id"].to_string(), request.to_string());
+                                    if i["op"] == "question" {
+                                        questions.insert(request.to_string(), i["questions"].clone());
+                                    }
                                     items.push(i.clone());
                                 }
                                 _ => items.push(i.clone()),
@@ -436,7 +447,7 @@ impl Bench {
                         }
                         writes
                     }
-                    Some("c2s") => {
+                    Some("c2s" | "out") => {
                         if let (Some(method), false) = (msg["method"].as_str(), msg["id"].is_null())
                         {
                             methods.insert(msg["id"].to_string(), method.to_string());
@@ -450,6 +461,11 @@ impl Bench {
                                     "text": p["prompt"][0]["text"],
                                 }),
                             ),
+                            Some("session/set_mode" | "session/set_config_option")
+                                if own_settings =>
+                            {
+                                Value::Null
+                            }
                             Some("session/set_mode") => {
                                 let mode = if p["modeId"] == "plan" {
                                     "plan"
@@ -470,6 +486,23 @@ impl Bench {
                             // The client's own start, which the plugin wrote itself.
                             Some(_) => Value::Null,
                             None => match asked.get(&msg["id"].to_string()) {
+                                // An answer to Vibe's form: by question, as the card gives it.
+                                Some(request) if msg["result"]["action"].is_string() => {
+                                    let mut answers = serde_json::Map::new();
+                                    let asked_qs = questions.get(request).cloned().unwrap_or_default();
+                                    for (n, q) in asked_qs.as_array().into_iter().flatten().enumerate() {
+                                        let given = &msg["result"]["content"][format!("q{n}")];
+                                        let text = match given.as_array() {
+                                            Some(l) => l.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(", "),
+                                            None => given.as_str().unwrap_or_default().to_string(),
+                                        };
+                                        answers.insert(q["question"].as_str().unwrap_or_default().to_string(), json!(text));
+                                    }
+                                    call(
+                                        "agent/answerQuestion",
+                                        json!({ "agent": key, "request": request, "call": request, "answers": answers }),
+                                    )
+                                }
                                 Some(request) => {
                                     let option = msg["result"]["outcome"]["optionId"]
                                         .as_str()
@@ -479,7 +512,7 @@ impl Bench {
                                         json!({
                                             "agent": key, "request": request,
                                             "allow": option.starts_with("allow"),
-                                            "always": option.starts_with("allow-always"),
+                                            "always": option.starts_with("allow-always") || option.starts_with("allow_always"),
                                         }),
                                     )
                                 }
