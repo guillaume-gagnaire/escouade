@@ -1,9 +1,9 @@
 ---
-number: null
+number: 60
 id: "vue-pull-requests-du-projet-en-liste-den"
 title: "Vue « Pull requests » du projet en liste dense"
 date: "2026-11-02"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-65"
 pages: ["git-fichiers/vue-pull-requests","git-fichiers/pull-requests"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"git-fichiers/vue-pull-requests","added":33,"removed":0},{"page":"git-fichiers/pull-requests","added":3,"removed":3}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-02T12:14:36+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

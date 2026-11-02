@@ -3,7 +3,7 @@ title: "Vue « Pull requests » du projet"
 subject: "git-fichiers"
 sources: ["docs/TODO-1.8.md","design/esc-65/README.md","src/components/prs/PrsView.svelte","src/lib/prlist.ts","src-tauri/src/pragent.rs","src-tauri/src/prview.rs"]
 tickets: ["ESC-65"]
-decisions: ["vue-pull-requests-du-projet-en-liste-den"]
+decisions: [60]
 compared: null
 ---
 
