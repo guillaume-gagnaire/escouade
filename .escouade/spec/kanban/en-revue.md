@@ -3,7 +3,7 @@ title: "En revue"
 subject: "kanban"
 sources: ["docs/TODO-1.8.md"]
 tickets: ["ESC-59","ESC-60"]
-decisions: ["la-ci-en-echec-d-un-ticket-en-revue-repa"]
+decisions: [55]
 compared: null
 ---
 

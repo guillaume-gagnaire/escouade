@@ -1,9 +1,9 @@
 ---
-number: null
+number: 55
 id: "la-ci-en-echec-d-un-ticket-en-revue-repa"
 title: "La CI en échec d'un ticket en revue repart chez son agent"
 date: "2026-11-02"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-60"
 pages: ["kanban/en-revue"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"kanban/en-revue","added":19,"removed":4}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-02T06:57:01+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
