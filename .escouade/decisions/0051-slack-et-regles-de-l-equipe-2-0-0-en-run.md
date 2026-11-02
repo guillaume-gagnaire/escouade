@@ -1,9 +1,9 @@
 ---
-number: null
+number: 51
 id: "slack-et-regles-de-l-equipe-2-0-0-en-run"
 title: "Slack et Règles de l'équipe 2.0.0 en run.js ; la version qui sert le WASM se dit par escouade-plugin"
 date: "2026-11-02"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-326"
 pages: ["plugins/programmes-js-ts-en-wasm"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/programmes-js-ts-en-wasm","added":5,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-02T04:55:58+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
