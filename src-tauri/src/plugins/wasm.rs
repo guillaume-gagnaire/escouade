@@ -35,6 +35,9 @@ use wasmtime_wasi::WasiCtxBuilder;
 
 /// What goes before the bundle: what Node gave it, served by Escouade.
 pub const PRELUDE: &str = include_str!("wasm_prelude.js");
+/// The first version of Escouade that runs `run.js` plugins in WASM (what `escouade.min` of such a plugin names):
+/// `escouade-plugin --version` says it, and `plugins/ci.mjs` judges the plugins of the repository against it.
+pub const SERVED_SINCE: &str = "2.2.0";
 /// The Javy the bundles are compiled with (its CLI, `-C deterministic=y`).
 pub const JAVY_VERSION: &str = "9.1.0";
 /// The Node modules a bundle may import, served by the prelude; any other import refuses its compilation.

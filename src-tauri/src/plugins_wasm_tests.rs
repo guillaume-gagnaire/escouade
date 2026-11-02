@@ -336,6 +336,65 @@ async fn slack_is_refused_any_host_but_those_of_its_permissions() {
     w.rt.shutdown();
 }
 
+/// ESC-326: the two plugins of Escouade's own hand, as their folders hold them (`run.js`, no launch script), run on a
+/// machine whose PATH holds no `node`: team-rules decides, slack posts to a fake Slack (never slack.com). Each test of
+/// the suite runs in its own process (nextest), so the PATH changed here is this test's alone.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_two_plugins_of_the_app_run_in_wasm_without_node_in_the_path() {
+    if !ready() {
+        return;
+    }
+    for dir in ["slack", "team-rules"] {
+        let folder = root().join("plugins").join(dir);
+        let m: Value = serde_json::from_str(
+            &std::fs::read_to_string(folder.join("escouade-plugin.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(m["version"], "2.0.0", "{dir}");
+        assert_eq!(
+            m["run"],
+            json!({ "js": "dist/plugin.mjs" }),
+            "{dir}: run.js alone"
+        );
+        assert!(!folder.join(dir).exists() && !folder.join(format!("{dir}.cmd")).exists());
+    }
+    let empty = std::env::temp_dir().join(format!("no-node-{}", uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir_all(&empty).unwrap();
+    std::env::set_var("PATH", &empty);
+    assert!(
+        std::process::Command::new("node")
+            .arg("-v")
+            .output()
+            .is_err(),
+        "node must not be reachable"
+    );
+
+    let w = own("team-rules", Limits::default());
+    w.rt.start(&w.id).unwrap();
+    until("running", || w.rt.status(&w.id).phase == PhaseName::Running).await;
+    assert_eq!(w.rt.status(&w.id).pid, None, "no process");
+    let denied =
+        w.rt.call(&w.id, "permissions/decide", ask("git push --force"))
+            .await
+            .unwrap();
+    assert_eq!(denied["decision"], "deny");
+    let allowed =
+        w.rt.call(&w.id, "permissions/decide", ask("git status"))
+            .await
+            .unwrap();
+    assert_eq!(allowed["decision"], "allow");
+    w.rt.shutdown();
+
+    let (w, seen) = slack(&["slack.com"]);
+    w.rt.notify(&w.id, "events/fact", to_review()).unwrap();
+    until("posted", || !seen.lock().unwrap().is_empty()).await;
+    assert_eq!(
+        seen.lock().unwrap()[0].0,
+        "POST /api/chat.postMessage HTTP/1.1"
+    );
+    w.rt.shutdown();
+}
+
 /// A bundle of the tests, without the SDK, on the host's own transport (`__esc` of the prelude, ESC-321): it
 /// answers `initialize`, `ping`, and what makes it misbehave.
 const PROBE: &str = r#"

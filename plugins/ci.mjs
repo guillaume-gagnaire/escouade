@@ -3,7 +3,8 @@
 // each as its author checks it before a tag: for those in TypeScript, `npm install`, the typecheck, their tests against
 // the SDK's fake Escouade, and their dist/plugin.mjs built again and compared to the one committed (Escouade runs the
 // plugin as the repository holds it); for the declarative ones, their `node --test`; then, for all, `escouade-plugin
-// validate` and the conformance bench of the app (ESCOUADE_PLUGIN_BIN), `--first-party` for their reserved ids. CI
+// validate` and the conformance bench of the app (ESCOUADE_PLUGIN_BIN), `--first-party` for their reserved ids: for a `run.js`
+// plugin (slack, team-rules) the bench plays dist/plugin.mjs compiled to WASM in the app's own host, with no Node. CI
 // runs it after building the app's escouade-plugin and the SDK.
 //
 //   npx tsc -p sdk/plugin/tsconfig.json
@@ -18,6 +19,14 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const bin = process.env.ESCOUADE_PLUGIN_BIN && resolve(process.env.ESCOUADE_PLUGIN_BIN);
 if (!bin || !existsSync(bin)) {
   console.error(`ESCOUADE_PLUGIN_BIN must name the app's escouade-plugin (cargo build --bin escouade-plugin): ${bin ?? 'unset'}`);
+  process.exit(2);
+}
+
+// The version of Escouade that serves `run.js` plugins in WASM, as the tool says it (`escouade-plugin --version`, its
+// `wasm-since` line): the plugins of this folder are judged for it, whatever version this build is.
+const since = /^wasm-since (\S+)\r?$/m.exec(spawnSync(bin, ['--version'], { encoding: 'utf8' }).stdout ?? '')?.[1];
+if (!since) {
+  console.error(`${bin} --version does not say "wasm-since": build escouade-plugin from this tree`);
   process.exit(2);
 }
 
@@ -58,7 +67,8 @@ function check(name) {
   // By its relative folder, as an author runs it beside the plugin; a reserved id is Escouade's own hand.
   const id = JSON.parse(readFileSync(join(folder, 'escouade-plugin.json'), 'utf8')).id;
   const hand = String(id).startsWith('dev.escouade.') ? ['--first-party'] : [];
-  return run(HERE, bin, 'validate', name, ...hand) && run(HERE, bin, 'test', name, ...hand);
+  const judged = ['--escouade', since];
+  return run(HERE, bin, 'validate', name, ...hand, ...judged) && run(HERE, bin, 'test', name, ...hand, ...judged);
 }
 
 const lf = (s) => s.replace(/\r\n/g, '\n');

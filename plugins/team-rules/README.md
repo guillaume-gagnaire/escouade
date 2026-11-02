@@ -26,7 +26,7 @@ with a substitution (`$(…)`, backquotes, `$VAR`), a redirection, an escape or 
 ## What it may do
 
 - decide the agents' permission requests (`permissions.decide`);
-- run its program, `dist/plugin.mjs` (Node 22.18 or later), as this folder holds it. No network, no secret.
+- run its program, `dist/plugin.mjs` in WASM, as this folder holds it: no Node on the machine (Node 22.18 or later only builds and tests it). No network, no secret.
 
 ## What is in this folder
 

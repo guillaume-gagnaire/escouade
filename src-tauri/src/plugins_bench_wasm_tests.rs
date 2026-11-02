@@ -44,6 +44,9 @@ fn as_run_js(dir: &str) -> PathBuf {
     let path = to.join("escouade-plugin.json");
     let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
     m["run"] = serde_json::json!({ "js": "dist/plugin.mjs" });
+    // These tests play the bench, not the version check (the repository's plugins name the release that serves WASM,
+    // which this build is not yet): the copy asks for any version.
+    m["escouade"]["min"] = serde_json::json!("2.1.0");
     std::fs::write(&path, serde_json::to_string_pretty(&m).unwrap()).unwrap();
     to
 }
@@ -104,7 +107,7 @@ fn build_writes_the_same_module_twice_and_its_sha256() {
             0
         );
     }
-    let name = "dev.escouade.team-rules-1.1.1.wasm";
+    let name = "dev.escouade.team-rules-2.0.0.wasm";
     let (a, b) = (
         std::fs::read(one.join(name)).unwrap(),
         std::fs::read(two.join(name)).unwrap(),

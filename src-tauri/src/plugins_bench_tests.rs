@@ -71,6 +71,8 @@ async fn bench(folder: &Path) -> Report {
 async fn bench_own(folder: &Path) -> Report {
     let o = Options {
         hand: crate::plugins::manifest::Hand::First,
+        // The run.js plugins of the repository need the release that serves WASM.
+        app_version: crate::plugins::wasm::SERVED_SINCE.into(),
         ..options()
     };
     run(folder, &o).await
@@ -304,7 +306,11 @@ fn the_command_tests_and_validates_a_folder() {
     assert_eq!(cli::main(args(&["validate", &theme, "--lang", "en"])), 1);
     assert_eq!(cli::main(args(&["test", &theme, "--lang", "en", own])), 0);
     let rules = path(example("team-rules"));
-    assert_eq!(cli::main(args(&["test", &rules, "--json", own])), 0);
+    let since = crate::plugins::wasm::SERVED_SINCE;
+    assert_eq!(
+        cli::main(args(&["test", &rules, "--json", own, "--escouade", since])),
+        0
+    );
 
     let broken = fake("cli", &["--ignore-shutdown"]);
     assert_eq!(cli::main(args(&["test", &path(broken.clone())])), 1);
@@ -387,4 +393,27 @@ async fn the_source_and_host_scenarios_play_the_calls_of_the_adapters() {
         .as_deref()
         .unwrap()
         .contains("-32401"));
+}
+
+/// ESC-326: `validate --escouade <version>` judges a plugin for another version of Escouade than the build's: the
+/// run.js plugins of the repository need the one that serves WASM, which `--version` says.
+#[test]
+fn validate_judges_a_plugin_for_the_version_of_escouade_it_is_given() {
+    #[cfg(windows)]
+    crate::paths::trim_test_path();
+    let slack = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../plugins/slack")
+        .to_string_lossy()
+        .into_owned();
+    let validate = |v: &str| {
+        cli::main(vec![
+            "validate".into(),
+            slack.clone(),
+            "--first-party".into(),
+            "--escouade".into(),
+            v.into(),
+        ])
+    };
+    assert_eq!(validate("2.1.2"), 1, "the 2.1 does not serve WASM");
+    assert_eq!(validate(crate::plugins::wasm::SERVED_SINCE), 0);
 }

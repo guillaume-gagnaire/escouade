@@ -47,6 +47,13 @@ function entries(file: string) {
   return out;
 }
 
+/** The manifest of Slack as a plugin launched by a script (what it was before 2.0.0, ESC-326): `slack` and `slack.cmd`. */
+function processManifest(): Record<string, unknown> {
+  const m = JSON.parse(fs.readFileSync(path.join(EXAMPLES, 'slack', 'escouade-plugin.json'), 'utf8'));
+  m.run = { command: 'slack', windows: 'slack.cmd' };
+  return m;
+}
+
 describe('escouade-plugin of the SDK', () => {
   it('validates a manifest, and says each field that is wrong', () => {
     expect(cli(['validate', path.join(EXAMPLES, 'slack'), '--first-party'])).toMatchObject({
@@ -67,7 +74,7 @@ describe('escouade-plugin of the SDK', () => {
 
   it('refuses a run program missing from the folder', () => {
     const dir = tmp();
-    fs.copyFileSync(path.join(EXAMPLES, 'slack', 'escouade-plugin.json'), path.join(dir, 'escouade-plugin.json'));
+    fs.writeFileSync(path.join(dir, 'escouade-plugin.json'), JSON.stringify(processManifest()));
     const r = cli(['validate', dir, '--first-party']);
     expect(r.code).toBe(1);
     expect(r.err).toContain('slack is not in the folder');
@@ -95,12 +102,13 @@ describe('escouade-plugin of the SDK', () => {
 
   it('packs the same bytes twice, programs executable, without node_modules, .git or packs', () => {
     const dir = tmp();
-    // What the Slack example runs, without its sources (and whatever npm left in it here).
-    for (const f of ['escouade-plugin.json', 'channels.json', 'slack', 'slack.cmd', 'dist/plugin.mjs']) {
+    // A plugin launched by scripts (the Slack example as it was in 1.x), without sources (and whatever npm left in it).
+    for (const f of ['channels.json', 'dist/plugin.mjs']) {
       fs.cpSync(path.join(EXAMPLES, 'slack', f), path.join(dir, f));
     }
-    fs.mkdirSync(path.join(dir, 'node_modules', 'x'), { recursive: true });
-    fs.writeFileSync(path.join(dir, 'node_modules', 'x', 'i.js'), '');
+    fs.writeFileSync(path.join(dir, 'escouade-plugin.json'), JSON.stringify(processManifest(), null, 2));
+    fs.writeFileSync(path.join(dir, 'slack'), '#!/bin/sh\nexec node "$(dirname "$0")/dist/plugin.mjs" "$@"\n');
+    fs.writeFileSync(path.join(dir, 'slack.cmd'), '@echo off\r\nnode "%~dp0dist\\plugin.mjs" %*\r\n');
     fs.mkdirSync(path.join(dir, '.git'));
     fs.writeFileSync(path.join(dir, '.git', 'HEAD'), '');
     fs.mkdirSync(path.join(dir, 'docs', 'a'.repeat(60), 'b'.repeat(60)), { recursive: true });

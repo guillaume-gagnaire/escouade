@@ -21,12 +21,12 @@ fn usage(lang: Lang) -> String {
         lang,
         "escouade-plugin : tester un plugin d'Escouade sans l'app.
 
-  escouade-plugin test <dossier> [--json] [--measure [n]] [--wasm <module>] [--offline]
+  escouade-plugin test <dossier> [--json] [--measure [n]] [--wasm <module>] [--offline] [--escouade <version>]
       Joue le banc de conformité : initialisation, version refusée, délais, un fait reçu,
       une décision, un secret, plantage, fermeture. Code de sortie 1 si un scénario échoue.
       --wasm joue ce module d'un plugin `run.js` (celui du store) au lieu de compiler son
       bundle ; --offline refuse tout fetch, quoi que dise permissions.network.
-  escouade-plugin validate <dossier>
+  escouade-plugin validate <dossier> [--escouade <version>]
       Lit le manifeste (escouade-plugin.json) et dit ce qui ne va pas, champ par champ ; pour un
       plugin `run.js`, que son bundle peut tourner en WASM.
   escouade-plugin build <dossier> [--out <dossier>] [--json]
@@ -44,7 +44,8 @@ fn usage(lang: Lang) -> String {
 Un plugin `run.js` tourne en WASM, sans Node : la Javy épinglée ({javy}) est téléchargée à son
 premier besoin et vérifiée par son SHA-256 (ESCOUADE_JAVY en nomme une autre).
 
-Options : --lang fr|en ; --first-party pour un plugin d'Escouade (plugins/<id>/ de son dépôt,
+Options : --lang fr|en ; --escouade <version> la version d'Escouade pour laquelle le plugin est jugé (celle de
+  ce binaire par défaut) ; --first-party pour un plugin d'Escouade (plugins/<id>/ de son dépôt,
   identifiants dev.escouade.*)
 ",
         "escouade-plugin: test an Escouade plugin without the app.
@@ -54,7 +55,7 @@ Options : --lang fr|en ; --first-party pour un plugin d'Escouade (plugins/<id>/ 
       a decision, a secret, crash, shutdown. Exit code 1 when a scenario fails.
       --wasm plays this module of a `run.js` plugin (the store's) instead of compiling its
       bundle; --offline refuses every fetch, whatever permissions.network says.
-  escouade-plugin validate <folder>
+  escouade-plugin validate <folder> [--escouade <version>]
       Reads the manifest (escouade-plugin.json) and says what is wrong, field by field; for a
       `run.js` plugin, that its bundle can run in WASM.
   escouade-plugin build <folder> [--out <folder>] [--json]
@@ -72,7 +73,8 @@ Options : --lang fr|en ; --first-party pour un plugin d'Escouade (plugins/<id>/ 
 A `run.js` plugin runs in WASM, without Node: the pinned Javy ({javy}) is downloaded the first
 time it is needed and checked by its SHA-256 (ESCOUADE_JAVY names another).
 
-Options: --lang fr|en; --first-party for a plugin of Escouade's own (plugins/<id>/ of its repository,
+Options: --lang fr|en; --escouade <version> the version of Escouade the plugin is judged for (this
+  build's by default); --first-party for a plugin of Escouade's own (plugins/<id>/ of its repository,
   ids dev.escouade.*)
 ",
         javy = wasm::JAVY_VERSION
@@ -85,14 +87,16 @@ fn version() -> String {
         "escouade-plugin {}
 javy {}
 escouade-js {}
-prelude {}",
+prelude {}
+wasm-since {}",
         env!("CARGO_PKG_VERSION"),
         wasm::JAVY_VERSION,
         match wasm::escouade_js() {
             Ok(_) => wasm::escouade_js_sha256().to_string(),
             Err(_) => "absent".into(),
         },
-        wasm::sha256(wasm::PRELUDE.as_bytes())
+        wasm::sha256(wasm::PRELUDE.as_bytes()),
+        wasm::SERVED_SINCE
     )
 }
 
@@ -136,6 +140,13 @@ pub fn main(args: Vec<String>) -> i32 {
         }
     };
     let flag = |name: &str| args.iter().any(|a| a == name);
+    // `--escouade <version>`: the version of Escouade the plugin is judged for (this build's by default).
+    let app_version = args
+        .iter()
+        .position(|a| a == "--escouade")
+        .and_then(|i| args.get(i + 1))
+        .cloned()
+        .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
     // A plugin of Escouade's own hand (`plugins/<id>/` of its repository, ESC-314) takes the ids
     // `dev.escouade.*`; one the app gives (INT-4), its programs too.
     let hand = if flag("--builtin") {
@@ -154,6 +165,7 @@ pub fn main(args: Vec<String>) -> i32 {
             let options = Options {
                 lang,
                 hand,
+                app_version: app_version.clone(),
                 measure: measure.unwrap_or(0),
                 module: args
                     .iter()
@@ -174,7 +186,7 @@ pub fn main(args: Vec<String>) -> i32 {
             }
             i32::from(!report.passed())
         }
-        "validate" => validate(&folder, lang, hand),
+        "validate" => validate(&folder, lang, hand, &app_version),
         "build" => {
             let out = args
                 .iter()
@@ -229,11 +241,11 @@ fn read_manifest(folder: &Path, lang: Lang, hand: manifest::Hand) -> Option<Mani
     }
 }
 
-fn validate(folder: &Path, lang: Lang, hand: manifest::Hand) -> i32 {
+fn validate(folder: &Path, lang: Lang, hand: manifest::Hand, app_version: &str) -> i32 {
     let Some(m) = read_manifest(folder, lang, hand) else {
         return 1;
     };
-    if let Some(why) = m.refusal(env!("CARGO_PKG_VERSION"), lang) {
+    if let Some(why) = m.refusal(app_version, lang) {
         eprintln!("✗ {why}");
         return 1;
     }

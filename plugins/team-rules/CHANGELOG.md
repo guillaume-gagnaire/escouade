@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.0 (2026-11-02)
+
+- The program runs in WASM inside Escouade (`"run": { "js": "dist/plugin.mjs" }`): no Node needed on the user's machine, and
+  the launch scripts `team-rules` and `team-rules.cmd` are gone. It reaches nothing. Node 22.18 or later is only for building and testing it.
+- Needs Escouade 2.2.0 or later (`escouade.min`); the 1.x versions stay on the store for older apps. The code does not change.
+
 ## 1.1.1 (2026-11-01)
 
 - A line with `--output` is never allowed: with it, `git diff` and `git log` write a file of the agent's choosing,

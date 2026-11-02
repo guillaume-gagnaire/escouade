@@ -2,7 +2,7 @@
 title: "Les programmes JS/TS des plugins, en WASM sans Node"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §5 (ESC-319, ESC-320, ESC-321, ESC-322, ESC-323)","docs/STORE.md §3.3, §3.4, §4.2, §5.2","prototypes/wasm-plugins/","Demande de l'utilisateur du 2026-11-01 : « je veux pas rendre node obligatoire… chaque plugin ts qui est soumis sera buildé en wasm »","Revue d'ESC-319 par le chef (2026-11-01) : l'adresse résolue","Consigne du chef au lancement d'ESC-323 (2026-11-01) : pas de socket Docker","Consignes du chef au lancement d'ESC-324 (2026-11-01) : le banc de run.js dans l'hôte WASM","src-tauri/src/plugins/wasm.rs","src-tauri/src/plugins/store.rs","src-tauri/src/plugins/files.rs","src-tauri/src/plugins/bench/","store/server/utils/compile.ts","store/server/utils/checks.ts","store/scripts/plugin-review/","sdk/plugin/src/index.ts","sdk/plugin/bin/escouade-plugin.mjs","schemas/plugin-protocol-1.json"]
-tickets: ["ESC-319","ESC-320","ESC-321","ESC-322","ESC-323","ESC-324"]
+tickets: ["ESC-319","ESC-320","ESC-321","ESC-322","ESC-323","ESC-324","ESC-326"]
 decisions: [29,32,36,38,43,46]
 compared: null
 ---
@@ -66,3 +66,10 @@ Un plugin dont le programme est écrit en JavaScript ou en TypeScript tourne **d
 
 - Les plugins `dev.escouade.*` écrits en Rust (harness, sources, hébergeurs) restent des programmes natifs, construits et signés avec l'app.
 - `dev.escouade.slack` et `dev.escouade.team-rules` passent en 2.0.0 sur `run.js`, revus, signés et publiés par le chef ; leurs 1.x restent pour les apps d'avant. Leurs `dist/plugin.mjs` sont reconstruits avec le SDK 0.3 (ESC-321), tournent dans le runtime de l'app et passent le banc d'`escouade-plugin` en WASM, sans Node.
+
+## La migration de Slack et de Règles de l'équipe (ESC-326)
+
+- `dev.escouade.slack` et `dev.escouade.team-rules` sont en **2.0.0** dans le dépôt : `"run": { "js": "dist/plugin.mjs" }` à la place de `command` et `windows`, leurs scripts de lancement (`slack`, `slack.cmd`, `team-rules`, `team-rules.cmd`) retirés, `engines.node` réservé au build et aux tests, `escouade.min` à **2.2.0** (la 2.1.x ne sert pas le WASM). Leur code (`src/`) et leur `dist/plugin.mjs` ne changent pas : le bundle fait avec le SDK 0.3 est identique. Slack n'atteint que `slack.com`, appliqué par l'hôte.
+- Un test de l'app les joue dans le runtime WASM avec un PATH sans `node` : Règles de l'équipe décide, Slack poste vers un faux Slack local (jamais slack.com).
+- **`escouade-plugin validate|test --escouade <version>`** juge le plugin pour cette version d'Escouade au lieu de celle du binaire, et `escouade-plugin --version` dit `wasm-since <version>` (la première version qui sert le WASM, une constante, `plugins::wasm::SERVED_SINCE`). `plugins/ci.mjs` lit cette ligne et juge les plugins du dépôt pour cette version : la CI de main passe avant que l'app ne soit bumpée en 2.2.0, sans écrire la version en dur.
+- Le chef pose les étiquettes `plugins/slack/v2.0.0` et `plugins/team-rules/v2.0.0`, soumet, revoit (la revue recompile), signe et publie ; les 1.x restent au store pour les apps d'avant. Le store de production ne compile pas encore les `run.js` (pas d'`escouade-plugin` dans son image) : la publication peut attendre.

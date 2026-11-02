@@ -45,6 +45,20 @@ export function exampleFiles(name, over = {}) {
     }
   };
   walk(root);
+  // slack and team-rules are `run.js` plugins now (2.0.0, ESC-326); these fixtures stand for the process plugins of the
+  // 1.x era (a launch script, an app of 2.1), which the store and the app still serve and judge.
+  if (name === 'slack' || name === 'team-rules') {
+    const m = JSON.parse(String(out['escouade-plugin.json']));
+    m.run = { command: name, windows: `${name}.cmd` };
+    m.escouade = { ...m.escouade, min: '2.1.0' };
+    out['escouade-plugin.json'] = Buffer.from(JSON.stringify(m, null, 2));
+    out[name] = Buffer.from(`#!/bin/sh
+exec node "$(dirname "$0")/dist/plugin.mjs" "$@"
+`);
+    out[`${name}.cmd`] = Buffer.from(`@echo off
+node "%~dp0dist\\plugin.mjs" %*
+`);
+  }
   if (Object.keys(over).length) {
     const m = { ...JSON.parse(String(out['escouade-plugin.json'])), ...over };
     out['escouade-plugin.json'] = Buffer.from(JSON.stringify(m, null, 2));

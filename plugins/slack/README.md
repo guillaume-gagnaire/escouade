@@ -22,7 +22,7 @@ escaped: `<!channel>` coming from a public issue is shown, never a mention.
 - read the facts `ticket.column` and `agent.status`;
 - reach `slack.com`;
 - keep one secret, `token`;
-- run its program, `dist/plugin.mjs` (Node 22.18 or later), as this folder holds it.
+- run its program, `dist/plugin.mjs` in WASM, as this folder holds it: no Node on the machine (Node 22.18 or later only builds and tests it).
 
 ## What is in this folder
 
