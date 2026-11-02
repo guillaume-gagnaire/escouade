@@ -32,7 +32,8 @@ test.afterAll(async () => {
 /** github.com/acme/demo, whose pushes land in a bare repository of the test: that repository. */
 function remote(app: { root: string; repo: string }) {
   const bare = path.join(app.root, 'origin.git');
-  git(app.root, 'init', '-q', '--bare', bare);
+  // On main, whatever the machine's init.defaultBranch: a clone of it then checks main out (the CI's is master).
+  git(app.root, 'init', '-q', '--bare', '-b', 'main', bare);
   const url = 'https://github.com/acme/demo.git';
   git(app.repo, 'remote', 'add', 'origin', url);
   git(app.repo, 'config', `url.${bare.replace(/\\/g, '/')}.insteadOf`, url);
@@ -43,7 +44,7 @@ function remote(app: { root: string; repo: string }) {
 /** Merges `branch` into main on « GitHub » (the bare repository), as its merge button would: the merge commit. */
 function mergeOnHost(root: string, bare: string, branch: string): string {
   const clone = path.join(root, 'host-clone');
-  git(root, 'clone', '-q', bare, clone);
+  git(root, 'clone', '-q', '-b', 'main', bare, clone);
   const who = ['-c', 'user.name=Ada', '-c', 'user.email=ada@example.com'];
   git(clone, ...who, 'merge', '-q', '--no-ff', '-m', `Merge ${branch}`, `origin/${branch}`);
   git(clone, 'push', '-q', 'origin', 'main');
