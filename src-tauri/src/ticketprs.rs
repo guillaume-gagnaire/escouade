@@ -10,7 +10,7 @@ use crate::core::Core;
 use crate::forge::{Check, CheckState, Forge, PrState, PullRequest, RepoRef};
 use crate::git;
 use crate::i18n::{self, Lang};
-use crate::model::{now_ms, Column, Service, Ticket, TicketPr};
+use crate::model::{now_ms, BoardSettings, Column, FailedCheck, Service, Ticket, TicketPr};
 use anyhow::{anyhow, bail, Result};
 use std::collections::BTreeMap;
 use std::sync::atomic::Ordering;
@@ -141,13 +141,22 @@ fn read_into(tp: &mut TicketPr, pr: &PullRequest, checks: Option<&[Check]>, now:
                 .iter()
                 .filter(|c| c.state == CheckState::Failure)
                 .count() as u32;
+            tp.failed = failed_of(list);
         }
         None if pr.checks.is_none() => {
             tp.checks_total = 0;
             tp.checks_failed = 0;
+            tp.failed.clear();
         }
         // Not read this time: the counts of the last reading stay.
         None => {}
+    }
+    // Its CI runs again (or passed) since a fix: the next failure goes to its agent again.
+    if pr.checks != Some(CheckState::Failure) {
+        tp.awaiting_ci = false;
+    }
+    if pr.checks == Some(CheckState::Success) {
+        tp.fix_error = None;
     }
     tp.approvals = pr.approvals;
     tp.changes_requested = pr.changes_requested;
@@ -273,6 +282,154 @@ pub fn finished_anyway_outcome(lang: Lang, word: &str, number: u64) -> String {
         "✓ Terminé quand même · {word} #{number} fermée",
         "✓ Finished anyway · {word} #{number} closed"
     )
+}
+
+// ---------- Its CI fixed by its agent (ESC-60) ----------
+
+/// The checks of a reading that failed, each with whether its host keeps its log.
+pub fn failed_of(list: &[Check]) -> Vec<FailedCheck> {
+    list.iter()
+        .filter(|c| c.state == CheckState::Failure)
+        .map(|c| FailedCheck {
+            name: c.name.clone(),
+            url: c.url.clone(),
+            log: c.job.is_some(),
+        })
+        .collect()
+}
+
+/// Its agent fixes its CI now: it holds a place of the board's agents in parallel.
+pub fn fixing(t: &Ticket) -> bool {
+    t.column == Column::Pr && t.pr.as_ref().is_some_and(|p| p.fixing.is_some())
+}
+
+/// Its CI may go to its agent (« L'agent corrige »): « En revue », its pull request open with
+/// failed checks, an agent, and no fix under way.
+pub fn fixable(t: &Ticket) -> bool {
+    t.column == Column::Pr
+        && t.agent_id.is_some()
+        && t.pr.as_ref().is_some_and(|p| {
+            !p.closed
+                && p.state == PrState::Open
+                && p.checks == Some(CheckState::Failure)
+                && p.fixing.is_none()
+        })
+}
+
+/// The autopilot gives it by itself: fixable, not given already since it last failed, within the
+/// ticket's loops, and not a teammate's.
+pub fn auto_fixable(t: &Ticket) -> bool {
+    fixable(t)
+        && t.blocked.is_none()
+        && !crate::sharing::theirs(t)
+        && t.pr
+            .as_ref()
+            .is_some_and(|p| !p.awaiting_ci && p.fixes < t.max_loops)
+}
+
+/// The tickets of `project_id` whose agents are at work and hold a place: « En cours » and not
+/// blocked (not on a teammate's machine), and « En revue » while their agent fixes their CI.
+pub fn busy(tickets: &[Ticket], project_id: &str) -> usize {
+    tickets
+        .iter()
+        .filter(|t| t.project_id == project_id)
+        .filter(|t| {
+            (t.column == Column::Doing && t.blocked.is_none() && !crate::sharing::elsewhere(t))
+                || fixing(t)
+        })
+        .count()
+}
+
+/// The tickets « En revue » of `project_id` whose CI the autopilot gives to their agent now, in
+/// the board's order, while places are free.
+pub fn to_fix(tickets: &[Ticket], project_id: &str, s: &BoardSettings) -> Vec<String> {
+    if !s.autopilot {
+        return Vec::new();
+    }
+    let free = (s.max_parallel.clamp(1, 6) as usize).saturating_sub(busy(tickets, project_id));
+    tickets
+        .iter()
+        .filter(|t| t.project_id == project_id && auto_fixable(t))
+        .take(free)
+        .map(|t| t.id.clone())
+        .collect()
+}
+
+/// A fix begins: counted (a loop of the ticket's), and what the last one left goes.
+pub fn fix_begins(t: &mut Ticket, from: Option<String>, now: i64) {
+    if let Some(tp) = t.pr.as_mut() {
+        tp.fixing = Some(now);
+        tp.fixes += 1;
+        tp.awaiting_ci = false;
+        tp.fix_error = None;
+        tp.fix_from = from;
+        t.loops += 1;
+    }
+}
+
+/// A fix that did not go to its end: the card says why, the autopilot does not give the same
+/// failure again (« L'agent corrige » does, by hand).
+pub fn fix_failed(t: &mut Ticket, why: String) {
+    if let Some(tp) = t.pr.as_mut() {
+        tp.fixing = None;
+        tp.fix_from = None;
+        tp.awaiting_ci = true;
+        tp.fix_error = Some(why);
+    }
+}
+
+/// Fixed and pushed: back « En revue » as before, its CI to run again.
+pub fn fix_done(t: &mut Ticket) {
+    if let Some(tp) = t.pr.as_mut() {
+        tp.fixing = None;
+        tp.fix_from = None;
+        tp.awaiting_ci = true;
+        tp.fix_error = None;
+    }
+}
+
+/// What the end of its agent's turn does to a ticket whose CI it fixes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FixEnd {
+    /// Taken up by itself (the usage limit's resume, a sign-in): the fix goes on.
+    Wait,
+    /// Its turn finished: what it did is pushed.
+    Finished,
+    /// Stopped or failed: why.
+    Stopped(String),
+}
+
+pub fn fix_end(end: &crate::board::TurnEnd) -> FixEnd {
+    use crate::board::TurnEnd;
+    match end {
+        TurnEnd::Limited | TurnEnd::SignIn => FixEnd::Wait,
+        TurnEnd::Finished(_) => FixEnd::Finished,
+        TurnEnd::Interrupted => FixEnd::Stopped(crate::board::interrupted(i18n::ui())),
+        TurnEnd::Error(e) => FixEnd::Stopped(crate::board::error_blocked(
+            i18n::ui(),
+            &crate::board::first_line(e),
+        )),
+    }
+}
+
+pub fn nothing_fixed(lang: Lang) -> String {
+    tr_in!(
+        lang,
+        "L'agent n'a rien commité : la CI reste en échec",
+        "The agent committed nothing: the CI still fails"
+    )
+}
+
+pub fn not_committed(lang: Lang) -> String {
+    tr_in!(
+        lang,
+        "Des changements de l'agent ne sont pas commités : rien n'est poussé",
+        "Some of the agent’s changes aren’t committed: nothing was pushed"
+    )
+}
+
+pub fn not_pushed(lang: Lang, why: &str) -> String {
+    tr_in!(lang, "Push impossible : {why}", "Couldn’t push: {why}")
 }
 
 /// Where a followed pull request is read: its instance's host, its host's kind, its repository
@@ -409,6 +566,8 @@ impl<R: tauri::Runtime> Core<R> {
         match news {
             Ok(News::Merged) => self.ticket_pr_merged(id).await,
             Ok(News::Closed) => self.notify_ticket(id, false),
+            // Its CI failed: with the autopilot, its agent fixes it (`to_fix`, ESC-60).
+            _ if self.ticket(id).is_ok_and(|t| auto_fixable(&t)) => self.schedule(),
             _ => {}
         }
     }
@@ -501,6 +660,251 @@ impl<R: tauri::Runtime> Core<R> {
         })?;
         self.schedule();
         Ok(())
+    }
+}
+
+impl<R: tauri::Runtime> Core<R> {
+    /// « L'agent corrige » on a ticket « En revue » whose CI failed (ESC-60), by hand or by the
+    /// autopilot: its agent gets the failed checks and the end of their logs, restored first with
+    /// its worktree made again from its branch when it went at the validation. Refused when there
+    /// is nothing to fix or a fix is under way; what fails once it began is said on the card too.
+    pub async fn ticket_pr_fix_ci(self: &Arc<Self>, id: &str) -> Result<()> {
+        let t = self.ticket(id)?;
+        let Some(tp) = t.pr.clone().filter(|_| t.column == Column::Pr) else {
+            bail!(tr!(
+                "Ce ticket n’est pas en revue.",
+                "This ticket isn’t in review."
+            ));
+        };
+        if tp.fixing.is_some() {
+            bail!(tr!(
+                "Son agent corrige déjà la CI.",
+                "Its agent is already fixing the CI."
+            ));
+        }
+        let Some(agent_id) = t.agent_id.clone().filter(|a| self.agent(a).is_ok()) else {
+            bail!(tr!(
+                "Ce ticket n’a plus d’agent pour corriger sa CI.",
+                "This ticket no longer has an agent to fix its CI."
+            ));
+        };
+        if !fixable(&t) {
+            let (word, n) = (&tp.word, tp.number);
+            bail!(tr!(
+                "La CI de la {word} #{n} n'a aucun check en échec.",
+                "The CI of {word} #{n} has no failed check."
+            ));
+        }
+        if self
+            .live_agent(&agent_id)
+            .is_some_and(|m| m.status.is_active())
+        {
+            bail!(tr!(
+                "Son agent travaille : attends la fin de son tour.",
+                "Its agent is at work: wait for the end of its turn."
+            ));
+        }
+        self.edit_ticket(id, |x| {
+            // Checked again under the lock: a second click, or the autopilot meanwhile.
+            if !fixable(x) || x.agent_id.as_deref() != Some(&agent_id) {
+                bail!(tr!(
+                    "Ce ticket a changé entre-temps.",
+                    "This ticket changed meanwhile."
+                ));
+            }
+            fix_begins(x, None, now_ms());
+            Ok(())
+        })?;
+        match self.fix_ci_run(id, &t, &tp, &agent_id).await {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                let why = board::first_line(&format!("{e:#}"));
+                let _ = self.edit_ticket(id, |x| {
+                    if fixing(x) {
+                        fix_failed(x, why.clone());
+                    }
+                    Ok(())
+                });
+                self.schedule();
+                Err(e)
+            }
+        }
+    }
+
+    async fn fix_ci_run(
+        self: &Arc<Self>,
+        id: &str,
+        t: &Ticket,
+        tp: &TicketPr,
+        agent_id: &str,
+    ) -> Result<()> {
+        let project = self.project(&t.project_id)?;
+        let repo = RepoRef {
+            namespace: tp.namespace.clone(),
+            name: tp.name.clone(),
+        };
+        let (client, _) = self.forge_client(&tp.host).await?;
+        let checks = client.checks(&repo, tp.number).await?;
+        let mut failed = Vec::new();
+        for c in checks
+            .into_iter()
+            .filter(|c| c.state == CheckState::Failure)
+        {
+            // A CI of another kind keeps no log here: its name and its address alone.
+            let log = match &c.job {
+                Some(job) => client.job_log(&repo, job).await.ok(),
+                None => None,
+            };
+            failed.push((c.name, c.url, log));
+        }
+        if failed.is_empty() {
+            let (word, n) = (&tp.word, tp.number);
+            bail!(tr!(
+                "La CI de la {word} #{n} n'a aucun check en échec.",
+                "The CI of {word} #{n} has no failed check."
+            ));
+        }
+        // Its branch gone from the project (deleted by hand): made again from its remote.
+        if !git::branch_exists(&project.path, &tp.branch).await {
+            if let Err(e) = git::fetch_branch(&project.path, &tp.branch).await {
+                bail!(tr!(
+                    "Branche {b} introuvable, ici comme sur le dépôt distant : {e:#}",
+                    "Branch {b} not found, here or on the remote: {e:#}",
+                    b = tp.branch
+                ));
+            }
+        }
+        let from = git::commit_of(&project.path, &tp.branch).await.ok();
+        self.edit_ticket(id, |x| {
+            if let Some(p) = x.pr.as_mut().filter(|p| p.fixing.is_some()) {
+                p.fix_from = from.clone();
+            }
+            Ok(())
+        })?;
+        // Archived at the validation: restored, its worktree made again from its branch.
+        let archived = self.agent(agent_id)?.lock().meta.archived;
+        if archived {
+            self.archive_agent(agent_id, false).await?;
+        }
+        let wt = self.agent(agent_id)?.lock().meta.worktree.clone();
+        if !wt
+            .as_ref()
+            .is_some_and(|w| std::path::Path::new(&w.path).is_dir())
+        {
+            bail!(tr!(
+                "Worktree non recréé depuis {b}",
+                "Worktree not recreated from {b}",
+                b = tp.branch
+            ));
+        }
+        let pr = PullRequest {
+            number: tp.number,
+            url: tp.url.clone(),
+            ..Default::default()
+        };
+        let message =
+            crate::agentprs::checks_message(self.lang().claude, &tp.word, &pr, &tp.branch, &failed);
+        self.send_message(agent_id, message, Vec::new()).await
+    }
+
+    /// The end of the turn of an agent that fixes its ticket's CI (ESC-60), when it is one: what it
+    /// committed is pushed (it may have pushed already), the pull request read again, and the
+    /// ticket is back « En revue » as before, its agent archived again and its worktree removed
+    /// as after the validation. Stopped or failed, the card says why and the agent stays
+    /// restored. False when the agent fixes no CI.
+    pub(crate) async fn ci_fix_turn_ended(
+        self: &Arc<Self>,
+        ticket_id: &str,
+        agent_id: &str,
+        end: &board::TurnEnd,
+    ) -> bool {
+        let Ok(t) = self.ticket(ticket_id) else {
+            return false;
+        };
+        if !fixing(&t) || t.agent_id.as_deref() != Some(agent_id) {
+            return false;
+        }
+        let why = match fix_end(end) {
+            FixEnd::Wait => return true,
+            FixEnd::Stopped(why) => Some(why),
+            FixEnd::Finished => None,
+        };
+        let tp = t.pr.clone().unwrap_or_default();
+        let wt = self
+            .agent(agent_id)
+            .ok()
+            .and_then(|h| h.lock().meta.worktree.clone());
+        let why = match (why, &wt) {
+            (Some(why), _) => Some(why),
+            (None, None) => Some(not_pushed(i18n::ui(), "worktree")),
+            (None, Some(wt)) => self.push_fix(&tp, wt).await.err(),
+        };
+        let done = why.is_none();
+        let _ = self.edit_ticket(ticket_id, |x| {
+            if fixing(x) && x.agent_id.as_deref() == Some(agent_id) {
+                match &why {
+                    Some(why) => fix_failed(x, why.clone()),
+                    None => fix_done(x),
+                }
+            }
+            Ok(())
+        });
+        if done {
+            self.wake_ticket_prs();
+            self.fix_cleanup(&t, agent_id, wt).await;
+        } else {
+            self.notify_ticket(ticket_id, false);
+        }
+        self.schedule();
+        true
+    }
+
+    /// What its agent did goes to the host: committed (else nothing is pushed), new since the fix
+    /// began, and pushed (again: it may have pushed it itself).
+    async fn push_fix(&self, tp: &TicketPr, wt: &crate::model::Worktree) -> Result<(), String> {
+        let lang = i18n::ui();
+        if !git::status(&wt.path)
+            .await
+            .is_ok_and(|s| s.entries.is_empty())
+        {
+            return Err(not_committed(lang));
+        }
+        let now = git::commit_of(&wt.path, "HEAD").await.ok();
+        if now.is_some() && now == tp.fix_from {
+            return Err(nothing_fixed(lang));
+        }
+        git::push_branch(&wt.path, &wt.branch)
+            .await
+            .map(|_| ())
+            .map_err(|e| not_pushed(lang, &board::first_line(&format!("{e:#}"))))
+    }
+
+    /// Fixed and pushed: its agent archived again, and its worktree removed when the board cleans
+    /// up (its branch stays: the pull request's), as after its validation.
+    async fn fix_cleanup(
+        self: &Arc<Self>,
+        t: &Ticket,
+        agent_id: &str,
+        wt: Option<crate::model::Worktree>,
+    ) {
+        let Ok(project) = self.project(&t.project_id) else {
+            return;
+        };
+        let (proc, ports) = match self.agent(agent_id) {
+            Ok(h) => {
+                let rt = h.lock();
+                (rt.proc.clone(), rt.meta.port_base)
+            }
+            Err(_) => return,
+        };
+        if let Err(e) = self.archive_agent(agent_id, true).await {
+            log::warn!("ticket {}: its agent was not archived: {e:#}", t.key);
+            return;
+        }
+        if let (true, Some(wt)) = (project.board.cleanup, wt) {
+            self.remove_worktree_of(t, &project, &wt, proc, ports, true)
+                .await;
+        }
     }
 }
 

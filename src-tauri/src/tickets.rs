@@ -1684,6 +1684,18 @@ impl<R: Runtime> Core<R> {
                     self.refuse_start(&p, &t.id, StartRefusal::Held(held));
                 }
             }
+            // A ticket « En revue » whose CI failed goes back to its agent first (ESC-60): it holds
+            // a place while its agent fixes it, as one « En cours ».
+            let fixes = crate::ticketprs::to_fix(&self.tickets.read(), &p.id, &p.board);
+            for id in fixes {
+                let Ok(t) = self.ticket(&id) else { continue };
+                if self.ticket_hold(&p, &t, engine_of(&t)).is_some() {
+                    continue;
+                }
+                if let Err(e) = self.ticket_pr_fix_ci(&id).await {
+                    log::info!("ticket {}: its CI not given to its agent: {e:#}", t.key);
+                }
+            }
             let ids = {
                 let tickets = self.tickets.read().clone();
                 let mut held: HashMap<(EngineId, bool, Option<String>), bool> = HashMap::new();
@@ -2296,6 +2308,10 @@ impl<R: Runtime> Core<R> {
             }
             end => end,
         };
+        // Its agent fixed the CI of its pull request (ESC-60): the ticket stays « En revue ».
+        if self.ci_fix_turn_ended(&ticket_id, agent_id, &end).await {
+            return;
+        }
         let lang = self.lang().claude;
         let mut reported = None;
         let Ok(next) = self.edit_ticket(&ticket_id, |t| {
@@ -2587,7 +2603,7 @@ impl<R: Runtime> Core<R> {
     // ---------- recovery and manual management ----------
 
     /// The agent, unless it is gone or archived.
-    fn live_agent(&self, id: &str) -> Option<AgentMeta> {
+    pub(crate) fn live_agent(&self, id: &str) -> Option<AgentMeta> {
         let meta = self.agent(id).ok()?.lock().meta.clone();
         (!meta.archived).then_some(meta)
     }
@@ -2627,6 +2643,23 @@ impl<R: Runtime> Core<R> {
                 (board::Recovery::Again, _) => self.start_over(&ticket_id, agent_id.as_deref()),
                 _ => {}
             }
+        }
+        // A fix of a pull request's CI cut by the app's stop (ESC-60): the card says so, and
+        // « L'agent corrige » gives it again.
+        let fixes: Vec<String> = self
+            .tickets
+            .read()
+            .iter()
+            .filter(|t| crate::ticketprs::fixing(t))
+            .map(|t| t.id.clone())
+            .collect();
+        for id in fixes {
+            let _ = self.edit_ticket(&id, |t| {
+                if crate::ticketprs::fixing(t) {
+                    crate::ticketprs::fix_failed(t, board::interrupted(i18n::ui()));
+                }
+                Ok(())
+            });
         }
         self.schedule();
     }
@@ -3361,7 +3394,7 @@ impl<R: Runtime> Core<R> {
     /// Windows a live process keeps the folder. The project's teardown then runs in it (`ports`:
     /// those its agent held). The removal is tried again for a few seconds; when it still fails,
     /// the ticket's outcome says the worktree is kept.
-    async fn remove_worktree_of(
+    pub(crate) async fn remove_worktree_of(
         &self,
         t: &Ticket,
         project: &Project,

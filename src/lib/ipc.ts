@@ -631,6 +631,7 @@ export const api = {
   /** A ticket whose pull request was closed without a merge: done all the same, or back to do. */
   ticketFinishAnyway: (id: string) => invoke<void>('ticket_finish_anyway', { id }),
   ticketPrBackToTodo: (id: string) => invoke<void>('ticket_pr_back_to_todo', { id }),
+  ticketPrFixCi: (id: string) => invoke<void>('ticket_pr_fix_ci', { id }),
   boardSet: (projectId: string, settings: BoardSettings) => invoke<Project>('board_set', { projectId, settings }),
   /** « Reprendre maintenant »: the autopilot's pause (a quota, a usage limit) is lifted. */
   autopilotResume: () => invoke<void>('autopilot_resume'),

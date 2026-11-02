@@ -107,7 +107,8 @@ function seed() {
       ],
       // The pull requests opened by the app (ESC-64), from #101: open, their CI running, until POST
       // /__github/pulls/<n> sets what a test wants of them ({ checks: 'FAILURE', changesRequested: true, … }), the
-      // repository it is in (`repo`, acme/demo by default) and the one of its branch (`headRepo`: a fork's, ESC-238).
+      // repository it is in (`repo`, acme/demo by default) and the one of its branch (`headRepo`: a fork's, ESC-238);
+      // `thirdParty`: a failed status of another CI (ci/jenkins), which keeps no log (ESC-60).
       pulls: [],
       // The forks and the repository each was forked from (`repository.parent`).
       forks: { 'ada/demo': 'acme/demo', 'bob/demo': 'acme/demo' },
@@ -809,8 +810,14 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
     m = p.match(/^\/github\/repos\/acme\/demo\/commits\/sha(\d+)\/(check-runs|status)$/);
     if (m) {
       const pull = g.pulls.find((x) => x.number === Number(m[1]));
-      if (m[2] === 'status') return send(200, { statuses: [] });
       const failed = pull?.checks === 'FAILURE';
+      if (m[2] === 'status')
+        return send(200, {
+          statuses:
+            failed && pull?.thirdParty
+              ? [{ context: 'ci/jenkins', state: 'failure', target_url: 'https://jenkins.example.com/job/7' }]
+              : [],
+        });
       const running = pull?.checks === 'PENDING';
       // When they ran (ESC-305): `test` 2 min 30 s, `lint` 12 s.
       const at = (s) => new Date(Date.parse('2026-10-30T10:00:00Z') + s * 1000).toISOString();

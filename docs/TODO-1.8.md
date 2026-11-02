@@ -1211,11 +1211,12 @@ But : Escouade suit le travail des agents après le push, jusqu'à la production
   - la branche locale part si le réglage le dit, et un fetch met la base à jour ;
   - les tickets qui l'attendent partent alors, sur une cible qui a son code.
 - [x] **Fermée sans merge** : le ticket est bloqué (« PR #12 fermée sans merge »), avec « Remettre à faire » et « Terminer quand même ».
-- [ ] **CI en échec** : « L'agent corrige ».
-  - Le ticket repart chez son agent, restauré depuis sa branche si son worktree n'est plus là.
-  - L'agent reçoit le nom des jobs en échec et la fin de leurs journaux (80 lignes par job, comme les tests).
-  - Il pousse, la PR se met à jour, et le ticket revient « En revue ».
-  - Avec le pilote auto, ça part seul, dans la limite des boucles du ticket (décidé le 2026-10-14). Sans lui, un bouton sur la carte.
+- [x] **CI en échec** (ESC-60, `ticketprs.rs`) : « L'agent corrige ».
+  - Le ticket reste « En revue » ; son agent, archivé à la validation, est restauré et son worktree recréé depuis sa branche (une branche supprimée du projet est reprise du dépôt distant).
+  - L'agent reçoit le nom des jobs en échec et la fin de leurs journaux (`agentprs::checks_message`, comme pour les agents ordinaires) ; une CI tierce sans journal : la carte le dit, son nom et son adresse seuls partent.
+  - À la fin de son tour, Escouade pousse (l'agent a pu le faire), la PR est relue, le ticket revient « En revue » et l'agent est archivé de nouveau. Rien de commité, des changements non commités, un push refusé, un tour interrompu : la carte le dit, l'agent reste restauré.
+  - Avec le pilote auto, ça part seul quand une place est libre, dans la limite des boucles du ticket (décidé le 2026-10-14), et jamais deux fois pour le même échec (il attend que la CI tourne de nouveau). Sans lui, le bouton sur la carte.
+  - Reste : essai réel sur GitHub (ESC-53, ESC-70) ; GitLab, Bitbucket Cloud et Gitea/Forgejo d'après leurs faux serveurs, à essayer en vrai plus tard. Un ticket dont l'agent a été supprimé ne peut pas faire corriger sa CI.
 - [ ] **Changements demandés** : « L'agent traite les retours ».
   - Escouade le propose dès que des retours arrivent (décidé le 2026-10-14) : une notification, et sur la carte, le nombre de retours avec « L'agent corrige les retours ». L'agent ne part qu'après ce clic, même avec le pilote auto.
   - Il reçoit les commentaires non résolus arrivés depuis le dernier push : fichier, ligne, extrait du diff, auteur, texte.

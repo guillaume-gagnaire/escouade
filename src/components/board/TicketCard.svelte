@@ -36,7 +36,7 @@
   import { docsStore } from '../../lib/docs.svelte';
   import { pageTitle } from '../../lib/planning';
   import { prIcon, prTone } from '../../lib/prs';
-  import { asPull, ciLine, prErrorLine, prFacts, prStateKey, prStateWord } from '../../lib/ticket-prs';
+  import { asPull, canFixCi, ciLine, fixesSpent, noLogLine, prErrorLine, prFacts, prStateKey, prStateWord } from '../../lib/ticket-prs';
 
   const uid = $props.id();
 
@@ -488,6 +488,27 @@
       >
     {/if}
     {#if down}<span class="lost" role="status" data-pr-error use:tip={{ text: down, cut: true }}>{down}</span>{/if}
+    <!-- Its CI failed (ESC-60): its agent fixes it, by itself with the autopilot (within its loops), else on « L'agent corrige ». -->
+    {@const noLog = noLogLine(p)}
+    {#if noLog}<span class="prfacts" data-pr-nolog use:tip={{ text: noLog, cut: true }}>{noLog}</span>{/if}
+    {#if p.fixing}
+      <span class="fixing" role="status" data-pr-fixing><i class="dot"></i>{t('board.pr.fixing')}</span>
+    {:else if p.fixError}
+      <span class="lost" role="status" data-pr-fix-error use:tip={{ text: p.fixError, cut: true }}>{p.fixError}</span>
+    {/if}
+    {#if canFixCi(ticket)}
+      <div class="row">
+        <button
+          class="btn small"
+          data-pr-fix
+          use:tip={t('board.pr.fixCiTitle', { word: p.word })}
+          onclick={(e) => act(e, () => app.run(api.ticketPrFixCi(ticket.id)))}>{t('board.pr.fixCi')}</button
+        >
+        {#if fixesSpent(ticket, s.autopilot)}<span class="prfacts"
+            >{t('board.pr.loopsSpent', { count: p.fixes, max: ticket.maxLoops })}</span
+          >{/if}
+      </div>
+    {/if}
   {/if}
 
   {#if ticket.column === 'done' && outcome}
@@ -1080,6 +1101,13 @@
   }
   .prfacts .conflicting {
     color: var(--del);
+  }
+  .fixing {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--run);
+    font-size: 12px;
   }
   /* The last line, under a hairline: a dot of the agent's state, what it does, its cost. */
   .act {

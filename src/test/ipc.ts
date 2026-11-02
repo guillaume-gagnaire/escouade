@@ -603,5 +603,10 @@ export const ticketPr = (over: Partial<TicketPr> = {}): TicketPr => ({
   error: null,
   errorSince: null,
   closed: false,
+  failed: [],
+  fixing: null,
+  fixes: 0,
+  awaitingCi: false,
+  fixError: null,
   ...over,
 });

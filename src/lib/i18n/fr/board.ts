@@ -34,6 +34,13 @@ export default {
     error: '{error} · depuis {since}',
     finishAnyway: 'Terminer quand même',
     backToTodo: 'Remettre à faire',
+    /** Its CI failed (ESC-60): its agent gets the failed jobs and the end of their logs. */
+    fixCi: "L'agent corrige",
+    fixCiTitle: 'Renvoyer à son agent les jobs en échec et la fin de leurs journaux ; il pousse, la {word} se met à jour',
+    fixing: "L'agent corrige la CI…",
+    /** A CI of another kind gives a status and an address alone. */
+    noLog: { one: '{names} : CI tierce, sans journal', other: '{names} : CI tierces, sans journal' },
+    loopsSpent: 'Boucles épuisées ({count}/{max}) : le pilote auto ne la renvoie plus',
   },
 
   // The header of the board.

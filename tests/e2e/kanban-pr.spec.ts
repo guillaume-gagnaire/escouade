@@ -105,3 +105,63 @@ test('a ticket’s pull request opens by the API, waits « En revue » with its 
   await expect(col('Terminé').locator('.card .outcome [data-icon="merge"]')).toHaveCount(1);
   await expect(col('En revue').locator('.card')).toHaveCount(0);
 });
+
+test('a failed CI goes back to the ticket’s agent: « L’agent corrige » by hand, by itself with the autopilot (ESC-60)', async ({ app }) => {
+  test.setTimeout(300_000);
+  const { page } = app;
+  remote(app);
+  await addProject(page, app.repo, { firstAgent: false });
+  await connectGithub(page);
+  await page.getByRole('button', { name: /^Kanban/ }).click();
+  const col = (name: string) => page.getByRole('region', { name });
+  await page.getByRole('button', { name: /Après validation/ }).click();
+  const settings = page.getByRole('dialog', { name: 'Réglages' });
+  await settings.getByRole('radio', { name: /Ouvrir une pull request/ }).click();
+  await settings.getByRole('button', { name: 'Enregistrer' }).click();
+  await expect(settings).toHaveCount(0);
+  await page.getByRole('button', { name: 'Nouveau ticket' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Nouveau ticket' });
+  await dialog.getByRole('textbox', { name: 'Titre du ticket' }).fill('Connexion par jeton [ok]');
+  await dialog.getByRole('button', { name: 'Ajouter', exact: true }).click();
+  await col('À tester').getByRole('button', { name: 'Valider + PR' }).click({ timeout: 90_000 });
+  const card = col('En revue').locator('.card');
+  await expect(card.locator('[data-ticket-pr="101"]')).toBeVisible({ timeout: 60_000 });
+  const fixes = () =>
+    git(path.join(app.root, 'origin.git'), 'log', '--format=%s', 'ticket/dem-1')
+      .split(/\r?\n/)
+      .filter((l) => l.startsWith('fix: CI de')).length;
+
+  // Without the autopilot: its CI fails, a third-party CI without log is said, nothing goes by itself.
+  await page.getByRole('switch', { name: 'Pilote auto' }).click();
+  await setPull(101, { checks: 'FAILURE', thirdParty: true });
+  await col('En revue').getByRole('button', { name: 'Rafraîchir' }).click();
+  await expect(card.locator('[data-ticket-pr="101"]')).toContainText('2/3 jobs en échec');
+  await expect(card.locator('[data-pr-nolog]')).toHaveText('ci/jenkins : CI tierce, sans journal');
+  const fix = card.getByRole('button', { name: "L'agent corrige" });
+  await expect(fix).toBeVisible();
+  if (SHOTS) await col('En revue').screenshot({ path: path.join(SHOTS, 'kanban-pr-ci-failed.png') });
+
+  // One click: its agent, restored with its worktree, gets the failed jobs and their logs, commits; pushed, the ticket
+  // is back « En revue ».
+  await fix.click();
+  await expect.poll(fixes, { timeout: 60_000 }).toBe(1);
+  await expect(card.locator('[data-pr-fixing]')).toHaveCount(0, { timeout: 30_000 });
+  await expect(card.locator('[data-pr-fix-error]')).toHaveCount(0);
+  await expect(col('En revue').locator('.card')).toHaveCount(1);
+
+  // With the autopilot: once its CI ran again and failed again, it goes by itself.
+  await setPull(101, { checks: 'PENDING', thirdParty: false });
+  await col('En revue').getByRole('button', { name: 'Rafraîchir' }).click();
+  await expect(card.locator('[data-ticket-pr="101"]')).toContainText('CI en cours');
+  await page.getByRole('switch', { name: 'Pilote auto' }).click();
+  await setPull(101, { checks: 'FAILURE' });
+  await col('En revue').getByRole('button', { name: 'Rafraîchir' }).click();
+  await expect.poll(fixes, { timeout: 60_000 }).toBe(2);
+  await expect(card.locator('[data-pr-fixing]')).toHaveCount(0, { timeout: 30_000 });
+
+  // Green: nothing to fix.
+  await setPull(101, { checks: 'SUCCESS' });
+  await col('En revue').getByRole('button', { name: 'Rafraîchir' }).click();
+  await expect(card.locator('[data-ticket-pr="101"]')).toContainText('CI verte');
+  await expect(fix).toHaveCount(0);
+});

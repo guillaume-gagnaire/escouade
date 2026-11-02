@@ -49,7 +49,9 @@
 // interrupt, [commite] its work committed by itself (every file of its folder, a copied .env forced
 // in), [retire-env] then .env taken out of git again in a second commit (still in the branch's
 // history), [tenace] a process that lasts 5 s once its input is closed, [rien] no file written (nothing
-// to merge), [dans:api] its file written in that folder instead (each one named; ESC-169); by default criterion n is
+// to merge), [dans:api] its file written in that folder instead (each one named; ESC-169); given its pull request's CI to
+// fix (« La CI de la PR #n », ESC-60), it writes ci.txt and commits it (nothing with [ci-rien]), and ends its turn with no
+// report; by default criterion n is
 // met from loop n on. "faits-workflow: [...]" in its ticket (ESC-197) plays those facts first, then holds its turn 10 min
 // as [lent] does: the agent of a ticket under way that follows a workflow too. [spec:<project>] (ESC-263): before its first
 // report it keeps the spec as its protocol asks, by Escouade's docs tools (its --mcp-config server): the page
@@ -1194,6 +1196,17 @@ function startSession() {
 
   function ticketTurn(text) {
     const key = sys.match(/ticket ([A-Z]+-\d+)/)?.[1] ?? 'TIC-0';
+    if (/(?:La CI de la|The CI of) (?:PR|MR) #\d+/.test(text)) {
+      if (!`${sys}\n${text}`.includes('[ci-rien]')) {
+        const n = (fs.existsSync('ci.txt') ? fs.readFileSync('ci.txt', 'utf8').split('\n').length - 1 : 0) + 1;
+        fs.appendFileSync('ci.txt', `correctif ${n}\n`);
+        execFileSync('git', ['add', 'ci.txt']);
+        execFileSync('git', ['commit', '-qm', `fix: CI de ${key}`]);
+      }
+      streamText('CI corrigée.');
+      result();
+      return;
+    }
     const count = Number(sys.match(/(?:Critères d'acceptation|Acceptance criteria) \((\d+)\)/)?.[1] ?? 1);
     const loop = Number(text.match(/(?:Boucle|Loop) (\d+)\//)?.[1] ?? 1);
     const all = `${sys}\n${text}`;

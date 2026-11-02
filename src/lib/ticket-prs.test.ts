@@ -1,6 +1,19 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { setLang } from './i18n';
-import { ciLine, joinNames, prColumnShown, prErrorLine, prFacts, prStateKey, prStateWord, splitNames } from './ticket-prs';
+import {
+  canFixCi,
+  ciLine,
+  fixesSpent,
+  joinNames,
+  noLogLine,
+  prColumnShown,
+  prErrorLine,
+  prFacts,
+  prStateKey,
+  prStateWord,
+  splitNames,
+} from './ticket-prs';
+import { busy } from './board';
 import { ticket, ticketPr } from '../test/ipc';
 
 describe('the pull requests of the tickets (ESC-59)', () => {
@@ -54,5 +67,36 @@ describe('the pull requests of the tickets (ESC-59)', () => {
     expect(splitNames(' @ada, grace ,, à relire ')).toEqual(['ada', 'grace', 'à relire']);
     expect(joinNames(['ada', 'grace'])).toBe('ada, grace');
     expect(joinNames(undefined)).toBe('');
+  });
+
+  it('offers « L’agent corrige » on a failed CI of an open one with an agent, none under way (ESC-60)', () => {
+    const failing = ticketPr({ checks: 'failure' });
+    expect(canFixCi(ticket({ column: 'pr', agentId: 'a1', pr: failing }))).toBe(true);
+    expect(canFixCi(ticket({ column: 'pr', agentId: 'a1', pr: ticketPr({ checks: 'success' }) }))).toBe(false);
+    expect(canFixCi(ticket({ column: 'pr', pr: failing }))).toBe(false);
+    expect(canFixCi(ticket({ column: 'pr', agentId: 'a1', pr: { ...failing, fixing: 5 } }))).toBe(false);
+    expect(canFixCi(ticket({ column: 'pr', agentId: 'a1', pr: { ...failing, closed: true } }))).toBe(false);
+    expect(canFixCi(ticket({ column: 'review', agentId: 'a1', pr: failing }))).toBe(false);
+  });
+
+  it('says the failed checks of a CI that keeps no log, and the loops the autopilot spent', () => {
+    expect(noLogLine(ticketPr())).toBeNull();
+    const failed = [
+      { name: 'test', url: null, log: true },
+      { name: 'ci/jenkins', url: null, log: false },
+      { name: 'circleci', url: null, log: false },
+    ];
+    expect(noLogLine(ticketPr({ failed }))).toBe('ci/jenkins, circleci : CI tierces, sans journal');
+    setLang('en');
+    expect(noLogLine(ticketPr({ failed: failed.slice(0, 2) }))).toBe('ci/jenkins: third-party CI, no log');
+    const x = ticket({ column: 'pr', maxLoops: 3, pr: ticketPr({ fixes: 3 }) });
+    expect(fixesSpent(x, true)).toBe(true);
+    expect(fixesSpent(x, false)).toBe(false);
+    expect(fixesSpent({ ...x, maxLoops: 5 }, true)).toBe(false);
+  });
+
+  it('counts a ticket in review whose agent fixes its CI among the places taken', () => {
+    expect(busy([ticket({ column: 'pr', pr: ticketPr() })])).toBe(0);
+    expect(busy([ticket({ column: 'pr', pr: ticketPr({ fixing: 1 }) }), ticket({ column: 'doing' })])).toBe(2);
   });
 });

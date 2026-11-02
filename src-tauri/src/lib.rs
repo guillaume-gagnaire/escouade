@@ -858,6 +858,7 @@ pub fn run() {
                 commands::ticket_prs_refresh,
                 commands::ticket_finish_anyway,
                 commands::ticket_pr_back_to_todo,
+                commands::ticket_pr_fix_ci,
                 commands::board_set,
                 commands::autopilot_resume,
                 commands::forges,

@@ -53,6 +53,20 @@ export function prErrorLine(p: TicketPr, now: number): string | null {
   return t('board.pr.error', { error: p.error, since: fSince(p.errorSince ?? now, now) });
 }
 
+/** « L'agent corrige » (ESC-60): its CI failed, its pull request is open, it has an agent, and no fix is under way. */
+export const canFixCi = (x: Ticket) =>
+  x.column === 'pr' && !!x.pr && !!x.agentId && !x.pr.closed && x.pr.state === 'open' && x.pr.checks === 'failure' && !x.pr.fixing;
+
+/** The failed checks whose host keeps no log (a CI of another kind: Jenkins, CircleCI…): said on the card, their name alone goes to the agent. */
+export function noLogLine(p: TicketPr): string | null {
+  const names = (p.failed ?? []).filter((c) => !c.log).map((c) => c.name);
+  if (!names.length) return null;
+  return t('board.pr.noLog', { count: names.length, names: names.join(', ') });
+}
+
+/** With the autopilot, its CI no longer goes to its agent by itself once its loops are spent: « L'agent corrige » still does. */
+export const fixesSpent = (x: Ticket, autopilot: boolean) => autopilot && !!x.pr && x.pr.fixes >= x.maxLoops;
+
 /** As the agents' pull requests are (`prs.ts`), for their tone and icon. */
 export function asPull(p: TicketPr): PullRequest {
   return {

@@ -28,6 +28,11 @@ export default defineZone('board', {
     error: '{error} · since {since}',
     finishAnyway: 'Finish anyway',
     backToTodo: 'Back to do',
+    fixCi: 'Agent fixes it',
+    fixCiTitle: 'Send its agent the failed jobs and the end of their logs; it pushes, the {word} updates',
+    fixing: 'The agent is fixing the CI…',
+    noLog: { one: '{names}: third-party CI, no log', other: '{names}: third-party CI, no logs' },
+    loopsSpent: 'Loops spent ({count}/{max}): the autopilot no longer sends it back',
   },
 
   header: {

@@ -2688,6 +2688,13 @@ pub async fn ticket_pr_back_to_todo(core: CoreState<'_>, id: String) -> Res<()> 
     core.ticket_pr_back_to_todo(&id).await.map_err(err)
 }
 
+/// « L'agent corrige » on a ticket « En revue » whose CI failed (ESC-60): its agent gets the
+/// failed jobs and the end of their logs, its worktree made again from its branch.
+#[tauri::command]
+pub async fn ticket_pr_fix_ci(core: CoreState<'_>, id: String) -> Res<()> {
+    core.ticket_pr_fix_ci(&id).await.map_err(err)
+}
+
 #[tauri::command(async)]
 pub fn board_set(core: CoreState, project_id: String, settings: BoardSettings) -> Res<Project> {
     core.board_set(&project_id, settings).map_err(err)

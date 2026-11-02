@@ -36,10 +36,12 @@ export function columnTickets(tickets: Ticket[], column: Column): Ticket[] {
   return list.sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0));
 }
 
-/** Tickets "En cours" holding a place (a blocked one gives it up). */
+/** Tickets "En cours" holding a place (a blocked one gives it up), and « En revue » while their agent fixes their CI (ESC-60). */
 export function busy(tickets: Ticket[]): number {
   // One under way on a teammate's machine (ESC-190) takes no place here.
-  return tickets.filter((ticket) => ticket.column === 'doing' && !ticket.blocked && !elsewhere(ticket)).length;
+  return tickets.filter(
+    (ticket) => (ticket.column === 'doing' && !ticket.blocked && !elsewhere(ticket)) || (ticket.column === 'pr' && !!ticket.pr?.fixing),
+  ).length;
 }
 
 /** When the agents stopped by the usage limit resume, if one is waiting: nothing starts until then. */

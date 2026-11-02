@@ -2,8 +2,8 @@
 title: "En revue"
 subject: "kanban"
 sources: ["docs/TODO-1.8.md"]
-tickets: ["ESC-59"]
-decisions: []
+tickets: ["ESC-59","ESC-60"]
+decisions: ["la-ci-en-echec-d-un-ticket-en-revue-repa"]
 compared: null
 ---
 
@@ -27,6 +27,18 @@ La colonne « En revue », entre « À tester » et « Terminé », tient les ti
 - Ses approbations, ses fils de discussion ouverts et un conflit avec la cible (« 1 approbation · 2 fils ouverts · conflit avec main »).
 - En haut à droite : « → <cible> ». Les critères ne s'y affichent plus.
 
+### La CI en échec : l'agent corrige
+
+- La carte d'un ticket dont la CI échoue a « L'agent corrige » (si le ticket a encore son agent et qu'aucune correction n'est en cours).
+- Un check en échec dont l'hébergeur ne garde pas de journal (une CI tierce : Jenkins, CircleCI… qui ne donne qu'un statut et une adresse) est dit sur la carte : « ci/jenkins : CI tierce, sans journal ».
+- La correction, d'un clic ou du pilote auto :
+  - le ticket reste « En revue » ; son agent, archivé à la validation, est restauré, et son worktree recréé depuis la branche du ticket (une branche supprimée du projet est reprise du dépôt distant) ;
+  - l'agent reçoit le nom des jobs en échec, leur adresse, et la fin de leurs journaux (80 lignes par job au plus, comme les tests), entre balises, donnés comme des informations et non des instructions ; il est prié de corriger, vérifier, commiter et pousser, sans commenter sur l'hébergeur ;
+  - la carte dit « L'agent corrige la CI… » tant qu'il travaille ;
+  - à la fin de son tour, Escouade pousse la branche (l'agent a pu le faire lui-même), la PR se met à jour et est relue tout de suite ; le ticket revient « En revue » comme avant, son agent archivé de nouveau et son worktree supprimé si le Kanban nettoie.
+- Ce qui empêche d'aller au bout est dit sur la carte, et l'agent reste restauré pour qu'on lui parle : des changements non commités (rien n'est poussé), rien de commité (« L'agent n'a rien commité : la CI reste en échec »), un push refusé, un tour interrompu ou en erreur, l'app fermée pendant le tour. Une CI verte efface ce message.
+- Chaque correction compte une boucle du ticket.
+
 ### Mergée sur l'hébergeur
 
 - Le ticket passe « Terminé », avec « ⤵ PR #12 mergée dans main » et le lien de la PR.
@@ -46,8 +58,8 @@ La colonne « En revue », entre « À tester » et « Terminé », tient les ti
 
 - Pas de webhook : l'app n'a pas d'adresse publique. Escouade interroge l'hébergeur, et seulement pour les PR des tickets « En revue » (celles des agents ont leur propre lecture, voir *Pull requests*).
 - Toutes les minutes quand la fenêtre est au premier plan, toutes les 5 minutes sinon.
-- Tout de suite après un push d'Escouade (une validation qui ouvre une PR, « Pousser ») et quand la fenêtre revient au premier plan ; et sur « Rafraîchir ».
-- Les PR d'un même dépôt se lisent ensemble : une seule requête GraphQL sur GitHub ; les jobs de la CI se comptent par une requête de plus, seulement pour une PR ouverte qui a une CI.
+- Tout de suite après un push d'Escouade (une validation qui ouvre une PR, « Pousser », la fin d'une correction de CI) et quand la fenêtre revient au premier plan ; et sur « Rafraîchir ».
+- Les PR d'un même dépôt se lisent ensemble : une seule requête GraphQL sur GitHub ; les jobs de la CI se comptent par une requête de plus, seulement pour une PR ouverte qui a une CI. Les journaux ne se lisent qu'au moment de la correction.
 
 ### Les erreurs
 
@@ -56,9 +68,14 @@ La colonne « En revue », entre « À tester » et « Terminé », tient les ti
 
 ### Le pilote auto
 
-Un ticket « En revue » ne prend pas de place parmi les tickets en parallèle : son agent est archivé à la validation. Quand l'agent devra corriger (CI, retours), son worktree sera recréé depuis la branche, et il ne comptera que pendant qu'il travaille.
+- Un ticket « En revue » ne prend de place parmi les tickets en parallèle que pendant que son agent corrige sa CI : son agent est archivé le reste du temps.
+- Avec le pilote auto, une CI en échec part seule chez l'agent, quand une place est libre et que la pause au-delà du quota ne retient pas son compte, avant les tickets « À faire ».
+- Il ne la renvoie que dans la limite des boucles du ticket (3, 5 ou 8) ; au-delà, la carte dit « Boucles épuisées (3/3) : le pilote auto ne la renvoie plus », et « L'agent corrige » reste à la main.
+- Il ne renvoie pas le même échec deux fois : après une correction (réussie ou non), il attend que la CI tourne de nouveau (en cours, verte ou absente) avant de la renvoyer.
+- Sans le pilote auto, rien ne part seul : « L'agent corrige » sur la carte.
 
 ## Ce qui n'est pas fait
 
-- « L'agent corrige » (CI en échec), « L'agent traite les retours », « L'agent met à jour la branche » (conflit), « Merger » et « Merger quand c'est vert » depuis la carte.
+- « L'agent traite les retours », « L'agent met à jour la branche » (conflit), « Merger » et « Merger quand c'est vert » depuis la carte.
+- Un ticket dont l'agent a été supprimé ne peut pas faire corriger sa CI.
 - Les essais réels : GitHub seulement, avec le compte de l'utilisateur ; GitLab, Bitbucket Cloud et Gitea / Forgejo d'après leur documentation et leurs faux serveurs, à essayer en vrai plus tard.

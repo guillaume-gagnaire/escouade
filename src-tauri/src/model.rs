@@ -1287,6 +1287,32 @@ pub struct TicketPr {
     /// Closed without a merge: the ticket is blocked with « Remettre à faire » and « Terminer
     /// quand même ».
     pub closed: bool,
+    /// The checks that failed at its last reading (ESC-60), each with whether its host keeps its
+    /// log: a CI of another kind (Jenkins, CircleCI…) gives a status and an address alone.
+    pub failed: Vec<FailedCheck>,
+    /// Its agent fixes its CI now (« L'agent corrige », ESC-60): since when (ms).
+    pub fixing: Option<i64>,
+    /// How many times its agent was given its CI to fix: the autopilot gives it while this is
+    /// below the ticket's loops.
+    pub fixes: u32,
+    /// Fixed and pushed: the autopilot does not give the CI that failed again until a reading sees
+    /// it run again (pending, green, or none).
+    pub awaiting_ci: bool,
+    /// The commit its branch was on when the fix began: the same at its end, nothing was done.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fix_from: Option<String>,
+    /// Why the last fix did not go to its end (its agent gone, its branch gone, not pushed).
+    pub fix_error: Option<String>,
+}
+
+/// A check of a ticket's pull request that failed (ESC-60).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FailedCheck {
+    pub name: String,
+    pub url: Option<String>,
+    /// Its host keeps its log, which goes to the agent.
+    pub log: bool,
 }
 
 /// Someone of the team, as the files of the shared tickets name them (ESC-190): the name they

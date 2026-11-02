@@ -1173,4 +1173,36 @@ describe('TicketCard with an account of its own', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Remettre à faire' }));
     expect(backend.called('ticket_pr_back_to_todo')).toEqual([{ cmd: 'ticket_pr_back_to_todo', args: { id: 't1' } }]);
   });
+
+  it('offers « L’agent corrige » on a failed CI, says a CI without log, and shows its agent at work (ESC-60)', async () => {
+    const backend = fakeBackend();
+    const failed = [
+      { name: 'test', url: 'https://github.com/acme/demo/runs/55', log: true },
+      { name: 'ci/jenkins', url: 'https://jenkins.example.com/7', log: false },
+    ];
+    const pr = ticketPr({ checks: 'failure', checksTotal: 2, checksFailed: 2, failed });
+    const { container, unmount } = show(ticket({ column: 'pr', agentId: 'a1', pr }));
+    expect(container.querySelector('[data-pr-nolog]')).toHaveTextContent('ci/jenkins : CI tierce, sans journal');
+    await userEvent.click(screen.getByRole('button', { name: "L'agent corrige" }));
+    expect(backend.called('ticket_pr_fix_ci')).toEqual([{ cmd: 'ticket_pr_fix_ci', args: { id: 't1' } }]);
+    unmount();
+    // Under way: no button, its agent fixes it.
+    const at = show(ticket({ column: 'pr', agentId: 'a1', pr: { ...pr, fixing: 1, fixes: 1 } }));
+    expect(at.container.querySelector('[data-pr-fixing]')).toHaveTextContent("L'agent corrige la CI…");
+    expect(screen.queryByRole('button', { name: "L'agent corrige" })).toBeNull();
+    at.unmount();
+    // Green, or without an agent: nothing to offer.
+    show(ticket({ column: 'pr', agentId: 'a1', pr: ticketPr({ checks: 'success' }) }));
+    show(ticket({ column: 'pr', pr }));
+    expect(screen.queryByRole('button', { name: "L'agent corrige" })).toBeNull();
+  });
+
+  it('says why the last fix did not go, and that the autopilot spent its loops (ESC-60)', () => {
+    fakeBackend();
+    const pr = ticketPr({ checks: 'failure', fixes: 3, awaitingCi: true, fixError: "L'agent n'a rien commité : la CI reste en échec" });
+    const { container } = show(ticket({ column: 'pr', agentId: 'a1', maxLoops: 3, pr }), project({ board: board({ autopilot: true }) }));
+    expect(container.querySelector('[data-pr-fix-error]')).toHaveTextContent("L'agent n'a rien commité");
+    expect(container).toHaveTextContent('Boucles épuisées (3/3) : le pilote auto ne la renvoie plus');
+    expect(screen.getByRole('button', { name: "L'agent corrige" })).toBeInTheDocument();
+  });
 });

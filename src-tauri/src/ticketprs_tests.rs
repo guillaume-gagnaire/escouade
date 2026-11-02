@@ -6,7 +6,7 @@ use crate::agentprs_tests::github_project;
 use crate::core_tests::{git, harness, Harness};
 use crate::i18n::Lang::{En, Fr};
 use crate::integrations::fake::FakeServer;
-use crate::model::{ExternalRef, Service, Ticket};
+use crate::model::{BoardSettings, ExternalRef, FailedCheck, Service, Ticket};
 use crate::tickets_tests::reviewed;
 use serde_json::{json, Value};
 
@@ -666,4 +666,376 @@ async fn on_gitlab_the_ticket_opens_a_merge_request_and_follows_it_to_its_merge(
     let u = h.ticket(&t.id);
     assert_eq!(u.column, Column::Done, "{:?}", u.pr);
     assert_eq!(u.outcome.as_deref(), Some("⤵ MR #4 mergée dans main"));
+}
+
+// ---------- Its CI fixed by its agent (ESC-60) ----------
+
+fn failing(t: &mut Ticket) {
+    let tp = t.pr.as_mut().unwrap();
+    tp.checks = Some(CheckState::Failure);
+}
+
+fn on_board(id: &str, column: Column) -> Ticket {
+    Ticket {
+        id: id.into(),
+        project_id: "p".into(),
+        column,
+        max_loops: 3,
+        agent_id: Some(format!("a-{id}")),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn a_reading_keeps_the_failed_checks_and_which_ones_have_a_log() {
+    let mut t = in_review(12);
+    let mut p = pr(12, PrState::Open);
+    p.checks = Some(CheckState::Failure);
+    let list = vec![
+        Check {
+            name: "test".into(),
+            state: CheckState::Failure,
+            job: Some("55".into()),
+            url: Some("https://github.com/acme/demo/runs/55".into()),
+            ..Default::default()
+        },
+        Check {
+            name: "ci/jenkins".into(),
+            state: CheckState::Failure,
+            url: Some("https://jenkins.example.com/1".into()),
+            ..Default::default()
+        },
+        check(CheckState::Success),
+    ];
+    t.pr.as_mut().unwrap().awaiting_ci = true;
+    settle(&mut t, &p, Some(&list), 2, Fr);
+    let tp = t.pr.clone().unwrap();
+    assert_eq!(
+        tp.failed,
+        vec![
+            FailedCheck {
+                name: "test".into(),
+                url: Some("https://github.com/acme/demo/runs/55".into()),
+                log: true
+            },
+            FailedCheck {
+                name: "ci/jenkins".into(),
+                url: Some("https://jenkins.example.com/1".into()),
+                log: false
+            },
+        ]
+    );
+    // Still failing: what was fixed is not given again by the autopilot.
+    assert!(tp.awaiting_ci);
+    // Run again since: the next failure goes to its agent.
+    p.checks = Some(CheckState::Pending);
+    t.pr.as_mut().unwrap().fix_error = Some("Push impossible".into());
+    settle(&mut t, &p, Some(&[check(CheckState::Pending)]), 3, Fr);
+    let tp = t.pr.clone().unwrap();
+    assert!(!tp.awaiting_ci && tp.failed.is_empty());
+    assert_eq!(tp.fix_error.as_deref(), Some("Push impossible"));
+    // Green: the error of the last fix goes.
+    p.checks = Some(CheckState::Success);
+    settle(&mut t, &p, Some(&[check(CheckState::Success)]), 4, Fr);
+    assert_eq!(t.pr.unwrap().fix_error, None);
+}
+
+#[test]
+fn the_autopilot_gives_a_failed_ci_to_its_agent_within_the_loops_and_the_places() {
+    let s = |autopilot: bool, max_parallel: u32| BoardSettings {
+        autopilot,
+        max_parallel,
+        ..Default::default()
+    };
+    let mut a = in_review(1);
+    a.project_id = "p".into();
+    a.max_loops = 3;
+    a.agent_id = Some("a1".into());
+    let green = a.clone();
+    failing(&mut a);
+    assert!(fixable(&a) && auto_fixable(&a));
+    assert!(!fixable(&green));
+    let tickets = vec![a.clone(), green];
+    assert_eq!(to_fix(&tickets, "p", &s(true, 2)), vec!["t1".to_string()]);
+    // Without the autopilot, only « L'agent corrige ».
+    assert!(to_fix(&tickets, "p", &s(false, 2)).is_empty());
+    assert!(to_fix(&tickets, "other", &s(true, 2)).is_empty());
+    // No place left: a ticket « En cours » holds it.
+    let doing = on_board("d", Column::Doing);
+    assert!(to_fix(&[a.clone(), doing.clone()], "p", &s(true, 1)).is_empty());
+    assert_eq!(to_fix(&[a.clone(), doing], "p", &s(true, 2)).len(), 1);
+
+    // Begun: counted as a loop, it holds a place (the next ticket to do waits), and is not given
+    // twice.
+    let mut b = a.clone();
+    fix_begins(&mut b, Some("abc".into()), 5);
+    let tp = b.pr.clone().unwrap();
+    assert_eq!((tp.fixing, tp.fixes, b.loops), (Some(5), 1, 1));
+    assert!(fixing(&b) && !fixable(&b));
+    assert_eq!(busy(std::slice::from_ref(&b), "p"), 1);
+    let todo = Ticket {
+        id: "n".into(),
+        project_id: "p".into(),
+        column: Column::Todo,
+        ..Default::default()
+    };
+    assert!(board::to_start(&[b.clone(), todo.clone()], "p", &s(true, 1), |_| false).is_empty());
+    assert_eq!(
+        board::to_start(&[a.clone(), todo], "p", &s(true, 1), |_| false),
+        vec!["n".to_string()]
+    );
+
+    // Fixed and pushed: back « En revue », its CI to run again before the autopilot gives it again.
+    fix_done(&mut b);
+    assert!(!fixing(&b) && fixable(&b) && !auto_fixable(&b));
+    // Failed: said, given again by hand only.
+    let mut c = a.clone();
+    fix_begins(&mut c, None, 5);
+    fix_failed(&mut c, "Interrompu".into());
+    let tp = c.pr.clone().unwrap();
+    assert_eq!(tp.fix_error.as_deref(), Some("Interrompu"));
+    assert!(fixable(&c) && !auto_fixable(&c));
+
+    // Its loops spent: by hand only.
+    let mut d = a.clone();
+    d.pr.as_mut().unwrap().fixes = 3;
+    assert!(fixable(&d) && !auto_fixable(&d));
+    // Without an agent, or closed: none.
+    let mut e = a.clone();
+    e.agent_id = None;
+    assert!(!fixable(&e));
+    let mut f = a.clone();
+    f.pr.as_mut().unwrap().closed = true;
+    assert!(!fixable(&f));
+}
+
+#[test]
+fn the_end_of_the_fixing_turn_pushes_waits_or_says_why() {
+    use crate::board::TurnEnd;
+    assert_eq!(fix_end(&TurnEnd::Finished("ok".into())), FixEnd::Finished);
+    assert_eq!(fix_end(&TurnEnd::Limited), FixEnd::Wait);
+    assert_eq!(fix_end(&TurnEnd::SignIn), FixEnd::Wait);
+    assert!(matches!(fix_end(&TurnEnd::Interrupted), FixEnd::Stopped(_)));
+    assert!(matches!(
+        fix_end(&TurnEnd::Error("boom\nmore".into())),
+        FixEnd::Stopped(w) if w.contains("boom") && !w.contains("more")
+    ));
+    assert_eq!(
+        nothing_fixed(En),
+        "The agent committed nothing: the CI still fails"
+    );
+    assert!(not_committed(Fr).contains("pas commités"));
+    assert_eq!(not_pushed(Fr, "rejeté"), "Push impossible : rejeté");
+}
+
+/// The CI of PR #12 on the fake GitHub: `rollup` for its state; failing, a GitHub Actions job
+/// (55) with its log and a status of another CI (Jenkins) with none.
+fn answer_ci(server: &FakeServer, rollup: &str) {
+    server.on(
+        "POST",
+        "/graphql#Pulls",
+        200,
+        json!({ "data": { "repository": { "p12": graphql_pr(12, "OPEN", rollup) } } }),
+    );
+    server.on(
+        "GET",
+        "/repos/acme/demo/pulls/12",
+        200,
+        json!({ "number": 12, "head": { "sha": "abc" } }),
+    );
+    let failed = rollup == "FAILURE";
+    server.on(
+        "GET",
+        "/repos/acme/demo/commits/abc/check-runs",
+        200,
+        json!({ "check_runs": [
+            { "name": "test", "status": "completed",
+              "conclusion": if failed { "failure" } else { "success" }, "id": 55,
+              "html_url": "https://github.com/acme/demo/runs/55", "app": { "slug": "github-actions" } },
+        ] }),
+    );
+    let statuses = if failed {
+        json!([{ "context": "ci/jenkins", "state": "failure", "target_url": "https://jenkins.example.com/job/7" }])
+    } else {
+        json!([])
+    };
+    server.on(
+        "GET",
+        "/repos/acme/demo/commits/abc/status",
+        200,
+        json!({ "statuses": statuses }),
+    );
+    server.on_text(
+        "GET",
+        "/repos/acme/demo/actions/jobs/55/logs",
+        200,
+        "npm test\nFAIL src/login.test.ts\n",
+        &[],
+    );
+}
+
+fn told(h: &Harness, id: &str, what: &str) -> bool {
+    h.items(id)
+        .iter()
+        .any(|i| i["kind"] == "user" && i["text"].as_str().is_some_and(|t| t.contains(what)))
+}
+
+fn on_origin(bare: &std::path::Path, branch: &str) -> String {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(bare)
+        .args(["log", "--format=%s", branch])
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+fn pr_opens(server: &FakeServer) {
+    server.on(
+        "POST",
+        "/repos/acme/demo/pulls",
+        201,
+        json!({
+            "number": 12, "html_url": "https://github.com/acme/demo/pull/12", "title": "feat",
+            "state": "open", "draft": false, "head": {"ref": "ticket/dem-1"}, "base": {"ref": "main"},
+        }),
+    );
+}
+
+/// A ticket « En revue » whose CI failed, with the autopilot: its agent, archived at the
+/// validation, is restored with its worktree made again from its branch (gone from the project:
+/// fetched from its remote), gets the failed jobs and the end of their logs, commits; Escouade
+/// pushes, and the ticket is back « En revue », its agent archived again. The same failure is not
+/// given twice; by hand, « L'agent corrige » gives it again.
+#[tokio::test]
+async fn with_the_autopilot_a_failed_ci_goes_back_to_its_agent_and_the_ticket_back_in_review() {
+    let h = harness("tp-fix");
+    let server = FakeServer::start().await;
+    let (p, r, bare) = github_project(&h, &server, false).await;
+    h.set_board(&p.id, |s| s.action = "pr".into());
+    pr_opens(&server);
+    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    h.core.ticket_approve(&t.id).await.unwrap();
+    let u = h.ticket(&t.id);
+    assert_eq!(u.column, Column::Pr, "{:?}", u.blocked);
+    let agent_id = u.agent_id.clone().unwrap();
+    assert!(h.agent(&agent_id).archived);
+    assert!(!wt.exists(), "its worktree goes at the validation");
+    // Its branch deleted from the project by hand: it is on the remote still.
+    git(&r, &["branch", "-D", "ticket/dem-1"]);
+    h.set_board(&p.id, |s| s.autopilot = false);
+
+    // Its CI fails: without the autopilot, nothing goes by itself.
+    answer_ci(&server, "FAILURE");
+    h.core.ticket_prs_refresh(Some(&p.id)).await.unwrap();
+    h.core.schedule_now().await;
+    let tp = h.ticket(&t.id).pr.unwrap();
+    assert_eq!(tp.checks, Some(CheckState::Failure));
+    assert_eq!((tp.fixing, tp.fixes), (None, 0));
+    assert_eq!(
+        tp.failed
+            .iter()
+            .map(|c| (c.name.as_str(), c.log))
+            .collect::<Vec<_>>(),
+        vec![("test", true), ("ci/jenkins", false)]
+    );
+
+    // With it, its agent fixes it.
+    let loops = h.ticket(&t.id).loops;
+    h.set_board(&p.id, |s| s.autopilot = true);
+    h.core.schedule_now().await;
+    h.wait("the failed jobs sent", |h| {
+        told(h, &agent_id, "La CI de la PR #12")
+    })
+    .await;
+    assert!(told(
+        &h,
+        &agent_id,
+        "<check name=\"test\" url=\"https://github.com/acme/demo/runs/55\"/>"
+    ));
+    assert!(told(&h, &agent_id, "<check name=\"ci/jenkins\""));
+    assert!(told(&h, &agent_id, "FAIL src/login.test.ts"));
+    let u = h.ticket(&t.id);
+    assert_eq!(u.column, Column::Pr);
+    assert_eq!(u.loops, loops + 1);
+    assert_eq!(u.pr.as_ref().unwrap().fixes, 1);
+    assert!(has_branch(&r, "ticket/dem-1"), "its branch fetched again");
+
+    // Its turn over: pushed, back « En revue », its agent archived again, its worktree gone.
+    h.wait_ticket(&t.id, "the fix over", |x| {
+        x.pr.as_ref().is_some_and(|p| p.fixing.is_none())
+    })
+    .await;
+    let u = h.ticket(&t.id);
+    let tp = u.pr.clone().unwrap();
+    assert_eq!(u.column, Column::Pr);
+    assert_eq!(tp.fix_error, None, "{:?}", tp.fix_error);
+    assert!(tp.awaiting_ci);
+    assert!(
+        on_origin(&bare, "ticket/dem-1").contains("fix: CI de DEM-1"),
+        "{}",
+        on_origin(&bare, "ticket/dem-1")
+    );
+    h.wait("its agent archived again", |h| h.agent(&agent_id).archived)
+        .await;
+    let restored = h.agent(&agent_id).worktree.unwrap().path;
+    h.wait("its worktree removed again", |_| {
+        !std::path::Path::new(&restored).exists()
+    })
+    .await;
+
+    // The same failure read again: not given twice.
+    h.core.ticket_prs_refresh(Some(&p.id)).await.unwrap();
+    h.core.schedule_now().await;
+    assert_eq!(h.ticket(&t.id).pr.unwrap().fixes, 1);
+    // By hand, it is.
+    h.set_board(&p.id, |s| s.autopilot = false);
+    h.core.ticket_pr_fix_ci(&t.id).await.unwrap();
+    assert_eq!(h.ticket(&t.id).pr.unwrap().fixes, 2);
+    // A second click meanwhile is refused.
+    assert!(h.core.ticket_pr_fix_ci(&t.id).await.is_err());
+    h.wait_ticket(&t.id, "the second fix over", |x| {
+        x.pr.as_ref().is_some_and(|p| p.fixing.is_none())
+    })
+    .await;
+    assert_eq!(h.ticket(&t.id).pr.unwrap().fix_error, None);
+    assert_eq!(
+        on_origin(&bare, "ticket/dem-1")
+            .matches("fix: CI de DEM-1")
+            .count(),
+        2
+    );
+
+    // Green: nothing to fix, refused.
+    answer_ci(&server, "SUCCESS");
+    h.core.ticket_prs_refresh(Some(&p.id)).await.unwrap();
+    let u = h.ticket(&t.id);
+    assert!(u.pr.as_ref().unwrap().failed.is_empty());
+    assert!(h.core.ticket_pr_fix_ci(&t.id).await.is_err());
+}
+
+/// The agent commits nothing: the card says so, the autopilot does not give it again, and its
+/// agent stays restored to be talked to.
+#[tokio::test]
+async fn an_agent_that_commits_nothing_is_said_on_the_card() {
+    let h = harness("tp-fix-none");
+    let server = FakeServer::start().await;
+    let (p, _r, _) = github_project(&h, &server, false).await;
+    h.set_board(&p.id, |s| s.action = "pr".into());
+    pr_opens(&server);
+    let (t, _) = reviewed(&h, &p.id, "Fichier [ok] [ci-rien]").await;
+    h.core.ticket_approve(&t.id).await.unwrap();
+    answer_ci(&server, "FAILURE");
+    h.core.ticket_prs_refresh(Some(&p.id)).await.unwrap();
+    h.core.ticket_pr_fix_ci(&t.id).await.unwrap();
+    h.wait_ticket(&t.id, "the fix over", |x| {
+        x.pr.as_ref().is_some_and(|p| p.fixing.is_none())
+    })
+    .await;
+    let u = h.ticket(&t.id);
+    let tp = u.pr.clone().unwrap();
+    assert_eq!(tp.fix_error.as_deref(), Some(nothing_fixed(Fr).as_str()));
+    assert!(!auto_fixable(&u));
+    let agent_id = u.agent_id.unwrap();
+    assert!(!h.agent(&agent_id).archived);
 }

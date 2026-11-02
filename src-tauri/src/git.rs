@@ -2939,6 +2939,23 @@ pub async fn fetch(repo: &str, background: bool) -> Result<()> {
     run_net(repo, &args, background).await.map(|_| ())
 }
 
+/// The local branch `branch`, gone from `repo` (deleted by hand), made again from the first
+/// remote that has it (ESC-60: a ticket's agent fixes its pull request's CI on it).
+pub async fn fetch_branch(repo: &str, branch: &str) -> Result<()> {
+    if branch.is_empty() || branch.starts_with('-') {
+        bail!("bad branch name: {branch}");
+    }
+    let spec = format!("refs/heads/{branch}:refs/heads/{branch}");
+    let mut last = None;
+    for remote in remotes(repo).await {
+        match run_net(repo, &["fetch", "--quiet", &remote, &spec], false).await {
+            Ok(_) => return Ok(()),
+            Err(e) => last = Some(e),
+        }
+    }
+    Err(last.unwrap_or_else(|| anyhow::anyhow!(no_remote(crate::i18n::ui()))))
+}
+
 /// What a fetch brought, for the user.
 pub fn fetch_summary(st: &Status) -> String {
     fetch_summary_in(crate::i18n::ui(), st)

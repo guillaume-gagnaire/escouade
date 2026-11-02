@@ -395,12 +395,9 @@ pub fn to_start(
 ) -> Vec<String> {
     let mut held = held;
     let mine = || tickets.iter().filter(|t| t.project_id == project_id);
-    // A ticket under way on a teammate's machine (ESC-190) takes no place here.
-    let busy = mine()
-        .filter(|t| {
-            t.column == Column::Doing && t.blocked.is_none() && !crate::sharing::elsewhere(t)
-        })
-        .count();
+    // A ticket under way on a teammate's machine (ESC-190) takes no place here; one « En revue »
+    // whose agent fixes its CI does (ESC-60).
+    let busy = crate::ticketprs::busy(tickets, project_id);
     let free = (s.max_parallel.clamp(1, 6) as usize).saturating_sub(busy);
     // A ticket gone, or of another project, holds nothing back.
     let unfinished: HashSet<&str> = mine()

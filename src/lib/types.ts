@@ -1124,6 +1124,22 @@ export interface TicketPr {
   errorSince: number | null;
   /** Closed without a merge: « Remettre à faire » and « Terminer quand même ». */
   closed: boolean;
+  /** The checks that failed at its last reading (ESC-60); `log`: its host keeps its log (not a CI of another kind). */
+  failed: FailedCheck[];
+  /** Its agent fixes its CI now: since when (ms). */
+  fixing: number | null;
+  /** How many times its agent was given its CI to fix (the autopilot: while below the ticket's loops). */
+  fixes: number;
+  /** Fixed and pushed: the autopilot waits for its CI to run again. */
+  awaitingCi: boolean;
+  /** Why the last fix did not go to its end. */
+  fixError: string | null;
+}
+
+export interface FailedCheck {
+  name: string;
+  url: string | null;
+  log: boolean;
 }
 
 /** Someone of the team, as the shared tickets' files name them (ESC-190). */
