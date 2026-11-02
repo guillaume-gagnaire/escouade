@@ -1,7 +1,7 @@
 //! The contract of the Kanban's ticket sources (INT-1): what a source answers (`TicketSource`),
 //! what Escouade knows of its kind (`TicketSourceKind`), and the registry of the kinds, as the
 //! code hosts' (`forge::Registry`). Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues
-//! and Azure Boards are behind it; a source a plugin serves will be too (`docs/PLUGINS.md` §4).
+//! and Azure Boards are behind it, each served by its plugin (`docs/PLUGINS.md` §4): the core keeps the contract.
 
 use super::*;
 use crate::forge::BoxFuture;
@@ -170,95 +170,6 @@ pub fn declared() -> Vec<SourceDecl> {
         .collect()
 }
 
-/// A source's calls, `TicketSource`'s, from the inherent ones of its client (`set_state` says
-/// which shape its `set_state` has, `view` whether it has a `states_view` of its own).
-macro_rules! ticket_source {
-    ($t:ty, set_state: $shape:ident, view: default) => {
-        ticket_source!(@impl $t, $shape, {});
-    };
-    ($t:ty, set_state: $shape:ident, view: own) => {
-        ticket_source!(@impl $t, $shape, {
-            fn states_view<'a>(&'a self, c: &'a str) -> BoxFuture<'a, Result<StatesView>> {
-                Box::pin(<$t>::states_view(self, c))
-            }
-        });
-    };
-    (@set plain, $t:ty, $s:ident, $r:ident, $st:ident, $m:ident) => {
-        {
-            let _ = $m;
-            <$t>::set_state($s, $r, $st)
-        }
-    };
-    (@set mapped, $t:ty, $s:ident, $r:ident, $st:ident, $m:ident) => {
-        <$t>::set_state($s, $r, $st, $m)
-    };
-    (@impl $t:ty, $shape:ident, { $($extra:item)* }) => {
-        impl TicketSource for $t {
-            fn me(&self) -> BoxFuture<'_, Result<(String, String)>> {
-                Box::pin(<$t>::me(self))
-            }
-            fn containers(&self) -> BoxFuture<'_, Result<Vec<Container>>> {
-                Box::pin(<$t>::containers(self))
-            }
-            fn states<'a>(&'a self, c: &'a str) -> BoxFuture<'a, Result<Vec<ExternalState>>> {
-                Box::pin(<$t>::states(self, c))
-            }
-            $($extra)*
-            fn issues<'a>(&'a self, c: &'a str, q: &'a Query) -> BoxFuture<'a, Result<IssuePage>> {
-                Box::pin(<$t>::issues(self, c, q))
-            }
-            fn set_state<'a>(
-                &'a self,
-                r: &'a ExternalRef,
-                state: &'a ExternalState,
-                mapped: &'a [ExternalState],
-            ) -> BoxFuture<'a, Result<()>> {
-                Box::pin(ticket_source!(@set $shape, $t, self, r, state, mapped))
-            }
-            fn comment<'a>(&'a self, r: &'a ExternalRef, t: &'a str) -> BoxFuture<'a, Result<()>> {
-                Box::pin(<$t>::comment(self, r, t))
-            }
-        }
-    };
-}
-
-ticket_source!(clickup::Clickup, set_state: plain, view: own);
-
-/// One kind of source whose client is built from the account, with `$base` the address of its
-/// API in `Bases` (Jira's is the account's site).
-macro_rules! kind {
-    ($name:ident, $id:literal, $label:literal, $short:literal, |$a:ident, $http:ident, $bases:ident| $build:expr $(, host: $host:literal)? $(, own: $own:literal)?) => {
-        pub struct $name;
-
-        impl TicketSourceKind for $name {
-            fn id(&self) -> &'static str {
-                $id
-            }
-            fn label(&self) -> &'static str {
-                $label
-            }
-            fn short(&self) -> &'static str {
-                $short
-            }
-            $(fn host(&self) -> Option<&'static str> {
-                Some($host)
-            })?
-            $(fn own_account(&self) -> bool {
-                $own
-            })?
-            fn build(
-                &self,
-                $a: &Account,
-                $http: reqwest::Client,
-                $bases: &Bases,
-            ) -> Box<dyn TicketSource> {
-                let _ = ($a, &$http, $bases);
-                Box::new($build)
-            }
-        }
-    };
-}
-
 // Jira: out of the core, served by the plugin « Jira » (INT-7.3).
 pub struct JiraKind;
 
@@ -381,13 +292,26 @@ impl TicketSourceKind for LinearKind {
         Box::new(Unserved("Linear"))
     }
 }
-kind!(
-    ClickupKind,
-    "clickup",
-    "ClickUp",
-    "ClickUp",
-    |a, http, b| clickup::Clickup::new(http, a, &b.clickup)
-);
+// ClickUp: out of the core, served by the plugin « ClickUp » (INT-7.4).
+pub struct ClickupKind;
+
+impl TicketSourceKind for ClickupKind {
+    fn id(&self) -> &'static str {
+        "clickup"
+    }
+    fn label(&self) -> &'static str {
+        "ClickUp"
+    }
+    fn short(&self) -> &'static str {
+        "ClickUp"
+    }
+    fn plugin(&self) -> Option<&'static str> {
+        Some(crate::plugins::builtin::CLICKUP)
+    }
+    fn build(&self, _: &Account, _: reqwest::Client, _: &Bases) -> Box<dyn TicketSource> {
+        Box::new(Unserved("ClickUp"))
+    }
+}
 // GitLab Issues: out of the core, served by the plugin « GitLab » (INT-8.2), on the accounts of the code host.
 pub struct GitlabKind;
 

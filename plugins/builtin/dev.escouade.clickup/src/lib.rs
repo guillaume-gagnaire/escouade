@@ -1,20 +1,28 @@
-//! ClickUp (API v2), with a personal API token. A project's source is a list, chosen through the
-//! hierarchy (workspace, space, folder, list); a task's state on the Kanban is one of the list's
-//! statuses, which each list has its own.
+//! ClickUp (API v2), with a personal API token: the Kanban's source of ClickUp tasks. A project's source is a list,
+//! chosen through the hierarchy (workspace, space, folder, list); a task's state on the Kanban is one of the list's
+//! statuses, which each list has its own. The account's secret is the token (`secrets/get` of `account:clickup`).
 
-use super::text::{criteria_of, default_states, names_criteria};
-use super::{
-    http_error, Account, Container, ExternalIssue, HttpError, IssueFilter, IssuePage, Query,
-    Refused, StatesView,
-};
-use crate::i18n::{self, Lang};
-use crate::model::{Column, ExternalRef, ExternalState, Service};
 use anyhow::{anyhow, Result};
+use escouade_plugin_kit::errors::{http_error_in, HttpError, Refused};
+use escouade_plugin_kit::forge::BoxFuture;
+use escouade_plugin_kit::hosts::{Credentials, SourceKind, StatesView, TicketSource};
+use escouade_plugin_kit::http::encode;
+use escouade_plugin_kit::i18n::{self, Lang};
+use escouade_plugin_kit::protocol::tickets::{
+    Container, ExternalIssue, ExternalRef, ExternalState, IssueFilter, IssuePage, Query,
+};
+use escouade_plugin_kit::text::{criteria_of, names_criteria};
+use escouade_plugin_kit::{tr, tr_in};
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
 use std::time::Duration;
 
-const S: Service = Service::CLICKUP;
+/// The source's id, and its name in what it says.
+pub const ID: &str = "clickup";
+const S: &str = "ClickUp";
 
+/// Where the API is when the core does not say (`ESCOUADE_CLICKUP_API` for a fake one).
+const API: &str = "https://api.clickup.com/api/v2";
 /// The prefix of a status's chip in the import.
 const STATUS: &str = "status:";
 /// The pages a search by title reads before it shows what it found (ClickUp has no search by
@@ -28,7 +36,7 @@ const WAIT_DEFAULT: Duration = Duration::from_secs(2);
 
 pub struct Clickup {
     http: reqwest::Client,
-    /// The API's address, `https://api.clickup.com/api/v2` (`Bases::clickup`).
+    /// The API's address.
     base: String,
     key: String,
     /// The account's user id: what « Mes tâches » filters on.
@@ -42,10 +50,16 @@ enum Answer {
 }
 
 impl Clickup {
-    pub fn new(http: reqwest::Client, a: &Account, base: &str) -> Self {
+    pub fn new(http: reqwest::Client, a: &Credentials) -> Self {
         Self {
             http,
-            base: base.trim_end_matches('/').to_string(),
+            base: a
+                .api
+                .as_deref()
+                .filter(|b| !b.trim().is_empty())
+                .unwrap_or(API)
+                .trim_end_matches('/')
+                .to_string(),
             key: a.token.trim().to_string(),
             user: a.user.clone(),
         }
@@ -80,10 +94,10 @@ impl Clickup {
 
     async fn once(&self, rb: reqwest::RequestBuilder) -> Result<Answer> {
         let resp = rb.send().await.map_err(|e| {
-            let (name, e) = (S.label(), anyhow::Error::from(e.without_url()));
+            let e = anyhow::Error::from(e.without_url());
             anyhow!(tr!(
-                "{name} injoignable : {e:#}",
-                "{name} can’t be reached: {e:#}"
+                "{S} injoignable : {e:#}",
+                "{S} can’t be reached: {e:#}"
             ))
         })?;
         let status = resp.status().as_u16();
@@ -99,20 +113,15 @@ impl Clickup {
         if !(200..300).contains(&status) {
             return Err(HttpError {
                 status,
-                message: http_error(S, status, &text),
+                message: http_error_in(i18n::ui(), S, status, &text),
             }
             .into());
         }
         if text.trim().is_empty() {
             return Ok(Answer::Done(Value::Null));
         }
-        let v = serde_json::from_str(&text).map_err(|_| {
-            let name = S.label();
-            anyhow!(tr!(
-                "{name} : réponse illisible",
-                "{name}: unreadable answer"
-            ))
-        })?;
+        let v = serde_json::from_str(&text)
+            .map_err(|_| anyhow!(tr!("{S} : réponse illisible", "{S}: unreadable answer")))?;
         Ok(Answer::Done(v))
     }
 
@@ -171,10 +180,7 @@ impl Clickup {
     /// The list's statuses with their type (`open`, `custom`, `done`, `closed`), in its order. A
     /// list gone or out of the token's reach says so.
     async fn statuses(&self, list: &str) -> Result<(String, Vec<(ExternalState, String)>)> {
-        let v = match self
-            .get(&format!("/list/{}", super::encode(list)), &[])
-            .await
-        {
+        let v = match self.get(&format!("/list/{}", encode(list)), &[]).await {
             Ok(v) => v,
             Err(e) => return Err(self.list_lost(list, e).await),
         };
@@ -209,12 +215,11 @@ impl Clickup {
         if !lost {
             return e;
         }
-        let name = S.label();
         HttpError {
             status: 404,
             message: tr!(
-                "La liste {name} {list} n'existe plus ou n'est plus accessible : choisis-en une autre dans Réglages › Intégrations",
-                "The {name} list {list} no longer exists or can’t be reached any more: choose another one in Settings › Integrations"
+                "La liste {S} {list} n'existe plus ou n'est plus accessible : choisis-en une autre dans Réglages › Intégrations",
+                "The {S} list {list} no longer exists or can’t be reached any more: choose another one in Settings › Integrations"
             ),
         }
         .into()
@@ -280,7 +285,7 @@ impl Clickup {
         let next = loop {
             let v = self
                 .get(
-                    &format!("/list/{}/task", super::encode(list)),
+                    &format!("/list/{}/task", encode(list)),
                     &self.task_query(q, page),
                 )
                 .await?;
@@ -372,10 +377,7 @@ impl Clickup {
     async fn task(&self, id: &str, query: &[(&str, String)]) -> Result<Option<Value>> {
         let mut query = query.to_vec();
         query.push(("include_markdown_description", "true".to_string()));
-        match self
-            .get(&format!("/task/{}", super::encode(id)), &query)
-            .await
-        {
+        match self.get(&format!("/task/{}", encode(id)), &query).await {
             Ok(v) => Ok(Some(v)),
             Err(e)
                 if e.downcast_ref::<HttpError>()
@@ -404,7 +406,7 @@ impl Clickup {
         };
         self.send(
             self.http
-                .put(self.url(&format!("/task/{}", super::encode(&r.id))))
+                .put(self.url(&format!("/task/{}", encode(&r.id))))
                 .json(&json!({ "status": known.name })),
         )
         .await?;
@@ -414,7 +416,7 @@ impl Clickup {
     pub async fn comment(&self, r: &ExternalRef, text: &str) -> Result<()> {
         self.send(
             self.http
-                .post(self.url(&format!("/task/{}/comment", super::encode(&r.id))))
+                .post(self.url(&format!("/task/{}/comment", encode(&r.id))))
                 .json(&json!({ "comment_text": text, "notify_all": false })),
         )
         .await?;
@@ -459,28 +461,104 @@ fn is_closed(kind: &str) -> bool {
     matches!(kind, "closed" | "done")
 }
 
-/// The defaults of the columns: by the statuses' names as for the other services; else « En
-/// cours » and « À tester » take the first status of the `custom` type (between the open one and
-/// the closed ones), « Terminé » the next one, else the first of the `done` type. A list with no
-/// such status leaves the column unchanged.
-fn defaults_by_type(
-    statuses: &[(ExternalState, String)],
-) -> std::collections::BTreeMap<Column, ExternalState> {
+/// What looks like « en cours », then « à tester », by priority (the names Escouade guesses the columns' states by).
+const DOING: &[&str] = &[
+    "in-progress",
+    "en-cours",
+    "doing",
+    "wip",
+    "in-development",
+    "en-developpement",
+    "progress",
+    "started",
+];
+const TO_TEST: &[&str] = &[
+    "a-tester",
+    "to-test",
+    "to-be-tested",
+    "testing",
+    "qa",
+    "in-review",
+    "review",
+    "recette",
+    "a-valider",
+    "validation",
+    "test",
+];
+
+/// A name as a kebab-case ASCII slug (accents folded).
+fn slug(s: &str) -> String {
+    let folded: String = s
+        .trim()
+        .to_lowercase()
+        .chars()
+        .map(|c| match c {
+            'à' | 'á' | 'â' | 'ä' | 'ã' => 'a',
+            'ç' => 'c',
+            'è' | 'é' | 'ê' | 'ë' => 'e',
+            'ì' | 'í' | 'î' | 'ï' => 'i',
+            'ò' | 'ó' | 'ô' | 'ö' | 'õ' => 'o',
+            'ù' | 'ú' | 'û' | 'ü' => 'u',
+            'ÿ' => 'y',
+            'ñ' => 'n',
+            c if c.is_ascii_alphanumeric() => c,
+            _ => '-',
+        })
+        .collect();
+    folded
+        .split('-')
+        .filter(|p| !p.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+/// The first state whose name holds one of `patterns` (as whole words), in their order.
+fn looks_like<'a>(states: &'a [ExternalState], patterns: &[&str]) -> Option<&'a ExternalState> {
+    patterns.iter().find_map(|p| {
+        states.iter().find(|s| {
+            let slug = slug(&s.name);
+            slug == *p
+                || slug.starts_with(&format!("{p}-"))
+                || slug.ends_with(&format!("-{p}"))
+                || slug.contains(&format!("-{p}-"))
+        })
+    })
+}
+
+/// The defaults of the columns (`doing`, `review`, `done`): by the statuses' names as for the other services (the one
+/// that looks like « en cours » for « En cours » and « À tester », the one that looks like « à tester » for
+/// « Terminé »); else « En cours » and « À tester » take the first status of the `custom` type (between the open one
+/// and the closed ones), « Terminé » the next one, else the first of the `done` type. A list with no such status
+/// leaves the column unchanged.
+fn defaults_by_type(statuses: &[(ExternalState, String)]) -> BTreeMap<String, ExternalState> {
     let states: Vec<ExternalState> = statuses.iter().map(|(s, _)| s.clone()).collect();
-    let mut out = default_states(&states);
+    let mut out = BTreeMap::new();
+    let doing = looks_like(&states, DOING);
+    if let Some(d) = doing {
+        out.insert("doing".to_string(), d.clone());
+        out.insert("review".to_string(), d.clone());
+    }
+    let others: Vec<ExternalState> = states
+        .iter()
+        .filter(|s| Some(*s) != doing)
+        .cloned()
+        .collect();
+    if let Some(t) = looks_like(&others, TO_TEST) {
+        out.insert("done".to_string(), t.clone());
+    }
     let custom: Vec<&ExternalState> = statuses
         .iter()
         .filter(|(_, k)| k == "custom")
         .map(|(s, _)| s)
         .collect();
-    if !out.contains_key(&Column::Doing) {
+    if !out.contains_key("doing") {
         if let Some(first) = custom.first() {
-            out.insert(Column::Doing, (*first).clone());
-            out.insert(Column::Review, (*first).clone());
+            out.insert("doing".to_string(), (*first).clone());
+            out.insert("review".to_string(), (*first).clone());
         }
     }
-    if !out.contains_key(&Column::Done) {
-        let doing = out.get(&Column::Doing).cloned();
+    if !out.contains_key("done") {
+        let doing = out.get("doing").cloned();
         let next = custom
             .iter()
             .find(|s| Some(**s) != doing.as_ref())
@@ -492,7 +570,7 @@ fn defaults_by_type(
                     .map(|(s, _)| s.clone())
             });
         if let Some(next) = next {
-            out.insert(Column::Done, next);
+            out.insert("done".to_string(), next);
         }
     }
     out
@@ -534,7 +612,7 @@ fn issue_of(t: &Value, list: &str, lang: Lang) -> ExternalIssue {
     );
     let checklists: Vec<&Value> = t["checklists"].as_array().into_iter().flatten().collect();
     ExternalIssue {
-        service: S,
+        service: ID.to_string(),
         key,
         title: t["name"].as_str().unwrap_or_default().to_string(),
         kind: task(lang),
@@ -620,7 +698,7 @@ fn now_ms() -> i64 {
 fn limited() -> anyhow::Error {
     HttpError {
         status: 429,
-        message: http_error(S, 429, ""),
+        message: http_error_in(i18n::ui(), S, 429, ""),
     }
     .into()
 }
@@ -638,6 +716,167 @@ fn mine_filter(lang: Lang) -> IssueFilter {
     }
 }
 
+impl TicketSource for Clickup {
+    fn me(&self) -> BoxFuture<'_, Result<(String, String)>> {
+        Box::pin(Clickup::me(self))
+    }
+    fn containers(&self) -> BoxFuture<'_, Result<Vec<Container>>> {
+        Box::pin(Clickup::containers(self))
+    }
+    fn states<'a>(&'a self, container: &'a str) -> BoxFuture<'a, Result<Vec<ExternalState>>> {
+        Box::pin(Clickup::states(self, container))
+    }
+    /// ClickUp's own view of the states: the defaults follow the statuses' types too.
+    fn states_view<'a>(&'a self, container: &'a str) -> BoxFuture<'a, Result<Option<StatesView>>> {
+        Box::pin(async move { Clickup::states_view(self, container).await.map(Some) })
+    }
+    fn issues<'a>(&'a self, container: &'a str, q: &'a Query) -> BoxFuture<'a, Result<IssuePage>> {
+        Box::pin(Clickup::issues(self, container, q))
+    }
+    fn set_state<'a>(
+        &'a self,
+        r: &'a ExternalRef,
+        state: &'a ExternalState,
+        _mapped: &'a [ExternalState],
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(Clickup::set_state(self, r, state))
+    }
+    fn comment<'a>(&'a self, r: &'a ExternalRef, text: &'a str) -> BoxFuture<'a, Result<()>> {
+        Box::pin(Clickup::comment(self, r, text))
+    }
+}
+
+/// The Kanban's source, ClickUp.
+pub struct ClickupSource;
+
+impl SourceKind for ClickupSource {
+    fn id(&self) -> &str {
+        ID
+    }
+    fn name(&self) -> &str {
+        S
+    }
+    fn client(&self, http: reqwest::Client, account: &Credentials) -> Box<dyn TicketSource> {
+        Box::new(Clickup::new(http, account))
+    }
+}
+
+/// What `escouade-plugins clickup` runs.
+pub fn run() -> i32 {
+    escouade_plugin_kit::serve::run(
+        "clickup",
+        escouade_plugin_kit::hosts::Hosts::new(vec![], vec![Box::new(ClickupSource)]),
+    )
+}
+
 #[cfg(test)]
-#[path = "clickup_tests.rs"]
-mod tests;
+mod tests {
+    use super::*;
+
+    fn s(name: &str, kind: &str) -> (ExternalState, String) {
+        (
+            ExternalState {
+                id: name.into(),
+                name: name.into(),
+            },
+            kind.to_string(),
+        )
+    }
+
+    #[test]
+    fn the_wait_lasts_until_the_reset() {
+        assert_eq!(wait_until(Some(1_000), 999_500), Duration::from_millis(500));
+        assert_eq!(wait_until(Some(1_000), 1_200_000), Duration::ZERO);
+        assert_eq!(wait_until(None, 0), WAIT_DEFAULT);
+    }
+
+    #[test]
+    fn statuses_whose_names_say_nothing_get_their_defaults_by_type() {
+        let d = defaults_by_type(&[
+            s("ouvert", "open"),
+            s("chez Ada", "custom"),
+            s("chez Bob", "custom"),
+            s("fini", "closed"),
+        ]);
+        assert_eq!(d["doing"].name, "chez Ada");
+        assert_eq!(d["review"].name, "chez Ada");
+        assert_eq!(d["done"].name, "chez Bob");
+        // One custom status: « Terminé » takes the `done` one.
+        let d = defaults_by_type(&[
+            s("ouvert", "open"),
+            s("chez Ada", "custom"),
+            s("livré", "done"),
+            s("fini", "closed"),
+        ]);
+        assert_eq!(d["done"].name, "livré");
+        // Open and closed only: no column moves the task.
+        assert!(defaults_by_type(&[s("ouvert", "open"), s("fini", "closed")]).is_empty());
+    }
+
+    #[test]
+    fn the_names_give_their_defaults_first() {
+        let d = defaults_by_type(&[
+            s("to do", "open"),
+            s("in progress", "custom"),
+            s("in review", "custom"),
+            s("shipped", "done"),
+            s("complete", "closed"),
+        ]);
+        assert_eq!(d["doing"].name, "in progress");
+        assert_eq!(d["review"].name, "in progress");
+        assert_eq!(d["done"].name, "in review");
+        assert!(!d.contains_key("todo"));
+        // Accents are folded: « À tester » is « a-tester ».
+        let d = defaults_by_type(&[s("À tester", "custom"), s("En cours", "custom")]);
+        assert_eq!(d["doing"].name, "En cours");
+        assert_eq!(d["done"].name, "À tester");
+    }
+
+    #[test]
+    fn without_a_checklist_the_criteria_come_from_the_description() {
+        let t = json!({
+            "id": "86abx3", "name": "Mode sombre", "checklists": [],
+            "markdown_description": "## Critères\n- Bascule persistée\n- Contrastes AA",
+        });
+        let i = issue_of(&t, "l1", Lang::Fr);
+        assert_eq!(i.criteria, ["Bascule persistée", "Contrastes AA"]);
+        // Without a custom id, its key is its id.
+        assert_eq!(i.key, "#86abx3");
+    }
+
+    #[test]
+    fn a_text_names_a_task_by_its_id_or_its_custom_id() {
+        assert_eq!(id_kind("#86abx3"), Some(Named::Task("86abx3")));
+        assert_eq!(id_kind("#9hz"), Some(Named::Task("9hz")));
+        assert_eq!(id_kind("86abx3"), Some(Named::Task("86abx3")));
+        assert_eq!(id_kind(" ABC-12 "), Some(Named::Custom("ABC-12")));
+        assert_eq!(id_kind("export"), None);
+        assert_eq!(id_kind("utf8"), None);
+        assert_eq!(id_kind("mode sombre"), None);
+        assert_eq!(id_kind("v2-beta"), None);
+        assert_eq!(id_kind(""), None);
+    }
+
+    #[test]
+    fn the_filter_of_clickup_reads_in_english() {
+        assert_eq!(mine_filter(Lang::En).label, "My tasks");
+        assert_eq!(task(Lang::En), "Task");
+    }
+
+    #[test]
+    fn the_api_is_the_one_the_core_says_else_clickups_and_the_key_goes_trimmed() {
+        let account = Credentials {
+            token: " pk_42_k1 ".into(),
+            api: Some("http://localhost:4101/".into()),
+            ..Default::default()
+        };
+        let c = Clickup::new(reqwest::Client::new(), &account);
+        assert_eq!(
+            (c.base.as_str(), c.key.as_str()),
+            ("http://localhost:4101", "pk_42_k1")
+        );
+        let c = Clickup::new(reqwest::Client::new(), &Credentials::default());
+        assert_eq!(c.base, API);
+        assert_eq!(ClickupSource.account_name(""), "clickup");
+    }
+}

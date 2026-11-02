@@ -8,8 +8,9 @@ use std::collections::BTreeMap;
 
 // The criteria of a description, as every source reads them, in the core and in the plugins (`escouade_plugin_kit::text`).
 #[cfg(test)]
-pub use escouade_plugin_kit::text::criteria_in;
-pub use escouade_plugin_kit::text::{criteria_of, names_criteria};
+use escouade_plugin_kit::text::criteria_of;
+#[cfg(test)]
+pub use escouade_plugin_kit::text::{criteria_in, names_criteria};
 
 /// What looks like « en cours », then « à tester », by priority.
 const DOING: &[&str] = &[

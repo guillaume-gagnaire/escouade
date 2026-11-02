@@ -433,12 +433,7 @@ fn missing_field(lang: Lang, service: Service, account: &Account) -> Option<Stri
             return Some(said);
         }
     }
-    Some(match service {
-        Service::CLICKUP if account.token.is_empty() => {
-            tr_in!(lang, "Indique le jeton.", "Give the token.")
-        }
-        _ => return None,
-    })
+    None
 }
 
 impl<R: Runtime> Core<R> {
@@ -494,6 +489,7 @@ impl<R: Runtime> Core<R> {
                 Service::LINEAR => (account.token.clone(), Some(&bases.linear)),
                 // Jira's API is its site's: the plugin is told the site, the e-mail and, lent, the token.
                 Service::JIRA => (account.token.clone(), None),
+                Service::CLICKUP => (account.token.clone(), Some(&bases.clickup)),
                 _ => (account.token.clone(), Some(&bases.github)),
             };
             self.plugin_runtime

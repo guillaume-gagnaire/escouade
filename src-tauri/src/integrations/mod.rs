@@ -3,7 +3,6 @@
 
 #[cfg(test)]
 mod azure_tests;
-pub mod clickup;
 #[cfg(test)]
 pub(crate) mod fake;
 #[cfg(test)]
@@ -412,6 +411,7 @@ pub(crate) fn lasting(e: &anyhow::Error) -> bool {
 }
 
 /// An HTTP error of `service`, and what its body says.
+#[cfg(test)]
 pub fn http_error(service: Service, status: u16, body: &str) -> String {
     http_error_in(crate::i18n::ui(), service.label(), status, body)
 }
@@ -425,7 +425,8 @@ pub(crate) fn http_error_in(
     escouade_plugin_kit::errors::http_error_in(crate::i18n::kit(lang), name, status, body)
 }
 
-/// A path segment or a query value, percent-encoded.
+/// A path segment or a query value, percent-encoded (the tests' fake servers; the clients are the plugins').
+#[cfg(test)]
 pub(crate) fn encode(s: &str) -> String {
     crate::board::encode(s, false)
 }

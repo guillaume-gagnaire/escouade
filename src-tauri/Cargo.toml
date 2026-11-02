@@ -75,6 +75,7 @@ escouade-plugin-acp = { path = "../plugins/builtin/dev.escouade.acp" }
 escouade-plugin-linear = { path = "../plugins/builtin/dev.escouade.linear" }
 escouade-plugin-jira = { path = "../plugins/builtin/dev.escouade.jira" }
 escouade-plugin-cursor = { path = "../plugins/builtin/dev.escouade.cursor-cli" }
+escouade-plugin-clickup = { path = "../plugins/builtin/dev.escouade.clickup" }
 # A version's archive from the store (STORE-9): read in memory, its links and climbing paths refused.
 flate2 = "1"
 tar = { version = "0.4", default-features = false }
@@ -182,6 +183,7 @@ members = [
     "../plugins/builtin/dev.escouade.linear",
     "../plugins/builtin/dev.escouade.jira",
     "../plugins/builtin/dev.escouade.cursor-cli",
+    "../plugins/builtin/dev.escouade.clickup",
 ]
 default-members = [
     ".",
@@ -198,6 +200,7 @@ default-members = [
     "../plugins/builtin/dev.escouade.linear",
     "../plugins/builtin/dev.escouade.jira",
     "../plugins/builtin/dev.escouade.cursor-cli",
+    "../plugins/builtin/dev.escouade.clickup",
 ]
 
 [profile.dev.package."*"]

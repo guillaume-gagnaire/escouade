@@ -2,7 +2,7 @@
 title: "Intégrations"
 subject: "Kanban"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-213","ESC-214","ESC-215"]
+tickets: ["ESC-213","ESC-214","ESC-215","ESC-216"]
 decisions: []
 compared: null
 ---
@@ -174,4 +174,11 @@ Dans Réglages › Intégrations › « Sources du Kanban » :
 - Il se voit dans la vue Plugins, sous « Livrés avec Escouade », et se coupe pour l'app ou pour un projet. Arrêté ou coupé, la synchro le dit (« Le plugin dev.escouade.jira ne répond pas : … ») et recommence plus tard.
 - « Connecter » vérifie le compte par le plugin, à qui Escouade prête le jeton le temps de l'appel ; le site (https, sauf cette machine) et l'e-mail lui sont dits, jamais le jeton. Les textes « Indique l'adresse du site. », « Indique l'e-mail. » et « Indique le jeton. » sont ceux du manifeste du plugin.
 - Le plugin reçoit de l'app la langue, le proxy et la vérification TLS des réglages (changés, le plugin repart avec).
-- ClickUp suit le même modèle.
+
+## ClickUp, plugin de première main (ESC-216, INT-7.4)
+
+- ClickUp n'est plus dans le cœur : c'est le plugin `dev.escouade.clickup`, livré avec Escouade et signé avec elle (dossier `plugins/builtin/dev.escouade.clickup/`), un process `escouade-plugins clickup`, sur le même modèle que Trello, Linear et Jira. Le Kanban, l'import (listes par espace et dossier, « Mes tâches », puces de statut, étiquette, recherche par titre, par id `#86abx3` ou par id personnalisé), le statut de la liste et le commentaire se comportent comme avant ; le jeton, les listes liées et le trousseau sont inchangés.
+- ClickUp garde sa vue propre des états : les statuts de chaque liste, et ceux que chaque colonne prend par défaut d'après leurs noms, puis leurs types.
+- Il se voit dans la vue Plugins, sous « Livrés avec Escouade », et se coupe pour l'app ou pour un projet. Arrêté ou coupé, la synchro le dit (« Le plugin dev.escouade.clickup ne répond pas : … ») et réessaie plus tard ; rien n'est perdu.
+- « Connecter » vérifie le jeton par le plugin, à qui Escouade le prête le temps de l'appel. Le texte « Indique le jeton. » est celui du manifeste du plugin.
+- Le plugin reçoit de l'app l'adresse de l'API (`ESCOUADE_CLICKUP_API`), la langue, le proxy et la vérification TLS des réglages.

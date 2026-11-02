@@ -111,6 +111,12 @@ pub const REGISTRY: &[Entry] = &[
             "../../../plugins/builtin/dev.escouade.cursor-cli/escouade-plugin.json"
         ),
     },
+    Entry {
+        id: CLICKUP,
+        manifest: include_str!(
+            "../../../plugins/builtin/dev.escouade.clickup/escouade-plugin.json"
+        ),
+    },
 ];
 
 /// The plugin « GitHub »: github.com, GHE.com and GitHub Enterprise Server, their pull requests and GitHub Issues.
@@ -143,6 +149,9 @@ pub const JIRA: &str = "dev.escouade.jira";
 
 /// The plugin « Cursor CLI »: Cursor CLI as a harness, over ACP (INT-10.1).
 pub const CURSOR: &str = "dev.escouade.cursor-cli";
+
+/// The plugin « ClickUp »: the Kanban's source of ClickUp tasks (INT-7.4).
+pub const CLICKUP: &str = "dev.escouade.clickup";
 
 /// Whether `id` is the id of a plugin the app gives.
 pub fn is_builtin(id: &str) -> bool {

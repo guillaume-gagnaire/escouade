@@ -234,7 +234,9 @@ impl Hosts {
         // Its account: its instance's host (github.com's), else the source's own (`SourceKind::account_name`).
         let name = kind.account_name(&url);
         let token = self.token(cx, kind.name(), &name).await?;
-        let key = format!("{id}\n{url}\n{:?}\n{token}", account.api);
+        // The user is part of the key: a client made before the account knew it (at « Connecter ») must not serve the
+        // calls after it (ClickUp's « Mes tâches » filters on it).
+        let key = format!("{id}\n{url}\n{:?}\n{token}\n{}", account.api, account.user);
         if let Some(c) = self.source_clients.lock().get(&key) {
             return Ok(c.clone());
         }

@@ -149,6 +149,8 @@ mod plugins_bench_wasm_tests;
 #[cfg(test)]
 mod plugins_builtin_tests;
 #[cfg(test)]
+mod plugins_clickup_tests;
+#[cfg(test)]
 mod plugins_decide_tests;
 #[cfg(test)]
 mod plugins_harness_tests;
