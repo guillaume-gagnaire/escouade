@@ -1,9 +1,9 @@
 ---
-number: null
+number: 54
 id: "clickup-sort-du-cœur-en-plugin-de-premie"
 title: "ClickUp sort du cœur en plugin de première main, en process"
 date: "2026-11-02"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-216"
 pages: ["escouade/spec/kanban/integrations"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: []
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-02T06:28:08+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
