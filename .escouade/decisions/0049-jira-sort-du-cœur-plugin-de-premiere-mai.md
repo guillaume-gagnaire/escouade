@@ -1,9 +1,9 @@
 ---
-number: null
+number: 49
 id: "jira-sort-du-cœur-plugin-de-premiere-mai"
 title: "Jira sort du cœur : plugin de première main en process, sur le modèle de Trello et Linear"
 date: "2026-11-02"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-215"
 pages: ["kanban/integrations"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"kanban/integrations","added":6,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-02T03:44:51+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
