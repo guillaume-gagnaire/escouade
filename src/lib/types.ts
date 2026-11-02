@@ -1124,6 +1124,14 @@ export interface TicketPr {
   errorSince: number | null;
   /** Closed without a merge: « Remettre à faire » and « Terminer quand même ». */
   closed: boolean;
+  /** The host's auto-merge is on: it merges by itself once the checks pass (ESC-62). */
+  autoMerge?: boolean;
+  /** How the repository lets it merge, read once it is open; null before. */
+  mergeOptions?: MergeOptions | null;
+  /** « Merger quand c'est vert » without the host's auto-merge: Escouade merges it with this strategy once approved and green. */
+  mergeWhenGreen?: MergeStrategy | null;
+  /** Why Escouade's merge did not go (its CI failed, the host refused), until the next gesture. */
+  mergeNote?: string | null;
   /** The checks that failed at its last reading (ESC-60); `log`: its host keeps its log (not a CI of another kind). */
   failed: FailedCheck[];
   /** Its agent fixes its CI now: since when (ms). */
@@ -1141,6 +1149,17 @@ export interface FailedCheck {
   url: string | null;
   log: boolean;
 }
+
+export type MergeStrategy = 'merge' | 'squash' | 'rebase' | 'semiLinear';
+
+/** How a repository lets a pull request merge (ESC-62). */
+export interface MergeOptions {
+  strategies: MergeStrategy[];
+  autoMerge: boolean;
+}
+
+/** How « Merger » or « Merger quand c'est vert » went: merged now, by the host's auto-merge, or Escouade waits. */
+export type MergeHow = 'merged' | 'host' | 'escouade';
 
 /** Someone of the team, as the shared tickets' files name them (ESC-190). */
 export interface Person {

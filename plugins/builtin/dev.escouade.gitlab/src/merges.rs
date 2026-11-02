@@ -476,6 +476,23 @@ fn discussion_of(comment: &str) -> &str {
     comment.split_once(':').map_or(comment, |(d, _)| d)
 }
 
+/// What a project's settings allow (`GET /projects/:id`): a merge commit unless squashing is « always », squashed
+/// unless it is « never » (`squash_option`). Auto-merge is GitLab's own (`merge_when_pipeline_succeeds`).
+pub fn merge_options_of(project: &Value) -> MergeOptions {
+    let squash = project["squash_option"].as_str().unwrap_or("default_off");
+    let mut strategies = Vec::new();
+    if squash != "always" {
+        strategies.push(MergeStrategy::Merge);
+    }
+    if squash != "never" {
+        strategies.push(MergeStrategy::Squash);
+    }
+    MergeOptions {
+        strategies,
+        auto_merge: true,
+    }
+}
+
 impl Forge for Gitlab {
     fn me(&self) -> BoxFuture<'_, Result<Identity>> {
         Box::pin(async move {
@@ -656,6 +673,17 @@ impl Forge for Gitlab {
             )
             .await?;
             Ok(())
+        })
+    }
+
+    fn merge_options<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+    ) -> BoxFuture<'a, Result<MergeOptions>> {
+        Box::pin(async move {
+            let _ = number;
+            Ok(merge_options_of(&self.get(&project(repo)).await?))
         })
     }
 

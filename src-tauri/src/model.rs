@@ -1287,6 +1287,17 @@ pub struct TicketPr {
     /// Closed without a merge: the ticket is blocked with « Remettre à faire » and « Terminer
     /// quand même ».
     pub closed: bool,
+    /// The host's auto-merge is on: it merges by itself once the checks pass (ESC-62).
+    pub auto_merge: bool,
+    /// How the repository lets it merge (the strategies it allows, its auto-merge), read once it
+    /// is open; none before.
+    pub merge_options: Option<crate::forge::MergeOptions>,
+    /// « Merger quand c'est vert » where the host has no auto-merge: Escouade merges it with this
+    /// strategy once it is approved and green, for as long as it runs.
+    pub merge_when_green: Option<crate::forge::MergeStrategy>,
+    /// Why Escouade's merge did not go (its CI failed, the host refused): said on the card until
+    /// the next gesture.
+    pub merge_note: Option<String>,
     /// The checks that failed at its last reading (ESC-60), each with whether its host keeps its
     /// log: a CI of another kind (Jenkins, CircleCI…) gives a status and an address alone.
     pub failed: Vec<FailedCheck>,

@@ -1232,3 +1232,22 @@ async fn real_azure_devops() {
     let after = forge.pull_request(&repo, pr.number).await.unwrap();
     assert_eq!(after.state, PrState::Closed);
 }
+
+/// How a pull request may merge (ESC-62): its branch's merge policy, and auto-complete.
+#[tokio::test]
+async fn the_branchs_policy_says_how_a_pull_request_may_merge() {
+    let server = FakeServer::start().await;
+    server.on("GET", PR, 200, fixture("pull-request"));
+    server.on(
+        "GET",
+        &format!("{PROJECT}/git/policy/configurations"),
+        200,
+        fixture("policy-configurations"),
+    );
+    let o = client(&server).merge_options(&repo(), 22).await.unwrap();
+    assert_eq!(
+        o.strategies,
+        vec![MergeStrategy::Squash, MergeStrategy::SemiLinear]
+    );
+    assert!(o.auto_merge);
+}

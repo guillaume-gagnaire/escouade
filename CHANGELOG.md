@@ -9,6 +9,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ### Nouveautés
 
 - « Valider + PR » ouvre la pull request du ticket par l'API de son hébergeur (GitHub, GitLab, Bitbucket, Gitea, Azure DevOps), sans `gh`, en brouillon si tu veux et avec tes relecteurs et étiquettes. Le ticket attend ensuite dans la nouvelle colonne « En revue », qui montre l'état de la PR, sa CI, ses approbations et ses conflits, et passe « Terminé » dès qu'elle est mergée.
+- Merge la PR d'un ticket « En revue » depuis sa carte quand elle est approuvée et verte, avec une stratégie que le dépôt autorise. Pendant que la CI tourne, « Merger quand c'est vert » active l'auto-merge de l'hébergeur ; sans lui (Bitbucket par exemple), Escouade attend la fin de la CI et merge elle-même.
 - Quand la CI de la PR d'un ticket en revue échoue, « L'agent corrige » renvoie à son agent les jobs en échec et la fin de leurs journaux ; il corrige, Escouade pousse et le ticket revient « En revue ». Avec le pilote auto, ça part seul, dans la limite des boucles du ticket.
 - Les plugins Contraste élevé, Discord, Slack et Règles de l’équipe sont des plugins d’Escouade, sur le store sous `dev.escouade.*` et tenus dans le dépôt de l’app ; seul ce dépôt peut publier ces identifiants. Une version installée sous l’ancien identifiant `dev.exemple.*` se remplace depuis la vue Plugins.
 - Slack et Règles de l’équipe tournent maintenant sans Node, isolés dans Escouade (version 2.0.0, pour Escouade 2.2 et après) ; Slack ne joint que slack.com.

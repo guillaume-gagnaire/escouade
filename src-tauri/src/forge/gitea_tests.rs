@@ -726,3 +726,43 @@ async fn the_instance_is_asked_its_version_once_per_client() {
         .count();
     assert_eq!(versions, 1);
 }
+
+/// How a pull request may merge (ESC-62): the repository's merge styles, and auto-merge only when
+/// its target branch is protected.
+#[tokio::test]
+async fn the_repositorys_styles_and_a_protected_branch_say_how_a_pull_request_may_merge() {
+    let server = FakeServer::start().await;
+    server.on("GET", "/version", 200, json!({ "version": "1.25.0" }));
+    server.on(
+        "GET",
+        "/repos/ada/notes",
+        200,
+        json!({ "allow_merge_commits": true, "allow_rebase": false, "allow_rebase_explicit": false, "allow_squash_merge": true }),
+    );
+    server.on(
+        "GET",
+        "/repos/ada/notes/pulls/7",
+        200,
+        json!({ "number": 7, "state": "open", "base": { "ref": "main" }, "head": { "ref": "feat" } }),
+    );
+    server.on(
+        "GET",
+        "/repos/ada/notes/branches/main",
+        200,
+        json!({ "name": "main", "protected": false }),
+    );
+    let forge = client(&server);
+    let o = forge.merge_options(&repo(), 7).await.unwrap();
+    assert_eq!(
+        o.strategies,
+        vec![MergeStrategy::Merge, MergeStrategy::Squash]
+    );
+    assert!(!o.auto_merge, "not a protected branch");
+    server.on(
+        "GET",
+        "/repos/ada/notes/branches/main",
+        200,
+        json!({ "name": "main", "protected": true }),
+    );
+    assert!(forge.merge_options(&repo(), 7).await.unwrap().auto_merge);
+}

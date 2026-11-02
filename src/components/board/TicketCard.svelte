@@ -36,7 +36,20 @@
   import { docsStore } from '../../lib/docs.svelte';
   import { pageTitle } from '../../lib/planning';
   import { prIcon, prTone } from '../../lib/prs';
-  import { asPull, canFixCi, ciLine, fixesSpent, noLogLine, prErrorLine, prFacts, prStateKey, prStateWord } from '../../lib/ticket-prs';
+  import {
+    asPull,
+    canFixCi,
+    ciLine,
+    fixesSpent,
+    mergeActions,
+    mergeHowText,
+    mergeWaitLine,
+    noLogLine,
+    prErrorLine,
+    prFacts,
+    prStateKey,
+    prStateWord,
+  } from '../../lib/ticket-prs';
 
   const uid = $props.id();
 
@@ -287,6 +300,14 @@
     f();
   }
 
+  /** « Merger » / « Merger quand c'est vert » (ESC-62): what it did said by a toast. */
+  async function merge(whenGreen: boolean) {
+    const p = ticket.pr;
+    if (!p) return;
+    const how = await app.run(api.ticketPrMerge(ticket.id, whenGreen));
+    if (how) app.toast(mergeHowText(how, p), how === 'merged' ? 'ok' : 'info');
+  }
+
   function approve() {
     const send = () => {
       // The test launches stop first (the backend does it too): their ends are no crashes.
@@ -507,6 +528,42 @@
         {#if fixesSpent(ticket, s.autopilot)}<span class="prfacts"
             >{t('board.pr.loopsSpent', { count: p.fixes, max: ticket.maxLoops })}</span
           >{/if}
+      </div>
+    {/if}
+    <!-- Merging from Escouade (ESC-62): never by itself, a button. « Merger » approved and green, with a strategy the
+         repository allows; « Merger quand c'est vert » while its CI runs (the host's auto-merge, else Escouade). -->
+    {@const acts = mergeActions(p, s.strategy)}
+    {@const waits = mergeWaitLine(p)}
+    {#if waits}
+      <span class="prwait" role="status" data-pr-wait>{waits}</span>
+    {/if}
+    {#if p.mergeNote}<span class="lost" role="status" data-pr-merge-note use:tip={{ text: p.mergeNote, cut: true }}>{p.mergeNote}</span
+      >{/if}
+    {#if acts.none}<span class="prfacts" data-pr-no-strategy>{t('board.pr.merge.none')}</span>{/if}
+    {#if acts.merge || acts.whenGreen || p.mergeWhenGreen || p.mergeNote}
+      <div class="row prmerge">
+        {#if acts.merge}
+          {@const strategy = t(`board.pr.merge.strategies.${acts.merge}`)}
+          <button
+            class="btn small primary"
+            data-pr-merge
+            use:tip={t('board.pr.merge.nowTitle', { word: p.word, number: p.number, target: p.target, strategy })}
+            onclick={(e) => act(e, () => merge(false))}><Icon name="merge" size={12} />{t('board.pr.merge.now', { strategy })}</button
+          >
+        {/if}
+        {#if acts.whenGreen}
+          <button
+            class="btn small"
+            data-pr-merge-green
+            use:tip={t('board.pr.merge.whenGreenTitle')}
+            onclick={(e) => act(e, () => merge(true))}>{t('board.pr.merge.whenGreen')}</button
+          >
+        {/if}
+        {#if p.mergeWhenGreen || p.mergeNote}
+          <button class="btn small" data-pr-stop-waiting onclick={(e) => act(e, () => app.run(api.ticketPrStopWaiting(ticket.id)))}
+            >{p.mergeNote ? t('common.close') : t('board.pr.merge.stopWaiting')}</button
+          >
+        {/if}
       </div>
     {/if}
   {/if}
@@ -1094,6 +1151,13 @@
   }
   .prci.pending {
     color: var(--wait);
+  }
+  .prwait {
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .prmerge {
+    margin-top: 2px;
   }
   .prfacts {
     color: var(--muted);

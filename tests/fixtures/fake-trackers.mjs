@@ -110,6 +110,8 @@ function seed() {
       // repository it is in (`repo`, acme/demo by default) and the one of its branch (`headRepo`: a fork's, ESC-238);
       // `thirdParty`: a failed status of another CI (ci/jenkins), which keeps no log (ESC-60).
       pulls: [],
+      // The settings of acme/demo (ESC-62): its merge methods and « Allow auto-merge », set by POST /__github/repo.
+      repo: { allow_merge_commit: true, allow_squash_merge: true, allow_rebase_merge: true, allow_auto_merge: false },
       // The forks and the repository each was forked from (`repository.parent`).
       forks: { 'ada/demo': 'acme/demo', 'bob/demo': 'acme/demo' },
     },
@@ -700,6 +702,21 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
       Object.assign(pull, json() ?? {});
       return send(200, pull);
     }
+    if (p === '/__github/repo') {
+      Object.assign(g.repo, json() ?? {});
+      return send(200, g.repo);
+    }
+    if (p === '/github/repos/acme/demo' && method === 'GET') return send(200, { full_name: 'acme/demo', ...g.repo });
+    // « Merger » (ESC-62): merged when its CI is green, refused else, as a required check would.
+    m = p.match(/^\/github\/repos\/acme\/demo\/pulls\/(\d+)\/merge$/);
+    if (m && method === 'PUT') {
+      const pull = g.pulls.find((x) => x.number === Number(m[1]));
+      if (!pull) return send(404, { message: 'Not Found' });
+      if (pull.checks !== 'SUCCESS') return send(405, { message: 'Required status check "test" is expected.' });
+      pull.state = 'MERGED';
+      pull.mergedWith = json()?.merge_method;
+      return send(200, { merged: true, message: 'Pull Request successfully merged' });
+    }
     const node = (x) => ({
       number: x.number,
       url: `https://github.com/${x.repo ?? 'acme/demo'}/pull/${x.number}`,
@@ -711,7 +728,7 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
       mergeable: x.mergeable ?? 'MERGEABLE',
       isCrossRepository: (x.headRepo ?? x.repo ?? 'acme/demo') !== (x.repo ?? 'acme/demo'),
       headRepository: { nameWithOwner: x.headRepo ?? x.repo ?? 'acme/demo' },
-      autoMergeRequest: null,
+      autoMergeRequest: x.autoMerge ? { enabledAt: '2026-11-02T10:00:00Z' } : null,
       author: { login: x.author ?? 'ada' },
       createdAt: x.createdAt ?? new Date(Date.now() - 2 * 3600_000).toISOString(),
       latestOpinionatedReviews: {
@@ -758,6 +775,25 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
             },
           },
         });
+      // « Merger quand c'est vert » (ESC-62): GitHub's auto-merge, refused when the repository does not allow it.
+      if (q.operationName === 'PullRequestId') {
+        const x = g.pulls.find((y) => y.number === q.variables.number);
+        return send(200, { data: { repository: { pullRequest: x ? { id: `PR_${x.number}` } : null } } });
+      }
+      if (q.operationName === 'EnableAutoMerge') {
+        const x = g.pulls.find((y) => `PR_${y.number}` === q.variables.id);
+        if (!x || !g.repo.allow_auto_merge)
+          return send(200, {
+            data: { enablePullRequestAutoMerge: null },
+            errors: [{ message: 'Pull request Auto merge is not allowed for this repository' }],
+          });
+        x.autoMerge = q.variables.method;
+        return send(200, {
+          data: {
+            enablePullRequestAutoMerge: { pullRequest: { number: x.number, autoMergeRequest: { enabledAt: '2026-11-02T10:00:00Z' } } },
+          },
+        });
+      }
       if (q.operationName === 'RepoParent') {
         const parent = g.forks[`${q.variables.owner}/${q.variables.name}`];
         const [owner, name] = parent ? parent.split('/') : [];

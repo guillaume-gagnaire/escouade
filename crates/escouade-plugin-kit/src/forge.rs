@@ -106,6 +106,16 @@ pub trait Forge: Send + Sync {
         unsupported("merge")
     }
 
+    /// How the pull request `number` may merge, as the repository's settings say: the strategies they allow, and
+    /// whether the host's auto-merge is there for it. Unsupported: the core takes its provider's `Capabilities`.
+    fn merge_options<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+        _number: u64,
+    ) -> BoxFuture<'a, Result<MergeOptions>> {
+        unsupported("merge_options")
+    }
+
     /// Merge once the checks pass.
     fn auto_merge<'a>(
         &'a self,

@@ -2,14 +2,14 @@
 title: "En revue"
 subject: "kanban"
 sources: ["docs/TODO-1.8.md"]
-tickets: ["ESC-59","ESC-60"]
-decisions: [55]
+tickets: ["ESC-59","ESC-60","ESC-62"]
+decisions: [55,"merger-depuis-escouade-et-merger-quand-c"]
 compared: null
 ---
 
 ## Ce que c'est
 
-La colonne « En revue », entre « À tester » et « Terminé », tient les tickets dont la pull request est ouverte sur l'hébergeur (voir *Validation*). Le ticket y reste jusqu'au merge, que l'utilisateur fait sur l'hébergeur. Sa carte montre où en est la PR, sans qu'il faille ouvrir le navigateur.
+La colonne « En revue », entre « À tester » et « Terminé », tient les tickets dont la pull request est ouverte sur l'hébergeur (voir *Validation*). Le ticket y reste jusqu'au merge, fait sur l'hébergeur ou depuis sa carte (« Merger », « Merger quand c'est vert »). Sa carte montre où en est la PR, sans qu'il faille ouvrir le navigateur.
 
 ## Comportement
 
@@ -39,6 +39,23 @@ La colonne « En revue », entre « À tester » et « Terminé », tient les ti
 - Ce qui empêche d'aller au bout est dit sur la carte, et l'agent reste restauré pour qu'on lui parle : des changements non commités (rien n'est poussé), rien de commité (« L'agent n'a rien commité : la CI reste en échec »), un push refusé, un tour interrompu ou en erreur, l'app fermée pendant le tour. Une CI verte efface ce message.
 - Chaque correction compte une boucle du ticket.
 
+### Merger depuis Escouade
+
+Rien ne se merge sans un geste : les deux actions sont des boutons de la carte, jamais un réglage.
+
+- **La stratégie** : celle du Kanban (merge commit, squash, rebase) quand le dépôt l'autorise, sinon la première qu'il autorise. Escouade lit ce que le dépôt autorise une fois, à la première lecture de la PR ouverte :
+  - GitHub : les méthodes du dépôt (`allow_merge_commit`, `allow_squash_merge`, `allow_rebase_merge`) et « Allow auto-merge ». GitHub ne les dit qu'à qui peut pousser : sinon, les trois.
+  - GitLab : `squash_option` du projet (« never » : pas de squash ; « always » : pas de merge commit).
+  - Gitea / Forgejo : les styles du dépôt (merge, squash, rebase, rebase puis merge), et l'auto-merge seulement si la branche cible est protégée.
+  - Bitbucket : les stratégies de la branche cible (`merge_strategies`), jamais d'auto-merge.
+  - Azure DevOps : la politique de merge de la branche cible, et son auto-complete.
+  - Un plugin d'hébergeur qui ne lit pas ces réglages : ce que son fournisseur déclare.
+- **« Merger (squash) »** : seulement pour une PR approuvée (au moins une approbation, aucun changement demandé), verte (CI réussie, ou pas de CI), sans conflit, ni brouillon, que son agent ne corrige pas la CI (voir plus haut), et avec une stratégie autorisée. Le bouton dit la stratégie. Si le dépôt n'en autorise aucune d'Escouade, la carte le dit, sans bouton. Mergée, la PR est relue tout de suite et le ticket passe « Terminé » comme après un merge sur l'hébergeur.
+- **« Merger quand c'est vert »** : tant que la CI tourne, sur une PR ouverte, ni brouillon, ni en conflit, sans changement demandé, que rien ne merge déjà seul, et que son agent ne corrige pas la CI.
+  - L'hébergeur a un auto-merge pour ce dépôt (GitHub `enablePullRequestAutoMerge` si le dépôt l'autorise, GitLab `auto_merge` / `merge_when_pipeline_succeeds`, Gitea `merge_when_checks_succeed` sur une branche protégée, Azure DevOps son auto-complete) : Escouade l'active. La carte dit « Auto-merge de GitHub activé : mergée dès que la CI est verte ».
+  - Sinon (Bitbucket, un dépôt GitHub sans auto-merge, une branche Gitea non protégée) : Escouade le dit (« Pas d'auto-merge sur Bitbucket pour ce dépôt : Escouade attend la fin de la CI et merge elle-même, tant qu'elle tourne »). La carte dit « Escouade la merge (squash) dès qu'elle est approuvée et verte, tant qu'elle tourne », avec « Ne plus attendre ». L'attente est gardée avec le ticket et reprend au redémarrage. À la lecture où la PR est approuvée et verte, Escouade la merge ; une CI en échec ou des changements demandés arrêtent l'attente, et la carte le dit (« CI en échec : PR #12 n'est pas mergée, Escouade n'attend plus »).
+- **Un merge refusé** par l'hébergeur (check requis, droits) : la carte dit « Merge refusé : … », avec « Fermer » ; le ticket reste « En revue ».
+
 ### Mergée sur l'hébergeur
 
 - Le ticket passe « Terminé », avec « ⤵ PR #12 mergée dans main » et le lien de la PR.
@@ -59,7 +76,7 @@ La colonne « En revue », entre « À tester » et « Terminé », tient les ti
 - Pas de webhook : l'app n'a pas d'adresse publique. Escouade interroge l'hébergeur, et seulement pour les PR des tickets « En revue » (celles des agents ont leur propre lecture, voir *Pull requests*).
 - Toutes les minutes quand la fenêtre est au premier plan, toutes les 5 minutes sinon.
 - Tout de suite après un push d'Escouade (une validation qui ouvre une PR, « Pousser », la fin d'une correction de CI) et quand la fenêtre revient au premier plan ; et sur « Rafraîchir ».
-- Les PR d'un même dépôt se lisent ensemble : une seule requête GraphQL sur GitHub ; les jobs de la CI se comptent par une requête de plus, seulement pour une PR ouverte qui a une CI. Les journaux ne se lisent qu'au moment de la correction.
+- Les PR d'un même dépôt se lisent ensemble : une seule requête GraphQL sur GitHub ; les jobs de la CI se comptent par une requête de plus, seulement pour une PR ouverte qui a une CI. Les journaux ne se lisent qu'au moment de la correction. Ce que le dépôt autorise pour le merge se lit une fois par PR. La même lecture sert l'attente de « Merger quand c'est vert » : pas de seconde boucle.
 
 ### Les erreurs
 
@@ -76,6 +93,7 @@ La colonne « En revue », entre « À tester » et « Terminé », tient les ti
 
 ## Ce qui n'est pas fait
 
-- « L'agent traite les retours », « L'agent met à jour la branche » (conflit), « Merger » et « Merger quand c'est vert » depuis la carte.
+- « L'agent traite les retours », « L'agent met à jour la branche » (conflit) depuis la carte.
 - Un ticket dont l'agent a été supprimé ne peut pas faire corriger sa CI.
+- Couper l'auto-merge de l'hébergeur depuis Escouade : il se coupe sur l'hébergeur.
 - Les essais réels : GitHub seulement, avec le compte de l'utilisateur ; GitLab, Bitbucket Cloud et Gitea / Forgejo d'après leur documentation et leurs faux serveurs, à essayer en vrai plus tard.

@@ -2676,6 +2676,21 @@ pub async fn ticket_prs_refresh(core: CoreState<'_>, project_id: String) -> Res<
         .map_err(err)
 }
 
+/// « Merger » / « Merger quand c'est vert » on a ticket « En revue » (ESC-62).
+#[tauri::command]
+pub async fn ticket_pr_merge(
+    core: CoreState<'_>,
+    id: String,
+    when_green: bool,
+) -> Res<crate::ticketprs::MergeHow> {
+    core.ticket_pr_merge(&id, when_green).await.map_err(err)
+}
+
+#[tauri::command(async)]
+pub fn ticket_pr_stop_waiting(core: CoreState, id: String) -> Res<()> {
+    core.ticket_pr_stop_waiting(&id).map_err(err)
+}
+
 /// « Terminer quand même »: a ticket whose pull request was closed without a merge is done.
 #[tauri::command(async)]
 pub fn ticket_finish_anyway(core: CoreState, id: String) -> Res<()> {

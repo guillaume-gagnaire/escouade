@@ -806,3 +806,28 @@ fn now_secs() -> u64 {
         .unwrap()
         .as_secs()
 }
+
+/// How a merge request may merge (ESC-62): `squash_option` says whether a merge commit or a
+/// squash is allowed; GitLab's auto-merge is always there.
+#[tokio::test]
+async fn the_projects_squash_option_says_how_a_merge_request_may_merge() {
+    let server = FakeServer::start().await;
+    server.on(
+        "GET",
+        "/projects/gitlab-org%2Fapi%2Fclient-go",
+        200,
+        json!({ "id": 1, "squash_option": "always", "merge_method": "merge" }),
+    );
+    let o = client(&server).merge_options(&repo(), 7).await.unwrap();
+    assert_eq!(o.strategies, vec![MergeStrategy::Squash]);
+    assert!(o.auto_merge);
+    use escouade_plugin_gitlab::merges::merge_options_of;
+    assert_eq!(
+        merge_options_of(&json!({ "squash_option": "never" })).strategies,
+        vec![MergeStrategy::Merge]
+    );
+    assert_eq!(
+        merge_options_of(&json!({ "squash_option": "default_on" })).strategies,
+        vec![MergeStrategy::Merge, MergeStrategy::Squash]
+    );
+}

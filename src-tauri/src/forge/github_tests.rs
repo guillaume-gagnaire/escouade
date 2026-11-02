@@ -1366,3 +1366,25 @@ async fn real_github_reads() {
     github.checks(&repo, 14768).await.unwrap();
     println!("rate limit: {:?}", github.rate_limit());
 }
+
+/// How a pull request may merge (ESC-62): the repository's merge methods and « Allow auto-merge »;
+/// not told (no right to push), the three.
+#[tokio::test]
+async fn the_repositorys_settings_say_how_a_pull_request_may_merge() {
+    let server = FakeServer::start().await;
+    server.on(
+        "GET",
+        "/repos/cli/cli",
+        200,
+        json!({ "allow_merge_commit": false, "allow_squash_merge": true, "allow_rebase_merge": true, "allow_auto_merge": true }),
+    );
+    let o = client(&server).merge_options(&repo(), 7).await.unwrap();
+    assert_eq!(
+        o.strategies,
+        vec![MergeStrategy::Squash, MergeStrategy::Rebase]
+    );
+    assert!(o.auto_merge);
+    let untold = escouade_plugin_github::pulls::merge_options_of(&json!({ "name": "cli" }));
+    assert_eq!(untold.strategies.len(), 3);
+    assert!(!untold.auto_merge);
+}

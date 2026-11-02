@@ -562,6 +562,28 @@ fn reviewer(who: &str) -> Value {
     }
 }
 
+/// What the target branch of a pull request allows (`destination.branch.merge_strategies`, by its branching model);
+/// none told, the four. Bitbucket has no auto-merge: Escouade waits for the checks and merges itself.
+pub fn merge_options_of(pr: &Value) -> MergeOptions {
+    let all = [
+        MergeStrategy::Merge,
+        MergeStrategy::Squash,
+        MergeStrategy::Rebase,
+        MergeStrategy::SemiLinear,
+    ];
+    let strategies = match pr["destination"]["branch"]["merge_strategies"].as_array() {
+        Some(told) => all
+            .into_iter()
+            .filter(|s| told.iter().any(|t| t == strategy_name(*s)))
+            .collect(),
+        None => all.to_vec(),
+    };
+    MergeOptions {
+        strategies,
+        auto_merge: false,
+    }
+}
+
 impl Forge for Bitbucket {
     fn me(&self) -> BoxFuture<'_, Result<Identity>> {
         Box::pin(async move {
@@ -755,6 +777,18 @@ impl Forge for Bitbucket {
                 }
             }
             Ok(())
+        })
+    }
+
+    fn merge_options<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+    ) -> BoxFuture<'a, Result<MergeOptions>> {
+        Box::pin(async move {
+            Ok(merge_options_of(
+                &self.get(&Self::pr_path(repo, number)).await?,
+            ))
         })
     }
 

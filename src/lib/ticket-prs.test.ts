@@ -2,9 +2,15 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { setLang } from './i18n';
 import {
   canFixCi,
+  canWaitGreen,
   ciLine,
   fixesSpent,
   joinNames,
+  mergeActions,
+  mergeHowText,
+  mergeReady,
+  mergeStrategy,
+  mergeWaitLine,
   noLogLine,
   prColumnShown,
   prErrorLine,
@@ -98,5 +104,60 @@ describe('the pull requests of the tickets (ESC-59)', () => {
   it('counts a ticket in review whose agent fixes its CI among the places taken', () => {
     expect(busy([ticket({ column: 'pr', pr: ticketPr() })])).toBe(0);
     expect(busy([ticket({ column: 'pr', pr: ticketPr({ fixing: 1 }) }), ticket({ column: 'doing' })])).toBe(2);
+  });
+});
+
+describe('merging a ticket’s pull request from Escouade (ESC-62)', () => {
+  beforeEach(() => setLang('fr'));
+  const green = { approvals: 1, checks: 'success' as const, mergeable: true };
+
+  it('is ready approved and green, without a conflict, a draft or changes asked for', () => {
+    expect(mergeReady(ticketPr(green))).toBe(true);
+    expect(mergeReady(ticketPr({ ...green, checks: null }))).toBe(true);
+    expect(mergeReady(ticketPr({ ...green, approvals: 0 }))).toBe(false);
+    expect(mergeReady(ticketPr({ ...green, checks: 'pending' }))).toBe(false);
+    expect(mergeReady(ticketPr({ ...green, checks: 'failure' }))).toBe(false);
+    expect(mergeReady(ticketPr({ ...green, mergeable: false }))).toBe(false);
+    expect(mergeReady(ticketPr({ ...green, draft: true }))).toBe(false);
+    expect(mergeReady(ticketPr({ ...green, changesRequested: true }))).toBe(false);
+    expect(mergeReady(ticketPr({ ...green, state: 'merged' }))).toBe(false);
+    // Its agent fixes its CI (ESC-60): nothing merges before the fix is pushed.
+    expect(mergeReady(ticketPr({ ...green, fixing: 1 }))).toBe(false);
+    expect(canWaitGreen(ticketPr({ checks: 'pending', fixing: 1 }))).toBe(false);
+  });
+
+  it('waits for green while the CI runs, once', () => {
+    expect(canWaitGreen(ticketPr({ checks: 'pending' }))).toBe(true);
+    expect(canWaitGreen(ticketPr({ checks: 'success' }))).toBe(false);
+    expect(canWaitGreen(ticketPr({ checks: 'pending', autoMerge: true }))).toBe(false);
+    expect(canWaitGreen(ticketPr({ checks: 'pending', mergeWhenGreen: 'merge' }))).toBe(false);
+  });
+
+  it('takes the Kanban’s strategy when the repository allows it, else the first it allows', () => {
+    const opts = (strategies: ('merge' | 'squash' | 'rebase')[]) => ticketPr({ mergeOptions: { strategies, autoMerge: false } });
+    expect(mergeStrategy(opts(['merge', 'squash']), 'squash')).toBe('squash');
+    expect(mergeStrategy(opts(['rebase', 'merge']), 'squash')).toBe('rebase');
+    expect(mergeStrategy(opts([]), 'squash')).toBeNull();
+    expect(mergeStrategy(ticketPr(), 'squash')).toBeNull();
+    expect(mergeActions(ticketPr({ ...green, mergeOptions: { strategies: [], autoMerge: false } }), 'squash')).toEqual({
+      merge: null,
+      whenGreen: false,
+      none: true,
+    });
+  });
+
+  it('says what merges it by itself, in French and in English', () => {
+    expect(mergeWaitLine(ticketPr({ autoMerge: true, kind: 'gitlab', word: 'MR' }))).toBe(
+      'Auto-merge de GitLab activé : mergée dès que la CI est verte',
+    );
+    expect(mergeWaitLine(ticketPr({ mergeWhenGreen: 'rebase' }))).toContain('Escouade la merge (rebase)');
+    expect(mergeWaitLine(ticketPr())).toBeNull();
+    expect(mergeHowText('escouade', ticketPr({ kind: 'bitbucket' }))).toContain('Bitbucket');
+    setLang('en');
+    expect(mergeWaitLine(ticketPr({ autoMerge: true }))).toBe('GitHub auto-merge on: merged as soon as the CI is green');
+    expect(mergeHowText('merged', ticketPr())).toBe('PR #12 merged');
+    expect(mergeHowText('escouade', ticketPr({ kind: 'bitbucket' }))).toBe(
+      'No auto-merge on Bitbucket for this repository: Escouade waits for the end of the CI and merges itself, while it runs',
+    );
   });
 });

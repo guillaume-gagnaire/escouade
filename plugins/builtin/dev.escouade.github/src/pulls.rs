@@ -552,6 +552,27 @@ fn method_name(strategy: MergeStrategy) -> Result<&'static str> {
     }
 }
 
+/// What a repository's settings allow (`GET /repos/{owner}/{repo}`): its merge methods, and « Allow auto-merge ».
+/// GitHub tells the methods only to who may push: none told, the three are taken.
+pub fn merge_options_of(repo: &Value) -> MergeOptions {
+    let keys = [
+        ("allow_merge_commit", MergeStrategy::Merge),
+        ("allow_squash_merge", MergeStrategy::Squash),
+        ("allow_rebase_merge", MergeStrategy::Rebase),
+    ];
+    let told = keys
+        .iter()
+        .any(|(k, _)| repo.get(*k).is_some_and(Value::is_boolean));
+    MergeOptions {
+        strategies: keys
+            .iter()
+            .filter(|(k, _)| !told || repo[*k] == true)
+            .map(|(_, s)| *s)
+            .collect(),
+        auto_merge: repo["allow_auto_merge"] == true,
+    }
+}
+
 impl Forge for Github {
     fn me(&self) -> BoxFuture<'_, Result<Identity>> {
         Box::pin(async move {
@@ -777,6 +798,17 @@ impl Forge for Github {
             )
             .await?;
             Ok(())
+        })
+    }
+
+    fn merge_options<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+    ) -> BoxFuture<'a, Result<MergeOptions>> {
+        Box::pin(async move {
+            let _ = number;
+            Ok(merge_options_of(&self.get(&Self::repo_path(repo)).await?))
         })
     }
 

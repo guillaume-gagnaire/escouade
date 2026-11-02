@@ -7,7 +7,10 @@
 
 use crate::board;
 use crate::core::Core;
-use crate::forge::{Check, CheckState, Forge, PrState, PullRequest, RepoRef};
+use crate::forge::{
+    Capabilities, Check, CheckState, Forge, MergeOptions, MergeStrategy, PrState, PullRequest,
+    RepoRef, Unsupported,
+};
 use crate::git;
 use crate::i18n::{self, Lang};
 use crate::model::{now_ms, BoardSettings, Column, FailedCheck, Service, Ticket, TicketPr};
@@ -162,6 +165,7 @@ fn read_into(tp: &mut TicketPr, pr: &PullRequest, checks: Option<&[Check]>, now:
     tp.changes_requested = pr.changes_requested;
     tp.open_threads = pr.open_threads;
     tp.mergeable = pr.mergeable;
+    tp.auto_merge = pr.auto_merge;
     tp.checked_at = Some(now);
     tp.error = None;
     tp.error_since = None;
@@ -176,6 +180,75 @@ pub enum News {
     Merged,
     /// Closed without a merge: the ticket is blocked.
     Closed,
+    /// Approved and green while Escouade waited for it (« Merger quand c'est vert » without the
+    /// host's auto-merge): Escouade merges it now with this strategy.
+    MergeNow(MergeStrategy),
+}
+
+/// The Kanban's strategy (`BoardSettings::strategy`) as a host's.
+pub fn strategy_of(board: &str) -> MergeStrategy {
+    match board {
+        "merge" => MergeStrategy::Merge,
+        "rebase" => MergeStrategy::Rebase,
+        _ => MergeStrategy::Squash,
+    }
+}
+
+/// The strategy « Merger » uses: the Kanban's when the repository allows it, else the first it
+/// allows; none when it allows none, or is not read yet.
+pub fn pick_strategy(wanted: MergeStrategy, opts: Option<&MergeOptions>) -> Option<MergeStrategy> {
+    let allowed = &opts?.strategies;
+    if allowed.contains(&wanted) {
+        Some(wanted)
+    } else {
+        allowed.first().copied()
+    }
+}
+
+/// How a host lets a pull request merge when its plugin does not read the repository's settings:
+/// what its provider declares.
+pub fn options_of_capabilities(caps: &Capabilities) -> MergeOptions {
+    MergeOptions {
+        strategies: caps.merge_strategies.clone(),
+        auto_merge: caps.auto_merge,
+    }
+}
+
+/// Its CI passed, or it has none.
+pub fn green(tp: &TicketPr) -> bool {
+    matches!(tp.checks, None | Some(CheckState::Success))
+}
+
+/// Open, followed, not a draft, without a conflict with its target, and its agent not fixing its
+/// CI (ESC-60): nothing merges before its fix is pushed.
+fn open(tp: &TicketPr) -> bool {
+    tp.state == PrState::Open
+        && !tp.closed
+        && !tp.draft
+        && tp.mergeable != Some(false)
+        && tp.fixing.is_none()
+}
+
+/// « Merger » is offered: approved (no change asked for), green, without a conflict.
+pub fn merge_ready(tp: &TicketPr) -> bool {
+    open(tp) && tp.approvals > 0 && !tp.changes_requested && green(tp)
+}
+
+/// « Merger quand c'est vert » is offered: its CI runs, and nothing merges it by itself yet.
+pub fn can_wait_green(tp: &TicketPr) -> bool {
+    open(tp)
+        && !tp.changes_requested
+        && tp.checks == Some(CheckState::Pending)
+        && !tp.auto_merge
+        && tp.merge_when_green.is_none()
+}
+
+pub fn merge_failed_note(lang: Lang, word: &str, number: u64) -> String {
+    tr_in!(
+        lang,
+        "CI en échec : {word} #{number} n’est pas mergée, Escouade n’attend plus",
+        "CI failed: {word} #{number} isn’t merged, Escouade no longer waits"
+    )
 }
 
 /// A reading of its pull request on a ticket « En revue »: its card's state, and, merged, the
@@ -203,10 +276,20 @@ pub fn settle(
                 tp.closed = false;
                 t.blocked = None;
             }
+            // Escouade waits for it (« Merger quand c'est vert », no auto-merge on the host).
+            if let Some(strategy) = tp.merge_when_green {
+                if tp.checks == Some(CheckState::Failure) || tp.changes_requested {
+                    tp.merge_when_green = None;
+                    tp.merge_note = Some(merge_failed_note(i18n::ui(), &word, n));
+                } else if merge_ready(tp) {
+                    return News::MergeNow(strategy);
+                }
+            }
             News::Same
         }
         PrState::Merged => {
             tp.closed = false;
+            tp.merge_when_green = None;
             t.column = Column::Done;
             t.blocked = None;
             t.conflict = false;
@@ -535,7 +618,8 @@ impl<R: tauri::Runtime> Core<R> {
                         } else {
                             None
                         };
-                        self.ticket_pr_read(id, pr, checks.as_deref()).await;
+                        self.ticket_pr_read(id, pr, checks.as_deref(), &*client, &repo, &kind)
+                            .await;
                         read += 1;
                     }
                 }
@@ -560,16 +644,197 @@ impl<R: tauri::Runtime> Core<R> {
         id: &str,
         pr: &PullRequest,
         checks: Option<&[Check]>,
+        client: &dyn Forge,
+        repo: &RepoRef,
+        kind: &str,
     ) {
         let claude = self.lang().claude;
         let news = self.edit_ticket(id, |t| Ok(settle(t, pr, checks, now_ms(), claude)));
         match news {
             Ok(News::Merged) => self.ticket_pr_merged(id).await,
             Ok(News::Closed) => self.notify_ticket(id, false),
-            // Its CI failed: with the autopilot, its agent fixes it (`to_fix`, ESC-60).
-            _ if self.ticket(id).is_ok_and(|t| auto_fixable(&t)) => self.schedule(),
-            _ => {}
+            Ok(News::MergeNow(strategy)) => {
+                let done = client.merge(repo, pr.number, strategy).await;
+                self.ticket_pr_merge_done(id, pr.number, done, client, repo)
+                    .await;
+            }
+            news => {
+                // How the repository lets it merge, read once while it is open.
+                let unread = matches!(news, Ok(News::Same))
+                    && pr.state == PrState::Open
+                    && self
+                        .ticket(id)
+                        .is_ok_and(|t| t.pr.is_some_and(|p| p.merge_options.is_none()));
+                if unread {
+                    if let Ok(opts) = self.merge_options(client, repo, pr.number, kind).await {
+                        let _ = self.edit_ticket(id, |t| {
+                            if let Some(tp) = t.pr.as_mut() {
+                                tp.merge_options = Some(opts);
+                            }
+                            Ok(())
+                        });
+                    }
+                }
+                // Its CI failed: with the autopilot, its agent fixes it (`to_fix`, ESC-60).
+                if self.ticket(id).is_ok_and(|t| auto_fixable(&t)) {
+                    self.schedule();
+                }
+            }
         }
+    }
+
+    /// How the repository lets the pull request merge: as its plugin reads it, else as its
+    /// provider declares (a plugin that does not read it).
+    async fn merge_options(
+        &self,
+        client: &dyn Forge,
+        repo: &RepoRef,
+        number: u64,
+        kind: &str,
+    ) -> Result<MergeOptions> {
+        match client.merge_options(repo, number).await {
+            Err(e) if e.downcast_ref::<Unsupported>().is_some() => {
+                let caps = self.forges.read().get(kind).map(|p| p.capabilities());
+                Ok(options_of_capabilities(&caps.unwrap_or_default()))
+            }
+            other => other,
+        }
+    }
+
+    /// A merge Escouade asked for went (the pull request read again, the ticket « Terminé » once
+    /// the host says it merged), or did not (said on the card, the wait over).
+    async fn ticket_pr_merge_done(
+        self: &Arc<Self>,
+        id: &str,
+        number: u64,
+        done: Result<()>,
+        client: &dyn Forge,
+        repo: &RepoRef,
+    ) -> Option<anyhow::Error> {
+        match done {
+            Ok(()) => {
+                let claude = self.lang().claude;
+                let news = match client.pull_request(repo, number).await {
+                    Ok(pr) => self.edit_ticket(id, |t| {
+                        if let Some(tp) = t.pr.as_mut() {
+                            tp.merge_when_green = None;
+                            tp.merge_note = None;
+                        }
+                        Ok(settle(t, &pr, None, now_ms(), claude))
+                    }),
+                    Err(_) => Ok(News::Same),
+                };
+                if let Ok(News::Merged) = news {
+                    self.ticket_pr_merged(id).await;
+                } else {
+                    // The host merges in a while (a merge queue, a long merge): read soon.
+                    self.wake_ticket_prs();
+                }
+                None
+            }
+            Err(e) => {
+                let label = self.ticket(id).ok().and_then(|t| t.pr).map(|tp| {
+                    self.forges
+                        .read()
+                        .get(&tp.kind)
+                        .map_or_else(|| tp.host.clone(), |p| p.name().to_string())
+                });
+                let why = merge_error_text(i18n::ui(), &label.unwrap_or_default(), &e);
+                let _ = self.edit_ticket(id, |t| {
+                    if let Some(tp) = t.pr.as_mut() {
+                        tp.merge_when_green = None;
+                        tp.merge_note = Some(why.clone());
+                    }
+                    Ok(())
+                });
+                Some(e)
+            }
+        }
+    }
+
+    /// « Merger » (when_green false) on a ticket « En revue » whose pull request is approved
+    /// and green, with the Kanban's strategy when the repository allows it, else one it allows;
+    /// « Merger quand c'est vert » (when_green) while its CI runs: the host's auto-merge when it
+    /// has one for the repository, else Escouade merges it once it is approved and green, for as
+    /// long as it runs. Never by itself: a gesture of the user.
+    pub async fn ticket_pr_merge(self: &Arc<Self>, id: &str, when_green: bool) -> Result<MergeHow> {
+        let t = self.ticket(id)?;
+        let Some(tp) = t.pr.clone().filter(|_| t.column == Column::Pr) else {
+            bail!(not_in_review());
+        };
+        if when_green && !can_wait_green(&tp) {
+            bail!(not_waiting(&tp.word, tp.number));
+        }
+        if !when_green && !merge_ready(&tp) {
+            bail!(not_ready(&tp.word, tp.number));
+        }
+        let board = self.project(&t.project_id)?.board.strategy;
+        let (client, _) = self.forge_client(&tp.host).await?;
+        let repo = RepoRef {
+            namespace: tp.namespace.clone(),
+            name: tp.name.clone(),
+        };
+        let opts = match tp.merge_options.clone() {
+            Some(o) => o,
+            None => {
+                self.merge_options(&*client, &repo, tp.number, &tp.kind)
+                    .await?
+            }
+        };
+        let Some(strategy) = pick_strategy(strategy_of(&board), Some(&opts)) else {
+            bail!(no_strategy(&tp.word, tp.number));
+        };
+        self.edit_ticket(id, |t| {
+            if let Some(p) = t.pr.as_mut() {
+                p.merge_options = Some(opts.clone());
+                p.merge_note = None;
+            }
+            Ok(())
+        })?;
+        if !when_green {
+            let done = client.merge(&repo, tp.number, strategy).await;
+            return match self
+                .ticket_pr_merge_done(id, tp.number, done, &*client, &repo)
+                .await
+            {
+                Some(e) => Err(e),
+                None => Ok(MergeHow::Merged),
+            };
+        }
+        if opts.auto_merge {
+            match client.auto_merge(&repo, tp.number, strategy).await {
+                Ok(()) => {
+                    self.edit_ticket(id, |t| {
+                        if let Some(p) = t.pr.as_mut() {
+                            p.auto_merge = true;
+                        }
+                        Ok(())
+                    })?;
+                    return Ok(MergeHow::Host);
+                }
+                // The plugin has no auto-merge after all: Escouade waits.
+                Err(e) if e.downcast_ref::<Unsupported>().is_some() => {}
+                Err(e) => return Err(e),
+            }
+        }
+        self.edit_ticket(id, |t| {
+            if let Some(p) = t.pr.as_mut() {
+                p.merge_when_green = Some(strategy);
+            }
+            Ok(())
+        })?;
+        Ok(MergeHow::Escouade)
+    }
+
+    /// « Ne plus attendre »: Escouade no longer merges it once green.
+    pub fn ticket_pr_stop_waiting(&self, id: &str) -> Result<()> {
+        self.edit_ticket(id, |t| {
+            if let Some(p) = t.pr.as_mut() {
+                p.merge_when_green = None;
+                p.merge_note = None;
+            }
+            Ok(())
+        })
     }
 
     /// Merged on its host: its local branch goes when the board cleans up, a fetch brings the
@@ -906,6 +1171,53 @@ impl<R: tauri::Runtime> Core<R> {
                 .await;
         }
     }
+}
+
+/// How a merge asked for went: merged now, by the host's auto-merge, or Escouade waits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MergeHow {
+    Merged,
+    Host,
+    Escouade,
+}
+
+/// Why a merge did not go, in words: a token refused, else the host's own words.
+pub fn merge_error_text(lang: Lang, name: &str, e: &anyhow::Error) -> String {
+    if crate::forge::refused(e) {
+        return error_text(lang, name, e);
+    }
+    let why = format!("{e:#}");
+    let why = why.lines().next().unwrap_or("").trim().to_string();
+    tr_in!(lang, "Merge refusé : {why}", "Merge refused: {why}")
+}
+
+fn not_in_review() -> anyhow::Error {
+    anyhow!(tr!(
+        "Ce ticket n’attend pas en revue.",
+        "This ticket isn’t waiting in review."
+    ))
+}
+
+fn no_strategy(word: &str, number: u64) -> anyhow::Error {
+    anyhow!(tr!(
+        "Le dépôt n’autorise aucune façon de merger {word} #{number}.",
+        "The repository allows no way to merge {word} #{number}."
+    ))
+}
+
+fn not_ready(word: &str, number: u64) -> anyhow::Error {
+    anyhow!(tr!(
+        "{word} #{number} n’est pas encore approuvée et verte.",
+        "{word} #{number} isn’t approved and green yet."
+    ))
+}
+
+fn not_waiting(word: &str, number: u64) -> anyhow::Error {
+    anyhow!(tr!(
+        "{word} #{number} n’a pas de CI en cours, ou se merge déjà quand elle est verte.",
+        "{word} #{number} has no CI running, or already merges once green."
+    ))
 }
 
 fn not_closed() -> anyhow::Error {

@@ -165,3 +165,83 @@ test('a failed CI goes back to the ticket’s agent: « L’agent corrige » by 
   await expect(card.locator('[data-ticket-pr="101"]')).toContainText('CI verte');
   await expect(fix).toHaveCount(0);
 });
+
+/** A ticket « En revue » with its pull request #101 open on the fake GitHub, its CI running. */
+async function inReview(app: { page: Page; root: string; repo: string }) {
+  const { page } = app;
+  remote(app);
+  await addProject(page, app.repo, { firstAgent: false });
+  await connectGithub(page);
+  await page.getByRole('button', { name: /^Kanban/ }).click();
+  await page.getByRole('button', { name: /Après validation/ }).click();
+  const settings = page.getByRole('dialog', { name: 'Réglages' });
+  await settings.getByRole('radio', { name: /Ouvrir une pull request/ }).click();
+  await settings.getByRole('button', { name: 'Enregistrer' }).click();
+  await expect(settings).toHaveCount(0);
+  await page.getByRole('button', { name: 'Nouveau ticket' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Nouveau ticket' });
+  await dialog.getByRole('textbox', { name: 'Titre du ticket' }).fill('Connexion par jeton [ok]');
+  await dialog.getByRole('button', { name: 'Ajouter', exact: true }).click();
+  await page.getByRole('region', { name: 'À tester' }).getByRole('button', { name: 'Valider + PR' }).click({ timeout: 90_000 });
+  const col = page.getByRole('region', { name: 'En revue' });
+  const card = col.locator('.card');
+  await expect(card.locator('[data-ticket-pr="101"]')).toContainText('CI en cours', { timeout: 60_000 });
+  return { col, card };
+}
+
+test('« Merger quand c’est vert » without GitHub’s auto-merge: Escouade says it waits, then merges at the end of the CI (ESC-62)', async ({
+  app,
+}) => {
+  test.setTimeout(240_000);
+  const { page } = app;
+  // The repository allows no squash (the Kanban's) and no auto-merge.
+  await fetch(`${github.url}/__github/repo`, {
+    method: 'POST',
+    body: JSON.stringify({ allow_squash_merge: false, allow_rebase_merge: false }),
+  });
+  const { col, card } = await inReview(app);
+  // Its CI runs: no « Merger », « Merger quand c'est vert ».
+  await setPull(101, { approved: true });
+  await col.getByRole('button', { name: 'Rafraîchir' }).click();
+  await expect(card.locator('[data-ticket-pr="101"]')).toContainText('approuvée');
+  await expect(card.getByRole('button', { name: /^Merger \(/ })).toHaveCount(0);
+  await card.getByRole('button', { name: 'Merger quand c’est vert' }).click();
+  await expect(
+    page.getByText('Pas d’auto-merge sur GitHub pour ce dépôt : Escouade attend la fin de la CI et merge elle-même'),
+  ).toBeVisible();
+  await expect(card.locator('[data-pr-wait]')).toContainText('Escouade la merge (merge commit) dès qu’elle est approuvée et verte');
+  await expect(card.getByRole('button', { name: 'Ne plus attendre' })).toBeVisible();
+  expect((await writes()).some((w) => w.body?.operationName === 'EnableAutoMerge')).toBe(false);
+  if (SHOTS) await col.screenshot({ path: path.join(SHOTS, 'kanban-pr-merge-wait.png') });
+
+  // Green: Escouade merges it with a merge commit, the ticket is done.
+  await setPull(101, { checks: 'SUCCESS' });
+  await col.getByRole('button', { name: 'Rafraîchir' }).click();
+  await expect(page.getByRole('region', { name: 'Terminé' }).locator('.card')).toContainText('PR #101 mergée dans main', {
+    timeout: 30_000,
+  });
+  const merged = (await writes()).find((w) => w.method === 'PUT' && w.path === '/github/repos/acme/demo/pulls/101/merge');
+  expect(merged?.body.merge_method).toBe('merge');
+});
+
+test('« Merger quand c’est vert » turns on GitHub’s auto-merge, and « Merger » merges approved and green (ESC-62)', async ({ app }) => {
+  test.setTimeout(240_000);
+  const { page } = app;
+  await fetch(`${github.url}/__github/repo`, { method: 'POST', body: JSON.stringify({ allow_auto_merge: true }) });
+  const { col, card } = await inReview(app);
+  await card.getByRole('button', { name: 'Merger quand c’est vert' }).click();
+  await expect(card.locator('[data-pr-wait]')).toHaveText('Auto-merge de GitHub activé : mergée dès que la CI est verte');
+  const asked = (await writes()).find((w) => w.body?.operationName === 'EnableAutoMerge');
+  expect(asked?.body.variables.method).toBe('SQUASH');
+  await expect(card.getByRole('button', { name: 'Merger quand c’est vert' })).toHaveCount(0);
+
+  // Approved and green: « Merger » with the Kanban's squash.
+  await setPull(101, { checks: 'SUCCESS', approved: true });
+  await col.getByRole('button', { name: 'Rafraîchir' }).click();
+  await card.getByRole('button', { name: 'Merger (squash)' }).click();
+  await expect(page.getByRole('region', { name: 'Terminé' }).locator('.card')).toContainText('PR #101 mergée dans main', {
+    timeout: 30_000,
+  });
+  const merged = (await writes()).find((w) => w.method === 'PUT' && w.path === '/github/repos/acme/demo/pulls/101/merge');
+  expect(merged?.body.merge_method).toBe('squash');
+});

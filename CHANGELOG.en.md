@@ -9,6 +9,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ### New
 
 - “Approve + PR” opens the ticket's pull request through its host's API (GitHub, GitLab, Bitbucket, Gitea, Azure DevOps), without `gh`, as a draft if you like and with your reviewers and labels. The ticket then waits in the new “In review” column, which shows the pull request's state, CI, approvals and conflicts, and moves to “Done” as soon as it's merged.
+- Merge an “In review” ticket's pull request from its card once it's approved and green, with a strategy the repository allows. While the CI runs, “Merge when green” turns on the host's auto-merge; without one (Bitbucket, say), Escouade waits for the end of the CI and merges itself.
 - When the CI of an in-review ticket's pull request fails, “Agent fixes it” sends its agent the failed jobs and the end of their logs; it fixes them, Escouade pushes, and the ticket is back “In review”. With the autopilot, it goes by itself, within the ticket's loops.
 - The High contrast, Discord, Slack and Team rules plugins are Escouade’s own, on the store as `dev.escouade.*` and kept in the app’s repository; only that repository can publish these ids. A version installed under the old `dev.exemple.*` id is replaced from the Plugins view.
 - Slack and Team rules now run without Node, isolated inside Escouade (version 2.0.0, for Escouade 2.2 and later); Slack reaches slack.com only.

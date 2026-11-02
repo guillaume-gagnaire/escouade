@@ -3,7 +3,7 @@
 
 import { fSince } from './format';
 import { t } from './i18n';
-import type { BoardSettings, PullRequest, Ticket, TicketPr } from './types';
+import type { BoardSettings, MergeStrategy, PullRequest, Ticket, TicketPr } from './types';
 
 /** The column « En revue » shows when the board opens pull requests, or while a ticket is in it. */
 export const prColumnShown = (s: Pick<BoardSettings, 'action'>, tickets: Ticket[]) =>
@@ -53,6 +53,68 @@ export function prErrorLine(p: TicketPr, now: number): string | null {
   return t('board.pr.error', { error: p.error, since: fSince(p.errorSince ?? now, now) });
 }
 
+/** Its CI passed, or it has none. */
+export const isGreen = (p: TicketPr) => p.checks === null || p.checks === 'success';
+
+/** Open, followed, not a draft, without a conflict with its target, and its agent not fixing its CI (ESC-60). */
+const isOpen = (p: TicketPr) => p.state === 'open' && !p.closed && !p.draft && p.mergeable !== false && !p.fixing;
+
+/** « Merger » may be offered (as `ticketprs::merge_ready`): approved, no change asked for, green, without a conflict. */
+export const mergeReady = (p: TicketPr) => isOpen(p) && p.approvals > 0 && !p.changesRequested && isGreen(p);
+
+/** « Merger quand c'est vert » (as `ticketprs::can_wait_green`): its CI runs, and nothing merges it by itself yet. */
+export const canWaitGreen = (p: TicketPr) =>
+  isOpen(p) && !p.changesRequested && p.checks === 'pending' && !p.autoMerge && !p.mergeWhenGreen;
+
+/** The strategy « Merger » uses: the Kanban's when the repository allows it, else the first it allows; null when it allows
+ * none, or is not read yet (as `ticketprs::pick_strategy`). */
+export function mergeStrategy(p: TicketPr, wanted: BoardSettings['strategy']): MergeStrategy | null {
+  const allowed = p.mergeOptions?.strategies;
+  if (!allowed) return null;
+  return allowed.includes(wanted) ? wanted : (allowed[0] ?? null);
+}
+
+const HOSTS: Record<string, string> = {
+  github: 'GitHub',
+  gitlab: 'GitLab',
+  gitea: 'Gitea',
+  bitbucket: 'Bitbucket',
+  azure: 'Azure DevOps',
+};
+
+/** Its host's name (`GitHub`), its address for one Escouade does not know. */
+export const hostName = (p: TicketPr) => HOSTS[p.kind] ?? p.host;
+
+/** What merges it by itself, in words: the host's auto-merge, or Escouade once it is approved and green; null when nothing. */
+export function mergeWaitLine(p: TicketPr): string | null {
+  if (p.state !== 'open' || p.closed) return null;
+  if (p.autoMerge) return t('board.pr.merge.hostOn', { host: hostName(p) });
+  if (p.mergeWhenGreen) return t('board.pr.merge.escouadeWaits', { strategy: t(`board.pr.merge.strategies.${p.mergeWhenGreen}`) });
+  return null;
+}
+
+/** What the merge buttons of its card are: « Merger (strategy) » approved and green, « Merger quand c'est vert » while
+ * its CI runs; `none` says why « Merger » is not there though it is approved and green (the repository allows none). */
+export function mergeActions(
+  p: TicketPr,
+  wanted: BoardSettings['strategy'],
+): { merge: MergeStrategy | null; whenGreen: boolean; none: boolean } {
+  const ready = mergeReady(p);
+  const strategy = mergeStrategy(p, wanted);
+  return {
+    merge: ready ? strategy : null,
+    whenGreen: canWaitGreen(p),
+    none: ready && !!p.mergeOptions && !strategy,
+  };
+}
+
+/** What « Merger quand c'est vert » did, for its toast. */
+export const mergeHowText = (how: string, p: TicketPr) =>
+  how === 'host'
+    ? t('board.pr.merge.hostOn', { host: hostName(p) })
+    : how === 'escouade'
+      ? t('board.pr.merge.escouadeTold', { host: hostName(p) })
+      : t('board.pr.merge.merged', { word: p.word, number: p.number });
 /** « L'agent corrige » (ESC-60): its CI failed, its pull request is open, it has an agent, and no fix is under way. */
 export const canFixCi = (x: Ticket) =>
   x.column === 'pr' && !!x.pr && !!x.agentId && !x.pr.closed && x.pr.state === 'open' && x.pr.checks === 'failure' && !x.pr.fixing;
@@ -81,7 +143,7 @@ export function asPull(p: TicketPr): PullRequest {
     approvals: p.approvals,
     changesRequested: p.changesRequested,
     openThreads: p.openThreads,
-    autoMerge: false,
+    autoMerge: !!p.autoMerge,
     checks: p.checks,
     fork: false,
   };

@@ -60,6 +60,16 @@ pub enum MergeStrategy {
     SemiLinear,
 }
 
+/// How a pull request of a repository may merge, as the repository's settings say (ESC-62): the strategies they allow,
+/// and whether the host merges by itself once the checks pass (GitHub's « Allow auto-merge », Gitea's protected
+/// branch). Read by `Forge::merge_options`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct MergeOptions {
+    pub strategies: Vec<MergeStrategy>,
+    pub auto_merge: bool,
+}
+
 /// A pull request (a merge request on GitLab) to open.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct PullRequestDraft {

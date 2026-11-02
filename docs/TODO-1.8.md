@@ -1223,11 +1223,12 @@ But : Escouade suit le travail des agents après le push, jusqu'à la production
   - Il pousse ses corrections.
   - Répondre sous chaque fil (« Corrigé dans abc1234 ») est un réglage, désactivé par défaut. Escouade ne résout jamais un fil seule.
 - [ ] **Conflit avec la cible** : « L'agent met à jour la branche », par un merge de la cible dans la branche, avec le traitement des conflits d'aujourd'hui (`on_conflict`). Le rebase, et son push forcé (`--force-with-lease`), seulement en réglage.
-- [ ] **Merger depuis Escouade** : « Merger » quand la PR est approuvée et verte, avec la stratégie du Kanban (parmi celles que le dépôt autorise). « Merger quand c'est vert » passe par l'auto-merge de l'hébergeur :
+- [x] **Merger depuis Escouade** (ESC-62, 2026-11-02) : « Merger » quand la PR est approuvée et verte, avec la stratégie du Kanban (parmi celles que le dépôt autorise, lues par `Forge::merge_options`). « Merger quand c'est vert » passe par l'auto-merge de l'hébergeur :
   - GitHub : `enablePullRequestAutoMerge` (GraphQL), si le dépôt l'autorise ;
   - GitLab : `merge_when_pipeline_succeeds` (ou `auto_merge`, selon la version) ;
   - Gitea : `merge_when_checks_succeed`, seulement sur une branche protégée ;
   - Bitbucket : aucun appel d'API connu. Son API merge tout de suite (demandes ouvertes BCLOUD-22055 et BCLOUD-22062). Escouade attend la CI puis merge elle-même tant qu'elle tourne, et le dit.
+  - Reste à essayer en vrai (ESC-53, ESC-70, avec l'utilisateur) : sur GitHub, « Merger » et « Merger quand c'est vert » sur un dépôt jetable, avec et sans « Allow auto-merge », et les méthodes de merge lues sans droit de pousser ; sur GitLab, `squash_option` et `auto_merge` / `merge_when_pipeline_succeeds` selon la version ; sur Gitea / Forgejo, `merge_when_checks_succeed` sur une branche protégée ; sur Bitbucket Cloud, `merge_strategies` de la branche cible et l'attente d'Escouade ; sur Azure DevOps, l'auto-complete. Tout a été fait contre les faux serveurs des tests.
 - [x] **Pilote auto** : un ticket en revue ne compte dans les agents en parallèle que quand son agent travaille.
 
 ### Les PR hors tickets

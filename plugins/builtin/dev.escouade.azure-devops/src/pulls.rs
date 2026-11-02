@@ -972,6 +972,28 @@ impl Forge for Azure {
         })
     }
 
+    fn merge_options<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+    ) -> BoxFuture<'a, Result<MergeOptions>> {
+        Box::pin(async move {
+            let p = self.pr_value(repo, number).await?;
+            let strategies = self.allowed(repo, &p).await.unwrap_or_else(|| {
+                vec![
+                    MergeStrategy::Merge,
+                    MergeStrategy::Squash,
+                    MergeStrategy::Rebase,
+                    MergeStrategy::SemiLinear,
+                ]
+            });
+            Ok(MergeOptions {
+                strategies,
+                auto_merge: true,
+            })
+        })
+    }
+
     /// Azure's auto-complete, set by the token's identity.
     fn auto_merge<'a>(
         &'a self,

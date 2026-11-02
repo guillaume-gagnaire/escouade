@@ -1001,3 +1001,21 @@ async fn a_refusal_that_holds_is_said_and_the_hour_taken_as_spent() {
     assert_eq!(server.requests().len(), 2, "one more try, no more");
     assert_eq!(bb.rate_limit().map(|l| l.remaining), Some(0));
 }
+
+/// How a pull request may merge (ESC-62): what its target branch allows; never an auto-merge.
+#[tokio::test]
+async fn the_target_branch_says_how_a_pull_request_may_merge_and_there_is_no_auto_merge() {
+    let server = FakeServer::start().await;
+    server.on(
+        "GET",
+        &format!("{PR}/7"),
+        200,
+        json!({ "id": 7, "state": "OPEN", "destination": { "branch": { "name": "main",
+            "merge_strategies": ["squash", "fast_forward"], "default_merge_strategy": "squash" } } }),
+    );
+    let o = client(&server).merge_options(&repo(), 7).await.unwrap();
+    assert_eq!(o.strategies, vec![MergeStrategy::Squash]);
+    assert!(!o.auto_merge);
+    let untold = escouade_plugin_bitbucket::pulls::merge_options_of(&json!({}));
+    assert_eq!(untold.strategies.len(), 4);
+}

@@ -1174,6 +1174,59 @@ describe('TicketCard with an account of its own', () => {
     expect(backend.called('ticket_pr_back_to_todo')).toEqual([{ cmd: 'ticket_pr_back_to_todo', args: { id: 't1' } }]);
   });
 
+  it('offers « Merger » only approved and green, with a strategy the repository allows, and says what merged (ESC-62)', async () => {
+    const backend = fakeBackend({ ticket_pr_merge: () => 'merged' });
+    const green = {
+      approvals: 1,
+      checks: 'success' as const,
+      mergeable: true,
+      mergeOptions: { strategies: ['merge' as const, 'rebase' as const], autoMerge: false },
+    };
+    // Approved but red, or green but not approved: no « Merger ».
+    show(ticket({ column: 'pr', pr: ticketPr({ ...green, checks: 'failure' }) }));
+    expect(screen.queryByRole('button', { name: /^Merger/ })).toBeNull();
+    cleanup();
+    show(ticket({ column: 'pr', pr: ticketPr({ ...green, approvals: 0 }) }));
+    expect(screen.queryByRole('button', { name: /^Merger/ })).toBeNull();
+    cleanup();
+    // The Kanban's squash is not allowed: the first strategy the repository allows.
+    show(ticket({ column: 'pr', pr: ticketPr(green) }));
+    await userEvent.click(screen.getByRole('button', { name: 'Merger (merge commit)' }));
+    expect(backend.called('ticket_pr_merge')).toEqual([{ cmd: 'ticket_pr_merge', args: { id: 't1', whenGreen: false } }]);
+    expect(app.toasts.at(-1)?.text).toBe('PR #12 mergée');
+    expect(screen.queryByRole('button', { name: 'Merger quand c’est vert' })).toBeNull();
+    cleanup();
+    // It allows none: said, no button.
+    const { container } = show(ticket({ column: 'pr', pr: ticketPr({ ...green, mergeOptions: { strategies: [], autoMerge: false } }) }));
+    expect(screen.queryByRole('button', { name: /^Merger/ })).toBeNull();
+    expect(container.querySelector('[data-pr-no-strategy]')).toHaveTextContent('aucune des façons de merger');
+  });
+
+  it('offers « Merger quand c’est vert » while the CI runs: the host’s auto-merge, else Escouade, said (ESC-62)', async () => {
+    const backend = fakeBackend({ ticket_pr_merge: () => 'escouade' });
+    const running = { approvals: 1, checks: 'pending' as const, mergeOptions: { strategies: ['squash' as const], autoMerge: false } };
+    show(ticket({ column: 'pr', pr: ticketPr({ ...running, kind: 'bitbucket', host: 'bitbucket.org' }) }));
+    expect(screen.queryByRole('button', { name: /^Merger \(/ })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Merger quand c’est vert' }));
+    expect(backend.called('ticket_pr_merge')).toEqual([{ cmd: 'ticket_pr_merge', args: { id: 't1', whenGreen: true } }]);
+    expect(app.toasts.at(-1)?.text).toContain('Pas d’auto-merge sur Bitbucket');
+    cleanup();
+    // Escouade waits: said, with « Ne plus attendre ».
+    const { container } = show(ticket({ column: 'pr', pr: ticketPr({ ...running, mergeWhenGreen: 'squash' }) }));
+    expect(container.querySelector('[data-pr-wait]')).toHaveTextContent('Escouade la merge (squash) dès qu’elle est approuvée et verte');
+    expect(screen.queryByRole('button', { name: 'Merger quand c’est vert' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Ne plus attendre' }));
+    expect(backend.called('ticket_pr_stop_waiting')).toEqual([{ cmd: 'ticket_pr_stop_waiting', args: { id: 't1' } }]);
+    cleanup();
+    // The host's auto-merge on.
+    const c2 = show(ticket({ column: 'pr', pr: ticketPr({ ...running, autoMerge: true }) })).container;
+    expect(c2.querySelector('[data-pr-wait]')).toHaveTextContent('Auto-merge de GitHub activé');
+    cleanup();
+    // A merge that did not go is said.
+    const c3 = show(ticket({ column: 'pr', pr: ticketPr({ ...running, mergeNote: 'Merge refusé : checks requis' }) })).container;
+    expect(c3.querySelector('[data-pr-merge-note]')).toHaveTextContent('Merge refusé : checks requis');
+  });
+
   it('offers « L’agent corrige » on a failed CI, says a CI without log, and shows its agent at work (ESC-60)', async () => {
     const backend = fakeBackend();
     const failed = [

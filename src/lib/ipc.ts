@@ -1,5 +1,6 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import type {
+  MergeHow,
   EngineDecl,
   PageBounds,
   PageView,
@@ -629,6 +630,8 @@ export const api = {
   /** « Rafraîchir » of the column « En revue » (ESC-59): how many pull requests were read. */
   ticketPrsRefresh: (projectId: string) => invoke<number>('ticket_prs_refresh', { projectId }),
   /** A ticket whose pull request was closed without a merge: done all the same, or back to do. */
+  ticketPrMerge: (id: string, whenGreen: boolean) => invoke<MergeHow>('ticket_pr_merge', { id, whenGreen }),
+  ticketPrStopWaiting: (id: string) => invoke<void>('ticket_pr_stop_waiting', { id }),
   ticketFinishAnyway: (id: string) => invoke<void>('ticket_finish_anyway', { id }),
   ticketPrBackToTodo: (id: string) => invoke<void>('ticket_pr_back_to_todo', { id }),
   ticketPrFixCi: (id: string) => invoke<void>('ticket_pr_fix_ci', { id }),

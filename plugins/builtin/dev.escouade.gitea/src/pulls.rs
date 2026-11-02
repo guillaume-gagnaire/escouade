@@ -491,6 +491,25 @@ async fn text(rb: reqwest::RequestBuilder) -> Result<String> {
     Ok(body)
 }
 
+/// What a repository's settings allow (`GET /repos/{owner}/{repo}`), and whether its pull request's target branch is
+/// protected, where alone Gitea merges by itself once the checks pass (`merge_when_checks_succeed`).
+pub fn merge_options_of(repo: &Value, protected: bool) -> MergeOptions {
+    let keys = [
+        ("allow_merge_commits", MergeStrategy::Merge),
+        ("allow_squash_merge", MergeStrategy::Squash),
+        ("allow_rebase", MergeStrategy::Rebase),
+        ("allow_rebase_explicit", MergeStrategy::SemiLinear),
+    ];
+    MergeOptions {
+        strategies: keys
+            .iter()
+            .filter(|(k, _)| repo[*k] != false)
+            .map(|(_, s)| *s)
+            .collect(),
+        auto_merge: protected,
+    }
+}
+
 impl Forge for Gitea {
     fn me(&self) -> BoxFuture<'_, Result<Identity>> {
         Box::pin(async move {
@@ -680,6 +699,24 @@ impl Forge for Gitea {
 
     /// `merge_when_checks_succeed`: the instance only schedules it on a protected branch; the client asks the branch
     /// first, so that the refusal says why.
+    fn merge_options<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+    ) -> BoxFuture<'a, Result<MergeOptions>> {
+        Box::pin(async move {
+            let base = Self::repo_path(repo);
+            let settings = self.get(&base).await?;
+            let pr = self.raw_pull(repo, number).await?;
+            let branch = pr["base"]["ref"].as_str().unwrap_or("").to_string();
+            let protected = self
+                .get(&format!("{base}/branches/{}", enc(&branch)))
+                .await
+                .is_ok_and(|b| b["protected"] == true);
+            Ok(merge_options_of(&settings, protected))
+        })
+    }
+
     fn auto_merge<'a>(
         &'a self,
         repo: &'a RepoRef,

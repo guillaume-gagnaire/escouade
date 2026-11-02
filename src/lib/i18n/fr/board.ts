@@ -32,6 +32,20 @@ export default {
     },
     /** The host could not be read: said, the ticket stays where it is. */
     error: '{error} · depuis {since}',
+    /** Merging from Escouade (ESC-62): « Merger » approved and green, « Merger quand c'est vert » while its CI runs. */
+    merge: {
+      now: 'Merger ({strategy})',
+      nowTitle: '{word} #{number} approuvée et verte : merger dans {target} en {strategy}',
+      whenGreen: 'Merger quand c’est vert',
+      whenGreenTitle: 'Par l’auto-merge de l’hébergeur quand le dépôt l’autorise, sinon Escouade merge à la fin de la CI',
+      hostOn: 'Auto-merge de {host} activé : mergée dès que la CI est verte',
+      escouadeWaits: 'Escouade la merge ({strategy}) dès qu’elle est approuvée et verte, tant qu’elle tourne',
+      escouadeTold: 'Pas d’auto-merge sur {host} pour ce dépôt : Escouade attend la fin de la CI et merge elle-même, tant qu’elle tourne',
+      stopWaiting: 'Ne plus attendre',
+      merged: '{word} #{number} mergée',
+      none: 'Le dépôt n’autorise aucune des façons de merger d’Escouade',
+      strategies: { merge: 'merge commit', squash: 'squash', rebase: 'rebase', semiLinear: 'semi-linéaire' },
+    },
     finishAnyway: 'Terminer quand même',
     backToTodo: 'Remettre à faire',
     /** Its CI failed (ESC-60): its agent gets the failed jobs and the end of their logs. */

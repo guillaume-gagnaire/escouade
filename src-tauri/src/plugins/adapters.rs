@@ -20,8 +20,9 @@
 
 use super::runtime::{CallError, Runtime, METHOD_NOT_FOUND};
 use crate::forge::{
-    BoxFuture, Check, Credentials, Deployment, Forge, Identity, MergeStrategy, PullRequest,
-    PullRequestDraft, RateLimit, RepoRef, Review, ReviewComment, ReviewDraft, Unsupported,
+    BoxFuture, Check, Credentials, Deployment, Forge, Identity, MergeOptions, MergeStrategy,
+    PullRequest, PullRequestDraft, RateLimit, RepoRef, Review, ReviewComment, ReviewDraft,
+    Unsupported,
 };
 use crate::integrations::source::{TicketSource, TicketSourceKind};
 use crate::integrations::{
@@ -561,6 +562,18 @@ impl Forge for ProcessForge {
             .await
             .map(|_| ())
         })
+    }
+
+    fn merge_options<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+    ) -> BoxFuture<'a, Result<MergeOptions>> {
+        Box::pin(self.ask(
+            "forge/mergeOptions",
+            "merge_options",
+            json!({ "repo": repo, "number": number }),
+        ))
     }
 
     fn auto_merge<'a>(

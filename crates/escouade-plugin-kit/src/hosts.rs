@@ -380,6 +380,11 @@ async fn forge_call(f: &dyn Forge, name: &str, p: &Value) -> Result<Value, Refus
             let numbers: Vec<u64> = arg(p, "numbers")?;
             to_value(f.pull_requests(&repo()?, &numbers).await.map_err(refusal)?)
         }
+        "mergeOptions" => to_value(
+            f.merge_options(&repo()?, number()?)
+                .await
+                .map_err(refusal)?,
+        ),
         "merge" => done(f.merge(&repo()?, number()?, arg(p, "strategy")?).await),
         "autoMerge" => done(f.auto_merge(&repo()?, number()?, arg(p, "strategy")?).await),
         "checks" => to_value(f.checks(&repo()?, number()?).await.map_err(refusal)?),

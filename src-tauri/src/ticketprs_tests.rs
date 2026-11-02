@@ -668,6 +668,378 @@ async fn on_gitlab_the_ticket_opens_a_merge_request_and_follows_it_to_its_merge(
     assert_eq!(u.outcome.as_deref(), Some("⤵ MR #4 mergée dans main"));
 }
 
+// ---------- Merging from Escouade (ESC-62) ----------
+
+fn ready(tp: &mut TicketPr) {
+    tp.approvals = 1;
+    tp.checks = Some(CheckState::Success);
+    tp.mergeable = Some(true);
+}
+
+#[test]
+fn merge_is_offered_only_approved_and_green_and_merge_when_green_while_the_ci_runs() {
+    let mut t = in_review(12);
+    let tp = t.pr.as_mut().unwrap();
+    // Open, not approved: neither.
+    tp.checks = Some(CheckState::Success);
+    assert!(!merge_ready(tp));
+    ready(tp);
+    assert!(merge_ready(tp));
+    // No CI at all is green too.
+    tp.checks = None;
+    assert!(merge_ready(tp));
+    let spoils: [fn(&mut TicketPr); 8] = [
+        |p| p.checks = Some(CheckState::Failure),
+        |p| p.checks = Some(CheckState::Pending),
+        |p| p.changes_requested = true,
+        |p| p.mergeable = Some(false),
+        |p| p.draft = true,
+        |p| p.closed = true,
+        |p| p.state = PrState::Merged,
+        // Its agent fixes its CI (ESC-60): nothing merges before the fix is pushed.
+        |p| p.fixing = Some(1),
+    ];
+    for spoil in spoils {
+        let mut p = tp.clone();
+        ready(&mut p);
+        spoil(&mut p);
+        assert!(!merge_ready(&p), "{p:?}");
+    }
+    // While its CI runs: « Merger quand c'est vert », once.
+    let mut p = tp.clone();
+    p.checks = Some(CheckState::Pending);
+    assert!(can_wait_green(&p));
+    p.merge_when_green = Some(MergeStrategy::Squash);
+    assert!(!can_wait_green(&p));
+    p.merge_when_green = None;
+    p.auto_merge = true;
+    assert!(!can_wait_green(&p));
+    p.auto_merge = false;
+    p.checks = Some(CheckState::Success);
+    assert!(!can_wait_green(&p), "green already: « Merger »");
+}
+
+#[test]
+fn the_kanbans_strategy_is_taken_when_the_repository_allows_it_else_one_it_allows() {
+    use MergeStrategy::*;
+    let opts = |s: &[MergeStrategy]| MergeOptions {
+        strategies: s.to_vec(),
+        auto_merge: false,
+    };
+    assert_eq!(strategy_of("squash"), Squash);
+    assert_eq!(strategy_of("merge"), Merge);
+    assert_eq!(strategy_of("rebase"), Rebase);
+    let all = opts(&[Merge, Squash, Rebase]);
+    assert_eq!(pick_strategy(Rebase, Some(&all)), Some(Rebase));
+    assert_eq!(
+        pick_strategy(Squash, Some(&opts(&[Merge, Rebase]))),
+        Some(Merge)
+    );
+    assert_eq!(pick_strategy(Squash, Some(&opts(&[]))), None);
+    assert_eq!(pick_strategy(Squash, None), None, "not read yet");
+    let caps = Capabilities {
+        auto_merge: true,
+        merge_strategies: vec![Merge],
+        ..Default::default()
+    };
+    assert_eq!(
+        options_of_capabilities(&caps),
+        MergeOptions {
+            strategies: vec![Merge],
+            auto_merge: true
+        }
+    );
+}
+
+#[test]
+fn escouade_merges_what_it_waits_for_once_approved_and_green_and_stops_on_a_red_ci() {
+    let mut t = in_review(12);
+    t.pr.as_mut().unwrap().merge_when_green = Some(MergeStrategy::Merge);
+    let mut p = pr(12, PrState::Open);
+    p.checks = Some(CheckState::Pending);
+    p.approvals = 1;
+    assert_eq!(settle(&mut t, &p, None, 2, Fr), News::Same);
+    p.checks = Some(CheckState::Success);
+    assert_eq!(
+        settle(&mut t, &p, None, 3, Fr),
+        News::MergeNow(MergeStrategy::Merge)
+    );
+    // Green but not approved: it waits on.
+    p.approvals = 0;
+    assert_eq!(settle(&mut t, &p, None, 4, Fr), News::Same);
+    assert!(t.pr.as_ref().unwrap().merge_when_green.is_some());
+    // Red: the wait is over, the card says so.
+    p.checks = Some(CheckState::Failure);
+    assert_eq!(settle(&mut t, &p, None, 5, Fr), News::Same);
+    let tp = t.pr.as_ref().unwrap();
+    assert_eq!(tp.merge_when_green, None);
+    assert!(tp.merge_note.as_deref().unwrap().starts_with("CI en échec"));
+    // The host's auto-merge is read on the card.
+    p.auto_merge = true;
+    settle(&mut t, &p, None, 6, Fr);
+    assert!(t.pr.as_ref().unwrap().auto_merge);
+}
+
+fn node_of(number: u64, state: &str, rollup: &str, approved: bool) -> Value {
+    let reviews = if approved {
+        json!([{"state": "APPROVED"}])
+    } else {
+        json!([])
+    };
+    json!({
+        "number": number, "url": format!("https://github.com/acme/demo/pull/{number}"),
+        "title": "feat", "state": state, "isDraft": false,
+        "headRefName": "ticket/dem-1", "baseRefName": "main", "mergeable": "MERGEABLE",
+        "isCrossRepository": false, "autoMergeRequest": null,
+        "latestOpinionatedReviews": {"nodes": reviews},
+        "reviewThreads": {"nodes": []},
+        "commits": {"nodes": [{"commit": {"statusCheckRollup": {"state": rollup}}}]},
+    })
+}
+
+fn pulls_answer(number: u64, state: &str, rollup: &str, approved: bool) -> Value {
+    json!({ "data": { "repository": { format!("p{number}"): node_of(number, state, rollup, approved) } } })
+}
+
+/// A ticket « En revue » with its pull request #12 on the fake GitHub, whose repository has
+/// `settings`.
+async fn merge_board(h: &Harness, server: &FakeServer, settings: Value) -> (String, String) {
+    let (p, _) = board_on_github(h, server).await;
+    server.on("GET", "/repos/acme/demo", 200, settings);
+    let (t, _) = reviewed(h, &p.id, "Fichier [ok]").await;
+    h.core
+        .edit_ticket(&t.id, |x| {
+            x.column = Column::Pr;
+            x.pr = in_review(12).pr;
+            Ok(())
+        })
+        .unwrap();
+    (p.id, t.id)
+}
+
+fn wrote(server: &FakeServer, path: &str) -> Option<Value> {
+    server
+        .writes()
+        .into_iter()
+        .find(|w| w.path() == path)
+        .map(|w| w.json())
+}
+
+fn graphql_sent(server: &FakeServer, op: &str) -> Option<Value> {
+    server
+        .writes()
+        .into_iter()
+        .map(|w| w.json())
+        .find(|j| j["operationName"] == op)
+}
+
+/// « Merger »: refused before it is approved and green; then merged with a strategy the
+/// repository allows (squash is not: a merge commit), and the ticket is done.
+#[tokio::test]
+async fn merge_goes_approved_and_green_with_a_strategy_the_repository_allows() {
+    let h = harness("tp-merge-now");
+    let server = FakeServer::start().await;
+    let settings = json!({
+        "allow_merge_commit": true, "allow_squash_merge": false, "allow_rebase_merge": false,
+        "allow_auto_merge": false,
+    });
+    let (p, id) = merge_board(&h, &server, settings).await;
+    server.on(
+        "POST",
+        "/graphql#Pulls",
+        200,
+        pulls_answer(12, "OPEN", "SUCCESS", false),
+    );
+    h.core.ticket_prs_refresh(Some(&p)).await.unwrap();
+    let tp = h.ticket(&id).pr.unwrap();
+    assert_eq!(
+        tp.merge_options.as_ref().map(|o| o.strategies.clone()),
+        Some(vec![MergeStrategy::Merge])
+    );
+    assert!(
+        h.core.ticket_pr_merge(&id, false).await.is_err(),
+        "not approved"
+    );
+    assert!(wrote(&server, "/repos/acme/demo/pulls/12/merge").is_none());
+
+    server.on(
+        "POST",
+        "/graphql#Pulls",
+        200,
+        pulls_answer(12, "MERGED", "SUCCESS", true),
+    );
+    server.on_once(
+        "POST",
+        "/graphql#Pulls",
+        200,
+        pulls_answer(12, "OPEN", "SUCCESS", true),
+        &[],
+    );
+    h.core.ticket_prs_refresh(Some(&p)).await.unwrap();
+    server.on(
+        "PUT",
+        "/repos/acme/demo/pulls/12/merge",
+        200,
+        json!({ "merged": true }),
+    );
+    assert_eq!(
+        h.core.ticket_pr_merge(&id, false).await.unwrap(),
+        MergeHow::Merged
+    );
+    let sent = wrote(&server, "/repos/acme/demo/pulls/12/merge").unwrap();
+    assert_eq!(sent["merge_method"], "merge");
+    let u = h.ticket(&id);
+    assert_eq!(u.column, Column::Done);
+    assert_eq!(u.outcome.as_deref(), Some("⤵ PR #12 mergée dans main"));
+}
+
+/// « Merger quand c'est vert » on a repository that allows auto-merge: GitHub's own.
+#[tokio::test]
+async fn merge_when_green_turns_on_the_hosts_auto_merge_when_the_repository_allows_it() {
+    let h = harness("tp-auto-merge");
+    let server = FakeServer::start().await;
+    let settings = json!({
+        "allow_merge_commit": true, "allow_squash_merge": true, "allow_rebase_merge": true,
+        "allow_auto_merge": true,
+    });
+    let (p, id) = merge_board(&h, &server, settings).await;
+    server.on(
+        "POST",
+        "/graphql#Pulls",
+        200,
+        pulls_answer(12, "OPEN", "PENDING", true),
+    );
+    h.core.ticket_prs_refresh(Some(&p)).await.unwrap();
+    assert!(
+        h.core.ticket_pr_merge(&id, false).await.is_err(),
+        "not green"
+    );
+    server.on(
+        "POST",
+        "/graphql#PullRequestId",
+        200,
+        json!({ "data": { "repository": { "pullRequest": { "id": "PR_12" } } } }),
+    );
+    server.on(
+        "POST",
+        "/graphql#EnableAutoMerge",
+        200,
+        json!({ "data": { "enablePullRequestAutoMerge": { "pullRequest": {
+            "number": 12, "autoMergeRequest": { "enabledAt": "2026-11-02T10:00:00Z" } } } } }),
+    );
+    assert_eq!(
+        h.core.ticket_pr_merge(&id, true).await.unwrap(),
+        MergeHow::Host
+    );
+    let sent = graphql_sent(&server, "EnableAutoMerge").expect("auto-merge asked of GitHub");
+    assert_eq!(sent["variables"]["method"], "SQUASH");
+    let tp = h.ticket(&id).pr.unwrap();
+    assert!(tp.auto_merge);
+    assert_eq!(tp.merge_when_green, None);
+    // Once on, it is not offered again.
+    assert!(h.core.ticket_pr_merge(&id, true).await.is_err());
+}
+
+/// « Merger quand c'est vert » without auto-merge on the repository: Escouade waits, then merges
+/// itself at the end of the CI.
+#[tokio::test]
+async fn without_the_hosts_auto_merge_escouade_merges_at_the_end_of_the_ci() {
+    let h = harness("tp-wait-green");
+    let server = FakeServer::start().await;
+    let settings = json!({
+        "allow_merge_commit": true, "allow_squash_merge": true, "allow_rebase_merge": true,
+        "allow_auto_merge": false,
+    });
+    let (p, id) = merge_board(&h, &server, settings).await;
+    server.on(
+        "POST",
+        "/graphql#Pulls",
+        200,
+        pulls_answer(12, "OPEN", "PENDING", true),
+    );
+    h.core.ticket_prs_refresh(Some(&p)).await.unwrap();
+    assert_eq!(
+        h.core.ticket_pr_merge(&id, true).await.unwrap(),
+        MergeHow::Escouade
+    );
+    assert_eq!(
+        h.ticket(&id).pr.unwrap().merge_when_green,
+        Some(MergeStrategy::Squash)
+    );
+    assert!(graphql_sent(&server, "EnableAutoMerge").is_none());
+    // Still running: nothing merges.
+    h.core.ticket_prs_refresh(Some(&p)).await.unwrap();
+    assert!(wrote(&server, "/repos/acme/demo/pulls/12/merge").is_none());
+    // Green: merged by Escouade, the ticket done.
+    server.on(
+        "PUT",
+        "/repos/acme/demo/pulls/12/merge",
+        200,
+        json!({ "merged": true }),
+    );
+    server.on(
+        "POST",
+        "/graphql#Pulls",
+        200,
+        pulls_answer(12, "MERGED", "SUCCESS", true),
+    );
+    server.on_once(
+        "POST",
+        "/graphql#Pulls",
+        200,
+        pulls_answer(12, "OPEN", "SUCCESS", true),
+        &[],
+    );
+    h.core.ticket_prs_refresh(Some(&p)).await.unwrap();
+    let sent = wrote(&server, "/repos/acme/demo/pulls/12/merge").expect("merged by Escouade");
+    assert_eq!(sent["merge_method"], "squash");
+    assert_eq!(h.ticket(&id).column, Column::Done);
+}
+
+/// The host refuses the merge Escouade waited for: said on the card, the wait over.
+#[tokio::test]
+async fn a_merge_refused_by_the_host_is_said_on_the_card() {
+    let h = harness("tp-merge-refused");
+    let server = FakeServer::start().await;
+    let (p, id) = merge_board(&h, &server, json!({ "allow_auto_merge": false })).await;
+    server.on(
+        "POST",
+        "/graphql#Pulls",
+        200,
+        pulls_answer(12, "OPEN", "PENDING", true),
+    );
+    h.core.ticket_prs_refresh(Some(&p)).await.unwrap();
+    h.core.ticket_pr_merge(&id, true).await.unwrap();
+    server.on(
+        "PUT",
+        "/repos/acme/demo/pulls/12/merge",
+        405,
+        json!({ "message": "Required status check \"ci\" is expected." }),
+    );
+    server.on(
+        "POST",
+        "/graphql#Pulls",
+        200,
+        pulls_answer(12, "OPEN", "SUCCESS", true),
+    );
+    h.core.ticket_prs_refresh(Some(&p)).await.unwrap();
+    let u = h.ticket(&id);
+    assert_eq!(u.column, Column::Pr);
+    let tp = u.pr.unwrap();
+    assert_eq!(tp.merge_when_green, None);
+    assert!(
+        tp.merge_note
+            .as_deref()
+            .unwrap()
+            .starts_with("Merge refusé"),
+        "{:?}",
+        tp.merge_note
+    );
+    // « Ne plus attendre » clears it.
+    h.core.ticket_pr_stop_waiting(&id).unwrap();
+    assert_eq!(h.ticket(&id).pr.unwrap().merge_note, None);
+}
+
 // ---------- Its CI fixed by its agent (ESC-60) ----------
 
 fn failing(t: &mut Ticket) {
