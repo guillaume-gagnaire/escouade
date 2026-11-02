@@ -19,7 +19,7 @@ Un **harness** est le CLI qui fait tourner un agent : Claude Code, Codex, OpenCo
 - Réglages › Harness liste chaque harness avec son exécutable, sa version, son état (introuvable, trop ancien, non connecté, prêt, non pris en charge) et « Se connecter… ». Rien n'y parle des versions testées. Un harness introuvable y donne sa commande d'installation, comme l'écran « Aucun harness trouvé » du premier lancement.
 - Dès que deux harness sont trouvés :
   - le projet a un « Harness par défaut » (Claude Code sans réglage) ;
-  - « Nouvel agent ▾ » propose « Nouvel agent sur <harness> » ;
+  - « Nouvel agent ▾ » propose « Nouvel agent sur <harness> » pour chaque harness installé qui a un compte ; les autres n’y sont pas (ils se règlent dans Réglages › Harness et Réglages › Comptes) ;
   - un ticket a un champ « Harness » (celui du projet par défaut), que le pilote auto suit ;
   - la carte de chaque agent porte la marque de son harness dès que des agents tournent sur deux harness.
 - Un agent garde son harness. Il n'en change que par une passation (voir *Comptes*, « Continuer sur un autre harness »).
