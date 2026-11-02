@@ -6,6 +6,9 @@
 # The page of the example plugins shows their code, checked against these files by its tests.
 !plugins
 plugins/*/node_modules
+# The pages of the plugins show the code of the SDK's templates too (ESC-325), checked the same way.
+!sdk/create-escouade-plugin/templates
+sdk/create-escouade-plugin/templates/*/node_modules
 website/node_modules
 website/.nuxt
 website/.output
