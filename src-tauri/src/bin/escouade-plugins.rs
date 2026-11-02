@@ -50,6 +50,8 @@ const ENTRIES: &[Entry] = &[
     ("acp", escouade_plugin_acp::run),
     // Linear (INT-7.2): the Kanban's source of Linear issues, in its crate (plugins/builtin/dev.escouade.linear).
     ("linear", escouade_plugin_linear::run),
+    // Jira (INT-7.3): the Kanban's source of Jira issues, in its crate (plugins/builtin/dev.escouade.jira).
+    ("jira", escouade_plugin_jira::run),
 ];
 
 fn main() {

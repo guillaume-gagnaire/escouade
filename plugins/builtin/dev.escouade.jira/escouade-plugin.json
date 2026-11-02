@@ -1,0 +1,47 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.jira",
+  "name": "Jira",
+  "version": "0.0.0",
+  "description": {
+    "fr": "Les tickets d'un projet Jira Cloud dans le Kanban, ses statuts comme colonnes.",
+    "en": "A Jira Cloud project's issues in the Kanban, its statuses as columns."
+  },
+  "author": { "name": "Escouade", "url": "https://escouade.dev" },
+  "license": "GPL-3.0-or-later",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/builtin/dev.escouade.jira",
+  "escouade": { "api": "1", "min": "2.1.0" },
+  "run": { "command": "{escouade}/escouade-plugins", "args": ["jira"] },
+  "activation": ["account:jira"],
+  "permissions": {
+    "network": ["*.atlassian.net"],
+    "secrets": ["account:jira"]
+  },
+  "contributes": {
+    "accounts": [
+      {
+        "id": "jira",
+        "name": "Jira",
+        "defaultHost": "atlassian.net",
+        "connect": ["token"],
+        "fields": [
+          {
+            "key": "site",
+            "missing": { "fr": "Indique l'adresse du site.", "en": "Give the site’s address." }
+          },
+          {
+            "key": "email",
+            "missing": { "fr": "Indique l'e-mail.", "en": "Give the email." }
+          },
+          {
+            "key": "token",
+            "secret": true,
+            "missing": { "fr": "Indique le jeton.", "en": "Give the token." }
+          }
+        ],
+        "tokenPage": "https://id.atlassian.com/manage-profile/security/api-tokens"
+      }
+    ],
+    "ticketSources": [{ "id": "jira", "name": "Jira", "account": "jira" }]
+  }
+}

@@ -101,6 +101,10 @@ pub const REGISTRY: &[Entry] = &[
         id: LINEAR,
         manifest: include_str!("../../../plugins/builtin/dev.escouade.linear/escouade-plugin.json"),
     },
+    Entry {
+        id: JIRA,
+        manifest: include_str!("../../../plugins/builtin/dev.escouade.jira/escouade-plugin.json"),
+    },
 ];
 
 /// The plugin « GitHub »: github.com, GHE.com and GitHub Enterprise Server, their pull requests and GitHub Issues.
@@ -127,6 +131,9 @@ pub const ACP: &str = "dev.escouade.acp";
 
 /// The plugin « Linear »: the Kanban's source of Linear issues (INT-7.2).
 pub const LINEAR: &str = "dev.escouade.linear";
+
+/// The plugin « Jira »: the Kanban's source of Jira Cloud issues (INT-7.3).
+pub const JIRA: &str = "dev.escouade.jira";
 
 /// Whether `id` is the id of a plugin the app gives.
 pub fn is_builtin(id: &str) -> bool {

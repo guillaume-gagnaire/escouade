@@ -73,6 +73,7 @@ escouade-plugin-trello = { path = "../plugins/builtin/dev.escouade.trello" }
 escouade-plugin-azure-devops = { path = "../plugins/builtin/dev.escouade.azure-devops" }
 escouade-plugin-acp = { path = "../plugins/builtin/dev.escouade.acp" }
 escouade-plugin-linear = { path = "../plugins/builtin/dev.escouade.linear" }
+escouade-plugin-jira = { path = "../plugins/builtin/dev.escouade.jira" }
 # A version's archive from the store (STORE-9): read in memory, its links and climbing paths refused.
 flate2 = "1"
 tar = { version = "0.4", default-features = false }
@@ -178,6 +179,7 @@ members = [
     "../plugins/builtin/dev.escouade.azure-devops",
     "../plugins/builtin/dev.escouade.acp",
     "../plugins/builtin/dev.escouade.linear",
+    "../plugins/builtin/dev.escouade.jira",
 ]
 default-members = [
     ".",
@@ -192,6 +194,7 @@ default-members = [
     "../plugins/builtin/dev.escouade.azure-devops",
     "../plugins/builtin/dev.escouade.acp",
     "../plugins/builtin/dev.escouade.linear",
+    "../plugins/builtin/dev.escouade.jira",
 ]
 
 [profile.dev.package."*"]

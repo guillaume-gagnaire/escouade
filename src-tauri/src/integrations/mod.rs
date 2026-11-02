@@ -361,17 +361,8 @@ impl Bases {
     }
 }
 
-/// Sends a request to `service` and reads its JSON answer (null when empty); an error says, in
-/// French, what went wrong and what the service said.
-pub(crate) async fn call(service: Service, rb: reqwest::RequestBuilder) -> Result<Value> {
-    Ok(send(service, rb).await?.0)
-}
-
-async fn send(service: Service, rb: reqwest::RequestBuilder) -> Result<(Value, HeaderMap)> {
-    send_named(service.label(), rb).await
-}
-
-/// `send` for a service known by its name only (a code host).
+/// Sends a request to a service known by its name only (a code host) and reads its JSON answer (null when empty); an
+/// error says what went wrong and what the service said.
 pub(crate) async fn send_named(
     name: &str,
     rb: reqwest::RequestBuilder,
@@ -462,6 +453,11 @@ pub fn checked_links(mut p: ProjectIntegrations) -> ProjectIntegrations {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A request to `service`, its JSON answer read.
+    async fn call(service: Service, rb: reqwest::RequestBuilder) -> Result<Value> {
+        Ok(send_named(service.label(), rb).await?.0)
+    }
 
     #[test]
     fn a_service_refusing_says_so_in_english() {

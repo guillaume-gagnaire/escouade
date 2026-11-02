@@ -423,6 +423,8 @@ fn missing_field(lang: Lang, service: Service, account: &Account) -> Option<Stri
             service.as_str(),
             |field| match field {
                 "key" => account.key.clone(),
+                "site" => account.site.clone(),
+                "email" => account.email.clone(),
                 "token" => account.token.clone(),
                 _ => String::new(),
             },
@@ -432,17 +434,7 @@ fn missing_field(lang: Lang, service: Service, account: &Account) -> Option<Stri
         }
     }
     Some(match service {
-        Service::JIRA if account.site.is_empty() => {
-            tr_in!(
-                lang,
-                "Indique l'adresse du site.",
-                "Give the site’s address."
-            )
-        }
-        Service::JIRA if account.email.is_empty() => {
-            tr_in!(lang, "Indique l'e-mail.", "Give the email.")
-        }
-        Service::JIRA | Service::CLICKUP if account.token.is_empty() => {
+        Service::CLICKUP if account.token.is_empty() => {
             tr_in!(lang, "Indique le jeton.", "Give the token.")
         }
         _ => return None,
@@ -491,31 +483,34 @@ impl<R: Runtime> Core<R> {
         }
         let bases = self.bases.read().clone();
         if let Some(own) = source::registry().get(service).and_then(|k| k.plugin()) {
-            // Out of the core (GitHub Issues, Trello, Linear): its plugin serves it, its secret lent as the core
+            // Out of the core (GitHub Issues, Trello, Linear, Jira): its plugin serves it, its secret lent as the core
             // holds it (Trello's is the key and the token), on github.com's account for GitHub.
             let host = crate::plugins::accounts::source_account(service);
             let (secret, api) = match service {
                 Service::TRELLO => (
                     serde_json::json!({ "key": account.key, "token": account.token }).to_string(),
-                    &bases.trello,
+                    Some(&bases.trello),
                 ),
-                Service::LINEAR => (account.token.clone(), &bases.linear),
-                _ => (account.token.clone(), &bases.github),
+                Service::LINEAR => (account.token.clone(), Some(&bases.linear)),
+                // Jira's API is its site's: the plugin is told the site, the e-mail and, lent, the token.
+                Service::JIRA => (account.token.clone(), None),
+                _ => (account.token.clone(), Some(&bases.github)),
             };
             self.plugin_runtime
                 .lend(own, &format!("account:{host}"), &secret);
             if service == Service::GITHUB {
                 account.site = format!("https://{host}");
             }
-            return Ok(Box::new(
-                crate::plugins::adapters::ProcessTicketSource::new(
-                    self.plugin_runtime.clone(),
-                    own,
-                    service.as_str(),
-                    &account,
-                )
-                .with_api(api),
-            ));
+            let source = crate::plugins::adapters::ProcessTicketSource::new(
+                self.plugin_runtime.clone(),
+                own,
+                service.as_str(),
+                &account,
+            );
+            return Ok(Box::new(match api {
+                Some(api) => source.with_api(api),
+                None => source,
+            }));
         }
         let http = crate::usage::http_client(&self.settings.read())?;
         source::registry().client(service, &account, http, &bases)

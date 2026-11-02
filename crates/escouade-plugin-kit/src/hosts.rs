@@ -97,6 +97,15 @@ pub trait SourceKind: Send + Sync {
     fn name(&self) -> &str;
     /// The client of one account (`url`: the instance of a code host's account; empty for a source's own).
     fn client(&self, http: reqwest::Client, account: &Credentials) -> Box<dyn TicketSource>;
+    /// The name of the account's secret (`account:<name>`) when the instance is `url`: by default its host, else the
+    /// source's own id. A source whose instance is only an address typed by the user (Jira's site) keeps its own id.
+    fn account_name(&self, url: &str) -> String {
+        if url.is_empty() {
+            self.id().to_string()
+        } else {
+            host_of(url)
+        }
+    }
 }
 
 /// The account a call names, as the core's adapters write it.
@@ -222,12 +231,8 @@ impl Hosts {
             .ok_or_else(|| invalid(format!("this plugin serves no ticket source {id:?}")))?;
         let account: Named = arg(params, "account")?;
         let url = account.address().trim_end_matches('/').to_string();
-        // Its account: its instance's host (github.com's), else the source's own.
-        let name = if url.is_empty() {
-            id.to_string()
-        } else {
-            host_of(&url)
-        };
+        // Its account: its instance's host (github.com's), else the source's own (`SourceKind::account_name`).
+        let name = kind.account_name(&url);
         let token = self.token(cx, kind.name(), &name).await?;
         let key = format!("{id}\n{url}\n{:?}\n{token}", account.api);
         if let Some(c) = self.source_clients.lock().get(&key) {

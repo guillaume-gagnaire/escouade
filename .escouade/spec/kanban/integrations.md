@@ -2,7 +2,7 @@
 title: "Intégrations"
 subject: "Kanban"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-213","ESC-214"]
+tickets: ["ESC-213","ESC-214","ESC-215"]
 decisions: []
 compared: null
 ---
@@ -167,3 +167,11 @@ Dans Réglages › Intégrations › « Sources du Kanban » :
 - « Connecter » vérifie la clé personnelle par le plugin, à qui Escouade la prête le temps de l'appel. Le texte « Indique le jeton. » est celui du manifeste du plugin.
 - Le plugin reçoit de l'app l'adresse de l'API (`ESCOUADE_LINEAR_API`), la langue, le proxy et la vérification TLS des réglages.
 - Jira et ClickUp suivent le même modèle.
+
+## Jira, plugin de première main (ESC-215, INT-7.3)
+
+- Jira n'est plus dans le cœur : c'est le plugin `dev.escouade.jira`, livré avec Escouade et signé avec elle (dossier `plugins/builtin/dev.escouade.jira/`), un process `escouade-plugins jira`, sur le même modèle que Trello et Linear. Le Kanban, l'import (projets, statuts, « Assignés à moi », sprint actif, « À faire », étiquettes, recherche par clé ou texte), la transition vers le statut de la colonne et le commentaire se comportent comme avant ; le compte (site, e-mail, jeton), les projets liés et le trousseau sont inchangés.
+- Il se voit dans la vue Plugins, sous « Livrés avec Escouade », et se coupe pour l'app ou pour un projet. Arrêté ou coupé, la synchro le dit (« Le plugin dev.escouade.jira ne répond pas : … ») et recommence plus tard.
+- « Connecter » vérifie le compte par le plugin, à qui Escouade prête le jeton le temps de l'appel ; le site (https, sauf cette machine) et l'e-mail lui sont dits, jamais le jeton. Les textes « Indique l'adresse du site. », « Indique l'e-mail. » et « Indique le jeton. » sont ceux du manifeste du plugin.
+- Le plugin reçoit de l'app la langue, le proxy et la vérification TLS des réglages (changés, le plugin repart avec).
+- ClickUp suit le même modèle.

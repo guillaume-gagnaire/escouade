@@ -215,8 +215,8 @@ export const BUILTINS: Builtin[] = [
     secrets: true,
     docs: doc('integrations'),
     logo: { category: 'source' },
-    // Trello (INT-7.1) and Linear (INT-7.2) have left the core; Jira and ClickUp follow.
-    ...(id === 'trello' || id === 'linear' ? { source: `plugins/builtin/dev.escouade.${id}` } : {}),
+    // Trello (INT-7.1), Linear (INT-7.2) and Jira (INT-7.3) have left the core; ClickUp follows.
+    ...(id === 'trello' || id === 'linear' || id === 'jira' ? { source: `plugins/builtin/dev.escouade.${id}` } : {}),
   })),
 ];
 

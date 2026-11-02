@@ -222,7 +222,6 @@ macro_rules! ticket_source {
     };
 }
 
-ticket_source!(jira::Jira, set_state: plain, view: default);
 ticket_source!(clickup::Clickup, set_state: plain, view: own);
 ticket_source!(gitlab::Gitlab, set_state: mapped, view: default);
 
@@ -261,9 +260,26 @@ macro_rules! kind {
     };
 }
 
-kind!(JiraKind, "jira", "Jira", "Jira", |a, http, _b| {
-    jira::Jira::new(http, a)
-});
+// Jira: out of the core, served by the plugin « Jira » (INT-7.3).
+pub struct JiraKind;
+
+impl TicketSourceKind for JiraKind {
+    fn id(&self) -> &'static str {
+        "jira"
+    }
+    fn label(&self) -> &'static str {
+        "Jira"
+    }
+    fn short(&self) -> &'static str {
+        "Jira"
+    }
+    fn plugin(&self) -> Option<&'static str> {
+        Some(crate::plugins::builtin::JIRA)
+    }
+    fn build(&self, _: &Account, _: reqwest::Client, _: &Bases) -> Box<dyn TicketSource> {
+        Box::new(Unserved("Jira"))
+    }
+}
 // Trello: out of the core, served by the plugin « Trello » (INT-7.1).
 pub struct TrelloKind;
 
@@ -428,10 +444,7 @@ mod tests {
             "YouGile"
         }
         fn build(&self, _: &Account, _: reqwest::Client, _: &Bases) -> Box<dyn TicketSource> {
-            Box::new(crate::integrations::jira::Jira::new(
-                reqwest::Client::new(),
-                &Account::default(),
-            ))
+            Box::new(Unserved("YouGile"))
         }
     }
 
