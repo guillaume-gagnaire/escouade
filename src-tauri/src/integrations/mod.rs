@@ -10,7 +10,6 @@ pub(crate) mod fake;
 mod github_tests;
 pub mod gitlab;
 pub mod jira;
-pub mod linear;
 pub mod secrets;
 pub mod source;
 pub mod sync;

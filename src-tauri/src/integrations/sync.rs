@@ -442,7 +442,7 @@ fn missing_field(lang: Lang, service: Service, account: &Account) -> Option<Stri
         Service::JIRA if account.email.is_empty() => {
             tr_in!(lang, "Indique l'e-mail.", "Give the email.")
         }
-        Service::JIRA | Service::LINEAR | Service::CLICKUP if account.token.is_empty() => {
+        Service::JIRA | Service::CLICKUP if account.token.is_empty() => {
             tr_in!(lang, "Indique le jeton.", "Give the token.")
         }
         _ => return None,
@@ -491,16 +491,16 @@ impl<R: Runtime> Core<R> {
         }
         let bases = self.bases.read().clone();
         if let Some(own) = source::registry().get(service).and_then(|k| k.plugin()) {
-            // Out of the core (GitHub Issues, Trello): its plugin serves it, its secret lent as the core
+            // Out of the core (GitHub Issues, Trello, Linear): its plugin serves it, its secret lent as the core
             // holds it (Trello's is the key and the token), on github.com's account for GitHub.
             let host = crate::plugins::accounts::source_account(service);
-            let (secret, api) = if service == Service::TRELLO {
-                (
+            let (secret, api) = match service {
+                Service::TRELLO => (
                     serde_json::json!({ "key": account.key, "token": account.token }).to_string(),
                     &bases.trello,
-                )
-            } else {
-                (account.token.clone(), &bases.github)
+                ),
+                Service::LINEAR => (account.token.clone(), &bases.linear),
+                _ => (account.token.clone(), &bases.github),
             };
             self.plugin_runtime
                 .lend(own, &format!("account:{host}"), &secret);

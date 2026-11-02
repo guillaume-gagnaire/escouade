@@ -1636,6 +1636,7 @@ dependencies = [
  "escouade-plugin-github",
  "escouade-plugin-gitlab",
  "escouade-plugin-kit",
+ "escouade-plugin-linear",
  "escouade-plugin-protocol",
  "escouade-plugin-trello",
  "espeak-ng",
@@ -1795,6 +1796,16 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "escouade-plugin-linear"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "escouade-plugin-kit",
+ "reqwest 0.12.28",
+ "serde_json",
 ]
 
 [[package]]

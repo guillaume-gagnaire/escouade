@@ -48,6 +48,8 @@ const ENTRIES: &[Entry] = &[
     ("azure-devops", escouade_plugin_azure_devops::run),
     // The generic ACP plugin (PLG-6): the harnesses a manifest describes, in its crate (plugins/builtin/dev.escouade.acp).
     ("acp", escouade_plugin_acp::run),
+    // Linear (INT-7.2): the Kanban's source of Linear issues, in its crate (plugins/builtin/dev.escouade.linear).
+    ("linear", escouade_plugin_linear::run),
 ];
 
 fn main() {

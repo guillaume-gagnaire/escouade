@@ -41,6 +41,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - Trello is a plugin shipped with Escouade: it shows in the Plugins view under “Shipped with Escouade”, can be turned off for the app or for a project, and the sync says when it is not answering. Your Trello account and linked projects stay as they are.
 - Azure DevOps and Azure Boards are one plugin shipped with Escouade, listed under “Shipped with Escouade”: your Azure Repos pull requests, their policies and pipelines, and the Azure Boards work items run apart, on the same account; the `az` tool’s token still works, and nothing changes in use.
 - An agent that speaks ACP, such as Goose, becomes a harness of Escouade through a plugin without code: its manifest describes it, and Escouade launches it, speaks to it and shows its conversation, its permissions with their diff and the end of its turns. The Goose plugin is the first; its agents stay, “harness missing”, when its plugin is turned off.
+- Linear is a plugin shipped with Escouade, like Trello: it shows in the Plugins view, can be turned off for the app or for a project, and the sync says when it is not answering. Your Linear key and linked projects stay as they are.
 
 ### Removed
 

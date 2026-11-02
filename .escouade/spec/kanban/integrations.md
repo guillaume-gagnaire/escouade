@@ -2,7 +2,7 @@
 title: "Intégrations"
 subject: "Kanban"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-213"]
+tickets: ["ESC-213","ESC-214"]
 decisions: []
 compared: null
 ---
@@ -159,3 +159,11 @@ Dans Réglages › Intégrations › « Sources du Kanban » :
 - « Connecter » vérifie la clé et le jeton par le plugin, à qui Escouade les prête le temps de l'appel (même quand le trousseau du système les refuse) ; ils vont ensuite au trousseau comme avant. Les textes « Indique le jeton. » et « Indique la clé d'API. » sont ceux du manifeste du plugin.
 - Le plugin reçoit de l'app l'adresse de l'API (`ESCOUADE_TRELLO_API`), la langue, le proxy et la vérification TLS des réglages.
 - Linear, Jira et ClickUp suivent le même modèle (une crate `plugins/builtin/<id>/` sur le kit `escouade-plugin-kit`).
+
+## Linear, plugin de première main (ESC-214, INT-7.2)
+
+- Linear n'est plus dans le cœur : c'est le plugin `dev.escouade.linear`, livré avec Escouade et signé avec elle (dossier `plugins/builtin/dev.escouade.linear/`), un process `escouade-plugins linear`, sur le même modèle que Trello. Le Kanban, l'import (équipes, statuts du workflow, « Mes issues », étiquettes, recherche par numéro ou titre), le changement de statut et le commentaire se comportent comme avant ; le compte, les projets liés et le trousseau sont inchangés.
+- Il se voit dans la vue Plugins, sous « Livrés avec Escouade », et se coupe pour l'app ou pour un projet. Arrêté ou coupé, la synchro le dit (« Le plugin dev.escouade.linear ne répond pas : … ») et recommence plus tard.
+- « Connecter » vérifie la clé personnelle par le plugin, à qui Escouade la prête le temps de l'appel. Le texte « Indique le jeton. » est celui du manifeste du plugin.
+- Le plugin reçoit de l'app l'adresse de l'API (`ESCOUADE_LINEAR_API`), la langue, le proxy et la vérification TLS des réglages.
+- Jira et ClickUp suivent le même modèle.

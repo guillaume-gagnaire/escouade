@@ -97,6 +97,10 @@ pub const REGISTRY: &[Entry] = &[
         id: ACP,
         manifest: include_str!("../../../plugins/builtin/dev.escouade.acp/escouade-plugin.json"),
     },
+    Entry {
+        id: LINEAR,
+        manifest: include_str!("../../../plugins/builtin/dev.escouade.linear/escouade-plugin.json"),
+    },
 ];
 
 /// The plugin « GitHub »: github.com, GHE.com and GitHub Enterprise Server, their pull requests and GitHub Issues.
@@ -120,6 +124,9 @@ pub const AZURE_DEVOPS: &str = "dev.escouade.azure-devops";
 
 /// The generic ACP plugin, which serves the harnesses a manifest describes (`contributes.harnesses[].acp`, PLG-6).
 pub const ACP: &str = "dev.escouade.acp";
+
+/// The plugin « Linear »: the Kanban's source of Linear issues (INT-7.2).
+pub const LINEAR: &str = "dev.escouade.linear";
 
 /// Whether `id` is the id of a plugin the app gives.
 pub fn is_builtin(id: &str) -> bool {

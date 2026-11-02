@@ -1,17 +1,25 @@
-//! Linear (GraphQL API), with a personal API key. A project's source is a team; an issue's state
-//! on the Kanban is one of the team's workflow states.
+//! Linear (GraphQL API), with a personal API key: the Kanban's source of Linear issues. A project's source is a team;
+//! an issue's state on the Kanban is one of the team's workflow states. The account's secret is the API key
+//! (`secrets/get` of `account:linear`).
 
-use super::text::criteria_of;
-use super::{
-    http_error, Account, Container, ExternalIssue, HttpError, IssueFilter, IssuePage, Query,
-    Refused,
-};
-use crate::i18n::{self, Lang};
-use crate::model::{ExternalRef, ExternalState, Service};
 use anyhow::{anyhow, Result};
+use escouade_plugin_kit::errors::{http_error_in, HttpError, Refused};
+use escouade_plugin_kit::forge::BoxFuture;
+use escouade_plugin_kit::hosts::{Credentials, SourceKind, TicketSource};
+use escouade_plugin_kit::i18n::{self, Lang};
+use escouade_plugin_kit::protocol::tickets::{
+    Container, ExternalIssue, ExternalRef, ExternalState, IssueFilter, IssuePage, Query,
+};
+use escouade_plugin_kit::text::criteria_of;
+use escouade_plugin_kit::{tr, tr_in};
 use serde_json::{json, Value};
 
-const S: Service = Service::LINEAR;
+/// The source's id, and its name in what it says.
+pub const ID: &str = "linear";
+const S: &str = "Linear";
+
+/// Where the API is, unless Escouade says otherwise (`ESCOUADE_LINEAR_API`: tests, demos).
+const API: &str = "https://api.linear.app";
 
 /// The issues of a page of the import.
 const PAGE: u32 = 50;
@@ -35,11 +43,11 @@ pub struct Linear {
 }
 
 impl Linear {
-    pub fn new(http: reqwest::Client, a: &Account, base: &str) -> Self {
+    pub fn new(http: reqwest::Client, account: &Credentials, base: &str) -> Self {
         Self {
             http,
             base: base.trim_end_matches('/').to_string(),
-            key: a.token.trim().to_string(),
+            key: account.token.trim().to_string(),
         }
     }
 
@@ -57,7 +65,7 @@ impl Linear {
             .send()
             .await
             .map_err(|e| {
-                let (name, e) = (S.label(), anyhow::Error::from(e.without_url()));
+                let (name, e) = (S, anyhow::Error::from(e.without_url()));
                 anyhow!(tr!(
                     "{name} injoignable : {e:#}",
                     "{name} can’t be reached: {e:#}"
@@ -80,12 +88,12 @@ impl Linear {
         if let Some(status) = failed {
             return Err(HttpError {
                 status,
-                message: http_error(S, status, &text),
+                message: http_error_in(i18n::ui(), S, status, &text),
             }
             .into());
         }
         if v["data"].is_null() {
-            let name = S.label();
+            let name = S;
             return Err(anyhow!(tr!(
                 "{name} : réponse illisible",
                 "{name}: unreadable answer"
@@ -221,7 +229,7 @@ impl Linear {
                 let mut criteria = criteria_of(&description);
                 criteria.truncate(20);
                 ExternalIssue {
-                    service: S,
+                    service: ID.to_string(),
                     id: i["id"].as_str().unwrap_or_default().to_string(),
                     key: i["identifier"].as_str().unwrap_or_default().to_string(),
                     title: i["title"].as_str().unwrap_or_default().to_string(),
@@ -350,190 +358,71 @@ fn mine_filter(lang: Lang) -> IssueFilter {
     }
 }
 
+impl TicketSource for Linear {
+    fn me(&self) -> BoxFuture<'_, Result<(String, String)>> {
+        Box::pin(Linear::me(self))
+    }
+    fn containers(&self) -> BoxFuture<'_, Result<Vec<Container>>> {
+        Box::pin(Linear::containers(self))
+    }
+    fn states<'a>(&'a self, container: &'a str) -> BoxFuture<'a, Result<Vec<ExternalState>>> {
+        Box::pin(Linear::states(self, container))
+    }
+    fn issues<'a>(&'a self, container: &'a str, q: &'a Query) -> BoxFuture<'a, Result<IssuePage>> {
+        Box::pin(Linear::issues(self, container, q))
+    }
+    fn set_state<'a>(
+        &'a self,
+        r: &'a ExternalRef,
+        state: &'a ExternalState,
+        _mapped: &'a [ExternalState],
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(Linear::set_state(self, r, state))
+    }
+    fn comment<'a>(&'a self, r: &'a ExternalRef, text: &'a str) -> BoxFuture<'a, Result<()>> {
+        Box::pin(Linear::comment(self, r, text))
+    }
+}
+
+/// The Kanban's source, Linear.
+pub struct LinearSource;
+
+impl SourceKind for LinearSource {
+    fn id(&self) -> &str {
+        ID
+    }
+    fn name(&self) -> &str {
+        S
+    }
+    fn client(&self, http: reqwest::Client, account: &Credentials) -> Box<dyn TicketSource> {
+        let base = account.api.clone().filter(|a| !a.trim().is_empty());
+        Box::new(Linear::new(http, account, base.as_deref().unwrap_or(API)))
+    }
+}
+
+/// What `escouade-plugins linear` runs.
+pub fn run() -> i32 {
+    escouade_plugin_kit::serve::run(
+        "linear",
+        escouade_plugin_kit::hosts::Hosts::new(vec![], vec![Box::new(LinearSource)]),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::integrations::fake::FakeServer;
 
-    async fn linear() -> (FakeServer, Linear) {
-        let server = FakeServer::start().await;
-        let account = Account {
+    #[test]
+    fn the_key_is_trimmed_and_goes_as_it_is() {
+        let account = Credentials {
             token: " lin_api_k1 ".into(),
             ..Default::default()
         };
-        let l = Linear::new(reqwest::Client::new(), &account, &server.url);
-        (server, l)
-    }
-
-    fn workflow(server: &FakeServer) {
-        server.on(
-            "POST",
-            "/graphql#States",
-            200,
-            json!({ "data": { "team": { "states": { "nodes": [
-                { "id": "s-done", "name": "Done", "type": "completed", "position": 0 },
-                { "id": "s-review", "name": "In Review", "type": "started", "position": 2 },
-                { "id": "s-todo", "name": "Todo", "type": "unstarted", "position": 1 },
-                { "id": "s-doing", "name": "In Progress", "type": "started", "position": 1 },
-                { "id": "s-backlog", "name": "Backlog", "type": "backlog", "position": 0 },
-                { "id": "s-canceled", "name": "Canceled", "type": "canceled", "position": 0 }
-            ] } } } }),
-        );
-    }
-
-    #[tokio::test]
-    async fn the_account_is_who_the_key_belongs_to_and_the_key_goes_as_it_is() {
-        let (server, l) = linear().await;
-        server.on(
-            "POST",
-            "/graphql#Me",
-            200,
-            json!({ "data": { "viewer": { "id": "u1", "name": "Ada", "email": "ada@atlas.dev" } } }),
-        );
+        let l = Linear::new(reqwest::Client::new(), &account, "https://x/");
         assert_eq!(
-            l.me().await.unwrap(),
-            ("ada@atlas.dev".to_string(), "u1".to_string())
+            (l.key.as_str(), l.base.as_str()),
+            ("lin_api_k1", "https://x")
         );
-        let req = &server.requests()[0];
-        assert_eq!(req.headers["authorization"], "lin_api_k1");
-        assert_eq!(req.json()["operationName"], "Me");
-    }
-
-    #[tokio::test]
-    async fn a_key_refused_reads_as_credentials_refused_and_can_be_put_right() {
-        let (server, l) = linear().await;
-        server.on(
-            "POST",
-            "/graphql#Me",
-            400,
-            json!({ "errors": [{ "message": "Authentication required, not authenticated",
-                                 "extensions": { "code": "AUTHENTICATION_ERROR" } }] }),
-        );
-        let e = l.me().await.unwrap_err();
-        assert_eq!(e.downcast_ref::<HttpError>().unwrap().status, 401);
-        assert!(!crate::integrations::lasting(&e));
-        assert!(
-            e.to_string()
-                .contains("Authentication required, not authenticated"),
-            "{e}"
-        );
-        // An error of the query, answered with a 200: a request refused as it is.
-        server.on(
-            "POST",
-            "/graphql#Teams",
-            200,
-            json!({ "data": null, "errors": [{ "message": "Argument Validation Error" }] }),
-        );
-        let e = l.containers().await.unwrap_err();
-        assert!(crate::integrations::lasting(&e));
-        assert!(e.to_string().contains("Argument Validation Error"), "{e}");
-    }
-
-    #[tokio::test]
-    async fn the_teams_are_the_containers_and_their_states_come_in_workflow_order() {
-        let (server, l) = linear().await;
-        server.on(
-            "POST",
-            "/graphql#Teams",
-            200,
-            json!({ "data": { "teams": { "nodes": [{ "id": "t1", "key": "ENG", "name": "Engineering" }] } } }),
-        );
-        assert_eq!(
-            l.containers().await.unwrap(),
-            [Container {
-                id: "t1".into(),
-                name: "Engineering (ENG)".into(),
-                group: None,
-                own: false,
-            }]
-        );
-        workflow(&server);
-        let names: Vec<String> = l
-            .states("t1")
-            .await
-            .unwrap()
-            .into_iter()
-            .map(|s| s.name)
-            .collect();
-        assert_eq!(
-            names,
-            [
-                "Backlog",
-                "Todo",
-                "In Progress",
-                "In Review",
-                "Done",
-                "Canceled"
-            ]
-        );
-        // « En cours » and « À tester » by default, as for the other services.
-        let defaults = super::super::text::default_states(&l.states("t1").await.unwrap());
-        use crate::model::Column;
-        assert_eq!(defaults[&Column::Doing].name, "In Progress");
-        assert_eq!(defaults[&Column::Done].name, "In Review");
-    }
-
-    #[tokio::test]
-    async fn the_issues_come_with_their_criteria_and_the_filters_go_to_linear() {
-        let (server, l) = linear().await;
-        workflow(&server);
-        server.on(
-            "POST",
-            "/graphql#Issues",
-            200,
-            json!({ "data": { "issues": {
-                "nodes": [{
-                    "id": "i1", "identifier": "ENG-42", "title": "Exporter le journal",
-                    "description": "Export CSV.\n\n## Critères d'acceptation\n- Un bouton Exporter\n- Le fichier s'ouvre dans Excel",
-                    "url": "https://linear.app/atlas/issue/ENG-42", "priorityLabel": "High",
-                    "assignee": { "displayName": "ada" }, "state": { "id": "s-todo", "name": "Todo" },
-                    "labels": { "nodes": [{ "name": "claude-ready" }] }
-                }],
-                "pageInfo": { "hasNextPage": true, "endCursor": "c2" }
-            } } }),
-        );
-        let q = Query {
-            text: "eng-42".into(),
-            filters: vec!["mine".into(), "state:s-todo".into()],
-            label: Some("claude-ready".into()),
-            page: Some("c1".into()),
-        };
-        let page = l.issues("t1", &q).await.unwrap();
-        let i = &page.issues[0];
-        assert_eq!((i.key.as_str(), i.kind_code.as_str()), ("ENG-42", "issue"));
-        assert_eq!(i.meta, ["Todo", "High", "ada", "claude-ready"]);
-        assert_eq!(
-            i.criteria,
-            ["Un bouton Exporter", "Le fichier s'ouvre dans Excel"]
-        );
-        assert_eq!(i.container, "t1");
-        assert_eq!(page.next.as_deref(), Some("c2"));
-        // The chips: mine, then the states not done nor canceled.
-        let chips: Vec<&str> = page.filters.iter().map(|f| f.id.as_str()).collect();
-        assert_eq!(
-            chips,
-            [
-                "mine",
-                "state:s-backlog",
-                "state:s-todo",
-                "state:s-doing",
-                "state:s-review"
-            ]
-        );
-        let sent = server
-            .requests()
-            .into_iter()
-            .find(|r| r.json()["operationName"] == "Issues")
-            .unwrap()
-            .json();
-        let f = &sent["variables"]["filter"];
-        assert_eq!(f["team"]["id"]["eq"], "t1");
-        assert_eq!(f["state"]["id"]["in"], json!(["s-todo"]));
-        assert_eq!(f["state"]["type"]["nin"], json!(["completed", "canceled"]));
-        assert_eq!(f["assignee"]["isMe"]["eq"], true);
-        assert_eq!(f["labels"]["some"]["name"]["eqIgnoreCase"], "claude-ready");
-        assert_eq!(f["number"]["eq"], 42);
-        assert_eq!(sent["variables"]["after"], "c1");
     }
 
     #[test]
@@ -549,54 +438,6 @@ mod tests {
         assert!(f["number"].is_null());
         assert!(issue_filter("t", &q("v2-beta"))["title"]["containsIgnoreCase"].is_string());
         assert!(issue_filter("t", &q(""))["title"].is_null());
-    }
-
-    #[tokio::test]
-    async fn a_state_and_a_comment_are_mutations_and_a_refusal_lasts() {
-        let (server, l) = linear().await;
-        let r = ExternalRef {
-            service: S,
-            id: "i1".into(),
-            key: "ENG-42".into(),
-            ..Default::default()
-        };
-        let review = ExternalState {
-            id: "s-review".into(),
-            name: "In Review".into(),
-        };
-        server.on(
-            "POST",
-            "/graphql#SetState",
-            200,
-            json!({ "data": { "issueUpdate": { "success": true } } }),
-        );
-        server.on(
-            "POST",
-            "/graphql#Comment",
-            200,
-            json!({ "data": { "commentCreate": { "success": true } } }),
-        );
-        l.set_state(&r, &review).await.unwrap();
-        l.comment(&r, "Escouade : ENG-42 est prêt à tester.")
-            .await
-            .unwrap();
-        let writes: Vec<Value> = server.writes().iter().map(|w| w.json()).collect();
-        assert_eq!(
-            writes[0]["variables"],
-            json!({ "id": "i1", "state": "s-review" })
-        );
-        assert_eq!(
-            writes[1]["variables"]["body"],
-            "Escouade : ENG-42 est prêt à tester."
-        );
-        server.on(
-            "POST",
-            "/graphql#SetState",
-            200,
-            json!({ "data": { "issueUpdate": { "success": false } } }),
-        );
-        let e = l.set_state(&r, &review).await.unwrap_err();
-        assert!(crate::integrations::lasting(&e));
     }
 
     #[test]

@@ -223,7 +223,6 @@ macro_rules! ticket_source {
 }
 
 ticket_source!(jira::Jira, set_state: plain, view: default);
-ticket_source!(linear::Linear, set_state: plain, view: default);
 ticket_source!(clickup::Clickup, set_state: plain, view: own);
 ticket_source!(gitlab::Gitlab, set_state: mapped, view: default);
 
@@ -347,9 +346,26 @@ impl TicketSource for Unserved {
         Box::pin(async move { self.said() })
     }
 }
-kind!(LinearKind, "linear", "Linear", "Linear", |a, http, b| {
-    linear::Linear::new(http, a, &b.linear)
-});
+// Linear: out of the core, served by the plugin « Linear » (INT-7.2).
+pub struct LinearKind;
+
+impl TicketSourceKind for LinearKind {
+    fn id(&self) -> &'static str {
+        "linear"
+    }
+    fn label(&self) -> &'static str {
+        "Linear"
+    }
+    fn short(&self) -> &'static str {
+        "Linear"
+    }
+    fn plugin(&self) -> Option<&'static str> {
+        Some(crate::plugins::builtin::LINEAR)
+    }
+    fn build(&self, _: &Account, _: reqwest::Client, _: &Bases) -> Box<dyn TicketSource> {
+        Box::new(Unserved("Linear"))
+    }
+}
 kind!(
     ClickupKind,
     "clickup",
