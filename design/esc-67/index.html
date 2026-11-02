@@ -1,0 +1,221 @@
+<!doctype html>
+<!-- ESC-67, la vue « Environnements » d'un projet : trois directions (?d=a, b ou c). Données fictives. -->
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>ESC-67 · Environnements</title>
+<style>
+  :root {
+    --p: oklch(0.72 0.12 250);
+    --frame: color-mix(in oklch, var(--p) 8%, #08090a);
+    --panel: color-mix(in oklch, var(--p) 4.5%, #0e0f11);
+    --raise: color-mix(in oklch, var(--p) 6%, #15161a);
+    --raise2: color-mix(in oklch, var(--p) 6%, #1b1c20);
+    --line: rgba(255, 255, 255, 0.075);
+    --line2: rgba(255, 255, 255, 0.12);
+    --text: #f7f8f8;
+    --soft: #d0d3d8;
+    --muted: #989da6;
+    --run: oklch(0.79 0.15 155);
+    --wait: oklch(0.84 0.14 82);
+    --del: oklch(0.74 0.14 22);
+    --info: oklch(0.8 0.1 235);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #050506; font: 13px/1.45 Inter, 'Segoe UI', system-ui, sans-serif; color: var(--text); padding: 24px; }
+  .shot { width: 1392px; height: 852px; background: var(--frame); border-radius: 12px; overflow: hidden; display: grid;
+    grid-template-columns: 52px 252px 1fr; grid-template-rows: 40px 1fr 26px; box-shadow: 0 0 0 1px var(--line2); }
+  .top { grid-column: 1 / -1; display: flex; align-items: center; padding: 0 14px; color: var(--muted); font-size: 12px; }
+  .top b { color: var(--soft); font-weight: 600; margin-right: 8px; }
+  .rail { display: grid; align-content: start; gap: 8px; justify-items: center; padding-top: 8px; }
+  .rail .tile { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; font-weight: 650; font-size: 12px;
+    background: color-mix(in oklch, var(--p) 30%, #15161a); }
+  .rail .tile.o { background: var(--raise); color: var(--muted); }
+  .side { padding: 10px; display: grid; align-content: start; gap: 4px; }
+  .seg { display: flex; gap: 2px; padding: 3px; border-radius: 9px; background: var(--raise); margin-bottom: 10px; }
+  .seg span { flex: 1; text-align: center; padding: 5px 0; border-radius: 7px; color: var(--muted); font-size: 12.5px; }
+  .seg span.on { background: rgba(255, 255, 255, 0.08); color: var(--text); box-shadow: inset 0 0 0 1px var(--line2); }
+  .side .it { padding: 6px 8px; border-radius: 7px; color: var(--muted); font-size: 12.5px; }
+  .main { background: var(--panel); border-radius: 12px 0 0 0; box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; display: flex; flex-direction: column; }
+  .status { grid-column: 1 / -1; color: var(--muted); font-size: 11.5px; padding: 4px 14px; }
+  .head { display: flex; align-items: center; gap: 16px; min-height: 60px; padding: 0 14px 0 22px; border-bottom: 1px solid var(--line); }
+  .head h1 { margin: 0; font-size: 15px; font-weight: 620; }
+  .head .crumbs { color: var(--muted); font-size: 12px; }
+  .tabs { display: flex; gap: 2px; padding: 3px; border-radius: 9px; background: var(--raise); }
+  .tabs span { padding: 4px 11px; border-radius: 7px; color: var(--muted); font-size: 12.5px; font-weight: 550; }
+  .tabs span.on { background: rgba(255, 255, 255, 0.08); color: var(--text); box-shadow: inset 0 0 0 1px var(--line2); }
+  .btn { height: 30px; display: inline-flex; align-items: center; gap: 6px; padding: 0 11px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line2);
+    color: var(--soft); font-weight: 550; font-size: 12.5px; white-space: nowrap; }
+  .grow { margin-right: auto; display: grid; gap: 2px; }
+  .muted { color: var(--muted); }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 12px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+  .ok { background: var(--run); } .wt { background: var(--wait); } .ko { background: var(--del); }
+  .link { color: var(--info); text-decoration: none; }
+  .key { color: var(--muted); font-weight: 600; font-size: 12px; }
+  .fail { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 550;
+    color: var(--del); background: oklch(from var(--del) l c h / 0.1); box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.35); }
+  .band { margin: 14px 22px 0; padding: 9px 12px; border-radius: 10px; display: flex; align-items: center; gap: 10px;
+    background: oklch(from var(--wait) l c h / 0.07); box-shadow: inset 0 0 0 1px oklch(from var(--wait) l c h / 0.32); color: var(--soft); font-size: 12.5px; }
+  .d { display: none; }
+  body.a .d.a, body.b .d.b, body.c .d.c { display: flex; }
+
+  /* A: lanes, one per environment, the way code goes */
+  .lanes { flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 16px 16px 16px 18px; min-height: 0; }
+  .lane { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+  .lane h2 { margin: 0; font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 8px; color: var(--soft); padding: 0 2px; }
+  .lane h2 .n { color: var(--muted); font-weight: 500; }
+  .runs { padding: 12px; border-radius: 11px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line); display: grid; gap: 6px; }
+  .runs.bad { box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.45); }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .card { padding: 10px 12px; border-radius: 10px; background: var(--raise2); box-shadow: inset 0 0 0 1px var(--line); display: grid; gap: 3px; }
+  .card .t { font-size: 13px; color: var(--soft); }
+  .arrow { color: var(--muted); }
+
+  /* B: summary cards, then the tickets by environment in a grid */
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 16px 22px 0; }
+  .env { padding: 14px; border-radius: 12px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line); display: grid; gap: 8px; }
+  .env.bad { box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.45); }
+  .env .name { font-size: 14px; font-weight: 620; display: flex; align-items: center; gap: 8px; }
+  table { margin: 16px 22px; border-collapse: collapse; width: calc(100% - 44px); font-size: 12.5px; }
+  th { text-align: left; color: var(--muted); font-weight: 550; padding: 8px 10px; border-bottom: 1px solid var(--line2); }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--line); color: var(--soft); }
+  td.c, th.c { text-align: center; width: 130px; }
+  .y { color: var(--run); } .w { color: var(--wait); }
+
+  /* C: one section per environment, in a column */
+  .list { flex: 1; overflow: hidden; padding: 6px 22px 16px; display: grid; align-content: start; gap: 4px; }
+  .sec { padding: 14px 0 10px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
+  .sec .h { display: flex; align-items: center; gap: 10px; }
+  .sec .h b { font-size: 14px; font-weight: 620; }
+  .sec .meta { color: var(--muted); font-size: 12px; display: flex; gap: 14px; align-items: center; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { padding: 3px 9px; border-radius: 7px; background: var(--raise2); box-shadow: inset 0 0 0 1px var(--line); font-size: 12px; color: var(--soft); }
+  .chip .key { margin-right: 6px; }
+</style>
+</head>
+<body>
+<script>
+  document.body.className = new URLSearchParams(location.search).get('d') || 'a';
+</script>
+<div class="shot">
+  <div class="top"><b>Escouade</b> demo-shop</div>
+  <div class="rail"><div class="tile">DS</div><div class="tile o">AT</div><div class="tile o">WB</div></div>
+  <div class="side">
+    <div class="seg"><span>Agents</span><span class="on">Kanban</span><span>Docs</span></div>
+    <div class="it">◇ Agent « refonte panier »</div>
+    <div class="it">◇ Agent « paiement 3DS »</div>
+  </div>
+  <main class="main">
+    <header class="head">
+      <div class="grow"><h1>Environnements</h1><div class="crumbs">demo-shop · GitHub · lu il y a 1 min</div></div>
+      <div class="tabs"><span>Tickets</span><span class="on">Environnements</span></div>
+      <span class="btn">↻ Rafraîchir</span>
+    </header>
+
+    <!-- A -->
+    <div class="d a" style="flex-direction: column; flex: 1; min-height: 0">
+      <div class="lanes">
+        <section class="lane">
+          <h2><span class="dot wt"></span>Mergés, pas encore déployés <span class="n">2</span></h2>
+          <div class="card"><span class="key">DEM-48</span><span class="t">Code promo sur le panier</span><span class="muted">mergé il y a 20 min · <span class="mono">8f2c1a0</span></span></div>
+          <div class="card"><span class="key">DEM-47</span><span class="t">Avis clients : tri par note</span><span class="muted">mergé il y a 2 h · <span class="mono">41d09be</span></span></div>
+        </section>
+        <section class="lane">
+          <h2><span class="dot ok"></span>staging <span class="n">3</span> <span class="arrow">→</span></h2>
+          <div class="runs">
+            <div class="row"><span class="mono">c71e5d2</span><span class="muted">· il y a 1 h · ada</span></div>
+            <a class="link">staging.demo-shop.example.com ↗</a>
+          </div>
+          <div class="card"><span class="key">DEM-46</span><span class="t">Paiement 3DS</span></div>
+          <div class="card"><span class="key">DEM-45</span><span class="t">Panier persistant</span></div>
+          <div class="card"><span class="key">DEM-44</span><span class="t">Corrige le calcul des frais de port</span></div>
+        </section>
+        <section class="lane">
+          <h2><span class="dot ko"></span>production <span class="n">12</span></h2>
+          <div class="runs bad">
+            <div class="row"><span class="mono">9a40b17</span><span class="muted">· hier · grace</span></div>
+            <a class="link">demo-shop.example.com ↗</a>
+            <div class="row"><span class="fail">✕ Dernier déploiement en échec · c71e5d2</span><a class="link">Voir le job ↗</a></div>
+          </div>
+          <div class="card"><span class="key">DEM-43</span><span class="t">Recherche par catégorie</span></div>
+          <div class="card"><span class="key">DEM-41</span><span class="t">Page de compte</span></div>
+          <div class="card"><span class="key">DEM-40</span><span class="t">E-mails de commande</span></div>
+          <div class="muted" style="padding: 0 4px">+ 9 autres</div>
+        </section>
+      </div>
+    </div>
+
+    <!-- B -->
+    <div class="d b" style="flex-direction: column; flex: 1; min-height: 0">
+      <div class="band">⏳ <span><b>5 tickets</b> pas encore en production</span></div>
+      <div class="cards">
+        <div class="env">
+          <div class="name"><span class="dot ok"></span>staging</div>
+          <div class="row"><span class="mono">c71e5d2</span><span class="muted">· il y a 1 h · ada</span></div>
+          <a class="link">staging.demo-shop.example.com ↗</a>
+        </div>
+        <div class="env bad">
+          <div class="name"><span class="dot ko"></span>production</div>
+          <div class="row"><span class="mono">9a40b17</span><span class="muted">· hier · grace</span></div>
+          <a class="link">demo-shop.example.com ↗</a>
+          <div class="row"><span class="fail">✕ En échec · c71e5d2</span><a class="link">Job ↗</a></div>
+        </div>
+        <div class="env" style="opacity: 0.6">
+          <div class="name"><span class="dot" style="background: var(--muted)"></span>Ajoutez un environnement</div>
+          <div class="muted">Les déploiements de GitHub Actions apparaissent ici d'eux-mêmes.</div>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>Ticket</th><th>Mergé</th><th class="c">staging</th><th class="c">production</th></tr></thead>
+        <tbody>
+          <tr><td><span class="key">DEM-48</span> Code promo sur le panier</td><td class="muted">il y a 20 min</td><td class="c w">⏳</td><td class="c w">⏳</td></tr>
+          <tr><td><span class="key">DEM-47</span> Avis clients : tri par note</td><td class="muted">il y a 2 h</td><td class="c w">⏳</td><td class="c w">⏳</td></tr>
+          <tr><td><span class="key">DEM-46</span> Paiement 3DS</td><td class="muted">il y a 3 h</td><td class="c y">✓</td><td class="c w">⏳</td></tr>
+          <tr><td><span class="key">DEM-45</span> Panier persistant</td><td class="muted">hier</td><td class="c y">✓</td><td class="c w">⏳</td></tr>
+          <tr><td><span class="key">DEM-44</span> Corrige le calcul des frais de port</td><td class="muted">hier</td><td class="c y">✓</td><td class="c w">⏳</td></tr>
+          <tr><td><span class="key">DEM-43</span> Recherche par catégorie</td><td class="muted">lun.</td><td class="c y">✓</td><td class="c y">✓</td></tr>
+          <tr><td><span class="key">DEM-41</span> Page de compte</td><td class="muted">lun.</td><td class="c y">✓</td><td class="c y">✓</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- C -->
+    <div class="d c" style="flex-direction: column; flex: 1; min-height: 0">
+      <div class="band">⏳ <span><b>5 tickets</b> pas encore en production :</span> <span class="muted">DEM-48, DEM-47, DEM-46, DEM-45, DEM-44</span></div>
+      <div class="list">
+        <section class="sec">
+          <div class="h"><span class="dot ok"></span><b>staging</b><a class="link">staging.demo-shop.example.com ↗</a></div>
+          <div class="meta"><span>Tourne : <span class="mono">c71e5d2</span></span><span>il y a 1 h</span><span>par ada</span></div>
+          <div class="chips">
+            <span class="chip"><span class="key">DEM-46</span>Paiement 3DS</span>
+            <span class="chip"><span class="key">DEM-45</span>Panier persistant</span>
+            <span class="chip"><span class="key">DEM-44</span>Frais de port</span>
+            <span class="chip"><span class="key">DEM-43</span>Recherche par catégorie</span>
+            <span class="chip muted">+ 8</span>
+          </div>
+        </section>
+        <section class="sec">
+          <div class="h"><span class="dot ko"></span><b>production</b><a class="link">demo-shop.example.com ↗</a><span class="fail">✕ Dernier déploiement en échec · c71e5d2</span><a class="link">Voir le job ↗</a></div>
+          <div class="meta"><span>Tourne : <span class="mono">9a40b17</span></span><span>hier</span><span>par grace</span></div>
+          <div class="chips">
+            <span class="chip"><span class="key">DEM-43</span>Recherche par catégorie</span>
+            <span class="chip"><span class="key">DEM-41</span>Page de compte</span>
+            <span class="chip"><span class="key">DEM-40</span>E-mails de commande</span>
+            <span class="chip muted">+ 9</span>
+          </div>
+        </section>
+        <section class="sec" style="border: none">
+          <div class="h"><span class="dot wt"></span><b>Mergés, sur aucun environnement</b></div>
+          <div class="chips">
+            <span class="chip"><span class="key">DEM-48</span>Code promo sur le panier</span>
+            <span class="chip"><span class="key">DEM-47</span>Avis clients : tri par note</span>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+  <div class="status">demo-shop · main ↑0 ↓0</div>
+</div>
+</body>
+</html>

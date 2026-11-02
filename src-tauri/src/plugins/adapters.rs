@@ -749,4 +749,12 @@ impl Forge for ProcessForge {
             json!({ "repo": repo, "ref": git_ref }),
         ))
     }
+
+    fn environments<'a>(&'a self, repo: &'a RepoRef) -> BoxFuture<'a, Result<Vec<Deployment>>> {
+        Box::pin(self.ask(
+            "forge/environments",
+            "environments",
+            json!({ "repo": repo }),
+        ))
+    }
 }

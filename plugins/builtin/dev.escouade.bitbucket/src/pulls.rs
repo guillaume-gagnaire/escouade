@@ -528,6 +528,7 @@ fn pr_of(p: &Value) -> Option<PullRequest> {
         } else {
             String::new()
         },
+        merge_commit: text_of(&p["merge_commit"]["hash"]),
         ..Default::default()
     })
 }
@@ -543,6 +544,65 @@ fn strategy_name(strategy: MergeStrategy) -> &'static str {
 }
 
 /// A deployment's state, in the words of the other hosts.
+/// What a deployment tells besides its environment, its state and its address: its commit, its
+/// date and its pipeline (Bitbucket does not say who deployed).
+fn deployment_facts(d: &Value) -> Deployment {
+    Deployment {
+        sha: text_of(&d["release"]["commit"]["hash"]),
+        created: deployed_at(d),
+        log: d["release"]["url"]
+            .as_str()
+            .filter(|u| !u.is_empty())
+            .map(str::to_string),
+        ..Default::default()
+    }
+}
+
+/// When a deployment began, else when it ended, else when its release was made.
+fn deployed_at(d: &Value) -> u64 {
+    [
+        &d["state"]["started_on"],
+        &d["state"]["completed_on"],
+        &d["release"]["created_on"],
+    ]
+    .into_iter()
+    .find_map(instant)
+    .unwrap_or(0)
+}
+
+/// The deployments of a repository as `environments` gives them (ESC-67): newest first, of each
+/// environment those down to its newest success. Its environments have no address on Bitbucket.
+pub fn environments_of(environments: &[Value], mut all: Vec<Value>) -> Vec<Deployment> {
+    all.sort_by_key(|d| std::cmp::Reverse(deployed_at(d)));
+    let name_of = |uuid: &str| {
+        environments
+            .iter()
+            .find(|e| e["uuid"].as_str() == Some(uuid))
+            .and_then(|e| e["name"].as_str())
+            .unwrap_or("?")
+            .to_string()
+    };
+    let mut out = Vec::new();
+    let mut settled: Vec<String> = Vec::new();
+    for d in &all {
+        let environment = name_of(d["environment"]["uuid"].as_str().unwrap_or(""));
+        if settled.contains(&environment) {
+            continue;
+        }
+        let state = deployment_state(d).to_string();
+        if state == "success" {
+            settled.push(environment.clone());
+        }
+        out.push(Deployment {
+            environment,
+            state,
+            url: None,
+            ..deployment_facts(d)
+        });
+    }
+    out
+}
+
 fn deployment_state(d: &Value) -> &'static str {
     match d["state"]["name"].as_str() {
         Some("COMPLETED") => match d["state"]["status"]["name"].as_str() {
@@ -1091,6 +1151,7 @@ impl Forge for Bitbucket {
                             .as_str()
                             .filter(|u| !u.is_empty())
                             .map(str::to_string),
+                        ..deployment_facts(d)
                     });
                 }
                 match page["next"].as_str() {
@@ -1102,6 +1163,26 @@ impl Forge for Bitbucket {
             }
             out.truncate(DEPLOYMENTS);
             Ok(out)
+        })
+    }
+
+    fn environments<'a>(&'a self, repo: &'a RepoRef) -> BoxFuture<'a, Result<Vec<Deployment>>> {
+        Box::pin(async move {
+            let base = Self::repo_path(repo);
+            let environments = self
+                .values(&format!("{base}/environments?pagelen=100"))
+                .await?;
+            let mut all = Vec::new();
+            let mut url = format!("{base}/deployments?pagelen=100");
+            for _ in 0..DEPLOYMENT_PAGES {
+                let page = self.get(&url).await?;
+                all.extend(page["values"].as_array().into_iter().flatten().cloned());
+                match page["next"].as_str() {
+                    Some(n) if n.starts_with(&self.base) => url = n.to_string(),
+                    _ => break,
+                }
+            }
+            Ok(environments_of(&environments, all))
         })
     }
 }

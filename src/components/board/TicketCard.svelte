@@ -55,6 +55,7 @@
     prStateKey,
     prStateWord,
   } from '../../lib/ticket-prs';
+  import { cardEnvironments } from '../../lib/environments';
 
   const uid = $props.id();
 
@@ -604,6 +605,18 @@
         {/if}
       </div>
     {/if}
+    {#if p.preview && !ticket.blocked}
+      <!-- Its preview (ESC-67): Vercel, Netlify, Cloudflare Pages… put it on the pull request. -->
+      {@const preview = p.preview}
+      <div class="row">
+        <button
+          class="btn small"
+          data-ticket-preview
+          use:tip={t('envs.card.previewTitle', { word: p.word, url: preview })}
+          onclick={(e) => act(e, () => app.run(openUrl(preview)))}><Icon name="ext" size={14} />{t('envs.card.preview')}</button
+        >
+      </div>
+    {/if}
   {/if}
 
   {#if ticket.column === 'done' && outcome}
@@ -620,6 +633,30 @@
       <!-- Pushed without a pull request (ESC-63): its branch's CI, its jobs on a click. -->
       <div class="cirow" data-ticket-pushed-ci><CiPill ci={pushed} of={{ kind: 'pushed', id: ticket.id }} projectId={project.id} /></div>
     {/if}
+  {/if}
+
+  {#if cardEnvironments(ticket).length}
+    <!-- Where it is deployed (ESC-67): « staging ✓ · production ⏳ » drawn with icons, each name opens its environment's address. -->
+    <div class="dep-envs" data-ticket-envs aria-label={t('envs.card.label')}>
+      {#each cardEnvironments(ticket) as e, i (e.name)}
+        {@const label = t(e.deployed ? 'envs.card.deployed' : 'envs.card.waiting', { name: e.name })}
+        {#if i}<span class="dep-sep" aria-hidden="true">{' · '}</span>{/if}
+        {#if e.url}
+          {@const url = e.url}
+          <button
+            class="dep-env"
+            class:deployed={e.deployed}
+            aria-label={label}
+            use:tip={`${label} · ${url}`}
+            onclick={(ev) => act(ev, () => app.run(openUrl(url)))}>{e.name}<Icon name={e.deployed ? 'check' : 'clock'} size={12} /></button
+          >
+        {:else}
+          <span class="dep-env" class:deployed={e.deployed} aria-label={label} use:tip={label}
+            >{e.name}<Icon name={e.deployed ? 'check' : 'clock'} size={12} /></span
+          >
+        {/if}
+      {/each}
+    </div>
   {/if}
 
   {#if ticket.column !== 'done' && ticket.column !== 'pr' && ticket.criteria.length}
@@ -1049,6 +1086,39 @@
   }
   .outcome.link:hover {
     color: var(--text);
+  }
+  /* The environments a done ticket is in (ESC-67): green once deployed, amber while it waits. */
+  .dep-envs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 2px;
+    min-width: 0;
+    font-size: 12px;
+  }
+  .dep-sep {
+    color: var(--muted);
+    white-space: pre;
+  }
+  .dep-env {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--wait);
+    font: inherit;
+    white-space: nowrap;
+  }
+  .dep-env.deployed {
+    color: var(--add);
+  }
+  button.dep-env {
+    cursor: pointer;
+  }
+  button.dep-env:hover {
+    text-decoration: underline;
   }
   .crit {
     display: grid;

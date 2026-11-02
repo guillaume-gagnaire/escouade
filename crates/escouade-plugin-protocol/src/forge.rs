@@ -139,6 +139,11 @@ pub struct PullRequest {
     /// repository that one was forked from. Empty: the target's.
     #[serde(skip_serializing_if = "String::is_empty")]
     pub host_repo: String,
+    /// Merged: the commit its merge made on its base (the merge commit, the squash commit, or the
+    /// last commit rebased), when the host tells it (ESC-67): what says in which environments a
+    /// ticket merged by its pull request is deployed.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub merge_commit: String,
     /// Whose review is asked and not given yet (logins; names on Azure DevOps), when the host
     /// says it: the « Relecture demandée » filter of the project's pull requests (ESC-65).
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -237,12 +242,29 @@ pub struct ReviewComment {
     pub excerpt: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+/// A deployment in one of the repository's environments.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
 pub struct Deployment {
     pub environment: String,
+    /// Its last state, in the host's word lowered: `success`, `failure`, `error`, `pending`,
+    /// `in_progress`, `queued`, `inactive` (a success a newer one replaced)…
     pub state: String,
+    /// `deployments`: the address of the environment, else of its job. `environments`: the
+    /// environment's address alone (`log` holds the job's).
     pub url: Option<String>,
+    /// The commit it deployed (its full id), when the host tells it (ESC-67).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub sha: String,
+    /// When it was made (seconds since 1970); 0 when the host does not say.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub created: u64,
+    /// Who made it (a login); empty when the host does not say.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub author: String,
+    /// The address of the job that deployed it, to read why it failed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log: Option<String>,
 }
 
 /// Who an account is on its host, as its token says.

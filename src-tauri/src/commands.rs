@@ -2009,6 +2009,26 @@ pub async fn project_prs(
     Ok(core.project_prs(&project_id).await)
 }
 
+/// The environments of the project's host as last read (ESC-67): the view « Environnements »
+/// opens on them, and its project is followed while it is open.
+#[tauri::command]
+pub fn project_environments(
+    core: CoreState<'_>,
+    project_id: String,
+) -> Option<crate::deploys::ProjectEnvironments> {
+    core.project_environments(&project_id)
+}
+
+/// « Rafraîchir » of the view « Environnements »: read now.
+#[tauri::command]
+pub async fn project_environments_read(
+    core: CoreState<'_>,
+    project_id: String,
+) -> Res<crate::deploys::ProjectEnvironments> {
+    core.project_environments(&project_id);
+    Ok(core.project_environments_read(&project_id).await)
+}
+
 /// The statistics of a period, of every account or (`account`) of one.
 #[tauri::command(async)]
 pub fn stats(

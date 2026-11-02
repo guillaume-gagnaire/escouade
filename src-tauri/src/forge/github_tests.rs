@@ -1367,6 +1367,83 @@ async fn real_github_reads() {
     println!("rate limit: {:?}", github.rate_limit());
 }
 
+#[tokio::test]
+async fn the_environments_are_read_down_to_their_newest_success() {
+    let server = FakeServer::start().await;
+    let dep = |id: u64, env: &str, sha: &str| {
+        json!({
+            "id": id, "environment": env, "sha": sha, "ref": "main",
+            "created_at": "2026-10-30T10:00:00Z", "creator": {"login": "ada"}
+        })
+    };
+    let mut preview = dep(5, "Preview", "eeee");
+    preview["transient_environment"] = json!(true);
+    server.on(
+        "GET",
+        "/repos/o/r/deployments?per_page=30",
+        200,
+        json!([
+            preview,
+            dep(4, "production", "dddd"),
+            dep(3, "staging", "cccc"),
+            dep(2, "production", "bbbb"),
+            dep(1, "production", "aaaa"),
+        ]),
+    );
+    let status = |state: &str, env_url: &str| {
+        json!([{
+            "state": state, "environment_url": env_url,
+            "log_url": "https://github.com/o/r/actions/runs/1/job/2"
+        }])
+    };
+    server.on(
+        "GET",
+        "/repos/o/r/deployments/4/statuses",
+        200,
+        status("failure", ""),
+    );
+    server.on(
+        "GET",
+        "/repos/o/r/deployments/3/statuses",
+        200,
+        status("success", "https://staging.example.com"),
+    );
+    server.on(
+        "GET",
+        "/repos/o/r/deployments/2/statuses",
+        200,
+        status("success", "https://example.com"),
+    );
+    let repo = RepoRef {
+        namespace: "o".into(),
+        name: "r".into(),
+    };
+    let d = client(&server).environments(&repo).await.unwrap();
+    assert_eq!(
+        d.iter()
+            .map(|d| (d.environment.as_str(), d.state.as_str(), d.sha.as_str()))
+            .collect::<Vec<_>>(),
+        [
+            ("production", "failure", "dddd"),
+            ("staging", "success", "cccc"),
+            ("production", "success", "bbbb"),
+        ],
+        "a preview left out, and nothing read past production's newest success"
+    );
+    assert_eq!(d[1].url.as_deref(), Some("https://staging.example.com"));
+    assert_eq!(d[0].url, None);
+    assert_eq!(
+        d[0].log.as_deref(),
+        Some("https://github.com/o/r/actions/runs/1/job/2")
+    );
+    assert_eq!(d[0].author, "ada");
+    assert!(d[0].created > 0);
+    assert!(server
+        .requests()
+        .iter()
+        .all(|r| !r.path().starts_with("/repos/o/r/deployments/1/")));
+}
+
 /// A branch's checks (the target's, one pushed without a pull request, ESC-63): those of its last
 /// commit, read by its name; its failed jobs run again once per run.
 #[tokio::test]

@@ -230,6 +230,13 @@ pub trait Forge: Send + Sync {
     ) -> BoxFuture<'a, Result<Vec<Deployment>>> {
         unsupported("deployments")
     }
+
+    /// The recent deployments of the repository, whatever their branch, newest first (ESC-67): of
+    /// each environment at least its newest one and its newest one that succeeded (what runs
+    /// there), with their commit, their date, their author and their job.
+    fn environments<'a>(&'a self, _repo: &'a RepoRef) -> BoxFuture<'a, Result<Vec<Deployment>>> {
+        unsupported("environments")
+    }
 }
 
 /// When and how long the client slows down.

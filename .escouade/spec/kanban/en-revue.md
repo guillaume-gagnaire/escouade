@@ -2,7 +2,7 @@
 title: "En revue"
 subject: "kanban"
 sources: ["docs/TODO-1.8.md"]
-tickets: ["ESC-59","ESC-60","ESC-61","ESC-62","ESC-63"]
+tickets: ["ESC-59","ESC-60","ESC-61","ESC-62","ESC-63","ESC-67"]
 decisions: [55,56,58]
 compared: null
 ---
@@ -25,6 +25,7 @@ La colonne « En revue », entre « À tester » et « Terminé », tient les ti
 - Son état en un mot : brouillon, ouverte, approuvée, changements demandés, fermée.
 - Sa CI et ses jobs : « CI verte · 3 jobs », « CI en cours · 2 jobs », « 1/4 jobs en échec ». Un clic ouvre ses jobs dans Escouade : le journal d'un job en échec en lecture seule, « Envoyer à un agent » et « Relancer les jobs en échec » (voir *CI de la cible et des branches poussées*).
 - Ses approbations, ses fils de discussion ouverts et un conflit avec la cible (« 1 approbation · 2 fils ouverts · conflit avec main »).
+- « Ouvrir l'aperçu » quand la PR a un aperçu (Vercel, Netlify, Cloudflare Pages… ; voir *Environnements et déploiements*) : il l'ouvre dans le navigateur.
 - En haut à droite : « → <cible> ». Les critères ne s'y affichent plus.
 
 ### La CI en échec : l'agent corrige
@@ -78,6 +79,7 @@ Rien ne se merge sans un geste : les deux actions sont des boutons de la carte, 
 ### Mergée sur l'hébergeur
 
 - Le ticket passe « Terminé », avec « ⤵ PR #12 mergée dans main » et le lien de la PR.
+- Le commit de son merge, quand l'hébergeur le dit, est gardé : il dit dans quels environnements le ticket est déployé (voir *Environnements et déploiements*).
 - L'issue externe suit, et reçoit son commentaire, comme pour tout passage en « Terminé » (voir *Intégrations*).
 - Sa branche locale part si « Supprimer le worktree d'un ticket terminé ou supprimé » est allumé (une branche reprise reste).
 - Un fetch met la base à jour : la cible locale avance jusqu'à sa branche distante quand c'est une avance rapide (dans le dossier du projet si elle y est extraite et que rien ne gêne).
@@ -95,7 +97,8 @@ Rien ne se merge sans un geste : les deux actions sont des boutons de la carte, 
 - Pas de webhook : l'app n'a pas d'adresse publique. Escouade interroge l'hébergeur, et seulement pour les PR des tickets « En revue » (celles des agents ont leur propre lecture, voir *Pull requests*), avec, dans la même boucle, la CI des cibles et des branches poussées (voir *CI de la cible et des branches poussées*).
 - Toutes les minutes quand la fenêtre est au premier plan, toutes les 5 minutes sinon.
 - Tout de suite après un push d'Escouade (une validation qui ouvre une PR, « Pousser », la fin d'une correction de CI, des retours ou d'une mise à jour de la branche), quand la fenêtre revient au premier plan et à la connexion d'un compte d'hébergeur ; et sur « Rafraîchir ».
-- Les PR d'un même dépôt se lisent ensemble : une seule requête GraphQL sur GitHub ; les jobs de la CI se comptent par une requête de plus, seulement pour une PR ouverte qui a une CI. Les journaux ne se lisent qu'au moment de la correction, ou à l'ouverture d'un job. Ce que le dépôt autorise pour le merge se lit une fois par PR. La même lecture sert l'attente de « Merger quand c'est vert » : pas de seconde boucle.
+- Les PR d'un même dépôt se lisent ensemble : une seule requête GraphQL sur GitHub ; les jobs de la CI se comptent par une requête de plus, seulement pour une PR ouverte qui a une CI ; les déploiements de sa branche (son aperçu) par une autre, quand l'hébergeur en a. Les journaux ne se lisent qu'au moment de la correction, ou à l'ouverture d'un job. Ce que le dépôt autorise pour le merge se lit une fois par PR. La même lecture sert l'attente de « Merger quand c'est vert » : pas de seconde boucle.
+- La même boucle lit ensuite les environnements des projets suivis (voir *Environnements et déploiements*).
 
 ### Les erreurs
 

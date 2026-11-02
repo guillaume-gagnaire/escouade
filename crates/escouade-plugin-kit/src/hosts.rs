@@ -414,6 +414,7 @@ async fn forge_call(f: &dyn Forge, name: &str, p: &Value) -> Result<Value, Refus
                 .await
                 .map_err(refusal)?,
         ),
+        "environments" => to_value(f.environments(&repo()?).await.map_err(refusal)?),
         other => Err(Refusal::not_found(&format!("forge/{other}"))),
     }
 }

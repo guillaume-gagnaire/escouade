@@ -149,6 +149,48 @@ pub fn deployment_state(status: &str) -> &str {
     }
 }
 
+/// What a deployment tells besides its environment, its state and its address: its commit, its date,
+/// who made it and its job.
+fn deployment_facts(d: &Value) -> Deployment {
+    Deployment {
+        sha: d["sha"].as_str().unwrap_or("").to_string(),
+        created: instant(&d["created_at"]).unwrap_or(0),
+        author: d["user"]["username"].as_str().unwrap_or("").to_string(),
+        log: d["deployable"]["web_url"]
+            .as_str()
+            .filter(|u| !u.is_empty())
+            .map(str::to_string),
+        ..Default::default()
+    }
+}
+
+/// The deployments of a project (newest first) as `environments` gives them (ESC-67): of each
+/// environment, those down to its newest success, with the environment's address alone.
+pub fn environments_of(list: &[Value]) -> Vec<Deployment> {
+    let mut out = Vec::new();
+    let mut settled: Vec<String> = Vec::new();
+    for d in list {
+        let environment = d["environment"]["name"].as_str().unwrap_or("?").to_string();
+        if settled.contains(&environment) {
+            continue;
+        }
+        let state = deployment_state(d["status"].as_str().unwrap_or("created")).to_string();
+        if state == "success" {
+            settled.push(environment.clone());
+        }
+        out.push(Deployment {
+            environment,
+            state,
+            url: d["environment"]["external_url"]
+                .as_str()
+                .filter(|u| !u.is_empty())
+                .map(str::to_string),
+            ..deployment_facts(d)
+        });
+    }
+    out
+}
+
 /// A merge request as a list of GitLab tells it: what is known without asking more (no approvals, no threads, no
 /// pipeline: a list does not say them).
 pub fn mr_of(m: &Value) -> Result<PullRequest> {
@@ -199,6 +241,15 @@ pub fn mr_of(m: &Value) -> Result<PullRequest> {
             (m["source_project_id"].as_u64(), m["target_project_id"].as_u64()),
             (Some(s), Some(t)) if s != t
         ),
+        // Squashed: its squash commit; merged: its merge commit; fast-forwarded: its last commit.
+        merge_commit: match state {
+            PrState::Merged => ["squash_commit_sha", "merge_commit_sha", "sha"]
+                .iter()
+                .find_map(|k| m[*k].as_str().filter(|s| !s.is_empty()))
+                .unwrap_or("")
+                .to_string(),
+            _ => String::new(),
+        },
         ..Default::default()
     })
 }
@@ -1050,9 +1101,24 @@ impl Forge for Gitlab {
                         .or(d["deployable"]["web_url"].as_str())
                         .filter(|u| !u.is_empty())
                         .map(str::to_string),
+                    ..deployment_facts(d)
                 });
             }
             Ok(out)
+        })
+    }
+
+    fn environments<'a>(&'a self, repo: &'a RepoRef) -> BoxFuture<'a, Result<Vec<Deployment>>> {
+        Box::pin(async move {
+            let list = self
+                .get(&format!(
+                    "{}/deployments?order_by=updated_at&sort=desc&per_page={DEPLOYMENTS_READ}",
+                    project(repo)
+                ))
+                .await?;
+            Ok(environments_of(
+                list.as_array().map_or(&[][..], Vec::as_slice),
+            ))
         })
     }
 

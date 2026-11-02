@@ -1191,9 +1191,12 @@ pub struct Ticket {
     pub outcome_claude: Option<String>,
     pub outcome_url: Option<String>,
     /// The commit its merge made on the target (the merge commit, the squash commit, or the last
-    /// commit rebased); None when it was not merged (pull request, push, kept, nothing to merge)
-    /// or before 1.8.
+    /// commit rebased), here or by its pull request on its host when the host tells it (ESC-67);
+    /// None when it was not merged (push, kept, nothing to merge) or before 1.8.
     pub outcome_commit: Option<String>,
+    /// Done and merged: the environments of its project's host and whether it is deployed in
+    /// each (ESC-67), as last read; empty while none is known.
+    pub environments: Vec<TicketEnv>,
     /// "Lancer" was clicked while the autopilot is off.
     pub forced: bool,
     /// Its agent was reminded once to end with its report.
@@ -1290,6 +1293,10 @@ pub struct TicketPr {
     /// Closed without a merge: the ticket is blocked with « Remettre à faire » and « Terminer
     /// quand même ».
     pub closed: bool,
+    /// The address of its preview (Vercel, Netlify, Cloudflare Pages…), as a deployment or a
+    /// check of its branch gives it (ESC-67): « Ouvrir l'aperçu » on its card.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preview: Option<String>,
     /// The host's auto-merge is on: it merges by itself once the checks pass (ESC-62).
     pub auto_merge: bool,
     /// How the repository lets it merge (the strategies it allows, its auto-merge), read once it
@@ -1360,6 +1367,18 @@ pub struct FailedCheck {
     pub url: Option<String>,
     /// Its host keeps its log, which goes to the agent.
     pub log: bool,
+}
+
+/// An environment of the project's host, and whether a done ticket is deployed in it (ESC-67):
+/// a deployment that succeeded there holds the commit of its merge.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TicketEnv {
+    pub name: String,
+    /// The environment's address, when its host tells it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    pub deployed: bool,
 }
 
 /// Someone of the team, as the files of the shared tickets name them (ESC-190): the name they
@@ -2957,6 +2976,10 @@ pub enum UiEvent {
     },
     /// Why no ticket of the project's board starts (its target branch has no commit yet, or is
     /// gone), or None once they may start again.
+    /// The environments of a project's host, as last read (ESC-67).
+    Environments {
+        environments: crate::deploys::ProjectEnvironments,
+    },
     #[serde(rename_all = "camelCase")]
     BoardIssue {
         project_id: String,

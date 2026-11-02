@@ -1174,6 +1174,52 @@ describe('TicketCard with an account of its own', () => {
     expect(backend.called('ticket_pr_back_to_todo')).toEqual([{ cmd: 'ticket_pr_back_to_todo', args: { id: 't1' } }]);
   });
 
+  it('opens the preview of its pull request from a card « En revue » (ESC-67)', async () => {
+    const backend = fakeBackend();
+    const pr = ticketPr({ preview: 'https://demo-git-fix.example.vercel.app' });
+    show(ticket({ column: 'pr', pr }));
+    await userEvent.click(screen.getByRole('button', { name: 'Ouvrir l’aperçu' }));
+    expect(backend.called('open_url')[0].args.url).toBe('https://demo-git-fix.example.vercel.app');
+    expect(app.modal).toBeNull();
+  });
+
+  it('has no preview to open while its pull request has none', () => {
+    fakeBackend();
+    show(ticket({ column: 'pr', pr: ticketPr() }));
+    expect(screen.queryByRole('button', { name: 'Ouvrir l’aperçu' })).toBeNull();
+  });
+
+  it('says in which environments a done ticket is deployed, each opening its address (ESC-67)', async () => {
+    const backend = fakeBackend();
+    const deployed = ticket({
+      column: 'done',
+      outcome: '⤵ Mergé dans main',
+      outcomeCommit: 'abc1234',
+      environments: [
+        { name: 'staging', url: 'https://staging.example.com', deployed: true },
+        { name: 'production', url: 'https://example.com', deployed: false },
+      ],
+    });
+    const { container, unmount } = show(deployed);
+    expect(container.querySelector('[data-ticket-envs]')).toHaveTextContent('staging · production');
+    // Deployed: a check, in green; not yet: a clock, in amber.
+    expect(container.querySelector('.dep-env.deployed [data-icon="check"]')).not.toBeNull();
+    expect(container.querySelector('.dep-env:not(.deployed) [data-icon="clock"]')).not.toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'production : pas encore déployé' }));
+    expect(backend.called('open_url')[0].args.url).toBe('https://example.com');
+    unmount();
+    setLang('en');
+    show(deployed);
+    expect(screen.getByRole('button', { name: 'staging: deployed' })).toBeInTheDocument();
+    setLang('fr');
+  });
+
+  it('names no environment while none is known', () => {
+    fakeBackend();
+    const { container } = show(ticket({ column: 'done', outcome: '⤵ Mergé dans main' }));
+    expect(container.querySelector('[data-ticket-envs]')).toBeNull();
+  });
+
   it('offers « Merger » only approved and green, with a strategy the repository allows, and says what merged (ESC-62)', async () => {
     const backend = fakeBackend({ ticket_pr_merge: () => 'merged' });
     const green = {

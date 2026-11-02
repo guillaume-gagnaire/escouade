@@ -1002,6 +1002,48 @@ async fn a_refusal_that_holds_is_said_and_the_hour_taken_as_spent() {
     assert_eq!(bb.rate_limit().map(|l| l.remaining), Some(0));
 }
 
+#[tokio::test]
+async fn the_environments_are_read_down_to_their_newest_success() {
+    let server = FakeServer::start().await;
+    let base = "/repositories/acme/demo";
+    server.on(
+        "GET",
+        &format!("{base}/environments"),
+        200,
+        fixture("environments"),
+    );
+    server.on(
+        "GET",
+        &format!("{base}/deployments"),
+        200,
+        fixture("deployments"),
+    );
+    let d = client(&server).environments(&repo()).await.unwrap();
+    assert_eq!(
+        d.iter()
+            .map(|d| (d.environment.as_str(), d.state.as_str(), d.sha.as_str()))
+            .collect::<Vec<_>>(),
+        [
+            (
+                "Production",
+                "in_progress",
+                "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
+            ),
+            (
+                "Test",
+                "success",
+                "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
+            ),
+        ],
+        "every commit's, and Test's older failure left out"
+    );
+    assert_eq!(d[0].url, None, "Bitbucket's environments have no address");
+    assert_eq!(
+        d[0].log.as_deref(),
+        Some("https://bitbucket.org/acme/demo/pipelines/results/9")
+    );
+}
+
 /// A branch's checks (ESC-63): the statuses of its last commit, each key by its last word; its
 /// pipelines do not run again from Escouade (to verify on Bitbucket).
 #[tokio::test]

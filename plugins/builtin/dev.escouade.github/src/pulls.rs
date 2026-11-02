@@ -30,6 +30,11 @@ pub const CACHE_MAX: usize = 500;
 /// How long a secondary limit is waited for when GitHub says nothing about when (its advice).
 const SECONDARY_WAIT: Duration = Duration::from_secs(60);
 
+/// The recent deployments `environments` reads (ESC-67), and the most of their statuses it asks:
+/// one call each, read until each environment's newest success is known.
+const ENVIRONMENTS_READ: usize = 30;
+const ENVIRONMENT_STATUSES: usize = 12;
+
 /// What a call answered.
 struct Reply {
     status: u16,
@@ -463,6 +468,21 @@ impl Github {
     }
 }
 
+/// What a deployment and its last status tell besides its environment, its state and its address:
+/// its commit, its date, who made it and its job.
+fn deployment_facts(d: &Value, last: &Value) -> Deployment {
+    Deployment {
+        sha: d["sha"].as_str().unwrap_or("").to_string(),
+        created: instant(&d["created_at"]).unwrap_or(0),
+        author: d["creator"]["login"].as_str().unwrap_or("").to_string(),
+        log: ["log_url", "target_url"]
+            .iter()
+            .find_map(|k| last[*k].as_str().filter(|u| !u.is_empty()))
+            .map(str::to_string),
+        ..Default::default()
+    }
+}
+
 /// The address of the next page in a `Link` header.
 fn next_link(link: &str) -> Option<String> {
     link.split(',').find_map(|part| {
@@ -491,7 +511,7 @@ fn run_state(run: &Value) -> CheckState {
 /// and the checks of its last commit, all in one.
 const PR_FIELDS: &str = "number url title state isDraft headRefName baseRefName mergeable \
     author { login } createdAt \
-    isCrossRepository headRepository { nameWithOwner } \
+    isCrossRepository headRepository { nameWithOwner } mergeCommit { oid } \
     autoMergeRequest { enabledAt } \
     latestOpinionatedReviews(first: 50) { nodes { state } } \
     reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } } } } \
@@ -547,6 +567,7 @@ fn pr_of_graphql(p: &Value) -> Option<PullRequest> {
             None => None,
         },
         host_repo: String::new(),
+        merge_commit: p["mergeCommit"]["oid"].as_str().unwrap_or("").to_string(),
         // A team asked has no login: only the people.
         reviewers: p["reviewRequests"]["nodes"]
             .as_array()
@@ -586,6 +607,10 @@ fn pr_of_rest(p: &Value) -> Result<PullRequest> {
             .to_string(),
         author: p["user"]["login"].as_str().unwrap_or("").to_string(),
         created: instant(&p["created_at"]).unwrap_or(0),
+        merge_commit: match p["merged_at"].is_string() {
+            true => p["merge_commit_sha"].as_str().unwrap_or("").to_string(),
+            false => String::new(),
+        },
         ..Default::default()
     })
 }
@@ -1143,6 +1168,53 @@ impl Forge for Github {
                         .iter()
                         .find_map(|k| last[*k].as_str().filter(|u| !u.is_empty()))
                         .map(str::to_string),
+                    ..deployment_facts(d, last)
+                });
+            }
+            Ok(out)
+        })
+    }
+
+    fn environments<'a>(&'a self, repo: &'a RepoRef) -> BoxFuture<'a, Result<Vec<Deployment>>> {
+        Box::pin(async move {
+            let base = Self::repo_path(repo);
+            let list = self
+                .get(&format!("{base}/deployments?per_page={ENVIRONMENTS_READ}"))
+                .await?;
+            let mut out = Vec::new();
+            // The environments whose newest success (or end) is known: their older ones are not read.
+            let mut settled: BTreeSet<String> = BTreeSet::new();
+            let mut asked = 0;
+            for d in list.as_array().into_iter().flatten() {
+                let Some(id) = d["id"].as_u64() else { continue };
+                // A pull request's preview (Vercel, Netlify…): not one of the repository's environments.
+                if d["transient_environment"] == true {
+                    continue;
+                }
+                let environment = d["environment"].as_str().unwrap_or("?").to_string();
+                if settled.contains(&environment) {
+                    continue;
+                }
+                if asked == ENVIRONMENT_STATUSES {
+                    break;
+                }
+                asked += 1;
+                let statuses = self
+                    .get(&format!("{base}/deployments/{id}/statuses?per_page=1"))
+                    .await?;
+                let last = &statuses[0];
+                let state = last["state"].as_str().unwrap_or("pending").to_string();
+                if matches!(state.as_str(), "success" | "inactive") {
+                    settled.insert(environment.clone());
+                }
+                out.push(Deployment {
+                    environment,
+                    state,
+                    url: last["environment_url"]
+                        .as_str()
+                        .filter(|u| !u.is_empty())
+                        .map(str::to_string),
+                    ..deployment_facts(d, last)
                 });
             }
             Ok(out)

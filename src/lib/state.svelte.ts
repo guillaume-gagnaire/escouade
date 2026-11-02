@@ -46,6 +46,7 @@ import type {
   EngineId,
   PageEvent,
   Project,
+  ProjectEnvironments,
   Resources,
   Settings,
   SetupOutput,
@@ -396,6 +397,10 @@ class AppState {
   docsEdit = $state<string | null>(null);
   /** Why no ticket of a project's board starts (its target branch has no commit yet, or is gone), by project. */
   boardIssues = $state<Record<string, string>>({});
+  /** The environments of each project's host as last read (ESC-67), by project id. */
+  environments = $state<Record<string, ProjectEnvironments>>({});
+  /** The board of a project shows its view « Environnements » in place of its tickets (ESC-67), by project id. */
+  envView = $state<Record<string, boolean>>({});
   /** The CI of each project's target branch as last read (ESC-63): the pill of its board's header. */
   targetCi = $state<Record<string, BranchCi>>({});
   /** What each project's docs have to share (ESC-257), by project id: the status bar says « N changements à partager ». */
@@ -772,6 +777,9 @@ class AppState {
         break;
       case 'docsCompared':
         this.docsComparing[e.projectId] = e.comparing;
+        break;
+      case 'environments':
+        this.environments[e.environments.projectId] = e.environments;
         break;
       case 'boardIssue':
         if (e.issue) this.boardIssues[e.projectId] = e.issue;

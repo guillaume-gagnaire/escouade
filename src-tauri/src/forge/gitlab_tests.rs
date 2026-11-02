@@ -705,22 +705,29 @@ async fn the_deployments_of_a_branch_are_the_last_of_each_environment() {
         .deployments(&repo(), "cancel-auto-merge")
         .await
         .unwrap();
+    let seen: Vec<(&str, &str, Option<&str>)> = deps
+        .iter()
+        .map(|d| (d.environment.as_str(), d.state.as_str(), d.url.as_deref()))
+        .collect();
     assert_eq!(
-        deps,
+        seen,
         [
-            Deployment {
-                environment: "docs-preview".into(),
-                state: "in_progress".into(),
-                url: Some("https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084480".into()),
-            },
-            Deployment {
-                environment: "review/cancel-auto-merge".into(),
-                state: "success".into(),
-                url: Some("https://cancel-auto-merge.review.example.dev".into()),
-            },
+            (
+                "docs-preview",
+                "in_progress",
+                Some("https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084480")
+            ),
+            (
+                "review/cancel-auto-merge",
+                "success",
+                Some("https://cancel-auto-merge.review.example.dev")
+            ),
         ],
         "the older failure of the review and main's production left out"
     );
+    assert_eq!(deps[0].sha, "24c5c32eb4f7dae8f76fb33a02204ab46509d63c");
+    assert_eq!(deps[0].author, "frank");
+    assert!(deps[0].created > 0);
     assert_eq!(
         server.requests()[0].query("order_by").as_deref(),
         Some("updated_at")
@@ -808,6 +815,37 @@ fn now_secs() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs()
+}
+
+#[tokio::test]
+async fn the_environments_are_read_down_to_their_newest_success() {
+    let server = FakeServer::start().await;
+    server.on(
+        "GET",
+        &format!("{P}/deployments"),
+        200,
+        fixture("deployments"),
+    );
+    let deps = client(&server).environments(&repo()).await.unwrap();
+    let seen: Vec<(&str, &str)> = deps
+        .iter()
+        .map(|d| (d.environment.as_str(), d.state.as_str()))
+        .collect();
+    assert_eq!(
+        seen,
+        [
+            ("docs-preview", "in_progress"),
+            ("review/cancel-auto-merge", "success"),
+            ("production", "success"),
+        ],
+        "whatever their branch, and the review's older failure left out"
+    );
+    // The environment's address alone: a job's goes in its log.
+    assert_eq!(deps[0].url, None);
+    assert_eq!(
+        deps[0].log.as_deref(),
+        Some("https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084480")
+    );
 }
 
 /// A branch's checks (ESC-63): the jobs of its last pipeline; failed, retried in one call.

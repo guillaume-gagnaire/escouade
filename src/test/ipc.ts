@@ -312,6 +312,7 @@ export function ticket(over: Partial<Ticket> = {}): Ticket {
     outcomeClaude: null,
     outcomeUrl: null,
     outcomeCommit: null,
+    environments: [],
     forced: false,
     reminded: false,
     cost: 0,

@@ -25,6 +25,7 @@ import type {
   ProjectPrs,
   PrDetail,
   PrRead,
+  ProjectEnvironments,
   BranchCi,
   CiDetail,
   CiOf,
@@ -456,6 +457,10 @@ export const api = {
   projectPrs: (projectId: string) => invoke<PrRead<ProjectPrs>>('project_prs', { projectId }),
   /** « Lancer un agent sur cette PR » (ESC-65): an agent in a worktree on the branch of the open pull request `number`. */
   createAgentOnPr: (projectId: string, number: number) => invoke<Agent>('create_agent_on_pr', { projectId, number }),
+  /** The environments of the project's host as last read (ESC-67); the project is followed while its view is open. */
+  projectEnvironments: (projectId: string) => invoke<ProjectEnvironments | null>('project_environments', { projectId }),
+  /** « Rafraîchir » of the view « Environnements »: read now. */
+  projectEnvironmentsRead: (projectId: string) => invoke<ProjectEnvironments>('project_environments_read', { projectId }),
   getCommands: (id: string) => invoke<SlashCommand[]>('get_commands', { id }),
   fileSuggestions: (id: string, query: string) => invoke<string[]>('file_suggestions', { id, query }),
   gitFiles: (projectId: string, agentId: string | null) => invoke<FileChange[]>('git_files', { projectId, agentId }),

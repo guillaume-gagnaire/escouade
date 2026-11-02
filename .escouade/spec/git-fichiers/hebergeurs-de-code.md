@@ -2,7 +2,7 @@
 title: "Hébergeurs de code"
 subject: "Git & fichiers"
 sources: ["docs/SPEC.md","plugins/builtin/dev.escouade.gitlab/README.md","tests/fixtures/forges/gitlab/README.md","docs/TODO-2.2.md (Hébergeurs de code)","plugins/builtin/dev.escouade.gitea/README.md","tests/fixtures/forges/gitea/README.md"]
-tickets: ["ESC-54","ESC-55","ESC-56","ESC-58","ESC-70","ESC-241","ESC-212","ESC-57"]
+tickets: ["ESC-54","ESC-55","ESC-56","ESC-58","ESC-70","ESC-241","ESC-212","ESC-57","ESC-67"]
 decisions: []
 compared: null
 ---
@@ -101,3 +101,13 @@ Servi par le plugin livré `dev.escouade.bitbucket` ; compte : e-mail et jeton d
 - **Checks** : les statuts de commit de la PR, un par clé (le dernier mot) ; un run de Bitbucket Pipelines a un journal, lu étape après étape sous le nom de l'étape (la fin de chacune, 256 Ko au plus). Une autre CI ne donne qu'un statut et une adresse. Pas de relance.
 - **Relectures** (approuvé, changements demandés), **commentaires** (fils de lignes et leur état résolu, la conversation, les supprimés écartés), commenter, répondre, résoudre un fil, publier une relecture (commentaires de ligne, texte, puis approbation ou changements demandés), et les déploiements d'un commit par environnement.
 - **Limite horaire** : 1000 appels par heure (plus pour un gros espace de travail) sans compteur dans les réponses : Escouade compte ses appels, croit `X-RateLimit-Limit`, prend `X-RateLimit-NearLimit` pour « un cinquième restant », étale ce qui reste de l'heure (30 s au plus d'un coup) ; un 429 est attendu (`Retry-After`) puis renvoyé une fois.
+
+## Les environnements d'un dépôt (ESC-67)
+
+Une opération de plus des hébergeurs, `environments` (`forge/environments` des plugins) : les déploiements récents du dépôt, toutes branches, le plus récent d'abord, et de chaque environnement au moins le dernier et le dernier réussi, avec leur commit, leur date, leur auteur, l'adresse de l'environnement et celle du job. Un hébergeur qui ne la sert pas répond « Cet hébergeur ne sait pas faire » (voir *Environnements et déploiements*).
+
+- **GitHub** : `/deployments` (30), puis le dernier statut de chacun jusqu'au dernier succès de chaque environnement (12 statuts au plus) ; les environnements transitoires (aperçus) sont laissés de côté. Adresse : `environment_url` ; job : `log_url`, sinon `target_url`.
+- **GitLab** : `/deployments` du projet (50, les plus récemment mis à jour d'abord) ; adresse : `external_url` de l'environnement ; job : son `deployable`.
+- **Bitbucket Cloud** : les environnements, puis les déploiements (3 pages), rangés par leur date ; pas d'adresse d'environnement ni d'auteur ; job : l'exécution du pipeline.
+- Une PR lue mergée dit aussi le commit de son merge (`mergeCommit` de GitHub, `squash_commit_sha` / `merge_commit_sha` / `sha` de GitLab, `merge_commit` de Bitbucket).
+- Un déploiement lu dit aussi son commit, sa date, son auteur et son job, dans `deployments` comme dans `environments`.

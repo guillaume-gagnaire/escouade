@@ -12,6 +12,7 @@
   import CiPill from '../CiPill.svelte';
   import Icon from '../Icon.svelte';
   import BoardColumn from './BoardColumn.svelte';
+  import EnvironmentsView from './EnvironmentsView.svelte';
   import { tip } from '../../lib/tip';
   import { prColumnShown } from '../../lib/ticket-prs';
 
@@ -45,6 +46,8 @@
   /** The project's harness has no account (ESC-128): « Ajouter un compte… » beside why nothing starts. */
   const engine = $derived(project.engine ?? defaultEngine());
   const noAccount = $derived(!hasAccount(engine));
+  /** The view « Environnements » in place of the tickets (ESC-67). */
+  const envs = $derived(!!app.envView[project.id]);
   /** The CI of its target branch (ESC-63), as last read: the pill of the header; none without a host Escouade reads. */
   const targetCi = $derived(targetCiOf(project));
   /** Its pill: none for a target without any CI. */
@@ -61,9 +64,29 @@
 <main class="board">
   <header class="head">
     <div class="h-title">
-      <h1>Kanban</h1>
+      <h1>{envs ? t('envs.view.title') : 'Kanban'}</h1>
       <div class="crumbs" use:tip={{ text: `${project.name} · ${sub}`, cut: true }}>
         <span class="proj-name">{project.name}</span><span aria-hidden="true">·</span><span class="num sub">{sub}</span>
+      </div>
+      <!-- Beside the title and its line, in the room they leave: the controls keep their place (ESC-67). -->
+      <div class="tabs" role="group" aria-label={t('envs.tabs.label')}>
+        <button
+          class:on={!envs}
+          aria-pressed={!envs}
+          aria-label={t('envs.tabs.tickets')}
+          use:tip={t('envs.tabs.tickets')}
+          onclick={() => (app.envView[project.id] = false)}
+          ><Icon name="kanban" size={14} /><span class="tl">{t('envs.tabs.tickets')}</span></button
+        >
+        <button
+          class:on={envs}
+          aria-pressed={envs}
+          aria-label={t('envs.tabs.environments')}
+          use:tip={t('envs.tabs.environments')}
+          data-env-tab
+          onclick={() => (app.envView[project.id] = true)}
+          ><Icon name="globe" size={14} /><span class="tl">{t('envs.tabs.environments')}</span></button
+        >
       </div>
     </div>
     {#if targetPill}
@@ -153,11 +176,15 @@
       >
     </div>
   {/if}
-  <div class="cols" style:--n={columns.length}>
-    {#each columns as c (c.id)}
-      <BoardColumn column={c} tickets={columnTickets(tickets, c.id)} {project} {busyCount} {quota} />
-    {/each}
-  </div>
+  {#if envs}
+    <EnvironmentsView {project} />
+  {:else}
+    <div class="cols" style:--n={columns.length}>
+      {#each columns as c (c.id)}
+        <BoardColumn column={c} tickets={columnTickets(tickets, c.id)} {project} {busyCount} {quota} />
+      {/each}
+    </div>
+  {/if}
 </main>
 
 <style>
@@ -187,9 +214,14 @@
   }
   .h-title {
     display: grid;
+    grid-template-columns: auto minmax(0, auto);
+    justify-content: start;
     gap: 2px;
     min-width: 0;
     margin-right: auto;
+  }
+  .h-title > :not(.tabs) {
+    grid-column: 1;
   }
   h1 {
     margin: 0;
@@ -244,6 +276,38 @@
     display: flex;
     align-items: center;
     gap: 6px;
+  }
+  /* « Tickets · Environnements » (ESC-67): the board's two views. */
+  .tabs {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    align-self: center;
+    margin-left: 14px;
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 9px;
+    background: var(--raise);
+  }
+  .tabs button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+    padding: 0 10px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 550;
+    cursor: pointer;
+  }
+  .tabs button.on {
+    background: rgba(var(--fg-rgb), 0.08);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--text);
   }
   /* « Après validation : merge squash → main », the button of the Kanban's settings. */
   .cfg {
@@ -322,6 +386,13 @@
   @media (max-width: 1240px) {
     .places:not(.missing) {
       display: none;
+    }
+    /* The tabs keep their icons alone: their names are in their tooltips. */
+    .tabs .tl {
+      display: none;
+    }
+    .tabs button {
+      padding: 0 7px;
     }
     .places.missing {
       max-width: 132px;

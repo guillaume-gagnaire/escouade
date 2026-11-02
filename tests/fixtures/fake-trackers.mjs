@@ -114,6 +114,9 @@ function seed() {
       repo: { allow_merge_commit: true, allow_squash_merge: true, allow_rebase_merge: true, allow_auto_merge: false },
       // The forks and the repository each was forked from (`repository.parent`).
       forks: { 'ada/demo': 'acme/demo', 'bob/demo': 'acme/demo' },
+      // The deployments of the repository's environments (ESC-67), newest first, set by POST /__github/deployments:
+      // { environment, sha, state, url, log }; their ids from 1001.
+      deployments: [],
       // The CI of the branches without a pull request (ESC-63), by name: none until POST /__github/branches/<name>
       // sets it ({ checks: 'FAILURE' | 'SUCCESS' | 'PENDING', thirdParty }); its job `test` (91) keeps a coloured log.
       branches: {},
@@ -698,6 +701,11 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
       assignee: i.assignee ? { login: i.assignee } : null,
     });
     // ---------- GitHub's pull requests (ESC-64) ----------
+    // The deployments of the environments a test wants (ESC-67), newest first.
+    if (p === '/__github/deployments') {
+      g.deployments = (json() ?? []).map((d, i) => ({ id: 1001 + i, ...d }));
+      return send(200, g.deployments);
+    }
     // ---------- The CI of a branch without a pull request (ESC-63) ----------
     m = p.match(/^\/__github\/branches\/(.+)$/);
     if (m) {
@@ -798,6 +806,8 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
       reviewThreads: { nodes: Array.from({ length: x.threads ?? (x.changesRequested ? 1 : 0) }, () => ({ isResolved: false })) },
       reviewRequests: { nodes: (x.reviewers ?? []).map((login) => ({ requestedReviewer: { login } })) },
       commits: { nodes: [{ commit: { statusCheckRollup: { state: x.checks } } }] },
+      // Merged: the commit its merge made (ESC-67), as a test sets it.
+      mergeCommit: x.state === 'MERGED' && x.mergeCommit ? { oid: x.mergeCommit } : null,
     });
     if (p === '/github/graphql') {
       const q = json() ?? {};
@@ -964,10 +974,27 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
     // The deployments of a branch (ESC-305): a preview of each pull request's.
     if (p === '/github/repos/acme/demo/deployments') {
       const ref = url.searchParams.get('ref');
+      // Without a branch, those of the environments (ESC-67), whatever their branch.
+      if (!ref)
+        return send(
+          200,
+          g.deployments.map((d) => ({
+            id: d.id,
+            environment: d.environment,
+            sha: d.sha,
+            ref: 'main',
+            created_at: d.createdAt ?? new Date(Date.now() - 3600_000).toISOString(),
+            creator: { login: d.author ?? 'ada' },
+          })),
+        );
       const pull = g.pulls.find((x) => x.head === ref);
-      return send(200, pull ? [{ id: pull.number, environment: 'Preview' }] : []);
+      return send(200, pull ? [{ id: pull.number, environment: 'Preview', transient_environment: true }] : []);
     }
     m = p.match(/^\/github\/repos\/acme\/demo\/deployments\/(\d+)\/statuses$/);
+    if (m && g.deployments.some((d) => d.id === Number(m[1]))) {
+      const d = g.deployments.find((x) => x.id === Number(m[1]));
+      return send(200, [{ state: d.state ?? 'success', environment_url: d.url ?? '', log_url: d.log ?? '' }]);
+    }
     if (m) return send(200, [{ state: 'success', environment_url: `https://demo-pr-${m[1]}.vercel.app` }]);
     m = p.match(/^\/github\/repos\/acme\/demo\/issues\/(\d+)\/comments$/);
     if (m && method === 'GET' && g.pulls.some((x) => x.number === Number(m[1]))) return send(200, []);

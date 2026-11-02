@@ -1061,8 +1061,10 @@ export interface Ticket {
   /** The same in the language of the texts for Claude (what the comment published for the team quotes); the window shows `outcome`. */
   outcomeClaude: string | null;
   outcomeUrl: string | null;
-  /** The commit its merge made on the target; null when it was not merged (pull request, push, kept, nothing to merge) or before 1.8. */
+  /** The commit its merge made on the target, here or by its pull request (ESC-67); null when it was not merged (push, kept, nothing to merge) or before 1.8. */
   outcomeCommit: string | null;
+  /** Done and merged: the environments of its project's host, and whether it is deployed in each (ESC-67). */
+  environments?: TicketEnv[];
   forced: boolean;
   reminded: boolean;
   cost: number;
@@ -1163,6 +1165,8 @@ export interface TicketPr {
   errorSince: number | null;
   /** Closed without a merge: « Remettre à faire » and « Terminer quand même ». */
   closed: boolean;
+  /** Its preview's address (Vercel, Netlify, Cloudflare Pages…), from a deployment or a check of its branch (ESC-67). */
+  preview?: string | null;
   /** The host's auto-merge is on: it merges by itself once the checks pass (ESC-62). */
   autoMerge?: boolean;
   /** How the repository lets it merge, read once it is open; null before. */
@@ -1193,6 +1197,50 @@ export interface FailedCheck {
   name: string;
   url: string | null;
   log: boolean;
+}
+
+/** An environment of the project's host, and whether a done ticket is deployed in it (ESC-67). */
+export interface TicketEnv {
+  name: string;
+  url?: string | null;
+  deployed: boolean;
+}
+
+/** A deployment in an environment (`forge::Deployment`). */
+export interface Deployment {
+  environment: string;
+  state: string;
+  url: string | null;
+  /** The commit it deployed, when the host tells it. */
+  sha?: string;
+  /** When it was made (seconds since 1970). */
+  created?: number;
+  author?: string;
+  /** Its job's address. */
+  log?: string | null;
+}
+
+/** An environment as the view « Environnements » shows it (`deploys::Environment`). */
+export interface Environment {
+  name: string;
+  url?: string | null;
+  production: boolean;
+  /** What runs there: its newest deployment that succeeded. */
+  running?: Deployment | null;
+  /** Its newest deployment, when it is not the one that runs (under way, or failed). */
+  latest?: Deployment | null;
+  failed: boolean;
+}
+
+/** The environments of a project, as last read (`deploys::ProjectEnvironments`). */
+export interface ProjectEnvironments {
+  projectId: string;
+  environments: Environment[];
+  readAt?: number | null;
+  error?: string | null;
+  /** The host has no deployments (Gitea, Forgejo, Azure DevOps). */
+  unsupported: boolean;
+  host: string;
 }
 
 export type MergeStrategy = 'merge' | 'squash' | 'rebase' | 'semiLinear';
@@ -2568,6 +2616,7 @@ export type UiEvent =
   | { type: 'focusBoard'; projectId: string }
   /** Why no ticket of the project's board starts (its target branch), or null once they may. */
   | { type: 'boardIssue'; projectId: string; issue: string | null }
+  | { type: 'environments'; environments: ProjectEnvironments }
   /** Why no ticket of a project that goes to any account starts for now, or null once they may; `projects`: the same for the paused projects that prefer an account. */
   | { type: 'autopilotPause'; pause: AutopilotPause | null; projects?: Record<string, AutopilotPause> }
   /** The CI of a project's target branch as last read (ESC-63), or null when there is none to show. */

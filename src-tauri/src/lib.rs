@@ -47,6 +47,7 @@ mod cursor_tui_tests;
 mod deeplink;
 #[cfg(test)]
 mod deeplink_tests;
+mod deploys;
 mod desktop;
 mod devpage;
 mod devpage_probe;
@@ -812,6 +813,8 @@ pub fn run() {
                 commands::agent_pr_rerun,
                 commands::agent_no_pr,
                 commands::project_prs,
+                commands::project_environments,
+                commands::project_environments_read,
                 commands::create_agent_on_pr,
                 commands::set_remote_control,
                 commands::stats,

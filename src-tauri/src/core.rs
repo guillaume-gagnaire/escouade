@@ -1029,6 +1029,15 @@ pub struct Core<R: Runtime = Wry> {
     /// minute, else every 5), and what wakes their reading at once (a push, the window's return).
     pub(crate) window_in_front: AtomicBool,
     pub(crate) ticket_prs_wake: tokio::sync::Notify,
+    /// The environments of the projects' hosts as last read (ESC-67), by project id; when the
+    /// view « Environnements » of a project was last open; and whether a commit (the merge of a
+    /// ticket) is in another (what runs in an environment), as git said it.
+    pub(crate) deploys: Mutex<HashMap<String, crate::deploys::ProjectEnvironments>>,
+    pub(crate) deploys_viewed: Mutex<HashMap<String, i64>>,
+    pub(crate) deploys_contains: Mutex<HashMap<(String, String), bool>>,
+    /// The commits that run in an environment and were still not here after a fetch (a branch
+    /// deleted since): not fetched for again, else the project would be fetched every minute.
+    pub(crate) deploys_missing: Mutex<HashSet<String>>,
     /// The CI of each project's target branch as last read (ESC-63), by project id.
     pub(crate) target_ci: RwLock<BTreeMap<String, crate::branchci::BranchCi>>,
     /// Notifications sent, as "<title> | <text>" (tests only).
@@ -1998,6 +2007,10 @@ impl<R: Runtime> Core<R> {
             names_dropped: AtomicU64::new(0),
             window_in_front: AtomicBool::new(true),
             ticket_prs_wake: tokio::sync::Notify::new(),
+            deploys: Mutex::default(),
+            deploys_viewed: Mutex::default(),
+            deploys_contains: Mutex::default(),
+            deploys_missing: Mutex::default(),
             target_ci: RwLock::new(BTreeMap::new()),
             #[cfg(test)]
             alerts: Mutex::default(),

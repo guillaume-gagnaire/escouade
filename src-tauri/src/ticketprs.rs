@@ -297,6 +297,10 @@ pub fn settle(
             t.outcome = Some(merged_outcome(i18n::ui(), &word, n, &target));
             t.outcome_claude = Some(merged_outcome(claude, &word, n, &target));
             t.outcome_url = Some(tp.url.clone());
+            // What says which environments it is deployed in (ESC-67).
+            if !pr.merge_commit.is_empty() {
+                t.outcome_commit = Some(pr.merge_commit.clone());
+            }
             t.done_at = Some(now);
             News::Merged
         }
@@ -807,6 +811,8 @@ impl<R: tauri::Runtime> Core<R> {
                 }
                 // The targets' CI and the branches the tickets pushed, in the same pass (ESC-63).
                 self.branch_cis_refresh(None, false).await;
+                // The environments the done tickets go to, at the same pace (ESC-67).
+                self.deploys_refresh(None).await;
                 let wait = every(self.window_in_front.load(Ordering::Acquire));
                 tokio::select! {
                     _ = tokio::time::sleep(wait) => {}
@@ -851,6 +857,11 @@ impl<R: tauri::Runtime> Core<R> {
                     continue;
                 }
             };
+            let deployments = self
+                .forges
+                .read()
+                .get(&kind)
+                .is_some_and(|p| p.capabilities().deployments);
             let numbers: Vec<u64> = list.iter().map(|(_, n)| *n).collect();
             match read_prs(&*client, &repo, &numbers).await {
                 Err(e) => {
@@ -872,6 +883,26 @@ impl<R: tauri::Runtime> Core<R> {
                         } else {
                             None
                         };
+                        // Its preview (ESC-67): a deployment of its branch, else a check, with an
+                        // address.
+                        let preview = if pr.state == PrState::Open {
+                            let deps = match deployments && !pr.fork {
+                                true => client.deployments(&repo, &pr.head).await.ok(),
+                                false => None,
+                            };
+                            crate::deploys::preview_of(
+                                deps.as_deref().unwrap_or(&[]),
+                                checks.as_deref().unwrap_or(&[]),
+                            )
+                        } else {
+                            None
+                        };
+                        let _ = self.edit_ticket(id, |t| {
+                            if let Some(tp) = t.pr.as_mut() {
+                                tp.preview = preview;
+                            }
+                            Ok(())
+                        });
                         // Its feedback, when a thread is open or changes are asked (two calls
                         // more): counted on its card, never given to its agent by itself (ESC-61).
                         let feedback = if feedback_worth_reading(pr) {

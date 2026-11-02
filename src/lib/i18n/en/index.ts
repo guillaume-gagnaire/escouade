@@ -22,6 +22,7 @@ import vectors from './vectors';
 import nav from './nav';
 import plan from './plan';
 import prs from './prs';
+import envs from './envs';
 import repos from './repos';
 import runs from './runs';
 import devpage from './devpage';
@@ -62,6 +63,7 @@ export const en = defineCatalog({
   branches,
   plan,
   prs,
+  envs,
   repos,
   subagents,
   bgtasks,
