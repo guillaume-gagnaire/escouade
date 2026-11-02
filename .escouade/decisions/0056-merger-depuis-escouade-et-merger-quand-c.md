@@ -1,9 +1,9 @@
 ---
-number: null
+number: 56
 id: "merger-depuis-escouade-et-merger-quand-c"
 title: "Merger depuis Escouade, et « Merger quand c'est vert »"
 date: "2026-11-02"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-62"
 pages: ["kanban/en-revue"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"kanban/en-revue","added":18,"removed":3}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-02T08:53:43+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

@@ -3,7 +3,7 @@ title: "En revue"
 subject: "kanban"
 sources: ["docs/TODO-1.8.md"]
 tickets: ["ESC-59","ESC-60","ESC-62"]
-decisions: [55,"merger-depuis-escouade-et-merger-quand-c"]
+decisions: [55,56]
 compared: null
 ---
 
