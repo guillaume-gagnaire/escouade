@@ -209,6 +209,9 @@ pub struct Review {
     pub author: String,
     pub state: ReviewState,
     pub body: String,
+    /// When it was given (seconds since 1970); 0 when the host does not say.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub created: u64,
 }
 
 /// A comment of a pull request, on one of its lines or not.
@@ -221,6 +224,13 @@ pub struct ReviewComment {
     pub path: Option<String>,
     pub line: Option<u32>,
     pub resolved: bool,
+    /// When it was written (seconds since 1970); 0 when the host does not say.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub created: u64,
+    /// The lines of the diff it was written on, as the host keeps them (GitHub's and Gitea's
+    /// `diff_hunk`); none when the host does not say.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub excerpt: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -93,6 +93,12 @@ export default defineZone('boardSettings', {
     reviewersPlaceholder: 'ada, grace',
     labels: 'Labels',
     labelsPlaceholder: 'escouade, needs-review',
+    replyThreads: 'Reply under fixed threads',
+    replyThreadsDesc:
+      '“Fixed in abc1234” under each thread given to the agent, once its fixes are pushed. Escouade never resolves a thread.',
+    prUpdate: 'Branch update',
+    prUpdates: { merge: 'Merge', rebase: 'Rebase' },
+    prUpdateDesc: 'In conflict with the target: merge the target into the branch, or rebase and push with --force-with-lease.',
 
     beforeAfter: 'Before and after',
     testCommand: 'Test command',

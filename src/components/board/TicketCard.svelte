@@ -39,8 +39,11 @@
   import {
     asPull,
     canFixCi,
+    canFixReviews,
+    canUpdateBranch,
     ciLine,
     fixesSpent,
+    fixingLine,
     mergeActions,
     mergeHowText,
     mergeWaitLine,
@@ -513,7 +516,7 @@
     {@const noLog = noLogLine(p)}
     {#if noLog}<span class="prfacts" data-pr-nolog use:tip={{ text: noLog, cut: true }}>{noLog}</span>{/if}
     {#if p.fixing}
-      <span class="fixing" role="status" data-pr-fixing><i class="dot"></i>{t('board.pr.fixing')}</span>
+      <span class="fixing" role="status" data-pr-fixing><i class="dot"></i>{fixingLine(p)}</span>
     {:else if p.fixError}
       <span class="lost" role="status" data-pr-fix-error use:tip={{ text: p.fixError, cut: true }}>{p.fixError}</span>
     {/if}
@@ -528,6 +531,29 @@
         {#if fixesSpent(ticket, s.autopilot)}<span class="prfacts"
             >{t('board.pr.loopsSpent', { count: p.fixes, max: ticket.maxLoops })}</span
           >{/if}
+      </div>
+    {/if}
+    <!-- Its review's new comments (ESC-61): counted, and given to its agent on this click only, the autopilot's too. -->
+    {#if canFixReviews(ticket)}
+      <div class="row">
+        <span class="prfacts" data-pr-feedback={p.feedback}>{t('board.pr.feedback', { count: p.feedback })}</span>
+        <button
+          class="btn small"
+          data-pr-fix-reviews
+          use:tip={t('board.pr.fixReviewsTitle')}
+          onclick={(e) => act(e, () => app.run(api.ticketPrFixReviews(ticket.id)))}>{t('board.pr.fixReviews')}</button
+        >
+      </div>
+    {/if}
+    <!-- In conflict with its target (ESC-61): merged in (or rebased onto, by the board's settings), its conflicts to its agent. -->
+    {#if canUpdateBranch(ticket)}
+      <div class="row">
+        <button
+          class="btn small"
+          data-pr-update-branch
+          use:tip={t(`board.pr.updateBranchTitle.${s.prUpdate === 'rebase' ? 'rebase' : 'merge'}`, { target: p.target })}
+          onclick={(e) => act(e, () => app.run(api.ticketPrUpdateBranch(ticket.id)))}>{t('board.pr.updateBranch')}</button
+        >
       </div>
     {/if}
     <!-- Merging from Escouade (ESC-62): never by itself, a button. « Merger » approved and green, with a strategy the

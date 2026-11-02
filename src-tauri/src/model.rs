@@ -1314,6 +1314,39 @@ pub struct TicketPr {
     pub fix_from: Option<String>,
     /// Why the last fix did not go to its end (its agent gone, its branch gone, not pushed).
     pub fix_error: Option<String>,
+    /// What its agent was last given to do: its CI, its review's comments, or its branch to bring
+    /// up to its target (ESC-61).
+    pub fix_kind: PrFix,
+    /// The review's comments not resolved that came since its last push of fixes and were not
+    /// given to its agent yet (ESC-61): « L'agent corrige les retours » gives them.
+    pub feedback: u32,
+    /// Since when its comments count (ms): its opening, then the push of its last review's fixes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub feedback_since: Option<i64>,
+    /// The comments already given to its agent (their ids on the host): never given twice.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub handed: Vec<String>,
+    /// The comments of the review's fix under way, handed once it is pushed.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub fix_ids: Vec<String>,
+    /// Those of them on a line, in a thread: answered under once pushed, when the board says so.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub fix_threads: Vec<String>,
+}
+
+/// What the agent of a ticket « En revue » is given to do on its pull request.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum PrFix {
+    /// Its failed CI (ESC-60).
+    #[default]
+    Ci,
+    /// Its review's comments (ESC-61).
+    Reviews,
+    /// Its conflict with its target, by a merge of the target into its branch (ESC-61).
+    Merge,
+    /// The same by a rebase, pushed with `--force-with-lease`.
+    Rebase,
 }
 
 /// A check of a ticket's pull request that failed (ESC-60).
@@ -1441,6 +1474,14 @@ pub struct BoardSettings {
     /// Who its pull requests ask for a review, and the labels they get (ESC-59).
     pub reviewers: Vec<String>,
     pub labels: Vec<String>,
+    /// Once its agent pushed the fixes of its review's comments, Escouade answers under each thread
+    /// it was given (« Corrigé dans abc1234 »): off unless the user turns it on (ESC-61). It never
+    /// resolves a thread.
+    pub reply_threads: bool,
+    /// How « L'agent met à jour la branche » brings the target into the branch of a pull request in
+    /// conflict with it (ESC-61): "merge" (a merge commit), or "rebase" (pushed again with
+    /// `--force-with-lease`).
+    pub pr_update: String,
     pub tests_first: bool,
     pub test_command: String,
     pub cleanup: bool,
@@ -1471,6 +1512,8 @@ impl Default for BoardSettings {
             draft: false,
             reviewers: Vec::new(),
             labels: Vec::new(),
+            reply_threads: false,
+            pr_update: "merge".into(),
             tests_first: false,
             test_command: String::new(),
             cleanup: true,

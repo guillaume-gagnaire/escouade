@@ -107,6 +107,12 @@ export default {
     reviewersPlaceholder: 'ada, grace',
     labels: 'Étiquettes',
     labelsPlaceholder: 'escouade, à relire',
+    replyThreads: 'Répondre sous les fils corrigés',
+    replyThreadsDesc:
+      '« Corrigé dans abc1234 » sous chaque fil donné à l’agent, une fois ses corrections poussées. Aucun fil n’est résolu par Escouade.',
+    prUpdate: 'Mise à jour de la branche',
+    prUpdates: { merge: 'Merge', rebase: 'Rebase' },
+    prUpdateDesc: 'En conflit avec la cible : merge de la cible dans la branche, ou rebase poussé avec --force-with-lease.',
 
     beforeAfter: 'Avant et après',
     testCommand: 'Commande de tests',

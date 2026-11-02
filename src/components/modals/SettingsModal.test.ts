@@ -454,7 +454,12 @@ describe('SettingsModal', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Rebase' }));
     expect(screen.queryByRole('switch', { name: 'PR en brouillon' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('radio', { name: /Ouvrir une pull request/ }));
-    expect(screen.queryByRole('button', { name: 'Rebase' })).not.toBeInTheDocument();
+    // The merge strategy goes; « Mise à jour de la branche » (ESC-61) has a Rebase of its own.
+    expect(screen.queryByRole('group', { name: 'Stratégie' })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('group', { name: 'Mise à jour de la branche' })).getByRole('button', { name: 'Merge' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     await userEvent.click(screen.getByRole('switch', { name: 'PR en brouillon' }));
     expect(backend.called('board_set')).toHaveLength(0);
     await save();

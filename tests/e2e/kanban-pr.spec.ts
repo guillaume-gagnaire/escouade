@@ -245,3 +245,70 @@ test('« Merger quand c’est vert » turns on GitHub’s auto-merge, and « Mer
   const merged = (await writes()).find((w) => w.method === 'PUT' && w.path === '/github/repos/acme/demo/pulls/101/merge');
   expect(merged?.body.merge_method).toBe('squash');
 });
+
+test('review comments wait for « L’agent corrige les retours », even with the autopilot; a conflict, for « L’agent met à jour la branche » (ESC-61)', async ({
+  app,
+}) => {
+  test.setTimeout(300_000);
+  const { page } = app;
+  remote(app);
+  await addProject(page, app.repo, { firstAgent: false });
+  await connectGithub(page);
+  await page.getByRole('button', { name: /^Kanban/ }).click();
+  const col = (name: string) => page.getByRole('region', { name });
+  await page.getByRole('button', { name: /Après validation/ }).click();
+  const settings = page.getByRole('dialog', { name: 'Réglages' });
+  await settings.getByRole('radio', { name: /Ouvrir une pull request/ }).click();
+  // Off by default: nothing is published under the threads.
+  await expect(settings.getByRole('switch', { name: 'Répondre sous les fils corrigés' })).toHaveAttribute('aria-checked', 'false');
+  await expect(settings.getByRole('group', { name: 'Mise à jour de la branche' }).getByRole('button', { name: 'Merge' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await settings.getByRole('button', { name: 'Enregistrer' }).click();
+  await expect(settings).toHaveCount(0);
+  await page.getByRole('button', { name: 'Nouveau ticket' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Nouveau ticket' });
+  await dialog.getByRole('textbox', { name: 'Titre du ticket' }).fill('Connexion par jeton [ok]');
+  await dialog.getByRole('button', { name: 'Ajouter', exact: true }).click();
+  await col('À tester').getByRole('button', { name: 'Valider + PR' }).click({ timeout: 90_000 });
+  const card = col('En revue').locator('.card');
+  await expect(card.locator('[data-ticket-pr="101"]')).toBeVisible({ timeout: 60_000 });
+  const origin = path.join(app.root, 'origin.git');
+  const log = () => git(origin, 'log', '--format=%s', 'ticket/dem-1');
+
+  // Bob asks for changes on a line: counted on the card; the autopilot (on) leaves it for the click.
+  await setPull(101, { changesRequested: true });
+  await col('En revue').getByRole('button', { name: 'Rafraîchir' }).click();
+  await expect(card.locator('[data-pr-feedback]')).toHaveText('1 retour de relecture');
+  const fixReviews = card.getByRole('button', { name: "L'agent corrige les retours" });
+  await expect(fixReviews).toBeVisible();
+  await page.waitForTimeout(3_000);
+  await expect(card.locator('[data-pr-fixing]')).toHaveCount(0);
+  expect(log()).not.toContain('fix: retours de');
+  if (SHOTS) await col('En revue').screenshot({ path: path.join(SHOTS, 'kanban-pr-feedback.png') });
+
+  // One click: its agent gets the comment, commits; pushed, nothing published on GitHub, and the comment is not offered again.
+  await fixReviews.click();
+  await expect.poll(log, { timeout: 60_000 }).toContain('fix: retours de DEM-1');
+  await expect(card.locator('[data-pr-fixing]')).toHaveCount(0, { timeout: 30_000 });
+  await expect(card.locator('[data-pr-fix-error]')).toHaveCount(0);
+  await col('En revue').getByRole('button', { name: 'Rafraîchir' }).click();
+  await expect(card.locator('[data-pr-feedback]')).toHaveCount(0);
+  const published = (await writes()).filter((w) => /replies|resolveReviewThread|\/comments$/.test(`${w.path} ${JSON.stringify(w.body)}`));
+  expect(published).toEqual([]);
+
+  // main moved on GitHub, and the pull request conflicts: the target merged into its branch, pushed.
+  execFileSync('git', ['commit', '-q', '--allow-empty', '-m', 'chore: ailleurs'], { cwd: app.repo });
+  git(app.repo, 'push', '-q', 'origin', 'main');
+  await setPull(101, { changesRequested: false, mergeable: 'CONFLICTING' });
+  await col('En revue').getByRole('button', { name: 'Rafraîchir' }).click();
+  await expect(card.getByText('conflit avec main')).toBeVisible();
+  const update = card.getByRole('button', { name: "L'agent met à jour la branche" });
+  if (SHOTS) await col('En revue').screenshot({ path: path.join(SHOTS, 'kanban-pr-conflict.png') });
+  await update.click();
+  await expect.poll(log, { timeout: 60_000 }).toContain('chore: ailleurs');
+  await expect(card.locator('[data-pr-fixing]')).toHaveCount(0, { timeout: 30_000 });
+  await expect(card.locator('[data-pr-fix-error]')).toHaveCount(0);
+  expect(log()).toMatch(/Merge/);
+});

@@ -1142,7 +1142,13 @@ export interface TicketPr {
   awaitingCi: boolean;
   /** Why the last fix did not go to its end. */
   fixError: string | null;
+  /** What its agent was last given (ESC-61): its CI, its review's comments, or its branch to bring up to its target. */
+  fixKind: TicketPrFix;
+  /** The review's comments not resolved that came since its last push of fixes, not given to its agent yet (ESC-61). */
+  feedback: number;
 }
+
+export type TicketPrFix = 'ci' | 'reviews' | 'merge' | 'rebase';
 
 export interface FailedCheck {
   name: string;
@@ -1247,6 +1253,10 @@ export interface BoardSettings {
   /** Who its pull requests ask for a review, and their labels (ESC-59). */
   reviewers: string[];
   labels: string[];
+  /** Once the review's fixes are pushed, « Corrigé dans abc1234 » under each thread (ESC-61): off by default; never resolved. */
+  replyThreads: boolean;
+  /** How « L'agent met à jour la branche » brings the target in (ESC-61): a merge, or a rebase pushed with --force-with-lease. */
+  prUpdate: 'merge' | 'rebase';
   testsFirst: boolean;
   testCommand: string;
   cleanup: boolean;

@@ -1250,6 +1250,44 @@ describe('TicketCard with an account of its own', () => {
     expect(screen.queryByRole('button', { name: "L'agent corrige" })).toBeNull();
   });
 
+  it('counts the new review comments and gives them to its agent on a click (ESC-61)', async () => {
+    const backend = fakeBackend();
+    const pr = ticketPr({ changesRequested: true, openThreads: 2, feedback: 2 });
+    const { container, unmount } = show(ticket({ column: 'pr', agentId: 'a1', pr }), project({ board: board({ autopilot: true }) }));
+    expect(container.querySelector('[data-pr-feedback]')).toHaveTextContent('2 retours de relecture');
+    // The autopilot gives it nothing by itself: the button waits.
+    expect(backend.called('ticket_pr_fix_reviews')).toEqual([]);
+    await userEvent.click(screen.getByRole('button', { name: "L'agent corrige les retours" }));
+    expect(backend.called('ticket_pr_fix_reviews')).toEqual([{ cmd: 'ticket_pr_fix_reviews', args: { id: 't1' } }]);
+    unmount();
+    const at = show(ticket({ column: 'pr', agentId: 'a1', pr: { ...pr, feedback: 0, fixing: 1, fixKind: 'reviews' } }));
+    expect(at.container.querySelector('[data-pr-fixing]')).toHaveTextContent("L'agent corrige les retours…");
+    expect(screen.queryByRole('button', { name: "L'agent corrige les retours" })).toBeNull();
+    at.unmount();
+    // Every comment given already: nothing to offer.
+    show(ticket({ column: 'pr', agentId: 'a1', pr: { ...pr, feedback: 0 } }));
+    expect(screen.queryByRole('button', { name: "L'agent corrige les retours" })).toBeNull();
+  });
+
+  it('offers « L’agent met à jour la branche » on a conflict with its target, by a merge or a rebase (ESC-61)', async () => {
+    const backend = fakeBackend();
+    const pr = ticketPr({ mergeable: false });
+    const { unmount } = show(ticket({ column: 'pr', agentId: 'a1', pr }));
+    const button = screen.getByRole('button', { name: "L'agent met à jour la branche" });
+    await userEvent.click(button);
+    expect(backend.called('ticket_pr_update_branch')).toEqual([{ cmd: 'ticket_pr_update_branch', args: { id: 't1' } }]);
+    unmount();
+    const at = show(
+      ticket({ column: 'pr', agentId: 'a1', pr: { ...pr, fixing: 1, fixKind: 'rebase' } }),
+      project({ board: board({ prUpdate: 'rebase' }) }),
+    );
+    expect(at.container.querySelector('[data-pr-fixing]')).toHaveTextContent("L'agent rebase la branche sur main…");
+    expect(screen.queryByRole('button', { name: "L'agent met à jour la branche" })).toBeNull();
+    at.unmount();
+    show(ticket({ column: 'pr', agentId: 'a1', pr: ticketPr({ mergeable: true }) }));
+    expect(screen.queryByRole('button', { name: "L'agent met à jour la branche" })).toBeNull();
+  });
+
   it('says why the last fix did not go, and that the autopilot spent its loops (ESC-60)', () => {
     fakeBackend();
     const pr = ticketPr({ checks: 'failure', fixes: 3, awaitingCi: true, fixError: "L'agent n'a rien commité : la CI reste en échec" });

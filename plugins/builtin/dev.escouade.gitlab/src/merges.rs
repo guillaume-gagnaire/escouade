@@ -762,6 +762,7 @@ impl Forge for Gitlab {
                         author: login.to_string(),
                         state: ReviewState::Approved,
                         body: String::new(),
+                        created: 0,
                     });
                 }
             }
@@ -786,6 +787,7 @@ impl Forge for Gitlab {
                         author: login.to_string(),
                         state,
                         body: String::new(),
+                        created: 0,
                     }),
                 }
             }
@@ -827,6 +829,8 @@ impl Forge for Gitlab {
                             .or(pos["old_line"].as_u64())
                             .map(|l| l as u32),
                         resolved: n["resolved"] == true,
+                        created: instant(&n["created_at"]).unwrap_or(0),
+                        excerpt: None,
                     });
                 }
             }

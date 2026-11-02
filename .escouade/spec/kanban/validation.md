@@ -2,8 +2,8 @@
 title: "Validation"
 subject: "Kanban"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-143","ESC-259","ESC-263","ESC-59"]
-decisions: []
+tickets: ["ESC-143","ESC-259","ESC-263","ESC-59","ESC-61"]
+decisions: ["les-retours-de-relecture-et-le-conflit-d"]
 compared: null
 ---
 
@@ -71,3 +71,5 @@ En cas de conflit, selon le réglage : me demander (« L'agent résout » / « A
 ## Réglages
 
 Dans l'onglet « Kanban » du projet : l'action après validation (« ⚙ Après validation : … » dans l'en-tête), la façon de merger (merge commit, squash ou rebase), la PR en brouillon, ses relecteurs et ses étiquettes par défaut (noms séparés par des virgules), la conduite en cas de conflit, la commande de tests, et « Supprimer le worktree d'un ticket terminé ou supprimé » (allumé par défaut).
+
+Avec « Valider + PR », deux réglages de plus pour la suite de la revue (voir *En revue*) : « Répondre sous les fils corrigés » (éteint par défaut : rien ne se publie sous les fils sans lui, et aucun fil n'est jamais résolu par Escouade), et « Mise à jour de la branche » d'une PR en conflit avec sa cible (Merge par défaut, ou Rebase poussé avec `--force-with-lease`).

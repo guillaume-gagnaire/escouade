@@ -265,6 +265,8 @@ export function board(over: Partial<BoardSettings> = {}): BoardSettings {
     strategy: 'squash',
     draft: false,
     reviewers: [],
+    replyThreads: false,
+    prUpdate: 'merge',
     labels: [],
     testsFirst: false,
     testCommand: '',
@@ -612,5 +614,7 @@ export const ticketPr = (over: Partial<TicketPr> = {}): TicketPr => ({
   fixes: 0,
   awaitingCi: false,
   fixError: null,
+  fixKind: 'ci',
+  feedback: 0,
   ...over,
 });

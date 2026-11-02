@@ -44,9 +44,23 @@ export default defineZone('board', {
     backToTodo: 'Back to do',
     fixCi: 'Agent fixes it',
     fixCiTitle: 'Send its agent the failed jobs and the end of their logs; it pushes, the {word} updates',
-    fixing: 'The agent is fixing the CI…',
     noLog: { one: '{names}: third-party CI, no log', other: '{names}: third-party CI, no logs' },
     loopsSpent: 'Loops spent ({count}/{max}): the autopilot no longer sends it back',
+    fixingKind: {
+      ci: 'The agent is fixing the CI…',
+      reviews: 'The agent is addressing the feedback…',
+      merge: 'The agent is updating the branch…',
+      rebase: 'The agent is rebasing the branch onto {target}…',
+    },
+    feedback: { one: '1 review comment', other: '{count} review comments' },
+    fixReviews: 'Agent addresses the feedback',
+    fixReviewsTitle:
+      'Give its agent the unresolved comments that came since the last push (file, line, diff excerpt, author, text); it pushes its fixes',
+    updateBranch: 'Agent updates the branch',
+    updateBranchTitle: {
+      merge: 'Merge {target} into the branch; its conflicts go to its agent, then Escouade pushes',
+      rebase: 'Rebase the branch onto {target}; its conflicts go to its agent, then Escouade pushes (--force-with-lease)',
+    },
   },
 
   header: {

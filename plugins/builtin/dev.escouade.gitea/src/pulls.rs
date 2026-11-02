@@ -247,6 +247,11 @@ impl Gitea {
                     .find_map(|l| l.as_u64().filter(|l| *l > 0))
                     .map(|l| l as u32),
                 resolved: !c["resolver"].is_null(),
+                created: instant(&c["created_at"]).unwrap_or(0),
+                excerpt: c["diff_hunk"]
+                    .as_str()
+                    .filter(|h| !h.is_empty())
+                    .map(str::to_string),
             })
             .collect())
     }
@@ -404,6 +409,7 @@ fn last_words(all: &[Value]) -> Vec<Review> {
             author: author.clone(),
             state,
             body: r["body"].as_str().unwrap_or("").to_string(),
+            created: instant(&r["submitted_at"]).unwrap_or(0),
         };
         match last.iter_mut().find(|x| x.author == author) {
             Some(prev) if state == ReviewState::Commented => {
@@ -840,6 +846,8 @@ impl Forge for Gitea {
                     path: None,
                     line: None,
                     resolved: false,
+                    created: instant(&c["created_at"]).unwrap_or(0),
+                    excerpt: None,
                 });
             }
             Ok(out)

@@ -126,6 +126,21 @@ export function noLogLine(p: TicketPr): string | null {
   return t('board.pr.noLog', { count: names.length, names: names.join(', ') });
 }
 
+/** Its agent is free to be given something on its pull request: it has one, its pull request is open, and no fix is under way. */
+const free = (x: Ticket) => x.column === 'pr' && !!x.pr && !!x.agentId && !x.pr.closed && x.pr.state === 'open' && !x.pr.fixing;
+
+/** « L'agent corrige les retours » (ESC-61): new review comments wait for its agent. On a click only, the autopilot's too. */
+export const canFixReviews = (x: Ticket) => free(x) && (x.pr?.feedback ?? 0) > 0;
+
+/** « L'agent met à jour la branche » (ESC-61): its pull request conflicts with its target. */
+export const canUpdateBranch = (x: Ticket) => free(x) && x.pr?.mergeable === false;
+
+/** What its agent does now on its pull request, in words. */
+export const fixingLine = (p: TicketPr) =>
+  p.fixKind === 'rebase'
+    ? t('board.pr.fixingKind.rebase', { target: p.target })
+    : t(`board.pr.fixingKind.${p.fixKind === 'reviews' || p.fixKind === 'merge' ? p.fixKind : 'ci'}`);
+
 /** With the autopilot, its CI no longer goes to its agent by itself once its loops are spent: « L'agent corrige » still does. */
 export const fixesSpent = (x: Ticket, autopilot: boolean) => autopilot && !!x.pr && x.pr.fixes >= x.maxLoops;
 

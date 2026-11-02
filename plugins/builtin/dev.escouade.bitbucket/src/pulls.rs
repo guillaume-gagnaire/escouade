@@ -872,6 +872,7 @@ impl Forge for Bitbucket {
                         author: person(&u["user"]),
                         state,
                         body: String::new(),
+                        created: 0,
                     })
                 })
                 .collect())
@@ -905,6 +906,8 @@ impl Forge for Bitbucket {
                         .or(c["inline"]["from"].as_u64())
                         .map(|l| l as u32),
                     resolved: resolved(c),
+                    created: instant(&c["created_on"]).unwrap_or(0),
+                    excerpt: None,
                 })
                 .collect())
         })

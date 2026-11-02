@@ -239,11 +239,13 @@ fn the_reviews_requests_and_the_open_comments_go_to_the_agent() {
             author: "ada".into(),
             state: ReviewState::ChangesRequested,
             body: "Renomme la fonction.".into(),
+            created: 0,
         },
         Review {
             author: "bob".into(),
             state: ReviewState::Approved,
             body: String::new(),
+            created: 0,
         },
     ];
     let comment = |id: &str, path: Option<&str>, line: Option<u32>, resolved: bool| ReviewComment {
@@ -253,6 +255,8 @@ fn the_reviews_requests_and_the_open_comments_go_to_the_agent() {
         path: path.map(str::to_string),
         line,
         resolved,
+        created: 0,
+        excerpt: None,
     };
     let comments = vec![
         comment("1", Some("src/app.ts"), Some(4), false),

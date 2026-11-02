@@ -1138,6 +1138,7 @@ impl Forge for Azure {
                             .to_string(),
                         state,
                         body: String::new(),
+                        created: 0,
                     })
                 })
                 .collect())
@@ -1174,6 +1175,8 @@ impl Forge for Azure {
                         path: path.clone(),
                         line,
                         resolved: resolved(&t["status"]),
+                        created: instant(&c["publishedDate"]).unwrap_or(0),
+                        excerpt: None,
                     });
                 }
             }

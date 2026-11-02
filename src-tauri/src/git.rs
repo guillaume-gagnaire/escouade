@@ -3092,6 +3092,54 @@ pub async fn push_branch(cwd: &str, branch: &str) -> Result<String> {
     Ok(remote)
 }
 
+/// Publishes `branch` from `cwd` again after a rebase (ESC-61): forced, but only over what the
+/// remote had when it was last fetched (`--force-with-lease`), so that a push of someone else's
+/// since is refused rather than lost. Returns the remote's name.
+pub async fn push_branch_lease(cwd: &str, branch: &str) -> Result<String> {
+    if branch.is_empty() || branch.starts_with('-') {
+        bail!(invalid_branch(branch));
+    }
+    let remotes = remotes(cwd).await;
+    let Some(remote) = sync_remote(&remotes, None).map(str::to_string) else {
+        bail!(no_remote(crate::i18n::ui()));
+    };
+    run_net_english(
+        cwd,
+        &["push", "--force-with-lease", "-u", &remote, branch],
+        false,
+    )
+    .await
+    .map_err(rejected)?;
+    Ok(remote)
+}
+
+/// The lines `line - before` to `line + after` (from 1) of `path` as `rev` has it, each
+/// with its number; none when the file or the line is not there.
+pub async fn lines_at(
+    repo: &str,
+    rev: &str,
+    path: &str,
+    line: u32,
+    before: u32,
+    after: u32,
+) -> Option<String> {
+    if rev.is_empty() || rev.starts_with('-') || path.is_empty() || line == 0 {
+        return None;
+    }
+    let bytes = run(repo, &["show", &format!("{rev}:{path}")]).await.ok()?;
+    let text = String::from_utf8_lossy(&bytes);
+    let from = line.saturating_sub(before).max(1) as usize;
+    let to = line.saturating_add(after) as usize;
+    let out: Vec<String> = text
+        .lines()
+        .enumerate()
+        .map(|(i, l)| (i + 1, l))
+        .filter(|(n, _)| *n >= from && *n <= to)
+        .map(|(n, l)| format!("{n:>5} {l}"))
+        .collect();
+    (!out.is_empty() && text.lines().count() >= line as usize).then(|| out.join("\n"))
+}
+
 /// The address of `remote` as configured (before any `insteadOf` rewriting).
 pub async fn remote_url(repo: &str, remote: &str) -> Option<String> {
     text(repo, &["config", "--get", &format!("remote.{remote}.url")])

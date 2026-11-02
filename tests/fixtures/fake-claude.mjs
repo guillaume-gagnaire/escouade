@@ -51,7 +51,8 @@
 // history), [tenace] a process that lasts 5 s once its input is closed, [rien] no file written (nothing
 // to merge), [dans:api] its file written in that folder instead (each one named; ESC-169); given its pull request's CI to
 // fix (« La CI de la PR #n », ESC-60), it writes ci.txt and commits it (nothing with [ci-rien]), and ends its turn with no
-// report; by default criterion n is
+// report; given its review's comments (ESC-61), retours.txt the same; its conflict with its target, resolved with its own
+// side (or its rebase done); by default criterion n is
 // met from loop n on. "faits-workflow: [...]" in its ticket (ESC-197) plays those facts first, then holds its turn 10 min
 // as [lent] does: the agent of a ticket under way that follows a workflow too. [spec:<project>] (ESC-263): before its first
 // report it keeps the spec as its protocol asks, by Escouade's docs tools (its --mcp-config server): the page
@@ -1204,6 +1205,33 @@ function startSession() {
         execFileSync('git', ['commit', '-qm', `fix: CI de ${key}`]);
       }
       streamText('CI corrigée.');
+      result();
+      return;
+    }
+    // Its pull request's review comments to address (ESC-61): retours.txt written and committed.
+    if (/(?:a des retours de relecture|has review feedback)/.test(text)) {
+      fs.appendFileSync('retours.txt', 'retour traité\n');
+      execFileSync('git', ['add', 'retours.txt']);
+      execFileSync('git', ['commit', '-qm', `fix: retours de ${key}`]);
+      streamText('Retours traités.');
+      result();
+      return;
+    }
+    // Its pull request in conflict with its target (ESC-61): the merge's conflicts resolved with its own side and
+    // committed; or the rebase it is asked for, its own side kept.
+    if (/(?:est en conflit avec|conflicts with) /.test(text) && /(?:PR|MR) #\d+/.test(text)) {
+      const onto = text.match(/git rebase (\S+)\)/)?.[1];
+      if (onto) {
+        execFileSync('git', ['rebase', '-X', 'theirs', onto]);
+      } else {
+        const unmerged = execFileSync('git', ['diff', '--name-only', '--diff-filter=U']).toString().split('\n').filter(Boolean);
+        for (const u of unmerged) {
+          execFileSync('git', ['checkout', '--ours', '--', u]);
+          execFileSync('git', ['add', '--', u]);
+        }
+        execFileSync('git', ['commit', '--no-edit', '-q']);
+      }
+      streamText('Conflits résolus.');
       result();
       return;
     }

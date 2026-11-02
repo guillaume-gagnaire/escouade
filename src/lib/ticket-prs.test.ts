@@ -2,9 +2,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { setLang } from './i18n';
 import {
   canFixCi,
+  canFixReviews,
+  canUpdateBranch,
   canWaitGreen,
   ciLine,
   fixesSpent,
+  fixingLine,
   joinNames,
   mergeActions,
   mergeHowText,
@@ -99,6 +102,30 @@ describe('the pull requests of the tickets (ESC-59)', () => {
     expect(fixesSpent(x, true)).toBe(true);
     expect(fixesSpent(x, false)).toBe(false);
     expect(fixesSpent({ ...x, maxLoops: 5 }, true)).toBe(false);
+  });
+
+  it('offers « L’agent corrige les retours » on new feedback and « L’agent met à jour la branche » on a conflict, none under way (ESC-61)', () => {
+    const fed = ticketPr({ feedback: 2 });
+    expect(canFixReviews(ticket({ column: 'pr', agentId: 'a1', pr: fed }))).toBe(true);
+    expect(canFixReviews(ticket({ column: 'pr', agentId: 'a1', pr: ticketPr() }))).toBe(false);
+    expect(canFixReviews(ticket({ column: 'pr', pr: fed }))).toBe(false);
+    expect(canFixReviews(ticket({ column: 'pr', agentId: 'a1', pr: { ...fed, fixing: 3 } }))).toBe(false);
+    expect(canFixReviews(ticket({ column: 'pr', agentId: 'a1', pr: { ...fed, state: 'merged' } }))).toBe(false);
+    const clash = ticketPr({ mergeable: false });
+    expect(canUpdateBranch(ticket({ column: 'pr', agentId: 'a1', pr: clash }))).toBe(true);
+    expect(canUpdateBranch(ticket({ column: 'pr', agentId: 'a1', pr: ticketPr({ mergeable: null }) }))).toBe(false);
+    expect(canUpdateBranch(ticket({ column: 'pr', agentId: 'a1', pr: { ...clash, closed: true } }))).toBe(false);
+    expect(canUpdateBranch(ticket({ column: 'pr', agentId: 'a1', pr: { ...clash, fixing: 3 } }))).toBe(false);
+  });
+
+  it('says what its agent does on its pull request, in both languages (ESC-61)', () => {
+    expect(fixingLine(ticketPr())).toBe("L'agent corrige la CI…");
+    expect(fixingLine(ticketPr({ fixKind: 'reviews' }))).toBe("L'agent corrige les retours…");
+    expect(fixingLine(ticketPr({ fixKind: 'merge' }))).toBe("L'agent met à jour la branche…");
+    expect(fixingLine(ticketPr({ fixKind: 'rebase' }))).toBe("L'agent rebase la branche sur main…");
+    setLang('en');
+    expect(fixingLine(ticketPr({ fixKind: 'reviews' }))).toBe('The agent is addressing the feedback…');
+    expect(fixingLine(ticketPr({ fixKind: 'rebase' }))).toBe('The agent is rebasing the branch onto main…');
   });
 
   it('counts a ticket in review whose agent fixes its CI among the places taken', () => {

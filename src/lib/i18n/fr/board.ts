@@ -51,10 +51,27 @@ export default {
     /** Its CI failed (ESC-60): its agent gets the failed jobs and the end of their logs. */
     fixCi: "L'agent corrige",
     fixCiTitle: 'Renvoyer à son agent les jobs en échec et la fin de leurs journaux ; il pousse, la {word} se met à jour',
-    fixing: "L'agent corrige la CI…",
     /** A CI of another kind gives a status and an address alone. */
     noLog: { one: '{names} : CI tierce, sans journal', other: '{names} : CI tierces, sans journal' },
     loopsSpent: 'Boucles épuisées ({count}/{max}) : le pilote auto ne la renvoie plus',
+    /** What its agent does on its pull request (ESC-60, ESC-61). */
+    fixingKind: {
+      ci: "L'agent corrige la CI…",
+      reviews: "L'agent corrige les retours…",
+      merge: "L'agent met à jour la branche…",
+      rebase: "L'agent rebase la branche sur {target}…",
+    },
+    /** New review comments (ESC-61): never given to its agent without a click. */
+    feedback: { one: '1 retour de relecture', other: '{count} retours de relecture' },
+    fixReviews: "L'agent corrige les retours",
+    fixReviewsTitle:
+      'Donner à son agent les commentaires non résolus arrivés depuis le dernier push (fichier, ligne, extrait du diff, auteur, texte) ; il pousse ses corrections',
+    /** In conflict with its target (ESC-61). */
+    updateBranch: "L'agent met à jour la branche",
+    updateBranchTitle: {
+      merge: 'Merger {target} dans la branche ; ses conflits vont à son agent, puis Escouade pousse',
+      rebase: 'Rebaser la branche sur {target} ; ses conflits vont à son agent, puis Escouade pousse (--force-with-lease)',
+    },
   },
 
   // The header of the board.

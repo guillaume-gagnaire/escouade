@@ -2710,6 +2710,19 @@ pub async fn ticket_pr_fix_ci(core: CoreState<'_>, id: String) -> Res<()> {
     core.ticket_pr_fix_ci(&id).await.map_err(err)
 }
 
+/// « L'agent corrige les retours » on a ticket « En revue » (ESC-61): its agent gets the review's
+/// comments not resolved that came since its last push of fixes. On a click only.
+#[tauri::command]
+pub async fn ticket_pr_fix_reviews(core: CoreState<'_>, id: String) -> Res<()> {
+    core.ticket_pr_fix_reviews(&id).await.map_err(err)
+}
+
+/// « L'agent met à jour la branche » on a ticket « En revue » in conflict with its target (ESC-61).
+#[tauri::command]
+pub async fn ticket_pr_update_branch(core: CoreState<'_>, id: String) -> Res<()> {
+    core.ticket_pr_update_branch(&id).await.map_err(err)
+}
+
 #[tauri::command(async)]
 pub fn board_set(core: CoreState, project_id: String, settings: BoardSettings) -> Res<Project> {
     core.board_set(&project_id, settings).map_err(err)

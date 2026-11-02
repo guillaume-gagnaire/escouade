@@ -9,11 +9,11 @@ use crate::board;
 use crate::core::Core;
 use crate::forge::{
     Capabilities, Check, CheckState, Forge, MergeOptions, MergeStrategy, PrState, PullRequest,
-    RepoRef, Unsupported,
+    RepoRef, Review, ReviewComment, ReviewState, Unsupported,
 };
 use crate::git;
 use crate::i18n::{self, Lang};
-use crate::model::{now_ms, BoardSettings, Column, FailedCheck, Service, Ticket, TicketPr};
+use crate::model::{now_ms, BoardSettings, Column, FailedCheck, PrFix, Service, Ticket, TicketPr};
 use anyhow::{anyhow, bail, Result};
 use std::collections::BTreeMap;
 use std::sync::atomic::Ordering;
@@ -119,6 +119,7 @@ pub fn ticket_pr(
         ..Default::default()
     };
     read_into(&mut tp, pr, None, now);
+    tp.feedback_since = Some(now);
     tp
 }
 
@@ -438,9 +439,15 @@ pub fn to_fix(tickets: &[Ticket], project_id: &str, s: &BoardSettings) -> Vec<St
         .collect()
 }
 
-/// A fix begins: counted (a loop of the ticket's), and what the last one left goes.
+/// A fix of its CI begins: counted (a loop of the ticket's), and what the last one left goes.
 pub fn fix_begins(t: &mut Ticket, from: Option<String>, now: i64) {
+    fix_begins_as(t, PrFix::Ci, from, now);
+}
+
+/// A fix of `kind` begins (its CI, its feedback, its conflict): the same.
+pub fn fix_begins_as(t: &mut Ticket, kind: PrFix, from: Option<String>, now: i64) {
     if let Some(tp) = t.pr.as_mut() {
+        tp.fix_kind = kind;
         tp.fixing = Some(now);
         tp.fixes += 1;
         tp.awaiting_ci = false;
@@ -456,18 +463,263 @@ pub fn fix_failed(t: &mut Ticket, why: String) {
     if let Some(tp) = t.pr.as_mut() {
         tp.fixing = None;
         tp.fix_from = None;
-        tp.awaiting_ci = true;
         tp.fix_error = Some(why);
+        match tp.fix_kind {
+            PrFix::Ci => tp.awaiting_ci = true,
+            // Its feedback was not handed: still to address, « L'agent corrige les retours » again.
+            PrFix::Reviews => {
+                tp.feedback = tp.feedback.max(tp.fix_ids.len() as u32);
+                tp.fix_ids.clear();
+                tp.fix_threads.clear();
+            }
+            PrFix::Merge | PrFix::Rebase => {}
+        }
     }
 }
 
 /// Fixed and pushed: back « En revue » as before, its CI to run again.
 pub fn fix_done(t: &mut Ticket) {
+    fix_done_at(t, now_ms());
+}
+
+/// The same at `now`: its feedback's fixes pushed, what its agent was given is handed, and only
+/// the comments written since count (« depuis le dernier push »).
+pub fn fix_done_at(t: &mut Ticket, now: i64) {
     if let Some(tp) = t.pr.as_mut() {
         tp.fixing = None;
         tp.fix_from = None;
         tp.awaiting_ci = true;
         tp.fix_error = None;
+        if tp.fix_kind == PrFix::Reviews {
+            let ids = std::mem::take(&mut tp.fix_ids);
+            tp.handed.extend(ids);
+            // The oldest go first: a ticket's pull request is not read for ever.
+            let over = tp.handed.len().saturating_sub(HANDED_MAX);
+            tp.handed.drain(..over);
+            tp.fix_threads.clear();
+            tp.feedback_since = Some(now);
+            tp.feedback = 0;
+        }
+        if matches!(tp.fix_kind, PrFix::Merge | PrFix::Rebase) {
+            // Pushed: the host says again whether it still conflicts.
+            tp.mergeable = None;
+        }
+    }
+}
+
+/// The most comments a ticket remembers as handed to its agent.
+const HANDED_MAX: usize = 500;
+
+// ---------- Its review's comments, and its conflict with its target (ESC-61) ----------
+
+/// The words Escouade answers under a thread whose comment its agent fixed, when the board says so
+/// (`BoardSettings::reply_threads`): « Corrigé dans abc1234 ».
+pub fn reply_text(lang: Lang, commit: &str) -> String {
+    let short: String = commit.chars().take(7).collect();
+    tr_in!(lang, "Corrigé dans {short}", "Fixed in {short}")
+}
+
+/// How Escouade's answers under the threads begin, in either language: a comment that begins so,
+/// written by the account itself, is Escouade's own and never feedback.
+const REPLY_HEADS: [&str; 2] = ["Corrigé dans ", "Fixed in "];
+
+/// A bot's comment (coverage, CI, dependencies: `name[bot]` on GitHub and Gitea): never feedback.
+pub fn bot(author: &str) -> bool {
+    author.ends_with("[bot]")
+}
+
+/// The key a review is handed by: it has no id on every host.
+pub fn review_key(r: &Review) -> String {
+    format!("review:{}:{}", r.author, r.created)
+}
+
+/// The feedback of a pull request not given to its agent yet: the reviews that say something
+/// (changes asked, or a comment with a text) and the comments not resolved, written since its last
+/// push of fixes (`TicketPr::feedback_since`; a comment the host gives no date to counts until it
+/// is handed), by someone else than a bot, and not Escouade's own answers under the threads (`me`:
+/// the account's login).
+pub fn new_feedback<'a>(
+    tp: &TicketPr,
+    me: &str,
+    reviews: &'a [Review],
+    comments: &'a [ReviewComment],
+) -> (Vec<&'a Review>, Vec<&'a ReviewComment>) {
+    let since = tp.feedback_since.unwrap_or(0);
+    // A host's date is to the second: one of the push's own second counts (rather given twice than lost).
+    let after = |created: u64| {
+        created == 0 || (created as i64).saturating_add(1).saturating_mul(1000) > since
+    };
+    let known = |id: &str| tp.handed.iter().any(|h| h == id) || tp.fix_ids.iter().any(|h| h == id);
+    let rs = reviews
+        .iter()
+        .filter(|r| r.state != ReviewState::Approved && !r.body.trim().is_empty())
+        .filter(|r| r.created > 0 && after(r.created) && !bot(&r.author))
+        .filter(|r| !known(&review_key(r)))
+        .collect();
+    let own = |c: &ReviewComment| {
+        !me.is_empty()
+            && c.author.eq_ignore_ascii_case(me)
+            && REPLY_HEADS
+                .iter()
+                .any(|h| c.body.trim_start().starts_with(h))
+    };
+    let cs = comments
+        .iter()
+        .filter(|c| !c.resolved && !c.id.is_empty() && !c.body.trim().is_empty())
+        .filter(|c| after(c.created) && !bot(&c.author) && !own(c) && !known(&c.id))
+        .collect();
+    (rs, cs)
+}
+
+/// A reading of its feedback on the card (`read`: its reviews and comments, none when they were
+/// not read): how many wait for its agent. Its pull request with no thread open and no change
+/// asked has none. True when there are more than before: the user is told.
+pub fn feedback_read(
+    tp: &mut TicketPr,
+    pr: &PullRequest,
+    read: Option<(&[Review], &[ReviewComment])>,
+    me: &str,
+) -> bool {
+    let before = tp.feedback;
+    if pr.state != PrState::Open {
+        tp.feedback = 0;
+        return false;
+    }
+    match read {
+        Some((reviews, comments)) => {
+            let (rs, cs) = new_feedback(tp, me, reviews, comments);
+            tp.feedback = (rs.len() + cs.len()) as u32;
+        }
+        None if pr.open_threads == 0 && !pr.changes_requested => tp.feedback = 0,
+        // Not read this time: the count of the last reading stays.
+        None => {}
+    }
+    tp.feedback > before
+}
+
+/// Its feedback is worth reading: a thread is open, or a reviewer asks for changes.
+pub fn feedback_worth_reading(pr: &PullRequest) -> bool {
+    pr.state == PrState::Open && (pr.open_threads > 0 || pr.changes_requested)
+}
+
+/// The notification of new feedback on a ticket « En revue ».
+pub fn feedback_alert(lang: Lang, key: &str, word: &str, number: u64, count: u32) -> String {
+    if count == 1 {
+        tr_in!(
+            lang,
+            "{key} : un retour de relecture sur la {word} #{number}",
+            "{key}: one review comment on {word} #{number}"
+        )
+    } else {
+        tr_in!(
+            lang,
+            "{key} : {count} retours de relecture sur la {word} #{number}",
+            "{key}: {count} review comments on {word} #{number}"
+        )
+    }
+}
+
+/// Its feedback may go to its agent (« L'agent corrige les retours »), by a click only, the
+/// autopilot's too: « En revue », its pull request open with feedback, an agent, no fix under way
+/// (the card's `canFixReviews`).
+#[cfg(test)]
+pub fn reviews_fixable(t: &Ticket) -> bool {
+    t.column == Column::Pr
+        && t.agent_id.is_some()
+        && t.pr.as_ref().is_some_and(|p| {
+            !p.closed && p.state == PrState::Open && p.feedback > 0 && p.fixing.is_none()
+        })
+}
+
+/// Its branch may be brought up to its target (« L'agent met à jour la branche »): « En revue »,
+/// its pull request open and in conflict with its target, an agent, no fix under way.
+pub fn updatable(t: &Ticket) -> bool {
+    t.column == Column::Pr
+        && t.agent_id.is_some()
+        && t.pr.as_ref().is_some_and(|p| {
+            !p.closed
+                && p.state == PrState::Open
+                && p.mergeable == Some(false)
+                && p.fixing.is_none()
+        })
+}
+
+/// How « L'agent met à jour la branche » goes, by the board's settings: a merge of the target,
+/// unless it says rebase.
+pub fn update_kind(s: &BoardSettings) -> PrFix {
+    if s.pr_update == "rebase" {
+        PrFix::Rebase
+    } else {
+        PrFix::Merge
+    }
+}
+
+/// The most lines of the diff a comment's excerpt keeps: its end, where the comment is.
+const EXCERPT_LINES: usize = 12;
+
+/// The end of a host's excerpt of the diff (`diff_hunk`), where the comment's line is.
+pub fn excerpt_tail(hunk: &str) -> String {
+    let lines: Vec<&str> = hunk.lines().collect();
+    lines[lines.len().saturating_sub(EXCERPT_LINES)..].join("\n")
+}
+
+/// The message of a merge of the target into its branch that stopped on conflicts: its agent
+/// resolves them and commits the merge; Escouade pushes.
+pub fn merge_conflict_message(
+    lang: Lang,
+    word: &str,
+    number: u64,
+    target: &str,
+    files: &[String],
+) -> String {
+    let files = files.join(", ");
+    tr_in!(
+        lang,
+        "La {word} #{number} est en conflit avec {target}. J'ai mergé {target} dans ta branche : il reste des conflits sur {files}. Résous-les en gardant ce que la {word} apporte et ce que {target} a reçu, vérifie (tests), puis commite le merge. Ne pousse pas : Escouade pousse à la fin de ton tour.",
+        "{word} #{number} conflicts with {target}. I merged {target} into your branch: conflicts remain in {files}. Resolve them, keeping what the {word} brings and what {target} received, check (tests), then commit the merge. Don’t push: Escouade pushes at the end of your turn."
+    )
+}
+
+/// The message of a rebase onto the target that stopped on conflicts (undone): its agent rebases
+/// itself; Escouade pushes with `--force-with-lease`.
+pub fn rebase_conflict_message(lang: Lang, word: &str, number: u64, onto: &str) -> String {
+    tr_in!(
+        lang,
+        "La {word} #{number} est en conflit avec sa cible. Rebase ta branche sur {onto} (git rebase {onto}) et résous ses conflits, vérifie (tests), puis termine le rebase. Ne pousse pas : Escouade pousse (--force-with-lease) à la fin de ton tour.",
+        "{word} #{number} conflicts with its target. Rebase your branch onto {onto} (git rebase {onto}) and resolve its conflicts, check (tests), then finish the rebase. Don’t push: Escouade pushes (--force-with-lease) at the end of your turn."
+    )
+}
+
+pub fn no_feedback(lang: Lang, word: &str, number: u64) -> String {
+    tr_in!(
+        lang,
+        "Aucun retour nouveau à traiter sur la {word} #{number}.",
+        "No new feedback to address on {word} #{number}."
+    )
+}
+
+pub fn not_in_conflict(lang: Lang, word: &str, number: u64) -> String {
+    tr_in!(
+        lang,
+        "La {word} #{number} n'est pas en conflit avec sa cible.",
+        "{word} #{number} doesn’t conflict with its target."
+    )
+}
+
+/// The branch did not move: nothing to push, said by what its agent was given.
+pub fn nothing_done(lang: Lang, kind: PrFix) -> String {
+    match kind {
+        PrFix::Ci => nothing_fixed(lang),
+        PrFix::Reviews => tr_in!(
+            lang,
+            "L'agent n'a rien commité : les retours restent à traiter",
+            "The agent committed nothing: the feedback is still to address"
+        ),
+        PrFix::Merge | PrFix::Rebase => tr_in!(
+            lang,
+            "La branche n'a pas bougé : le conflit reste",
+            "The branch didn’t move: the conflict remains"
+        ),
     }
 }
 
@@ -587,8 +839,8 @@ impl<R: tauri::Runtime> Core<R> {
                 .read()
                 .get(&kind)
                 .map_or_else(|| host.clone(), |p| p.name().to_string());
-            let client = match self.forge_client(&host).await {
-                Ok((c, _)) => c,
+            let (client, me) = match self.forge_client(&host).await {
+                Ok((c, a)) => (c, a.user),
                 Err(e) => {
                     let why = error_text(i18n::ui(), &label, &e);
                     for (id, _) in &list {
@@ -618,8 +870,31 @@ impl<R: tauri::Runtime> Core<R> {
                         } else {
                             None
                         };
-                        self.ticket_pr_read(id, pr, checks.as_deref(), &*client, &repo, &kind)
-                            .await;
+                        // Its feedback, when a thread is open or changes are asked (two calls
+                        // more): counted on its card, never given to its agent by itself (ESC-61).
+                        let feedback = if feedback_worth_reading(pr) {
+                            match tokio::join!(
+                                client.reviews(&repo, *n),
+                                client.comments(&repo, *n)
+                            ) {
+                                (Ok(r), Ok(c)) => Some((r, c)),
+                                _ => None,
+                            }
+                        } else {
+                            None
+                        };
+                        let feedback = feedback.as_ref().map(|(r, c)| (&r[..], &c[..]));
+                        self.ticket_pr_read(
+                            id,
+                            pr,
+                            checks.as_deref(),
+                            feedback,
+                            &me,
+                            &*client,
+                            &repo,
+                            &kind,
+                        )
+                        .await;
                         read += 1;
                     }
                 }
@@ -639,18 +914,33 @@ impl<R: tauri::Runtime> Core<R> {
         });
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn ticket_pr_read(
         self: &Arc<Self>,
         id: &str,
         pr: &PullRequest,
         checks: Option<&[Check]>,
+        feedback: Option<(&[Review], &[ReviewComment])>,
+        me: &str,
         client: &dyn Forge,
         repo: &RepoRef,
         kind: &str,
     ) {
         let claude = self.lang().claude;
-        let news = self.edit_ticket(id, |t| Ok(settle(t, pr, checks, now_ms(), claude)));
-        match news {
+        let read = self.edit_ticket(id, |t| {
+            let news = settle(t, pr, checks, now_ms(), claude);
+            let in_review = t.column == Column::Pr;
+            let grew = match t.pr.as_mut() {
+                Some(tp) if in_review => feedback_read(tp, pr, feedback, me),
+                _ => false,
+            };
+            Ok((news, grew))
+        });
+        let news = read.as_ref().map(|(n, _)| *n).ok();
+        if read.is_ok_and(|(_, grew)| grew) {
+            self.notify_feedback(id);
+        }
+        match news.ok_or(()) {
             Ok(News::Merged) => self.ticket_pr_merged(id).await,
             Ok(News::Closed) => self.notify_ticket(id, false),
             Ok(News::MergeNow(strategy)) => {
@@ -681,6 +971,26 @@ impl<R: tauri::Runtime> Core<R> {
                 }
             }
         }
+    }
+
+    /// New feedback on a ticket « En revue »: the user is told, « L'agent corrige les retours »
+    /// waits on its card.
+    fn notify_feedback(self: &Arc<Self>, id: &str) {
+        let Ok(t) = self.ticket(id) else { return };
+        let Some(tp) = &t.pr else { return };
+        let project = self
+            .project(&t.project_id)
+            .map(|p| p.name)
+            .unwrap_or_default();
+        let body = feedback_alert(i18n::ui(), &t.key, &tp.word, tp.number, tp.feedback);
+        self.alert(
+            crate::agent::NotifyKind::Ticket,
+            project,
+            body,
+            crate::model::UiEvent::FocusBoard {
+                project_id: t.project_id.clone(),
+            },
+        );
     }
 
     /// How the repository lets the pull request merge: as its plugin reads it, else as its
@@ -1003,7 +1313,6 @@ impl<R: tauri::Runtime> Core<R> {
         tp: &TicketPr,
         agent_id: &str,
     ) -> Result<()> {
-        let project = self.project(&t.project_id)?;
         let repo = RepoRef {
             namespace: tp.namespace.clone(),
             name: tp.name.clone(),
@@ -1029,39 +1338,7 @@ impl<R: tauri::Runtime> Core<R> {
                 "The CI of {word} #{n} has no failed check."
             ));
         }
-        // Its branch gone from the project (deleted by hand): made again from its remote.
-        if !git::branch_exists(&project.path, &tp.branch).await {
-            if let Err(e) = git::fetch_branch(&project.path, &tp.branch).await {
-                bail!(tr!(
-                    "Branche {b} introuvable, ici comme sur le dépôt distant : {e:#}",
-                    "Branch {b} not found, here or on the remote: {e:#}",
-                    b = tp.branch
-                ));
-            }
-        }
-        let from = git::commit_of(&project.path, &tp.branch).await.ok();
-        self.edit_ticket(id, |x| {
-            if let Some(p) = x.pr.as_mut().filter(|p| p.fixing.is_some()) {
-                p.fix_from = from.clone();
-            }
-            Ok(())
-        })?;
-        // Archived at the validation: restored, its worktree made again from its branch.
-        let archived = self.agent(agent_id)?.lock().meta.archived;
-        if archived {
-            self.archive_agent(agent_id, false).await?;
-        }
-        let wt = self.agent(agent_id)?.lock().meta.worktree.clone();
-        if !wt
-            .as_ref()
-            .is_some_and(|w| std::path::Path::new(&w.path).is_dir())
-        {
-            bail!(tr!(
-                "Worktree non recréé depuis {b}",
-                "Worktree not recreated from {b}",
-                b = tp.branch
-            ));
-        }
+        self.restore_for_fix(id, t, tp, agent_id).await?;
         let pr = PullRequest {
             number: tp.number,
             url: tp.url.clone(),
@@ -1094,6 +1371,17 @@ impl<R: tauri::Runtime> Core<R> {
             FixEnd::Stopped(why) => Some(why),
             FixEnd::Finished => None,
         };
+        self.pr_fix_finish(ticket_id, agent_id, why).await;
+        true
+    }
+
+    /// A fix's end (its agent's turn over, or a branch brought up to its target without a
+    /// conflict): pushed, the ticket « En revue » as before and its agent archived again; else the
+    /// card says why (`why`, or the push's) and the agent stays restored.
+    async fn pr_fix_finish(self: &Arc<Self>, ticket_id: &str, agent_id: &str, why: Option<String>) {
+        let Ok(t) = self.ticket(ticket_id) else {
+            return;
+        };
         let tp = t.pr.clone().unwrap_or_default();
         let wt = self
             .agent(agent_id)
@@ -1115,13 +1403,49 @@ impl<R: tauri::Runtime> Core<R> {
             Ok(())
         });
         if done {
+            if tp.fix_kind == PrFix::Reviews {
+                if let Some(wt) = &wt {
+                    self.reply_under_threads(&t, &tp, wt).await;
+                }
+            }
             self.wake_ticket_prs();
             self.fix_cleanup(&t, agent_id, wt).await;
         } else {
             self.notify_ticket(ticket_id, false);
         }
         self.schedule();
-        true
+    }
+
+    /// Its feedback's fixes pushed, with the board's « Répondre sous les fils » on (off by
+    /// default): « Corrigé dans abc1234 » under each thread its agent was given. A thread is never
+    /// resolved by Escouade; an answer refused is only logged.
+    async fn reply_under_threads(&self, t: &Ticket, tp: &TicketPr, wt: &crate::model::Worktree) {
+        let on = self
+            .project(&t.project_id)
+            .is_ok_and(|p| p.board.reply_threads);
+        if !on || tp.fix_threads.is_empty() {
+            return;
+        }
+        let Ok(commit) = git::commit_of(&wt.path, "HEAD").await else {
+            return;
+        };
+        let (client, _) = match self.forge_client(&tp.host).await {
+            Ok(c) => c,
+            Err(e) => {
+                log::info!("ticket {}: no answer under its threads: {e:#}", t.key);
+                return;
+            }
+        };
+        let repo = RepoRef {
+            namespace: tp.namespace.clone(),
+            name: tp.name.clone(),
+        };
+        let body = reply_text(self.lang().claude, &commit);
+        for id in &tp.fix_threads {
+            if let Err(e) = client.reply(&repo, tp.number, id, &body).await {
+                log::info!("ticket {}: no answer under {id}: {e:#}", t.key);
+            }
+        }
     }
 
     /// What its agent did goes to the host: committed (else nothing is pushed), new since the fix
@@ -1136,10 +1460,14 @@ impl<R: tauri::Runtime> Core<R> {
         }
         let now = git::commit_of(&wt.path, "HEAD").await.ok();
         if now.is_some() && now == tp.fix_from {
-            return Err(nothing_fixed(lang));
+            return Err(nothing_done(lang, tp.fix_kind));
         }
-        git::push_branch(&wt.path, &wt.branch)
-            .await
+        let pushed = if tp.fix_kind == PrFix::Rebase {
+            git::push_branch_lease(&wt.path, &wt.branch).await
+        } else {
+            git::push_branch(&wt.path, &wt.branch).await
+        };
+        pushed
             .map(|_| ())
             .map_err(|e| not_pushed(lang, &board::first_line(&format!("{e:#}"))))
     }
@@ -1170,6 +1498,292 @@ impl<R: tauri::Runtime> Core<R> {
             self.remove_worktree_of(t, &project, &wt, proc, ports, true)
                 .await;
         }
+    }
+}
+
+impl<R: tauri::Runtime> Core<R> {
+    /// What « L'agent corrige les retours » and « L'agent met à jour la branche » ask first: the
+    /// ticket « En revue », no fix under way, its agent here and resting.
+    fn pr_fix_preflight(&self, id: &str) -> Result<(Ticket, TicketPr, String)> {
+        let t = self.ticket(id)?;
+        let Some(tp) = t.pr.clone().filter(|_| t.column == Column::Pr) else {
+            bail!(tr!(
+                "Ce ticket n’est pas en revue.",
+                "This ticket isn’t in review."
+            ));
+        };
+        if tp.fixing.is_some() {
+            bail!(tr!(
+                "Son agent travaille déjà sur sa {w}.",
+                "Its agent is already working on its {w}.",
+                w = tp.word
+            ));
+        }
+        let Some(agent_id) = t.agent_id.clone().filter(|a| self.agent(a).is_ok()) else {
+            bail!(tr!(
+                "Ce ticket n’a plus d’agent.",
+                "This ticket no longer has an agent."
+            ));
+        };
+        if self
+            .live_agent(&agent_id)
+            .is_some_and(|m| m.status.is_active())
+        {
+            bail!(tr!(
+                "Son agent travaille : attends la fin de son tour.",
+                "Its agent is at work: wait for the end of its turn."
+            ));
+        }
+        Ok((t, tp, agent_id))
+    }
+
+    /// A fix that failed once it began: the card says why, and the error goes back to the caller.
+    fn pr_fix_failed(self: &Arc<Self>, id: &str, e: anyhow::Error) -> anyhow::Error {
+        let why = board::first_line(&format!("{e:#}"));
+        let _ = self.edit_ticket(id, |x| {
+            if fixing(x) {
+                fix_failed(x, why.clone());
+            }
+            Ok(())
+        });
+        self.schedule();
+        e
+    }
+
+    /// Its agent made ready to work on its pull request again: its branch here (taken from the
+    /// remote when it went), the commit it starts from kept, the agent restored from the archive
+    /// with its worktree made again from its branch.
+    async fn restore_for_fix(
+        self: &Arc<Self>,
+        id: &str,
+        t: &Ticket,
+        tp: &TicketPr,
+        agent_id: &str,
+    ) -> Result<crate::model::Worktree> {
+        let project = self.project(&t.project_id)?;
+        // Its branch gone from the project (deleted by hand): made again from its remote.
+        if !git::branch_exists(&project.path, &tp.branch).await {
+            if let Err(e) = git::fetch_branch(&project.path, &tp.branch).await {
+                bail!(tr!(
+                    "Branche {b} introuvable, ici comme sur le dépôt distant : {e:#}",
+                    "Branch {b} not found, here or on the remote: {e:#}",
+                    b = tp.branch
+                ));
+            }
+        }
+        let from = git::commit_of(&project.path, &tp.branch).await.ok();
+        self.edit_ticket(id, |x| {
+            if let Some(p) = x.pr.as_mut().filter(|p| p.fixing.is_some()) {
+                p.fix_from = from.clone();
+            }
+            Ok(())
+        })?;
+        // Archived at the validation: restored, its worktree made again from its branch.
+        let archived = self.agent(agent_id)?.lock().meta.archived;
+        if archived {
+            self.archive_agent(agent_id, false).await?;
+        }
+        let wt = self.agent(agent_id)?.lock().meta.worktree.clone();
+        match wt.filter(|w| std::path::Path::new(&w.path).is_dir()) {
+            Some(wt) => Ok(wt),
+            None => bail!(tr!(
+                "Worktree non recréé depuis {b}",
+                "Worktree not recreated from {b}",
+                b = tp.branch
+            )),
+        }
+    }
+
+    /// « L'agent corrige les retours » (ESC-61), on a click only, the autopilot's too: its agent
+    /// gets the review's comments not resolved that came since its last push of fixes, each with
+    /// its file, its line, the lines of the diff it is on, its author and its text; restored
+    /// first, as for its CI. It pushes; Escouade pushes again at the end of its turn.
+    pub async fn ticket_pr_fix_reviews(self: &Arc<Self>, id: &str) -> Result<()> {
+        let (t, tp, agent_id) = self.pr_fix_preflight(id)?;
+        if tp.closed || tp.state != PrState::Open {
+            bail!(tr!(
+                "Sa {w} n’est plus ouverte.",
+                "Its {w} is no longer open.",
+                w = tp.word
+            ));
+        }
+        let repo = RepoRef {
+            namespace: tp.namespace.clone(),
+            name: tp.name.clone(),
+        };
+        let (client, account) = self.forge_client(&tp.host).await?;
+        let reviews = client.reviews(&repo, tp.number).await?;
+        let comments = client.comments(&repo, tp.number).await?;
+        let (rs, cs) = new_feedback(&tp, &account.user, &reviews, &comments);
+        if rs.is_empty() && cs.is_empty() {
+            let _ = self.edit_ticket(id, |x| {
+                if let Some(p) = x.pr.as_mut() {
+                    p.feedback = 0;
+                }
+                Ok(())
+            });
+            bail!(no_feedback(i18n::ui(), &tp.word, tp.number));
+        }
+        let rs: Vec<Review> = rs.into_iter().cloned().collect();
+        let mut cs: Vec<ReviewComment> = cs.into_iter().cloned().collect();
+        let ids: Vec<String> = rs
+            .iter()
+            .map(review_key)
+            .chain(cs.iter().map(|c| c.id.clone()))
+            .collect();
+        let threads: Vec<String> = cs
+            .iter()
+            .filter(|c| c.path.is_some())
+            .map(|c| c.id.clone())
+            .collect();
+        self.edit_ticket(id, |x| {
+            // Checked again under the lock: a second click meanwhile.
+            if x.column != Column::Pr
+                || x.agent_id.as_deref() != Some(&agent_id)
+                || x.pr.as_ref().is_none_or(|p| p.fixing.is_some())
+            {
+                bail!(tr!(
+                    "Ce ticket a changé entre-temps.",
+                    "This ticket changed meanwhile."
+                ));
+            }
+            fix_begins_as(x, PrFix::Reviews, None, now_ms());
+            if let Some(p) = x.pr.as_mut() {
+                p.fix_ids = ids.clone();
+                p.fix_threads = threads.clone();
+                p.feedback = 0;
+            }
+            Ok(())
+        })?;
+        let sent = async {
+            let wt = self.restore_for_fix(id, &t, &tp, &agent_id).await?;
+            // The lines a comment is on, from the branch when the host gives none.
+            for c in &mut cs {
+                c.excerpt = match (c.excerpt.take(), &c.path, c.line) {
+                    (Some(hunk), _, _) => Some(excerpt_tail(&hunk)),
+                    (None, Some(path), Some(line)) => {
+                        git::lines_at(&wt.path, "HEAD", path, line, 3, 1).await
+                    }
+                    _ => None,
+                };
+            }
+            let pr = PullRequest {
+                number: tp.number,
+                url: tp.url.clone(),
+                ..Default::default()
+            };
+            let message = crate::agentprs::reviews_message(
+                self.lang().claude,
+                &tp.word,
+                &pr,
+                &tp.branch,
+                &rs,
+                &cs,
+            );
+            self.send_message(&agent_id, message, Vec::new()).await
+        }
+        .await;
+        sent.map_err(|e| self.pr_fix_failed(id, e))
+    }
+
+    /// « L'agent met à jour la branche » (ESC-61): its pull request in conflict with its target,
+    /// the target (fetched) is merged into its branch in its agent's worktree, restored first; or
+    /// rebased onto when the board says so. Without a conflict, Escouade pushes at once
+    /// (`--force-with-lease` after a rebase). With some, as the board treats conflicts
+    /// (`BoardSettings::conflict`): « abort » undoes it and the card names the files, else its
+    /// agent resolves them (the click is the user's say) and Escouade pushes at the end of its turn.
+    pub async fn ticket_pr_update_branch(self: &Arc<Self>, id: &str) -> Result<()> {
+        let (t, tp, agent_id) = self.pr_fix_preflight(id)?;
+        if !updatable(&t) {
+            bail!(not_in_conflict(i18n::ui(), &tp.word, tp.number));
+        }
+        let project = self.project(&t.project_id)?;
+        let s = project.board.clone();
+        let kind = update_kind(&s);
+        self.edit_ticket(id, |x| {
+            if !updatable(x) || x.agent_id.as_deref() != Some(&agent_id) {
+                bail!(tr!(
+                    "Ce ticket a changé entre-temps.",
+                    "This ticket changed meanwhile."
+                ));
+            }
+            fix_begins_as(x, kind, None, now_ms());
+            Ok(())
+        })?;
+        let lang = self.lang().claude;
+        let run = async {
+            let wt = self.restore_for_fix(id, &t, &tp, &agent_id).await?;
+            if !git::remotes(&project.path).await.is_empty() {
+                git::fetch(&project.path, true).await?;
+            }
+            let onto = self.update_base(&project.path, &tp.target).await;
+            let shown = onto.trim_start_matches("refs/remotes/").to_string();
+            let verb = if kind == PrFix::Rebase {
+                "rebase"
+            } else {
+                "merge"
+            };
+            let args: Vec<&str> = if kind == PrFix::Rebase {
+                vec!["rebase", &onto]
+            } else {
+                vec!["merge", "--no-edit", &onto]
+            };
+            let done = git::run_hooks(&wt.path, &args).await;
+            let e = match done {
+                // Clean: nothing for its agent, pushed now.
+                Ok(_) => return Ok(None),
+                Err(e) => e,
+            };
+            let files = git::unmerged(&wt.path).await;
+            if kind == PrFix::Rebase || s.conflict == "abort" || files.is_empty() {
+                let _ = git::run(&wt.path, &[verb, "--abort"]).await;
+            }
+            if files.is_empty() {
+                return Err(e.context(tr!(
+                    "Mise à jour de {b} depuis {shown} impossible",
+                    "Can’t update {b} from {shown}",
+                    b = tp.branch
+                )));
+            }
+            if s.conflict == "abort" {
+                bail!(crate::tickets::conflict_reason(
+                    i18n::ui(),
+                    &tp.target,
+                    &files,
+                    false
+                ));
+            }
+            Ok(Some(if kind == PrFix::Rebase {
+                rebase_conflict_message(lang, &tp.word, tp.number, &shown)
+            } else {
+                merge_conflict_message(lang, &tp.word, tp.number, &tp.target, &files)
+            }))
+        }
+        .await;
+        match run {
+            Err(e) => Err(self.pr_fix_failed(id, e)),
+            Ok(None) => {
+                self.pr_fix_finish(id, &agent_id, None).await;
+                Ok(())
+            }
+            Ok(Some(message)) => self
+                .send_message(&agent_id, message, Vec::new())
+                .await
+                .map_err(|e| self.pr_fix_failed(id, e)),
+        }
+    }
+
+    /// What the target of a pull request is brought from: its remote's branch as fetched, else the
+    /// local one.
+    async fn update_base(&self, repo: &str, target: &str) -> String {
+        if let Some(up) = git::upstream_of(repo, target).await {
+            return up.tracking;
+        }
+        let remote = format!("refs/remotes/origin/{target}");
+        if git::commit_of(repo, &remote).await.is_ok() {
+            return remote;
+        }
+        target.to_string()
     }
 }
 
@@ -1247,3 +1861,7 @@ async fn read_prs(client: &dyn Forge, repo: &RepoRef, numbers: &[u64]) -> Result
 #[cfg(test)]
 #[path = "ticketprs_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "ticketprs_review_tests.rs"]
+mod review_tests;

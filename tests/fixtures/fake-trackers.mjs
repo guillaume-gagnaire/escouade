@@ -805,7 +805,18 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
           isResolved: false,
           path: 'src/app.ts',
           line: 1,
-          comments: { nodes: [{ databaseId: 1, author: { login: 'bob' }, body: 'Ce nom est peu clair.' }] },
+          // Written after the pull request opened, on the lines of its diff (ESC-61).
+          comments: {
+            nodes: [
+              {
+                databaseId: 1,
+                author: { login: 'bob' },
+                body: 'Ce nom est peu clair.',
+                createdAt: new Date().toISOString(),
+                diffHunk: '@@ -0,0 +1 @@\n+export const login = () => {};',
+              },
+            ],
+          },
         };
         return send(200, { data: { repository: { pullRequest: { reviewThreads: { nodes: x?.changesRequested ? [thread] : [] } } } } });
       }

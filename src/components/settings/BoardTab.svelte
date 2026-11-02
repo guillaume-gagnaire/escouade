@@ -42,6 +42,8 @@
   const STRATEGY_IDS: BoardSettings['strategy'][] = ['merge', 'squash', 'rebase'];
   const strategies = $derived(STRATEGY_IDS.map((value) => ({ value, label: t(`boardSettings.tab.strategies.${value}`) })));
   const CONFLICT_IDS: BoardSettings['conflict'][] = ['ask', 'agent', 'abort'];
+  const PR_UPDATE_IDS: BoardSettings['prUpdate'][] = ['merge', 'rebase'];
+  const prUpdates = $derived(PR_UPDATE_IDS.map((value) => ({ value, label: t(`boardSettings.tab.prUpdates.${value}`) })));
   const conflicts = $derived(CONFLICT_IDS.map((value) => ({ value, label: t(`boardSettings.tab.conflicts.${value}`) })));
   const PARALLEL = [1, 2, 3, 4, 5, 6].map((n) => ({ value: n, label: String(n) }));
   /** As the backend offers them (`board::QUOTA_PAUSES`). */
@@ -112,6 +114,23 @@
         </label>
       {/if}
     </div>
+  {/if}
+  {#if b.action === 'pr'}
+    <!-- After its review (ESC-61): answers under the threads its agent fixed, off by default (never resolved); how a conflict with the target is settled. -->
+    <Row label={t('boardSettings.tab.replyThreads')} desc={t('boardSettings.tab.replyThreadsDesc')}>
+      <Switch label={t('boardSettings.tab.replyThreads')} bind:on={b.replyThreads} />
+    </Row>
+    <Row label={t('boardSettings.tab.prUpdate')} desc={t('boardSettings.tab.prUpdateDesc')}>
+      <span class="segmented" role="group" aria-label={t('boardSettings.tab.prUpdate')} data-pr-update>
+        {#each prUpdates as u (u.value)}
+          <button
+            class:on={(b.prUpdate || 'merge') === u.value}
+            aria-pressed={(b.prUpdate || 'merge') === u.value}
+            onclick={() => (b.prUpdate = u.value)}>{u.label}</button
+          >
+        {/each}
+      </span>
+    </Row>
   {/if}
 </Group>
 

@@ -927,6 +927,7 @@ impl Forge for Github {
                     author: author.clone(),
                     state,
                     body: r["body"].as_str().unwrap_or("").to_string(),
+                    created: instant(&r["submitted_at"]).unwrap_or(0),
                 };
                 // A comment alone does not take back an approval or a request for changes.
                 match last.iter_mut().find(|x| x.author == author) {
@@ -955,7 +956,7 @@ impl Forge for Github {
                     "query Threads($owner: String!, $name: String!, $number: Int!) { \
                      repository(owner: $owner, name: $name) { pullRequest(number: $number) { \
                      reviewThreads(first: 100) { nodes { isResolved path line \
-                     comments(first: 50) { nodes { databaseId author { login } body } } } } } } }",
+                     comments(first: 50) { nodes { databaseId author { login } body createdAt diffHunk } } } } } } }",
                     json!({ "owner": repo.namespace, "name": repo.name, "number": number }),
                 )
                 .await?;
@@ -976,6 +977,11 @@ impl Forge for Github {
                         path: t["path"].as_str().map(str::to_string),
                         line: t["line"].as_u64().map(|l| l as u32),
                         resolved: t["isResolved"].as_bool().unwrap_or(false),
+                        created: instant(&c["createdAt"]).unwrap_or(0),
+                        excerpt: c["diffHunk"]
+                            .as_str()
+                            .filter(|h| !h.is_empty())
+                            .map(str::to_string),
                     });
                 }
             }
@@ -994,6 +1000,8 @@ impl Forge for Github {
                     path: None,
                     line: None,
                     resolved: false,
+                    created: instant(&c["created_at"]).unwrap_or(0),
+                    excerpt: None,
                 });
             }
             Ok(out)
