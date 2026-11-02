@@ -35,6 +35,7 @@
   import AccountModal from './components/modals/AccountModal.svelte';
   import CommitModal from './components/modals/CommitModal.svelte';
   import PrModal from './components/modals/PrModal.svelte';
+  import CiModal from './components/modals/CiModal.svelte';
   import ConfirmModal from './components/modals/ConfirmModal.svelte';
   import MergeReposModal from './components/modals/MergeReposModal.svelte';
   import CommitReposModal from './components/modals/CommitReposModal.svelte';
@@ -306,6 +307,8 @@
   <CommitModal projectId={app.modal.projectId} agentId={app.modal.agentId} resume={app.modal.resume} />
 {:else if app.modal?.kind === 'pullRequest'}
   <PrModal agentId={app.modal.agentId} />
+{:else if app.modal?.kind === 'ci'}
+  <CiModal of={app.modal.of} projectId={app.modal.projectId} />
 {:else if app.modal?.kind === 'mergeRepos'}
   <MergeReposModal agentId={app.modal.agentId} />
 {:else if app.modal?.kind === 'newBranch'}

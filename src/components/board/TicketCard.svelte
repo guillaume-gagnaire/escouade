@@ -26,6 +26,8 @@
   import type { Project, Ticket } from '../../lib/types';
   import { cardActivity } from '../../lib/sidebar';
   import type { IconName } from '../../lib/icons';
+  import { pushedCi, redTargetHolds, targetCiOf } from '../../lib/branch-ci';
+  import CiPill from '../CiPill.svelte';
   import EngineMark from '../EngineMark.svelte';
   import Icon from '../Icon.svelte';
   import RejectForm from './RejectForm.svelte';
@@ -73,6 +75,10 @@
   const issue = $derived(app.boardIssues[project.id] ?? null);
   /** Why none starts for now (a quota, a usage limit): that of the accounts the project goes to. */
   const pause = $derived(pauseOf(project));
+  /** « Pause quand la CI de la cible est rouge » (ESC-63) holds the autopilot's tickets back now. */
+  const redTarget = $derived(redTargetHolds(s, targetCiOf(project)));
+  /** The branch it pushed without a pull request (« Valider et pousser »), and its CI. */
+  const pushed = $derived(pushedCi(ticket));
   const agent = $derived(ticket.agentId ? app.agents[ticket.agentId] : undefined);
   /** Of several repositories (ESC-169): those its agent changed, while it is tested. */
   const changedRepos = $derived(ticket.column === 'review' && agent && isMulti(project) ? touchedRepos(project, agent).map(repoLabel) : []);
@@ -241,7 +247,7 @@
     if ((e.target as Element).closest('input, textarea')) return;
     if (theirs) {
       // Another one's ticket (ESC-190, choice 118): launched by hand, changed for the team, hidden here or deleted for all.
-      const run = ticket.column === 'todo' && canStart(ticket, s, busyCount, quota, issue, pause);
+      const run = ticket.column === 'todo' && canStart(ticket, s, busyCount, quota, issue, pause, redTarget);
       menu.show(e, [
         ...(run ? [{ label: t('board.card.launch'), onClick: launch }] : []),
         ...(ticket.column === 'todo' ? [{ label: t('common.edit'), onClick: onedit }] : []),
@@ -502,7 +508,13 @@
         onclick={(e) => act(e, () => app.run(openUrl(p.url)))}><Icon name={prIcon(pull)} size={12} />{p.word} #{p.number}</button
       >
       <span class="prstate {prStateKey(p)}">{prStateWord(p)}</span>
-      {#if ci}<span class="prci {p.checks}">{ci}</span>{/if}
+      {#if ci}<button
+          class="prci {p.checks}"
+          data-ticket-ci
+          use:tip={t('board.ci.pillTitle', { branch: p.branch, state: ci })}
+          onclick={(e) => act(e, () => (app.modal = { kind: 'ci', of: { kind: 'ticketPr', id: ticket.id }, projectId: project.id }))}
+          >{ci}</button
+        >{/if}
     </div>
     {#if facts.length}
       <!-- The conflict with its target is always the last, in red: what to fix first. -->
@@ -604,6 +616,10 @@
         >{#if outcome.icon}<Icon name={outcome.icon} size={14} />{/if}{outcome.text}</span
       >
     {/if}
+    {#if pushed}
+      <!-- Pushed without a pull request (ESC-63): its branch's CI, its jobs on a click. -->
+      <div class="cirow" data-ticket-pushed-ci><CiPill ci={pushed} of={{ kind: 'pushed', id: ticket.id }} projectId={project.id} /></div>
+    {/if}
   {/if}
 
   {#if ticket.column !== 'done' && ticket.column !== 'pr' && ticket.criteria.length}
@@ -681,13 +697,13 @@
 
   <!-- The card's last line: why a ticket to do waits, or what the agent of one under way does and what it cost. -->
   {#if ticket.column === 'todo'}
-    {@const why = waitLabel(ticket, queueIndex, s, busyCount, issue, pause, awaited)}
+    {@const why = waitLabel(ticket, queueIndex, s, busyCount, issue, pause, awaited, redTarget)}
     <div class="act" class:theirs={theirs && !ticket.forced}>
       <Icon name={theirs && !ticket.forced ? 'team' : awaited.length && !ticket.forced ? 'link' : 'clock'} size={14} /><span
         class="grow"
         use:tip={{ text: why, cut: true }}>{why}</span
       >
-      {#if canStart(ticket, s, busyCount, quota, issue, pause)}
+      {#if canStart(ticket, s, busyCount, quota, issue, pause, redTarget)}
         <button class="btn small" onclick={(e) => act(e, launch)}><Icon name="play" size={14} />{t('board.card.launch')}</button>
       {/if}
     </div>
@@ -1167,7 +1183,19 @@
     color: var(--muted);
   }
   .prci {
+    padding: 0;
+    border: none;
+    background: none;
     color: var(--muted);
+    font: inherit;
+    cursor: pointer;
+  }
+  .prci:hover {
+    text-decoration: underline;
+  }
+  .cirow {
+    display: flex;
+    min-width: 0;
   }
   .prci.success {
     color: var(--run);

@@ -1095,6 +1095,45 @@ export interface Ticket {
   decisions?: DecisionRef[];
   /** Its pull request, opened through its host's API by its validation (ESC-59), as last read. */
   pr?: TicketPr | null;
+  /** The branch its validation pushed without a pull request (« Valider et pousser », ESC-63), and its CI as last read. */
+  pushed?: BranchCi | null;
+}
+
+/** The CI of a branch without a pull request (ESC-63, `branchci::BranchCi`): a project's target, or a ticket's pushed branch. */
+export interface BranchCi {
+  kind: string;
+  host: string;
+  namespace: string;
+  name: string;
+  branch: string;
+  checks: CheckState | null;
+  checksTotal: number;
+  checksFailed: number;
+  failed: FailedCheck[];
+  /** Red since when (ms); null while it is not red. */
+  redSince: number | null;
+  checkedAt: number | null;
+  /** Why its last reading failed, and since when (ms): the last state stays. */
+  error: string | null;
+  errorSince: number | null;
+  /** Its host runs failed jobs again. */
+  rerun: boolean;
+}
+
+/** Whose CI a window shows (`branchci::CiOf`): a project's target, a ticket's pushed branch or pull request, an agent's branch. */
+export interface CiOf {
+  kind: 'target' | 'pushed' | 'ticketPr' | 'agent';
+  id: string;
+}
+
+/** The checks of a CI, as its window shows them (`branchci::CiDetail`). */
+export interface CiDetail {
+  branch: string;
+  number?: number;
+  word: string;
+  hostName: string;
+  checks: PrCheck[];
+  can: PrDetail['can'];
 }
 
 /** The pull request of a ticket « En revue » (ESC-59), as its host last told it. */
@@ -1267,6 +1306,8 @@ export interface BoardSettings {
   effort: string;
   mode: string;
   autopilot: boolean;
+  /** « Pause quand la CI de la cible est rouge » (ESC-63): off by default. */
+  pauseOnRedTarget?: boolean;
   prefix: string;
   nextNumber: number;
 }
@@ -1501,6 +1542,8 @@ export interface Agent {
   /** The plugin that serves its code host does not answer (switched off, stopped, crashed): why, said on its card; its
    * pull requests read last stay. Absent when it answers. */
   prDown?: string;
+  /** Its branch pushed without a pull request (ESC-63): its CI as last read, the pill under its card. */
+  branchCi?: BranchCi | null;
   /** The ticket's protocol, appended to Claude Code's system prompt. */
   appendPrompt: string | null;
   /** First of the 10 ports reserved for its test launches. */
@@ -2527,6 +2570,8 @@ export type UiEvent =
   | { type: 'boardIssue'; projectId: string; issue: string | null }
   /** Why no ticket of a project that goes to any account starts for now, or null once they may; `projects`: the same for the paused projects that prefer an account. */
   | { type: 'autopilotPause'; pause: AutopilotPause | null; projects?: Record<string, AutopilotPause> }
+  /** The CI of a project's target branch as last read (ESC-63), or null when there is none to show. */
+  | { type: 'targetCi'; projectId: string; ci: BranchCi | null }
   | { type: 'toast'; text: string }
   /** The settings changed a language: the window switches to it at once. */
   | { type: 'language'; lang: LangInfo }

@@ -18,6 +18,7 @@ mod attachfiles;
 #[cfg(test)]
 mod attachfiles_tests;
 mod board;
+mod branchci;
 #[cfg(test)]
 mod branches_tests;
 mod clipboard;
@@ -856,6 +857,12 @@ pub fn run() {
                 commands::ticket_resolve_conflict,
                 commands::ticket_dismiss,
                 commands::ticket_prs_refresh,
+                commands::target_cis,
+                commands::ci_refresh,
+                commands::ci_detail,
+                commands::ci_job_log,
+                commands::ci_rerun,
+                commands::ci_log_to_agent,
                 commands::ticket_finish_anyway,
                 commands::ticket_pr_merge,
                 commands::ticket_pr_stop_waiting,

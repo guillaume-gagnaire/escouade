@@ -727,6 +727,35 @@ async fn the_instance_is_asked_its_version_once_per_client() {
     assert_eq!(versions, 1);
 }
 
+/// A branch's checks (ESC-63): the statuses of its last commit with their Actions jobs; its failed
+/// runs run again on Gitea.
+#[tokio::test]
+async fn a_branchs_checks_are_its_last_commits_statuses_and_run_again() {
+    let server = instance(GITEA).await;
+    let checks = client(&server).branch_checks(&repo(), "dev").await.unwrap();
+    assert!(!checks.is_empty());
+    assert!(checks.iter().any(|c| c.job.is_some()), "{checks:?}");
+    server.on(
+        "POST",
+        "/repos/ada/notes/actions/runs/900/rerun-failed-jobs",
+        200,
+        json!({}),
+    );
+    let n = client(&server)
+        .rerun_failed_of_branch(&repo(), "dev")
+        .await
+        .unwrap();
+    assert!(n >= 1);
+    assert_eq!(
+        n,
+        writes_to(
+            &server,
+            "/repos/ada/notes/actions/runs/900/rerun-failed-jobs"
+        )
+        .len()
+    );
+}
+
 /// How a pull request may merge (ESC-62): the repository's merge styles, and auto-merge only when
 /// its target branch is protected.
 #[tokio::test]

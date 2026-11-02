@@ -31,6 +31,8 @@ import type {
   Agent,
   AgentStatus,
   AutopilotPause,
+  BranchCi,
+  CiOf,
   DiscussionPreset,
   DocsConflict,
   FileTree,
@@ -153,6 +155,8 @@ export type Modal =
   | { kind: 'commit'; projectId: string; agentId: string | null; resume?: CommitDraft }
   /** « Ouvrir une PR » on an ordinary agent's branch (ESC-64): its title and description proposed, then read and edited. */
   | { kind: 'pullRequest'; agentId: string }
+  /** The jobs of a CI (ESC-63): a project's target, a ticket's pushed branch or pull request; their logs, their re-run. */
+  | { kind: 'ci'; of: CiOf; projectId: string }
   /** « Merger… » of an agent of several repositories (ESC-169): each repository checked, all or nothing. */
   | { kind: 'mergeRepos'; agentId: string }
   /**
@@ -388,6 +392,8 @@ class AppState {
   docsEdit = $state<string | null>(null);
   /** Why no ticket of a project's board starts (its target branch has no commit yet, or is gone), by project. */
   boardIssues = $state<Record<string, string>>({});
+  /** The CI of each project's target branch as last read (ESC-63): the pill of its board's header. */
+  targetCi = $state<Record<string, BranchCi>>({});
   /** What each project's docs have to share (ESC-257), by project id: the status bar says « N changements à partager ». */
   docsShare = $state<Record<string, { pending: number; conflict: DocsConflict | null }>>({});
   /** The pages of each project being compared to the code (ESC-263). */
@@ -607,6 +613,11 @@ class AppState {
     this.agents = Object.fromEntries(s.agents.map((a) => [a.id, a]));
     this.tickets = Object.fromEntries((s.tickets ?? []).map((t) => [t.id, t]));
     this.boardIssues = { ...s.boardIssues };
+    // Read by the loop of the pull requests a little after the start: what it read already, those the events bring after.
+    api
+      .targetCis()
+      .then((m) => (this.targetCi = { ...m, ...this.targetCi }))
+      .catch(() => {});
     this.setupOutput = { ...s.setupOutput };
     this.autopilotPause = s.autopilotPause ?? null;
     this.projectPauses = s.projectPauses ?? {};
@@ -753,6 +764,10 @@ class AppState {
       case 'boardIssue':
         if (e.issue) this.boardIssues[e.projectId] = e.issue;
         else delete this.boardIssues[e.projectId];
+        break;
+      case 'targetCi':
+        if (e.ci) this.targetCi[e.projectId] = e.ci;
+        else delete this.targetCi[e.projectId];
         break;
       case 'autopilotPause':
         this.autopilotPause = e.pause;

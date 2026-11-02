@@ -1248,11 +1248,12 @@ But : Escouade suit le travail des agents après le push, jusqu'à la production
   - Rien ne part sans lui.
 
 ### La CI
-- [ ] **La branche cible** : une pastille dans l'en-tête du projet (« main ✗ depuis 2 h »). Réglage du pilote auto « Pause quand la CI de la cible est rouge », désactivé par défaut.
-- [ ] **Les branches poussées sans PR** (« Valider et pousser », agents) : la même pastille sur la carte.
+- [x] **La branche cible** : une pastille dans l'en-tête du projet (« main ✗ depuis 2 h »). Réglage du pilote auto « Pause quand la CI de la cible est rouge », désactivé par défaut. *Fait (ESC-63) : pastille dans l'en-tête du Kanban, lue dans la boucle des PR des tickets (`branchci.rs`), `forge/branchChecks` servi par les 5 plugins.*
+- [x] **Les branches poussées sans PR** (« Valider et pousser », agents) : la même pastille sur la carte. *Fait (ESC-63) : carte « Terminé » du ticket, et sous la carte d'un agent sans PR dont la branche suit le dépôt distant.*
 - [ ] **Les sources** : checks et statuts de GitHub, pipelines de GitLab, statuts de commit de Bitbucket, statuts combinés de Gitea. Une CI tierce (Jenkins, CircleCI, Buildkite…) ne donne qu'un statut et une adresse, pas de journal : la carte le dit.
-- [ ] **Le journal d'un job**, en lecture seule dans Escouade comme un terminal, avec « Envoyer à un agent ».
-- [ ] **« Relancer les jobs en échec »**, quand l'hébergeur le permet : GitHub Actions et GitLab ; Bitbucket Pipelines et Gitea Actions, à vérifier.
+- [x] **Le journal d'un job**, en lecture seule dans Escouade comme un terminal, avec « Envoyer à un agent ». *Fait (ESC-63) : fenêtre « CI de … » (CiModal), couleurs ANSI, menu des agents du projet.*
+- [x] **« Relancer les jobs en échec »**, quand l'hébergeur le permet : GitHub Actions et GitLab ; Bitbucket Pipelines et Gitea Actions, à vérifier. *Fait (ESC-63) pour une PR et pour une branche (`forge/rerunFailedOfBranch`) : GitHub, GitLab, Gitea (selon la version), Azure Pipelines ; Bitbucket répond `Unsupported` et la fenêtre le dit.*
+  - [ ] **À essayer en vrai** (ESC-53, ESC-70, avec l'utilisateur ; aucun essai n'a écrit sur un vrai dépôt) : la pastille de la cible et d'une branche poussée sur chaque hébergeur ; la relance d'une branche sur GitHub Actions, GitLab, Gitea / Forgejo et Azure Pipelines ; la relance de Bitbucket Pipelines (`POST …/pipelines/` avec la cible du run ?) ; une branche au nom avec `/` dans `commits/{ref}` de GitHub ; `refs?filter=heads/…` et `commits/{sha}/statuses?latestOnly=true` d'Azure ; `pipelines?ref=` de GitLab sur un projet aux pipelines de MR.
 
 ### Les déploiements
 - [ ] **Après le merge**, Escouade suit les déploiements par environnement : déploiements et statuts de GitHub, environnements de GitLab, déploiements de Bitbucket Pipelines. Gitea n'a pas d'API de déploiements connue : seulement la CI de la cible.

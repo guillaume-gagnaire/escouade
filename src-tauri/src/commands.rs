@@ -213,6 +213,8 @@ pub fn save_settings(
 ) -> Res<Vec<ShellInfo>> {
     let remote_was_on = core.settings.read().remote_control_all;
     core.save_window_settings(settings.clone()).map_err(err)?;
+    // An account saved (a code host's among them): the CI of the targets read at once (ESC-63).
+    core.wake_ticket_prs();
     // A conversation under way takes the voice, its language, pace and volume (ESC-115).
     voice.conversation_tune(&conv_choice(&core.settings.read(), &*core.secrets, &voice.catalog).0);
     if settings.remote_control_all && !remote_was_on {
@@ -2676,6 +2678,62 @@ pub async fn ticket_prs_refresh(core: CoreState<'_>, project_id: String) -> Res<
         .map_err(err)
 }
 
+/// The CI of each project's target branch as last read (ESC-63): what the headers start with.
+#[tauri::command(async)]
+pub fn target_cis(
+    core: CoreState,
+) -> std::collections::BTreeMap<String, crate::branchci::BranchCi> {
+    core.target_cis()
+}
+
+/// « Rafraîchir » of a CI's pill (ESC-63): the project's target and the branches its tickets
+/// pushed are read now.
+#[tauri::command]
+pub async fn ci_refresh(core: CoreState<'_>, project_id: String) -> Res<()> {
+    core.branch_cis_refresh(Some(&project_id), true).await;
+    Ok(())
+}
+
+/// The checks of a target, of a pushed branch, of a ticket's pull request or of an agent's branch.
+#[tauri::command]
+pub async fn ci_detail(
+    core: CoreState<'_>,
+    of: crate::branchci::CiOf,
+) -> Res<crate::prview::Read<crate::branchci::CiDetail>> {
+    Ok(core.ci_detail(&of).await)
+}
+
+/// The end of a job's log, in reading only.
+#[tauri::command]
+pub async fn ci_job_log(
+    core: CoreState<'_>,
+    of: crate::branchci::CiOf,
+    job: String,
+) -> Res<crate::prview::Read<String>> {
+    Ok(core.ci_job_log(&of, &job).await)
+}
+
+/// « Relancer les jobs en échec », on the user's click: how many runs started.
+#[tauri::command]
+pub async fn ci_rerun(core: CoreState<'_>, of: crate::branchci::CiOf) -> Res<usize> {
+    core.ci_rerun(&of).await.map_err(err)
+}
+
+/// « Envoyer à un agent »: a failed job and the end of its log go to an agent of the project.
+#[tauri::command]
+pub async fn ci_log_to_agent(
+    core: CoreState<'_>,
+    of: crate::branchci::CiOf,
+    job: Option<String>,
+    check: String,
+    url: Option<String>,
+    agent_id: String,
+) -> Res<()> {
+    core.ci_log_to_agent(&of, job.as_deref(), &check, url.as_deref(), &agent_id)
+        .await
+        .map_err(err)
+}
+
 /// « Merger » / « Merger quand c'est vert » on a ticket « En revue » (ESC-62).
 #[tauri::command]
 pub async fn ticket_pr_merge(
@@ -2955,7 +3013,12 @@ pub async fn forge_connect(
     core: CoreState<'_>,
     form: crate::forge::connect::ForgeForm,
 ) -> Res<crate::forge::connect::ForgesView> {
-    core.forge_connect(form).await.map_err(err)
+    let r = core.forge_connect(form).await.map_err(err);
+    // An account there: the CI of the targets and the pull requests read at once (ESC-63).
+    if r.is_ok() {
+        core.wake_ticket_prs();
+    }
+    r
 }
 
 #[tauri::command]
@@ -2988,6 +3051,10 @@ pub async fn integration_connect(
         .integration_connect(service, account)
         .await
         .map_err(err);
+    // github.com's account is its code host's too: the CI of the targets read at once (ESC-63).
+    if r.is_ok() && service == Service::GITHUB {
+        core.wake_ticket_prs();
+    }
     let service = telemetry::service(service);
     counted(&core, Event::IntegrationConnected { service }, r)
 }

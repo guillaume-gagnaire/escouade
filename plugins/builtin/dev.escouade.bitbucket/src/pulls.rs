@@ -327,24 +327,45 @@ impl Bitbucket {
                 Self::pr_path(repo, number)
             ))
             .await?;
-        let mut seen: Vec<String> = Vec::new();
-        let mut out = Vec::new();
-        for s in &all {
-            // The statuses come newest first: a key's first one is its last word.
-            let key = s["key"]
-                .as_str()
-                .or(s["name"].as_str())
-                .unwrap_or("?")
-                .to_string();
-            if seen.contains(&key) {
-                continue;
-            }
-            seen.push(key.clone());
-            out.push(check_of(s, &key));
-        }
-        Ok(out)
+        Ok(last_statuses(&all))
     }
 
+    /// The statuses of the last commit of a branch (ESC-63); none when the branch is not found.
+    async fn branch_status_list(&self, repo: &RepoRef, branch: &str) -> Result<Vec<Check>> {
+        let Some(sha) = self.commit_of(repo, branch).await else {
+            return Ok(Vec::new());
+        };
+        let all = self
+            .values(&format!(
+                "{}/commit/{sha}/statuses?pagelen=100&sort=-updated_on",
+                Self::repo_path(repo)
+            ))
+            .await?;
+        Ok(last_statuses(&all))
+    }
+}
+
+/// The last word of each status (they come newest first).
+fn last_statuses(all: &[Value]) -> Vec<Check> {
+    let mut seen: Vec<String> = Vec::new();
+    let mut out = Vec::new();
+    for s in all {
+        // The statuses come newest first: a key's first one is its last word.
+        let key = s["key"]
+            .as_str()
+            .or(s["name"].as_str())
+            .unwrap_or("?")
+            .to_string();
+        if seen.contains(&key) {
+            continue;
+        }
+        seen.push(key.clone());
+        out.push(check_of(s, &key));
+    }
+    out
+}
+
+impl Bitbucket {
     /// What reading a pull request costs after its own call: its open threads and the statuses of its last commit,
     /// for a pull request still open (the others no longer wait for anything).
     async fn enrich(&self, repo: &RepoRef, pr: &mut PullRequest) -> Result<()> {
@@ -796,6 +817,16 @@ impl Forge for Bitbucket {
 
     fn checks<'a>(&'a self, repo: &'a RepoRef, number: u64) -> BoxFuture<'a, Result<Vec<Check>>> {
         Box::pin(async move { self.status_list(repo, number).await })
+    }
+
+    /// The statuses of the last commit of a branch. Its failed jobs do not run again from here:
+    /// Bitbucket Pipelines' rerun is to verify (`Unsupported`).
+    fn branch_checks<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        branch: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<Check>>> {
+        Box::pin(async move { self.branch_status_list(repo, branch).await })
     }
 
     /// The logs of the steps of a Pipelines run, one after the other under the step's name (`job` is the run's number,

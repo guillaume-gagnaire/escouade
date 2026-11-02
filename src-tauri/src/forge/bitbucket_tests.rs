@@ -1002,6 +1002,44 @@ async fn a_refusal_that_holds_is_said_and_the_hour_taken_as_spent() {
     assert_eq!(bb.rate_limit().map(|l| l.remaining), Some(0));
 }
 
+/// A branch's checks (ESC-63): the statuses of its last commit, each key by its last word; its
+/// pipelines do not run again from Escouade (to verify on Bitbucket).
+#[tokio::test]
+async fn a_branchs_checks_are_its_last_commits_statuses() {
+    let server = FakeServer::start().await;
+    let base = "/repositories/acme/demo";
+    server.on(
+        "GET",
+        &format!("{base}/refs/branches/feature%2Flogin"),
+        200,
+        fixture("branch"),
+    );
+    server.on(
+        "GET",
+        &format!("{base}/commit/a1b2c3d4e5f60718293a4b5c6d7e8f9012345678/statuses"),
+        200,
+        fixture("statuses"),
+    );
+    server.on(
+        "GET",
+        &format!("{PR}/42/statuses"),
+        200,
+        fixture("statuses"),
+    );
+    let checks = client(&server)
+        .branch_checks(&repo(), "feature/login")
+        .await
+        .unwrap();
+    assert!(!checks.is_empty());
+    let pr_checks = client(&server).checks(&repo(), 42).await.unwrap();
+    assert_eq!(checks, pr_checks, "read as a pull request's are");
+    let e = client(&server)
+        .rerun_failed_of_branch(&repo(), "feature/login")
+        .await
+        .unwrap_err();
+    assert!(e.downcast_ref::<Unsupported>().is_some(), "{e:#}");
+}
+
 /// How a pull request may merge (ESC-62): what its target branch allows; never an auto-merge.
 #[tokio::test]
 async fn the_target_branch_says_how_a_pull_request_may_merge_and_there_is_no_auto_merge() {

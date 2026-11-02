@@ -382,6 +382,13 @@ impl Github {
 
     async fn check_list(&self, repo: &RepoRef, number: u64) -> Result<Vec<Check>> {
         let sha = self.head_sha(repo, number).await?;
+        self.checks_at(repo, &sha).await
+    }
+
+    /// The check runs and the statuses of a commit (`git_ref`: its hash, or a branch's name,
+    /// which GitHub reads as its last commit).
+    async fn checks_at(&self, repo: &RepoRef, git_ref: &str) -> Result<Vec<Check>> {
+        let sha = enc(git_ref);
         let base = Self::repo_path(repo);
         let runs = self
             .pages(
@@ -421,6 +428,38 @@ impl Github {
             });
         }
         Ok(out)
+    }
+
+    /// The failed Actions jobs among `checks` run again, once per run: how many runs.
+    async fn rerun_of(&self, repo: &RepoRef, checks: Vec<Check>) -> Result<usize> {
+        let mut runs = BTreeSet::new();
+        for check in checks {
+            let (CheckState::Failure, Some(job)) = (check.state, check.job) else {
+                continue;
+            };
+            let j = self
+                .get(&format!(
+                    "{}/actions/jobs/{}",
+                    Self::repo_path(repo),
+                    enc(&job)
+                ))
+                .await?;
+            if let Some(run) = j["run_id"].as_u64() {
+                runs.insert(run);
+            }
+        }
+        for run in &runs {
+            self.write(
+                reqwest::Method::POST,
+                &format!(
+                    "{}/actions/runs/{run}/rerun-failed-jobs",
+                    Self::repo_path(repo)
+                ),
+                json!({}),
+            )
+            .await?;
+        }
+        Ok(runs.len())
     }
 }
 
@@ -874,34 +913,27 @@ impl Forge for Github {
 
     fn rerun_failed<'a>(&'a self, repo: &'a RepoRef, number: u64) -> BoxFuture<'a, Result<usize>> {
         Box::pin(async move {
-            let mut runs = BTreeSet::new();
-            for check in self.check_list(repo, number).await? {
-                let (CheckState::Failure, Some(job)) = (check.state, check.job) else {
-                    continue;
-                };
-                let j = self
-                    .get(&format!(
-                        "{}/actions/jobs/{}",
-                        Self::repo_path(repo),
-                        enc(&job)
-                    ))
-                    .await?;
-                if let Some(run) = j["run_id"].as_u64() {
-                    runs.insert(run);
-                }
-            }
-            for run in &runs {
-                self.write(
-                    reqwest::Method::POST,
-                    &format!(
-                        "{}/actions/runs/{run}/rerun-failed-jobs",
-                        Self::repo_path(repo)
-                    ),
-                    json!({}),
-                )
-                .await?;
-            }
-            Ok(runs.len())
+            let checks = self.check_list(repo, number).await?;
+            self.rerun_of(repo, checks).await
+        })
+    }
+
+    fn branch_checks<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        branch: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<Check>>> {
+        Box::pin(async move { self.checks_at(repo, branch).await })
+    }
+
+    fn rerun_failed_of_branch<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        branch: &'a str,
+    ) -> BoxFuture<'a, Result<usize>> {
+        Box::pin(async move {
+            let checks = self.checks_at(repo, branch).await?;
+            self.rerun_of(repo, checks).await
         })
     }
 

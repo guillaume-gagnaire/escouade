@@ -182,6 +182,10 @@
   <Row label={t('boardSettings.tab.autoAssign')} desc={t('boardSettings.tab.autoAssignDesc')}>
     <Switch label={t('boardSettings.tab.autoAssign')} bind:on={b.autopilot} />
   </Row>
+  <!-- ESC-63: off by default; the target's CI is read from its code host, like the pull requests of the tickets. -->
+  <Row label={t('boardSettings.tab.redTargetPause')} desc={t('boardSettings.tab.redTargetPauseDesc')}>
+    <Switch label={t('boardSettings.tab.redTargetPause')} bind:on={() => !!b.pauseOnRedTarget, (v) => (b.pauseOnRedTarget = v)} />
+  </Row>
   <!-- The quotas are the account's: an app setting, shown with each project's autopilot. -->
   <Row label={t('boardSettings.tab.quotaPause')} hint={t('boardSettings.tab.quotaPauseHint')} desc={t('boardSettings.tab.quotaPauseDesc')}>
     <Chips label={t('boardSettings.tab.quotaPause')} options={quotaPauses} mono bind:value={settingsForm.settings.quotaPause} />

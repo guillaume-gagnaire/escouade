@@ -987,6 +987,14 @@ impl<R: Runtime> Core<R> {
             }
         }
         let prs = own_prs(found, own.as_deref());
+        // Pushed without a pull request (ESC-63): the CI of its branch, on the target's host.
+        let branch_ci = match prs.is_empty() {
+            true => {
+                self.agent_branch_ci(&sources, &w, meta.branch_ci.clone())
+                    .await
+            }
+            false => None,
+        };
         // The branch moved meanwhile (renamed after the agent, switched): its own are read next time.
         let now_meta = h.lock().meta.clone();
         if self.watched(&now_meta).await.as_ref() != Some(&w) {
@@ -994,8 +1002,9 @@ impl<R: Runtime> Core<R> {
         }
         let changed = {
             let mut rt = h.lock();
-            let changed = rt.meta.prs != prs;
+            let changed = rt.meta.prs != prs || rt.meta.branch_ci != branch_ci;
             rt.meta.prs = prs;
+            rt.meta.branch_ci = branch_ci;
             changed
         };
         if changed {
@@ -1003,6 +1012,46 @@ impl<R: Runtime> Core<R> {
             self.request_save();
         }
         Ok(())
+    }
+
+    /// The CI of an agent's branch pushed without a pull request (ESC-63): read on the target's
+    /// repository while the branch tracks one on the remote; none when it is not pushed, its host
+    /// reads no branch's checks, or the read fails (what was read last stays then).
+    async fn agent_branch_ci(
+        &self,
+        sources: &[Source],
+        w: &Watched,
+        before: Option<crate::branchci::BranchCi>,
+    ) -> Option<crate::branchci::BranchCi> {
+        git::upstream_of(&w.dir, &w.branch).await?;
+        let s = sources.iter().find(|s| s.target)?;
+        let rerun = s
+            .remote
+            .kind
+            .as_deref()
+            .and_then(|k| self.forges.read().get(k))
+            .map(|p| p.capabilities().rerun)
+            .unwrap_or(false);
+        let mut ci =
+            before
+                .filter(|c| c.branch == w.branch)
+                .unwrap_or_else(|| crate::branchci::BranchCi {
+                    kind: s.remote.kind.clone().unwrap_or_default(),
+                    host: s.remote.host.clone(),
+                    namespace: s.remote.repo.namespace.clone(),
+                    name: s.remote.repo.name.clone(),
+                    branch: w.branch.clone(),
+                    rerun,
+                    ..Default::default()
+                });
+        match s.client.branch_checks(&s.remote.repo, &w.branch).await {
+            Ok(checks) => crate::branchci::read_into(&mut ci, &checks, crate::model::now_ms()),
+            Err(e) if e.downcast_ref::<crate::forge::Unsupported>().is_some() => return None,
+            Err(e) => {
+                crate::branchci::read_failed(&mut ci, format!("{e:#}"), crate::model::now_ms())
+            }
+        }
+        Some(ci)
     }
 
     /// The host, the repository and the branch of the agent's pull request `pr` (`number`): the

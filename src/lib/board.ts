@@ -118,6 +118,7 @@ export function waitLabel(
   issue: string | null = null,
   pause: AutopilotPause | null = null,
   waiting: string[] = [],
+  redTarget = false,
 ): string {
   if (issue) return t('boardSettings.wait.targetBranch');
   if (waiting.length && !ticket.forced) return t('boardSettings.wait.after', { keys: keyList(waiting) });
@@ -126,6 +127,8 @@ export function waitLabel(
   // Another one's shared ticket (ESC-190): the autopilot never starts it.
   if (isTheirs(ticket)) return theirsLine(ticket) ?? t('boardSettings.wait.autopilotOff');
   if (!s.autopilot) return t('boardSettings.wait.autopilotOff');
+  // « Pause quand la CI de la cible est rouge » (ESC-63): the autopilot's alone, « Lancer » starts it all the same.
+  if (redTarget) return t('boardSettings.wait.redTarget');
   return queueIndex === 0 ? t('boardSettings.wait.next') : t('boardSettings.wait.place', { busy: busyCount, max: s.maxParallel });
 }
 
@@ -185,11 +188,12 @@ export function canStart(
   quota: number | null,
   issue: string | null = null,
   pause: AutopilotPause | null = null,
+  redTarget = false,
 ): boolean {
   // Another one's shared ticket (ESC-190) is launched by hand whatever the autopilot: it never starts it. One whose file
-  // cannot be read never starts.
+  // cannot be read never starts. Held by a red target (ESC-63), the autopilot starts none: « Lancer » does.
   if (ticket.shared?.problem) return false;
-  return !issue && !pause && (!s.autopilot || isTheirs(ticket)) && !ticket.forced && !quota && busyCount < s.maxParallel;
+  return !issue && !pause && (!s.autopilot || isTheirs(ticket) || redTarget) && !ticket.forced && !quota && busyCount < s.maxParallel;
 }
 
 /** As the backend fixes it: the first three letters of the project's name (accents folded), TIC without any. */

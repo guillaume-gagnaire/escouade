@@ -39,6 +39,7 @@ export default defineZone('boardSettings', {
     targetBranch: 'Waiting for the target branch',
     after: 'After {keys}',
     pause: 'Waiting: autopilot paused',
+    redTarget: 'Waiting: the target’s CI is red',
     forced: 'Start requested…',
     autopilotOff: 'Autopilot is off',
     next: 'Picked up as soon as a slot is free',
@@ -120,6 +121,10 @@ export default defineZone('boardSettings', {
     quotaPauseHint: 'for all projects',
     quotaPauseDesc:
       'The autopilot starts no ticket while the 5-hour window or the weekly window is above this threshold. A ticket launched by hand still starts.',
+
+    redTargetPause: 'Pause while the target’s CI is red',
+
+    redTargetPauseDesc: 'The autopilot starts no ticket while the CI of the target branch fails. A ticket started by hand starts anyway.',
 
     parallel: 'In parallel',
     parallelDesc: 'Beyond that, “To do” tickets wait for a free slot',

@@ -19,22 +19,9 @@
     refreshPrs,
     stateWord,
   } from '../lib/prs';
-  import {
-    agentOfPr,
-    checkDuration,
-    checkPhase,
-    ciSummary,
-    deployState,
-    failureTitle,
-    hasFailed,
-    phaseIcon,
-    reallyFailed,
-    POLL_MS,
-    sortChecks,
-    sortComments,
-    stillRunning,
-  } from '../lib/prview';
-  import type { Agent, NoPr, PrCheck, PrDetail, PrFailure, PrRead, Project, PullRequest } from '../lib/types';
+  import { agentOfPr, deployState, failureTitle, POLL_MS, sortComments, stillRunning } from '../lib/prview';
+  import type { Agent, NoPr, PrDetail, PrFailure, PrRead, Project, PullRequest } from '../lib/types';
+  import CiChecks from './CiChecks.svelte';
   import Icon from './Icon.svelte';
   import { tip } from '../lib/tip';
 
@@ -86,8 +73,6 @@
   $effect(() => {
     const k = mainKey;
     untrack(() => {
-      openLog = null;
-      logs = {};
       if (k) void loadDetail();
       else [detail, failure] = [null, null];
     });
@@ -113,34 +98,10 @@
     return () => clearInterval(timer);
   });
 
-  const checks = $derived(detail ? sortChecks(detail.checks) : []);
-
-  // The log of a failed check, by its job.
-  let openLog = $state<string | null>(null);
-  let logs = $state<Record<string, PrRead<string> | 'loading'>>({});
-  async function toggleLog(c: PrCheck) {
-    const job = c.job;
-    if (!job || !agent || !main) return;
-    if (openLog === job) {
-      openLog = null;
-      return;
-    }
-    openLog = job;
-    if (logs[job] && logs[job] !== 'loading' && !(logs[job] as PrRead<string>).failure) return;
-    logs[job] = 'loading';
-    try {
-      logs[job] = await api.agentPrLog(agent.id, main.number, job, main.hostRepo);
-    } catch (e) {
-      logs[job] = { failure: failedRead(e) };
-    }
-  }
-
-  let rerunning = $state(false);
+  // « Relancer les échecs », on a click (the list of its checks is `CiChecks`).
   async function rerun() {
     if (!agent || !main) return;
-    rerunning = true;
     const n = await app.run(api.agentPrRerun(agent.id, main.number, main.hostRepo));
-    rerunning = false;
     if (n === undefined) return;
     app.toast(n ? t('prs.view.ci.rerunDone', { count: n }) : t('prs.view.ci.rerunNone'), n ? 'ok' : 'info');
     void loadDetail(true);
@@ -278,71 +239,18 @@
         <p class="state" role="status">{t('prs.view.loading', { word })}</p>
       {:else if detail}
         {@const d = detail}
-        {#if d.can.checks}
-          <section class="sec" aria-labelledby="hosts-ci">
-            <div class="sec-h">
-              <h3 id="hosts-ci">{t('prs.view.ci.title')}</h3>
-              {#if checks.length}<span class="sum" class:bad={reallyFailed(checks)}>{ciSummary(checks)}</span>{/if}
-              {#if d.can.rerun && p.state === 'open' && hasFailed(checks)}
-                <button class="btn rerun" disabled={rerunning} use:tip={t('prs.view.ci.rerunHint')} onclick={rerun}
-                  ><Icon name="restart" size={13} />{rerunning ? t('prs.view.ci.rerunning') : t('prs.view.ci.rerun')}</button
-                >
-              {/if}
-            </div>
-            {#if !checks.length}
-              <p class="none">{t('prs.view.ci.none')}</p>
-            {:else}
-              <ul class="list" aria-label={t('prs.view.ci.title')}>
-                {#each checks as c, i (`${c.name}|${c.job ?? i}`)}
-                  {@const phase = checkPhase(c)}
-                  {@const dur = checkDuration(c, app.now)}
-                  {@const withLog = phase === 'failure' && !!c.job && d.can.jobLogs}
-                  <li class="check {phase}" data-check={c.name}>
-                    <span class="ic {phase}"><Icon name={phaseIcon[phase]} size={13} /></span>
-                    {#if withLog}
-                      <button
-                        class="cn as-btn"
-                        aria-expanded={openLog === c.job}
-                        use:tip={{ text: t('prs.view.ci.logShow'), aria: false }}
-                        onclick={() => toggleLog(c)}>{c.name}</button
-                      >
-                    {:else}
-                      <span class="cn">{c.name}</span>
-                    {/if}
-                    <span class="cs">{t(`prs.view.ci.phase.${phase}`)}</span>
-                    {#if dur}<span class="cd mono">{dur}</span>{/if}
-                    {#if c.url}
-                      {@const url = c.url}
-                      <button
-                        class="icon-btn ext"
-                        aria-label={`${c.name} · ${t('prs.view.ci.onHost')}`}
-                        use:tip={{ text: t('prs.view.ci.onHost'), aria: false }}
-                        onclick={() => openOutside(url)}><Icon name="ext" size={12} /></button
-                      >
-                    {/if}
-                  </li>
-                  {#if withLog && openLog === c.job}
-                    {@const log = logs[c.job ?? '']}
-                    <li class="log" aria-label={t('prs.view.ci.log', { name: c.name })}>
-                      {#if !log || log === 'loading'}
-                        <p class="state" role="status">{t('prs.view.ci.logLoading')}</p>
-                      {:else if log.failure}
-                        {@render failed(log.failure, () => {
-                          openLog = null;
-                          return toggleLog(c);
-                        })}
-                      {:else if log.data?.trim()}
-                        <span class="log-h">{t('prs.view.ci.logTail')}</span>
-                        <pre class="mono">{log.data}</pre>
-                      {:else}
-                        <p class="none">{t('prs.view.ci.logNone')}</p>
-                      {/if}
-                    </li>
-                  {/if}
-                {/each}
-              </ul>
-            {/if}
-          </section>
+        {#if d.can.checks && agent && main}
+          {@const [a, pr] = [agent, main]}
+          {#key mainKey}
+            <CiChecks
+              checks={d.checks}
+              jobLogs={d.can.jobLogs}
+              canRerun={d.can.rerun && p.state === 'open'}
+              loadLog={(job) => api.agentPrLog(a.id, pr.number, job, pr.hostRepo)}
+              onRerun={rerun}
+              titleId="hosts-ci"
+            />
+          {/key}
         {/if}
 
         {#if d.can.reviews}
@@ -519,8 +427,7 @@
     gap: 6px;
     margin-top: 4px;
   }
-  .acts .btn,
-  .rerun {
+  .acts .btn {
     height: 26px;
     padding: 0 9px;
     font-size: 12px;
@@ -598,9 +505,6 @@
   .sum.bad {
     color: var(--del);
   }
-  .rerun {
-    margin-left: auto;
-  }
   .list {
     display: grid;
     gap: 1px;
@@ -608,7 +512,6 @@
     padding: 0;
     list-style: none;
   }
-  .check,
   .dep {
     display: flex;
     align-items: center;
@@ -618,7 +521,6 @@
     padding: 0 6px 0 8px;
     border-radius: 7px;
   }
-  .check:hover,
   .dep:hover {
     background: var(--hover);
   }
@@ -630,57 +532,10 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .as-btn {
-    padding: 0;
-    border: none;
-    background: none;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
-  .as-btn:hover {
-    text-decoration: underline;
-  }
-  .cs {
-    flex: none;
-    color: var(--muted);
-    font-size: 11.5px;
-  }
-  .check.failure .cs {
-    color: var(--del);
-  }
-  .cd {
-    flex: none;
-    color: var(--dim);
-    font-size: 11px;
-  }
   .ext {
     width: 22px;
     height: 22px;
     border-radius: 5px;
-  }
-  .log {
-    display: grid;
-    gap: 4px;
-    margin: 0 0 6px 29px;
-  }
-  .log-h {
-    color: var(--dim);
-    font-size: 11px;
-  }
-  .log pre {
-    max-height: 320px;
-    margin: 0;
-    padding: 8px 10px;
-    overflow: auto;
-    border-radius: 7px;
-    background: var(--well);
-    box-shadow: inset 0 0 0 1px var(--line);
-    color: var(--code-fg);
-    font-size: 11px;
-    line-height: 1.45;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
   }
   .say {
     display: grid;

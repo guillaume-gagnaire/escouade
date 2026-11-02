@@ -1367,6 +1367,72 @@ async fn real_github_reads() {
     println!("rate limit: {:?}", github.rate_limit());
 }
 
+/// A branch's checks (the target's, one pushed without a pull request, ESC-63): those of its last
+/// commit, read by its name; its failed jobs run again once per run.
+#[tokio::test]
+async fn a_branchs_checks_are_read_by_its_name_and_its_failed_jobs_run_again() {
+    let server = FakeServer::start().await;
+    let base = "/repos/o/r/commits/feat%2Fx";
+    server.on(
+        "GET",
+        &format!("{base}/check-runs"),
+        200,
+        json!({ "total_count": 2, "check_runs": [
+            { "id": 7, "name": "test", "status": "completed", "conclusion": "failure",
+              "app": { "slug": "github-actions" } },
+            { "id": 8, "name": "lint", "status": "completed", "conclusion": "success",
+              "app": { "slug": "github-actions" } },
+        ] }),
+    );
+    server.on(
+        "GET",
+        &format!("{base}/status"),
+        200,
+        json!({ "statuses": [
+            { "context": "ci/jenkins", "state": "failure", "target_url": "https://ci.example.com/1" },
+        ] }),
+    );
+    let repo = RepoRef {
+        namespace: "o".into(),
+        name: "r".into(),
+    };
+    let checks = client(&server)
+        .branch_checks(&repo, "feat/x")
+        .await
+        .unwrap();
+    assert_eq!(
+        checks
+            .iter()
+            .map(|c| (c.name.as_str(), c.state, c.job.as_deref()))
+            .collect::<Vec<_>>(),
+        [
+            ("test", CheckState::Failure, Some("7")),
+            ("lint", CheckState::Success, Some("8")),
+            ("ci/jenkins", CheckState::Failure, None),
+        ]
+    );
+    server.on(
+        "GET",
+        "/repos/o/r/actions/jobs/7",
+        200,
+        json!({ "id": 7, "run_id": 70 }),
+    );
+    server.on(
+        "POST",
+        "/repos/o/r/actions/runs/70/rerun-failed-jobs",
+        201,
+        json!({}),
+    );
+    assert_eq!(
+        client(&server)
+            .rerun_failed_of_branch(&repo, "feat/x")
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(server.writes().len(), 1);
+}
+
 /// How a pull request may merge (ESC-62): the repository's merge methods and « Allow auto-merge »;
 /// not told (no right to push), the three.
 #[tokio::test]

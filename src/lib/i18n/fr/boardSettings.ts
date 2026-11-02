@@ -48,6 +48,7 @@ export default {
     targetBranch: 'En attente de la branche cible',
     after: 'Après {keys}',
     pause: 'En attente : pilote auto en pause',
+    redTarget: 'En attente : CI de la cible rouge',
     forced: 'Lancement demandé…',
     autopilotOff: 'Pilote auto désactivé',
     next: "Pris dès qu'une place se libère",
@@ -135,6 +136,9 @@ export default {
     quotaPauseDesc:
       'Le pilote auto ne démarre aucun ticket tant que la fenêtre de 5 h ou la fenêtre hebdomadaire dépasse ce seuil. Un ticket lancé à la main part quand même.',
 
+    redTargetPause: 'Pause quand la CI de la cible est rouge',
+    redTargetPauseDesc:
+      'Le pilote auto ne démarre aucun ticket tant que la CI de la branche cible est en échec. Un ticket lancé à la main part quand même.',
     parallel: 'En parallèle',
     parallelDesc: 'Au-delà, les tickets « À faire » attendent une place libre',
     defaultModel: 'Par défaut ({model})',

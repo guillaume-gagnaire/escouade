@@ -425,6 +425,45 @@ impl Gitlab {
         let Some((id, pid, target)) = self.head_pipeline(repo, number).await? else {
             return Ok((Vec::new(), None));
         };
+        self.pipeline_jobs(id, pid, target).await
+    }
+
+    /// The last pipeline of a branch (id and project), none when it has none yet.
+    async fn branch_pipeline(&self, repo: &RepoRef, branch: &str) -> Result<Option<(u64, u64)>> {
+        let list = self
+            .get(&format!(
+                "{}/pipelines?ref={}&per_page=1",
+                project(repo),
+                encode(branch)
+            ))
+            .await?;
+        let p = &list[0];
+        Ok(match (p["id"].as_u64(), p["project_id"].as_u64()) {
+            (Some(id), Some(pid)) => Some((id, pid)),
+            _ => None,
+        })
+    }
+
+    /// The checks of the last pipeline of a branch (ESC-63), with that pipeline.
+    async fn branch_check_list(
+        &self,
+        repo: &RepoRef,
+        branch: &str,
+    ) -> Result<(Vec<Check>, Option<(u64, u64)>)> {
+        let Some((id, pid)) = self.branch_pipeline(repo, branch).await? else {
+            return Ok((Vec::new(), None));
+        };
+        self.pipeline_jobs(id, pid, Some(pid)).await
+    }
+
+    /// The jobs of a pipeline `id` of the project `pid`, as checks (`target`: the project of the
+    /// merge request, which names a job of another project by `<project>:<job>`).
+    async fn pipeline_jobs(
+        &self,
+        id: u64,
+        pid: u64,
+        target: Option<u64>,
+    ) -> Result<(Vec<Check>, Option<(u64, u64)>)> {
         let jobs = self
             .list(&format!("/projects/{pid}/pipelines/{id}/jobs?per_page=100"))
             .await?;
@@ -441,6 +480,24 @@ impl Gitlab {
             })
             .collect();
         Ok((checks, Some((pid, id))))
+    }
+
+    /// A pipeline whose jobs failed retried in one call: one when some failed, none otherwise.
+    async fn retry(&self, found: (Vec<Check>, Option<(u64, u64)>)) -> Result<usize> {
+        let (checks, pipeline) = found;
+        let Some((pid, id)) = pipeline else {
+            return Ok(0);
+        };
+        if !checks.iter().any(|c| c.state == CheckState::Failure) {
+            return Ok(0);
+        }
+        self.write(
+            Method::POST,
+            &format!("/projects/{pid}/pipelines/{id}/retry"),
+            json!({}),
+        )
+        .await?;
+        Ok(1)
     }
 
     /// The id of a user by their login, read once.
@@ -732,20 +789,28 @@ impl Forge for Gitlab {
     /// GitLab retries a pipeline's failed jobs in one call: one when some failed, none otherwise.
     fn rerun_failed<'a>(&'a self, repo: &'a RepoRef, number: u64) -> BoxFuture<'a, Result<usize>> {
         Box::pin(async move {
-            let (checks, pipeline) = self.check_list(repo, number).await?;
-            let Some((pid, id)) = pipeline else {
-                return Ok(0);
-            };
-            if !checks.iter().any(|c| c.state == CheckState::Failure) {
-                return Ok(0);
-            }
-            self.write(
-                Method::POST,
-                &format!("/projects/{pid}/pipelines/{id}/retry"),
-                json!({}),
-            )
-            .await?;
-            Ok(1)
+            let found = self.check_list(repo, number).await?;
+            self.retry(found).await
+        })
+    }
+
+    /// The jobs of the last pipeline of a branch.
+    fn branch_checks<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        branch: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<Check>>> {
+        Box::pin(async move { Ok(self.branch_check_list(repo, branch).await?.0) })
+    }
+
+    fn rerun_failed_of_branch<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        branch: &'a str,
+    ) -> BoxFuture<'a, Result<usize>> {
+        Box::pin(async move {
+            let found = self.branch_check_list(repo, branch).await?;
+            self.retry(found).await
         })
     }
 

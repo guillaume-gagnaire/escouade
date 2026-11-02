@@ -24,6 +24,9 @@ import type {
   PullRequest,
   PrDetail,
   PrRead,
+  BranchCi,
+  CiDetail,
+  CiOf,
   NoPr,
   Agent,
   AttachedFile,
@@ -635,6 +638,17 @@ export const api = {
   ticketFinishAnyway: (id: string) => invoke<void>('ticket_finish_anyway', { id }),
   ticketPrBackToTodo: (id: string) => invoke<void>('ticket_pr_back_to_todo', { id }),
   ticketPrFixCi: (id: string) => invoke<void>('ticket_pr_fix_ci', { id }),
+  /** The CI of each project's target branch as last read (ESC-63). */
+  targetCis: () => invoke<Record<string, BranchCi>>('target_cis'),
+  /** « Rafraîchir »: a project's target and its tickets' pushed branches read now. */
+  ciRefresh: (projectId: string) => invoke<void>('ci_refresh', { projectId }),
+  ciDetail: (of: CiOf) => invoke<PrRead<CiDetail>>('ci_detail', { of }),
+  ciJobLog: (of: CiOf, job: string) => invoke<PrRead<string>>('ci_job_log', { of, job }),
+  /** « Relancer les jobs en échec »: how many runs started. */
+  ciRerun: (of: CiOf) => invoke<number>('ci_rerun', { of }),
+  /** « Envoyer à un agent »: a failed job and the end of its log go to an agent of the project. */
+  ciLogToAgent: (of: CiOf, job: string | null, check: string, url: string | null, agentId: string) =>
+    invoke<void>('ci_log_to_agent', { of, job, check, url, agentId }),
   ticketPrFixReviews: (id: string) => invoke<void>('ticket_pr_fix_reviews', { id }),
   ticketPrUpdateBranch: (id: string) => invoke<void>('ticket_pr_update_branch', { id }),
   boardSet: (projectId: string, settings: BoardSettings) => invoke<Project>('board_set', { projectId, settings }),

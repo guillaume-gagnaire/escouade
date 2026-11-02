@@ -17,6 +17,7 @@ import type {
   AccountUsage,
   Agent,
   BoardSettings,
+  BranchCi,
   BranchInfo,
   EngineDecl,
   GitInfo,
@@ -40,7 +41,7 @@ export interface Call {
 }
 
 /** What a command answers when a test gives it no handler: nothing (null), except the lists the window reads on its own. */
-const ANSWERS: Record<string, unknown> = { closed_projects: [], memory_list: [], claude_memory_offer: [] };
+const ANSWERS: Record<string, unknown> = { closed_projects: [], memory_list: [], claude_memory_offer: [], target_cis: {} };
 
 /** What the backend answers by default from the arguments of a call. */
 const DEFAULTS: Record<string, (args: any) => unknown> = {
@@ -382,6 +383,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.docsEdit = null;
   app.docsShare = {};
   app.boardIssues = {};
+  app.targetCi = {};
   app.setupOutput = {};
   app.relaunched = {};
   app.autopilotPause = null;
@@ -616,5 +618,24 @@ export const ticketPr = (over: Partial<TicketPr> = {}): TicketPr => ({
   fixError: null,
   fixKind: 'ci',
   feedback: 0,
+  ...over,
+});
+
+/** The CI of a branch without a pull request (ESC-63): a project's target, red for 2 h and a half. */
+export const branchCi = (over: Partial<BranchCi> = {}): BranchCi => ({
+  kind: 'github',
+  host: 'github.com',
+  namespace: 'acme',
+  name: 'demo',
+  branch: 'main',
+  checks: 'failure',
+  checksTotal: 3,
+  checksFailed: 1,
+  failed: [{ name: 'test', url: 'https://github.com/acme/demo/runs/7', log: true }],
+  redSince: Date.now() - 2.5 * 3600_000,
+  checkedAt: Date.now(),
+  error: null,
+  errorSince: null,
+  rerun: true,
   ...over,
 });

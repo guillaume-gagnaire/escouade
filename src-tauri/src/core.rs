@@ -1029,6 +1029,8 @@ pub struct Core<R: Runtime = Wry> {
     /// minute, else every 5), and what wakes their reading at once (a push, the window's return).
     pub(crate) window_in_front: AtomicBool,
     pub(crate) ticket_prs_wake: tokio::sync::Notify,
+    /// The CI of each project's target branch as last read (ESC-63), by project id.
+    pub(crate) target_ci: RwLock<BTreeMap<String, crate::branchci::BranchCi>>,
     /// Notifications sent, as "<title> | <text>" (tests only).
     #[cfg(test)]
     pub alerts: Mutex<Vec<String>>,
@@ -1996,6 +1998,7 @@ impl<R: Runtime> Core<R> {
             names_dropped: AtomicU64::new(0),
             window_in_front: AtomicBool::new(true),
             ticket_prs_wake: tokio::sync::Notify::new(),
+            target_ci: RwLock::new(BTreeMap::new()),
             #[cfg(test)]
             alerts: Mutex::default(),
             #[cfg(test)]

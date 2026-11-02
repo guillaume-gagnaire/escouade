@@ -74,6 +74,54 @@ export default {
     },
   },
 
+  /** The CI of a branch without a pull request (ESC-63): a project's target in its board's header, a ticket's pushed branch on its card. */
+  ci: {
+    /** The pill: `{branch}` and, red, since when. */
+    pill: {
+      failure: '{branch} ✗ depuis {since}',
+      success: '{branch} ✓',
+      pending: '{branch} · CI en cours',
+      none: '{branch} · aucune CI',
+    },
+    pillTitle: 'CI de {branch} : {state}. Cliquer pour voir les jobs, leurs journaux et les relancer',
+    /** Its state in words, in the pill's tooltip. */
+    state: {
+      failure: { one: '{failed}/{count} job en échec', other: '{failed}/{count} jobs en échec' },
+      success: { one: '{count} job réussi', other: '{count} jobs réussis' },
+      pending: { one: '{count} job en cours', other: '{count} jobs en cours' },
+      none: 'aucun job',
+    },
+    /** A reading that failed: the last state stays. */
+    error: '{error} · depuis {since}',
+    /** « Pause quand la CI de la cible est rouge »: the band under the board's header. */
+    paused: 'Pilote auto en pause : la CI de {branch} est rouge depuis {since}',
+    pausedShow: 'Voir les jobs',
+    /** The window of a CI's jobs. */
+    title: 'CI de {branch}',
+    titlePr: 'CI de la {word} #{number}',
+    loading: 'Lecture des jobs…',
+    empty: 'Aucun job sur le dernier commit de {branch}.',
+    refresh: 'Rafraîchir',
+    rerun: 'Relancer les jobs en échec',
+    rerunHint: 'Relance sur {host} les jobs en échec du dernier commit. Rien ne part sans ce clic.',
+    rerunning: 'Relance…',
+    rerunDone: { one: '{count} exécution relancée.', other: '{count} exécutions relancées.' },
+    rerunNone: 'Aucun job à relancer : {host} ne relance que ses propres jobs.',
+    noRerun: '{host} ne relance pas les jobs depuis Escouade : relance-les sur son site.',
+    /** A job's log, in reading only, like a terminal. */
+    log: 'Journal',
+    logOf: 'Journal de {name}',
+    logHint: 'Lecture seule · la fin du journal',
+    logLoading: 'Lecture du journal…',
+    logEmpty: 'Journal vide.',
+    noLog: 'CI tierce : un statut et une adresse, pas de journal',
+    onHost: 'Ouvrir sur {host}',
+    send: 'Envoyer à un agent',
+    sendHint: 'Donner ce job et la fin de son journal à un agent du projet, en message',
+    sendNone: 'Aucun agent actif dans ce projet : crée-en un pour lui envoyer ce journal.',
+    sent: 'Journal de {name} envoyé à {agent}.',
+  },
+
   // The header of the board.
   header: {
     sub: {

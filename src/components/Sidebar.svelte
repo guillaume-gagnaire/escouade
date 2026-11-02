@@ -70,6 +70,8 @@
   import EngineMark from './EngineMark.svelte';
   import StatusDot from './StatusDot.svelte';
   import FoldTitle from './FoldTitle.svelte';
+  import { ciShown } from '../lib/branch-ci';
+  import CiPill from './CiPill.svelte';
   import Icon from './Icon.svelte';
   import BranchPicker from './branches/BranchPicker.svelte';
   import { tip } from '../lib/tip';
@@ -1016,6 +1018,12 @@
           <!-- Its code host's plugin does not answer (INT-8.1): said under the card, the pull requests read last kept. -->
           <div class="prdown" role="status" data-pr-down={a.id} use:tip={t('prs.downHint', { why: a.prDown, word: prWord(a) })}>
             <Icon name="plug" size={12} />{t('prs.down', { word: prWord(a) })}
+          </div>
+        {/if}
+        {#if !prs.length && !a.ticketId && ciShown(a.branchCi)}
+          <!-- Its branch pushed without a pull request (ESC-63): its CI, its jobs on a click. -->
+          <div class="prs" role="group" aria-label={t('prs.group', { name: a.name })} data-branch-ci={a.id}>
+            <CiPill ci={a.branchCi} of={{ kind: 'agent', id: a.id }} projectId={a.projectId} />
           </div>
         {/if}
         {#if prs.length}

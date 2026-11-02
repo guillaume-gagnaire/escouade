@@ -7,6 +7,9 @@
   import { shownOnBoard } from '../../lib/sharing';
   import { app } from '../../lib/state.svelte';
   import type { Project } from '../../lib/types';
+  import { ciShown, redTargetHolds, targetCiOf } from '../../lib/branch-ci';
+  import { fSince } from '../../lib/format';
+  import CiPill from '../CiPill.svelte';
   import Icon from '../Icon.svelte';
   import BoardColumn from './BoardColumn.svelte';
   import { tip } from '../../lib/tip';
@@ -42,6 +45,12 @@
   /** The project's harness has no account (ESC-128): « Ajouter un compte… » beside why nothing starts. */
   const engine = $derived(project.engine ?? defaultEngine());
   const noAccount = $derived(!hasAccount(engine));
+  /** The CI of its target branch (ESC-63), as last read: the pill of the header; none without a host Escouade reads. */
+  const targetCi = $derived(targetCiOf(project));
+  /** Its pill: none for a target without any CI. */
+  const targetPill = $derived(ciShown(targetCi) ? targetCi : null);
+  /** « Pause quand la CI de la cible est rouge » holds the autopilot's tickets back now. */
+  const redHold = $derived(s.autopilot && redTargetHolds(s, targetCi));
 
   async function toggleAutopilot() {
     // The project comes back through the backend's event, in order with any newer one: its answer is not written over it.
@@ -57,6 +66,10 @@
         <span class="proj-name">{project.name}</span><span aria-hidden="true">·</span><span class="num sub">{sub}</span>
       </div>
     </div>
+    {#if targetPill}
+      <!-- The CI of its target branch (ESC-63): « main ✗ depuis 2 h »; its jobs, their logs and their re-run on a click. -->
+      <span class="target-ci"><CiPill ci={targetPill} of={{ kind: 'target', id: project.id }} projectId={project.id} /></span>
+    {/if}
     {#if !app.enginesFound.length}
       <!-- No place is worth showing: nothing starts without a harness. -->
       <span class="places missing" use:tip={{ text: t('board.header.noEngine'), cut: true }}>{t('board.header.noEngine')}</span>
@@ -64,8 +77,8 @@
       <!-- Nor while the target branch cannot start a ticket. -->
       <span class="places missing" use:tip={{ text: issue, cut: true }}>{issue}</span>
       {#if noAccount}<button class="btn add-account" onclick={() => addAccount(engine)}>{t('accounts.tab.add')}</button>{/if}
-    {:else if pause}
-      <!-- Nor while the autopilot is paused: the band under the header says why. -->
+    {:else if pause || redHold}
+      <!-- Nor while the autopilot is paused (a quota, a limit, a red target): the band under the header says why. -->
     {:else}
       <span class="places" use:tip={{ text: places, cut: true }}>{places}</span>
     {/if}
@@ -108,6 +121,17 @@
       <span class="why" use:tip={{ text: paused, cut: true }}>{paused}</span>
       {#if over}<span class="over" use:tip={{ text: over, cut: true }}>{over}</span>{/if}
       <button class="btn" onclick={() => app.run(api.autopilotResume())}>{t('board.header.resumeNow')}</button>
+    </div>
+  {/if}
+  {#if redHold && targetCi}
+    <!-- « Pause quand la CI de la cible est rouge » (ESC-63): nothing starts by itself until it is green again. -->
+    {@const why = t('board.ci.paused', { branch: targetCi.branch, since: targetCi.redSince ? fSince(targetCi.redSince, app.now) : '' })}
+    <div class="band pause" role="status" data-red-target>
+      <Icon name="pause" size={14} />
+      <span class="why" use:tip={{ text: why, cut: true }}>{why}</span>
+      <button class="btn" onclick={() => (app.modal = { kind: 'ci', of: { kind: 'target', id: project.id }, projectId: project.id })}
+        >{t('board.ci.pausedShow')}</button
+      >
     </div>
   {/if}
   {#if hasPending(project)}
@@ -154,6 +178,12 @@
     padding: 0 14px 0 22px;
     border-bottom: 1px solid var(--line);
     white-space: nowrap;
+  }
+  .target-ci {
+    display: flex;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 240px;
   }
   .h-title {
     display: grid;

@@ -168,6 +168,25 @@ pub trait Forge: Send + Sync {
         unsupported("rerun_failed")
     }
 
+    /// The checks of the last commit of a branch (the target, a branch pushed without a pull
+    /// request), as `checks` gives a pull request's (ESC-63).
+    fn branch_checks<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+        _branch: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<Check>>> {
+        unsupported("branch_checks")
+    }
+
+    /// Run the failed jobs of the last commit of a branch again; how many runs started (ESC-63).
+    fn rerun_failed_of_branch<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+        _branch: &'a str,
+    ) -> BoxFuture<'a, Result<usize>> {
+        unsupported("rerun_failed_of_branch")
+    }
+
     /// Publish a review the user validated.
     fn review<'a>(
         &'a self,

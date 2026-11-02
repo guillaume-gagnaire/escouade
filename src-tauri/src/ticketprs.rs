@@ -805,6 +805,8 @@ impl<R: tauri::Runtime> Core<R> {
                 if let Err(e) = self.ticket_prs_refresh(None).await {
                     log::info!("tickets' pull requests not read: {e:#}");
                 }
+                // The targets' CI and the branches the tickets pushed, in the same pass (ESC-63).
+                self.branch_cis_refresh(None, false).await;
                 let wait = every(self.window_in_front.load(Ordering::Acquire));
                 tokio::select! {
                     _ = tokio::time::sleep(wait) => {}

@@ -654,6 +654,30 @@ impl Forge for ProcessForge {
         ))
     }
 
+    fn branch_checks<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        branch: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<Check>>> {
+        Box::pin(self.ask(
+            "forge/branchChecks",
+            "branch_checks",
+            json!({ "repo": repo, "branch": branch }),
+        ))
+    }
+
+    fn rerun_failed_of_branch<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        branch: &'a str,
+    ) -> BoxFuture<'a, Result<usize>> {
+        Box::pin(self.ask(
+            "forge/rerunFailedOfBranch",
+            "rerun_failed_of_branch",
+            json!({ "repo": repo, "branch": branch }),
+        ))
+    }
+
     fn review<'a>(
         &'a self,
         repo: &'a RepoRef,

@@ -61,6 +61,15 @@ describe('BoardTab in English', () => {
     expect(settingsForm.project!.board.cleanup).toBe(false);
   });
 
+  it('leaves the pause on a red target off by default, and turns it on (ESC-63)', async () => {
+    render(BoardTab, { project: app.projects[0] });
+    const pause = screen.getByRole('switch', { name: 'Pause while the target’s CI is red' });
+    expect(pause).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByText(/The autopilot starts no ticket while the CI of the target branch fails/)).toBeInTheDocument();
+    await userEvent.click(pause);
+    expect(settingsForm.project!.board.pauseOnRedTarget).toBe(true);
+  });
+
   it('writes the tests, the commit message and the conflicts', () => {
     render(BoardTab, { project: app.projects[0] });
     expect(screen.getByRole('textbox', { name: 'Test command' })).toHaveAttribute('placeholder', 'e.g. npm test');

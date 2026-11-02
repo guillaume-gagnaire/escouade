@@ -1233,6 +1233,77 @@ async fn real_azure_devops() {
     assert_eq!(after.state, PrState::Closed);
 }
 
+/// A branch's checks (ESC-63): the last status of each context of its last commit, and the
+/// newest build of each pipeline that built it in this repository; failed builds retried.
+#[tokio::test]
+async fn a_branchs_checks_are_its_commits_statuses_and_its_builds() {
+    let server = FakeServer::start().await;
+    server.on(
+        "GET",
+        &format!("{REPO}/refs"),
+        200,
+        json!({ "value": [
+            { "name": "refs/heads/main-old", "objectId": "0000" },
+            { "name": "refs/heads/main", "objectId": "abc123" },
+        ] }),
+    );
+    server.on(
+        "GET",
+        &format!("{REPO}/commits/abc123/statuses"),
+        200,
+        fixture("statuses"),
+    );
+    server.on(
+        "GET",
+        &format!("{PROJECT}/build/builds"),
+        200,
+        json!({ "value": [
+            { "id": 61, "status": "completed", "result": "failed", "sourceVersion": "abc123",
+              "definition": { "id": 7, "name": "CI" }, "repository": { "name": "demo" } },
+            { "id": 60, "status": "completed", "result": "succeeded", "sourceVersion": "abc123",
+              "definition": { "id": 7, "name": "CI" }, "repository": { "name": "demo" } },
+            { "id": 62, "status": "completed", "result": "failed", "sourceVersion": "abc123",
+              "definition": { "id": 8, "name": "Other" }, "repository": { "name": "other" } },
+            { "id": 59, "status": "completed", "result": "failed", "sourceVersion": "0ld",
+              "definition": { "id": 9, "name": "Old" }, "repository": { "name": "demo" } },
+        ] }),
+    );
+    let checks = client(&server)
+        .branch_checks(&repo(), "main")
+        .await
+        .unwrap();
+    let ci: Vec<_> = checks.iter().filter(|c| c.job.is_some()).collect();
+    assert_eq!(ci.len(), 1, "{checks:?}");
+    assert_eq!(
+        (ci[0].name.as_str(), ci[0].state, ci[0].job.as_deref()),
+        ("CI", CheckState::Failure, Some("61"))
+    );
+    let sonar = checks.iter().find(|c| c.name == "quality/sonar").unwrap();
+    assert_eq!(sonar.state, CheckState::Success, "its last status");
+    let asked = server
+        .requests()
+        .into_iter()
+        .find(|r| r.path().ends_with("/build/builds"))
+        .unwrap();
+    assert_eq!(
+        asked.query("branchName").as_deref(),
+        Some("refs/heads/main")
+    );
+    server.on(
+        "PATCH",
+        &format!("{PROJECT}/build/builds/61"),
+        200,
+        json!({ "id": 61 }),
+    );
+    assert_eq!(
+        client(&server)
+            .rerun_failed_of_branch(&repo(), "main")
+            .await
+            .unwrap(),
+        1
+    );
+}
+
 /// How a pull request may merge (ESC-62): its branch's merge policy, and auto-complete.
 #[tokio::test]
 async fn the_branchs_policy_says_how_a_pull_request_may_merge() {

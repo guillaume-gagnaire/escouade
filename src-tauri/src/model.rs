@@ -1247,6 +1247,9 @@ pub struct Ticket {
     /// Its pull request, opened by its validation through its host's API (ESC-59): what its card
     /// « En revue » shows, as last read. Kept once it is done.
     pub pr: Option<TicketPr>,
+    /// The branch its validation pushed without a pull request (« Valider et pousser », ESC-63)
+    /// and its CI as last read: the pill of its card « Terminé ». None otherwise.
+    pub pushed: Option<crate::branchci::BranchCi>,
 }
 
 /// The pull request of a ticket « En revue » (ESC-59), as its host last told it.
@@ -1496,6 +1499,9 @@ pub struct BoardSettings {
     pub effort: String,
     pub mode: String,
     pub autopilot: bool,
+    /// « Pause quand la CI de la cible est rouge » (ESC-63): the autopilot starts no ticket while
+    /// the target's CI is red as last read (one launched by hand starts). Off by default.
+    pub pause_on_red_target: bool,
     /// The tickets' key prefix, fixed by the first ticket.
     pub prefix: String,
     /// The next ticket's number (never reused).
@@ -1524,6 +1530,7 @@ impl Default for BoardSettings {
             effort: String::new(),
             mode: String::new(),
             autopilot: true,
+            pause_on_red_target: false,
             prefix: String::new(),
             next_number: 1,
         }
@@ -1884,6 +1891,11 @@ pub struct AgentMeta {
     /// its card says, its pull requests read last kept. Gone at the next read that works.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pr_down: Option<String>,
+    /// Its branch pushed without a pull request (ESC-63): its CI as last read with its pull
+    /// requests, the pill under its card. None while it has a pull request, or its branch is not
+    /// pushed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch_ci: Option<crate::branchci::BranchCi>,
     /// Its worktree was switched to another branch by the user (the status bar's picker): the
     /// agent is told with the next message it gets, then this goes.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -2949,6 +2961,13 @@ pub enum UiEvent {
     BoardIssue {
         project_id: String,
         issue: Option<String>,
+    },
+    /// The CI of a project's target branch as last read (ESC-63), or None when it has none to show
+    /// (no remote on a host Escouade reads, no account there).
+    #[serde(rename_all = "camelCase")]
+    TargetCi {
+        project_id: String,
+        ci: Option<crate::branchci::BranchCi>,
     },
     /// Why no ticket of a board starts for now (a quota, a usage limit), or None once they may
     /// start again: `pause` for the projects that go to any account, `projects` for the paused

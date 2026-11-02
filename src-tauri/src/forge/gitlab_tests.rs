@@ -807,6 +807,59 @@ fn now_secs() -> u64 {
         .as_secs()
 }
 
+/// A branch's checks (ESC-63): the jobs of its last pipeline; failed, retried in one call.
+#[tokio::test]
+async fn a_branchs_checks_are_its_last_pipelines_jobs_retried_in_one_call() {
+    let server = FakeServer::start().await;
+    server.on(
+        "GET",
+        &format!("{P}/pipelines"),
+        200,
+        json!([{ "id": 3004244757u64, "project_id": 65271576, "ref": "main", "status": "failed" }]),
+    );
+    let mut jobs = fixture("jobs");
+    jobs[0]["status"] = "failed".into();
+    server.on("GET", JOBS, 200, jobs);
+    server.on(
+        "POST",
+        "/projects/65271576/pipelines/3004244757/retry",
+        201,
+        json!({"id": 3004244757u64, "status": "pending"}),
+    );
+    let checks = client(&server)
+        .branch_checks(&repo(), "main")
+        .await
+        .unwrap();
+    assert!(!checks.is_empty());
+    assert_eq!(checks[0].state, CheckState::Failure);
+    assert!(
+        checks
+            .iter()
+            .all(|c| c.job.as_deref().is_some_and(|j| !j.contains(':'))),
+        "jobs of the project itself"
+    );
+    let asked = server
+        .requests()
+        .into_iter()
+        .find(|r| r.path() == format!("{P}/pipelines"))
+        .unwrap();
+    assert_eq!(asked.query("ref").as_deref(), Some("main"));
+    assert_eq!(
+        client(&server)
+            .rerun_failed_of_branch(&repo(), "main")
+            .await
+            .unwrap(),
+        1
+    );
+    // A branch without a pipeline: no check, nothing to retry.
+    server.on("GET", &format!("{P}/pipelines"), 200, json!([]));
+    assert!(client(&server)
+        .branch_checks(&repo(), "main")
+        .await
+        .unwrap()
+        .is_empty());
+}
+
 /// How a merge request may merge (ESC-62): `squash_option` says whether a merge commit or a
 /// squash is allowed; GitLab's auto-merge is always there.
 #[tokio::test]

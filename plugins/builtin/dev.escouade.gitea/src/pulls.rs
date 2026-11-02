@@ -307,12 +307,37 @@ impl Gitea {
 
     async fn check_list(&self, repo: &RepoRef, number: u64) -> Result<Vec<Check>> {
         let sha = self.head_sha(repo, number).await?;
+        self.checks_at(repo, &sha).await
+    }
+
+    /// The last commit of a branch (ESC-63).
+    async fn branch_sha(&self, repo: &RepoRef, branch: &str) -> Result<String> {
+        let b = self
+            .get(&format!(
+                "{}/branches/{}",
+                Self::repo_path(repo),
+                enc(branch)
+            ))
+            .await?;
+        b["commit"]["id"]
+            .as_str()
+            .map(str::to_string)
+            .ok_or_else(|| {
+                anyhow!(tr!(
+                    "{NAME} : branche {branch} sans commit",
+                    "{NAME}: branch {branch} without commit"
+                ))
+            })
+    }
+
+    /// The statuses of a commit, with the Actions job each one points to.
+    async fn checks_at(&self, repo: &RepoRef, sha: &str) -> Result<Vec<Check>> {
         let base = Self::repo_path(repo);
         let statuses = self
-            .list(&format!("{base}/commits/{}/statuses", enc(&sha)), None)
+            .list(&format!("{base}/commits/{}/statuses", enc(sha)), None)
             .await?;
         // Actions post their statuses with the address of the job: `.../actions/runs/<number>/jobs/<index>`.
-        let runs = self.runs(repo, &sha).await.unwrap_or_default();
+        let runs = self.runs(repo, sha).await.unwrap_or_default();
         // The statuses are listed newest first: a context counts once, by its latest.
         let mut seen = BTreeSet::new();
         let mut out = Vec::new();
@@ -336,6 +361,35 @@ impl Gitea {
             });
         }
         Ok(out)
+    }
+
+    /// The failed Actions jobs of the commit `sha` run again, once per run: how many runs.
+    async fn rerun_at(&self, repo: &RepoRef, sha: &str) -> Result<usize> {
+        let runs = self.runs(repo, sha).await?;
+        let mut failed = BTreeSet::new();
+        for c in self.checks_at(repo, sha).await? {
+            let (CheckState::Failure, Some(job)) = (c.state, c.job) else {
+                continue;
+            };
+            if let Some(r) = runs
+                .iter()
+                .find(|r| r.jobs.iter().any(|j| j.id.to_string() == job))
+            {
+                failed.insert(r.id);
+            }
+        }
+        for run in &failed {
+            self.write(
+                Method::POST,
+                &format!(
+                    "{}/actions/runs/{run}/rerun-failed-jobs",
+                    Self::repo_path(repo)
+                ),
+                json!({}),
+            )
+            .await?;
+        }
+        Ok(failed.len())
     }
 
     async fn head_sha(&self, repo: &RepoRef, number: u64) -> Result<String> {
@@ -777,31 +831,32 @@ impl Forge for Gitea {
                 return Err(Unsupported("rerun_failed").into());
             }
             let sha = self.head_sha(repo, number).await?;
-            let runs = self.runs(repo, &sha).await?;
-            let mut failed = BTreeSet::new();
-            for c in self.check_list(repo, number).await? {
-                let (CheckState::Failure, Some(job)) = (c.state, c.job) else {
-                    continue;
-                };
-                if let Some(r) = runs
-                    .iter()
-                    .find(|r| r.jobs.iter().any(|j| j.id.to_string() == job))
-                {
-                    failed.insert(r.id);
-                }
+            self.rerun_at(repo, &sha).await
+        })
+    }
+
+    fn branch_checks<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        branch: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<Check>>> {
+        Box::pin(async move {
+            let sha = self.branch_sha(repo, branch).await?;
+            self.checks_at(repo, &sha).await
+        })
+    }
+
+    fn rerun_failed_of_branch<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        branch: &'a str,
+    ) -> BoxFuture<'a, Result<usize>> {
+        Box::pin(async move {
+            if !self.instance().await?.rerun() {
+                return Err(Unsupported("rerun_failed_of_branch").into());
             }
-            for run in &failed {
-                self.write(
-                    Method::POST,
-                    &format!(
-                        "{}/actions/runs/{run}/rerun-failed-jobs",
-                        Self::repo_path(repo)
-                    ),
-                    json!({}),
-                )
-                .await?;
-            }
-            Ok(failed.len())
+            let sha = self.branch_sha(repo, branch).await?;
+            self.rerun_at(repo, &sha).await
         })
     }
 

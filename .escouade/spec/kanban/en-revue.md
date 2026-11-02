@@ -2,7 +2,7 @@
 title: "En revue"
 subject: "kanban"
 sources: ["docs/TODO-1.8.md"]
-tickets: ["ESC-59","ESC-60","ESC-61","ESC-62"]
+tickets: ["ESC-59","ESC-60","ESC-61","ESC-62","ESC-63"]
 decisions: [55,56,58]
 compared: null
 ---
@@ -23,7 +23,7 @@ La colonne « En revue », entre « À tester » et « Terminé », tient les ti
 
 - Le numéro, cliquable, avec le mot de l'hébergeur (« PR #12 », « MR #4 » sur GitLab) et l'icône de sa CI, comme les PR des agents dans la barre latérale ; un clic l'ouvre dans le navigateur.
 - Son état en un mot : brouillon, ouverte, approuvée, changements demandés, fermée.
-- Sa CI et ses jobs : « CI verte · 3 jobs », « CI en cours · 2 jobs », « 1/4 jobs en échec ».
+- Sa CI et ses jobs : « CI verte · 3 jobs », « CI en cours · 2 jobs », « 1/4 jobs en échec ». Un clic ouvre ses jobs dans Escouade : le journal d'un job en échec en lecture seule, « Envoyer à un agent » et « Relancer les jobs en échec » (voir *CI de la cible et des branches poussées*).
 - Ses approbations, ses fils de discussion ouverts et un conflit avec la cible (« 1 approbation · 2 fils ouverts · conflit avec main »).
 - En haut à droite : « → <cible> ». Les critères ne s'y affichent plus.
 
@@ -92,10 +92,10 @@ Rien ne se merge sans un geste : les deux actions sont des boutons de la carte, 
 
 ### Le rafraîchissement
 
-- Pas de webhook : l'app n'a pas d'adresse publique. Escouade interroge l'hébergeur, et seulement pour les PR des tickets « En revue » (celles des agents ont leur propre lecture, voir *Pull requests*).
+- Pas de webhook : l'app n'a pas d'adresse publique. Escouade interroge l'hébergeur, et seulement pour les PR des tickets « En revue » (celles des agents ont leur propre lecture, voir *Pull requests*), avec, dans la même boucle, la CI des cibles et des branches poussées (voir *CI de la cible et des branches poussées*).
 - Toutes les minutes quand la fenêtre est au premier plan, toutes les 5 minutes sinon.
-- Tout de suite après un push d'Escouade (une validation qui ouvre une PR, « Pousser », la fin d'une correction de CI, des retours ou d'une mise à jour de la branche) et quand la fenêtre revient au premier plan ; et sur « Rafraîchir ».
-- Les PR d'un même dépôt se lisent ensemble : une seule requête GraphQL sur GitHub ; les jobs de la CI se comptent par une requête de plus, seulement pour une PR ouverte qui a une CI. Les journaux ne se lisent qu'au moment de la correction. Ce que le dépôt autorise pour le merge se lit une fois par PR. La même lecture sert l'attente de « Merger quand c'est vert » : pas de seconde boucle.
+- Tout de suite après un push d'Escouade (une validation qui ouvre une PR, « Pousser », la fin d'une correction de CI, des retours ou d'une mise à jour de la branche), quand la fenêtre revient au premier plan et à la connexion d'un compte d'hébergeur ; et sur « Rafraîchir ».
+- Les PR d'un même dépôt se lisent ensemble : une seule requête GraphQL sur GitHub ; les jobs de la CI se comptent par une requête de plus, seulement pour une PR ouverte qui a une CI. Les journaux ne se lisent qu'au moment de la correction, ou à l'ouverture d'un job. Ce que le dépôt autorise pour le merge se lit une fois par PR. La même lecture sert l'attente de « Merger quand c'est vert » : pas de seconde boucle.
 
 ### Les erreurs
 
@@ -105,7 +105,7 @@ Rien ne se merge sans un geste : les deux actions sont des boutons de la carte, 
 ### Le pilote auto
 
 - Un ticket « En revue » ne prend de place parmi les tickets en parallèle que pendant que son agent corrige sa CI, ses retours ou met à jour sa branche : son agent est archivé le reste du temps.
-- Avec le pilote auto, une CI en échec part seule chez l'agent, quand une place est libre et que la pause au-delà du quota ne retient pas son compte, avant les tickets « À faire ».
+- Avec le pilote auto, une CI en échec part seule chez l'agent, quand une place est libre et que la pause au-delà du quota ne retient pas son compte, avant les tickets « À faire ». La pause sur une cible rouge ne la retient pas.
 - Il ne la renvoie que dans la limite des boucles du ticket (3, 5 ou 8) ; au-delà, la carte dit « Boucles épuisées (3/3) : le pilote auto ne la renvoie plus », et « L'agent corrige » reste à la main.
 - Il ne renvoie pas le même échec deux fois : après une correction (réussie ou non), il attend que la CI tourne de nouveau (en cours, verte ou absente) avant de la renvoyer.
 - Sans le pilote auto, rien ne part seul : « L'agent corrige » sur la carte.

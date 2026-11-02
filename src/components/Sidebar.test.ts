@@ -8,7 +8,19 @@ import { setLang } from '../lib/i18n';
 import { menu } from '../lib/menu.svelte';
 import { app } from '../lib/state.svelte';
 import { openTerminal } from '../lib/terminals';
-import { agent, BARE_ENGINE, branchInfo, CLAUDE_ENGINE, fakeBackend, gitInfo, project, pullRequest, resetApp, ticket } from '../test/ipc';
+import {
+  agent,
+  BARE_ENGINE,
+  branchCi,
+  branchInfo,
+  CLAUDE_ENGINE,
+  fakeBackend,
+  gitInfo,
+  project,
+  pullRequest,
+  resetApp,
+  ticket,
+} from '../test/ipc';
 import ContextMenu from './ContextMenu.svelte';
 import Sidebar from './Sidebar.svelte';
 import { getByTip } from '../test/tip';
@@ -2837,6 +2849,20 @@ describe('Sidebar — an agent’s pull requests (ESC-64)', () => {
     expect(down).toHaveTextContent('Hébergeur arrêté : PR plus suivies');
     expect(down).toHaveAttribute('data-pr-down');
     expect(within(screen.getByRole('group', { name: 'Pull requests de refacto-auth' })).getByText(/#12/)).toBeInTheDocument();
+  });
+
+  it('shows under the card the CI of its branch pushed without a pull request, its jobs on a click (ESC-63)', async () => {
+    resetApp({
+      projects: [project()],
+      agents: [agent({ worktree: WT, prWord: 'PR', branchCi: branchCi({ branch: WT.branch }) })],
+    });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const group = within(screen.getByRole('group', { name: 'Pull requests de refacto-auth' }));
+    const pill = group.getByRole('button', { name: new RegExp(`^CI de ${WT.branch}`) });
+    expect(pill).toHaveTextContent(`${WT.branch} ✗ depuis 2 h`);
+    await userEvent.click(pill);
+    expect(app.modal).toEqual({ kind: 'ci', of: { kind: 'agent', id: 'a1' }, projectId: 'p1' });
   });
 
   it('says it in English', async () => {

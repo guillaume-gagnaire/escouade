@@ -390,6 +390,16 @@ async fn forge_call(f: &dyn Forge, name: &str, p: &Value) -> Result<Value, Refus
         "checks" => to_value(f.checks(&repo()?, number()?).await.map_err(refusal)?),
         "jobLog" => to_value(f.job_log(&repo()?, &text("job")?).await.map_err(refusal)?),
         "rerunFailed" => to_value(f.rerun_failed(&repo()?, number()?).await.map_err(refusal)?),
+        "branchChecks" => to_value(
+            f.branch_checks(&repo()?, &text("branch")?)
+                .await
+                .map_err(refusal)?,
+        ),
+        "rerunFailedOfBranch" => to_value(
+            f.rerun_failed_of_branch(&repo()?, &text("branch")?)
+                .await
+                .map_err(refusal)?,
+        ),
         "reviews" => to_value(f.reviews(&repo()?, number()?).await.map_err(refusal)?),
         "comments" => to_value(f.comments(&repo()?, number()?).await.map_err(refusal)?),
         "comment" => done(f.comment(&repo()?, number()?, &text("body")?).await),

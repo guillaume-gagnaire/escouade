@@ -114,6 +114,9 @@ function seed() {
       repo: { allow_merge_commit: true, allow_squash_merge: true, allow_rebase_merge: true, allow_auto_merge: false },
       // The forks and the repository each was forked from (`repository.parent`).
       forks: { 'ada/demo': 'acme/demo', 'bob/demo': 'acme/demo' },
+      // The CI of the branches without a pull request (ESC-63), by name: none until POST /__github/branches/<name>
+      // sets it ({ checks: 'FAILURE' | 'SUCCESS' | 'PENDING', thirdParty }); its job `test` (91) keeps a coloured log.
+      branches: {},
     },
     // Azure DevOps (ESC-241): the pull requests opened by the app on acme/demo/demo, from #101, until POST
     // /__azure/pulls/<n> sets what a test wants of them ({ checks: 'FAILURE', changesRequested: true, … }).
@@ -695,6 +698,59 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
       assignee: i.assignee ? { login: i.assignee } : null,
     });
     // ---------- GitHub's pull requests (ESC-64) ----------
+    // ---------- The CI of a branch without a pull request (ESC-63) ----------
+    m = p.match(/^\/__github\/branches\/(.+)$/);
+    if (m) {
+      g.branches[decodeURIComponent(m[1])] = json() ?? {};
+      return send(200, g.branches[decodeURIComponent(m[1])]);
+    }
+    m = p.match(/^\/github\/repos\/acme\/demo\/commits\/(.+)\/(check-runs|status)$/);
+    if (m && !/^sha\d+$/.test(m[1])) {
+      const b = g.branches[decodeURIComponent(m[1])];
+      const failed = b?.checks === 'FAILURE';
+      if (m[2] === 'status')
+        return send(200, {
+          statuses:
+            failed && b?.thirdParty ? [{ context: 'ci/jenkins', state: 'failure', target_url: 'https://jenkins.example.com/job/9' }] : [],
+        });
+      if (!b) return send(200, { total_count: 0, check_runs: [] });
+      const running = b.checks === 'PENDING';
+      const at = (h) => new Date(Date.now() - h * 3600_000).toISOString();
+      return send(200, {
+        check_runs: [
+          {
+            id: 91,
+            name: 'test',
+            status: running ? 'in_progress' : 'completed',
+            conclusion: running ? null : failed ? 'failure' : 'success',
+            started_at: at(2.6),
+            completed_at: running ? null : at(2.5),
+            html_url: 'https://github.com/acme/demo/actions/runs/9/job/91',
+            app: { slug: 'github-actions' },
+          },
+          {
+            id: 92,
+            name: 'lint',
+            status: 'completed',
+            conclusion: 'success',
+            started_at: at(2.6),
+            completed_at: at(2.59),
+            html_url: 'https://github.com/acme/demo/actions/runs/9/job/92',
+            app: { slug: 'github-actions' },
+          },
+        ],
+      });
+    }
+    if (p === '/github/repos/acme/demo/actions/jobs/91/logs')
+      return send.text(
+        200,
+        '##[group]Run npm test\nnpm test\n\x1b[31mFAIL\x1b[0m src/main.test.ts\n##[error]Process completed with exit code 1.\n',
+      );
+    if (p === '/github/repos/acme/demo/actions/jobs/91') return send(200, { id: 91, run_id: 9 });
+    if (p === '/github/repos/acme/demo/actions/runs/9/rerun-failed-jobs' && method === 'POST') {
+      for (const b of Object.values(g.branches)) if (b.checks === 'FAILURE') b.checks = 'PENDING';
+      return send(201, {});
+    }
     m = p.match(/^\/__github\/pulls\/(\d+)$/);
     if (m) {
       const pull = g.pulls.find((x) => x.number === Number(m[1]));

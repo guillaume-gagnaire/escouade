@@ -1699,7 +1699,12 @@ impl<R: Runtime> Core<R> {
             let ids = {
                 let tickets = self.tickets.read().clone();
                 let mut held: HashMap<(EngineId, bool, Option<String>), bool> = HashMap::new();
+                // « Pause quand la CI de la cible est rouge » (ESC-63): the autopilot's alone.
+                let red = self.red_target_holds(&p);
                 board::to_start(&tickets, &p.id, &p.board, |t| {
+                    if red && !t.forced {
+                        return true;
+                    }
                     let e = engine_of(t);
                     // One set on an account waits for that account alone (ESC-153).
                     if !t.account.is_empty() {
@@ -3031,6 +3036,7 @@ impl<R: Runtime> Core<R> {
         // never committed, merged or pushed. Git ignores them, so only an agent that forced one in
         // could; checked all the same.
         let mut pr: Option<TicketPr> = None;
+        let mut pushed: Option<crate::branchci::BranchCi> = None;
         let (outcome, nothing) = if wt.is_multi() {
             // Of several repositories (ESC-169): each one's, checked first, all or nothing.
             match self.validate_repos(t, &s, &project, &wt, &agent_id).await? {
@@ -3121,7 +3127,9 @@ impl<R: Runtime> Core<R> {
                 }
                 "push" => {
                     self.set_step(&t.id, "Push…");
-                    git::push_branch(&wt.path, &wt.branch).await?;
+                    let to = git::push_branch(&wt.path, &wt.branch).await?;
+                    // Its CI followed on its card (ESC-63), on a host Escouade reads.
+                    pushed = self.pushed_ci(&wt.path, &to, &wt.branch).await;
                     board::Outcome::of(lang, |l| board::pushed_outcome(l, &wt.branch))
                 }
                 _ => board::Outcome::of(lang, board::kept_outcome),
@@ -3131,6 +3139,7 @@ impl<R: Runtime> Core<R> {
         // Opened through its host's API: the ticket waits « En revue » for its merge there
         // (ESC-59), and its pull request is read at once.
         let in_review = pr.is_some();
+        let has_pushed = pushed.is_some();
         // What every agent of the ticket cost, archived ones included (a ticket sent back and taken
         // over has several), as « À tester » and the statistics add it up; at least its own.
         let own = self
@@ -3163,10 +3172,11 @@ impl<R: Runtime> Core<R> {
             x.outcome_commit = outcome.commit;
             x.done_at = (!in_review).then(now_ms);
             x.pr = pr;
+            x.pushed = pushed;
             x.cost = cost;
             Ok(())
         })?;
-        if in_review {
+        if in_review || has_pushed {
             self.wake_ticket_prs();
         }
         if let Some(merged) = merged {
@@ -3530,6 +3540,31 @@ impl<R: Runtime> Core<R> {
         let outcome =
             board::Outcome::of(lang, |l| board::pushed_for_pr_outcome(l, &word, &wt.branch));
         Ok((outcome.with_url(url), None))
+    }
+
+    /// The CI to follow of a branch pushed to the remote `to` (ESC-63): on a host Escouade knows
+    /// and reads the checks of, else none.
+    async fn pushed_ci(
+        &self,
+        path: &str,
+        to: &str,
+        branch: &str,
+    ) -> Option<crate::branchci::BranchCi> {
+        let remote = self.remote_named(path, to).await?;
+        let kind = remote.kind.clone()?;
+        let caps = self.forges.read().get(&kind)?.capabilities();
+        if !caps.checks {
+            return None;
+        }
+        Some(crate::branchci::BranchCi {
+            kind,
+            host: remote.host,
+            namespace: remote.repo.namespace,
+            name: remote.repo.name,
+            branch: branch.to_string(),
+            rerun: caps.rerun,
+            ..Default::default()
+        })
     }
 
     /// What the remote `name` of the repository at `path` names: its code host and repository.

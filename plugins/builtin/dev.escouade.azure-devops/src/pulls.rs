@@ -674,6 +674,131 @@ impl Azure {
         Ok(out)
     }
 
+    /// The checks of the last commit of a branch (ESC-63): the statuses of that commit, and the
+    /// newest build of each pipeline that built the branch in this repository.
+    async fn branch_check_list(&self, repo: &RepoRef, branch: &str) -> Result<Vec<Check>> {
+        let (org, project) = parts(repo);
+        let web = format!("{}/{}", self.org_url(org), enc(project));
+        let full = format!("refs/heads/{branch}");
+        let refs = self
+            .list(
+                format!(
+                    "{}/refs?filter={}",
+                    self.repo_api(repo),
+                    enc(&format!("heads/{branch}"))
+                ),
+                VERSION,
+            )
+            .await?;
+        let sha = refs
+            .iter()
+            .find(|r| r["name"].as_str() == Some(full.as_str()))
+            .and_then(|r| r["objectId"].as_str())
+            .map(str::to_string);
+        let mut out: Vec<Check> = Vec::new();
+        if let Some(sha) = &sha {
+            for s in self
+                .list(
+                    format!(
+                        "{}/commits/{}/statuses?latestOnly=true",
+                        self.repo_api(repo),
+                        enc(sha)
+                    ),
+                    VERSION,
+                )
+                .await?
+            {
+                let ctx = &s["context"];
+                let name = match (ctx["genre"].as_str(), ctx["name"].as_str()) {
+                    (Some(g), Some(n)) if !g.is_empty() => format!("{g}/{n}"),
+                    (_, Some(n)) => n.to_string(),
+                    _ => "status".to_string(),
+                };
+                // A context counts once, by its last status (listed after the earlier ones).
+                out.retain(|c| c.name != name);
+                out.push(Check {
+                    name,
+                    state: match s["state"].as_str() {
+                        Some("succeeded") => CheckState::Success,
+                        Some("failed" | "error") => CheckState::Failure,
+                        Some("notApplicable") => CheckState::Skipped,
+                        _ => CheckState::Pending,
+                    },
+                    url: s["targetUrl"].as_str().map(str::to_string),
+                    ..Default::default()
+                });
+            }
+        }
+        let builds = self
+            .list(
+                format!(
+                    "{}/build/builds?branchName={}&queryOrder=queueTimeDescending&$top=50",
+                    self.project_api(repo),
+                    enc(&full)
+                ),
+                VERSION,
+            )
+            .await?;
+        let mut seen = BTreeSet::new();
+        for b in &builds {
+            let Some(id) = b["id"].as_u64() else { continue };
+            // The builds of the same branch in another repository of the project.
+            if b["repository"]["name"]
+                .as_str()
+                .is_some_and(|n| !n.eq_ignore_ascii_case(&repo.name))
+            {
+                continue;
+            }
+            // Of the commit the branch is at, when it is known.
+            if let (Some(sha), Some(v)) = (&sha, b["sourceVersion"].as_str()) {
+                if !v.eq_ignore_ascii_case(sha) {
+                    continue;
+                }
+            }
+            if !seen.insert(b["definition"]["id"].as_u64().unwrap_or(0)) {
+                continue;
+            }
+            out.push(Check {
+                name: b["definition"]["name"]
+                    .as_str()
+                    .unwrap_or("Build")
+                    .to_string(),
+                state: build_state(b),
+                url: b["_links"]["web"]["href"]
+                    .as_str()
+                    .map(str::to_string)
+                    .or_else(|| Some(format!("{web}/_build/results?buildId={id}"))),
+                job: Some(id.to_string()),
+                started: instant(&b["startTime"]),
+                finished: instant(&b["finishTime"]),
+                cancelled: b["result"] == "canceled",
+            });
+        }
+        Ok(out)
+    }
+
+    /// Each failed build among `checks` retried (its failed jobs run again); how many.
+    async fn retry_builds(&self, repo: &RepoRef, checks: Vec<Check>) -> Result<usize> {
+        let builds: BTreeSet<String> = checks
+            .into_iter()
+            .filter(|c| c.state == CheckState::Failure)
+            .filter_map(|c| c.job)
+            .collect();
+        for id in &builds {
+            self.write(
+                reqwest::Method::PATCH,
+                format!(
+                    "{}/build/builds/{}?retry=true",
+                    self.project_api(repo),
+                    enc(id)
+                ),
+                json!({}),
+            )
+            .await?;
+        }
+        Ok(builds.len())
+    }
+
     /// The strategies the branch's merge policy allows; none when it has no such policy (or
     /// its policies cannot be read: Azure says then).
     async fn allowed(&self, repo: &RepoRef, p: &Value) -> Option<Vec<MergeStrategy>> {
@@ -1095,26 +1220,27 @@ impl Forge for Azure {
     fn rerun_failed<'a>(&'a self, repo: &'a RepoRef, number: u64) -> BoxFuture<'a, Result<usize>> {
         Box::pin(async move {
             let p = self.pr_value(repo, number).await?;
-            let builds: BTreeSet<String> = self
-                .check_list(repo, &p)
-                .await?
-                .into_iter()
-                .filter(|c| c.state == CheckState::Failure)
-                .filter_map(|c| c.job)
-                .collect();
-            for id in &builds {
-                self.write(
-                    reqwest::Method::PATCH,
-                    format!(
-                        "{}/build/builds/{}?retry=true",
-                        self.project_api(repo),
-                        enc(id)
-                    ),
-                    json!({}),
-                )
-                .await?;
-            }
-            Ok(builds.len())
+            let checks = self.check_list(repo, &p).await?;
+            self.retry_builds(repo, checks).await
+        })
+    }
+
+    fn branch_checks<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        branch: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<Check>>> {
+        Box::pin(async move { self.branch_check_list(repo, branch).await })
+    }
+
+    fn rerun_failed_of_branch<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        branch: &'a str,
+    ) -> BoxFuture<'a, Result<usize>> {
+        Box::pin(async move {
+            let checks = self.branch_check_list(repo, branch).await?;
+            self.retry_builds(repo, checks).await
         })
     }
 
