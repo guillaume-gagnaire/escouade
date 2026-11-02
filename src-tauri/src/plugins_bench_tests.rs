@@ -118,6 +118,10 @@ async fn the_fake_plugin_passes_every_scenario() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_examples_pass_and_what_does_not_concern_them_is_not_played() {
+    // slack and team-rules are run.js plugins since 2.0.0 (ESC-326): played in WASM.
+    if !crate::plugins_wasm_tests::ready() {
+        return;
+    }
     let slack = bench_own(&example("slack")).await;
     assert!(slack.passed(), "{}", slack.render(Lang::En));
     assert_eq!(verdict(&slack, Scenario::Fact), Verdict::Pass);
@@ -305,12 +309,15 @@ fn the_command_tests_and_validates_a_folder() {
     );
     assert_eq!(cli::main(args(&["validate", &theme, "--lang", "en"])), 1);
     assert_eq!(cli::main(args(&["test", &theme, "--lang", "en", own])), 0);
-    let rules = path(example("team-rules"));
-    let since = crate::plugins::wasm::SERVED_SINCE;
-    assert_eq!(
-        cli::main(args(&["test", &rules, "--json", own, "--escouade", since])),
-        0
-    );
+    // team-rules is a run.js plugin since 2.0.0 (ESC-326): its bench plays it in WASM.
+    if crate::plugins_wasm_tests::ready() {
+        let rules = path(example("team-rules"));
+        let since = crate::plugins::wasm::SERVED_SINCE;
+        assert_eq!(
+            cli::main(args(&["test", &rules, "--json", own, "--escouade", since])),
+            0
+        );
+    }
 
     let broken = fake("cli", &["--ignore-shutdown"]);
     assert_eq!(cli::main(args(&["test", &path(broken.clone())])), 1);

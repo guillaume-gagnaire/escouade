@@ -332,6 +332,11 @@ async fn the_plugins_decide_for_every_harness() {
 async fn the_team_rules_example_refuses_rm_rf_with_its_reason() {
     #[cfg(windows)]
     crate::paths::trim_test_path();
+    // team-rules is a run.js plugin since 2.0.0 (ESC-326): it runs in WASM, on escouade-js and the pinned Javy shared
+    // by the tests (`ready` fetches it once, before the 60 s of the waits below).
+    if !crate::plugins_wasm_tests::ready() {
+        return;
+    }
     let h = harness("plg8-team-rules");
     // Escouade's own plugin (plugins/team-rules, ESC-182 and ESC-314) as its repository holds it: its program
     // is dist/plugin.mjs, built and committed.
@@ -348,6 +353,15 @@ async fn the_team_rules_example_refuses_rm_rf_with_its_reason() {
     m["escouade"]["min"] = serde_json::json!(env!("CARGO_PKG_VERSION"));
     std::fs::write(&manifest, serde_json::to_string_pretty(&m).unwrap()).unwrap();
     h.core.plugins.load_dev(&dir, Lang::En).unwrap();
+    // Its module made now, before the waits' 60 s: Javy and wasmtime's compilation of a debug build take long on a
+    // busy machine (the CI's, 2026-11-02), as the app makes it at an install.
+    h.core
+        .plugin_runtime
+        .prepare("dev.escouade.team-rules")
+        .expect("a run.js plugin")
+        .join()
+        .unwrap()
+        .expect("its module");
     crate::plugins::decide::warm(&h.core.plugins, &h.core.plugin_runtime);
     let name = h
         .core
