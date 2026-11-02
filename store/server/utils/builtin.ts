@@ -65,12 +65,16 @@ export const BUILTINS: Builtin[] = [
     'GitHub Copilot CLI comme harness : la conversation, sa vue terminal, les permissions et les crédits du compte.',
     'GitHub Copilot CLI as a harness: the conversation, its terminal view, permissions and the account’s credits.',
   ),
-  harness(
-    'cursor-cli',
-    'Cursor CLI',
-    'Cursor CLI comme harness, par ACP : la conversation, les permissions, les modèles et l’usage du compte.',
-    'Cursor CLI as a harness, over ACP: the conversation, permissions, models and the account’s usage.',
-  ),
+  {
+    ...harness(
+      'cursor-cli',
+      'Cursor CLI',
+      'Cursor CLI comme harness, par ACP : la conversation, les permissions, les modèles et l’usage du compte.',
+      'Cursor CLI as a harness, over ACP: the conversation, permissions, models and the account’s usage.',
+    ),
+    // The first harness to have left the core (INT-10.1).
+    source: 'plugins/builtin/dev.escouade.cursor-cli',
+  },
   harness(
     'opencode',
     'OpenCode',

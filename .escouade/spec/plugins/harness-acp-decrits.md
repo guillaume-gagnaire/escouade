@@ -2,7 +2,7 @@
 title: "Les harness ACP décrits"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §1.1, §4.4, §4.12","docs/TODO-2.2.md, PLG-6","Essai réel de Goose 1.57.0 sur Ollama, 2026-11-01 (ESC-178)"]
-tickets: ["ESC-178"]
+tickets: ["ESC-178","ESC-222"]
 decisions: []
 compared: null
 ---
@@ -35,3 +35,9 @@ Le programme (`locate.names`, cherché dans le PATH ; un plugin tiers ne donne j
 ## Goose
 
 Le plugin `dev.escouade.goose` (`plugins/goose/`) décrit Goose : `goose acp`, modes approve, smart_approve et auto, `chat` en lecture seule, le modèle par l'option `model`, ses outils `shell`, `write`, `edit`, `read` sous les noms de Claude Code, `GOOSE_PATH_ROOT` par compte. Essai réel du 2026-11-01 avec Goose 1.57.0 sur Ollama (`real_goose`) : réponse, écriture et commande demandées puis accordées, jetons comptés. Goose écrit ses fichiers lui-même même quand le client annonce `fs` : `"fs": false`, aucun projet privé ne lui est ouvert.
+
+## Ajouts d'INT-10.1 (ESC-222)
+
+- Le service de `dev.escouade.acp` sert aussi un plugin de première main qui a son propre harness (`serve_as`) : Cursor CLI (*Cursor CLI en plugin*), dont la description est celle de son manifeste.
+- L'objet `acp` gagne `fenceOnPermissions` (avec `"fs": false`, la clôture tenue sur les seules permissions, crue d'un plugin livré seulement) ; le harness gagne `keyVar` (la variable de la clé d'un compte).
+- Le contrat gagne `relay` et `byKey` dans `engine/launch`, `content` dans `agent/sendMessage` (le message tel que le cœur l'a fait : ses images, ses fichiers texte) ; avec l'extension `cursor`, l'effort passe par l'option de chaque modèle (`cursor/list_available_models`).

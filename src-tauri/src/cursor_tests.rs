@@ -525,3 +525,44 @@ async fn compact_typed_to_a_cursor_agent_is_refused_with_where_it_works() {
     assert!(!h.agent(&id).status.is_active());
     h.core.stop_for_good();
 }
+
+/// INT-10.1: Cursor's conversation goes through its plugin (`dev.escouade.cursor-cli`). Switched off, an agent's start
+/// says so, and the agent keeps its session; on again, it talks as before.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_cursor_agent_says_its_plugin_is_off_and_talks_again_once_it_is_on() {
+    let h = harness("int10-cursor-off");
+    let (p, _) = h.project(false).await;
+    cursor_account(&h, &crate::engine::fake_cursor());
+    let a = cursor_agent(&h, &p.id, "default").await;
+    let id = crate::plugins::builtin::CURSOR;
+    h.core.plugins.choose(id, |c| c.enabled = false).unwrap();
+    h.core.plugin_runtime.forget(id);
+    h.core.sync_harnesses();
+    assert!(crate::engine::cursor::plugged().is_none());
+    let sent = h.core.send_message(&a, "bonjour".into(), vec![]).await;
+    let said = |h: &Harness| {
+        let items = Value::Array(h.items(&a)).to_string();
+        let err = sent
+            .as_ref()
+            .err()
+            .map(|e| e.to_string())
+            .unwrap_or_default();
+        format!("{err} {items}")
+    };
+    wait_long(&h, &a, "the plugin said off", 30, |h| said(h).contains(id)).await;
+    assert!(said(&h).contains("coupé"), "{}", said(&h));
+    h.core.plugins.choose(id, |c| c.enabled = true).unwrap();
+    h.core.sync_harnesses();
+    assert!(crate::engine::cursor::plugged().is_some());
+    let ended = |h: &Harness| {
+        texts(h, &a).iter().any(|t| t == "Cursor a reçu : bonjour")
+            && !h.agent(&a).status.is_active()
+    };
+    if !ended(&h) {
+        h.core
+            .send_message(&a, "bonjour".into(), vec![])
+            .await
+            .unwrap();
+    }
+    wait_long(&h, &a, "its answer", 30, ended).await;
+}

@@ -9,8 +9,8 @@
 
 use escouade_acp::Agent;
 use escouade_plugin_protocol::engine::{
-    method, AgentRef, AnswerPermission, AnswerQuestion, Attach, Frames, Items, LaunchParams,
-    SendMessage, SetValue, Usage, Writes,
+    method, AgentRef, AnswerPermission, AnswerQuestion, Attach, Frames, HarnessDecl, Items,
+    LaunchParams, SendMessage, SetValue, Usage, Writes,
 };
 use escouade_plugin_protocol::{serve, Refusal};
 use serde::de::DeserializeOwned;
@@ -22,6 +22,9 @@ use std::collections::HashMap;
 struct Plugin {
     version: String,
     agents: HashMap<String, Agent>,
+    /// The harness of a plugin of Escouade's own on this client (Cursor CLI, INT-10.1), as its manifest declares it:
+    /// taken when the core describes none (`described` is for the harnesses other plugins describe).
+    own: Option<HarnessDecl>,
 }
 
 fn invalid(e: impl std::fmt::Display) -> Refusal {
@@ -52,21 +55,39 @@ fn refused(message: String) -> Refusal {
 }
 
 pub fn run() -> i32 {
+    serve_as("acp", None)
+}
+
+/// The harnesses the manifest `manifest` declares (its `contributes.harnesses`), those that read.
+pub fn harnesses_of(manifest: &str) -> Vec<HarnessDecl> {
+    let v: Value = serde_json::from_str(manifest).unwrap_or_default();
+    v["contributes"]["harnesses"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|h| serde_json::from_value(h.clone()).ok())
+        .collect()
+}
+
+/// Serves the protocol as the entry `name` of `escouade-plugins`: the harnesses described with each agent, and `own`,
+/// the harness of a plugin of Escouade's own on this client, when the core describes none (Cursor CLI, INT-10.1).
+pub fn serve_as(name: &str, own: Option<HarnessDecl>) -> i32 {
     let mut plugin = Plugin {
         version: std::env::var("ESCOUADE_VERSION").unwrap_or_default(),
+        own,
         ..Plugin::default()
     };
     let stdin = std::io::stdin();
     let result = serve(
         stdin.lock(),
         std::io::stdout().lock(),
-        json!({ "harnesses": ["acp"] }),
+        json!({ "harnesses": [name] }),
         |m, params| plugin.handle(m, params),
     );
     match result {
         Ok(()) => 0,
         Err(e) => {
-            eprintln!("escouade-plugins acp: {e}");
+            eprintln!("escouade-plugins {name}: {e}");
             1
         }
     }
@@ -84,7 +105,7 @@ impl Plugin {
         match m {
             method::ATTACH => {
                 let a: Attach = read(params)?;
-                let Some(decl) = a.described.clone() else {
+                let Some(decl) = a.described.clone().or_else(|| self.own.clone()) else {
                     return Err(refused(
                         "dev.escouade.acp serves the harnesses a manifest describes: none given"
                             .into(),
@@ -107,7 +128,7 @@ impl Plugin {
             method::LAUNCH => {
                 let p: LaunchParams = read(params)?;
                 if !self.agents.contains_key(&p.agent) {
-                    let Some(decl) = p.described.clone() else {
+                    let Some(decl) = p.described.clone().or_else(|| self.own.clone()) else {
                         return Err(refused("no harness described".into()));
                     };
                     let a = Attach {
@@ -129,7 +150,10 @@ impl Plugin {
             }
             method::SEND_MESSAGE => {
                 let s: SendMessage = read(params)?;
-                writes(self.agent(&s.agent)?.send(&s.text))
+                writes(
+                    self.agent(&s.agent)?
+                        .send_content(&s.text, s.content.as_ref()),
+                )
             }
             method::INTERRUPT => {
                 let a: AgentRef = read(params)?;

@@ -35,7 +35,7 @@ fn fixtures() -> PathBuf {
 }
 
 /// Where the build put its programs (`escouade-plugins` among them).
-fn app_dir() -> PathBuf {
+pub(crate) fn app_dir() -> PathBuf {
     let exe = std::env::current_exe().unwrap();
     let dir = exe.parent().unwrap().parent().unwrap().to_path_buf();
     assert!(
@@ -69,7 +69,7 @@ fn fake_acp() -> Program {
 }
 
 /// The runtime of a data folder of its own: the plugins the app gives in it (the generic ACP plugin among them).
-fn runtime(name: &str) -> (Arc<Runtime>, Arc<Plugins>, DataDir) {
+pub(crate) fn runtime(name: &str) -> (Arc<Runtime>, Arc<Plugins>, DataDir) {
     let data = DataDir::new(bench_dir(&format!("plg6-{name}")).join("data"));
     let plugins = Plugins::load_in(data.clone(), VERSION, app_dir());
     let rt = Runtime::new(
@@ -215,24 +215,10 @@ fn what_the_manifest_declares_is_what_the_harness_is() {
     );
 }
 
-/// Cursor CLI described as an ACP harness with its extension `cursor`: what INT-10.1 will give.
+/// Cursor CLI as the manifest of its plugin declares it (INT-10.1): an ACP harness with its extension `cursor`.
 fn cursor_decl() -> Value {
-    json!({
-        "id": "cursor", "name": "Cursor CLI", "speaker": "Cursor",
-        "locate": { "names": ["agent"] },
-        "tested": { "oldest": "2026.10.22", "newest": "2026.10.22" },
-        "caps": { "modes": ["default", "plan", "acceptEdits", "bypassPermissions"] },
-        "models": [{ "id": "default", "label": "Auto" }],
-        "accountVar": "CURSOR_CONFIG_DIR",
-        "acp": {
-            "args": ["acp"],
-            "removeEnv": ["MSYSTEM", "EXEPATH"],
-            "fs": false,
-            "modes": { "default": "agent", "plan": "plan", "acceptEdits": "agent", "bypassPermissions": "agent" },
-            "modelOption": "model",
-            "extensions": ["cursor"]
-        }
-    })
+    let v: Value = serde_json::from_str(escouade_plugin_cursor::MANIFEST).unwrap();
+    v["contributes"]["harnesses"][0].clone()
 }
 
 struct FakeCursor(&'static ProcessEngine);
@@ -927,4 +913,125 @@ async fn the_fence_on_the_client_s_files_is_not_got_round_by_dots_a_relative_pat
     }
     a.stop().await;
     rt.shutdown();
+}
+
+/// INT-10.1: Cursor's effort goes by the option of its model, read from `cursor/list_available_models` (asked beside
+/// the session), as the core's client set it: once the session is open and the list there, and at each change.
+#[test]
+fn cursors_effort_is_set_by_the_option_its_models_list_gives() {
+    let decl: proto::HarnessDecl = serde_json::from_value(cursor_decl()).unwrap();
+    let attach = proto::Attach {
+        agent: "a".into(),
+        cwd: "C:/wt".into(),
+        model: "claude-opus-5-5".into(),
+        effort: "high".into(),
+        mode: "default".into(),
+        lang: "fr".into(),
+        ..proto::Attach::default()
+    };
+    let mut client = escouade_acp::Agent::new(&attach, &decl, VERSION);
+    let launch = client
+        .launch(&proto::LaunchParams {
+            agent: "a".into(),
+            cwd: "C:/wt".into(),
+            model: "claude-opus-5-5".into(),
+            effort: "high".into(),
+            mode: "default".into(),
+            lang: "fr".into(),
+            ..proto::LaunchParams::default()
+        })
+        .unwrap();
+    let sent = |lines: &[String]| -> Vec<Value> {
+        lines
+            .iter()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect()
+    };
+    let writes = |items: Vec<Item>| -> Vec<Value> {
+        items
+            .into_iter()
+            .filter_map(|i| match i {
+                Item::Write { line } => Some(serde_json::from_str(&line).unwrap()),
+                _ => None,
+            })
+            .collect()
+    };
+    let init = &sent(&launch.writes)[0];
+    let hello = json!({ "jsonrpc": "2.0", "id": init["id"], "result": {
+        "protocolVersion": 1, "agentCapabilities": { "loadSession": true },
+    } });
+    let asked = writes(client.frames(&[hello.to_string()]));
+    let id_of = |m: &str| asked.iter().find(|w| w["method"] == m).unwrap()["id"].clone();
+    let (new, list) = (id_of("session/new"), id_of("cursor/list_available_models"));
+    let models = json!({ "jsonrpc": "2.0", "id": list, "result": { "models": [
+        { "value": "claude-opus-5-5", "configOptions": [
+            { "id": "effort", "category": "thought_level", "options": [{ "value": "low" }, { "value": "high" }] },
+        ] },
+    ] } });
+    // Before the session: nothing to set yet.
+    assert!(writes(client.frames(&[models.to_string()])).is_empty());
+    let opened = json!({ "jsonrpc": "2.0", "id": new, "result": { "sessionId": "s1" } });
+    let set = writes(client.frames(&[opened.to_string()]));
+    let effort = |w: &Vec<Value>| -> Vec<Value> {
+        w.iter()
+            .filter(|w| w["params"]["configId"] == "effort")
+            .map(|w| w["params"]["value"].clone())
+            .collect()
+    };
+    assert_eq!(effort(&set), [json!("high")], "{set:?}");
+    let changed = sent(&client.set_effort("low"));
+    assert_eq!(effort(&changed), [json!("low")]);
+}
+
+/// The items of a resumed session do not take the ids of those of the process before it: each process of the agent
+/// numbers its items from 1, under the tag of its key (found with the real Cursor CLI, INT-10.1, where the answer of a
+/// resumed turn took the place of the first one).
+#[test]
+fn the_items_of_two_processes_of_an_agent_have_ids_of_their_own() {
+    let decl: proto::HarnessDecl = serde_json::from_value(cursor_decl()).unwrap();
+    let text_id = |key: &str| -> String {
+        let attach = proto::Attach {
+            agent: key.into(),
+            cwd: "C:/wt".into(),
+            lang: "fr".into(),
+            ..proto::Attach::default()
+        };
+        let mut client = escouade_acp::Agent::new(&attach, &decl, VERSION);
+        let launch = client
+            .launch(&proto::LaunchParams {
+                agent: key.into(),
+                cwd: "C:/wt".into(),
+                lang: "fr".into(),
+                ..proto::LaunchParams::default()
+            })
+            .unwrap();
+        let init: Value = serde_json::from_str(&launch.writes[0]).unwrap();
+        let hello =
+            json!({ "jsonrpc": "2.0", "id": init["id"], "result": { "protocolVersion": 1 } });
+        let asked: Vec<Value> = client
+            .frames(&[hello.to_string()])
+            .into_iter()
+            .filter_map(|i| match i {
+                Item::Write { line } => serde_json::from_str(&line).ok(),
+                _ => None,
+            })
+            .collect();
+        let new = asked.iter().find(|w| w["method"] == "session/new").unwrap()["id"].clone();
+        let opened = json!({ "jsonrpc": "2.0", "id": new, "result": { "sessionId": "s1" } });
+        let chunk = json!({ "jsonrpc": "2.0", "method": "session/update", "params": { "sessionId": "s1", "update": {
+            "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "A" },
+        } } });
+        client
+            .frames(&[opened.to_string(), chunk.to_string()])
+            .into_iter()
+            .map(|i| serde_json::to_value(i).unwrap())
+            .find_map(|i| {
+                i["id"]
+                    .as_str()
+                    .filter(|id| id.starts_with("acp-text"))
+                    .map(str::to_string)
+            })
+            .expect("a text")
+    };
+    assert_ne!(text_id("cursor-0a1b2c3d4e"), text_id("cursor-9f8e7d6c5b"));
 }

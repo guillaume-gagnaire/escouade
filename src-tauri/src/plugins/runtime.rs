@@ -907,6 +907,23 @@ impl Runtime {
         self.call(id, method, params).await
     }
 
+    /// `attach`, within `within` (a first call that starts the process).
+    pub async fn attach_within(
+        &self,
+        id: &str,
+        key: &str,
+        method: &str,
+        params: Value,
+        within: Duration,
+    ) -> Result<Value, CallError> {
+        let host = self.host(id)?;
+        host.inner
+            .lock()
+            .attached
+            .insert(key.to_string(), (method.to_string(), raw(&params)));
+        self.call_within(id, method, params, within).await
+    }
+
     /// Forgets what `key` attached.
     pub fn detach(&self, id: &str, key: &str) {
         if let Some(h) = self.hosts.lock().get(id) {

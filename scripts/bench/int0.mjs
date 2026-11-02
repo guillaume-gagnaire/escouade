@@ -43,6 +43,10 @@ function run(what, command, args, cwd, env) {
 const read = (file) => (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null);
 const fmt = (x, digits = 0) => (Number.isFinite(x) ? x.toFixed(digits) : '—');
 
+// The harnesses that left the core (INT-10) are replayed through their plugin's process: the program of the plugins,
+// beside the release tests.
+run('the plugins’ program (release)', 'cargo', ['build', '--release', '--bin', 'escouade-plugins'], path.join(ROOT, 'src-tauri'));
+
 run(
   'stream bench (release)',
   'cargo',

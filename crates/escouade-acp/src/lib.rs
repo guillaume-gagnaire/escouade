@@ -48,6 +48,11 @@ pub fn preamble(instructions: &str) -> String {
     format!("<instructions>\n{}\n</instructions>", instructions.trim())
 }
 
+/// What was said in the agent's own interface (« Vue Cursor », the core's relay), as it goes before its next message.
+pub fn relayed(relay: &str) -> String {
+    format!("<relais_escouade>\n{}\n</relais_escouade>", relay.trim())
+}
+
 /// The option of a permission (`session/request_permission`) of `kind` (`allow_once`, `allow_always`, `reject_once`),
 /// by the id the agent gave it.
 pub fn option_of(params: &Value, kind: &str) -> String {

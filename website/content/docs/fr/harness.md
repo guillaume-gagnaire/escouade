@@ -143,6 +143,8 @@ Pas de « Toujours autoriser », pas de mode `assisted` (expérimental), pas d
 
 ## Cursor CLI
 
+Cursor CLI est un plugin livré avec Escouade (`dev.escouade.cursor-cli`) : ses agents conversent par un programme à part qu’Escouade lance et surveille. Il se voit dans la vue Plugins, sous « Livrés avec Escouade » ; coupé, un agent de Cursor dit au lancement qu’il faut le rallumer, et garde sa session.
+
 ### Installation et compte
 
 Installe Cursor CLI avec son script (`irm 'https://cursor.com/install?win32=true' | iex` sous Windows, `curl https://cursor.com/install -fsS | bash` sous macOS et Linux), puis connecte-le avec `agent login`. Escouade le trouve dans `%LOCALAPPDATA%\cursor-agent` sous Windows, même absent du `PATH`, et lance sa dernière version installée. Chaque agent a son `agent acp` et son propre dossier de configuration, retiré avec lui : ses règles, son modèle et ses sessions y sont gardés, jamais dans ta config de Cursor. La connexion de la machine (`agent login`) est « le compte de la machine ». Un autre compte Cursor s’ajoute par sa clé d’API (cursor.com, Settings › API Keys) dans Réglages › Comptes : elle est gardée dans le trousseau du système et donnée à ses agents par `CURSOR_API_KEY`, jamais dans un fichier ni sur une ligne de commande ; « Changer la clé… » la redonne.

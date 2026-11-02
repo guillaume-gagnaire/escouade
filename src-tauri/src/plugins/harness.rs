@@ -59,6 +59,10 @@ pub const FRAME_QUEUE: usize = 20_000;
 /// How long a batch of frames waits for its answer.
 const FRAMES_WITHIN: Duration = Duration::from_secs(10);
 
+/// How long the first call of a launch waits: it may start the plugin's process (its `initialize` has 10 s), on a
+/// machine under load.
+const ATTACH_WITHIN: Duration = Duration::from_secs(30);
+
 /// How many times a call is given again to a plugin that crashed before it answered.
 const RETRIES: usize = 8;
 
@@ -173,12 +177,55 @@ pub fn sync(rt: &Arc<Runtime>, plugins: &super::Plugins) -> Vec<EngineId> {
     let on = |v: &super::PluginView| v.state == super::State::Ready && v.choices.enabled;
     let list = plugins.list(crate::i18n::Lang::En);
     let acp_on = list.iter().any(|v| v.id == super::builtin::ACP && on(v));
+    let cursor_on = list.iter().any(|v| v.id == super::builtin::CURSOR && on(v));
+    sync_cursor(rt, cursor_on, plugins.app_dir());
+    // The harnesses of Escouade's own plugins keep their place in the registry (Cursor CLI's, above): only the others
+    // are described.
     let described: Vec<(String, serde_json::Map<String, Value>)> = list
         .iter()
-        .filter(|v| on(v))
+        .filter(|v| on(v) && v.id != super::builtin::CURSOR)
         .filter_map(|v| Some((v.id.clone(), v.manifest.as_ref()?.contributes.clone())))
         .collect();
     sync_described(rt, acp_on, &described, plugins.app_dir())
+}
+
+/// The harness of the plugin Cursor CLI, made once for each runtime (by its address): a test makes several.
+static CURSOR_ENGINE: Mutex<Option<(usize, &'static ProcessEngine)>> = Mutex::new(None);
+
+/// The harness of the plugin Cursor CLI (INT-10.1) put behind Cursor's agents when the plugin is on (`on`), taken
+/// away when it is not: its agents are then told so at their start (`engine::cursor::plug`).
+pub fn sync_cursor(rt: &Arc<Runtime>, on: bool, escouade_dir: &Path) {
+    if !on {
+        crate::engine::cursor::plug(None);
+        return;
+    }
+    let key = Arc::as_ptr(rt) as usize;
+    let mut made = CURSOR_ENGINE.lock();
+    let engine = match *made {
+        Some((k, e)) if k == key => e,
+        _ => {
+            let Some(decl) = super::builtin::manifest_text(super::builtin::CURSOR, "")
+                .and_then(|m| serde_json::from_str::<Value>(&m).ok())
+                .and_then(|m| {
+                    serde_json::from_value::<proto::HarnessDecl>(
+                        m["contributes"]["harnesses"][0].clone(),
+                    )
+                    .ok()
+                })
+            else {
+                log::warn!("the plugin Cursor CLI declares no harness that reads");
+                crate::engine::cursor::plug(None);
+                return;
+            };
+            let e: &'static ProcessEngine = Box::leak(Box::new(
+                ProcessEngine::new(rt.clone(), super::builtin::CURSOR, decl, escouade_dir)
+                    .with_native(crate::engine::cursor::native),
+            ));
+            *made = Some((key, e));
+            e
+        }
+    };
+    crate::engine::cursor::plug(Some(engine));
 }
 
 /// A harness whose plugin runs in its own process.
@@ -203,8 +250,18 @@ pub struct ProcessEngine {
     version_args: &'static [&'static str],
     tested: Tested,
     account_var: &'static str,
+    /// The variable of an account's key (`HarnessDecl::key_var`).
+    key_var: Option<&'static str>,
     escouade_dir: PathBuf,
+    /// How long after its input is closed its harness is killed, if it does not end by itself (`close_grace_ms`).
+    close_grace: Option<Duration>,
+    /// The program its harness's launcher runs, and its first arguments (Cursor CLI's `node` and `index.js`: the
+    /// launcher its installer leaves is a script), when the launcher is one.
+    native: Option<Native>,
 }
+
+/// What a harness's launcher runs: the program and its first arguments, if it is a launcher it knows.
+pub type Native = fn(&Program) -> Option<(PathBuf, Vec<String>)>;
 
 impl ProcessEngine {
     /// The harness `decl` of the plugin `plugin`; `escouade_dir` is the folder of the app's programs (`{escouade}`).
@@ -285,7 +342,10 @@ impl ProcessEngine {
                     .as_deref()
                     .unwrap_or("ESCOUADE_HARNESS_HOME"),
             ),
+            key_var: decl.key_var.as_deref().map(leak),
+            close_grace: decl.close_grace_ms.map(Duration::from_millis),
             escouade_dir: escouade_dir.to_path_buf(),
+            native: None,
             decl,
         }
     }
@@ -310,6 +370,12 @@ impl ProcessEngine {
         e.described = true;
         e.id = id;
         e
+    }
+
+    /// The same, its launcher run as `native` says (Cursor CLI's, INT-10.1).
+    pub fn with_native(mut self, native: Native) -> Self {
+        self.native = Some(native);
+        self
     }
 
     /// The plugin it is served by.
@@ -626,6 +692,10 @@ impl Engine for ProcessEngine {
         let (ready_tx, _) = watch::channel(None);
         let p = Arc::new(ProcessEngineProcess {
             rt: self.rt.clone(),
+            key_var: self.key_var,
+            close_grace: self.close_grace,
+            me: std::sync::OnceLock::new(),
+            native: self.native,
             plugin: self.plugin.clone(),
             name: self.name,
             account_var: self.account_var,
@@ -639,6 +709,7 @@ impl Engine for ProcessEngine {
             kill_tx: Mutex::new(None),
             tail: Mutex::new(VecDeque::new()),
         });
+        let _ = p.me.set(Arc::downgrade(&p));
         tokio::spawn(control(Arc::downgrade(&p), control_rx));
         tokio::spawn(p.clone().run(spawn, stdin_rx, on_frame, on_exit));
         Ok(p)
@@ -754,6 +825,14 @@ struct Control {
 /// The live process of an agent whose harness's plugin runs apart.
 pub struct ProcessEngineProcess {
     rt: Arc<Runtime>,
+    /// As `ProcessEngine::close_grace`.
+    close_grace: Option<Duration>,
+    /// Itself, for what it does later (the kill after its input is closed).
+    me: std::sync::OnceLock<std::sync::Weak<Self>>,
+    /// The variable of an account's key (`HarnessDecl::key_var`).
+    key_var: Option<&'static str>,
+    /// What its harness's launcher runs (`ProcessEngine::with_native`).
+    native: Option<Native>,
     plugin: String,
     name: &'static str,
     /// The variable that gives the agent its own folder (`HarnessDecl::account_var`): where its launch may write.
@@ -876,14 +955,16 @@ impl ProcessEngineProcess {
         self.key.clone()
     }
 
-    /// Launches its harness from the plugin's description, checked: its child.
+    /// Launches its harness from the plugin's description, checked: its child. The first call may start the plugin's
+    /// process: it is given the time of a start (`ATTACH_WITHIN`), not that of a call.
     async fn launch(&self, spawn: &Spawn) -> Result<(tokio::process::Child, Option<Arc<Job>>)> {
         self.rt
-            .attach(
+            .attach_within(
                 &self.plugin,
                 &self.key,
                 method::ATTACH,
                 self.attach_params(),
+                ATTACH_WITHIN,
             )
             .await
             .map_err(|e| down(self.name, e))?;
@@ -901,6 +982,10 @@ impl ProcessEngineProcess {
             effort: spawn.effort.clone(),
             mode: spawn.mode.clone(),
             append_prompt: spawn.append_prompt.clone(),
+            relay: spawn.relay.clone(),
+            by_key: self
+                .key_var
+                .is_some_and(|var| spawn.env.iter().any(|(k, v)| k == var && !v.is_empty())),
             start: match &spawn.start {
                 Start::New => proto::StartAt::New,
                 Start::Resume { session } => proto::StartAt::Resume {
@@ -962,13 +1047,14 @@ impl ProcessEngineProcess {
             spawn.account
         );
         let env = merged(&spawn.env, &launch.env);
-        let mut cmd = command_of(
-            &spawn.program,
-            &spawn.cwd,
-            &launch.args,
-            &env,
-            &launch.remove_env,
-        )?;
+        let (program, args) = match self.native.and_then(|n| n(&spawn.program)) {
+            Some((program, mut first)) => {
+                first.extend(launch.args.iter().cloned());
+                (Program::Native(program), first)
+            }
+            None => (spawn.program.clone(), launch.args.clone()),
+        };
+        let mut cmd = command_of(&program, &spawn.cwd, &args, &env, &launch.remove_env)?;
         let child = cmd.spawn().with_context(|| {
             let program = spawn.program.describe();
             tr!("impossible de lancer {program}", "can’t start {program}")
@@ -1237,6 +1323,17 @@ impl EngineProcess for ProcessEngineProcess {
     }
     fn close_input(&self) {
         self.stdin.lock().take();
+        // A harness that does not end when its input closes (Cursor CLI's `agent acp`) is killed a moment later.
+        if let (Some(grace), Some(me)) = (self.close_grace, self.me.get().cloned()) {
+            if let Ok(rt) = tokio::runtime::Handle::try_current() {
+                rt.spawn(async move {
+                    tokio::time::sleep(grace).await;
+                    if let Some(p) = me.upgrade().filter(|p| p.is_alive()) {
+                        p.kill();
+                    }
+                });
+            }
+        }
     }
     fn kill(&self) {
         self.stdin.lock().take();
@@ -1280,6 +1377,9 @@ impl EngineProcess for ProcessEngineProcess {
             agent: self.agent(),
             uuid: uuid.to_string(),
             text: message.0.as_str().unwrap_or_default().to_string(),
+            // A message its engine made as its harness takes it (Cursor CLI's `prompt` blocks: its images, its text
+            // files), passed as it is.
+            content: message.0.get("prompt").cloned(),
         };
         let params = serde_json::to_value(s)?;
         let sent = self.control.lock().as_ref().map(|tx| {

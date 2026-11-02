@@ -24,6 +24,24 @@ pub fn full_id(model: &str) -> String {
     }
 }
 
+/// The option that sets the effort of `model` (its base id, `default` for Auto) among the models Cursor lists
+/// (`cursor/list_available_models`: its `thought_level` option), if it has efforts.
+pub fn effort_key(listed: &Value, model: &str) -> Option<String> {
+    let base = model.split('[').next().unwrap_or(model);
+    let m = listed["models"]
+        .as_array()?
+        .iter()
+        .find(|m| m["value"] == base)?;
+    let thought = m["configOptions"]
+        .as_array()?
+        .iter()
+        .find(|c| c["category"] == "thought_level")?;
+    let efforts = thought["options"].as_array().is_some_and(|o| !o.is_empty());
+    efforts
+        .then(|| thought["id"].as_str().map(str::to_string))
+        .flatten()
+}
+
 /// The task list as Cursor last gave it (merged by id), and as Claude Code's `TodoWrite` gives it.
 #[derive(Default)]
 pub struct Todos {
@@ -262,8 +280,8 @@ pub fn at_limit(refusal: Refusal) -> bool {
     matches!(refusal, Refusal::Upgrade | Refusal::Payment)
 }
 
-/// What the card says of a turn Cursor refused, the agent on `model`.
-pub fn refusal_error(lang: &str, refusal: Refusal, model: &str) -> String {
+/// What the card says of a turn Cursor refused, the agent on `model`, its account by its key or not (`by_key`).
+pub fn refusal_error(lang: &str, refusal: Refusal, model: &str, by_key: bool) -> String {
     let url = DASHBOARD;
     match refusal {
         Refusal::Upgrade if model == AUTO || model.is_empty() => tr(
@@ -281,10 +299,15 @@ pub fn refusal_error(lang: &str, refusal: Refusal, model: &str) -> String {
             format!("Limite d’usage de ce compte Cursor atteinte : la suite passe par l’usage à la demande, qui demande un moyen de paiement (« Add a payment method to continue »). Son usage : {url}"),
             format!("This Cursor account’s usage limit is reached: what comes next is on-demand usage, which needs a payment method (“Add a payment method to continue”). Its usage: {url}"),
         ),
+        Refusal::SignIn | Refusal::Unauthenticated if by_key => tr(
+            lang,
+            "Cursor a refusé la clé d’API de ce compte : donne-la de nouveau dans Réglages › Comptes, « Changer la clé… ».".into(),
+            "Cursor refused this account’s API key: give it again in Settings › Accounts, “Change the key…”.".into(),
+        ),
         Refusal::SignIn | Refusal::Unauthenticated => tr(
             lang,
-            "Cursor CLI n’est pas connecté ou sa clé est refusée (« Please sign in to continue ») : lance agent login dans un terminal, ou donne de nouveau la clé du compte.".into(),
-            "Cursor CLI isn’t signed in or its key is refused (“Please sign in to continue”): run agent login in a terminal, or give the account’s key again.".into(),
+            "Cursor CLI n’est pas connecté sur cette machine (« Please sign in to continue ») : lance agent login dans un terminal.".into(),
+            "Cursor CLI isn’t signed in on this machine (“Please sign in to continue”): run agent login in a terminal.".into(),
         ),
     }
 }
@@ -296,4 +319,32 @@ pub fn write_not_done(lang: &str) -> String {
         "Cursor n’a rien écrit : l’écriture a été refusée, par un hook (ceux de Claude Code tournent aussi sous Cursor) ou par Cursor lui-même, qui n’en donne pas la raison.".into(),
         "Cursor wrote nothing: the write was refused, by a hook (those of Claude Code run under Cursor too) or by Cursor itself, which doesn’t give the reason.".into(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    #[test]
+    fn the_effort_of_a_model_goes_by_the_option_its_list_gives_it() {
+        let listed = json!({ "models": [
+            { "value": "claude-opus-5-5", "configOptions": [
+                { "id": "effort", "category": "thought_level", "options": [{ "value": "low" }, { "value": "high" }] },
+            ] },
+            { "value": "default", "configOptions": [] },
+        ] });
+        assert_eq!(
+            super::effort_key(&listed, "claude-opus-5-5").as_deref(),
+            Some("effort")
+        );
+        assert_eq!(
+            super::effort_key(&listed, "claude-opus-5-5[context=300k]").as_deref(),
+            Some("effort")
+        );
+        assert_eq!(super::effort_key(&listed, "default"), None);
+        assert_eq!(
+            super::effort_key(&serde_json::Value::Null, "claude-opus-5-5"),
+            None
+        );
+    }
 }

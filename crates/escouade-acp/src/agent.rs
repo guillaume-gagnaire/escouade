@@ -31,6 +31,8 @@ enum Ours {
     Prompt,
     /// A setting (`session/set_mode`, `session/set_model`…): only an error of it is said.
     Setting(String),
+    /// Cursor's `cursor/list_available_models`: the option of each model's effort.
+    Models,
 }
 
 /// A request of the agent waiting for the user's answer.
@@ -82,12 +84,20 @@ pub struct Agent {
     /// The fence as the files through the client are compared to it (`paths::fence_of`).
     fence_keys: Vec<std::path::PathBuf>,
     read_only: bool,
+    /// Its account goes by its key (`LaunchParams::by_key`): what a refusal of Cursor's says.
+    by_key: bool,
     instructions: Option<String>,
+    /// What was said in its own interface, to go before the next message (`LaunchParams::relay`).
+    relay: Option<String>,
     next: u64,
     ours: HashMap<u64, Ours>,
     asked: HashMap<String, Asked>,
     seq: u64,
-    queue: VecDeque<String>,
+    /// What tells the ids of its items from those of the agent's processes before it (the end of the key of its process,
+    /// new at each start): a resumed session numbers its items from 1 again.
+    tag: String,
+    /// The messages waiting, by their blocks.
+    queue: VecDeque<Vec<Value>>,
     busy: bool,
     open: bool,
     can_load: bool,
@@ -95,6 +105,8 @@ pub struct Agent {
     loading: bool,
     /// What the session told of its configuration (`configOptions` of `session/new`).
     options: Value,
+    /// Cursor's models and their options (`cursor/list_available_models`): the option of each one's effort.
+    listed: Value,
     /// The texts and reasonings being written, in the order they began: who (`""` the agent, else the call of its
     /// subagent), the kind, the text.
     writing: Vec<Writing>,
@@ -138,6 +150,21 @@ fn write(line: String) -> Item {
     Item::Write { line }
 }
 
+/// The tag of the ids of the items of the process `key` (`Agent::tag`): the last characters of its key.
+fn tag_of(key: &str) -> String {
+    let end: String = key
+        .chars()
+        .rev()
+        .take_while(char::is_ascii_alphanumeric)
+        .take(8)
+        .collect();
+    if end.is_empty() {
+        String::new()
+    } else {
+        format!("{}-", end.chars().rev().collect::<String>())
+    }
+}
+
 fn notice(text: String, level: &str) -> Item {
     Item::Notice {
         text,
@@ -166,17 +193,21 @@ impl Agent {
             fence: Vec::new(),
             fence_keys: Vec::new(),
             read_only: false,
+            by_key: false,
             instructions: None,
+            relay: None,
             next: 0,
             ours: HashMap::new(),
             asked: HashMap::new(),
             seq: 0,
+            tag: tag_of(&a.agent),
             queue: VecDeque::new(),
             busy: false,
             open: false,
             can_load: false,
             loading: false,
             options: Value::Null,
+            listed: Value::Null,
             writing: Vec::new(),
             calls: HashMap::new(),
             children: HashMap::new(),
@@ -281,7 +312,9 @@ impl Agent {
         }
         self.instructions =
             Some(instructions).filter(|i| !i.trim().is_empty() && matches!(p.start, StartAt::New));
-        if !self.fence.is_empty() && !self.acp.fs {
+        self.relay = p.relay.clone().filter(|r| !r.trim().is_empty());
+        self.by_key = p.by_key;
+        if !self.fence.is_empty() && !self.acp.fs && !self.acp.fence_on_permissions {
             return Err(texts::fence_missing(&self.lang, &self.name));
         }
         if self.read_only && self.acp.read_only_mode.is_none() {
@@ -393,6 +426,13 @@ impl Agent {
                     ),
                 };
                 out.push(write(line));
+                // Cursor's models and the option of their efforts, asked beside the session (it needs none): the
+                // effort is set once both are there.
+                if self.cursor {
+                    let line =
+                        self.request("cursor/list_available_models", json!({}), Ours::Models);
+                    out.push(write(line));
+                }
             }
             Ours::Load(session) => {
                 self.loading = false;
@@ -449,6 +489,15 @@ impl Agent {
                     out.push(notice(text, "warning"));
                 }
             }
+            // Not told, the efforts stay Cursor's own (as when it does not answer).
+            Ours::Models => {
+                if error.is_none() {
+                    self.listed = result;
+                    for l in self.effort_lines() {
+                        out.push(write(l));
+                    }
+                }
+            }
         }
     }
 
@@ -481,8 +530,8 @@ impl Agent {
         for l in self.model_lines() {
             out.push(write(l));
         }
-        if let Some(text) = self.queue.pop_front() {
-            let l = self.prompt(&text);
+        if let Some(blocks) = self.queue.pop_front() {
+            let l = self.prompt(blocks);
             out.push(write(l));
         }
     }
@@ -554,7 +603,7 @@ impl Agent {
         if self.model.is_empty() {
             return Vec::new();
         }
-        match self.acp.model_option.clone() {
+        let mut lines = match self.acp.model_option.clone() {
             Some(key) => {
                 let value = self.model_value(&key);
                 vec![self.request(
@@ -568,16 +617,40 @@ impl Agent {
                 json!({ "sessionId": session, "modelId": self.model }),
                 Ours::Setting("session/set_model".into()),
             )],
-        }
+        };
+        lines.extend(self.effort_lines());
+        lines
     }
 
-    fn prompt(&mut self, text: &str) -> String {
+    /// The effort of Cursor's model, by the option its models' list gives it (`cursor/list_available_models`), once the
+    /// session is open: nothing while the list is not there, or for Auto (it picks its effort itself).
+    fn effort_lines(&mut self) -> Vec<String> {
+        let Some(session) = self.session.clone().filter(|_| self.cursor) else {
+            return Vec::new();
+        };
+        if self.effort.is_empty() {
+            return Vec::new();
+        }
+        let Some(key) = cursor::effort_key(&self.listed, &self.model) else {
+            return Vec::new();
+        };
+        vec![self.request(
+            "session/set_config_option",
+            json!({ "sessionId": session, "configId": key, "value": self.effort }),
+            Ours::Setting("session/set_config_option".into()),
+        )]
+    }
+
+    fn prompt(&mut self, message: Vec<Value>) -> String {
         let session = self.session.clone().unwrap_or_default();
         let mut blocks = Vec::new();
         if let Some(i) = self.instructions.take() {
             blocks.push(json!({ "type": "text", "text": crate::preamble(&i) }));
         }
-        blocks.push(json!({ "type": "text", "text": text }));
+        if let Some(r) = self.relay.take() {
+            blocks.push(json!({ "type": "text", "text": crate::relayed(&r) }));
+        }
+        blocks.extend(message);
         self.busy = true;
         self.turn_text.clear();
         self.request(
@@ -589,11 +662,21 @@ impl Agent {
 
     /// A message: sent now, or once the session is open and the turn under way is over.
     pub fn send(&mut self, text: &str) -> Vec<String> {
+        self.send_content(text, None)
+    }
+
+    /// A message as the core made it for its harness (`content`: ACP's blocks, its images and text files), else its
+    /// text alone.
+    pub fn send_content(&mut self, text: &str, content: Option<&Value>) -> Vec<String> {
+        let blocks = match content.and_then(Value::as_array) {
+            Some(b) => b.clone(),
+            None => vec![json!({ "type": "text", "text": text })],
+        };
         if !self.open || self.busy {
-            self.queue.push_back(text.to_string());
+            self.queue.push_back(blocks);
             return Vec::new();
         }
-        vec![self.prompt(text)]
+        vec![self.prompt(blocks)]
     }
 
     /// `session/cancel`; what the agent waits the user for is answered cancelled, as ACP wants it.
@@ -626,7 +709,7 @@ impl Agent {
 
     pub fn set_effort(&mut self, effort: &str) -> Vec<String> {
         self.effort = effort.to_string();
-        Vec::new()
+        self.effort_lines()
     }
 
     /// The user's answer to the permission `request`.
@@ -676,7 +759,9 @@ impl Agent {
             .ok_or_else(|| format!("{} no longer waits for this answer", self.name))?;
         if asked.method == "escouade/question" {
             let text = crate::questions::answers_message(&asked.params, answers);
-            return Ok(vec![self.prompt(&text)]);
+            return Ok(vec![
+                self.prompt(vec![json!({ "type": "text", "text": text })])
+            ]);
         }
         let outcome = cursor::question_outcome(&asked.params, answers);
         Ok(vec![reply(&asked.id, json!({ "outcome": outcome }))])
@@ -684,7 +769,12 @@ impl Agent {
 
     fn rid(&mut self, id: &Value) -> String {
         self.seq += 1;
-        format!("acp-{}-{}", self.seq, id.to_string().trim_matches('"'))
+        format!(
+            "acp-{}{}-{}",
+            self.tag,
+            self.seq,
+            id.to_string().trim_matches('"')
+        )
     }
 
     /// A request of the agent to the client.
@@ -1062,7 +1152,7 @@ impl Agent {
                 self.writing.push(Writing {
                     who,
                     kind,
-                    id: format!("acp-text-{}", self.seq),
+                    id: format!("acp-text-{}{}", self.tag, self.seq),
                     text: String::new(),
                     sent: 0,
                 });
@@ -1297,8 +1387,10 @@ impl Agent {
             }
             _ => Value::Null,
         };
-        // A read or a write made by the agent itself while a fence is set: said once.
+        // A read or a write made by the agent itself while a fence is set: said once (a fence held on the permissions
+        // says so in its modes' meanings instead).
         if !self.fence.is_empty()
+            && !self.acp.fence_on_permissions
             && !self.leak_said
             && matches!(call.kind.as_str(), "read" | "edit" | "delete")
         {
@@ -1363,7 +1455,12 @@ impl Agent {
                 if cursor::at_limit(refusal) {
                     limited = Some(None);
                 }
-                error = Some(cursor::refusal_error(&self.lang, refusal, &self.model));
+                error = Some(cursor::refusal_error(
+                    &self.lang,
+                    refusal,
+                    &self.model,
+                    self.by_key,
+                ));
             }
         }
         out.push(Item::Turn {
@@ -1372,8 +1469,8 @@ impl Agent {
             usage: std::mem::take(&mut self.usage),
             error,
         });
-        if let Some(text) = self.queue.pop_front() {
-            let l = self.prompt(&text);
+        if let Some(blocks) = self.queue.pop_front() {
+            let l = self.prompt(blocks);
             out.push(write(l));
         }
     }

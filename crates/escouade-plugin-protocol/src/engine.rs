@@ -96,6 +96,13 @@ pub struct LaunchParams {
     pub mode: String,
     #[serde(default)]
     pub append_prompt: Option<String>,
+    /// What was said in the harness's own interface since the agent last ran (« Vue Cursor », a relay of the core's):
+    /// it goes before the next message.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relay: Option<String>,
+    /// Its account goes by its key (`HarnessDecl::key_var` given), not by the machine's sign-in: what a refusal says.
+    #[serde(default)]
+    pub by_key: bool,
     #[serde(default)]
     pub start: StartAt,
     #[serde(default)]
@@ -234,6 +241,10 @@ pub struct SendMessage {
     pub agent: String,
     pub uuid: String,
     pub text: String,
+    /// The message as its harness takes it, when the core made it (ACP's `prompt` blocks: its images and its text
+    /// files, INT-10.1); None: `text` alone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -568,6 +579,13 @@ pub struct HarnessDecl {
     /// The variable that gives each account its configuration folder.
     #[serde(default)]
     pub account_var: Option<String>,
+    /// The variable that gives an account added by its key that key (`CURSOR_API_KEY`): the agent then goes by it, not
+    /// by the machine's sign-in (`LaunchParams::by_key`).
+    #[serde(default)]
+    pub key_var: Option<String>,
+    /// It does not end when its input is closed (Cursor CLI's `agent acp`): it is killed that many milliseconds after.
+    #[serde(default)]
+    pub close_grace_ms: Option<u64>,
     /// Where it keeps what it remembers of a project, offered once to the shared memory: a folder of files, with
     /// `{configDir}` and `{projectKey}` (the project's path, every character but a letter or a digit a dash).
     #[serde(default)]
@@ -674,6 +692,11 @@ pub struct AcpDecl {
     /// private projects is then held there. False: it reads and writes by itself, and no private project is open to it.
     #[serde(default = "yes")]
     pub fs: bool,
+    /// With `fs` false, the fence of a private project held on its permissions alone, as Cursor CLI's in the core was
+    /// (ESC-140): a permission that names a path of the fence is refused at once; what it reads and writes by itself
+    /// is not seen, which its modes' meanings say. Only a plugin Escouade gives is believed (`fenceByClient`).
+    #[serde(default)]
+    pub fence_on_permissions: bool,
     /// The ACP mode (`session/set_mode`) of each mode of Escouade; a mode left out sets none.
     #[serde(default)]
     pub modes: std::collections::BTreeMap<String, String>,

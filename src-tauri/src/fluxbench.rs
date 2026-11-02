@@ -31,6 +31,7 @@ use crate::core_tests::{harness, Harness};
 use crate::model::EngineId;
 use parking_lot::Mutex;
 use serde_json::{json, Value};
+use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -41,6 +42,12 @@ use tauri::ipc::{Channel, InvokeResponseBody};
 const HARNESSES: [&str; 8] = [
     "claude", "codex", "copilot", "cursor", "opencode", "vibe", "agy", "gemini",
 ];
+
+/// The plugin a harness's conversation goes through, for those that left the core (INT-10): their streams are replayed
+/// through its process (`Bench::play_plugged`).
+fn plugged_by(harness: EngineId) -> Option<&'static str> {
+    (harness == EngineId::CURSOR).then_some(crate::plugins::builtin::CURSOR)
+}
 
 /// The longest silence of a stream replayed at its recorded pace (a model thinking, a person
 /// answering): a line's delay does not depend on it.
@@ -200,6 +207,9 @@ impl Bench {
 
     /// Replays `flux` at `pace` for a new agent of its harness.
     pub(crate) async fn play(&self, flux: &Flux, pace: Pace) -> Played {
+        if let Some(plugin) = plugged_by(flux.harness) {
+            return self.play_plugged(flux, pace, plugin).await;
+        }
         let id = self.agent(flux).await;
         *self.replayed.lock() = format!("\"{id}\"");
         let core = self.h.core.clone();
@@ -247,9 +257,21 @@ impl Bench {
         })
         .await
         .unwrap();
+        self.settled(&id, flux, read, cpu).await
+    }
+
+    /// What a replay of `flux` for the agent `id` made, once its last deltas are sent: `read` is each line's moment,
+    /// the events before it, and whether it made one; `cpu` the process's CPU time at its start.
+    async fn settled(
+        &self,
+        id: &str,
+        flux: &Flux,
+        read: Vec<(Instant, usize, bool)>,
+        cpu: Duration,
+    ) -> Played {
         // The last deltas, sent by the flusher.
         let waited = Instant::now();
-        while self.h.core.conv_pending(&id) && waited.elapsed() < Duration::from_secs(5) {
+        while self.h.core.conv_pending(id) && waited.elapsed() < Duration::from_secs(5) {
             tokio::time::sleep(Duration::from_millis(2)).await;
         }
         // Taken out of the buffer, the last of them may still be on their way to the channel.
@@ -278,6 +300,218 @@ impl Bench {
             took: end - first,
             cpu,
         }
+    }
+
+    /// Replays `flux` at `pace` for a new agent of a harness whose conversation goes through its plugin (Cursor CLI,
+    /// INT-10.1), as the app does it: what the harness said (`s2c`) handed to the plugin's process (`agent/frames`),
+    /// its items to `Core::on_frame`; what the client said (`c2s`) asked of the plugin as the core asks it (a message,
+    /// a mode, a model, an answer). The plugin numbers its requests itself: a recorded answer is given under the id
+    /// the plugin gave the request of its method, as the harness would. A line is timed from the moment it is handed
+    /// to the plugin; the lines of the client are no harness's and make no event of their own (counted silent).
+    async fn play_plugged(&self, flux: &Flux, pace: Pace, plugin: &'static str) -> Played {
+        type Pending = Arc<Mutex<HashMap<String, VecDeque<Value>>>>;
+        let id = self.agent(flux).await;
+        *self.replayed.lock() = format!("\"{id}\"");
+        let core = self.h.core.clone();
+        let rt = core.plugin_runtime.clone();
+        let key = format!("bench-{id}");
+        let cwd = flux.agent["cwd"].as_str().unwrap_or_default().to_string();
+        let session = flux.agent["sessionId"].as_str().map(str::to_string);
+        let attach = json!({
+            "agent": key, "cwd": cwd, "session": session, "model": flux.agent["model"],
+            "mode": flux.agent["mode"], "lang": "fr",
+        });
+        // Its first call starts the plugin's process: given time, as a machine under load needs it.
+        rt.call_within(plugin, "agent/attach", attach, Duration::from_secs(60))
+            .await
+            .unwrap();
+        let start = match &session {
+            Some(s) => json!({ "kind": "resume", "session": s }),
+            None => json!({ "kind": "new" }),
+        };
+        let launch = rt
+            .call(
+                plugin,
+                "engine/launch",
+                json!({
+                    "agent": key, "cwd": cwd, "model": flux.agent["model"], "mode": flux.agent["mode"],
+                    "start": start, "lang": "fr",
+                }),
+            )
+            .await
+            .unwrap();
+        // The requests of the plugin waiting for their answer, by method: its ids, in order.
+        let pending: Pending = Arc::default();
+        let note = {
+            let pending = pending.clone();
+            move |line: &str| {
+                if let Ok(m) = serde_json::from_str::<Value>(line) {
+                    if let (Some(method), false) = (m["method"].as_str(), m["id"].is_null()) {
+                        pending
+                            .lock()
+                            .entry(method.to_string())
+                            .or_default()
+                            .push_back(m["id"].clone());
+                    }
+                }
+            }
+        };
+        for w in launch["writes"].as_array().into_iter().flatten() {
+            note(w.as_str().unwrap_or_default());
+        }
+        let sent = self.sent.clone();
+        let lines = flux.lines.clone();
+        let times = match pace {
+            Pace::Fastest => None,
+            Pace::Recorded => flux.times.clone(),
+        };
+        let agent = id.clone();
+        let tokio = tokio::runtime::Handle::current();
+        let cpu = usage().cpu;
+        let read = tokio::task::spawn_blocking(move || {
+            let handle = core.agent(&agent).unwrap();
+            let (start, mut shift) = (Instant::now(), Duration::ZERO);
+            let mut last = 0u64;
+            let mut read = Vec::with_capacity(lines.len());
+            // The methods of the client's requests of the recording, by their ids; the requests of the harness, by
+            // their ids, as the plugin named them.
+            let mut methods: HashMap<String, String> = HashMap::new();
+            let mut asked: HashMap<String, String> = HashMap::new();
+            let call = |method: &str, params: Value| -> Value {
+                tokio
+                    .block_on(rt.call(plugin, method, params))
+                    .unwrap_or(Value::Null)
+            };
+            for (n, line) in lines.iter().enumerate() {
+                if let Some(t) = times.as_ref().map(|t| t[n]) {
+                    let gap = Duration::from_millis(t.saturating_sub(last));
+                    shift += gap.saturating_sub(LONGEST_GAP);
+                    last = t;
+                    let due = start + Duration::from_millis(t) - shift;
+                    if let Some(wait) = due.checked_duration_since(Instant::now()) {
+                        std::thread::sleep(wait);
+                    }
+                }
+                let before = sent.lock().len();
+                let ops = core.conv_ops.load(Ordering::Acquire);
+                let at = Instant::now();
+                let f: Value = serde_json::from_str(line)
+                    .unwrap_or_else(|e| panic!("line {} is no JSON: {e}", n + 1));
+                let mut msg = f["msg"].clone();
+                let writes = match f["dir"].as_str() {
+                    Some("s2c") => {
+                        if msg["method"].is_null() && !msg["id"].is_null() {
+                            // An answer to a request of the client: under the id the plugin gave it.
+                            let method = methods.get(&msg["id"].to_string()).cloned();
+                            let given =
+                                method.and_then(|m| pending.lock().get_mut(&m)?.pop_front());
+                            match given {
+                                Some(id) => msg["id"] = id,
+                                None => {
+                                    read.push((at, before, false));
+                                    continue;
+                                }
+                            }
+                        }
+                        let got = call(
+                            "agent/frames",
+                            json!({ "agent": key, "frames": [msg.to_string()] }),
+                        );
+                        let mut items = Vec::new();
+                        let mut writes = Vec::new();
+                        for i in got["items"].as_array().into_iter().flatten() {
+                            match i["op"].as_str() {
+                                Some("write") => writes.push(i["line"].clone()),
+                                Some("permission") | Some("question") => {
+                                    let request = i["request"].as_str().unwrap_or_default();
+                                    asked.insert(msg["id"].to_string(), request.to_string());
+                                    items.push(i.clone());
+                                }
+                                _ => items.push(i.clone()),
+                            }
+                        }
+                        if !items.is_empty() {
+                            let gen = handle.lock().gen;
+                            core.on_frame(&handle, gen, json!({ "items": items }));
+                        }
+                        writes
+                    }
+                    Some("c2s") => {
+                        if let (Some(method), false) = (msg["method"].as_str(), msg["id"].is_null())
+                        {
+                            methods.insert(msg["id"].to_string(), method.to_string());
+                        }
+                        let p = &msg["params"];
+                        let got = match msg["method"].as_str() {
+                            Some("session/prompt") => call(
+                                "agent/sendMessage",
+                                json!({
+                                    "agent": key, "uuid": crate::model::new_id(),
+                                    "text": p["prompt"][0]["text"],
+                                }),
+                            ),
+                            Some("session/set_mode") => {
+                                let mode = if p["modeId"] == "plan" {
+                                    "plan"
+                                } else {
+                                    "default"
+                                };
+                                call("agent/setMode", json!({ "agent": key, "value": mode }))
+                            }
+                            Some("session/set_config_option") if p["configId"] == "model" => {
+                                let full = p["value"].as_str().unwrap_or_default();
+                                let model = full.split('[').next().unwrap_or(full);
+                                call("agent/setModel", json!({ "agent": key, "value": model }))
+                            }
+                            Some("session/set_config_option") => call(
+                                "agent/setEffort",
+                                json!({ "agent": key, "value": p["value"] }),
+                            ),
+                            // The client's own start, which the plugin wrote itself.
+                            Some(_) => Value::Null,
+                            None => match asked.get(&msg["id"].to_string()) {
+                                Some(request) => {
+                                    let option = msg["result"]["outcome"]["optionId"]
+                                        .as_str()
+                                        .unwrap_or_default();
+                                    call(
+                                        "agent/answerPermission",
+                                        json!({
+                                            "agent": key, "request": request,
+                                            "allow": option.starts_with("allow"),
+                                            "always": option.starts_with("allow-always"),
+                                        }),
+                                    )
+                                }
+                                None => Value::Null,
+                            },
+                        };
+                        got["writes"].as_array().cloned().unwrap_or_default()
+                    }
+                    _ => Vec::new(),
+                };
+                for w in &writes {
+                    note(w.as_str().unwrap_or_default());
+                }
+                let made = core.conv_ops.load(Ordering::Acquire) > ops
+                    || sent.lock()[before..].iter().any(|(_, mine)| *mine);
+                read.push((at, before, made));
+            }
+            read
+        })
+        .await
+        .unwrap();
+        let _ = self
+            .h
+            .core
+            .plugin_runtime
+            .call(
+                plugin,
+                "agent/detach",
+                json!({ "agent": format!("bench-{id}") }),
+            )
+            .await;
+        self.settled(&id, flux, read, cpu).await
     }
 }
 

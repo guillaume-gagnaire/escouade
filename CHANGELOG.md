@@ -46,6 +46,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Un agent qui parle ACP, comme Goose, devient un harness d’Escouade par un plugin sans code : son manifeste le décrit, et Escouade le lance, lui parle et montre sa conversation, ses permissions avec leur diff et ses fins de tour. Le plugin Goose est le premier ; ses agents restent, « harness absent », quand son plugin est désactivé.
 - Linear est un plugin livré avec Escouade, comme Trello : il se voit dans la vue Plugins, s’arrête pour l’app ou pour un projet, et la synchronisation dit quand il ne répond pas. Ta clé Linear et tes projets liés restent tels quels.
 - Jira est un plugin livré avec Escouade, comme Trello et Linear : il se voit dans la vue Plugins, s’arrête pour l’app ou pour un projet, et la synchronisation dit quand il ne répond pas. Ton compte Jira et tes projets liés restent tels quels.
+- Cursor CLI est un plugin livré avec Escouade : ses agents conversent comme avant, mais par un programme à part qu’Escouade lance et surveille. Il se voit dans la vue Plugins, sous « Livrés avec Escouade » ; coupé, un agent de Cursor dit au lancement qu’il faut le rallumer, et sa session est gardée.
 
 ### Retiré
 

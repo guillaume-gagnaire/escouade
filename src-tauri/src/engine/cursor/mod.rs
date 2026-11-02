@@ -39,6 +39,40 @@ use crate::model::EngineId;
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Value};
 
+/// The harness of the plugin Cursor CLI (`dev.escouade.cursor-cli`, INT-10.1): the conversation of Cursor's agents
+/// goes through it, on the contract of the harnesses in process; None while the plugin is off or not loaded.
+static PLUGGED: parking_lot::RwLock<Option<&'static crate::plugins::harness::ProcessEngine>> =
+    parking_lot::RwLock::new(None);
+
+/// Puts the harness of the plugin Cursor CLI behind Cursor's agents (`plugins::harness::sync`), or takes it away.
+pub fn plug(engine: Option<&'static crate::plugins::harness::ProcessEngine>) {
+    *PLUGGED.write() = engine;
+}
+
+/// The harness of the plugin Cursor CLI, if it is on.
+pub fn plugged() -> Option<&'static crate::plugins::harness::ProcessEngine> {
+    *PLUGGED.read()
+}
+
+/// What an agent of Cursor is told when its plugin is off or not loaded.
+fn unplugged() -> anyhow::Error {
+    let id = crate::plugins::builtin::CURSOR;
+    anyhow!(tr!(
+        "Le plugin Cursor CLI ({id}) est coupé ou n’est pas chargé : rallume-le dans la vue Plugins pour lancer un agent de Cursor CLI.",
+        "The Cursor CLI plugin ({id}) is switched off or not loaded: turn it back on in the Plugins view to start a Cursor CLI agent."
+    ))
+}
+
+/// What the launcher Cursor's installer leaves runs: the `node` and the `index.js` of its newest version
+/// (`ProcessEngine::with_native`).
+pub fn native(program: &Program) -> Option<(std::path::PathBuf, Vec<String>)> {
+    let Program::Native(launcher) = program else {
+        return None;
+    };
+    locate::native_of(launcher)
+        .map(|(node, index)| (node, vec![index.to_string_lossy().into_owned()]))
+}
+
 /// Cursor CLI.
 pub struct Cursor;
 
@@ -849,44 +883,22 @@ impl Engine for Cursor {
         on_frame: super::OnFrame,
         on_exit: super::OnExit,
     ) -> Result<Process> {
-        let escouade = match &spawn.escouade {
-            Escouade::Granted { url, token, .. } => Some((url.clone(), token.clone())),
-            Escouade::Denied { .. } => None,
-        };
-        log::info!(
-            "{}: starting {} acp in {} (account {})",
-            spawn.label,
-            spawn.program.describe(),
-            spawn.cwd,
-            spawn.account
-        );
-        let fence = crate::fence::spelled(&spawn.fence, &spawn.program);
-        let opts = process::Opts {
-            program: spawn.program,
-            cwd: spawn.cwd,
-            args: vec!["acp".into()],
-            env: spawn.env,
-            start: spawn.start,
-            settings: Settings {
-                model: spawn.model,
-                effort: spawn.effort,
-                mode: spawn.mode,
-            },
-            instructions: spawn.append_prompt,
-            relay: spawn.relay,
-            escouade,
-            fence,
-        };
-        let p: Process = CursorProcess::spawn(opts, on_frame, on_exit)?;
-        Ok(p)
+        // Its conversation goes through its plugin (INT-10.1): the launch it describes, checked and started by the
+        // core, what Cursor writes translated there.
+        plugged()
+            .ok_or_else(unplugged)?
+            .spawn(spawn, on_frame, on_exit)
     }
 
     fn message(&self, text: &str, attachments: &[Attachment]) -> Result<Message> {
         message(text, attachments).map(Message)
     }
 
+    /// The items its plugin made of what Cursor wrote (`agent/items`).
     fn translate(&self, rt: &mut AgentRt, frame: &Value, fx: &mut Effects) {
-        rt.cursor_frame(frame, fx);
+        if let Some(items) = frame["items"].as_array() {
+            rt.apply_items(items, fx);
+        }
     }
 
     /// A session that cannot be loaded gives a new one (`process::open`), said by the conversation.

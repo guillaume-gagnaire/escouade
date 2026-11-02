@@ -1,0 +1,15 @@
+[package]
+name = "escouade-plugin-cursor"
+version = "1.0.0"
+description = "Le plugin Cursor CLI livré avec Escouade : Cursor CLI comme harness, par ACP"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+workspace = "../../../src-tauri"
+
+# One of the plugins of `escouade-plugins` (docs/PLUGINS.md §4.3): its program is `escouade-plugins cursor`, on the ACP
+# client of `crates/escouade-acp` (PLG-6) with its extension `cursor`, served as the generic ACP plugin serves the
+# harnesses a manifest describes.
+[dependencies]
+escouade-plugin-acp = { path = "../dev.escouade.acp" }

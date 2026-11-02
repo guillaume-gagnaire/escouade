@@ -52,6 +52,8 @@ const ENTRIES: &[Entry] = &[
     ("linear", escouade_plugin_linear::run),
     // Jira (INT-7.3): the Kanban's source of Jira issues, in its crate (plugins/builtin/dev.escouade.jira).
     ("jira", escouade_plugin_jira::run),
+    // Cursor CLI (INT-10.1): its harness on the ACP client, in its crate (plugins/builtin/dev.escouade.cursor-cli).
+    ("cursor", escouade_plugin_cursor::run),
 ];
 
 fn main() {
