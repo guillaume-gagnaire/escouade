@@ -1,9 +1,9 @@
 ---
-number: null
+number: 50
 id: "pr-des-tickets-par-l-api-de-l-hebergeur"
 title: "PR des tickets par l'API de l'hébergeur, suivies « En revue » jusqu'au merge"
 date: "2026-11-02"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-59"
 pages: ["kanban/validation","kanban/en-revue","kanban/kanban"]
@@ -12,8 +12,8 @@ documents: ["docs/TODO-1.8.md"]
 supersedes: []
 superseded_by: null
 changes: [{"page":"kanban/validation","added":13,"removed":8},{"page":"kanban/en-revue","added":37,"removed":0},{"page":"kanban/kanban","added":4,"removed":4}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-02T04:53:58+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
