@@ -3,7 +3,7 @@ title: "CI de la cible et des branches poussées"
 subject: "kanban"
 sources: ["docs/TODO-1.8.md"]
 tickets: ["ESC-63"]
-decisions: ["ci-de-la-cible-et-des-branches-poussees"]
+decisions: [59]
 compared: null
 ---
 

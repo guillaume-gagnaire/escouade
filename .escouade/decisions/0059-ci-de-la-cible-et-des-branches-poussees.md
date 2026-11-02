@@ -1,9 +1,9 @@
 ---
-number: null
+number: 59
 id: "ci-de-la-cible-et-des-branches-poussees"
 title: "CI de la cible et des branches poussées : pastilles, journaux, relance, pause du pilote"
 date: "2026-11-02"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-63"
 pages: ["kanban/ci-des-branches","kanban/pilote-auto","kanban/kanban","kanban/en-revue"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"kanban/ci-des-branches","added":46,"removed":4},{"page":"kanban/pilote-auto","added":10,"removed":4},{"page":"kanban/kanban","added":4,"removed":2},{"page":"kanban/en-revue","added":5,"removed":5}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-02T11:53:11+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
