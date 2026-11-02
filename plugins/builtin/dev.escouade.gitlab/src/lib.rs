@@ -1,14 +1,16 @@
 //! The plugin « GitLab » (`dev.escouade.gitlab`, docs/PLUGINS.md §4.4): gitlab.com and the self-managed instances, on
 //! one account per instance. It serves the code host `gitlab` (merge requests, merge and auto-merge, pipelines and their
-//! jobs, a job's log, reruns, approvals, discussions, deployments: `merges`). GitLab Issues, the Kanban's source on the
-//! same accounts, is still the core's (`integrations/gitlab.rs`): INT-8.2 (ESC-218) brings it here, a `SourceKind`
-//! beside `GitlabForge` as GitHub's. Its program is `escouade-plugins gitlab`; the kit (`escouade-plugin-kit::hosts`)
+//! jobs, a job's log, reruns, approvals, discussions, deployments: `merges`) and the Kanban's source `gitlab` (GitLab
+//! Issues, on the same accounts: `issues`; one account per instance, the core asks the one whose host a container
+//! names). Its program is `escouade-plugins gitlab`; the kit (`escouade-plugin-kit::hosts`)
 //! answers the protocol, gets each account's token from Escouade and keeps one client per account.
 
+pub mod issues;
 pub mod merges;
 
 use escouade_plugin_kit::forge::Forge;
-use escouade_plugin_kit::hosts::{Credentials, ForgeKind, Hosts};
+use escouade_plugin_kit::hosts::{Credentials, ForgeKind, Hosts, SourceKind, TicketSource};
+use escouade_plugin_kit::http::host_of;
 
 /// Its name, in what it says.
 pub const NAME: &str = "GitLab";
@@ -53,9 +55,33 @@ impl ForgeKind for GitlabForge {
     }
 }
 
+/// The Kanban's source, GitLab Issues.
+pub struct GitlabIssues;
+
+impl SourceKind for GitlabIssues {
+    fn id(&self) -> &str {
+        issues::ID
+    }
+    fn name(&self) -> &str {
+        NAME
+    }
+    fn client(&self, http: reqwest::Client, account: &Credentials) -> Box<dyn TicketSource> {
+        Box::new(issues::Gitlab::new(
+            http,
+            &host_of(&account.url),
+            &base_of(account),
+            &account.token,
+            &account.user,
+        ))
+    }
+}
+
 /// What `escouade-plugins gitlab` runs.
 pub fn run() -> i32 {
-    escouade_plugin_kit::serve::run("gitlab", Hosts::new(vec![Box::new(GitlabForge)], vec![]))
+    escouade_plugin_kit::serve::run(
+        "gitlab",
+        Hosts::new(vec![Box::new(GitlabForge)], vec![Box::new(GitlabIssues)]),
+    )
 }
 
 #[cfg(test)]

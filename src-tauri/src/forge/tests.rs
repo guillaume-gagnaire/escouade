@@ -797,3 +797,63 @@ async fn the_gitea_plugin_switched_off_is_said_by_the_view_and_by_its_calls() {
     h.core.plugins.choose(GITEA, |c| c.enabled = true).unwrap();
     assert_eq!(served(&h.core.forges_view().await), Some(true));
 }
+
+/// The plugin « GitLab » switched off (INT-8.2): the view of the code hosts reads it from the registry, and its two
+/// uses say the plugin is down — a call of the code host, and a call of GitLab Issues on the same account.
+#[tokio::test]
+async fn the_gitlab_plugin_switched_off_is_said_by_the_view_and_by_its_two_uses() {
+    use crate::integrations::source::TicketSource;
+    use crate::plugins::builtin::GITLAB;
+    let h = harness("forge-gitlab-off");
+    let served = |view: &super::connect::ForgesView| {
+        view.providers
+            .iter()
+            .find(|p| p.kind == "gitlab")
+            .and_then(|p| p.served_by.as_ref().map(|s| s.on))
+    };
+    assert_eq!(served(&h.core.forges_view().await), Some(true));
+
+    h.core
+        .plugins
+        .choose(GITLAB, |c| c.enabled = false)
+        .unwrap();
+    h.core.plugin_runtime.forget(GITLAB);
+    assert_eq!(served(&h.core.forges_view().await), Some(false));
+    let creds = Credentials {
+        url: "https://gitlab.com".into(),
+        email: String::new(),
+        token: "glpat-test".into(),
+        api: None,
+    };
+    let client = crate::plugins::adapters::ProcessForge::new(
+        h.core.plugin_runtime.clone(),
+        GITLAB,
+        "gitlab",
+        &creds,
+    );
+    let e = client.me().await.unwrap_err();
+    assert!(crate::plugins::adapters::is_down(&e), "{e:#}");
+
+    let account = crate::integrations::Account {
+        site: "https://gitlab.com".into(),
+        user: "ada".into(),
+        ..Default::default()
+    };
+    let issues = crate::plugins::hosted::HostedTicketSource::new(
+        "GitLab",
+        vec![(
+            "gitlab.com".into(),
+            crate::plugins::adapters::ProcessTicketSource::new(
+                h.core.plugin_runtime.clone(),
+                GITLAB,
+                "gitlab",
+                &account,
+            ),
+        )],
+    );
+    let e = issues.me().await.unwrap_err();
+    assert!(crate::plugins::adapters::is_down(&e), "{e:#}");
+
+    h.core.plugins.choose(GITLAB, |c| c.enabled = true).unwrap();
+    assert_eq!(served(&h.core.forges_view().await), Some(true));
+}

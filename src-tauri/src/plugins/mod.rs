@@ -20,6 +20,8 @@ pub mod adapters;
 pub mod bench;
 /// The adapter of a harness in process (INT-9).
 pub mod harness;
+// A source on a code host's instances, one account each, served by its plugin (GitLab Issues, INT-8.2).
+pub mod hosted;
 // The permission rules: the plugins that decide before the user is asked (PLG-8).
 pub mod decide;
 // The plugins the app gives, their registry and the check of their program (INT-4).

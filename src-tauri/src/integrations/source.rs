@@ -223,7 +223,6 @@ macro_rules! ticket_source {
 }
 
 ticket_source!(clickup::Clickup, set_state: plain, view: own);
-ticket_source!(gitlab::Gitlab, set_state: mapped, view: default);
 
 /// One kind of source whose client is built from the account, with `$base` the address of its
 /// API in `Bases` (Jira's is the account's site).
@@ -389,17 +388,32 @@ kind!(
     "ClickUp",
     |a, http, b| clickup::Clickup::new(http, a, &b.clickup)
 );
-// One instance: the account's site, token and user (`Core::gitlab_client` gives every one).
-kind!(GitlabKind, "gitlab", "GitLab", "GitLab", |a, http, _b| gitlab::Gitlab::new(
-    http,
-    vec![gitlab::Instance {
-        host: crate::forge::host_of(&a.site),
-        base: format!("{}/api/v4", a.site.trim_end_matches('/')),
-        token: a.token.trim().to_string(),
-        user: a.user.clone(),
-        label: a.label.clone(),
-    }],
-), host: "gitlab", own: false);
+// GitLab Issues: out of the core, served by the plugin « GitLab » (INT-8.2), on the accounts of the code host.
+pub struct GitlabKind;
+
+impl TicketSourceKind for GitlabKind {
+    fn id(&self) -> &'static str {
+        "gitlab"
+    }
+    fn label(&self) -> &'static str {
+        "GitLab"
+    }
+    fn short(&self) -> &'static str {
+        "GitLab"
+    }
+    fn host(&self) -> Option<&'static str> {
+        Some("gitlab")
+    }
+    fn own_account(&self) -> bool {
+        false
+    }
+    fn plugin(&self) -> Option<&'static str> {
+        Some(crate::plugins::builtin::GITLAB)
+    }
+    fn build(&self, _: &Account, _: reqwest::Client, _: &Bases) -> Box<dyn TicketSource> {
+        Box::new(Unserved("GitLab"))
+    }
+}
 // Azure Boards: out of the core, served by the plugin « Azure DevOps » (INT-8.5), on its code host's accounts.
 pub struct BoardsKind;
 

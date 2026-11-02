@@ -8,7 +8,8 @@ pub mod clickup;
 pub(crate) mod fake;
 #[cfg(test)]
 mod github_tests;
-pub mod gitlab;
+#[cfg(test)]
+mod gitlab_tests;
 pub mod jira;
 pub mod secrets;
 pub mod source;

@@ -599,23 +599,38 @@ impl<R: Runtime> Core<R> {
                 continue;
             }
             match self.credentials(&a).await {
-                Ok(c) => instances.push(gitlab::Instance {
-                    base: c
-                        .api
-                        .unwrap_or_else(|| format!("{}/api/v4", c.url.trim_end_matches('/'))),
-                    token: c.token.trim().to_string(),
-                    user: a.user.clone(),
-                    label: a.label.clone(),
-                    host,
-                }),
+                Ok(c) => {
+                    // The plugin « GitLab » serves it: the token as the core holds it (the user's, or `glab`'s)
+                    // is lent to it under the instance's name.
+                    let own = crate::plugins::builtin::GITLAB;
+                    self.plugin_runtime
+                        .lend(own, &format!("account:{host}"), &c.token);
+                    let account = Account {
+                        site: a.url.clone(),
+                        label: a.label.clone(),
+                        user: a.user.clone(),
+                        ..Account::default()
+                    };
+                    let mut client = crate::plugins::adapters::ProcessTicketSource::new(
+                        self.plugin_runtime.clone(),
+                        own,
+                        Service::GITLAB.as_str(),
+                        &account,
+                    );
+                    if let Some(api) = c.api.as_deref().filter(|a| !a.trim().is_empty()) {
+                        client = client.with_api(api);
+                    }
+                    instances.push((host, client));
+                }
                 Err(e) => failed = Some(e),
             }
         }
         if instances.is_empty() {
             return Err(failed.unwrap_or_else(|| anyhow!("GitLab")));
         }
-        let http = crate::usage::http_client(&self.settings.read())?;
-        Ok(Box::new(gitlab::Gitlab::new(http, instances)))
+        Ok(Box::new(crate::plugins::hosted::HostedTicketSource::new(
+            "GitLab", instances,
+        )))
     }
 
     /// Azure Boards' client: every Azure DevOps code host's account (an organization's), served by the plugin « Azure

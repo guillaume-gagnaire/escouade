@@ -3,7 +3,7 @@
 `dev.escouade.gitlab`, a plugin [Escouade](https://escouade.dev) gives: it is shipped with the app, signed with it, and
 updated with it. Its version is Escouade's (the `0.0.0` of its manifest is replaced by the app's when it is read).
 
-Les MR, les pipelines, les discussions et les déploiements de tes projets GitLab, sur gitlab.com et tes instances.
+Les issues dans le Kanban, les MR, les pipelines, les discussions et les déploiements de tes projets GitLab, sur gitlab.com et tes instances.
 
 ## What it does
 
@@ -28,8 +28,11 @@ the open threads are read only when GitLab says some are, a fork's path once; it
 (`RateLimit-*`) and waits what a 429 asks (`Retry-After`) before trying once more; each answer tells Escouade what the
 account has left (`rateLimit`).
 
-GitLab Issues, the Kanban's source on the same accounts, is still in Escouade's core: it comes into this plugin next
-(INT-8.2), as GitHub Issues is in « GitHub ».
+It serves the Kanban's source `gitlab` too, GitLab Issues, on the same accounts (`src/issues.rs`): the opened issues of a
+project (by number, searched, assigned to you, by label, a page at a time), its states (opened, closed, the labels of
+its boards' lists, its other labels), an issue closed, opened again or given a label in one call, and a note. A
+container is `<host>/<groups>/<project>`, so that the instance goes with it: Escouade asks the account whose host the
+container names.
 
 Its program is `escouade-plugins gitlab`, a process of its own. The code is the crate of this folder (`src/merges.rs`
 for the code host), on the kit of the Rust plugins of Escouade (`crates/escouade-plugin-kit`), which speaks the
@@ -51,20 +54,22 @@ CLI's is asked by Escouade, which knows where `glab` is.
 - read the tokens of its accounts (`account:*`), never another plugin's;
 - nothing else: no command, no file, no fact of the board.
 
-Switched off (Settings › Plugins, for the app or a project), its merge requests are no longer followed: an agent's card
+Switched off (Settings › Plugins, for the app or a project), its merge requests and its issues are no longer followed: an agent's card
 says so, the code hosts' view too, and nothing is lost.
 
 ## What is in this folder
 
 | File                   | What it is                                   |
 | ---------------------- | -------------------------------------------- |
-| `escouade-plugin.json` | The manifest: its account and its code host  |
+| `escouade-plugin.json` | The manifest: its account, code host and source |
 | `README.md`            | This page                                    |
-| `Cargo.toml`, `src/`   | Its crate: `lib.rs` (its kind), `merges.rs`  |
+| `Cargo.toml`, `src/`   | Its crate: `lib.rs` (its kinds), `merges.rs`, `issues.rs` |
 
 Its tests: the crate's own (`cargo test -p escouade-plugin-gitlab`), and those of the app that run its process against
 a fake GitLab fed with answers recorded from gitlab.com (`tests/fixtures/forges/gitlab/`, `record.mjs`):
-`src-tauri/src/forge/gitlab_tests.rs`.
+`src-tauri/src/forge/gitlab_tests.rs` for the merge requests, `src-tauri/src/integrations/gitlab_tests.rs` for the
+issues (gitlab.com and an instance side by side; `real_gitlab_issues`, ignored, is the real trial by hand with
+`ESCOUADE_TEST_GITLAB_TOKEN` and `ESCOUADE_TEST_GITLAB_PROJECT`).
 
 ## Run it alone
 
