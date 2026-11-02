@@ -8,30 +8,63 @@ Ce plugin (`dev.escouade.acp`) lance l’agent, lui parle et montre sa conversat
 
 Le plugin Goose (`plugins/goose/` du dépôt d’Escouade), essayé avec Goose 1.57 :
 
+`plugins/goose/escouade-plugin.json`
+
 ```json
 {
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.goose",
   "name": "Goose",
   "version": "1.0.0",
+  "description": {
+    "fr": "Goose, l'agent open source de Block, comme harness : décrit par ACP, sans code.",
+    "en": "Goose, Block's open source agent, as a harness: described over ACP, no code."
+  },
+  "author": { "name": "Escouade", "url": "https://escouade.dev" },
   "license": "MIT",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/goose",
   "escouade": { "api": "1", "min": "2.1.0" },
   "contributes": {
     "harnesses": [
       {
         "id": "goose",
         "name": "Goose",
+        "speaker": "Goose",
+        "writer": "Goose",
         "locate": { "names": ["goose"] },
         "tested": { "oldest": "1.57.0", "newest": "1.57.0" },
         "caps": {
           "modes": [
-            { "id": "default", "meaning": { "fr": "Goose demande avant chaque outil.", "en": "Goose asks before each tool." } },
-            "acceptEdits",
-            "bypassPermissions"
+            {
+              "id": "default",
+              "meaning": {
+                "fr": "Goose demande avant chaque outil (son mode approve). Il écrit les fichiers lui-même, sans les faire passer par Escouade.",
+                "en": "Goose asks before each tool (its approve mode). It writes files by itself, without passing them through Escouade."
+              }
+            },
+            {
+              "id": "acceptEdits",
+              "meaning": {
+                "fr": "Goose ne demande que pour ce qu'il juge sensible (son mode smart_approve) ; Escouade accepte ses écritures dans le dossier de l'agent.",
+                "en": "Goose asks only for what it deems sensitive (its smart_approve mode); Escouade accepts its writes in the agent's folder."
+              }
+            },
+            {
+              "id": "bypassPermissions",
+              "meaning": {
+                "fr": "Goose ne demande rien (son mode auto) : commandes, fichiers, tout le disque. Pas de bac à sable.",
+                "en": "Goose asks nothing (its auto mode): commands, files, the whole disk. No sandbox."
+              }
+            }
           ],
           "readOnly": true
         },
         "accountVar": "GOOSE_PATH_ROOT",
-        "install": { "unix": "curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | CONFIGURE=false bash" },
+        "install": {
+          "windows": "Invoke-WebRequest -Uri https://raw.githubusercontent.com/aaif-goose/goose/main/download_cli.ps1 -OutFile download_cli.ps1; ./download_cli.ps1",
+          "unix": "curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | CONFIGURE=false bash"
+        },
+        "updateCommand": "goose update",
         "acp": {
           "args": ["acp"],
           "fs": false,
@@ -39,7 +72,7 @@ Le plugin Goose (`plugins/goose/` du dépôt d’Escouade), essayé avec Goose 1
           "readOnlyMode": "chat",
           "modelOption": "model",
           "questionsInText": true,
-          "tools": { "shell": "Bash", "write": "Write", "edit": "Edit", "read": "Read" }
+          "tools": { "shell": "Bash", "write": "Write", "edit": "Edit", "text_editor": "Edit", "read": "Read", "tree": "Glob" }
         }
       }
     ]
@@ -60,7 +93,7 @@ Chaque entrée de `contributes.harnesses` avec un objet `acp` est un harness dé
 ## L’objet `acp`
 
 - `args` : ses arguments (`["acp"]`) ; `env` et `removeEnv` : des variables à lui (jamais un secret : un manifeste se lit), et celles de l’app qu’il ne doit pas recevoir ;
-- `fs` : il lit et écrit les fichiers **par Escouade** (`fs/read_text_file`, `fs/write_text_file`), vrai par défaut. Mettez `false` pour un agent qui les lit et écrit lui-même, comme Goose ou Cursor CLI, même quand Escouade le lui propose ;
+- `fs` : il lit et écrit les fichiers **par Escouade** (`fs/read_text_file`, `fs/write_text_file`), vrai par défaut. Mets `false` pour un agent qui les lit et écrit lui-même, comme Goose ou Cursor CLI, même quand Escouade le lui propose ;
 - `modes` : le mode ACP (`session/set_mode`) de chaque mode d’Escouade ; `readOnlyMode` : celui qui ne change rien, pour les discussions de l’onglet Docs ;
 - `modelOption` : l’option de configuration du modèle (`session/set_config_option`), sinon `session/set_model` ;
 - `questionsInText` : l’agent n’a pas d’outil pour poser une question ; son premier message lui dit de finir son tour sur un bloc `<escouade_question>`, qu’Escouade montre comme une carte de question ;
@@ -80,4 +113,4 @@ Pour l’instant, un harness décrit n’a pas de vue terminal ni de textes réd
 
 ## L’essayer
 
-Installez le dossier de votre plugin depuis la vue Plugins (« En développement »), puis choisissez son harness dans le menu « Harness ». Avant l’installation, la fenêtre montre le programme que ses agents lanceront (`goose acp`). Le banc des harness d’Escouade joue le même client sur un faux agent ACP décrit par un manifeste (`tests/fixtures/plugins/fake-acp/`).
+Installe le dossier de ton plugin depuis la vue Plugins (« En développement »), puis choisis son harness dans le menu « Harness ». Avant l’installation, la fenêtre montre le programme que ses agents lanceront (`goose acp`). Le banc des harness d’Escouade joue le même client sur un faux agent ACP décrit par un manifeste (`tests/fixtures/plugins/fake-acp/`).

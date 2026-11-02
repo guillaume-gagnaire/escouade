@@ -26,7 +26,7 @@ With the `author` scope, every account’s:
 | --- | --- |
 | `list_repositories` | your repositories where the App is installed, and your last submissions |
 | `list_folders`, `list_tags` | the folders of a repository that hold a manifest, the tags of a folder |
-| `submit_version`, `get_version`, `retry_checks` | submit a tag of a folder, follow its ten checks, run them again when the store or GitHub failed |
+| `submit_version`, `get_version`, `retry_checks` | submit a tag of a folder, follow its eleven checks, run them again when the store or GitHub failed |
 | `publish_version` | publish: the categories of a first version, “Ask for the review” (yes by default), new tags published on their own |
 | `list_plugins`, `get_plugin` | your plugins, their versions and their state, the versions waiting for a click |
 | `yank_version`, `dismiss_version` | yank a published version, set aside a waiting one |
@@ -47,4 +47,4 @@ The `review` scope (read the review queue, a version and its report, post a repo
 
 In your account on the store, “Connected apps” shows each client you allowed, its scopes, the date of its last use and its last actions. “Disconnect” stops its tokens at once. Each action of a tool is noted in your journal, “by an MCP client”, with the client’s name. Deleting your account erases all its authorizations.
 
-See also [Publishing on the store](/en/docs/plugins/publishing/) for the ten checks and their refusals.
+See also [Publishing on the store](/en/docs/plugins/publishing/) for the eleven checks and their refusals.

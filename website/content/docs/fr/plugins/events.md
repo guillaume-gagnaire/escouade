@@ -121,27 +121,49 @@ Un plugin **déclaratif** (sans `run`) appelle une adresse sur un fait. Chaque w
 
 Un gabarit remplace `{{chemin}}` par la valeur du fait : `{{name}}`, `{{ticket.key}}`, `{{ticket.title}}`, `{{project.name}}`, `{{agent.name}}`, `{{data.to}}`… Dans un objet, un texte qui n’est qu’un `{{chemin}}` prend la valeur telle quelle (une liste reste une liste) ; dans un texte JSON, les valeurs sont échappées. Un secret ne va jamais dans le corps.
 
-Le webhook Discord des tickets à tester :
+Le plugin Discord, en entier : un webhook pour un ticket passé « À tester », un autre pour un agent qui attend.
+
+`plugins/discord/escouade-plugin.json`
 
 ```json
 {
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.discord",
   "name": "Discord",
-  "version": "1.0.0",
+  "version": "1.1.0",
+  "description": {
+    "fr": "Les tickets à tester et les agents qui attendent, dans un salon Discord : un webhook, sans code.",
+    "en": "Tickets to test and agents waiting, in a Discord channel: a webhook, no code."
+  },
+  "author": { "name": "Escouade", "url": "https://escouade.dev" },
+  "license": "MIT",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/discord",
   "escouade": { "api": "1", "min": "2.1.0" },
   "permissions": {
-    "events": ["ticket.column"],
+    "events": ["ticket.column", "agent.status"],
     "network": ["discord.com"],
     "secrets": ["webhook"]
   },
   "contributes": {
-    "secrets": [{ "key": "webhook", "title": { "fr": "Adresse du webhook", "en": "Webhook URL" } }],
+    "secrets": [{ "key": "webhook", "title": { "fr": "Adresse du webhook Discord", "en": "Discord webhook URL" } }],
     "webhooks": [
       {
         "url": "{{secrets.webhook}}",
         "events": ["ticket.column"],
         "when": { "data.to": "review" },
-        "body": { "content": "{{ticket.key}} à tester : {{ticket.title}} ({{project.name}})" }
+        "body": {
+          "content": "🧪 **{{ticket.key}}** to test: {{ticket.title}} ({{project.name}})",
+          "allowed_mentions": { "parse": [] }
+        }
+      },
+      {
+        "url": "{{secrets.webhook}}",
+        "events": ["agent.status"],
+        "when": { "data.status": "waiting" },
+        "body": {
+          "content": "✋ **{{agent.name}}** waits for you ({{project.name}})",
+          "allowed_mentions": { "parse": [] }
+        }
       }
     ]
   }

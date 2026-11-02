@@ -19,12 +19,12 @@ A plugin is **a folder of a repository**: the root, or a subfolder that holds it
 
 1. Sign in on [store.escouade.dev](https://store.escouade.dev/en/submit) with GitHub, and install the “Escouade Store” App on the plugin’s repository. It reads the code and the tags, never writing. A private repository is refused: the code of a plugin of the store is read by all.
 2. Choose the repository, the plugin’s folder (the root by default), then the tag of the version (`v1.2.0` or `1.2.0` at the root, `plugins/slack/v1.2.0` in a folder). The store resolves it into its commit once, at submission, and never reads it again for this version.
-3. The ten checks run on the page, one line each. The store downloads the commit’s archive once, keeps it as it came and computes its SHA-256 fingerprint; nothing of the plugin runs on the server.
+3. The eleven checks run on the page, one line each. The store downloads the commit’s archive once, keeps it as it came and computes its SHA-256 fingerprint; nothing of the plugin runs on the server.
 4. If everything passes, publish: a first version asks for one to three categories and keywords. The version appears **unverified**; the “Ask for the review” box (checked) puts it in the queue of the “Verified by Escouade” review, which holds for this version only.
 
 Each published version has its `version.json` file: the id, the number, the repository, the commit, the fingerprint of the archive, of the manifest and of each binary. Its fingerprint is the version’s, which the app checks and the review signs. A published version never changes, and its number is not used again.
 
-## The ten checks
+## The eleven checks
 
 | Check | What it asks |
 | --- | --- |
@@ -37,7 +37,8 @@ Each published version has its `version.json` file: the id, the number, the repo
 | Screenshots | Those of `store.screenshots`: 6 at most, in PNG, JPEG or WebP, 1600 px wide and 1 MB each at most. The store re-encodes them, without their metadata. |
 | Archive | 50 MB at most, no symbolic link, no absolute path nor `..`, no submodule nor unresolved Git LFS file. |
 | Permissions | Consistent with the plugin: with no program and no webhook, it asks for no network, no events, no secrets; a secret it asks for is declared in `contributes.secrets`; a host is written alone (`hooks.slack.com`). |
-| Binaries | The program of `run` is in the repository, or in the tag’s release for each system (see below). |
+| Binaries | The program of `run.command` is in the repository, or in the tag’s release for each system (see below). A script or an interpreter (`node`, `deno`, `python`…) is refused: a program in JS or TypeScript ships as `run.js`. A `run.js` plugin has nothing to provide. |
+| Compilation | For a `run.js` plugin: its bundle, taken from the archive (5 MB at most, never an `npm install`), compiled to WASM twice by `escouade-plugin build`, isolated, each time in a fresh folder. Two different modules refuse the version; so does an `import` other than `node:fs` and `node:readline`. The module kept is the one the app downloads and checks. |
 
 ## The plugin’s page
 

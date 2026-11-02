@@ -1,6 +1,6 @@
 # La sécurité des plugins
 
-Un plugin du store passe par trois gardes : les dix contrôles du store à la soumission, la revue « Vérifié par Escouade » faite à la main, et les vérifications de l’app à chaque installation. Cette page dit ce que chacune tient, ce que la revue refuse, et ce que le sceau ne promet pas.
+Un plugin du store passe par trois gardes : les onze contrôles du store à la soumission, la revue « Vérifié par Escouade » faite à la main, et les vérifications de l’app à chaque installation. Cette page dit ce que chacune tient, ce que la revue refuse, et ce que le sceau ne promet pas.
 
 ## Ce que l’app vérifie
 

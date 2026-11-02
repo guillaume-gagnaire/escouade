@@ -435,6 +435,28 @@ describe('the page of the example plugins', () => {
     expect(blocks('en').map((b) => b.path)).toEqual(blocks('fr').map((b) => b.path));
   });
 
+  it('takes the code of every page of plugins/ from a plugin or a template that passes the bench', () => {
+    // A block under a path of the repository (`plugins/goose/escouade-plugin.json`, `sdk/create-escouade-plugin/
+    // templates/program/src/plugin.ts`) is that file, or lines of it as they are; a manifest of one of Escouade's
+    // plugins is never shown without its path: a copy by hand would drift from the plugin.
+    const pages = DOC_SLUGS.filter((s) => s.startsWith('plugins/'));
+    for (const lang of LANGS) {
+      for (const slug of pages) {
+        const text = source(lang, slug);
+        for (const [, path, code] of text.matchAll(/^`((?:plugins|sdk)\/[^`\s]+)`(?: \([^)\n]*\))?\n\n```\w*\n([\s\S]*?)\n```$/gm)) {
+          const file = readFileSync(new URL(path, REPO), 'utf8').replace(/\r\n/g, '\n');
+          expect(file.includes(code), `${lang}/${slug}: ${path} no longer holds this block, copy it again`).toBe(true);
+        }
+        for (const [whole, before] of text.matchAll(/(^.*)\n\n```json\n[\s\S]*?\n```$/gm)) {
+          if (/"id": "dev\.escouade\./.test(whole) && /"(?:contributes|permissions)": \{/.test(whole))
+            expect(before, `${lang}/${slug}: a manifest of Escouade's plugins without the path it comes from`).toMatch(
+              /^`(?:plugins|sdk)\//,
+            );
+        }
+      }
+    }
+  });
+
   it('shows every plugin of plugins/', () => {
     const examples = readdirSync(new URL('plugins/', REPO), { withFileTypes: true })
       .filter((d) => d.isDirectory() && existsSync(new URL(`plugins/${d.name}/escouade-plugin.json`, REPO)))

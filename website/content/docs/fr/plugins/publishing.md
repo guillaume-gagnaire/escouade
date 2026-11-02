@@ -19,12 +19,12 @@ Un plugin est **un dossier d’un dépôt** : la racine, ou un sous-dossier qui 
 
 1. Connecte-toi sur [store.escouade.dev](https://store.escouade.dev/submit) avec GitHub, et installe l’App « Escouade Store » sur le dépôt du plugin. Elle lit le code et les étiquettes, sans jamais écrire. Un dépôt privé est refusé : le code d’un plugin du store se lit par tous.
 2. Choisis le dépôt, le dossier du plugin (la racine par défaut), puis l’étiquette de la version (`v1.2.0` ou `1.2.0` à la racine, `plugins/slack/v1.2.0` dans un dossier). Le store la résout en commit une fois, à la soumission, et ne la relit plus pour cette version.
-3. Les dix contrôles tournent sur la page, une ligne chacun. Le store télécharge l’archive du commit une fois, la garde telle quelle et en calcule l’empreinte SHA-256 ; rien du plugin ne s’exécute sur le serveur.
+3. Les onze contrôles tournent sur la page, une ligne chacun. Le store télécharge l’archive du commit une fois, la garde telle quelle et en calcule l’empreinte SHA-256 ; rien du plugin ne s’exécute sur le serveur.
 4. Si tout passe, publie : une première version demande une à trois catégories et des mots-clés. La version paraît **non vérifiée** ; la case « Demander la revue » (cochée) la met dans la file de la revue « Vérifié par Escouade », qui vaut pour cette version seulement.
 
 Chaque version publiée a son fichier `version.json` : l’identifiant, le numéro, le dépôt, le commit, l’empreinte de l’archive, du manifeste et de chaque binaire. Son empreinte est celle de la version, que l’app vérifie et que la revue signe. Une version publiée ne change plus, et son numéro ne se réutilise pas.
 
-## Les dix contrôles
+## Les onze contrôles
 
 | Contrôle | Ce qu’il demande |
 | --- | --- |
@@ -37,7 +37,8 @@ Chaque version publiée a son fichier `version.json` : l’identifiant, le numé
 | Captures | Celles de `store.screenshots` : 6 au plus, en PNG, JPEG ou WebP, 1600 px de large et 1 Mo chacune au plus. Le store les réencode, sans leurs métadonnées. |
 | Archive | 50 Mo au plus, sans lien symbolique, sans chemin absolu ni `..`, sans sous-module ni fichier Git LFS non résolu. |
 | Permissions | Cohérentes avec le plugin : sans programme ni webhook, il ne demande ni réseau, ni événements, ni secrets ; un secret demandé est déclaré dans `contributes.secrets` ; un hôte s’écrit seul (`hooks.slack.com`). |
-| Binaires | Le programme de `run` est dans le dépôt, ou dans la release de l’étiquette pour chaque système (voir plus bas). |
+| Binaires | Le programme de `run.command` est dans le dépôt, ou dans la release de l’étiquette pour chaque système (voir plus bas). Un script ou un interpréteur (`node`, `deno`, `python`…) est refusé : un programme en JS ou en TypeScript se publie en `run.js`. Un plugin `run.js` n’a rien à fournir. |
+| Compilation | Pour un plugin `run.js` : son bundle, pris dans l’archive (5 Mo au plus, jamais de `npm install`), compilé en WASM deux fois par `escouade-plugin build`, isolé, chaque fois dans un dossier neuf. Deux modules différents refusent la version ; un `import` hors de `node:fs` et `node:readline` aussi. Le module gardé est celui que l’app télécharge et vérifie. |
 
 ## La page du plugin
 

@@ -1,6 +1,6 @@
 # Plugin security
 
-A plugin from the store goes through three guards: the store’s ten checks on submission, the “Verified by Escouade” review done by hand, and the app’s checks on every install. This page says what each one holds, what the review refuses, and what the seal does not promise.
+A plugin from the store goes through three guards: the store’s eleven checks on submission, the “Verified by Escouade” review done by hand, and the app’s checks on every install. This page says what each one holds, what the review refuses, and what the seal does not promise.
 
 ## What the app checks
 

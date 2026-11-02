@@ -265,7 +265,7 @@ Gemini donne les tokens de chaque tour, pas leur coût ni son quota : son usage 
 
 ## D’autres harness, par un plugin
 
-Un agent qui parle ACP (Goose, par exemple) se décrit dans le manifeste d’un plugin, sans code : voir [un harness ACP décrit](plugins/harnesses).
+Un agent qui parle ACP (Goose, par exemple) se décrit dans le manifeste d’un plugin, sans code : voir [un harness ACP décrit](plugins/harnesses). Le plugin ACP, livré avec Escouade (`dev.escouade.acp`), le lance et lui parle ; il se coupe dans la vue Plugins, et les agents de ces harness restent alors, marqués « harness absent », avec leurs conversations. Les harness de cette page, eux, font encore partie de l’app.
 
 ## Le serveur MCP
 

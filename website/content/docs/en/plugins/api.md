@@ -109,6 +109,15 @@ The last 500 lines are read in the Journal tab of its page, in the view Plugins 
 
 Its methods, their parameters, their answers and their delays are described by a schema, [`plugin-protocol-1.json`](/schemas/plugin-protocol-1.json), where the types of the [TypeScript SDK](plugins/sdk) come from. To check that a plugin keeps to this protocol without starting the app, play [the conformance bench](plugins/testing): `escouade-plugin test <folder>`.
 
+## A program in JS or TypeScript
+
+A plugin whose manifest says `"run": { "js": "dist/plugin.mjs" }` starts no process: Escouade runs its bundle **inside the app, in WASM**, one instance per plugin, which keeps its state from one call to the next. The messages, the handshake, the delays, the restarts and the journal are those of a process; the [SDK](plugins/sdk) speaks either without the plugin knowing.
+
+- **Its limits**: 64 MB of memory, 2 s per turn of work, 500 ms while it holds a decision. Past them, Escouade ends the instance and the journal says so (“a turn ran past 2000 ms: Escouade stopped its instance”); a new one is made, as after a crash, with the same three restarts in five minutes.
+- **The network, through Escouade only**: `net/fetch` (the SDK’s `fetch`), over https, to a host of `permissions.network` or one of its subdomains, following no redirect, within 10 s and 1 MB, and never to an address of the machine or of the local network, judged on the addresses the name leads to. A refused call answers `-32003`, a call that fails on the way `-32004`.
+- **The files of its folder**: `files/read` (the SDK’s `file()`), 256 KB per file and 1 MB in all; never its manifest, a hidden file, a link or a path that leaves the folder.
+- **Nothing else**: it starts no program and reads no disk outside its folder. That is why the install window says “Runs inside Escouade, isolated”, not “Runs a program on your computer”.
+
 ## What the user changes
 
 A plugin switched off, a permission taken back or given again, an update installed: its process is stopped, and the next one gets the manifest and the permissions of now. A secret’s permission taken back makes `secrets/get` answer `-32001` for that key, as for a secret that is not its own.

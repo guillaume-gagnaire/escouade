@@ -234,3 +234,4 @@ Sont aussi refusées, et notées : une requête sans jeton (« Requête refusé
 - [Le Kanban](board) : les tickets que les outils créent et déplacent.
 - [Réglages du Kanban](settings-board) : ce que `get_board` lit et que `set_board` change.
 - [Réglages des harness](settings-claude-code) : où se trouve l’interrupteur.
+- [Le store depuis un agent](plugins/store-mcp) : le serveur MCP du store, pour publier un plugin depuis un agent.

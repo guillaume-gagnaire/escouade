@@ -1,6 +1,6 @@
 # The SDK
 
-`@escouade-dev/plugin` writes a plugin of Escouade in TypeScript: the protocol’s types, a client that speaks it on the standard input and output, a fake Escouade for the plugin’s tests, and the `escouade-plugin` command. It is under the MIT license, like the protocol’s schema, and depends on nothing.
+`@escouade-dev/plugin` writes a plugin of Escouade in TypeScript: the protocol’s types, a client that speaks it, inside Escouade in WASM or under Node, a fake Escouade for the plugin’s tests, and the `escouade-plugin` command. It is under the MIT license, like the protocol’s schema, and depends on nothing.
 
 ## A first plugin
 
@@ -22,25 +22,41 @@ To try it in Escouade, load its folder in Settings › Plugins, in developer mod
 
 ## The client
 
+The `program` template, as `npm create escouade-plugin` writes it: what the plugin does, apart so that its tests drive it without a process,
+
+`sdk/create-escouade-plugin/templates/program/src/plugin.ts`
+
 ```ts
+// What the plugin does: its handlers, kept apart from main.ts so that the tests drive them without a process.
 import { createPlugin } from '@escouade-dev/plugin';
 
-const plugin = createPlugin();
+export const plugin = createPlugin();
 
-// A fact of permissions.events.
-plugin.onEvent('ticket.column', async (fact, p) => {
-  if (fact.data.to !== 'review') return;
-  const webhook = await p.secret('webhook'); // one of permissions.secrets, or null
-  if (!webhook) return p.log.warn('no webhook kept: nothing sent');
-  await fetch(webhook, { method: 'POST', body: JSON.stringify({ text: `${fact.ticket?.key ?? ''} is ready to test` }) });
+// A fact of permissions.events: a ticket changed columns (its data says from and to).
+plugin.onEvent('ticket.column', (fact, p) => {
+  // A ticket's fact says its ticket; the fact's type, one for every fact, leaves it optional.
+  if (fact.data.to === 'review') p.log.info(`${fact.ticket?.key ?? ''} is ready to test (${fact.project?.name ?? ''})`);
 });
 
-// A permission an agent asks for (permissions.decide): within 500 ms.
-plugin.decidePermission(({ request }) =>
-  request.kind === 'command' && String(request.input?.command).startsWith('rm -rf')
-    ? { decision: 'deny', message: 'Not here.' }
-    : { decision: 'ask' },
-);
+// A permission an agent asks for, before the user is asked (permissions.decide). Answer within 500 ms.
+plugin.decidePermission(({ request }) => {
+  const command = typeof request.input?.command === 'string' ? request.input.command : '';
+  if (request.kind === 'command' && /\bgit\s+push\b.*(--force\b|\s-f\b)/.test(command)) {
+    return { decision: 'deny', message: 'No force push in this team: push a new commit instead.' };
+  }
+  // Leaves it to the user, as without the plugin.
+  return { decision: 'ask' };
+});
+```
+
+and the program, which `run.js` names once bundled into `dist/plugin.mjs`:
+
+`sdk/create-escouade-plugin/templates/program/src/main.ts`
+
+```ts
+// The program (run.js in escouade-plugin.json, once bundled): speaks the protocol to Escouade, which runs it inside the
+// app in WASM; under Node too (the bench of escouade-plugin, a test), on stdin and stdout. start() finds which.
+import { plugin } from './plugin.ts';
 
 void plugin.start();
 ```
@@ -52,10 +68,11 @@ void plugin.start();
 | `secret(key)` | Asks Escouade for one of its secrets (`secrets/get`); `null` when none is kept. Another key rejects with the error `-32001`. |
 | `settings(project?)` | Asks for its settings (`settings/get`); with a project’s id, those its `.escouade.yml` gives it (`plugins.<id>`) go first. |
 | `log.debug/info/warn/error(message)` | A line of its journal (`log`). |
+| `file(path)` | Reads a file of its folder (`files/read`), 256 KB at most: never its manifest, a hidden file or a path that leaves it. |
 | `handle(method, handler)` | Serves another method (a later extension point). Throw `new RpcError(code, message)` to answer an error. |
 | `onInitialize(handler)`, `onShutdown(handler)` | Runs at `initialize`, or before the answer to `shutdown` (800 ms at most: Escouade waits a second). |
 | `call(method, params)`, `notify(method, params)` | A call or a notification to Escouade, typed for its methods. |
-| `start()` | Speaks the protocol on the process’s standard streams, and ends it after `shutdown`. |
+| `start()` | Speaks the protocol to Escouade: to its WASM host when the app runs the plugin, on the standard input and output under Node (the bench, a test); the same code on both. Ends the plugin after `shutdown`. |
 
 The client answers `initialize` with version 1 of the protocol, whatever is offered (Escouade stops a plugin that does not speak its own), serves batches, answers a method it does not know with `-32601`, and never writes anything but the protocol on its standard output: write your traces on the standard error, which goes to the journal.
 
@@ -78,17 +95,36 @@ The protocol’s types come from one schema, [`plugin-protocol-1.json`](/schemas
 
 `@escouade-dev/plugin/testing` gives a fake Escouade, in memory: it sends the plugin the same messages as the app and the bench, without starting a process.
 
+The template’s tests:
+
+`sdk/create-escouade-plugin/templates/program/test/plugin.test.ts`
+
 ```ts
+// The plugin's handlers, driven by the SDK's fake Escouade, in memory. `npm run bench` plays the real program.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { connect } from '@escouade-dev/plugin/testing';
 import { plugin } from '../src/plugin.ts';
 
-test('a ticket moved to test is said in the journal', async () => {
-  const escouade = connect(plugin, { secrets: { webhook: null } });
+test('it speaks version 1 of the protocol', async () => {
+  const escouade = connect(plugin);
+  const hello = await escouade.initialize();
+  assert.equal(hello.protocolVersion, 1);
+});
+
+test('a ticket moved to review is said in the journal', async () => {
+  const escouade = connect(plugin);
   await escouade.initialize();
   await escouade.fact('ticket.column', { ticket: { key: 'APP-7' }, data: { from: 'doing', to: 'review' } });
-  assert.deepEqual(escouade.logs, [{ level: 'warn', message: 'no webhook kept: nothing sent' }]);
+  assert.deepEqual(escouade.logs, [{ level: 'info', message: 'APP-7 is ready to test (Banc)' }]);
+});
+
+test('a force push is refused, the rest left to the user', async () => {
+  const escouade = connect(plugin);
+  await escouade.initialize();
+  const push = await escouade.decide({ request: { input: { command: 'git push --force origin main' } } });
+  assert.equal(push.decision, 'deny');
+  assert.equal((await escouade.decide()).decision, 'ask');
 });
 ```
 
@@ -104,6 +140,7 @@ The SDK installs `escouade-plugin` in the plugin’s `node_modules`, for its npm
 | `escouade-plugin test [folder]` | [The conformance bench](plugins/testing): Escouade’s own. |
 | `escouade-plugin dev [folder]` | [The fake Escouade](plugins/testing#the-fake-escouade): facts, decisions and calls you type, to a running program. |
 | `escouade-plugin pack [folder]` | The plugin’s archive and its SHA-256. |
+| `escouade-plugin build [folder]` | Compiles `run.js` to WASM, as the store does: `packs/<id>-<version>.wasm` and its `.sha256`. |
 
 `test` and `dev` run the `escouade-plugin` that ships with Escouade, so that a plugin is judged by the bench of the app: the one of `ESCOUADE_PLUGIN_BIN`, else the one on the `PATH`, else the app’s (`%LOCALAPPDATA%\Escouade` on Windows, `Escouade.app` on macOS, `/usr/bin` with the `.deb`). Without one, the command says where to get it.
 
@@ -113,25 +150,21 @@ The SDK installs `escouade-plugin` in the plugin’s `node_modules`, for its npm
 
 `--target windows-x64` (or `macos-arm64`, `linux-x64`…) names the archive of one system, `<id>-<version>-windows-x64.tar.gz`: the name [the store](plugins/publishing) expects of the release’s files of a compiled plugin.
 
-## One executable
+## Without Node
 
-A plugin in TypeScript needs Node, which not everyone has. Compile it into one executable per system, and name each in `run`:
+A plugin in JS or TypeScript ships as its bundle, named by `run.js`:
 
-```sh
-npm run build
-deno compile --allow-env --allow-read --allow-net --output bin/plugin-windows-x64.exe --target x86_64-pc-windows-msvc dist/plugin.mjs
-deno compile --allow-env --allow-read --allow-net --output bin/plugin-macos-arm64 --target aarch64-apple-darwin dist/plugin.mjs
-deno compile --allow-env --allow-read --allow-net --output bin/plugin-linux-x64 --target x86_64-unknown-linux-gnu dist/plugin.mjs
-```
+`sdk/create-escouade-plugin/templates/program/escouade-plugin.json` (excerpt)
 
 ```json
-"run": { "command": "plugin", "windows": "bin/plugin-windows-x64.exe", "macos": "bin/plugin-macos-arm64", "linux": "bin/plugin-linux-x64" }
+  "run": { "js": "dist/plugin.mjs" },
 ```
 
-- Give the program only the rights it uses: `--allow-net` for a plugin that calls a service, nothing for one that only decides.
-- `bun build --compile --target=bun-windows-x64 dist/plugin.mjs --outfile bin/plugin-windows-x64.exe` does the same with Bun.
-- An executable weighs about 100 MB, 40 MB in its archive. Attach one archive per system to the release (`escouade-plugin pack . --target windows-x64`), built by a public workflow with its provenance attestation: the store only verifies the binaries it can tie to the commit.
-- `escouade-plugin test .` plays the bench on the executable of the system it runs on: run it on each.
+Escouade runs it **inside the app, in WASM**, with no Node on the user’s machine: one isolated instance per plugin, which keeps its state from one call to the next like a process. The store compiles the bundle when it is submitted, and the app downloads that module and checks it against the version’s `version.json`; a plugin installed from a folder or a git repository is compiled by the app. The install window says “Runs inside Escouade, isolated”, and `permissions.network` is enforced there: `fetch` goes through Escouade, over https, to those hosts only (see [the protocol](plugins/api#a-program-in-js-or-typescript)).
+
+- The bundle imports only `node:fs` and `node:readline`, which Escouade serves; any other `import` fails its compilation, and `escouade-plugin validate` says so.
+- `escouade-plugin build` makes the module as the store does, to check that it compiles; `test` and `dev` play the bundle in WASM, without Node. The Javy that compiles it is downloaded the first time it is needed and checked by its hash.
+- A plugin that must start a program of the computer (a harness, a command) keeps a `run.command`: one executable per system, in its folder or attached to its release with its provenance attestation (see [publishing](plugins/publishing)). Its install window says “Runs a program on your computer, with your rights”. The store refuses a `run.command` that is a script or names an interpreter (`node`…): a program in JS or TypeScript ships as `run.js`.
 
 ## In CI
 
@@ -154,6 +187,3 @@ jobs:
 
 Escouade’s CI does the same on both templates of `npm create escouade-plugin`, against the bench of each build.
 
-## Later
-
-A Rust crate of the same types, then the WIT interface of the WebAssembly runtime, with the 2.2.

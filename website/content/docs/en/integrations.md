@@ -30,6 +30,17 @@ Tokens stay on your machine, apart from your settings, and are only used for cal
 
 When the keychain refuses a token on Windows or macOS, it stays in that file and the tab says so: “System keychain unavailable: the token stays in ~/.escouade/integrations.json.” If the keychain exists but cannot be read, the tab says “System keychain unreadable: restart Escouade or reconnect the account.” and no call goes out without the tokens. For GitHub through `gh`, Escouade keeps no token.
 
+### The services a plugin serves
+
+GitHub (the code host and GitHub Issues), GitLab (the code host; GitLab Issues is still part of the app), Bitbucket, Gitea and Forgejo, and Trello are served by plugins shipped with Escouade: nothing changes in use, the accounts and the forms are the same. An account served by another author’s plugin says so: “Served by the plugin …”. The token stays in the keychain; Escouade lends it to the plugin of that service alone, when it needs it.
+
+These plugins are switched off in the Plugins view, for the whole app or for one project (see [the plugins shipped with Escouade](plugins/installer#the-plugins-shipped-with-escouade)). Switched off or stopped, a plugin says so instead of going quiet:
+
+- **a code host**: the agent’s card shows “Code host stopped: PRs no longer followed” and keeps the PRs read last; Settings › Integrations says under the account “The plugin GitHub is switched off (Settings › Plugins): this account serves nothing, its PRs are no longer followed”, or that it stopped and why;
+- **a source**: the sync stops, and its failure says “The plugin dev.escouade.trello is not answering: …”; the imported tickets stay.
+
+Switched back on, the plugin picks up where it stopped: the first read that works clears the message.
+
 ## Linking a project to a source
 
 A project links to one place per service: a Jira project, a Trello board, a GitHub repository, a Linear team, a ClickUp list, a GitLab project, or an Azure DevOps project. In Settings › Integrations, the “Sources linked to `<project>`” group offers, for each connected service, a list: “Jira project”, “Trello board”, “GitHub Issues repository”, “Linear team”, “ClickUp list”, “GitLab Issues project”, “Azure Boards project”. “None” unlinks the service. For GitHub, the project’s own repository, when its remote is on GitHub, comes first (“(the project’s repository)”); likewise for GitLab, when the remote is on a connected instance, and for Azure Boards, when it is on the connected organization. Azure DevOps projects are grouped by organization. GitLab projects are grouped by instance, with their groups and subgroups in the path (“acme/back/api”). For ClickUp, the lists of all your workspaces are grouped by space and folder (“Product › Sprints”), as in ClickUp’s sidebar: the lists outside a folder first, archived ones left out; typing the first letters of a name, with the menu open, goes to it.

@@ -1,6 +1,6 @@
 # Les plugins d’exemple
 
-Quatre plugins complets à lire, copier et installer : un thème, un webhook Discord sans code, Slack et les règles d’une équipe en TypeScript. Ce sont des plugins d’Escouade, sur son store ; chacun passe le banc de conformité à chaque changement.
+Cinq plugins complets à lire, copier et installer : un thème, un webhook Discord sans code, Slack et les règles d’une équipe en TypeScript, et Goose, un harness décrit sans code. Ce sont des plugins d’Escouade, sur son store ; chacun passe le banc de conformité à chaque changement.
 
 ## Où les trouver
 
@@ -14,8 +14,12 @@ Pour en faire le tien, copie son dossier et donne-lui un identifiant à toi (`io
 | Discord | Les tickets à tester et les agents qui attendent, dans un salon Discord | Déclaratif |
 | Slack | La même chose dans Slack, dans le salon de chaque projet, avec un secret au trousseau | Programme TypeScript |
 | Règles de l’équipe | Les commandes des agents autorisées ou refusées selon un fichier du dépôt | Programme TypeScript |
+| Goose | Un agent qui parle ACP, ajouté comme harness | Déclaratif |
 
-Le code montré ici est celui du dépôt : un test du site vérifie qu’il n’a pas changé depuis. Gemini CLI, lui, est livré avec Escouade ; l’exemple d’un harness décrit par un plugin viendra avec ce point d’extension.
+Le code montré ici est celui du dépôt : un test du site vérifie qu’il n’a pas changé depuis.
+
+> [!NOTE]
+> Slack et Règles de l’équipe se lancent encore par Node (`node dist/plugin.mjs`, par leurs scripts `slack` et `team-rules`) : il leur faut Node sur la machine. Un plugin neuf en TypeScript se publie plutôt en `run.js`, qu’Escouade fait tourner sans Node (voir [le SDK](plugins/sdk#sans-node)).
 
 ## Les essayer
 

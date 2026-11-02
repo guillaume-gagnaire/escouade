@@ -58,14 +58,34 @@ Elle dit, avant que rien ne soit installé :
 
 | Permission | Ce que dit la fenêtre |
 | --- | --- |
-| `run` | « Lance un programme sur ton ordinateur, avec tes droits », en gras |
+| `run.command` | « Lance un programme sur ton ordinateur, avec tes droits », en gras |
+| `run.js` | « Tourne dans Escouade, isolé » : un programme en WASM, sans accès au disque hors de son dossier |
 | `permissions.decide` | « Décide des autorisations de tes agents », en rouge |
 | `permissions.commands` | « Lance des commandes », et lesquelles |
 | `permissions.events` | « Reçoit ces événements », et lesquels |
-| `permissions.network` | « Se connecte à », et l’hôte : déclaré, Escouade ne filtre pas encore le réseau d’un programme |
+| `permissions.network` | « Se connecte à », et l’hôte : appliqué à un programme `run.js` et aux webhooks, que Escouade n’envoie qu’à ces hôtes ; seulement déclaré pour un programme `run.command`, dont Escouade ne filtre pas le réseau |
 | `permissions.secrets` | « Garde un secret : », et son nom |
 
 « Installer quand même » installe le plugin ; « Annuler » efface ce qui avait été mis de côté. Un manifeste qui ne tient pas n’ouvre pas la fenêtre : la raison s’affiche en tête de la vue, champ par champ (voir [le manifeste](plugins/manifest)).
+
+## Les plugins livrés avec Escouade
+
+Certaines intégrations d’Escouade sont des plugins, livrés avec l’app, signés et mis à jour avec elle : la vue Plugins les range sous « Livrés avec Escouade », avec la même page que les autres (ce qu’ils ajoutent, leurs permissions, leur journal). Ils sont actifs partout d’office, projets privés compris, comme quand ils faisaient partie de l’app.
+
+| Plugin | Ce qu’il sert |
+| --- | --- |
+| GitHub | L’hébergeur GitHub (PR, CI, relectures, déploiements) et la source GitHub Issues, sur un seul compte. Voir [les intégrations](integrations). |
+| GitLab | L’hébergeur GitLab, gitlab.com et tes instances (merge requests, pipelines, discussions, déploiements). GitLab Issues fait encore partie de l’app, sur le même compte. |
+| Bitbucket | L’hébergeur Bitbucket Cloud. |
+| Gitea / Forgejo | L’hébergeur de Gitea, de Forgejo et de Codeberg. |
+| Trello | La source Trello du Kanban. |
+| ACP | Les [harness ACP décrits](plugins/harnesses) par un plugin, comme Goose. |
+| isola | L’environnement de lancement isola, pour les [lancements de test](testing). |
+| OpenAI, Groq, Mistral, ElevenLabs, Deepgram | Les services de voix en ligne (voir [Réglages › Voix](settings-voice)). |
+
+- **Les couper** : leur interrupteur, pour toute l’app, ou leur onglet Projets, pour un projet. Rien de ce qu’ils ont fait n’est perdu, et tes choix sont gardés pour quand tu les rallumes.
+- **Ce qui se voit** : un hébergeur coupé ou arrêté ne suit plus les PR, et la carte de l’agent comme Réglages › Intégrations le disent ; une source coupée arrête sa synchro, qui dit pourquoi ; un service de voix coupé quitte Réglages › Voix, et la dictée repasse en local ; les agents d’un harness ACP restent, marqués « Harness absent ».
+- **Pas de désinstallation**, ni de mise à jour à part : ils changent avec l’app. Un plugin d’un autre auteur ne peut pas prendre leur identifiant (`dev.escouade.*` est réservé) ; il peut servir le même service à côté d’eux, et c’est le compte qui dit lequel le sert.
 
 ## Activer pour l’app ou par projet
 

@@ -1,6 +1,6 @@
 # Example plugins
 
-Four complete plugins to read, copy and install: a theme, a Discord webhook with no code, and Slack and a team’s rules in TypeScript. They are Escouade’s own plugins, on its store; each one passes the conformance bench on every change.
+Five complete plugins to read, copy and install: a theme, a Discord webhook with no code, Slack and a team’s rules in TypeScript, and Goose, a harness described with no code. They are Escouade’s own plugins, on its store; each one passes the conformance bench on every change.
 
 ## Where to find them
 
@@ -14,8 +14,12 @@ To make one yours, copy its folder and give it an id of your own (`io.github.<yo
 | Discord | Tickets to review and agents waiting, in a Discord channel | Declarative |
 | Slack | The same in Slack, in each project’s channel, with a secret in the keychain | TypeScript program |
 | Team rules | The agents’ commands allowed or denied by a file of the repository | TypeScript program |
+| Goose | An agent that speaks ACP, added as a harness | Declarative |
 
-The code shown here is the repository’s: a test of the site checks it has not changed since. Gemini CLI ships with Escouade; the example of a harness described by a plugin will come with that extension point.
+The code shown here is the repository’s: a test of the site checks it has not changed since.
+
+> [!NOTE]
+> Slack and Team rules still start through Node (`node dist/plugin.mjs`, by their `slack` and `team-rules` scripts): they need Node on the machine. A new TypeScript plugin rather ships as `run.js`, which Escouade runs without Node (see [the SDK](plugins/sdk#without-node)).
 
 ## Trying them
 

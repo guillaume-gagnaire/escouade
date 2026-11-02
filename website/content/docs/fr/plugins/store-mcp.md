@@ -26,7 +26,7 @@ Avec la portée `author`, celle de tout compte :
 | --- | --- |
 | `list_repositories` | tes dépôts où l’App est installée, et tes dernières soumissions |
 | `list_folders`, `list_tags` | les dossiers à manifeste d’un dépôt, les étiquettes d’un dossier |
-| `submit_version`, `get_version`, `retry_checks` | soumettre une étiquette d’un dossier, suivre ses dix contrôles, les relancer si le store ou GitHub a échoué |
+| `submit_version`, `get_version`, `retry_checks` | soumettre une étiquette d’un dossier, suivre ses onze contrôles, les relancer si le store ou GitHub a échoué |
 | `publish_version` | publier : les catégories d’une première version, « Demander la revue » (oui par défaut), la publication seule des nouvelles étiquettes |
 | `list_plugins`, `get_plugin` | tes plugins, leurs versions et leur état, les versions en attente d’un clic |
 | `yank_version`, `dismiss_version` | retirer une version publiée, mettre de côté une version en attente |
@@ -47,4 +47,4 @@ La portée `review` (lire la file de revue, une version et son rapport, déposer
 
 Dans ton compte sur le store, « Applications connectées » montre chaque client autorisé, ses portées, la date de son dernier usage et ses dernières actions. « Déconnecter » coupe ses jetons aussitôt. Chaque action d’un outil est notée dans ton journal, « par un client MCP », avec le nom du client. Supprimer ton compte efface toutes ses autorisations.
 
-Voir aussi [Publier sur le store](/docs/plugins/publishing/) pour les dix contrôles et leurs refus.
+Voir aussi [Publier sur le store](/docs/plugins/publishing/) pour les onze contrôles et leurs refus.

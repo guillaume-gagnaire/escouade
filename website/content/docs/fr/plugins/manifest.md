@@ -4,28 +4,51 @@ Chaque plugin d’Escouade se décrit dans un fichier escouade-plugin.json à la
 
 ## Un exemple complet
 
+Le plugin Discord, l’un des [plugins d’exemple](plugins/examples), en entier : un plugin sans programme, qui garde un secret et envoie deux webhooks.
+
+`plugins/discord/escouade-plugin.json`
+
 ```json
 {
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
-  "id": "dev.exemple.slack",
-  "name": "Slack",
-  "version": "1.2.0",
-  "description": { "fr": "Les tickets à tester dans un salon Slack.", "en": "Tickets to review in a Slack channel." },
-  "author": { "name": "Exemple", "url": "https://exemple.dev" },
+  "id": "dev.escouade.discord",
+  "name": "Discord",
+  "version": "1.1.0",
+  "description": {
+    "fr": "Les tickets à tester et les agents qui attendent, dans un salon Discord : un webhook, sans code.",
+    "en": "Tickets to test and agents waiting, in a Discord channel: a webhook, no code."
+  },
+  "author": { "name": "Escouade", "url": "https://escouade.dev" },
   "license": "MIT",
-  "repository": "https://github.com/exemple/escouade-slack",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/discord",
   "escouade": { "api": "1", "min": "2.1.0" },
-  "icon": "assets/icon.png",
-  "run": { "command": "bin/escouade-slack", "windows": "bin/escouade-slack.exe" },
-  "activation": ["event:ticket.column"],
   "permissions": {
-    "events": ["ticket.*"],
-    "network": ["hooks.slack.com"],
+    "events": ["ticket.column", "agent.status"],
+    "network": ["discord.com"],
     "secrets": ["webhook"]
   },
   "contributes": {
-    "settings": [{ "key": "channel", "type": "string", "title": { "fr": "Salon", "en": "Channel" } }],
-    "secrets": [{ "key": "webhook", "title": { "fr": "Adresse du webhook", "en": "Webhook URL" } }]
+    "secrets": [{ "key": "webhook", "title": { "fr": "Adresse du webhook Discord", "en": "Discord webhook URL" } }],
+    "webhooks": [
+      {
+        "url": "{{secrets.webhook}}",
+        "events": ["ticket.column"],
+        "when": { "data.to": "review" },
+        "body": {
+          "content": "🧪 **{{ticket.key}}** to test: {{ticket.title}} ({{project.name}})",
+          "allowed_mentions": { "parse": [] }
+        }
+      },
+      {
+        "url": "{{secrets.webhook}}",
+        "events": ["agent.status"],
+        "when": { "data.status": "waiting" },
+        "body": {
+          "content": "✋ **{{agent.name}}** waits for you ({{project.name}})",
+          "allowed_mentions": { "parse": [] }
+        }
+      }
+    ]
   }
 }
 ```
@@ -71,7 +94,19 @@ La place de marché la réencode sans ses métadonnées en 256 et 64 px, et la m
 
 ### Le programme
 
-`command` est le chemin du programme dans le dossier du plugin ; `windows`, `macos` et `linux` en donnent un autre pour chaque système qui a le sien ; `args` ajoute des arguments. Un chemin absolu ou qui remonte avec `..` est refusé : un plugin ne lance que ce qu’il apporte.
+Un programme est l’un ou l’autre, jamais les deux :
+
+- `js` : le bundle d’un plugin en JS ou en TypeScript, dans son dossier. Escouade le fait tourner dans l’app, en WASM, sans Node ; la fenêtre d’installation dit « Tourne dans Escouade, isolé ». C’est ce qu’écrit `npm create escouade-plugin` (voir [le SDK](plugins/sdk#sans-node)) :
+
+`sdk/create-escouade-plugin/templates/program/escouade-plugin.json` (extrait)
+
+```json
+  "run": { "js": "dist/plugin.mjs" },
+```
+
+- `command` : le chemin d’un programme dans le dossier du plugin, que lance un process ; `windows`, `macos` et `linux` en donnent un autre pour chaque système qui a le sien ; `args` ajoute des arguments. La fenêtre d’installation dit « Lance un programme sur ton ordinateur, avec tes droits ».
+
+Un chemin absolu ou qui remonte avec `..` est refusé : un plugin ne lance que ce qu’il apporte.
 
 ### Les points d’extension
 
@@ -123,12 +158,13 @@ Le secret d’un compte est au trousseau sous `plugin:<id>:account:<compte>` : l
 
 ## Installer un plugin
 
-Escouade installe un plugin de trois façons :
+Escouade installe un plugin de quatre façons :
 
+- **Depuis le store** : la version est téléchargée de store.escouade.dev et vérifiée (son empreinte, sa signature quand elle est vérifiée par Escouade) avant d’être copiée au même endroit (voir [installer un plugin](plugins/installer#depuis-le-store)).
 - **Depuis un dossier** : le dossier est copié dans `~/.escouade/plugins/<id>/`, sans son historique git, et fixé par l’empreinte SHA-256 de ses fichiers.
 - **Depuis un dépôt git et une étiquette** (`v1.2.0`) : Escouade clone cette étiquette seule, la copie au même endroit, et la fixe par son commit. Un plugin est toujours fixé à une version ; installer une autre étiquette remplace la précédente.
 - **Un dossier en développement** : chargé là où il est, sans copie, et relu dès qu’un de ses fichiers change. C’est le mode des auteurs de plugins.
 
 La liste des plugins installés, leur origine et leur empreinte sont dans `~/.escouade/plugins.json`. Une copie dont les fichiers ont changé depuis l’installation est désactivée, avec la raison.
 
-Le programme d’un plugin démarre à sa première activation et parle [le protocole](plugins/api). Les faits qui le démarrent et qu’il reçoit sont dans [Les événements](plugins/events). L’onglet Réglages › Plugins, qui installe, active et désinstalle les plugins depuis l’interface, arrive avec la suite de la 2.1.
+Le programme d’un plugin démarre à sa première activation et parle [le protocole](plugins/api). Les faits qui le démarrent et qu’il reçoit sont dans [Les événements](plugins/events). La vue Plugins installe, active et désinstalle les plugins depuis l’interface : voir [installer un plugin](plugins/installer). Les plugins livrés avec Escouade n’ont pas à être installés : ils viennent avec l’app.

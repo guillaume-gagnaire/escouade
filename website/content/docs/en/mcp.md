@@ -234,3 +234,4 @@ Also refused, and logged: a request without a token (“Request refused: no toke
 - [The Kanban](board): the tickets the tools create and move.
 - [Kanban settings](settings-board): what `get_board` reads and `set_board` changes.
 - [Harness settings](settings-claude-code): where the switch is.
+- [The store from an agent](plugins/store-mcp): the store’s MCP server, to publish a plugin from an agent.

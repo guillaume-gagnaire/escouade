@@ -63,16 +63,19 @@ Lis tes règles **avant** la première demande (au démarrage), pas pendant : 50
 
 ## Un exemple
 
-« Règles de l’équipe » refuse ce que `deny` interdit, autorise ce que `allow` permet, et laisse le reste :
+« Règles de l’équipe » refuse ce que `deny` interdit, autorise ce que `allow` permet, et laisse le reste à l’utilisateur. Son manifeste ne demande que `"permissions": { "decide": true }` ; ses règles sont dans un fichier de son dossier :
+
+`plugins/team-rules/rules.json`
 
 ```json
 {
-  "id": "dev.escouade.team-rules",
-  "name": { "fr": "Règles de l'équipe", "en": "Team rules" },
-  "version": "1.0.0",
-  "escouade": { "api": "1", "min": "2.1.0" },
-  "run": { "command": "team-rules", "windows": "team-rules.cmd" },
-  "permissions": { "decide": true }
+  "deny": [
+    "rm -rf",
+    "git reset --hard",
+    { "command": "git push --force", "message": "No force push in this team: push a new commit instead." },
+    { "command": "git push -f", "message": "No force push in this team: push a new commit instead." }
+  ],
+  "allow": ["npm test", "npm run lint", "cargo test", "cargo nextest", "git status", "git diff", "git log"]
 }
 ```
 

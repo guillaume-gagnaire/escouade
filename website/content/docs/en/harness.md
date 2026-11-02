@@ -265,7 +265,7 @@ Gemini gives each turn’s tokens, not their cost nor its quota: its usage is re
 
 ## Other harnesses, by a plugin
 
-An agent that speaks ACP (Goose, say) is described in a plugin’s manifest, without code: see [a described ACP harness](plugins/harnesses).
+An agent that speaks ACP (Goose, say) is described in a plugin’s manifest, without code: see [a described ACP harness](plugins/harnesses). The ACP plugin, shipped with Escouade (`dev.escouade.acp`), starts it and speaks to it; it is switched off in the Plugins view, and the agents of those harnesses then stay, marked “harness missing”, with their conversations. The harnesses of this page are still part of the app.
 
 ## The MCP server
 

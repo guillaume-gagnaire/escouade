@@ -109,6 +109,15 @@ Les 500 dernières lignes se lisent dans l’onglet Journal de sa page, dans la 
 
 Ses méthodes, leurs paramètres, leurs réponses et leurs délais sont décrits par un schéma, [`plugin-protocol-1.json`](/schemas/plugin-protocol-1.json), d’où viennent les types du [SDK en TypeScript](plugins/sdk). Pour vérifier qu’un plugin tient ce protocole sans lancer l’app, joue [le banc de conformité](plugins/testing) : `escouade-plugin test <dossier>`.
 
+## Un programme en JS ou en TypeScript
+
+Un plugin dont le manifeste dit `"run": { "js": "dist/plugin.mjs" }` ne lance pas de process : Escouade fait tourner son bundle **dans l’app, en WASM**, une instance par plugin, qui garde son état d’un appel à l’autre. Les messages, la poignée de main, les délais, les relances et le journal sont ceux d’un process ; le [SDK](plugins/sdk) parle l’un ou l’autre sans que le plugin le sache.
+
+- **Ses limites** : 64 Mo de mémoire, 2 s par tour de travail, 500 ms quand il tient une décision. Au-delà, Escouade finit l’instance et le journal le dit (« a turn ran past 2000 ms: Escouade stopped its instance ») ; une nouvelle est faite, comme après un plantage, avec les mêmes trois relances en cinq minutes.
+- **Le réseau, par Escouade seulement** : `net/fetch` (le `fetch` du SDK), en https, vers un hôte de `permissions.network` ou l’un de ses sous-domaines, sans suivre de redirection, en 10 s et 1 Mo au plus, et jamais vers une adresse de la machine ou du réseau local, jugée sur les adresses où le nom mène. Un appel refusé répond `-32003`, un appel qui échoue en route `-32004`.
+- **Les fichiers de son dossier** : `files/read` (`file()` du SDK), 256 Ko par fichier et 1 Mo en tout ; jamais son manifeste, un fichier caché, un lien ou un chemin qui sort du dossier.
+- **Rien d’autre** : il ne lance aucun programme et ne lit pas le disque hors de son dossier. C’est pourquoi la fenêtre d’installation dit « Tourne dans Escouade, isolé », et non « Lance un programme sur ton ordinateur ».
+
 ## Ce que l’utilisateur change
 
 Un plugin désactivé, une permission retirée ou rendue, une mise à jour installée : son process est arrêté, et le suivant reçoit le manifeste et les permissions de maintenant. Une permission de secret retirée fait répondre `-32001` à `secrets/get` pour cette clé, comme pour un secret qui n’est pas le sien.

@@ -30,6 +30,17 @@ Les jetons restent sur ta machine, à part des réglages, et ne servent qu’aux
 
 Quand le trousseau refuse un jeton sous Windows ou macOS, il reste dans ce fichier et l’onglet le dit : « Trousseau du système indisponible : le jeton reste dans ~/.escouade/integrations.json. » Si le trousseau existe mais ne peut pas être lu, l’onglet dit « Trousseau du système illisible : relance Escouade ou reconnecte le compte. » et aucun appel ne part sans les jetons. Pour GitHub par `gh`, Escouade ne garde aucun jeton.
 
+### Les services servis par un plugin
+
+GitHub (l’hébergeur et GitHub Issues), GitLab (l’hébergeur ; GitLab Issues fait encore partie de l’app), Bitbucket, Gitea et Forgejo, et Trello sont servis par des plugins livrés avec Escouade : rien ne change à l’usage, les comptes et les formulaires sont les mêmes. Un compte servi par le plugin d’un autre auteur le dit : « Servi par le plugin … ». Le jeton reste au trousseau ; Escouade le prête au seul plugin de ce service, quand il en a besoin.
+
+Ces plugins se coupent dans la vue Plugins, pour toute l’app ou pour un projet (voir [les plugins livrés avec Escouade](plugins/installer#les-plugins-livres-avec-escouade)). Coupé ou arrêté, un plugin le dit au lieu de se taire :
+
+- **un hébergeur** : la carte de l’agent porte « Hébergeur arrêté : PR plus suivies » et garde les PR lues en dernier ; Réglages › Intégrations dit sous le compte « Le plugin GitHub est coupé (Réglages › Plugins) : ce compte ne sert plus rien, ses PR ne sont plus suivies », ou qu’il s’est arrêté et pourquoi ;
+- **une source** : la synchro s’arrête, et son échec dit « Le plugin dev.escouade.trello ne répond pas : … » ; les tickets importés restent.
+
+Rallumé, le plugin reprend là où il s’était arrêté : la première lecture qui marche efface le message.
+
 ## Lier un projet à une source
 
 Un projet se lie à un endroit par service : un projet Jira, un tableau Trello, un dépôt GitHub, une équipe Linear, une liste ClickUp, un projet GitLab ou un projet Azure DevOps. Dans Réglages › Intégrations, le groupe « Sources liées à `<projet>` » propose, pour chaque service connecté, une liste : « Projet Jira », « Tableau Trello », « Dépôt GitHub Issues », « Équipe Linear », « Liste ClickUp », « Projet GitLab Issues », « Projet Azure Boards ». « Aucun » délie le service. Pour GitHub, le dépôt du projet, quand son remote est sur GitHub, vient en premier (« (dépôt du projet) ») ; de même pour GitLab, quand le remote est sur une instance connectée, et pour Azure Boards, quand il est sur l’organisation connectée. Les projets Azure DevOps sont rangés par organisation. Les projets GitLab sont rangés par instance, avec leurs groupes et sous-groupes dans le chemin (« acme/back/api »). Pour ClickUp, les listes de tous tes espaces de travail sont rangées par espace et par dossier (« Produit › Sprints »), comme dans la barre latérale de ClickUp : les listes hors dossier d’abord, les archivées en moins ; taper les premières lettres d’un nom, menu ouvert, y va.

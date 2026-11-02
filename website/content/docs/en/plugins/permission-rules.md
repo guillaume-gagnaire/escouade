@@ -63,16 +63,19 @@ Read your rules **before** the first request (at start), not during one: 500 ms 
 
 ## An example
 
-“Team rules” denies what `deny` forbids, allows what `allow` permits, and leaves the rest:
+“Team rules” denies what `deny` forbids, allows what `allow` permits, and leaves the rest to the user. Its manifest asks only for `"permissions": { "decide": true }`; its rules are in a file of its folder:
+
+`plugins/team-rules/rules.json`
 
 ```json
 {
-  "id": "dev.escouade.team-rules",
-  "name": { "fr": "Règles de l'équipe", "en": "Team rules" },
-  "version": "1.0.0",
-  "escouade": { "api": "1", "min": "2.1.0" },
-  "run": { "command": "team-rules", "windows": "team-rules.cmd" },
-  "permissions": { "decide": true }
+  "deny": [
+    "rm -rf",
+    "git reset --hard",
+    { "command": "git push --force", "message": "No force push in this team: push a new commit instead." },
+    { "command": "git push -f", "message": "No force push in this team: push a new commit instead." }
+  ],
+  "allow": ["npm test", "npm run lint", "cargo test", "cargo nextest", "git status", "git diff", "git log"]
 }
 ```
 

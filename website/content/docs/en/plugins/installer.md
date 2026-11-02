@@ -58,14 +58,34 @@ It tells, before anything is installed:
 
 | Permission | What the window says |
 | --- | --- |
-| `run` | “Runs a program on your computer, with your rights”, in bold |
+| `run.command` | “Runs a program on your computer, with your rights”, in bold |
+| `run.js` | “Runs inside Escouade, isolated”: a program in WASM, with no access to the disk outside its folder |
 | `permissions.decide` | “Decides your agents’ permissions”, in red |
 | `permissions.commands` | “Runs commands”, and which |
 | `permissions.events` | “Gets these events”, and which |
-| `permissions.network` | “Connects to”, and the host: declared, Escouade does not filter a program’s network yet |
+| `permissions.network` | “Connects to”, and the host: enforced for a `run.js` program and for webhooks, which Escouade only sends to those hosts; only declared for a `run.command` program, whose network Escouade does not filter |
 | `permissions.secrets` | “Keeps a secret:”, and its name |
 
 “Install anyway” installs the plugin; “Cancel” erases what was set aside. A manifest that does not hold opens no window: the reason shows at the top of the view, field by field (see [the manifest](plugins/manifest)).
+
+## The plugins shipped with Escouade
+
+Some of Escouade’s integrations are plugins, shipped with the app, signed and updated with it: the Plugins view lists them under “Shipped with Escouade”, with the same page as the others (what they add, their permissions, their journal). They are on everywhere from the start, private projects included, as when they were part of the app.
+
+| Plugin | What it serves |
+| --- | --- |
+| GitHub | The GitHub code host (PRs, CI, reviews, deployments) and the GitHub Issues source, on one account. See [integrations](integrations). |
+| GitLab | The GitLab code host, gitlab.com and your instances (merge requests, pipelines, discussions, deployments). GitLab Issues is still part of the app, on the same account. |
+| Bitbucket | The Bitbucket Cloud code host. |
+| Gitea / Forgejo | The code host of Gitea, Forgejo and Codeberg. |
+| Trello | The Trello source of the board. |
+| ACP | The [ACP harnesses described](plugins/harnesses) by a plugin, like Goose. |
+| isola | The isola launch environment, for [test launches](testing). |
+| OpenAI, Groq, Mistral, ElevenLabs, Deepgram | The online voice services (see [Settings › Voice](settings-voice)). |
+
+- **Switching them off**: their switch, for the whole app, or their Projects tab, for one project. Nothing they did is lost, and your choices are kept for when you switch them back on.
+- **What shows**: a code host switched off or stopped no longer follows the PRs, and the agent’s card and Settings › Integrations say so; a source switched off stops its sync, which says why; a voice service switched off leaves Settings › Voice, and dictation goes back to local; the agents of an ACP harness stay, marked “Harness missing”.
+- **No uninstall**, and no update of their own: they change with the app. A plugin by another author cannot take their id (`dev.escouade.*` is reserved); it can serve the same service beside them, and the account says which one serves it.
 
 ## Switching on for the app or by project
 

@@ -43,7 +43,10 @@ export const DOC_GROUPS = [
   {
     id: 'plugins',
     pages: [
+      'plugins/introduction',
       'plugins/installer',
+      'plugins/permissions',
+      'plugins/quick-start',
       'plugins/manifest',
       'plugins/api',
       'plugins/events',
@@ -53,9 +56,11 @@ export const DOC_GROUPS = [
       'plugins/sdk',
       'plugins/testing',
       'plugins/publishing',
+      'plugins/versioning',
       'plugins/store-mcp',
       'plugins/security',
       'plugins/examples',
+      'plugins/faq',
     ],
   },
   { id: 'reference', pages: ['shortcuts', 'escouade-yml', 'data', 'updates', 'troubleshooting'] },
