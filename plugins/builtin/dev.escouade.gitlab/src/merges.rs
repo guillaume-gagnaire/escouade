@@ -186,6 +186,13 @@ pub fn mr_of(m: &Value) -> Result<PullRequest> {
         changes_requested: detailed == "requested_changes",
         auto_merge: open && m["merge_when_pipeline_succeeds"].as_bool().unwrap_or(false),
         author: m["author"]["username"].as_str().unwrap_or("").to_string(),
+        reviewers: m["reviewers"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|r| r["username"].as_str())
+            .map(str::to_string)
+            .collect(),
         created: instant(&m["created_at"]).unwrap_or(0),
         checks: m["head_pipeline"]["status"].as_str().map(pipeline_state),
         fork: matches!(

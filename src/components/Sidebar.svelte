@@ -143,8 +143,10 @@
   const selectedAgentId = $derived(app.agent?.id);
   const termSelected = $derived(app.selectedTerm[project.id] ?? null);
   /** Another view (terminal, launch log, board) fills the main area: no agent is highlighted. */
-  const otherView = $derived(!!termSelected || !!app.runCommand || app.boardOn || app.docsOn);
+  const otherView = $derived(!!termSelected || !!app.runCommand || app.boardOn || app.docsOn || app.prsOn);
   const review = $derived(app.reviewCount(project.id));
+  /** The word of the project's code host (« PR », « MR » on GitLab): read by its view, else by one of its agents (ESC-65). */
+  const prsWord = $derived(app.prWords[project.id] ?? app.projectAgents.find((a) => a.prWord)?.prWord ?? 'PR');
   /** Who waits for an answer goes first (2.0 design). */
   const agents = $derived(sidebarOrder(app.projectAgents));
   /** The requests answered from the list, until the agent's request is gone: one click answers once. */
@@ -187,7 +189,7 @@
   $effect(() => {
     if (app.newAgentMenu === menuAsked) return;
     menuAsked = app.newAgentMenu;
-    if (!app.boardOn && !app.docsOn) newAgentMenu();
+    if (!app.boardOn && !app.docsOn && !app.prsOn) newAgentMenu();
   });
 
   // « … » of an agent's header (Conversation): its menu, the one of its card, where the button is; the keyboard goes in.
@@ -278,7 +280,7 @@
    * Kanban, and not a request just shown (`HOLD_MS`).
    */
   function listKey(e: KeyboardEvent) {
-    if (e.defaultPrevented || app.modal || menu.open || app.boardOn || app.docsOn || app.ui.view !== 'project') return;
+    if (e.defaultPrevented || app.modal || menu.open || app.boardOn || app.docsOn || app.prsOn || app.ui.view !== 'project') return;
     const target = e.target instanceof Element ? e.target : null;
     if (
       target?.closest(
@@ -763,11 +765,12 @@
 <aside class="side">
   <div class="seg segmented" role="group" aria-label={t('nav.sidebar.viewLabel')}>
     <button
-      class:on={!app.boardOn && !app.docsOn}
-      aria-pressed={!app.boardOn && !app.docsOn}
+      class:on={!app.boardOn && !app.docsOn && !app.prsOn}
+      aria-pressed={!app.boardOn && !app.docsOn && !app.prsOn}
       onclick={() => {
         app.closeBoard(project.id);
         app.closeDocs(project.id);
+        app.closePrs(project.id);
       }}
       ><Icon name="agents" size={14} />{t('common.agents')}<span class="count" aria-hidden="true">{app.projectAgents.length}</span></button
     >
@@ -775,6 +778,13 @@
       ><Icon name="kanban" size={14} />Kanban{#if review}<span class="badge" use:tip={t('nav.sidebar.toReview', { count: review })}
           >{review}</span
         >{/if}</button
+    >
+    <!-- The project's open pull requests (ESC-65), in the host's word: « PR », « MR » on GitLab. -->
+    <button
+      class:on={app.prsOn}
+      aria-pressed={app.prsOn}
+      onclick={() => app.openPrs(project.id)}
+      use:tip={t('prs.list.tabHint', { word: prsWord })}><Icon name="pr" size={14} />{t('prs.list.tab', { word: prsWord })}</button
     >
     <button class:on={app.docsOn} aria-pressed={app.docsOn} onclick={() => app.openDocs(project.id)}
       ><Icon name="file" size={14} />{t('docs.tab')}</button
@@ -1421,16 +1431,17 @@
     inset: 0 0 0 -6px;
   }
 
-  /* Agents | Kanban | Docs. */
+  /* Agents | Kanban | PR | Docs: each its own width, the short « PR » the least. */
   .seg {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: auto auto auto auto;
+    justify-content: space-between;
     gap: 0;
   }
   .seg button {
-    gap: 7px;
-    padding: 0;
-    font-size: 13px;
+    gap: 4px;
+    padding: 0 3px;
+    white-space: nowrap;
   }
   .seg .count {
     color: var(--dim);
@@ -1496,6 +1507,12 @@
   }
   /* Narrow (ESC-204), « Nouvel agent » stays whole: its shortcut goes, still in its tooltip; on a card, the bars of a
      plan and of a ticket's loops go, their words stay. */
+  /* Below its default width, the four views keep their words, without their icons. */
+  @container sidebar (max-width: 255px) {
+    .seg button :global(.icon) {
+      display: none;
+    }
+  }
   @container sidebar (max-width: 250px) {
     .new-agent kbd,
     .plan-bar,

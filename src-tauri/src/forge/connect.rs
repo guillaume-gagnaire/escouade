@@ -319,6 +319,12 @@ impl<R: Runtime> Core<R> {
         Ok(creds)
     }
 
+    /// The login of the account of `host`'s instance; empty without one.
+    pub fn forge_login(&self, host: &str) -> String {
+        let list = accounts::all(&self.accounts.read());
+        accounts::for_host(&list, host).map_or_else(String::new, |a| a.user.clone())
+    }
+
     /// A client of the account of `host`'s instance.
     pub async fn forge_client(&self, host: &str) -> Result<(Box<dyn Forge>, ForgeAccount)> {
         let list = accounts::all(&self.accounts.read());
@@ -715,6 +721,12 @@ fn insecure() -> String {
 
 /// The address of the remote of `target`'s upstream, else of origin, else of the only remote.
 async fn project_remote_url(path: &str, target: &str) -> Option<String> {
+    let remote = project_remote_name(path, target).await?;
+    crate::git::remote_url(path, &remote).await
+}
+
+/// The name of the git remote the project's target syncs with (the one its code host is read on).
+pub(crate) async fn project_remote_name(path: &str, target: &str) -> Option<String> {
     let remotes = crate::git::remotes(path).await;
     let upstream = if target.is_empty() {
         None
@@ -731,6 +743,5 @@ async fn project_remote_url(path: &str, target: &str) -> Option<String> {
         .ok()
         .filter(|u| !u.is_empty())
     };
-    let remote = crate::git::sync_remote(&remotes, upstream.as_deref())?;
-    crate::git::remote_url(path, remote).await
+    crate::git::sync_remote(&remotes, upstream.as_deref()).map(str::to_string)
 }

@@ -1872,6 +1872,24 @@ pub async fn create_agent_on_branch(
     Ok(agent)
 }
 
+/// « Lancer un agent sur cette PR » (ESC-65): an agent in a worktree on the branch of the project's
+/// open pull request `number`, a fork's too.
+#[tauri::command]
+pub async fn create_agent_on_pr(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+) -> Res<AgentView> {
+    let agent = core
+        .create_agent_on_pr(&project_id, number)
+        .await
+        .map_err(branch_err)?;
+    core.telemetry.track(Event::AgentCreated {
+        worktree: agent.meta.worktree.is_some(),
+    });
+    Ok(agent)
+}
+
 /// « Intégrer <base> » on an agent with a worktree: its base branch goes into its branch.
 #[tauri::command]
 pub async fn integrate_base(core: CoreState<'_>, id: String) -> Res<crate::core::Integration> {

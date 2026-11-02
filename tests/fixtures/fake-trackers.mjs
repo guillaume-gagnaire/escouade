@@ -787,10 +787,16 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
       autoMergeRequest: x.autoMerge ? { enabledAt: '2026-11-02T10:00:00Z' } : null,
       author: { login: x.author ?? 'ada' },
       createdAt: x.createdAt ?? new Date(Date.now() - 2 * 3600_000).toISOString(),
+      // `approvals` APPROVED reviews beside a CHANGES_REQUESTED one (`approved`: one, without changes asked); `threads` open threads (one with changes asked, by default);
+      // `reviewers` the logins whose review is asked (ESC-65).
       latestOpinionatedReviews: {
-        nodes: x.changesRequested ? [{ state: 'CHANGES_REQUESTED' }] : x.approved ? [{ state: 'APPROVED' }] : [],
+        nodes: [
+          ...(x.changesRequested ? [{ state: 'CHANGES_REQUESTED' }] : []),
+          ...Array.from({ length: x.approvals ?? (x.approved && !x.changesRequested ? 1 : 0) }, () => ({ state: 'APPROVED' })),
+        ],
       },
-      reviewThreads: { nodes: x.changesRequested ? [{ isResolved: false }] : [] },
+      reviewThreads: { nodes: Array.from({ length: x.threads ?? (x.changesRequested ? 1 : 0) }, () => ({ isResolved: false })) },
+      reviewRequests: { nodes: (x.reviewers ?? []).map((login) => ({ requestedReviewer: { login } })) },
       commits: { nodes: [{ commit: { statusCheckRollup: { state: x.checks } } }] },
     });
     if (p === '/github/graphql') {

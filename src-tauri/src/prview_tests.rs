@@ -286,12 +286,16 @@ async fn the_projects_open_pull_requests_and_why_none() {
             "mergeable": "CONFLICTING", "author": { "login": "ada" }, "createdAt": "2026-10-29T08:00:00Z",
             "isCrossRepository": false, "autoMergeRequest": null,
             "latestOpinionatedReviews": { "nodes": [] }, "reviewThreads": { "nodes": [] },
+            "reviewRequests": { "nodes": [{ "requestedReviewer": { "login": "ada" } }, { "requestedReviewer": {} }] },
             "commits": { "nodes": [{ "commit": { "statusCheckRollup": { "state": "FAILURE" } } }] },
         }] } } } }),
     );
     let read = h.core.project_prs(&p.id).await;
     let d = read.data.unwrap();
     assert_eq!(d.word, "PR");
+    // Who reads them (« Les miennes »), and whose review is asked: a team's left out (ESC-65).
+    assert_eq!(d.me, "ada");
+    assert_eq!(d.prs[0].reviewers, vec!["ada".to_string()]);
     let pr = &d.prs[0];
     assert_eq!(
         (pr.number, pr.author.as_str(), pr.mergeable, pr.checks),

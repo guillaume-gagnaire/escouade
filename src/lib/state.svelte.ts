@@ -382,6 +382,10 @@ class AppState {
   board = $state<Record<string, boolean>>({});
   /** Projects whose Docs tab (ESC-258) fills the main area, in place of the agents and the board (not saved). */
   docs = $state<Record<string, boolean>>({});
+  /** Projects whose « Pull requests » view (ESC-65) fills the main area, in place of the agents (not saved). */
+  prs = $state<Record<string, boolean>>({});
+  /** The word of each project's code host for a pull request (« PR », « MR » on GitLab), once read (ESC-65). */
+  prWords = $state<Record<string, string>>({});
   /** The space of the Docs tab each project shows: the spec, the decisions or the documents. */
   docsSpace = $state<Record<string, DocsSpaceId>>({});
   /** The page of the spec each project shows; none: the map of the subjects. */
@@ -413,6 +417,14 @@ class AppState {
   boardOn = $derived(this.ui.view === 'project' && !!this.project && !!this.board[this.project.id]);
   /** The Docs tab of the project on screen is shown (ESC-258). */
   docsOn = $derived(this.ui.view === 'project' && !!this.project && !!this.docs[this.project.id] && !this.board[this.project.id]);
+  /** The « Pull requests » view of the project on screen is shown (ESC-65). */
+  prsOn = $derived(
+    this.ui.view === 'project' &&
+      !!this.project &&
+      !!this.prs[this.project.id] &&
+      !this.board[this.project.id] &&
+      !this.docs[this.project.id],
+  );
   /** The editor of the project on screen is open, and on screen: the statistics hide it. */
   editorOn = $derived(this.ui.view === 'project' && !!(this.project && this.editor[this.project.id]?.on));
   split = $derived(this.ui.layout === 'split');
@@ -466,7 +478,7 @@ class AppState {
 
   /** The agent whose conversation is on screen: its project's view, without the board, the editor, a run or a terminal over it. */
   agentShown = $derived(
-    this.ui.view === 'project' && !this.term && !this.runCommand && !this.editorOn && !this.boardOn ? this.agent : null,
+    this.ui.view === 'project' && !this.term && !this.runCommand && !this.editorOn && !this.boardOn && !this.prsOn ? this.agent : null,
   );
 
   /** What else goes when the backend removes an agent: what other modules (the launches' logs) hold of it. */
@@ -1084,6 +1096,7 @@ class AppState {
     this.selectedLaunch[a.projectId] = null;
     this.board[a.projectId] = false;
     this.docs[a.projectId] = false;
+    this.prs[a.projectId] = false;
     const ed = this.editor[a.projectId];
     if (ed?.on) {
       ed.source = a.worktree ? a.id : 'project';
@@ -1102,6 +1115,7 @@ class AppState {
       this.selectedLaunch[p.id] = null;
       this.board[p.id] = false;
       this.docs[p.id] = false;
+      this.prs[p.id] = false;
       this.closeEditor(p.id);
     }
   }
@@ -1114,6 +1128,7 @@ class AppState {
       this.selectedTerm[p.id] = null;
       this.board[p.id] = false;
       this.docs[p.id] = false;
+      this.prs[p.id] = false;
       this.closeEditor(p.id);
     }
   }
@@ -1125,6 +1140,7 @@ class AppState {
     this.ui.view = 'project';
     this.board[projectId] = true;
     this.docs[projectId] = false;
+    this.prs[projectId] = false;
     this.selectedTerm[projectId] = null;
     this.selectedLaunch[projectId] = null;
     this.closeEditor(projectId);
@@ -1145,6 +1161,7 @@ class AppState {
     this.ui.view = 'project';
     this.board[projectId] = false;
     this.docs[projectId] = true;
+    this.prs[projectId] = false;
     if (space) this.docsSpace[projectId] = space;
     if (page !== undefined) this.docsPage[projectId] = page;
     // A space chosen: the discussion open leaves the main area.
@@ -1169,6 +1186,27 @@ class AppState {
 
   closeDocs(projectId = this.ui.activeProject) {
     if (projectId) this.docs[projectId] = false;
+  }
+
+  /**
+   * Shows the « Pull requests » view of a project (ESC-65): its open pull requests, in place of the agents, the board, the
+   * Docs tab, a terminal, a launch log and the editor.
+   */
+  openPrs(projectId = this.ui.activeProject) {
+    if (!projectId) return;
+    this.ui.activeProject = projectId;
+    this.ui.view = 'project';
+    this.board[projectId] = false;
+    this.docs[projectId] = false;
+    this.prs[projectId] = true;
+    this.selectedTerm[projectId] = null;
+    this.selectedLaunch[projectId] = null;
+    this.closeEditor(projectId);
+    this.persistUi();
+  }
+
+  closePrs(projectId = this.ui.activeProject) {
+    if (projectId) this.prs[projectId] = false;
   }
 
   /** A project as the backend now has it (its board settings, mostly). */
@@ -1219,6 +1257,7 @@ class AppState {
     this.ui.view = 'project';
     this.board[projectId] = false;
     this.docs[projectId] = false;
+    this.prs[projectId] = false;
     this.selectedTerm[projectId] = null;
     this.selectedLaunch[projectId] = null;
     // Always work through the stored `$state` proxies, not the raw objects the `??=` expressions return:
@@ -1359,6 +1398,7 @@ class AppState {
     delete this.editor[id];
     delete this.board[id];
     delete this.docs[id];
+    delete this.prs[id];
     delete this.boardIssues[id];
     buffers.closeProject(id);
     trees.closeProject(id);
@@ -1468,6 +1508,7 @@ class AppState {
     if (this.ui.view !== 'project' || this.ui.activeProject !== next.projectId) this.selectProject(next.projectId);
     this.board[next.projectId] = false;
     this.docs[next.projectId] = false;
+    this.prs[next.projectId] = false;
     this.cardFocus = { id: next.id, n: this.cardFocus.n + 1 };
   }
 

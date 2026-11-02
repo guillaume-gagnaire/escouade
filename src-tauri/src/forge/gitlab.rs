@@ -14,6 +14,11 @@ impl Provider for GitlabProvider {
     fn kind(&self) -> String {
         "gitlab".into()
     }
+    fn pull_fetch(&self, number: u64) -> Option<PullFetch> {
+        Some(PullFetch::Head(format!(
+            "refs/merge-requests/{number}/head"
+        )))
+    }
 
     fn name(&self) -> &'static str {
         NAME

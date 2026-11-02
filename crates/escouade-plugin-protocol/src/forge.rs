@@ -139,6 +139,10 @@ pub struct PullRequest {
     /// repository that one was forked from. Empty: the target's.
     #[serde(skip_serializing_if = "String::is_empty")]
     pub host_repo: String,
+    /// Whose review is asked and not given yet (logins; names on Azure DevOps), when the host
+    /// says it: the « Relecture demandée » filter of the project's pull requests (ESC-65).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub reviewers: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]

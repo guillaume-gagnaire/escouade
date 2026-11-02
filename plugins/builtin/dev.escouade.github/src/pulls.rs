@@ -494,6 +494,7 @@ const PR_FIELDS: &str = "number url title state isDraft headRefName baseRefName 
     isCrossRepository headRepository { nameWithOwner } \
     autoMergeRequest { enabledAt } \
     latestOpinionatedReviews(first: 50) { nodes { state } } \
+    reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } } } } \
     reviewThreads(first: 100) { nodes { isResolved } } \
     commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }";
 
@@ -546,6 +547,14 @@ fn pr_of_graphql(p: &Value) -> Option<PullRequest> {
             None => None,
         },
         host_repo: String::new(),
+        // A team asked has no login: only the people.
+        reviewers: p["reviewRequests"]["nodes"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|r| r["requestedReviewer"]["login"].as_str())
+            .map(str::to_string)
+            .collect(),
     })
 }
 

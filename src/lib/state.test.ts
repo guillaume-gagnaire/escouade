@@ -1226,6 +1226,27 @@ describe('board', () => {
     expect(app.projects.map((p) => p.id)).toEqual(['p1', 'p2']);
   });
 
+  it('shows the « Pull requests » view in place of the agents until another view or an agent is picked (ESC-65)', async () => {
+    await start();
+    app.openPrs('p1');
+    expect(app.prsOn).toBe(true);
+    expect(app.agentShown).toBeNull();
+    app.selectAgent('a2');
+    expect(app.prsOn).toBe(false);
+    app.openPrs('p1');
+    app.openBoard('p1');
+    expect(app.prsOn).toBe(false);
+    app.openPrs('p1');
+    app.openDocs('p1');
+    expect(app.prsOn).toBe(false);
+    app.openPrs('p1');
+    app.selectTerm('t1');
+    expect(app.prsOn).toBe(false);
+    app.openPrs('p1');
+    app.closePrs();
+    expect(app.prsOn).toBe(false);
+  });
+
   it('shows the board in place of the agents until an agent, a terminal, a launch or the editor is picked', async () => {
     await start();
     app.openBoard('p1');

@@ -275,8 +275,8 @@ async fn the_open_merge_requests_cost_one_call() {
         &format!("{P}/merge_requests"),
         200,
         json!([
-            open_mr(json!({"iid": 3164})),
-            open_mr(json!({"iid": 3165, "draft": true}))
+            open_mr(json!({"iid": 3164, "reviewers": [{"username": "ada"}, {"username": "bob"}]})),
+            open_mr(json!({"iid": 3165, "draft": true, "reviewers": []}))
         ]),
     );
     let prs = client(&server).open_pull_requests(&repo()).await.unwrap();
@@ -285,6 +285,9 @@ async fn the_open_merge_requests_cost_one_call() {
         [3164, 3165]
     );
     assert!(prs[1].draft);
+    // Whose review is asked (« Relecture demandée », ESC-65).
+    assert_eq!(prs[0].reviewers, ["ada", "bob"]);
+    assert!(prs[1].reviewers.is_empty());
     let sent = server.requests();
     assert_eq!(sent.len(), 1);
     assert_eq!(sent[0].query("state").as_deref(), Some("opened"));

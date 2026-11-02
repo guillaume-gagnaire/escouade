@@ -103,9 +103,15 @@ test('the sidebar looks as the preview draws it, in both themes, at both sizes',
         // Agents | Kanban: the segments, the one shown, their places.
         expect.soft(await place(side.locator('.seg')), `segments' place, ${where}`).toEqual(await place(ps.locator('.seg')));
         expect.soft(await look(side.locator('.seg')), `segments, ${where}`).toEqual(await look(ps.locator('.seg')));
+        // ESC-65 added a fourth view, « PR », chosen on its preview: the four share the row at the size of every
+        // `segmented` (12.5px), 3px on each side; the rest of the look, weight and face included, stays the preview's.
+        const shown = side.locator('.seg button[aria-pressed="true"]');
+        const drawn = ps.locator('.seg button[aria-selected="true"]');
         expect
-          .soft(await lookBut(side.locator('.seg button[aria-pressed="true"]'), 'width'), `Agents, ${where}`)
-          .toEqual(await lookBut(ps.locator('.seg button[aria-selected="true"]'), 'width'));
+          .soft(await lookBut(shown, 'width', 'padding', 'font'), `Agents, ${where}`)
+          .toEqual(await lookBut(drawn, 'width', 'padding', 'font'));
+        const face = (l: Record<string, unknown>) => String(l.font).replace(/ [\d.]+px /, ' ');
+        expect.soft(face(await look(shown)), `Agents' face, ${where}`).toEqual(face(await look(drawn)));
 
         // « Nouvel agent Ctrl N » and the arrow of its menu « Harness ».
         expect.soft(await place(side.locator('.new-agent')), `new agent's place, ${where}`).toEqual(await place(ps.locator('.new-agent')));

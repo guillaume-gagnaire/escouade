@@ -1239,10 +1239,12 @@ But : Escouade suit le travail des agents après le push, jusqu'à la production
   - « L'agent corrige » (checks en échec et fin de leurs journaux) et « L'agent corrige les retours » (demandes de changement, fils non résolus) s'y font en un clic, jamais seuls ; l'agent est prié de ne rien publier sous les fils.
   - Un hébergeur sans client encore (`Capabilities::pull_requests` à faux : GitLab, Bitbucket, Gitea) : rien ne s'affiche, ni numéros ni « Ouvrir une PR » (de même sans remote ou sans compte : `AgentMeta::pr_word`).
   - Reste : essai réel sur GitHub (compte de l'utilisateur) ; GitLab, Bitbucket Cloud et Gitea/Forgejo avec leurs clients (ESC-56 à 58), à essayer en vrai plus tard.
-- [ ] **Vue « Pull requests » du projet**, à côté du Kanban : les PR ouvertes du dépôt (les miennes, celles où on me demande une relecture, toutes), avec CI, relectures, conflit et âge. Actions :
+- [x] **Vue « Pull requests » du projet** (ESC-65, `pragent.rs`, `PrsView`, direction A de `design/esc-65/`), à côté du Kanban : les PR ouvertes du dépôt (les miennes, celles où on me demande une relecture, toutes), avec CI, relectures, conflit et âge. Actions :
   - ouvrir dans le navigateur ;
   - « Lancer un agent sur cette PR » : un worktree sur sa branche, comme « Reprendre une branche existante… ». Une PR venue d'un fork se récupère par `refs/pull/<n>/head` (GitHub, Gitea) ou `refs/merge-requests/<n>/head` (GitLab) ; pour Bitbucket, à voir ;
   - « Faire relire par un agent » (ci-dessous).
+  - Fait : liste dense, filtres « Les miennes » (le login du compte), « Relecture demandée » (relectures demandées et pas encore rendues : `reviewers` de chaque plugin), « Toutes » ; lancement par `Provider::pull_fetch` (`refs/pull/<n>/head` GitHub et Gitea, `refs/merge-requests/<n>/head` GitLab, second parent de `refs/pull/<n>/merge` Azure DevOps, la branche du fork lui-même sur Bitbucket Cloud) dans `pr-<n>` / `mr-<n>`.
+  - Reste : essai réel sur GitHub (compte de l'utilisateur) ; GitLab, Bitbucket Cloud, Gitea/Forgejo et Azure DevOps d'après leur documentation, à essayer en vrai plus tard. La carte d'un agent sur une PR de fork ne montre pas cette PR (sa branche `pr-<n>` n'est pas celle du fork).
 - [ ] **Relecture par un agent** : un agent lit le diff d'une PR et rédige une relecture, avec des commentaires par fichier et par ligne.
   - L'utilisateur les garde, les corrige ou les écarte un par un dans Escouade, puis publie : review de GitHub et de Gitea, discussions de GitLab, commentaires de ligne de Bitbucket.
   - Rien ne part sans lui.

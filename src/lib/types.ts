@@ -2885,6 +2885,16 @@ export interface PullRequest {
   author?: string;
   /** When it was opened (Unix seconds), when the host says it. */
   created?: number;
+  /** Whose review is asked and not given yet (logins; names on Azure DevOps), when the host says it (ESC-65). */
+  reviewers?: string[];
+}
+
+/** The open pull requests of a project (`prview::ProjectPrs`): its host's word, and whose account read them. */
+export interface ProjectPrs {
+  word: string;
+  prs: PullRequest[];
+  /** The login of the account they were read with; empty when it does not say. */
+  me?: string;
 }
 
 /** A check or a status of a pull request's last commit (`forge::Check`). */

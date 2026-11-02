@@ -70,6 +70,51 @@ export default {
   to: '→ {base}',
   seeCi: 'Voir la CI de la {word} #{number} dans le panneau',
 
+  /**
+   * The project's « Pull requests » view (ESC-65), beside the Kanban: its open pull requests, three filters, and an agent
+   * launched on one. Read only.
+   */
+  list: {
+    /** The sidebar's button, its word: « PR », « MR » on GitLab. */
+    tab: '{word}',
+    tabHint: 'Les {word} ouvertes du projet',
+    title: 'Pull requests',
+    titleMr: 'Merge requests',
+    open: { one: '{count} ouverte', other: '{count} ouvertes' },
+    filterLabel: 'Quelles {word}',
+    filter: {
+      mine: 'Les miennes',
+      review: 'Relecture demandée',
+      all: 'Toutes',
+    },
+    readAt: 'Lu à {time}',
+    refresh: 'Rafraîchir',
+    empty: {
+      all: 'Aucune {word} ouverte.',
+      mine: 'Aucune {word} ouverte par toi.',
+      review: 'Personne ne t’a demandé de relecture.',
+    },
+    emptyHint: 'Les {word} ouvertes du dépôt, par toi ou par d’autres, s’affichent ici.',
+    showAll: 'Toutes les {word}',
+    /** The host did not say whose account it read them with. */
+    noMe: 'L’hébergeur ne dit pas ton identifiant : « Les miennes » et « Relecture demandée » restent vides.',
+    draft: 'Brouillon',
+    fork: 'fork {owner}',
+    forkHint: 'Depuis le fork {repo}, branche {branch}',
+    agentHint: 'L’agent {agent} y travaille',
+    conflict: 'Conflit',
+    changesRequested: 'Changements demandés',
+    yourReview: 'Ta relecture',
+    noCi: 'Pas de CI',
+    /** A row, for a screen reader. */
+    row: '{word} #{number} · {title}',
+    launch: 'Lancer un agent',
+    launchHint: 'Lancer un agent sur cette {word} : un worktree sur sa branche {branch} (Entrée)',
+    launching: 'Lancement…',
+    openAgent: 'Ouvrir l’agent',
+    openAgentHint: 'Ouvrir {agent}, qui travaille sur cette {word}',
+  },
+
   /** The side panel's « PR et CI » tab (ESC-305): read only, but « Relancer les échecs » on a click. */
   view: {
     loading: 'Lecture de la {word}…',

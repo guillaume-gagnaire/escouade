@@ -143,6 +143,9 @@ pub struct PrDetail {
 pub struct ProjectPrs {
     pub word: String,
     pub prs: Vec<PullRequest>,
+    /// The login of the account the host was read with: « Les miennes » and « Relecture
+    /// demandée » (ESC-65); empty when the account does not say it.
+    pub me: String,
 }
 
 /// Why an agent has no « Ouvrir une PR… »: the reason, and whether Réglages › Intégrations is
@@ -336,6 +339,7 @@ impl<R: Runtime> Core<R> {
             Ok(prs) => Read::ok(ProjectPrs {
                 word: provider.request_word().to_string(),
                 prs,
+                me: self.forge_login(&remote.host),
             }),
             Err(e) => Read::failed(&e, client.rate_limit()),
         }

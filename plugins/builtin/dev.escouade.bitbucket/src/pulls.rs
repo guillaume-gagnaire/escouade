@@ -515,6 +515,12 @@ fn pr_of(p: &Value) -> Option<PullRequest> {
             .iter()
             .any(|u| u["state"] == "changes_requested"),
         author: person(&p["author"]),
+        // A reviewer who has not said yet.
+        reviewers: participants
+            .iter()
+            .filter(|u| u["role"] == "REVIEWER" && u["approved"] != true && u["state"].is_null())
+            .map(|u| person(&u["user"]))
+            .collect(),
         created: instant(&p["created_on"]).unwrap_or(0),
         fork,
         head_repo: if fork {

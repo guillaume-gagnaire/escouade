@@ -2,14 +2,14 @@
 title: "Pull requests"
 subject: "Git & fichiers"
 sources: ["docs/SPEC.md","docs/TODO-1.8.md","src/components/PrPanel.svelte","src-tauri/src/prview.rs"]
-tickets: ["ESC-64","ESC-161","ESC-305","ESC-56","ESC-58"]
+tickets: ["ESC-64","ESC-161","ESC-305","ESC-56","ESC-58","ESC-65"]
 decisions: [15]
 compared: "2026-10-30T18:20:19+01:00"
 ---
 
 ## Ce que c'est
 
-Escouade ouvre la pull request d'un agent ordinaire et suit celles de tout agent : leur état, leur CI et leurs relectures, sur la carte de l'agent, dans l'en-tête de sa conversation, dans la barre d'état et dans l'onglet « PR et CI » du panneau latéral. Quand la CI échoue ou qu'une relecture demande des changements, un bouton envoie le tout à l'agent pour qu'il corrige. La PR d'un ticket est ouverte par sa validation (voir *Validation*) ; elle s'affiche et se lit comme les autres. Ce que chaque hébergeur permet est dans *Hébergeurs de code*.
+Escouade ouvre la pull request d'un agent ordinaire et suit celles de tout agent : leur état, leur CI et leurs relectures, sur la carte de l'agent, dans l'en-tête de sa conversation, dans la barre d'état et dans l'onglet « PR et CI » du panneau latéral. Quand la CI échoue ou qu'une relecture demande des changements, un bouton envoie le tout à l'agent pour qu'il corrige. La PR d'un ticket est ouverte par sa validation (voir *Validation*) ; elle s'affiche et se lit comme les autres. Toutes les PR ouvertes du projet, les siennes ou d'autres, se listent à côté du Kanban, où l'on lance un agent sur l'une d'elles (voir *Vue « Pull requests » du projet*). Ce que chaque hébergeur permet est dans *Hébergeurs de code*.
 
 ## Comportement
 
@@ -36,7 +36,7 @@ Escouade ouvre la pull request d'un agent ordinaire et suit celles de tout agent
 - Celles de la branche où il est réellement, quel qu'en soit l'auteur : celle de son worktree (agent de ticket compris, en lecture seule : ni « Ouvrir une PR » ni correction, son Kanban la suit), celle du worktree où il est entré seul, sinon celle du dossier du projet. Pas celle du dossier quand il est sur la cible du Kanban ou la branche par défaut d'un dépôt distant (`main` ou `master` faute de mieux) : une PR `main → prod` irait sinon à tous les agents du dossier.
 - Elles sont cherchées sur le dépôt de la cible (là où « Ouvrir une PR » ouvre), sur celui que suit la branche (sinon `origin`), et sur GitHub, GitLab, Gitea et Forgejo sur le dépôt dont ce dernier est un fork. Un dépôt autre que celui de la cible qui ne répond pas garde ce qui y a été lu en dernier ; un dépôt parent que l'hébergeur n'a pas dit est redemandé 10 min plus tard.
 - Deux PR de dépôts différents peuvent avoir le même numéro : elles se distinguent par leur dépôt. La PR d'un fork est gardée quand sa branche de tête est celle de l'agent (une branche poussée sur ton fork, la PR ouverte vers l'original), écartée sinon (un autre fork qui a une branche du même nom). Lue ailleurs que sur le dépôt de la cible, elle garde son dépôt, où « L'agent corrige » et l'onglet « PR et CI » lisent ses checks et ses retours.
-- Elles sont lues à l'affichage de l'agent, puis chaque minute tant qu'il est affiché, au plus toutes les 20 s, et plus du tout une fois toutes mergées. Elles sont gardées avec l'agent, dans l'ordre : ouvertes prêtes, brouillons, mergées, fermées, la plus récente d'abord. L'hébergeur dit aussi leur auteur et leur date de création, quand il les donne.
+- Elles sont lues à l'affichage de l'agent, puis chaque minute tant qu'il est affiché, au plus toutes les 20 s, et plus du tout une fois toutes mergées. Elles sont gardées avec l'agent, dans l'ordre : ouvertes prêtes, brouillons, mergées, fermées, la plus récente d'abord. L'hébergeur dit aussi leur auteur, leur date de création et à qui une relecture est demandée, quand il les donne.
 
 ### Sur la carte et dans l'en-tête
 
@@ -81,6 +81,6 @@ Sous la carte et dans l'onglet « PR et CI », sur une PR ouverte, jamais d'elle
 
 - « Ouvrir une PR », la lecture des PR et l'onglet « PR et CI » : GitHub, GitLab, Bitbucket Cloud, Gitea / Forgejo et Azure DevOps (voir *Hébergeurs de code*).
 - Azure DevOps ne donne ni déploiements ni durée des évaluations de stratégie (seulement celle des builds). Gitea et Forgejo ne donnent pas de déploiements, et leurs journaux et leur relance dépendent de la version de l'instance.
-- La vue « Pull requests » du projet à côté du Kanban, ses filtres et « Lancer un agent sur cette PR » ne sont pas faits (ESC-65).
+- La liste des PR du projet et « Lancer un agent sur cette PR » : voir *Vue « Pull requests » du projet* ; « Faire relire par un agent » n'est pas fait.
 - Un agent qui travaille dans un worktree qui n'est pas d'Escouade n'est suivi que sur Claude Code.
 - Le cycle des PR hors tickets et ce qui en reste à faire : `docs/TODO-1.8.md`, chapitre 2 (« Les PR hors tickets »).

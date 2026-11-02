@@ -2939,6 +2939,18 @@ pub async fn fetch(repo: &str, background: bool) -> Result<()> {
     run_net(repo, &args, background).await.map(|_| ())
 }
 
+/// Fetches `refspec` from `from` (a remote's name, or an address), as the user would: their
+/// credentials may be asked (« Lancer un agent sur cette PR », ESC-65).
+pub async fn fetch_ref(repo: &str, from: &str, refspec: &str) -> Result<()> {
+    run_net(
+        repo,
+        &["fetch", "--quiet", "--no-tags", from, refspec],
+        false,
+    )
+    .await
+    .map(|_| ())
+}
+
 /// The local branch `branch`, gone from `repo` (deleted by hand), made again from the first
 /// remote that has it (ESC-60: a ticket's agent fixes its pull request's CI on it).
 pub async fn fetch_branch(repo: &str, branch: &str) -> Result<()> {

@@ -14,6 +14,9 @@ impl Provider for BitbucketProvider {
     fn kind(&self) -> String {
         "bitbucket".into()
     }
+    fn pull_fetch(&self, _number: u64) -> Option<PullFetch> {
+        Some(PullFetch::ForkBranch)
+    }
 
     fn name(&self) -> &'static str {
         NAME

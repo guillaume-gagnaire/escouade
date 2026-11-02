@@ -76,6 +76,9 @@ impl Provider for AzureProvider {
     fn kind(&self) -> String {
         "azure".into()
     }
+    fn pull_fetch(&self, number: u64) -> Option<PullFetch> {
+        Some(PullFetch::Merge(format!("refs/pull/{number}/merge")))
+    }
 
     fn name(&self) -> &'static str {
         NAME

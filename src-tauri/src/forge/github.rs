@@ -26,6 +26,9 @@ impl Provider for GithubProvider {
     fn kind(&self) -> String {
         "github".into()
     }
+    fn pull_fetch(&self, number: u64) -> Option<PullFetch> {
+        Some(PullFetch::Head(format!("refs/pull/{number}/head")))
+    }
 
     fn name(&self) -> &'static str {
         NAME

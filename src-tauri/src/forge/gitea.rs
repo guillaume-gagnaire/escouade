@@ -13,6 +13,9 @@ impl Provider for GiteaProvider {
     fn kind(&self) -> String {
         "gitea".into()
     }
+    fn pull_fetch(&self, number: u64) -> Option<PullFetch> {
+        Some(PullFetch::Head(format!("refs/pull/{number}/head")))
+    }
 
     fn name(&self) -> &'static str {
         "Gitea / Forgejo"

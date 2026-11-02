@@ -164,6 +164,15 @@ fn pr_of(p: &Value) -> Option<PullRequest> {
             .unwrap_or("")
             .to_string(),
         created: instant(&p["creationDate"]).unwrap_or(0),
+        // A reviewer who has not voted yet (0), a group left out.
+        reviewers: p["reviewers"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|r| r["vote"].as_i64() == Some(0) && r["isContainer"] != true)
+            .filter_map(|r| r["displayName"].as_str())
+            .map(str::to_string)
+            .collect(),
         ..Default::default()
     })
 }

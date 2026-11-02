@@ -509,6 +509,13 @@ fn pr_of(p: &Value) -> Result<PullRequest> {
         // Said for an open pull request only.
         mergeable: p["mergeable"].as_bool().filter(|_| state == PrState::Open),
         author: p["user"]["login"].as_str().unwrap_or("").to_string(),
+        reviewers: p["requested_reviewers"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|r| r["login"].as_str())
+            .map(str::to_string)
+            .collect(),
         created: instant(&p["created_at"]).unwrap_or(0),
         fork,
         head_repo: p["head"]["repo"]["full_name"]

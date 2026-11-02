@@ -452,6 +452,8 @@ async fn a_pull_request_is_read_with_its_votes_threads_and_checks() {
     assert!(pr.changes_requested);
     // One thread on a line still active (another fixed, one deleted, one not on a line).
     assert_eq!(pr.open_threads, 1);
+    // Every person asked has voted; a team is never one whose review is asked (ESC-65).
+    assert!(pr.reviewers.is_empty());
     assert!(!pr.auto_merge);
     assert!(!pr.fork);
     assert_eq!(pr.checks, Some(CheckState::Failure));

@@ -173,6 +173,9 @@ mod plugins_tests;
 mod plugins_trello_tests;
 #[cfg(test)]
 mod plugins_wasm_tests;
+mod pragent;
+#[cfg(test)]
+mod pragent_tests;
 mod pricing;
 #[cfg(test)]
 mod private_tests;
@@ -809,6 +812,7 @@ pub fn run() {
                 commands::agent_pr_rerun,
                 commands::agent_no_pr,
                 commands::project_prs,
+                commands::create_agent_on_pr,
                 commands::set_remote_control,
                 commands::stats,
                 commands::refresh_usage,

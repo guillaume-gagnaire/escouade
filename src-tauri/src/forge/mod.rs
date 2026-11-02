@@ -164,6 +164,19 @@ impl Probe {
     }
 }
 
+/// How the branch of a pull request opened from a fork is fetched (`Provider::pull_fetch`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PullFetch {
+    /// A reference of the targeted repository that is its head (`refs/pull/<n>/head`).
+    Head(String),
+    /// A reference of the targeted repository that is its merge into its base, whose second parent
+    /// is its head (Azure DevOps' `refs/pull/<n>/merge`).
+    Merge(String),
+    /// Its branch, in the fork's repository on the same instance (Bitbucket Cloud keeps no reference
+    /// of a pull request).
+    ForkBranch,
+}
+
 /// A code host: what Escouade knows of it, and the client of an account.
 pub trait Provider: Send + Sync {
     /// What the accounts and the window know it by: `github`, `gitlab`, `bitbucket`, `gitea`.
@@ -175,6 +188,11 @@ pub trait Provider: Send + Sync {
         "PR"
     }
     fn capabilities(&self) -> Capabilities;
+    /// How a pull request opened from a fork is fetched from the repository it targets (« Lancer
+    /// un agent sur cette PR », ESC-65); none when this host keeps no reference of it.
+    fn pull_fetch(&self, _number: u64) -> Option<PullFetch> {
+        None
+    }
     /// Its public instance (`github.com`), if it has one.
     fn default_host(&self) -> Option<&'static str>;
     /// The host of its public instance or of one it hosts (`acme.ghe.com`), and the other names of

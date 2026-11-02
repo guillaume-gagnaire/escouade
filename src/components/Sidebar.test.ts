@@ -1549,6 +1549,25 @@ describe('Sidebar editor entries', () => {
     await userEvent.click(screen.getByRole('button', { name: /refacto-auth/ }));
     expect(app.boardOn).toBe(false);
   });
+
+  it('opens the project’s « Pull requests » beside the Kanban, in the host’s word (ESC-65)', async () => {
+    resetApp({ projects: [project()], agents: [agent()] });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const tab = screen.getByRole('button', { name: 'PR' });
+    await userEvent.click(tab);
+    expect(app.prsOn).toBe(true);
+    expect(tab).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^Kanban/ })).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(screen.getByRole('button', { name: /^Kanban/ }));
+    expect(app.prsOn).toBe(false);
+    app.openPrs('p1');
+    await userEvent.click(screen.getByRole('button', { name: /refacto-auth/ }));
+    expect(app.prsOn).toBe(false);
+    // GitLab's word, once read.
+    app.prWords.p1 = 'MR';
+    expect(await screen.findByRole('button', { name: 'MR' })).toBeInTheDocument();
+  });
 });
 
 describe('Sidebar copies of an agent', () => {
