@@ -1,19 +1,19 @@
 ---
-number: null
+number: 52
 id: "la-conversation-de-cursor-cli-passe-par"
 title: "La conversation de Cursor CLI passe par son plugin de première main, le reste de son moteur au cœur"
 date: "2026-11-02"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-222"
 pages: []
-tickets: []
+tickets: ["ESC-222"]
 documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/cursor-cli-en-plugin","added":16,"removed":0},{"page":"plugins/harness-acp-decrits","added":4,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-02T05:10:27+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
