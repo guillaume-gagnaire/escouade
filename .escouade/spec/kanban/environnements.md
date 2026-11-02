@@ -3,7 +3,7 @@ title: "Environnements et déploiements"
 subject: "kanban"
 sources: ["docs/TODO-1.8.md (chapitre 2, « Les déploiements »)","design/esc-67/README.md"]
 tickets: ["ESC-67"]
-decisions: ["les-deploiements-suivis-par-environnemen"]
+decisions: [61]
 compared: null
 ---
 

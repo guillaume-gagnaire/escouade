@@ -1,9 +1,9 @@
 ---
-number: null
+number: 61
 id: "les-deploiements-suivis-par-environnemen"
 title: "Les déploiements suivis par environnement, vue « Environnements » en couloirs"
 date: "2026-11-02"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-67"
 pages: ["kanban/environnements","kanban/en-revue","git-fichiers/hebergeurs-de-code"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"kanban/environnements","added":35,"removed":0},{"page":"kanban/en-revue","added":4,"removed":1},{"page":"git-fichiers/hebergeurs-de-code","added":7,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-02T12:42:24+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
