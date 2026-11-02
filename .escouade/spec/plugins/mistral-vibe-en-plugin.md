@@ -3,7 +3,7 @@ title: "Mistral Vibe en plugin"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.5, §4.6, §4.13 (INT-10.6)","docs/TODO-2.2.md, INT-10.6","Ticket ESC-281","plugins/builtin/dev.escouade.mistral-vibe/README.md"]
 tickets: ["ESC-281"]
-decisions: ["mistral-vibe-passe-par-son-plugin-en-pro"]
+decisions: [57]
 compared: null
 ---
 

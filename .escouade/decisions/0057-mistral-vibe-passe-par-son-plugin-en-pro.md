@@ -1,9 +1,9 @@
 ---
-number: null
+number: 57
 id: "mistral-vibe-passe-par-son-plugin-en-pro"
 title: "Mistral Vibe passe par son plugin, en process"
 date: "2026-11-02"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-281"
 pages: ["plugins/mistral-vibe-en-plugin","plugins/livres-avec-escouade","plugins/harness-acp-decrits","plugins/cursor-cli-en-plugin"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/mistral-vibe-en-plugin","added":21,"removed":0},{"page":"plugins/livres-avec-escouade","added":1,"removed":0},{"page":"plugins/harness-acp-decrits","added":4,"removed":0},{"page":"plugins/cursor-cli-en-plugin","added":2,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-02T10:01:41+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
