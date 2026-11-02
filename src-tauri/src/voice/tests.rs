@@ -209,16 +209,23 @@ fn the_level_is_told_while_it_listens_and_no_more_after() {
     put_model(&h.voice.store, "base");
     let id = session(h.voice.start(&choice("base", "fr")).unwrap());
     h.script.push(&voice_tone(16_000, 0.1));
-    std::thread::sleep(Duration::from_millis(160));
-    let levels: Vec<(f32, u64)> = h
-        .events
-        .lock()
-        .iter()
-        .filter_map(|e| match e {
-            VoiceEvent::Level { session, level, ms } if *session == id => Some((*level, *ms)),
-            _ => None,
-        })
-        .collect();
+    // Waited for, not slept for: on a busy machine (the CI's macOS, 2026-11-02) the first level came after 160 ms.
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    let levels: Vec<(f32, u64)> = loop {
+        std::thread::sleep(Duration::from_millis(40));
+        let levels: Vec<(f32, u64)> = h
+            .events
+            .lock()
+            .iter()
+            .filter_map(|e| match e {
+                VoiceEvent::Level { session, level, ms } if *session == id => Some((*level, *ms)),
+                _ => None,
+            })
+            .collect();
+        if levels.len() >= 2 || std::time::Instant::now() > deadline {
+            break levels;
+        }
+    };
     assert!(!levels.is_empty());
     assert!(levels[0].0 > 0.3, "{levels:?}");
     // The time grows; the level falls back once nothing comes.
