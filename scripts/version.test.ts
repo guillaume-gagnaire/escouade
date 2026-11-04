@@ -46,6 +46,23 @@ describe('version script', () => {
     );
   });
 
+  it('keeps the crate of escouade-plugin at the app’s version, in its manifest and in the lock', () => {
+    const root = fixture();
+    const crate = path.join(root, 'crates', 'escouade-plugin-cli', 'Cargo.toml');
+    fs.mkdirSync(path.dirname(crate), { recursive: true });
+    fs.writeFileSync(crate, '[package]\nname = "escouade-plugin-cli"\nversion = "0.1.0"\n');
+    const cargoLock = path.join(root, 'src-tauri', 'Cargo.lock');
+    fs.writeFileSync(
+      cargoLock,
+      '[[package]]\nname = "escouade-plugin-cli"\nversion = "0.1.0"\n\n[[package]]\nname = "x"\nversion = "0.1.0"\n',
+    );
+    setVersion(root, '1.2.3');
+    expect(readVersions(root)).toEqual({ package: '1.2.3', tauri: '1.2.3', cargo: '1.2.3', cli: '1.2.3' });
+    expect(fs.readFileSync(cargoLock, 'utf8')).toBe(
+      '[[package]]\nname = "escouade-plugin-cli"\nversion = "1.2.3"\n\n[[package]]\nname = "x"\nversion = "1.2.3"\n',
+    );
+  });
+
   it('accepts a v-prefixed tag and rejects non-semver input', () => {
     const root = fixture();
     setVersion(root, 'v2.0.0-beta.1');

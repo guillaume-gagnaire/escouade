@@ -1,6 +1,6 @@
 // The checks of a plugin's manifest, escouade-plugin.json (docs/PLUGINS.md §3.1, ESC-173), as a library without
 // dependencies: what the store runs on a submitted plugin (STORE-3, docs/STORE.md §3.3), reading it, never running it.
-// The same rules as the app's reader (src-tauri/src/plugins/manifest.rs): both go through the cases of
+// The same rules as the app's reader (crates/escouade-plugin-cli/src/manifest.rs): both go through the cases of
 // tests/fixtures/plugins/manifests.json. The schema for the editors' completion is plugin-1.json, beside this file.
 //
 //   import { validate, message } from '../schemas/plugin-manifest.mjs';

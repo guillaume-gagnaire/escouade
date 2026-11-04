@@ -30,7 +30,7 @@ pub mod builtin;
 pub mod events;
 // `files/read`: a file of the plugin's own folder, for both transports (ESC-321).
 pub mod files;
-pub mod manifest;
+pub use escouade_plugin_cli::manifest;
 // The reader of workflows a plugin brings (ESC-200).
 pub mod reader;
 #[cfg_attr(not(test), allow(dead_code))]

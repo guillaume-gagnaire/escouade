@@ -1,5 +1,7 @@
 // First: its macros (`tr!`, `tr_in!`) are then in scope in every module below.
 #[macro_use]
+extern crate escouade_plugin_cli;
+#[macro_use]
 mod i18n;
 mod accounts;
 mod agent;

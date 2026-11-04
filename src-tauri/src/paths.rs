@@ -1,9 +1,11 @@
+pub use escouade_plugin_cli::paths::{
+    sandbox_dir, sandbox_dir_from, tools_data_dir, write_atomic, DATA_DIR_NAME,
+};
 use std::path::{Path, PathBuf};
 
 // The app was « Claude Code Manager » until 0.1.3: what it keeps on disk moves to its new names
 // on the first launch that finds it under the old ones.
 
-pub const DATA_DIR_NAME: &str = ".escouade";
 const OLD_DATA_DIR_NAME: &str = ".claude-code-manager";
 /// The app identifier (tauri.conf.json), which names its WebView and window-state folders, and its
 /// entries in the system's keychain.
@@ -215,19 +217,6 @@ fn rename_patiently(a: &Path, b: &Path) -> std::io::Result<()> {
     )(a, b)
 }
 
-/// A sandboxed data folder (end-to-end tests, demos): `$ESCOUADE_DATA_DIR`, or the former
-/// `$CCM_DATA_DIR`.
-pub fn sandbox_dir() -> Option<PathBuf> {
-    sandbox_dir_from(|k| std::env::var_os(k))
-}
-
-fn sandbox_dir_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<PathBuf> {
-    ["ESCOUADE_DATA_DIR", "CCM_DATA_DIR"]
-        .into_iter()
-        .find_map(|k| var(k).filter(|d| !d.is_empty()))
-        .map(PathBuf::from)
-}
-
 /// The window of a sandboxed run kept out of the user's way (end-to-end tests run while they work):
 /// `$ESCOUADE_HIDDEN_WINDOW` set, which only a sandboxed run hears. The window opens off every
 /// screen, never takes the focus, has no button in the taskbar, and the app no tray icon.
@@ -262,16 +251,6 @@ pub fn default_data_dir() -> PathBuf {
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     let mut notes = NOTES.lock().unwrap_or_else(|e| e.into_inner());
     data_dir_in(&home, cfg!(debug_assertions), &mut notes)
-}
-
-/// The app's data folder as `escouade-plugin` reads it (the pinned Javy, the modules of the `run.js` plugins), moving
-/// nothing: the sandboxed folder, else `~/.escouade`.
-pub fn tools_data_dir() -> PathBuf {
-    sandbox_dir().unwrap_or_else(|| {
-        dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join(DATA_DIR_NAME)
-    })
 }
 
 /// Moves the WebView and window-state folders, named after the app identifier, to the new
@@ -357,12 +336,12 @@ impl DataDir {
     /// The modules of the `run.js` plugins, compiled and precompiled (`plugins::wasm::Modules`): a cache, made
     /// again when it is gone.
     pub fn plugin_wasm_dir(&self) -> PathBuf {
-        self.0.join("cache").join("plugins-wasm")
+        escouade_plugin_cli::paths::plugin_wasm_dir(&self.0)
     }
 
     /// The programs Escouade downloads for itself (the pinned Javy of the `run.js` plugins).
     pub fn tools_dir(&self) -> PathBuf {
-        self.0.join("tools")
+        escouade_plugin_cli::paths::tools_dir(&self.0)
     }
 
     /// The list of the installed plugins: where each comes from and its fingerprint.
@@ -674,13 +653,6 @@ pub fn same_folder(a: &str, b: &str) -> bool {
 /// WSL's included.
 fn is_local_key(key: &str) -> bool {
     !key.starts_with("//")
-}
-
-/// Writes a file atomically (temp file + rename) so a crash never leaves a truncated file.
-pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    let tmp = path.with_extension("tmp");
-    std::fs::write(&tmp, bytes)?;
-    std::fs::rename(&tmp, path)
 }
 
 /// `write_atomic` for a file that may hold secrets, maybe their only copy: on disk before it takes

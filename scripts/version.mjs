@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Keeps the app version identical in package.json, tauri.conf.json and Cargo.toml.
+// Keeps the app version identical in package.json, tauri.conf.json, Cargo.toml and the crate of `escouade-plugin`.
 //   node scripts/version.mjs 1.2.0 (or v1.2.0, a tag) → sets the version everywhere
 //   node scripts/version.mjs                         → prints the version of each manifest
 
@@ -14,6 +14,8 @@ const files = (root) => ({
   package: path.join(root, 'package.json'),
   tauri: path.join(root, 'src-tauri', 'tauri.conf.json'),
   cargo: path.join(root, 'src-tauri', 'Cargo.toml'),
+  // The program the store's image builds says the same version as the app's (ESC-328).
+  cli: path.join(root, 'crates', 'escouade-plugin-cli', 'Cargo.toml'),
 });
 
 export function readVersions(root) {
@@ -22,6 +24,7 @@ export function readVersions(root) {
     package: JSON.parse(fs.readFileSync(f.package, 'utf8')).version,
     tauri: JSON.parse(fs.readFileSync(f.tauri, 'utf8')).version,
     cargo: fs.readFileSync(f.cargo, 'utf8').match(CARGO_VERSION)?.[2],
+    ...(fs.existsSync(f.cli) ? { cli: fs.readFileSync(f.cli, 'utf8').match(CARGO_VERSION)?.[2] } : {}),
   };
 }
 
@@ -36,6 +39,8 @@ export function setVersion(root, input) {
   }
   const cargo = fs.readFileSync(f.cargo, 'utf8');
   fs.writeFileSync(f.cargo, cargo.replace(CARGO_VERSION, `$1${version}$3`));
+  const cli = fs.existsSync(f.cli) ? fs.readFileSync(f.cli, 'utf8') : null;
+  if (cli) fs.writeFileSync(f.cli, cli.replace(CARGO_VERSION, `$1${version}$3`));
   // The lockfiles record the app's own version too: keep them in step (dependencies untouched).
   const npmLock = path.join(root, 'package-lock.json');
   if (fs.existsSync(npmLock)) {
@@ -45,10 +50,14 @@ export function setVersion(root, input) {
     fs.writeFileSync(npmLock, JSON.stringify(lock, null, 2) + '\n');
   }
   const cargoLock = path.join(root, 'src-tauri', 'Cargo.lock');
-  const name = cargo.match(/^\[package\][\s\S]*?\nname\s*=\s*"([^"]+)"/)?.[1];
-  if (name && fs.existsSync(cargoLock)) {
-    const entry = new RegExp(`(\\nname = "${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\nversion = ")[^"]+(")`);
-    fs.writeFileSync(cargoLock, fs.readFileSync(cargoLock, 'utf8').replace(entry, `$1${version}$2`));
+  const names = [cargo, cli].map((t) => t?.match(/^\[package\][\s\S]*?\nname\s*=\s*"([^"]+)"/)?.[1]).filter(Boolean);
+  if (names.length && fs.existsSync(cargoLock)) {
+    let lock = fs.readFileSync(cargoLock, 'utf8');
+    for (const name of names) {
+      const entry = new RegExp(`(\nname = "${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\nversion = ")[^"]+(")`);
+      lock = lock.replace(entry, `$1${version}$2`);
+    }
+    fs.writeFileSync(cargoLock, lock);
   }
   return version;
 }

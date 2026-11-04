@@ -49,9 +49,9 @@ rusqlite = { version = "0.37", features = ["bundled"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }
 base64 = "0.22"
 log = "0.4"
-trash = "5"
-# The system's language, for the interface's default one.
+# The system's language, in the usage statistics (`telemetry`).
 sys-locale = "0.3"
+trash = "5"
 # The system's name and version, in the usage statistics (`telemetry`).
 os_info = { version = "3", default-features = false }
 # The name of a Claude account's macOS keychain entry: Claude Code's own hash of its folder, in NFC.
@@ -62,6 +62,9 @@ minisign-verify = "0.2"
 escouade-plugin-protocol = { path = "../crates/escouade-plugin-protocol" }
 # The ACP client (PLG-6), which the core's ACP harnesses share until they come out in process (INT-10).
 escouade-acp = { path = "../crates/escouade-acp" }
+# What `escouade-plugin` does without the app's host, which the store's image builds alone (ESC-328): the manifest's
+# reader and the compiler of the `run.js` plugins.
+escouade-plugin-cli = { path = "../crates/escouade-plugin-cli" }
 # The contract of a code host and its errors, shared with the Rust plugins of the first hand (docs/PLUGINS.md §4.5).
 escouade-plugin-kit = { path = "../crates/escouade-plugin-kit" }
 # The plugins of `escouade-plugins` (its entries): the core runs none of their code, it starts their process.
@@ -179,6 +182,7 @@ keyring = { version = "3.6", features = ["apple-native"] }
 [workspace]
 members = [
     "../crates/escouade-plugin-protocol",
+    "../crates/escouade-plugin-cli",
     "../crates/escouade-plugin-kit",
     "../crates/escouade-acp",
     "../plugins/builtin/dev.escouade.github",
@@ -202,6 +206,7 @@ members = [
 default-members = [
     ".",
     "../crates/escouade-plugin-protocol",
+    "../crates/escouade-plugin-cli",
     "../crates/escouade-plugin-kit",
     "../crates/escouade-acp",
     "../plugins/builtin/dev.escouade.github",

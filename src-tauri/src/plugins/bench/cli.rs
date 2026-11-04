@@ -1,134 +1,27 @@
-//! `escouade-plugin`, the command of the plugins' authors (PLG-3, ESC-175): `test` plays the
-//! conformance bench on a folder, `validate` reads its manifest, `dev` starts it under the fake
-//! Escouade and sends it what is typed (facts, decisions, calls), showing what comes back. `build` compiles a
-//! `run.js` plugin's bundle to its WASM module and says its SHA-256 (ESC-322): what the store and the review compile.
-//! None needs Node: a `run.js` plugin runs in WASM, in the app's own host.
+//! `escouade-plugin`, the command of the plugins' authors (PLG-3, ESC-175): what runs a plugin, on the app's host.
+//! `test` plays the conformance bench on a folder, `dev` starts it under the fake Escouade and sends it what is typed
+//! (facts, decisions, calls), showing what comes back. The rest of the command (`validate`, `build`, `--version`) needs
+//! no host and lives in `escouade_plugin_cli::cli` (ESC-328), which the store's image builds alone.
 
 use super::fake::{Reply, Seen, Session};
 use super::{decision_request, fact, program_of, run, Options, Program};
 use crate::i18n::Lang;
 use crate::plugins::manifest::{self, Manifest};
 use crate::plugins::runtime::{timeout_of, PROTOCOL};
-use crate::plugins::wasm;
+use escouade_plugin_cli::cli::{self, read_manifest, usage, Call};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-fn usage(lang: Lang) -> String {
-    tr_in!(
-        lang,
-        "escouade-plugin : tester un plugin d'Escouade sans l'app.
-
-  escouade-plugin test <dossier> [--json] [--measure [n]] [--wasm <module>] [--offline] [--escouade <version>]
-      Joue le banc de conformité : initialisation, version refusée, délais, un fait reçu,
-      une décision, un secret, plantage, fermeture. Code de sortie 1 si un scénario échoue.
-      --wasm joue ce module d'un plugin `run.js` (celui du store) au lieu de compiler son
-      bundle ; --offline refuse tout fetch, quoi que dise permissions.network.
-  escouade-plugin validate <dossier> [--escouade <version>]
-      Lit le manifeste (escouade-plugin.json) et dit ce qui ne va pas, champ par champ ; pour un
-      plugin `run.js`, que son bundle peut tourner en WASM.
-  escouade-plugin build <dossier> [--out <dossier>] [--json]
-      Compile le bundle d'un plugin `run.js` en WASM, comme le store : packs/<id>-<version>.wasm
-      et son SHA-256, le même sur tous les systèmes.
-  escouade-plugin dev <dossier> [--secret <clé>=<valeur>]...
-      Le faux Escouade : lance le plugin, puis envoie ce que tu tapes :
-        fact <nom> [json]       un fait (events/fact), ex. fact ticket.column
-        decide [json]           une demande d'autorisation (permissions/decide)
-        call <méthode> [json]   un appel, et sa réponse
-        notify <méthode> [json] une notification
-        restart                 tue le plugin et le relance
-        quit                    shutdown, puis la fin
-
-Un plugin `run.js` tourne en WASM, sans Node : la Javy épinglée ({javy}) est téléchargée à son
-premier besoin et vérifiée par son SHA-256 (ESCOUADE_JAVY en nomme une autre).
-
-Options : --lang fr|en ; --escouade <version> la version d'Escouade pour laquelle le plugin est jugé (celle de
-  ce binaire par défaut) ; --first-party pour un plugin d'Escouade (plugins/<id>/ de son dépôt,
-  identifiants dev.escouade.*)
-",
-        "escouade-plugin: test an Escouade plugin without the app.
-
-  escouade-plugin test <folder> [--json] [--measure [n]] [--wasm <module>] [--offline]
-      Plays the conformance bench: initialization, version refused, delays, a fact received,
-      a decision, a secret, crash, shutdown. Exit code 1 when a scenario fails.
-      --wasm plays this module of a `run.js` plugin (the store's) instead of compiling its
-      bundle; --offline refuses every fetch, whatever permissions.network says.
-  escouade-plugin validate <folder> [--escouade <version>]
-      Reads the manifest (escouade-plugin.json) and says what is wrong, field by field; for a
-      `run.js` plugin, that its bundle can run in WASM.
-  escouade-plugin build <folder> [--out <folder>] [--json]
-      Compiles a `run.js` plugin's bundle to WASM, as the store does: packs/<id>-<version>.wasm
-      and its SHA-256, the same on every system.
-  escouade-plugin dev <folder> [--secret <key>=<value>]...
-      The fake Escouade: starts the plugin, then sends what you type:
-        fact <name> [json]       a fact (events/fact), e.g. fact ticket.column
-        decide [json]            a permission request (permissions/decide)
-        call <method> [json]     a call, and its answer
-        notify <method> [json]   a notification
-        restart                  kills the plugin and starts it again
-        quit                     shutdown, then the end
-
-A `run.js` plugin runs in WASM, without Node: the pinned Javy ({javy}) is downloaded the first
-time it is needed and checked by its SHA-256 (ESCOUADE_JAVY names another).
-
-Options: --lang fr|en; --escouade <version> the version of Escouade the plugin is judged for (this
-  build's by default); --first-party for a plugin of Escouade's own (plugins/<id>/ of its repository,
-  ids dev.escouade.*)
-",
-        javy = wasm::JAVY_VERSION
-    )
-}
-
-/// What compiles a `run.js` plugin here: this escouade-plugin, the pinned Javy, escouade-js and the prelude.
-fn version() -> String {
-    format!(
-        "escouade-plugin {}
-javy {}
-escouade-js {}
-prelude {}
-wasm-since {}",
-        env!("CARGO_PKG_VERSION"),
-        wasm::JAVY_VERSION,
-        match wasm::escouade_js() {
-            Ok(_) => wasm::escouade_js_sha256().to_string(),
-            Err(_) => "absent".into(),
-        },
-        wasm::sha256(wasm::PRELUDE.as_bytes()),
-        wasm::SERVED_SINCE
-    )
-}
-
 /// Runs the command of `args` (without the program's name); gives its exit code.
 pub fn main(args: Vec<String>) -> i32 {
-    let mut lang = crate::i18n::system();
-    if let Some(i) = args.iter().position(|a| a == "--lang") {
-        if let Some(l) = args.get(i + 1) {
-            lang = crate::i18n::of_locale(l);
-        }
-    }
-    let Some(command) = args.first().map(String::as_str) else {
-        eprint!("{}", usage(lang));
-        return 2;
-    };
-    if matches!(command, "-h" | "--help" | "help") {
-        print!("{}", usage(lang));
-        return 0;
-    }
-    if matches!(command, "-V" | "--version" | "version") {
-        println!("{}", version());
-        // Built without escouade-js, it plays no `run.js` plugin: the release checks it is there.
-        return i32::from(wasm::escouade_js().is_err());
-    }
-    let Some(folder) = args
-        .get(1)
-        .filter(|a| !a.starts_with("--"))
-        .map(PathBuf::from)
-    else {
-        eprint!("{}", usage(lang));
-        return 2;
-    };
+    cli::main(args, Some(&host))
+}
+
+/// `test` and `dev`.
+fn host(call: &Call) -> i32 {
     let rt = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -139,222 +32,43 @@ pub fn main(args: Vec<String>) -> i32 {
             return 2;
         }
     };
-    let flag = |name: &str| args.iter().any(|a| a == name);
-    // `--escouade <version>`: the version of Escouade the plugin is judged for (this build's by default).
-    let app_version = args
-        .iter()
-        .position(|a| a == "--escouade")
-        .and_then(|i| args.get(i + 1))
-        .cloned()
-        .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
-    // A plugin of Escouade's own hand (`plugins/<id>/` of its repository, ESC-314) takes the ids
-    // `dev.escouade.*`; one the app gives (INT-4), its programs too.
-    let hand = if flag("--builtin") {
-        manifest::Hand::Builtin
-    } else if flag("--first-party") {
-        manifest::Hand::First
-    } else {
-        manifest::Hand::Third
-    };
-    match command {
-        "test" => {
-            let measure = args
-                .iter()
-                .position(|a| a == "--measure")
-                .map(|i| args.get(i + 1).and_then(|n| n.parse().ok()).unwrap_or(1000));
-            let options = Options {
-                lang,
-                hand,
-                app_version: app_version.clone(),
-                measure: measure.unwrap_or(0),
-                module: args
-                    .iter()
-                    .position(|a| a == "--wasm")
-                    .and_then(|i| args.get(i + 1))
-                    .map(PathBuf::from),
-                offline: flag("--offline"),
-                ..Options::default()
-            };
-            let report = rt.block_on(run(&folder, &options));
-            if flag("--json") {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&report).unwrap_or_default()
-                );
-            } else {
-                print!("{}", report.render(lang));
-            }
-            i32::from(!report.passed())
-        }
-        "validate" => validate(&folder, lang, hand, &app_version),
-        "build" => {
-            let out = args
-                .iter()
-                .position(|a| a == "--out")
-                .and_then(|i| args.get(i + 1))
-                .map(PathBuf::from);
-            build(&folder, lang, hand, out, flag("--json"))
-        }
-        "dev" => {
-            let mut secrets = HashMap::new();
-            for (i, a) in args.iter().enumerate() {
-                if a == "--secret" {
-                    if let Some((k, v)) = args.get(i + 1).and_then(|kv| kv.split_once('=')) {
-                        secrets.insert(k.to_string(), v.to_string());
-                    }
-                }
-            }
-            rt.block_on(dev(&folder, lang, secrets, hand))
-        }
-        _ => {
-            eprint!("{}", usage(lang));
-            2
-        }
-    }
-}
-
-/// The manifest of `folder`, or what is wrong with it, said on the standard error.
-fn read_manifest(folder: &Path, lang: Lang, hand: manifest::Hand) -> Option<Manifest> {
-    let path = folder.join(manifest::FILE);
-    let text = match std::fs::read_to_string(&path) {
-        Ok(t) => t,
-        Err(e) => {
-            eprintln!("{}: {e}", path.display());
-            return None;
-        }
-    };
-    let read = manifest::read_in(&text, hand, folder);
-    for f in &read.ignored {
-        eprintln!(
-            "{}",
-            tr_in!(lang, "champ ignoré : {f}", "ignored field: {f}")
-        );
-    }
-    match read.manifest {
-        Ok(m) => Some(m),
-        Err(problems) => {
-            for p in problems {
-                eprintln!("✗ {}", p.message(lang));
-            }
-            None
-        }
-    }
-}
-
-fn validate(folder: &Path, lang: Lang, hand: manifest::Hand, app_version: &str) -> i32 {
-    let Some(m) = read_manifest(folder, lang, hand) else {
-        return 1;
-    };
-    if let Some(why) = m.refusal(app_version, lang) {
-        eprintln!("✗ {why}");
-        return 1;
-    }
-    // A `run.js` plugin: its bundle is one that can run in WASM (what the store's compilation refuses, said first).
-    if let Some(js) = m.run.as_ref().and_then(|r| r.js.as_ref()) {
-        if let Err(why) = bundle_of(folder, js, lang) {
-            eprintln!("✗ {why}");
-            return 1;
-        }
-    }
-    println!(
-        "{}",
-        tr_in!(
+    let (folder, lang, hand) = (call.folder, call.lang, call.hand);
+    if call.command == "test" {
+        let measure = call.args.iter().position(|a| a == "--measure").map(|i| {
+            call.args
+                .get(i + 1)
+                .and_then(|n| n.parse().ok())
+                .unwrap_or(1000)
+        });
+        let options = Options {
             lang,
-            "✓ {} {} : le manifeste est valide",
-            "✓ {} {}: the manifest holds",
-            m.id,
-            m.version
-        )
-    );
-    0
-}
-
-/// The bundle `js` of the plugin in `folder`, when it can run in WASM; why not, in words.
-fn bundle_of(folder: &Path, js: &str, lang: Lang) -> Result<String, String> {
-    let path = folder.join(js);
-    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    wasm::script_of(&text).map_err(|r| r.message(lang))?;
-    Ok(text)
-}
-
-/// `build`: the module of a `run.js` plugin, written with its SHA-256 (`<sha256>  <name>`, as `pack` writes its own).
-fn build(folder: &Path, lang: Lang, hand: manifest::Hand, out: Option<PathBuf>, json: bool) -> i32 {
-    let Some(m) = read_manifest(folder, lang, hand) else {
-        return 1;
-    };
-    let Some(js) = m.run.as_ref().and_then(|r| r.js.as_ref()) else {
-        eprintln!(
-            "{}",
-            tr_in!(
-                lang,
-                "✗ seul un plugin `run.js` se compile en WASM",
-                "✗ only a `run.js` plugin compiles to WASM"
-            )
-        );
-        return 1;
-    };
-    let bundle = match bundle_of(folder, js, lang) {
-        Ok(b) => b,
-        Err(why) => {
-            eprintln!("✗ {why}");
-            return 1;
-        }
-    };
-    let modules = wasm::Modules::new(
-        &crate::paths::DataDir::new(Options::default().data),
-        env!("CARGO_PKG_VERSION"),
-    );
-    let bytes = match modules.build(&bundle) {
-        Ok(b) => b,
-        Err(e) => {
-            eprintln!(
+            hand,
+            app_version: call.app_version.to_string(),
+            measure: measure.unwrap_or(0),
+            module: call.value("--wasm").map(PathBuf::from),
+            offline: call.flag("--offline"),
+            ..Options::default()
+        };
+        let report = rt.block_on(run(folder, &options));
+        if call.flag("--json") {
+            println!(
                 "{}",
-                tr_in!(
-                    lang,
-                    "✗ {js} ne se compile pas en WASM : {e}",
-                    "✗ {js} does not compile to WASM: {e}"
-                )
+                serde_json::to_string_pretty(&report).unwrap_or_default()
             );
-            return 1;
+        } else {
+            print!("{}", report.render(lang));
         }
-    };
-    let sha256 = wasm::sha256(&bytes);
-    let out = out.unwrap_or_else(|| folder.join("packs"));
-    let name = format!("{}-{}.wasm", m.id, m.version);
-    let path = out.join(&name);
-    let written = std::fs::create_dir_all(&out)
-        .and_then(|()| std::fs::write(&path, &bytes))
-        .and_then(|()| {
-            std::fs::write(
-                out.join(format!("{name}.sha256")),
-                format!("{sha256}  {name}\n"),
-            )
-        });
-    if let Err(e) = written {
-        eprintln!("{}: {e}", path.display());
-        return 1;
+        return i32::from(!report.passed());
     }
-    if json {
-        let report = json!({
-            "file": path,
-            "size": bytes.len(),
-            "sha256": sha256,
-            "compiler": {
-                "javy": wasm::JAVY_VERSION,
-                "engine": wasm::escouade_js_sha256(),
-                "prelude": env!("CARGO_PKG_VERSION"),
-            },
-        });
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&report).unwrap_or_default()
-        );
-    } else {
-        println!("{}", path.display());
-        println!("{}", tr_in!(lang, "  {} octets", "  {} bytes", bytes.len()));
-        println!("  sha256 {sha256}");
+    let mut secrets = HashMap::new();
+    for (i, a) in call.args.iter().enumerate() {
+        if a == "--secret" {
+            if let Some((k, v)) = call.args.get(i + 1).and_then(|kv| kv.split_once('=')) {
+                secrets.insert(k.to_string(), v.to_string());
+            }
+        }
     }
-    0
+    rt.block_on(dev(folder, lang, secrets, hand))
 }
 
 /// `[json]` after a command's words: an object, or nothing.
