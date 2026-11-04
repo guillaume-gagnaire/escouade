@@ -1,9 +1,9 @@
 ---
-number: null
+number: 74
 id: "le-compilateur-des-plugins-run-js-constr"
 title: "Le compilateur des plugins run.js construit dans l'image du store, et un escouade-js reproductible sous Linux"
 date: "2026-11-04"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-328"
 pages: ["plugins/programmes-js-ts-en-wasm"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: []
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-04T23:50:09+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
