@@ -1,5 +1,5 @@
 //! Mistral Vibe in the agent's conversation. Since INT-10.6 its agents' updates (`vibe-acp`, ACP v1) are translated by
-//! its plugin (`dev.escouade.mistral-vibe`, the client of `crates/escouade-acp` with its extension `vibe`) and applied
+//! its plugin (`dev.escouade.mistral`, the client of `crates/escouade-acp` with its extension `vibe`) and applied
 //! as items (`AgentRt::apply_items`, through `Engine::translate`); what stays here is its terminal view's
 //! (`agent/vibe_tui.rs`).
 

@@ -30,6 +30,13 @@
 //! first and copied under the new names when these differ (`secrets::read_entry`): a token that a
 //! version from before changed after a return to it is taken back. `revert` goes back: the former
 //! entries hold the secrets, the new ones go. A version after this one drops the former entries.
+//!
+//! **The Mistral account** (ESC-327, INT-10.6 bis, `docs/PLUGINS.md` §4.13): the plugin `dev.escouade.mistral` declares
+//! the kind `mistral`, whose points are its voice and Mistral Vibe. Its account `mistral` is the key of Réglages › Voix
+//! (former name `dictation-mistral`); a Vibe account that has a key of its own keeps it, as an account `vibe-<id>` of
+//! the same plugin (former name `vibe:<id>`), so that two Mistral organizations stay two accounts. The key goes to the
+//! voice in each call and to Vibe by `MISTRAL_API_KEY`, as before: the plugin reads no secret. Each side falls back on
+//! the other: a Vibe account without a key goes by the plugin's, the voice without a key by the first Vibe account's.
 
 use super::manifest::Manifest;
 use super::runtime::secret_name;
@@ -108,6 +115,10 @@ pub struct AccountKind {
     pub sources: Vec<String>,
     /// The code host its accounts serve (`ForgeAccount::kind`), if any.
     pub forge: Option<String>,
+    /// The harnesses its accounts serve (`contributes.harnesses[].account`).
+    pub harnesses: Vec<String>,
+    /// The voice services its accounts serve (`voice` of the kind: they are no point of `contributes`).
+    pub voice: Vec<String>,
     /// Its sources are served by its public instance's account only (GitHub Issues: github.com's,
     /// not a GitHub Enterprise Server's).
     pub sources_public_only: bool,
@@ -170,6 +181,8 @@ fn of_provider(p: &dyn Provider) -> AccountKind {
         sources_public_only: kind == "github",
         sources,
         forge: Some(kind.clone()),
+        harnesses: Vec::new(),
+        voice: Vec::new(),
         id: kind,
     }
 }
@@ -214,6 +227,8 @@ fn of_source(s: &dyn source::TicketSourceKind) -> AccountKind {
         token_page: (!page.is_empty()).then(|| page.to_string()),
         sources: vec![id.into()],
         forge: None,
+        harnesses: Vec::new(),
+        voice: Vec::new(),
         sources_public_only: false,
     }
 }
@@ -317,6 +332,8 @@ pub fn of_manifest(m: &Manifest) -> Vec<AccountKind> {
                 scopes: words(a, "scopes"),
                 token_page: text(a, "tokenPage"),
                 forge: serving("forges", &id).into_iter().next(),
+                harnesses: serving("harnesses", &id),
+                voice: words(a, "voice"),
                 sources,
                 sources_public_only: a
                     .get("sourcesPublicOnly")
@@ -449,6 +466,19 @@ pub fn forge_vault_name(a: &forge::accounts::ForgeAccount) -> String {
     vault_name(&serving(&a.kind, &a.plugin), &a.host())
 }
 
+/// The kind of the plugin Mistral, and the name of its account: the key the voice and Vibe share.
+pub const MISTRAL: &str = "mistral";
+
+/// The keychain's name of the Mistral account (its former name is the voice's, `dictation-mistral`).
+pub fn mistral_vault_name() -> String {
+    vault_name(super::builtin::MISTRAL, MISTRAL)
+}
+
+/// The keychain's name of the key of the Vibe account `id` (its former name is `vibe:<id>`).
+pub fn vibe_vault_name(id: &str) -> String {
+    vault_name(super::builtin::MISTRAL, &format!("vibe-{id}"))
+}
+
 /// The names an instance's token may have in the keychain whatever its kind: those of the code
 /// hosts of the first hand (a « Déconnecter » that failed knows only the host).
 pub fn forge_vault_names(host: &str) -> Vec<String> {
@@ -470,7 +500,7 @@ pub struct Shared {
     /// Its name in the keychain's (`gitlab.com`, `jira`).
     pub account: String,
     pub label: String,
-    /// The points it serves: `ticketSources:<id>`, `forges:<id>`.
+    /// The points it serves: `ticketSources:<id>`, `forges:<id>`, `harnesses:<id>`, `voice:<id>`.
     pub points: Vec<String>,
 }
 
@@ -486,6 +516,8 @@ pub fn points(kind: &AccountKind, host: Option<&str>) -> Vec<String> {
     if let Some(f) = &kind.forge {
         list.push(format!("forges:{f}"));
     }
+    list.extend(kind.harnesses.iter().map(|h| format!("harnesses:{h}")));
+    list.extend(kind.voice.iter().map(|v| format!("voice:{v}")));
     list
 }
 
@@ -563,6 +595,27 @@ pub fn revert(store: &dyn SecretStore, accounts: &mut Accounts) -> anyhow::Resul
         store.delete(&forge_vault_name(a))?;
     }
     accounts.vault = 0;
+    Ok(())
+}
+
+/// `revert`, for the keys of the plugin Mistral: `voice` the voice's former entry, `vibe` the former and new names of
+/// the Vibe accounts' keys. Each former entry holds what is read, the new one goes.
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn revert_mistral(
+    store: &dyn SecretStore,
+    voice: &str,
+    vibe: &[(String, String)],
+) -> anyhow::Result<()> {
+    use crate::integrations::secrets;
+    let voice_names = (voice.to_string(), mistral_vault_name());
+    for (former, name) in vibe.iter().chain(std::iter::once(&voice_names)) {
+        if let Some(secret) = secrets::read_entry(store, Some(former), name, former)?
+            .or(store.get(name)?.filter(|s| !s.is_empty()))
+        {
+            secrets::keep_secret(store, former, &secret)?;
+        }
+        store.delete(name)?;
+    }
     Ok(())
 }
 

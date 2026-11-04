@@ -1,18 +1,21 @@
 import { untrack } from 'svelte';
 import { api } from './ipc';
-import type { OnlineModel, OnlineVoice, ServiceCatalog } from './types';
+import type { MistralKey, OnlineModel, OnlineVoice, ServiceCatalog } from './types';
 
 // The services on line of Réglages › Voix (ESC-110, ESC-132), shared by the dictation and the conversation: which keys
 // are in the keychain (one by service, for both), and each service's models and voices, as its API listed them (or
 // its documentation's).
 class OnlineVoiceState {
   keys = $state<string[]>([]);
+  /** The Mistral account (ESC-327), shared by the voice and Mistral Vibe: its key by its end, or the Vibe account the voice goes by. */
+  mistral = $state<MistralKey>({ own: null, borrowed: null });
   catalogs = $state<Record<string, ServiceCatalog>>({});
   /** Services whose list is being read. */
   loading = $state<Record<string, boolean>>({});
 
   async loadKeys() {
     this.keys = (await api.voiceOnlineKeys().catch(() => null)) ?? [];
+    this.mistral = (await api.voiceMistralKey().catch(() => null)) ?? { own: null, borrowed: null };
   }
 
   /** The models and voices of `service`; `refresh` reads its API again. */

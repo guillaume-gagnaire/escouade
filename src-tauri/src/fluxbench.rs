@@ -48,7 +48,7 @@ const HARNESSES: [&str; 8] = [
 fn plugged_by(harness: EngineId) -> Option<&'static str> {
     match harness {
         EngineId::CURSOR => Some(crate::plugins::builtin::CURSOR),
-        EngineId::VIBE => Some(crate::plugins::builtin::VIBE),
+        EngineId::VIBE => Some(crate::plugins::builtin::MISTRAL),
         _ => None,
     }
 }

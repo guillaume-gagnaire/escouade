@@ -33,6 +33,8 @@ export interface Manifest {
     }>;
     /** Harnesses. */
     harnesses?: Array<{
+      /** The id of one of `contributes.accounts`. */
+      account?: string;
       id: string;
       /** One text, or a text by language (`en` first, then `fr`). */
       name?: string | Record<string, string>;

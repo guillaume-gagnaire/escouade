@@ -510,11 +510,11 @@ pub(crate) fn fenced_config(before: &str, fence: &[String]) -> Result<String> {
     Ok(doc.to_string())
 }
 
-/// The harness of the plugin Mistral Vibe (`dev.escouade.mistral-vibe`, INT-10.6), if it is on: the conversation of
+/// The harness of the plugin Mistral (`dev.escouade.mistral`, INT-10.6 bis), if it is on: the conversation of
 /// Vibe's agents goes through it (`plugins::harness::BUILTIN_HARNESSES`).
 #[cfg(test)]
 pub fn plugged() -> Option<&'static crate::plugins::harness::ProcessEngine> {
-    crate::plugins::harness::plugged(crate::plugins::builtin::VIBE)
+    crate::plugins::harness::plugged(crate::plugins::builtin::MISTRAL)
 }
 
 /// What the core writes in the agent's own `VIBE_HOME` before its launch (`plugins::harness::Prepare`), never in the
@@ -908,7 +908,7 @@ impl Engine for Vibe {
         // Its conversation goes through its plugin (INT-10.6): the launch it describes, checked and started by the
         // core after `prepare`, what Vibe writes translated there.
         crate::plugins::harness::spawn_plugged(
-            crate::plugins::builtin::VIBE,
+            crate::plugins::builtin::MISTRAL,
             self.name(),
             spawn,
             on_frame,

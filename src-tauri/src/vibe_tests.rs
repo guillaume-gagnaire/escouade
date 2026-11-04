@@ -342,7 +342,7 @@ async fn real_vibe_writes_a_text() {
     assert!(!answer.trim().is_empty() && answer.len() < 200, "{answer}");
 }
 
-/// INT-10.6: Vibe's conversation goes through its plugin (`dev.escouade.mistral-vibe`). Switched off, an agent's start
+/// INT-10.6: Vibe's conversation goes through its plugin (`dev.escouade.mistral`). Switched off, an agent's start
 /// says so, and the agent keeps its session; on again, it talks as before.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_vibe_agent_says_its_plugin_is_off_and_talks_again_once_it_is_on() {
@@ -350,7 +350,7 @@ async fn a_vibe_agent_says_its_plugin_is_off_and_talks_again_once_it_is_on() {
     let (p, _) = h.project(false).await;
     machine_account(&h);
     let a = agent_on(&h, &p.id, "principal-vibe").await;
-    let id = crate::plugins::builtin::VIBE;
+    let id = crate::plugins::builtin::MISTRAL;
     h.core.plugins.choose(id, |c| c.enabled = false).unwrap();
     h.core.plugin_runtime.forget(id);
     h.core.sync_harnesses();

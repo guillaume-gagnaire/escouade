@@ -1,6 +1,6 @@
 //! Mistral Vibe's translation, on the streams of the real Vibe 3.0.3 (tests/fixtures/vibe/) and on
 //! its fake (tests/fixtures/fake-vibe.mjs): the turn, its permission, its question, its plan, its
-//! cancel, its resume, the fence (ESC-266). Since INT-10.6 it is its plugin's (`dev.escouade.mistral-vibe`):
+//! cancel, its resume, the fence (ESC-266). Since INT-10.6 it is its plugin's (`dev.escouade.mistral`):
 //! the streams go through its client, the fake is driven through its process.
 
 use crate::agent::*;

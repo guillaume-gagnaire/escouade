@@ -12,6 +12,7 @@ import type {
   WorkflowScan,
   SentView,
   LeftoverReport,
+  MistralKey,
   Account,
   MachineAccount,
   AccountForm,
@@ -178,6 +179,7 @@ export const api = {
   voiceDeleteModel: (model: string) => invoke<void>('voice_delete_model', { model }),
   /** The services of « En ligne » whose key is in the keychain; never the keys. */
   voiceOnlineKeys: () => invoke<string[]>('voice_online_keys'),
+  voiceMistralKey: () => invoke<MistralKey>('voice_mistral_key'),
   /** Keeps a service's key in the system keychain (never in a file); fails when the keychain refuses it. */
   voiceOnlineKeySet: (service: string, key: string) => invoke<void>('voice_online_key_set', { service, key }),
   voiceOnlineKeyDelete: (service: string) => invoke<void>('voice_online_key_delete', { service }),

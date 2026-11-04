@@ -459,7 +459,7 @@ fn the_recorded_streams_of_cursor_make_through_the_generic_client_the_items_of_t
 
 /// Mistral Vibe as the manifest of its plugin declares it (INT-10.6): an ACP harness with its extension `vibe`.
 pub(crate) fn vibe_decl() -> Value {
-    let v: Value = serde_json::from_str(escouade_plugin_vibe::MANIFEST).unwrap();
+    let v: Value = serde_json::from_str(escouade_plugin_mistral::MANIFEST).unwrap();
     v["contributes"]["harnesses"][0].clone()
 }
 

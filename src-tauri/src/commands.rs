@@ -3329,7 +3329,15 @@ pub async fn voice_stop(
 /// Réglages › Voix: the services of « En ligne » whose key is in the keychain (never the keys).
 #[tauri::command(async)]
 pub fn voice_online_keys(core: CoreState) -> Vec<String> {
-    crate::voice::online::keys(&*core.secrets)
+    let settings = core.settings.read().clone();
+    crate::voice::online::usable_keys(&settings, &*core.secrets)
+}
+
+/// Réglages › Voix and the accounts of Mistral Vibe: the Mistral account's key by its end, or the Vibe account the voice
+/// goes by (ESC-327).
+#[tauri::command(async)]
+pub fn voice_mistral_key(core: CoreState) -> crate::voice::online::MistralKey {
+    crate::voice::online::mistral_state(&core.settings.read())
 }
 
 /// Keeps the key of `service` in the system's keychain, read back to check; never in a file: a

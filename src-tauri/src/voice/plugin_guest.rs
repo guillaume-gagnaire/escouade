@@ -1,4 +1,4 @@
-//! The plugin's side of a voice service (INT-13, ESC-285): what `escouade-plugins voice-<service>` runs. It answers
+//! The plugin's side of a voice service (INT-13, ESC-285): what `escouade-plugins voice-<service>` (`escouade-plugins mistral` for Mistral, which also serves its harness) runs. It answers
 //! `voice/*` (see `wire`) with the code of the service as it was in the core: `online::transcribe`, `LiveStream`,
 //! `online_speech::speak`, `online_catalog`. Requests run on threads of their own (a reading lasts seconds, the
 //! stream's audio and a cancel must get through meanwhile); the answers and the notifications share one output.
@@ -74,14 +74,23 @@ fn text(v: &Value, k: &str) -> String {
     v.get(k).and_then(Value::as_str).unwrap_or("").to_string()
 }
 
+/// What a plugin serves beside its voice, in the same process (Mistral: its harness, INT-10.6 bis): the requests that
+/// are not `voice/*`, in their order, on the loop's thread.
+pub type Other<'a> = Box<dyn FnMut(&str, Value) -> Result<Value, Refusal> + 'a>;
+
 /// The service `id`'s plugin, until its input ends or `shutdown`. Returns the exit code.
 pub fn run(id: &str) -> i32 {
+    run_with(id, json!({}), None)
+}
+
+/// `run`, with what the plugin serves beside its voice: `other`, which `initialize` says by `capabilities`.
+pub fn run_with(id: &str, capabilities: Value, other: Option<Other<'_>>) -> i32 {
     let Some(provider) = Provider::core(id) else {
         eprintln!("escouade-plugins voice-{id}: no such service");
         return 2;
     };
     let out: Out = Arc::new(Mutex::new(Box::new(std::io::stdout())));
-    match serve(provider, std::io::stdin().lock(), out) {
+    match serve_with(provider, std::io::stdin().lock(), out, capabilities, other) {
         Ok(()) => 0,
         Err(e) => {
             eprintln!("escouade-plugins voice-{}: {e}", provider.id());
@@ -90,8 +99,18 @@ pub fn run(id: &str) -> i32 {
     }
 }
 
-/// The loop, on any input and output (the tests').
-pub fn serve<R: BufRead>(provider: Provider, input: R, out: Out) -> std::io::Result<()> {
+/// The loop, on any input and output (the tests'), with what the plugin serves beside its voice (`run_with`).
+pub fn serve_with<R: BufRead>(
+    provider: Provider,
+    input: R,
+    out: Out,
+    capabilities: Value,
+    mut other: Option<Other<'_>>,
+) -> std::io::Result<()> {
+    let mut said = json!({ "voice": true });
+    if let (Some(said), Some(more)) = (said.as_object_mut(), capabilities.as_object()) {
+        said.extend(more.clone());
+    }
     let state = Arc::new(State {
         provider,
         out,
@@ -115,7 +134,7 @@ pub fn serve<R: BufRead>(provider: Provider, input: R, out: Out) -> std::io::Res
         match method.as_str() {
             "initialize" => {
                 if let Some(id) = &id {
-                    state.send(&answer(id, Ok(initialized(json!({ "voice": true })))));
+                    state.send(&answer(id, Ok(initialized(said.clone()))));
                 }
             }
             "shutdown" => {
@@ -158,6 +177,13 @@ pub fn serve<R: BufRead>(provider: Provider, input: R, out: Out) -> std::io::Res
             wire::LIVE_OPEN => {
                 let result = live_open(&state, &params);
                 reply(&state, &id, result);
+            }
+            // Not the voice's: in its order, the frames of an agent before the next ones.
+            m if !m.starts_with("voice/") && other.is_some() => {
+                if let Some(other) = other.as_mut() {
+                    let result = other(m, params);
+                    reply(&state, &id, result);
+                }
             }
             _ => {
                 let state = state.clone();

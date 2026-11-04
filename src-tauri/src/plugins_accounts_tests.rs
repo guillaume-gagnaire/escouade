@@ -630,3 +630,198 @@ async fn an_account_added_through_another_plugin_is_served_by_it_for_issues_and_
     h.core.forge_disconnect("gitlab.com").await.unwrap();
     assert!(store.all().is_empty());
 }
+
+// The Mistral account (ESC-327, INT-10.6 bis): the plugin's, shared by the voice and Vibe, its keys under their former
+// names read first; on a fake keychain, never the user's.
+
+const VOICE_FORMER: &str = "dictation-mistral";
+
+fn vibe_account(id: &str, name: &str) -> crate::model::Account {
+    crate::model::Account {
+        id: id.into(),
+        name: name.into(),
+        engine: crate::model::EngineId::VIBE,
+        active: true,
+        // Unique to the test: what the keys in memory go by.
+        config_dir: test_dir(id).to_string_lossy().into_owned(),
+        ..Default::default()
+    }
+}
+
+fn mistral_manifest() -> manifest::Manifest {
+    let text = crate::plugins::builtin::manifest_text("dev.escouade.mistral", "2.2.0").unwrap();
+    let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+    manifest::check(&v, Hand::Builtin)
+        .manifest
+        .expect("the manifest of Mistral holds")
+}
+
+#[test]
+fn the_plugin_mistral_declares_one_account_for_its_voice_and_vibe() {
+    let m = mistral_manifest();
+    let kinds = accounts::of_manifest(&m);
+    let k = kind(&kinds, accounts::MISTRAL);
+    assert_eq!(k.plugin, "dev.escouade.mistral");
+    assert_eq!(k.connect, [Connect::Token]);
+    assert_eq!(
+        k.fields,
+        [Field {
+            key: "token".into(),
+            secret: true
+        }]
+    );
+    assert_eq!(
+        accounts::points(k, None),
+        ["harnesses:vibe", "voice:mistral"],
+        "one account, every point of its plugin"
+    );
+    // The plugin reads no secret: the key goes in each call to its voice, and to Vibe by MISTRAL_API_KEY.
+    assert!(m.permissions.secrets.is_empty());
+}
+
+#[test]
+fn nobody_gives_the_voice_key_again_and_its_former_entry_stays_read_first() {
+    let store = MemoryStore::default();
+    store.set(VOICE_FORMER, "cle-de-la-voix").unwrap();
+    let name = accounts::mistral_vault_name();
+    assert_eq!(name, "plugin:dev.escouade.mistral:account:mistral");
+    assert_eq!(
+        crate::voice::online::mistral_key(&store).as_deref(),
+        Some("cle-de-la-voix")
+    );
+    assert_eq!(
+        store.get(&name).unwrap().as_deref(),
+        Some("cle-de-la-voix"),
+        "copied under the account"
+    );
+    assert_eq!(
+        store.get(VOICE_FORMER).unwrap().as_deref(),
+        Some("cle-de-la-voix"),
+        "the former one stays"
+    );
+    // A version from before changed it after a return to it: taken back.
+    store.set(VOICE_FORMER, "cle-changee-avant").unwrap();
+    assert_eq!(
+        crate::voice::online::mistral_key(&store).as_deref(),
+        Some("cle-changee-avant")
+    );
+    assert_eq!(
+        store.get(&name).unwrap().as_deref(),
+        Some("cle-changee-avant")
+    );
+    // A version from before took it away: the former name decides.
+    store.delete(VOICE_FORMER).unwrap();
+    assert_eq!(crate::voice::online::mistral_key(&store), None);
+}
+
+#[test]
+fn nobody_gives_the_key_of_a_vibe_account_again() {
+    use crate::accounts::{forget_account_key, keep_account_key, read_account_key};
+    use crate::model::EngineId;
+    let store = MemoryStore::default();
+    store.set("vibe:equipe", "cle-du-compte-equipe").unwrap();
+    let name = accounts::vibe_vault_name("equipe");
+    assert_eq!(name, "plugin:dev.escouade.mistral:account:vibe-equipe");
+    assert_eq!(
+        read_account_key(&store, EngineId::VIBE, "equipe")
+            .unwrap()
+            .as_deref(),
+        Some("cle-du-compte-equipe")
+    );
+    assert_eq!(
+        store.get(&name).unwrap().as_deref(),
+        Some("cle-du-compte-equipe")
+    );
+    keep_account_key(&store, EngineId::VIBE, "equipe", "nouvelle-cle-equipe").unwrap();
+    assert_eq!(
+        store.get("vibe:equipe").unwrap().as_deref(),
+        Some("nouvelle-cle-equipe")
+    );
+    assert_eq!(
+        store.get(&name).unwrap().as_deref(),
+        Some("nouvelle-cle-equipe")
+    );
+    forget_account_key(&store, EngineId::VIBE, "equipe").unwrap();
+    assert_eq!(store.get("vibe:equipe").unwrap(), None);
+    assert_eq!(store.get(&name).unwrap(), None);
+    // Cursor's keep their one name.
+    keep_account_key(&store, EngineId::CURSOR, "pro", "cle-de-cursor").unwrap();
+    assert_eq!(
+        store.get("cursor:pro").unwrap().as_deref(),
+        Some("cle-de-cursor")
+    );
+    assert_eq!(
+        read_account_key(&store, EngineId::CURSOR, "pro")
+            .unwrap()
+            .as_deref(),
+        Some("cle-de-cursor")
+    );
+}
+
+#[test]
+fn the_migration_of_the_mistral_keys_goes_back() {
+    let store = MemoryStore::default();
+    store.set(VOICE_FORMER, "cle-de-la-voix").unwrap();
+    store.set("vibe:equipe", "cle-du-compte-equipe").unwrap();
+    let vibe = [(
+        "vibe:equipe".to_string(),
+        accounts::vibe_vault_name("equipe"),
+    )];
+    crate::voice::online::mistral_key(&store);
+    crate::accounts::read_account_key(&store, crate::model::EngineId::VIBE, "equipe").unwrap();
+    // A key only under its new name (the version that drops the former ones) goes back too.
+    store.delete("vibe:equipe").unwrap();
+    accounts::revert_mistral(&store, VOICE_FORMER, &vibe).unwrap();
+    assert_eq!(
+        store.get(VOICE_FORMER).unwrap().as_deref(),
+        Some("cle-de-la-voix")
+    );
+    assert_eq!(
+        store.get("vibe:equipe").unwrap().as_deref(),
+        Some("cle-du-compte-equipe")
+    );
+    assert_eq!(store.get(&accounts::mistral_vault_name()).unwrap(), None);
+    assert_eq!(store.get(&vibe[0].1).unwrap(), None);
+}
+
+#[test]
+fn the_voice_and_vibe_go_by_each_others_key_and_a_key_of_its_own_wins() {
+    use crate::accounts::{account_key, key_ready, remember_key, remember_mistral_key};
+    use crate::voice::online::{self, Provider};
+    let team = vibe_account("vibe-equipe", "Équipe");
+    let other = vibe_account("vibe-autre", "Autre");
+    let settings = crate::model::Settings {
+        accounts: vec![team.clone(), other.clone()],
+        ..Default::default()
+    };
+    let store = MemoryStore::default();
+    // Nothing yet: a Vibe account cannot start, the voice has no key.
+    assert!(key_ready(&team).is_err());
+    assert!(online::keyed(Provider::Mistral, &settings, &store).is_err());
+    // The key of a Vibe account serves the voice, which says whose it is.
+    remember_key(&team, Some("cle-du-compte-equipe"));
+    let spec = online::keyed(Provider::Mistral, &settings, &store).expect("Vibe's key");
+    assert_eq!(spec.key, "cle-du-compte-equipe");
+    let state = online::mistral_state(&settings);
+    assert_eq!(state.own, None);
+    let borrowed = state.borrowed.expect("the account it goes by");
+    assert_eq!(borrowed.account, "Équipe");
+    assert!(borrowed.hint.ends_with("uipe"), "{}", borrowed.hint);
+    // Another service borrows nothing.
+    assert!(online::keyed(Provider::OpenAi, &settings, &store).is_err());
+    // The Mistral account's key: the voice's, and Vibe's accounts without a key of their own go by it; never in place of one's own.
+    store.set(VOICE_FORMER, "cle-de-la-voix-0000").unwrap();
+    remember_mistral_key(online::mistral_key(&store).as_deref());
+    let spec = online::keyed(Provider::Mistral, &settings, &store).expect("its key");
+    assert_eq!(spec.key, "cle-de-la-voix-0000");
+    assert_eq!(online::mistral_state(&settings).borrowed, None);
+    assert_eq!(account_key(&other).as_deref(), Some("cle-de-la-voix-0000"));
+    assert!(key_ready(&other).is_ok());
+    assert_eq!(account_key(&team).as_deref(), Some("cle-du-compte-equipe"));
+    // A key of the Principal's is the machine's: never read, never shared.
+    let principal = crate::model::Account {
+        id: "principal-vibe".into(),
+        ..vibe_account("principal-vibe", "Principal")
+    };
+    assert!(!crate::accounts::by_key(&principal));
+}

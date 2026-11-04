@@ -134,6 +134,10 @@
           "description": "Harnesses.",
           "items": {
             "properties": {
+              "account": {
+                "description": "The id of one of `contributes.accounts`.",
+                "type": "string"
+              },
               "id": {
                 "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$",
                 "type": "string"

@@ -2,7 +2,7 @@
 title: "Les comptes partagés par plugin"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.3, §4.4, §4.8","docs/TODO-2.2.md (INT-6)","src-tauri/src/plugins/accounts.rs"]
-tickets: ["ESC-212"]
+tickets: ["ESC-212","ESC-327"]
 decisions: [33]
 compared: null
 ---
@@ -44,3 +44,9 @@ Un compte (un GitLab, un Jira…) est d'un genre, que déclare le plugin qui le 
 
 - Un plugin sert sa source sur une seule instance de son hébergeur tant que les sources ne sont pas sorties dans les plugins (INT-8).
 - Les comptes servis par un autre plugin n'ont pas d'ancienne entrée : une version d'avant les voit « Trousseau du système illisible ».
+
+## Le compte Mistral
+
+- Le plugin « Mistral » déclare le genre `mistral`, dont les points sont un harness et une voix (`harnesses:vibe`, `voice:mistral`) : un compte de plugin ne sert pas que des sources et des hébergeurs. Le genre le dit dans `voice`, le harness par son `account`.
+- Une exception assumée à la lecture par `secrets/get` : le plugin n'a aucun droit sur le trousseau. La clé part avec chaque appel de la voix, et à Vibe par `MISTRAL_API_KEY`.
+- Le compte `mistral` et les comptes `vibe-<id>` ont leurs anciens noms (`dictation-mistral`, `vibe:<id>`), tenus et lus d'abord, comme ci-dessus. Le détail est dans *Mistral Vibe en plugin*.

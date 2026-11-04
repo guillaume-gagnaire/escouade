@@ -69,6 +69,17 @@ pub fn harnesses_of(manifest: &str) -> Vec<HarnessDecl> {
         .collect()
 }
 
+/// The answer of this client to a request of the protocol, for a plugin that serves other things in the same process
+/// (Mistral, its voice beside Vibe): `own` as for `serve_as`.
+pub fn handler(own: Option<HarnessDecl>) -> impl FnMut(&str, Value) -> Result<Value, Refusal> {
+    let mut plugin = Plugin {
+        version: std::env::var("ESCOUADE_VERSION").unwrap_or_default(),
+        own,
+        ..Plugin::default()
+    };
+    move |m, params| plugin.handle(m, params)
+}
+
 /// Serves the protocol as the entry `name` of `escouade-plugins`: the harnesses described with each agent, and `own`,
 /// the harness of a plugin of Escouade's own on this client, when the core describes none (Cursor CLI, INT-10.1).
 pub fn serve_as(name: &str, own: Option<HarnessDecl>) -> i32 {

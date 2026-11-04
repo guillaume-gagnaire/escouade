@@ -70,6 +70,10 @@ export default {
     key: 'Clé de {service}',
     keyDesc:
       'Une clé par service, la même pour la dictée et pour la voix de la conversation : enregistrée une fois, elle sert aux deux. Gardée dans le trousseau du système, jamais dans les fichiers d’Escouade ni dans son journal.',
+    keyMistralDesc:
+      'Le compte Mistral, partagé par la voix et Mistral Vibe : la même clé pour la dictée et la voix de la conversation, et pour les comptes Vibe qui n’ont pas de clé à eux. Gardée dans le trousseau du système, jamais dans les fichiers d’Escouade ni dans son journal.',
+    keyBorrowed: 'Celle du compte Vibe « {account} » · {hint}',
+    keyGiveOther: 'Donner une autre clé',
     keyPlaceholder: 'Colle ta clé d’API',
     keySave: 'Enregistrer la clé',
     keySaved: 'Enregistrée dans le trousseau',

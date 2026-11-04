@@ -398,3 +398,97 @@ async fn int13_real_elevenlabs_through_the_plugin() {
     );
     rt.shutdown();
 }
+
+/// ESC-327: one process for the voice and what the plugin serves beside it (Mistral, its harness): `voice/*` to the
+/// voice, the rest to `other` in its order, both said by `initialize`.
+#[test]
+fn a_plugin_serves_its_voice_and_what_it_serves_beside_it_in_one_process() {
+    use std::io::Write;
+    use std::sync::{Arc, Mutex};
+    #[derive(Clone, Default)]
+    struct Lines(Arc<Mutex<Vec<u8>>>);
+    impl Write for Lines {
+        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(b);
+            Ok(b.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let lines = Lines::default();
+    let out: Arc<Mutex<Box<dyn Write + Send>>> = Arc::new(Mutex::new(Box::new(lines.clone())));
+    let input = [
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#,
+        r#"{"jsonrpc":"2.0","id":2,"method":"voice/describe","params":{}}"#,
+        r#"{"jsonrpc":"2.0","id":3,"method":"agent/frames","params":{"n":1}}"#,
+        r#"{"jsonrpc":"2.0","id":4,"method":"agent/frames","params":{"n":2}}"#,
+    ]
+    .join("\n");
+    let mut seen = Vec::new();
+    let other: super::plugin_guest::Other = Box::new(|m, p| {
+        seen.push(p["n"].as_u64().unwrap());
+        Ok(serde_json::json!({ "method": m }))
+    });
+    super::plugin_guest::serve_with(
+        super::online::Provider::Mistral,
+        input.as_bytes(),
+        out,
+        serde_json::json!({ "harnesses": ["vibe"] }),
+        Some(other),
+    )
+    .unwrap();
+    assert_eq!(seen, [1, 2], "in their order");
+    let answer = |id: u64| -> serde_json::Value {
+        for _ in 0..500 {
+            let text = String::from_utf8(lines.0.lock().unwrap().clone()).unwrap();
+            let found = text
+                .lines()
+                .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+                .find(|v| v["id"] == id);
+            if let Some(v) = found {
+                return v;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        panic!("no answer {id}");
+    };
+    let init = answer(1);
+    let says = init["result"].to_string();
+    assert!(says.contains("voice") && says.contains("vibe"), "{says}");
+    assert_eq!(answer(2)["result"]["id"], "mistral");
+    assert_eq!(answer(3)["result"]["method"], "agent/frames");
+}
+
+/// The real Mistral through its plugin (ESC-327), the process that serves Vibe too: `MISTRAL_API_KEY` given to this
+/// process only, never written. By hand: `cargo nextest run --run-ignored only real_mistral_through --no-capture`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "real service: run by hand with MISTRAL_API_KEY"]
+async fn real_mistral_through_the_plugin() {
+    let key = std::env::var("MISTRAL_API_KEY").expect("MISTRAL_API_KEY");
+    let p = Provider::Mistral;
+    let rt = runtime("real-mistral");
+    let svc = through(&rt, p).await;
+    let wav =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/voice/testdata/question-fr.wav");
+    let mut r = hound::WavReader::open(wav).unwrap();
+    let rate = r.spec().sample_rate;
+    let samples: Vec<f32> = r
+        .samples::<i16>()
+        .map(|s| s.unwrap() as f32 / i16::MAX as f32)
+        .collect();
+    let sound = crate::voice::audio::resample(&samples, rate, 16_000);
+    let spec = move |key: &str| Spec::new(p, key.into(), reqwest::Client::new());
+    let (text, refused) = tokio::task::spawn_blocking(move || {
+        let no = Arc::new(AtomicBool::new(false));
+        (
+            svc.transcribe(&spec(&key), &sound, "fr", &no),
+            svc.transcribe(&spec("not-a-key-0000"), &sound, "fr", &no),
+        )
+    })
+    .await
+    .unwrap();
+    println!("the dictation: {text:?}");
+    assert!(!text.unwrap().is_empty());
+    assert_eq!(refused.unwrap_err(), OnlineError::KeyRefused(p));
+}

@@ -285,6 +285,34 @@ describe('AccountModal', () => {
       expect(term.opened).toEqual([]);
       expect(app.modal).toEqual({ kind: 'settings', tab: 'accounts', resume: true });
     });
+
+    it('may leave its key empty when the Mistral account has one (ESC-327)', async () => {
+      const b = backend([OUT], {
+        account_shareable: () => [],
+        account_machine: () => ({ found: true, added: true, connected: true, signsIn: true, email: null, dir: '' }),
+        account_create: () => KEYED,
+        voice_mistral_key: () => ({ own: 'clé …wxyz', borrowed: null }),
+      });
+      render(AccountModal, { engine: 'vibe' });
+      const key = await screen.findByLabelText('Clé d’API');
+      await waitFor(() => expect(key).toHaveAttribute('placeholder', 'Vide : la clé Mistral de Réglages › Voix (clé …wxyz)'));
+      await userEvent.type(screen.getByRole('textbox', { name: 'Nom' }), 'Équipe');
+      await userEvent.click(screen.getByRole('button', { name: 'Ajouter le compte' }));
+      await waitFor(() => expect(b.called('account_create')).toHaveLength(1));
+      expect(b.called('account_key')).toHaveLength(0);
+      await waitFor(() => expect(app.modal).toEqual({ kind: 'settings', tab: 'accounts', resume: true }));
+    });
+
+    it('asks its key while the Mistral account has none', async () => {
+      backend([OUT], {
+        account_shareable: () => [],
+        account_machine: () => ({ found: true, added: true, connected: true, signsIn: true, email: null, dir: '' }),
+        voice_mistral_key: () => ({ own: null, borrowed: null }),
+      });
+      render(AccountModal, { engine: 'vibe' });
+      await userEvent.type(await screen.findByRole('textbox', { name: 'Nom' }), 'Équipe');
+      expect(screen.getByRole('button', { name: 'Ajouter le compte' })).toBeDisabled();
+    });
   });
 
   describe('a Gemini CLI account (ESC-275)', () => {

@@ -117,6 +117,16 @@
   const says = $derived(SAYS[engine] ?? CLAUDE_SAYS);
   const keySays = $derived(KEY_SAYS[engine] ?? CURSOR_KEY_SAYS);
   let name = $state('');
+  /** The Mistral account's key, by its end: a new Mistral Vibe account may leave its own empty and go by it (ESC-327). */
+  let mistralKey = $state<string | null>(null);
+  const sharedKey = $derived(!account && engine === 'vibe' ? mistralKey : null);
+  $effect(() => {
+    if (engine === 'vibe')
+      void api.voiceMistralKey().then(
+        (k) => (mistralKey = k?.own ?? null),
+        () => {},
+      );
+  });
   /** The API key of a new Cursor or Vibe account, or the one given again (ESC-43, ESC-267). */
   let key = $state('');
   /** How a new account of Gemini CLI signs in (ESC-275): its Google account, by `gemini` in a terminal, or its API key. */
@@ -295,7 +305,7 @@
   }
 
   async function create() {
-    if (!name.trim() || busy || (byKey && !key.trim())) return;
+    if (!name.trim() || busy || (byKey && !key.trim() && !sharedKey)) return;
     busy = true;
     error = null;
     try {
@@ -307,7 +317,9 @@
       // Gemini's goes by its key once it is given (the backend marks it then).
       account = engine === 'gemini' && keyed ? { ...made, apiKey: true } : made;
       // A key refused leaves the account made, its key to give again here.
-      if (keyed) return void (await giveKey());
+      if (keyed && key.trim()) return void (await giveKey());
+      // A Mistral Vibe account left without a key goes by the Mistral account's (ESC-327).
+      if (keyed) return close();
       await start();
     } catch (e) {
       error = String(e);
@@ -445,7 +457,7 @@
     <button class="btn primary" disabled={busy || !offersMachine} onclick={addMachine}>{t('accounts.modal.addMachine')}</button>
   {:else if !account}
     <button class="btn" onclick={close}>{t('common.cancel')}</button>
-    <button class="btn primary" disabled={busy || !name.trim() || (byKey && !key.trim())} onclick={create}
+    <button class="btn primary" disabled={busy || !name.trim() || (byKey && !key.trim() && !sharedKey)} onclick={create}
       >{t(byKey ? 'accounts.modal.cursor.create' : 'accounts.modal.create')}</button
     >
   {:else}
@@ -464,7 +476,7 @@
       type="password"
       autocomplete="off"
       spellcheck="false"
-      placeholder={t(keySays.placeholder)}
+      placeholder={sharedKey ? t('accounts.modal.vibe.keyShared', { hint: sharedKey }) : t(keySays.placeholder)}
       bind:value={key}
       onkeydown={(e) => e.key === 'Enter' && (account ? saveKey() : create())}
     />

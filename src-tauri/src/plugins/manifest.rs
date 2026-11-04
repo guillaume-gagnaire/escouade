@@ -1386,7 +1386,7 @@ pub fn schema() -> Value {
                     "accounts": with_id("A kind of account its points share.", false),
                     "ticketSources": with_id("Sources of the Kanban.", true),
                     "forges": with_id("Code hosts: pull requests, CI, deployments.", true),
-                    "harnesses": with_id("Harnesses.", false),
+                    "harnesses": with_id("Harnesses.", true),
                     "launchEnvironments": with_id("Launch environments: the up, ls, down and destroy of a worktree.", false),
                     "workflowReaders": readers,
                     "themes": open("Themes."),

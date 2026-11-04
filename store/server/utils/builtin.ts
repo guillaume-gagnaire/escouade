@@ -83,13 +83,13 @@ export const BUILTINS: Builtin[] = [
   ),
   {
     ...harness(
-      'mistral-vibe',
-      'Mistral Vibe',
-      'Mistral Vibe comme harness, par ACP : la conversation, sa vue terminal, la clé et le coût par compte.',
-      'Mistral Vibe as a harness, over ACP: the conversation, its terminal view, the key and the cost per account.',
+      'mistral',
+      'Mistral',
+      'Mistral dans Escouade : Mistral Vibe comme harness, par ACP (la conversation, sa vue terminal, la clé et le coût par compte), et le service de voix, sur un compte Mistral partagé.',
+      'Mistral in Escouade: Mistral Vibe as a harness, over ACP (the conversation, its terminal view, the key and the cost per account), and the voice service, on one shared Mistral account.',
     ),
-    // Out of the core since INT-10.6.
-    source: 'plugins/builtin/dev.escouade.mistral-vibe',
+    // Out of the core since INT-10.6; one plugin with the voice since INT-10.6 bis.
+    source: 'plugins/builtin/dev.escouade.mistral',
   },
   harness(
     'antigravity-cli',

@@ -546,6 +546,38 @@ pub fn spec_of(
     ))
 }
 
+/// The entry of the voice of the plugin Mistral, the former name of the Mistral account (ESC-327).
+const MISTRAL_ENTRY: &str = "dictation-mistral";
+
+/// The key under the entry `entry` of a service, for the plugin Mistral under the former name read first and copied
+/// under the account's (the migration of INT-6).
+fn read_key(secrets: &dyn SecretStore, entry: &str) -> anyhow::Result<Option<String>> {
+    if entry == MISTRAL_ENTRY {
+        let name = crate::plugins::accounts::mistral_vault_name();
+        crate::integrations::secrets::read_entry(secrets, Some(entry), &name, entry)
+    } else {
+        secrets.get(entry)
+    }
+}
+
+/// The key of the Mistral account, if the keychain gives one.
+pub fn mistral_key(secrets: &dyn SecretStore) -> Option<String> {
+    read_key(secrets, MISTRAL_ENTRY)
+        .unwrap_or_else(|e| {
+            log::warn!("voice: the system keychain did not give the key of Mistral: {e:#}");
+            None
+        })
+        .filter(|k| !k.trim().is_empty())
+}
+
+/// What `p`'s key is when it has none of its own: for Mistral, the first Vibe account's (ESC-327).
+fn borrowed_key(p: Provider, settings: &crate::model::Settings) -> Option<String> {
+    (p == Provider::Mistral)
+        .then(|| crate::accounts::vibe_key_for_voice(settings))
+        .flatten()
+        .map(|(_, key)| key)
+}
+
 /// `p` with its key from the keychain (the one of its dictation, ESC-132: one entry by service) and the client of the
 /// settings' proxy.
 pub fn keyed(
@@ -553,8 +585,7 @@ pub fn keyed(
     settings: &crate::model::Settings,
     secrets: &dyn SecretStore,
 ) -> std::result::Result<Spec, super::VoiceError> {
-    let key = secrets
-        .get(&p.entry())
+    let key = read_key(secrets, &p.entry())
         .unwrap_or_else(|e| {
             log::warn!(
                 "voice: the system keychain did not give the key of {}: {e:#}",
@@ -563,6 +594,7 @@ pub fn keyed(
             None
         })
         .filter(|k| !k.trim().is_empty())
+        .or_else(|| borrowed_key(p, settings))
         .ok_or(super::VoiceError::Online(OnlineError::NoKey(p)))?;
     let client =
         super::models::client(settings).map_err(|e| super::VoiceError::Other(e.to_string()))?;
@@ -577,14 +609,54 @@ pub fn keys(secrets: &dyn SecretStore) -> Vec<String> {
     super::service::services()
         .into_iter()
         .filter(|s| {
-            secrets
-                .get(&s.account_entry())
+            read_key(secrets, &s.account_entry())
                 .ok()
                 .flatten()
                 .is_some_and(|k| !k.trim().is_empty())
         })
         .map(|s| s.id())
         .collect()
+}
+
+/// `keys`, with the service whose key is another account's: Mistral on a Vibe account's (ESC-327).
+pub fn usable_keys(settings: &crate::model::Settings, secrets: &dyn SecretStore) -> Vec<String> {
+    let mut list = keys(secrets);
+    let id = Provider::Mistral.id().to_string();
+    if !list.contains(&id)
+        && super::service::find(&id).is_some()
+        && borrowed_key(Provider::Mistral, settings).is_some()
+    {
+        list.push(id);
+    }
+    list
+}
+
+/// Réglages › Voix and the accounts of Mistral Vibe: the key of the Mistral account, by its end, and the Vibe account
+/// whose key the voice goes by when it has none.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MistralKey {
+    pub own: Option<String>,
+    pub borrowed: Option<Borrowed>,
+}
+
+/// A Vibe account the voice borrows its key from.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct Borrowed {
+    pub account: String,
+    pub hint: String,
+}
+
+/// What `MistralKey` says now.
+pub fn mistral_state(settings: &crate::model::Settings) -> MistralKey {
+    let own = crate::accounts::mistral_key_hint();
+    let borrowed = crate::accounts::vibe_key_for_voice(settings)
+        .filter(|_| own.is_none())
+        .map(|(account, key)| Borrowed {
+            account,
+            hint: crate::accounts::key_hint(&key),
+        });
+    MistralKey { own, borrowed }
 }
 
 /// Keeps the key of `service` in the keychain, read back to check; never in a file: a keychain
@@ -599,7 +671,7 @@ pub fn save_key(
     if key.is_empty() {
         return Err(tr!("La clé est vide.", "The key is empty."));
     }
-    crate::integrations::secrets::keep_secret(secrets, &p.account_entry(), key).map_err(|e| {
+    keep_key(secrets, &p.account_entry(), key).map_err(|e| {
         let e = redact(&format!("{e:#}"), key);
         log::warn!(
             "voice: the system keychain refused the key of {}: {e}",
@@ -614,12 +686,33 @@ pub fn save_key(
     Ok(())
 }
 
-/// Forgets the key of `service`.
+/// The key kept under `entry` and, for the Mistral account, under its name of the plugin too.
+fn keep_key(secrets: &dyn SecretStore, entry: &str, key: &str) -> anyhow::Result<()> {
+    use crate::integrations::secrets::keep_secret;
+    keep_secret(secrets, entry, key)?;
+    if entry == MISTRAL_ENTRY {
+        keep_secret(
+            secrets,
+            &crate::plugins::accounts::mistral_vault_name(),
+            key,
+        )?;
+        crate::accounts::remember_mistral_key(Some(key));
+    }
+    Ok(())
+}
+
+/// Forgets the key of `service`, under each of its names.
 pub fn delete_key(secrets: &dyn SecretStore, service: &str) -> std::result::Result<(), String> {
     let p = super::service::find(service).ok_or_else(|| format!("unknown service {service}"))?;
-    secrets
-        .delete(&p.account_entry())
-        .map_err(|e| format!("{e:#}"))
+    let entry = p.account_entry();
+    secrets.delete(&entry).map_err(|e| format!("{e:#}"))?;
+    if entry == MISTRAL_ENTRY {
+        secrets
+            .delete(&crate::plugins::accounts::mistral_vault_name())
+            .map_err(|e| format!("{e:#}"))?;
+        crate::accounts::remember_mistral_key(None);
+    }
+    Ok(())
 }
 
 /// The transcriber of a dictation on line: what `Voice` calls, as it calls Whisper. It asks the service of the

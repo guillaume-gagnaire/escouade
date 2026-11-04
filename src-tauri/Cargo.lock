@@ -1640,9 +1640,9 @@ dependencies = [
  "escouade-plugin-jira",
  "escouade-plugin-kit",
  "escouade-plugin-linear",
+ "escouade-plugin-mistral",
  "escouade-plugin-protocol",
  "escouade-plugin-trello",
- "escouade-plugin-vibe",
  "espeak-ng",
  "flate2",
  "futures-util",
@@ -1842,6 +1842,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "escouade-plugin-mistral"
+version = "1.0.0"
+dependencies = [
+ "escouade-plugin-acp",
+ "escouade-plugin-protocol",
+ "serde_json",
+]
+
+[[package]]
 name = "escouade-plugin-protocol"
 version = "1.0.0"
 dependencies = [
@@ -1857,13 +1866,6 @@ dependencies = [
  "escouade-plugin-kit",
  "reqwest 0.12.28",
  "serde_json",
-]
-
-[[package]]
-name = "escouade-plugin-vibe"
-version = "1.0.0"
-dependencies = [
- "escouade-plugin-acp",
 ]
 
 [[package]]

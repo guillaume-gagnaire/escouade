@@ -160,6 +160,12 @@ export interface SpeechSettings {
 }
 
 /** A model of a service on line (ESC-132). */
+/** The Mistral account, shared by the voice and Mistral Vibe (ESC-327): its key by its end, or the Vibe account the voice goes by. */
+export interface MistralKey {
+  own: string | null;
+  borrowed: { account: string; hint: string } | null;
+}
+
 export interface OnlineModel {
   id: string;
   label: string;

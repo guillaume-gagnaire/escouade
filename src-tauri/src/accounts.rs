@@ -13,6 +13,7 @@ use crate::board;
 use crate::core::Core;
 use crate::engine::{self, Process};
 use crate::i18n::Lang;
+use crate::integrations::secrets::{keep_secret, read_entry, SecretStore};
 use crate::model::{Account, AccountUsage, EngineId, Project, Settings};
 use crate::pace::{self, Standing};
 use crate::pty::TermInfo;
@@ -947,9 +948,59 @@ static ACCOUNT_KEYS: std::sync::LazyLock<
     parking_lot::RwLock<std::collections::HashMap<String, String>>,
 > = std::sync::LazyLock::new(Default::default);
 
+/// The key of the Mistral account, as the keychain gave it: the one of Réglages › Voix, which Vibe's accounts without a
+/// key of their own go by (ESC-327).
+static MISTRAL_KEY: parking_lot::RwLock<Option<String>> = parking_lot::RwLock::new(None);
+
 /// The keychain's entry of the API key of the account `id` of `engine` (`cursor:<id>`, `vibe:<id>`).
 pub(crate) fn key_entry(engine: EngineId, id: &str) -> String {
     format!("{}:{id}", engine.as_str())
+}
+
+/// The name the plugin of `engine` knows the key of its account `id` by (`plugin:…:account:…`), beside `key_entry`, its
+/// former name, kept and read first (the migration of INT-6): Mistral Vibe's, whose account is its plugin's (ESC-327).
+fn key_vault_name(engine: EngineId, id: &str) -> Option<String> {
+    (engine == EngineId::VIBE).then(|| crate::plugins::accounts::vibe_vault_name(id))
+}
+
+/// The key of the account `id` of `engine` in the keychain, under its former name and copied under the new one.
+pub(crate) fn read_account_key(
+    store: &dyn SecretStore,
+    engine: EngineId,
+    id: &str,
+) -> Result<Option<String>> {
+    let former = key_entry(engine, id);
+    match key_vault_name(engine, id) {
+        Some(name) => read_entry(store, Some(&former), &name, &former),
+        None => store.get(&former),
+    }
+}
+
+/// The key of the account kept under each of its names.
+pub(crate) fn keep_account_key(
+    store: &dyn SecretStore,
+    engine: EngineId,
+    id: &str,
+    key: &str,
+) -> Result<()> {
+    keep_secret(store, &key_entry(engine, id), key)?;
+    match key_vault_name(engine, id) {
+        Some(name) => keep_secret(store, &name, key),
+        None => Ok(()),
+    }
+}
+
+/// The key of the account forgotten under each of its names.
+pub(crate) fn forget_account_key(
+    store: &dyn SecretStore,
+    engine: EngineId,
+    id: &str,
+) -> Result<()> {
+    store.delete(&key_entry(engine, id))?;
+    match key_vault_name(engine, id) {
+        Some(name) => store.delete(&name),
+        None => Ok(()),
+    }
 }
 
 /// Whether the account is one that goes by its own API key: every one of Cursor CLI's and Mistral
@@ -995,7 +1046,43 @@ pub(crate) fn key_status(
 /// The API key the account goes by, as the keychain gave it; None when it has none (yet).
 pub(crate) fn account_key(account: &Account) -> Option<String> {
     let dir = own_dir(account)?;
-    ACCOUNT_KEYS.read().get(dir).cloned()
+    ACCOUNT_KEYS
+        .read()
+        .get(dir)
+        .cloned()
+        .or_else(|| shared_key(account))
+}
+
+/// The key of the Mistral account for a Vibe account without a key of its own (ESC-327).
+fn shared_key(account: &Account) -> Option<String> {
+    if account.engine != EngineId::VIBE {
+        return None;
+    }
+    MISTRAL_KEY.read().clone()
+}
+
+/// The key of the Mistral account known (`None`: there is none) for the Vibe accounts without a key of their own.
+pub(crate) fn remember_mistral_key(key: Option<&str>) {
+    *MISTRAL_KEY.write() = key.map(str::to_string);
+}
+
+/// The key of the Mistral account, shown by its end (« clé …a1b2 »).
+pub(crate) fn mistral_key_hint() -> Option<String> {
+    MISTRAL_KEY.read().as_deref().map(key_hint)
+}
+
+/// The first active Vibe account with a key of its own, its name and its key: what the voice goes by when the Mistral
+/// account has no key (ESC-327).
+pub(crate) fn vibe_key_for_voice(settings: &Settings) -> Option<(String, String)> {
+    settings
+        .accounts
+        .iter()
+        .filter(|a| a.engine == EngineId::VIBE && a.active && by_key(a))
+        .find_map(|a| {
+            let keys = ACCOUNT_KEYS.read();
+            let key = keys.get(own_dir(a)?)?;
+            Some((a.name.clone(), key.clone()))
+        })
 }
 
 /// The account's API key known (`None`: forgotten) for its processes from now on.
@@ -1841,10 +1928,10 @@ impl<R: Runtime> Core<R> {
             bail!(engine::by_id(account.engine).key_malformed());
         }
         let store = self.secrets.clone();
-        let (entry, secret) = (key_entry(account.engine, id), key.to_string());
+        let (engine, account_id, secret) = (account.engine, id.to_string(), key.to_string());
         let harness = account.engine.as_str();
         tokio::task::spawn_blocking(move || {
-            crate::integrations::secrets::keep_secret(&*store, &entry, &secret)
+            keep_account_key(&*store, engine, &account_id, &secret)
         })
         .await?
         .map_err(|e| {
@@ -1887,6 +1974,7 @@ impl<R: Runtime> Core<R> {
     /// At the start: the keys of the Cursor and Vibe accounts read from the keychain (`set_account_key`).
     /// One the keychain does not give leaves its account not signed in, said so in the log.
     pub(crate) fn load_account_keys(&self) {
+        remember_mistral_key(crate::voice::online::mistral_key(&*self.secrets).as_deref());
         let accounts: Vec<Account> = self
             .settings
             .read()
@@ -1897,7 +1985,7 @@ impl<R: Runtime> Core<R> {
             .collect();
         for a in accounts {
             let harness = a.engine.as_str();
-            match self.secrets.get(&key_entry(a.engine, &a.id)) {
+            match read_account_key(&*self.secrets, a.engine, &a.id) {
                 Ok(Some(key)) if !key.is_empty() => remember_key(&a, Some(&key)),
                 Ok(_) => log::warn!(
                     "{harness} account {}: no API key in the system keychain",
@@ -2126,7 +2214,7 @@ impl<R: Runtime> Core<R> {
         // account's).
         if by_key(&gone) {
             remember_key(&gone, None);
-            if let Err(e) = self.secrets.delete(&key_entry(gone.engine, &gone.id)) {
+            if let Err(e) = forget_account_key(&*self.secrets, gone.engine, &gone.id) {
                 log::warn!(
                     "{} account {}: the system keychain did not forget its key: {e:#}",
                     gone.engine.as_str(),

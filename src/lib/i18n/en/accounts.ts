@@ -179,6 +179,7 @@ export default defineZone('accounts', {
       signInHint: 'Give your API key in the terminal below: vibe --setup keeps it in the system keychain.',
       newHintKey: 'An API key of another Mistral account, kept in the system keychain.',
       keyPlaceholder: 'From console.mistral.ai, API Keys',
+      keyShared: 'Empty: the Mistral key of Settings › Voice ({hint})',
       keyHint:
         'Kept in the system keychain, given to this account’s agents by MISTRAL_API_KEY, never written in a file nor on a command line. Their turns are billed to that key’s Mistral account; the machine’s account stays the key of vibe --setup.',
     },

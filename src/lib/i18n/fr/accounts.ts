@@ -208,6 +208,7 @@ export default {
       signInHint: 'Donne ta clé d’API dans le terminal ci-dessous : vibe --setup la garde dans le trousseau du système.',
       newHintKey: 'La clé d’API d’un autre compte Mistral, gardée dans le trousseau du système.',
       keyPlaceholder: 'Sur console.mistral.ai, API Keys',
+      keyShared: 'Vide : la clé Mistral de Réglages › Voix ({hint})',
       keyHint:
         'Gardée dans le trousseau du système, donnée aux agents de ce compte par MISTRAL_API_KEY, jamais écrite dans un fichier ni sur une ligne de commande. Leurs tours sont facturés au compte Mistral de cette clé ; le compte de la machine reste la clé de vibe --setup.',
     },

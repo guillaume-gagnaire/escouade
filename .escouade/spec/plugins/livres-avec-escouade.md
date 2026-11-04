@@ -2,7 +2,7 @@
 title: "Les plugins livrés avec Escouade"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.3, §4.4","docs/TODO-2.2.md (INT-4, INT-8.1)","src-tauri/src/plugins/builtin.rs","docs/PLUGINS.md §4.13","plugins/builtin/dev.escouade.github/README.md","plugins/builtin/dev.escouade.gitlab/README.md","plugins/builtin/dev.escouade.gitea/README.md","plugins/builtin/dev.escouade.azure-devops/README.md"]
-tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281"]
+tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327"]
 decisions: []
 compared: null
 ---
@@ -44,10 +44,8 @@ Certains plugins sont donnés par l'app : livrés avec elle, signés avec elle, 
 
 ## Les services de voix en ligne (INT-13)
 
-- OpenAI, Groq, Mistral, ElevenLabs et Deepgram sont cinq plugins livrés, `dev.escouade.openai` (etc.), au registre de tous les builds. Chacun est l'entrée `escouade-plugins voice-<service>`. Réglages › Voix se comporte comme avant : la clé reste au trousseau (`dictation-<service>`), la dictée, le direct et la voix de l'agent passent par le plugin, sans différence visible.
+- OpenAI, Groq, Mistral, ElevenLabs et Deepgram sont cinq plugins livrés, `dev.escouade.openai` (etc.), au registre de tous les builds. Chacun est l'entrée `escouade-plugins voice-<service>`, sauf Mistral (`escouade-plugins mistral`). Réglages › Voix se comporte comme avant : la clé reste au trousseau (`dictation-<service>`), la dictée, le direct et la voix de l'agent passent par le plugin, sans différence visible.
 - Les couper dans la vue Plugins retire le service de Réglages › Voix (la dictée repasse en local). Un plugin qui ne démarre pas laisse le service du cœur répondre, et son journal dit pourquoi.
 - Un plugin d'un autre auteur peut servir un nouveau service de voix ou prendre la place de l'un des cinq (même identifiant de service).
 - Délais : le plugin ajoute moins de 1 ms au texte final du direct (médiane et 99e centile), son poussé au rythme du micro ; détail et protocole `voice/*` dans `docs/PLUGINS.md` §4.13.
-- Le compte Mistral : un plugin « Mistral » porte la voix et, plus tard, Mistral Vibe, avec une seule clé.
-
-- Mistral Vibe est pour l'instant un plugin livré à part, `dev.escouade.mistral-vibe` (INT-10.6, voir *Mistral Vibe en plugin*), ses comptes par clé inchangés ; il rejoint « Mistral » et sa clé avant la release 2.2, dans un ticket à part.
+- Le compte Mistral : le plugin « Mistral » (`dev.escouade.mistral`) porte la voix et Mistral Vibe (INT-10.6 bis), un seul process et un seul compte, partagé ; voir *Mistral Vibe en plugin*. Couper ce plugin retire les deux.

@@ -156,6 +156,29 @@ describe('Réglages › Voix', () => {
     expect(await screen.findByLabelText('Clé de Groq')).toBeInTheDocument();
   });
 
+  it('says the Vibe account Mistral goes by, whose key it may replace but not erase (ESC-327)', async () => {
+    app.settings.voice = { ...app.settings.voice, transcription: 'online', onlineService: 'mistral' };
+    open({
+      voice_online_keys: () => ['mistral'],
+      voice_mistral_key: () => ({ own: null, borrowed: { account: 'Équipe', hint: 'clé …wxyz' } }),
+    });
+    expect(await screen.findByText('Celle du compte Vibe « Équipe » · clé …wxyz')).toBeInTheDocument();
+    expect(screen.getByText(/Le compte Mistral, partagé par la voix et Mistral Vibe/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Effacer la clé' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Donner une autre clé' }));
+    expect(await screen.findByLabelText('Clé de Mistral')).toHaveAttribute('type', 'password');
+  });
+
+  it('keeps a key of its own for Mistral as for any service', async () => {
+    app.settings.voice = { ...app.settings.voice, transcription: 'online', onlineService: 'mistral' };
+    open({
+      voice_online_keys: () => ['mistral'],
+      voice_mistral_key: () => ({ own: 'clé …a1b2', borrowed: null }),
+    });
+    expect(await screen.findByText('Enregistrée dans le trousseau')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Effacer la clé' })).toBeInTheDocument();
+  });
+
   it('offers the models of the service, today’s by default, and keeps the one chosen by service (ESC-132)', async () => {
     app.settings.voice = { ...app.settings.voice, transcription: 'online', onlineService: 'groq' };
     const backend = open({

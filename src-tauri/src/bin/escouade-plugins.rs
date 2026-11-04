@@ -30,7 +30,9 @@ const ENTRIES: &[Entry] = &[
     ("minimal-harness", minimal_harness::run),
     ("voice-openai", voice::openai),
     ("voice-groq", voice::groq),
-    ("voice-mistral", voice::mistral),
+    // Mistral (INT-13, INT-10.6 bis): one process, its voice service and Mistral Vibe, the harness on the ACP client in
+    // its crate (plugins/builtin/dev.escouade.mistral).
+    ("mistral", voice::mistral),
     ("voice-elevenlabs", voice::elevenlabs),
     ("voice-deepgram", voice::deepgram),
     // GitHub (INT-8.1): its code host and GitHub Issues, in its crate (plugins/builtin/dev.escouade.github).
@@ -56,8 +58,6 @@ const ENTRIES: &[Entry] = &[
     ("cursor", escouade_plugin_cursor::run),
     // ClickUp (INT-7.4): the Kanban's source of ClickUp tasks, in its crate (plugins/builtin/dev.escouade.clickup).
     ("clickup", escouade_plugin_clickup::run),
-    // Mistral Vibe (INT-10.6): its harness on the ACP client, in its crate (plugins/builtin/dev.escouade.mistral-vibe).
-    ("vibe", escouade_plugin_vibe::run),
 ];
 
 fn main() {

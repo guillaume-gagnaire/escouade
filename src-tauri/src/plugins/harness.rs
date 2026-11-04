@@ -216,9 +216,9 @@ pub const BUILTIN_HARNESSES: &[BuiltinHarness] = &[
         native: Some(crate::engine::cursor::native),
         prepare: None,
     },
-    // Mistral Vibe (INT-10.6): the trust and the `denylist` of a private project in its `VIBE_HOME`.
+    // Mistral Vibe (INT-10.6, in the plugin Mistral): the trust and the `denylist` of a private project in its `VIBE_HOME`.
     BuiltinHarness {
-        plugin: super::builtin::VIBE,
+        plugin: super::builtin::MISTRAL,
         native: None,
         prepare: Some(crate::engine::vibe::prepare),
     },
@@ -282,9 +282,14 @@ pub fn spawn_plugged(
     on_exit: OnExit,
 ) -> Result<Process> {
     let Some(engine) = plugged(plugin) else {
+        // The plugin may be called otherwise than its harness: Mistral, for Mistral Vibe.
+        let called = super::builtin::manifest_text(plugin, "")
+            .and_then(|m| serde_json::from_str::<Value>(&m).ok())
+            .and_then(|m| m["name"].as_str().map(str::to_string))
+            .unwrap_or_else(|| name.to_string());
         bail!(tr!(
-            "Le plugin {name} ({plugin}) est coupé ou n’est pas chargé : rallume-le dans la vue Plugins pour lancer un agent de {name}.",
-            "The {name} plugin ({plugin}) is switched off or not loaded: turn it back on in the Plugins view to start a {name} agent."
+            "Le plugin {called} ({plugin}) est coupé ou n’est pas chargé : rallume-le dans la vue Plugins pour lancer un agent de {name}.",
+            "The {called} plugin ({plugin}) is switched off or not loaded: turn it back on in the Plugins view to start a {name} agent."
         ));
     };
     engine.spawn(spawn, on_frame, on_exit)

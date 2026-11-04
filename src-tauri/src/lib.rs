@@ -415,6 +415,19 @@ pub fn voice_plugin(service: &str) -> i32 {
     voice::plugin_guest::run(service)
 }
 
+/// `voice_plugin`, for a plugin that serves something else beside its voice in the same process (`escouade-plugins
+/// mistral`: its harness, INT-10.6 bis): the requests that are not `voice/*` go to `other`, and `capabilities` says it.
+pub fn voice_plugin_with(
+    service: &str,
+    capabilities: serde_json::Value,
+    other: impl FnMut(
+        &str,
+        serde_json::Value,
+    ) -> Result<serde_json::Value, escouade_plugin_protocol::Refusal>,
+) -> i32 {
+    voice::plugin_guest::run_with(service, capabilities, Some(Box::new(other)))
+}
+
 /// `escouade-plugin` (src/bin): the conformance bench, the manifest's check and the fake Escouade,
 /// for the plugins' authors (PLG-3). Gives the exit code.
 pub fn plugin_cli(args: Vec<String>) -> i32 {
@@ -926,6 +939,7 @@ pub fn run() {
                 commands::voice_download_cancel,
                 commands::voice_delete_model,
                 commands::voice_online_keys,
+                commands::voice_mistral_key,
                 commands::voice_online_key_set,
                 commands::voice_online_key_delete,
                 commands::voice_online_catalog,
