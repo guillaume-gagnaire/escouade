@@ -82,6 +82,7 @@ escouade-plugin-mistral = { path = "../plugins/builtin/dev.escouade.mistral" }
 escouade-plugin-gemini = { path = "../plugins/builtin/dev.escouade.gemini-cli" }
 # Copilot CLI (INT-10.3): its plugin, whose translation the core's « Vue Copilot » reads as a library, with its rules.
 escouade-plugin-copilot = { path = "../plugins/builtin/dev.escouade.copilot-cli" }
+escouade-plugin-codex = { path = "../plugins/builtin/dev.escouade.codex" }
 # A version's archive from the store (STORE-9): read in memory, its links and climbing paths refused.
 flate2 = "1"
 tar = { version = "0.4", default-features = false }
@@ -194,6 +195,7 @@ members = [
     "../plugins/builtin/dev.escouade.gemini-cli",
     "../plugins/builtin/dev.escouade.opencode",
     "../plugins/builtin/dev.escouade.copilot-cli",
+    "../plugins/builtin/dev.escouade.codex",
 ]
 default-members = [
     ".",
@@ -215,6 +217,7 @@ default-members = [
     "../plugins/builtin/dev.escouade.gemini-cli",
     "../plugins/builtin/dev.escouade.opencode",
     "../plugins/builtin/dev.escouade.copilot-cli",
+    "../plugins/builtin/dev.escouade.codex",
 ]
 
 [profile.dev.package."*"]

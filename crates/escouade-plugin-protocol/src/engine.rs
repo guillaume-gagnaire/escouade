@@ -339,6 +339,9 @@ pub struct Compacted {
     /// What the core writes to the harness to ask it: `Item::Compacted` then says the end.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub writes: Vec<String>,
+    /// Written, it runs as a turn the harness ends itself (Codex): no `Item::Compacted` to wait for.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub turn: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -699,6 +702,24 @@ pub enum Item {
     },
     /// The harness is of no use: the core stops it, and `reason` is what its end says (its protocol, no sign-in).
     Stop { reason: String },
+    /// The last entry of its session a copy may start after, when no `Turn` tells it (a plan to approve).
+    Entry {
+        #[serde(default)]
+        entry: Option<String>,
+    },
+    /// What the agent is doing, shown on its row, when the item that follows does not tell it: a command that only
+    /// reads a file is a `Read` (`tool`, `input`), a reasoning begun says so before it has a word (`block`: `thinking`).
+    Activity {
+        #[serde(default)]
+        tool: Option<String>,
+        #[serde(default)]
+        input: Value,
+        #[serde(default)]
+        block: Option<String>,
+    },
+    /// How long the turn that ends took, as its harness counted it (ms), told just before its `Turn`; left out, the core
+    /// counts it.
+    Took { ms: i64 },
     /// Asked to stop gently (`method::CLOSE`), its turn is over: the agent has left its shared process.
     Closed,
     /// An item of a later version of the contract: left aside.

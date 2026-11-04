@@ -1,6 +1,8 @@
-//! Codex, the second engine: a `codex app-server` process per agent, driven over its JSON-RPC
-//! protocol (docs/PROTOCOL.md, « Codex app-server »), its messages translated by
-//! `AgentRt::codex_frame` (`agent/codex.rs`).
+//! Codex, the second engine: a `codex app-server` process per agent. Since INT-10.4 its agents converse through its
+//! plugin in process (`dev.escouade.codex`: the client of its app-server and the translation of its messages,
+//! `plugins::harness::BUILTIN_HARNESSES`); what stays here is what the contract leaves in the core: its place in the
+//! registry, its accounts (`CODEX_HOME`), an account's quota and models (`process`), the texts it writes, its terminal
+//! view and the trust of its hooks.
 //!
 //! What it does as Escouade drives it comes from the real runs of Codex 0.163.0 (ESC-22,
 //! docs/TODO-1.8.md, point 0, « Codex »), whose streams are in `tests/fixtures/codex/` and whose
@@ -18,8 +20,12 @@ pub(crate) mod terminal;
 
 #[cfg(test)]
 pub(crate) use bench::fake_codex;
-pub(crate) use process::id_key;
-use process::CodexProcess;
+#[cfg(test)]
+pub(crate) use words::{
+    answers, is_plan_approval, mode_of, mode_params, Settings, FENCE_PLAN_PROFILE, FENCE_PROFILE,
+};
+use words::{declares_escouade, TOKEN_VAR};
+pub(crate) use words::{fence_args, fence_profile, sandbox_mode, sandboxed};
 
 use super::registry::{
     CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested,
@@ -33,10 +39,11 @@ use super::{
 use crate::agent::{AgentRt, Effects};
 use crate::core::{size_label, Attachment, MAX_IMAGE, MAX_TOTAL};
 use crate::i18n::{self, Lang};
-use crate::model::{EngineId, QuotaMeter, RateWindow};
+use crate::model::{EngineId, QuotaMeter};
 use anyhow::{bail, Result};
+use escouade_plugin_codex::words;
 use serde_json::{json, Value};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// Codex.
 pub struct Codex;
@@ -62,167 +69,6 @@ const MODELS: [(&str, &str); 1] = [("gpt-6-luna", "GPT-6-Luna")];
 
 /// The efforts of its models (`supportedReasoningEfforts`, those Escouade's menu has).
 const EFFORTS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
-
-/// What the next turn is started with (Codex takes them at `turn/start`).
-#[derive(Debug, Clone, Default)]
-pub(crate) struct Settings {
-    pub model: String,
-    pub effort: String,
-    /// Escouade's mode (`default`, `plan`…), turned into Codex's by `mode_params`.
-    pub mode: String,
-    /// The paths its sandbox refuses (« Projet privé »), as Codex names them: a permissions
-    /// profile of Escouade's in place of the sandbox of its mode (`fence_profile`).
-    pub fence: Vec<String>,
-    /// A discussion of the Docs tab (ESC-261): read only whatever its mode (`Settings::sandboxed`).
-    pub read_only: bool,
-}
-
-impl Settings {
-    /// The mode its sandbox is of: Plan's, read only, for a discussion.
-    pub(crate) fn sandboxed(&self) -> &str {
-        sandboxed(&self.mode, self.read_only)
-    }
-}
-
-/// The mode whose sandbox an agent in `mode` has: Plan's, read only, when it is `read_only` (a
-/// discussion, ESC-261), which writes nothing but through Escouade's tools; its own otherwise.
-pub(crate) fn sandboxed(mode: &str, read_only: bool) -> &str {
-    if read_only {
-        "plan"
-    } else {
-        mode
-    }
-}
-
-/// « Projet privé » (ESC-140): Codex's permissions profiles, its sandbox with the paths of a fence
-/// refused (`deny`: neither read nor written by its commands, tried on 0.163.0 under Windows).
-/// Its sandbox enforces them: none in « Sans permissions », which has none.
-pub(crate) const FENCE_PROFILE: &str = "escouade-fence";
-/// The same, read only: the mode Plan.
-pub(crate) const FENCE_PLAN_PROFILE: &str = "escouade-fence-plan";
-
-/// The profile of a fenced agent in `mode`; None in « Sans permissions » (no sandbox).
-pub(crate) fn fence_profile(mode: &str) -> Option<&'static str> {
-    match mode {
-        "bypassPermissions" => None,
-        "plan" => Some(FENCE_PLAN_PROFILE),
-        _ => Some(FENCE_PROFILE),
-    }
-}
-
-/// The options (`-c`) of a process of Codex that declare both profiles with `paths` refused, and
-/// `default` its profile (`default_permissions`, which Codex wants once it has profiles). Declared
-/// for the process, not a thread's `config`: Codex reads its config again for a turn that names
-/// its profile, and a thread's is not in it (« failed to load workspace requirements », tried on
-/// 0.163.0). The plan's holds the paths, read only; the other is it with its folder written, as
-/// `workspace-write` is (the paths once: a `.cmd` launcher takes 8,191 characters). A path of
-/// Windows with `/`: Codex reads it so, its `\` an escape in a string of its config.
-pub(crate) fn fence_args(paths: &[String], default: &str) -> Vec<String> {
-    let deny: Vec<String> = paths
-        .iter()
-        .map(|p| {
-            let p = if p.starts_with('/') {
-                p.clone()
-            } else {
-                p.replace('\\', "/")
-            };
-            format!("{}=\"deny\"", toml_string(&p))
-        })
-        .collect();
-    vec![
-        "-c".into(),
-        format!("default_permissions={}", toml_string(default)),
-        "-c".into(),
-        format!(
-            "permissions.{FENCE_PLAN_PROFILE}={{extends=\":read-only\", filesystem={{{}}}}}",
-            deny.join(", ")
-        ),
-        "-c".into(),
-        format!(
-            "permissions.{FENCE_PROFILE}={{extends=\"{FENCE_PLAN_PROFILE}\", filesystem={{\":workspace_roots\"=\"write\", \":tmpdir\"=\"write\"}}}}"
-        ),
-    ]
-}
-
-/// `s` as a string of TOML (JSON's escapes are TOML's).
-fn toml_string(s: &str) -> String {
-    serde_json::to_string(s).unwrap_or_default()
-}
-
-/// The sandbox of a thread in `mode` (`thread/start`): read only to plan, none without
-/// permissions, else the agent's folder.
-pub(crate) fn sandbox_mode(mode: &str) -> &'static str {
-    match mode {
-        "plan" => "read-only",
-        "bypassPermissions" => "danger-full-access",
-        _ => "workspace-write",
-    }
-}
-
-/// Escouade's modes in Codex (docs/TODO-1.8.md, « Composer : modèles, effort, modes »): its approval
-/// policy, its sandbox, who reviews the approvals, and its collaboration mode (the mode Plan).
-pub(crate) fn mode_params(s: &Settings, _cwd: &str) -> Value {
-    let (approval, sandbox, reviewer) = match s.sandboxed() {
-        "plan" => ("on-request", json!({ "type": "readOnly" }), "user"),
-        "bypassPermissions" => ("never", json!({ "type": "dangerFullAccess" }), "user"),
-        "auto" => ("on-request", workspace_write(), "auto_review"),
-        // « Accepter les modifications »: the sandbox lets it write in its folder, and Escouade
-        // accepts the git commands of its worktree (`agent/codex.rs`).
-        _ => ("on-request", workspace_write(), "user"),
-    };
-    let profile = (!s.fence.is_empty())
-        .then(|| fence_profile(s.sandboxed()))
-        .flatten();
-    let collaboration = if s.mode == "plan" { "plan" } else { "default" };
-    let mut settings = json!({ "model": s.model, "developer_instructions": null });
-    if !s.effort.is_empty() {
-        settings["reasoning_effort"] = json!(s.effort);
-    }
-    let mut p = json!({
-        "approvalPolicy": approval,
-        "approvalsReviewer": reviewer,
-        "sandboxPolicy": sandbox,
-        "collaborationMode": { "mode": collaboration, "settings": settings },
-    });
-    // Fenced: its profile, which Codex takes in place of a sandbox policy (not both).
-    if let (Some(profile), Some(o)) = (profile, p.as_object_mut()) {
-        o.remove("sandboxPolicy");
-        o.insert("permissions".into(), json!(profile));
-    }
-    p
-}
-
-fn workspace_write() -> Value {
-    json!({ "type": "workspaceWrite", "writableRoots": [], "networkAccess": false })
-}
-
-/// The mode of Escouade a thread's settings say (`thread/settings/updated`), given the agent's
-/// `current` one: « Demander » and « Accepter les modifications » are the same for Codex.
-pub(crate) fn mode_of(settings: &Value, current: &str) -> Option<&'static str> {
-    let collab = settings["collaborationMode"]["mode"].as_str();
-    let approval = settings["approvalPolicy"].as_str()?;
-    let sandbox = settings["sandboxPolicy"]["type"].as_str();
-    Some(if collab == Some("plan") {
-        "plan"
-    } else if approval == "never" && sandbox == Some("dangerFullAccess") {
-        "bypassPermissions"
-    } else if settings["approvalsReviewer"] == "auto_review" {
-        "auto"
-    } else if current == "acceptEdits" {
-        "acceptEdits"
-    } else {
-        "default"
-    })
-}
-
-/// The id of the card of a plan to approve, Codex's turn over on it (`agent/codex.rs`).
-pub(crate) fn plan_approval(turn: &str) -> String {
-    format!("plan:{turn}")
-}
-
-pub(crate) fn is_plan_approval(request_id: &str) -> bool {
-    request_id.starts_with("plan:")
-}
 
 /// The model the `config.toml` of an account names (`model = "…"`, at its top), read only: None
 /// when it names none, or is no TOML.
@@ -263,77 +109,12 @@ pub(crate) fn with_config_model(mut listed: Vec<ToldModel>, home: &Path) -> Vec<
 
 /// The models of `model/list`, as the composer's menu offers them.
 pub(crate) fn catalog(list: &Value) -> Option<Vec<ToldModel>> {
-    let models: Vec<ToldModel> = list["data"]
-        .as_array()?
-        .iter()
-        .filter(|m| m["hidden"] != true)
-        .filter_map(|m| {
-            let id = m["model"].as_str().or_else(|| m["id"].as_str())?;
-            Some(ToldModel {
-                from_config: false,
-                id: id.to_string(),
-                label: m["displayName"].as_str().unwrap_or(id).to_string(),
-                efforts: m["supportedReasoningEfforts"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .filter_map(|e| e["reasoningEffort"].as_str().map(str::to_string))
-                    .collect(),
-                default_effort: m["defaultReasoningEffort"].as_str().map(str::to_string),
-                images: m["inputModalities"]
-                    .as_array()
-                    .is_some_and(|a| a.iter().any(|x| x == "image")),
-                default: m["isDefault"] == true,
-                provider: None,
-                multiplier: None,
-                price: None,
-            })
-        })
-        .collect();
-    (!models.is_empty()).then_some(models)
+    serde_json::from_value(words::catalog(list)?).ok()
 }
 
-/// The windows of a quota of Codex (`rateLimits` of `account/rateLimits/*`), as meters: each
-/// labelled by its length (5 hours, a week, 30 days on the free plan).
+/// The windows of a quota of Codex (`rateLimits` of `account/rateLimits/*`), as meters.
 pub(crate) fn meters(limits: &Value) -> Vec<QuotaMeter> {
-    let mut all: Vec<QuotaMeter> = ["primary", "secondary"]
-        .iter()
-        .filter_map(|k| {
-            let w = limits.get(*k).filter(|w| w.is_object())?;
-            let minutes = w["windowDurationMins"].as_u64()? as u32;
-            Some(QuotaMeter::window(
-                minutes,
-                RateWindow {
-                    pct: w["usedPercent"].as_f64().unwrap_or(0.0),
-                    resets_at: w["resetsAt"].as_i64().map(|s| s * 1000),
-                },
-            ))
-        })
-        .collect();
-    all.sort_by_key(|m| m.minutes);
-    all
-}
-
-/// The answers of a question's card (`input.answers`, by question as Escouade keeps them) in the
-/// form `item/tool/requestUserInput` takes: by the question's id, a list of answers.
-pub(crate) fn answers(input: &Value) -> Value {
-    let given = &input["answers"];
-    let mut out = serde_json::Map::new();
-    for q in input["questions"].as_array().into_iter().flatten() {
-        let (Some(id), Some(text)) = (q["id"].as_str(), q["question"].as_str()) else {
-            continue;
-        };
-        let answer = match &given[text] {
-            Value::String(s) => vec![s.clone()],
-            Value::Array(a) => a
-                .iter()
-                .filter_map(|v| v.as_str().map(str::to_string))
-                .collect(),
-            _ => continue,
-        };
-        out.insert(id.to_string(), json!({ "answers": answer }));
-    }
-    Value::Object(out)
+    process::meters_of(limits)
 }
 
 /// What a mode means in Codex, as the menu says it.
@@ -410,88 +191,16 @@ pub fn caps() -> EngineCaps {
     }
 }
 
-/// The arguments of its app-server: the plan tool given to the model (it no longer has it by
-/// default, tried), then what it is given of Escouade's server.
-fn args(s: &Spawn) -> Vec<String> {
-    let mut a: Vec<String> = ["app-server", "-c", "tools.update_plan.enabled=true"]
-        .map(String::from)
-        .to_vec();
-    // Refused, an entry of the user's is turned off; with none, nothing is passed: an entry made
-    // of `enabled` alone has no transport, and Codex does not start (« invalid transport », tried
-    // on 0.163.0).
-    let declared = || {
-        let home = s
-            .env
-            .iter()
-            .find(|(k, _)| k == "CODEX_HOME")
-            .map(|(_, v)| PathBuf::from(v))
-            .or_else(|| dirs::home_dir().map(|h| h.join(".codex")));
-        home.and_then(|h| std::fs::read_to_string(h.join("config.toml")).ok())
-            .is_some_and(|text| declares_escouade(&text))
-    };
-    // « Projet privé »: its profiles, which its threads and turns name (`mode_params`).
-    if !s.fence.is_empty() {
-        let paths = crate::fence::spelled(&s.fence, &s.program);
-        a.extend(fence_args(
-            &paths,
-            fence_profile(sandboxed(&s.mode, s.read_only)).unwrap_or(FENCE_PROFILE),
-        ));
-    }
-    if !matches!(s.escouade, Escouade::Denied { .. }) || declared() {
-        a.extend(escouade_launch(&s.escouade).args);
-    }
-    a
-}
-
-/// Whether a `config.toml` of Codex declares a server named `escouade` (`[mcp_servers.escouade]`,
-/// one of its subtables, or a key of `[mcp_servers]`).
-fn declares_escouade(text: &str) -> bool {
-    let mut in_servers = false;
-    for line in text.lines().map(str::trim) {
-        if line.starts_with('[') {
-            let table: String = line
-                .chars()
-                .filter(|c| !c.is_whitespace() && *c != '"' && *c != '\'')
-                .collect();
-            if table.starts_with(&format!("[mcp_servers.{}", mcp::SERVER)) {
-                return true;
-            }
-            in_servers = table == "[mcp_servers]";
-            continue;
-        }
-        let key = line
-            .split(['=', '.'])
-            .next()
-            .unwrap_or_default()
-            .trim()
-            .trim_matches(['"', '\'']);
-        if (in_servers && key == mcp::SERVER)
-            || line.starts_with(&format!("mcp_servers.{}", mcp::SERVER))
-        {
-            return true;
-        }
-    }
-    false
-}
-
-/// Escouade's server for its app-server, by `-c` alone (never by the `config` of `thread/start`,
-/// which would drop them, tried): its address and the variable of its token; refused, an entry of
+/// Escouade's server for its interface: its address and the variable of its token, by `-c` alone; refused, an entry of
 /// that name turned off, the user's own included. The token is in the process's environment.
 fn escouade_launch(escouade: &Escouade) -> mcp::Launch {
-    const VAR: &str = "ESCOUADE_MCP_TOKEN";
-    let server = mcp::SERVER;
     match escouade {
         Escouade::Granted { url, token, .. } => mcp::Launch {
-            args: vec![
-                "-c".into(),
-                format!("mcp_servers.{server}.url={url}"),
-                "-c".into(),
-                format!("mcp_servers.{server}.bearer_token_env_var={VAR}"),
-            ],
-            env: vec![(VAR.into(), token.clone())],
+            args: words::granted_args(url),
+            env: vec![(TOKEN_VAR.into(), token.clone())],
         },
         Escouade::Denied { .. } => mcp::Launch {
-            args: vec!["-c".into(), format!("mcp_servers.{server}.enabled=false")],
+            args: words::denied_args(),
             env: Vec::new(),
         },
     }
@@ -761,44 +470,31 @@ impl Engine for Codex {
         on_frame: super::OnFrame,
         on_exit: super::OnExit,
     ) -> Result<Process> {
-        let mut env = spawn.env.clone();
-        env.extend(escouade_launch(&spawn.escouade).env);
-        let args = args(&spawn);
-        log::info!(
-            "{}: starting {} {} in {} (account {})",
-            spawn.label,
-            spawn.program.describe(),
-            args.join(" "),
-            spawn.cwd,
-            spawn.account
-        );
-        let settings = Settings {
-            model: spawn.model.clone(),
-            effort: spawn.effort.clone(),
-            mode: spawn.mode.clone(),
-            fence: crate::fence::spelled(&spawn.fence, &spawn.program),
-            read_only: spawn.read_only,
-        };
-        let instructions = spawn.append_prompt.clone().filter(|p| !p.trim().is_empty());
-        let opts = process::Opts {
-            program: spawn.program,
-            cwd: spawn.cwd,
-            args,
-            env,
-            start: spawn.start,
-            settings,
-            instructions,
-        };
-        let p: Process = CodexProcess::spawn(opts, on_frame, on_exit)?;
-        Ok(p)
+        // Its conversation goes through its plugin (INT-10.4): the launch it describes, checked and started by the core,
+        // what Codex writes translated there.
+        crate::plugins::harness::spawn_plugged(
+            crate::plugins::builtin::CODEX,
+            self.name(),
+            spawn,
+            on_frame,
+            on_exit,
+        )
     }
 
     fn message(&self, text: &str, attachments: &[Attachment]) -> Result<Message> {
-        user_input(text, attachments).map(Message)
+        // As its harness takes it, passed by the plugin's client as it is (`content` of `agent/sendMessage`).
+        user_input(text, attachments).map(|prompt| Message(json!({ "prompt": prompt })))
     }
 
     fn translate(&self, rt: &mut AgentRt, frame: &Value, fx: &mut Effects) {
-        rt.codex_frame(frame, fx);
+        match frame["items"].as_array() {
+            Some(items) => rt.apply_items(items, fx),
+            // A recorded stream, replayed through the same translation.
+            #[cfg(test)]
+            None => rt.codex_frame(frame, fx),
+            #[cfg(not(test))]
+            None => {}
+        }
     }
 
     /// A thread that cannot be resumed is told by `thread/resume`'s answer: its process starts a
@@ -1095,22 +791,6 @@ url = \"escouade\"
 trust_level = \"trusted\"
 "
         ));
-        let dir = crate::paths::test_dir("esc37-codex-refusal");
-        let mut spawn = Spawn::of(
-            &crate::model::AgentMeta::default(),
-            Program::Native(PathBuf::new()),
-            vec![("CODEX_HOME".into(), dir.to_string_lossy().into())],
-        );
-        spawn.escouade = Escouade::Denied { file: None };
-        assert!(!args(&spawn).iter().any(|a| a.contains("mcp_servers")));
-        std::fs::write(
-            dir.join("config.toml"),
-            "[mcp_servers.escouade]
-command = \"x\"
-",
-        )
-        .unwrap();
-        assert!(args(&spawn).contains(&"mcp_servers.escouade.enabled=false".to_string()));
     }
 
     #[test]

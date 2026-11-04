@@ -56,6 +56,8 @@ A turn’s cost is the one Claude Code gives. The quota is your account’s 5-ho
 
 ## Codex
 
+Codex is a plugin shipped with Escouade (`dev.escouade.codex`): its agents talk through a program of its own that Escouade starts and watches. It shows in the Plugins view, under “Shipped with Escouade”; turned off, a Codex agent says at its start that it needs turning back on, and keeps its session.
+
 ### Installation and account
 
 `npm install -g @openai/codex`, then `codex login` with your ChatGPT account. Escouade starts the native binary of the npm package (on Windows, the package’s `codex.exe`, not its launcher): Codex’s desktop app often installs an older version, which the `PATH` may find first. Each agent has its `codex app-server`. Its accounts each have their `CODEX_HOME`: see [Codex accounts](accounts#codex-accounts).

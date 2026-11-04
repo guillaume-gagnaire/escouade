@@ -64,6 +64,8 @@ const ENTRIES: &[Entry] = &[
     ("opencode", escouade_plugin_opencode::run),
     // Copilot CLI (INT-10.3): its harness on the client of its server, in its crate (plugins/builtin/dev.escouade.copilot-cli).
     ("copilot", escouade_plugin_copilot::run),
+    // Codex (INT-10.4): the client of its app-server and its translation, in its crate (plugins/builtin/dev.escouade.codex).
+    ("codex", escouade_plugin_codex::run),
 ];
 
 fn main() {

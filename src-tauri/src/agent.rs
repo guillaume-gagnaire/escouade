@@ -293,6 +293,8 @@ pub struct AgentRt {
     pub(crate) escouade_next: bool,
     /// What the translation of Codex keeps between its messages (`agent/codex.rs`).
     codex: codex::CodexState,
+    /// How long the turn that ends took, as its harness's plugin told it (`Item::Took`).
+    turn_took: Option<i64>,
     /// What the translation of Copilot keeps between the events of its view's log (`agent/copilot.rs`).
     copilot: copilot::CopilotState,
     /// What the translation of Cursor keeps between its updates (`agent/cursor.rs`).
@@ -576,6 +578,7 @@ impl AgentRt {
             privacy: crate::fence::Privacy::default(),
             escouade_next: false,
             codex: codex::CodexState::default(),
+            turn_took: None,
             copilot: copilot::CopilotState::default(),
             cursor: cursor::CursorState::default(),
             todo_writes: 0,

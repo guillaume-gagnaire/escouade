@@ -56,6 +56,8 @@ Le coût d’un tour est celui que donne Claude Code. Le quota, ce sont la fenê
 
 ## Codex
 
+Codex est un plugin livré avec Escouade (`dev.escouade.codex`) : ses agents conversent par un programme à part qu’Escouade lance et surveille. Il se voit dans la vue Plugins, sous « Livrés avec Escouade » ; coupé, un agent de Codex dit au lancement qu’il faut le rallumer, et garde sa session.
+
 ### Installation et compte
 
 `npm install -g @openai/codex`, puis `codex login` avec ton compte ChatGPT. Escouade lance le binaire natif du paquet npm (sous Windows, le `codex.exe` du paquet, pas son lanceur) : l’app de bureau de Codex installe souvent une version plus ancienne, que le `PATH` peut trouver d’abord. Chaque agent a son `codex app-server`. Ses comptes ont chacun leur `CODEX_HOME` : voir [les comptes Codex](accounts#comptes-codex).

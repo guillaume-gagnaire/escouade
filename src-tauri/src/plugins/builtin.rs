@@ -135,6 +135,10 @@ pub const REGISTRY: &[Entry] = &[
             "../../../plugins/builtin/dev.escouade.copilot-cli/escouade-plugin.json"
         ),
     },
+    Entry {
+        id: CODEX,
+        manifest: include_str!("../../../plugins/builtin/dev.escouade.codex/escouade-plugin.json"),
+    },
 ];
 
 /// The plugin « GitHub »: github.com, GHE.com and GitHub Enterprise Server, their pull requests and GitHub Issues.
@@ -152,6 +156,9 @@ pub const GITEA: &str = "dev.escouade.gitea";
 
 /// The plugin « Trello »: the Kanban's source of Trello cards (INT-7.1).
 pub const TRELLO: &str = "dev.escouade.trello";
+
+/// The plugin « Codex »: OpenAI's Codex as a harness (INT-10.4).
+pub const CODEX: &str = "dev.escouade.codex";
 
 /// The plugin « Azure DevOps »: Azure DevOps (dev.azure.com and Server), its pull requests, checks and Azure Boards.
 pub const AZURE_DEVOPS: &str = "dev.escouade.azure-devops";

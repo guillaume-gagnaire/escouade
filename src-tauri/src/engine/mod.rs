@@ -45,9 +45,6 @@ pub use claude::{
 pub use codex::CODEX;
 #[cfg(test)]
 pub(crate) use codex::{fake_codex, is_plan_approval as codex_is_plan_approval};
-pub(crate) use codex::{
-    id_key as codex_request_id, meters as codex_meters, mode_of as codex_mode_of, plan_approval,
-};
 #[cfg(test)]
 pub(crate) use copilot::fake_copilot;
 #[cfg(test)]

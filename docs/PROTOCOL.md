@@ -525,7 +525,7 @@ Dans une build de debug, `ESCOUADE_CODEX` (les e2e) donne le programme quand auc
 
 ### Le protocole
 
-JSON-RPC, une ligne par message sur stdio. Le process (`engine/codex/process.rs`) répond lui-même à ses requêtes et passe tout le reste à la traduction (`agent/codex.rs`) : les notifications, et les requêtes de Codex (approbations, questions), dont il garde l'id, la méthode et les paramètres jusqu'à la réponse.
+JSON-RPC, une ligne par message sur stdio. Depuis INT-10.4, le client est dans le plugin `dev.escouade.codex` (`plugins/builtin/dev.escouade.codex/src/client.rs`, une machine à états sans process : le cœur lance Codex et lui passe ses lignes). Il répond lui-même à ses requêtes et passe tout le reste à la traduction (`translate.rs`, à côté) : les notifications, et les requêtes de Codex (approbations, questions), dont il garde l'id, la méthode et les paramètres jusqu'à la réponse.
 
 | Étape | Message | Ce qu'Escouade y met |
 |---|---|---|

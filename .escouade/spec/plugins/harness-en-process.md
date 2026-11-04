@@ -2,7 +2,7 @@
 title: "Le contrat des harness en process"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.5 et §4.6","docs/TODO-2.2.md (INT-9)","crates/escouade-plugin-protocol/src/engine.rs","src-tauri/src/plugins/harness.rs","src-tauri/src/plugins/shared.rs"]
-tickets: ["ESC-221","ESC-223","ESC-224"]
+tickets: ["ESC-221","ESC-223","ESC-225","ESC-224"]
 decisions: [34]
 compared: null
 ---
@@ -53,3 +53,11 @@ Depuis Copilot CLI (INT-10.3), pour tout harness, dans son manifeste :
 Un plugin peut aussi faire demander au harness son quota, commander un titre ou une compaction par l'entrée du harness, écrire une carte entière (permission ou question, avec la portée de « Toujours », un formulaire) et dire le quota. Ce sont de nouveaux éléments : un plugin écrit avant reste tel quel.
 
 Le fichier privé du serveur d'Escouade, quand le moteur en fait un, est donné au lancement : le jeton reste hors des arguments, et le cœur le vérifie toujours.
+## Ce que Codex a ajouté au contrat (INT-10.4)
+
+Codex se sert de ce qu'OpenCode et Copilot CLI y ont mis (voir plus haut), et y ajoute, pour tous :
+
+- une compaction demandée au harness peut se poursuivre en un tour de celui-ci, qui la finit ;
+- un plugin peut dire la dernière entrée d'où une copie repart quand aucun tour ne la porte, ce que fait l'agent quand l'élément suivant ne le dit pas, et la durée d'un tour selon le harness ;
+- l'ouverture d'une session par le plugin a une limite de trois minutes : au-delà, l'agent le dit au lieu de rester bloqué ;
+- **la clôture d'un projet privé** se compare au lancement quelle que soit la forme des barres d'un chemin Windows : Codex lit `C:/code/secret`, pas `C:\code\secret`.

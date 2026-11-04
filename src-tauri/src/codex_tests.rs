@@ -918,3 +918,62 @@ async fn real_codex_compact() {
     assert!(after < before, "{before} → {after}");
     h.core.stop_for_good();
 }
+
+/// INT-10.4: Codex's conversation goes through its plugin (`dev.escouade.codex`). Switched off, an agent's start says
+/// so, and the agent keeps its session; on again, it talks as before.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_codex_agent_says_its_plugin_is_off_and_talks_again_once_it_is_on() {
+    let h = harness("int10-codex-off");
+    let (p, _) = h.project(false).await;
+    codex_accounts(&h);
+    signed_in(&h, None);
+    let a = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                engine: Some(EngineId::CODEX),
+                account: Some("work".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    let id = crate::plugins::builtin::CODEX;
+    h.core.plugins.choose(id, |c| c.enabled = false).unwrap();
+    h.core.plugin_runtime.forget(id);
+    h.core.sync_harnesses();
+    assert!(crate::plugins::harness::plugged(id).is_none());
+    let sent = h.core.send_message(&a, "bonjour".into(), vec![]).await;
+    let said = |h: &Harness| {
+        let items = Value::Array(h.items(&a)).to_string();
+        let err = sent
+            .as_ref()
+            .err()
+            .map(|e| e.to_string())
+            .unwrap_or_default();
+        format!("{err} {items}")
+    };
+    h.wait("the plugin said off", |h| said(h).contains(id))
+        .await;
+    assert!(said(&h).contains("coupé"), "{}", said(&h));
+    h.core.plugins.choose(id, |c| c.enabled = true).unwrap();
+    h.core.sync_harnesses();
+    assert!(crate::plugins::harness::plugged(id).is_some());
+    let answered = |h: &Harness| {
+        !h.agent(&a).status.is_active()
+            && h.items(&a)
+                .iter()
+                .any(|i| i["kind"] == "turn" && i["isError"] != true)
+    };
+    if !answered(&h) {
+        h.core
+            .send_message(&a, "bonjour".into(), vec![])
+            .await
+            .unwrap();
+    }
+    h.wait("its answer", answered).await;
+    h.core.stop_for_good();
+}

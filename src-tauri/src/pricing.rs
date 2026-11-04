@@ -1,6 +1,6 @@
 //! Public list prices of Claude models, to estimate what a turn costs while it runs (the CLI
-//! reports the exact cost only once the turn ends), and of OpenAI's, to estimate what a turn of
-//! Codex costs (it tells none).
+//! reports the exact cost only once the turn ends). OpenAI's left with Codex, in its plugin
+//! (`escouade_plugin_codex::prices`, INT-10.4).
 
 use serde_json::Value;
 
@@ -67,50 +67,16 @@ const fn p(input: f64, output: f64, read: f64) -> Price {
     }
 }
 
-/// OpenAI's models: id, then USD per million tokens of input, cached input and output, at the
-/// standard tier and short context (developers.openai.com/api/docs/pricing, read on 2026-10-17).
-/// Codex's own variants (`gpt-5-codex`) are their model's but where the grid names them.
-const OPENAI: [(&str, f64, f64, f64); 24] = [
-    ("gpt-6-astra", 10.0, 1.0, 50.0),
-    ("gpt-6.1-sol", 2.0, 0.1, 10.0),
-    ("gpt-6-sol", 2.0, 0.2, 10.0),
-    ("gpt-6-luna", 0.1, 0.01, 0.5),
-    ("gpt-5.6-sol", 4.0, 0.4, 20.0),
-    ("gpt-5.6-terra", 2.0, 0.2, 12.0),
-    ("gpt-5.6-luna", 0.2, 0.02, 1.2),
-    ("gpt-5.5", 5.0, 0.5, 30.0),
-    ("gpt-5.4-mini", 0.75, 0.075, 4.5),
-    ("gpt-5.4-nano", 0.2, 0.02, 1.25),
-    ("gpt-5.4", 2.5, 0.25, 15.0),
-    ("gpt-5.3-codex", 1.75, 0.175, 14.0),
-    ("gpt-5.2", 1.75, 0.175, 14.0),
-    ("gpt-5.1-codex-mini", 0.25, 0.025, 2.0),
-    ("gpt-5.1", 1.25, 0.125, 10.0),
-    ("gpt-5-mini", 0.25, 0.025, 2.0),
-    ("gpt-5-nano", 0.05, 0.005, 0.4),
-    ("gpt-5", 1.25, 0.125, 10.0),
-    ("gpt-4.1-mini", 0.4, 0.1, 1.6),
-    ("gpt-4.1-nano", 0.1, 0.025, 0.4),
-    ("gpt-4.1", 2.0, 0.5, 8.0),
-    ("gpt-4o-mini", 0.15, 0.075, 0.6),
-    ("gpt-4o", 2.5, 1.25, 10.0),
-    ("o4-mini", 1.1, 0.275, 4.4),
-];
-
-/// The price of OpenAI's model `model` (in lower case): the longest id of the grid it is, or is a
-/// variant of (`gpt-5-2025-08-07`, `gpt-5-codex`). Cache writes cost what input does.
+/// The price of OpenAI's model `model`, from the grid of its plugin. Cache writes cost what input does.
 fn openai(model: &str) -> Option<Price> {
-    let mut grid = OPENAI;
-    grid.sort_by_key(|(id, ..)| std::cmp::Reverse(id.len()));
-    grid.iter()
-        .find(|(id, ..)| model == *id || model.starts_with(&format!("{id}-")))
-        .map(|&(_, input, cached, output)| Price {
-            input,
-            output,
-            cache_read: cached,
-            write_5m: input,
-            write_1h: input,
-        })
+    let p = escouade_plugin_codex::prices::price(model)?;
+    Some(Price {
+        input: p.input,
+        output: p.output,
+        cache_read: p.cached,
+        write_5m: p.input,
+        write_1h: p.input,
+    })
 }
 
 /// List price of a model id (`claude-opus-5-5`, `claude-haiku-4-5-20251001`, `gpt-6-luna`…), if
@@ -149,11 +115,6 @@ pub fn price(model: &str) -> Option<Price> {
 /// Estimated cost in USD of `usage` on `model`, if its price is known.
 pub fn estimate(model: &str, usage: &Usage) -> Option<f64> {
     Some(cost(price(model)?, usage))
-}
-
-/// `estimate` on OpenAI's grid alone (a turn of Codex): None for any other model.
-pub fn estimate_openai(model: &str, usage: &Usage) -> Option<f64> {
-    Some(cost(openai(&model.trim().to_ascii_lowercase())?, usage))
 }
 
 fn cost(p: Price, usage: &Usage) -> f64 {

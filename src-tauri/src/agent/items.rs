@@ -403,6 +403,16 @@ impl AgentRt {
                 }
             }
             Item::LimitRest => self.limit_rest = true,
+            Item::Entry { entry } => self.set_last_entry(entry, fx),
+            Item::Activity { tool, input, block } => {
+                let activity = match (tool, block) {
+                    (Some(tool), _) => tool_activity(&tool, &input, &self.meta.cwd),
+                    (None, Some(block)) => block_activity(i18n::ui(), &block),
+                    (None, None) => return,
+                };
+                self.set_activity(activity, fx);
+            }
+            Item::Took { ms } => self.turn_took = Some(ms),
             Item::Context { tokens, window } => {
                 if let Some(tokens) = tokens {
                     self.context_tokens = tokens;
@@ -485,7 +495,10 @@ impl AgentRt {
                     fx.agent_changed = true;
                 }
                 fx.plan_files = true;
-                let took = self.active_since.map(|since| (now_ms() - since).max(0));
+                let took = self
+                    .turn_took
+                    .take()
+                    .or_else(|| self.active_since.map(|since| (now_ms() - since).max(0)));
                 let item = json!({
                     "kind": "turn", "id": new_id(), "ts": now_ms(), "durationMs": took, "cost": usage.cost,
                     "tokens": tokens, "isError": ended_badly, "interrupted": interrupted, "error": error,

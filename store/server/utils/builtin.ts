@@ -53,12 +53,15 @@ export const BUILTINS: Builtin[] = [
     'Claude Code comme harness : la conversation, sa vue terminal, les permissions, le plan, les comptes et leur quota.',
     'Claude Code as a harness: the conversation, its terminal view, permissions, the plan, accounts and their quota.',
   ),
-  harness(
-    'codex',
-    'Codex',
-    'Codex d’OpenAI comme harness : la conversation, sa vue terminal, les permissions, le plan et le coût par compte.',
-    'OpenAI’s Codex as a harness: the conversation, its terminal view, permissions, the plan and the cost per account.',
-  ),
+  {
+    ...harness(
+      'codex',
+      'Codex',
+      'Codex d’OpenAI comme harness : la conversation, sa vue terminal, les permissions, le plan et le coût par compte.',
+      'OpenAI’s Codex as a harness: the conversation, its terminal view, permissions, the plan and the cost per account.',
+    ),
+    source: 'plugins/builtin/dev.escouade.codex',
+  },
   {
     ...harness(
       'copilot-cli',

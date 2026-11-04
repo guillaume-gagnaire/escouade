@@ -52,6 +52,7 @@ fn plugged_by(harness: EngineId) -> Option<&'static str> {
         EngineId::GEMINI => Some(crate::plugins::builtin::GEMINI),
         EngineId::OPENCODE => Some(crate::plugins::builtin::OPENCODE),
         EngineId::COPILOT => Some(crate::plugins::builtin::COPILOT),
+        EngineId::CODEX => Some(crate::plugins::builtin::CODEX),
         _ => None,
     }
 }
@@ -325,9 +326,12 @@ impl Bench {
         let key = format!("bench-{id}");
         let cwd = flux.agent["cwd"].as_str().unwrap_or_default().to_string();
         let session = flux.agent["sessionId"].as_str().map(str::to_string);
+        // What a case leaves out (Codex's say no model).
+        let model = flux.agent["model"].as_str().unwrap_or_default();
+        let mode = flux.agent["mode"].as_str().unwrap_or("default");
         let attach = json!({
-            "agent": key, "cwd": cwd, "session": session, "model": flux.agent["model"],
-            "mode": flux.agent["mode"], "lang": "fr",
+            "agent": key, "cwd": cwd, "session": session, "model": model,
+            "mode": mode, "lang": "fr",
         });
         // Its first call starts the plugin's process: given time, as a machine under load needs it.
         rt.call_within(plugin, "agent/attach", attach, Duration::from_secs(60))
@@ -345,7 +349,7 @@ impl Bench {
                 plugin,
                 "engine/launch",
                 json!({
-                    "agent": key, "cwd": cwd, "model": flux.agent["model"], "mode": flux.agent["mode"],
+                    "agent": key, "cwd": cwd, "model": model, "mode": mode,
                     "start": start, "lang": "fr",
                 }),
             )
@@ -454,10 +458,10 @@ impl Bench {
                         for i in got["items"].as_array().into_iter().flatten() {
                             match i["op"].as_str() {
                                 Some("write") => writes.push(i["line"].clone()),
-                                Some("permission" | "question" | "questionCard") => {
+                                Some("permission" | "question" | "permissionCard" | "questionCard") => {
                                     let request = i["request"].as_str().unwrap_or_default();
                                     asked.insert(msg["id"].to_string(), request.to_string());
-                                    if i["op"] != "permission" {
+                                    if i["questions"].is_array() {
                                         questions.insert(request.to_string(), i["questions"].clone());
                                     }
                                     items.push(i.clone());
@@ -528,6 +532,16 @@ impl Bench {
                                     "text": p["prompt"][0]["text"],
                                 }),
                             ),
+                            // Codex's turns, as the core asks them.
+                            Some("turn/start") => call(
+                                "agent/sendMessage",
+                                json!({
+                                    "agent": key, "uuid": crate::model::new_id(),
+                                    "text": "", "content": p["input"],
+                                }),
+                            ),
+                            Some("turn/interrupt") => call("agent/interrupt", json!({ "agent": key })),
+                            Some("thread/compact/start") => call("agent/compact", json!({ "agent": key })),
                             Some("session/set_mode" | "session/set_config_option")
                                 if own_settings =>
                             {
@@ -553,6 +567,31 @@ impl Bench {
                             // The client's own start, which the plugin wrote itself.
                             Some(_) => Value::Null,
                             None => match asked.get(&msg["id"].to_string()) {
+                                // Codex's answers, by the ids of its questions.
+                                Some(request) if msg["result"]["answers"].is_object() => {
+                                    let mut answers = serde_json::Map::new();
+                                    let asked_qs = questions.get(request).cloned().unwrap_or_default();
+                                    for q in asked_qs.as_array().into_iter().flatten() {
+                                        let id = q["id"].as_str().unwrap_or_default();
+                                        let given = msg["result"]["answers"][id]["answers"].clone();
+                                        answers.insert(q["question"].as_str().unwrap_or_default().to_string(), given);
+                                    }
+                                    call(
+                                        "agent/answerQuestion",
+                                        json!({ "agent": key, "request": request, "call": request, "answers": answers }),
+                                    )
+                                }
+                                Some(request) if msg["result"]["decision"].is_string() => {
+                                    let decision = msg["result"]["decision"].as_str().unwrap_or_default();
+                                    call(
+                                        "agent/answerPermission",
+                                        json!({
+                                            "agent": key, "request": request,
+                                            "allow": decision.starts_with("accept"),
+                                            "always": decision == "acceptForSession",
+                                        }),
+                                    )
+                                }
                                 // An answer to Vibe's form: by question, as the card gives it.
                                 Some(request) if msg["result"]["action"].is_string() => {
                                     let mut answers = serde_json::Map::new();

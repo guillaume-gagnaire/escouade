@@ -79,6 +79,9 @@ const REQUEST_WITHIN: Duration = Duration::from_secs(60);
 /// How often an agent on a shared harness looks at its plugin: no call is under way to tell it stopped.
 const WATCH_EVERY: Duration = Duration::from_millis(250);
 
+/// How long a harness whose plugin opens its session may take: each request its opening makes had a minute.
+const SESSION_WITHIN: Duration = Duration::from_secs(180);
+
 /// How many times a call is given again to a plugin that crashed before it answered.
 const RETRIES: usize = 8;
 
@@ -266,6 +269,12 @@ pub const BUILTIN_HARNESSES: &[BuiltinHarness] = &[
     // Copilot CLI (INT-10.3): no ACP harness, nothing to prepare; its framing and its close are in its manifest.
     BuiltinHarness {
         plugin: super::builtin::COPILOT,
+        native: None,
+        prepare: None,
+    },
+    // Codex (INT-10.4): no ACP harness, nothing to prepare; its plugin opens its thread (`opens`).
+    BuiltinHarness {
+        plugin: super::builtin::CODEX,
         native: None,
         prepare: None,
     },
@@ -633,10 +642,13 @@ pub fn check_launch(
         }
     }
     if !fence.is_empty() {
+        // Whatever its slashes: Codex reads a path of Windows with `/`.
+        let plain = |s: &str| s.replace('\\', "/");
         let said = |p: &str| {
-            launch.args.iter().any(|a| a.contains(p))
-                || launch.env.iter().any(|v| v.value.contains(p))
-                || launch.files.iter().any(|f| f.text.contains(p))
+            let p = plain(p);
+            launch.args.iter().any(|a| plain(a).contains(&p))
+                || launch.env.iter().any(|v| plain(&v.value).contains(&p))
+                || launch.files.iter().any(|f| plain(&f.text).contains(&p))
         };
         // Held by the plugin on what its harness reads and writes through it (ACP's `fs/*`), or by the launch, every
         // path in it.
@@ -2007,9 +2019,9 @@ impl EngineProcess for ProcessEngineProcess {
             }
             // Its plugin opens its session over its protocol: the agent is ready when it says so.
             let mut opened = self.opened.subscribe();
-            let done = opened
-                .wait_for(Option::is_some)
+            let done = tokio::time::timeout(SESSION_WITHIN, opened.wait_for(Option::is_some))
                 .await
+                .map_err(|_| anyhow!("{}: its session not open in time", self.name))?
                 .map_err(|_| anyhow!("{} is gone", self.name))?
                 .clone();
             match done {
@@ -2209,6 +2221,10 @@ impl EngineProcess for ProcessEngineProcess {
             // Asked of the harness through its input: over when it says so (`Item::Compacted`).
             for line in &c.writes {
                 self.write(line);
+            }
+            // A turn of its harness's, which ends it.
+            if c.turn {
+                return Ok(false);
             }
             tokio::time::timeout(COMPACT_WITHIN, rx)
                 .await
