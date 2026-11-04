@@ -40,7 +40,7 @@ pub mod shared;
 pub mod store;
 // The seal of a version from the store, checked with the keys the app embeds (STORE-8).
 pub mod store_keys;
-/// The JS/TS plugins (`run.js`) in WASM, inside the app (ESC-320).
+/// The plugins in WASM, inside the app: `run.js` (ESC-320), `run.wasm` (ESC-331).
 pub mod wasm;
 
 use crate::i18n::Lang;
@@ -1631,7 +1631,10 @@ impl Plugins {
             }
             if let (Some(bytes), Some(program)) = (
                 &f.program,
-                m.run.as_ref().filter(|r| r.js.is_none()).map(program_here),
+                m.run
+                    .as_ref()
+                    .filter(|r| r.in_wasm().is_none())
+                    .map(program_here),
             ) {
                 let to = inside(&incoming, &program).ok_or_else(|| {
                     Refusal::other(format!("{program}: a path out of the plugin's folder"))
@@ -1658,6 +1661,25 @@ impl Plugins {
                             "The store's WASM module could not be taken in: {e}"
                         ))
                     })?;
+            }
+            // A run.wasm plugin: the store's module, checked the same way, is what it runs, in place of anything in
+            // the archive (ESC-331); it stays in the folder, under its digest, and the install precompiles it.
+            if m.run.as_ref().is_some_and(|r| r.wasm.is_some()) {
+                let Some(bytes) = &f.module else {
+                    return Err(Refusal::other(tr_in!(
+                        lang,
+                        "Cette version n'a pas de module WASM compilé par le store : rien n'est installé.",
+                        "This version has no WASM module compiled by the store: nothing is installed."
+                    )));
+                };
+                wasm::reactor(bytes).map_err(|e| {
+                    Refusal::other(tr_in!(
+                        lang,
+                        "Le module WASM du store n'a pas pu être pris : {e}",
+                        "The store's WASM module could not be taken in: {e}"
+                    ))
+                })?;
+                std::fs::write(incoming.join(wasm::MODULE_FILE), bytes).map_err(fail)?;
             }
             Ok(m)
         })();

@@ -19,6 +19,8 @@
 //   installed as any plugin of the store (origin store, never the app's builtin);
 // - dev.escouade.slack: 1.1.0 not signed yet (the app refuses it: Escouade's own installs signed only);
 // - dev.exemple.climbs: its version.json names a folder that climbs out (refused);
+// - dev.exemple.reactor: a run.wasm plugin (tests/fixtures/plugins/reactor), its archive with a plugin.wasm that is not the
+//   one the store compiled (ESC-331); dev.exemple.reactor-bare: the same without a module of the store (refused);
 // - dev.exemple.wasm: a run.js plugin (tests/fixtures/plugins/sdk-both), with the module the store compiled of it
 //   (ESC-323), named by its version.json; dev.exemple.wasm-changed: its module changed after its version.json (refused).
 // Its controls: POST /_fake/revocations { entries, serial? } signs and serves the next list (the mirror too);
@@ -65,6 +67,19 @@ function runJs(over) {
     'escouade-plugin.json': JSON.stringify(m, null, 2),
     'dist/plugin.mjs': readFileSync(new URL('dist/plugin.mjs', root)),
     'README.md': '# SDK\n\nUn plugin run.js.\n',
+  };
+}
+
+/** The run.wasm plugin of the host's tests, its manifest changed by `over`: the store compiled its module. */
+function runWasm(over) {
+  const root = new URL('../plugins/reactor/', import.meta.url);
+  const m = { ...JSON.parse(readFileSync(new URL('escouade-plugin.json', root), 'utf8')), ...over };
+  return {
+    'escouade-plugin.json': JSON.stringify(m, null, 2),
+    'Cargo.toml': readFileSync(new URL('Cargo.toml', root)),
+    'src/lib.rs': readFileSync(new URL('src/lib.rs', root)),
+    'plugin.wasm': 'not the module the store compiled',
+    'README.md': '# Reactor\n\nUn plugin run.wasm.\n',
   };
 }
 
@@ -154,6 +169,9 @@ const SPEC = [
     name: 'WASM changé',
     wasmChanged: true,
   },
+  // ESC-331: a run.wasm plugin and the module the store compiled of it; then one that came without any.
+  { id: 'dev.exemple.reactor', v: '1.0.0', from: 'reactor', runWasm: true, cat: ['tools'], kw: ['wasm'], name: 'En Rust' },
+  { id: 'dev.exemple.reactor-bare', v: '1.0.0', from: 'reactor', runWasm: true, bare: true, cat: ['tools'], kw: [], name: 'Sans module' },
 ];
 
 /** The store's content: the catalogue, the files by path, signed with `key`. */
@@ -170,7 +188,7 @@ export function build(key) {
       ...(s.name ? { name: s.name } : {}),
       ...(s.min ? { escouade: { api: '1', min: s.min } } : {}),
     };
-    const f = s.runJs ? runJs(over) : example(s.from, over);
+    const f = s.runJs ? runJs(over) : s.runWasm ? runWasm(over) : example(s.from, over);
     if (s.icon) {
       f['icon.png'] = png(256, 256);
       const m = JSON.parse(f['escouade-plugin.json']);
@@ -197,6 +215,16 @@ export function build(key) {
       wasm = { sha256: sha256(bytes), size: bytes.length, compiler: { javy: '9.1.0', engine: 'e'.repeat(64), prelude: '2.2.0' } };
       wasmPath = `${base}/plugin.wasm`;
       files.set(wasmPath, s.wasmChanged ? Buffer.concat([bytes, wasmModule('changed').subarray(8)]) : bytes);
+    }
+    if (s.runWasm && !s.bare) {
+      const bytes = readFileSync(new URL('../plugins/reactor/plugin.wasm', import.meta.url));
+      wasm = {
+        sha256: sha256(bytes),
+        size: bytes.length,
+        compiler: { rust: '1.98.0', target: 'wasm32-wasip1', canon: 'c'.repeat(64), lock: 'd'.repeat(64) },
+      };
+      wasmPath = `${base}/plugin.wasm`;
+      files.set(wasmPath, bytes);
     }
     const json = canonical({
       format: 1,

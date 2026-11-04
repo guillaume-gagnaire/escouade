@@ -902,6 +902,191 @@
       "ignored": []
     },
     {
+      "name": "a Rust module: its Cargo.toml",
+      "manifest": {
+        "id": "dev.exemple.linear",
+        "name": "Linear",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "wasm": "Cargo.toml"
+        },
+        "permissions": {
+          "network": ["linear.app"]
+        }
+      },
+      "files": {
+        "Cargo.toml": {
+          "text": "[package]\nname = \"linear\"\n"
+        },
+        "dist/plugin.mjs": {
+          "text": "createPlugin().start();\n"
+        }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "a Rust module in a folder of the plugin",
+      "manifest": {
+        "id": "dev.exemple.linear",
+        "name": "Linear",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "wasm": "module/Cargo.toml"
+        },
+        "permissions": {
+          "network": ["linear.app"]
+        }
+      },
+      "files": {
+        "module/Cargo.toml": {
+          "text": "[package]\n"
+        }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "a module and a command: one of the three",
+      "manifest": {
+        "id": "dev.exemple.linear",
+        "name": "Linear",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "wasm": "Cargo.toml",
+          "command": "bin/linear"
+        },
+        "permissions": {
+          "network": ["linear.app"]
+        }
+      },
+      "files": {
+        "Cargo.toml": {
+          "text": "[package]\nname = \"linear\"\n"
+        },
+        "dist/plugin.mjs": {
+          "text": "createPlugin().start();\n"
+        }
+      },
+      "errors": ["run.wasm exclusive"],
+      "ignored": []
+    },
+    {
+      "name": "a module and a bundle: one of the three",
+      "manifest": {
+        "id": "dev.exemple.linear",
+        "name": "Linear",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "wasm": "Cargo.toml",
+          "js": "dist/plugin.mjs"
+        },
+        "permissions": {
+          "network": ["linear.app"]
+        }
+      },
+      "files": {
+        "Cargo.toml": {
+          "text": "[package]\nname = \"linear\"\n"
+        },
+        "dist/plugin.mjs": {
+          "text": "createPlugin().start();\n"
+        }
+      },
+      "errors": ["run.wasm exclusive"],
+      "ignored": []
+    },
+    {
+      "name": "a module names no binary",
+      "manifest": {
+        "id": "dev.exemple.linear",
+        "name": "Linear",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "wasm": "plugin.wasm"
+        },
+        "permissions": {
+          "network": ["linear.app"]
+        }
+      },
+      "files": {
+        "plugin.wasm": {
+          "text": "x"
+        }
+      },
+      "errors": ["run.wasm cargo"],
+      "ignored": []
+    },
+    {
+      "name": "a Cargo.toml that is not in the folder",
+      "manifest": {
+        "id": "dev.exemple.linear",
+        "name": "Linear",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "wasm": "Cargo.toml"
+        },
+        "permissions": {
+          "network": ["linear.app"]
+        }
+      },
+      "files": {},
+      "errors": ["run.wasm file"],
+      "ignored": []
+    },
+    {
+      "name": "a Cargo.toml out of the folder",
+      "manifest": {
+        "id": "dev.exemple.linear",
+        "name": "Linear",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "wasm": "../other/Cargo.toml"
+        },
+        "permissions": {
+          "network": ["linear.app"]
+        }
+      },
+      "files": {
+        "Cargo.toml": {
+          "text": "[package]\nname = \"linear\"\n"
+        },
+        "dist/plugin.mjs": {
+          "text": "createPlugin().start();\n"
+        }
+      },
+      "errors": ["run.wasm path"],
+      "ignored": []
+    },
+    {
       "name": "a bundle out of the folder, or not a file of it",
       "manifest": {
         "id": "dev.exemple.slack",

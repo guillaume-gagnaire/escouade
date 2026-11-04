@@ -28,6 +28,10 @@ cargo test --release                            # les 5 tests : les modules cont
 cargo run --release --example measure > ../results/measures-1.json
 ```
 
+Ces mêmes modules passent aussi par l'hôte de l'app, sans celui d'ici (ESC-331) : une fois `reproducible.sh` lancé,
+`ESCOUADE_PARITY=1 cargo nextest run --lib plugins_wasm_parity` dans `src-tauri/`, après `cargo build --bins`. Sans
+`ESCOUADE_PARITY`, ces tests se sautent quand les modules manquent.
+
 `reproducible.sh` installe rust 1.98.0 en profil `minimal` dans `target/rustup` (avec `rust-src`, l'empreinte change),
 sans toucher à la chaîne d'outils de l'utilisateur. `--plain` compile sans `rustc-canon`, pour voir ce qu'il change.
 

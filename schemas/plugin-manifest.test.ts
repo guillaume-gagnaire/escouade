@@ -77,9 +77,11 @@ describe('plugin-manifest', () => {
     ]);
     const both = validate({ run: { command: 'bin/slack', js: 'dist/plugin.mjs' } }).errors.find((e) => e.path === 'run.js')!;
     expect(message(both, 'fr')).toBe(
-      '`run.js` ne va pas avec `run.command` : un programme est une commande ou un bundle JS/TS, pas les deux.',
+      '`run.js` ne va pas avec `run.command`, `run.js` ou `run.wasm` : un programme est une commande, un bundle JS/TS ou un module Rust, un seul des trois.',
     );
-    expect(message(both, 'en')).toBe('`run.js` does not go with `run.command`: a program is a command or a JS/TS bundle, not both.');
+    expect(message(both, 'en')).toBe(
+      '`run.js` does not go with `run.command`, `run.js` or `run.wasm`: a program is a command, a JS/TS bundle or a Rust module, one of the three.',
+    );
     const svg = validate({ icon: 'logo.svg' }).errors.find((e) => e.path === 'icon')!;
     expect(message(svg, 'en')).toBe('`icon` is no PNG (no SVG nor JPEG: a square PNG of 256 px at least).');
   });

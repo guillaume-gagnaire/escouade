@@ -8,7 +8,8 @@
 //! declarative plugin.
 //!
 //! A `run.js` plugin is played in WASM (ESC-322), as the app runs it: its bundle compiled by the pinned Javy with the
-//! app's escouade-js and prelude (`plugins::wasm`), then its instance in the app's host, without Node.
+//! app's escouade-js and prelude (`plugins::wasm`), then its instance in the app's host, without Node. A `run.wasm`
+//! plugin too (ESC-331): its `plugin.wasm`, or the module given.
 
 pub mod cli;
 pub mod fake;
@@ -247,8 +248,8 @@ pub struct Options {
     pub data: PathBuf,
     /// The limits of an instance in WASM: the app's.
     pub wasm: super::wasm::Limits,
-    /// The module of a `run.js` plugin to play as it is, in place of its bundle compiled here: the one the store
-    /// published, played by the local review (`--wasm`, ESC-324).
+    /// The module of a plugin in WASM to play as it is, in place of its bundle compiled here or of its `plugin.wasm`:
+    /// the one the store published, played by the local review (`--wasm`, ESC-324).
     pub module: Option<PathBuf>,
     /// No `net/fetch` reaches the network, whatever `permissions.network` says (`--offline`): the review's bench.
     pub offline: bool,
@@ -326,12 +327,12 @@ fn fact_of(patterns: &[String]) -> Option<String> {
     })
 }
 
-/// The program the bench plays: a process, or the module of a `run.js` plugin.
+/// The program the bench plays: a process, or the module of a plugin in WASM.
 #[derive(Clone)]
 pub enum Program {
     Process(PathBuf),
     Wasm {
-        /// Its bundle, for what the bench says.
+        /// Its bundle or its module, for what the bench says.
         bundle: PathBuf,
         module: wasmtime::Module,
     },
@@ -363,11 +364,40 @@ impl Program {
     }
 }
 
-/// The program of the plugin of `m` in `folder`: its process, or its bundle compiled to its module (in the cache of
-/// `o.data`); why not, in words, and what the author should do.
+/// The module of the `run.wasm` plugin of `folder`: the one given, or its `plugin.wasm`, as the app loads it. Why not,
+/// in words, and what the author should do.
+fn reactor_of(folder: &Path, o: &Options) -> Result<Program, (String, String)> {
+    let lang = o.lang;
+    let path = o
+        .module
+        .clone()
+        .unwrap_or_else(|| folder.join(super::wasm::MODULE_FILE));
+    let path = std::path::absolute(&path).unwrap_or(path);
+    let build = || {
+        tr_in!(
+            lang,
+            "compile-le pour wasm32-wasip1 (crate-type = [\"cdylib\"]) et pose le .wasm en {} à côté du manifeste, ou donne-le par --wasm.",
+            "compile it for wasm32-wasip1 (crate-type = [\"cdylib\"]) and put the .wasm as {} beside the manifest, or give it by --wasm.",
+            super::wasm::MODULE_FILE
+        )
+    };
+    let said = |e: String| (tr_in!(lang, "{} : {e}", "{}: {e}", path.display()), build());
+    let bytes = std::fs::read(&path).map_err(|e| said(e.to_string()))?;
+    let module = super::wasm::reactor(&bytes).map_err(said)?;
+    Ok(Program::Wasm {
+        bundle: path,
+        module,
+    })
+}
+
+/// The program of the plugin of `m` in `folder`: its process, its module, or its bundle compiled to its module (in the
+/// cache of `o.data`); why not, in words, and what the author should do.
 pub fn program_of(folder: &Path, m: &Manifest, o: &Options) -> Result<Program, (String, String)> {
     let lang = o.lang;
     let run = m.run.as_ref().expect("a program");
+    if run.wasm.is_some() {
+        return reactor_of(folder, o);
+    }
     let Some(js) = &run.js else {
         return Ok(Program::Process(program_path(folder, run, &o.escouade_dir)));
     };

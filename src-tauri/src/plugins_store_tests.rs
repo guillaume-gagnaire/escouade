@@ -359,6 +359,44 @@ async fn a_run_js_plugin_installs_the_module_the_store_compiled_and_a_changed_on
     assert!(plugins.get("dev.exemple.wasm-changed", Lang::Fr).is_none());
 }
 
+/// ESC-331: a run.wasm plugin runs the module the store compiled, checked against its version.json, kept in its folder
+/// in place of anything of that name in the archive, and precompiled; a version without one installs nothing.
+#[tokio::test]
+async fn a_run_wasm_plugin_installs_the_module_the_store_compiled_and_one_without_is_refused() {
+    let fake = Fake::start().trusted();
+    let (data, store, plugins) = ready(&fake, "reactor").await;
+    let view = install(&store, &plugins, "dev.exemple.reactor", None, false)
+        .await
+        .expect("the run.wasm plugin installs");
+    let served = reqwest::get(format!(
+        "{}/api/v1/plugins/dev.exemple.reactor/1.0.0/plugin.wasm",
+        fake.url
+    ))
+    .await
+    .unwrap()
+    .bytes()
+    .await
+    .unwrap()
+    .to_vec();
+    let module = crate::plugins::wasm::MODULE_FILE;
+    assert_eq!(
+        std::fs::read(Path::new(&view.folder).join(module)).unwrap(),
+        served,
+        "the store's module, not the archive's"
+    );
+    let modules = crate::plugins::wasm::Modules::new(&data, "2.1.0");
+    let (_, made) = modules
+        .prepare_reactor(Path::new(&view.folder))
+        .expect("precompiled");
+    assert_eq!(made, crate::plugins::wasm::Made::Precompiled);
+
+    let e = install(&store, &plugins, "dev.exemple.reactor-bare", None, false)
+        .await
+        .unwrap_err();
+    assert!(e.contains("pas de module WASM compilé par le store"), "{e}");
+    assert!(plugins.get("dev.exemple.reactor-bare", Lang::Fr).is_none());
+}
+
 #[tokio::test]
 async fn a_changed_archive_or_a_forged_seal_stops_everything() {
     let fake = Fake::start().trusted();

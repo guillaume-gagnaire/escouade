@@ -4,7 +4,8 @@
 //! `escouade-turn` export, built by scripts/escouade-js.sh and embedded here), deterministically.
 //!
 //! What runs the module (the app's cache, wasmtime, its instance and what it is served) is in the app:
-//! `src-tauri/src/plugins/wasm.rs`. The store's image has this part alone.
+//! `src-tauri/src/plugins/wasm.rs`. The store's image has this part alone. So is what a `run.wasm` module must look like
+//! ([`reactor_form`], ESC-331): its exports are read here, without wasmtime, and the app compiles it.
 
 use parking_lot::RwLock;
 use std::path::{Path, PathBuf};
@@ -20,6 +21,8 @@ pub const SERVED_SINCE: &str = "2.2.0";
 pub const JAVY_VERSION: &str = "9.1.0";
 /// The Node modules a bundle may import, served by the prelude; any other import refuses its compilation.
 const NODE: &[&str] = &["node:fs", "node:readline"];
+/// The module of a `run.wasm` plugin, in its folder: what the store published, or what its author built.
+pub const MODULE_FILE: &str = "plugin.wasm";
 /// Windows's flag for a program without a console window.
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -48,6 +51,65 @@ pub fn sha256(bytes: &[u8]) -> String {
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect()
+}
+
+/// A number of a module (LEB128) at `at`, which it passes.
+fn number(bytes: &[u8], at: &mut usize) -> Option<usize> {
+    let (mut value, mut shift) = (0usize, 0u32);
+    loop {
+        let byte = *bytes.get(*at)?;
+        *at += 1;
+        value |= usize::from(byte & 0x7f).checked_shl(shift)?;
+        if byte & 0x80 == 0 {
+            return Some(value);
+        }
+        shift += 7;
+        if shift > 28 {
+            return None;
+        }
+    }
+}
+
+/// The names a module exports, from its binary form; none when it is no module.
+fn exports_of(bytes: &[u8]) -> Option<Vec<String>> {
+    let mut at = 8;
+    if bytes.get(..8)? != b"\0asm\x01\0\0\0" {
+        return None;
+    }
+    let mut names = Vec::new();
+    while at < bytes.len() {
+        let id = bytes[at];
+        at += 1;
+        let size = number(bytes, &mut at)?;
+        let end = at.checked_add(size).filter(|e| *e <= bytes.len())?;
+        // The export section: a count, then each name, its kind and its index.
+        if id == 7 {
+            let mut p = at;
+            for _ in 0..number(bytes, &mut p)? {
+                let len = number(bytes, &mut p)?;
+                let stop = p.checked_add(len).filter(|e| *e <= end)?;
+                names.push(String::from_utf8_lossy(&bytes[p..stop]).into_owned());
+                p = stop + 1;
+                number(bytes, &mut p)?;
+            }
+        }
+        at = end;
+    }
+    Some(names)
+}
+
+/// Whether `bytes` have the form of the reactor a `run.wasm` plugin must be: no `_start`, and `escouade-turn` (rustc
+/// exports no `_initialize` from a cdylib unless told to, so none is asked for). Why not, in words.
+pub fn reactor_form(bytes: &[u8]) -> Result<(), String> {
+    let form = "a plugin in Rust is a reactor (crate-type = [\"cdylib\"], target wasm32-wasip1) with its turn";
+    let exports = exports_of(bytes).ok_or_else(|| format!("no WASM module: {form}"))?;
+    if exports.iter().any(|e| e == "_start") {
+        return Err(format!("it exports _start: {form}"));
+    }
+    if !exports.iter().any(|e| e == "escouade-turn") {
+        return Err(format!("no export escouade-turn: {form}"));
+    }
+    Ok(())
 }
 
 /// Why a bundle cannot run in WASM (ESC-322: said by `escouade-plugin` in the author's language).

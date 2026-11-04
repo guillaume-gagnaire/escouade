@@ -194,11 +194,11 @@ fn a_bundle_is_a_program_of_its_own_never_beside_a_command() {
         .unwrap_err();
     assert_eq!(
         p.iter().map(|p| p.message(Lang::Fr)).collect::<Vec<_>>(),
-        ["`run.js` ne va pas avec `run.command` : un programme est une commande ou un bundle JS/TS, pas les deux."]
+        ["`run.js` ne va pas avec `run.command`, `run.js` ou `run.wasm` : un programme est une commande, un bundle JS/TS ou un module Rust, un seul des trois."]
     );
     assert_eq!(
         p[0].message(Lang::En),
-        "`run.js` does not go with `run.command`: a program is a command or a JS/TS bundle, not both."
+        "`run.js` does not go with `run.command`, `run.js` or `run.wasm`: a program is a command, a JS/TS bundle or a Rust module, one of the three."
     );
 }
 

@@ -165,6 +165,8 @@ mod plugins_linear_tests;
 #[cfg(test)]
 mod plugins_protocol_tests;
 #[cfg(test)]
+mod plugins_reactor_tests;
+#[cfg(test)]
 mod plugins_reader_tests;
 #[cfg(test)]
 mod plugins_runtime_tests;
@@ -174,6 +176,8 @@ mod plugins_store_tests;
 mod plugins_tests;
 #[cfg(test)]
 mod plugins_trello_tests;
+#[cfg(test)]
+mod plugins_wasm_parity_tests;
 #[cfg(test)]
 mod plugins_wasm_tests;
 mod pragent;

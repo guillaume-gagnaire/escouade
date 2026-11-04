@@ -157,8 +157,10 @@ pub enum Code {
     Small,
     /// A webhook to a host `permissions.network` does not cover (`host_covered`).
     Network,
-    /// `run.js` beside `run.command`: a program is one or the other (ESC-320).
+    /// Two of `run.command`, `run.js` and `run.wasm`: a program is one of them (ESC-320, ESC-331).
     Exclusive,
+    /// A `run.wasm` that names no `Cargo.toml`: a module is built, never brought (ESC-331).
+    Cargo,
 }
 
 /// A field that is wrong, by its path (`contributes.settings[0].key`; empty for the whole file).
@@ -259,8 +261,13 @@ impl Problem {
             ),
             Code::Exclusive => tr_in!(
                 lang,
-                "ne va pas avec `run.command` : un programme est une commande ou un bundle JS/TS, pas les deux.",
-                "does not go with `run.command`: a program is a command or a JS/TS bundle, not both."
+                "ne va pas avec `run.command`, `run.js` ou `run.wasm` : un programme est une commande, un bundle JS/TS ou un module Rust, un seul des trois.",
+                "does not go with `run.command`, `run.js` or `run.wasm`: a program is a command, a JS/TS bundle or a Rust module, one of the three."
+            ),
+            Code::Cargo => tr_in!(
+                lang,
+                "doit nommer le `Cargo.toml` du plugin, jamais un binaire.",
+                "must name the plugin's `Cargo.toml`, never a binary."
             ),
             Code::Square => tr_in!(
                 lang,
@@ -335,8 +342,8 @@ pub struct Range {
 }
 
 /// Its program (`run`): none for a declarative plugin. A command (`command`, a process of its
-/// own), or a JS/TS bundle of its folder (`js`, run in WASM inside Escouade, ESC-320): one or the
-/// other, never both; `command` is empty for a bundle.
+/// own), a JS/TS bundle of its folder (`js`, run in WASM inside Escouade, ESC-320) or the Rust of a
+/// module (`wasm`, ESC-331): one of the three; `command` is empty for the two in WASM.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Run {
@@ -344,9 +351,19 @@ pub struct Run {
     /// The bundle (`dist/plugin.mjs`), a file of the plugin's folder.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub js: Option<String>,
+    /// The Rust of its module (`Cargo.toml`), a file of the plugin's folder; what runs is its `plugin.wasm`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wasm: Option<String>,
     pub args: Vec<String>,
     /// The program of each system that has its own (`windows`, `macos`, `linux`).
     pub by_system: std::collections::BTreeMap<String, String>,
+}
+
+impl Run {
+    /// What it runs in WASM, inside Escouade: its bundle, or the `Cargo.toml` of its module; none for a process.
+    pub fn in_wasm(&self) -> Option<&str> {
+        self.js.as_deref().or(self.wasm.as_deref())
+    }
 }
 
 /// What it asks for (`permissions`); a permission Escouade does not know is not given.
@@ -1018,26 +1035,49 @@ impl Checker {
         self.ignore_others(
             o,
             "run",
-            &["command", "js", "args", "windows", "macos", "linux"],
+            &["command", "js", "wasm", "args", "windows", "macos", "linux"],
         );
-        // A bundle (ESC-320): a file of the folder, never beside a command.
-        let both = o.contains_key("js") && o.contains_key("command");
-        if both {
-            self.problem("run.js", Code::Exclusive);
+        // A bundle (ESC-320) or the Rust of a module (ESC-331): a file of the folder, one of the three kinds of program.
+        let in_wasm = o.contains_key("js") || o.contains_key("wasm");
+        let both = o.contains_key("wasm") && o.contains_key("js");
+        let clash = (in_wasm && o.contains_key("command")) || both;
+        if clash {
+            self.problem(
+                if both || !o.contains_key("js") {
+                    "run.wasm"
+                } else {
+                    "run.js"
+                },
+                Code::Exclusive,
+            );
         }
-        let js = match o.get("js") {
-            Some(j) if !both => self.inner_path(j, "run.js").filter(|path| {
+        let inner = |me: &mut Self, key: &str, cargo: bool| {
+            let at = join("run", key);
+            me.inner_path(o.get(key)?, &at).filter(|path| {
+                if cargo && icon_path(path).rsplit('/').next() != Some("Cargo.toml") {
+                    me.problem(&at, Code::Cargo);
+                    return false;
+                }
                 let found = file.is_none_or(|file| file(&icon_path(path)).is_some());
                 if !found {
-                    self.problem("run.js", Code::File);
+                    me.problem(&at, Code::File);
                 }
                 found
-            }),
-            _ => None,
+            })
         };
-        let command = match (o.get("command"), o.contains_key("js")) {
-            _ if both => None,
-            (None, true) => js.as_ref().map(|_| String::new()),
+        let js = if clash {
+            None
+        } else {
+            inner(self, "js", false)
+        };
+        let wasm = if clash {
+            None
+        } else {
+            inner(self, "wasm", true)
+        };
+        let command = match (o.get("command"), in_wasm) {
+            _ if clash => None,
+            (None, true) => js.as_ref().or(wasm.as_ref()).map(|_| String::new()),
             (None, false) => {
                 self.problem("run.command", Code::Required);
                 None
@@ -1059,6 +1099,7 @@ impl Checker {
         Some(Run {
             command: command?,
             js,
+            wasm,
             args,
             by_system,
         })
@@ -1376,10 +1417,11 @@ pub fn schema() -> Value {
             },
             "run": {
                 "type": "object",
-                "description": "Its program; without one, the plugin is declarative: nothing runs. A command (`command`, a process) or a JS/TS bundle of its folder that Escouade runs in WASM (`js`), not both.",
+                "description": "Its program; without one, the plugin is declarative: nothing runs. A command (`command`, a process), a JS/TS bundle of its folder that Escouade runs in WASM (`js`), or the `Cargo.toml` of a Rust module that Escouade runs in WASM (`wasm`): one of the three.",
                 "properties": {
                     "command": inner_path,
                     "js": inner_path,
+                    "wasm": inner_path,
                     "args": words,
                     "windows": inner_path,
                     "macos": inner_path,

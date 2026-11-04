@@ -689,6 +689,7 @@ fn a_relative_folder_gives_an_absolute_program() {
     let run = crate::plugins::manifest::Run {
         command: "slack".into(),
         js: None,
+        wasm: None,
         args: vec![],
         by_system: Default::default(),
     };

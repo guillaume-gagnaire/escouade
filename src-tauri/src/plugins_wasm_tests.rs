@@ -707,8 +707,8 @@ async fn net_fetch_refuses_at_the_connection_a_declared_host_that_resolves_to_12
     w.rt.shutdown();
 }
 
-#[test]
-fn net_fetch_refuses_every_address_of_the_machine_and_of_the_local_network() {
+#[tokio::test(flavor = "multi_thread")]
+async fn net_fetch_refuses_every_address_of_the_machine_and_of_the_local_network() {
     let refused = [
         "127.0.0.1",
         "127.8.9.1",
@@ -780,7 +780,7 @@ fn net_fetch_refuses_every_address_of_the_machine_and_of_the_local_network() {
     let f = Fetcher::new("dev.test.probe", &["exemple.dev".to_string()], &net);
     for host in ["a", "b", "c", "d", "e"] {
         let url = format!("https://{host}.exemple.dev:{port}/x");
-        let (code, message) = f.fetch(&json!({ "url": url })).unwrap_err();
+        let (code, message) = f.fetch(&json!({ "url": url })).await.unwrap_err();
         assert_eq!(code, wasm::REFUSED, "{host}: {message}");
         assert!(
             message.contains("an address of this machine or of the local network"),
@@ -814,7 +814,7 @@ fn net_fetch_refuses_every_address_of_the_machine_and_of_the_local_network() {
     ];
     for (url, said) in names {
         assert_eq!(
-            f.fetch(&json!({ "url": url })).unwrap_err(),
+            f.fetch(&json!({ "url": url })).await.unwrap_err(),
             (wasm::REFUSED, said.to_string()),
             "{url}"
         );
@@ -1031,5 +1031,67 @@ async fn a_bundle_that_reads_stdin_itself_says_to_build_it_again() {
             .any(|l| l.contains("build the plugin with @escouade-dev/plugin 0.3 or later")),
         "{journal:#?}"
     );
+    w.rt.shutdown();
+}
+
+/// ESC-331: one host for `run.js` and `run.wasm`: a bundle's fetch runs beside its thread too.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_slow_fetch_of_a_bundle_holds_back_neither_the_next_nor_the_thread() {
+    if !ready() {
+        return;
+    }
+    let l = TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://{}", l.local_addr().unwrap());
+    std::thread::spawn(move || {
+        for stream in l.incoming().flatten() {
+            std::thread::spawn(move || {
+                let mut r = BufReader::new(stream.try_clone().unwrap());
+                let (mut first, mut len) = (String::new(), 0);
+                r.read_line(&mut first).unwrap();
+                loop {
+                    let mut h = String::new();
+                    r.read_line(&mut h).unwrap();
+                    if h.trim().is_empty() {
+                        break;
+                    }
+                    if let Some(v) = h.to_ascii_lowercase().strip_prefix("content-length:") {
+                        len = v.trim().parse().unwrap();
+                    }
+                }
+                r.read_exact(&mut vec![0; len]).unwrap();
+                if first.contains("/slow") {
+                    std::thread::sleep(Duration::from_millis(1500));
+                }
+                let mut s = stream;
+                let _ = write!(
+                    s,
+                    "HTTP/1.1 200 OK\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"
+                );
+            });
+        }
+    });
+    let w = probe("slow-fetch", &["exemple.dev"], Limits::default());
+    w.rt.set_net(Net {
+        routes: HashMap::from([("api.exemple.dev".to_string(), base)]),
+        dns: None,
+    });
+    let started = Instant::now();
+    let (rt, id) = (w.rt.clone(), w.id.clone());
+    let slow = tokio::spawn(async move {
+        let urls = json!({ "urls": ["https://api.exemple.dev/slow"] });
+        let r = rt.call(&id, "try", urls).await.unwrap();
+        (r, started.elapsed())
+    });
+    // Wait for the first to be under way, then the second and a plain call go past it.
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let urls = json!({ "urls": ["https://api.exemple.dev/quick"] });
+    let quick = w.rt.call(&w.id, "try", urls).await.unwrap();
+    assert!(w.rt.call(&w.id, "ping", json!({})).await.is_ok());
+    let passed = started.elapsed();
+    assert_eq!(quick[0][0], 200, "{quick}");
+    let (slow, took) = slow.await.unwrap();
+    assert_eq!(slow[0][0], 200, "{slow}");
+    assert!(passed < took, "{passed:?} then {took:?}");
+    assert!(took >= Duration::from_millis(1500), "{took:?}");
     w.rt.shutdown();
 }

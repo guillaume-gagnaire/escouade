@@ -24,7 +24,8 @@ export interface ManifestError {
     | 'square'
     | 'small'
     | 'network'
-    | 'exclusive';
+    | 'exclusive'
+    | 'cargo';
   /** The type, or the values, the field takes, for `type` and `enum`. */
   expected?: string;
 }

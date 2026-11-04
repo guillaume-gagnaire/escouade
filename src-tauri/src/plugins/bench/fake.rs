@@ -261,7 +261,7 @@ impl Session {
         })
     }
 
-    /// Starts the instance of `module`, the WASM of the `run.js` plugin of `manifest` in `folder`, in Escouade's host,
+    /// Starts the instance of `module`, the WASM of the plugin of `manifest` in `folder`, in Escouade's host,
     /// with its limits; `secrets` and `made` as for a process.
     pub fn start_wasm(
         folder: &Path,
@@ -275,6 +275,7 @@ impl Session {
         let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
         let shared = Shared::new(tx, folder, manifest, secrets, made, true);
         let (ftx, frames) = mpsc::unbounded_channel::<wasm::Frame>();
+        let back = ftx.downgrade();
         // What the bench writes, to the instance's thread; closed when the bench closes it (`kill`, `shutdown`).
         std::thread::Builder::new()
             .name(format!("bench {} input", manifest.id))
@@ -310,9 +311,10 @@ impl Session {
                     Ok(instance) => {
                         let wiring = wasm::Wiring {
                             rx: frames,
+                            back,
                             line: Box::new(move |l| incoming(&s1, l)),
                             stderr: Box::new(move |l| s2.tell(l.to_string())),
-                            refused: Box::new(move |l| s3.tell(l.to_string())),
+                            refused: Arc::new(move |l| s3.tell(l.to_string())),
                         };
                         wasm::serve(instance, fetcher, wiring)
                     }

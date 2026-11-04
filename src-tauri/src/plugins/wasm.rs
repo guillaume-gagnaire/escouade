@@ -1,9 +1,14 @@
-//! The JS/TS plugins in WASM (ESC-320, docs/PLUGINS.md §5): a plugin whose program is a bundle of its folder
-//! (`"run": { "js": "dist/plugin.mjs" }`) runs inside Escouade, without Node, isolated.
+//! The plugins in WASM (ESC-320, docs/PLUGINS.md §5 and §8): a plugin whose program is a bundle of its folder
+//! (`"run": { "js": "dist/plugin.mjs" }`) or a Rust module (`"run": { "wasm": "Cargo.toml" }`, ESC-331) runs inside
+//! Escouade, without Node, isolated. One host for both: only the first call differs (`_start`, or `_initialize` when
+//! the module has one).
 //!
 //! - **Its module.** The bundle is compiled by `escouade_plugin_cli::wasm` (ESC-328: the pinned Javy, escouade-js and
 //!   the prelude, the same in the store's image), deterministically. Then Cranelift precompiles it for this machine. Both are kept in the app's cache ([`Modules`]): the module by the
 //!   SHA-256 of what made it, the precompiled one by the app's version too, made again after an update.
+//! - **A Rust module** is a reactor compiled to `wasm32-wasip1` (`crate-type = ["cdylib"]`): no `_start`, and
+//!   `escouade-turn` (rustc exports no `_initialize` from a cdylib unless told to: it is called when it is there). It is `plugin.wasm` beside the manifest: what the store published, or what the author built.
+//!   Precompiled and kept as a bundle's, under the SHA-256 of the module itself. It gets no first line.
 //! - **Its instance.** One per plugin, which keeps its state from a call to the next, as its process did: the same
 //!   JSON-RPC lines, carried by the module's standard input and output, held in memory ([`Instance`]). The input
 //!   never blocks; a turn (`escouade-turn`) hands the plugin what came, and ends when QuickJS has nothing left to
@@ -14,9 +19,13 @@
 //!   ([`Fetcher`]): https only, to a host of `permissions.network` or one of its subdomains, no redirection followed,
 //!   10 s and 1 MiB at most, and never to an address of the machine or of the local network, judged on the
 //!   addresses the name resolves to, by the resolver the connection itself uses ([`forbidden`]).
+//! - **Its thread** ([`serve`]) waits on one channel, whatever comes: a line of the core, the end of a fetch. It writes
+//!   all that came on the module's input, runs one turn, then serves what the module wrote. A fetch runs beside it, on
+//!   the host's runtime ([`net`]), and comes back on the channel: a slow call holds back neither the next nor the thread.
+//! - **Its synchronous call** (`escouade.call`, [`Calls`]): a JSON request, its JSON answer, served on the thread, in
+//!   the time of the turn, for what a state machine must have before it answers.
 //!
-//! The transport (the thread of a plugin, [`serve`]) is wired to the runtime's host in `runtime.rs`: same journal,
-//! same delays, same restarts.
+//! The transport is wired to the runtime's host in `runtime.rs`: same journal, same delays, same restarts.
 
 use crate::paths::DataDir;
 use serde_json::{json, Value};
@@ -25,7 +34,10 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
-use wasmtime::{Config, Engine, Linker, Module, Store, StoreLimits, StoreLimitsBuilder, TypedFunc};
+use wasmtime::{
+    Caller, Config, Engine, Extern, Linker, Module, Store, StoreLimits, StoreLimitsBuilder,
+    TypedFunc,
+};
 use wasmtime_wasi::cli::{IsTerminal, StdinStream, StdoutStream};
 use wasmtime_wasi::p1::WasiP1Ctx;
 use wasmtime_wasi::p2::{InputStream, OutputStream, Pollable, StreamResult};
@@ -34,8 +46,8 @@ use wasmtime_wasi::WasiCtxBuilder;
 // The compiler is the crate's: what the rest of the app, the bench and the tests call here.
 #[allow(unused_imports)]
 pub use escouade_plugin_cli::wasm::{
-    escouade_js, escouade_js_sha256, javy_asset, script_of, sha256, unpack_javy, wrap, ClientOf,
-    Compiler, Refusal, JAVY_VERSION, PRELUDE, SERVED_SINCE,
+    escouade_js, escouade_js_sha256, javy_asset, reactor_form, script_of, sha256, unpack_javy,
+    wrap, ClientOf, Compiler, Refusal, JAVY_VERSION, MODULE_FILE, PRELUDE, SERVED_SINCE,
 };
 
 /// The epoch's tick.
@@ -47,6 +59,8 @@ pub const FAILED: i64 = -32004;
 /// How long a fetch may take, and how much it may read.
 const FETCH_TIME: Duration = Duration::from_secs(10);
 const FETCH_BYTES: usize = 1 << 20;
+/// How many fetches of a plugin are under way at once; the others wait for their turn beside its thread.
+const FETCHES_AT_ONCE: usize = 16;
 /// The files of its folder a plugin is given: each, and all of them.
 const FILE_BYTES: u64 = 256 << 10;
 const FILES_BYTES: usize = 1 << 20;
@@ -103,7 +117,7 @@ fn w<T>(r: wasmtime::Result<T>) -> Result<T, String> {
 pub enum Made {
     /// Its precompiled module, from the cache.
     Cache,
-    /// Its module from the cache, precompiled now (a new version of the app).
+    /// Its module, precompiled now (a new version of the app, a new `run.wasm`).
     Precompiled,
     /// Its bundle compiled by Javy, then precompiled.
     Compiled,
@@ -119,7 +133,7 @@ impl Made {
     }
 }
 
-/// The modules of the `run.js` plugins, in the app's cache.
+/// The modules of the plugins in WASM, in the app's cache.
 pub struct Modules {
     cache: PathBuf,
     app_version: String,
@@ -182,14 +196,8 @@ impl Modules {
         let wasm = self.cache.join(format!("{key}.wasm"));
         let native = self.cache.join(format!("{key}-{}.cwasm", self.app_version));
         let _one = self.busy.lock().unwrap_or_else(|e| e.into_inner());
-        // Read whole, not mapped: under Windows a mapped file could be neither replaced nor taken out of the cache.
-        if let Ok(pre) = std::fs::read(&native) {
-            // SAFETY: a file this app wrote itself (`Module::serialize`) into its own cache, never one received;
-            // wasmtime checks it was made by this same version and configuration.
-            match unsafe { Module::deserialize(engine(), &pre) } {
-                Ok(m) => return Ok((m, Made::Cache)),
-                Err(e) => log::warn!("{}: {e:#}; precompiled again", native.display()),
-            }
+        if let Some(m) = precompiled(&native) {
+            return Ok((m, Made::Cache));
         }
         let (bytes, made) = match std::fs::read(&wasm) {
             Ok(b) => (b, Made::Precompiled),
@@ -203,6 +211,34 @@ impl Modules {
         let pre = w(module.serialize())?;
         crate::paths::write_atomic(&native, &pre).map_err(|e| e.to_string())?;
         Ok((module, made))
+    }
+
+    /// The module of a `run.wasm` plugin (ESC-331), its `plugin.wasm`: precompiled from the cache, by the SHA-256 of the
+    /// module and the app's version, or now. The module is not kept here: it stays in the plugin's folder.
+    pub fn prepare_reactor(&self, folder: &Path) -> Result<(Module, Made), String> {
+        let path = folder.join(MODULE_FILE);
+        let bytes =
+            std::fs::read(&path).map_err(|e| format!("its module {}: {e}", path.display()))?;
+        let native = self
+            .cache
+            .join(format!("{}-{}.cwasm", sha256(&bytes), self.app_version));
+        let _one = self.busy.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(m) = precompiled(&native) {
+            return Ok((m, Made::Cache));
+        }
+        let module = reactor(&bytes)?;
+        std::fs::create_dir_all(&self.cache).map_err(|e| e.to_string())?;
+        let pre = w(module.serialize())?;
+        crate::paths::write_atomic(&native, &pre).map_err(|e| e.to_string())?;
+        Ok((module, Made::Precompiled))
+    }
+
+    /// The module of the program `run` of the plugin of `folder`, whichever of the two it is; a process has none.
+    pub fn of(&self, folder: &Path, run: &super::manifest::Run) -> Result<(Module, Made), String> {
+        match &run.js {
+            Some(js) => self.prepare(folder, js),
+            None => self.prepare_reactor(folder),
+        }
     }
 
     /// Takes in the module the store compiled of `bundle` (ESC-323), once checked against its
@@ -253,6 +289,33 @@ impl Modules {
             }
         }
     }
+}
+
+/// The precompiled module of `path`, in the cache, when it is one wasmtime can load.
+fn precompiled(path: &Path) -> Option<Module> {
+    // Read whole, not mapped: under Windows a mapped file could be neither replaced nor taken out of the cache.
+    let pre = std::fs::read(path).ok()?;
+    // SAFETY: a file this app wrote itself (`Module::serialize`) into its own cache, never one received;
+    // wasmtime checks it was made by this same version and configuration.
+    match unsafe { Module::deserialize(engine(), &pre) } {
+        Ok(m) => Some(m),
+        Err(e) => {
+            log::warn!("{}: {e:#}; precompiled again", path.display());
+            None
+        }
+    }
+}
+
+/// Whether the module exports `name`.
+fn exports(module: &Module, name: &str) -> bool {
+    module.exports().any(|e| e.name() == name)
+}
+
+/// `bytes` compiled, when they are the reactor a `run.wasm` plugin must be: no `_start`, and `escouade-turn`.
+pub fn reactor(bytes: &[u8]) -> Result<Module, String> {
+    let module = w(Module::new(engine(), bytes))?;
+    reactor_form(bytes)?;
+    Ok(module)
 }
 
 // ---- The instance ----------------------------------------------------------------------------------------------
@@ -339,6 +402,57 @@ impl StdoutStream for Outbox {
 struct State {
     wasi: WasiP1Ctx,
     limits: StoreLimits,
+    calls: Option<Calls>,
+}
+
+/// What `escouade.call` serves: a method and its parameters, its result or why not. Served on the plugin's thread, in
+/// the time of its turn: nothing here may wait for long.
+pub type Calls = Arc<dyn Fn(&str, &Value) -> Result<Value, String> + Send + Sync>;
+
+/// The import `escouade.call`: the JSON request at `request`, its JSON answer (`{"result":…}` or `{"error":"…"}`)
+/// written at `out`. How many bytes it took, or the opposite of how many it needs when `cap` is too small. A pointer out
+/// of its memory is a fault of the module, as any other trap.
+fn escouade_call(
+    mut caller: Caller<'_, State>,
+    request: u32,
+    len: u32,
+    out: u32,
+    cap: u32,
+) -> wasmtime::Result<i64> {
+    let out_of_memory = || wasmtime::Error::msg("escouade.call: out of the module's memory");
+    let Some(Extern::Memory(memory)) = caller.get_export("memory") else {
+        return Err(wasmtime::Error::msg(
+            "escouade.call: a module without memory",
+        ));
+    };
+    let (request, len) = (request as usize, len as usize);
+    let asked: Value = serde_json::from_slice(
+        memory
+            .data(&caller)
+            .get(request..request.saturating_add(len))
+            .ok_or_else(out_of_memory)?,
+    )
+    .unwrap_or(Value::Null);
+    let method = asked["method"].as_str().unwrap_or_default();
+    let answer = match &caller.data().calls {
+        Some(calls) => calls(method, &asked["params"]),
+        None => Err(format!("no call {method}")),
+    };
+    let answer = match answer {
+        Ok(result) => json!({ "result": result }),
+        Err(error) => json!({ "error": error }),
+    }
+    .to_string();
+    if answer.len() > cap as usize {
+        return Ok(-(answer.len() as i64));
+    }
+    let out = out as usize;
+    memory
+        .data_mut(&mut caller)
+        .get_mut(out..out.saturating_add(answer.len()))
+        .ok_or_else(out_of_memory)?
+        .copy_from_slice(answer.as_bytes());
+    Ok(answer.len() as i64)
 }
 
 /// Why an instance is done.
@@ -363,7 +477,7 @@ impl std::fmt::Display for Fault {
     }
 }
 
-/// A plugin's instance: its module evaluated once, then a turn at a time.
+/// A plugin's instance: its module started once, then a turn at a time.
 pub struct Instance {
     store: Store<State>,
     turn: TypedFunc<(), ()>,
@@ -374,11 +488,22 @@ pub struct Instance {
 }
 
 impl Instance {
-    /// Its instance, with the files of its folder (the first line), its top level run (`_start`).
+    /// Its instance, without `escouade.call` to serve.
     pub fn start(
         module: &Module,
         files: &BTreeMap<String, String>,
         limits: Limits,
+    ) -> Result<Instance, Fault> {
+        Self::start_with(module, files, limits, None)
+    }
+
+    /// Its instance. A bundle gets the files of its folder (the first line), then its top level runs (`_start`); a
+    /// reactor gets no line, and its `_initialize` runs if it has one. The rest is the same.
+    pub fn start_with(
+        module: &Module,
+        files: &BTreeMap<String, String>,
+        limits: Limits,
+        calls: Option<Calls>,
     ) -> Result<Instance, Fault> {
         let crashed = Fault::Crashed;
         let mut linker: Linker<State> = Linker::new(engine());
@@ -387,6 +512,7 @@ impl Instance {
             |s: &mut State| &mut s.wasi,
         ))
         .map_err(crashed)?;
+        w(linker.func_wrap("escouade", "call", escouade_call)).map_err(crashed)?;
         let inbox = Inbox::default();
         let outbox = Outbox::default();
         let errbox = Outbox::default();
@@ -404,6 +530,7 @@ impl Instance {
                     .memory_size(limits.memory)
                     .instances(1)
                     .build(),
+                calls,
             },
         );
         store.limiter(|s| &mut s.limits);
@@ -411,7 +538,13 @@ impl Instance {
         let instance = w(linker.instantiate(&mut store, module)).map_err(crashed)?;
         let turn =
             w(instance.get_typed_func::<(), ()>(&mut store, "escouade-turn")).map_err(crashed)?;
-        let start = w(instance.get_typed_func::<(), ()>(&mut store, "_start")).map_err(crashed)?;
+        let bundle = exports(module, "_start");
+        let first = if bundle { "_start" } else { "_initialize" };
+        let first = if exports(module, first) {
+            Some(w(instance.get_typed_func::<(), ()>(&mut store, first)).map_err(crashed)?)
+        } else {
+            None
+        };
         let mut me = Instance {
             store,
             turn,
@@ -420,9 +553,13 @@ impl Instance {
             errbox,
             limits,
         };
-        let boot = json!({ "escouade/boot": { "files": files } });
-        me.push(format!("{boot}\n").as_bytes());
-        me.call(start, limits.turn)?;
+        if bundle {
+            let boot = json!({ "escouade/boot": { "files": files } });
+            me.push(format!("{boot}\n").as_bytes());
+        }
+        if let Some(first) = first {
+            me.call(first, limits.turn)?;
+        }
         Ok(me)
     }
 
@@ -433,16 +570,6 @@ impl Instance {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .extend(bytes);
-    }
-
-    /// Whether something waits on its input.
-    pub fn waiting(&self) -> bool {
-        !self
-            .inbox
-            .0
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .is_empty()
     }
 
     /// What it wrote on its standard error since the last time.
@@ -649,13 +776,28 @@ pub struct Net {
     pub dns: Option<Dns>,
 }
 
+/// The host's runtime: what runs beside the plugins' threads (their `net/fetch`).
+fn net() -> &'static tokio::runtime::Handle {
+    static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+    RUNTIME
+        .get_or_init(|| {
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(2)
+                .thread_name("plugins-net")
+                .enable_all()
+                .build()
+                .expect("the host's runtime")
+        })
+        .handle()
+}
+
 /// A plugin's `net/fetch`: only to its hosts, by https, through the guarded resolver.
 pub struct Fetcher {
     id: String,
     network: Vec<String>,
     routes: HashMap<String, String>,
     client: Option<reqwest::Client>,
-    rt: Option<tokio::runtime::Runtime>,
+    at_once: tokio::sync::Semaphore,
 }
 
 impl Fetcher {
@@ -672,16 +814,12 @@ impl Fetcher {
             .user_agent(concat!("escouade/", env!("CARGO_PKG_VERSION")))
             .build()
             .ok();
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .ok();
         Self {
             id: id.to_string(),
             network: network.to_vec(),
             routes: net.routes.clone(),
             client,
-            rt,
+            at_once: tokio::sync::Semaphore::new(FETCHES_AT_ONCE),
         }
     }
 
@@ -704,7 +842,7 @@ impl Fetcher {
     }
 
     /// `{ url, method, headers, body }` → `{ status, headers, body }`, or why not (`REFUSED`, `FAILED`).
-    pub fn fetch(&self, params: &Value) -> Result<Value, (i64, String)> {
+    pub async fn fetch(&self, params: &Value) -> Result<Value, (i64, String)> {
         let url = params.get("url").and_then(Value::as_str).unwrap_or("");
         let parsed = reqwest::Url::parse(url)
             .map_err(|_| (super::runtime::INVALID_PARAMS, format!("not a URL: {url}")))?;
@@ -740,7 +878,7 @@ impl Fetcher {
             }
             None => parsed.to_string(),
         };
-        let (Some(client), Some(rt)) = (&self.client, &self.rt) else {
+        let Some(client) = &self.client else {
             return Err((FAILED, "no network client".into()));
         };
         let method = params
@@ -766,36 +904,39 @@ impl Fetcher {
         if let Some(b) = params.get("body").and_then(Value::as_str) {
             req = req.body(b.to_string());
         }
-        rt.block_on(async {
-            let mut res = req.send().await.map_err(|e| refusal_of(&name, &e))?;
-            let status = res.status().as_u16();
-            let mut headers = serde_json::Map::new();
-            for (k, v) in res.headers() {
-                let v = v.to_str().unwrap_or("");
-                headers
-                    .entry(k.as_str().to_string())
-                    .and_modify(|old| {
-                        *old = json!(format!("{}, {v}", old.as_str().unwrap_or("")));
-                    })
-                    .or_insert_with(|| json!(v));
+        let _turn = self
+            .at_once
+            .acquire()
+            .await
+            .map_err(|e| (FAILED, e.to_string()))?;
+        let mut res = req.send().await.map_err(|e| refusal_of(&name, &e))?;
+        let status = res.status().as_u16();
+        let mut headers = serde_json::Map::new();
+        for (k, v) in res.headers() {
+            let v = v.to_str().unwrap_or("");
+            headers
+                .entry(k.as_str().to_string())
+                .and_modify(|old| {
+                    *old = json!(format!("{}, {v}", old.as_str().unwrap_or("")));
+                })
+                .or_insert_with(|| json!(v));
+        }
+        let mut body = Vec::new();
+        while let Some(chunk) = res
+            .chunk()
+            .await
+            .map_err(|e| (FAILED, format!("{name}: {e}")))?
+        {
+            if body.len() + chunk.len() > FETCH_BYTES {
+                return Err((FAILED, format!("{name}: an answer over 1 MiB")));
             }
-            let mut body = Vec::new();
-            while let Some(chunk) = res
-                .chunk()
-                .await
-                .map_err(|e| (FAILED, format!("{name}: {e}")))?
-            {
-                if body.len() + chunk.len() > FETCH_BYTES {
-                    return Err((FAILED, format!("{name}: an answer over 1 MiB")));
-                }
-                body.extend_from_slice(&chunk);
-            }
-            Ok(json!({
-                "status": status,
-                "headers": headers,
-                "body": String::from_utf8_lossy(&body),
-            }))
-        })
+            body.extend_from_slice(&chunk);
+        }
+        Ok(json!({
+            "status": status,
+            "headers": headers,
+            "body": String::from_utf8_lossy(&body),
+        }))
     }
 }
 
@@ -824,24 +965,30 @@ fn refusal_of(name: &str, e: &reqwest::Error) -> (i64, String) {
 
 // ---- The plugin's thread ---------------------------------------------------------------------------------------
 
-/// A line for its input, and who waits for it to be written (`runtime::Frame`).
+/// What comes for a plugin, on the one channel its thread waits on: a line for its input, and who waits for it to be
+/// written (`runtime::Frame`). A line of the core, the end of a fetch: to the module, it is all lines.
 pub type Frame = (Vec<u8>, Option<tokio::sync::oneshot::Sender<()>>);
 
 /// What the thread of a plugin tells its host.
 pub struct Wiring {
-    /// What the host writes to it.
+    /// What comes for it. Closed by the host: the end of the thread, a fetch under way or not.
     pub rx: tokio::sync::mpsc::UnboundedReceiver<Frame>,
+    /// The way back to `rx` of what runs beside the thread, which does not keep it open.
+    pub back: tokio::sync::mpsc::WeakUnboundedSender<Frame>,
     /// A line it wrote, but `net/fetch`'s requests (served here).
     pub line: Box<dyn FnMut(&str) + Send>,
     /// A line of its standard error.
     pub stderr: Box<dyn FnMut(&str) + Send>,
-    /// A fetch refused or failed, for its journal.
-    pub refused: Box<dyn FnMut(&str) + Send>,
+    /// A fetch refused or failed, for its journal: said from beside the thread.
+    pub refused: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
 /// Serves the instance until its host closes its input (None) or it is done (why).
 pub fn serve(mut instance: Instance, fetcher: Fetcher, mut wiring: Wiring) -> Option<Fault> {
     let limits = instance.limits();
+    let fetcher = Arc::new(fetcher);
+    // What runs beside the thread: it goes with it, dropped here.
+    let mut beside = tokio::task::JoinSet::new();
     let mut errors = String::new();
     let flush_stderr = |instance: &Instance, wiring: &mut Wiring, errors: &mut String| {
         errors.push_str(&instance.stderr());
@@ -852,11 +999,8 @@ pub fn serve(mut instance: Instance, fetcher: Fetcher, mut wiring: Wiring) -> Op
     };
     flush_stderr(&instance, &mut wiring, &mut errors);
     loop {
-        // What the host wrote: wait for it, unless the plugin has answers waiting already (a fetch).
-        let mut frames = Vec::new();
-        if !instance.waiting() {
-            frames.push(wiring.rx.blocking_recv()?);
-        }
+        // Whatever comes first, then all that came with it: one turn for all of it.
+        let mut frames = vec![wiring.rx.blocking_recv()?];
         while let Ok(f) = wiring.rx.try_recv() {
             frames.push(f);
         }
@@ -887,18 +1031,30 @@ pub fn serve(mut instance: Instance, fetcher: Fetcher, mut wiring: Wiring) -> Op
         for line in lines {
             match fetch_request(&line) {
                 Some((id, params)) => {
-                    let reply = match fetcher.fetch(&params) {
-                        Ok(result) => json!({ "jsonrpc": "2.0", "id": id, "result": result }),
-                        Err((code, message)) => {
-                            (wiring.refused)(&format!("net/fetch: {message}"));
-                            json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
-                        }
-                    };
-                    instance.push(format!("{reply}\n").as_bytes());
+                    let (fetcher, back) = (fetcher.clone(), wiring.back.clone());
+                    let refused = wiring.refused.clone();
+                    beside.spawn_on(
+                        async move {
+                            let reply = match fetcher.fetch(&params).await {
+                                Ok(result) => {
+                                    json!({ "jsonrpc": "2.0", "id": id, "result": result })
+                                }
+                                Err((code, message)) => {
+                                    refused(&format!("net/fetch: {message}"));
+                                    json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
+                                }
+                            };
+                            if let Some(tx) = back.upgrade() {
+                                let _ = tx.send((format!("{reply}\n").into_bytes(), None));
+                            }
+                        },
+                        net(),
+                    );
                 }
                 None => (wiring.line)(&line),
             }
         }
+        while beside.try_join_next().is_some() {}
     }
 }
 

@@ -19,11 +19,12 @@ pub fn usage(lang: Lang) -> String {
   escouade-plugin test <dossier> [--json] [--measure [n]] [--wasm <module>] [--offline] [--escouade <version>]
       Joue le banc de conformité : initialisation, version refusée, délais, un fait reçu,
       une décision, un secret, plantage, fermeture. Code de sortie 1 si un scénario échoue.
-      --wasm joue ce module d'un plugin `run.js` (celui du store) au lieu de compiler son
-      bundle ; --offline refuse tout fetch, quoi que dise permissions.network.
+      --wasm joue ce module (celui du store) au lieu de compiler le bundle d'un plugin `run.js`
+      ou de prendre le plugin.wasm d'un plugin `run.wasm` ; --offline refuse tout fetch, quoi que dise permissions.network.
   escouade-plugin validate <dossier> [--escouade <version>]
       Lit le manifeste (escouade-plugin.json) et dit ce qui ne va pas, champ par champ ; pour un
-      plugin `run.js`, que son bundle peut tourner en WASM.
+      plugin `run.js`, que son bundle peut tourner en WASM ; pour un `run.wasm`, que son plugin.wasm,
+      s'il est là, a la forme d'un réacteur.
   escouade-plugin build <dossier> [--out <dossier>] [--json]
       Compile le bundle d'un plugin `run.js` en WASM, comme le store : packs/<id>-<version>.wasm
       et son SHA-256, le même sur tous les systèmes.
@@ -48,11 +49,12 @@ Options : --lang fr|en ; --escouade <version> la version d'Escouade pour laquell
   escouade-plugin test <folder> [--json] [--measure [n]] [--wasm <module>] [--offline]
       Plays the conformance bench: initialization, version refused, delays, a fact received,
       a decision, a secret, crash, shutdown. Exit code 1 when a scenario fails.
-      --wasm plays this module of a `run.js` plugin (the store's) instead of compiling its
-      bundle; --offline refuses every fetch, whatever permissions.network says.
+      --wasm plays this module (the store's) instead of compiling a `run.js` plugin's bundle
+      or taking a `run.wasm` plugin's plugin.wasm; --offline refuses every fetch, whatever permissions.network says.
   escouade-plugin validate <folder> [--escouade <version>]
       Reads the manifest (escouade-plugin.json) and says what is wrong, field by field; for a
-      `run.js` plugin, that its bundle can run in WASM.
+      `run.js` plugin, that its bundle can run in WASM; for a `run.wasm` one, that its plugin.wasm,
+      when it is there, has the form of a reactor.
   escouade-plugin build <folder> [--out <folder>] [--json]
       Compiles a `run.js` plugin's bundle to WASM, as the store does: packs/<id>-<version>.wasm
       and its SHA-256, the same on every system.
@@ -249,6 +251,16 @@ fn validate(folder: &Path, lang: Lang, hand: manifest::Hand, app_version: &str) 
         if let Err(why) = bundle_of(folder, js, lang) {
             eprintln!("✗ {why}");
             return 1;
+        }
+    }
+    // A `run.wasm` plugin: its module, when it is there, has the form the app runs; `build` comes later (A5).
+    if m.run.as_ref().is_some_and(|r| r.wasm.is_some()) {
+        let path = folder.join(wasm::MODULE_FILE);
+        if let Ok(bytes) = std::fs::read(&path) {
+            if let Err(why) = wasm::reactor_form(&bytes) {
+                eprintln!("✗ {}: {why}", path.display());
+                return 1;
+            }
         }
     }
     println!(

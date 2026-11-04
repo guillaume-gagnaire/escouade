@@ -8,6 +8,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### New
 
+- A plugin can be written in Rust and run sandboxed inside Escouade, compiled to WASM, on the same host as a JS/TS plugin. A plugin waiting for a slow network answer keeps answering everything else.
 - OpenCode is a plugin shipped with Escouade: its agents talk as before, on the same server per account, but through a program of its own that Escouade starts and watches. If it crashes, the server and the turn go on; turned off, an OpenCode agent says it needs turning back on, and its session is kept.
 - Copilot CLI is a plugin shipped with Escouade: its agents talk through a program of its own, with nothing changed in how you use them, and an agent says at its start if the plugin is off. It shows in the Plugins view and turns off like the others.
 - Codex is a plugin shipped with Escouade: its agents talk through a program of its own, with nothing changed in how you use them, and an agent says at its start if the plugin is off. It shows in the Plugins view, and turns off like the others.

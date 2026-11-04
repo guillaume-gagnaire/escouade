@@ -544,7 +544,7 @@ impl Runtime {
         rt
     }
 
-    /// The modules of the `run.js` plugins.
+    /// The modules of the plugins in WASM.
     pub fn modules(&self) -> &Arc<super::wasm::Modules> {
         &self.modules
     }
@@ -555,14 +555,14 @@ impl Runtime {
         *self.net.write() = net;
     }
 
-    /// Makes the module of the `run.js` plugin `id` ready in the cache, on a thread of its own (its
+    /// Makes the module of the plugin in WASM `id` ready in the cache, on a thread of its own (its
     /// installation, an update of the app): none for a plugin of another kind.
     pub fn prepare(
         &self,
         id: &str,
     ) -> Option<std::thread::JoinHandle<Result<super::wasm::Made, String>>> {
         let view = self.plugins.get(id, Lang::En)?;
-        let js = view.manifest?.run?.js?;
+        let run = view.manifest?.run.filter(|r| r.in_wasm().is_some())?;
         let folder = PathBuf::from(&view.folder);
         let modules = self.modules.clone();
         let journal = self.journal_of(id);
@@ -570,7 +570,7 @@ impl Runtime {
         std::thread::Builder::new()
             .name(format!("plugin {id}: its module"))
             .spawn(move || {
-                let made = modules.prepare(&folder, &js).map(|(_, made)| made);
+                let made = modules.of(&folder, &run).map(|(_, made)| made);
                 match &made {
                     Ok(super::wasm::Made::Cache) => {}
                     Ok(m) => journal.push(Kind::Message, format!("ready: {}", m.describe())),
@@ -584,16 +584,17 @@ impl Runtime {
             .ok()
     }
 
-    /// Makes ready the modules of every `run.js` plugin installed, those of another version of the app taken
+    /// Makes ready the modules of every plugin in WASM installed, those of another version of the app taken
     /// out of the cache: at the start of the app, once its version may have changed.
     pub fn prepare_all(&self) {
         self.modules.prune();
         for v in self.plugins.list(Lang::En) {
-            let js = v
+            let in_wasm = v
                 .manifest
                 .as_ref()
-                .is_some_and(|m| m.run.as_ref().is_some_and(|r| r.js.is_some()));
-            if v.state == Loaded::Ready && js {
+                .and_then(|m| m.run.as_ref())
+                .is_some_and(|r| r.in_wasm().is_some());
+            if v.state == Loaded::Ready && in_wasm {
                 if let Some(h) = self.prepare(&v.id) {
                     let _ = h.join();
                 }
@@ -1147,10 +1148,11 @@ impl Host {
             inner.generation
         };
         let run = self.manifest.run.as_ref().expect("a host has a program");
-        let conn = if let Some(js) = &run.js {
-            // A bundle (ESC-320): its module from the cache, or made now, off the runtime's threads.
-            let (modules, folder, bundle) = (rt.modules.clone(), self.folder.clone(), js.clone());
-            let prepared = tokio::task::spawn_blocking(move || modules.prepare(&folder, &bundle))
+        let conn = if run.in_wasm().is_some() {
+            // In WASM (ESC-320, ESC-331): its module from the cache, or made now, off the runtime's threads.
+            let js = run.js.as_deref().unwrap_or(super::wasm::MODULE_FILE);
+            let (modules, folder, program) = (rt.modules.clone(), self.folder.clone(), run.clone());
+            let prepared = tokio::task::spawn_blocking(move || modules.of(&folder, &program))
                 .await
                 .unwrap_or_else(|e| Err(e.to_string()));
             let (module, made) = match prepared {
@@ -1453,8 +1455,8 @@ impl Host {
         Ok(Some(conn))
     }
 
-    /// Its instance in WASM (`run.js`), on a thread of its own, which reads what the host writes and serves
-    /// `net/fetch`; none when it was stopped meanwhile. A fault of the instance ends it as a crash ends a
+    /// Its instance in WASM (`run.js`, `run.wasm`), on a thread of its own, which reads what comes for it and sends
+    /// `net/fetch` on its way; none when it was stopped meanwhile. A fault of the instance ends it as a crash ends a
     /// process: `exited` makes another while its budget of restarts lasts.
     fn spawn_wasm(
         self: &Arc<Self>,
@@ -1463,6 +1465,7 @@ impl Host {
         generation: u64,
     ) -> std::io::Result<Option<Arc<Conn>>> {
         let (tx, rx) = mpsc::unbounded_channel::<Frame>();
+        let back = tx.downgrade();
         let conn = Arc::new(Conn {
             generation,
             pid: None,
@@ -1495,9 +1498,10 @@ impl Host {
                         let (h2, h3) = (host.clone(), host.clone());
                         let wiring = super::wasm::Wiring {
                             rx,
+                            back,
                             line: Box::new(move |l| h1.incoming(&c1, l)),
                             stderr: Box::new(move |l| h2.journal.push(Kind::Stderr, l)),
-                            refused: Box::new(move |l| h3.journal.push(Kind::Refused, l)),
+                            refused: Arc::new(move |l| h3.journal.push(Kind::Refused, l)),
                         };
                         super::wasm::serve(instance, fetcher, wiring)
                     }

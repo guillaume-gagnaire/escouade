@@ -61,7 +61,7 @@ export interface Manifest {
   repository?: string;
   escouade: { api: number; min: string; max?: string };
   /** A command (a process), or a JS/TS bundle that Escouade runs in WASM (`js`, ESC-320). */
-  run?: { command: string; js?: string; args: string[] };
+  run?: { command: string; js?: string; wasm?: string; args: string[] };
   activation: string[];
   permissions: { events: string[]; network: string[]; secrets: string[]; commands: string[]; decide: boolean };
   contributes: Record<string, unknown>;
@@ -225,8 +225,9 @@ export function askOf(word: string, m: Manifest | null, lang: string): Ask {
   const what = rest.join(':');
   switch (kind) {
     case 'run':
-      // A JS/TS bundle runs inside Escouade, isolated (ESC-320): no program of the user's machine.
-      if (m?.run?.js) return { word, icon: 'shield', text: t('plugins.ask.wasm'), detail: m.run.js, strong: false, red: false };
+      // A JS/TS bundle or a Rust module runs inside Escouade, isolated (ESC-320, ESC-331): no program of the user's machine.
+      if (m?.run?.js || m?.run?.wasm)
+        return { word, icon: 'shield', text: t('plugins.ask.wasm'), detail: m.run.js ?? m.run.wasm ?? '', strong: false, red: false };
       return { word, icon: 'term', text: t('plugins.ask.run'), detail: m?.run?.command ?? '', strong: true, red: false };
     case 'decide':
       return { word, icon: 'shield', text: t('plugins.ask.decide'), detail: '', strong: true, red: true };
@@ -247,7 +248,13 @@ export function askOf(word: string, m: Manifest | null, lang: string): Ask {
         red: false,
         // A bundle goes through Escouade's `net/fetch`, a declarative plugin's webhooks are sent by Escouade: only a
         // command keeps a network of its own.
-        note: t(m?.run?.js ? 'plugins.perms.networkApplied' : m && !m.run ? 'plugins.perms.networkWebhooks' : 'plugins.perms.networkNote'),
+        note: t(
+          m?.run?.js || m?.run?.wasm
+            ? 'plugins.perms.networkApplied'
+            : m && !m.run
+              ? 'plugins.perms.networkWebhooks'
+              : 'plugins.perms.networkNote',
+        ),
       };
     default:
       return {

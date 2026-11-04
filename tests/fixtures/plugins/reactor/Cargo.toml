@@ -1,0 +1,19 @@
+# A `run.wasm` plugin of the tests (ESC-331): `sh build.sh` makes its plugin.wasm, committed so that the tests need no
+# wasm32-wasip1. No dependency: a workspace of its own, which no build of the app reads.
+[package]
+name = "reactor"
+version = "1.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[workspace]
+
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
