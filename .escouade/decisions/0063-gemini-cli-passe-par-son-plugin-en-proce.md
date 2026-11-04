@@ -1,9 +1,9 @@
 ---
-number: null
+number: 63
 id: "gemini-cli-passe-par-son-plugin-en-proce"
 title: "Gemini CLI passe par son plugin, en process"
 date: "2026-11-03"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-282"
 pages: ["plugins/gemini-cli-en-plugin","plugins/harness-acp-decrits","plugins/livres-avec-escouade","plugins/cursor-cli-en-plugin"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/gemini-cli-en-plugin","added":22,"removed":0},{"page":"plugins/harness-acp-decrits","added":3,"removed":0},{"page":"plugins/livres-avec-escouade","added":1,"removed":0},{"page":"plugins/cursor-cli-en-plugin","added":2,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-04T04:50:17+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

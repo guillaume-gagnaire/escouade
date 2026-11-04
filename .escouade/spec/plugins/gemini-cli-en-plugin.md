@@ -3,7 +3,7 @@ title: "Gemini CLI en plugin"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.5, §4.6 (INT-10.7)","docs/TODO-2.2.md, INT-10.7","Ticket ESC-282","plugins/builtin/dev.escouade.gemini-cli/README.md"]
 tickets: ["ESC-282"]
-decisions: ["gemini-cli-passe-par-son-plugin-en-proce"]
+decisions: [63]
 compared: null
 ---
 
