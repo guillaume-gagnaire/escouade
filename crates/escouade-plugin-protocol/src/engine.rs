@@ -29,7 +29,7 @@ pub mod method {
     pub const FRAMES: &str = "agent/frames";
     /// A message to send (`SendMessage` → `Writes`).
     pub const SEND_MESSAGE: &str = "agent/sendMessage";
-    /// Stop the running turn (`AgentRef` → `Writes`).
+    /// Stop the running turn (`Interrupt` → `Writes`).
     pub const INTERRUPT: &str = "agent/interrupt";
     /// A change of model, effort or mode (`SetValue` → `Writes`).
     pub const SET_MODEL: &str = "agent/setModel";
@@ -44,6 +44,22 @@ pub mod method {
     pub const TERMINAL_LAUNCH: &str = "terminal/launch";
     /// One of its hooks, with what the core answers it (`Hook` → `HookAnswer`).
     pub const TERMINAL_HOOK: &str = "terminal/hook";
+    /// A harness shared by agents (`Launch::shared`): the agent's session opened on it (`Open` → `Opened`).
+    pub const OPEN: &str = "agent/open";
+    /// The agent stops using its shared harness (`Close`, a call or a notification): gently, its turn finished first and
+    /// `Item::Closed` said once it is; or at once, its turn stopped.
+    pub const CLOSE: &str = "agent/close";
+    /// The agent was the last in its folder: its shared harness lets that folder go (`AgentRef`).
+    pub const LET_GO: &str = "agent/letGo";
+    /// Compact its context (`Compact` → `Compacted`), as `Engine::compaction` says it can.
+    pub const COMPACT: &str = "agent/compact";
+    /// Give its session a title (`SetValue`).
+    pub const RENAME: &str = "agent/rename";
+    /// A request in the harness's own protocol, its answer: for the tests, and what has no method yet (`Control`).
+    pub const CONTROL: &str = "agent/control";
+    /// From the plugin, without being asked (a notification, `Pushed`): what its harness said by a way only the plugin
+    /// reads (the event stream of a shared server).
+    pub const ITEMS: &str = "agent/items";
 }
 
 /// How many bytes of lines a batch of `agent/frames` carries at most. A batch is what was read while the last one
@@ -180,9 +196,60 @@ pub struct Launch {
     /// The first lines written on its input, once it started.
     #[serde(default)]
     pub writes: Vec<String>,
+    /// One process for several agents (`opencode serve`, 0,7 Go): the core runs it for those of the same program and
+    /// variables, and does not start it again for the next; the plugin speaks to it by a way of its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shared: Option<SharedLaunch>,
     /// For a terminal view: the trust bands its interface asks, shown before it opens.
     #[serde(default)]
     pub trust: Vec<String>,
+}
+
+/// How a process shared by agents starts and is shared. It runs in a folder of its own, none of the agents': a worktree
+/// removed would find it held. It lives from its first agent to its last, in the core's Job object.
+#[derive(Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedLaunch {
+    /// What the line that says it is ready holds: the line goes to the plugin (`SharedRef::line`).
+    pub ready: String,
+    /// A folder has one agent per process: another agent in that folder gets a process of its own.
+    #[serde(default)]
+    pub one_agent_a_folder: bool,
+    /// What the plugin wants back with each agent on that process (its password): kept by the core, never read.
+    #[serde(default)]
+    pub keep: Value,
+}
+
+impl std::fmt::Debug for SharedLaunch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SharedLaunch")
+            .field("ready", &self.ready)
+            .field("one_agent_a_folder", &self.one_agent_a_folder)
+            .field("keep", &"…")
+            .finish()
+    }
+}
+
+/// The shared process an agent is on: enough for a plugin that started again to find it.
+#[derive(Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct SharedRef {
+    /// Which process, the same for each of its agents.
+    pub key: String,
+    /// The line that said it is ready.
+    pub line: String,
+    /// `SharedLaunch::keep`, as given by the launch that started it.
+    #[serde(default)]
+    pub keep: Value,
+}
+
+impl std::fmt::Debug for SharedRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SharedRef")
+            .field("key", &self.key)
+            .field("line", &self.line)
+            .field("keep", &"…")
+            .finish()
+    }
 }
 
 /// An agent given to the plugin: what it cannot know by itself, given again after each restart and each change.
@@ -208,11 +275,96 @@ pub struct Attach {
     /// As `LaunchParams::lang`.
     #[serde(default)]
     pub lang: String,
+    /// The shared process it is on (`Launch::shared`), once it runs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shared: Option<SharedRef>,
+    /// As `LaunchParams::fence`, `read_only` and `append_prompt`, for a plugin that holds them on a session of its
+    /// own (`Launch::shared`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fence: Vec<String>,
+    #[serde(default)]
+    pub read_only: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub append_prompt: Option<String>,
+    /// A turn of its runs, as far as the core knows: one that ended while the plugin was down is told so.
+    #[serde(default)]
+    pub running: bool,
+}
+
+/// What `agent/open` is told: the agent's session, on the shared process of its `agent/attach`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct Open {
+    pub agent: String,
+    #[serde(default)]
+    pub start: StartAt,
+    /// Escouade's server, None when refused.
+    #[serde(default)]
+    pub escouade: Option<Grant>,
+}
+
+/// What `agent/open` found.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct Opened {
+    /// How its harness's interface joins it in a terminal, what is secret in a variable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attach: Option<Launch>,
+    /// The models of its account, as `ToldModel`s of the core.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub catalog: Option<Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Close {
+    pub agent: String,
+    /// Its turn stopped first, not waited for.
+    #[serde(default)]
+    pub now: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Compact {
+    pub agent: String,
+    #[serde(default)]
+    pub instructions: String,
+}
+
+/// `EngineProcess::compact`'s answer: it is over; false, it runs as a turn the harness ends itself.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Compacted {
+    #[serde(default)]
+    pub over: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Control {
+    pub agent: String,
+    pub request: Value,
+    /// How long the answer may take, in milliseconds.
+    #[serde(default)]
+    pub within_ms: u64,
+}
+
+/// `method::ITEMS`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Pushed {
+    pub agent: String,
+    pub items: Vec<Item>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentRef {
     pub agent: String,
+}
+
+/// What `agent/interrupt` is told (a plugin may read it as an `AgentRef`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Interrupt {
+    pub agent: String,
+    /// The messages queued after the turn go too.
+    #[serde(default)]
+    pub cancel_queued: bool,
 }
 
 /// A batch of what the harness wrote: each line as it read it, never read again by the core.
@@ -280,6 +432,9 @@ pub struct AnswerQuestion {
     pub call: String,
     /// The answers, by question.
     pub answers: Value,
+    /// The questions they answer, as the card has them, for a harness that wants them in its order.
+    #[serde(default)]
+    pub questions: Value,
 }
 
 /// The quota its process read (`usage::parse_windows` reads its windows); null when none.
@@ -352,6 +507,9 @@ pub enum Item {
         input: Value,
         #[serde(default)]
         parent: Option<String>,
+        /// Not a row of the plan: its task list comes by `Todos`.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        unplanned: bool,
     },
     /// What is known later of a call: its input (an edit's file), or the name it turns out to have (`Write` for a
     /// file added).
@@ -397,12 +555,44 @@ pub enum Item {
         /// The call of the subagent that asks it.
         #[serde(default)]
         parent: Option<String>,
+        /// The hunks of a patch the harness gave as they are, in place of `diff` (`hunks_of`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        hunks: Option<Value>,
+        /// « Always » is the harness's, for its session: not worded as « Pour cet agent ».
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        always_by_harness: bool,
+        /// The turn stays open on this card, what was streaming closed (a plan to approve at the end of a turn).
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        ends_stream: bool,
     },
     /// Questions to the user (each `{question, header, multiSelect, options: [{label, description}]}`).
     Question {
         request: String,
         call: String,
         questions: Value,
+        /// The call of the subagent that asks them.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        parent: Option<String>,
+    },
+    /// A request answered in the harness's own interface: its card says so and goes. `decision` of a permission
+    /// (`allow`, `always`, `deny`), `answers` of questions (for each in its order, the labels chosen), else cancelled.
+    Answered {
+        request: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        decision: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        answers: Option<Value>,
+    },
+    /// The user's message typed in the harness's own interface: shown as they typed it.
+    User { id: String, text: String },
+    /// The model the harness took in place of the agent's (one its account does not offer).
+    Model { model: String },
+    /// What the agent's context holds (`tokens`), and the window of its model.
+    Context {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tokens: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        window: Option<u64>,
     },
     /// The task list of the agent, as Claude Code's `TodoWrite` gives it (`[{ content, status, activeForm }]`),
     /// for its plan.
@@ -426,6 +616,9 @@ pub enum Item {
         /// It ended in error, and why (a model refused, a key refused).
         #[serde(default)]
         error: Option<String>,
+        /// The last entry of its session: where a copy forks it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        entry: Option<String>,
     },
     /// A line of the conversation from Escouade or the harness, not the model (`info`, `warning`, `error`).
     Notice {
@@ -435,6 +628,8 @@ pub enum Item {
     },
     /// A line for the harness's input, written by the core in the order of the items.
     Write { line: String },
+    /// Asked to stop gently (`method::CLOSE`), its turn is over: the agent has left its shared process.
+    Closed,
     /// An item of a later version of the contract: left aside.
     #[serde(other)]
     Unknown,
@@ -447,6 +642,39 @@ fn info() -> String {
 /// A field that is there, `null` included (`Some(None)`); left out, it is `None` (`default`).
 fn present<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<i64>>, D::Error> {
     Ok(Some(Option::<i64>::deserialize(d)?))
+}
+
+/// The hunks of a unified diff, as Claude Code's `structuredPatch` has them.
+pub fn hunks_of(diff: &str) -> Value {
+    let mut hunks: Vec<Value> = Vec::new();
+    for line in diff.lines() {
+        if let Some(head) = line.strip_prefix("@@ ") {
+            let num = |sign: char| {
+                head.split_whitespace()
+                    .find_map(|w| w.strip_prefix(sign))
+                    .and_then(|w| w.split(',').next())
+                    .and_then(|n| n.parse::<u64>().ok())
+                    .unwrap_or(0)
+            };
+            hunks.push(
+                serde_json::json!({ "oldStart": num('-'), "newStart": num('+'), "lines": [] }),
+            );
+            continue;
+        }
+        if line.starts_with("+++") || line.starts_with("---") {
+            continue;
+        }
+        if hunks.is_empty() {
+            if !(line.starts_with('+') || line.starts_with('-') || line.starts_with(' ')) {
+                continue;
+            }
+            hunks.push(serde_json::json!({ "oldStart": 1, "newStart": 1, "lines": [] }));
+        }
+        if let Some(lines) = hunks.last_mut().and_then(|h| h["lines"].as_array_mut()) {
+            lines.push(serde_json::json!(line));
+        }
+    }
+    Value::Array(hunks)
 }
 
 /// A write a permission would make: its file, before (None for a file added) and after.
@@ -881,6 +1109,7 @@ mod tests {
                 limited,
                 usage: TurnUsage::default(),
                 error: None,
+                entry: None,
             };
             let back: Item = serde_json::from_value(serde_json::to_value(&turn).unwrap()).unwrap();
             assert_eq!(back, turn);

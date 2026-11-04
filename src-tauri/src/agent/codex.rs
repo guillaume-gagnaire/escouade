@@ -995,33 +995,7 @@ fn file_change(change: &Value) -> (&'static str, Value, Value) {
 
 /// The hunks of a unified diff, as Claude Code's `structuredPatch` lists them.
 pub(super) fn hunks_of(diff: &str) -> Value {
-    let mut hunks: Vec<Value> = Vec::new();
-    for line in diff.lines() {
-        if let Some(head) = line.strip_prefix("@@ ") {
-            let num = |sign: char| {
-                head.split_whitespace()
-                    .find_map(|w| w.strip_prefix(sign))
-                    .and_then(|w| w.split(',').next())
-                    .and_then(|n| n.parse::<u64>().ok())
-                    .unwrap_or(0)
-            };
-            hunks.push(json!({ "oldStart": num('-'), "newStart": num('+'), "lines": [] }));
-            continue;
-        }
-        if line.starts_with("+++") || line.starts_with("---") {
-            continue;
-        }
-        if hunks.is_empty() {
-            if !(line.starts_with('+') || line.starts_with('-') || line.starts_with(' ')) {
-                continue;
-            }
-            hunks.push(json!({ "oldStart": 1, "newStart": 1, "lines": [] }));
-        }
-        if let Some(lines) = hunks.last_mut().and_then(|h| h["lines"].as_array_mut()) {
-            lines.push(json!(line));
-        }
-    }
-    Value::Array(hunks)
+    escouade_plugin_protocol::engine::hunks_of(diff)
 }
 
 /// What a request for more permissions asks, in words.

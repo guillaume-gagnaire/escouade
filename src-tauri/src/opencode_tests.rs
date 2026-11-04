@@ -1679,3 +1679,130 @@ async fn compact_typed_to_an_opencode_agent_summarizes_its_session() {
     assert!(format!("{e:#}").contains("instruction"), "{e:#}");
     h.core.stop_for_good();
 }
+
+/// Stops the process `pid` as a crash would.
+fn crash(pid: u32) {
+    let pid = pid.to_string();
+    let killed = if cfg!(windows) {
+        std::process::Command::new("taskkill")
+            .args(["/F", "/PID", pid.as_str()])
+            .output()
+    } else {
+        std::process::Command::new("kill")
+            .args(["-9", pid.as_str()])
+            .output()
+    };
+    assert!(killed.unwrap().status.success());
+}
+
+fn said(h: &Harness, id: &str) -> String {
+    Value::Array(h.items(id)).to_string()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_opencode_agent_says_its_plugin_is_off_and_talks_again_once_it_is_on() {
+    let h = harness("int10-opencode-off");
+    let (p, _) = h.project(false).await;
+    opencode_account(&h);
+    let a = new_agent(&h, &p.id).await;
+    let id = crate::plugins::builtin::OPENCODE;
+    h.core.plugins.choose(id, |c| c.enabled = false).unwrap();
+    h.core.plugin_runtime.forget(id);
+    h.core.sync_harnesses();
+    assert!(crate::plugins::harness::plugged(id).is_none());
+    // The agent that ran stops, and says why.
+    wait_long(&h, "the plugin said off", 30, |h| said(h, &a).contains(id)).await;
+    wait_long(&h, "its stop", 30, |h| !h.agent(&a).status.is_active()).await;
+    let session = h.agent(&a).session_id;
+    assert!(session.is_some());
+    // The next message says what to do.
+    let sent = h.core.send_message(&a, "bonjour".into(), vec![]).await;
+    let told = |h: &Harness| {
+        let err = sent
+            .as_ref()
+            .err()
+            .map(|e| e.to_string())
+            .unwrap_or_default();
+        format!("{err} {}", said(h, &a))
+    };
+    wait_long(&h, "the plugin said off again", 30, |h| {
+        told(h).contains("coupé")
+    })
+    .await;
+    assert_eq!(h.agent(&a).session_id, session);
+    h.core.plugins.choose(id, |c| c.enabled = true).unwrap();
+    h.core.sync_harnesses();
+    assert!(crate::plugins::harness::plugged(id).is_some());
+    let answered = |h: &Harness| texts(h, &a).iter().any(|t| t.contains("bonjour"));
+    if !answered(&h) {
+        h.core
+            .send_message(&a, "bonjour".into(), vec![])
+            .await
+            .unwrap();
+    }
+    wait_long(&h, "its answer", 30, answered).await;
+}
+
+/// The plugin crashes in the middle of a turn: `opencode serve` goes on (the core runs it), the plugin starts again, hears
+/// the session again, and the turn is stopped and followed by the next as if nothing had happened.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_crash_of_the_opencode_plugin_leaves_its_server_and_the_agents_turn_goes_on() {
+    let h = harness("int10-opencode-crash");
+    let (p, _) = h.project(false).await;
+    opencode_account(&h);
+    let a = new_agent(&h, &p.id).await;
+    h.core
+        .send_message(&a, "lent".into(), vec![])
+        .await
+        .unwrap();
+    h.wait("its command runs", |h| {
+        h.items(&a).iter().any(|i| i["name"] == "Bash")
+    })
+    .await;
+    let id = crate::plugins::builtin::OPENCODE;
+    crash(h.core.plugin_runtime.status(id).pid.unwrap());
+    wait_long(&h, "the plugin said it started again", 30, |h| {
+        said(h, &a).contains("a redémarré")
+    })
+    .await;
+    assert!(h.agent(&a).status.is_active(), "its turn still runs");
+    // It hears its session again: stopped, the turn ends.
+    h.core.interrupt(&a).await.unwrap();
+    wait_long(&h, "its turn stopped", 30, |h| {
+        !h.agent(&a).status.is_active()
+    })
+    .await;
+    h.core
+        .send_message(&a, "bonjour".into(), vec![])
+        .await
+        .unwrap();
+    wait_long(&h, "its next answer", 30, |h| {
+        texts(h, &a).iter().any(|t| t.contains("bonjour"))
+    })
+    .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_opencode_agent_stops_with_its_plugin_and_says_why_its_session_kept() {
+    let h = harness("int10-opencode-stopped");
+    let (p, _) = h.project(false).await;
+    opencode_account(&h);
+    let a = new_agent(&h, &p.id).await;
+    let session = h.agent(&a).session_id;
+    let id = crate::plugins::builtin::OPENCODE;
+    let rt = h.core.plugin_runtime.clone();
+    for _ in 0..10 {
+        if rt.status(id).stop.is_some() {
+            break;
+        }
+        if let Some(pid) = rt.status(id).pid {
+            crash(pid);
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+    }
+    wait_long(&h, "the agent said why", 30, |h| {
+        said(h, &a).contains("plantages")
+    })
+    .await;
+    assert_eq!(h.agent(&a).session_id, session);
+}

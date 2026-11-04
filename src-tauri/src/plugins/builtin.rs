@@ -123,6 +123,12 @@ pub const REGISTRY: &[Entry] = &[
             "../../../plugins/builtin/dev.escouade.gemini-cli/escouade-plugin.json"
         ),
     },
+    Entry {
+        id: OPENCODE,
+        manifest: include_str!(
+            "../../../plugins/builtin/dev.escouade.opencode/escouade-plugin.json"
+        ),
+    },
 ];
 
 /// The plugin « GitHub »: github.com, GHE.com and GitHub Enterprise Server, their pull requests and GitHub Issues.
@@ -165,6 +171,9 @@ pub const MISTRAL: &str = "dev.escouade.mistral";
 
 /// The plugin « Gemini CLI »: Gemini CLI as a harness, over ACP (INT-10.7).
 pub const GEMINI: &str = "dev.escouade.gemini-cli";
+
+/// The plugin « OpenCode »: OpenCode as a harness, on its `opencode serve` (INT-10.2).
+pub const OPENCODE: &str = "dev.escouade.opencode";
 
 /// Whether `id` is the id of a plugin the app gives.
 pub fn is_builtin(id: &str) -> bool {

@@ -298,7 +298,6 @@ pub struct AgentRt {
     /// How many task lists a harness of a plugin gave (`Item::Todos`): the id of the next one.
     todo_writes: u32,
     /// What the translation of OpenCode keeps between its events (`agent/opencode.rs`).
-    opencode: opencode::OpencodeState,
     /// What the translation of Mistral Vibe keeps between its updates (`agent/vibe.rs`).
     vibe: vibe::VibeState,
     /// What the translation of Antigravity CLI keeps between its events (`agent/agy.rs`).
@@ -577,7 +576,6 @@ impl AgentRt {
             copilot: copilot::CopilotState::default(),
             cursor: cursor::CursorState::default(),
             todo_writes: 0,
-            opencode: opencode::OpencodeState::default(),
             vibe: vibe::VibeState::default(),
             agy: agy::AgyState::default(),
             gemini_tui: gemini_tui::GeminiTuiState::default(),
@@ -683,7 +681,6 @@ impl AgentRt {
         self.codex = codex::CodexState::default();
         self.copilot = copilot::CopilotState::default();
         self.cursor = cursor::CursorState::default();
-        self.opencode = opencode::OpencodeState::default();
         self.vibe = vibe::VibeState::default();
         self.agy = agy::AgyState::default();
         // What ran in the process before is gone with it.

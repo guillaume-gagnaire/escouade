@@ -8,6 +8,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- OpenCode est un plugin livré avec Escouade : ses agents conversent comme avant, sur le même serveur par compte, mais par un programme à part qu’Escouade lance et surveille. S’il plante, le serveur et le tour continuent ; coupé, un agent d’OpenCode dit qu’il faut le rallumer, et sa session est gardée.
 - Mistral Vibe et la voix Mistral sont un seul plugin, « Mistral », sur un compte partagé : une clé donnée dans Réglages › Voix sert aussi aux comptes Vibe sans clé, et la voix sans clé prend celle de ton compte Vibe. Tes clés restent les tiennes, tu n’as rien à ressaisir.
 - « Valider + PR » ouvre la pull request du ticket par l'API de son hébergeur (GitHub, GitLab, Bitbucket, Gitea, Azure DevOps), sans `gh`, en brouillon si tu veux et avec tes relecteurs et étiquettes. Le ticket attend ensuite dans la nouvelle colonne « En revue », qui montre l'état de la PR, sa CI, ses approbations et ses conflits, et passe « Terminé » dès qu'elle est mergée.
 - Merge la PR d'un ticket « En revue » depuis sa carte quand elle est approuvée et verte, avec une stratégie que le dépôt autorise. Pendant que la CI tourne, « Merger quand c'est vert » active l'auto-merge de l'hébergeur ; sans lui (Bitbucket par exemple), Escouade attend la fin de la CI et merge elle-même.

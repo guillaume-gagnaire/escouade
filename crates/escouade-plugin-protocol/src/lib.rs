@@ -10,6 +10,7 @@ pub mod tickets;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::io::{BufRead, Write};
+use std::sync::{Arc, Mutex};
 
 /// The major version of the protocol, which `escouade.api` of a manifest and `protocolVersion` of the handshake name.
 pub const PROTOCOL: u64 = 1;
@@ -161,6 +162,79 @@ pub fn serve<R: BufRead, W: Write>(
         }
         if request.method == method::SHUTDOWN {
             return Ok(());
+        }
+    }
+    Ok(())
+}
+
+/// The output of a plugin that answers later, or says something without being asked: a line at a time, from any thread.
+#[derive(Clone)]
+pub struct Output(Arc<Mutex<Box<dyn Write + Send>>>);
+
+impl Output {
+    pub fn new(out: impl Write + Send + 'static) -> Self {
+        Self(Arc::new(Mutex::new(Box::new(out))))
+    }
+
+    fn line(&self, text: &str) {
+        let mut out = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        // The core is gone: its end closes this process's input, which ends its loop.
+        let _ = writeln!(out, "{text}").and_then(|()| out.flush());
+    }
+
+    /// Tells the core something, without waiting for an answer.
+    pub fn notify(&self, method: &str, params: &impl Serialize) {
+        self.line(&json!({ "jsonrpc": "2.0", "method": method, "params": params }).to_string());
+    }
+}
+
+/// How a request is answered, now or later; dropped, it is not (a notification has nothing to answer).
+#[derive(Clone)]
+pub struct Reply {
+    id: Option<Value>,
+    out: Output,
+}
+
+impl Reply {
+    pub fn send(&self, result: Result<Value, Refusal>) {
+        if let Some(id) = &self.id {
+            self.out.line(&answer(id, result));
+        }
+    }
+}
+
+/// `serve` for a plugin whose answers may wait (an HTTP client): `handler` answers by its `Reply`, from wherever it wants,
+/// and goes back to reading at once, so that a long call does not hold the others.
+pub fn serve_later<R: BufRead>(
+    input: R,
+    output: Output,
+    capabilities: Value,
+    mut handler: impl FnMut(&str, Value, Reply),
+) -> std::io::Result<()> {
+    for line in input.lines() {
+        let line = line?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let Ok(request) = serde_json::from_str::<Request>(&line) else {
+            let refusal = Refusal {
+                code: code::PARSE,
+                message: "not a JSON-RPC request".into(),
+            };
+            output.line(&answer(&Value::Null, Err(refusal)));
+            continue;
+        };
+        let reply = Reply {
+            id: request.id.clone(),
+            out: output.clone(),
+        };
+        match request.method.as_str() {
+            method::INITIALIZE => reply.send(Ok(initialized(capabilities.clone()))),
+            method::SHUTDOWN => {
+                reply.send(Ok(Value::Null));
+                return Ok(());
+            }
+            other => handler(other, request.params, reply),
         }
     }
     Ok(())

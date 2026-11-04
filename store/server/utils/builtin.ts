@@ -75,12 +75,15 @@ export const BUILTINS: Builtin[] = [
     // The first harness to have left the core (INT-10.1).
     source: 'plugins/builtin/dev.escouade.cursor-cli',
   },
-  harness(
-    'opencode',
-    'OpenCode',
-    'OpenCode comme harness : un serveur par compte, ses modèles (locaux compris), son budget par jour.',
-    'OpenCode as a harness: one server per account, its models (local ones too), its daily budget.',
-  ),
+  {
+    ...harness(
+      'opencode',
+      'OpenCode',
+      'OpenCode comme harness : un serveur par compte, ses modèles (locaux compris), son budget par jour.',
+      'OpenCode as a harness: one server per account, its models (local ones too), its daily budget.',
+    ),
+    source: 'plugins/builtin/dev.escouade.opencode',
+  },
   {
     ...harness(
       'mistral',

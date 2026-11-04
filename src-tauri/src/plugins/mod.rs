@@ -35,6 +35,7 @@ pub mod manifest;
 pub mod reader;
 #[cfg_attr(not(test), allow(dead_code))]
 pub mod runtime;
+pub mod shared;
 // The store in the app: its catalogue, its revocation list, a version downloaded and checked (STORE-9).
 pub mod store;
 // The seal of a version from the store, checked with the keys the app embeds (STORE-8).

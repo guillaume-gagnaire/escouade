@@ -84,6 +84,8 @@ It doesn’t read PDFs (the button refuses them and says so) and offers only the
 
 ## OpenCode
 
+OpenCode is a plugin shipped with Escouade (`dev.escouade.opencode`): its agents talk through a program of its own that Escouade starts and watches, on their account’s server. It shows in the Plugins view, under “Shipped with Escouade”. If it crashes, the server and the turn go on and the conversation says so; turned off, an OpenCode agent says it needs turning back on, and keeps its session.
+
 ### Installation and account
 
 `npm install -g opencode-ai` installs OpenCode 1, the only one Escouade drives: OpenCode 2 (`@opencode/cli`) is recognized and says “Not supported”. Connect a provider with `opencode auth login` (“Sign in…” in Settings › Harness runs it); Ollama’s local models work too. OpenCode has a single account in Escouade, its usual config. A single `opencode serve` serves all OpenCode agents, protected by a random password that never leaves Escouade; each agent is a session on it.

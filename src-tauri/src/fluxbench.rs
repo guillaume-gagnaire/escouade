@@ -50,6 +50,7 @@ fn plugged_by(harness: EngineId) -> Option<&'static str> {
         EngineId::CURSOR => Some(crate::plugins::builtin::CURSOR),
         EngineId::VIBE => Some(crate::plugins::builtin::MISTRAL),
         EngineId::GEMINI => Some(crate::plugins::builtin::GEMINI),
+        EngineId::OPENCODE => Some(crate::plugins::builtin::OPENCODE),
         _ => None,
     }
 }
@@ -374,6 +375,7 @@ impl Bench {
         let tokio = tokio::runtime::Handle::current();
         // The client's settings of a Vibe recording are the ones it made itself at the session's start.
         let own_settings = flux.harness == EngineId::VIBE;
+        let opencode = flux.harness == EngineId::OPENCODE;
         let cpu = usage().cpu;
         let read = tokio::task::spawn_blocking(move || {
             let handle = core.agent(&agent).unwrap();
@@ -427,9 +429,11 @@ impl Bench {
                                 }
                             }
                         }
+                        // OpenCode's plugin reads the recording's own lines: no harness writes them to it.
+                        let frame = if opencode { line.clone() } else { msg.to_string() };
                         let got = call(
                             "agent/frames",
-                            json!({ "agent": key, "frames": [msg.to_string()] }),
+                            json!({ "agent": key, "frames": [frame] }),
                         );
                         let mut items = Vec::new();
                         let mut writes = Vec::new();

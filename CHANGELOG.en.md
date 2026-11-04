@@ -8,6 +8,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### New
 
+- OpenCode is a plugin shipped with Escouade: its agents talk as before, on the same server per account, but through a program of its own that Escouade starts and watches. If it crashes, the server and the turn go on; turned off, an OpenCode agent says it needs turning back on, and its session is kept.
 - Mistral Vibe and the Mistral voice are now one plugin, “Mistral”, on a shared account: a key given in Settings › Voice also serves the Vibe accounts without one, and the voice without a key takes your Vibe account’s. Your keys stay yours, and you have nothing to type again.
 - “Approve + PR” opens the ticket's pull request through its host's API (GitHub, GitLab, Bitbucket, Gitea, Azure DevOps), without `gh`, as a draft if you like and with your reviewers and labels. The ticket then waits in the new “In review” column, which shows the pull request's state, CI, approvals and conflicts, and moves to “Done” as soon as it's merged.
 - Merge an “In review” ticket's pull request from its card once it's approved and green, with a strategy the repository allows. While the CI runs, “Merge when green” turns on the host's auto-merge; without one (Bitbucket, say), Escouade waits for the end of the CI and merges itself.

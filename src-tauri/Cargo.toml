@@ -75,6 +75,8 @@ escouade-plugin-acp = { path = "../plugins/builtin/dev.escouade.acp" }
 escouade-plugin-linear = { path = "../plugins/builtin/dev.escouade.linear" }
 escouade-plugin-jira = { path = "../plugins/builtin/dev.escouade.jira" }
 escouade-plugin-cursor = { path = "../plugins/builtin/dev.escouade.cursor-cli" }
+# OpenCode (INT-10.2): its harness in a crate, its `opencode serve` run by the core (`Launch::shared`).
+escouade-plugin-opencode = { path = "../plugins/builtin/dev.escouade.opencode" }
 escouade-plugin-clickup = { path = "../plugins/builtin/dev.escouade.clickup" }
 escouade-plugin-mistral = { path = "../plugins/builtin/dev.escouade.mistral" }
 escouade-plugin-gemini = { path = "../plugins/builtin/dev.escouade.gemini-cli" }
@@ -188,6 +190,7 @@ members = [
     "../plugins/builtin/dev.escouade.clickup",
     "../plugins/builtin/dev.escouade.mistral",
     "../plugins/builtin/dev.escouade.gemini-cli",
+    "../plugins/builtin/dev.escouade.opencode",
 ]
 default-members = [
     ".",
@@ -207,6 +210,7 @@ default-members = [
     "../plugins/builtin/dev.escouade.clickup",
     "../plugins/builtin/dev.escouade.mistral",
     "../plugins/builtin/dev.escouade.gemini-cli",
+    "../plugins/builtin/dev.escouade.opencode",
 ]
 
 [profile.dev.package."*"]

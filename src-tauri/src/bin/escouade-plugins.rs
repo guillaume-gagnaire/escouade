@@ -60,6 +60,8 @@ const ENTRIES: &[Entry] = &[
     ("clickup", escouade_plugin_clickup::run),
     // Gemini CLI (INT-10.7): its harness on the ACP client, in its crate (plugins/builtin/dev.escouade.gemini-cli).
     ("gemini", escouade_plugin_gemini::run),
+    // OpenCode (INT-10.2): its harness, the client of `opencode serve`, in its crate (plugins/builtin/dev.escouade.opencode).
+    ("opencode", escouade_plugin_opencode::run),
 ];
 
 fn main() {

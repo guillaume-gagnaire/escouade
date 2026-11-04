@@ -680,6 +680,7 @@ impl Agent {
             limited: None,
             usage: TurnUsage::default(),
             error: Some(why),
+            entry: None,
         });
     }
 
@@ -1210,6 +1211,7 @@ impl Agent {
                     request: rid,
                     call,
                     questions: Value::Array(questions),
+                    parent: None,
                 });
             }
             other => out.push(write(reply_error(
@@ -1319,6 +1321,9 @@ impl Agent {
                 diff: None,
                 can_always: true,
                 parent: None,
+                hunks: None,
+                always_by_harness: false,
+                ends_stream: false,
             });
             return;
         }
@@ -1362,6 +1367,7 @@ impl Agent {
                 name: tool.clone(),
                 input: input.clone(),
                 parent: parent.clone(),
+                unplanned: false,
             });
         }
         let mut paths: Vec<String> = diff.iter().map(|d| d.0.clone()).collect();
@@ -1439,6 +1445,9 @@ impl Agent {
             }),
             can_always,
             parent,
+            hunks: None,
+            always_by_harness: false,
+            ends_stream: false,
         });
     }
 
@@ -1753,6 +1762,7 @@ impl Agent {
             name,
             input,
             parent,
+            unplanned: false,
         });
         // A call that ends as it starts (some agents say it whole at once).
         if matches!(u["status"].as_str(), Some("completed" | "failed")) {
@@ -2056,6 +2066,9 @@ impl Agent {
                 diff: None,
                 can_always: true,
                 parent: None,
+                hunks: None,
+                always_by_harness: false,
+                ends_stream: false,
             });
             return;
         }
@@ -2099,6 +2112,7 @@ impl Agent {
                     request: rid.clone(),
                     call: rid,
                     questions,
+                    parent: None,
                 });
                 return;
             }
@@ -2131,6 +2145,7 @@ impl Agent {
             limited,
             usage: std::mem::take(&mut self.usage),
             error,
+            entry: None,
         });
         if let Some(blocks) = self.queue.pop_front() {
             let l = self.prompt(blocks);
@@ -2161,6 +2176,7 @@ impl Agent {
                     request: rid,
                     call,
                     questions,
+                    parent: None,
                 });
             }
             "cursor/create_plan" => {
@@ -2188,6 +2204,9 @@ impl Agent {
                     diff: None,
                     can_always: true,
                     parent: None,
+                    hunks: None,
+                    always_by_harness: false,
+                    ends_stream: false,
                 });
             }
             "cursor/update_todos" => {

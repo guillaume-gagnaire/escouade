@@ -1,8 +1,8 @@
 ---
 title: "Le contrat des harness en process"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §4.5 et §4.6","docs/TODO-2.2.md (INT-9)","crates/escouade-plugin-protocol/src/engine.rs","src-tauri/src/plugins/harness.rs"]
-tickets: ["ESC-221"]
+sources: ["docs/PLUGINS.md §4.5 et §4.6","docs/TODO-2.2.md (INT-9)","crates/escouade-plugin-protocol/src/engine.rs","src-tauri/src/plugins/harness.rs","src-tauri/src/plugins/shared.rs"]
+tickets: ["ESC-221","ESC-223"]
 decisions: [34]
 compared: null
 ---
@@ -31,3 +31,13 @@ Le harness d'un plugin (`contributes.harnesses`) est servi par le process du plu
 ## Les seuils
 
 Mesuré sur le harness « Minimal », contre les chiffres d'INT-0 : au plus 5 ms de plus par ligne au rythme réel (0,66 ms au 99e centile), au moins 2 200 lignes par seconde (41 119), au plus 30 Mo par process de plugin (14 Mo). Chaque harness qui passe en process refait ces mesures.
+
+## Un harness partagé par des agents
+
+Un harness peut servir plusieurs agents d'un seul process (`opencode serve`, voir *OpenCode en plugin*). Le contrat le dit pour tous (`Launch::shared`) :
+
+- **Le lancement reste au cœur.** Le plugin décrit le process et le marque partagé ; le cœur le lance une fois pour les agents du même plugin, du même programme et des mêmes variables, avec un agent par dossier si le plugin le demande, et l'arrête avec son dernier agent. Il survit donc au plantage de son plugin, comme tout harness.
+- **Ce que le plugin lit seul**, le cœur ne le voit pas passer : les éléments arrivent sans être demandés (`agent/items`), dans leur ordre. Ce qu'un tel harness ne dit pas sur une ligne, la clôture et la lecture seule comprises, le plugin le tient ; seul un plugin livré avec l'app est cru sur la clôture.
+- **Un plantage ou un arrêt se voit sans appel en cours** : chaque agent regarde l'état de son plugin. Les messages sont les mêmes que plus haut ; coupé pendant qu'un agent tourne, l'agent s'arrête en le disant, sa session gardée.
+
+Une fin de tour et une question alertent comme pour les autres harness, quel que soit le plugin : c'est le cœur qui applique les éléments.

@@ -48,7 +48,6 @@ impl AgentRt {
         self.codex_new_conversation();
         self.copilot_new_conversation();
         self.cursor_new_conversation();
-        self.opencode_new_conversation();
         // It tells the state of its link to claude.ai itself, once it has one.
         self.remote_state = None;
     }

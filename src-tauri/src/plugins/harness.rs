@@ -27,11 +27,12 @@
 #![allow(dead_code)]
 
 use super::runtime::{CallError, Runtime, Stop};
+use super::shared::{self, Shared};
 use crate::agent::{AgentRt, Effects};
 use crate::core::Attachment;
 use crate::engine::registry::{
     AccountStore, CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind,
-    Tested,
+    Tested, ToldModel,
 };
 use crate::engine::{
     mcp, terminal, BoxFuture, Engine, EngineProcess, Escouade, Message, OnExit, OnFrame, OneShot,
@@ -62,6 +63,15 @@ const FRAMES_WITHIN: Duration = Duration::from_secs(10);
 /// How long the first call of a launch waits: it may start the plugin's process (its `initialize` has 10 s), on a
 /// machine under load.
 const ATTACH_WITHIN: Duration = Duration::from_secs(30);
+
+/// How long an agent's session may take to open on a shared harness (`agent/open`): the harness's start, then requests.
+const OPEN_WITHIN: Duration = Duration::from_secs(150);
+
+/// How long a request of the plugin to its harness may take (`agent/letGo`, `agent/rename`, `agent/compact`).
+const REQUEST_WITHIN: Duration = Duration::from_secs(60);
+
+/// How often an agent on a shared harness looks at its plugin: no call is under way to tell it stopped.
+const WATCH_EVERY: Duration = Duration::from_millis(250);
 
 /// How many times a call is given again to a plugin that crashed before it answered.
 const RETRIES: usize = 8;
@@ -240,6 +250,12 @@ pub const BUILTIN_HARNESSES: &[BuiltinHarness] = &[
         plugin: super::builtin::GEMINI,
         native: None,
         prepare: Some(crate::engine::gemini::prepare),
+    },
+    // OpenCode (INT-10.2): one `opencode serve` for the agents of an account (`Launch::shared`).
+    BuiltinHarness {
+        plugin: super::builtin::OPENCODE,
+        native: None,
+        prepare: None,
     },
 ];
 
@@ -656,7 +672,7 @@ fn merged(base: &[(String, String)], more: &[proto::EnvVar]) -> Vec<(String, Str
     out
 }
 
-fn command_of(
+pub(super) fn command_of(
     program: &Program,
     cwd: &str,
     args: &[String],
@@ -781,6 +797,7 @@ impl Engine for ProcessEngine {
             pending: Vec::new(),
             described: self.description(),
             lang: crate::i18n::ui().tag().to_string(),
+            ..proto::Attach::default()
         };
         let (stdin_tx, stdin_rx) = mpsc::unbounded_channel();
         let (control_tx, control_rx) = mpsc::unbounded_channel();
@@ -804,6 +821,14 @@ impl Engine for ProcessEngine {
             job: Mutex::new(None),
             kill_tx: Mutex::new(None),
             tail: Mutex::new(VecDeque::new()),
+            shared: Mutex::new(None),
+            left: AtomicBool::new(false),
+            left_tx: watch::channel(false).0,
+            closing: AtomicBool::new(false),
+            let_go: Arc::new(AtomicBool::new(true)),
+            told: Mutex::new(None),
+            joins: Mutex::new(None),
+            catalog: Mutex::new(None),
         });
         let _ = p.me.set(Arc::downgrade(&p));
         tokio::spawn(control(Arc::downgrade(&p), control_rx));
@@ -948,6 +973,75 @@ pub struct ProcessEngineProcess {
     kill_tx: Mutex<Option<oneshot::Sender<()>>>,
     /// The end of what its harness wrote on its stderr.
     tail: Mutex<VecDeque<String>>,
+    /// The process it shares with other agents (`Launch::shared`).
+    shared: Mutex<Option<Arc<Shared>>>,
+    /// It left that process.
+    left: AtomicBool,
+    left_tx: watch::Sender<bool>,
+    /// Stopped before it was on that process: it leaves once it is.
+    closing: AtomicBool,
+    /// Its folder let go by that process, when it was its last agent there (or no need).
+    let_go: Arc<AtomicBool>,
+    /// Where what its plugin says unasked goes (`agent/items`).
+    told: Mutex<Option<Arc<OnFrame>>>,
+    /// How its harness's interface joins it, as `agent/open` said it.
+    joins: Mutex<Option<terminal::Attach>>,
+    /// The models of its account, as `agent/open` said them.
+    catalog: Mutex<Option<Vec<ToldModel>>>,
+}
+
+/// What a launch came to.
+enum Launched {
+    Child(tokio::process::Child, Option<Arc<Job>>),
+    /// A process shared by agents, from this description.
+    Shared(proto::Launch),
+}
+
+/// The agents on a shared harness, by their key: what their plugin says unasked comes to them.
+static TOLD: Mutex<Vec<(String, std::sync::Weak<ProcessEngineProcess>)>> = Mutex::new(Vec::new());
+
+/// What a plugin said of its agent without being asked (`agent/items`).
+fn told(params: &Value) {
+    let Some(agent) = params["agent"].as_str() else {
+        return;
+    };
+    let p = TOLD
+        .lock()
+        .iter()
+        .find(|(k, _)| k == agent)
+        .and_then(|(_, p)| p.upgrade());
+    let (Some(p), Some(items)) = (p, params["items"].as_array()) else {
+        return;
+    };
+    let on_frame = p.told.lock().clone();
+    if let Some(on_frame) = on_frame {
+        p.deliver(items.clone(), &on_frame);
+    }
+}
+
+/// Where its conversation starts from, in the contract's words.
+fn start_at(start: &Start) -> proto::StartAt {
+    match start {
+        Start::New => proto::StartAt::New,
+        Start::Resume { session } => proto::StartAt::Resume {
+            session: session.clone(),
+        },
+        Start::Fork { of, at } => proto::StartAt::Fork {
+            of: of.clone(),
+            at: at.clone(),
+        },
+    }
+}
+
+/// Escouade's server for it, in the contract's words.
+fn grant_of(escouade: &Escouade) -> Option<proto::Grant> {
+    match escouade {
+        Escouade::Granted { url, token, .. } => Some(proto::Grant {
+            url: url.clone(),
+            token: token.clone(),
+        }),
+        Escouade::Denied { .. } => None,
+    }
 }
 
 /// The calls of the control task, one after the other: their `writes` go to the harness in their order.
@@ -1055,7 +1149,7 @@ impl ProcessEngineProcess {
 
     /// Launches its harness from the plugin's description, checked: its child. The first call may start the plugin's
     /// process: it is given the time of a start (`ATTACH_WITHIN`), not that of a call.
-    async fn launch(&self, spawn: &Spawn) -> Result<(tokio::process::Child, Option<Arc<Job>>)> {
+    async fn launch(&self, spawn: &Spawn) -> Result<Launched> {
         self.rt
             .attach_within(
                 &self.plugin,
@@ -1084,28 +1178,13 @@ impl ProcessEngineProcess {
             by_key: self
                 .key_var
                 .is_some_and(|var| spawn.env.iter().any(|(k, v)| k == var && !v.is_empty())),
-            start: match &spawn.start {
-                Start::New => proto::StartAt::New,
-                Start::Resume { session } => proto::StartAt::Resume {
-                    session: session.clone(),
-                },
-                Start::Fork { of, at } => proto::StartAt::Fork {
-                    of: of.clone(),
-                    at: at.clone(),
-                },
-            },
+            start: start_at(&spawn.start),
             read_dirs: spawn
                 .read_dirs
                 .iter()
                 .map(|d| d.to_string_lossy().into_owned())
                 .collect(),
-            escouade: match &spawn.escouade {
-                Escouade::Granted { url, token, .. } => Some(proto::Grant {
-                    url: url.clone(),
-                    token: token.clone(),
-                }),
-                Escouade::Denied { .. } => None,
-            },
+            escouade: grant_of(&spawn.escouade),
             fence: fence.clone(),
             read_only: spawn.read_only,
             program: spawn.program.describe(),
@@ -1146,6 +1225,9 @@ impl ProcessEngineProcess {
             }
             std::fs::write(path, &f.text)?;
         }
+        if launch.shared.is_some() {
+            return Ok(Launched::Shared(launch));
+        }
         log::info!(
             "{}: starting {} ({}) in {} (account {})",
             spawn.label,
@@ -1172,7 +1254,241 @@ impl ProcessEngineProcess {
         for w in &launch.writes {
             self.write(w);
         }
-        Ok((child, job))
+        Ok(Launched::Child(child, job))
+    }
+
+    /// Its launch failed: why.
+    fn failed(&self, e: &anyhow::Error, on_exit: OnExit) {
+        let why = format!("{e:#}");
+        self.alive.store(false, Ordering::Release);
+        self.control.lock().take();
+        let _ = self.ready.send(Some(Err(why.clone())));
+        self.rt.detach(&self.plugin, &self.key);
+        on_exit(None, why);
+    }
+
+    /// On its shared process: started by its first agent, ready, then the agent's session opened on it by the plugin.
+    async fn join(self: &Arc<Self>, spawn: &Spawn, launch: &proto::Launch) -> Result<()> {
+        let how = launch.shared.clone().unwrap_or_default();
+        let env = merged(&spawn.env, &launch.env);
+        let key = shared::key_of(
+            Arc::as_ptr(&self.rt) as usize,
+            &self.plugin,
+            &spawn.program,
+            &spawn.env,
+        );
+        let dir = shared::folder(&self.plugin);
+        let s = shared::acquire(&key, &spawn.cwd, how.one_agent_a_folder, |own| {
+            log::info!(
+                "{}: starting {} ({}) in {} (account {})",
+                spawn.label,
+                spawn.program.describe(),
+                self.name,
+                dir.display(),
+                spawn.account
+            );
+            Shared::start(shared::Start {
+                key: own,
+                name: self.name,
+                program: &spawn.program,
+                args: &launch.args,
+                env: &env,
+                remove_env: &launch.remove_env,
+                ready: &how.ready,
+                keep: how.keep.clone(),
+                dir: &dir,
+            })
+        })?;
+        *self.shared.lock() = Some(s.clone());
+        let line = s.ready(self.name).await?;
+        TOLD.lock()
+            .push((self.key.clone(), self.me.get().cloned().unwrap_or_default()));
+        self.rt.on_notification(&self.plugin, |m, params| {
+            if m == method::ITEMS {
+                told(&params);
+            }
+        });
+        {
+            let mut a = self.attach.lock();
+            a.shared = Some(proto::SharedRef {
+                key: s.key().to_string(),
+                line,
+                keep: s.keep().clone(),
+            });
+            a.fence = crate::fence::spelled(&spawn.fence, &spawn.program);
+            a.read_only = spawn.read_only;
+            a.append_prompt = spawn.append_prompt.clone();
+        }
+        self.rt
+            .attach_within(
+                &self.plugin,
+                &self.key,
+                method::ATTACH,
+                self.attach_params(),
+                ATTACH_WITHIN,
+            )
+            .await
+            .map_err(|e| down(self.name, e))?;
+        let open = proto::Open {
+            agent: self.key.clone(),
+            start: start_at(&spawn.start),
+            escouade: grant_of(&spawn.escouade),
+        };
+        let opened: proto::Opened = serde_json::from_value(
+            self.rt
+                .call_within(
+                    &self.plugin,
+                    method::OPEN,
+                    serde_json::to_value(&open)?,
+                    OPEN_WITHIN,
+                )
+                .await
+                .map_err(|e| down(self.name, e))?,
+        )?;
+        if let Some(a) = opened.attach {
+            *self.joins.lock() = Some(terminal::Attach {
+                args: a.args,
+                env: a.env.into_iter().map(|v| (v.name, v.value)).collect(),
+            });
+        }
+        *self.catalog.lock() = opened.catalog.and_then(|c| serde_json::from_value(c).ok());
+        Ok(())
+    }
+
+    /// The life of an agent on a shared process: the process's own end, its leaving, or its plugin stopped.
+    async fn run_shared(
+        self: Arc<Self>,
+        spawn: Spawn,
+        launch: proto::Launch,
+        on_frame: OnFrame,
+        on_exit: OnExit,
+    ) {
+        let on_frame = Arc::new(on_frame);
+        *self.told.lock() = Some(on_frame.clone());
+        if let Err(e) = self.join(&spawn, &launch).await {
+            self.leave();
+            TOLD.lock().retain(|(k, _)| *k != self.key);
+            let _ = self
+                .rt
+                .notify(&self.plugin, method::DETACH, json!({ "agent": self.key }));
+            self.failed(&e, on_exit);
+            return;
+        }
+        let _ = self.ready.send(Some(Ok(())));
+        let Some(s) = self.shared.lock().clone() else {
+            return;
+        };
+        if self.closing.load(Ordering::Acquire) {
+            self.leave();
+        }
+        let mut end = s.end();
+        let mut ended = Box::pin(async move {
+            let e = end.wait_for(Option::is_some).await.ok();
+            e.and_then(|e| e.clone())
+        });
+        let mut left = self.left_tx.subscribe();
+        let mut gone = Box::pin(async move {
+            let _ = left.wait_for(|l| *l).await;
+        });
+        let name = self.name;
+        let mut restarts = self.rt.status(&self.plugin).restarts;
+        let mut watch = tokio::time::interval(WATCH_EVERY);
+        let (code, said) = loop {
+            tokio::select! {
+                end = &mut ended => {
+                    self.left.store(true, Ordering::Release);
+                    break end.unwrap_or_default();
+                }
+                () = &mut gone => break (Some(0), String::new()),
+                _ = watch.tick() => {
+                    let status = self.rt.status(&self.plugin);
+                    if let Some(stop) = status.stop.filter(|_| {
+                        matches!(status.phase, super::runtime::PhaseName::Stopped)
+                    }) {
+                        let why = stopped_line(name, &CallError::Stopped(stop));
+                        on_frame(json!({ "items": [{ "op": "notice", "level": "error", "text": why }] }));
+                        self.leave();
+                        break (None, why);
+                    }
+                    // Forgotten (switched off, its permissions changed): started anew when it may be.
+                    if matches!(status.phase, super::runtime::PhaseName::Idle) {
+                        let again = self
+                            .rt
+                            .attach(&self.plugin, &self.key, method::ATTACH, self.attach_params())
+                            .await;
+                        if let Err(e @ (CallError::Unavailable(_) | CallError::Stopped(_))) = again {
+                            let why = stopped_line(name, &e);
+                            on_frame(json!({ "items": [{ "op": "notice", "level": "error", "text": why }] }));
+                            self.leave();
+                            break (None, why);
+                        }
+                    }
+                    let running = matches!(status.phase, super::runtime::PhaseName::Running);
+                    let again = running && status.restarts > restarts;
+                    if running {
+                        restarts = status.restarts;
+                    }
+                    if again {
+                        let text = tr!(
+                            "Le plugin de {name} a redémarré.",
+                            "The plugin of {name} started again."
+                        );
+                        on_frame(json!({ "items": [{ "op": "notice", "level": "warning", "text": text }] }));
+                        let _ = self.reattach().await;
+                    }
+                }
+            }
+        };
+        self.alive.store(false, Ordering::Release);
+        self.control.lock().take();
+        on_exit(code, said);
+        // The plugin keeps the agent until its folder is let go.
+        while !self.let_go.load(Ordering::Acquire) {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        let _ = self
+            .rt
+            .notify(&self.plugin, method::DETACH, json!({ "agent": self.key }));
+        self.rt.detach(&self.plugin, &self.key);
+        TOLD.lock().retain(|(k, _)| *k != self.key);
+    }
+
+    /// It no longer uses its shared process: its folder let go when it was the last agent there, the process stopped
+    /// with its last agent.
+    fn leave(&self) {
+        if self.left.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        let shared = self.shared.lock().clone();
+        if let Some(s) = shared {
+            let cwd = self.attach.lock().cwd.clone();
+            if s.leave(&cwd) && s.is_alive() {
+                if let Ok(rt) = tokio::runtime::Handle::try_current() {
+                    self.let_go.store(false, Ordering::Release);
+                    s.disposing(&cwd, false);
+                    let (plugins, plugin, key) =
+                        (self.rt.clone(), self.plugin.clone(), self.key.clone());
+                    let (s, done) = (s.clone(), self.let_go.clone());
+                    rt.spawn(async move {
+                        let said = plugins
+                            .call_within(
+                                &plugin,
+                                method::LET_GO,
+                                json!({ "agent": key }),
+                                REQUEST_WITHIN,
+                            )
+                            .await;
+                        if let Err(e) = said {
+                            log::debug!("{key}: its folder let go: {e}");
+                        }
+                        s.disposing(&cwd, true);
+                        done.store(true, Ordering::Release);
+                    });
+                }
+            }
+            shared::release(&s);
+        }
+        let _ = self.left_tx.send(true);
     }
 
     /// The process's life: its launch, its frames, its end.
@@ -1184,14 +1500,13 @@ impl ProcessEngineProcess {
         on_exit: OnExit,
     ) {
         let (mut child, job) = match self.launch(&spawn).await {
-            Ok(c) => c,
+            Ok(Launched::Child(child, job)) => (child, job),
+            Ok(Launched::Shared(launch)) => {
+                self.run_shared(spawn, launch, on_frame, on_exit).await;
+                return;
+            }
             Err(e) => {
-                let why = format!("{e:#}");
-                self.alive.store(false, Ordering::Release);
-                self.control.lock().take();
-                let _ = self.ready.send(Some(Err(why.clone())));
-                self.rt.detach(&self.plugin, &self.key);
-                on_exit(None, why);
+                self.failed(&e, on_exit);
                 return;
             }
         };
@@ -1370,17 +1685,30 @@ impl ProcessEngineProcess {
                     }
                     continue;
                 }
-                "start" => {
+                "closed" => {
+                    self.leave();
+                    continue;
+                }
+                "start" | "session" => {
+                    let mut a = self.attach.lock();
                     if let Some(s) = item["session"].as_str() {
-                        self.attach.lock().session = Some(s.to_string());
+                        a.session = Some(s.to_string());
                     }
+                    a.running |= item["op"] == "start";
                 }
                 "permission" | "question" => {
+                    let mut a = self.attach.lock();
                     if let Some(r) = item["request"].as_str() {
-                        self.attach.lock().pending.push(r.to_string());
+                        a.pending.push(r.to_string());
                     }
+                    // Its harness's turn is over on this card: nothing to wait for from it.
+                    a.running &= item["endsStream"] != true;
                 }
-                "turn" => self.attach.lock().pending.clear(),
+                "turn" => {
+                    let mut a = self.attach.lock();
+                    a.pending.clear();
+                    a.running = false;
+                }
                 _ => {}
             }
             out.push(item);
@@ -1424,6 +1752,9 @@ impl EngineProcess for ProcessEngineProcess {
         u32::from(self.is_alive())
     }
     fn pids(&self) -> Vec<u32> {
+        if let Some(s) = self.shared.lock().as_ref().filter(|_| self.is_alive()) {
+            return s.pids();
+        }
         self.job
             .lock()
             .as_ref()
@@ -1431,6 +1762,27 @@ impl EngineProcess for ProcessEngineProcess {
             .unwrap_or_default()
     }
     fn close_input(&self) {
+        self.closing.store(true, Ordering::Release);
+        if self.shared.lock().is_some() {
+            // Once its turn is over, as its plugin says it (`closed`); at once when it says nothing.
+            let close = proto::Close {
+                agent: self.key.clone(),
+                now: false,
+            };
+            if let (Some(me), Ok(rt)) = (
+                self.me.get().and_then(std::sync::Weak::upgrade),
+                tokio::runtime::Handle::try_current(),
+            ) {
+                rt.spawn(async move {
+                    if me.ordered(method::CLOSE, close, true).await.is_err() {
+                        me.leave();
+                    }
+                });
+            } else {
+                self.leave();
+            }
+            return;
+        }
         self.stdin.lock().take();
         // A harness that does not end when its input closes (Cursor CLI's `agent acp`) is killed a moment later.
         if let (Some(grace), Some(me)) = (self.close_grace, self.me.get().cloned()) {
@@ -1445,6 +1797,13 @@ impl EngineProcess for ProcessEngineProcess {
         }
     }
     fn kill(&self) {
+        self.closing.store(true, Ordering::Release);
+        if self.shared.lock().is_some() {
+            let close = json!({ "agent": self.key, "now": true });
+            let _ = self.rt.notify(&self.plugin, method::CLOSE, close);
+            self.leave();
+            return;
+        }
         self.stdin.lock().take();
         if let Some(k) = self.kill_tx.lock().take() {
             let _ = k.send(());
@@ -1462,8 +1821,21 @@ impl EngineProcess for ProcessEngineProcess {
             !self.is_alive()
         })
     }
+    /// Gone, and its folder let go by a shared process that goes on for other agents (a worktree is removed next).
     fn wait_gone(&self, within: Duration) -> BoxFuture<'_, bool> {
-        self.wait_exit(within)
+        Box::pin(async move {
+            let deadline = Instant::now() + within;
+            if !self.wait_exit(within).await {
+                return false;
+            }
+            while !self.let_go.load(Ordering::Acquire) {
+                if Instant::now() >= deadline {
+                    return false;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            true
+        })
     }
 
     fn initialize(&self) -> BoxFuture<'_, Result<Ready>> {
@@ -1475,7 +1847,10 @@ impl EngineProcess for ProcessEngineProcess {
                 .map_err(|_| anyhow!("{} is gone", self.name))?
                 .clone();
             match done {
-                Some(Ok(())) => Ok(Ready::default()),
+                Some(Ok(())) => Ok(Ready {
+                    catalog: self.catalog.lock().take(),
+                    ..Ready::default()
+                }),
                 Some(Err(why)) => Err(anyhow!(why)),
                 None => unreachable!("waited for"),
             }
@@ -1486,11 +1861,16 @@ impl EngineProcess for ProcessEngineProcess {
             agent: self.agent(),
             uuid: uuid.to_string(),
             text: message.0.as_str().unwrap_or_default().to_string(),
-            // A message its engine made as its harness takes it (Cursor CLI's `prompt` blocks: its images, its text
-            // files), passed as it is.
-            content: message.0.get("prompt").cloned(),
+            // A message its engine made as its harness takes it (Cursor CLI's `prompt` blocks, OpenCode's parts: its
+            // images, its text files), passed as it is.
+            content: if message.0.is_array() {
+                Some(message.0.clone())
+            } else {
+                message.0.get("prompt").cloned()
+            },
         };
         let params = serde_json::to_value(s)?;
+        self.attach.lock().running = true;
         let sent = self.control.lock().as_ref().map(|tx| {
             tx.send(Control {
                 method: method::SEND_MESSAGE,
@@ -1504,10 +1884,11 @@ impl EngineProcess for ProcessEngineProcess {
         }
         Ok(())
     }
-    fn interrupt(&self, _cancel_queued: bool, timeout: Duration) -> BoxFuture<'_, Result<()>> {
+    fn interrupt(&self, cancel_queued: bool, timeout: Duration) -> BoxFuture<'_, Result<()>> {
         Box::pin(async move {
-            let a = proto::AgentRef {
+            let a = proto::Interrupt {
                 agent: self.agent(),
+                cancel_queued,
             };
             tokio::time::timeout(timeout, self.ordered(method::INTERRUPT, a, true))
                 .await
@@ -1565,6 +1946,7 @@ impl EngineProcess for ProcessEngineProcess {
             request: request_id.to_string(),
             call: call.to_string(),
             answers: input["answers"].clone(),
+            questions: input["questions"].clone(),
         };
         self.send_ordered(method::ANSWER_QUESTION, serde_json::to_value(a)?)
     }
@@ -1583,8 +1965,52 @@ impl EngineProcess for ProcessEngineProcess {
             Ok((!u.usage.is_null()).then_some(u.usage))
         })
     }
-    fn rename<'a>(&'a self, _: &'a str) -> BoxFuture<'a, Result<()>> {
-        ready(Ok(()))
+    /// A harness whose plugin does not say how keeps its title.
+    fn rename<'a>(&'a self, title: &'a str) -> BoxFuture<'a, Result<()>> {
+        Box::pin(async move {
+            let v = proto::SetValue {
+                agent: self.agent(),
+                value: title.into(),
+            };
+            match self
+                .rt
+                .call_within(
+                    &self.plugin,
+                    method::RENAME,
+                    serde_json::to_value(v)?,
+                    REQUEST_WITHIN,
+                )
+                .await
+            {
+                Ok(_) => Ok(()),
+                Err(CallError::Remote { code, .. }) if code == super::runtime::METHOD_NOT_FOUND => {
+                    Ok(())
+                }
+                Err(e) => Err(down(self.name, e)),
+            }
+        })
+    }
+    fn compact<'a>(&'a self, instructions: &'a str) -> BoxFuture<'a, Result<bool>> {
+        Box::pin(async move {
+            let c = proto::Compact {
+                agent: self.agent(),
+                instructions: instructions.into(),
+            };
+            let v = self
+                .rt
+                .call_within(
+                    &self.plugin,
+                    method::COMPACT,
+                    serde_json::to_value(c)?,
+                    REQUEST_WITHIN,
+                )
+                .await
+                .map_err(|e| down(self.name, e))?;
+            Ok(serde_json::from_value::<proto::Compacted>(v)?.over)
+        })
+    }
+    fn attach(&self) -> Option<terminal::Attach> {
+        self.joins.lock().clone().filter(|_| self.is_alive())
     }
     fn stop_task<'a>(&'a self, _: &'a str) -> BoxFuture<'a, Result<()>> {
         ready(Err(anyhow!("not supported")))
@@ -1595,8 +2021,23 @@ impl EngineProcess for ProcessEngineProcess {
     fn remote_control(&self, _: Remote, _: Duration) -> BoxFuture<'_, Result<Value>> {
         ready(Err(anyhow!("not supported")))
     }
-    fn control(&self, _: Value, _: Duration) -> BoxFuture<'_, Result<Value>> {
-        ready(Err(anyhow!("not supported")))
+    fn control(&self, request: Value, timeout: Duration) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move {
+            let c = proto::Control {
+                agent: self.agent(),
+                request,
+                within_ms: timeout.as_millis() as u64,
+            };
+            self.rt
+                .call_within(
+                    &self.plugin,
+                    method::CONTROL,
+                    serde_json::to_value(c)?,
+                    timeout + Duration::from_secs(1),
+                )
+                .await
+                .map_err(|e| down(self.name, e))
+        })
     }
     fn reply(&self, _: &str, _: std::result::Result<Value, String>) -> Result<()> {
         bail!("not supported")

@@ -84,6 +84,8 @@ Il ne lit pas les PDF (le bouton les refuse en le disant) et ne propose dans Esc
 
 ## OpenCode
 
+OpenCode est un plugin livré avec Escouade (`dev.escouade.opencode`) : ses agents conversent par un programme à part qu’Escouade lance et surveille, sur le serveur de leur compte. Il se voit dans la vue Plugins, sous « Livrés avec Escouade ». S’il plante, le serveur et le tour continuent et la conversation le dit ; coupé, un agent d’OpenCode dit qu’il faut le rallumer, et garde sa session.
+
 ### Installation et compte
 
 `npm install -g opencode-ai` installe OpenCode 1, le seul que pilote Escouade : OpenCode 2 (`@opencode/cli`) est reconnu et dit « Non pris en charge ». Connecte un fournisseur avec `opencode auth login` (« Se connecter… » dans Réglages › Harness le lance) ; les modèles locaux d’Ollama marchent aussi. OpenCode a un seul compte dans Escouade, sa config habituelle. Un seul `opencode serve` sert tous les agents OpenCode, protégé par un mot de passe tiré au hasard qui ne quitte pas Escouade ; chaque agent y est une session.

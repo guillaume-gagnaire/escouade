@@ -1,4 +1,12 @@
-use super::*;
+use super::super::*;
+use super::absolute;
+use crate::engine::opencode::Through;
+use escouade_plugin_opencode::translate::tool_of;
+
+thread_local! {
+    /// The translation of each agent of a test, as its plugin keeps it.
+    static THROUGH: std::cell::RefCell<HashMap<String, Through>> = Default::default();
+}
 
 /// An agent of OpenCode in `cwd`, its frames translated one by one.
 fn agent(cwd: &str) -> AgentRt {
@@ -21,7 +29,11 @@ fn feed(rt: &mut AgentRt, frames: &[Value]) -> Vec<Effects> {
         .iter()
         .map(|f| {
             let mut fx = Effects::default();
-            rt.opencode_frame(f, &mut fx);
+            THROUGH.with_borrow_mut(|t| {
+                t.entry(rt.meta.id.clone())
+                    .or_default()
+                    .frame(rt, f, &mut fx)
+            });
             fx
         })
         .collect()

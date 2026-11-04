@@ -9,7 +9,7 @@
 // `OPENCODE_SERVER_PASSWORD` (Basic `opencode:<password>`, 401 otherwise). Its sessions are kept by folder in
 // `<FAKE_OPENCODE_HOME | XDG_DATA_HOME | tmp/fake-opencode>/<hash of the folder>.json`, so that a server started again resumes
 // them. It answers `/config/providers`, `/config`, `/session` (create, get, patch, messages, fork, prompt_async,
-// abort, summarize), `/permission/:id/reply`, `/question/:id/reply`, `/instance/dispose`. What a prompt plays is picked by its
+// abort, summarize), `/session/status`, `/permission/:id/reply`, `/question/:id/reply`, `/instance/dispose`. What a prompt plays is picked by its
 // message (French words, as the scenarios of the fake `claude`):
 // - "raisonnement": a reasoning (by deltas), then a reply;
 // - "commande": `rm -rf build` (bash), which asks its permission under a rule `ask`: run once allowed, refused
@@ -818,6 +818,10 @@ const server = http.createServer(async (req, res) => {
     if (!e) return notFound();
     e.status = 'disabled';
     return json(true);
+  }
+  // The sessions that run, as OpenCode answers it: an idle one is not listed.
+  if (req.method === 'GET' && p === '/session/status') {
+    return json(Object.fromEntries([...turns.keys()].map((sid) => [sid, { type: 'busy' }])));
   }
   if (req.method === 'POST' && p === '/session') return json(sessionInfo(newSession(dir, body || {})));
   if ((m = p.match(/^\/session\/([^/]+)$/))) {

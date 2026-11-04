@@ -3,6 +3,7 @@
 //! (tests/fixtures/opencode/), replayed from tests/fixtures/replays/opencode/.
 
 use super::OPENCODE;
+use crate::agent::{AgentRt, Effects};
 use crate::engine::bench::{bench_dir, replay, run, Scenario, Target};
 use crate::engine::{Engine, Program};
 use serde_json::Value;
@@ -34,6 +35,23 @@ pub(crate) fn recorded(file: &str) -> Vec<Value> {
         .filter(|l| l["dir"] == "s2c")
         .map(|l| l["msg"].clone())
         .collect()
+}
+
+/// The translation of its plugin, in this process: a frame of OpenCode's, its items applied to the agent.
+#[derive(Default)]
+pub(crate) struct Through(Option<escouade_plugin_opencode::Translator>);
+
+impl Through {
+    pub(crate) fn frame(&mut self, rt: &mut AgentRt, frame: &Value, fx: &mut Effects) {
+        let t = self.0.get_or_insert_with(|| {
+            let (cwd, model) = (&rt.meta.cwd, &rt.meta.model);
+            escouade_plugin_opencode::Translator::new(cwd, model, rt.meta.session_id.clone(), "fr")
+        });
+        let mut items = Vec::new();
+        t.frame(frame, &mut items);
+        let items = serde_json::to_value(items).unwrap();
+        rt.apply_items(items.as_array().unwrap(), fx);
+    }
 }
 
 pub(crate) struct OnBench;
@@ -79,8 +97,11 @@ impl Target for OnBench {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn the_fake_opencode_passes_the_bench() {
+    // Its conversation goes through its plugin (INT-10.2): the plugins the app gives, in a runtime of their own.
+    let (rt, plugins, _) = crate::plugins_acp_tests::runtime("int10-opencode-bench");
+    crate::plugins::harness::sync(&rt, &plugins);
     let dir = bench_dir("esc44-bench-opencode");
     let played = run(&OnBench, &dir).await;
     // No quota: neither the limit nor the quota is asked of it.
@@ -90,10 +111,14 @@ async fn the_fake_opencode_passes_the_bench() {
         .collect();
     assert_eq!(played, expected);
     // Every agent stopped, its server too.
-    assert_eq!(super::server::running(), 0);
+    assert_eq!(crate::plugins::shared::running(), 0);
+    rt.shutdown();
 }
 
 #[test]
 fn the_recorded_streams_of_opencode_make_the_items_expected() {
-    replay::check_all(&OPENCODE, "opencode");
+    replay::check_all_through(&OPENCODE, "opencode", || {
+        let mut through = Through::default();
+        Box::new(move |rt, frame, fx| through.frame(rt, frame, fx))
+    });
 }

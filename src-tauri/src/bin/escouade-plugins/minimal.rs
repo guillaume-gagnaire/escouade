@@ -246,6 +246,7 @@ fn hook(h: Hook) -> HookAnswer {
                 limited: None,
                 usage: TurnUsage::default(),
                 error: None,
+                entry: None,
             }],
             answer: None,
         },
@@ -309,6 +310,7 @@ impl Agent {
                     name: name.to_string(),
                     input,
                     parent,
+                    unplanned: false,
                 });
             }
             "done" => {
@@ -337,6 +339,9 @@ impl Agent {
                         diff: None,
                         can_always: false,
                         parent: None,
+                        hunks: None,
+                        always_by_harness: false,
+                        ends_stream: false,
                     });
                 }
             }
@@ -357,6 +362,7 @@ impl Agent {
                     request,
                     call,
                     questions,
+                    parent: None,
                 });
             }
             "end" => {
@@ -371,6 +377,7 @@ impl Agent {
                         ..TurnUsage::default()
                     },
                     error: None,
+                    entry: None,
                 });
             }
             // The scenario « plantage »: the plugin crashes in the middle of a turn, once (its flag written) or each
