@@ -1,9 +1,9 @@
 ---
-number: null
+number: 64
 id: "opencode-passe-par-son-plugin-le-cœur-la"
 title: "OpenCode passe par son plugin : le cœur lance un harness partagé, le plugin en est le client"
 date: "2026-11-04"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-223"
 pages: ["plugins/opencode-en-plugin","plugins/harness-en-process","plugins/livres-avec-escouade"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/opencode-en-plugin","added":16,"removed":0},{"page":"plugins/harness-en-process","added":6,"removed":0},{"page":"plugins/livres-avec-escouade","added":2,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-04T07:03:49+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
