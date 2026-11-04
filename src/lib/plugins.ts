@@ -245,7 +245,9 @@ export function askOf(word: string, m: Manifest | null, lang: string): Ask {
         detail: what,
         strong: false,
         red: false,
-        note: t(m?.run?.js ? 'plugins.perms.networkApplied' : 'plugins.perms.networkNote'),
+        // A bundle goes through Escouade's `net/fetch`, a declarative plugin's webhooks are sent by Escouade: only a
+        // command keeps a network of its own.
+        note: t(m?.run?.js ? 'plugins.perms.networkApplied' : m && !m.run ? 'plugins.perms.networkWebhooks' : 'plugins.perms.networkNote'),
       };
     default:
       return {
@@ -267,11 +269,12 @@ export function contributionsOf(m: Manifest | null, lang: string): string[] {
   if (!m) return [];
   const out: string[] = [];
   const list = (key: string) => (Array.isArray(m.contributes[key]) ? (m.contributes[key] as Record<string, unknown>[]) : []);
-  const names = (key: string) =>
-    list(key)
-      .map((i) => textOf((i.name ?? i.title ?? i.id) as ManifestText | undefined, lang))
-      .filter(Boolean)
-      .join(', ');
+  // A webhook has no name of its own: what sets it off says it.
+  const nameOf = (i: Record<string, unknown>) =>
+    Array.isArray(i.events) && !i.name && !i.title && !i.id
+      ? i.events.join(' ')
+      : textOf((i.name ?? i.title ?? i.id) as ManifestText | undefined, lang);
+  const names = (key: string) => list(key).map(nameOf).filter(Boolean).join(', ');
   const points: [
     string,
     (

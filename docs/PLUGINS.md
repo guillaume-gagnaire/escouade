@@ -1,408 +1,289 @@
-# Les plugins d'Escouade : analyse (ESC-170)
+# Les plugins d'Escouade : la référence
 
-Demandé par l'utilisateur le 2026-10-25 : « pour la v2.1.0, planifie pour plus tard un système de plugins, permettant à tout le monde d'apporter des fonctionnalités à Escouade, fais une analyse poussée pour voir tout ce qu'on pourrait manipuler via ces plugins, et planifie une documentation étendue sur le sujet ».
+Ce document dit **ce qui a été construit**, et où. Il était l'analyse d'ESC-170 (2026-10-25) ; ESC-184 (PLG-12, 2026-11-04) l'a passé de l'analyse à la référence. Le texte de l'analyse reste dans l'historique git (`git show e05a5265:docs/PLUGINS.md`). Le plan et ce qui reste à faire sont dans `docs/TODO-2.2.md`, chapitres « Plugins » et « Tout l'externe en plugins » ; la place de marché dans `docs/STORE.md` ; la documentation des auteurs sur le site (`website/content/docs/*/plugins/`).
 
-Ce document est l'analyse. Il ne change pas l'app. Le découpage en tickets, le plan de la documentation et les questions qui décident sont dans `docs/TODO-2.2.md`, chapitre « Plugins ».
-
-- §1 : l'inventaire de ce qu'un plugin pourrait manipuler, point d'extension par point d'extension, depuis le code ;
-- §2 : l'architecture, comparée sur ce que font VS Code, Zed, Obsidian, Raycast, JetBrains, Claude Code, Tauri et MCP, et trois expériences jetables ;
+- §1 : les points d'extension, un par un, et ce qui n'en est pas encore un ;
+- §2 : l'architecture retenue, et pourquoi ;
 - §3 : le modèle de confiance et de distribution ;
-- §4 : tout ce qui est externe devient un plugin (ESC-203, 2026-10-26) : les harness, les sources du Kanban, les hébergeurs et leurs PR, en plugins de première main, tous en process ; un plugin qui tient plusieurs points (GitHub : tickets et PR) ; les options comparées et ce que coûte le « tout en process » décidé, l'ordre de migration, l'effet sur les tickets en cours.
-- §5 : les programmes en JS/TS sans Node (ESC-319, 2026-11-01) : Javy, Extism et componentize-js comparés et mesurés, le runtime WASM retenu et son prototype, le contrat de l'hôte, le pipeline du store, le sort du `run` natif, la migration de Slack et de Règles de l'équipe.
+- §4 : tout ce qui est externe est un plugin, en process (ESC-203) ; ce chapitre est encore celui de l'étude, ESC-227 (INT-11) le passe en référence ;
+- §5 : les programmes en JS/TS sans Node, en WASM (ESC-319) ;
+- §6 : les sources de l'étude ;
+- §7 : l'essai réel (ESC-184).
 
-**Depuis ESC-203, la règle est : tout ce qui est externe est un plugin.** Les intégrations d'aujourd'hui deviennent des plugins de première main, livrés et signés avec l'app, et, comme les plugins tiers, des process qui parlent le même protocole (§4, décidé le 2026-10-26).
+**La règle, depuis ESC-203 : tout ce qui est externe est un plugin.** Les intégrations d'Escouade sont des plugins de première main, livrés et signés avec l'app, et, comme ceux des tiers, des process qui parlent le même protocole (§4, décidé le 2026-10-26).
 
 ## En bref
 
-- **Un plugin est un dossier avec un manifeste** (`escouade-plugin.json`). Il apporte des **contributions déclarées** : un thème, une langue, un harness ACP, un webhook, des modèles de projet, des entrées de menu… Escouade les lit et les montre avec ses propres composants. Il peut aussi apporter un **programme**, qui parle à Escouade en **JSON-RPC 2.0 sur stdio**, comme un serveur MCP ou un agent ACP : il réagit aux événements, décide d'une autorisation, fournit une source du Kanban.
-- **Pas de HTML libre dans la fenêtre en 2.1** : l'interface d'un plugin est déclarée (manifeste et blocs), rendue par Escouade. Une vue libre viendra plus tard, dans une iframe isolée (le modèle de MCP Apps).
-- **Les programmes en JS/TS tournent en WASM, sans Node** (révisé le 2026-11-01, ESC-319, §5) : le store compile le bundle commité en WASM (Javy et le QuickJS d'Escouade, reproductible), l'app le fait tourner par wasmtime, dans son process. Les mêmes messages, un autre transport ; le réseau et les fichiers y sont appliqués, plus seulement déclarés. Les programmes natifs restent pour la première main et pour les binaires tiers attestés.
-- **La 2.1.0** : le socle (manifeste, chargement, Réglages › Plugins, permissions, journal, faux Escouade pour les tests), puis trois points : les **événements** (webhooks, Slack, Discord, commandes), les **harness ACP déclarés**, les **thèmes**. Les **règles d'autorisation** suivent, si la 2.1.0 a la place. Les sources du Kanban, les hébergeurs, les outils MCP, l'interface et les langues viennent après.
-- **La place de marché store.escouade.dev arrive avec la 2.1** (ESC-202, `docs/STORE.md`) : soumission depuis un dépôt public, comptes GitHub, revue en local par l'utilisateur et badge « Vérifié par Escouade » signé hors du serveur. L'installation depuis un dossier ou un dépôt git reste permise, « non vérifié ».
+- **Un plugin est un dossier avec un manifeste** (`escouade-plugin.json`). Il apporte des **contributions déclarées** : un thème, un webhook, un harness ACP, un compte, une source du Kanban, un hébergeur… Escouade les lit et les montre avec ses propres composants. Il peut aussi apporter un **programme**, qui parle à Escouade en **JSON-RPC 2.0**.
+- **Trois genres de plugin** : **déclaratif** (rien ne s'exécute : `dev.escouade.high-contrast`, `discord`, `goose`) ; **programme en JS/TS** (`run.js`, un bundle que le store compile en WASM et que l'app fait tourner par wasmtime, dans son process, sans Node : `dev.escouade.slack` et `team-rules` depuis leur 2.0.0) ; **programme natif** (`run.command`, un process : la première main en Rust, `escouade-plugins <nom>`, et les binaires tiers attestés).
+- **Pas de HTML libre dans la fenêtre** : ce qu'un plugin montre est déclaré et rendu par Escouade. Les menus, les badges et la barre d'état déclarés ne sont pas encore servis (§1.9).
+- **La distribution** : la place de marché store.escouade.dev (`docs/STORE.md`), soumission depuis un dépôt public, revue en local et badge « Vérifié par Escouade » signé hors du serveur. L'installation depuis un dossier ou un dépôt git reste permise, « non vérifié ».
+- **Vingt-deux plugins livrés avec l'app** à ce jour (`plugins/builtin/`), dont le harness de démonstration des builds de développement, et **cinq plugins de première main hors de l'app** (`plugins/<id-court>/`) : quatre au store, signés, et Goose, écrit mais pas encore soumis.
 
-## 1. L'inventaire
+## Les pièces
 
-Chaque point d'extension dit : **où** il vit aujourd'hui, **ce qu'un plugin y ferait**, **un exemple**, puis sa **valeur** pour un utilisateur, sa **difficulté** de construction et son **risque** (sécurité, stabilité, compatibilité). Valeur, difficulté et risque sont notés de 1 (faible) à 3 (fort). Le tableau du §1.13 les résume.
+| Pièce | Où | Ce qu'elle fait |
+| --- | --- | --- |
+| Le manifeste | `src-tauri/src/plugins/manifest.rs`, `schemas/plugin-manifest.mjs` (deux lecteurs, un corpus : `tests/fixtures/plugins/manifests.json`), `schemas/plugin-1.json` | Lit et refuse, champ par champ, en français et en anglais |
+| Le chargement et l'installation | `src-tauri/src/plugins/mod.rs` | Installe (dossier, dépôt git, store, en développement), fixe l'empreinte, tient `<data>/plugins/` et les choix de l'utilisateur |
+| Les plugins livrés | `src-tauri/src/plugins/builtin.rs`, `plugins/builtin/<id>/` | Le registre embarqué, la vérification de `{escouade}/…` |
+| Le runtime | `src-tauri/src/plugins/runtime.rs` | Un process par plugin dans un Job object, démarré à la demande, délais, relances, mémoire, fermeture |
+| Le WASM | `src-tauri/src/plugins/wasm.rs`, `wasm_prelude.js`, `src-tauri/escouade-js` | L'hôte wasmtime, `net/fetch`, les limites, le cache des précompilés (§5) |
+| Le protocole | `schemas/plugin-protocol-1.json` (le socle, dont le TS du SDK est généré), `crates/escouade-plugin-protocol` (les types partagés avec le cœur : comptes, sources, hébergeurs, harness, voix) | Un seul protocole pour les deux transports |
+| Les faits | `src-tauri/src/facts.rs`, `src-tauri/src/plugins/events.rs` | Le bus de faits typés, les webhooks et les commandes déclarés |
+| Les autorisations | `src-tauri/src/plugins/decide.rs` | Les plugins qui décident, un refus qui l'emporte, le délai |
+| Les adaptateurs | `src-tauri/src/plugins/adapters.rs` (sources, hébergeurs), `hosted.rs` (un client par compte), `harness.rs` et `shared.rs` (harness), `reader.rs` (workflows), `accounts.rs` (comptes), `src-tauri/src/launchenv.rs`, `src-tauri/src/voice/service.rs` | Ce que le cœur appelle, sans savoir qui répond |
+| Le journal | `src-tauri/src/plugins/journal.rs` | Démarrages, plantages, appels, décisions ; `<data>/plugin-logs/<id>.log`, secrets masqués |
+| Le store dans l'app | `src-tauri/src/plugins/store.rs`, `store_keys.rs` | Catalogue, liste de révocation, téléchargement et vérifications, sceau revérifié hors ligne |
+| Le banc | `src-tauri/src/plugins/bench/`, la CLI `escouade-plugin` (`test`, `dev`, `validate`, `build`) | La conformité d'un plugin, livrée avec l'app |
+| Le kit Rust | `crates/escouade-plugin-kit`, `crates/escouade-acp` | La boucle des plugins Rust ; le client ACP |
+| Le SDK | `sdk/plugin` (`@escouade-dev/plugin`, MIT), `sdk/create-escouade-plugin` | TypeScript, faux Escouade, gabarit |
+| La fenêtre | `src/components/plugins/`, `src/lib/plugins*.ts`, `src/lib/plugin-theme*.ts`, `src/lib/proposed-plugins.ts` | La vue Plugins, le store, les thèmes, les plugins proposés |
 
-Ce qui rend un point facile, c'est un **trait ou un registre déjà là**, derrière lequel le cœur ne sait pas qui répond : les harness (`Engine`, `EngineProcess`, `registry`), les hébergeurs (`Forge`, `Provider`, `forge::Registry`) et le coffre (`SecretStore`) en ont un. Les sources du Kanban (`integrations::Client`, une énumération fermée), les services de voix (`voice::online::Provider`, une énumération fermée) et les langues (`i18n::Lang`, `Fr` et `En`) n'en ont pas : il faudra d'abord les ouvrir.
+## 1. Les points d'extension
+
+**Un point d'extension est servi** quand le cœur s'en sert ; un manifeste peut en déclarer davantage (le schéma les réserve). Le tableau du §1.14 les résume. Tout point est ouvert aux plugins de première main et aux tiers, sauf ce que dit le §4.10.
+
+Le protocole de base (`schemas/plugin-protocol-1.json`, version 1, délai par défaut 5 s) :
+
+| Méthode | Sens | Délai | Ce qu'elle fait |
+| --- | --- | --- | --- |
+| `initialize` | vers le plugin | 10 s | La poignée de main, versions et capacités |
+| `shutdown` | vers le plugin | 1 s | Escouade ferme |
+| `events/fact` | vers le plugin, notification | — | Un fait de `permissions.events`, d'un projet où le plugin est actif |
+| `permissions/decide` | vers le plugin | 500 ms | Une demande d'un agent, avant l'utilisateur |
+| `secrets/get` | vers Escouade | 5 s | Un de ses secrets (`plugin:<id>:<clé>`) |
+| `settings/get` | vers Escouade | 5 s | Ses réglages ; avec un projet, ceux de son `.escouade.yml` par-dessus |
+| `files/read` | vers Escouade | 5 s | Un fichier de son dossier (256 Kio, texte, jamais le manifeste ni un fichier caché) |
+| `net/fetch` | vers Escouade | 10 s | Une requête https vers `permissions.network` (WASM seulement) |
+| `log` | vers Escouade, notification | — | Une ligne de son journal |
+
+Les points servis par un programme ajoutent leurs méthodes (`account/*`, `tickets/*`, `forge/*`, `engine/*`, `agent/*`, `terminal/*`, `voice/*`, `launch/*`, `workflow/read`), dans `crates/escouade-plugin-protocol` ; le §4.5 les dit point par point. Les erreurs sont celles de `x-errors` : celles de JSON-RPC, puis `notYours` -32001, `keychain` -32002, `refused` -32003, `failed` -32004, `notFound` -32005.
 
 ### 1.1 Les harness
 
-**Où.** `src-tauri/src/engine/` : les traits `Engine` (sans état : `locate`, `tested`, `caps`, `models`, `efforts`, `spawn`, `message`, `translate`, `one_shot`, `grant_file`, `escouade_launch`, `fence_settings`, `user_config`…) et `EngineProcess` (le process vivant : `send_message`, `interrupt`, `set_model`, `set_mode`, `answer_permission`, `answer_question`, `read_usage`…), dans `engine/mod.rs` ; le registre `engine/registry.rs` (`EngineCaps`, `EngineDecl`, `Tested`, `Version`, `Range`, `EngineState`) ; un dossier par harness (`claude/`, `codex/`, `copilot/`, `cursor/`, `opencode/`, `vibe/`, `agy/`, `gemini/`, chacun avec `locate.rs`, `process.rs`, `bench.rs`, et `terminal.rs` pour une vue terminal) ; le code propre à un harness hors d'`engine/` (`signin.rs`, `usage.rs`, `pricing.rs`, `codeindex/hint.rs`, `memory.rs::claude_offer`) ; la traduction de leurs frames en conversation, `src-tauri/src/agent/<harness>.rs` ; le banc de conformité `engine/bench/` (scénarios, `replay`), et `engine/minimal/`, un faux moteur qui montre le moins qu'un moteur écrit. Le guide « Ajouter un moteur » de `docs/ENGINES.md` liste une quarantaine de cases.
+**Servi.** Trois façons, de la plus simple à la plus complète :
 
-**Ce qu'un plugin y ferait.** Deux niveaux :
+1. **Décrit par ACP** (`contributes.harnesses[].acp`, PLG-6, ESC-178) : un manifeste, sans code, et le plugin livré `dev.escouade.acp` (`crates/escouade-acp`) lance l'agent, lui parle et montre sa conversation, ses permissions, ses diffs. Exemple : `plugins/goose/`.
+2. **Un plugin ACP avec ses extensions** (`dev.escouade.cursor-cli`, `dev.escouade.mistral`, `dev.escouade.gemini-cli`), sur le même client.
+3. **Un client à lui, en process** (`dev.escouade.opencode`, `dev.escouade.copilot-cli`, `dev.escouade.codex`), par le contrat `engine/*` et `agent/*` (INT-9, ESC-221).
 
-1. **Un harness ACP décrit** : Cursor CLI parle déjà ACP v1 à un client d'Escouade (`engine/cursor/process.rs`, `agent/cursor.rs`). Généralisé en un **adaptateur ACP générique**, un plugin n'a plus qu'à _décrire_ son agent dans son manifeste : son programme et ses arguments (`agent acp`), comment le trouver (`locate` : noms, chemins, `--version`), ses versions testées, la variable de son dossier de config (`agent_home_var`), ses modes et leur sens (`ModeCap`), ses modèles, ce qu'il sait faire (`EngineCaps` : images, PDF, copie, message en cours de tour…), sa commande d'installation, ses textes (`speaker`, `writer`). Pas de code : Escouade fait le reste, banc compris. Ce que l'ACP ne dit pas (le quota, le coût, les comptes) reste « inconnu » (`QuotaKind`, `CostKind`), comme chez Cursor.
-2. **Un harness en programme** : un plugin qui implémente `Engine` et `EngineProcess` lui-même, par le protocole du plugin (`engine/spawn`, `engine/translate`…). Pour un harness qui ne parle ni ACP ni rien de connu. La traduction doit produire les éléments normalisés (`user`, `text`, `thinking`, `tool`, `question`, `permission`, `turn`, `notice`, `event`) et les noms d'outils de Claude Code (`Bash`, `Edit`…), ce que le banc vérifie.
+Dans les trois cas, le cœur garde le lancement (il vérifie la description que rend le plugin, `check_launch`), le PTY et la vue terminal (`terminal/launch`, `terminal/hook`), les comptes et ce qui n'est pas la conversation ; le moteur du registre (`engine/<harness>/`) n'en est plus que la façade. L'id d'un harness est ouvert (`EngineId`, ESC-209) : un agent d'un harness absent est gardé, « harness absent ». Le contrat, le coût mesuré et les harness un par un : §4.5 et §4.6. Antigravity CLI et Claude Code sont les derniers à sortir (ESC-283, ESC-226). `engine/*` n'est pas encore ouvert aux tiers (§4.10) : un harness tiers passe par l'ACP décrit.
 
-**Exemple.** « Gemini CLI » ou « Goose », qui parlent ACP : un manifeste de 40 lignes, sans code, et l'agent apparaît dans le menu « Harness » de la barre latérale, avec ses modèles, ses modes et sa vue de conversation.
-
-**Valeur 3.** Chaque nouveau harness a coûté plusieurs tickets (Cursor : ESC-24, ESC-42, ESC-43, ESC-49). Les agents ACP se multiplient : la communauté suivrait leur rythme. **Difficulté 2** pour le niveau 1 (le client ACP existe ; il faut en retirer ce qui est propre à Cursor, `cursor/*`, et faire du registre une liste ouverte : `EngineId` est aujourd'hui une énumération de `model.rs`), **3** pour le niveau 2 (la traduction touche l'état de l'agent de près, `agent/<harness>.rs`). **Risque 3** : un harness lance un programme avec les droits de l'utilisateur, reçoit le jeton du serveur MCP d'Escouade (`grant_file`, jamais dans les arguments) et doit appliquer la clôture des projets privés (`fence_settings`) ; un harness qui l'ignore ouvre les projets privés. L'adaptateur ACP générique doit donc tenir la clôture lui-même (ce qu'ACP permet : les lectures et écritures de fichiers passent par le client, `fs/read_text_file`), et le dire quand l'agent ne passe pas par lui.
-
-**La vue terminal** (`engine/terminal.rs`, `TerminalView`, `escouade-hook`) reste hors des plugins en 2.1 : chaque vue a demandé ses hooks, ses bandes de confiance et ses pièges (ESC-46 à 49).
+Un harness est le point de plus fort risque : il lance un programme, reçoit le jeton du serveur MCP d'Escouade, et doit tenir la clôture des projets privés. L'ACP décrit la tient pour lui, par `fs/*`, et le dit quand l'agent n'y passe pas.
 
 ### 1.2 Les sources du Kanban
 
-**Où.** `src-tauri/src/integrations/` : `mod.rs` (`Client`, une énumération `Jira`, `Trello`, `Github`, `Linear` qui distribue chaque appel par `match` : `me`, `containers`, `states`, `issues`…, avec `Container`, `ExternalIssue`, `IssuePage`, `IssueFilter`, `Query`, `Bases`), un fichier par service, `sync.rs` (la synchro des colonnes et de l'état), `text.rs` (le texte d'un ticket importé), `secrets.rs` (le coffre), `fake.rs` (le faux service des tests, `tests/fixtures/fake-trackers.mjs`). Dans la fenêtre : `src/components/settings/IntegrationsTab.svelte`, `src/components/modals/ImportModal.svelte`, l'étape `wizard/IntegrationsStep.svelte`, `src/lib/integrations.ts`.
-
-**Ce qu'un plugin y ferait.** Fournir un service de plus : se connecter (les champs du compte, déclarés), lister les conteneurs (projets, tableaux), leurs états, les tickets filtrés et paginés, et pousser l'état d'un ticket quand il change de colonne (`sync.rs`).
-
-**Exemple.** YouTrack, Asana, ClickUp, Notion, Azure Boards, ou un CSV dans le dépôt.
-
-**Valeur 3** : chaque équipe a son outil, et Escouade n'en couvrira jamais que quelques-uns (GitLab Issues est déjà demandé, ESC-165). **Difficulté 2** : remplacer l'énumération par un trait (comme `Forge`), puis un `Client` qui parle au plugin ; les types sont déjà sérialisables. **Risque 2** : le plugin a besoin du réseau et d'un secret ; il lit des tickets que l'utilisateur lui confie ; un plugin lent bloque l'import (il faut un délai par appel).
+**Servi** (`contributes.ticketSources`, sur un compte déclaré ; `tickets/containers`, `tickets/states`, `tickets/issues`, `tickets/setState`, `tickets/comment`). Le cœur appelle `TicketSource` (`src-tauri/src/integrations/`), derrière lequel `ProcessTicketSource` parle au plugin ; la synchro des colonnes reste au cœur. Sortis du cœur : Jira, Linear, Trello, ClickUp, GitHub Issues, GitLab Issues, Azure Boards. Une source tierce (YouTrack, Asana…) est le même contrat ; un délai par appel tient un plugin lent, et un plugin coupé ou arrêté se dit dans la synchro.
 
 ### 1.3 Les hébergeurs de code
 
-**Où.** `src-tauri/src/forge/` : les traits `Forge` (`me`, `create_pr`, `pull_request`, les vérifications de CI `Check`, les relectures `Review`, `ReviewComment`, les déploiements `Deployment`, le merge `MergeStrategy`, la limite d'appels `RateLimit`, chaque méthode refusée par défaut `unsupported`) et `Provider` (`kind`, `name`, `request_word`, `capabilities`, `default_host`, `own_host`, `repo_of`, `probe`, `scopes`, `token_page`, `cli`, `client`), le registre `forge::Registry`, `remote.rs` (l'analyse des remotes), `accounts.rs`, `connect.rs` ; GitHub (`github.rs`, `github_api.rs`) et Azure DevOps (`azure.rs` : sa déclaration, son client est dans le plugin `dev.escouade.azure-devops`, ESC-241 et 280), GitLab, Bitbucket et Gitea dans leurs plugins livrés (`dev.escouade.gitlab`, `dev.escouade.bitbucket`, `dev.escouade.gitea`, ESC-56 à 58). Dans la fenêtre : `settings/ForgesSection.svelte`, `modals/PrModal.svelte`, `src/lib/prs.ts`, `src/lib/forges.ts`.
-
-**Ce qu'un plugin y ferait.** Un hébergeur de plus (`Provider` + `Forge`) ; ou seulement une partie : les déploiements d'un service qui n'est pas l'hébergeur (Vercel, Netlify, Coolify, Fly.io), la CI d'un autre service (Jenkins, Buildkite), sur une PR déjà connue.
-
-**Exemple.** « Déploiements Coolify » : sur la carte d'un ticket en revue, l'état du déploiement d'aperçu de sa branche, et son adresse.
-
-**Valeur 2** (GitHub, GitLab, Bitbucket et Gitea couvrent la plupart ; les déploiements et la CI tierce valent plus). **Difficulté 1** pour un hébergeur entier (le trait et le registre existent, `unsupported` permet d'en faire une partie), **2** pour des déploiements découplés de l'hébergeur (le modèle les attache à `Forge`). **Risque 2** : un jeton d'hébergeur peut écrire dans les dépôts (`scopes`) ; il va au coffre et n'est donné qu'à son plugin.
+**Servi** (`contributes.forges`, sur un compte déclaré ; `forge/*`, `account/me`). `ProcessForge` répond au trait `Forge` (`src-tauri/src/forge/`), chaque méthode refusée par défaut (`unsupported`), selon les capacités déclarées. Sortis du cœur : GitHub, GitLab, Bitbucket Cloud, Gitea et Forgejo, Azure DevOps. Un plugin coupé ou arrêté se dit sur la carte de l'agent et dans Réglages › Intégrations. Ni `ci` ni `deployments` à part, pour un service qui n'est pas l'hébergeur (Jenkins, Coolify, Vercel) : pas encore (§4.4).
 
 ### 1.4 Les services de voix
 
-**Où.** `src-tauri/src/voice/` : la dictée locale (Whisper, `transcribe.rs`, `models.rs`, `vad.rs`, `audio.rs`), la transcription en ligne (`online.rs` : `Provider`, une énumération de cinq services, `PROVIDERS`, `Spec`, `Net`, et le catalogue `online_catalog.rs`), le direct (`live.rs`, par WebSocket), la voix en ligne (`online_speech.rs`), la conversation vocale (`conversation.rs`, `spoken.rs`). Dans la fenêtre : `settings/VoiceTab.svelte`, `SpeechSettings.svelte`, `OnlineKey.svelte`, `OnlineModel.svelte`, `src/lib/dictation.svelte.ts`, `src/lib/online-voice.svelte.ts`.
-
-**Ce qu'un plugin y ferait.** Un service de transcription (un fichier audio, ou un flux en direct) ou de voix (un texte, un flux audio), avec son catalogue de modèles et de voix.
-
-**Exemple.** Wispr Flow (déjà demandé, ESC-164), AssemblyAI, Azure Speech, ou un serveur Whisper de l'équipe.
-
-**Le contrat (INT-12, ESC-284, fait le 2026-11-01).** `src-tauri/src/voice/service.rs` : le trait `VoiceService` porte les cinq usages d'un service en ligne, et le cœur n'appelle plus que lui :
-
-- **le compte** : `account_entry` (l'entrée du trousseau, `dictation-<id>`, une clé comme INT-6), lue par `keys`, `save_key` et `delete_key` ;
-- **la dictée d'un fichier** : `default_model`, `transcribe` (bloquant, annulable) ;
-- **le direct** : `offers_live`, `live_model`, `open_live` (un `LiveStream` : l'audio poussé, le texte partiel par rappel, le texte final à `finish`) ;
-- **la synthèse** : `max_chars`, `speak` (le son rendu par morceaux à un rappel, annulable) ;
-- **le catalogue** : `catalog` (la documentation, ou ce que l'API a listé) et `list` (relit les modèles et les voix).
-
-`CoreService(Provider)` répond pour OpenAI, Groq, Mistral, ElevenLabs et Deepgram avec le code d'avant, sans changement de comportement ; `services()`, `find(id)` et `of(provider)` sont le registre. Whisper et Piper n'en font pas partie : hors ligne, sans compte, ils restent au cœur. Un plugin répond au même trait (INT-13, fait : §4.13 ; Wispr Flow, ESC-164, s'écrira dessus plus tard). **Mesure d'INT-0 pour la voix** (`voice::service::tests`, faux serveurs WebSocket, 20 phrases par service, Windows 11, build de debug) : le délai du texte final après la fin de la phrase, en médiane, **avant** 2,4 ms (OpenAI), 2,0 ms (Mistral), 2,0 ms (ElevenLabs), 1,5 ms (Deepgram) ; **après**, par le contrat, les mêmes (2,4 ; 2,0 ; 2,0 ; 1,5 ms). La mesure refuse plus de 5 ms de plus en médiane ; elle se lance à la main (`cargo test the_contract_adds -- --ignored --nocapture`), car deux médianes de 2 ms comparées sur une machine de CI chargée échoueraient au hasard. La CI garde le passage du direct par le contrat, avec une borne large. Le passage par un plugin, mesuré par INT-13 (§4.13) : moins de 1 ms de plus en médiane comme au 99e centile quand le son est poussé au rythme du micro (cœur 0,5 ms, plugin 1,0 à 1,2 ms), sous le seuil de 5 ms.
-
-**Valeur 2.** **Difficulté 2** pour le fichier entier (une requête, une réponse), **3** pour le direct (de l'audio en continu, des délais de quelques centaines de millisecondes mesurés en ESC-136 et ESC-137 : un process par stdio tient le débit, mais le passage par un plugin s'ajoute au délai). **Risque 2** : le plugin entend ce que l'utilisateur dicte ; il a besoin du réseau et d'une clé.
+**Servi** (`voice/*`, le trait `VoiceService` de `src-tauri/src/voice/service.rs`, INT-12 et INT-13). OpenAI, Groq, ElevenLabs et Deepgram sont des plugins livrés, Mistral est dans `dev.escouade.mistral` ; la clé reste au trousseau (`dictation-<service>`). Whisper et Piper, hors ligne, restent au cœur. Un plugin qui ne démarre pas laisse le service du cœur répondre, et son journal dit pourquoi. Détail, protocole et mesures : §4.13.
 
 ### 1.5 Les outils du serveur MCP d'Escouade
 
-**Où.** `src-tauri/src/mcp/` : `tools.rs` (la liste et les descriptions des outils : `list_projects`, `get_board`, `create_ticket`, `start_ticket`, `answer_permission`, `create_agent`, `send_message`, `get_usage`… 52 en tout, par familles : le Kanban et les agents, la mémoire, la spec, les décisions et les documents ; les `index_*` de l'index du code sont retirés avec lui par ESC-310), `read.rs` et `act.rs` (ce qu'ils lisent et font), `resolve.rs` (`Sight`, `may_act_on` : ce qu'un agent voit et sur quoi il agit, les projets privés), `http.rs` (le serveur et son jeton), `install.rs` (la déclaration dans chaque harness), `activity.rs` (le journal des appels, `McpActivity`). Dans la fenêtre : `settings/McpSection.svelte`, `src/lib/mcp.svelte.ts`, les noms en mots des outils dans `src/lib/tools.ts` (`ESCOUADE_TOOLS`).
-
-**Ce qu'un plugin y ferait.** Deux sens :
-
-- **ajouter des outils** au serveur d'Escouade, que les agents appellent comme les autres (`mcp__escouade__<plugin>_<outil>`) : l'outil passe par le serveur d'Escouade, qui garde le jeton, la vue (`Sight`) et le journal, puis par le plugin ;
-- **utiliser les outils** d'Escouade, comme un client : un plugin qui lit le Kanban, crée un ticket, lance un agent. Le plugin reçoit un jeton à lui, et ses droits sont ceux qu'il a demandés (lecture seule, ou actions), jamais plus que ceux d'un agent (`may_act_on`).
-
-**Exemple.** « Sentry » : un outil `sentry_issue` que l'agent appelle pour lire l'erreur d'un ticket ; ou un plugin qui crée un ticket par alerte de production.
-
-**Valeur 2** (un agent peut déjà avoir ses propres serveurs MCP ; l'intérêt est de les grouper avec le reste d'un plugin et de les donner à tous les harness d'un coup, par l'interrupteur unique d'ESC-119). **Difficulté 1** pour ajouter des outils (une table, un appel relayé), **2** pour le client (un jeton par plugin, sa portée). **Risque 3** : un outil d'agent est un chemin pour l'injection de consignes ; un plugin client peut agir sur les projets ; les projets privés doivent rester hors de sa vue, comme pour un agent d'un autre projet.
+**Pas servi.** Un plugin n'ajoute pas d'outils au serveur d'Escouade et n'en est pas client : chacun demande un chemin d'injection à tenir et un jeton à sa portée (2.2 ou après, `docs/TODO-2.2.md`). Les outils d'un agent restent ceux du serveur (`src-tauri/src/mcp/`).
 
 ### 1.6 Les événements
 
-**Où.** Il n'y a pas de bus d'événements interne. Le cœur (`src-tauri/src/core.rs`, 9 300 lignes) change l'état et envoie à la fenêtre un `UiEvent` par un seul canal (`hub.rs`, `model.rs` : `Agent`, `AgentRemoved`, `Conv`, `Git`, `Usage`, `Ticket`, `TicketRemoved`, `Project`, `BoardIssue`, `AutopilotPause`, `Toast`, `McpActivity`, `Voice`…) ; ces événements portent l'état entier, pour la fenêtre, pas le fait. Les faits vivent là où ils arrivent :
+**Servi** (PLG-5, ESC-177). Le bus est `src-tauri/src/facts.rs` : un `Body` typé par fait, émis là où l'état change, et non dérivé des `UiEvent` de la fenêtre. Trente-neuf faits en version 1 :
 
-- **un agent** : son statut (`AgentStatus`, `set_status` dans `agent.rs`), sa création, son arrêt, son passage sur un autre harness (`handover.rs`), son changement de compte au seuil (`switching.rs`) ;
-- **un tour** : sa fin (`Effects.turn_end`, `board::TurnEnd` : `Finished`, `Interrupted`, `Limited`, `Error`), la limite atteinte (`Effects.limited`), le quota (`Effects.rate`) ;
-- **une demande** : une autorisation ou une question en attente (`add_pending`), sa réponse (`PermissionAnswer::Allow`, `Always`, `Deny` ; « Refusé par <client> via Escouade » dit déjà qui a répondu) ;
-- **un ticket** : sa création, son passage d'une colonne à l'autre (`model::Column` : `Todo`, `Doing`, `Review`, `Done`), son lancement par le pilote auto, son rapport de critères (le bloc `escouade`), sa validation et son refus, son merge et ses conflits (`board.rs`) ;
-- **un projet** : son ajout, sa fermeture (`closed.rs`), ses réglages, un worktree créé ou retiré (`worktrees.rs`) ;
-- **un lancement** : un lancement de test démarré, prêt, arrêté (`testlaunch.rs`, `RunView.svelte`), les tests d'une validation passés ou non ;
-- **l'app** : son démarrage, une mise à jour disponible (`updates.rs`).
+- les agents : `agent.created`, `agent.renamed`, `agent.status`, `agent.stopped`, `agent.handover` ; les tours : `turn.ended` ;
+- les demandes : `request.permission`, `request.question`, `request.answered` ;
+- les tickets : `ticket.created`, `ticket.column`, `ticket.report`, `ticket.approved`, `ticket.rejected`, `ticket.merged`, `ticket.conflict` ;
+- les projets : `project.added`, `project.closed`, `worktree.created`, `worktree.removed` ;
+- les lancements : `launch.started`, `launch.ready`, `launch.stopped`, `tests.result` ;
+- l'app : `app.started` ;
+- les docs : `docs.written`, `docs.filed`, `docs.gaps`, `memory.written`, `memory.forgotten`, `decision.proposed`, `decision.accepted` ;
+- les PR et les comptes : `pr.opened`, `account.switched` ;
+- le workflow : `workflow.step_entered`, `workflow.step_left`, `workflow.looped_back`, `workflow.left`, `workflow.changed` (ESC-200).
 
-**Ce qu'un plugin y ferait.** S'abonner aux faits qu'il a déclarés, et réagir : notifier ailleurs, lancer une commande, appeler une URL, ou, pour quelques-uns, **décider** (voir §1.7).
-
-**Exemple.** « Slack » : « Ticket ESC-170 à tester, 3 critères sur 3 » dans le salon de l'équipe, avec le lien de la PR ; « Commande à la fin du tour » : `say "Claude a fini"` ; un webhook générique vers n8n ou Zapier.
-
-**Valeur 3** (demandé de toutes les formes ; c'est le point d'entrée de la plupart des plugins). **Difficulté 2** : il faut un bus de faits, typé et versionné, appelé aux endroits du cœur qui changent l'état, et non dérivé des `UiEvent` (qui portent trop et changent avec l'interface). **Risque 2** : un fait dit le nom d'un ticket, d'un projet, d'une branche, parfois un extrait de conversation ; ceux d'un projet privé ne vont qu'aux plugins activés pour lui. Un plugin lent ne retarde rien : les faits partent dans une file, sans attendre de réponse.
-
-**Construit (ESC-177, PLG-5).** Le bus est `src-tauri/src/facts.rs` : un `Body` typé par fait (39 en version 1, de `agent.created` à `app.started`, avec ceux des docs, de la mémoire, des décisions, des PR, des comptes et du workflow, ESC-200), émis là où l’état change (`AgentRt::set_status`, `add_pending`, `Core::apply`, `edit_ticket_with`, la validation, `remove_worktree`, `move_session`, `Space::spec_write`…), les noms remplis par un fil du bus (`Resolve`). `plugins/events.rs` les distribue : `permissions.events`, une seule règle avec Réglages › Plugins (PLG-4) : les `Choices` (`Plugins::reaches` sur `active_in`, un projet privé éteint d’office, un fait sans projet connu gardé comme privé) et les permissions retirées (`granted` : `events:<e>` retiré coupe le fait, ses webhooks et ses commandes), une file de 256 par plugin, `events/fact` au programme, `contributes.webhooks` (vers un hôte de `permissions.network` seulement, écrit en clair, tiré d’un secret ou fait d’une valeur du fait ; `*.d` couvre les sous-domaines de `d`, pas `d` ; la lecture du manifeste refuse un webhook écrit en clair vers un autre hôte, `manifest::host_covered`) et `contributes.commands` (après l’accord, une empreinte rangée dans `Choices.commands_approved`, donné ou retiré dans l’onglet Permissions). La page « Les événements » du site les décrit fait par fait.
+Un plugin les reçoit de trois façons : `events/fact` dans son programme (`permissions.events`, globs permis), un **webhook** déclaré (`contributes.webhooks` : une URL et un gabarit par fait, vers un hôte de `permissions.network`), une **commande** déclarée (`contributes.commands`, `permissions.commands`, approuvée telle quelle par l'utilisateur dans la page du plugin). Les faits d'un projet ne vont qu'aux plugins actifs dans ce projet ; ceux d'un projet privé, qu'à ceux qui y sont activés un par un.
 
 ### 1.7 Les autorisations et les questions
 
-**Où.** `EngineProcess::answer_permission` et `answer_question` (`engine/mod.rs`), la réponse dans le cœur (`core.rs`, `answer_permission`), dans l'agent (`agent.rs`, `answer_permission_by` : qui a répondu), dans la fenêtre (`conv/PermissionCard.svelte`, `QuestionCard.svelte`, `src/lib/answer-keys.svelte.ts`), par la voix (`voice/conversation.rs`), et par un autre agent (`mcp__escouade__answer_permission`). Le refus par défaut de Claude Code (`caps.default_refusal`) et les règles « Toujours » de chaque harness (`PermissionAnswer::Always { rules }`).
-
-**Ce qu'un plugin y ferait.** **Décider** d'une demande avant qu'elle n'arrive à l'utilisateur, selon une règle : autoriser, refuser avec un message, ou laisser l'utilisateur répondre. Avec un délai court au-delà duquel la demande va à l'utilisateur comme aujourd'hui. La réponse dit « Autorisé par <plugin> via Escouade ».
-
-**Exemple.** « Règles de l'équipe » : `npm test`, `cargo nextest` et `git status` autorisés dans tous les worktrees ; `git push --force` et `rm -rf` hors du worktree refusés ; le reste à l'utilisateur. Ou une politique lue dans le dépôt.
-
-**Valeur 3** (les demandes d'autorisation sont ce qui interrompt le plus ; un mode Bypass est souvent la seule issue). **Difficulté 2** (le chemin de réponse existe ; il faut une étape avant `add_pending`, et un ordre quand plusieurs plugins répondent : un refus l'emporte). **Risque 3** : un plugin qui autorise tout est un mode Bypass caché. Il faut une permission à part, montrée en rouge, jamais accordée à un plugin proposé par un projet, et le journal de chaque décision.
+**Servi pour les autorisations** (PLG-8, ESC-180, `src-tauri/src/plugins/decide.rs`). Un plugin qui a `permissions.decide` reçoit `permissions/decide` avant que la demande n'arrive à l'utilisateur : autoriser, refuser avec un message, ou laisser. Plusieurs plugins répondent en parallèle, **un refus l'emporte** ; passé 500 ms (3 s une fois pour un process pas encore lancé), la demande va à l'utilisateur. La réponse dit « Autorisé par <plugin> via Escouade » et s'inscrit au journal. La permission est montrée en rouge, n'est jamais donnée par un projet, et ne s'applique ni à `ExitPlanMode` ni aux questions. Les questions, elles, restent à l'utilisateur : aucun plugin n'y répond.
 
 ### 1.8 Les textes rédigés, les consignes et la passation
 
-**Où.** Les textes que le modèle rédige : les one-shots (`engine/oneshot.rs`, `Engine::one_shot`, `Weight::Light` et `Reading`, « Modèle des textes rédigés ») pour le nom d'un agent (`core.rs`, `rename_agent`, le nom donné au premier message d'ESC-156), le message de commit et la description d'une PR (`board.rs`, `pr_body`, la forme conventionnelle), les étapes de mise en place d'un worktree et les commandes de lancement (`core.rs`, `suggest_worktree_steps`, `suggest_run_commands`). Les consignes : le protocole d'un ticket (`board.rs`, `protocol`, `protocol_prompt_for`, borné par `PROTOCOL_BUDGET` et `Engine::instructions_room`), le message transmis à un sous-agent (`subagent_relay`). La passation à un autre harness (`handover.rs`, le fichier écrit depuis le journal `conv.rs`).
-
-**Ce qu'un plugin y ferait.** **Transformer** un texte avant qu'il serve : le message de commit, la description d'une PR (un gabarit d'équipe, un lien vers le ticket Jira), le nom d'un agent ; **ajouter des consignes** au protocole d'un ticket (les règles de l'équipe, la définition de « fini ») dans la place qui reste ; enrichir le fichier de passation.
-
-**Exemple.** « Gabarit de PR » : la description suit le modèle `.github/pull_request_template.md` du dépôt, avec la case « Tests » cochée d'après le rapport de critères.
-
-**Valeur 2.** **Difficulté 1** (des fonctions pures, appelées à quelques endroits). **Risque 2** : des consignes ajoutées sont une injection possible dans chaque agent ; leur taille doit rester dans `instructions_room` ; un plugin qui renvoie n'importe quoi ne doit pas casser un commit (le texte d'Escouade sert de repli, comme pour un one-shot raté).
+**Pas servi.** Aucun plugin ne transforme un message de commit, une description de PR ou un nom d'agent, et aucun n'ajoute de consignes au protocole d'un ticket. Ces textes restent ceux du cœur (`engine/oneshot.rs`, `board.rs`, `instructions_room`) ; les textes rédigés d'un harness sont en revanche décrits par son plugin (`engine/oneShot`, `engine/oneShotRead`).
 
 ### 1.9 L'interface
 
-**Où.** Svelte 5, dans `src/components/` et `src/lib/` :
+**Servis** : la vue Plugins (`src/components/plugins/`), le rendu des réglages et des secrets déclarés (`contributes.settings`, `contributes.secrets`), les thèmes (§1.10), les modèles et modes d'un harness dans les menus de l'app. Ils sont rendus par les composants d'Escouade, dans les deux langues.
 
-| Emplacement | Fichiers | Ce qu'un plugin y mettrait |
-| --- | --- | --- |
-| Panneau latéral | `SidePanel.svelte`, `FilesPanel.svelte`, `branches/`, `editor/` | un panneau de plus à côté de Git et des fichiers (« Sentry », « Docs de l'équipe ») |
-| Barre latérale | `Sidebar.svelte`, `src/lib/sidebar.ts` | une section (« Revues en attente ») |
-| Réglages | `modals/SettingsModal.svelte`, `settings/*Tab.svelte`, `Group.svelte`, `Row.svelte` | un onglet, ou une section d'un onglet, avec les champs de ses réglages |
-| Menus | `ContextMenu.svelte`, `src/lib/menu.svelte.ts` (`MenuItem`), `agent-actions.ts`, `project-actions.ts`, `launch-actions.ts`, `term-actions.ts` | une entrée sur un agent, un ticket, un projet, un lancement |
-| Commandes et raccourcis | `src/lib/shortcuts.ts`, `QuickOpen.svelte` | une commande nommée, avec un raccourci proposé |
-| Carte dans la conversation | `conv/ToolRow.svelte`, `src/lib/tools.ts` (le résumé d'un outil), `conv/EventMessage.svelte` | le rendu d'un outil (le sien ou un autre) : une table, un lien, une image |
-| Badge | `board/` (cartes des tickets), `Sidebar.svelte` (cartes des agents) | « CI verte », « Déployé », « Sentry : 3 erreurs » |
-| Barre d'état | `StatusBar.svelte` | un élément (« Coolify : en ligne ») |
-| Barre des projets | `ProjectRail.svelte`, `ProjectTile.svelte` | un badge sur la tuile d'un projet |
-| Page plein cadre | `Stats.svelte`, `Overview.svelte` | une page à elle (« Coûts par client ») |
-| Fenêtre | `modals/Modal.svelte` | une fenêtre de saisie (connexion, choix) |
-
-**Ce qu'un plugin y ferait.** Ajouter un élément à un emplacement, dont **Escouade** fait le rendu à partir d'une description : un texte, une icône du jeu d'Escouade (`Icon.svelte`, `IconSprite.svelte`), une couleur de statut, une action (une méthode du plugin) ; pour un panneau ou une page, des blocs (liste, table, champs, boutons, markdown par `Markdown.svelte`). Plus tard, une vue libre en HTML dans une iframe isolée (voir §2.3).
-
-**Exemple.** « Coûts par client » : une page plein cadre qui regroupe les statistiques par préfixe de ticket, une entrée « Facturer ce ticket » dans le menu d'un ticket.
-
-**Valeur 3** pour les menus, badges, barre d'état et réglages (là où un plugin devient visible), **2** pour les panneaux et pages. **Difficulté 2** pour l'interface déclarée (un composant par type de bloc, aux règles de `DESIGN.md`, dans les deux langues), **3** pour une vue libre (isolation, thème, taille, focus, accessibilité, et les trois moteurs de rendu). **Risque 1** pour l'interface déclarée (Escouade fait le rendu), **3** pour une vue libre dans la fenêtre principale (une iframe qui atteindrait l'IPC de Tauri aurait les droits de l'app : CVE-2024-35222, voir §2.3).
+**Déclarés mais pas servis** : `contributes.menus`, `statusBar`, `badges`, `projectTemplates` et `escouadeYml` : le schéma les réserve (ils s'affichent dans la fiche d'un plugin comme ce qu'il ajoute), rien de la fenêtre ne les rend encore. Pas de panneau, de page ni de fenêtre apportés par un plugin ; pas de vue libre : l'iframe isolée reste à essayer sous WKWebView et WebKitGTK (§2.2).
 
 ### 1.10 Les thèmes et les langues
 
-**Les thèmes. Où.** `src/app.css` (177 propriétés `--…` : surfaces, texte, filets, états, `@property --p`), `src/lib/theme.ts` (la teinte de la fenêtre par `--p`, la couleur du projet en oklch, `PROJECT_COLORS`, `BRAND`), `src/lib/appearance.ts`, le thème de xterm tiré des jetons (ESC-80, `TerminalView.svelte`), celui de CodeMirror (`src/lib/editor/`), les règles de `DESIGN.md`. **Ce qu'un plugin y ferait** : un jeu de valeurs pour les jetons, clair ou sombre, et une palette de couleurs de projet. **Exemple** : « Solarized », « Contraste élevé ». **Valeur 2**, **difficulté 1** (des données ; les anciens jetons, `--ok`, `--accent`, `--line2`…, ont été renommés en jetons 2.0 par ESC-172 et leur liste est dans `DESIGN.md` « Les jetons » : un thème ne dépend que de ces noms), **risque 1** (des valeurs CSS filtrées : couleurs, longueurs ; jamais `url()` ni du CSS libre, qui pourrait charger une ressource ou masquer une demande d'autorisation).
+**Les thèmes sont servis** (PLG-7, ESC-179, `contributes.themes`, `src/lib/plugin-themes.ts`, `plugin-theme.svelte.ts`) : un thème, clair et sombre, donne des jetons de la liste `THEME_TOKENS` (tenue égale à `src/app.css` par Vitest), filtrés (les couleurs seulement, une valeur douteuse est écartée et dite) ; il touche la fenêtre, les terminaux et l'éditeur, et peut donner sa palette de couleurs de projet. Il se choisit dans Réglages › Application › Couleurs. Exemple : `plugins/high-contrast/`.
 
-**Les langues. Où.** `src/lib/i18n/` : un catalogue par langue et par domaine (`fr/*.ts`, `en/*.ts`, 26 fichiers et près de 3 900 lignes en français), typé (`types.ts`, `type-checks.ts`), avec `GLOSSARY.md`, et un test qui refuse le texte écrit en dur (`hardcoded.test.ts`) ; côté Rust, `src-tauri/src/i18n.rs` (`Lang` : `Fr`, `En`) et des textes écrits dans le code par `match lang` (le protocole d'un ticket, les notifications, les refus). Le site, `website/content/docs/{fr,en}/`. **Ce qu'un plugin y ferait** : une langue de plus, ses catalogues complets. **Exemple** : « Español ». **Valeur 2** (Escouade est en deux langues), **difficulté 3** (`Lang` est fermé, les textes du cœur ne sont pas en catalogue ; une langue partielle doit retomber sur l'anglais clé par clé ; les consignes données aux agents dans une langue doivent rester dans leur budget), **risque 1** (des textes ; mais un texte de consigne traduit est une consigne, à borner comme au §1.8).
+**Les langues ne sont pas servies** : le français et l'anglais sont dans `src/lib/i18n/` et `src-tauri/src/i18n.rs` ; ouvrir `Lang` reste à faire (2.3 ou après).
 
 ### 1.11 Les recettes, les worktrees, l'assistant et `.escouade.yml`
 
-**Où.** Les lancements de test d'un worktree (`src-tauri/src/testlaunch.rs` : les ports réservés, les fichiers copiés, les tests d'une validation, la disponibilité d'un serveur ; `src/lib/recipe.ts`, `RunView.svelte`, `RunsSection.svelte`, `modals/TestLaunchModal.svelte`), isola, un outil externe déjà branché (`isola.rs` : `isola up`, `ls --json`, `down`, `destroy`), la mise en place et le retrait d'un worktree (`worktrees.rs`, `worktrees.setup`, `worktrees.teardown`), l'assistant « Nouveau projet » (`src/lib/wizard.ts`, `wizard-form.svelte.ts`, `components/wizard/*Step.svelte`), le fichier partagé du projet (`projectfile.rs`, `KEYS` : `agents.engine`, `board.*`, `git.*`, `worktrees.*`, et `schemas/`).
+**Servis :**
 
-**Ce qu'un plugin y ferait.**
+- **l'environnement de lancement** (`contributes.launchEnvironments`, INT-14, ESC-286, `src-tauri/src/launchenv.rs`) : `detect`, `program`, `up`, puis `launch/ls`, `launch/down`, `launch/destroy` ; isola est le premier, `dev.escouade.isola`, et les commandes passent par l'approbation à empreinte de `.escouade.yml` ;
+- **le lecteur de workflow, en contrat seulement** (`contributes.workflowReaders`, ESC-200, `src-tauri/src/plugins/reader.rs`) : `workflow/read` sur les fichiers que le manifeste déclare ; le contrat et ses tests sont là, rien dans l'app n'appelle encore un lecteur (§4.5) ;
+- **les plugins proposés par un projet et leurs réglages** (PLG-14, ESC-288, §3.3) : `plugins.recommended` et `plugins.<id>` de `.escouade.yml`.
 
-- **un environnement de lancement**, à la manière d'isola : prendre en charge `up`, l'adresse, `down` et `destroy` d'un worktree (Docker Compose, devcontainers, Tilt, un cluster de préproduction) ;
-- **des étapes de mise en place** proposées selon ce qu'il reconnaît dans le dossier (un `pnpm-lock.yaml`, un `Cargo.toml`), en plus de celles que rédige le modèle ;
-- **des modèles de projet** pour l'assistant (« Nuxt + Supabase » : la recette, les étapes, les réglages du Kanban) ;
-- **des clés à lui** dans `.escouade.yml`, sous `plugins.<id>.*`, validées par le schéma qu'il déclare.
-
-**Exemple.** « Docker Compose » : chaque worktree a ses conteneurs, sur ses ports réservés, retirés avec lui.
-
-**Valeur 3** pour l'environnement de lancement (c'est là que les projets diffèrent le plus), **2** pour le reste. **Difficulté 2** (isola est déjà un cas particulier à généraliser ; `KEYS` est la seule liste de `.escouade.yml`, il faut un espace à part pour les plugins). **Risque 3** : une recette lance des commandes. Les commandes de `.escouade.yml` passent déjà par une approbation à empreinte stricte (ESC-146) ; celles d'un plugin aussi.
+**Pas servis** : les étapes de mise en place proposées par un plugin, les modèles de projet de l'assistant (`projectTemplates`).
 
 ### 1.12 Les statistiques, les notifications et la recherche
 
-**Les statistiques. Où.** `src-tauri/src/stats.rs` (SQLite : tokens et coût par agent, par compte, par jour), `src/lib/stats.ts` (les indicateurs), `Stats.svelte` et `Overview.svelte`, la grille des prix `pricing.rs`. Rien ne s'exporte aujourd'hui. **Ce qu'un plugin y ferait** : lire les statistiques (en lecture seule), les exporter (CSV, Grafana, un tableur), ajouter une page ou un indicateur. **Exemple** : « Export mensuel » en CSV par projet et par harness. **Valeur 2**, **difficulté 1**, **risque 1** (des chiffres, mais pour un projet privé seulement si le plugin y est activé). La **télémétrie** (`telemetry.rs`, Aptabase, envoyée seulement avec l'accord de l'utilisateur) n'est pas un point d'extension : un plugin ne lit ni n'envoie rien par elle.
+**Pas servis comme points à part.** Un plugin lit ce qu'il lui faut par les faits (§1.6), et notifie ailleurs par un webhook ou un programme (`dev.escouade.discord`, `dev.escouade.slack`). Il n'y a ni canal de notification déclaré, ni lecture ou export des statistiques, ni source de résultats dans Ctrl+K.
 
-**Les notifications. Où.** `src-tauri/src/notify.rs` (le son, la notification du système, la barre des tâches, le badge du plateau), `Toasts.svelte`, `settings/AppTab.svelte`. **Ce qu'un plugin y ferait** : un canal de plus (ntfy, Pushover, Telegram, la montre), à côté de ceux du système, avec les mêmes réglages de ce qui notifie ; et des notifications à lui. **Exemple** : « ntfy » pour être prévenu sur son téléphone qu'un agent attend. **Valeur 3** (avec les événements, c'est ce que demandent ceux qui laissent tourner l'autopilote), **difficulté 1**, **risque 1** (le texte d'une notification est borné, `MAX_BODY`).
+### 1.13 Les comptes, et ce qui reste au cœur
 
-**La recherche. Où.** `convsearch.rs` (Ctrl+K, dans les conversations), `search.rs` (`git grep` de l'éditeur), `QuickOpen.svelte` et `src/lib/editor/quick-open.ts`. **Ce qu'un plugin y ferait** : une source de résultats de plus dans Ctrl+K (les tickets Linear, la doc interne, les erreurs Sentry), chaque résultat avec son action. **Valeur 2**, **difficulté 2** (un délai, un nombre de résultats borné, comme `MAX_HITS` et `TIME_LIMIT`), **risque 1**.
+**Les comptes sont servis** (`contributes.accounts`, INT-6, ESC-212, `src-tauri/src/plugins/accounts.rs`, `AccountKind`, §4.4) : les hôtes, les façons de se connecter, les champs, les droits, la page du jeton, partagés par les points d'un même plugin. Quand plusieurs plugins proposent un même genre de compte, « Connecter… » demande lequel le sert.
 
-### 1.13 Ce que j'ai trouvé en plus
+**Le coffre** (`integrations/secrets.rs`, `SecretStore`) n'est pas un point d'extension : c'est le service que tous les plugins utilisent (§3.5).
 
-- **Les comptes et le quota** (`accounts.rs`, `usage.rs`, `switching.rs`, `QuotaMeter.svelte`) : un plugin qui lit le quota d'un harness qui ne le dit pas (un tableau de bord de fournisseur), ou qui décide du changement de compte. Valeur 1, difficulté 2, risque 2. Après.
-- **Le coffre** (`integrations/secrets.rs`, `SecretStore` : `get`, `set`, `delete`, le trousseau du système) : pas un point d'extension, mais le service que tous les plugins utilisent (§3.5).
-- **Les fichiers joints et les images d'un ticket** (`attachfiles.rs`, `ticketfiles.rs`, `ticketimages.rs`) : un plugin qui joint une capture d'écran prise par un navigateur sans tête au rapport d'un ticket. Valeur 2, difficulté 2, risque 2. Après.
-- **Le pilote auto** (`board.rs`, l'autopilote, `maxParallel`, `AutopilotPause`) : un plugin qui ordonne la file des tickets (par priorité Jira, par coût). Valeur 2, difficulté 2, risque 2. Après, sur les événements et les sources.
-- **Les commandes locales et `/` des harness** (`agent/localcmd.rs`, `src/lib/localcmd.ts`, `caps.slash_commands`) : des commandes `/` d'Escouade apportées par un plugin, dans le composer. Valeur 2, difficulté 2, risque 2. Après.
-- **Les mises à jour d'Escouade** (`updates.rs`, `selfupdate.rs`) : jamais par un plugin.
+Restent au cœur, hors de tout plugin : les fichiers joints d'un ticket, le pilote auto et l'ordre de sa file, les commandes `/` d'Escouade, le quota et le changement de compte au seuil, et **les mises à jour d'Escouade, jamais par un plugin**.
 
 ### 1.14 Le tableau
 
-| Point d'extension | Valeur | Difficulté | Risque | Version proposée |
-| --- | :-: | :-: | :-: | --- |
-| Événements (notifier, commandes, webhooks) | 3 | 2 | 2 | **2.1.0** |
-| Harness ACP décrit (adaptateur générique) | 3 | 2 | 3 | **2.1.0** |
-| Thèmes | 2 | 1 | 1 | **2.1.0** |
-| Autorisations décidées par une règle | 3 | 2 | 3 | 2.1.0 si la place, sinon 2.1.x |
-| Notifications : un canal de plus | 3 | 1 | 1 | 2.1.x (sur les événements) |
-| Interface déclarée : menus, badges, barre d'état, réglages | 3 | 2 | 1 | 2.1.x |
-| Sources du Kanban | 3 | 2 | 2 | 2.2 |
-| Environnements de lancement, étapes, modèles de projet | 3 | 2 | 3 | 2.2 |
-| Textes rédigés et consignes | 2 | 1 | 2 | 2.2 |
-| Outils MCP ajoutés, plugin client du serveur | 2 | 1–2 | 3 | 2.2 |
-| Hébergeurs, déploiements, CI tierce | 2 | 1–2 | 2 | 2.2, après ESC-56 à 69 |
-| Statistiques et export | 2 | 1 | 1 | 2.2 |
-| Recherche (Ctrl+K) | 2 | 2 | 1 | 2.2 |
-| Services de voix | 2 | 2–3 | 2 | 2.3 |
-| Interface libre : panneau, page en iframe | 2 | 3 | 3 | 2.3 |
-| Langues | 2 | 3 | 1 | 2.3 |
-| Harness en programme, vue terminal | 2 | 3 | 3 | plus tard |
-
-**Révisé par ESC-203** (§4) : les sources du Kanban et les hébergeurs ne sont plus seulement des points ouverts aux tiers en 2.2. Leur contrat est posé dès la 2.1.0 (les sources) et la 2.1.x (les hébergeurs), et les intégrations d'Escouade deviennent des plugins de première main en process, après le transport (PLG-2) et le banc (PLG-3). Les versions sont dans `docs/TODO-2.2.md`, « Tout l'externe en plugins ».
+| Point d'extension | Contribution | État | Qui s'en sert |
+| --- | --- | --- | --- |
+| Événements | `permissions.events`, `webhooks`, `commands` | servi | Discord, Slack |
+| Autorisations décidées | `permissions.decide` | servi | Règles de l'équipe |
+| Thèmes | `themes` | servi | Contraste élevé |
+| Harness ACP décrit | `harnesses[].acp` | servi | Goose |
+| Harness en process | `harnesses` | servi à la première main ; tiers en 2.3 | Cursor CLI, Mistral Vibe, Gemini CLI, OpenCode, Copilot CLI, Codex ; Antigravity CLI et Claude Code en cours |
+| Comptes | `accounts` | servi | ceux des sources et des hébergeurs |
+| Sources du Kanban | `ticketSources` | servi | Jira, Linear, Trello, ClickUp, GitHub, GitLab, Azure Boards |
+| Hébergeurs | `forges` | servi | GitHub, GitLab, Bitbucket, Gitea, Azure DevOps |
+| Services de voix | `voice/*` | servi | OpenAI, Groq, Mistral, ElevenLabs, Deepgram |
+| Environnements de lancement | `launchEnvironments` | servi | isola |
+| Lecteurs de workflow | `workflowReaders` | contrat seul, rien ne l'appelle | — |
+| Réglages et secrets | `settings`, `secrets` | servi | tous |
+| Menus, barre d'état, badges | `menus`, `statusBar`, `badges` | réservé | — |
+| Modèles de projet, clés de `.escouade.yml` | `projectTemplates`, `escouadeYml` | réservé (`plugins.<id>` est lu) | — |
+| Outils MCP, textes rédigés, langues, statistiques, Ctrl+K, canaux de notification, vues libres | — | à faire | — |
 
 ## 2. L'architecture
 
 ### 2.1 Ce que font les autres
 
-| App | Où tourne le code | Isolation | Permissions | Compatibilité |
-| --- | --- | --- | --- | --- |
-| **VS Code** | un _extension host_, un process Node à part (ou un Web Worker dans le navigateur) ; les vues libres dans des _webviews_, des iframes servies d'une autre origine | un plantage ne fait pas tomber l'éditeur ; aucun bac à sable pour le code : une extension a les droits de l'utilisateur | aucune au niveau du code ; la _Workspace Trust_ (mode restreint) coupe ce qui exécute le code d'un dossier, et chaque extension déclare son support (`capabilities.untrustedWorkspaces`) ; « Workspace Trust can't prevent a malicious extension from executing code » | `engines.vscode` dans `package.json`, API stable et API proposée à part ; activation paresseuse (`activationEvents`) |
-| **Zed** | des composants WebAssembly (WIT, wasmtime), écrits en Rust | un vrai bac à sable : l'extension n'a que ce que l'API lui donne (client HTTP, lancement d'un process, réglages) | par les fonctions exposées ; pas d'interface libre : les extensions ne peuvent pas modifier l'interface | une version du WIT par version de Zed : une extension garde l'API avec laquelle elle a été faite |
-| **Obsidian** | du JS dans la fenêtre Electron, sans séparation | aucune : un plugin a accès aux fichiers, au réseau, et peut installer des programmes | aucune ; un mode restreint, actif par défaut, empêche tout code tiers ; une revue à la soumission, pas à chaque version | `minAppVersion` dans le manifeste |
-| **Raycast** | TypeScript, React et Node ; un réconciliateur maison transforme l'arbre React en une interface native (AppKit) | l'interface est déclarée par des composants de Raycast, jamais en HTML | une revue de chaque extension par PR dans un dépôt public, une CI qui valide le manifeste ; licence MIT exigée | le manifeste est un `package.json` augmenté |
-| **JetBrains** | du Java ou du Kotlin dans la JVM de l'IDE | aucune ; un plugin a l'IDE entier | aucune ; les plugins du Marketplace sont signés et vérifiés | `since-build` et `until-build`, et le _Plugin Verifier_ qui vérifie la compatibilité binaire sur une plage de versions |
-| **Claude Code** | un dossier avec `.claude-plugin/plugin.json` : skills, commandes, agents, hooks (des commandes, du HTTP), serveurs MCP et LSP en process, thèmes, moniteurs | les hooks et serveurs sont des process avec les droits de l'utilisateur | `userConfig` : des valeurs demandées à l'activation, celles qui sont sensibles au trousseau ; un chemin hors du dossier du plugin est refusé | `claude plugin validate`, des places de marché qui sont des dépôts git (`marketplace.json`) ; `version` fixe la version installée |
-| **Tauri** | des _capabilities_ (ACL) par fenêtre ou webview ; un modèle « isolation » | une webview sans capability n'a pas d'accès à l'IPC ; une iframe ajoutée à la page atteignait l'IPC (CVE-2024-35222, corrigée en 2.0.0-beta.20) | par commande et par fenêtre | — |
-| **MCP** | des serveurs en process (stdio) ou en HTTP, JSON-RPC 2.0 ; MCP Apps (SEP-1865) : des vues HTML dans une iframe isolée, qui parlent JSON-RPC par `postMessage` | l'iframe n'atteint ni le DOM, ni le stockage, ni les scripts de la page hôte ; une CSP déclarée | l'hôte peut exiger un accord avant un appel d'outil venu d'une vue ; tout le trafic est journalisé | négociation des capacités à l'initialisation |
-
-Ce qu'on en retient :
+L'étude de 2026-10-25 a comparé VS Code, Zed, Obsidian, Raycast, JetBrains, Claude Code, Tauri et MCP (le tableau, dans l'historique ; les liens au §6). Ce qu'on en a retenu :
 
 1. **Personne ne bac-à-sable le code et l'interface libre à la fois, sauf par la séparation.** VS Code sépare le code (un process) de l'interface (des iframes d'une autre origine) ; MCP Apps fait de même. Zed bac-à-sable le code et n'offre pas d'interface ; Raycast offre une interface riche mais _déclarée_.
-2. **Sans bac à sable, la sécurité vient de la confiance et de la revue** (Obsidian, JetBrains, Raycast, Claude Code) : un mode restreint par défaut, une revue humaine, des signatures, et le droit de tout retirer.
-3. **La compatibilité vient d'une version d'API déclarée et vérifiée** (`engines.vscode`, `minAppVersion`, `since-build`, le WIT par version de Zed), plus un outil qui le vérifie avant la publication (`claude plugin validate`, _Plugin Verifier_).
-4. **Escouade parle déjà le langage des process** : ses harness sont des process (stream-json, JSON-RPC de Codex et de Copilot, ACP de Cursor, HTTP et SSE d'OpenCode), son serveur MCP aussi, et tout son outillage de tests repose sur des faux process (`tests/fixtures/fake-*.mjs`) et des Job objects qui tuent un arbre de process entier (`job.rs`).
+2. **Sans bac à sable, la sécurité vient de la confiance et de la revue** : un mode restreint, une revue humaine, des signatures, le droit de tout retirer.
+3. **La compatibilité vient d'une version d'API déclarée et vérifiée**, plus un outil qui le vérifie avant la publication.
+4. **Escouade parle déjà le langage des process** : ses harness et son serveur MCP sont des process, ses tests reposent sur des faux process, ses Job objects tuent un arbre entier.
 
-### 2.2 Trois expériences jetables
+### 2.2 Les trois expériences
 
-Faites hors du dépôt, dans `%TEMP%\esc170`, le 2026-10-25, sur la machine de développement (Windows 11).
+Faites le 2026-10-25 sous Windows 11, hors du dépôt :
 
-**Un module WASM chargé depuis Rust** (`wasm/`, wasmtime 38, Cranelift, un module en WAT avec une fonction de l'hôte) :
+- **WASM dans Rust** (wasmtime 38, Cranelift) : 11 ns par appel ; une boucle infinie arrêtée par l'époque ou le carburant, une mémoire bornée (`StoreLimits`), un plantage rendu en erreur, l'hôte vivant ; 11 Mo de plus. Mesuré dans l'app depuis : §5.3.
+- **Une iframe isolée sous WebView2** (`sandbox="allow-scripts"`, sans `allow-same-origin`, CSP `default-src 'none'`) : DOM, IPC de Tauri, `localStorage` et réseau refusés ; `postMessage` passe ; une boucle de 1,5 s n'a pas gelé la page. **Pas essayée sous WKWebView ni WebKitGTK**, où une iframe partage sans doute le process de la page : à vérifier avant d'offrir une vue libre.
+- **Un plugin en process** (JSON-RPC sur stdio, une ligne par message) : 43 µs par aller-retour.
 
-- compilation du module : 3,4 ms ; instanciation : 27 µs ; un million d'appels de l'hôte vers le module : 11,5 ms, **11 ns par appel** ;
-- une boucle infinie arrêtée par le **carburant** (`consume_fuel`, 5·10⁷ unités) en 11 ms, ou par l'**époque** (`epoch_interruption`, incrémentée par un autre fil) en 200 ms, à la milliseconde : `Trap::OutOfFuel` et `Trap::Interrupt` ;
-- une mémoire qui grossit sans fin arrêtée à la limite (`StoreLimits`, 16 Mio : 241 pages de 64 Kio accordées, puis `memory.grow` refusé) ;
-- un plantage (`unreachable`) rendu en erreur, l'hôte toujours vivant, le module appelable à nouveau ;
-- le coût : **11 Mo** de plus dans l'exécutable avec Cranelift, et 518 Mo de `target` à la compilation.
+### 2.3 Les façons, comparées
 
-Le bac à sable de WASM tient ce qu'il promet, à un coût d'appel négligeable. Ce qu'il ne dit pas : le confort d'un auteur en TypeScript ou en Python (il faut embarquer un interpréteur compilé en WASM : QuickJS, StarlingMonkey, CPython, plusieurs Mo par plugin et un démarrage plus lent), le débogage (pas de débogueur pas à pas ordinaire dans l'hôte), et les appels asynchrones de l'hôte (le réseau) qui demandent les fonctions asynchrones de wasmtime.
+| | Process | WASM | JS en iframe |
+| --- | --- | --- | --- |
+| Plantage, boucle, mémoire | relancé, délai, Job | rattrapés, bornés | dépend du moteur de rendu |
+| Réseau, disque, clôture | déclarés, non appliqués | appliqués | appliqués (CSP, origine opaque) |
+| Secrets, projets privés | appliqués (ce qui passe par Escouade) | appliqués | appliqués |
+| Coût d'un appel | 43 µs | 11 ns | `postMessage` |
+| Langages | tous | Rust, Go, C ; JS par un interpréteur | JS |
+| Vit sans fenêtre | oui | oui | non |
 
-**Une iframe isolée dans le moteur de WebView2** (`iframe/`, Edge sans tête par Playwright, une iframe `sandbox="allow-scripts"` en `srcdoc`, sans `allow-same-origin`, avec une CSP `default-src 'none'`, dans une page qui imite l'IPC de Tauri par `window.__TAURI_INTERNALS__`) :
+### 2.4 Ce qui a été retenu
 
-- l'iframe a l'origine `null` ; lire le DOM de la page, appeler `parent.__TAURI_INTERNALS__.invoke()` et le `localStorage` : **refusés** (`SecurityError`) ; `fetch` vers l'extérieur : **refusé** par la CSP (`TypeError`) ;
-- `postMessage` dans les deux sens fonctionne : un JSON-RPC entre la vue et la fenêtre est possible ;
-- une boucle de 1,5 s dans l'iframe n'a pas gelé la page : son minuteur de 50 ms a eu au plus 65 ms d'écart. Chromium met l'iframe d'origine opaque dans un autre process de rendu.
-- **Non essayé** : WKWebView (macOS) et WebKitGTK (Linux). Le navigateur WebKit de Playwright n'est pas installé sur cette machine. WebKit met les iframes dans le process de la page, sauf là où son isolation des sites est active : une boucle infinie gèlerait sans doute la fenêtre sous macOS et Linux. À vérifier sur un Mac et sous Linux avant d'offrir une vue libre.
+**Un protocole JSON-RPC 2.0, deux transports, une interface déclarée, un niveau déclaratif sans code.**
 
-**Un plugin en process à côté** (`proc/`, un hôte Node et un plugin Node en JSON-RPC sur stdio, une ligne par message, la forme du protocole de Codex et d'ACP) : premier échange 67 ms après le lancement (le démarrage de Node), puis **43 µs par aller-retour** sur 10 000 demandes d'autorisation. Assez pour un événement, une décision ou un texte ; trop pour un appel par image d'une animation, ce qu'aucun point d'extension ne demande.
-
-### 2.3 Les quatre façons, comparées
-
-**A. Un process à côté, en JSON-RPC sur stdio** (comme un serveur MCP, un agent ACP, l'_extension host_ de VS Code, un serveur LSP).
-
-- **Isolation** : un plantage ne touche qu'un process ; Escouade le redémarre avec un budget (trois fois, puis le plugin est arrêté et le journal le dit). Une fuite de mémoire est mesurable (`resources.rs` lit déjà la mémoire et le CPU des process des agents) et bornable par le Job object (Windows : limite de mémoire du Job ; ailleurs, `setrlimit`). Une boucle infinie ne gèle rien : chaque appel a un délai, au-delà duquel la réponse par défaut s'applique. Le Job tue tout l'arbre du plugin à sa fin ou à celle de l'app (`job.rs`).
-- **Permissions** : Escouade ne peut **appliquer** que ce qui passe par lui : les faits et les données qu'il envoie (rien d'un projet privé à un plugin non activé pour lui : la vue `Sight` du serveur MCP), les secrets qu'il donne (ceux du plugin seulement), les outils qu'il ouvre. Le réseau et le disque, il ne peut que les **déclarer** et les montrer : le process a les droits de l'utilisateur, comme chez VS Code, Obsidian, JetBrains et Claude Code. La clôture des projets privés (`fence.rs`) n'est pas tenue contre un plugin qui va lire le disque lui-même. Un bac à sable du système (AppContainer, Seatbelt, bubblewrap, ce que Codex fait pour ses commandes) le permettrait plus tard, à un coût élevé sur trois systèmes.
-- **Performances** : 43 µs par aller-retour mesurés ; le démarrage d'un runtime (67 ms pour Node) ; la mémoire d'un process par plugin (quelques dizaines de Mo pour Node), d'où un démarrage paresseux, au premier fait auquel il est abonné, comme les `activationEvents` de VS Code.
-- **Langages et débogage** : n'importe lesquels (TypeScript, Python, Go, Rust, un script shell pour un hook) ; un débogueur ordinaire s'attache au process (`--inspect` pour Node) ; le journal de stderr va dans Réglages › Plugins. Mais il faut un runtime : un plugin en TypeScript exige Node, que tous les utilisateurs n'ont pas (Claude Code a son installeur natif). Le SDK doit permettre de livrer un exécutable unique (`bun build --compile`, `deno compile`, Go, Rust).
-- **Compatibilité** : la version du protocole est négociée à `initialize`, comme ACP et MCP (`protocolVersion`, les capacités de chaque côté) ; un champ inconnu est ignoré des deux côtés, comme la lecture des harness le fait déjà (« La lecture tolère l'inconnu », `docs/ENGINES.md`).
-- **Coût dans Escouade** : faible. Le client JSON-RPC sur stdio, les Job objects, les faux process et le banc existent ; le cœur appelle un trait, comme pour les harness.
-
-**B. Un module WASM chargé par le cœur** (wasmtime, ou Extism par-dessus ; ce que fait Zed).
-
-- **Isolation** : la meilleure. Plantage, mémoire et boucle infinie bornés et rattrapés (essayé au §2.2), dans le process d'Escouade sans le mettre en danger.
-- **Permissions** : **appliquées** : le module n'a que les fonctions que l'hôte lui donne. Le réseau passe par une fonction de l'hôte qui ne laisse sortir que vers les hôtes déclarés (le `allowed_hosts` d'Extism) ; le disque par des dossiers préouverts (WASI) que la clôture des projets privés peut filtrer ; les secrets par une fonction qui ne rend que ceux du plugin. C'est la seule façon de tenir `fence` contre un plugin.
-- **Performances** : 11 ns par appel ; un démarrage en millisecondes ; mais un interpréteur embarqué pour JS ou Python, de plusieurs Mo, et un code JS bien plus lent qu'avec Node.
-- **Langages et débogage** : Rust, C, Go (TinyGo), AssemblyScript sont naturels ; JS et Python passent par un interpréteur compilé en WASM, avec des limites (pas de modules natifs, pas de `npm` qui touche au système) ; le débogage se fait surtout au journal.
-- **Compatibilité** : une interface WIT par version majeure, gardée côté hôte comme Zed le fait ; l'hôte peut charger des modules de plusieurs versions de l'API à la fois.
-- **Coût dans Escouade** : moyen à fort. 11 Mo de plus, une interface WIT à tenir, les fonctions asynchrones de l'hôte, un SDK par langage. Et ce que les points d'extension de la 2.1.0 demandent d'abord (le réseau pour un webhook, un process pour un harness, une commande pour une notification) devrait de toute façon sortir du bac à sable, par des fonctions de l'hôte qui le réouvrent.
-
-**C. Du JS dans la WebView, en iframe isolée ou en Web Worker** (les _webviews_ de VS Code, MCP Apps).
-
-- **Isolation** : sous WebView2, une iframe d'origine opaque tourne dans un autre process (essayé) ; sous WKWebView et WebKitGTK, sans doute dans celui de la fenêtre, où une boucle la gèlerait (non essayé). Un Web Worker a son propre fil partout, mais pas de DOM. Une fuite de mémoire pèse sur la fenêtre.
-- **Permissions** : sans `allow-same-origin`, avec une CSP `default-src 'none'`, l'iframe n'atteint ni l'IPC de Tauri, ni le DOM, ni le stockage, ni le réseau (essayé). Les capabilities de Tauri ne s'appliquent pas à une iframe : c'est l'origine opaque qui protège, et ce n'est sûr que si **aucune** iframe de plugin n'a `allow-same-origin` (CVE-2024-35222). La CSP d'Escouade (`tauri.conf.json`) devra ajouter `frame-src` pour les vues des plugins, servies par un protocole à part.
-- **Performances** : bonnes pour une vue ; nulles pour la logique hors de la fenêtre (un plugin dans la WebView ne vit que tant que la fenêtre est ouverte, et Escouade tourne aussi fenêtre cachée, dans le plateau).
-- **Langages et débogage** : JS et TypeScript, les outils du navigateur (les DevTools de WebView2 s'ouvrent déjà pour les e2e).
-- **Compatibilité** : le thème (les jetons de `app.css` passés à la vue), la taille, le focus et les raccourcis sont à reprendre dans chaque vue ; trois moteurs de rendu à essayer.
-- **Coût dans Escouade** : moyen ; le protocole `postMessage`, un composant hôte, le protocole qui sert les fichiers du plugin.
-
-**D. Les mélanges.**
-
-- **D1. Le code en process, l'interface déclarée** : le plugin décrit ses contributions (manifeste, puis blocs rendus par Escouade : texte, liste, table, champs, boutons, markdown), et le code tourne en process. C'est le modèle de Raycast pour l'interface et de VS Code pour le code (ses menus, commandes, réglages et barre d'état sont déclarés dans `package.json`). Pas de HTML d'un plugin dans la fenêtre.
-- **D2. D1, plus des vues libres en iframe isolée plus tard**, pour ce que les blocs ne savent pas montrer (un graphe, un tableau de bord) : le modèle de MCP Apps, qui parle aussi JSON-RPC.
-- **D3. Un seul protocole, deux runtimes** : les mêmes messages JSON-RPC, portés soit par stdio vers un process, soit par une fonction de l'hôte vers un module WASM. Un plugin qui n'a besoin d'aucun droit du système (une règle d'autorisation, un gabarit de PR, un ordre des tickets) se compile en WASM et devient installable sans crainte ; les autres restent des process.
-- **D4. Le déclaratif seul**, sans code : thèmes, langues, harness ACP décrits, webhooks (une URL et un gabarit par fait), modèles de projet, recettes. Une bonne part de la valeur, sans aucun code tiers à faire tourner.
-
-| | A. Process | B. WASM | C. JS en iframe | D1 + D3 + D4 |
-| --- | --- | --- | --- | --- |
-| Plantage, boucle, mémoire | redémarré, délai, Job | rattrapés, bornés | dépend du moteur de rendu | comme A, et B pour les modules |
-| Réseau, disque, `fence` | déclarés, non appliqués | appliqués | appliqués (CSP, origine opaque) | appliqués pour le déclaratif et le WASM, déclarés pour le process |
-| Secrets, projets privés | appliqués (ce qui passe par Escouade) | appliqués | appliqués | appliqués |
-| Coût d'un appel | 43 µs | 11 ns | `postMessage` | — |
-| Langages | tous | Rust, Go, C ; JS et Python avec un interpréteur | JS | tous |
-| Débogage | ordinaire | au journal | DevTools | ordinaire |
-| Vit sans fenêtre | oui | oui | non | oui |
-| Coût pour Escouade | faible | moyen à fort | moyen | faible en 2.1, moyen ensuite |
-
-### 2.4 La recommandation
-
-**D : un protocole des plugins en JSON-RPC 2.0, servi en 2.1 par un process à côté (A), avec une interface déclarée (D1) et un niveau déclaratif sans code (D4) ; un runtime WASM du même protocole plus tard (D3), puis des vues libres en iframe isolée (D2).**
-
-> **Révisé le 2026-11-01 (ESC-319, §5).** Le WASM n'attend plus : il devient **le runtime des programmes en JS et en TS**, pour que Node ne soit jamais un prérequis. Le store compile le bundle commité (`run.js`) en WASM par Javy et le plugin Javy d'Escouade, de façon reproductible ; l'app le fait tourner par wasmtime, dans son process, et **applique** ce que le tableau du §2.3 disait seulement déclaré : le réseau (`permissions.network`, par `net/fetch` servi par l'hôte), les fichiers (ceux du dossier du plugin seulement), la mémoire et le temps. Le protocole, le SDK et l'interface déclarée ne changent pas (D3 : un protocole, deux transports). Le process (A) reste pour la première main en Rust et pour les binaires tiers attestés ; `node` n'est plus une commande d'un plugin tiers du store. La webview est écartée (§5.1). Les raisons 2 et 3 ci-dessous valent toujours pour les plugins qui lancent des programmes ; pour les autres, le §5.3 montre qu'un interpréteur embarqué coûte moins qu'on ne le craignait (1,3 Mo par plugin, 71 µs par décision, 2 ms pour démarrer).
-
-Pourquoi :
-
-1. **C'est ce qu'Escouade sait déjà faire.** Ses huit harness et son serveur MCP sont des process en JSON-RPC ou proches ; ses tests reposent sur des faux process et un banc de conformité ; ses Job objects tuent un arbre entier. Le socle coûte le moins, et le banc des plugins se calque sur celui des harness.
-2. **Les points qui valent le plus ont besoin du système.** Un harness est un process ; un webhook, une source du Kanban, un hébergeur ont besoin du réseau ; une notification ou un environnement de lancement lancent des commandes. En WASM, il faudrait les rouvrir par des fonctions de l'hôte, et le bac à sable n'aurait plus grand-chose à garder.
-3. **Les auteurs écrivent en TypeScript et en Python**, ceux des agents et des serveurs MCP. Un process les accueille sans interpréteur embarqué, avec leur débogueur.
-4. **L'honnêteté plutôt qu'un faux bac à sable** : un plugin en process a les droits de l'utilisateur, comme chez VS Code, Obsidian, JetBrains et Claude Code. Escouade le dit avant l'installation, applique ce qu'il peut (les faits, les secrets, les projets privés, les outils MCP), et réserve le niveau « sans crainte » au déclaratif, puis au WASM.
-5. **L'interface déclarée garde le design** : chaque contribution est rendue par les composants d'Escouade, dans les deux langues, aux règles de `DESIGN.md`, sans HTML d'un tiers dans la fenêtre qui a l'IPC. Les vues libres attendent d'avoir été essayées sous WebKit.
-6. **Le WASM reste ouvert** : comme le protocole ne dépend pas du transport, un runtime WASM s'ajoutera sans changer l'API des plugins, pour ceux qu'un projet peut proposer sans risque.
+- **Le déclaratif** : thèmes, webhooks, harness ACP décrits, comptes : rien ne s'exécute, ou seulement le code d'Escouade.
+- **Le process** : la première main en Rust (`escouade-plugins <nom>`) et les binaires tiers attestés. C'est ce qu'il faut pour lancer un programme ; le plugin a les droits de l'utilisateur, et Escouade le dit avant l'installation. Il n'applique que ce qui passe par lui : les faits, les secrets, les projets privés, les outils.
+- **Le WASM** : les programmes en JS et en TS, pour que Node ne soit jamais un prérequis (ESC-319, décidé le 2026-11-01, §5). Il **applique** ce que le process ne fait que déclarer : le réseau, les fichiers, la mémoire et le temps. La recommandation de 2026-10-25 le gardait pour plus tard ; le prototype a montré qu'un interpréteur embarqué coûte peu (1,3 Mo par plugin, 71 µs par décision, 2 ms pour démarrer). La webview est écartée (§5.1). `node` n'est plus une commande d'un plugin tiers du store.
+- **L'interface déclarée** : chaque contribution est rendue par les composants d'Escouade, dans les deux langues, aux règles de `DESIGN.md`, sans HTML d'un tiers dans la fenêtre qui a l'IPC. Les vues libres attendent d'avoir été essayées sous WebKit.
 
 ## 3. Le modèle de confiance et de distribution
 
 ### 3.1 Le manifeste
 
-Un fichier `escouade-plugin.json` à la racine du dossier du plugin (du JSON, comme `package.json`, `plugin.json` de Claude Code et les schémas de `schemas/` ; un schéma publié pour l'autocomplétion) :
+Un fichier `escouade-plugin.json` à la racine du dossier du plugin ; `schemas/plugin-1.json` en est le schéma publié (`https://escouade.dev/schemas/plugin-1.json`). La page `plugins/manifest` du site le dit champ par champ. Le manifeste de `dev.escouade.slack` :
 
 ```json
 {
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
-  "id": "dev.exemple.slack",
+  "id": "dev.escouade.slack",
   "name": "Slack",
-  "version": "1.2.0",
-  "description": { "fr": "Les tickets à tester et les agents qui attendent, dans un salon Slack.", "en": "…" },
-  "author": { "name": "Exemple", "url": "https://exemple.dev" },
+  "version": "2.0.0",
+  "description": {
+    "fr": "Les tickets à tester et les agents qui attendent, dans le salon Slack de chaque projet.",
+    "en": "Tickets to test and agents waiting, in each project's Slack channel."
+  },
+  "author": { "name": "Escouade", "url": "https://escouade.dev" },
   "license": "MIT",
-  "repository": "https://github.com/exemple/escouade-slack",
-  "escouade": { "api": "1", "min": "2.1.0" },
-  "icon": "assets/icon.png",
-  "run": { "command": "bin/escouade-slack", "windows": "bin/escouade-slack.exe" },
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/slack",
+  "escouade": { "api": "1", "min": "2.2.0" },
+  "run": { "js": "dist/plugin.mjs" },
   "activation": ["event:ticket.column", "event:agent.status"],
   "permissions": {
-    "events": ["ticket.*", "agent.status"],
-    "network": ["hooks.slack.com"],
-    "secrets": ["webhook"]
+    "events": ["ticket.column", "agent.status"],
+    "network": ["slack.com"],
+    "secrets": ["token"]
   },
   "contributes": {
-    "settings": [{ "key": "channel", "type": "string", "title": { "fr": "Salon", "en": "Channel" } }],
-    "secrets": [{ "key": "webhook", "title": { "fr": "Adresse du webhook", "en": "Webhook URL" } }]
+    "secrets": [{ "key": "token", "title": { "fr": "Jeton du bot Slack (xoxb-…)", "en": "Slack bot token (xoxb-…)" } }]
   }
 }
 ```
 
-- `id` : unique, en nom de domaine inversé (pas de collision entre deux auteurs) ; `name` et `description` dans les deux langues, l'anglais par défaut ;
-- `escouade.api` : la version **majeure** du protocole qu'il parle ; `min` (et `max` facultatif) : les versions d'Escouade où il a été essayé. Un plugin d'une API que l'app ne sert plus est désactivé, et la raison montrée, comme une version trop ancienne d'un harness (`Tested`, `oldest_reason`) ;
-- `icon` : facultatif (PLG-13, ESC-292). Son logo, un chemin relatif dans le dossier du plugin vers un **PNG carré de 256 px de côté au moins** (512 conseillé), **1 Mo au plus**. Ni SVG (il peut porter du script), ni image distante, ni chemin hors du dossier (`..`, absolu, lecteur, adresse). Les deux lecteurs (`src-tauri/src/plugins/manifest.rs` et `schemas/plugin-manifest.mjs`) en lisent l'en-tête sans le décoder, sur le même corpus (`tests/fixtures/plugins/manifests.json` : absent, introuvable, pas carré, trop petit, trop lourd, pas un PNG, SVG, `..`, absolu, distant), et disent chaque refus en français et en anglais (`file`, `png`, `heavy`, `square`, `small`, `path`). Le store le décode (4096 px de côté au plus) et le réencode sans métadonnées en 256 et 64 px (docs/STORE.md §3.3) ; l'app le lit dans le dossier du plugin installé par la commande `plugin_icon`, qui ne prend que l'id du plugin et ne sort jamais de son dossier (un lien qui en sort est refusé). Sans icône, la tuile garde ses deux lettres ;
-- `run` : facultatif. Sans lui, le plugin est **déclaratif** : rien ne s'exécute ;
-- `activation` : ce qui le démarre (un fait, une commande, l'ouverture des réglages) ; sans activation, il ne tourne pas ;
-- `permissions` : ce qu'il demande, montré avant l'installation (§3.4) ;
-- `contributes` : ses points d'extension (`themes`, `harnesses`, `webhooks`, `menus`, `statusBar`, `badges`, `settings`, `secrets`, `commands`, `projectTemplates`, `escouadeYml`…), chacun avec son schéma.
+- `id` : unique, en nom de domaine inversé, en minuscules. `dev.escouade.*` est réservé (§4.3, `docs/STORE.md` §3.6) ;
+- `name` et `description` : un texte, ou un par langue, l'anglais par défaut ;
+- `escouade.api` : la version **majeure** du protocole (1) ; `min` et `max` : les versions d'Escouade où il a été essayé. Un plugin hors de sa plage est chargé désactivé, et la raison montrée ;
+- `icon` : facultatif (PLG-13, ESC-292). Un PNG carré de 256 px de côté au moins, 1 Mo au plus, relatif au dossier ; ni SVG, ni image distante. Les deux lecteurs en lisent l'en-tête sans le décoder et disent chaque refus. Le store le décode et le réencode sans métadonnées (`docs/STORE.md` §3.3) ; l'app le lit par la commande `plugin_icon`, qui ne sort jamais du dossier. Sans icône, la tuile garde ses deux lettres ;
+- `run` : facultatif, sans lui le plugin est **déclaratif**. `command` (avec `windows`, `macos`, `linux`, `args`) ou `js`, jamais les deux (§5.6). `{escouade}/…` est réservé aux plugins livrés ;
+- `activation` : ce qui le démarre (un fait, une commande) ; sans activation, il ne tourne pas ;
+- `permissions` : `events`, `network`, `secrets`, `commands`, `decide` ; une permission inconnue n'est pas donnée ;
+- `contributes` : ses points d'extension (§1.14) ;
+- `store` : ce que sa page du store en dit.
+
+Un champ inconnu est ignoré, un manifeste invalide ne charge rien et dit pourquoi, champ par champ.
 
 ### 3.2 L'installation, la signature, la mise à jour
 
-- **2.1.0 : un dossier local, et un dépôt git** (une URL et une étiquette, `git clone --depth 1` dans le dossier des plugins de l'app, `DataDir`) ; le dossier d'un plugin en développement est chargé en place et rechargé à chaque changement (comme `--plugin-dir` de Claude Code).
-- **Avec la 2.1, la place de marché store.escouade.dev** (ESC-202, `docs/STORE.md`, qui remplace l'idée d'un registre en dépôt public pour la 2.2) : un auteur soumet un plugin depuis son dépôt public et une étiquette ; le store fige le commit et l'archive, contrôle seul le manifeste, la licence et la doc, et le liste ; l'app le parcourt dans Réglages › Plugins.
-- **L'intégrité** : chaque version installée est fixée par son empreinte (le commit git, ou le SHA-256 de l'archive) ; une mise à jour change l'empreinte et redemande l'accord si les permissions ont grandi.
-- **La signature** : avec le store, en 2.1. Une version revue en local par l'utilisateur (un agent de ce dépôt, `/review-plugin`) est signée par lui avec une clé minisign gardée sur son poste, jamais sur le serveur ; l'app la vérifie avec la clé publique embarquée : « Vérifié par Escouade », version par version, retirable par une liste de révocation signée (`docs/STORE.md`, §4). Un plugin installé depuis un dossier ou un dépôt git reste installable, marqué « non vérifié ».
-- **La mise à jour** : jamais en silence. Escouade cherche une nouvelle étiquette à son démarrage, la montre dans Réglages › Plugins, et l'installe sur un clic ; une version refusée laisse la précédente en place.
+- **Quatre origines** : un dossier local, un dépôt git à une étiquette, le store, et « En développement » (un dossier chargé en place et relu à chaque changement). Un plugin livré a l'origine `builtin`.
+- **L'intégrité** : chaque version installée est fixée par son empreinte (le commit, le SHA-256 du dossier, ou `store:<SHA-256 de version.json>`) ; une copie dont les fichiers ont changé est chargée désactivée.
+- **La signature** : une version revue en local (`/review-plugin`, `npm run plugin-review`) est signée par le chef d'escouade avec une clé minisign gardée sur son poste, jamais sur le serveur ; l'app la vérifie avec les clés publiques embarquées (`store_keys.rs`) : « Vérifié par Escouade », version par version, retirable par une liste de révocation signée (`docs/STORE.md` §4). `dev.escouade.*` ne s'installe que signé. Un plugin installé hors du store reste installable, « non vérifié ».
+- **La mise à jour** : jamais en silence. Une nouvelle version est montrée dans la vue Plugins et s'installe sur un clic ; l'accord est redemandé si elle demande plus ; une version refusée laisse la précédente en place.
+
+La place de marché, ses onze contrôles, la compilation et la revue : `docs/STORE.md` et §5.6.
 
 ### 3.3 L'activation, les projets privés et `.escouade.yml`
 
 - **Installé** n'est pas **activé**. Un plugin s'active pour toute l'app, ou projet par projet ; par défaut, pour tous les projets **sauf les projets privés**.
-- **Un projet privé** (ESC-140) : un plugin ne l'atteint que s'il y est activé un par un. Ses faits, ses tickets, ses statistiques, ses textes ne vont pas aux autres plugins ; un plugin client du serveur MCP le voit comme un agent d'un autre projet (`Sight`), c'est-à-dire pas du tout. Ce qu'Escouade ne peut pas garantir (un process qui lit le disque), Réglages › Plugins le dit en face du projet privé.
-- **Un projet qui propose un plugin** : `.escouade.yml` gagne une clé `plugins.recommended` (des identifiants et une source), comme les extensions recommandées de VS Code. Escouade le **propose**, n'installe ni n'active rien seul : un dépôt cloné ne doit pas pouvoir lancer un programme. Un plugin déclaratif (ou WASM, plus tard) peut s'activer après un clic ; un plugin avec un programme demande l'accord complet, comme une installation. Ses réglages propres vont sous `plugins.<id>.*` (§1.11), validés par son schéma, jamais un secret.
-- **Fait le 2026-10-30** (PLG-14, ESC-288) : `plugins.recommended` (des identifiants du store, la source est store.escouade.dev) et `plugins.<id>` (des valeurs simples) rejoignent `KEYS` et le schéma comme clés du fichier seul, jamais appliquées au projet ni exportées ; l’ouverture du projet dit combien il en propose, une bande en tête de Réglages › Projets les nomme avec « Voir dans le store » (la page du plugin dans la vue Plugins), « Pas pour ce projet » la fait taire sur ce poste. `settings/get` prend un `project` : les réglages du fichier passent devant ceux de l’utilisateur, seulement les clés de `contributes.settings` d’une valeur de leur type, jamais un secret, et seulement si le plugin est actif dans ce projet (un projet privé ne donne rien à un plugin qui n’y est pas activé).
+- **Un projet privé** (ESC-140) : un plugin ne l'atteint que s'il y est activé un par un. Ses faits, ses tickets et ses textes ne vont pas aux autres plugins. Ce qu'Escouade ne peut pas garantir (un process qui lit le disque) est dit en face du projet privé.
+- **Un projet qui propose un plugin** (PLG-14, ESC-288) : `plugins.recommended` (des identifiants du store) et `plugins.<id>` (des valeurs simples) sont des clés du fichier seul, jamais appliquées au projet ni exportées. L'ouverture du projet dit combien il en propose, une bande en tête de Réglages › Projets les nomme avec « Voir dans le store », « Pas pour ce projet » la fait taire sur ce poste. **Rien ne s'installe ni ne s'active seul.** `settings/get` prend un `project` : les réglages du fichier passent devant ceux de l'utilisateur, seulement les clés de `contributes.settings` d'une valeur de leur type, jamais un secret, et seulement si le plugin est actif dans ce projet.
 
 ### 3.4 Ce que l'utilisateur voit, et ce qu'il retire
 
-Avant l'installation, une fenêtre dit, en mots : qui l'a fait et d'où il vient (dépôt, empreinte, « non vérifié »), ce qu'il ajoute (ses contributions), et ce qu'il pourra faire, permission par permission, la plus forte d'abord :
+Avant l'installation, une fenêtre dit en mots qui l'a fait et d'où il vient (dépôt, empreinte, sceau), ce qu'il ajoute, et ce qu'il pourra faire, permission par permission, la plus forte d'abord :
 
-- **« Lance un programme sur votre ordinateur, avec vos droits »** (tout plugin avec `run`) ;
-- « Décide des autorisations de vos agents » (en rouge) ;
-- « Ajoute des consignes à vos agents », « Ajoute des outils à vos agents » ;
-- « Agit sur vos projets » (crée des tickets, lance des agents) ou « Lit vos projets » ;
-- « Reçoit ces événements : … » ;
-- « Se connecte à : hooks.slack.com » (déclaré) ;
+- **« Lance un programme sur ton ordinateur, avec tes droits »** (un plugin à `run.command`), ou « Tourne dans Escouade, isolé » (un `run.js`) ;
+- « Décide des autorisations de tes agents » (en rouge) ;
+- « Reçoit ces événements », avec chaque fait ;
+- « Se connecte à », avec l'hôte et ce qu'Escouade en fait : appliqué pour un `run.js` et pour les webhooks d'un plugin déclaratif, seulement déclaré pour un `run.command` ;
 - « Garde un secret : Adresse du webhook ».
 
-Après : désactiver (pour l'app ou un projet), retirer une permission (le plugin continue sans elle, ou s'arrête s'il ne peut pas), désinstaller (son dossier, ses réglages et ses secrets effacés, avec une case pour garder ses données) ; et le **journal** de chaque plugin : ses démarrages, ses plantages, ses appels, les autorisations qu'il a décidées.
+Après : désactiver (pour l'app ou un projet), retirer une permission (le plugin continue sans elle, ou s'arrête s'il ne peut pas), désinstaller (son dossier, ses réglages et ses secrets effacés, avec une case pour garder ses données) ; et le **journal** de chaque plugin : ses démarrages, ses plantages, ses appels, les autorisations qu'il a décidées. Un plugin livré se coupe, mais ne se désinstalle pas.
 
 ### 3.5 Les secrets
 
-Les secrets d'un plugin vont au coffre d'Escouade (`integrations/secrets.rs`, `SecretStore` : le trousseau du système, un fichier dans le bac à sable des tests), sous un nom à lui (`plugin:<id>:<clé>`), saisis dans les champs qu'il déclare (`contributes.secrets`), jamais dans `.escouade.yml` ni dans ses réglages en clair. Il les obtient par le protocole, au moment où il en a besoin (`secrets/get`), seulement les siens ; jamais ceux d'un autre plugin, d'un compte, d'un harness ou d'une intégration. Le texte d'une erreur les masque, comme les déclarations du serveur MCP le font déjà (`add_declaration`, `secrets`).
+Les secrets d'un plugin vont au coffre d'Escouade (`integrations/secrets.rs`, `SecretStore` : le trousseau du système, un fichier dans le bac à sable des tests), sous un nom à lui (`plugin:<id>:<clé>`), saisis dans les champs qu'il déclare (`contributes.secrets`), jamais dans `.escouade.yml` ni dans ses réglages en clair. Il les obtient par `secrets/get`, seulement les siens (`notYours`, -32001 sinon) ; jamais ceux d'un autre plugin, d'un compte, d'un harness ou d'une intégration. Les plugins livrés reçoivent le jeton d'un compte par le même appel (`account:<hôte>`). Le journal masque les secrets.
 
 ### 3.6 La télémétrie
 
-Rien de neuf sans accord. Si l'utilisateur a accepté les statistiques d'usage (`telemetry.rs`), Escouade compte les fonctions des plugins comme les autres (« un plugin installé », « un plugin activé », « installé depuis le store », sans son nom) ; le store compte les installations de ses plugins, sans identifiant, avec le même accord (`docs/STORE.md`, §5.4). Un plugin n'a pas accès à la télémétrie d'Escouade ; s'il envoie ses propres statistiques, c'est une permission réseau qu'il déclare et que l'utilisateur voit.
+Rien de neuf sans accord. Si l'utilisateur a accepté les statistiques d'usage (`telemetry.rs`), l'événement `plugin_installed` part avec `from_store` oui ou non, sans le nom du plugin ; le store compte les installations, sans identifiant, avec le même accord (`POST /api/v1/installs`, `docs/STORE.md` §5.4). Un plugin n'a pas accès à la télémétrie d'Escouade ; s'il envoie ses propres statistiques, c'est une permission réseau qu'il déclare et que l'utilisateur voit.
 
 ## 4. Tout ce qui est externe est un plugin, en process (ESC-203)
 
@@ -908,7 +789,7 @@ Les docs elles-mêmes (§1.1, §1.5, §4.7, §4.8, §4.10, le tableau des versio
 
 Demandé par l'utilisateur le 2026-11-01, en apprenant qu'un plugin en TypeScript (`dev.escouade.slack`, `dev.escouade.team-rules`) se lance par `node dist/plugin.mjs` : « je veux pas rendre node obligatoire, donc soit tu les exécutes dans la partie navigateur de tauri, soit tu prends en compte wasm directement et chaque plugin ts qui est soumis sera buildé en wasm ».
 
-Ce chapitre est l'étude, avec un prototype mesuré (`prototypes/wasm-plugins/`, son README dit comment refaire chaque mesure). Il ne change pas encore l'app : les tickets du §5.9 le font, dans l'ordre. Il révise la recommandation D du §2.4 (voir la révision en tête du §2.4).
+Ce chapitre est l'étude, avec un prototype mesuré (`prototypes/wasm-plugins/`, son README dit comment refaire chaque mesure), et ce que les tickets du §5.9 en ont construit : tout est dans l'app, dans la CLI et dans le code du store. Reste la mise en production de la compilation au store (ESC-328). Il a révisé le choix du §2.4.
 
 **En bref.** Un plugin en JS ou en TS se publie comme aujourd'hui, son bundle commité (`dist/plugin.mjs`). Le store le compile en WASM avec **Javy** et le **plugin Javy d'Escouade** (`escouade-js`, QuickJS), dans un conteneur sans réseau, avec des outils épinglés ; deux compilations, sous Windows comme sous Linux, donnent le même module à l'octet. L'app le fait tourner dans son propre process par **wasmtime**, une instance par plugin qui vit comme le process d'avant. Le protocole ne change pas : les mêmes lignes JSON-RPC, portées par l'entrée et la sortie standard du module. Escouade sert en plus le réseau (`net/fetch`, seulement vers `permissions.network`) et les fichiers du dossier du plugin. Les `dist/plugin.mjs` de team-rules et de slack tournent ainsi **sans aucune retouche** : team-rules décide en 71 µs (médiane), slack poste par le `fetch` de l'hôte et se voit refuser tout autre hôte.
 
@@ -1047,7 +928,7 @@ Son API ne change pas : `createPlugin().onEvent(...)`, `decidePermission(...)`, 
 
 ### 5.8 La migration de Slack et de Règles de l'équipe
 
-`dev.escouade.slack` 2.0.0 et `dev.escouade.team-rules` 2.0.0 : `"run": { "js": "dist/plugin.mjs" }` à la place de `command` et `windows`, leurs scripts `slack`, `slack.cmd`, `team-rules`, `team-rules.cmd` retirés, `engines.node` réservé au build et aux tests, `escouade.min` relevé à la version de l'app qui sert le WASM. Le code ne change pas (le prototype le prouve) ; le SDK de la version WASM se rebâtit dans leur `dist/`. Ce qu'ils gagnent : plus de Node chez l'utilisateur, et `permissions.network: ["slack.com"]` appliqué. La version 1.x reste au store pour les apps d'avant (sa compatibilité, `escouade.max`). C'est le chef qui revoit, signe et publie ces versions (`first-party-plugin-signing`).
+**Fait dans le dépôt** (WASM-7, ESC-326, 2026-11-02) ; **pas encore au store** : leur 2.0.0 attend que le store sache compiler en production (ESC-328), et les versions publiées, `slack` 1.1.0 et `team-rules` 1.1.1, se lancent par Node (§7). `dev.escouade.slack` 2.0.0 et `dev.escouade.team-rules` 2.0.0 : `"run": { "js": "dist/plugin.mjs" }` à la place de `command` et `windows`, leurs scripts `slack`, `slack.cmd`, `team-rules`, `team-rules.cmd` retirés, `engines.node` réservé au build et aux tests, `escouade.min` relevé à la version de l'app qui sert le WASM. Le code ne change pas (le prototype le prouve) ; le SDK de la version WASM se rebâtit dans leur `dist/`. Ce qu'ils gagnent : plus de Node chez l'utilisateur, et `permissions.network: ["slack.com"]` appliqué. La version 1.x reste au store pour les apps d'avant (sa compatibilité, `escouade.max`). C'est le chef qui revoit, signe et publie ces versions (`first-party-plugin-signing`).
 
 ### 5.9 Les tickets, dans l'ordre
 
@@ -1056,10 +937,10 @@ Chacun livrable seul, chacun après le précédent :
 1. **WASM-1, le runtime dans l'app** (fait, ESC-320) : `plugins/wasm.rs` (l'hôte du prototype, `escouade-js` construit en CI et livré avec l'app), `run.js` lu par les deux lecteurs du manifeste, la compilation par la Javy épinglée, la précompilation et son cache, `net/fetch` et les fichiers, les limites, le redémarrage ; le poids mesuré dans l'exécutable de l'app.
 2. **WASM-2, le SDK** (fait, ESC-321) : `start()` qui choisit le transport, `p.file()`, `fetch`, le prélude réduit ; `create-escouade-plugin` qui écrit `run.js`.
 3. **WASM-3, `escouade-plugin` sans Node** (fait, ESC-322) : `dev`, `test`, `validate` et `pack` sur `run.js`, la Javy téléchargée et vérifiée, le banc qui joue le WASM, `build`.
-4. **WASM-4, le store** : le onzième contrôle (la compilation isolée, deux fois), `wasm` dans `version.json`, le contrôle des binaires qui refuse script et interpréteur pour un tiers, l'app qui télécharge et vérifie le `.wasm`.
+4. **WASM-4, le store** (fait, ESC-323 ; en production avec ESC-328) : le onzième contrôle (la compilation isolée, deux fois), `wasm` dans `version.json`, le contrôle des binaires qui refuse script et interpréteur pour un tiers, l'app qui télécharge et vérifie le `.wasm`.
 5. **WASM-5, la revue locale** : la recompilation et la comparaison des empreintes, les pistes de lecture revues, le conteneur réservé aux binaires. **Fait le 2026-11-01** (ESC-324, docs/STORE.md §4.2).
-6. **WASM-6, la doc du site** (fr et en) : `plugins/api` (le transport WASM, `net/fetch`, les fichiers, les limites, ce qu'un plugin ne peut pas faire), `plugins/sdk`, `plugins/publish` (`run.js`, la compilation, plus de Node), `plugins/examples`.
-7. **WASM-7, la migration** de `dev.escouade.slack` et `dev.escouade.team-rules` en 2.0.0 sur `run.js`, revues, signées et publiées par le chef.
+6. **WASM-6, la doc du site** (fait, ESC-325, fr et en) : `plugins/api` (le transport WASM, `net/fetch`, les fichiers, les limites, ce qu'un plugin ne peut pas faire), `plugins/sdk`, `plugins/publish` (`run.js`, la compilation, plus de Node), `plugins/examples`.
+7. **WASM-7, la migration** de `dev.escouade.slack` et `dev.escouade.team-rules` en 2.0.0 sur `run.js` (faite dans le dépôt, ESC-326) ; leur revue, leur signature et leur publication par le chef suivent ESC-328.
 
 ## 6. Sources
 
@@ -1075,3 +956,79 @@ Chacun livrable seul, chacun après le précédent :
 - Extism, les limites de mémoire, de temps et les hôtes permis : <https://extism.org/docs/concepts/runtime-apis>.
 - ESC-319 (§5) : Javy <https://github.com/bytecodealliance/javy> (v9.1.0, ses `docs/docs-using-*.md`), `javy-plugin-api` 7.1.0 <https://crates.io/crates/javy-plugin-api> ; Extism <https://github.com/extism/extism> (1.41.0) et son PDK JS <https://github.com/extism/js-pdk> (1.7.0) ; ComponentizeJS <https://github.com/bytecodealliance/ComponentizeJS> (0.23.0) et StarlingMonkey <https://github.com/bytecodealliance/StarlingMonkey> (v0.4.0) ; wasmtime 50.0.1 <https://github.com/bytecodealliance/wasmtime> ; binaryen version_133 <https://github.com/WebAssembly/binaryen>. Le prototype et ses mesures : `prototypes/wasm-plugins/`.
 - Escouade : `docs/ENGINES.md` (les traits, le registre, le banc, « Ajouter un moteur »), `docs/PROTOCOL.md`, `docs/SPEC.md`.
+
+## 7. L'essai réel (ESC-184, 2026-11-04)
+
+Il remplace « l'essai réel des cinq exemples » du plan : les `dev.exemple.*` ont été retirés du store sans jamais servir (décision de l'utilisateur du 2026-11-01). Il porte sur les plugins de première main publiés et signés, et sur les plugins livrés avec l'app.
+
+### 7.1 Sous Windows, depuis store.escouade.dev
+
+**Comment.** Une app de debug construite sur main (e05a5265, elle embarque les clés publiques depuis f5b67f76), sur ses propres dossiers, sans `ESCOUADE_STORE_TEST_KEY` : les sceaux sont vérifiés contre les vraies clés. Le scénario est `tests/e2e/real-store.spec.ts`, sauté sans `ESCOUADE_E2E_REAL_STORE` ; il se rejoue à la release, et il écrit son rapport et ses captures dans `ESCOUADE_E2E_REAL_OUT`. Aucun webhook ni jeton réel, statistiques coupées : rien n'a été compté au store.
+
+| Plugin | Sceau et fenêtre | Ce qu'il fait | Désactivé, désinstallé |
+| --- | --- | --- | --- |
+| Contraste élevé 1.1.0 (`store:ca76…2cba`) | « Vérifié par Escouade », commit a2480d7, archive identique, signature vérifiée ici ; « Sans programme » | Choisi dans Réglages › Application › Couleurs, il change la fenêtre (`--text` #15171c → #000000) ; « Escouade » rend les couleurs d'avant | désinstallé : dossier et preuves partis |
+| Discord 1.1.0 (`store:ece7…ce53`) | Le même ; deux faits, `discord.com`, un secret | **Arrêté à la configuration** : le champ « Adresse du webhook Discord » au trousseau, aucune adresse donnée | désinstallé : dossier et preuves partis |
+| Slack 1.1.0 (`store:6014…d6f3`) | Le même ; « Lance un programme », `slack.com`, un secret | Son programme démarre (`slack.cmd`) et répond à `initialize` ; **arrêté à la configuration** : le champ du jeton, aucun jeton donné | désinstallé : dossier et preuves partis |
+| Règles de l'équipe 1.1.1 (`store:68e7…7d98`) | Le même, commit 3f3485d ; « Lance un programme », « Décide des autorisations » en rouge | Le `rm -rf build` d'un agent (le faux Claude Code des e2e) est refusé : « Refusé par Règles de l'équipe via Escouade — The team's rules forbid `rm -rf` » | désactivé : la même commande arrive à l'utilisateur ; désinstallé : dossier et preuves partis |
+
+Après un redémarrage de l'app, les quatre sont là et leur sceau tient, relu de ses preuves. Le refus du tableau est celui du plugin relancé avec l'app ; à froid, voir plus bas.
+
+**Ce qu'il a trouvé et corrigé.** La fenêtre d'installation disait de Discord qu'« Escouade ne filtre pas encore son réseau », alors qu'Escouade applique les hôtes déclarés aux webhooks qu'elle envoie elle-même (`plugins/events.rs`). Un plugin déclaratif a maintenant son texte. La même fenêtre disait « 2 webhooks : » sans rien après, un webhook n'ayant pas de nom : elle dit ce qui le déclenche. Et « store.escouade.dev · store.escouade.dev » : une fois suffit.
+
+**Ce qu'il n'a pas pu faire.**
+
+- **Une mise à jour** : il n'y en a pas à jouer. Chaque plugin n'a qu'une version installable : la seule autre version du catalogue, `team-rules` 1.1.0, n'est pas signée, donc refusée pour un `dev.escouade.*`. La mise à jour reste couverte par le faux store (`plugins_store_tests.rs`, et `plugins.test.ts` pour la fenêtre).
+- **La révocation** : aucune liste n'est publiée (`/api/v1/revocations.json` répond 404, « No revocation list yet », et sa copie sur escouade.dev aussi) ; l'app le tient sans erreur. Sa lecture reste couverte par le faux store. `docs/STORE.md` §9.1, étape 8, est encore à jouer pour de vrai.
+- **Couper le réseau** puis relancer : le redémarrage a été fait réseau ouvert.
+
+**À savoir pour la release.**
+
+- `slack` 1.1.0 et `team-rules` 1.1.1 se lancent par Node (`slack.cmd`, `team-rules.cmd`) : sans Node sur la machine, ils ne démarrent pas. Leurs 2.0.0 en `run.js` attendent ESC-328, qui attend elle-même la release 2.2.0 : **une 2.2.0 proposera donc un moment des versions à Node**, à fermer juste après la release.
+- **Le premier refus de `team-rules` 1.1.1 peut arriver trop tard.** Juste installé, son process démarre avec la première demande, et Node par `team-rules.cmd` a pris plus de 3 s dans plusieurs passages, le poste chargé (journal : « no answer within 3000 ms », le process démarré 5 s après la demande ; quand il répond, c'était en 2,3 s). La demande reste alors à l'utilisateur : **rien n'est autorisé**, c'est le repli voulu. Le plugin relancé avec l'app répond à temps : `decide::warm` le démarre, mais seulement au démarrage de l'app, pas à l'installation ni à la réactivation, malgré ce que dit son commentaire. La 2.0.0 en `run.js` lève la question de Node ; `warm` à l'installation reste à décider.
+- Les plugins de voix (`openai`, `groq`, `elevenlabs`, `deepgram`) disent `escouade.min` 2.2.0 : une app qui se dit 2.1.2, comme ce build, les charge désactivés et le service du cœur répond à leur place.
+
+### 7.2 Les plugins livrés avec l'app
+
+Sous Windows, le même build, plugin par plugin de la vue Plugins, onglet Journal : sur les 22 de ce build de développement, **18 démarrent** (« En marche », leur programme `escouade-plugins <nom>` a répondu à `initialize`) :
+
+- la démonstration : Minimal ;
+- la voix : Mistral ;
+- le lancement : isola ;
+- les hébergeurs et les sources : GitHub, GitLab, Bitbucket, Gitea / Forgejo, Azure DevOps, Trello, Linear, Jira, ClickUp ;
+- les harness : ACP, Cursor CLI, Gemini CLI, OpenCode, Copilot CLI, Codex.
+
+**4 ne démarrent pas dans ce build, comme prévu** : OpenAI, Groq, ElevenLabs et Deepgram, qui demandent Escouade 2.2.0 (§7.1). À vérifier sur l'app de la release.
+
+Cet essai dit qu'un programme démarre et parle le protocole, rien de plus : aucun compte réel de service n'y a servi. Les essais avec de vrais comptes sont ceux de leurs tickets.
+
+### 7.3 Les harness : les essais de chaque ticket
+
+Ils n'ont pas été rejoués ici : chaque ticket INT-10 l'a fait sur ce poste, contre son plugin.
+
+| Harness | Ticket | Rejoué et passé | Ce qui manque |
+| --- | --- | --- | --- |
+| Cursor CLI | ESC-222 | `real_cursor` (reprise comprise), puis `real-harnesses.spec.ts` par ESC-282 | `real_cursor_view` : la limite du compte Free atteinte, à relancer après sa remise à zéro |
+| Mistral Vibe | ESC-281 | `real_vibe`, `real_vibe_writes_a_text`, `real-harnesses.spec.ts`, puis `real-harnesses.spec.ts` par ESC-282 | — |
+| Gemini CLI | ESC-282 | aucun | **Pas de compte sur ce poste** : `real_gemini` reste écrit et ignoré, jamais joué |
+| OpenCode | ESC-223 | `real_opencode`, `real_fence`, `real_opencode_view`, `real-harnesses.spec.ts`, sur Ollama, avant la fusion avec main | — |
+| Copilot CLI | ESC-224 | `real_copilot`, `real_fence`, `real_copilot_through_its_plugin` | **La vue**, qui demande un jeton : `real_copilot_view`, `real_copilot_view_on_a_free_account` ; et `real-harnesses.spec.ts` |
+| Codex | ESC-225 | aucun | **Le Codex de ce poste est en 0.144.5, sous le minimum 0.163, et refusé** : `real-harnesses.spec.ts`, `real_fence`, `real_codex_view`, `real_codex_compact` à jouer sur une 0.163 ou plus |
+| Antigravity CLI | ESC-283 | en cours | à reprendre ici quand il sera dans main |
+| Claude Code | ESC-226 | en cours | à reprendre ici quand il sera dans main |
+
+### 7.4 macOS et Linux
+
+Il n'y a pas de Mac sur le poste de l'essai, et WSL n'y répond pas. **Aucun essai réel n'a donc été fait sous macOS ni sous Linux.** Ce qui tient lieu, à la CI de main (verte sur e05a5265, le 2026-11-04) :
+
+| | Linux (ubuntu-22.04) | macOS (macos-latest) |
+| --- | --- | --- |
+| clippy, tests Rust (runtime, WASM, banc, installation, store contre son faux) | oui | oui |
+| La page d'un lancement dans une vraie webview | oui | oui |
+| Les paquets portent `escouade-hook`, `escouade-plugin`, `escouade-plugins` | oui | oui, signés |
+| `plugins/ci.mjs` : tests, `validate`, banc des plugins de première main | oui | non |
+| Les gabarits du SDK (`validate`, banc) | oui | non |
+
+Les e2e, et donc la vue Plugins, le store dans l'app, les thèmes et les sceaux vus dans la fenêtre, ne tournent que sous Windows.
+
+**À faire à la release, sur un Mac et sous Linux** : `docs/STORE.md` §9.1, étape 7 : installer depuis store.escouade.dev, le sceau et la fenêtre des permissions, le thème dans WKWebView et WebKitGTK, un programme par plugin (les scripts `slack` et `team-rules` des versions à Node, qui doivent être exécutables), le lien `escouade://`, les plugins livrés et leur signature (`codesign` sous macOS), puis la révocation (étape 8).

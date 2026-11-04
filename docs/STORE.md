@@ -586,7 +586,7 @@ Ordre : STORE-1 → STORE-2 → STORE-3 → (STORE-4, STORE-5, STORE-6 en parall
 À faire ensemble, dans cet ordre ; chaque étape dit ce qu'on doit voir. Rien ici ne se fait sans l'utilisateur : la signature demande ses clés, la soumission agit en son nom sur un service public.
 
 1. **Les clés** : la procédure de §4.5 (deux paires minisign, sauvegarde hors ligne, jeton d'administration au trousseau). Le chef d'escouade met les deux clés publiques dans `store/keys/store.pub`, `store/keys/backup.pub` et `src-tauri/src/plugins/store_keys.rs` ; le push sur `main` redéploie le store. **À voir** : la page `/review` ne dit plus « aucune clé » en tête ; `cargo nextest run the_embedded_keys_are_those_of_the_store` passe (les clés de l'app sont celles du store).
-2. **Une app qui embarque les clés**, pour les trois systèmes : la release suivante, ou les artefacts de la CI d'un commit de `main` qui les a (Windows : l'installeur NSIS ; macOS : le `.dmg` universel ; Linux : le `.deb` ou l'AppImage). Un build debug ne convient pas : il lit `ESCOUADE_STORE_TEST_KEY`.
+2. **Une app qui embarque les clés**, pour les trois systèmes : la release suivante, ou les artefacts de la CI d'un commit de `main` qui les a (Windows : l'installeur NSIS ; macOS : le `.dmg` universel ; Linux : le `.deb` ou l'AppImage). Un build debug convient aussi, tant que `ESCOUADE_STORE_TEST_KEY` n'est pas posée : c'est celui de l'essai du 2026-11-04.
 3. **Les dépôts** : quatre dépôts publics, sous le compte de l'utilisateur ou l'organisation `escouade-dev` (à décider avec lui), un par exemple. Pour chacun, depuis la racine de ce dépôt :
    ```sh
    git subtree split --prefix plugin-examples/high-contrast -b plugin-high-contrast
@@ -616,6 +616,8 @@ Ordre : STORE-1 → STORE-2 → STORE-3 → (STORE-4, STORE-5, STORE-6 en parall
 9. **Une mise à jour** (facultatif) : une étiquette `v1.0.1` sur un dépôt. **À voir** : la version en attente dans `/account`, « Publier », puis dans l'app « v1.0.1 · non vérifiée » proposée, jamais installée seule.
 
 Ce qui se note à la fin : les commits et étiquettes publiés, les versions signées, ce qui n'a pas marché, dans la mémoire du projet et ici.
+
+**Fait le 2026-11-04 sous Windows** (ESC-184, `docs/PLUGINS.md` §7), sur les quatre plugins de première main : l'étape 7, depuis store.escouade.dev, avec une app de debug et `tests/e2e/real-store.spec.ts`, sauf la coupure du réseau et les webhooks réels. **Restent** : l'étape 7 sous macOS et Linux, l'étape 8, aucune liste de révocation n'étant publiée (`/api/v1/revocations.json` répond 404), et l'étape 9, aucun plugin n'ayant de version plus récente à installer.
 
 ### 9.2 La première main au store (ESC-314), les gestes du chef
 

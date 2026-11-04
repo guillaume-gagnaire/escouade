@@ -169,6 +169,35 @@ describe('the install window', () => {
     expect(dialog.textContent).not.toContain('ne filtre pas encore');
   });
 
+  it('says Escouade holds the webhooks of a declarative plugin to its hosts (ESC-184)', () => {
+    const declarative = { ...MANIFEST, run: undefined };
+    plugins.install = { kind: 'preview', preview: preview({ manifest: declarative }), busy: false, error: null };
+    render(InstallModal, { step: plugins.install });
+    const dialog = screen.getByRole('dialog', { name: 'Installer Slack ?' });
+    expect(dialog.textContent).toContain('appliqué par Escouade : ses webhooks ne partent que vers cet hôte');
+    expect(dialog.textContent).not.toContain('ne filtre pas encore');
+  });
+
+  it('names a webhook by what sets it off, and says where a store plugin comes from once (ESC-184)', () => {
+    const contributes = { webhooks: [{ events: ['ticket.column'] }, { events: ['agent.status'] }] };
+    const manifest = { ...MANIFEST, contributes } as unknown as typeof MANIFEST;
+    const origin = {
+      kind: 'store' as const,
+      version: '1.0.0',
+      sha256: 'abc',
+      verified: true,
+      repository: 'https://github.com/o/r',
+      tag: 'v1.0.0',
+      commit: 'a2480d724f8e',
+    };
+    plugins.install = { kind: 'preview', preview: preview({ manifest, origin }), busy: false, error: null };
+    render(InstallModal, { step: plugins.install });
+    const dialog = screen.getByRole('dialog', { name: 'Installer Slack ?' });
+    expect(dialog.textContent).toContain('2 webhooks : ticket.column, agent.status');
+    expect(dialog.textContent).not.toContain('store.escouade.dev · store.escouade.dev');
+    expect(dialog.textContent).toContain('store.escouade.dev');
+  });
+
   it('installs nothing before « Installer », then the plugin; cancelled, what was set aside is discarded', async () => {
     const backend = fakeBackend({ plugin_install: () => view() });
     plugins.install = { kind: 'preview', preview: preview(), busy: false, error: null };

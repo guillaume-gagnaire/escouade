@@ -100,6 +100,7 @@ Les tickets proposés s'appellent ici PLG-1, PLG-2… ; le chef d'escouade leur 
 **PLG-11. La documentation du site.** Dépend de PLG-1 à PLG-10 ; écrite au fil des tickets (chaque ticket écrit sa page), relue ici. Voir « La documentation étendue ». Critères : l'arbre ci-dessous en français et en anglais, les tests du site (`generate` puis ses tests, les NBSP), chaque exemple de code tiré d'un plugin d'exemple qui passe le banc.
 
 **PLG-12. Les docs internes et l'essai réel.** Dépend de tout le reste de la 2.1.0. Critères : `docs/PLUGINS.md` passé de l'analyse à la référence (ce qui a été construit), `docs/SPEC.md` (« Plugins »), `docs/PROTOCOL.md` si le protocole d'un ticket change, le CHANGELOG fr/en ; un essai réel des cinq exemples sur Windows, macOS et Linux.
+- **Fait le 2026-11-04** (ESC-184) : `docs/PLUGINS.md` est la référence, sauf le §4 (ESC-227) ; la spec est dans Escouade (`plugins/vue-d-ensemble`), `docs/SPEC.md` n'est plus tenue. L'essai réel porte sur les quatre plugins publiés au store et sur les plugins livrés, sous Windows (`tests/e2e/real-store.spec.ts`, `docs/PLUGINS.md` §7) ; macOS, Linux, la révocation et une mise à jour réelle restent à faire à la release.
 
 Ordre : PLG-1 → PLG-2 → PLG-3 → (PLG-4, PLG-5, PLG-6, PLG-7 en parallèle ; PLG-6 et PLG-7 peuvent partir dès PLG-1) → PLG-8 → PLG-9 → PLG-10 → PLG-11 → PLG-12.
 

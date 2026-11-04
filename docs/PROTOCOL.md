@@ -18,6 +18,10 @@ Escouade fait tourner ses agents sur huit harness : Claude Code, Codex, OpenCode
 
 La déclaration du serveur MCP d'Escouade dans la config de chaque harness, pour l'utilisateur, est commune : « Serveur MCP d'Escouade » › « Déclaration dans les harness ».
 
+**Où est le client de chaque harness.** Ce document dit ce qu'Escouade échange avec chaque harness ; ce protocole-là n'a pas changé quand ils sont sortis du cœur, seul le code a bougé (docs/PLUGINS.md §4.5). Le cœur lance le programme, et le plugin livré du harness tient sa conversation : le client de Codex (`plugins/builtin/dev.escouade.codex/`), de Copilot CLI (`dev.escouade.copilot-cli`) et d'OpenCode (`dev.escouade.opencode`) ; le client ACP partagé (`crates/escouade-acp`) et ses extensions pour Cursor CLI, Mistral Vibe et Gemini CLI, servis par leur plugin. `src-tauri/src/engine/<harness>/` garde la façade : capacités, comptes, quota, textes rédigés, vue terminal. Claude Code et Antigravity CLI sont encore au cœur (ESC-226, ESC-283).
+
+**Le protocole des plugins** n'est pas ici : c'est celui qu'Escouade parle à ses plugins, JSON-RPC 2.0, version 1 (`schemas/plugin-protocol-1.json` pour le socle, `crates/escouade-plugin-protocol` pour les points d'extension). Voir docs/PLUGINS.md §1 et, pour les auteurs, la page `plugins/api` du site.
+
 ## Claude Code (stream-json)
 
 Les sections qui suivent, jusqu'à « Codex app-server », sont celles de Claude Code. Le protocole de base est validé empiriquement sur Claude Code 2.1.283 (types de référence : `@anthropic-ai/claude-agent-sdk` 0.3.283, `sdk.d.ts` / `sdk-tools.d.ts`). Les ajouts de la 1.7 l'ont été sur des versions plus récentes, dites à chaque section : 2.1.289 pour les comptes et la copie d'un agent, 2.1.296 pour le serveur MCP et l'avancée d'un plan.
@@ -631,7 +635,7 @@ OpenCode est le troisième harness (docs/ENGINES.md). Testé avec **OpenCode 1.1
 opencode serve --hostname 127.0.0.1 --port 0
 ```
 
-Un serveur sert tous les agents d'un même compte (même programme, même environnement : `engine/opencode/server.rs`). Il est lancé au premier agent et arrêté avec le dernier, dans un Job (tout son arbre est tué avec lui), dans un dossier à lui (`escouade-opencode` du dossier temporaire) : jamais celui d'un agent, qu'un worktree supprimé trouverait tenu. Chaque agent est une session dans son dossier (`?directory=<dossier>` sur chaque requête) ; quand le dernier agent d'un dossier s'en va, Escouade le dit au serveur (`POST /instance/dispose`), qui lâche le dossier. Un serveur qui tombe arrête tous ses agents (ils redémarrent au message suivant, leur session reprise). Repli possible si un serveur commun pose problème : un serveur par agent (0,7 Go chacun).
+Un serveur sert tous les agents d'un même compte (même programme, même environnement : `plugins/builtin/dev.escouade.opencode/src/server.rs`). Il est lancé au premier agent et arrêté avec le dernier, dans un Job (tout son arbre est tué avec lui), dans un dossier à lui (`escouade-opencode` du dossier temporaire) : jamais celui d'un agent, qu'un worktree supprimé trouverait tenu. Chaque agent est une session dans son dossier (`?directory=<dossier>` sur chaque requête) ; quand le dernier agent d'un dossier s'en va, Escouade le dit au serveur (`POST /instance/dispose`), qui lâche le dossier. Un serveur qui tombe arrête tous ses agents (ils redémarrent au message suivant, leur session reprise). Repli possible si un serveur commun pose problème : un serveur par agent (0,7 Go chacun).
 
 - `--port 0` prend 4096 s'il est libre, sinon un port au hasard : l'adresse est lue sur sa sortie (`opencode server listening on http://127.0.0.1:<port>`).
 - `OPENCODE_SERVER_PASSWORD` : tiré au hasard (24 octets) pour chaque serveur, en Basic `opencode:<mot de passe>`. Il ne sort jamais d'Escouade (`GET /config` rend la config résolue, jeton du serveur MCP compris).
@@ -660,7 +664,7 @@ Un serveur sert tous les agents d'un même compte (même programme, même enviro
 
 ### Les modes
 
-OpenCode n'a pas de bac à sable : seules ses règles de permission protègent (`rules` d'`engine/opencode/mod.rs`), et le menu le dit.
+OpenCode n'a pas de bac à sable : seules ses règles de permission protègent (`rules.rs` de `dev.escouade.opencode`), et le menu le dit.
 
 | Escouade | Agent | `bash` | `git add *`, `git commit *` | `edit` | `webfetch` | `external_directory` |
 |---|---|---|---|---|---|---|

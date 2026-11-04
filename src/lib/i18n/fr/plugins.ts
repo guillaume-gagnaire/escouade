@@ -228,6 +228,7 @@ export default {
     runNote: 'Pour l’arrêter, désactive le plugin.',
     networkNote: 'déclaré par le plugin : Escouade ne filtre pas encore son réseau',
     networkApplied: 'appliqué par Escouade : il ne joint aucun autre hôte, ni une adresse de ta machine ou de ton réseau local',
+    networkWebhooks: 'appliqué par Escouade : ses webhooks ne partent que vers cet hôte',
     none: 'Il ne demande rien : ses contributions sont lues, rien de lui ne s’exécute.',
     revoked: 'retirée',
   },

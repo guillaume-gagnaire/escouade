@@ -2,7 +2,7 @@
 title: "Publier sur le store, la sécurité des plugins et l'essai réel"
 subject: "store"
 sources: ["docs/STORE.md","website/content/docs/fr/plugins/publishing.md","website/content/docs/fr/plugins/security.md","store/server/utils/checks.ts","store/server/utils/folder.ts","store/shared/folder.ts","store/server/utils/submissions.ts","store/server/utils/builtin.ts","store/tests/unit/trial.test.ts"]
-tickets: ["ESC-237","ESC-313","ESC-314","ESC-323"]
+tickets: ["ESC-237","ESC-313","ESC-314","ESC-323","ESC-184"]
 decisions: [21,25,43]
 compared: "2026-10-31T19:50:09+01:00"
 ---
@@ -44,3 +44,7 @@ Détail : `docs/STORE.md` §3 (§3.6 pour les dossiers et la première main), §
 ## Les plugins en JS/TS : la compilation au store (ESC-323)
 - Une onzième ligne, **« Compilation »**, rejoint les contrôles. Un plugin `run.js` est compilé deux fois en WASM par le store, depuis le bundle de l'archive figée, chaque fois dans un dossier neuf. Deux empreintes différentes refusent la version. Son module entre dans `version.json` (`wasm`), que la signature couvre. Le contrôle des binaires refuse à un tiers un script ou un interpréteur (`node`…). Le détail est dans `plugins/programmes-js-ts-en-wasm`, et le bac à sable dans la décision `la-compilation-des-plugins-run-js-au-sto`.
 - La documentation des auteurs du site (« Publier sur le store ») dit encore « les dix contrôles » : WASM-6 (ESC-325) la met à jour.
+
+## L'essai réel sur store.escouade.dev (ESC-184)
+- Fait le 2026-11-04 sous Windows sur les quatre plugins de première main publiés et signés, avec une app de debug qui vérifie les sceaux contre les vraies clés : `tests/e2e/real-store.spec.ts`, sauté sans `ESCOUADE_E2E_REAL_STORE`. Sceau, permissions, activation, désactivation, désinstallation ; Discord et Slack arrêtés à leur configuration, sans webhook ni jeton réels. Résultats : `docs/PLUGINS.md` §7.
+- Reste à faire à la release : macOS et Linux, la révocation (aucune liste publiée), une mise à jour réelle (aucune version installable plus récente).

@@ -2,8 +2,8 @@
 title: "Le store dans l'app"
 subject: "store"
 sources: ["docs/STORE.md","docs/PLUGINS.md","design/plugins/maquettes-b.html","design/app-redesign/UX-NOTES.md","website/content/docs/fr/plugins/installer.md"]
-tickets: ["ESC-236","ESC-287","ESC-313","ESC-314"]
-decisions: [21,25]
+tickets: ["ESC-236","ESC-287","ESC-313","ESC-314","ESC-184"]
+decisions: [21,25,"la-fenetre-d-installation-dit-ce-qu-esco"]
 compared: "2026-10-31T19:50:53+01:00"
 gaps: [{"text":"La spec dit que le schéma `escouade` est enregistré par les installeurs NSIS et MSI sous Windows. Le code ne produit que l'installeur NSIS (`bundle.targets` vaut [\"nsis\"] et rien ne construit de MSI), donc aucun MSI n'enregistre le schéma.","code":["src-tauri/tauri.conf.json"]},{"text":"La spec dit que le `.deb` et le `.rpm` déclarent `x-scheme-handler/escouade`. Sous Linux, la config ne construit que `appimage` et `deb` (`targets: [\"appimage\", \"deb\"]`). Le gabarit de bureau est prévu pour le rpm, mais aucun `.rpm` n'est produit, donc aucun rpm ne déclare le schéma.","code":["src-tauri/tauri.linux.conf.json"]}]
 ---
@@ -61,3 +61,6 @@ Référence : `docs/STORE.md` §5 et §7 (il fait foi) ; aperçu `#b1` à `#b4` 
 - **Signés seulement** : une version `dev.escouade.*` sans signature du store est refusée à l'installation, « <id> v… est un plugin d'Escouade (`dev.escouade.*`) que le store n'a pas encore signé : il ne s'installe que signé. ». Un dossier copié ou un dépôt cloné qui prend un id `dev.escouade.*` reste refusé (« réservé aux plugins d'Escouade ») ; un dossier chargé « En développement » le prend, pour que l'auteur l'essaie.
 - Un tel plugin ne prend que l'id : jamais les programmes de l'app (`{escouade}/…`), réservés aux plugins qu'elle livre.
 - **Livré avec l'app ou venu du store, l'origine les distingue, jamais l'id** : un plugin livré a l'origine `builtin` (INT-4) et seul il est rangé dans « Livrés avec Escouade » ; un `dev.escouade.*` du store est rangé dans « Ajoutés », avec son sceau et sa ligne « Vient de ».
+
+## Ce que la fenêtre d'installation dit du réseau (ESC-184)
+- Chaque hôte de `permissions.network` porte ce qu'Escouade en fait : appliqué pour un `run.js` (« il ne joint aucun autre hôte, ni une adresse de ta machine ou de ton réseau local ») ; appliqué pour un plugin déclaratif (« ses webhooks ne partent que vers cet hôte ») ; seulement déclaré pour un `run.command` (« Escouade ne filtre pas encore son réseau »).

@@ -122,7 +122,7 @@
       {/if}
       <div class="facts">
         <span class="k">{t('plugins.origin.from')}</span><span class="v" use:tip={{ text: originOf(p.origin), aria: false }}
-          >{originLabel} · {originOf(p.origin)}</span
+          >{originOf(p.origin) === originLabel ? originLabel : `${originLabel} · ${originOf(p.origin)}`}</span
         >
         <span class="k">{t('plugins.origin.version')}</span><span class="v mono">{versionLine}</span>
         <span class="k">{t('plugins.origin.fingerprint')}</span><span class="v mono" use:tip={{ text: p.fingerprint, aria: false }}
