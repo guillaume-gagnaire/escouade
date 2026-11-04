@@ -2,7 +2,7 @@
 title: "Cursor CLI en plugin"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4 (INT-10.1)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-222"]
-tickets: ["ESC-222","ESC-281"]
+tickets: ["ESC-222","ESC-281","ESC-282"]
 decisions: []
 compared: null
 ---
@@ -36,3 +36,7 @@ Coupé pour l'app ou pas chargé, le plugin n'est plus branché derrière Cursor
 ## Depuis INT-10.6
 
 Le branchement de Cursor CLI n'est plus propre à lui : il est une ligne de la table des harness livrés, avec Mistral Vibe (*Mistral Vibe en plugin*). La traduction de `agent/cursor.rs` reste pour Gemini CLI et Antigravity CLI.
+
+## Depuis INT-10.7
+
+Gemini CLI a sa ligne dans la même table (*Gemini CLI en plugin*). La traduction de `agent/cursor.rs` ne reste que pour Antigravity CLI.

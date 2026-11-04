@@ -2,7 +2,7 @@
 title: "Les plugins livrés avec Escouade"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.3, §4.4","docs/TODO-2.2.md (INT-4, INT-8.1)","src-tauri/src/plugins/builtin.rs","docs/PLUGINS.md §4.13","plugins/builtin/dev.escouade.github/README.md","plugins/builtin/dev.escouade.gitlab/README.md","plugins/builtin/dev.escouade.gitea/README.md","plugins/builtin/dev.escouade.azure-devops/README.md"]
-tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327"]
+tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282"]
 decisions: []
 compared: null
 ---
@@ -49,3 +49,5 @@ Certains plugins sont donnés par l'app : livrés avec elle, signés avec elle, 
 - Un plugin d'un autre auteur peut servir un nouveau service de voix ou prendre la place de l'un des cinq (même identifiant de service).
 - Délais : le plugin ajoute moins de 1 ms au texte final du direct (médiane et 99e centile), son poussé au rythme du micro ; détail et protocole `voice/*` dans `docs/PLUGINS.md` §4.13.
 - Le compte Mistral : le plugin « Mistral » (`dev.escouade.mistral`) porte la voix et Mistral Vibe (INT-10.6 bis), un seul process et un seul compte, partagé ; voir *Mistral Vibe en plugin*. Couper ce plugin retire les deux.
+
+- Gemini CLI est un plugin livré, `dev.escouade.gemini-cli` (INT-10.7, voir *Gemini CLI en plugin*), ses comptes inchangés.

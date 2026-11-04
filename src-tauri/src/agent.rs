@@ -303,8 +303,6 @@ pub struct AgentRt {
     vibe: vibe::VibeState,
     /// What the translation of Antigravity CLI keeps between its events (`agent/agy.rs`).
     agy: agy::AgyState,
-    /// What the translation of Gemini CLI keeps between its updates (`agent/gemini.rs`).
-    gemini: gemini::GeminiState,
     /// What the hooks of its Gemini interface keep between them (`agent/gemini_tui.rs`).
     gemini_tui: gemini_tui::GeminiTuiState,
 }
@@ -582,7 +580,6 @@ impl AgentRt {
             opencode: opencode::OpencodeState::default(),
             vibe: vibe::VibeState::default(),
             agy: agy::AgyState::default(),
-            gemini: gemini::GeminiState::default(),
             gemini_tui: gemini_tui::GeminiTuiState::default(),
         }
     }
@@ -689,7 +686,6 @@ impl AgentRt {
         self.opencode = opencode::OpencodeState::default();
         self.vibe = vibe::VibeState::default();
         self.agy = agy::AgyState::default();
-        self.gemini = gemini::GeminiState::default();
         // What ran in the process before is gone with it.
         self.interrupt_plan();
     }

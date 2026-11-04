@@ -49,6 +49,7 @@ fn plugged_by(harness: EngineId) -> Option<&'static str> {
     match harness {
         EngineId::CURSOR => Some(crate::plugins::builtin::CURSOR),
         EngineId::VIBE => Some(crate::plugins::builtin::MISTRAL),
+        EngineId::GEMINI => Some(crate::plugins::builtin::GEMINI),
         _ => None,
     }
 }
@@ -405,7 +406,12 @@ impl Bench {
                 let at = Instant::now();
                 let f: Value = serde_json::from_str(line)
                     .unwrap_or_else(|e| panic!("line {} is no JSON: {e}", n + 1));
-                let mut msg = f["msg"].clone();
+                // Gemini's lines are the message itself, with its `dir`.
+                let mut msg = if f["msg"].is_null() {
+                    f.clone()
+                } else {
+                    f["msg"].clone()
+                };
                 let writes = match f["dir"].as_str() {
                     Some("s2c" | "in") => {
                         if msg["method"].is_null() && !msg["id"].is_null() {
@@ -511,8 +517,8 @@ impl Bench {
                                         "agent/answerPermission",
                                         json!({
                                             "agent": key, "request": request,
-                                            "allow": option.starts_with("allow"),
-                                            "always": option.starts_with("allow-always") || option.starts_with("allow_always"),
+                                            "allow": option.starts_with("allow") || option.starts_with("proceed"),
+                                            "always": option.starts_with("allow-always") || option.starts_with("allow_always") || option.starts_with("proceed_always"),
                                         }),
                                     )
                                 }

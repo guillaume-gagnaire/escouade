@@ -190,11 +190,24 @@ pub fn sync(rt: &Arc<Runtime>, plugins: &super::Plugins) -> Vec<EngineId> {
     sync_described(rt, acp_on, &described, plugins.app_dir())
 }
 
-/// What the core writes in the agent's own folder before its harness is launched, from that folder (`home`, the
-/// variable of `HarnessDecl::account_var`), the agent's folder and the fence as its program spells it: Mistral Vibe's
-/// trust of the folder and the refusals of a private project in its `config.toml`, which the rules its « Toujours »
-/// wrote there keep beside them.
-pub type Prepare = fn(home: Option<&Path>, cwd: &str, fence: &[String]) -> Result<()>;
+/// What the core knows of a launch when it prepares it (`Prepare`).
+pub struct Preparing<'a> {
+    /// The agent's own folder (the variable of `HarnessDecl::account_var`), when it has one.
+    pub home: Option<&'a Path>,
+    /// The agent's folder.
+    pub cwd: &'a str,
+    /// The fence, as its program spells it.
+    pub fence: &'a [String],
+    /// A discussion, which changes nothing.
+    pub read_only: bool,
+    /// The variables its process is given by the core (its account's).
+    pub env: &'a [(String, String)],
+}
+
+/// What the core writes in the agent's own folder before its harness is launched, and the arguments that adds to the
+/// launch: Mistral Vibe's trust of the folder and the refusals of a private project in its `config.toml`, which the
+/// rules its « Toujours » wrote there keep beside them; Gemini CLI's settings and its rules, given by `--policy`.
+pub type Prepare = fn(&Preparing) -> Result<Vec<String>>;
 
 /// A harness of a plugin the app gives (INT-10), behind the core's engine of the same id: the engine keeps its place
 /// in the registry (its accounts, its models, its texts, its terminal view), its agents' conversation goes through the
@@ -221,6 +234,12 @@ pub const BUILTIN_HARNESSES: &[BuiltinHarness] = &[
         plugin: super::builtin::MISTRAL,
         native: None,
         prepare: Some(crate::engine::vibe::prepare),
+    },
+    // Gemini CLI (INT-10.7): its settings and its rules in its `GEMINI_CLI_HOME`, `--policy` added to its launch.
+    BuiltinHarness {
+        plugin: super::builtin::GEMINI,
+        native: None,
+        prepare: Some(crate::engine::gemini::prepare),
     },
 ];
 
@@ -1110,9 +1129,16 @@ impl ProcessEngineProcess {
             &launch,
         )
         .map_err(|e| anyhow!(e))?;
-        if let Some(prepare) = self.prepare {
-            prepare(home.as_deref().map(Path::new), &spawn.cwd, &fence)?;
-        }
+        let added = match self.prepare {
+            Some(prepare) => prepare(&Preparing {
+                home: home.as_deref().map(Path::new),
+                cwd: &spawn.cwd,
+                fence: &fence,
+                read_only: spawn.read_only,
+                env: &spawn.env,
+            })?,
+            None => Vec::new(),
+        };
         for f in &launch.files {
             let path = Path::new(&f.path);
             if let Some(dir) = path.parent() {
@@ -1129,12 +1155,13 @@ impl ProcessEngineProcess {
             spawn.account
         );
         let env = merged(&spawn.env, &launch.env);
+        let told = launch.args.iter().chain(&added).cloned();
         let (program, args) = match self.native.and_then(|n| n(&spawn.program)) {
             Some((program, mut first)) => {
-                first.extend(launch.args.iter().cloned());
+                first.extend(told);
                 (Program::Native(program), first)
             }
-            None => (spawn.program.clone(), launch.args.clone()),
+            None => (spawn.program.clone(), told.collect()),
         };
         let mut cmd = command_of(&program, &spawn.cwd, &args, &env, &launch.remove_env)?;
         let child = cmd.spawn().with_context(|| {

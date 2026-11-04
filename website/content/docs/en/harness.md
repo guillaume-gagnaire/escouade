@@ -234,6 +234,8 @@ Antigravity gives each turn’s tokens (on its card, in the statistics), not the
 
 ## Gemini CLI
 
+Gemini CLI is a plugin shipped with Escouade (`dev.escouade.gemini-cli`): its agents talk through a program of its own that Escouade starts and watches. It shows in the Plugins view, under “Shipped with Escouade”; turned off, a Gemini agent says at its start that it needs turning back on, and keeps its session.
+
 > [!WARNING]
 > Gemini CLI hasn’t been tried with a real account yet: its adapter follows its documentation and what its program does against a fake server. What is left to see for real: the size of its live answers, its questions, its quotas and their messages, its Google sign-in given to each agent, its terminal view and its hooks.
 

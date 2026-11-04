@@ -8,11 +8,12 @@
 //! `dev.escouade.acp` (`escouade-plugins acp`) runs one for each agent of a harness a manifest describes
 //! (`contributes.harnesses[].acp`).
 //!
-//! The helpers at the top are those the core's ACP harnesses share (Cursor CLI, Mistral Vibe, Gemini CLI), until they
-//! come out in process on this client (INT-10.1, 10.6, 10.7).
+//! The helpers at the top are those of the ACP harnesses, and of Antigravity CLI in the core until it comes out (INT-10.8).
 
 pub mod agent;
 pub mod cursor;
+pub mod gemini;
+pub mod limits;
 pub mod paths;
 pub mod questions;
 mod texts;

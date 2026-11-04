@@ -2,7 +2,7 @@
 title: "Les harness ACP décrits"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §1.1, §4.4, §4.12","docs/TODO-2.2.md, PLG-6","Essai réel de Goose 1.57.0 sur Ollama, 2026-11-01 (ESC-178)"]
-tickets: ["ESC-178","ESC-222","ESC-281"]
+tickets: ["ESC-178","ESC-222","ESC-281","ESC-282"]
 decisions: []
 compared: null
 ---
@@ -47,3 +47,8 @@ Le plugin `dev.escouade.goose` (`plugins/goose/`) décrit Goose : `goose acp`, m
 - Mistral Vibe est sorti du cœur à son tour (*Mistral Vibe en plugin*) : l'extension `vibe` du client (`crates/escouade-acp`, `vibe.rs`) tient ses outils, ses formulaires (`elicitation/create`), son mode Plan joué par Escouade, son refus qui coupe le tour, sa copie par `session/fork`, sa réflexion et son coût. Seul Gemini CLI, dans le cœur, appelle encore les aides partagées.
 - Le contrat gagne l'élément `session` : la session ouverte avant tout tour, sans passer l'agent « en cours ».
 - Dans un flux enregistré rejoué, les règles d'Escouade n'accordent aucune permission à la place de l'essai.
+
+## Ajouts d'INT-10.7 (ESC-282)
+
+- Gemini CLI est sorti du cœur à son tour (*Gemini CLI en plugin*) : l'extension `gemini` du client (`crates/escouade-acp`, `gemini.rs`) tient ses appels sans `rawInput`, son mode dit par un texte, son plan lu dans un fichier, son tour tenu pour une question, ses jetons et sa limite d'usage.
+- Pour tout harness `questionsInText` : un bloc qui n'est pas une question est montré tel qu'il a été écrit, et l'arrêt d'un tour tenu par une question le finit.

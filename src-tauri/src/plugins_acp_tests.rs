@@ -315,7 +315,8 @@ pub(crate) fn replayed_through_the_client(
     let mut asked: std::collections::HashMap<String, String> = Default::default();
     let mut forms: std::collections::HashMap<String, Value> = Default::default();
     for f in lines {
-        let msg = &f["msg"];
+        // Gemini's are the message itself, with its `dir`.
+        let msg = if f["msg"].is_null() { f } else { &f["msg"] };
         let mut fx = Effects::default();
         let harness = matches!(f["dir"].as_str(), Some("s2c" | "in"));
         let client_said = matches!(f["dir"].as_str(), Some("c2s" | "out"));
@@ -347,10 +348,14 @@ pub(crate) fn replayed_through_the_client(
         } else if client_said && msg["method"].is_null() && msg["result"]["outcome"].is_object() {
             if let Some(rid) = asked.get(&msg["id"].to_string()) {
                 let decision = match msg["result"]["outcome"]["optionId"].as_str() {
-                    Some(o) if o.starts_with("allow-always") || o.starts_with("allow_always") => {
+                    Some(o)
+                        if o.starts_with("allow-always")
+                            || o.starts_with("allow_always")
+                            || o.starts_with("proceed_always") =>
+                    {
                         "always"
                     }
-                    Some(o) if o.starts_with("allow") => "allow",
+                    Some(o) if o.starts_with("allow") || o.starts_with("proceed") => "allow",
                     _ => "deny",
                 };
                 rt.recorded_answer(rid, decision, &mut fx);
@@ -434,6 +439,15 @@ fn check_replays_through_the_client(harness: &str, decl: &Value, cases: &[&str])
             Value::Array(made.clone())
         );
         for (n, (want, got)) in expected.iter().zip(&made).enumerate() {
+            // The id of a request: its client's own name for it, not the conversation's (`recorded-<id>` in the core).
+            let mut want = want.clone();
+            if want["toolUseId"]
+                .as_str()
+                .is_some_and(|i| i.starts_with("recorded-"))
+            {
+                want.as_object_mut().unwrap().remove("toolUseId");
+            }
+            let want = &want;
             if let Err(at) = crate::engine::bench::replay::within(want, got, "") {
                 panic!("{case}: item {n}, at {at}\nexpected: {want:#}\nmade: {got:#}");
             }
@@ -478,6 +492,35 @@ fn the_recorded_streams_of_vibe_make_through_its_plugin_s_client_the_items_of_th
             "load-fork-reject",
             "cancel-config-options",
             "error-invalid-key",
+        ],
+    );
+}
+
+/// Gemini CLI as the manifest of its plugin declares it (INT-10.7): an ACP harness with its extension `gemini`.
+pub(crate) fn gemini_decl() -> Value {
+    let v: Value = serde_json::from_str(escouade_plugin_gemini::MANIFEST).unwrap();
+    v["contributes"]["harnesses"][0].clone()
+}
+
+/// The streams of the study of Gemini CLI 0.66.0 (tests/fixtures/gemini/), what Gemini said read by the client of its
+/// plugin with its extension `gemini` (INT-10.7): the conversation is the one the core's own translation made
+/// (tests/fixtures/replays/gemini/), its tokens included, and the agent after it.
+#[test]
+fn the_recorded_streams_of_gemini_make_through_its_plugin_s_client_the_items_of_the_core() {
+    check_replays_through_the_client(
+        "gemini",
+        &gemini_decl(),
+        &[
+            "load-replay",
+            "mcp-tool",
+            "permission-shell",
+            "permission-write",
+            "plan-exit-approval",
+            "policy-fence-deny",
+            "rate-limit",
+            "simple-turn",
+            "subagent-yolo",
+            "thoughts",
         ],
     );
 }

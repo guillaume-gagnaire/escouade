@@ -521,10 +521,11 @@ pub fn plugged() -> Option<&'static crate::plugins::harness::ProcessEngine> {
 /// user's: the trust of its folder, its view's hooks taken out (they are its interface's alone), and the refusals of
 /// its fence (`fence`, as Vibe names the paths) for its file tools. A fence that cannot be written keeps the agent from
 /// starting.
-pub(crate) fn prepare(home: Option<&std::path::Path>, cwd: &str, fence: &[String]) -> Result<()> {
-    let Some(home) = home else {
+pub(crate) fn prepare(p: &crate::plugins::harness::Preparing) -> Result<Vec<String>> {
+    let (cwd, fence) = (p.cwd, p.fence);
+    let Some(home) = p.home else {
         if fence.is_empty() {
-            return Ok(());
+            return Ok(Vec::new());
         }
         bail!(tr!(
             "Mistral Vibe n’a pas de dossier de configuration où refuser les chemins des projets privés : l’agent ne démarre pas.",
@@ -540,7 +541,8 @@ pub(crate) fn prepare(home: Option<&std::path::Path>, cwd: &str, fence: &[String
             "Les chemins des projets privés n’ont pas pu être refusés à Mistral Vibe ({e}) : l’agent ne démarre pas.",
             "The private projects’ paths couldn’t be refused to Mistral Vibe ({e}): the agent doesn’t start."
         ))
-    })
+    })?;
+    Ok(Vec::new())
 }
 
 /// A message to Vibe: its text, the images joined to it (ACP's `image` blocks), the text files

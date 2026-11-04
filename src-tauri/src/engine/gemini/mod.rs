@@ -1,6 +1,7 @@
-//! Gemini CLI, the eighth harness: a `gemini --acp` process per agent, driven over ACP v1 by a
-//! client of Escouade's own (`process`), its updates translated by `AgentRt::gemini_frame`
-//! (`agent/gemini.rs`), which hands most of them to Cursor's translation (both speak ACP).
+//! Gemini CLI, the eighth harness. Since INT-10.7 its conversation goes through its plugin (`dev.escouade.gemini-cli`,
+//! `plugins::harness::BUILTIN_HARNESSES`): the client of `crates/escouade-acp` with its extension `gemini` speaks ACP v1 to
+//! a `gemini --acp` per agent, whose launch the core checks and starts. Here stay its capabilities, its accounts, its
+//! models, its texts (`gemini -p`), its terminal view, and what the core writes in the agent's home (`prepare`).
 //!
 //! What it does as Escouade drives it comes from the study of Gemini CLI 0.66.0 without an account
 //! (ESC-273, docs/TODO-1.8.md, point 0, « Gemini CLI »): its documentation, its installed code, and
@@ -27,20 +28,17 @@
 #[cfg(test)]
 pub(crate) mod bench;
 mod locate;
-mod process;
 pub(crate) mod terminal;
 #[cfg(test)]
 mod tests;
-
-use process::GeminiProcess;
 
 use super::registry::{
     CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested,
     ToldModel,
 };
 use super::{
-    mcp, BoxFuture, Engine, EngineProcess, Escouade, Message, OneShot, Process, Program, Room,
-    Spawn, StartLost, Weight,
+    mcp, BoxFuture, Engine, Escouade, Message, OneShot, Process, Program, Room, Spawn, StartLost,
+    Weight,
 };
 use crate::agent::{AgentRt, Effects};
 use crate::core::{size_label, Attachment, MAX_IMAGE, MAX_TOTAL};
@@ -124,48 +122,10 @@ pub(crate) fn machine_has_key() -> bool {
 /// Where its usage and its quotas are told: Gemini tells them in its interface alone (`/stats`).
 pub(crate) const USAGE_PAGE: &str = "https://aistudio.google.com/usage";
 
-/// How long after a limit by the minute (a 429, its model's capacity) its agent goes on, when
-/// Gemini tells no wait.
-pub(crate) const RATE_RESUME_MS: i64 = 60_000;
-
-/// How long after its daily quota was met its agent tries again: Gemini tells no reset (its quotas
-/// are by the day), and a turn tried for nothing costs none.
-pub(crate) const DAILY_RESUME_MS: i64 = 3_600_000;
-
-/// The usage limit an error of Gemini tells (its words read in its code, 0.66.0: a 429, « You have
-/// exhausted your daily quota on this model. », « Please retry in 30.5s », its model's capacity):
-/// in how many ms to try again, the wait it tells else a minute (an hour for its daily quota). None
-/// for another error.
-pub(crate) fn limit_of(code: Option<i64>, error: &str) -> Option<i64> {
-    let lower = error.to_lowercase();
-    let daily = lower.contains("daily quota") || lower.contains("perday");
-    let limited = daily
-        || code == Some(429)
-        || lower.contains("usage limit")
-        || crate::engine::agy::limit_of(error).is_some();
-    if !limited {
-        return None;
-    }
-    let told = lower.split_once("retry in ").and_then(|(_, rest)| {
-        let digits: String = rest
-            .chars()
-            .take_while(|c| c.is_ascii_digit() || *c == '.')
-            .collect();
-        let n: f64 = digits.parse().ok()?;
-        let unit = rest[digits.len()..].trim_start();
-        let ms = if unit.starts_with("ms") {
-            n
-        } else {
-            n * 1000.0
-        };
-        (ms > 0.0).then_some(ms.ceil() as i64)
-    });
-    Some(told.unwrap_or(if daily {
-        DAILY_RESUME_MS
-    } else {
-        RATE_RESUME_MS
-    }))
-}
+#[cfg(test)]
+use escouade_acp::gemini::{
+    escouade_mode, is_plan_exit, limit_of, mode_update, plan_file, DAILY_RESUME_MS, RATE_RESUME_MS,
+};
 
 /// Its default model: its router, which picks Pro or Flash at each turn.
 pub(crate) const DEFAULT: &str = "auto";
@@ -173,26 +133,8 @@ pub(crate) const DEFAULT: &str = "auto";
 /// The models of its menu until a process of the account has listed them.
 const MODELS: [(&str, &str); 1] = [(DEFAULT, "Auto")];
 
-/// What the first message tells the model of its questions: Gemini has no tool to ask in ACP.
-pub(crate) const QUESTIONS: &str = escouade_acp::questions::QUESTIONS;
-
-/// The tags of a question's block.
-pub(crate) const QUESTION_OPEN: &str = escouade_acp::questions::OPEN;
-
-/// How Gemini says it changed its mode: a text of its own (« [MODE_UPDATE] default »).
-pub(crate) const MODE_UPDATE: &str = "[MODE_UPDATE] ";
-
-/// How the permission of its `exit_plan_mode` names the plan to approve.
-pub(crate) const PLAN_APPROVAL: &str = "Requesting plan approval for: ";
-
-/// The model, effort and mode in force.
-#[derive(Debug, Clone, Default)]
-pub(crate) struct Settings {
-    pub model: String,
-    pub mode: String,
-}
-
 /// The mode of Gemini for Escouade's `mode`.
+#[cfg(test)]
 pub(crate) fn gemini_mode(mode: &str) -> &'static str {
     match mode {
         "plan" => "plan",
@@ -200,36 +142,6 @@ pub(crate) fn gemini_mode(mode: &str) -> &'static str {
         "bypassPermissions" => "yolo",
         _ => "default",
     }
-}
-
-/// Escouade's mode for Gemini's `mode`; None for one it does not know.
-pub(crate) fn escouade_mode(mode: &str) -> Option<&'static str> {
-    match mode {
-        "plan" => Some("plan"),
-        "autoEdit" => Some("acceptEdits"),
-        "yolo" => Some("bypassPermissions"),
-        "default" => Some("default"),
-        _ => None,
-    }
-}
-
-/// Escouade's mode of a text of Gemini that tells its change of mode (« [MODE_UPDATE] plan »);
-/// None for any other text.
-pub(crate) fn mode_update(text: &str) -> Option<&'static str> {
-    escouade_mode(text.strip_prefix(MODE_UPDATE)?.trim())
-}
-
-/// Whether a call (its `toolCallId`) is Gemini's `exit_plan_mode`: the plan to approve.
-pub(crate) fn is_plan_exit(call: &str) -> bool {
-    call.starts_with("exit_plan_mode")
-}
-
-/// The file of the plan its `exit_plan_mode` asks to approve, from the call's title.
-pub(crate) fn plan_file(title: &str) -> Option<&str> {
-    title
-        .strip_prefix(PLAN_APPROVAL)
-        .map(str::trim)
-        .filter(|p| !p.is_empty())
 }
 
 /// The modes Escouade gives Gemini, in the menu's order.
@@ -358,75 +270,13 @@ pub(crate) fn catalog(told: &[ToldModel]) -> Vec<ToldModel> {
 /// runs by itself, its permissions still asked).
 pub(crate) fn hello() -> Value {
     json!({
-        "protocolVersion": process::PROTOCOL,
+        "protocolVersion": escouade_acp::PROTOCOL,
         "clientCapabilities": {
             "fs": { "readTextFile": false, "writeTextFile": false },
             "terminal": false,
         },
         "clientInfo": { "name": "escouade", "version": env!("CARGO_PKG_VERSION") },
     })
-}
-
-/// What keeps back the text of a turn from where a question's block starts (`QUESTION_OPEN`): the
-/// text before it goes on to the thread, the block is kept for the card. A piece that may be the
-/// start of the tag waits for the next one.
-#[derive(Debug, Default)]
-pub(crate) struct QuestionFilter {
-    held: String,
-    block: Option<String>,
-}
-
-impl QuestionFilter {
-    /// What of `text` goes on to the thread now.
-    pub(crate) fn push(&mut self, text: &str) -> String {
-        if let Some(block) = &mut self.block {
-            block.push_str(text);
-            return String::new();
-        }
-        self.held.push_str(text);
-        if let Some(at) = self.held.find(QUESTION_OPEN) {
-            let out = self.held[..at].to_string();
-            self.block = Some(self.held[at..].to_string());
-            self.held.clear();
-            return out;
-        }
-        // The end that could start the tag is held back.
-        let keep = (1..QUESTION_OPEN.len())
-            .rev()
-            .find(|&n| {
-                self.held.len() >= n
-                    && self.held.is_char_boundary(self.held.len() - n)
-                    && QUESTION_OPEN.starts_with(&self.held[self.held.len() - n..])
-            })
-            .unwrap_or(0);
-        let cut = self.held.len() - keep;
-        let out = self.held[..cut].to_string();
-        self.held.drain(..cut);
-        out
-    }
-
-    /// The end of the turn: what was held back that started no block.
-    pub(crate) fn flush(&mut self) -> String {
-        std::mem::take(&mut self.held)
-    }
-
-    /// The block of a question the turn ended on, its tags included; None without one.
-    pub(crate) fn take_block(&mut self) -> Option<String> {
-        self.block.take()
-    }
-}
-
-/// The questions of a block (`<escouade_question>{"questions": […]}</escouade_question>`) as
-/// Cursor's `cursor/ask_question` gives them, under the call `call`; None for a block that is not
-/// questions.
-pub(crate) fn question_params(call: &str, block: &str) -> Option<Value> {
-    escouade_acp::questions::question_params(call, block)
-}
-
-/// The message that gives the model the user's answers to the questions `params` (a card's
-/// `answers`, by question).
-pub(crate) fn answers_message(params: &Value, answers: &Value) -> String {
-    escouade_acp::questions::answers_message(params, answers)
 }
 
 /// The tools of Gemini that read, search or write files: those the rules of a private project
@@ -542,6 +392,46 @@ pub(crate) fn write_policy(home: &Path, rules: Option<&str>) -> std::io::Result<
     }
 }
 
+/// The harness of the plugin Gemini CLI (`dev.escouade.gemini-cli`, INT-10.7), if it is on: the conversation of Gemini's
+/// agents goes through it (`plugins::harness::BUILTIN_HARNESSES`).
+#[cfg(test)]
+pub fn plugged() -> Option<&'static crate::plugins::harness::ProcessEngine> {
+    crate::plugins::harness::plugged(crate::plugins::builtin::GEMINI)
+}
+
+/// What the core writes in the agent's own `GEMINI_CLI_HOME` before its launch (`plugins::harness::Prepare`), never in
+/// the user's: its settings, how it signs in, and the rules of a private project or a discussion, given by `--policy`.
+/// Rules that cannot be written keep the agent from starting.
+pub(crate) fn prepare(p: &crate::plugins::harness::Preparing) -> Result<Vec<String>> {
+    let rules = policy(p.fence, p.read_only);
+    let Some(home) = p.home else {
+        if rules.is_none() {
+            return Ok(Vec::new());
+        }
+        bail!(tr!(
+            "Gemini CLI n’a pas de dossier de configuration où écrire les règles de l’agent : l’agent ne démarre pas.",
+            "Gemini CLI has no configuration folder where to write the agent’s rules: the agent doesn’t start."
+        ));
+    };
+    // Its account's sign-in, not the one it refreshed here before (ESC-275).
+    forget_sign_in(home);
+    if let Err(e) = write_settings(home, auth_type(p.env)) {
+        log::warn!(
+            "gemini: the settings of {} not written: {e}",
+            home.display()
+        );
+    }
+    let file = write_policy(home, rules.as_deref()).map_err(|e| {
+        anyhow!(tr!(
+            "Les règles de l’agent n’ont pas pu être écrites pour Gemini CLI ({e}) : l’agent ne démarre pas.",
+            "The agent’s rules couldn’t be written for Gemini CLI ({e}): the agent doesn’t start."
+        ))
+    })?;
+    Ok(file
+        .map(|file| vec!["--policy".to_string(), file.to_string_lossy().into_owned()])
+        .unwrap_or_default())
+}
+
 /// How Gemini signs in, from the variables of its process (`env`, then the app's): its API key or
 /// Vertex AI when they are given, else the Google account of the machine (its keychain).
 pub(crate) fn auth_type(env: &[(String, String)]) -> &'static str {
@@ -608,25 +498,6 @@ pub(crate) fn write_settings(home: &Path, auth: &str) -> Result<()> {
 /// are left out without a word, tried).
 pub(crate) const TRUST: (&str, &str) = ("GEMINI_CLI_TRUST_WORKSPACE", "true");
 
-/// Refused: the ACP of the process is not the one Escouade speaks.
-fn protocol_refused(lang: Lang, version: &Value) -> String {
-    tr_in!(
-        lang,
-        "Gemini CLI parle ACP {version}, Escouade ACP {ours} : mets Gemini CLI à jour (npm install -g @google/gemini-cli).",
-        "Gemini CLI speaks ACP {version}, Escouade ACP {ours}: update Gemini CLI (npm install -g @google/gemini-cli).",
-        ours = process::PROTOCOL
-    )
-}
-
-/// No session opened for the agent: what Gemini said (no account, say).
-fn session_refused(lang: Lang, e: &anyhow::Error) -> String {
-    tr_in!(
-        lang,
-        "Gemini CLI n’a pas ouvert la session de l’agent : {e:#}. S’il n’est pas connecté, lance gemini dans un terminal pour te connecter à ton compte Google, ou donne-lui une clé d’API par GEMINI_API_KEY.",
-        "Gemini CLI didn’t open the agent’s session: {e:#}. If it isn’t signed in, run gemini in a terminal to sign in to your Google account, or give it an API key by GEMINI_API_KEY."
-    )
-}
-
 /// A message to Gemini: its text, the images joined to it (ACP's `image` blocks), the text files
 /// joined to it as text. A PDF is refused.
 fn message(text: &str, attachments: &[Attachment]) -> Result<Value> {
@@ -686,70 +557,98 @@ fn throwaway_home(env: &mut Vec<(String, String)>) -> Result<PathBuf> {
     Ok(home)
 }
 
-/// A process of its own in a throwaway home, started for a question of the app's (its models, a
-/// text), its frames sent to `frames`; the home to remove once done.
-fn throwaway_process(
-    program: Program,
-    env: Vec<(String, String)>,
-    cwd: &Path,
-    mode: &str,
-    read_only: bool,
-    frames: tokio::sync::mpsc::UnboundedSender<Value>,
-) -> Result<(std::sync::Arc<GeminiProcess>, PathBuf)> {
-    let mut env = env;
-    let home = throwaway_home(&mut env)?;
-    let mut args = vec!["--acp".to_string()];
-    if let Some(file) = write_policy(&home, policy(&[], read_only).as_deref())? {
-        args.extend(["--policy".to_string(), file.to_string_lossy().into_owned()]);
-    }
-    let opts = process::Opts {
-        program,
-        args,
-        cwd: cwd.to_string_lossy().into_owned(),
-        env,
-        start: super::Start::New,
-        settings: Settings {
-            model: String::new(),
-            mode: mode.to_string(),
-        },
-        instructions: None,
-        escouade: None,
-        fence: Vec::new(),
-    };
-    let p = GeminiProcess::spawn(
-        opts,
-        Box::new(move |f| {
-            let _ = frames.send(f);
-        }),
-        Box::new(|_, _| {}),
-    )?;
-    Ok((p, home))
+/// A line of its ACP.
+fn acp_line(id: u64, method: &str, params: Value) -> Vec<u8> {
+    let msg = json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params });
+    let mut out = msg.to_string().into_bytes();
+    out.push(b'\n');
+    out
 }
 
-/// The models of an account none of whose agents runs: a `gemini --acp` of its own, asked
-/// `initialize` then `session/new` (its `models`). Killed once it answered.
+/// The result of the request `id` among the lines of `read`, what else it says left aside.
+async fn acp_answer<R: tokio::io::AsyncBufRead + Unpin>(
+    read: &mut tokio::io::Lines<R>,
+    id: u64,
+) -> Result<Value> {
+    while let Some(line) = read.next_line().await? {
+        let Ok(msg) = serde_json::from_str::<Value>(line.trim()) else {
+            continue;
+        };
+        if msg["id"].as_u64() != Some(id) || msg.get("method").is_some() {
+            continue;
+        }
+        if let Some(e) = msg.get("error").filter(|e| !e.is_null()) {
+            bail!("{}", e["message"].as_str().unwrap_or("error"));
+        }
+        return Ok(msg["result"].clone());
+    }
+    bail!("gemini --acp left before it answered")
+}
+
+/// `models` of its `session/new`: a `gemini --acp` of its own, in its throwaway `home`, asked `initialize` then
+/// `session/new`, its writes and commands refused. Killed once it answered.
+async fn session_models(
+    program: &Program,
+    env: &[(String, String)],
+    cwd: &Path,
+    home: &Path,
+) -> Result<Value> {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+    let dir = cwd.to_string_lossy().into_owned();
+    let mut args = vec!["--acp".to_string()];
+    if let Some(file) = write_policy(home, policy(&[], true).as_deref())? {
+        args.extend(["--policy".to_string(), file.to_string_lossy().into_owned()]);
+    }
+    let launch = program.launch(&dir, &args, env)?;
+    let mut cmd = tokio::process::Command::new(&launch.program);
+    cmd.args(&launch.args)
+        .current_dir(&dir)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .kill_on_drop(true);
+    for (k, v) in &launch.env {
+        cmd.env(k, v);
+    }
+    #[cfg(windows)]
+    cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
+    crate::job::isolate(&mut cmd);
+    crate::proc::no_inherited_fds(&mut cmd);
+    let mut child = cmd.spawn()?;
+    let job = crate::job::Job::for_child(&child);
+    let mut stdin = child.stdin.take().ok_or_else(|| anyhow!("stdin"))?;
+    let stdout = child.stdout.take().ok_or_else(|| anyhow!("stdout"))?;
+    let mut lines = tokio::io::BufReader::new(stdout).lines();
+    let asked = async {
+        stdin.write_all(&acp_line(1, "initialize", hello())).await?;
+        stdin.flush().await?;
+        acp_answer(&mut lines, 1).await?;
+        let params = json!({ "cwd": dir, "mcpServers": [] });
+        stdin.write_all(&acp_line(2, "session/new", params)).await?;
+        stdin.flush().await?;
+        acp_answer(&mut lines, 2).await
+    };
+    let got = tokio::time::timeout(std::time::Duration::from_secs(60), asked)
+        .await
+        .map_err(|_| anyhow!("gemini --acp: no answer in time"))?;
+    if let Some(job) = &job {
+        job.terminate();
+    }
+    let _ = child.kill().await;
+    Ok(got?["models"].clone())
+}
+
+/// The models of an account none of whose agents runs.
 async fn read_models(
     program: Program,
     env: Vec<(String, String)>,
     cwd: &Path,
 ) -> Result<Vec<ToldModel>> {
-    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-    let (p, home) = throwaway_process(program, env, cwd, "default", true, tx)?;
-    let limit = std::time::Duration::from_secs(60);
-    let asked = async {
-        p.request("initialize", hello(), limit).await?;
-        p.request(
-            "session/new",
-            json!({ "cwd": cwd.to_string_lossy(), "mcpServers": [] }),
-            limit,
-        )
-        .await
-    };
-    let got = asked.await;
-    p.kill();
-    p.wait_gone(std::time::Duration::from_secs(5)).await;
+    let mut env = env;
+    let home = throwaway_home(&mut env)?;
+    let got = session_models(&program, &env, cwd, &home).await;
     let _ = std::fs::remove_dir_all(&home);
-    Ok(models_of(&got?["models"]))
+    Ok(models_of(&got?))
 }
 
 /// The model of a text of `weight`: its smallest Flash for a short text, its Flash for one written
@@ -1094,81 +993,29 @@ impl Engine for Gemini {
         on_frame: super::OnFrame,
         on_exit: super::OnExit,
     ) -> Result<Process> {
-        let escouade = match &spawn.escouade {
-            Escouade::Granted { url, token, .. } => Some((url.clone(), token.clone())),
-            Escouade::Denied { .. } => None,
-        };
-        log::info!(
-            "{}: starting {} in {} (account {})",
-            spawn.label,
-            spawn.program.describe(),
-            spawn.cwd,
-            spawn.account
-        );
-        let fence = crate::fence::spelled(&spawn.fence, &spawn.program);
-        let rules = policy(&fence, spawn.read_only);
-        let mut args = vec!["--acp".to_string()];
-        // Its settings and rules in its own home, never the user's. Rules that cannot be written
-        // keep the agent from starting.
-        match spawn.env.iter().find(|(k, _)| k == HOME_VAR) {
-            Some((_, home)) => {
-                let home = Path::new(home);
-                // Its account's sign-in, not the one it refreshed here before (ESC-275).
-                forget_sign_in(home);
-                if let Err(e) = write_settings(home, auth_type(&spawn.env)) {
-                    log::warn!("gemini: the settings of {} not written: {e}", home.display());
-                }
-                let file = write_policy(home, rules.as_deref()).map_err(|e| {
-                    anyhow!(tr!(
-                        "Les règles de l’agent n’ont pas pu être écrites pour Gemini CLI ({e}) : l’agent ne démarre pas.",
-                        "The agent’s rules couldn’t be written for Gemini CLI ({e}): the agent doesn’t start."
-                    ))
-                })?;
-                if let Some(file) = file {
-                    args.extend(["--policy".to_string(), file.to_string_lossy().into_owned()]);
-                }
-            }
-            None if rules.is_some() => bail!(tr!(
-                "Gemini CLI n’a pas de dossier de configuration où écrire les règles de l’agent : l’agent ne démarre pas.",
-                "Gemini CLI has no configuration folder where to write the agent’s rules: the agent doesn’t start."
-            )),
-            None => {}
-        }
-        let mut env = spawn.env;
-        env.push((TRUST.0.into(), TRUST.1.into()));
-        let mut instructions = spawn.append_prompt.unwrap_or_default();
-        if !instructions.trim().is_empty() {
-            instructions = escouade_acp::preamble(&instructions);
-            instructions.push_str("\n\n");
-        }
-        instructions.push_str(QUESTIONS);
-        let opts = process::Opts {
-            program: spawn.program,
-            args,
-            cwd: spawn.cwd,
-            env,
-            start: spawn.start,
-            settings: Settings {
-                model: spawn.model,
-                mode: spawn.mode,
-            },
-            instructions: Some(instructions),
-            escouade,
-            fence,
-        };
-        let p: Process = GeminiProcess::spawn(opts, on_frame, on_exit)?;
-        Ok(p)
+        // Its conversation goes through its plugin (INT-10.7): the launch it describes, checked and started by the core
+        // after `prepare`, what Gemini writes translated there.
+        crate::plugins::harness::spawn_plugged(
+            crate::plugins::builtin::GEMINI,
+            self.name(),
+            spawn,
+            on_frame,
+            on_exit,
+        )
     }
 
     fn message(&self, text: &str, attachments: &[Attachment]) -> Result<Message> {
         message(text, attachments).map(Message)
     }
 
+    /// The items its plugin made of what Gemini wrote (`agent/items`).
     fn translate(&self, rt: &mut AgentRt, frame: &Value, fx: &mut Effects) {
-        rt.gemini_frame(frame, fx);
+        if let Some(items) = frame["items"].as_array() {
+            rt.apply_items(items, fx);
+        }
     }
 
-    /// A session that cannot be loaded gives a new one (`process::open`), said by the conversation.
+    /// A session that cannot be loaded gives a new one (its plugin's client), said by the conversation.
     fn start_lost(&self, _stderr: &str) -> Option<StartLost> {
         None
     }

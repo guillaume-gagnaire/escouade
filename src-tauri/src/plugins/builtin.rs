@@ -117,6 +117,12 @@ pub const REGISTRY: &[Entry] = &[
             "../../../plugins/builtin/dev.escouade.clickup/escouade-plugin.json"
         ),
     },
+    Entry {
+        id: GEMINI,
+        manifest: include_str!(
+            "../../../plugins/builtin/dev.escouade.gemini-cli/escouade-plugin.json"
+        ),
+    },
 ];
 
 /// The plugin « GitHub »: github.com, GHE.com and GitHub Enterprise Server, their pull requests and GitHub Issues.
@@ -156,6 +162,9 @@ pub const CLICKUP: &str = "dev.escouade.clickup";
 /// The plugin « Mistral », one process and one account: its voice service (INT-13) and Mistral Vibe as a harness, over
 /// ACP (INT-10.6 bis).
 pub const MISTRAL: &str = "dev.escouade.mistral";
+
+/// The plugin « Gemini CLI »: Gemini CLI as a harness, over ACP (INT-10.7).
+pub const GEMINI: &str = "dev.escouade.gemini-cli";
 
 /// Whether `id` is the id of a plugin the app gives.
 pub fn is_builtin(id: &str) -> bool {

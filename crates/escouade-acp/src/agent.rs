@@ -15,7 +15,7 @@
 //!   private project are refused, which is the fence that holds; a read or a write the agent made by itself on a path
 //!   while a fence is set is said in the conversation, once (the fence does not hold for it).
 
-use crate::{cursor, texts, tools, vibe};
+use crate::{cursor, gemini, texts, tools, vibe};
 use escouade_plugin_protocol::engine::{
     AcpDecl, Attach, Diff, EnvVar, HarnessDecl, Item, Launch, LaunchParams, StartAt, TurnUsage,
 };
@@ -37,6 +37,8 @@ enum Ours {
     Setting(String),
     /// Cursor's `cursor/list_available_models`: the option of each model's effort.
     Models,
+    /// The request whose answer tells Gemini's replay of a `session/load` is behind (`Agent::settling`).
+    Settled,
 }
 
 /// A request of the agent waiting for the user's answer.
@@ -77,6 +79,16 @@ pub struct Agent {
     cursor: bool,
     /// It is Mistral Vibe (the extension `vibe`): its tools, its forms, Escouade's mode Plan played here, its cost.
     vibe: bool,
+    /// It is Gemini CLI (the extension `gemini`): its calls, its modes told as texts, its plan's file, its turns held for
+    /// their questions, its tokens.
+    gemini: bool,
+    /// The models Gemini's session offers (`models` of its `session/new`).
+    gemini_models: Vec<String>,
+    /// A plan of Gemini approved: the mode it goes on in is set once Gemini has left its mode plan.
+    gemini_resume: bool,
+    /// Gemini's `session/load` replays the history after its answer: nothing is sent, and nothing it says counts, until
+    /// a request sent after that answer is answered too (a prompt sent at once would take the replay for its turn).
+    settling: bool,
     /// Vibe's calls as their `tool_call` told them, in Cursor's form, by their own id (the last `VIBE_CALLS`).
     vibe_calls: HashMap<String, Value>,
     vibe_order: VecDeque<String>,
@@ -189,6 +201,9 @@ fn tag_of(key: &str) -> String {
 /// The request of the client's own that holds the plan of a turn in Vibe's mode Plan, played here.
 const PLAN: &str = "escouade/plan";
 
+/// The request of the client's own that holds a question the agent's text ended on.
+const QUESTION: &str = "escouade/question";
+
 /// The most of Vibe's calls kept for the permissions and results that name them.
 const VIBE_CALLS: usize = 200;
 
@@ -217,6 +232,10 @@ impl Agent {
             version: version.into(),
             cursor: acp.extensions.iter().any(|e| e == "cursor"),
             vibe: acp.extensions.iter().any(|e| e == "vibe"),
+            gemini: acp.extensions.iter().any(|e| e == "gemini"),
+            gemini_models: Vec::new(),
+            gemini_resume: false,
+            settling: false,
             vibe_calls: HashMap::new(),
             vibe_order: VecDeque::new(),
             spent_base: None,
@@ -309,6 +328,7 @@ impl Agent {
             "session/prompt" => {
                 self.busy = true;
                 self.cut = false;
+                self.loading = false;
                 self.turn_text.clear();
                 Ours::Prompt
             }
@@ -321,6 +341,8 @@ impl Agent {
     fn session_refused(&self, e: &str) -> String {
         if self.vibe {
             vibe::session_refused(&self.lang, e)
+        } else if self.gemini {
+            gemini::session_refused(&self.lang, e)
         } else {
             texts::session_refused(&self.lang, &self.name, e)
         }
@@ -357,7 +379,14 @@ impl Agent {
         self.fence_keys = crate::paths::fence_of(&self.fence);
         self.read_only = p.read_only;
         let mut instructions = p.append_prompt.clone().unwrap_or_default();
-        if self.acp.questions_in_text {
+        if self.gemini {
+            // Before its first message, whatever the start: a session to resume loaded takes them away (`Ours::Load`), one
+            // that cannot be, or a copy (it has none), is a new one.
+            if !instructions.trim().is_empty() {
+                instructions = format!("{}\n\n", crate::preamble(&instructions));
+            }
+            instructions.push_str(crate::questions::QUESTIONS);
+        } else if self.acp.questions_in_text {
             instructions = format!(
                 "{}
 
@@ -366,8 +395,8 @@ impl Agent {
                 crate::questions::QUESTIONS
             );
         }
-        self.instructions =
-            Some(instructions).filter(|i| !i.trim().is_empty() && matches!(p.start, StartAt::New));
+        self.instructions = Some(instructions)
+            .filter(|i| !i.trim().is_empty() && (self.gemini || matches!(p.start, StartAt::New)));
         self.relay = p.relay.clone().filter(|r| !r.trim().is_empty());
         self.by_key = p.by_key;
         if !self.fence.is_empty() && !self.acp.fs && !self.acp.fence_on_permissions {
@@ -388,6 +417,12 @@ impl Agent {
         // Vibe's questions are forms: without them its model has no `ask_user_question` (tried).
         if self.vibe {
             caps["elicitation"] = json!({ "form": {} });
+        }
+        // Gemini is offered what the study tried (ESC-273), nothing else.
+        if self.gemini {
+            if let Some(c) = caps.as_object_mut() {
+                c.remove("_meta");
+            }
         }
         let hello = self.request(
             "initialize",
@@ -467,12 +502,15 @@ impl Agent {
                     let v = result["protocolVersion"].to_string();
                     let why = if self.vibe {
                         vibe::protocol_refused(&self.lang, &v)
+                    } else if self.gemini {
+                        gemini::protocol_refused(&self.lang, &v)
                     } else {
                         texts::protocol_refused(&self.lang, &self.name, &v)
                     };
                     return self.refused(why, out);
                 }
-                self.can_load = result["agentCapabilities"]["loadSession"] == true;
+                // Gemini is always asked (a session that cannot be loaded gives a new one).
+                self.can_load = self.gemini || result["agentCapabilities"]["loadSession"] == true;
                 let mcp = crate::mcp_servers(
                     self.escouade
                         .as_ref()
@@ -511,7 +549,12 @@ impl Agent {
             Ours::Load(session) => {
                 self.loading = false;
                 match error {
-                    None => self.opened(session, &result, out),
+                    None => {
+                        // Its session has them already.
+                        self.instructions = None;
+                        self.settling = self.gemini;
+                        self.opened(session, &result, out)
+                    }
                     Some(e) => {
                         // Gone: a new session, said.
                         out.push(notice(
@@ -519,7 +562,9 @@ impl Agent {
                             "warning",
                         ));
                         let _ = e;
-                        self.instructions = None;
+                        if !self.gemini {
+                            self.instructions = None;
+                        }
                         let mcp = crate::mcp_servers(
                             self.escouade
                                 .as_ref()
@@ -569,18 +614,34 @@ impl Agent {
                             vibe::rate_limited(&self.lang, Some(&e))
                         }
                         (true, _) => e,
+                        // Gemini's own words; its usage limit ends the turn « limité », its resume planned.
+                        (false, code) if self.gemini => match gemini::limit_of(code, &e) {
+                            Some(wait) => {
+                                self.limited_at = Some(now_ms() + wait);
+                                gemini::rate_limited(&self.lang, &e)
+                            }
+                            None => e,
+                        },
                         _ => texts::not_translated(&self.lang, &self.name, &e),
                     });
                 }
                 let cancelled = result["stopReason"] == "cancelled";
-                // What the turn spent, when the agent tells it (`usage` of the answer, unstable in ACP).
-                let n = |k: &str| result["usage"][k].as_u64().unwrap_or(0);
-                self.usage = TurnUsage {
-                    input: n("inputTokens"),
-                    output: n("outputTokens"),
-                    cache: n("cachedReadTokens") + n("cachedWriteTokens"),
-                    cost: 0.0,
-                };
+                if self.gemini {
+                    // A turn that asked a question goes on after its answers: its tokens add up.
+                    let s = gemini::spent(&result["usage"]);
+                    self.usage.input += s.input;
+                    self.usage.output += s.output;
+                    self.usage.cache += s.cache;
+                } else {
+                    // What the turn spent, when the agent tells it (`usage` of the answer, unstable in ACP).
+                    let n = |k: &str| result["usage"][k].as_u64().unwrap_or(0);
+                    self.usage = TurnUsage {
+                        input: n("inputTokens"),
+                        output: n("outputTokens"),
+                        cache: n("cachedReadTokens") + n("cachedWriteTokens"),
+                        cost: 0.0,
+                    };
+                }
                 self.turn_end(cancelled, out);
             }
             Ours::Setting(what) => {
@@ -588,6 +649,14 @@ impl Agent {
                     let text =
                         texts::not_translated(&self.lang, &self.name, &format!("{what}: {e}"));
                     out.push(notice(text, "warning"));
+                }
+            }
+            Ours::Settled => {
+                self.loading = false;
+                self.open = true;
+                if let Some(blocks) = self.queue.pop_front() {
+                    let l = self.prompt(blocks);
+                    out.push(write(l));
                 }
             }
             // Not told, the efforts stay Cursor's own (as when it does not answer).
@@ -623,6 +692,9 @@ impl Agent {
         self.session = Some(session);
         self.open = true;
         self.options = result["configOptions"].clone();
+        if self.gemini {
+            self.gemini_models = gemini::models_of(&result["models"]);
+        }
         if !self.queue.is_empty() {
             self.tell(out);
         }
@@ -635,6 +707,18 @@ impl Agent {
         }
         for l in self.model_lines() {
             out.push(write(l));
+        }
+        if std::mem::take(&mut self.settling) {
+            if let Some(mode) = self.acp_mode(&self.mode.clone()) {
+                self.open = false;
+                self.loading = true;
+                let l = self.request(
+                    "session/set_mode",
+                    json!({ "sessionId": self.session, "modeId": mode }),
+                    Ours::Settled,
+                );
+                return out.push(write(l));
+            }
         }
         if let Some(blocks) = self.queue.pop_front() {
             let l = self.prompt(blocks);
@@ -662,6 +746,10 @@ impl Agent {
         let m = self.acp.modes.get(mode).cloned();
         if self.vibe {
             return m.map(|m| vibe::agent_of(&m, !self.fence.is_empty()));
+        }
+        // A mode of another harness's, after a handover: Gemini's `default`.
+        if self.gemini {
+            return m.or_else(|| self.acp.modes.get("default").cloned());
         }
         m
     }
@@ -713,13 +801,15 @@ impl Agent {
         if self.model.is_empty() {
             return Vec::new();
         }
-        // A model Vibe's session does not offer (another harness's, after a handover) is left to its default.
-        let unlisted = self.vibe
+        // A model the session of Vibe or Gemini does not offer (another harness's, after a handover) is left to its
+        // default.
+        let unlisted = (self.vibe
             && !self
                 .acp
                 .model_option
                 .as_deref()
-                .is_some_and(|k| vibe::option_values(&self.options, k).contains(&self.model));
+                .is_some_and(|k| vibe::option_values(&self.options, k).contains(&self.model)))
+            || (self.gemini && !self.gemini_models.contains(&self.model));
         if unlisted {
             return self.effort_lines();
         }
@@ -780,7 +870,9 @@ impl Agent {
         let session = self.session.clone().unwrap_or_default();
         let mut blocks = Vec::new();
         if let Some(i) = self.instructions.take() {
-            blocks.push(json!({ "type": "text", "text": crate::preamble(&i) }));
+            // Gemini's are made already (`launch`): its questions' rules stand beside them.
+            let text = if self.gemini { i } else { crate::preamble(&i) };
+            blocks.push(json!({ "type": "text", "text": text }));
         }
         // Vibe has no mode Plan: each prompt of Escouade's says what it asks.
         if self.vibe && self.mode == "plan" {
@@ -825,15 +917,17 @@ impl Agent {
         let Some(session) = self.session.clone() else {
             return Vec::new();
         };
-        // A plan waiting for its answer (Vibe's mode Plan): no prompt runs, the turn ends.
-        if self.asked.values().any(|a| a.method == PLAN) {
-            self.asked.retain(|_, a| a.method != PLAN);
+        // A plan waiting for its answer (Vibe's mode Plan), or a question held at the end of a turn: no prompt runs, the
+        // turn ends.
+        let held = |a: &Asked| a.method == PLAN || a.method == QUESTION;
+        if self.asked.values().any(held) {
+            self.asked.retain(|_, a| !held(a));
             return self.end_held(true);
         }
         let mut out: Vec<String> = self
             .asked
             .drain()
-            .filter(|(_, a)| a.method == "session/request_permission")
+            .filter(|(_, a)| a.method == "session/request_permission" || a.method == gemini::PLAN)
             .map(|(_, a)| reply(&a.id, json!({ "outcome": { "outcome": "cancelled" } })))
             .collect();
         out.push(line(json!({
@@ -883,6 +977,30 @@ impl Agent {
         if asked.method == PLAN {
             return Ok(self.answer_plan(allow, always, message, resume));
         }
+        // Gemini's plan, the permission of its `exit_plan_mode`: « Toujours » carries it out with its writes accepted.
+        // Gemini goes back to its `default` once it is approved: the mode the plan goes on in, the one it was in before
+        // Plan or `autoEdit`, is set once it has (`gemini_told_mode`).
+        if asked.method == gemini::PLAN {
+            let kind = if allow { "allow_once" } else { "reject_once" };
+            let option = crate::option_of(&asked.params, kind);
+            let mut out = vec![reply(
+                &asked.id,
+                json!({ "outcome": { "outcome": "selected", "optionId": option } }),
+            )];
+            if allow {
+                let mode = if always {
+                    "acceptEdits"
+                } else {
+                    resume.unwrap_or("default")
+                };
+                self.mode = mode.to_string();
+                self.gemini_resume = mode != "default";
+                self.told_mode = Some(mode.to_string());
+            } else {
+                self.cut_turn(message, &mut out);
+            }
+            return Ok(out);
+        }
         let kind = match (allow, always) {
             (true, true) => "allow_always",
             (true, false) => "allow_once",
@@ -904,21 +1022,25 @@ impl Agent {
             &asked.id,
             json!({ "outcome": { "outcome": "selected", "optionId": option } }),
         )];
-        // Vibe: a refusal cuts the turn, its word (if any) sent once it has ended; else Vibe tries the command again
-        // under other forms, each asking again.
-        if self.vibe && !allow {
-            if let Some(m) = message.filter(|m| vibe::worded(m)) {
-                self.queue
-                    .push_front(vec![json!({ "type": "text", "text": m })]);
-            }
-            self.cut = true;
-            if let Some(session) = self.session.clone() {
-                out.push(line(json!({
-                    "jsonrpc": "2.0", "method": "session/cancel", "params": { "sessionId": session },
-                })));
-            }
+        // Vibe and Gemini: a refusal cuts the turn; else Vibe tries the command again under other forms, each asking again.
+        if (self.vibe || self.gemini) && !allow {
+            self.cut_turn(message, &mut out);
         }
         Ok(out)
+    }
+
+    /// The turn cut by a refusal (`session/cancel`), its word (if any) sent once it has ended.
+    fn cut_turn(&mut self, message: Option<&str>, out: &mut Vec<String>) {
+        if let Some(m) = message.filter(|m| vibe::worded(m)) {
+            self.queue
+                .push_front(vec![json!({ "type": "text", "text": m })]);
+        }
+        self.cut = true;
+        if let Some(session) = self.session.clone() {
+            out.push(line(json!({
+                "jsonrpc": "2.0", "method": "session/cancel", "params": { "sessionId": session },
+            })));
+        }
     }
 
     /// The plan of Vibe's mode Plan answered: approved, it is carried out in the mode chosen, in the same turn; sent
@@ -976,7 +1098,7 @@ impl Agent {
             .asked
             .remove(request)
             .ok_or_else(|| format!("{} no longer waits for this answer", self.name))?;
-        if asked.method == "escouade/question" {
+        if asked.method == QUESTION {
             let text = crate::questions::answers_message(&asked.params, answers);
             return Ok(vec![
                 self.prompt(vec![json!({ "type": "text", "text": text })])
@@ -1138,6 +1260,13 @@ impl Agent {
             }
             vibe_p = params;
             &vibe_p
+        } else if self.gemini {
+            let mut params = p.clone();
+            if let Some(n) = gemini::normalized(&p["toolCall"], &self.cwd) {
+                params["toolCall"] = n;
+            }
+            vibe_p = params;
+            &vibe_p
         } else {
             p
         };
@@ -1154,6 +1283,43 @@ impl Agent {
         // « Projet privé »: refused at once, never a card the user could accept.
         if crate::fenced(p, &self.fence) {
             out.push(write(reject(self)));
+            return;
+        }
+        // Gemini's plan to approve: its card, whatever comes of the rules below.
+        if self.gemini && tc["toolCallId"].as_str().is_some_and(gemini::is_plan_exit) {
+            self.tell(out);
+            // The plan written is whole: what comes once it is approved is another text.
+            self.close("", out);
+            // A recorded stream names the file of its trial, not one of this agent's.
+            let plan = if self.replaying {
+                p["toolCall"]["title"]
+                    .as_str()
+                    .and_then(gemini::plan_file)
+                    .unwrap_or_default()
+                    .to_string()
+            } else {
+                gemini::plan_of(p)
+            };
+            let rid = self.rid(&id);
+            self.asked.insert(
+                rid.clone(),
+                Asked {
+                    id,
+                    method: gemini::PLAN.into(),
+                    params: p.clone(),
+                },
+            );
+            out.push(Item::Permission {
+                request: rid.clone(),
+                call: rid,
+                tool: Some("ExitPlanMode".into()),
+                input: Some(json!({ "plan": plan })),
+                description: None,
+                reason: None,
+                diff: None,
+                can_always: true,
+                parent: None,
+            });
             return;
         }
         if self.read_only && matches!(kind.as_str(), "edit" | "delete" | "move" | "execute") {
@@ -1222,9 +1388,9 @@ impl Agent {
         }
         let safe = match self.mode.as_str() {
             "bypassPermissions" => true,
-            // Vibe's agent `ask` asks for each write: in « Demander » too, its writes in the agent's folder go through
-            // (the meaning of its mode, as the core's rules had it).
-            "acceptEdits" | "default" if self.mode == "acceptEdits" || self.vibe => {
+            // Vibe's agent `ask` and Gemini's `default` ask for each write: in « Demander » too, their writes in the
+            // agent's folder go through (the meaning of their mode, as the core's rules had it).
+            "acceptEdits" | "default" if self.mode == "acceptEdits" || self.vibe || self.gemini => {
                 matches!(kind.as_str(), "edit" | "delete")
                     && !paths.is_empty()
                     && paths.iter().all(|f| crate::inside(f, &self.cwd))
@@ -1343,8 +1509,8 @@ impl Agent {
             }
             return ("Task".into(), input);
         }
-        // Vibe's calls are put in Cursor's form (`vibe::normalized`).
-        if self.cursor || self.vibe {
+        // Those of Vibe and Gemini are put in Cursor's form (`vibe::normalized`, `gemini::normalized`).
+        if self.cursor || self.vibe || self.gemini {
             if let Some(t) = cursor::tool_of(u, &self.cwd) {
                 return t;
             }
@@ -1381,6 +1547,25 @@ impl Agent {
                 "current_mode_update" | "user_message_chunk" => return,
                 // Told outside a turn too (after `session/load`, a mode set): no turn begins with them.
                 "available_commands_update" | "session_info_update" => return,
+                _ => {}
+            }
+        }
+        if self.gemini {
+            // `session/load` replays its history after its answer too: only what comes while a prompt runs counts.
+            if !self.busy {
+                return;
+            }
+            match kind {
+                "tool_call" => return self.gemini_tool_start(p, out),
+                "tool_call_update" => return self.gemini_tool_update(p, out),
+                // The invite is the conversation's already; its context window, the commands of its interface: not shown.
+                "user_message_chunk" | "usage_update" | "available_commands_update" => return,
+                "agent_message_chunk" => {
+                    let text = u["content"]["text"].as_str().unwrap_or_default();
+                    if let Some(mode) = gemini::mode_update(text) {
+                        return self.gemini_told_mode(mode, out);
+                    }
+                }
                 _ => {}
             }
         }
@@ -1785,11 +1970,62 @@ impl Agent {
         self.tool_update(&n, out);
     }
 
+    /// Gemini's change of mode, told as a text: out of its mode plan, the mode a plan approved goes on in is set.
+    fn gemini_told_mode(&mut self, mode: &str, out: &mut Vec<Item>) {
+        if mode == "default" && std::mem::take(&mut self.gemini_resume) {
+            for l in self.mode_lines(None) {
+                out.push(write(l));
+            }
+            return;
+        }
+        if self.mode != mode && !(mode == "default" && self.mode.is_empty()) {
+            self.mode = mode.to_string();
+            out.push(Item::Mode { mode: mode.into() });
+        }
+    }
+
+    /// Gemini's call started, put in Cursor's form; a tool shown otherwise is left out.
+    fn gemini_tool_start(&mut self, p: &Value, out: &mut Vec<Item>) {
+        let Some(parent) = self.owner(p["sessionId"].as_str()) else {
+            return;
+        };
+        let Some(n) = gemini::normalized(&p["update"], &self.cwd) else {
+            return;
+        };
+        self.tell(out);
+        // A call told once it is over (a rule's refusal, a replay) ends there too (`tool_start`).
+        self.tool_start(&n, parent, out);
+    }
+
+    /// What Gemini says of its call as it goes; a call refused by its rules is told by its end alone.
+    fn gemini_tool_update(&mut self, p: &Value, out: &mut Vec<Item>) {
+        let Some(parent) = self.owner(p["sessionId"].as_str()) else {
+            return;
+        };
+        let Some(n) = gemini::normalized(&p["update"], &self.cwd) else {
+            return;
+        };
+        self.tell(out);
+        let known = n["toolCallId"]
+            .as_str()
+            .is_some_and(|id| self.calls.contains_key(&tools::call_id(id)));
+        if !known {
+            self.tool_start(&n, parent, out);
+        }
+        self.tool_update(&n, out);
+    }
+
     /// The end of the prompt: what was being written given, the turn closed; the next message waiting sent.
     fn turn_end(&mut self, cancelled: bool, out: &mut Vec<Item>) {
         self.tell(out);
         while let Some(w) = self.writing.first().cloned() {
             self.close(&w.who, out);
+        }
+        // A plan approved whose turn ended before Gemini told it left its mode plan.
+        if std::mem::take(&mut self.gemini_resume) {
+            for l in self.mode_lines(None) {
+                out.push(write(l));
+            }
         }
         // Vibe in Escouade's mode Plan: a turn that ended on its words has its plan approved first (the card « Plan à
         // approuver »), the turn held until it is answered.
@@ -1841,20 +2077,21 @@ impl Agent {
                 cost: d.cost,
             };
         }
-        // A turn that ends on a question: its card, and the turn goes on with the answers.
-        if let Some(block) = self
-            .block
-            .take()
-            .filter(|_| !cancelled && self.error.is_none())
-        {
+        // A turn that ends on a question: its card, and the turn goes on with the answers (Gemini's held till then: a
+        // message waits for them). A block that is no question is shown as it was written.
+        if let Some(block) = self.block.take().filter(|_| self.error.is_none()) {
             let rid = self.rid(&json!("question"));
-            if let Some(params) = crate::questions::question_params(&rid, &block) {
+            let params = (!cancelled)
+                .then(|| crate::questions::question_params(&rid, &block))
+                .flatten();
+            if let Some(params) = params {
                 let questions = cursor::questions(&params);
+                self.busy = self.gemini;
                 self.asked.insert(
                     rid.clone(),
                     Asked {
                         id: Value::Null,
-                        method: "escouade/question".into(),
+                        method: QUESTION.into(),
                         params,
                     },
                 );
@@ -1864,6 +2101,13 @@ impl Agent {
                     questions,
                 });
                 return;
+            }
+            if !self.cut {
+                out.push(Item::Text {
+                    text: block,
+                    parent: None,
+                    id: None,
+                });
             }
         }
         let mut error = self.error.take().filter(|_| !cancelled);

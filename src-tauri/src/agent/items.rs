@@ -229,9 +229,18 @@ impl AgentRt {
                 self.plan_apply(fx, |plan| plan.end_turn(now_ms()));
                 let tokens = usage.input + usage.cache + usage.output;
                 if tokens > 0 || usage.cost > 0.0 {
+                    // An agent on its harness's default model: that one's row (Gemini's router).
+                    let model = if self.meta.model.is_empty() {
+                        crate::engine::of(&self.meta)
+                            .models()
+                            .first()
+                            .map_or_else(String::new, |m| m.id.to_string())
+                    } else {
+                        self.meta.model.clone()
+                    };
                     fx.turns.push(TurnRow {
                         engine: self.meta.engine,
-                        model: self.meta.model.clone(),
+                        model,
                         input: usage.input,
                         cache: usage.cache,
                         output: usage.output,

@@ -97,12 +97,16 @@ export const BUILTINS: Builtin[] = [
     'Antigravity CLI comme harness : la conversation, sa vue terminal, les permissions et les comptes Google.',
     'Antigravity CLI as a harness: the conversation, its terminal view, permissions and Google accounts.',
   ),
-  harness(
-    'gemini-cli',
-    'Gemini CLI',
-    'Gemini CLI comme harness, par ACP : la conversation, sa vue terminal, les permissions et les comptes.',
-    'Gemini CLI as a harness, over ACP: the conversation, its terminal view, permissions and accounts.',
-  ),
+  {
+    ...harness(
+      'gemini-cli',
+      'Gemini CLI',
+      'Gemini CLI comme harness, par ACP : la conversation, sa vue terminal, les permissions et les comptes.',
+      'Gemini CLI as a harness, over ACP: the conversation, its terminal view, permissions and accounts.',
+    ),
+    // Out of the core since INT-10.7.
+    source: 'plugins/builtin/dev.escouade.gemini-cli',
+  },
   {
     ...harness(
       'acp',

@@ -1634,6 +1634,7 @@ dependencies = [
  "escouade-plugin-bitbucket",
  "escouade-plugin-clickup",
  "escouade-plugin-cursor",
+ "escouade-plugin-gemini",
  "escouade-plugin-gitea",
  "escouade-plugin-github",
  "escouade-plugin-gitlab",
@@ -1766,6 +1767,13 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-cursor"
+version = "1.0.0"
+dependencies = [
+ "escouade-plugin-acp",
+]
+
+[[package]]
+name = "escouade-plugin-gemini"
 version = "1.0.0"
 dependencies = [
  "escouade-plugin-acp",

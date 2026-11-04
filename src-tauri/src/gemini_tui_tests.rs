@@ -316,3 +316,46 @@ async fn a_new_agent_in_geminis_view_starts_a_session_under_the_id_escouade_give
     .await;
     assert_eq!(h.agent(&id).session_id.as_deref(), Some(named.as_str()));
 }
+
+/// INT-10.7: Gemini's conversation goes through its plugin (`dev.escouade.gemini-cli`). Switched off, an agent's start
+/// says so, and the agent keeps its session; on again, it talks as before.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_gemini_agent_says_its_plugin_is_off_and_talks_again_once_it_is_on() {
+    let h = harness("int10-gemini-off");
+    let (a, _) = gemini_agent(&h).await;
+    let id = crate::plugins::builtin::GEMINI;
+    h.core.plugins.choose(id, |c| c.enabled = false).unwrap();
+    h.core.plugin_runtime.forget(id);
+    h.core.sync_harnesses();
+    assert!(crate::engine::gemini::plugged().is_none());
+    let sent = h.core.send_message(&a, "bonjour".into(), vec![]).await;
+    let said = |h: &Harness| {
+        let items = Value::Array(h.items(&a)).to_string();
+        let err = sent
+            .as_ref()
+            .err()
+            .map(|e| e.to_string())
+            .unwrap_or_default();
+        format!("{err} {items}")
+    };
+    h.wait("the plugin said off", |h| said(h).contains(id))
+        .await;
+    assert!(said(&h).contains("coupé"), "{}", said(&h));
+    h.core.plugins.choose(id, |c| c.enabled = true).unwrap();
+    h.core.sync_harnesses();
+    assert!(crate::engine::gemini::plugged().is_some());
+    let ended = |h: &Harness| {
+        h.items(&a)
+            .iter()
+            .any(|i| i["kind"] == "text" && i["text"] == "Gemini a reçu : bonjour")
+            && !h.agent(&a).status.is_active()
+    };
+    if !ended(&h) {
+        h.core
+            .send_message(&a, "bonjour".into(), vec![])
+            .await
+            .unwrap();
+    }
+    h.wait("its answer", ended).await;
+    h.core.stop_for_good();
+}
