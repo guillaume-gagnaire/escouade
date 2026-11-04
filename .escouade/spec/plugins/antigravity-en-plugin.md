@@ -3,7 +3,7 @@ title: "Antigravity CLI en plugin"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4 (INT-10.8)","docs/PROTOCOL.md, Antigravity CLI","docs/TODO-2.2.md, INT-10.8","Ticket ESC-283","plugins/builtin/dev.escouade.antigravity-cli/README.md"]
 tickets: ["ESC-283"]
-decisions: ["antigravity-cli-passe-par-son-plugin-en"]
+decisions: [68]
 compared: null
 ---
 

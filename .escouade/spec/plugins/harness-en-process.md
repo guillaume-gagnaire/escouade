@@ -3,7 +3,7 @@ title: "Le contrat des harness en process"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.5 et §4.6","docs/TODO-2.2.md (INT-9)","crates/escouade-plugin-protocol/src/engine.rs","src-tauri/src/plugins/harness.rs","src-tauri/src/plugins/shared.rs"]
 tickets: ["ESC-221","ESC-223","ESC-225","ESC-224","ESC-283"]
-decisions: [34,"antigravity-cli-passe-par-son-plugin-en"]
+decisions: [34,68]
 compared: null
 ---
 
