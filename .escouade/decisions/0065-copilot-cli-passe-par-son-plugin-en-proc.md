@@ -1,9 +1,9 @@
 ---
-number: null
+number: 65
 id: "copilot-cli-passe-par-son-plugin-en-proc"
 title: "Copilot CLI passe par son plugin, en process, et sa vue lit sa traduction en bibliothèque"
 date: "2026-11-04"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-224"
 pages: ["plugins/copilot-cli-en-plugin","plugins/harness-en-process","plugins/livres-avec-escouade"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/copilot-cli-en-plugin","added":18,"removed":0},{"page":"plugins/harness-en-process","added":8,"removed":0},{"page":"plugins/livres-avec-escouade","added":2,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-04T08:06:29+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
