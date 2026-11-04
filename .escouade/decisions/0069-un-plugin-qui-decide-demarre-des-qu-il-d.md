@@ -1,9 +1,9 @@
 ---
-number: null
+number: 69
 id: "un-plugin-qui-decide-demarre-des-qu-il-d"
 title: "Un plugin qui décide démarre dès qu'il devient prêt et activé"
 date: "2026-11-04"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-329"
 pages: ["plugins/regles-d-autorisation"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/regles-d-autorisation","added":4,"removed":1}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-04T20:11:55+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
