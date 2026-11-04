@@ -2073,6 +2073,34 @@ impl<R: Runtime> Core<R> {
         (core, rx)
     }
 
+    /// The plugin `id` changed (installed, updated, switched, a permission taken back or given again): its process
+    /// stops and the next one reads it anew; if it decides permissions now, that one starts at once (ESC-329).
+    pub(crate) fn plugin_changed(&self, id: &str) {
+        self.plugin_runtime.forget(id);
+        crate::plugins::decide::warm_one(&self.plugins, &self.plugin_runtime, id);
+    }
+
+    /// Installs what the inspection `token` set aside. A plugin of that id stops first: under Windows its running
+    /// process holds its folder, which its new version replaces (ESC-329).
+    pub(crate) fn install_plugin(
+        &self,
+        token: &str,
+        lang: crate::i18n::Lang,
+    ) -> Result<crate::plugins::PluginView, crate::plugins::Refusal> {
+        let staged = self.plugins.staged(token);
+        if let Some((id, true)) = &staged {
+            self.plugin_runtime.forget(id);
+        }
+        let installed = self.plugins.install(token, lang);
+        match (&installed, staged) {
+            (Ok(view), _) => self.plugin_changed(&view.id),
+            // Refused: the version it had stays, and starts again if it decides.
+            (Err(_), Some((id, _))) => self.plugin_changed(&id),
+            (Err(_), None) => {}
+        }
+        installed
+    }
+
     /// `app.started` on the facts' bus (PLG-5).
     pub(crate) fn tell_started(&self) {
         self.facts.emit(

@@ -59,7 +59,7 @@ Escouade appelle `permissions/decide` (voir [Le protocole](plugins/api)) :
 
 Une erreur JSON-RPC, une réponse au-delà de 500 ms ou une réponse qui n’est pas l’une des trois valent `ask`. Un plugin qui plante pendant une décision est relancé comme d’habitude ; la demande, elle, va à l’utilisateur.
 
-Lis tes règles **avant** la première demande (au démarrage), pas pendant : 500 ms, c’est court. Escouade démarre les plugins qui décident en même temps que lui ; un plugin pas encore démarré a, une seule fois, trois secondes pour démarrer et répondre.
+Lis tes règles **avant** la première demande (au démarrage), pas pendant : 500 ms, c’est court. Escouade démarre les plugins qui décident en même temps que lui, et dès qu’un plugin est installé, mis à jour ou réactivé ; un plugin pas encore démarré a, une seule fois, trois secondes pour démarrer et répondre.
 
 ## Un exemple
 

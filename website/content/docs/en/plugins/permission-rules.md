@@ -59,7 +59,7 @@ Escouade calls `permissions/decide` (see [The protocol](plugins/api)):
 
 A JSON-RPC error, an answer past 500 ms or an answer that is none of the three count as `ask`. A plugin that crashes during a decision is restarted as usual; the request goes to the user.
 
-Read your rules **before** the first request (at start), not during one: 500 ms is short. Escouade starts the plugins that decide when it starts; a plugin not started yet has, once, three seconds to start and answer.
+Read your rules **before** the first request (at start), not during one: 500 ms is short. Escouade starts the plugins that decide when it starts, and as soon as one is installed, updated or switched back on; a plugin not started yet has, once, three seconds to start and answer.
 
 ## An example
 

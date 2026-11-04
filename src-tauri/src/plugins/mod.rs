@@ -1246,7 +1246,7 @@ impl Plugins {
         let copy = self.data.plugins_dir().join(&id);
         match staged.dir {
             Some(dir) => {
-                remove_dir(&copy);
+                remove_dir_patiently(&copy);
                 if let Err(e) = std::fs::rename(&dir, &copy) {
                     remove_dir(&dir);
                     return Err(Refusal::other(tr_in!(
@@ -1261,7 +1261,7 @@ impl Plugins {
                 // A copy of the same id goes: the folder takes its place (unless it is that copy).
                 if let Origin::Dev { path } = &installed.origin {
                     if std::fs::canonicalize(&copy).ok() != std::fs::canonicalize(path).ok() {
-                        remove_dir(&copy);
+                        remove_dir_patiently(&copy);
                     }
                 }
             }

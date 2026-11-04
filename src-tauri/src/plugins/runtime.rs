@@ -533,11 +533,12 @@ impl Runtime {
             me: me.clone(),
         });
         // A folder in development read again: its process stops, and the next one is given the
-        // manifest of now (its permissions of secrets included).
+        // manifest of now (its permissions of secrets included), at once if it decides.
         let weak = Arc::downgrade(&rt);
         plugins.on_reload(move |id| {
             if let Some(rt) = weak.upgrade() {
                 rt.forget(id);
+                super::decide::warm_one(&rt.plugins, &rt, id);
             }
         });
         rt

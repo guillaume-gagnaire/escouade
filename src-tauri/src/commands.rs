@@ -429,8 +429,7 @@ pub fn plugin_install(
     token: String,
 ) -> Result<crate::plugins::PluginView, crate::plugins::Refusal> {
     let staged = core.plugins.staged(&token);
-    let view = core.plugins.install(&token, crate::i18n::ui())?;
-    core.plugin_runtime.forget(&view.id);
+    let view = core.install_plugin(&token, crate::i18n::ui())?;
     // A run.js plugin's module compiled and precompiled now, in the cache, off this thread (ESC-320).
     core.plugin_runtime.prepare(&view.id);
     let from_store = matches!(view.origin, crate::plugins::Origin::Store { .. });
@@ -506,7 +505,7 @@ pub fn plugin_set_enabled(
     core.plugins
         .choose(&id, |c| c.enabled = on)
         .map_err(|e| e.to_string())?;
-    core.plugin_runtime.forget(&id);
+    core.plugin_changed(&id);
     core.sync_voice_plugins();
     plugin_view(&core, &id)
 }
@@ -552,7 +551,7 @@ pub fn plugin_set_permission(
             }
         })
         .map_err(|e| e.to_string())?;
-    core.plugin_runtime.forget(&id);
+    core.plugin_changed(&id);
     plugin_view(&core, &id)
 }
 

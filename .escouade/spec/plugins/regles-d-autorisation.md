@@ -1,8 +1,8 @@
 ---
 title: "Règles d'autorisation des plugins"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §1.7","docs/TODO-2.1.md (PLG-8)","schemas/plugin-protocol-1.json (permissions/decide)","website/content/docs/fr/plugins/permission-rules.md"]
-tickets: ["ESC-180"]
+sources: ["docs/PLUGINS.md §1.7","docs/PLUGINS.md §7.1","docs/TODO-2.1.md (PLG-8)","schemas/plugin-protocol-1.json (permissions/decide)","website/content/docs/fr/plugins/permission-rules.md"]
+tickets: ["ESC-180","ESC-329"]
 decisions: []
 compared: "2026-10-30T01:50:33+01:00"
 ---
@@ -20,10 +20,16 @@ Un plugin qui a la permission `permissions.decide` répond aux demandes d'autori
 
 Les plugins chargés, avec un programme, dont `decide` n'a pas été retiré, et allumés pour le projet de l'agent (un projet privé : seulement un plugin allumé pour lui). La permission est montrée en rouge à l'installation ; aucun `.escouade.yml` n'allume un plugin ni ne donne une permission.
 
+## Démarrage
+
+Un plugin qui décide tourne avant la première demande : Escouade le démarre avec l'app, et aussitôt qu'il devient prêt et activé : installé (store, dossier, dépôt git), mis à jour, réactivé, sa permission `decide` rendue, son dossier en développement relu. Un plugin qui ne décide pas attend sa première utilité.
+
+Le plugin en marche est arrêté avant que sa nouvelle version ne remplace son dossier : sous Windows, son process le tient. Une mise à jour refusée le laisse à sa version, relancé s'il décide.
+
 ## Comment
 
 - `permissions/decide` à tous en même temps : la demande (`id`, `kind` parmi `command`, `edit`, `read`, `fetch`, `mcp`, `tool` ; `tool` au nom de Claude Code ; `input` aux textes longs coupés), le projet (avec `private`), le ticket s'il y en a un, l'agent. Jamais la conversation.
-- Délai : 500 ms par plugin ; un plugin dont le process ne tourne pas encore a 3 s, une fois. Escouade démarre les plugins qui décident à son démarrage.
+- Délai : 500 ms par plugin ; un plugin dont le process ne tourne pas encore a 3 s, une fois.
 - Réponse `allow`, `deny` (avec `message`) ou `ask`. Une erreur, un silence, un plantage ou une réponse autre valent `ask`.
 - **Un refus l'emporte**, puis une autorisation (le premier plugin dans l'ordre de la liste est nommé) ; sinon la demande va à l'utilisateur comme sans plugin.
 
