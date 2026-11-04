@@ -11,7 +11,7 @@
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash, generateKeyPairSync, randomUUID } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -61,6 +61,8 @@ if (!env.startsWith('/usr/local/bin/escouade-plugin /usr/local/bin/javy\n')) fai
 
 // ---- A `run.js` plugin compiles twice to the same bytes, by the store's own code.
 const work = mkdtempSync(join(tmpdir(), 'image-test-'));
+// mkdtemp makes it 0700, and the image runs as `node`, which must read it.
+chmodSync(work, 0o755);
 let failed = false;
 try {
   const esbuild = process.platform === 'win32' ? 'esbuild.cmd' : 'esbuild';
