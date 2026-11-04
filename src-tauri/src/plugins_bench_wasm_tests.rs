@@ -120,6 +120,51 @@ fn build_writes_the_same_module_twice_and_its_sha256() {
     assert_eq!(cli::main(args(&["validate", &d, "--first-party"])), 0);
 }
 
+/// `build` gives the modules noted in goldens.json, to the byte (ESC-328): what the store compiles, and the local
+/// review compares. They hold for one compiler and one bundle; another escouade-js (one built under Windows, or a
+/// change of it) or another bundle leaves them out, and the note is made again with the Linux escouade-js of CI.
+#[test]
+fn build_gives_the_modules_of_the_goldens_on_slack_and_team_rules() {
+    if !ready() {
+        return;
+    }
+    let repo = root();
+    let goldens: Value = serde_json::from_slice(
+        &std::fs::read(repo.join("crates/escouade-plugin-cli/goldens.json")).unwrap(),
+    )
+    .unwrap();
+    if goldens["engine"] != wasm::escouade_js_sha256()
+        || goldens["prelude"] != wasm::sha256(wasm::PRELUDE.as_bytes())
+    {
+        eprintln!("skipped: goldens.json speaks of another compiler");
+        return;
+    }
+    let out = crate::paths::test_dir("plugin-goldens");
+    for name in ["team-rules", "slack"] {
+        let folder = repo.join("plugins").join(name);
+        let bundle = std::fs::read(folder.join("dist/plugin.mjs")).unwrap();
+        if goldens["plugins"][name]["bundle"] != wasm::sha256(&bundle) {
+            eprintln!("skipped {name}: goldens.json speaks of another bundle");
+            continue;
+        }
+        let (d, o) = (folder.to_string_lossy(), out.join(name));
+        let o = o.to_string_lossy();
+        assert_eq!(
+            cli::main(args(&["build", &d, "--first-party", "--out", &o])),
+            0
+        );
+        let file = format!("dev.escouade.{name}-2.0.0.wasm");
+        let module = std::fs::read(out.join(name).join(file)).unwrap();
+        assert_eq!(goldens["plugins"][name]["module"], wasm::sha256(&module));
+    }
+}
+
+/// The program the store's image builds says the app's version: the local review compares them (`compiler.prelude`).
+#[test]
+fn the_crate_of_escouade_plugin_has_the_version_of_the_app() {
+    assert_eq!(escouade_plugin_cli::VERSION, env!("CARGO_PKG_VERSION"));
+}
+
 /// A copy of team-rules whose bundle imports node:child_process.
 fn child_process() -> PathBuf {
     let dir = as_run_js("team-rules");

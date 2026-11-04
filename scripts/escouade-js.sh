@@ -6,7 +6,7 @@
 # (the `escouade-js` job) and hands it to every job that builds the app.
 #
 # The pinned Javy is downloaded once into src-tauri/escouade-js/target/javy/ and checked by its SHA-256 (the digests
-# of the v9.1.0 release, the same the app checks, src-tauri/src/plugins/wasm.rs); ESCOUADE_JAVY names another.
+# of the v9.1.0 release, the same the app checks, crates/escouade-plugin-cli/src/wasm.rs); ESCOUADE_JAVY names another.
 # Needs rustup's wasm32-wasip1 target for the pinned toolchain (rustup target add wasm32-wasip1).
 set -e
 here=$(cd "$(dirname "$0")/../src-tauri/escouade-js" && pwd)
@@ -41,16 +41,34 @@ else
 fi
 
 cd "$here"
+# The same bytes wherever it is built on Linux or macOS (ESC-328): the store's image and CI must embed the same
+# escouade-js, or the local review could not compare what they compile. rustc writes the paths of the sources into the
+# module (its panics' locations): a wrapper of rustc takes out those of this machine. Not in RUSTFLAGS: cargo hashes them
+# into the symbols, which would differ by machine all the same. Under Windows the paths keep their backslashes whatever
+# is done, so a module built there differs: the reference is the Linux one (docs/STORE.md §3.3).
+export RUSTFLAGS="-C target-feature=+simd128" # Javy's own flags (its .cargo/config.toml).
+case "$(uname -s)" in
+  MINGW* | MSYS* | CYGWIN*) ;;
+  *)
+    {
+      echo '#!/bin/sh'
+      echo 'rustc=$1; shift'
+      echo "exec \"\$rustc\" --remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo --remap-path-prefix=$(rustc --print sysroot)=/rust --remap-path-prefix=$here=/escouade-js \"\$@\""
+    } > "$out/rustc-wrapper"
+    chmod +x "$out/rustc-wrapper"
+    export RUSTC_WRAPPER="$out/rustc-wrapper"
+    ;;
+esac
 # rquickjs-sys runs bindgen with the clang of the WASI SDK it downloads, whose own headers it misses on Windows: a
 # first build fetches it, then its include folder is given to bindgen.
 if ! cargo build --release --target wasm32-wasip1 2>/dev/null; then
   inc=$(ls -d target/wasm32-wasip1/release/build/rquickjs-sys-*/out/wasi-sdk/lib/clang/*/include 2>/dev/null | head -1)
   [ -n "$inc" ] && export BINDGEN_EXTRA_CLANG_ARGS="-I$(cd "$inc" && (pwd -W 2>/dev/null || pwd))"
 fi
-# Javy's own flags (its .cargo/config.toml); the `target_features` section kept (strip = false in Cargo.toml), which
-# `javy init-plugin` (binaryen) reads.
-RUSTFLAGS="-C target-feature=+simd128" cargo build --release --target wasm32-wasip1
-"$javy" init-plugin target/wasm32-wasip1/release/escouade_js.wasm -o "$out/escouade-js.wasm"
+# The `target_features` section kept (strip = false in Cargo.toml), which `javy init-plugin` (binaryen) reads.
+cargo build --release --target wasm32-wasip1
+# --deterministic: fixed clocks and a zero-filled RNG during the pre-initialization, without which each run differs.
+"$javy" init-plugin --deterministic target/wasm32-wasip1/release/escouade_js.wasm -o "$out/escouade-js.wasm"
 sum=$( (sha256sum "$out/escouade-js.wasm" 2>/dev/null || shasum -a 256 "$out/escouade-js.wasm") | cut -d' ' -f1)
 echo "$sum" > "$out/escouade-js.wasm.sha256"
 echo "escouade-js.wasm: $(wc -c < "$out/escouade-js.wasm" | tr -d ' ') bytes, SHA-256 $sum"

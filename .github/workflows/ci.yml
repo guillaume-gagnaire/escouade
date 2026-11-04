@@ -67,13 +67,17 @@ jobs:
               - 'website/app/assets/main.css'
               - 'design/store/**'
               - '.github/workflows/ci.yml'
+              - 'crates/escouade-plugin-cli/**'
+              - 'src-tauri/escouade-js/**'
+              - 'src-tauri/Cargo.lock'
+              - 'scripts/escouade-js.sh'
 
   store:
     name: Store (format, types, tests, e2e, image)
-    needs: store-changes
+    needs: [store-changes, escouade-js]
     if: needs.store-changes.outputs.store == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     # The migrations are played from an empty base, then the tests run against it: PostgreSQL 17, as Coolify's.
     services:
       postgres:
@@ -141,6 +145,20 @@ jobs:
       - name: Docker image
         working-directory: .
         run: docker build -f store/Dockerfile -t escouade-store:ci .
+
+      # Its compiler answers, a run.js plugin compiles in it twice to the same bytes, with the escouade-js the app embeds,
+      # and the store starts and says the isolation it got (ESC-328).
+      - name: Download escouade-js
+        uses: actions/download-artifact@v7
+        with:
+          name: escouade-js
+          path: src-tauri/escouade-js/target
+
+      - name: The compiler in the image
+        working-directory: .
+        env:
+          IMAGE_TEST_DATABASE_URL: postgres://store:store@localhost:5432/store
+        run: node store/scripts/image-test.mjs escouade-store:ci src-tauri/escouade-js/target/escouade-js.wasm.sha256
 
   # escouade-js, the Javy plugin of the run.js plugins (ESC-320, docs/PLUGINS.md §5): built once for wasm32-wasip1 with the
   # pinned Javy (scripts/escouade-js.sh), its SHA-256 noted, then handed to every job that builds the app, which embeds it.

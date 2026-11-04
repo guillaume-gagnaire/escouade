@@ -11,16 +11,58 @@
 //! reader of the folder (a PNG, square, 256 px a side at least, 1 MB at most); `icon_file` never
 //! leaves the folder.
 
-use crate::engine::registry::Version;
 use crate::i18n::Lang;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
+use std::cmp::Ordering;
 use std::path::Path;
+
+/// A version number (`2.1.301`), compared number by number (a missing one counts as 0).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Version(Vec<u64>);
+
+impl Version {
+    /// The first version number of `text` (`2.1.301 (Claude Code)`, `codex-cli 0.163.0`).
+    pub fn find(text: &str) -> Option<Version> {
+        text.split(|c: char| !(c.is_ascii_digit() || c == '.'))
+            .map(|w| w.trim_matches('.'))
+            .find(|w| w.contains('.') && w.split('.').all(|n| !n.is_empty()))
+            .and_then(|w| w.split('.').map(|n| n.parse().ok()).collect::<Option<_>>())
+            .map(Version)
+    }
+
+    pub fn parse(text: &str) -> Version {
+        Version::find(text).unwrap_or(Version(Vec::new()))
+    }
+}
+
+impl std::fmt::Display for Version {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let parts: Vec<String> = self.0.iter().map(u64::to_string).collect();
+        f.write_str(&parts.join("."))
+    }
+}
+
+impl PartialOrd for Version {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Version {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let n = self.0.len().max(other.0.len());
+        let at = |v: &Version, i: usize| v.0.get(i).copied().unwrap_or(0);
+        (0..n)
+            .map(|i| at(self, i).cmp(&at(other, i)))
+            .find(|o| o.is_ne())
+            .unwrap_or(Ordering::Equal)
+    }
+}
 
 /// The manifest's file in a plugin's folder.
 pub const FILE: &str = "escouade-plugin.json";
 /// Where the site serves the schema (`schemas/plugin-1.json` of the repository).
-#[cfg_attr(not(test), allow(dead_code))]
 pub const SCHEMA_URL: &str = "https://escouade.dev/schemas/plugin-1.json";
 /// The major version of the plugins' protocol this Escouade serves (`escouade.api`).
 pub const API: u64 = 1;
@@ -405,7 +447,7 @@ fn beyond(v: &Version, max: &str) -> bool {
 }
 
 /// A version of Escouade, `2` as much as `2.1.0`.
-pub(crate) fn version(s: &str) -> Version {
+pub fn version(s: &str) -> Version {
     if s.contains('.') {
         Version::parse(s)
     } else {
@@ -422,7 +464,6 @@ pub struct Read {
 }
 
 /// Reads the text of a manifest, for a plugin of `hand`.
-#[cfg_attr(not(test), allow(dead_code))]
 pub fn read(text: &str, hand: Hand) -> Read {
     read_with(text, hand, None)
 }
@@ -447,7 +488,6 @@ fn read_with(text: &str, hand: Hand, file: Option<FileOf>) -> Read {
 }
 
 /// Checks a manifest's value, field by field; its icon's field, not its file.
-#[cfg_attr(not(test), allow(dead_code))]
 pub fn check(v: &Value, hand: Hand) -> Read {
     check_with(v, hand, None)
 }
@@ -1246,7 +1286,6 @@ impl Checker {
 
 /// The JSON schema of the manifest (`schemas/plugin-1.json`), for the editors' completion: the
 /// reader's rules, as far as a schema says them. Unknown fields are allowed (they are ignored).
-#[cfg_attr(not(test), allow(dead_code))]
 pub fn schema() -> Value {
     let text = json!({
         "description": "One text, or a text by language (`en` first, then `fr`).",

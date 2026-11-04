@@ -1,6 +1,7 @@
 use super::*;
 use crate::engine::CLAUDE;
 use crate::i18n::Lang::{En, Fr};
+use std::cmp::Ordering;
 
 #[test]
 fn a_version_is_read_from_what_the_program_prints_and_compared_number_by_number() {

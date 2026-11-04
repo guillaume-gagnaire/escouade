@@ -24,11 +24,11 @@ Ce document dit **ce qui a été construit**, et où. Il était l'analyse d'ESC-
 
 | Pièce | Où | Ce qu'elle fait |
 | --- | --- | --- |
-| Le manifeste | `src-tauri/src/plugins/manifest.rs`, `schemas/plugin-manifest.mjs` (deux lecteurs, un corpus : `tests/fixtures/plugins/manifests.json`), `schemas/plugin-1.json` | Lit et refuse, champ par champ, en français et en anglais |
+| Le manifeste | `crates/escouade-plugin-cli/src/manifest.rs`, `schemas/plugin-manifest.mjs` (deux lecteurs, un corpus : `tests/fixtures/plugins/manifests.json`), `schemas/plugin-1.json` | Lit et refuse, champ par champ, en français et en anglais |
 | Le chargement et l'installation | `src-tauri/src/plugins/mod.rs` | Installe (dossier, dépôt git, store, en développement), fixe l'empreinte, tient `<data>/plugins/` et les choix de l'utilisateur |
 | Les plugins livrés | `src-tauri/src/plugins/builtin.rs`, `plugins/builtin/<id>/` | Le registre embarqué, la vérification de `{escouade}/…` |
 | Le runtime | `src-tauri/src/plugins/runtime.rs` | Un process par plugin dans un Job object, démarré à la demande, délais, relances, mémoire, fermeture |
-| Le WASM | `src-tauri/src/plugins/wasm.rs`, `wasm_prelude.js`, `src-tauri/escouade-js` | L'hôte wasmtime, `net/fetch`, les limites, le cache des précompilés (§5) |
+| Le WASM | `src-tauri/src/plugins/wasm.rs`, `crates/escouade-plugin-cli/src/wasm.rs` et `wasm_prelude.js`, `src-tauri/escouade-js` | L'hôte wasmtime, `net/fetch`, les limites, le cache des précompilés dans l'app ; la compilation (Javy, `escouade-js`, le prélude) dans le crate sans Tauri que l'image du store construit (§5, ESC-328) |
 | Le protocole | `schemas/plugin-protocol-1.json` (le socle, dont le TS du SDK est généré), `crates/escouade-plugin-protocol` (les types partagés avec le cœur : comptes, sources, hébergeurs, harness, voix) | Un seul protocole pour les deux transports |
 | Les faits | `src-tauri/src/facts.rs`, `src-tauri/src/plugins/events.rs` | Le bus de faits typés, les webhooks et les commandes déclarés |
 | Les autorisations | `src-tauri/src/plugins/decide.rs` | Les plugins qui décident, un refus qui l'emporte, le délai |

@@ -1,0 +1,37 @@
+[package]
+name = "escouade-plugin-cli"
+# Always the app's own (scripts/version.mjs keeps them together): `escouade-plugin --version` says it, and the store's
+# `version.json` names it (`compiler.prelude`), which the local review compares with the machine's.
+version = "2.1.2"
+description = "L'outil des auteurs de plugins d'Escouade sans l'app : lire le manifeste et compiler un plugin run.js en WASM"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+workspace = "../../src-tauri"
+
+# What `escouade-plugin` does without the app's host: `validate`, `build`, `--version` (docs/STORE.md §1.3). Neither
+# Tauri, GTK nor WebKit, nor wasmtime: the store's image builds this crate alone (store/Dockerfile), and the app takes
+# its manifest's reader and its compiler from here, so that the two can never drift apart. `test` and `dev` stay in the
+# app, on its host (`src-tauri/src/plugins/bench`), and reach `cli::main` through its `more`.
+#
+# Its program is `escouade-plugin-cli` in the build, and only then: the store's image installs it as `escouade-plugin`.
+# The app ships its own `escouade-plugin` (Tauri bundles the bins of its package alone), and a second bin of that name in
+# the workspace would make `cargo build --bin escouade-plugin` ambiguous and two programs fight for one file.
+[lib]
+name = "escouade_plugin_cli"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+flate2 = "1"
+uuid = { version = "1", features = ["v4"] }
+dirs = "6"
+parking_lot = "0.12"
+log = "0.4"
+sys-locale = "0.3"
+# The download of the pinned Javy, by the app's own client where it has one (Réglages › Réseau's proxy).
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }
+tokio = { version = "1", features = ["rt", "time", "net"] }

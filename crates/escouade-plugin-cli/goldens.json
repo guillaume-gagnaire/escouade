@@ -1,0 +1,14 @@
+{
+  "engine": "fede6ced36c3edc8fd37a05ca0aa9dd5eb54f89ce9921d3b7423f72e61da74cf",
+  "prelude": "20f65a33179d52bc94a0e38ca66476526774fdc6eb3806533a31c6d2ac53d0f4",
+  "plugins": {
+    "team-rules": {
+      "bundle": "bfdc1f9e18ecddcf381b31ea56c53293ec68859486c077f129d25fae2d16c394",
+      "module": "8ee6e6adaa0d26f054e2281c7f8747afc5de757495913be34a9728ed5238daf1"
+    },
+    "slack": {
+      "bundle": "95f4fa023f30f03c3a34ff21b78eb5d31a02725104b8cab35d23bb89b8ba6f84",
+      "module": "cb1e74f3cbf58adf8cd01465469b2825b0bd36d39375dc86bf565b83443c9926"
+    }
+  }
+}

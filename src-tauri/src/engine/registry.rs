@@ -11,7 +11,6 @@ use crate::i18n::{self, Lang};
 use crate::model::EngineId;
 use parking_lot::{Mutex, RwLock};
 use serde::Serialize;
-use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
@@ -261,48 +260,7 @@ pub struct ToldModel {
     pub from_config: bool,
 }
 
-/// A version number (`2.1.301`), compared number by number (a missing one counts as 0).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Version(Vec<u64>);
-
-impl Version {
-    /// The first version number of `text` (`2.1.301 (Claude Code)`, `codex-cli 0.163.0`).
-    pub fn find(text: &str) -> Option<Version> {
-        text.split(|c: char| !(c.is_ascii_digit() || c == '.'))
-            .map(|w| w.trim_matches('.'))
-            .find(|w| w.contains('.') && w.split('.').all(|n| !n.is_empty()))
-            .and_then(|w| w.split('.').map(|n| n.parse().ok()).collect::<Option<_>>())
-            .map(Version)
-    }
-
-    pub fn parse(text: &str) -> Version {
-        Version::find(text).unwrap_or(Version(Vec::new()))
-    }
-}
-
-impl std::fmt::Display for Version {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let parts: Vec<String> = self.0.iter().map(u64::to_string).collect();
-        f.write_str(&parts.join("."))
-    }
-}
-
-impl PartialOrd for Version {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for Version {
-    fn cmp(&self, other: &Self) -> Ordering {
-        let n = self.0.len().max(other.0.len());
-        let at = |v: &Version, i: usize| v.0.get(i).copied().unwrap_or(0);
-        (0..n)
-            .map(|i| at(self, i).cmp(&at(other, i)))
-            .find(|o| o.is_ne())
-            .unwrap_or(Ordering::Equal)
-    }
-}
+pub use escouade_plugin_cli::manifest::Version;
 
 /// Where a version stands against the tested range.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
