@@ -52,7 +52,10 @@ describe('version script', () => {
     fs.mkdirSync(path.dirname(crate), { recursive: true });
     fs.writeFileSync(crate, '[package]\nname = "escouade-plugin-cli"\nversion = "0.1.0"\n');
     const cargoLock = path.join(root, 'src-tauri', 'Cargo.lock');
-    fs.writeFileSync(cargoLock, '[[package]]\nname = "escouade-plugin-cli"\nversion = "0.1.0"\n\n[[package]]\nname = "x"\nversion = "0.1.0"\n');
+    fs.writeFileSync(
+      cargoLock,
+      '[[package]]\nname = "escouade-plugin-cli"\nversion = "0.1.0"\n\n[[package]]\nname = "x"\nversion = "0.1.0"\n',
+    );
     setVersion(root, '1.2.3');
     expect(readVersions(root)).toEqual({ package: '1.2.3', tauri: '1.2.3', cargo: '1.2.3', cli: '1.2.3' });
     expect(fs.readFileSync(cargoLock, 'utf8')).toBe(

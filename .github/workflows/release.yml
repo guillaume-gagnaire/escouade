@@ -92,6 +92,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri/escouade-js
+          # The script decides what rustc is given (its wrapper is no input cargo sees): a cache made by another one would hand
+          # back a module with this machine's paths, and the store's image would embed another escouade-js.
+          key: ${{ hashFiles('scripts/escouade-js.sh') }}
 
       - name: Build escouade-js
         run: |
