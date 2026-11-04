@@ -1,9 +1,9 @@
 ---
-number: null
+number: 66
 id: "codex-passe-par-son-plugin-en-process-et"
 title: "Codex passe par son plugin, en process, et sa vue lit sa traduction en bibliothèque"
 date: "2026-11-04"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-225"
 pages: ["plugins/codex-en-plugin","plugins/harness-en-process","plugins/livres-avec-escouade"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/codex-en-plugin","added":15,"removed":0},{"page":"plugins/harness-en-process","added":7,"removed":0},{"page":"plugins/livres-avec-escouade","added":1,"removed":1}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-04T09:29:23+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
