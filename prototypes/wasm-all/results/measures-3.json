@@ -1,0 +1,100 @@
+{
+  "codex": {
+    "native": {
+      "batched": {
+        "linesPerSecond": 219860.41846919316
+      },
+      "fastest": {
+        "lines": 9580,
+        "linesPerSecond": 31431.518660741705,
+        "maxUs": 12459.6,
+        "mbPerSecond": 10.636714638557223,
+        "medianUs": 26.299999999999997,
+        "p99Us": 76.19999999999999
+      },
+      "memory": 10706944,
+      "paced": {
+        "maxUs": 2852.7000000000003,
+        "medianUs": 68.80000000000001,
+        "p99Us": 261.1,
+        "seconds": 59.9302027
+      }
+    },
+    "wasm": {
+      "batched": {
+        "linesPerSecond": 191309.21000079878
+      },
+      "fastest": {
+        "lines": 9580,
+        "linesPerSecond": 46724.84674201495,
+        "maxUs": 195.4,
+        "mbPerSecond": 15.812117342770648,
+        "medianUs": 17.8,
+        "p99Us": 60.900000000000006
+      },
+      "memory": 0,
+      "paced": {
+        "maxUs": 192.9,
+        "medianUs": 64.8,
+        "p99Us": 140.70000000000002,
+        "seconds": 59.930247
+      }
+    }
+  },
+  "linear": {
+    "native": {
+      "callsPerSecond": 823.0439465549829,
+      "maxUs": 6925.299999999999,
+      "medianUs": 1153.1,
+      "memory": 10231808,
+      "p99Us": 1731.2,
+      "pacedMedianUs": 1846.1000000000001,
+      "pacedP99Us": 3059.4
+    },
+    "wasm": {
+      "callsPerSecond": 708.3585745105385,
+      "maxUs": 4165.6,
+      "medianUs": 1336.3999999999999,
+      "memory": 0,
+      "p99Us": 2279.7999999999997,
+      "pacedMedianUs": 1644.7,
+      "pacedP99Us": 2650.0
+    }
+  },
+  "size": {
+    "codexNative": 1164800,
+    "linearNative": 3693568
+  },
+  "start": {
+    "codexNative": {
+      "idleMemory": 7479296,
+      "medianMs": 17.3902,
+      "p99Ms": 560.7692
+    },
+    "codexWasm": {
+      "cwasmBytes": 1964264,
+      "instanceMedianMs": 3.3906,
+      "instanceP99Ms": 5.4848,
+      "linearMemory": 1179648,
+      "loadMs": 0.5429999999999999,
+      "precompileMs": 96.7688,
+      "wasmBytes": 642140,
+      "workingSetPerInstance": 329728
+    },
+    "linearNative": {
+      "idleMemory": 6696960,
+      "medianMs": 14.401900000000001,
+      "p99Ms": 629.9259999999999
+    },
+    "linearWasm": {
+      "cwasmBytes": 1482784,
+      "instanceMedianMs": 2.2234,
+      "instanceP99Ms": 4.6602,
+      "linearMemory": 1179648,
+      "loadMs": 0.33149999999999996,
+      "precompileMs": 49.9873,
+      "wasmBytes": 459364,
+      "workingSetPerInstance": 248627
+    }
+  }
+}

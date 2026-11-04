@@ -8,7 +8,8 @@ Ce document dit **ce qui a été construit**, et où. Il était l'analyse d'ESC-
 - §4 : tout ce qui est externe est un plugin, en process (ESC-203) ; ce chapitre est encore celui de l'étude, ESC-227 (INT-11) le passe en référence ;
 - §5 : les programmes en JS/TS sans Node, en WASM (ESC-319) ;
 - §6 : les sources de l'étude ;
-- §7 : l'essai réel (ESC-184).
+- §7 : l'essai réel (ESC-184) ;
+- §8 : tous les plugins en WASM, la première main comprise : l'étude et le plan (ESC-330), la cible de la 2.2.
 
 **La règle, depuis ESC-203 : tout ce qui est externe est un plugin.** Les intégrations d'Escouade sont des plugins de première main, livrés et signés avec l'app, et, comme ceux des tiers, des process qui parlent le même protocole (§4, décidé le 2026-10-26).
 
@@ -916,7 +917,7 @@ Son API ne change pas : `createPlugin().onEvent(...)`, `decidePermission(...)`, 
 
 ### 5.6 Le pipeline du store
 
-**Le manifeste.** Un programme en JS/TS se déclare par **`"run": { "js": "dist/plugin.mjs" }`**, un champ de `run` à côté de `command` : le bundle commité est la source de vérité, le `.wasm` est un produit du store, jamais commité. Un `run.wasm` (un module écrit en Rust ou en Go, compilé par son auteur) n'est pas ouvert : le store ne pourrait pas le reproduire. Un manifeste a `command` **ou** `js`, pas les deux.
+**Le manifeste.** Un programme en JS/TS se déclare par **`"run": { "js": "dist/plugin.mjs" }`**, un champ de `run` à côté de `command` : le bundle commité est la source de vérité, le `.wasm` est un produit du store, jamais commité. Un `run.wasm` (un module écrit en Rust ou en Go, compilé par son auteur) n'est pas ouvert : le store ne pourrait pas le reproduire. Le §8.5 l'ouvre, autrement : le store compile les sources en Rust. Un manifeste a `command` **ou** `js`, pas les deux.
 
 **À la soumission** (STORE-3, un onzième contrôle, « Compilation ») :
 
@@ -945,7 +946,7 @@ Son API ne change pas : `createPlugin().onEvent(...)`, `decidePermission(...)`, 
 
 **Ce que WASM-4 (ESC-323) a construit.** Le onzième contrôle du store, « Compilation » (`store/server/utils/compile.ts`, `docs/STORE.md` §3.3) : le bundle de l'archive figée compilé deux fois par `escouade-plugin build`, chaque fois dans un dossier neuf, deux modules différents refusant la version ; le module gardé sous son SHA-256 et `wasm: { sha256, size, compiler }` dans `version.json` ; `plugin.wasm` servi par l'API de l'app, que `plugins/store.rs` télécharge, vérifie contre `version.json` et range dans le cache, où l'installation le précompile ; le contrôle des binaires qui refuse à un tiers un script ou un interpréteur. **Le conteneur du §5.6 n'est pas construit** : le store tourne lui-même dans un conteneur sur Coolify, sans le socket Docker de l'hôte (le lui donner ferait root sur le serveur quiconque passe par le store). La compilation y est un sous-process : sans réseau par `unshare -rn` quand le noyau le permet, 2 minutes et 1 Gio, un dossier et des données neufs, aucune variable du store ; le code d'initialisation du plugin, lui, ne tourne que dans le bac à sable WASM de wasmtime (Wizer), sans appel système. Ce que cela couvre et ne couvre pas : la décision d'ESC-323.
 
-**Le `run` natif, tranché :**
+**Le `run` natif, tranché** (ce qui suit est revu par le §8.8, dès l'acceptation des décisions d'ESC-330) **:**
 
 1. **La première main le garde.** Les plugins `dev.escouade.*` qui sont des programmes Rust du dépôt de l'app (les harness, les sources du Kanban, les hébergeurs, la voix : §4), construits et signés avec l'app (`{escouade}/escouade-plugins`), restent des process : ils lancent des CLI, parlent à des API avec des comptes, et leur confiance est celle de l'app. Slack et Règles de l'équipe, eux, passent en `run.js` (§5.8) : rien ne les oblige à être des process.
 2. **Les binaires tiers attestés restent permis**, inchangés : un exécutable par système, son attestation de provenance GitHub, « Lance un programme sur votre ordinateur, avec vos droits » en rouge. C'est la seule voie pour un plugin tiers qui doit lancer un programme (un harness ACP, une commande) ; ils ne seront jamais « sans crainte ». Un auteur en Go ou en Rust qui n'a besoin d'aucun droit du système est invité à `run.js`… ou à attendre `run.wasm`.
@@ -1057,3 +1058,508 @@ Il n'y a pas de Mac sur le poste de l'essai, et WSL n'y répond pas. **Aucun ess
 Les e2e, et donc la vue Plugins, le store dans l'app, les thèmes et les sceaux vus dans la fenêtre, ne tournent que sous Windows.
 
 **À faire à la release, sur un Mac et sous Linux** : `docs/STORE.md` §9.1, étape 7 : installer depuis store.escouade.dev, le sceau et la fenêtre des permissions, le thème dans WKWebView et WebKitGTK, un programme par plugin (les scripts `slack` et `team-rules` des versions à Node, qui doivent être exécutables), le lien `escouade://`, les plugins livrés et leur signature (`codesign` sous macOS), puis la révocation (étape 8).
+
+## 8. Tous les plugins en WASM, la première main comprise (ESC-330)
+
+Décidé par l'utilisateur le 2026-11-04 : « je veux que tous les plugins, même les builtins, passent par le même système : on livre un plugin, il est compilé pour qu'il soit utilisable sur tous les systèmes, et il fait ce qu'il a besoin de faire », puis « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté ». Le même jour, l'état de fin : « A la fin, je veux que tous les plugins builtins soient dans /plugins/* (exemple plugins/claude), tous publiés sur le store, vérifiés et signés. »
+
+Ce chapitre est l'étude, faite avant le portage : rien n'a changé dans l'app. Le prototype, ses tests et ses mesures sont dans `prototypes/wasm-all/` (son README dit comment tout refaire). Il revoit le §5.7 (« le `run` natif, tranché ») et le §5.6 (« un `run.wasm` n'est pas ouvert ») : ces deux passages tiennent jusqu'à l'acceptation des décisions proposées par ESC-330. Sans numéro tant qu'elles ne sont pas acceptées, elles se citent par leur identifiant : `run-wasm-le-rust-des-plugins-compile-par`, `les-capacites-de-l-hote-ce-qu-un-plugin`, `la-premiere-main-dans-plugins-id-court-p`, `plus-aucun-run-command-le-store-le-refus`.
+
+**En bref.**
+
+- **Le portage coûte peu sur ce qui a été essayé.** Le fichier source de Linear compile **sans changer une ligne** ; il reçoit seulement l'export du tour, ajouté par `prepare.mjs`. Codex change cinq endroits (`prepare.mjs` les imprime). Les deux répondent exactement comme leur natif, ligne à ligne, sur les flux enregistrés.
+- **Le coût à l'exécution est nul ou favorable** : voir les mesures du §8.9. Un plugin passe de 7 à 11 Mo par process à moins de 2 Mo, et son démarrage de 14 à 18 ms à 2 ou 3 ms. Le seul recul mesuré : un appel de Linear prend 0,2 ms de plus.
+- **La reproductibilité tient, à une condition.** Le même rustc 1.98.0 donne **les mêmes octets sous Windows et sous Linux** (`5ae4aabb…` pour Linear, `c5ab5a0a…` pour Codex), à condition de passer par un enveloppeur de `rustc` et une chaîne d'outils minimale. Sans lui, les empreintes diffèrent.
+- **Ce qui reste difficile n'est pas la compilation.** C'est, dans l'ordre : OpenCode (flux SSE, serveur local), la voix (WebSocket, sons binaires, code encore dans le crate de l'app), Antigravity (attente active d'un fichier) et les hébergeurs auto-hébergés et derrière un proxy, que `net/fetch` refuse aujourd'hui (§8.4.1).
+- **Un risque neuf au store.** Compiler du Rust exécute du code natif de l'auteur : les `build.rs` et les macros procédurales. Javy n'en avait pas. Le bac à sable d'ESC-323 ne suffit pas pour un tiers (§8.5.4).
+- **Le store ne lit que le dossier du plugin** : `path = "../../crates/…"` n'y existe pas. Le kit doit sortir sur crates.io (§8.6.3), ce qui est une publication, à accepter.
+
+### 8.1 L'inventaire : ce que chaque plugin fait hors du protocole
+
+Relevé sur `main` au 2026-11-04, et sur `ticket/esc-226` (c291625b) pour Claude Code, le code étant celui de ce ticket en cours. « Rien » veut dire : aucun process, aucun fichier, aucun fil, aucun minuteur.
+
+**Le socle commun.**
+
+| Pièce | Ce qu'elle fait hors du protocole | Où |
+| --- | --- | --- |
+| `escouade-plugin-kit` | tokio à 2 fils, une tâche par appel | `crates/escouade-plugin-kit/src/serve.rs:150-222`, `:225-229` |
+| | reqwest, proxy et TLS lus dans l'environnement (`ESCOUADE_PROXY`, `ESCOUADE_NO_PROXY`, `ESCOUADE_INSECURE_TLS`) | `http.rs:22-41` |
+| | la langue lue dans l'environnement (`ESCOUADE_LANG`) | `i18n.rs:47` |
+| `escouade-plugin-protocol` | rien : `serve` prend un `BufRead` et un `Write` | `src/lib.rs:133` |
+| `escouade-acp` | lit et écrit les fichiers de l'agent (`fs/read_text_file`, `fs/write_text_file`) | `crates/escouade-acp/src/agent.rs:1195`, `:1227-1231`, `:1551` |
+| | résout les chemins, lit `.git`, `gitdir`, `commondir`, le dossier temporaire | `git.rs:340-348`, `:383-393` |
+| | le plan de Gemini, par le chemin que Gemini nomme | `gemini.rs:76` |
+| | l'heure | `agent.rs:215` |
+
+**Les hébergeurs et les sources.** Tous passent par `net/fetch` sans nouveauté de fond. Le minuteur est leur seule capacité en plus.
+
+| Plugin | Hôtes (`permissions.network`) | Hors du protocole | Où |
+| --- | --- | --- | --- |
+| `dev.escouade.linear` | `api.linear.app` | rien | `plugins/builtin/dev.escouade.linear/src/lib.rs` |
+| `dev.escouade.trello` | `api.trello.com` | rien | `.../dev.escouade.trello/src/lib.rs` |
+| `dev.escouade.jira` | `*.atlassian.net` | rien ; le site est tapé par l'utilisateur | `.../dev.escouade.jira/src/lib.rs` |
+| `dev.escouade.clickup` | `api.clickup.com` | une attente de limite d'appels, l'heure | `src/lib.rs:84`, `:692` |
+| `dev.escouade.github` | `api.github.com`, `*.ghe.com`, `api.*.ghe.com` ; toute instance Server | une pause par limite d'appels, l'heure | `src/pulls.rs:160`, `:107` |
+| `dev.escouade.gitlab` | `gitlab.com` ; toute instance | une pause, l'heure | `src/merges.rs:317`, `:62` |
+| `dev.escouade.bitbucket` | `api.bitbucket.org` | une pause, l'heure ; `ESCOUADE_BITBUCKET_API` (essais) | `src/pulls.rs:172`, `:93` ; `src/lib.rs:21` |
+| `dev.escouade.gitea` | `codeberg.org`, `gitea.com` ; toute instance | rien | `src/pulls.rs` |
+| `dev.escouade.azure-devops` | `dev.azure.com`, `*.dev.azure.com`, `*.visualstudio.com` ; toute instance Server | une pause, l'heure | `src/pulls.rs:347`, `:46` |
+
+Le jeton de la CLI (`gh auth token`, `glab auth status --show-token`, `az account get-access-token`) est déjà demandé par le cœur (`src-tauri/src/forge/github.rs:87`, `gitlab.rs:88`, `azure.rs:203`) : **aucun hébergeur ne lance de process**.
+
+**Les harness.** Le cœur lance tous les CLI (`engine/launch`, `check_launch`) : aucun plugin de harness ne lance son harness.
+
+| Plugin | Hors du protocole | Où |
+| --- | --- | --- |
+| `dev.escouade.codex` | `std::process::id()` (qui **plante** sur WASI, §8.9) | `src/client.rs:167` |
+| | `dirs::home_dir()`, lit `config.toml` du dossier du compte | `src/client.rs:204`, `:212` |
+| `dev.escouade.copilot-cli` | `std::process::id()` | `src/client.rs:183` |
+| `dev.escouade.cursor-cli`, `dev.escouade.gemini-cli`, `dev.escouade.acp` | rien d'eux-mêmes : tout est dans `escouade-acp` ; `ESCOUADE_VERSION` lu dans l'environnement | `.../dev.escouade.acp/src/lib.rs:76`, `:87` |
+| `dev.escouade.mistral` | Mistral Vibe : comme les précédents ; sa voix : comme la voix, plus bas | `src/lib.rs` |
+| `dev.escouade.antigravity-cli` | lit `settings.json`, le fichier MCP, le plan, ce qui est toujours permis | `src/client.rs:179`, `:266`, `:503` ; `src/words.rs:171` |
+| | **attend un fichier en boucle dans un tour** : le transcript, 40 ms entre deux lectures, 600 ms au plus | `src/client.rs:283-298`, `:30` |
+| | lit des variables et `dirs::home_dir()` pour le dossier de l'agent | `src/words.rs:546-548` |
+| `dev.escouade.opencode` | tokio à 2 fils, 3 tâches par session | `src/lib.rs:78-80`, `:172`, `:263` ; `src/session.rs:274`, `:299`, `:717` |
+| | joint `opencode serve` sur `127.0.0.1`, le port lu dans ce que le serveur écrit | `src/lib.rs:324` ; `src/server.rs:49`, `:279` |
+| | **un flux SSE sans fin** (`/global/event`), relancé 200 ms après une coupure | `src/server.rs:228-248` |
+| | des appels HTTP bornés par un délai | `src/session.rs:766`, `src/server.rs:77` |
+| `dev.escouade.claude-code` (ESC-226) | son client et sa traduction : rien, comme Codex | `plugins/builtin/dev.escouade.claude-code/src/client.rs`, `translate.rs` |
+| | `signin.rs` lit `.credentials.json` et lance `/usr/bin/security` (macOS), en tokio : du code **que le cœur appelle en bibliothèque**, pas le plugin | `src/signin.rs:110`, `:180` |
+| `dev.escouade.minimal` | le plugin écrit un fichier d'essai ; son faux harness a un fil et dort | `src-tauri/src/bin/escouade-plugins/minimal.rs:390`, `minimal_harness.rs:53`, `:206` |
+
+**Les services de voix.** `dev.escouade.openai`, `.groq`, `.elevenlabs`, `.deepgram` et la voix de `.mistral` n'ont **pas de crate** : leur programme est `escouade_lib::voice_plugin`, le crate de l'app tout entier (`src-tauri/src/bin/escouade-plugins/voice.rs:7`, `src-tauri/src/lib.rs:414`). Le code est dans `src-tauri/src/voice/`.
+
+| Besoin | Où |
+| --- | --- |
+| un fil par requête (`std::thread::spawn`), un runtime tokio à chaque appel | `src-tauri/src/voice/plugin_guest.rs:190`, `:209` |
+| WebSocket `wss` (`tokio-tungstenite`), TLS et tunnel de proxy faits à la main, en-têtes d'authentification | `voice/live.rs:31`, `:647-692` |
+| le son en direct : un morceau toutes les 100 ms, en base64 sur `voice/live/audio` | `voice/live.rs:38`, `voice/wire.rs:15`, `:65` |
+| envoi d'un WAV en multipart ou brut : **un corps binaire** | `voice/online.rs:316`, `:353-385` |
+| réponses en flux : SSE base64 (Mistral), PCM brut (ElevenLabs), lues par morceaux | `voice/online_speech.rs:121`, `:306`, `:422` |
+
+**isola.** C'est **le seul plugin qui lance un programme lui-même** : `isola ls --json`, `isola down`, `isola destroy`, 60 s au plus, ses deux flux vidés par deux fils, tué au-delà (`src-tauri/src/bin/escouade-plugins/isola.rs:121-168`). `isola up` est lancé par le cœur (`contributes.launchEnvironments`). Docker n'est pas appelé par le plugin : c'est `isola` qui le fait.
+
+**Ce qui revient partout.** L'environnement (`ESCOUADE_LANG`, le proxy, la version) doit devenir une donnée d'`initialize`, WASI n'ayant pas d'environnement ; `std::process::id()` plante ; `dirs::home_dir()` rend `None`. Trois points, un seul ticket (A4 du plan).
+
+### 8.2 Ce que le cœur fait déjà, et ce qui lui reste
+
+**Déjà au cœur, et qui y reste :**
+
+- trouver un CLI (`locate`), décrire sa version, le lancer dans son Job object, sous WSL au besoin (`plugins/harness.rs:866`) ; vérifier sa description de lancement (`check_launch`, `:633`) ;
+- le PTY de la vue terminal : ni ses octets ni son écran ne passent par un plugin (`terminal/launch`, `terminal/hook`) ;
+- lire ce que le harness écrit et le lui passer par lots de 64 Kio (`agent/frames`), écrire ce que le plugin demande (`writes`), appliquer les éléments ;
+- écrire les fichiers d'un lancement dans le dossier de l'agent (`Launch::files`, `check_launch:677-702`) ;
+- le processus partagé d'OpenCode (`Launch::shared`, `plugins/shared.rs`) ;
+- le coffre (`secrets/get`, `plugins/runtime.rs:1587`), les jetons des CLI, la connexion des comptes ;
+- le serveur MCP d'Escouade, les hooks, les autorisations, le journal, les redémarrages ;
+- la voix locale (Whisper, Piper, la capture du micro) : ce n'est pas externe (§4.2).
+
+**Ce qui passe au cœur avec le WASM.** Ces trois points ne peuvent pas rester dans un module :
+
+- `signin.rs` de Claude Code, pour ses lectures (`.credentials.json`, le trousseau de macOS) : le cœur les fait déjà en l'appelant en bibliothèque. Sa règle pure peut rester dans la crate, ses entrées-sorties vont au cœur. ESC-226 a déjà séparé les deux (c291625b).
+- le jugement de la clôture des projets privés sur les fichiers, que `escouade-acp` tient aujourd'hui lui-même (`paths.rs`) : avec `fs/*`, c'est l'hôte qui le tient (§8.4.6). C'est plus sûr qu'aujourd'hui.
+- le tunnel de proxy et le TLS du WebSocket, aujourd'hui dans `voice/live.rs` : l'hôte les fait pour tous (§8.4.4).
+
+**Ce qui doit sortir du cœur.** Le cœur lie aujourd'hui des crates de plugins **en bibliothèque** : 8 usages d'`escouade_plugin_opencode`, 7 de `_codex`, 5 de `_copilot`, 5 de `_agy` et 19 d'`escouade_acp` hors tests, pour ses « Vue X » et ses comptes (`src-tauri/src/agent/*.rs`, `engine/*/mod.rs`). Un correctif publié au store ne corrigerait donc pas la vue, qui resterait à la version de l'app. **Retenu** : une méthode du contrat (`view/translate`), le cœur lisant le fichier de la session et le plugin le traduisant. Le cœur ne lie plus que `escouade-plugin-protocol`. C'est le ticket P8 du plan ; il peut attendre après la 2.2 sans rien casser, le code restant commun.
+
+### 8.3 Le modèle d'exécution
+
+**Une instance par plugin, sur un fil, réveillée par des événements.** C'est le modèle de `run.js` (§5.4), étendu sur un point : les réponses lentes ne bloquent plus le fil.
+
+- **Le module est un réacteur** : `crate-type = ["cdylib"]`, donc `_initialize`, puis l'export `escouade-turn`, le même nom que pour `run.js`. Il garde son état entre deux tours.
+- **Le fil attend sur un seul canal** ce qui peut arriver : une ligne du cœur, la fin d'un `net/fetch`, un morceau de flux, un message de WebSocket, la sortie d'un programme, un minuteur. Il écrit tout ce qui est arrivé sur l'entrée du module, puis lance **un** tour, puis sert ce que le module a écrit. Plusieurs événements font un seul tour.
+- **Rien n'attend dans un tour.** Une demande à l'hôte est une ligne ; sa réponse arrive au tour suivant. Une tâche Rust qui attend rend la main (`Poll::Pending`) ; `escouade-plugin-kit` a un exécuteur d'une centaine de lignes, sans tokio, qui sonde ses tâches à chaque tour (`prototypes/wasm-all/guest/kit/src/serve.rs`). Un harness, machine à états sans attente, garde son `Plugin::handle` tel quel (`guest/escouade-turn/src/lib.rs`).
+- **Deux portes vers l'hôte :**
+  - **les lignes JSON-RPC**, pour tout ce qui dure : c'est la voie normale, la même qu'en `run.js`, le même journal ;
+  - **un appel synchrone** (`escouade.call`, un import du module, requête et réponse en JSON), pour ce qu'une machine à états doit avoir avant de répondre, sans changer sa forme : les fichiers (§8.4.6). Il est servi sur le fil du plugin et compte dans le temps du tour.
+- **Les limites** restent celles du §5.4 : 64 Mio, 2 s par tour, 500 ms pour une décision, le même budget de redémarrages. Le temps d'attente du réseau n'est pas compté : il n'est pas dans un tour. Une instance qui dépasse est finie et refaite ; ce qu'elle tenait (les agents attachés) lui est redonné par `agent/attach`, comme après un redémarrage d'aujourd'hui.
+- **Ce que cela change à `wasm.rs`** : `serve` reçoit ses événements d'un canal au lieu de `rx` et sert `net/fetch` à côté, sur le runtime de l'hôte. Aujourd'hui, un `fetch` lent bloque son plugin (`wasm.rs:1184`) ; pour Linear ou GitHub, qui font plusieurs appels à la fois, ce serait une régression. Le test `a_slow_fetch_holds_back_neither_the_next_nor_the_thread` prouve le nouveau modèle : un appel tenu 400 ms laisse passer le suivant.
+
+**Pourquoi pas un `main` qui bloque sur son entrée.** Un programme Rust ordinaire aurait gardé `serve` tel quel, l'hôte bloquant dans `fd_read`. Mais le temps du tour n'a alors plus de bord, l'hôte ne sert plus `net/fetch` depuis le même fil, et `run.js` et `run.wasm` auraient deux hôtes. Le tour garde **un seul hôte pour les deux** : seule la première ligne change (`_start` ou `_initialize`). Le prix : trois lignes dans le `run()` de chaque harness.
+
+### 8.4 Les capacités de l'hôte
+
+Sur le modèle de `net/fetch` : une méthode du protocole, déclarée au manifeste, appliquée par l'hôte, dite dans la fenêtre d'installation et gardée au journal. **Ce que le manifeste ne déclare pas, le module ne peut pas l'atteindre**, l'import n'étant servi qu'avec la permission. Une capacité non déclarée répond `-32003`.
+
+Les « coûts » sont ceux du prototype quand ils ont été mesurés, sinon une estimation dite comme telle.
+
+#### 8.4.1 Le réseau : `net/fetch` à revoir
+
+`net/fetch` existe, mais quatre de ses règles empêchent la première main d'y passer. Sans elles, personne ne migre.
+
+| Ce qui bloque | Qui | Ce qui est proposé |
+| --- | --- | --- |
+| **Une instance auto-hébergée** : GitHub Enterprise Server, GitLab, Gitea, Azure DevOps Server, Jira. Son hôte n'est pas au manifeste, et `forbidden` refuse tout hôte de réseau local (`wasm.rs:839`). | 5 plugins | `"network": ["{account}"]` : l'hôte de l'adresse **que l'utilisateur a saisie** pour ce compte, et lui seul. Il est dit dans la fenêtre et sur le compte. L'interdiction du réseau local et de http saute pour cet hôte seul : c'est l'utilisateur qui l'a nommé. |
+| **Réglages › Réseau** : `net/fetch` ignore le proxy (`wasm.rs:964`), alors que le kit le suit (`http.rs:32`). Un poste derrière un proxy d'entreprise perdrait tous ses plugins. | tous | L'hôte suit le proxy réglé, comme le kit aujourd'hui. Avec un proxy, les adresses résolues ne peuvent pas être jugées : seul le nom l'est, et le journal le dit. `ESCOUADE_INSECURE_TLS` passe à l'hôte. Revoit la décision 32. |
+| **Un corps binaire** : `body` est du texte, la réponse passe par `from_utf8_lossy` (`wasm.rs:1090`). | voix | `bodyBase64` dans les deux sens. |
+| **10 s et 1 Mio** : une transcription lit plus longtemps, un WAV pèse plus. | voix, journaux de CI | Des limites par plugin, déclarées : `"limits": { "fetchSeconds": 120, "fetchBytes": 33554432 }`, avec un plafond fixé par l'hôte (120 s, 32 Mio). |
+
+**Texte de la fenêtre.** Inchangé pour un hôte ; pour `{account}` : « Se connecte aux instances que tu lui donnes » / « Connects to the instances you give it ».
+**Coût.** Mesuré sur Linear, deux `fetch` et un secret par appel : 677 appels/s contre 795 en natif, 99e centile 2,35 ms contre 2,03 ms. Négligeable devant une vraie API, qui répond en centaines de millisecondes.
+**Surface d'attaque.** `{account}` permet à un plugin de joindre une adresse du réseau local, mais seulement celle que l'utilisateur a tapée. Avec un proxy, un DNS menteur n'est plus jugé par Escouade ; le proxy l'est par l'entreprise.
+
+#### 8.4.2 Joindre un serveur local que le cœur a lancé
+
+Pour OpenCode seulement : `opencode serve` écoute sur `127.0.0.1`, sur un port qu'il choisit.
+
+- **Déclaration** : `"network": ["local:shared"]`, et `Launch::shared.listens`, le gabarit de la ligne où le serveur dit son adresse (`"opencode server listening on http://{host}:{port}"`).
+- **Ce qu'Escouade applique** : `net/fetch` et `net/stream` en **http** vers `127.0.0.1:<port>`, seulement si `<port>` a été lu par le cœur dans la sortie d'un processus partagé que le cœur a lancé pour ce plugin, et tant que ce processus vit. Le plugin ne nomme jamais un port que le cœur n'a pas lu. Tout autre port local reste refusé.
+- **Texte** : « Parle au serveur local du harness, lancé par Escouade » / « Talks to the harness's local server, started by Escouade ».
+- **Coût** : aucun de plus que `net/fetch`.
+- **Surface d'attaque** : seulement ce serveur. Un harness qui écrirait une fausse ligne d'adresse pourrait désigner un autre port local : le harness est déjà un programme de confiance, lancé par le cœur, et le gabarit n'accepte que `127.0.0.1`.
+
+#### 8.4.3 Les réponses en flux et le SSE
+
+- **Déclaration** : aucune de plus que `network` (ou `local:shared`) : le flux suit les mêmes hôtes.
+- **Méthodes** : `net/stream { url, method, headers, body }` → `{ stream, status, headers }`, puis `net/chunk { stream, data | dataBase64 }`, `net/end { stream, error? }` ; `net/credit { stream, bytes }` et `net/cancel { stream }` du plugin vers l'hôte. Le découpage du SSE reste au plugin (`block_end`, `sse_data` d'OpenCode ne changent pas).
+- **Ce qu'Escouade applique** : les règles de `net/fetch` à l'ouverture ; **un crédit** : l'hôte ne lit plus la socket au-delà de 256 Kio non consommés, donc un plugin lent ralentit le serveur et non la mémoire de l'app ; 8 flux par plugin ; pas de limite de durée, mais 120 s sans octet ferment un flux de réponse, jamais un flux déclaré `"sse": true`.
+- **Texte** : aucun de plus.
+- **Coût** : une ligne JSON par morceau, un tour par lot d'événements ; le prototype ne l'a pas mesuré. Estimé par le débit du §8.9 (14 Mo/s en lignes isolées, bien plus en lots), très au-dessus d'un flux de harness ou de voix.
+- **Surface d'attaque** : un flux ouvert tient une connexion. D'où les 8 flux et le crédit.
+
+#### 8.4.4 Le WebSocket
+
+- **Déclaration** : `network` (les mêmes hôtes) ; `wss` seulement.
+- **Méthodes** : `ws/open { url, headers }` → `{ socket }`, `ws/send { socket, text | dataBase64 }`, `ws/close { socket }` ; `ws/message { socket, text | dataBase64 }`, `ws/closed { socket, code, reason }`.
+- **Ce qu'Escouade applique** : l'hôte de `network`, jugé à l'ouverture comme un `fetch`, le proxy et le TLS de Réglages › Réseau ; 4 sockets par plugin ; 1 Mio par message ; une file bornée à 256 Kio, au-delà de laquelle `ws/send` est refusé. Les en-têtes (la clé du service) ne vont pas au journal.
+- **Texte** : aucun de plus que « Se connecte à ».
+- **Coût** : un morceau de 100 ms à 16 kHz fait 3,2 Ko, 4,3 Ko en base64. C'est le cas le plus serré de tout le chantier : le délai de bout en bout est à mesurer dans le ticket de la voix (P6) contre le « moins de 1 ms ajoutée » du §4.13. Un tour coûte 18 µs en médiane, 72 µs au 99e centile, traduction comprise (§8.9) : rien n'annonce de problème, mais rien ne l'a prouvé.
+- **Surface d'attaque** : une connexion longue vers un hôte déclaré, comme le SSE.
+
+#### 8.4.5 Les minuteurs
+
+- **Déclaration** : aucune. Comme `log`, c'est un droit de base, borné.
+- **Méthodes** : `timer/set { ms }` → `{ timer }`, `timer/cancel { timer }` ; `timer/fired { timer }`. En JS, le prélude en fait `setTimeout` ; en Rust, le kit en fait `sleep`, `timeout`.
+- **Ce qu'Escouade applique** : 10 ms au moins, 64 minuteurs par plugin. Coupés avec l'instance.
+- **Texte** : aucun.
+- **Coût** : un réveil de tour, quelques dizaines de microsecondes. Un plugin arrêté n'en a aucun.
+- **Surface d'attaque** : un plugin qui se réveille sans cesse consomme du CPU, borné à 100 tours par seconde par le plancher de 10 ms. Il n'y a pas d'heure cachée de plus que WASI.
+
+#### 8.4.6 Les fichiers d'un dossier déclaré
+
+- **Déclaration** : `"files": [{ "root": "agent", "access": "write" }, { "root": "agentHome", "access": "read" }]`. Les racines sont une liste fermée, résolues par l'hôte : `plugin` (son dossier, ce qui existe), `agent` (le dossier de travail de l'agent), `agentRepo` (son dépôt git, pour un worktree), `agentHome` (le dossier du compte de l'agent), `temp` (un dossier à lui). Aucun chemin libre, aucun `~`.
+- **Méthodes**, par l'appel synchrone : `fs/read`, `fs/write`, `fs/stat`, `fs/list`, `fs/canon`. Essayé dans le prototype : `fs/read`.
+- **Pourquoi synchrone, et pas des préouvertures WASI** : un agent naît après l'instance, et WASI fixe ses dossiers à l'instanciation ; une machine à états lit au milieu d'un calcul (`agent.rs:1195`) ; et les chemins sont ceux de l'hôte (`C:\wt`), que WASI ne sait pas nommer. La voie asynchrone aurait forcé à réécrire ces lectures en attentes.
+- **Ce qu'Escouade applique** : le chemin résolu, liens compris, doit être sous une racine de cet agent-là ; la clôture du projet privé est appliquée **ici, par l'hôte**, quel que soit le code du plugin ; 256 Kio au plus en lecture sans `limits`, 4 Mio au plus ; le journal garde chaque écriture et chaque refus. Un test du prototype : `config.toml` lu dans le dossier déclaré, refusé dans un autre.
+- **Texte** : « Lit les fichiers de tes agents » / « Reads your agents' files » ; « Écrit dans les dossiers de tes agents » / « Writes in your agents' folders », en orange ; « Lit le dossier de compte de tes agents » / « Reads your agents' account folder ».
+- **Coût** : un aller-retour dans la mémoire du module, puis la lecture elle-même ; rien de mesurable devant un disque.
+- **Surface d'attaque** : `agentHome` contient les identifiants d'un harness (`.credentials.json`, `auth.json`). Un plugin de harness a déjà ce pouvoir aujourd'hui, en mieux. Ici il est déclaré ; à la revue, ce droit se justifie.
+
+**Antigravity** garde une attente de 600 ms dans un tour (`client.rs:283`). Il faut la réécrire avec un minuteur : `frames` répond sans le transcript, puis un `agent/items` l'envoie quand il arrive. C'est le seul harness à changer de forme.
+
+#### 8.4.7 Lancer un programme nommé
+
+Pour isola seulement, à ce jour, et pour les tiers.
+
+- **Déclaration** : `permissions.commands`, qui existe : `["isola ls --json", "isola down", "isola destroy"]`. Le premier mot est un programme **que le cœur trouve** (`locate`), jamais un chemin.
+- **Méthodes** : `proc/spawn { command, args, dir, env }` → `{ proc }`, `proc/write { proc, data }`, `proc/kill { proc }` ; `proc/out { proc, stream, data }`, `proc/exit { proc, code }`.
+- **Ce qu'Escouade applique** :
+  - la commande et ses arguments doivent **commencer par** une entrée déclarée, mot pour mot, le reste n'étant accepté que si l'entrée finit par `*` ;
+  - `dir` est une racine (`agent`, `project`), jamais un chemin libre ; un projet privé la refuse sans activation explicite ;
+  - l'environnement est celui d'un agent, sans les secrets d'Escouade, plus les seules variables que le plugin nomme ;
+  - le programme tourne dans le Job object du plugin : il meurt avec lui, ou à `proc/kill` ; 4 à la fois, sortie bornée par un crédit ; pas de shell ;
+  - chaque lancement va au journal, avec ses arguments, secrets masqués.
+- **Texte** : « Lance ces commandes sur ton ordinateur : isola ls --json, isola down » / « Runs these commands on your computer: isola ls --json, isola down », en rouge, comme aujourd'hui `ask.commands`, mais appliqué.
+- **Coût** : celui d'un process.
+- **Surface d'attaque** : la plus forte de toutes. **Le module est isolé, le programme qu'il lance ne l'est pas.** `isola` a les droits de l'utilisateur. Une entrée en `*` sur un programme généraliste (`git *`, `docker *`) rouvre tout (`git -c core.sshCommand=…`). Le store refuse `*` pour un tiers vérifié, sauf justification relue.
+
+#### 8.4.8 Ce que le module reçoit à son démarrage
+
+`initialize` porte en plus ce que l'environnement portait : `lang`, `version`, et pour la première main rien du réseau, l'hôte le gardant. Le dossier de l'agent et le dossier temporaire arrivent dans `agent/attach`. L'identifiant d'une instance vient de WASI (`random_get`), `std::process::id()` étant remplacé dans Codex et Copilot.
+
+### 8.5 `run.wasm` : du Rust compilé par le store
+
+#### 8.5.1 La cible : `wasm32-wasip1`
+
+**Retenu : `wasm32-wasip1`, un module cœur en réacteur.** Rejeté pour l'instant : `wasm32-wasip2` et le modèle de composants.
+
+- **Un seul hôte.** Javy sort un module cœur WASI p1 : `run.js` et `run.wasm` partagent `Instance`, `serve`, les limites, le journal.
+- **WASI p2 n'apporterait rien ici.** Ses `wasi:http` et `wasi:sockets` sont ce qu'Escouade ne veut pas donner à un module : le réseau passe par `net/*`, jugé par l'hôte. Le contrat reste le JSON-RPC, qu'un WIT ne remplacerait qu'à grand prix pour trente méthodes déjà écrites et testées.
+- **Le composant ne coûte pas cher en Rust, mais il ne sert à rien ici** : Linear compile aussi en `wasm32-wasip2`, 487 155 o contre 459 364 o, sans changer de source. Il demanderait la partie composants de wasmtime et un second chemin dans l'hôte, pour rien de plus. Sa reproductibilité n'a pas été essayée. En JS, ESC-319 avait vu un composant 10 fois plus lourd (§5.3).
+- **Le risque** : WASI p1 est figé. wasmtime le sert et l'app épingle wasmtime (=50.0.1) ; `wasm32-wasip1` est une cible de niveau 2 de Rust. Si elle disparaissait un jour, la voie serait `wasi-sdk` et un adaptateur p1 → p2, sans toucher aux plugins.
+
+**Le manifeste.** `"run": { "wasm": "Cargo.toml" }` : le manifeste Cargo du plugin, jamais un binaire. Le `.wasm` n'est pas commité. Rust seulement pour commencer ; le nom laisse la place à d'autres langages.
+
+#### 8.5.2 La chaîne d'outils, épinglée
+
+| Pièce | Version | Comment elle est tenue |
+| --- | --- | --- |
+| rustc, cargo, std de `wasm32-wasip1` | 1.98.0 (la même que l'app) | profil `minimal` de rustup, un `RUSTUP_HOME` à part : **pas de `rust-src`** |
+| les dépendances | `Cargo.lock` commité, `--locked`, sommes de contrôle de crates.io | |
+| le profil | `opt-level = 3`, `lto = "fat"`, `codegen-units = 1`, `panic = "abort"`, `strip = true` | imposé par l'outil (`--config`) ; le `[profile]` de l'auteur est ignoré |
+| l'enveloppeur `rustc-canon` | embarqué dans `escouade-plugin` | son empreinte notée dans `version.json` |
+
+**Trois pièges, trouvés en le faisant.** Deux compilations sur un même système donnaient déjà la même empreinte ; d'un système à l'autre, non (642 460 o contre 643 804 o pour Codex). Trois causes :
+
+1. **`-C metadata`** : cargo y mêle le `host` de `rustc -vV` et le chemin relatif d'une dépendance, avec ses `\`. Ce sel entre dans chaque symbole, et l'ordre du code suit les symboles. `rustc-canon` le recalcule sur le seul nom du crate, sa version, ses fonctionnalités et sa cible.
+2. **Les emplacements de panique** gardent le chemin de chaque source. `--remap-path-prefix` retire le début, pas les `\` que Windows met après (`src\de\mod.rs`). `rustc-canon` donne donc **une règle par fichier source**, de son chemin entier à son chemin canonique (`/src/…`, `/cargo/…`).
+3. **`rust-src`** : quand ce composant est installé, rustc écrit les chemins de la bibliothèque standard là où il la trouve sur la machine. D'où un `RUSTUP_HOME` à part, en profil `minimal`. Un `rust-toolchain.toml` qui demande `clippy` casse aussi la compilation hors ligne.
+
+Une source qui atteint un fichier par `#[path = "../../…"]` garde ses `..` dans son emplacement : le prototype copie donc ses sources (`prepare.mjs`), et un plugin n'en aura pas.
+
+**Le résultat** (`sh reproducible.sh`, rustc 1.98.0, le même `Cargo.lock` de 67 paquets) :
+
+| Compilation | `linear.wasm` | `codex.wasm` |
+| --- | --- | --- |
+| Windows 11, deux fois, dossiers `target` neufs | `5ae4aabb…` | `c5ab5a0a…` |
+| Linux (image `rust:1.98.0-bookworm`, Podman), deux fois, sans réseau, `--read-only`, utilisateur 1000 | `5ae4aabb…` | `c5ab5a0a…` |
+| Sans `rustc-canon` : Windows / Linux | `c488693b…` / `61a82e7e…` | `acff2243…` / `c1037cdc…` |
+
+Empreintes complètes : `5ae4aabbeb48ce8d18ad8fd4181c5769b828c40fa808a684500afadbb5dddb18`, `c5ab5a0a044e731e81f39fbd6f864382c826bc05838dda926e4f0a5af198eb79`. **macOS n'a pas été essayé** : rien ne l'y distingue de Linux, mais il faudra le voir une fois, en CI. Un autre dossier de dépôt : un autre dossier de dépôt et un autre `CARGO_HOME` donnent aussi la même empreinte (essayé sous Linux, `/tmp/ailleurs/un/autre/depot`).
+
+**Taille et temps** (machine chargée par d'autres agents) :
+
+| | Linear | Codex |
+| --- | --- | --- |
+| Module | 459 364 o, 165 162 o en gzip -9 | 642 140 o, 223 483 o en gzip -9 |
+| Natif équivalent | 3 693 568 o | 1 164 800 o |
+| Compilation à froid (Linux, sans réseau, les deux modules et leurs 67 paquets) | 12 s | |
+| Précompilation par Cranelift | 50 ms, 1,48 Mo | 93 ms, 1,96 Mo |
+| Chargement du précompilé | 0,41 ms | 0,54 ms |
+
+#### 8.5.3 Ce que fait le store, et l'image d'ESC-328
+
+Un douzième contrôle n'est pas nécessaire : **le onzième, « Compilation », s'étend**. Pour un `run.wasm` :
+
+1. **Récupérer** les dépendances : `cargo fetch --locked`, le réseau limité à `index.crates.io` et `static.crates.io`, sans exécuter une ligne du plugin. Essayé.
+2. **Vérifier** avant de compiler (§8.5.4).
+3. **Compiler deux fois** par `escouade-plugin build --json` (`compileTwice` d'aujourd'hui), chacune dans un bac à sable sans réseau. Deux empreintes refusent la version.
+4. **Publier** le `.wasm` comme aujourd'hui : `wasm: { sha256, size, compiler: { rust: "1.98.0", target: "wasm32-wasip1", canon: "<empreinte>", lock: "<empreinte de Cargo.lock>" } }`.
+
+**L'image** (ESC-328 prépare son étape Rust) doit garder dans sa dernière étape, en plus de ce que ce ticket y met : rustc, cargo, la std `wasm32-wasip1`, et `gcc` pour lier `build.rs` et macros, qui sont natifs. **678 Mo** mesurés pour le `RUSTUP_HOME`, plus environ 60 Mo de dépendances par `Cargo.lock`. La limite d'aujourd'hui (2 minutes, 1 Gio) doit monter : 1 Gio tue la compilation (`tmpfs` compris, dans le conteneur de l'essai), 1,5 Gio passe. **Proposé : 2 Gio et 5 minutes par plugin**.
+
+#### 8.5.4 Ce qui change au store : du code natif de l'auteur s'exécute
+
+**Javy n'exécute le plugin que dans WASM. Cargo, lui, exécute en natif chaque `build.rs` et chaque macro procédurale.** Les deux modules du prototype en ont déjà : `anyhow`, `num-traits`, `parking_lot_core`, `proc-macro2`, `quote`, `serde`, `serde_core`, `serde_json`, `zmij` pour les scripts, `serde_derive` pour les macros. La décision d'ESC-323 (décision 43) disait : « le code du plugin ne tourne que dans le bac à sable WASM ». Ce n'est plus vrai.
+
+`unshare -rn` coupe le réseau, pas le reste : le sous-process tourne sous le même utilisateur que le store, dont il pourrait lire `/proc/<pid>/environ`, donc **les secrets**. Pour un tiers, il faut donc :
+
+- **Un vrai bac à sable** : `bubblewrap` (`--unshare-all --clearenv --new-session --die-with-parent`), un espace de PID et de montage neufs, seuls la chaîne d'outils, les dépendances et le dossier du plugin en lecture seule. Sans espaces de noms utilisateur sur le serveur, `run.wasm` tiers reste refusé (« pas d'isolation : version en attente »). `STORE_COMPILE_ISOLATION=require` pour `run.wasm`, sans repli.
+- **Une liste fermée**, en plus : pas de `build.rs` dans les crates du plugin ; pas de dépendance `git` ni `path` hors du dossier ; pas de `[patch]`, pas de `.cargo/config.toml`, pas de `rust-toolchain.toml` ; des dépendances de crates.io seulement ; un script ou une macro procédurale tiers seulement s'il est sur une liste relue (`serde_derive`, `thiserror-impl`, `proc-macro2`…), par nom, version et somme de contrôle.
+- **`include_bytes!("/etc/passwd")`** devient inoffensif : le bac à sable ne voit rien d'autre.
+
+Un plugin tiers qui passe tout cela est compilé ; la revue relit le reste. **La première main** a les mêmes règles : le store ne fait pas d'exception, la revue du chef est la même.
+
+#### 8.5.5 Ce que fait la revue locale (ESC-324)
+
+`npm run plugin-review` recompile déjà un `run.js` et compare. Pour un `run.wasm` :
+
+- `recompile.ts` lance `escouade-plugin build` avec le `compiler` de `version.json` ; **une autre empreinte arrête tout**, comme aujourd'hui. Le poste du chef est sous Windows : c'est exactement l'essai ci-dessus. Il lui faut Visual Studio Build Tools pour lier `build.rs` et macros (déjà là pour l'app). La chaîne d'outils s'installe à son premier besoin dans `<données>/tools/rust-1.98.0/`.
+- **Pour un tiers, cette recompilation se fait dans le conteneur sans réseau** de la revue (`podman run --network=none --read-only`), jamais en natif : les `build.rs` ne tournent pas sur le poste du chef. Podman y est (STORE-7).
+- Les pistes de lecture : `Cargo.lock` en plus, dépendance par dépendance, et son diff avec la version d'avant, le code de `unsafe`, les `extern`, `#[link]`.
+- Le banc joue le module publié dans l'hôte WASM, hors ligne, comme un `run.js`.
+- Une dépendance nouvelle se relit : ce que le lock ajoute est du code qui tourne.
+
+### 8.6 Les dossiers, la CI et le store de la première main
+
+#### 8.6.1 Les noms courts
+
+Chaque plugin quitte `plugins/builtin/dev.escouade.<id>/` pour `plugins/<id-court>/`, comme `plugins/slack/`. Il y garde son manifeste, son README, sa LICENSE, son CHANGELOG et ses tests. **Les identifiants ne changent pas** : les comptes, les réglages et le trousseau en dépendent (`plugin:<id>:…`).
+
+| Dossier | Identifiant | Programme | Note |
+| --- | --- | --- | --- |
+| `plugins/claude/` | `dev.escouade.claude-code` | `run.wasm` | l'exemple de l'utilisateur ; suit ESC-226 |
+| `plugins/codex/` | `dev.escouade.codex` | `run.wasm` | prototype |
+| `plugins/copilot/` | `dev.escouade.copilot-cli` | `run.wasm` | |
+| `plugins/cursor/` | `dev.escouade.cursor-cli` | `run.wasm` | |
+| `plugins/gemini/` | `dev.escouade.gemini-cli` | `run.wasm` | |
+| `plugins/antigravity/` | `dev.escouade.antigravity-cli` | `run.wasm` | |
+| `plugins/opencode/` | `dev.escouade.opencode` | `run.wasm` | |
+| `plugins/acp/` | `dev.escouade.acp` | `run.wasm` | sert aussi `plugins/goose/` |
+| `plugins/mistral/` | `dev.escouade.mistral` | `run.wasm` | la voix et Vibe |
+| `plugins/openai/` | `dev.escouade.openai` | `run.wasm` | voix, crate à créer |
+| `plugins/groq/` | `dev.escouade.groq` | `run.wasm` | voix, crate à créer |
+| `plugins/elevenlabs/` | `dev.escouade.elevenlabs` | `run.wasm` | voix, crate à créer |
+| `plugins/deepgram/` | `dev.escouade.deepgram` | `run.wasm` | voix, crate à créer |
+| `plugins/github/` | `dev.escouade.github` | `run.wasm` | |
+| `plugins/gitlab/` | `dev.escouade.gitlab` | `run.wasm` | |
+| `plugins/bitbucket/` | `dev.escouade.bitbucket` | `run.wasm` | |
+| `plugins/gitea/` | `dev.escouade.gitea` | `run.wasm` | |
+| `plugins/azure-devops/` | `dev.escouade.azure-devops` | `run.wasm` | |
+| `plugins/linear/` | `dev.escouade.linear` | `run.wasm` | prototype |
+| `plugins/jira/` | `dev.escouade.jira` | `run.wasm` | |
+| `plugins/trello/` | `dev.escouade.trello` | `run.wasm` | |
+| `plugins/clickup/` | `dev.escouade.clickup` | `run.wasm` | |
+| `plugins/isola/` | `dev.escouade.isola` | `run.wasm` | le seul à lancer un programme |
+
+`dev.escouade.minimal` n'est pas un produit : il va dans `tests/fixtures/plugins/minimal/`, sans publication. `discord`, `goose`, `high-contrast`, `slack` et `team-rules` ne bougent pas. `plugins/builtin/` disparaît, et `plugins/README.md` avec sa section.
+
+**Le nom du dossier n'est pas le dernier mot de l'identifiant** pour six d'entre eux : il sert seulement à l'étiquette, et le store relie un dossier à un id par son manifeste (§3.6 de `docs/STORE.md`).
+
+**La licence** : les plugins déménagés restent en GPL-3.0-or-later, leur code venant du cœur ; `plugins/README.md`, qui dit MIT, doit le dire plugin par plugin. Chacun a sa `LICENSE` dans son dossier : le contrôle 5 la lit.
+
+**Les versions** : chacun a la sienne, à partir de `2.2.0`, et un `CHANGELOG.md`. Son `escouade.min` est `2.2.0`. `manifest_text` ne remplace plus sa version par celle de l'app.
+
+#### 8.6.2 Le passage par le store
+
+Chacun passe **comme un tiers** :
+
+1. l'étiquette `plugins/<id-court>/vX.Y.Z`, posée par le chef ;
+2. la soumission en dossier, par le MCP du store (`submit_version`) ;
+3. les contrôles, dont la compilation en WASM par le store ;
+4. la revue locale, qui recompile et compare ; le rapport ;
+5. la signature par le chef (`npm run plugin-review -- sign`, sa clé sans mot de passe : mémoire `first-party-plugin-signing`) ;
+6. la publication.
+
+**La liste `BUILTINS` de `store/server/utils/builtin.ts`** se vide : chacun devient une vraie ligne de plugin, à sa place dans le catalogue, avec la marque « Escouade » et ses versions. Le préfixe `dev.escouade.*` reste réservé au dépôt de l'app (`STORE_FIRST_PARTY_REPO`, décision 25) et l'app ne l'installe que signé.
+
+Pour 23 plugins, ces gestes doivent tenir en une commande du chef : `npm run plugins:publish -- --changed` pose les étiquettes des dossiers qui ont bougé, soumet, attend, revoit, signe et publie, et s'arrête au premier verdict qui n'est pas « Vérifier ». La lecture humaine reste celle des diffs.
+
+#### 8.6.3 Le kit sort sur crates.io
+
+Le store ne lit que le dossier du plugin (`docs/STORE.md` §3.6), à raison : c'est ce qu'il archive et ce que le chef relit. Or `path = "../../crates/escouade-plugin-kit"` sort du dossier.
+
+**Retenu** : `escouade-plugin-protocol`, `escouade-plugin-kit` et `escouade-acp` sont publiés sur crates.io. Un plugin en dépend par version, son `Cargo.lock` en fixe la somme de contrôle. Dans le dépôt, un `[patch.crates-io]` à la racine des plugins les ramène sur les chemins locaux pour le développement ; le store, qui ne voit pas cette racine, compile ce qui est publié. **Les plugins tiers en Rust ont besoin de ces crates de toute façon.**
+
+Écarté : copier `crates/` dans chaque dossier (`vendor/`), des milliers de lignes dupliquées 23 fois ; ou faire lire `crates/` au store pour la seule première main, une exception à la règle « comme un tiers ». **Publier sur crates.io est un geste public et sans retour** (un numéro publié ne s'efface pas) : c'est au nom de l'utilisateur, à faire par lui ou sur son accord.
+
+#### 8.6.4 La CI de `plugins/`
+
+`plugins/ci.mjs` connaît deux sortes de plugins, avec et sans `package.json`. Il en gagne une troisième, avec `Cargo.toml` :
+
+- `cargo test` en natif : les tests unitaires ne changent pas ;
+- `escouade-plugin build`, puis `validate` et `test --first-party` : le banc joue le module dans l'hôte de l'app ;
+- `--changed` : seulement les dossiers touchés, plus tous quand `crates/` bouge.
+
+Un job **reproductible** compare sous Windows et Linux, sur `main` : le même plugin, la même empreinte. Un écart est rouge. Un job de plus sur macOS le fait une fois par release.
+
+Les tests de l'app (`forge/*_tests`, `plugins_harness_tests`, le banc de flux) lancent aujourd'hui `escouade-plugins`. Ils lanceront les modules, construits une fois par CI comme `escouade-js` (`scripts/plugins-wasm.sh`), le `target` étant partagé : quelques minutes, pas 23 fois 12 s.
+
+### 8.7 La distribution dans l'app
+
+**Ce que l'utilisateur doit garder** : l'app marche dès son installation et hors ligne, et un harness n'attend aucun téléchargement.
+
+**Retenu : les deux.** Une **amorce** dans l'app, puis le store.
+
+- **L'amorce.** L'installeur embarque un dossier `plugins/` (les ressources de Tauri) : pour chaque plugin de première main, **ce que le store a publié pour sa dernière version** : `version.json`, `version.json.minisig`, l'archive du dossier et `plugin.wasm`. Rien de construit à part : les mêmes octets, la même signature.
+- **Au premier lancement**, ou après une mise à jour de l'app, Escouade **installe l'amorce par le chemin d'une installation du store**, sans réseau : mêmes vérifications, mêmes dossiers, origine `store`, une marque `seed`. La précompilation (50 à 93 ms par module, soit deux secondes environ pour tous sur un cœur) se fait à la première activation de chacun, hors du fil de la fenêtre, pas au démarrage.
+- **Ensuite, le store.** Les plugins de première main se mettent à jour par lui, sans attendre une release de l'app. Une version du store plus récente que l'amorce reste en place à la mise à jour de l'app ; une amorce plus récente la remplace. On ne redescend jamais de version.
+- **Sans réseau**, rien ne change : l'amorce, ou ce qui a été téléchargé, tourne. Le catalogue n'est lu que pour proposer. **Sans store** (panne, entreprise fermée), tout marche à la version de l'amorce.
+
+**Le mode de mise à jour.** La règle du §3.2 (« jamais en silence ») reste pour les tiers. **Pour la première main, signée** : la mise à jour se fait seule si ses permissions ne grandissent pas, avec un changement de version dans le journal et une mention dans la vue Plugins ; sinon, elle attend l'accord. Un agent en cours garde sa version jusqu'à son prochain lancement : un plugin de harness ne change pas sous un tour.
+
+**Ce que l'app vérifie avant de lancer**, qu'il vienne de l'amorce ou du store :
+
+1. la signature `minisign` de `version.json` contre les clés publiques embarquées (`store_keys.rs`), son commentaire de confiance (`escouade-verified-v1 <id>@<version>`) ;
+2. l'empreinte de `plugin.wasm` et de l'archive contre `version.json` ;
+3. `dev.escouade.*` : signé, sinon refusé, quelle que soit l'origine ;
+4. la liste de révocation : celle du store si elle est là, sinon **celle de l'amorce**, gardée dans l'installeur, à laquelle les plugins livrés n'échappent plus ;
+5. `escouade.min` et `max`.
+
+Le précompilé reste local, jamais reçu : `Module::deserialize` fait confiance à ses octets.
+
+**Une révocation qui frappe l'amorce** : un `dev.escouade.*` révoqué sans remplaçant laisse le plugin coupé, et sa raison dite. C'est le prix d'avoir une seule règle ; un correctif publié par le store, qui ne demande pas de release, est la parade.
+
+**Ce que devient `dev.escouade.*`.** Il reste réservé. L'origine `builtin`, son `{escouade}/…`, `check_program`, `builtin:<version>` et la règle « l'identifiant de l'app l'emporte » disparaissent. Le registre de `plugins/builtin.rs` devient la liste des identifiants de l'amorce et de ceux que l'app ne laisse pas désinstaller : un plugin livré **se coupe mais ne se désinstalle pas**, comme aujourd'hui. Un plugin d'un autre auteur peut toujours prendre la place d'un service de voix, à son identifiant à lui.
+
+**L'ordre de la release.** L'amorce fige des versions publiées : **le chef publie d'abord, la release ensuite**. `release.yml` télécharge l'amorce nommée par `plugins/seed.json` (un fichier commité : `id`, `version`, empreinte de `version.json`), vérifie chaque signature, et échoue sinon. Un build de développement n'a pas de signature : `debug_assertions` accepte les modules de `scripts/plugins-wasm.sh`, comme il accepte aujourd'hui un programme non signé.
+
+**Le poids.** `escouade-plugins.exe` pèse **34,5 Mo** aujourd'hui (34 479 104 o, release de `ticket/esc-226`) et disparaît. L'amorce pèse à peu près 23 × 0,5 Mo, soit **11 à 14 Mo** en clair d'après les deux modules mesurés, moins dans l'installeur compressé (165 Ko et 223 Ko en gzip pour les deux mesurés). Les plugins qui ne servent pas ne se précompilent pas. Le précompilé, 1,5 à 2 Mo par module actif, va dans le cache.
+
+### 8.8 Les binaires natifs des tiers
+
+Aucun n'est publié aujourd'hui : la décision ne casse rien.
+
+- **Au store** : `run.command` est refusé à la soumission, pour tous, avec la raison (« un plugin se publie en `run.js` ou `run.wasm` : le store le compile pour tous les systèmes »). Le contrôle n° 10 perd ses attestations et ses binaires par système. `gh attestation verify` et `binaries/` sortent de la revue.
+- **Dans l'app** : `run.command` n'est plus lancé, quelle que soit l'origine. Le manifeste reste lisible, et la fiche dit pourquoi le plugin ne démarre pas.
+- **Pour un auteur** en Go ou en C : rien ne s'ouvre en 2.2, le compilateur devant être reproduit par le store. `run.wasm` reste Rust au début. Son besoin de lancer un programme passe par `permissions.commands`.
+- **Les versions publiées qui se lancent par Node** (`slack` 1.1.0, `team-rules` 1.1.1) restent pour les apps d'avant : `escouade.max` les borne, et leur 2.0.0 prend le relais.
+- **Un harness décrit** (`contributes.harnesses[].acp`, Goose) ne change pas : le cœur lance le CLI, et `dev.escouade.acp` le sert.
+
+Le transport par process de `runtime.rs` part en dernier, avec ses tests (`tests/fixtures/fake-plugin.mjs`) : ticket Z du plan.
+
+Le prix : **un outil d'un tiers qu'on ne peut pas compiler en WASM ne s'intègre que par un programme qu'il installe lui-même**, et que le plugin nomme. C'est le sens de la décision du 2026-11-04.
+
+### 8.9 Le prototype et ses mesures
+
+`prototypes/wasm-all/` n'est branché nulle part. Il contient :
+
+- `guest/` : les modules. `linear` et `codex` compilent **les fichiers du dépôt** (`prepare.mjs` les copie), sur `kit` (les fichiers du vrai kit, sauf `serve`), `reqwest` (la part de reqwest dont ils se servent, sur `net/fetch`) et `escouade-turn` (le tour et l'appel synchrone) ;
+- `rustc-canon/`, `reproducible.sh` : la compilation reproductible ;
+- `host/` : l'hôte (`src/lib.rs`), les deux plugins natifs sur leurs vraies crates (`src/bin/`), les tests (`tests/parity.rs`) et le banc (`examples/measure.rs`).
+
+**Ce qu'a coûté le portage de ces deux-là :**
+
+| | Changé dans le code du plugin | Ce qui a changé |
+| --- | --- | --- |
+| Linear | 0 ligne | l'export du tour, ajouté ; `reqwest` remplacé par une façade de 230 lignes |
+| Codex | 5 endroits | `run()` ; un `use` ; l'export du tour ; `std::process::id()` (qui plante sur WASI) ; `std::fs::read_to_string` remplacé par `fs_read` |
+| Le kit | `serve.rs` réécrit (170 lignes, sans tokio) | tous ses autres fichiers tels quels |
+
+**Les tests** (`cargo test --release`, 5 passés) : Linear répond **exactement** comme son natif à `account/me`, `tickets/issues`, `tickets/states` sur un faux Linear ; Codex traduit **les mêmes éléments** que son natif, ligne à ligne, sur 479 lignes de `full-turn.jsonl` et `plan-mode.jsonl` ; un hôte hors du manifeste est refusé ; un appel lent ne retient pas le suivant ; un fichier se lit dans le dossier déclaré et pas à côté.
+
+**Les mesures**, faites comme INT-0, avec une différence : **elles s'arrêtent à la réponse du plugin**. INT-0 compte aussi ce que le cœur fait de la réponse, inchangé ici. Ce sont les mêmes lignes vers le même code, par les tubes d'un process ou par les tours d'un module, sous Windows 11, au profil release de l'app, en release pour le module, trois passes avec d'autres agents qui compilaient sur le poste ; **c'est la médiane des trois passes**, et l'écart d'une passe à l'autre est grand (le débit de Codex en module va de 21 000 à 47 000 lignes/s, en natif de 21 000 à 31 000) : seuls les ordres de grandeur comptent. Bruts : `prototypes/wasm-all/results/`. La mémoire d'un module vient d'une quatrième passe. Le passage par `ProcessEngine` et par le cœur reste à rejouer par `npm run bench:int0` à chaque harness porté : le seuil d'INT-0 (5 ms de plus au 99e centile, 2 200 lignes/s) reste le juge.
+
+| | Codex natif | Codex module | Linear natif | Linear module |
+| --- | --- | --- | --- | --- |
+| **Au plus vite : débit** | 27 562 lignes/s, 9,3 Mo/s | 42 561 lignes/s, 14,4 Mo/s | 795 appels/s | 677 appels/s |
+| **Au plus vite : médiane, 99e centile** | 32 µs, 80 µs | 18 µs, 72 µs | 1,17 ms, 2,03 ms | 1,37 ms, 2,35 ms |
+| **En lots de 64 Kio** | 199 153 lignes/s | 191 309 lignes/s | — | — |
+| **Au rythme réel : médiane, 99e centile** | 69 µs, 254 µs | 65 µs, 164 µs | 1,74 ms, 2,65 ms | 1,64 ms, 2,43 ms |
+| **Mémoire, à vide** | 7,5 Mo (working set) | 1,18 Mio de mémoire linéaire, 0,28 Mo de working set en plus par instance | 6,7 Mo | 1,18 Mio, 0,25 Mo |
+| **Mémoire, après le banc** | 10,9 Mo | 1,57 Mio | 10,4 Mo | 1,64 Mio |
+| **Démarrage jusqu'à `initialize`** | 18,4 ms | 3,4 ms ; 93 ms la première fois, précompilation comprise | 14,4 ms | 2,2 ms ; 50 ms la première fois |
+| **99e centile du démarrage** | 537 ms | 5,1 ms | 575 ms | 4,4 ms |
+| **Taille** | 1 164 800 o, ou sa part des 34,5 Mo d'`escouade-plugins` | 642 140 o | 3 693 568 o | 459 364 o |
+
+Le flux de Codex est celui de `full-turn.jsonl` et `plan-mode.jsonl`, 479 lignes rejouées 20 fois au plus vite, une fois à son rythme (60 s, un silence de plus de 2 s raccourci à 2 s, comme INT-0). Linear répond à `tickets/issues`, une page de 50 issues, deux `fetch` et un secret, sur un faux Linear local : 2 000 appels au plus vite, 200 toutes les 20 ms. Le natif équivalent est un exécutable pour ce seul plugin, sur sa vraie crate, au profil de l'app ; `escouade-plugins` les porte tous.
+
+Ce qu'on en tire :
+
+1. **Le flux d'un harness est aussi rapide en module qu'en process**, plus rapide ligne à ligne (pas de tube), un peu moins en gros lots (la traduction elle-même est plus lente en WASM). Au rythme réel, il n'y a pas de différence qui compte : quelques dixièmes de milliseconde, très en dessous des 16 ms de `conv_flusher`.
+2. **Le réseau ajoute un peu** : environ 0,2 ms par appel à Linear, au plus vite, et rien de visible au rythme réel. C'est le seul recul mesuré. Il vient du JSON de `net/fetch` et de l'aller-retour vers le fil de l'hôte.
+3. **La mémoire et le démarrage changent d'échelle** : plus de process par plugin. 23 plugins actifs coûteraient 150 à 250 Mo en process, une quarantaine en modules, le code compilé étant partagé.
+4. **Le risque n'est pas là où on l'attendait** en 2.1 (§4.6 : « W : impossible pour un harness »). Le harness est lancé par le cœur depuis INT-9 : le plugin n'est plus qu'une machine à états, et elle compile.
+
+### 8.10 Le plan
+
+Les tickets du portage, dans l'ordre. **Les lettres sont des noms de travail**, le chef crée les tickets. Chacun passe ses suites locales ; chaque harness porté rejoue INT-0.
+
+**A. Ce qui débloque tout, à la suite :**
+
+| Ticket | Ce qu'il fait | Ce qu'il touche | Après |
+| --- | --- | --- | --- |
+| **M0. Le déménagement** | `plugins/builtin/*` → `plugins/<id-court>/`, LICENSE, CHANGELOG, `minimal` en fixture ; aucun changement de code | `src-tauri/Cargo.toml` (ses chemins), `plugins/builtin.rs` (`include_str!`), `store/server/utils/builtin.ts` (`source`), `website/`, docs, `plugins/README.md` | ESC-226 fusionné : sinon conflit |
+| **M1. La CI de `plugins/`** | `plugins/ci.mjs` lit `Cargo.toml` : `cargo test`, `--changed` | `plugins/ci.mjs`, `.github/workflows/` | M0 |
+| **A1. `run.wasm` dans l'app** | `run.wasm` au manifeste, le réacteur, `serve` par événements, `fetch` concurrent, `escouade.call` | `plugins/wasm.rs`, `manifest.rs`, `runtime.rs`, `schemas/` | |
+| **A2. Le réseau** | `net/fetch` revu (§8.4.1) ; `net/stream` ; `ws/*` ; `local:shared` ; `timer/*` ; `setTimeout` du prélude | `plugins/wasm.rs`, `wasm_prelude.js`, `schemas/plugin-protocol-1.json`, `sdk/` | A1 |
+| **A3. Les fichiers et les commandes** | `fs/*`, racines, clôture à l'hôte ; `proc/*` | `plugins/wasm.rs`, `plugins/files.rs`, `manifest.rs`, `src/lib/i18n/*/plugins.ts`, la fenêtre | A1 |
+| **A4. Le kit en WASM** | `escouade-turn` et `serve` dans les crates, `http` sans reqwest sur wasm, `initialize` au lieu de l'environnement, `std::process::id` | `crates/*` | A1 |
+| **A5. `escouade-plugin build`** | `rustc-canon` et la chaîne d'outils privée, `run.wasm` au banc, `plugin-cli` d'ESC-328 | `plugins/bench/`, le crate d'ESC-328 | A4, ESC-328 |
+| **A6. Le store** | le onzième contrôle pour `run.wasm`, bubblewrap, la liste fermée, l'image | `store/server/utils/{compile,checks}.ts`, `store/Dockerfile`, `docs/STORE.md` | A5, ESC-328 |
+| **A7. La revue locale** | `recompile.ts`, les pistes, le conteneur pour un tiers | `store/scripts/plugin-review/` | A6 |
+| **A8. L'amorce** | `plugins/seed.json`, l'installation sans réseau, la révocation, la mise à jour sans clic, `release.yml` | `plugins/store.rs`, `plugins/builtin.rs`, `plugins/mod.rs`, `src-tauri/tauri.conf.json`, `.github/workflows/release.yml` | A1 |
+| **A9. crates.io** | publier les trois crates ; `[patch.crates-io]` | `crates/*/Cargo.toml` ; **geste de l'utilisateur** | A4 |
+
+**P. Le portage, en parallèle une fois A1 à A5 faits** (rien n'empêche d'en porter en attendant A6, le banc suffit) :
+
+| Ticket | Plugins | Ce qui le distingue |
+| --- | --- | --- |
+| **P1** | Linear, Trello, Jira, ClickUp | le kit seul ; le plus simple |
+| **P2** | GitHub, GitLab, Bitbucket, Gitea, Azure DevOps | `{account}`, proxy, instances auto-hébergées ; essais contre `fake-trackers` |
+| **P3** | Codex, Copilot CLI, Cursor, Gemini, ACP, Vibe, Claude Code | les machines à états ; `fs/*` pour ACP ; `real-harnesses` rejoué |
+| **P4** | Antigravity | l'attente du transcript réécrite (§8.4.6) |
+| **P5** | OpenCode | SSE, `local:shared`, ses trois tâches ; le plus risqué des harness |
+| **P6** | OpenAI, Groq, Mistral, ElevenLabs, Deepgram | sortir `voice/online*`, `live.rs`, `wire.rs` du crate de l'app dans une crate commune ; WebSocket ; INT-13 rejoué |
+| **P7** | isola | `proc/*` |
+| **P8** | les « Vue X » | `view/translate` ; le cœur ne lie plus aucun plugin ; peut suivre la 2.2 |
+
+**Z. La fin, dans cet ordre :**
+
+| Ticket | Ce qu'il fait |
+| --- |--- |
+| **Z1. Les contrôles et la première publication** | le chef publie chaque plugin (§8.6.2), revue et signature une par une la première fois |
+| **Z2. L'amorce réelle** | `plugins/seed.json` rempli, un essai d'installation hors ligne |
+| **Z3. Le retrait** | `escouade-plugins`, `run.command`, le transport par process, `check_program`, l'origine `builtin`, `BUILTINS`, les attestations ; `npm run bench:int0` complet |
+
+**L'ordre demandé par l'utilisateur** se lit ainsi : **le déménagement** (M0), **la CI de `plugins/`** (M1), **les contrôles du store pour un `run.wasm`** (A6, A7), **la publication de chacun** (Z1).
+
+**Ce qui part en parallèle** : M1 avec A1 ; A2, A3, A4 après A1 ; A8 après A1 ; tout P après A5, un ticket par famille, P1 d'abord pour éprouver le kit.
+
+**Le sort des tickets en cours :**
+
+- **ESC-226 (Claude Code natif)** se termine tel quel, et passe avant M0. Son client et sa traduction sont déjà des machines à états. Il garde `tokio` pour `signin.rs` : P3 le retire du plugin, les lectures allant au cœur. Rien à changer maintenant.
+- **ESC-328 (l'image du store)** continue : c'est un prérequis. Il reste juste **à prévoir sa dernière étape pour Rust** (§8.5.3) : le crate sans Tauri d'`escouade-plugin` (`crates/escouade-plugin-cli`) devient celui qui porte `rustc-canon`, `bubblewrap` entre dans l'image, et sa limite de temps monte. Son test d'empreinte (slack, team-rules) reste. Sa décision de ne dépendre d'aucune release tient.
+- **ESC-227 (la doc de référence)** passe **après Z3** : §4 et §8 deviennent la référence, `docs/ENGINES.md` (« Écrire un plugin de harness ») dit le WASM, et les pages `plugins/api`, `publish` et `manifest` du site disent `run.wasm` et les capacités. La revue du 2026-10-29 fait qu'elle couvrait déjà « tout en process » : ce texte-là est à revoir.
+
+**Ce que la décision du 2026-11-04 ne tranche pas et que ce plan suppose** : la mise à jour sans clic de la première main (§8.7), la publication sur crates.io (§8.6.3) et la licence GPL des plugins déménagés (§8.6.1). Les trois sont dans les décisions proposées, et se refusent séparément.

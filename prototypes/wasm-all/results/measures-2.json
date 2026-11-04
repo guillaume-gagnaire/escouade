@@ -1,0 +1,100 @@
+{
+  "codex": {
+    "native": {
+      "batched": {
+        "linesPerSecond": 199152.66569377054
+      },
+      "fastest": {
+        "lines": 9580,
+        "linesPerSecond": 27562.174569261904,
+        "maxUs": 323.6,
+        "mbPerSecond": 9.327293054964962,
+        "medianUs": 32.0,
+        "p99Us": 80.2
+      },
+      "memory": 10948608,
+      "paced": {
+        "maxUs": 324.40000000000003,
+        "medianUs": 86.0,
+        "p99Us": 214.4,
+        "seconds": 59.9305401
+      }
+    },
+    "wasm": {
+      "batched": {
+        "linesPerSecond": 159029.22452502884
+      },
+      "fastest": {
+        "lines": 9580,
+        "linesPerSecond": 21266.186053821653,
+        "maxUs": 526.6,
+        "mbPerSecond": 7.196672707625016,
+        "medianUs": 48.6,
+        "p99Us": 98.8
+      },
+      "memory": 0,
+      "paced": {
+        "maxUs": 1432.1,
+        "medianUs": 89.0,
+        "p99Us": 426.5,
+        "seconds": 59.9303305
+      }
+    }
+  },
+  "linear": {
+    "native": {
+      "callsPerSecond": 602.4155538394745,
+      "maxUs": 13475.4,
+      "medianUs": 1522.7,
+      "memory": 10358784,
+      "p99Us": 2960.7000000000003,
+      "pacedMedianUs": 1740.5,
+      "pacedP99Us": 2645.7
+    },
+    "wasm": {
+      "callsPerSecond": 629.514781652326,
+      "maxUs": 12902.800000000001,
+      "medianUs": 1434.3,
+      "memory": 0,
+      "p99Us": 2417.5,
+      "pacedMedianUs": 1636.0,
+      "pacedP99Us": 2186.7000000000003
+    }
+  },
+  "size": {
+    "codexNative": 1164800,
+    "linearNative": 3693568
+  },
+  "start": {
+    "codexNative": {
+      "idleMemory": 7483392,
+      "medianMs": 19.0508,
+      "p99Ms": 533.9051999999999
+    },
+    "codexWasm": {
+      "cwasmBytes": 1964264,
+      "instanceMedianMs": 2.2643,
+      "instanceP99Ms": 4.9584,
+      "linearMemory": 1179648,
+      "loadMs": 0.5423,
+      "precompileMs": 90.4729,
+      "wasmBytes": 642140,
+      "workingSetPerInstance": 284672
+    },
+    "linearNative": {
+      "idleMemory": 6684672,
+      "medianMs": 14.271,
+      "p99Ms": 504.66
+    },
+    "linearWasm": {
+      "cwasmBytes": 1482784,
+      "instanceMedianMs": 2.1925,
+      "instanceP99Ms": 3.4938000000000002,
+      "linearMemory": 1179648,
+      "loadMs": 0.4063,
+      "precompileMs": 49.5057,
+      "wasmBytes": 459364,
+      "workingSetPerInstance": 240025
+    }
+  }
+}

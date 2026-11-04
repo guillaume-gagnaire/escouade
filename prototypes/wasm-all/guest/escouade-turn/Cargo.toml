@@ -1,0 +1,11 @@
+[package]
+name = "escouade-turn"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# A plugin in Rust as a WASM reactor: its turn (what the host hands it, then its lines), and the host's synchronous
+# call. What `escouade-plugin-protocol` would hold.
+[dependencies]
+escouade-plugin-protocol = { path = "../../../../crates/escouade-plugin-protocol" }
+serde_json = "1"
