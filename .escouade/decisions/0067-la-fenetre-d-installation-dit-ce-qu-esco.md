@@ -1,9 +1,9 @@
 ---
-number: null
+number: 67
 id: "la-fenetre-d-installation-dit-ce-qu-esco"
 title: "La fenêtre d'installation dit ce qu'Escouade applique du réseau d'un plugin déclaratif"
 date: "2026-11-04"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-184"
 pages: ["store/store-dans-l-app","plugins/vue-d-ensemble"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"store/store-dans-l-app","added":2,"removed":0},{"page":"plugins/vue-d-ensemble","added":26,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-04T18:36:11+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
