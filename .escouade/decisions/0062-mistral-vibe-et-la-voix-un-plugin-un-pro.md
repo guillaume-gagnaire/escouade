@@ -1,9 +1,9 @@
 ---
-number: null
+number: 62
 id: "mistral-vibe-et-la-voix-un-plugin-un-pro"
 title: "Mistral Vibe et la voix : un plugin, un process, un compte Mistral partagé"
 date: "2026-11-03"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-327"
 pages: ["plugins/mistral-vibe-en-plugin","plugins/livres-avec-escouade","plugins/comptes-partages"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: [57]
 superseded_by: null
 changes: [{"page":"plugins/mistral-vibe-en-plugin","added":11,"removed":5},{"page":"plugins/livres-avec-escouade","added":2,"removed":3},{"page":"plugins/comptes-partages","added":4,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-04T01:28:39+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
