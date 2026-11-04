@@ -682,3 +682,39 @@ async fn int9_measure_the_stream_through_the_plugin() {
     }
     rt.shutdown();
 }
+
+/// INT-10.8: the fence of a launch in a file of JSON, its paths written with their `\` doubled, is read as said; a relaunch goes
+/// through the same check: one that drops a path of the fence, or read-only, is refused.
+#[test]
+fn a_fence_in_a_file_of_json_is_read_as_said_and_a_file_outside_the_agents_folder_refused() {
+    let (private, home) = if cfg!(windows) {
+        ("C:\\prive\\", "C:\\agent")
+    } else {
+        ("/prive/", "/agent")
+    };
+    let fence = vec![private.to_string()];
+    let file = |path: String, text: String| proto::FileToWrite { path, text };
+    let inside = format!("{home}{}settings.json", std::path::MAIN_SEPARATOR);
+    let rules = serde_json::json!({ "deny": [format!("read_file({})", private.trim_end_matches(['/', '\\']))] });
+    let ok = proto::Launch {
+        fence_applied: true,
+        files: vec![file(inside.clone(), rules.to_string())],
+        ..proto::Launch::default()
+    };
+    check_launch("Agy", true, None, &fence, false, Some(home), &ok).unwrap();
+    let forgot = proto::Launch {
+        fence_applied: true,
+        files: vec![file(inside.clone(), "{}".into())],
+        ..proto::Launch::default()
+    };
+    assert!(check_launch("Agy", true, None, &fence, false, Some(home), &forgot).is_err());
+    assert!(check_launch("Agy", true, None, &[], true, Some(home), &ok).is_err());
+    let outside = proto::Launch {
+        files: vec![file(
+            format!("{home}-autre{}x", std::path::MAIN_SEPARATOR),
+            "{}".into(),
+        )],
+        ..proto::Launch::default()
+    };
+    assert!(check_launch("Agy", true, None, &[], false, Some(home), &outside).is_err());
+}

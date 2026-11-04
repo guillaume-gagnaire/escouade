@@ -56,6 +56,7 @@ export function tui(argv) {
       argv,
       cwd,
       home,
+      autoUpdate: process.env.AGY_CLI_DISABLE_AUTO_UPDATE ?? null,
       mcp: readJson(path.join(gemini, 'config', 'mcp_config.json')),
       hooks: readJson(hooksFile),
       settings: readJson(settingsFile),

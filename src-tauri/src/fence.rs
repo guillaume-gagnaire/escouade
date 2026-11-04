@@ -547,22 +547,6 @@ fn opencode_data() -> PathBuf {
     }
 }
 
-/// Whether `text` (a path, a command) names `path` or a path under it, whatever its separators
-/// and, under Windows, its case. A guard: a longer name that starts alike counts too.
-pub(crate) fn names(text: &str, path: &str) -> bool {
-    let norm = |s: &str| {
-        let s = s.replace('\\', "/");
-        let s = s.trim_end_matches('/').to_string();
-        if cfg!(windows) {
-            s.to_lowercase()
-        } else {
-            s
-        }
-    };
-    let p = norm(path);
-    !p.is_empty() && norm(text).contains(&p)
-}
-
 /// The paths of `fence` as `program` names them (its Linux ones for a harness of WSL).
 pub(crate) fn spelled(fence: &Fence, program: &crate::engine::Program) -> Vec<String> {
     fence.paths().iter().map(|p| program.file_path(p)).collect()

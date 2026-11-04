@@ -150,6 +150,7 @@ async fn agys_view_resumes_the_agents_conversation_follows_its_turns_and_hands_i
     h.core.set_agent_view(&id, true).await.unwrap();
     let (info, screen) = open_agy(&h, &id, &format!("fake-agy-tui {session}")).await;
     let launch = jsonl(&home.join("fake-tui-launches.jsonl")).pop().unwrap();
+    assert_eq!(launch["autoUpdate"], "1", "{launch}");
     let argv: Vec<String> = serde_json::from_value(launch["argv"].clone()).unwrap();
     let flag = |k: &str| argv.windows(2).find(|w| w[0] == k).map(|w| w[1].clone());
     assert_eq!(

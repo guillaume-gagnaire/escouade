@@ -1,5 +1,5 @@
 //! Antigravity CLI on the bench, through the fake `agy` (tests/fixtures/fake-agy.mjs), whose message
-//! picks the scenario; and the real streams of `agy` 1.4.9 (tests/fixtures/agy/), replayed from
+//! picks the scenario, its conversation through its plugin (INT-10.8); and the real streams of `agy` 1.4.9 (tests/fixtures/agy/), replayed from
 //! tests/fixtures/replays/agy/.
 
 use super::AGY;
@@ -77,8 +77,11 @@ impl Target for OnBench {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn the_fake_agy_passes_the_bench() {
+    // Its conversation goes through its plugin (INT-10.8): the plugins the app gives, in a runtime of their own.
+    let (rt, plugins, _) = crate::plugins_acp_tests::runtime("int10-agy-bench");
+    crate::plugins::harness::sync(&rt, &plugins);
     let dir = bench_dir("esc270-bench-agy");
     let played = run(&OnBench, &dir).await;
     // No quota nor copy: neither its limit, its reading nor a fork asked of it.

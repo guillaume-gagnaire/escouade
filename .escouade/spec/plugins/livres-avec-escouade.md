@@ -2,7 +2,7 @@
 title: "Les plugins livrés avec Escouade"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.3, §4.4","docs/TODO-2.2.md (INT-4, INT-8.1)","src-tauri/src/plugins/builtin.rs","docs/PLUGINS.md §4.13","plugins/builtin/dev.escouade.github/README.md","plugins/builtin/dev.escouade.gitlab/README.md","plugins/builtin/dev.escouade.gitea/README.md","plugins/builtin/dev.escouade.azure-devops/README.md"]
-tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224"]
+tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283"]
 decisions: []
 compared: null
 ---
@@ -59,3 +59,5 @@ Cursor CLI, Mistral Vibe, Gemini CLI et OpenCode sont servis par des plugins liv
 ## Les harness livrés
 
 Cursor CLI, Mistral Vibe (dans le plugin Mistral), Gemini CLI, OpenCode, Copilot CLI et Codex (`dev.escouade.codex`, INT-10.4) sont servis par un plugin livré ; voir leurs pages *… en plugin*.
+
+Antigravity CLI aussi (`dev.escouade.antigravity-cli`, INT-10.8), ses comptes inchangés ; voir *Antigravity CLI en plugin*.

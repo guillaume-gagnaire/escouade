@@ -53,6 +53,7 @@ fn plugged_by(harness: EngineId) -> Option<&'static str> {
         EngineId::OPENCODE => Some(crate::plugins::builtin::OPENCODE),
         EngineId::COPILOT => Some(crate::plugins::builtin::COPILOT),
         EngineId::CODEX => Some(crate::plugins::builtin::CODEX),
+        EngineId::AGY => Some(crate::plugins::builtin::ANTIGRAVITY),
         _ => None,
     }
 }
@@ -344,6 +345,8 @@ impl Bench {
         // Copilot's plugin opens its session itself, step by step, which no recording follows: it is given the sessions
         // of the recording as they open (`agent/attach`, as after a restart).
         let opens = flux.harness == EngineId::COPILOT;
+        // Antigravity's lines are its events alone, with no `dir`.
+        let only_said = flux.harness == EngineId::AGY;
         let launch = rt
             .call(
                 plugin,
@@ -424,7 +427,7 @@ impl Bench {
                 } else {
                     f["msg"].clone()
                 };
-                let writes = match f["dir"].as_str() {
+                let writes = match f["dir"].as_str().or(only_said.then_some("s2c")) {
                     Some("s2c" | "in") => {
                         if let (true, Some(session)) = (opens, msg["result"]["sessionId"].as_str()) {
                             let again = json!({

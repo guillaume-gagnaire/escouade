@@ -79,6 +79,9 @@ pub struct Agent {
     cursor: bool,
     /// It is Mistral Vibe (the extension `vibe`): its tools, its forms, Escouade's mode Plan played here, its cost.
     vibe: bool,
+    /// It is Antigravity CLI (the extension `agy`): its client puts its stream in Cursor's form (`Agent::heard`), its
+    /// refusals are errors of their own, not its texts.
+    agy: bool,
     /// It is Gemini CLI (the extension `gemini`): its calls, its modes told as texts, its plan's file, its turns held for
     /// their questions, its tokens.
     gemini: bool,
@@ -230,7 +233,8 @@ impl Agent {
             name: decl.speaker.clone().unwrap_or_else(|| decl.name.clone()),
             lang: String::new(),
             version: version.into(),
-            cursor: acp.extensions.iter().any(|e| e == "cursor"),
+            cursor: acp.extensions.iter().any(|e| e == "cursor" || e == "agy"),
+            agy: acp.extensions.iter().any(|e| e == "agy"),
             vibe: acp.extensions.iter().any(|e| e == "vibe"),
             gemini: acp.extensions.iter().any(|e| e == "gemini"),
             gemini_models: Vec::new(),
@@ -450,6 +454,58 @@ impl Agent {
             writes: vec![hello],
             ..Launch::default()
         })
+    }
+
+    /// A harness that is no ACP (Antigravity CLI): its client opened the session `session`.
+    pub fn session_opened(&mut self, session: &str) -> Vec<Item> {
+        let mut out = Vec::new();
+        self.opened(session.to_string(), &Value::Null, &mut out);
+        out
+    }
+
+    /// The same: a prompt of its client begins.
+    pub fn prompt_begun(&mut self) {
+        self.busy = true;
+        self.cut = false;
+        self.turn_text.clear();
+    }
+
+    /// The same: a message of its, in ACP's form, heard as the agent's own.
+    pub fn heard(&mut self, msg: Value) -> Vec<Item> {
+        let mut out = Vec::new();
+        if let Some(mode) = self.told_mode.take() {
+            out.push(Item::Mode { mode });
+        }
+        self.read(msg, &mut out);
+        out
+    }
+
+    /// The same: its text or reasoning is whole.
+    pub fn text_whole(&mut self) -> Vec<Item> {
+        let mut out = Vec::new();
+        self.close("", &mut out);
+        out
+    }
+
+    /// The same: what its client answered of `request` itself.
+    pub fn forget(&mut self, request: &str) {
+        self.asked.remove(request);
+    }
+
+    /// The same: its prompt ended, with what it spent, why it failed, and when it goes on after a limit (ms).
+    pub fn prompt_ended(
+        &mut self,
+        cancelled: bool,
+        usage: TurnUsage,
+        error: Option<String>,
+        limited_at: Option<i64>,
+    ) -> Vec<Item> {
+        let mut out = Vec::new();
+        self.usage = usage;
+        self.error = error;
+        self.limited_at = limited_at;
+        self.turn_end(cancelled, &mut out);
+        out
     }
 
     /// What the agent wrote: the items for the conversation, and the lines to write back to it (`Item::Write`).
@@ -2127,7 +2183,7 @@ impl Agent {
         let mut error = self.error.take().filter(|_| !cancelled);
         // Vibe's rate limit: the agent goes on a minute later.
         let mut limited = self.limited_at.take().filter(|_| !cancelled).map(Some);
-        if self.cursor && !cancelled && error.is_none() {
+        if self.cursor && !self.agy && !cancelled && error.is_none() {
             if let Some(refusal) = cursor::refusal(&self.turn_text) {
                 if cursor::at_limit(refusal) {
                     limited = Some(None);

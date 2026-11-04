@@ -2,8 +2,8 @@
 title: "Le contrat des harness en process"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.5 et §4.6","docs/TODO-2.2.md (INT-9)","crates/escouade-plugin-protocol/src/engine.rs","src-tauri/src/plugins/harness.rs","src-tauri/src/plugins/shared.rs"]
-tickets: ["ESC-221","ESC-223","ESC-225","ESC-224"]
-decisions: [34]
+tickets: ["ESC-221","ESC-223","ESC-225","ESC-224","ESC-283"]
+decisions: [34,"antigravity-cli-passe-par-son-plugin-en"]
 compared: null
 ---
 
@@ -61,3 +61,15 @@ Codex se sert de ce qu'OpenCode et Copilot CLI y ont mis (voir plus haut), et y 
 - un plugin peut dire la dernière entrée d'où une copie repart quand aucun tour ne la porte, ce que fait l'agent quand l'élément suivant ne le dit pas, et la durée d'un tour selon le harness ;
 - l'ouverture d'une session par le plugin a une limite de trois minutes : au-delà, l'agent le dit au lieu de rester bloqué ;
 - **la clôture d'un projet privé** se compare au lancement quelle que soit la forme des barres d'un chemin Windows : Codex lit `C:/code/secret`, pas `C:\code\secret`.
+
+## Ce qu'Antigravity CLI a ajouté au contrat (INT-10.8)
+
+Un agent d'`agy` a plusieurs programmes à la suite : il ne prend son modèle, son effort et son mode qu'au lancement, et n'a pas de message qui arrête un tour. Un harness peut le déclarer (`relaunches`), et pour tous :
+
+- **un plugin peut demander une relance** : le cœur arrête le programme et en démarre un autre depuis une nouvelle description, **vérifiée comme la première** (jeton, clôture, lecture seule, fichiers) ; ce qui s'écrit ensuite va au nouveau. Il peut aussi arrêter le programme et garder l'agent, jusqu'à la relance suivante ;
+- **un programme qui finit de lui-même est dit au plugin**, derrière ce qu'il a écrit : le plugin en relance un autre, dit pourquoi l'agent s'arrête, ou laisse l'agent finir ;
+- **un fichier s'écrit pendant que l'agent tourne**, dans son dossier seul et avec le même contrôle qu'au lancement (des règles lues à chaud) ;
+- **toute réponse peut porter des éléments**, appliqués dans leur ordre : un message qui relance est une relance, puis une ligne écrite ;
+- le manifeste peut écarter des lignes de la sortie d'erreur du harness : ses journaux nomment le compte ;
+- un plugin qui redémarre retrouve le dossier de l'agent, ses dossiers lus, sa clôture, sa lecture seule et ses consignes, pour tout harness ;
+- **la clôture d'un projet privé** se lit aussi dans un fichier JSON, où les barres d'un chemin Windows sont doublées, quelle que soit la barre finale.

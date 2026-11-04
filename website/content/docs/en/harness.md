@@ -209,6 +209,8 @@ Vibe tells the cost and tokens of each turn: the conversation, the agent’s car
 
 ## Antigravity CLI
 
+Antigravity CLI is a plugin shipped with Escouade (`dev.escouade.antigravity-cli`): its agents talk through a program of its own that Escouade starts and watches. It shows in the Plugins view, under “Shipped with Escouade”; turned off, an Antigravity CLI agent says at its start that it has to be turned back on, and keeps its conversation.
+
 ### Installation and account
 
 Install Antigravity CLI with its script (`irm https://antigravity.google/cli/install.ps1 | iex` on Windows, `curl -fsSL https://antigravity.google/cli/install.sh | bash` elsewhere), then add its account in Settings › Accounts (see below). Escouade finds `agy` in the `PATH`, or where its script puts it. Each agent has its own folder, removed with it, which stands as `agy`’s home: its rules, its conversations and Escouade’s MCP server are kept there, never in your `~/.gemini`, which Gemini CLI shares. Its updates are off.

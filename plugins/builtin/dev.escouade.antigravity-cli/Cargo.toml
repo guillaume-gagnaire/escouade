@@ -1,0 +1,19 @@
+[package]
+name = "escouade-plugin-agy"
+version = "1.0.0"
+description = "Le plugin Antigravity CLI livré avec Escouade : l'agent de Google comme harness, par stream-json"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+workspace = "../../../src-tauri"
+
+# One of the plugins of `escouade-plugins` (docs/PLUGINS.md §4.3): its program is `escouade-plugins agy`. It is no ACP
+# harness: it holds the client of `agy -p` in stream-json, without a process nor a runtime of its own, and puts its events in
+# the form the ACP client reads. The core's « Vue Antigravity » reads its words as a library (`src-tauri/src/engine/agy/`).
+[dependencies]
+escouade-acp = { path = "../../../crates/escouade-acp" }
+escouade-plugin-protocol = { path = "../../../crates/escouade-plugin-protocol" }
+dirs = "6"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

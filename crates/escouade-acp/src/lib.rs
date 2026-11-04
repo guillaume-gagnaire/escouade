@@ -8,7 +8,8 @@
 //! `dev.escouade.acp` (`escouade-plugins acp`) runs one for each agent of a harness a manifest describes
 //! (`contributes.harnesses[].acp`).
 //!
-//! The helpers at the top are those of the ACP harnesses, and of Antigravity CLI in the core until it comes out (INT-10.8).
+//! The helpers at the top are those of the ACP harnesses, and of Antigravity CLI, whose client puts its stream in the
+//! form of this one (`plugins/builtin/dev.escouade.antigravity-cli`, INT-10.8).
 
 pub mod agent;
 pub mod cursor;

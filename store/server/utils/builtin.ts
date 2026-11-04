@@ -101,12 +101,16 @@ export const BUILTINS: Builtin[] = [
     // Out of the core since INT-10.6; one plugin with the voice since INT-10.6 bis.
     source: 'plugins/builtin/dev.escouade.mistral',
   },
-  harness(
-    'antigravity-cli',
-    'Antigravity CLI',
-    'Antigravity CLI comme harness : la conversation, sa vue terminal, les permissions et les comptes Google.',
-    'Antigravity CLI as a harness: the conversation, its terminal view, permissions and Google accounts.',
-  ),
+  {
+    ...harness(
+      'antigravity-cli',
+      'Antigravity CLI',
+      'Antigravity CLI comme harness : la conversation, sa vue terminal, les permissions et les comptes Google.',
+      'Antigravity CLI as a harness: the conversation, its terminal view, permissions and Google accounts.',
+    ),
+    // Out of the core since INT-10.8.
+    source: 'plugins/builtin/dev.escouade.antigravity-cli',
+  },
   {
     ...harness(
       'gemini-cli',

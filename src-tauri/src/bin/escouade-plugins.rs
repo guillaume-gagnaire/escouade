@@ -66,6 +66,9 @@ const ENTRIES: &[Entry] = &[
     ("copilot", escouade_plugin_copilot::run),
     // Codex (INT-10.4): the client of its app-server and its translation, in its crate (plugins/builtin/dev.escouade.codex).
     ("codex", escouade_plugin_codex::run),
+    // Antigravity CLI (INT-10.8): the client of `agy -p` and its translation, in its crate
+    // (plugins/builtin/dev.escouade.antigravity-cli).
+    ("agy", escouade_plugin_agy::run),
 ];
 
 fn main() {

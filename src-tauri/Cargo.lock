@@ -1630,6 +1630,7 @@ dependencies = [
  "dirs 6.0.0",
  "escouade-acp",
  "escouade-plugin-acp",
+ "escouade-plugin-agy",
  "escouade-plugin-azure-devops",
  "escouade-plugin-bitbucket",
  "escouade-plugin-clickup",
@@ -1726,6 +1727,17 @@ dependencies = [
 name = "escouade-plugin-acp"
 version = "1.0.0"
 dependencies = [
+ "escouade-acp",
+ "escouade-plugin-protocol",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "escouade-plugin-agy"
+version = "1.0.0"
+dependencies = [
+ "dirs 6.0.0",
  "escouade-acp",
  "escouade-plugin-protocol",
  "serde",

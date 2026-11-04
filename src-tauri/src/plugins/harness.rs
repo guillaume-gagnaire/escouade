@@ -278,6 +278,12 @@ pub const BUILTIN_HARNESSES: &[BuiltinHarness] = &[
         native: None,
         prepare: None,
     },
+    // Antigravity CLI (INT-10.8): no ACP harness, several programs in a row (`relaunches`), the hooks of its view taken away.
+    BuiltinHarness {
+        plugin: super::builtin::ANTIGRAVITY,
+        native: None,
+        prepare: Some(crate::engine::agy::prepare),
+    },
 ];
 
 /// The harnesses of the plugins the app gives that are on, by their plugin, each made once for each runtime (by its
@@ -642,13 +648,14 @@ pub fn check_launch(
         }
     }
     if !fence.is_empty() {
-        // Whatever its slashes: Codex reads a path of Windows with `/`.
-        let plain = |s: &str| s.replace('\\', "/");
+        // Whatever its slashes: Codex reads a path of Windows with `/`, a file in JSON doubles its `\`.
+        let plain = |s: &str| s.replace('\\', "/").replace("//", "/");
         let said = |p: &str| {
             let p = plain(p);
-            launch.args.iter().any(|a| plain(a).contains(&p))
-                || launch.env.iter().any(|v| plain(&v.value).contains(&p))
-                || launch.files.iter().any(|f| plain(&f.text).contains(&p))
+            let p = p.trim_end_matches('/');
+            launch.args.iter().any(|a| plain(a).contains(p))
+                || launch.env.iter().any(|v| plain(&v.value).contains(p))
+                || launch.files.iter().any(|f| plain(&f.text).contains(p))
         };
         // Held by the plugin on what its harness reads and writes through it (ACP's `fs/*`), or by the launch, every
         // path in it.
@@ -668,19 +675,36 @@ pub fn check_launch(
         ));
     }
     for f in &launch.files {
+        check_file(name, home, &f.path)?;
+    }
+    Ok(())
+}
+
+/// A file a plugin wants written: in the agent's own folder alone.
+fn check_file(name: &str, home: Option<&str>, file: &str) -> std::result::Result<(), String> {
+    let path = Path::new(file);
+    let inside = home.is_some_and(|home| {
+        path.is_absolute()
+            && path.starts_with(home)
+            && !path.components().any(|c| matches!(c, Component::ParentDir))
+    });
+    if inside {
+        return Ok(());
+    }
+    Err(tr!(
+        "Le plugin de {name} veut écrire {file}, hors du dossier de l’agent : l’agent ne démarre pas.",
+        "The plugin of {name} wants to write {file}, outside the agent’s folder: the agent doesn’t start."
+    ))
+}
+
+/// The files of a launch, written.
+fn write_files(launch: &proto::Launch) -> Result<()> {
+    for f in &launch.files {
         let path = Path::new(&f.path);
-        let inside = home.is_some_and(|home| {
-            path.is_absolute()
-                && path.starts_with(home)
-                && !path.components().any(|c| matches!(c, Component::ParentDir))
-        });
-        if !inside {
-            let file = &f.path;
-            return Err(tr!(
-                "Le plugin de {name} veut écrire {file}, hors du dossier de l’agent : l’agent ne démarre pas.",
-                "The plugin of {name} wants to write {file}, outside the agent’s folder: the agent doesn’t start."
-            ));
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
         }
+        std::fs::write(path, &f.text)?;
     }
     Ok(())
 }
@@ -867,6 +891,10 @@ impl Engine for ProcessEngine {
             framed: self.decl.framing.as_deref() == Some("contentLength"),
             close_line: self.decl.close_line.clone(),
             opens: self.decl.opens,
+            relaunches: self.decl.relaunches,
+            leaves_out: self.decl.stderr_leaves_out.clone(),
+            next: Mutex::new(None),
+            paused: AtomicBool::new(false),
             opened: watch::channel(None).0,
             refused: Mutex::new(None),
             compacting: Mutex::new(None),
@@ -1019,6 +1047,14 @@ pub struct ProcessEngineProcess {
     close_line: Option<String>,
     /// As `HarnessDecl::opens`: it is ready at `Item::Ready`.
     opens: bool,
+    /// As `HarnessDecl::relaunches`.
+    relaunches: bool,
+    /// As `HarnessDecl::stderr_leaves_out`.
+    leaves_out: Vec<String>,
+    /// Who starts its next program (`run`).
+    next: Mutex<Option<mpsc::UnboundedSender<Next>>>,
+    /// No program runs for now (`Item::Pause`).
+    paused: AtomicBool,
     /// What `Item::Ready` said (the models of the account), or why it will not come.
     opened: watch::Sender<Option<std::result::Result<Value, String>>>,
     /// Why its plugin stopped its harness (`Item::Stop`).
@@ -1066,6 +1102,22 @@ pub struct ProcessEngineProcess {
     joins: Mutex<Option<terminal::Attach>>,
     /// The models of its account, as `agent/open` said them.
     catalog: Mutex<Option<Vec<ToldModel>>>,
+}
+
+/// What is asked of its programs (`Item::Relaunch`, `Item::Pause`).
+enum Next {
+    Launch(Box<proto::Launch>, mpsc::UnboundedReceiver<Vec<u8>>),
+    Pause,
+}
+
+/// What its harness's reader gives the pump: a line, or the end of its program by itself (told to the plugin behind the
+/// lines it wrote), answered by whether another starts.
+enum Heard {
+    Line(String),
+    Gone {
+        code: Option<i32>,
+        again: oneshot::Sender<bool>,
+    },
 }
 
 /// What a launch came to.
@@ -1180,9 +1232,14 @@ impl ProcessEngineProcess {
         for _ in 0..RETRIES {
             match self.rt.call(&self.plugin, method, params.clone()).await {
                 Ok(v) => {
+                    let items = v["items"].as_array().cloned().unwrap_or_default();
                     let writes: proto::Writes = serde_json::from_value(v).unwrap_or_default();
                     for w in &writes.writes {
                         self.write(w);
+                    }
+                    let told = self.told.lock().clone();
+                    if let (false, Some(on_frame)) = (items.is_empty(), told) {
+                        self.deliver(items, &on_frame);
                     }
                     return Ok(());
                 }
@@ -1297,6 +1354,15 @@ impl ProcessEngineProcess {
             &launch,
         )
         .map_err(|e| anyhow!(e))?;
+        {
+            let mut a = self.attach.lock();
+            a.home = home.clone();
+            a.read_dirs = params.read_dirs.clone();
+            a.by_key = params.by_key;
+            a.fence = fence.clone();
+            a.read_only = spawn.read_only;
+            a.append_prompt = spawn.append_prompt.clone();
+        }
         let added = match self.prepare {
             Some(prepare) => prepare(&Preparing {
                 home: home.as_deref().map(Path::new),
@@ -1307,16 +1373,24 @@ impl ProcessEngineProcess {
             })?,
             None => Vec::new(),
         };
-        for f in &launch.files {
-            let path = Path::new(&f.path);
-            if let Some(dir) = path.parent() {
-                std::fs::create_dir_all(dir)?;
-            }
-            std::fs::write(path, &f.text)?;
-        }
+        write_files(&launch)?;
         if launch.shared.is_some() {
             return Ok(Launched::Shared(launch));
         }
+        let (child, job) = self.start_program(spawn, &launch, &added)?;
+        for w in &launch.writes {
+            self.write(w);
+        }
+        Ok(Launched::Child(child, job))
+    }
+
+    /// Starts its program from `launch`, `added` to its arguments.
+    fn start_program(
+        &self,
+        spawn: &Spawn,
+        launch: &proto::Launch,
+        added: &[String],
+    ) -> Result<(tokio::process::Child, Option<Arc<Job>>)> {
         log::info!(
             "{}: starting {} ({}) in {} (account {})",
             spawn.label,
@@ -1326,7 +1400,7 @@ impl ProcessEngineProcess {
             spawn.account
         );
         let env = merged(&spawn.env, &launch.env);
-        let told = launch.args.iter().chain(&added).cloned();
+        let told = launch.args.iter().chain(added).cloned();
         let (program, args) = match self.native.and_then(|n| n(&spawn.program)) {
             Some((program, mut first)) => {
                 first.extend(told);
@@ -1340,10 +1414,29 @@ impl ProcessEngineProcess {
             tr!("impossible de lancer {program}", "can’t start {program}")
         })?;
         let job = Job::for_child(&child).map(Arc::new);
-        for w in &launch.writes {
-            self.write(w);
-        }
-        Ok(Launched::Child(child, job))
+        Ok((child, job))
+    }
+
+    /// Starts the next of its programs, its description checked as the first one's was.
+    fn start_again(
+        &self,
+        spawn: &Spawn,
+        launch: &proto::Launch,
+    ) -> Result<(tokio::process::Child, Option<Arc<Job>>)> {
+        let fence = crate::fence::spelled(&spawn.fence, &spawn.program);
+        let home = self.attach.lock().home.clone();
+        check_launch(
+            self.name,
+            super::builtin::is_builtin(&self.plugin),
+            spawn.escouade.token(),
+            &fence,
+            spawn.read_only,
+            home.as_deref(),
+            launch,
+        )
+        .map_err(|e| anyhow!(e))?;
+        write_files(launch)?;
+        self.start_program(spawn, launch, &[])
     }
 
     /// Its launch failed: why.
@@ -1450,11 +1543,9 @@ impl ProcessEngineProcess {
         self: Arc<Self>,
         spawn: Spawn,
         launch: proto::Launch,
-        on_frame: OnFrame,
+        on_frame: Arc<OnFrame>,
         on_exit: OnExit,
     ) {
-        let on_frame = Arc::new(on_frame);
-        *self.told.lock() = Some(on_frame.clone());
         if let Err(e) = self.join(&spawn, &launch).await {
             self.leave();
             TOLD.lock().retain(|(k, _)| *k != self.key);
@@ -1585,10 +1676,12 @@ impl ProcessEngineProcess {
     async fn run(
         self: Arc<Self>,
         spawn: Spawn,
-        mut stdin_rx: mpsc::UnboundedReceiver<Vec<u8>>,
+        stdin_rx: mpsc::UnboundedReceiver<Vec<u8>>,
         on_frame: OnFrame,
         on_exit: OnExit,
     ) {
+        let on_frame = Arc::new(on_frame);
+        *self.told.lock() = Some(on_frame.clone());
         let (mut child, job) = match self.launch(&spawn).await {
             Ok(Launched::Child(child, job)) => (child, job),
             Ok(Launched::Shared(launch)) => {
@@ -1600,70 +1693,82 @@ impl ProcessEngineProcess {
                 return;
             }
         };
+        let mut job = job;
         *self.job.lock() = job.clone();
         let (kill_tx, mut kill_rx) = oneshot::channel();
         *self.kill_tx.lock() = Some(kill_tx);
-        if let Some(mut stdin) = child.stdin.take() {
-            tokio::spawn(async move {
-                while let Some(bytes) = stdin_rx.recv().await {
-                    if stdin.write_all(&bytes).await.is_err() || stdin.flush().await.is_err() {
-                        break;
-                    }
-                }
-            });
-        }
-        if let Some(stderr) = child.stderr.take() {
-            let me = Arc::downgrade(&self);
-            tokio::spawn(async move {
-                let mut lines = BufReader::new(stderr).lines();
-                while let Ok(Some(line)) = lines.next_line().await {
-                    let Some(p) = me.upgrade() else { break };
-                    let mut tail = p.tail.lock();
-                    tail.push_back(line);
-                    if tail.len() > 20 {
-                        tail.pop_front();
-                    }
-                }
-            });
-        }
-        let (lines_tx, lines_rx) = mpsc::channel::<String>(FRAME_QUEUE);
-        let stdout = child.stdout.take();
-        let by_length = self.framed;
-        let reader = tokio::spawn(async move {
-            let Some(stdout) = stdout else { return };
-            if by_length {
-                let mut reader = BufReader::new(stdout);
-                while let Ok(Some(body)) = read_frame(&mut reader).await {
-                    let text = String::from_utf8_lossy(&body).into_owned();
-                    if lines_tx.send(text).await.is_err() {
-                        break;
-                    }
-                }
-                return;
-            }
-            let mut lines = BufReader::new(stdout).split(b'\n');
-            while let Ok(Some(bytes)) = lines.next_segment().await {
-                let text = String::from_utf8_lossy(&bytes);
-                let text = text.trim();
-                if !text.is_empty() && lines_tx.send(text.to_string()).await.is_err() {
-                    break;
-                }
-            }
-        });
+        let (next_tx, mut next_rx) = mpsc::unbounded_channel();
+        *self.next.lock() = Some(next_tx);
+        let (lines_tx, lines_rx) = mpsc::channel::<Heard>(FRAME_QUEUE);
+        let mut reader = Some(self.hook_up(&mut child, stdin_rx, lines_tx.clone()));
+        let mut child = Some(child);
         let _ = self.ready.send(Some(Ok(())));
         let pump = {
-            let me = self.clone();
+            let (me, on_frame) = (self.clone(), on_frame.clone());
             tokio::spawn(async move { me.pump(lines_rx, &on_frame).await })
         };
-        let code = tokio::select! {
-            status = child.wait() => status.ok().and_then(|s| s.code()),
-            _ = &mut kill_rx => {
-                let _ = child.start_kill();
-                if let Some(job) = &job { job.terminate(); }
-                child.wait().await.ok().and_then(|s| s.code())
+        let code = loop {
+            tokio::select! {
+                status = async {
+                    match child.as_mut() {
+                        Some(c) => c.wait().await,
+                        None => std::future::pending().await,
+                    }
+                } => {
+                    let code = status.ok().and_then(|s| s.code());
+                    child = None;
+                    if let Some(r) = reader.take() {
+                        let _ = r.await;
+                    }
+                    if !self.relaunches || self.closing.load(Ordering::Acquire) {
+                        break code;
+                    }
+                    // Told behind what it wrote; its plugin may start another.
+                    let (again, answer) = oneshot::channel();
+                    if lines_tx.send(Heard::Gone { code, again }).await.is_err()
+                        || !answer.await.unwrap_or(false)
+                    {
+                        break code;
+                    }
+                }
+                _ = &mut kill_rx => {
+                    let mut code = None;
+                    if let Some(c) = child.as_mut() {
+                        let _ = c.start_kill();
+                        if let Some(job) = &job { job.terminate(); }
+                        code = c.wait().await.ok().and_then(|s| s.code());
+                    }
+                    break code;
+                }
+                Some(next) = next_rx.recv() => {
+                    if let Some(mut c) = child.take() {
+                        let _ = c.start_kill();
+                        if let Some(job) = &job { job.terminate(); }
+                        let _ = c.wait().await;
+                    }
+                    if let Some(r) = reader.take() {
+                        let _ = tokio::time::timeout(Duration::from_secs(2), r).await;
+                    }
+                    job = None;
+                    *self.job.lock() = None;
+                    let Next::Launch(launch, stdin) = next else { continue };
+                    match self.start_again(&spawn, &launch) {
+                        Ok((mut c, j)) => {
+                            job = j;
+                            *self.job.lock() = job.clone();
+                            reader = Some(self.hook_up(&mut c, stdin, lines_tx.clone()));
+                            child = Some(c);
+                        }
+                        // A message that was to go to it: its turn ends, said; the next one tries again.
+                        Err(e) => self.not_started(&e),
+                    }
+                }
             }
         };
-        let _ = reader.await;
+        drop(lines_tx);
+        if let Some(r) = reader.take() {
+            let _ = r.await;
+        }
         let stopped = pump.await.ok().flatten();
         self.alive.store(false, Ordering::Release);
         self.control.lock().take();
@@ -1698,20 +1803,138 @@ impl ProcessEngineProcess {
         on_exit(code, said);
     }
 
+    /// Its program's input, error output and lines hooked up; answers the task that reads its lines.
+    fn hook_up(
+        self: &Arc<Self>,
+        child: &mut tokio::process::Child,
+        mut stdin_rx: mpsc::UnboundedReceiver<Vec<u8>>,
+        lines_tx: mpsc::Sender<Heard>,
+    ) -> tokio::task::JoinHandle<()> {
+        if let Some(mut stdin) = child.stdin.take() {
+            tokio::spawn(async move {
+                while let Some(bytes) = stdin_rx.recv().await {
+                    if stdin.write_all(&bytes).await.is_err() || stdin.flush().await.is_err() {
+                        break;
+                    }
+                }
+            });
+        }
+        if let Some(stderr) = child.stderr.take() {
+            let me = Arc::downgrade(self);
+            tokio::spawn(async move {
+                let mut lines = BufReader::new(stderr).lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    let Some(p) = me.upgrade() else { break };
+                    if p.leaves_out.iter().any(|t| line.contains(t.as_str())) {
+                        continue;
+                    }
+                    let mut tail = p.tail.lock();
+                    tail.push_back(line);
+                    if tail.len() > 20 {
+                        tail.pop_front();
+                    }
+                }
+            });
+        }
+        let stdout = child.stdout.take();
+        let by_length = self.framed;
+        tokio::spawn(async move {
+            let Some(stdout) = stdout else { return };
+            if by_length {
+                let mut reader = BufReader::new(stdout);
+                while let Ok(Some(body)) = read_frame(&mut reader).await {
+                    let text = String::from_utf8_lossy(&body).into_owned();
+                    if lines_tx.send(Heard::Line(text)).await.is_err() {
+                        break;
+                    }
+                }
+                return;
+            }
+            let mut lines = BufReader::new(stdout).split(b'\n');
+            while let Ok(Some(bytes)) = lines.next_segment().await {
+                let text = String::from_utf8_lossy(&bytes);
+                let text = text.trim();
+                if !text.is_empty() && lines_tx.send(Heard::Line(text.to_string())).await.is_err() {
+                    break;
+                }
+            }
+        })
+    }
+
+    /// A program that was asked for did not start: the conversation says why, and its plugin ends the turn it was for as a
+    /// stopped one (the next message starts another).
+    fn not_started(&self, e: &anyhow::Error) {
+        let why = format!("{e:#}");
+        log::warn!("{}: {why}", self.key);
+        let told = self.told.lock().clone();
+        if let Some(on_frame) = told {
+            on_frame(json!({ "items": [{ "op": "notice", "level": "error", "text": why }] }));
+        }
+        let stop = json!({ "agent": self.key, "cancelQueued": true });
+        if let Err(e) = self.send_ordered(method::INTERRUPT, stop) {
+            log::warn!("{}: {e:#}", self.key);
+        }
+    }
+
+    /// Its program ended by itself: what its plugin makes of it. Answers whether another starts.
+    async fn program_gone(&self, code: Option<i32>, on_frame: &OnFrame) -> bool {
+        let said: Vec<String> = self.tail.lock().iter().cloned().collect();
+        let gone = proto::Gone {
+            agent: self.key.clone(),
+            code,
+            said: said.join("\n"),
+        };
+        let Ok(params) = serde_json::to_value(&gone) else {
+            return false;
+        };
+        let answer = self
+            .rt
+            .call_within(&self.plugin, method::PROGRAM_GONE, params, FRAMES_WITHIN)
+            .await;
+        let items = match answer {
+            Ok(v) => v["items"].as_array().cloned().unwrap_or_default(),
+            Err(e) => {
+                log::warn!("{}: {e}", self.key);
+                return false;
+            }
+        };
+        let again = items.iter().any(|i| i["op"] == "relaunch");
+        self.deliver(items, on_frame);
+        again
+    }
+
     /// Reads its harness's lines in batches and gives them to the plugin; answers why it stopped the harness, if it
     /// did (its plugin stopped).
-    async fn pump(&self, mut lines: mpsc::Receiver<String>, on_frame: &OnFrame) -> Option<String> {
+    async fn pump(&self, mut lines: mpsc::Receiver<Heard>, on_frame: &OnFrame) -> Option<String> {
         let mut stopped = None;
-        while let Some(first) = lines.recv().await {
+        let mut held = None;
+        loop {
+            let heard = match held.take() {
+                Some(h) => Some(h),
+                None => lines.recv().await,
+            };
+            let first = match heard {
+                Some(Heard::Line(line)) => line,
+                Some(Heard::Gone { code, again }) => {
+                    let goes_on = stopped.is_none() && self.program_gone(code, on_frame).await;
+                    let _ = again.send(goes_on);
+                    continue;
+                }
+                None => break,
+            };
             // What was read meanwhile goes with it, up to 64 KiB; nothing waits for more: under a fast stream the
             // lines gather while the last batch is with the plugin, and a lone line goes at once.
             let mut bytes = first.len();
             let mut batch = vec![first];
             while bytes < proto::BATCH_BYTES {
                 match lines.try_recv() {
-                    Ok(l) => {
+                    Ok(Heard::Line(l)) => {
                         bytes += l.len();
                         batch.push(l);
+                    }
+                    Ok(gone) => {
+                        held = Some(gone);
+                        break;
                     }
                     Err(_) => break,
                 }
@@ -1831,7 +2054,32 @@ impl ProcessEngineProcess {
                         self.answered(r);
                     }
                 }
+                // The harness left its mode: told again after a restart.
+                "mode" => {
+                    if let Some(mode) = item["mode"].as_str() {
+                        self.attach.lock().mode = mode.to_string();
+                    }
+                }
                 // What is for this process, not the agent.
+                "relaunch" => {
+                    match serde_json::from_value::<proto::Launch>(item["launch"].clone()) {
+                        Ok(launch) => self.relaunch(launch),
+                        Err(e) => log::warn!("{}: a relaunch that does not read: {e}", self.key),
+                    }
+                    continue;
+                }
+                "pause" => {
+                    self.pause();
+                    continue;
+                }
+                "file" => {
+                    let (path, text) = (
+                        item["path"].as_str().unwrap_or_default(),
+                        item["text"].as_str().unwrap_or_default(),
+                    );
+                    self.write_file(path, text);
+                    continue;
+                }
                 "ready" => {
                     let _ = self.opened.send(Some(Ok(item["models"].clone())));
                     continue;
@@ -1864,6 +2112,45 @@ impl ProcessEngineProcess {
         }
         if !out.is_empty() {
             on_frame(json!({ "items": out }));
+        }
+    }
+
+    /// Its next program, once the one running is stopped: the lines written from now on go to it.
+    fn relaunch(&self, launch: proto::Launch) {
+        if self.closing.load(Ordering::Acquire) {
+            return;
+        }
+        let (tx, rx) = mpsc::unbounded_channel();
+        *self.stdin.lock() = Some(tx);
+        self.paused.store(false, Ordering::Release);
+        if let Some(next) = self.next.lock().as_ref() {
+            let _ = next.send(Next::Launch(Box::new(launch), rx));
+        }
+    }
+
+    /// Its program stopped, the agent kept.
+    fn pause(&self) {
+        self.stdin.lock().take();
+        self.paused.store(true, Ordering::Release);
+        if let Some(next) = self.next.lock().as_ref() {
+            let _ = next.send(Next::Pause);
+        }
+    }
+
+    /// A file its plugin wants written while it runs, in the agent's own folder alone.
+    fn write_file(&self, path: &str, text: &str) {
+        let home = self.attach.lock().home.clone();
+        let done = check_file(self.name, home.as_deref(), path)
+            .map_err(|e| anyhow!(e))
+            .and_then(|()| {
+                if let Some(dir) = Path::new(path).parent() {
+                    std::fs::create_dir_all(dir)?;
+                }
+                std::fs::write(path, text)?;
+                Ok(())
+            });
+        if let Err(e) = done {
+            log::warn!("{}: a file of its plugin not written: {e:#}", self.key);
         }
     }
 
@@ -1932,6 +2219,10 @@ impl EngineProcess for ProcessEngineProcess {
                 self.leave();
             }
             return;
+        }
+        // No program running: nothing to wait for.
+        if self.paused.load(Ordering::Acquire) {
+            return self.kill();
         }
         if let Some(line) = &self.close_line {
             self.write(line);

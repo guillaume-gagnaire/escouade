@@ -60,6 +60,9 @@ pub mod method {
     /// From the plugin, without being asked (a notification, `Pushed`): what its harness said by a way only the plugin
     /// reads (the event stream of a shared server).
     pub const ITEMS: &str = "agent/items";
+    /// Its program ended by itself, for a harness that declares `relaunches` (`Gone` → `Items`): `Item::Relaunch` goes
+    /// on with another, `Item::Stop` says why not, nothing ends the agent's process.
+    pub const PROGRAM_GONE: &str = "agent/programGone";
 }
 
 /// How many bytes of lines a batch of `agent/frames` carries at most. A batch is what was read while the last one
@@ -281,8 +284,8 @@ pub struct Attach {
     /// The shared process it is on (`Launch::shared`), once it runs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shared: Option<SharedRef>,
-    /// As `LaunchParams::fence`, `read_only` and `append_prompt`, for a plugin that holds them on a session of its
-    /// own (`Launch::shared`).
+    /// As `LaunchParams::fence`, `read_only` and `append_prompt`, for a plugin that holds them itself, or starts again:
+    /// on a session of its own (`Launch::shared`), in rules it writes.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fence: Vec<String>,
     #[serde(default)]
@@ -292,6 +295,14 @@ pub struct Attach {
     /// A turn of its runs, as far as the core knows: one that ended while the plugin was down is told so.
     #[serde(default)]
     pub running: bool,
+    /// As `LaunchParams::home`, `read_dirs` and `by_key`, for a plugin that starts again and writes in that folder (its
+    /// rules, a harness that `relaunches`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub home: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub read_dirs: Vec<String>,
+    #[serde(default)]
+    pub by_key: bool,
 }
 
 /// What `agent/open` is told: the agent's session, on the shared process of its `agent/attach`.
@@ -376,6 +387,16 @@ pub struct Interrupt {
     pub cancel_queued: bool,
 }
 
+/// `method::PROGRAM_GONE`: how it ended, and what it said last on its error output.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Gone {
+    pub agent: String,
+    #[serde(default)]
+    pub code: Option<i32>,
+    #[serde(default)]
+    pub said: String,
+}
+
 /// A batch of what the harness wrote: each line as it read it, never read again by the core.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Frames {
@@ -383,7 +404,8 @@ pub struct Frames {
     pub frames: Vec<String>,
 }
 
-/// What a batch made.
+/// What a batch made. The answer to any call that answers `Writes` may be this instead: its items applied, in their
+/// order (a message that starts a program again: `Item::Relaunch`, then its `Item::Write`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Items {
     #[serde(default)]
@@ -720,6 +742,13 @@ pub enum Item {
     /// How long the turn that ends took, as its harness counted it (ms), told just before its `Turn`; left out, the core
     /// counts it.
     Took { ms: i64 },
+    /// A harness that `relaunches`: its program stopped, and another started from this description, checked as the
+    /// first one was; the lines written after it go to the new one.
+    Relaunch { launch: Box<Launch> },
+    /// A harness that `relaunches`: its program stopped, the agent kept; `Relaunch` starts the next one.
+    Pause,
+    /// A file written now, in the agent's own folder alone, checked as those of a launch: rules read while it runs.
+    File { path: String, text: String },
     /// Asked to stop gently (`method::CLOSE`), its turn is over: the agent has left its shared process.
     Closed,
     /// An item of a later version of the contract: left aside.
@@ -920,6 +949,13 @@ pub struct HarnessDecl {
     /// launch, and `Item::Stop` is its refusal.
     #[serde(default)]
     pub opens: bool,
+    /// One agent has several programs in a row (`Item::Relaunch`, `Item::Pause`): it takes its settings at its launch alone,
+    /// or has no way to stop a turn. Its end by itself is told to its plugin (`method::PROGRAM_GONE`).
+    #[serde(default)]
+    pub relaunches: bool,
+    /// The lines of its error output that hold one of these are not kept (what it logs of the account).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub stderr_leaves_out: Vec<String>,
     /// Where it keeps what it remembers of a project, offered once to the shared memory: a folder of files, with
     /// `{configDir}` and `{projectKey}` (the project's path, every character but a letter or a digit a dash).
     #[serde(default)]

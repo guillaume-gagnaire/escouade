@@ -561,6 +561,9 @@ impl AgentRt {
             | Item::Ready { .. }
             | Item::Compacted { .. }
             | Item::Stop { .. }
+            | Item::Relaunch { .. }
+            | Item::Pause
+            | Item::File { .. }
             | Item::Closed
             | Item::Unknown => {}
         }
