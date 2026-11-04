@@ -59,12 +59,16 @@ export const BUILTINS: Builtin[] = [
     'Codex d’OpenAI comme harness : la conversation, sa vue terminal, les permissions, le plan et le coût par compte.',
     'OpenAI’s Codex as a harness: the conversation, its terminal view, permissions, the plan and the cost per account.',
   ),
-  harness(
-    'copilot-cli',
-    'Copilot CLI',
-    'GitHub Copilot CLI comme harness : la conversation, sa vue terminal, les permissions et les crédits du compte.',
-    'GitHub Copilot CLI as a harness: the conversation, its terminal view, permissions and the account’s credits.',
-  ),
+  {
+    ...harness(
+      'copilot-cli',
+      'Copilot CLI',
+      'GitHub Copilot CLI comme harness : la conversation, sa vue terminal, les permissions et les crédits du compte.',
+      'GitHub Copilot CLI as a harness: the conversation, its terminal view, permissions and the account’s credits.',
+    ),
+    // Out of the core since INT-10.3.
+    source: 'plugins/builtin/dev.escouade.copilot-cli',
+  },
   {
     ...harness(
       'cursor-cli',

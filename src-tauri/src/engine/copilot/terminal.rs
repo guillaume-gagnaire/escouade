@@ -54,6 +54,9 @@ const HOOK_LIMIT_SECS: u64 = 10;
 const COPY_LIMIT: Duration = Duration::from_secs(30);
 /// How long the account's models may take to be listed, before its interface starts.
 const LIST_LIMIT: Duration = Duration::from_secs(20);
+
+/// How long a server of an account may take to tell its quota: its start, then its answers.
+const QUOTA_LIMIT: Duration = Duration::from_secs(60);
 /// How long after a first Escape the second goes, which interrupts the turn.
 const INTERRUPT_AGAIN: Duration = Duration::from_millis(400);
 
@@ -292,6 +295,38 @@ pub(crate) async fn models_list(
     answer?
 }
 
+/// The quota of an account none of whose agents runs, by a server of its own started then stopped (`more`: its
+/// arguments besides its server's): `account.getQuota`'s snapshots, None when the account is not signed in. No session
+/// is opened, no model asked.
+pub(crate) async fn read_quota(
+    program: &Program,
+    cwd: &str,
+    env: &[(String, String)],
+    more: &[String],
+) -> Result<Option<Value>> {
+    let mut server = Server::start_with(program, cwd, env, more)?;
+    let own_home = super::process::own_home(env);
+    let talk = async {
+        let mut rpc = server.rpc();
+        rpc.ask(
+            "connect",
+            json!({ "supportedTaskKinds": ["agent", "client", "shell"] }),
+        )
+        .await?;
+        let auth = rpc.ask("auth.getStatus", json!({})).await?;
+        if !super::process::signed_in(&auth, own_home) {
+            return Ok::<_, anyhow::Error>(None);
+        }
+        let quota = rpc.ask("account.getQuota", json!({})).await?;
+        Ok(Some(quota["quotaSnapshots"].clone()))
+    };
+    let answer = tokio::time::timeout(QUOTA_LIMIT, talk)
+        .await
+        .map_err(|_| anyhow!("copilot did not tell its quota in time"));
+    server.stop().await;
+    answer?
+}
+
 /// The models each account lists (by its `COPILOT_HOME`, empty for the user's own), asked once
 /// for the app's run: a plan changed (Free to Pro) is seen at the next start.
 static LISTED: parking_lot::Mutex<Vec<(String, Vec<String>)>> = parking_lot::Mutex::new(Vec::new());
@@ -327,7 +362,18 @@ struct Server {
 
 impl Server {
     fn start(program: &Program, cwd: &str, env: &[(String, String)]) -> Result<Self> {
-        let launch = program.launch(cwd, &server_args(), env)?;
+        Self::start_with(program, cwd, env, &[])
+    }
+
+    fn start_with(
+        program: &Program,
+        cwd: &str,
+        env: &[(String, String)],
+        more: &[String],
+    ) -> Result<Self> {
+        let mut args = server_args();
+        args.extend_from_slice(more);
+        let launch = program.launch(cwd, &args, env)?;
         let mut cmd = tokio::process::Command::new(&launch.program);
         cmd.args(&launch.args)
             .current_dir(cwd)
@@ -335,6 +381,13 @@ impl Server {
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .kill_on_drop(true);
+        // An account of its own signs in by itself (`copilot login`): a token of the app's environment would make it
+        // another one.
+        if super::process::own_home(env) {
+            for var in super::process::INHERITED_TOKENS {
+                cmd.env_remove(var);
+            }
+        }
         for (k, v) in &launch.env {
             cmd.env(k, v);
         }

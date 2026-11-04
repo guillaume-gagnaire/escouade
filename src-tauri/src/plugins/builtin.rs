@@ -129,6 +129,12 @@ pub const REGISTRY: &[Entry] = &[
             "../../../plugins/builtin/dev.escouade.opencode/escouade-plugin.json"
         ),
     },
+    Entry {
+        id: COPILOT,
+        manifest: include_str!(
+            "../../../plugins/builtin/dev.escouade.copilot-cli/escouade-plugin.json"
+        ),
+    },
 ];
 
 /// The plugin « GitHub »: github.com, GHE.com and GitHub Enterprise Server, their pull requests and GitHub Issues.
@@ -161,6 +167,9 @@ pub const JIRA: &str = "dev.escouade.jira";
 
 /// The plugin « Cursor CLI »: Cursor CLI as a harness, over ACP (INT-10.1).
 pub const CURSOR: &str = "dev.escouade.cursor-cli";
+
+/// The plugin « Copilot CLI »: its harness in process, on the client of its own server (INT-10.3).
+pub const COPILOT: &str = "dev.escouade.copilot-cli";
 
 /// The plugin « ClickUp »: the Kanban's source of ClickUp tasks (INT-7.4).
 pub const CLICKUP: &str = "dev.escouade.clickup";

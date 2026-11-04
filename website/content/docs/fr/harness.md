@@ -115,6 +115,8 @@ Pas de mode « Auto » (OpenCode n’a pas de relecteur), pas de bac à sable,
 
 ## Copilot CLI
 
+Copilot CLI est un plugin livré avec Escouade (`dev.escouade.copilot-cli`) : ses agents conversent par un programme à part qu’Escouade lance et surveille. Il se voit dans la vue Plugins, sous « Livrés avec Escouade » ; coupé, un agent de Copilot dit au lancement qu’il faut le rallumer, et garde sa session.
+
 ### Installation et compte
 
 `npm install -g @github/copilot`, puis `copilot login` avec un compte GitHub qui a Copilot (Free compris). Chaque agent a son `copilot --server --stdio`, sans le serveur MCP GitHub que Copilot branche de lui-même, sans accès au dossier temporaire du système et sans les jetons GitHub dans l’environnement de ses commandes. Ses comptes ont chacun leur `COPILOT_HOME` : voir [les comptes Copilot CLI](accounts#comptes-copilot-cli).

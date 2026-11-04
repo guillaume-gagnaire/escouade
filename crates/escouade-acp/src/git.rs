@@ -14,6 +14,10 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+/// A console-less child (`CREATE_NO_WINDOW`): no window flashes under Windows.
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 /// The shell that reads a script.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Shell {
@@ -23,7 +27,7 @@ enum Shell {
 
 /// What a script asks of git: its commands, in order (each one `add` or `commit`).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Calls {
+pub struct Calls {
     pub subcommands: Vec<&'static str>,
 }
 
@@ -35,7 +39,7 @@ impl Calls {
 
 /// Whether the command `command` (the request's, as Codex will run it) with its summary `actions`,
 /// run in `cwd` (the agent's worktree), is accepted without asking.
-pub(crate) fn accepts(command: &str, actions: &[&str], cwd: &Path) -> bool {
+pub fn accepts(command: &str, actions: &[&str], cwd: &Path) -> bool {
     let Some(calls) = calls(command, actions) else {
         return false;
     };
@@ -44,7 +48,7 @@ pub(crate) fn accepts(command: &str, actions: &[&str], cwd: &Path) -> bool {
 
 /// The git calls of `command`, when it is nothing but `git add` and `git commit` and its summary
 /// `actions` says the same; None otherwise (it is asked).
-pub(crate) fn calls(command: &str, actions: &[&str]) -> Option<Calls> {
+pub fn calls(command: &str, actions: &[&str]) -> Option<Calls> {
     let argv = posix_words(command)?;
     let (shell, script) = unwrap(&argv)?;
     let shown = actions.join(" && ");
@@ -371,7 +375,7 @@ fn protected_dir(dir: &Path, cwd: &Path) -> bool {
 
 /// Whether the repository of the worktree `cwd` has a configuration the agent cannot have written:
 /// its git folder and its common folder (where the configuration is) protected.
-pub(crate) fn repo_protected(cwd: &Path) -> bool {
+pub fn repo_protected(cwd: &Path) -> bool {
     let dot = cwd.join(".git");
     if dot.is_dir() {
         return true;
@@ -396,7 +400,7 @@ pub(crate) fn repo_protected(cwd: &Path) -> bool {
 /// Whether a commit in `cwd` runs the hooks of its repository's `.git` (`<projet>/.git/hooks`,
 /// which the sandbox protects), not hooks of a folder the agent writes (`core.hooksPath` in the
 /// worktree: husky, `.githooks/`…). Asked of git once the configuration is known to be protected.
-pub(crate) fn hooks_protected(cwd: &Path) -> bool {
+pub fn hooks_protected(cwd: &Path) -> bool {
     let Some(out) = git_paths(cwd) else {
         return false;
     };
@@ -431,7 +435,7 @@ fn git_paths(cwd: &Path) -> Option<String> {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
+        cmd.creation_flags(CREATE_NO_WINDOW);
     }
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
@@ -445,7 +449,7 @@ fn git_paths(cwd: &Path) -> Option<String> {
 
 /// A git command that would write in the repository (the old list, and what the card tells as out
 /// of Codex's sandbox when it is asked).
-pub(crate) fn writes_repository(command: &str) -> bool {
+pub fn writes_repository(command: &str) -> bool {
     const WRITES: [&str; 15] = [
         "add",
         "commit",
@@ -478,6 +482,14 @@ pub(crate) fn writes_repository(command: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A new empty folder for the test `name`.
+    fn test_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
 
     /// A command as Codex writes it under Windows: pwsh's argv joined.
     fn pwsh(script: &str) -> String {
@@ -658,7 +670,7 @@ mod tests {
 
     #[test]
     fn a_git_folder_the_agent_could_have_written_is_never_trusted() {
-        let dir = crate::paths::test_dir("esc37-git-protected");
+        let dir = test_dir("esc37-git-protected");
         // `<worktree>/.git` itself: protected by the sandbox.
         let own = dir.join("own");
         std::fs::create_dir_all(own.join(".git")).unwrap();
@@ -686,7 +698,7 @@ mod tests {
 
     #[test]
     fn hooks_of_a_folder_of_the_worktree_are_asked() {
-        let dir = crate::paths::test_dir("esc37-git-hooks");
+        let dir = test_dir("esc37-git-hooks");
         git(&dir, &["init", "-q"]);
         // The repository's own hooks: in its `.git`.
         let out = git_paths(&dir).unwrap();

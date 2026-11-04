@@ -36,6 +36,150 @@ async fn wait_long(h: &Harness, id: &str, what: &str, secs: u64, pred: impl Fn(&
     panic!("no {what}: {:#}", Value::Array(h.items(id)));
 }
 
+/// INT-10.3: Copilot's conversation goes through its plugin (`dev.escouade.copilot-cli`). Switched off, an agent's start
+/// says so, and the agent keeps its session; on again, it talks as before.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_copilot_agent_says_its_plugin_is_off_and_talks_again_once_it_is_on() {
+    let h = harness("int10-copilot-off");
+    let (p, _) = h.project(false).await;
+    h.set_settings(|s| {
+        s.accounts.push(Account {
+            id: "principal-copilot".into(),
+            name: "Principal".into(),
+            engine: EngineId::COPILOT,
+            claude_path: crate::engine::fake_copilot(),
+            active: true,
+            ..Default::default()
+        });
+    });
+    let a = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                engine: Some(EngineId::COPILOT),
+                model: Some("gpt-6-luna".into()),
+                mode: Some("default".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    let id = crate::plugins::builtin::COPILOT;
+    h.core.plugins.choose(id, |c| c.enabled = false).unwrap();
+    h.core.plugin_runtime.forget(id);
+    h.core.sync_harnesses();
+    assert!(crate::plugins::harness::plugged(id).is_none());
+    let sent = h.core.send_message(&a, "bonjour".into(), vec![]).await;
+    let said = |h: &Harness| {
+        let items = Value::Array(h.items(&a)).to_string();
+        let err = sent
+            .as_ref()
+            .err()
+            .map(|e| e.to_string())
+            .unwrap_or_default();
+        format!("{err} {items}")
+    };
+    wait_long(&h, &a, "the plugin said off", 30, |h| said(h).contains(id)).await;
+    assert!(said(&h).contains("coupé"), "{}", said(&h));
+    h.core.plugins.choose(id, |c| c.enabled = true).unwrap();
+    h.core.sync_harnesses();
+    assert!(crate::plugins::harness::plugged(id).is_some());
+    let ended = |h: &Harness| !texts(h, &a).is_empty() && !h.agent(&a).status.is_active();
+    if !ended(&h) {
+        h.core
+            .send_message(&a, "bonjour".into(), vec![])
+            .await
+            .unwrap();
+    }
+    wait_long(&h, &a, "its answer", 30, ended).await;
+    h.core.stop_for_good();
+}
+
+/// Real run (INT-10.3), by hand: the real Copilot CLI (`ESCOUADE_REAL_COPILOT`) through its plugin, on the account already
+/// signed in on the machine, without a token nor a folder of its own: `cargo test --lib real_copilot_through_its_plugin --
+/// --ignored --nocapture`. Its credits are counted: three short turns on its cheapest model. A reply, a command allowed
+/// on its card, then its process stopped and its session resumed.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore]
+async fn real_copilot_through_its_plugin() {
+    let real = std::env::var("ESCOUADE_REAL_COPILOT")
+        .expect("ESCOUADE_REAL_COPILOT: the path of the real copilot");
+    let h = harness("int10-copilot-real");
+    let (p, _) = h.project(false).await;
+    h.set_settings(|s| {
+        s.mcp_enabled = false;
+        s.accounts.push(Account {
+            id: "principal-copilot".into(),
+            name: "Principal".into(),
+            engine: EngineId::COPILOT,
+            claude_path: real.clone(),
+            active: true,
+            ..Default::default()
+        });
+    });
+    let id = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                engine: Some(EngineId::COPILOT),
+                model: Some("gpt-5-mini".into()),
+                mode: Some("default".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    let turns = |h: &Harness| h.items(&id).iter().filter(|i| i["kind"] == "turn").count();
+    let send = |text: &str| {
+        let (c, id, text) = (h.core.clone(), id.clone(), text.to_string());
+        async move { c.send_message(&id, text, vec![]).await.unwrap() }
+    };
+    let ended = |h: &Harness, n: usize| turns(h) >= n && !h.agent(&id).status.is_active();
+
+    send("Réponds seulement : A").await;
+    wait_long(&h, &id, "the first reply", 120, |h| ended(h, 1)).await;
+    assert!(texts(&h, &id).iter().any(|t| t.contains('A')));
+    let session = h.agent(&id).session_id.clone().expect("its session");
+
+    send("Avec l'outil powershell, lance exactement `git status --short`, puis dis en une phrase ce qu'il a affiché.").await;
+    wait_long(&h, &id, "the permission", 120, |h| {
+        waiting(h, &id, "permission").is_some() || ended(h, 2)
+    })
+    .await;
+    if let Some(card) = waiting(&h, &id, "permission") {
+        println!("PERMISSION {}", card["toolName"]);
+        assert_eq!(card["toolName"], "Bash");
+        h.core
+            .answer_permission(&id, card["id"].as_str().unwrap(), "allow", None)
+            .unwrap();
+    }
+    wait_long(&h, &id, "the command's turn", 120, |h| ended(h, 2)).await;
+
+    // Stopped, then resumed: the same session, which runtime.shutdown saved.
+    h.core.restart_process(&id).await.unwrap();
+    send("Réponds seulement : B").await;
+    wait_long(&h, &id, "the reply once resumed", 120, |h| ended(h, 3)).await;
+    assert_eq!(h.agent(&id).session_id.as_deref(), Some(session.as_str()));
+    let items = h.items(&id);
+    for i in &items {
+        match i["kind"].as_str() {
+            Some("text") => println!("TEXT {}", i["text"]),
+            Some("tool") => println!("TOOL {} {}", i["name"], i["status"]),
+            Some("turn") => println!("TURN cost {} tokens {}", i["cost"], i["tokens"]),
+            Some("notice") => println!("NOTICE {}", i["text"]),
+            _ => {}
+        }
+    }
+    assert!(!Value::Array(items).to_string().contains("ghp_"));
+    h.core.stop_for_good();
+}
+
 /// Real run (ESC-39), by hand: the real Copilot CLI 1.0.98 (`ESCOUADE_REAL_COPILOT`, its
 /// `copilot.exe`), a `COPILOT_HOME` of its own and a token in the environment of this process
 /// alone (`GH_TOKEN`, never printed): `cargo test --lib real_copilot -- --ignored --nocapture`.

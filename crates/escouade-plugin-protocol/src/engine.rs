@@ -133,6 +133,9 @@ pub struct LaunchParams {
     /// A discussion of the Docs tab: it changes no file and runs no command. `Launch::read_only` must say it holds.
     #[serde(default)]
     pub read_only: bool,
+    /// The private file the core made for Escouade's server (`Engine::grant_file`), which a plugin's launch may name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub escouade_file: Option<String>,
     /// Its program, as the user knows it.
     #[serde(default)]
     pub program: String,
@@ -333,6 +336,9 @@ pub struct Compact {
 pub struct Compacted {
     #[serde(default)]
     pub over: bool,
+    /// What the core writes to the harness to ask it: `Item::Compacted` then says the end.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub writes: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -442,6 +448,14 @@ pub struct AnswerQuestion {
 pub struct Usage {
     #[serde(default)]
     pub usage: Value,
+}
+
+/// The answer of `agent/readUsage` when the quota is to be asked of the harness: `writes` go to its input, and
+/// `Item::Usage` brings what it said.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct UsageAsked {
+    #[serde(default)]
+    pub writes: Vec<String>,
 }
 
 /// The tokens and cost of a turn.
@@ -628,6 +642,63 @@ pub enum Item {
     },
     /// A line for the harness's input, written by the core in the order of the items.
     Write { line: String },
+    /// The approval of a call, its card written whole: the tool asked, what it says of it, the hunks of the write it
+    /// would make (Claude Code's `structuredPatch`), how far « Toujours » goes (`alwaysScope`, left out for a plan).
+    #[serde(rename_all = "camelCase")]
+    PermissionCard {
+        request: String,
+        call: String,
+        tool: String,
+        #[serde(default)]
+        input: Value,
+        #[serde(default)]
+        description: Option<String>,
+        #[serde(default)]
+        reason: Option<String>,
+        #[serde(default)]
+        hunks: Value,
+        #[serde(default)]
+        can_always: bool,
+        #[serde(default)]
+        always_scope: Option<String>,
+        #[serde(default)]
+        parent: Option<String>,
+    },
+    /// Questions asked by a subagent (`parent`), or a form (`form`: what it is for, `{ message, source }`).
+    QuestionCard {
+        request: String,
+        call: String,
+        questions: Value,
+        #[serde(default)]
+        form: Value,
+        #[serde(default)]
+        parent: Option<String>,
+    },
+    /// The account's quota as a call told it: its meters (`usage::parse_windows`'s).
+    Quota {
+        #[serde(default)]
+        meters: Value,
+    },
+    /// What `agent/readUsage` asked of the harness (`UsageAsked`), as `Usage::usage`.
+    Usage {
+        #[serde(default)]
+        usage: Value,
+    },
+    /// The turn ending next stopped at a limit it waits for: told in its turn, the agent at rest and not in error.
+    LimitRest,
+    /// A harness that declares `opens`: its session is open and its first message may go; `models` are the account's
+    /// (`ToldModel`s), for the menu.
+    Ready {
+        #[serde(default)]
+        models: Value,
+    },
+    /// The end of what `agent/compact` asked, and why it failed.
+    Compacted {
+        #[serde(default)]
+        error: Option<String>,
+    },
+    /// The harness is of no use: the core stops it, and `reason` is what its end says (its protocol, no sign-in).
+    Stop { reason: String },
     /// Asked to stop gently (`method::CLOSE`), its turn is over: the agent has left its shared process.
     Closed,
     /// An item of a later version of the contract: left aside.
@@ -817,6 +888,17 @@ pub struct HarnessDecl {
     /// It does not end when its input is closed (Cursor CLI's `agent acp`): it is killed that many milliseconds after.
     #[serde(default)]
     pub close_grace_ms: Option<u64>,
+    /// What frames its messages on its input and output: lines when left out, `contentLength` for `Content-Length`
+    /// headers (Copilot CLI's server).
+    #[serde(default)]
+    pub framing: Option<String>,
+    /// A line written on its input just before it is closed (Copilot CLI's `runtime.shutdown`, which saves its session).
+    #[serde(default)]
+    pub close_line: Option<String>,
+    /// Its plugin opens the session over the protocol once it runs: the agent is ready at `Item::Ready`, not at its
+    /// launch, and `Item::Stop` is its refusal.
+    #[serde(default)]
+    pub opens: bool,
     /// Where it keeps what it remembers of a project, offered once to the shared memory: a folder of files, with
     /// `{configDir}` and `{projectKey}` (the project's path, every character but a letter or a digit a dash).
     #[serde(default)]

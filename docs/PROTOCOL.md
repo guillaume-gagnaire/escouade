@@ -789,7 +789,7 @@ copilot --server --stdio --no-auto-update --disable-builtin-mcps --disallow-temp
 
 ### Les modes
 
-En `manual`, Copilot demande tout, lectures comprises : les règles d'Escouade (`cp_safe` d'`agent/copilot.rs`) répondent sans carte aux demandes sûres, comme le bac à sable de Codex.
+En `manual`, Copilot demande tout, lectures comprises : les règles d'Escouade (`safe` de `plugins/builtin/dev.escouade.copilot-cli/src/translate.rs`) répondent sans carte aux demandes sûres, comme le bac à sable de Codex.
 
 | Escouade | Mode de l'agent | Permissions | Sans carte |
 |---|---|---|---|

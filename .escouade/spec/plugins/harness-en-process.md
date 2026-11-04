@@ -2,7 +2,7 @@
 title: "Le contrat des harness en process"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.5 et §4.6","docs/TODO-2.2.md (INT-9)","crates/escouade-plugin-protocol/src/engine.rs","src-tauri/src/plugins/harness.rs","src-tauri/src/plugins/shared.rs"]
-tickets: ["ESC-221","ESC-223"]
+tickets: ["ESC-221","ESC-223","ESC-224"]
 decisions: [34]
 compared: null
 ---
@@ -41,3 +41,15 @@ Un harness peut servir plusieurs agents d'un seul process (`opencode serve`, voi
 - **Un plantage ou un arrêt se voit sans appel en cours** : chaque agent regarde l'état de son plugin. Les messages sont les mêmes que plus haut ; coupé pendant qu'un agent tourne, l'agent s'arrête en le disant, sa session gardée.
 
 Une fin de tour et une question alertent comme pour les autres harness, quel que soit le plugin : c'est le cœur qui applique les éléments.
+
+## Ce qu'un harness peut déclarer de plus
+
+Depuis Copilot CLI (INT-10.3), pour tout harness, dans son manifeste :
+
+- **`framing: "contentLength"`** : le cœur lit et écrit ses messages avec des en-têtes `Content-Length`, pas par lignes.
+- **`closeLine`** : une ligne écrite juste avant de fermer son entrée (ce qui lui fait sauver sa session).
+- **`opens`** : son plugin ouvre la session par le protocole du harness. L'agent est prêt quand le plugin le dit, avec les modèles du compte pour le menu ; le plugin peut aussi arrêter le harness en disant pourquoi, et cette raison finit l'agent.
+
+Un plugin peut aussi faire demander au harness son quota, commander un titre ou une compaction par l'entrée du harness, écrire une carte entière (permission ou question, avec la portée de « Toujours », un formulaire) et dire le quota. Ce sont de nouveaux éléments : un plugin écrit avant reste tel quel.
+
+Le fichier privé du serveur d'Escouade, quand le moteur en fait un, est donné au lancement : le jeton reste hors des arguments, et le cœur le vérifie toujours.

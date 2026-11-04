@@ -51,7 +51,7 @@ use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::{mpsc, oneshot, watch};
 
 /// How many lines wait for the plugin at most while it starts again; past them the oldest are dropped, and said.
@@ -63,6 +63,12 @@ const FRAMES_WITHIN: Duration = Duration::from_secs(10);
 /// How long the first call of a launch waits: it may start the plugin's process (its `initialize` has 10 s), on a
 /// machine under load.
 const ATTACH_WITHIN: Duration = Duration::from_secs(30);
+
+/// How long a harness may take to tell its quota.
+const USAGE_WITHIN: Duration = Duration::from_secs(60);
+
+/// How long a compaction may take: a call to the model that summarizes the whole conversation.
+const COMPACT_WITHIN: Duration = Duration::from_secs(600);
 
 /// How long an agent's session may take to open on a shared harness (`agent/open`): the harness's start, then requests.
 const OPEN_WITHIN: Duration = Duration::from_secs(150);
@@ -254,6 +260,12 @@ pub const BUILTIN_HARNESSES: &[BuiltinHarness] = &[
     // OpenCode (INT-10.2): one `opencode serve` for the agents of an account (`Launch::shared`).
     BuiltinHarness {
         plugin: super::builtin::OPENCODE,
+        native: None,
+        prepare: None,
+    },
+    // Copilot CLI (INT-10.3): no ACP harness, nothing to prepare; its framing and its close are in its manifest.
+    BuiltinHarness {
+        plugin: super::builtin::COPILOT,
         native: None,
         prepare: None,
     },
@@ -661,6 +673,40 @@ pub fn check_launch(
     Ok(())
 }
 
+/// One message of a stream framed by `Content-Length` headers (`HarnessDecl::framing`), read from `r`: None once it ends.
+pub(crate) async fn read_frame<R: tokio::io::AsyncBufRead + Unpin>(
+    r: &mut R,
+) -> std::io::Result<Option<Vec<u8>>> {
+    let mut len: Option<usize> = None;
+    loop {
+        let mut line = String::new();
+        if r.read_line(&mut line).await? == 0 {
+            return Ok(None);
+        }
+        let line = line.trim_end_matches(['\r', '\n']);
+        if line.is_empty() {
+            if let Some(n) = len {
+                let mut body = vec![0; n];
+                r.read_exact(&mut body).await?;
+                return Ok(Some(body));
+            }
+            continue;
+        }
+        if let Some((k, v)) = line.split_once(':') {
+            if k.trim().eq_ignore_ascii_case("content-length") {
+                len = v.trim().parse().ok();
+            }
+        }
+    }
+}
+
+/// `body` framed by its `Content-Length` header.
+pub(crate) fn framed(body: &[u8]) -> Vec<u8> {
+    let mut out = format!("Content-Length: {}\r\n\r\n", body.len()).into_bytes();
+    out.extend_from_slice(body);
+    out
+}
+
 /// The variables of `base` with those of `more` over them.
 fn merged(base: &[(String, String)], more: &[proto::EnvVar]) -> Vec<(String, String)> {
     let mut out: Vec<(String, String)> = base
@@ -806,6 +852,13 @@ impl Engine for ProcessEngine {
             rt: self.rt.clone(),
             key_var: self.key_var,
             close_grace: self.close_grace,
+            framed: self.decl.framing.as_deref() == Some("contentLength"),
+            close_line: self.decl.close_line.clone(),
+            opens: self.decl.opens,
+            opened: watch::channel(None).0,
+            refused: Mutex::new(None),
+            compacting: Mutex::new(None),
+            reading: Mutex::new(None),
             me: std::sync::OnceLock::new(),
             native: self.native,
             prepare: self.prepare,
@@ -948,6 +1001,19 @@ pub struct ProcessEngineProcess {
     rt: Arc<Runtime>,
     /// As `ProcessEngine::close_grace`.
     close_grace: Option<Duration>,
+    /// Its messages go with `Content-Length` headers (`HarnessDecl::framing`), not by lines.
+    framed: bool,
+    /// As `HarnessDecl::close_line`.
+    close_line: Option<String>,
+    /// As `HarnessDecl::opens`: it is ready at `Item::Ready`.
+    opens: bool,
+    /// What `Item::Ready` said (the models of the account), or why it will not come.
+    opened: watch::Sender<Option<std::result::Result<Value, String>>>,
+    /// Why its plugin stopped its harness (`Item::Stop`).
+    refused: Mutex<Option<String>>,
+    /// Who waits for the end of a compaction (`Item::Compacted`), and for the quota it asked (`Item::Usage`).
+    compacting: Mutex<Option<oneshot::Sender<Result<bool>>>>,
+    reading: Mutex<Option<oneshot::Sender<Value>>>,
     /// Itself, for what it does later (the kill after its input is closed).
     me: std::sync::OnceLock<std::sync::Weak<Self>>,
     /// The variable of an account's key (`HarnessDecl::key_var`).
@@ -1063,9 +1129,14 @@ async fn control(
 impl ProcessEngineProcess {
     /// Writes `line` on its harness's input.
     fn write(&self, line: &str) {
-        let mut bytes = Vec::with_capacity(line.len() + 1);
-        bytes.extend_from_slice(line.as_bytes());
-        bytes.push(b'\n');
+        let bytes = if self.framed {
+            framed(line.as_bytes())
+        } else {
+            let mut bytes = Vec::with_capacity(line.len() + 1);
+            bytes.extend_from_slice(line.as_bytes());
+            bytes.push(b'\n');
+            bytes
+        };
         if let Some(tx) = self.stdin.lock().as_ref() {
             let _ = tx.send(bytes);
         }
@@ -1185,6 +1256,12 @@ impl ProcessEngineProcess {
                 .map(|d| d.to_string_lossy().into_owned())
                 .collect(),
             escouade: grant_of(&spawn.escouade),
+            escouade_file: match &spawn.escouade {
+                Escouade::Granted { file, .. } => {
+                    file.as_ref().map(|f| f.to_string_lossy().into_owned())
+                }
+                Escouade::Denied { .. } => None,
+            },
             fence: fence.clone(),
             read_only: spawn.read_only,
             program: spawn.program.describe(),
@@ -1263,6 +1340,7 @@ impl ProcessEngineProcess {
         self.alive.store(false, Ordering::Release);
         self.control.lock().take();
         let _ = self.ready.send(Some(Err(why.clone())));
+        let _ = self.opened.send(Some(Err(why.clone())));
         self.rt.detach(&self.plugin, &self.key);
         on_exit(None, why);
     }
@@ -1538,8 +1616,19 @@ impl ProcessEngineProcess {
         }
         let (lines_tx, lines_rx) = mpsc::channel::<String>(FRAME_QUEUE);
         let stdout = child.stdout.take();
+        let by_length = self.framed;
         let reader = tokio::spawn(async move {
             let Some(stdout) = stdout else { return };
+            if by_length {
+                let mut reader = BufReader::new(stdout);
+                while let Ok(Some(body)) = read_frame(&mut reader).await {
+                    let text = String::from_utf8_lossy(&body).into_owned();
+                    if lines_tx.send(text).await.is_err() {
+                        break;
+                    }
+                }
+                return;
+            }
             let mut lines = BufReader::new(stdout).split(b'\n');
             while let Ok(Some(bytes)) = lines.next_segment().await {
                 let text = String::from_utf8_lossy(&bytes);
@@ -1570,14 +1659,30 @@ impl ProcessEngineProcess {
             .rt
             .notify(&self.plugin, method::DETACH, json!({ "agent": self.key }));
         self.rt.detach(&self.plugin, &self.key);
-        let said = stopped.unwrap_or_else(|| {
-            self.tail
-                .lock()
-                .iter()
-                .cloned()
-                .collect::<Vec<_>>()
-                .join("\n")
+        let said = stopped
+            .or_else(|| self.refused.lock().take())
+            .unwrap_or_else(|| {
+                self.tail
+                    .lock()
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            });
+        // Who still waits for it is told: it is gone.
+        self.opened.send_if_modified(|o| {
+            let none = o.is_none();
+            if none {
+                *o = Some(Err(if said.is_empty() {
+                    "process exited".to_string()
+                } else {
+                    said.clone()
+                }));
+            }
+            none
         });
+        self.compacting.lock().take();
+        self.reading.lock().take();
         on_exit(code, said);
     }
 
@@ -1696,7 +1801,7 @@ impl ProcessEngineProcess {
                     }
                     a.running |= item["op"] == "start";
                 }
-                "permission" | "question" => {
+                "permission" | "question" | "permissionCard" | "questionCard" => {
                     let mut a = self.attach.lock();
                     if let Some(r) = item["request"].as_str() {
                         a.pending.push(r.to_string());
@@ -1708,6 +1813,38 @@ impl ProcessEngineProcess {
                     let mut a = self.attach.lock();
                     a.pending.clear();
                     a.running = false;
+                }
+                "answered" => {
+                    if let Some(r) = item["request"].as_str() {
+                        self.answered(r);
+                    }
+                }
+                // What is for this process, not the agent.
+                "ready" => {
+                    let _ = self.opened.send(Some(Ok(item["models"].clone())));
+                    continue;
+                }
+                "usage" => {
+                    if let Some(tx) = self.reading.lock().take() {
+                        let _ = tx.send(item["usage"].clone());
+                    }
+                    continue;
+                }
+                "compacted" => {
+                    if let Some(tx) = self.compacting.lock().take() {
+                        let _ = tx.send(match item["error"].as_str() {
+                            Some(e) => Err(anyhow!("{e}")),
+                            None => Ok(true),
+                        });
+                    }
+                    continue;
+                }
+                "stop" => {
+                    let reason = item["reason"].as_str().unwrap_or_default().to_string();
+                    let _ = self.opened.send(Some(Err(reason.clone())));
+                    *self.refused.lock() = Some(reason);
+                    self.kill();
+                    continue;
                 }
                 _ => {}
             }
@@ -1749,7 +1886,8 @@ impl EngineProcess for ProcessEngineProcess {
         self.job.lock().as_ref().and_then(|j| j.usage())
     }
     fn still_running(&self) -> u32 {
-        u32::from(self.is_alive())
+        let in_job = self.usage().map_or(0, |u| u.processes);
+        in_job.max(u32::from(self.is_alive()))
     }
     fn pids(&self) -> Vec<u32> {
         if let Some(s) = self.shared.lock().as_ref().filter(|_| self.is_alive()) {
@@ -1782,6 +1920,9 @@ impl EngineProcess for ProcessEngineProcess {
                 self.leave();
             }
             return;
+        }
+        if let Some(line) = &self.close_line {
+            self.write(line);
         }
         self.stdin.lock().take();
         // A harness that does not end when its input closes (Cursor CLI's `agent acp`) is killed a moment later.
@@ -1834,6 +1975,13 @@ impl EngineProcess for ProcessEngineProcess {
                 }
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
+            // What it started goes with it: its worktree cannot be removed before.
+            while cfg!(windows) && self.usage().is_some_and(|u| u.processes > 0) {
+                if Instant::now() >= deadline {
+                    return false;
+                }
+                tokio::time::sleep(Duration::from_millis(25)).await;
+            }
             true
         })
     }
@@ -1847,11 +1995,35 @@ impl EngineProcess for ProcessEngineProcess {
                 .map_err(|_| anyhow!("{} is gone", self.name))?
                 .clone();
             match done {
-                Some(Ok(())) => Ok(Ready {
-                    catalog: self.catalog.lock().take(),
+                Some(Ok(())) if !self.opens => {
+                    return Ok(Ready {
+                        catalog: self.catalog.lock().take(),
+                        ..Ready::default()
+                    })
+                }
+                Some(Ok(())) => {}
+                Some(Err(why)) => return Err(anyhow!(why)),
+                None => unreachable!("waited for"),
+            }
+            // Its plugin opens its session over its protocol: the agent is ready when it says so.
+            let mut opened = self.opened.subscribe();
+            let done = opened
+                .wait_for(Option::is_some)
+                .await
+                .map_err(|_| anyhow!("{} is gone", self.name))?
+                .clone();
+            match done {
+                Some(Ok(models)) => Ok(Ready {
+                    catalog: serde_json::from_value(models)
+                        .ok()
+                        .filter(|m: &Vec<_>| !m.is_empty()),
                     ..Ready::default()
                 }),
-                Some(Err(why)) => Err(anyhow!(why)),
+                // Stopped by its plugin: gone by the time the core hears of it.
+                Some(Err(why)) => {
+                    self.wait_exit(Duration::from_secs(5)).await;
+                    Err(anyhow!(why))
+                }
                 None => unreachable!("waited for"),
             }
         })
@@ -1952,6 +2124,8 @@ impl EngineProcess for ProcessEngineProcess {
     }
     fn read_usage(&self) -> BoxFuture<'_, Result<Option<Value>>> {
         Box::pin(async move {
+            let (tx, rx) = oneshot::channel();
+            *self.reading.lock() = Some(tx);
             let v = self
                 .rt
                 .call(
@@ -1961,6 +2135,19 @@ impl EngineProcess for ProcessEngineProcess {
                 )
                 .await
                 .map_err(|e| down(self.name, e))?;
+            // To be asked of the harness (`UsageAsked`): what it says comes back with its frames.
+            if let Ok(asked) = serde_json::from_value::<proto::UsageAsked>(v.clone()) {
+                if !asked.writes.is_empty() {
+                    for w in &asked.writes {
+                        self.write(w);
+                    }
+                    let read = tokio::time::timeout(USAGE_WITHIN, rx)
+                        .await
+                        .map_err(|_| anyhow!("{}: its quota not read in time", self.name))?
+                        .map_err(|_| anyhow!("{} is gone", self.name))?;
+                    return Ok((!read.is_null()).then_some(read));
+                }
+            }
             let u: proto::Usage = serde_json::from_value(v)?;
             Ok((!u.usage.is_null()).then_some(u.usage))
         })
@@ -1982,7 +2169,14 @@ impl EngineProcess for ProcessEngineProcess {
                 )
                 .await
             {
-                Ok(_) => Ok(()),
+                Ok(v) => {
+                    // A harness told through its input (`Writes`), or by the plugin itself (none).
+                    let w: proto::Writes = serde_json::from_value(v).unwrap_or_default();
+                    for line in &w.writes {
+                        self.write(line);
+                    }
+                    Ok(())
+                }
                 Err(CallError::Remote { code, .. }) if code == super::runtime::METHOD_NOT_FOUND => {
                     Ok(())
                 }
@@ -1996,6 +2190,8 @@ impl EngineProcess for ProcessEngineProcess {
                 agent: self.agent(),
                 instructions: instructions.into(),
             };
+            let (tx, rx) = oneshot::channel();
+            *self.compacting.lock() = Some(tx);
             let v = self
                 .rt
                 .call_within(
@@ -2006,7 +2202,18 @@ impl EngineProcess for ProcessEngineProcess {
                 )
                 .await
                 .map_err(|e| down(self.name, e))?;
-            Ok(serde_json::from_value::<proto::Compacted>(v)?.over)
+            let c: proto::Compacted = serde_json::from_value(v)?;
+            if c.writes.is_empty() {
+                return Ok(c.over);
+            }
+            // Asked of the harness through its input: over when it says so (`Item::Compacted`).
+            for line in &c.writes {
+                self.write(line);
+            }
+            tokio::time::timeout(COMPACT_WITHIN, rx)
+                .await
+                .map_err(|_| anyhow!("{}: its compaction not over in time", self.name))?
+                .map_err(|_| anyhow!("{} is gone", self.name))?
         })
     }
     fn attach(&self) -> Option<terminal::Attach> {

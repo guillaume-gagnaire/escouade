@@ -241,6 +241,8 @@ pub struct AgentRt {
     /// turn's result brings the exact figures.
     live: HashMap<String, (String, Usage)>,
     queued: u32,
+    /// The turn ending next waits for a limit (`Item::LimitRest`).
+    limit_rest: bool,
     /// Claude Code's own interface running for it, in a terminal (« Vue Claude Code », `tui`).
     pub tui: Option<TuiRun>,
     /// Its harness's interface joined to its process, in a terminal (`AgentMeta::attached`).
@@ -291,7 +293,7 @@ pub struct AgentRt {
     pub(crate) escouade_next: bool,
     /// What the translation of Codex keeps between its messages (`agent/codex.rs`).
     codex: codex::CodexState,
-    /// What the translation of Copilot keeps between its events (`agent/copilot.rs`).
+    /// What the translation of Copilot keeps between the events of its view's log (`agent/copilot.rs`).
     copilot: copilot::CopilotState,
     /// What the translation of Cursor keeps between its updates (`agent/cursor.rs`).
     cursor: cursor::CursorState,
@@ -555,6 +557,7 @@ impl AgentRt {
             last_usage: HashMap::new(),
             live: HashMap::new(),
             queued: 0,
+            limit_rest: false,
             tui: None,
             attach: None,
             tui_usage: HashMap::new(),

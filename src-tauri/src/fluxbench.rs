@@ -51,6 +51,7 @@ fn plugged_by(harness: EngineId) -> Option<&'static str> {
         EngineId::VIBE => Some(crate::plugins::builtin::MISTRAL),
         EngineId::GEMINI => Some(crate::plugins::builtin::GEMINI),
         EngineId::OPENCODE => Some(crate::plugins::builtin::OPENCODE),
+        EngineId::COPILOT => Some(crate::plugins::builtin::COPILOT),
         _ => None,
     }
 }
@@ -88,16 +89,17 @@ fn lines_of(path: &Path) -> Vec<String> {
         .collect()
 }
 
-/// When each line came, from its own `t` or `ms` (ms) when every line has one, from the first.
+/// When each line came, from its own `t` or `ms` (ms) when every line has one, from the first. The last line may have none
+/// (the note that closes a recording of Copilot): it comes with the one before.
 fn times_of(lines: &[String]) -> Option<Vec<u64>> {
-    let times: Option<Vec<u64>> = lines
-        .iter()
-        .map(|l| {
-            let v: Value = serde_json::from_str(l).ok()?;
-            v.get("t").or_else(|| v.get("ms")).and_then(Value::as_u64)
-        })
-        .collect();
-    let times = times?;
+    let time = |l: &String| {
+        let v: Value = serde_json::from_str(l).ok()?;
+        v.get("t").or_else(|| v.get("ms")).and_then(Value::as_u64)
+    };
+    let (last, before) = lines.split_last()?;
+    let mut times: Vec<u64> = before.iter().map(time).collect::<Option<_>>()?;
+    let end = time(last).or(times.last().copied())?;
+    times.push(end);
     let first = *times.first()?;
     Some(times.into_iter().map(|t| t.saturating_sub(first)).collect())
 }
@@ -335,6 +337,9 @@ impl Bench {
             Some(s) => json!({ "kind": "resume", "session": s }),
             None => json!({ "kind": "new" }),
         };
+        // Copilot's plugin opens its session itself, step by step, which no recording follows: it is given the sessions
+        // of the recording as they open (`agent/attach`, as after a restart).
+        let opens = flux.harness == EngineId::COPILOT;
         let launch = rt
             .call(
                 plugin,
@@ -372,6 +377,7 @@ impl Bench {
             Pace::Recorded => flux.times.clone(),
         };
         let agent = id.clone();
+        let (model, mode) = (flux.agent["model"].clone(), flux.agent["mode"].clone());
         let tokio = tokio::runtime::Handle::current();
         // The client's settings of a Vibe recording are the ones it made itself at the session's start.
         let own_settings = flux.harness == EngineId::VIBE;
@@ -416,6 +422,14 @@ impl Bench {
                 };
                 let writes = match f["dir"].as_str() {
                     Some("s2c" | "in") => {
+                        if let (true, Some(session)) = (opens, msg["result"]["sessionId"].as_str()) {
+                            let again = json!({
+                                "agent": key, "cwd": cwd, "session": session, "model": model,
+                                "mode": mode, "lang": "fr",
+                            });
+                            call("agent/detach", json!({ "agent": key }));
+                            call("agent/attach", again);
+                        }
                         if msg["method"].is_null() && !msg["id"].is_null() {
                             // An answer to a request of the client: under the id the plugin gave it.
                             let method = methods.get(&msg["id"].to_string()).cloned();
@@ -440,10 +454,10 @@ impl Bench {
                         for i in got["items"].as_array().into_iter().flatten() {
                             match i["op"].as_str() {
                                 Some("write") => writes.push(i["line"].clone()),
-                                Some("permission") | Some("question") => {
+                                Some("permission" | "question" | "questionCard") => {
                                     let request = i["request"].as_str().unwrap_or_default();
                                     asked.insert(msg["id"].to_string(), request.to_string());
-                                    if i["op"] == "question" {
+                                    if i["op"] != "permission" {
                                         questions.insert(request.to_string(), i["questions"].clone());
                                     }
                                     items.push(i.clone());
@@ -463,7 +477,50 @@ impl Bench {
                             methods.insert(msg["id"].to_string(), method.to_string());
                         }
                         let p = &msg["params"];
+                        let answer_of = |p: &Value| {
+                            let kind = p["result"]["kind"].as_str().unwrap_or_default();
+                            json!({
+                                "agent": key, "request": p["requestId"],
+                                "allow": kind.starts_with("approve") || p["response"]["approved"] == true,
+                                "always": kind == "approve-for-session",
+                            })
+                        };
                         let got = match msg["method"].as_str() {
+                            Some("session.send") => call(
+                                "agent/sendMessage",
+                                json!({
+                                    "agent": key, "uuid": crate::model::new_id(), "text": p["prompt"],
+                                }),
+                            ),
+                            Some("session.abort") => call("agent/interrupt", json!({ "agent": key })),
+                            Some("session.model.switchTo") => call(
+                                "agent/setModel",
+                                json!({ "agent": key, "value": p["modelId"] }),
+                            ),
+                            Some("session.mode.set") => {
+                                let mode = match p["mode"].as_str() {
+                                    Some("plan") => "plan",
+                                    Some("autopilot") => "auto",
+                                    _ => "default",
+                                };
+                                call("agent/setMode", json!({ "agent": key, "value": mode }))
+                            }
+                            Some(
+                                "session.permissions.handlePendingPermissionRequest"
+                                | "session.ui.handlePendingExitPlanMode",
+                            ) => call("agent/answerPermission", answer_of(p)),
+                            Some("session.ui.handlePendingUserInput") => {
+                                let request = p["requestId"].as_str().unwrap_or_default();
+                                let question = questions.get(request).cloned().unwrap_or_default();
+                                let text = question[0]["question"].as_str().unwrap_or_default();
+                                call(
+                                    "agent/answerQuestion",
+                                    json!({
+                                        "agent": key, "request": request, "call": request,
+                                        "answers": { text: p["response"]["answer"] },
+                                    }),
+                                )
+                            }
                             Some("session/prompt") => call(
                                 "agent/sendMessage",
                                 json!({
@@ -876,16 +933,22 @@ async fn int0_stream_bench() {
     for (_, streams) in groups(&corpus) {
         measure(&bench, "warm", &streams, Pace::Fastest, 1).await;
     }
+    // One harness alone (`ESCOUADE_BENCH_ONLY`), for a measure of it.
+    let only = std::env::var("ESCOUADE_BENCH_ONLY").ok();
+    let wanted = |name: &str| only.as_deref().is_none_or(|o| name == o);
     let mut all = Vec::new();
     println!("{HEADER}");
     for (name, streams) in groups(&corpus) {
+        if !wanted(&name) {
+            continue;
+        }
         let m = measure(&bench, &name, &streams, Pace::Fastest, rounds).await;
         println!("{}", row(&m));
         all.push(m);
     }
     for (name, streams) in groups(&corpus) {
         let timed: Vec<&Flux> = streams.into_iter().filter(|f| f.times.is_some()).collect();
-        if timed.is_empty() {
+        if timed.is_empty() || !wanted(&name) {
             continue;
         }
         let m = measure(&bench, &name, &timed, Pace::Recorded, 1).await;

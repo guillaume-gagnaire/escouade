@@ -62,6 +62,8 @@ const ENTRIES: &[Entry] = &[
     ("gemini", escouade_plugin_gemini::run),
     // OpenCode (INT-10.2): its harness, the client of `opencode serve`, in its crate (plugins/builtin/dev.escouade.opencode).
     ("opencode", escouade_plugin_opencode::run),
+    // Copilot CLI (INT-10.3): its harness on the client of its server, in its crate (plugins/builtin/dev.escouade.copilot-cli).
+    ("copilot", escouade_plugin_copilot::run),
 ];
 
 fn main() {

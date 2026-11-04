@@ -13,6 +13,7 @@
 pub mod agent;
 pub mod cursor;
 pub mod gemini;
+pub mod git;
 pub mod limits;
 pub mod paths;
 pub mod questions;

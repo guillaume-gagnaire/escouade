@@ -241,7 +241,10 @@ impl Plugin {
                 method::COMPACT => {
                     let c: Compact = read(params.clone())?;
                     self.agent(&c.agent)?.compact().map_err(failed)?;
-                    give(Compacted { over: false })
+                    give(Compacted {
+                        over: false,
+                        ..Compacted::default()
+                    })
                 }
                 other => Err(Refusal::not_found(other)),
             }

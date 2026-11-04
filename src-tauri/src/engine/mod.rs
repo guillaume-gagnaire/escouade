@@ -42,7 +42,6 @@ pub use claude::{
     catalog as claude_catalog, missing_line as claude_missing_line,
     told_model as claude_told_model, CLAUDE,
 };
-pub(crate) use codex::git as codex_git;
 pub use codex::CODEX;
 #[cfg(test)]
 pub(crate) use codex::{fake_codex, is_plan_approval as codex_is_plan_approval};
@@ -54,14 +53,10 @@ pub(crate) use copilot::fake_copilot;
 #[cfg(test)]
 pub(crate) use copilot::limit_answer as copilot_limit_answer;
 pub use copilot::COPILOT;
-pub(crate) use copilot::{
-    call_nano as copilot_call_nano, credits as copilot_credits,
-    limit_choices as copilot_limit_choices, limit_question as copilot_limit_question,
-    no as copilot_no, yes as copilot_yes,
-};
 #[cfg(test)]
 pub(crate) use cursor::fake_cursor;
 pub use cursor::CURSOR;
+pub(crate) use escouade_acp::git as codex_git;
 pub use gemini::GEMINI;
 pub use mcp::Escouade;
 #[cfg(test)]

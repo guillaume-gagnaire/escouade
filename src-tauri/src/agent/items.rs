@@ -18,7 +18,7 @@ impl AgentRt {
         }
     }
 
-    fn apply_item(&mut self, item: Item, fx: &mut Effects) {
+    pub(super) fn apply_item(&mut self, item: Item, fx: &mut Effects) {
         match item {
             Item::Start { session } => {
                 if let Some(session) = session {
@@ -239,6 +239,100 @@ impl AgentRt {
                 ));
                 self.ask(&request, &call, "AskUserQuestion".into(), input, item, fx);
             }
+            Item::PermissionCard {
+                request,
+                call,
+                tool,
+                input,
+                description,
+                reason,
+                hunks,
+                can_always,
+                always_scope,
+                parent,
+            } => {
+                if self.conv.contains(&request) {
+                    return;
+                }
+                let mut item = json!({
+                    "kind": "permission", "id": request, "toolUseId": call, "toolName": tool,
+                    "description": description, "input": trim_strings(&input), "reason": reason,
+                    "canAlways": can_always, "defaultNo": false, "decision": null, "ts": now_ms(),
+                });
+                if let Some(scope) = always_scope {
+                    item["alwaysScope"] = json!(scope);
+                }
+                if !hunks.is_null() {
+                    let shown =
+                        tool_result(String::new(), false, &json!({ "structuredPatch": hunks }));
+                    if !shown["patch"].is_null() {
+                        item["patch"] = shown["patch"].clone();
+                    }
+                }
+                if let Some(sub) = parent {
+                    item["sub"] = sub.into();
+                }
+                let req = json!({ "description": description, "decision_reason": reason });
+                fx.notify = Some(AgentAlert::new(
+                    NotifyKind::Question,
+                    notify::permission_body(&tool, &input, &self.meta.cwd),
+                ));
+                self.ask_with(&request, &call, tool, input, &req, item, fx);
+            }
+            Item::QuestionCard {
+                request,
+                call,
+                questions,
+                form,
+                parent,
+            } => {
+                if self.conv.contains(&request) {
+                    return;
+                }
+                let input = json!({ "questions": questions });
+                let mut item = json!({
+                    "kind": "question", "id": request, "toolUseId": call, "questions": questions,
+                    "answers": null, "ts": now_ms(),
+                });
+                if !form.is_null() {
+                    item["form"] = form.clone();
+                }
+                if let Some(sub) = parent {
+                    item["sub"] = sub.into();
+                }
+                self.append(item, fx);
+                let mut view = pending_view(
+                    &request,
+                    "AskUserQuestion",
+                    &Value::Null,
+                    &input,
+                    &self.meta.cwd,
+                );
+                // A form says what it is for: its message, on the list too.
+                view.description = form["message"].as_str().map(|m| {
+                    let mut cut = false;
+                    let m = capped(m, &mut cut);
+                    view.cut |= cut;
+                    m
+                });
+                self.add_pending(
+                    PendingReq {
+                        item_id: request,
+                        tool_use_id: call,
+                        input: input.clone(),
+                        suggestions: Value::Null,
+                        view,
+                        since: now_ms(),
+                    },
+                    fx,
+                );
+                self.set_status(AgentStatus::Waiting, fx);
+                fx.notify = Some(AgentAlert::new(
+                    NotifyKind::Question,
+                    notify::question_body(crate::engine::of(&self.meta).speaker(), &input),
+                ));
+                fx.agent_changed = true;
+            }
             Item::Answered {
                 request,
                 decision,
@@ -279,6 +373,13 @@ impl AgentRt {
                 }
                 fx.agent_changed = true;
             }
+            Item::Quota { meters } => {
+                let read: Vec<crate::model::QuotaMeter> =
+                    serde_json::from_value(meters).unwrap_or_default();
+                if !read.is_empty() {
+                    fx.rate = Some(read);
+                }
+            }
             Item::User { id, text } => {
                 if self.conv.contains(&id) {
                     return;
@@ -301,6 +402,7 @@ impl AgentRt {
                     fx.save = true;
                 }
             }
+            Item::LimitRest => self.limit_rest = true,
             Item::Context { tokens, window } => {
                 if let Some(tokens) = tokens {
                     self.context_tokens = tokens;
@@ -334,6 +436,7 @@ impl AgentRt {
                 entry,
             } => {
                 let interrupted = std::mem::take(&mut self.interrupted) || interrupted;
+                let limited = limited.filter(|_| !interrupted);
                 if entry.is_some() {
                     self.set_last_entry(entry, fx);
                 }
@@ -366,7 +469,10 @@ impl AgentRt {
                     self.meta.cost += usage.cost;
                 }
                 let error = error.filter(|_| !interrupted);
-                let failed = error.is_some();
+                // Stopped by a limit its harness says it waits for: told, not an error of the agent's.
+                let rest = std::mem::take(&mut self.limit_rest) && limited.is_some();
+                let failed = error.is_some() && !rest;
+                let ended_badly = failed || rest;
                 // A resume planned is over (the core plans the next one, `fx.limited`), as is a move once a turn
                 // went well after it; the plan's files are read again (as the core's own translations do).
                 if self.meta.resume_at.take().is_some() {
@@ -382,7 +488,7 @@ impl AgentRt {
                 let took = self.active_since.map(|since| (now_ms() - since).max(0));
                 let item = json!({
                     "kind": "turn", "id": new_id(), "ts": now_ms(), "durationMs": took, "cost": usage.cost,
-                    "tokens": tokens, "isError": failed, "interrupted": interrupted, "error": error,
+                    "tokens": tokens, "isError": ended_badly, "interrupted": interrupted, "error": error,
                     "limited": limited.is_some(), "engine": self.meta.engine,
                 });
                 self.append(item, fx);
@@ -437,7 +543,13 @@ impl AgentRt {
                 self.append(item, fx);
             }
             // Written by the process's adapter, in its order, before the items reach the agent; `Closed` is its own too.
-            Item::Write { .. } | Item::Closed | Item::Unknown => {}
+            Item::Write { .. }
+            | Item::Usage { .. }
+            | Item::Ready { .. }
+            | Item::Compacted { .. }
+            | Item::Stop { .. }
+            | Item::Closed
+            | Item::Unknown => {}
         }
     }
 

@@ -2,7 +2,7 @@
 title: "Les plugins livrés avec Escouade"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.3, §4.4","docs/TODO-2.2.md (INT-4, INT-8.1)","src-tauri/src/plugins/builtin.rs","docs/PLUGINS.md §4.13","plugins/builtin/dev.escouade.github/README.md","plugins/builtin/dev.escouade.gitlab/README.md","plugins/builtin/dev.escouade.gitea/README.md","plugins/builtin/dev.escouade.azure-devops/README.md"]
-tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-223"]
+tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-223","ESC-224"]
 decisions: []
 compared: null
 ---
@@ -54,4 +54,4 @@ Certains plugins sont donnés par l'app : livrés avec elle, signés avec elle, 
 
 ## Les harness
 
-Cursor CLI, Mistral Vibe, Gemini CLI et OpenCode sont servis par des plugins livrés (voir *Cursor CLI en plugin*, *Mistral Vibe en plugin*, *Gemini CLI en plugin*, *OpenCode en plugin*). `dev.escouade.opencode` est dans les releases : son dossier porte sa crate, sa page du store pointe vers ce dossier.
+Cursor CLI, Mistral Vibe, Gemini CLI, OpenCode et Copilot CLI sont servis par des plugins livrés (voir *Cursor CLI en plugin*, *Mistral Vibe en plugin*, *Gemini CLI en plugin*, *OpenCode en plugin*, *Copilot CLI en plugin*). `dev.escouade.opencode` est dans les releases : son dossier porte sa crate, sa page du store pointe vers ce dossier.

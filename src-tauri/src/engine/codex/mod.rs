@@ -10,7 +10,6 @@
 #[cfg(test)]
 mod bench;
 mod exec;
-pub(crate) mod git;
 mod locate;
 mod process;
 #[cfg(test)]

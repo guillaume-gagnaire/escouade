@@ -115,6 +115,8 @@ No “Auto” mode (OpenCode has no reviewer), no sandbox, a single account, no 
 
 ## Copilot CLI
 
+Copilot CLI is a plugin shipped with Escouade (`dev.escouade.copilot-cli`): its agents talk through a program of its own that Escouade starts and watches. It shows in the Plugins view, under “Shipped with Escouade”; turned off, a Copilot agent says at its start that it needs turning back on, and keeps its session.
+
 ### Installation and account
 
 `npm install -g @github/copilot`, then `copilot login` with a GitHub account that has Copilot (Free included). Each agent has its `copilot --server --stdio`, without the GitHub MCP server Copilot plugs in by itself, without access to the system’s temporary folder and without the GitHub tokens in its commands’ environment. Its accounts each have their `COPILOT_HOME`: see [Copilot CLI accounts](accounts#copilot-cli-accounts).
