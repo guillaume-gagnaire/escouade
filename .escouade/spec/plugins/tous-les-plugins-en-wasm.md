@@ -1,8 +1,8 @@
 ---
 title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §8 (ESC-330)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »"]
-tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338"]
+sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire"]
+tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341"]
 decisions: [73,71,70,72,75,80]
 compared: null
 ---
@@ -96,3 +96,12 @@ Pour `run.js` comme pour `run.wasm`, appliqué par Escouade et gardé au journal
 - En module, `sleep` et `timeout` du kit reposent sur les minuteurs de l'hôte. Si l'hôte refuse un minuteur, le journal le dit et l'attente finit aussitôt, pour qu'un appel ne reste pas retenu pour toujours.
 - Linear et Codex, compilés depuis leurs crates, répondent dans l'hôte de l'app comme leur natif : Linear à ses appels, Codex ligne à ligne sur les flux enregistrés.
 - Les trois crates sont prêtes pour crates.io, avec licence, dépôt et README. Seul le chef les publie.
+
+## Le kit sur crates.io (ESC-341, publication à venir)
+
+Rien n'est publié : seul le chef publie, après l'accord écrit de Florian Gagnaire sur sa contribution. D'ici là, un auteur tiers ne peut pas encore tirer ces crates.
+
+- `escouade-plugin-protocol`, `escouade-plugin-kit` et `escouade-acp` sortent en `0.1.0`, sous licence MIT comme le SDK. Un plugin en Rust garde ainsi le choix de sa licence. Les plugins de la première main et l'app restent en GPL-3.0-or-later.
+- Leur documentation, en anglais, se lira sur docs.rs pour le natif et pour `wasm32-wasip1`.
+- Les plugins dépendent de ces crates par version. Dans le dépôt, `[patch.crates-io]` les ramène sur `crates/`. Le store, qui ne lit que le dossier du plugin, compilera ce qui est publié.
+- Un plugin de la première main ne se compile pas encore seul dans son dossier : il reste membre du workspace de l'app et n'a pas de `Cargo.lock` à lui. C'est à régler avant que le store le compile (`docs/PLUGINS.md` §8.16).

@@ -76,6 +76,6 @@ app's. `ci.mjs` does not run them yet; their tests run with the app's (`cargo ne
 | `clickup/`      | `dev.escouade.clickup`         | GPL-3.0-or-later | ClickUp in the Kanban                                    |
 | `isola/`        | `dev.escouade.isola`           | GPL-3.0-or-later | isola as a launch environment                            |
 
-Those with a crate (`Cargo.toml`, `src/`) stand on the kit of the Rust plugins (`crates/escouade-plugin-kit`) or on the
+Those with a crate (`Cargo.toml`, `src/`) depend by version on the crates that go to crates.io, and `[patch.crates-io]` of `src-tauri/Cargo.toml` brings them back to `crates/` here. They stand on the kit of the Rust plugins (`crates/escouade-plugin-kit`) or on the
 ACP client (`crates/escouade-acp`). The demonstration, `dev.escouade.minimal` (in development builds only), is a fixture:
 `tests/fixtures/plugins/minimal/`.

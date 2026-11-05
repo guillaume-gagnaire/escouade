@@ -1,12 +1,15 @@
 [package]
 name = "escouade-acp"
-version = "1.0.0"
-description = "Le client ACP d'Escouade : ce qu'un agent ACP dit, traduit en éléments de la conversation, et ce qu'Escouade lui écrit"
+version = "0.1.0"
+description = "Escouade's client of the Agent Client Protocol: what an ACP agent says, as items of the conversation, and what to write back to it"
 authors = ["Guillaume Gagnaire"]
-license = "GPL-3.0-or-later"
+license = "MIT"
 repository = "https://github.com/guillaume-gagnaire/escouade"
 homepage = "https://escouade.dev"
+documentation = "https://docs.rs/escouade-acp"
 readme = "README.md"
+keywords = ["escouade","acp","agent","wasm","json-rpc"]
+categories = ["development-tools","api-bindings","wasm"]
 include = ["src/**/*.rs", "Cargo.toml", "README.md", "LICENSE"]
 edition = "2021"
 rust-version = "1.88"
@@ -17,8 +20,13 @@ workspace = "../../src-tauri"
 # (docs/PLUGINS.md §1.1, PLG-6). Shared by `escouade-plugins acp` (the plugin `dev.escouade.acp`) and by the core's
 # ACP harnesses until they come out in process (Cursor CLI, Mistral Vibe, Gemini CLI: INT-10.1, 10.6, 10.7).
 [dependencies]
-escouade-plugin-protocol = { path = "../escouade-plugin-protocol", version = "1.0.0" }
+escouade-plugin-protocol = { path = "../escouade-plugin-protocol", version = "0.1.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # A path canonicalized without the `\\?\` prefix of Windows (the fence of private projects).
 dunce = "1"
+
+# docs.rs builds the two targets a plugin compiles for.
+[package.metadata.docs.rs]
+default-target = "x86_64-unknown-linux-gnu"
+targets = ["x86_64-unknown-linux-gnu", "wasm32-wasip1"]

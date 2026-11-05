@@ -10,7 +10,7 @@ workspace = "../../src-tauri"
 
 # One of the plugins of `escouade-plugins` (docs/PLUGINS.md §4.3): its program is `escouade-plugins bitbucket`.
 [dependencies]
-escouade-plugin-kit = { path = "../../crates/escouade-plugin-kit" }
+escouade-plugin-kit = "0.1.0"
 serde_json = "1"
 anyhow = "1"
 parking_lot = "0.12"

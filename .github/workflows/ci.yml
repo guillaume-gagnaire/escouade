@@ -220,6 +220,15 @@ jobs:
       - name: Linear and Codex as modules
         run: sh scripts/plugins-wasm.sh
 
+      - name: The examples and the documentation of the crates of crates.io
+        working-directory: src-tauri
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: |
+          cargo test --doc --locked -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp
+          cargo doc --no-deps --locked -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp
+          cargo doc --no-deps --locked --target wasm32-wasip1 -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp
+
       - name: The crates of crates.io can be published (a dry run)
         working-directory: src-tauri
         run: cargo publish --dry-run --locked -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp

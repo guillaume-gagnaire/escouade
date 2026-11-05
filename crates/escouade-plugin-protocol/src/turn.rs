@@ -9,7 +9,7 @@
 //!   whose calls wait.
 //! - [`crate::module!`] exports the turn. It is one line of the plugin, nothing at all natively.
 //! - [`instance_id`] and [`read_file`] are what `std::process::id` and `std::fs` cannot be in a module.
-//! - On `wasm32`, [`lines`], [`write`], [`flush`], [`set_turn`] are the kit's way in, and [`host_call`] the synchronous
+//! - On `wasm32`, `lines`, `write`, `flush`, `set_turn` are the kit's way in, and `host_call` the synchronous
 //!   door to the host (`escouade.call`).
 
 use crate::Refusal;

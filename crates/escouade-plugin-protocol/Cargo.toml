@@ -1,12 +1,15 @@
 [package]
 name = "escouade-plugin-protocol"
-version = "1.0.0"
-description = "Le protocole JSON-RPC des plugins d'Escouade : ses constantes, ses messages et la boucle d'un plugin, en process ou en module WASM"
+version = "0.1.0"
+description = "The JSON-RPC protocol of Escouade's plugins: its constants, its messages and the loop of a plugin, in process or as a WASM module"
 authors = ["Guillaume Gagnaire"]
-license = "GPL-3.0-or-later"
+license = "MIT"
 repository = "https://github.com/guillaume-gagnaire/escouade"
 homepage = "https://escouade.dev"
+documentation = "https://docs.rs/escouade-plugin-protocol"
 readme = "README.md"
+keywords = ["escouade","plugin","json-rpc","wasm","protocol"]
+categories = ["development-tools","wasm"]
 include = ["src/**/*.rs", "Cargo.toml", "README.md", "LICENSE"]
 edition = "2021"
 rust-version = "1.88"
@@ -17,3 +20,8 @@ workspace = "../../src-tauri"
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# docs.rs builds the two targets a plugin compiles for.
+[package.metadata.docs.rs]
+default-target = "x86_64-unknown-linux-gnu"
+targets = ["x86_64-unknown-linux-gnu", "wasm32-wasip1"]

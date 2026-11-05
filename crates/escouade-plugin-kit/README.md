@@ -1,35 +1,39 @@
 # escouade-plugin-kit
 
-Ce que partagent les plugins Rust d'[Escouade](https://escouade.dev), pour qu'un plugin ne soit que son client. La même source
-compile en process et pour `wasm32-wasip1`, sans tokio ni reqwest dans ce second cas.
+What the Rust plugins of [Escouade](https://escouade.dev) share, so that a plugin is nothing but its client. The same source
+compiles in process and for `wasm32-wasip1`, without tokio or reqwest in the second case.
 
-- `serve` : la boucle d'un plugin. Les appels répondent quand ils finissent, plusieurs à la fois, et le plugin peut demander à
-  Escouade ses secrets et ses réglages pendant qu'il répond (`Cx`).
-- `hosts` : le service des hébergeurs de code et des sources du Kanban. Un plugin donne ses genres (`ForgeKind`, `SourceKind`).
-- `http` : les appels, et `http::reqwest`, le client d'un plugin. C'est reqwest en process et, dans un module, la part de reqwest
-  dont les plugins se servent, sur `net/fetch`.
-- `time` : `sleep` et `timeout`, sur tokio en process et sur les minuteurs de l'hôte dans un module.
-- `i18n` : la langue de l'interface, dite par `initialize`.
+- `serve`: the loop of a plugin. Calls answer as they end, several at once, and the plugin can ask Escouade for its secrets and
+  its settings while it answers (`Cx`).
+- `hosts`: the service of code hosts and of the Kanban's sources, and of their account. A plugin gives its kinds (`ForgeKind`,
+  `SourceKind`); the account, its token, one client per account, the typed errors and the budget of calls are here.
+- `forge`: the contract of a code host's client.
+- `errors`, `text`: an HTTP error and what it says, the criteria of a ticket's description.
+- `http`: the calls, and `http::reqwest`, a plugin's client. It is reqwest in process and, in a module, the part of reqwest
+  plugins use, over `net/fetch`.
+- `time`: `sleep` and `timeout`, on tokio in process and on the host's timers in a module.
+- `i18n`: the language of the interface, as `initialize` says it.
 
 ```rust
 use escouade_plugin_kit::forge::BoxFuture;
 use escouade_plugin_kit::serve::{self, Cx, Plugin, Refusal};
 use serde_json::Value;
 
-struct Exemple;
+struct Example;
 
-impl Plugin for Exemple {
+impl Plugin for Example {
     fn call<'a>(&'a self, _cx: &'a Cx, method: &'a str, _params: Value) -> BoxFuture<'a, Result<Value, Refusal>> {
         Box::pin(async move { Err(Refusal::not_found(method)) })
     }
 }
 
 pub fn run() -> i32 {
-    serve::run("exemple", Exemple)
+    serve::run("example", Example)
 }
 
 escouade_plugin_kit::protocol::module!(run);
 ```
 
-La référence des plugins : <https://escouade.dev/docs/plugins/api>. Le code est dans [le dépôt d'Escouade](https://github.com/guillaume-gagnaire/escouade),
-sous licence GPL-3.0-or-later.
+The reference of the plugins: <https://escouade.dev/en/docs/plugins/api>. The code is in
+[Escouade's repository](https://github.com/guillaume-gagnaire/escouade). This crate is under the MIT licence; the app is under
+GPL-3.0-or-later.

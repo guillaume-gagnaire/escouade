@@ -37,7 +37,7 @@ Ce document dit **ce qui a été construit**, et où. Il était l'analyse d'ESC-
 | Le journal | `src-tauri/src/plugins/journal.rs` | Démarrages, plantages, appels, décisions ; `<data>/plugin-logs/<id>.log`, secrets masqués |
 | Le store dans l'app | `src-tauri/src/plugins/store.rs`, `store_keys.rs` | Catalogue, liste de révocation, téléchargement et vérifications, sceau revérifié hors ligne |
 | Le banc | `src-tauri/src/plugins/bench/`, la CLI `escouade-plugin` (`test`, `dev`, `validate`, `build`) | La conformité d'un plugin, livrée avec l'app |
-| Le kit Rust | `crates/escouade-plugin-kit`, `crates/escouade-acp` | La boucle des plugins Rust ; le client ACP |
+| Le kit Rust | `crates/escouade-plugin-kit`, `crates/escouade-acp` (MIT, pour crates.io, §8.16) | La boucle des plugins Rust ; le client ACP |
 | Le SDK | `sdk/plugin` (`@escouade-dev/plugin`, MIT), `sdk/create-escouade-plugin` | TypeScript, faux Escouade, gabarit |
 | La fenêtre | `src/components/plugins/`, `src/lib/plugins*.ts`, `src/lib/plugin-theme*.ts`, `src/lib/proposed-plugins.ts` | La vue Plugins, le store, les thèmes, les plugins proposés |
 
@@ -1088,7 +1088,7 @@ Les e2e, et donc la vue Plugins, le store dans l'app, les thèmes et les sceaux 
 
 Décidé par l'utilisateur le 2026-11-04 : « je veux que tous les plugins, même les builtins, passent par le même système : on livre un plugin, il est compilé pour qu'il soit utilisable sur tous les systèmes, et il fait ce qu'il a besoin de faire », puis « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté ». Le même jour, l'état de fin : « A la fin, je veux que tous les plugins builtins soient dans /plugins/* (exemple plugins/claude), tous publiés sur le store, vérifiés et signés. »
 
-Ce chapitre est l'étude, faite avant le portage. **A1, A2, A3, A4 et A8 sont faits** (ESC-331, §8.11 ; ESC-332, §8.12 ; ESC-334, §8.13 ; ESC-338, §8.14 ; ESC-333, §8.15) ; le reste du plan ne l'est pas. Le prototype, ses tests et ses mesures sont dans `prototypes/wasm-all/` (son README dit comment tout refaire). Il revoit le §5.7 (« le `run` natif, tranché ») et le §5.6 (« un `run.wasm` n'est pas ouvert ») : ces deux passages tiennent jusqu'à l'acceptation des décisions proposées par ESC-330. Sans numéro tant qu'elles ne sont pas acceptées, elles se citent par leur identifiant : `run-wasm-le-rust-des-plugins-compile-par`, `les-capacites-de-l-hote-ce-qu-un-plugin`, `la-premiere-main-dans-plugins-id-court-p`, `plus-aucun-run-command-le-store-le-refus`.
+Ce chapitre est l'étude, faite avant le portage. **A1, A2, A3, A4 et A8 sont faits** (ESC-331, §8.11 ; ESC-332, §8.12 ; ESC-334, §8.13 ; ESC-338, §8.14 ; ESC-333, §8.15), **A9 est prêt et attend le geste du chef** (ESC-341, §8.16) ; le reste du plan ne l'est pas. Le prototype, ses tests et ses mesures sont dans `prototypes/wasm-all/` (son README dit comment tout refaire). Il revoit le §5.7 (« le `run` natif, tranché ») et le §5.6 (« un `run.wasm` n'est pas ouvert ») : ces deux passages tiennent jusqu'à l'acceptation des décisions proposées par ESC-330. Sans numéro tant qu'elles ne sont pas acceptées, elles se citent par leur identifiant : `run-wasm-le-rust-des-plugins-compile-par`, `les-capacites-de-l-hote-ce-qu-un-plugin`, `la-premiere-main-dans-plugins-id-court-p`, `plus-aucun-run-command-le-store-le-refus`.
 
 **En bref.**
 
@@ -1436,7 +1436,7 @@ Pour 23 plugins, ces gestes doivent tenir en une commande du chef : `npm run plu
 
 Le store ne lit que le dossier du plugin (`docs/STORE.md` §3.6), à raison : c'est ce qu'il archive et ce que le chef relit. Or `path = "../../crates/escouade-plugin-kit"` sort du dossier.
 
-**Retenu** : `escouade-plugin-protocol`, `escouade-plugin-kit` et `escouade-acp` sont publiés sur crates.io. Un plugin en dépend par version, son `Cargo.lock` en fixe la somme de contrôle. Dans le dépôt, un `[patch.crates-io]` à la racine des plugins les ramène sur les chemins locaux pour le développement ; le store, qui ne voit pas cette racine, compile ce qui est publié. **Les plugins tiers en Rust ont besoin de ces crates de toute façon.**
+**Retenu** : `escouade-plugin-protocol`, `escouade-plugin-kit` et `escouade-acp` sont publiés sur crates.io. Un plugin en dépend par version, son `Cargo.lock` en fixe la somme de contrôle. Dans le dépôt, un `[patch.crates-io]` à la racine du workspace qui tient les plugins (`src-tauri/Cargo.toml`) les ramène sur les chemins locaux pour le développement ; le store, qui ne voit pas cette racine, compile ce qui est publié. **Les plugins tiers en Rust ont besoin de ces crates de toute façon.**
 
 Écarté : copier `crates/` dans chaque dossier (`vendor/`), des milliers de lignes dupliquées 23 fois ; ou faire lire `crates/` au store pour la seule première main, une exception à la règle « comme un tiers ». **Publier sur crates.io est un geste public et sans retour** (un numéro publié ne s'efface pas) : c'est au nom de l'utilisateur, à faire par lui ou sur son accord. **Accordé le 2026-11-04** : l'utilisateur a choisi crates.io et s'est connecté par `cargo login` sur le poste. Le chef publie les trois crates au ticket A9 ; aucun agent de ticket ne lance `cargo publish`.
 
@@ -1558,7 +1558,7 @@ Les tickets du portage, dans l'ordre. **Les lettres sont des noms de travail**, 
 | **A6. Le store** | le onzième contrôle pour `run.wasm`, bubblewrap, la liste fermée, l'image | `store/server/utils/{compile,checks}.ts`, `store/Dockerfile`, `docs/STORE.md` | A5, ESC-328 |
 | **A7. La revue locale** | `recompile.ts`, les pistes, le conteneur pour un tiers | `store/scripts/plugin-review/` | A6 |
 | **A8. L'amorce** (fait, §8.14) | `plugins/seed.json`, l'installation sans réseau, la révocation, plugins à part entière, `release.yml` | `plugins/seed.rs`, `plugins/store.rs`, `plugins/builtin.rs`, `plugins/mod.rs`, `src-tauri/tauri.conf.json`, `.github/workflows/release.yml` | A1 |
-| **A9. crates.io** | publier les trois crates ; `[patch.crates-io]` | `crates/*/Cargo.toml` ; **geste de l'utilisateur** | A4 |
+| **A9. crates.io** (prêt, §8.16 ; la publication reste à faire) | publier les trois crates ; `[patch.crates-io]` | `crates/*/Cargo.toml` ; **geste de l'utilisateur** | A4 |
 
 **P. Le portage, en parallèle une fois A1 à A5 faits** (rien n'empêche d'en porter en attendant A6, le banc suffit) :
 
@@ -1634,7 +1634,7 @@ Les tickets du portage, dans l'ordre. **Les lettres sont des noms de travail**, 
 - **`initialize`.** Le cœur envoie `lang` à tout plugin ; le kit et `serve` gardent `lang` et `escouade.version` (`protocol::greeting()`), et le kit règle sa langue dessus. `read_file` passe par `fs/read`, que l'hôte refuse jusqu'à A3 : Codex y lit `config.toml` pour le seul cas d'un serveur refusé.
 - **La preuve.** `sh scripts/plugins-wasm.sh` compile Linear et Codex depuis `plugins/<id-court>/`, sans fork, par `cargo rustc --crate-type cdylib` : leur crate reste une `rlib` pour `escouade-plugins` jusqu'à Z3, et leur manifeste ne change pas. `ESCOUADE_PARITY=1 cargo nextest run --lib plugins_wasm_parity`, après `cargo build --bins`, les joue dans l'hôte de l'app. Linear : un `use` à la place de sa dépendance reqwest, `module!`. Codex : `run()`, deux lignes de `client.rs`, `module!`. Ce n'est pas une compilation reproductible : c'est A5.
 - **Le prototype s'arrête là.** `prepare.mjs` cherche le code d'avant A4 et échoue : pour refaire les mesures du §8.9, partir du commit `de8eba05`.
-- **Prêtes pour A9.** Licence, dépôt, `readme`, `include`, une copie de LICENSE et un README par crate. `cargo publish --dry-run -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp` passe. Le chef publie.
+- **Prêtes pour A9.** Licence, dépôt, `readme`, `include`, une copie de LICENSE et un README par crate. `cargo publish --dry-run -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp` passe. Le chef publie (§8.16).
 
 ### 8.14 Ce qu'A8 a construit (ESC-338)
 
@@ -1668,3 +1668,27 @@ Les tickets du portage, dans l'ordre. **Les lettres sont des noms de travail**, 
 - **Le journal** dit la méthode et la racine (`fs/write agent: wrote 17 bytes`), jamais le chemin ni le contenu, comme `net/fetch` dit la méthode et l'hôte. Une commande y va avec ses arguments, secrets masqués, comme le demande le §8.4.7.
 - **Le banc** sert `fs/*` et `proc/*` par le même code, autour d'un agent `bench` et d'un dossier jetable. Hors ligne (la revue), aucun programme ne tourne.
 - **Les preuves.** Sur `files.rs` et `procs.rs`, chaque racine et chaque refus ; `plugins_reactor_tests.rs` : un `run.wasm` lit le dossier d'un agent et lance une commande ; `plugins_wasm_tests.rs` : `sdk-both` fait de même en `run.js`.
+
+### 8.16 Ce qu'A9 a préparé (ESC-341)
+
+Rien n'est publié : c'est le geste du chef. Les trois crates sont prêtes et `cargo publish --dry-run` passe, en natif et pour `wasm32-wasip1`.
+
+- **Les noms sont libres** : `escouade-plugin-protocol`, `escouade-plugin-kit` et `escouade-acp` n'étaient pas dans l'index de crates.io le 2026-11-05.
+- **`0.1.0`**, pas `1.0.0` : la version d'un crate n'est pas celle du protocole (`PROTOCOL`, 1), et son API bouge encore avec le portage. `"0.1.0"` veut dire `^0.1` : un changement cassant passe à `0.2.0`, avec l'exigence des plugins, dans le même commit.
+- **MIT**, choisi par l'utilisateur le 2026-11-05, comme le SDK (décision 4 du 2026-10-25). Les plugins et l'app restent en GPL-3.0-or-later. Un tiers garde ainsi le choix de sa licence : en GPL, le `run.wasm` qu'il publie, lié au kit, aurait été distribué sous GPL.
+- **La condition de la publication** : une dizaine de lignes de `forge.rs` du protocole et du kit (les champs de dépôt, la méthode `parent`) viennent de la PR #17 de Florian Gagnaire, sous la GPL de l'app, et le dépôt n'a pas de CLA. **Son accord est demandé par l'issue [#22](https://github.com/guillaume-gagnaire/escouade/issues/22) : le premier `cargo publish` attend son « oui » en commentaire de #22.** La recherche est faite ligne à ligne, sur les lignes ajoutées par Florian Gagnaire et Eric Pommereuil : du code reformaté a pu lui échapper. Aucune ligne d'Eric Pommereuil n'a été trouvée au-delà de formes banales.
+- **Les plugins dépendent par version** (`escouade-plugin-kit = "0.1.0"`). `[patch.crates-io]`, dans `src-tauri/Cargo.toml`, racine du workspace qui les tient, les ramène sur `crates/`. Le cœur garde ses `path` : il n'est pas publié.
+- **Entre crates, `path` et `version` à la fois.** `cargo publish` retire le `path` du manifeste publié. Avec la version seule, l'empaquetage cherche le crate sur crates.io et échoue tant qu'il n'y est pas : `[patch.crates-io]` ne l'atteint pas.
+- **Le README est la doc du crate** (`#![doc = include_str!("../README.md")]`), en anglais, avec un exemple que `cargo test --doc` compile. docs.rs construit les deux cibles (`[package.metadata.docs.rs]`). Le job `plugin-kit-wasm` passe les doctests et `cargo doc` sans avertissement. `scripts/crates-io.test.ts` garde les champs, la licence et le `[patch.crates-io]`.
+- **Il reste, pour que le store compile un plugin de la première main** : son manifeste porte `workspace = "../../src-tauri"`, que `cargo` refuse dans un dossier seul (essayé sur `plugins/linear`), et il n'a pas de `Cargo.lock` à lui, ce qu'un membre du workspace ne peut avoir et qui demande de toute façon les crates publiées. Sans cette ligne, `cargo metadata` cherche bien `escouade-plugin-kit` sur crates.io. **À traiter en A6 ou au portage de chaque plugin** : ce ticket ne fait que le dire.
+
+**Publier, dans cet ordre** (depuis `src-tauri/`, sur `main` à jour, arbre propre, « oui » de Florian Gagnaire en commentaire de #22, adresse e-mail du compte vérifiée sur crates.io) :
+
+```sh
+cargo publish --dry-run --locked -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp
+cargo publish --locked -p escouade-plugin-protocol
+cargo publish --locked -p escouade-plugin-kit
+cargo publish --locked -p escouade-acp
+```
+
+Le deuxième et le troisième attendent seuls que le premier soit dans l'index. **Après** : sur crates.io, chaque page dit `0.1.0`, MIT, le dépôt et le README ; le propriétaire est le compte de l'utilisateur. Sur docs.rs, la construction de `https://docs.rs/crate/<nom>/0.1.0/builds` est verte pour les deux cibles, et `escouade_plugin_kit::serve` se lit. Depuis un dossier vide, un crate qui dépend de `escouade-plugin-kit = "0.1.0"` compile pour `wasm32-wasip1`. Une version publiée ne s'efface pas : une erreur se corrige par `0.1.1`, et `cargo yank` retire seulement la version des nouvelles résolutions.

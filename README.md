@@ -266,6 +266,6 @@ Escouade est gratuite et open source. Si elle t'est utile, tu peux offrir un caf
 
 ## Licence
 
-GPL-3.0 ou ultérieure (`GPL-3.0-or-later`), voir [LICENSE](LICENSE).
+GPL-3.0 ou ultérieure (`GPL-3.0-or-later`), voir [LICENSE](LICENSE). Le SDK des plugins (`sdk/plugin`) et les crates du kit Rust (`crates/escouade-plugin-protocol`, `crates/escouade-plugin-kit`, `crates/escouade-acp`) sont sous licence MIT, pour que chaque auteur de plugin choisisse la sienne.
 
 Escouade est un logiciel libre : tu peux le redistribuer et le modifier selon les termes de la licence publique générale GNU, publiée par la Free Software Foundation, version 3 ou (à ton choix) toute version ultérieure. Il est distribué dans l'espoir qu'il sera utile, mais sans aucune garantie. Les versions jusqu'à la 1.7.7 comprise ont été publiées sous licence MIT.

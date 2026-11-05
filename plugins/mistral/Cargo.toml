@@ -14,5 +14,5 @@ workspace = "../../src-tauri"
 # the generic ACP plugin serves the harnesses a manifest describes. What is not `voice/*` comes here.
 [dependencies]
 escouade-plugin-acp = { path = "../acp" }
-escouade-plugin-protocol = { path = "../../crates/escouade-plugin-protocol" }
+escouade-plugin-protocol = "0.1.0"
 serde_json = "1"

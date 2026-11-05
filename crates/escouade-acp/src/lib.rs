@@ -1,3 +1,7 @@
+#![doc = include_str!("../README.md")]
+//!
+//! ## Internals
+//!
 //! The ACP client of Escouade (Agent Client Protocol v1: JSON-RPC 2.0, one message a line on the agent's input and
 //! output), drawn from the one Cursor CLI was driven with (`engine/cursor/`, `agent/cursor.rs` of the app), with what is
 //! Cursor's own (`cursor/*`) kept apart in `cursor` (docs/PLUGINS.md §1.1, PLG-6).

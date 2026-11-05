@@ -230,6 +230,14 @@ default-members = [
     "../plugins/antigravity",
 ]
 
+# The plugins depend on the kit by version, as the store reads them (their folder, published crates, the checksum of their
+# own Cargo.lock: docs/PLUGINS.md §8.6.3). Here, development goes on against the kit of this tree. Bump a crate's version
+# with the plugins' requirement in one commit: a patch that no longer matches is dropped by cargo.
+[patch.crates-io]
+escouade-plugin-protocol = { path = "../crates/escouade-plugin-protocol" }
+escouade-plugin-kit = { path = "../crates/escouade-plugin-kit" }
+escouade-acp = { path = "../crates/escouade-acp" }
+
 [profile.dev.package."*"]
 debug = "line-tables-only"
 

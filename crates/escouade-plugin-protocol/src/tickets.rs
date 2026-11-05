@@ -18,7 +18,7 @@ pub struct Container {
     pub own: bool,
 }
 
-/// A state of an external ticket: for GitHub "open", "closed" or "label:<name>".
+/// A state of an external ticket: for GitHub "open", "closed" or `label:<name>`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ExternalState {

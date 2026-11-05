@@ -13,8 +13,8 @@ workspace = "../../src-tauri"
 # both without a process nor a runtime of their own. The core's « Vue Copilot » reads its session's log through that
 # same translation, as a library (`src-tauri/src/agent/copilot.rs`).
 [dependencies]
-escouade-acp = { path = "../../crates/escouade-acp" }
-escouade-plugin-protocol = { path = "../../crates/escouade-plugin-protocol" }
+escouade-acp = "0.1.0"
+escouade-plugin-protocol = "0.1.0"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

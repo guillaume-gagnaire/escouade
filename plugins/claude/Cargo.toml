@@ -14,7 +14,7 @@ workspace = "../../src-tauri"
 # what stays in it: « Vue Claude Code » reads its session's transcript through that same translation
 # (`src-tauri/src/agent/claude.rs`), an account's sign-in and quota read the same files (`src-tauri/src/usage.rs`).
 [dependencies]
-escouade-plugin-protocol = { path = "../../crates/escouade-plugin-protocol" }
+escouade-plugin-protocol = "0.1.0"
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
