@@ -104,6 +104,11 @@ try {
     const waits = parsed(out).find((l) => 'rust' in l);
     if (waits?.rust !== 'waits' || !/no sandbox/.test(waits.said) || waits.plugin) fail(`without bubblewrap: ${JSON.stringify(waits)}`);
     console.log('✓ without bubblewrap, a run.wasm version waits');
+    // What each option does alone: the options a server needs, for the profile of ESC-356.
+    for (const option of ['seccomp=unconfined', 'apparmor=unconfined']) {
+      const probe = parsed(inImage(['node', '/test/compile.mjs'], ['-e', 'IMAGE_TEST_PROBE=1', '--security-opt', option, ...mounts]));
+      console.log(`${option} alone: ${JSON.stringify(probe.find((l) => 'bubblewrap' in l))}`);
+    }
     const options = (process.env.RUST_OPTIONS ?? 'seccomp=unconfined apparmor=unconfined').split(' ').flatMap((o) => ['--security-opt', o]);
     out = inImage(['node', '/test/compile.mjs'], [...options, ...mounts]);
     console.log(out.trim());
@@ -130,7 +135,8 @@ try {
   if (lines.length !== 2) fail(`${lines.length} plugins compiled, not 2`);
 
   // ---- A `run.wasm` plugin: the hash of goldens.json, what is refused, and what its sandbox shows.
-  if (!said2.find((l) => 'bubblewrap' in l)?.bubblewrap) fail('bubblewrap cannot run in this container');
+  const sandbox = said2.find((l) => 'bubblewrap' in l);
+  if (!sandbox?.bubblewrap) fail(`bubblewrap cannot run in this container: ${sandbox?.why}`);
   const rust = said2.find((l) => l.plugin === 'rust-build');
   if (!rust || rust.compilation.state !== 'built') fail(`rust-build: ${JSON.stringify(rust)}`);
   if (rust.compilation.sha256 !== goldens.rust.module)
@@ -148,9 +154,8 @@ try {
   refused('store', /couldn't read|No such file/);
   const inside = said2.find((l) => 'inside' in l)?.inside ?? [];
   console.log(inside.join('\n'));
-  const want = ['app 1 absent', 'data absent', 'etc []', 'home []', 'secret 0', 'runtime 0', 'links 1'];
-  if (want.some((line) => !inside.some((l) => l.startsWith(line.split(' ')[0]) && l.endsWith(line.split(' ').at(-1)))))
-    fail(`the sandbox shows more than it should: ${inside.join(' | ')}`);
+  const want = ['app absent', 'data absent', 'proc absent', 'etc []', 'env [PATH PWD ]', 'net unreachable'];
+  if (want.join('|') !== inside.join('|')) fail(`the sandbox shows more than it should: ${inside.join(' | ')}`);
   console.log('✓ the sandbox shows neither the store, nor its variables, nor a network');
 
   // ---- The store starts, and says what it has.

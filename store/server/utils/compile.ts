@@ -130,6 +130,8 @@ export interface SandboxOptions {
    * this store has no sandbox for one, and such a version waits in `error`.
    */
   rust?: RustSandbox | 'none';
+  /** Why there is no sandbox here, for the version that waits. */
+  noSandbox?: string;
 }
 
 /** Bubblewrap and what it shows a `run.wasm` compilation. */
@@ -162,8 +164,8 @@ export function bwrapArgs(s: RustSandbox, dir: string, network: boolean, env: En
     `${root}/opt`,
     '/opt',
     ...['bin', 'sbin', 'lib', 'lib64'].flatMap((d) => ['--symlink', `usr/${d}`, `/${d}`]),
-    '--proc',
-    '/proc',
+    // No `/proc`, neither a new one, which a kernel refuses to mount where the container hides parts of its own, nor
+    // the container's, which would show its processes: nothing of a compilation needs it.
     '--dev',
     '/dev',
     '--tmpfs',
@@ -202,19 +204,20 @@ export function inSandbox(s: RustSandbox, dir: string, network: boolean, env: En
   return [s.bwrap, [...bwrapArgs(s, dir, network, env), ...command], { PATH: SANDBOX_PATH }];
 }
 
-const probedBwrap = new Map<string, boolean>();
+const probedBwrap = new Map<string, string | null>();
 
-/** Whether this kernel and this container let bubblewrap make its sandbox, asked once. */
-export function canBubblewrap(s: RustSandbox): boolean {
-  if (process.platform !== 'linux') return false;
+/** Why bubblewrap cannot make its sandbox here, in its own words; null when it can. Asked once. */
+export function whyNoBubblewrap(s: RustSandbox): string | null {
+  if (process.platform !== 'linux') return 'not Linux';
   const key = `${s.bwrap}\0${s.root}`;
-  let can = probedBwrap.get(key);
-  if (can === undefined) {
+  let why = probedBwrap.get(key);
+  if (why === undefined) {
     const [exe, args, env] = inSandbox(s, tmpdir(), false, {}, ['/bin/true']);
-    can = spawnSync(exe, args, { stdio: 'ignore', timeout: 10_000, env: env as NodeJS.ProcessEnv }).status === 0;
-    probedBwrap.set(key, can);
+    const r = spawnSync(exe, args, { encoding: 'utf8', timeout: 10_000, env: env as NodeJS.ProcessEnv });
+    why = r.status === 0 ? null : r.error ? r.error.message : `${r.stderr.trim() || 'no word'} (code ${r.status})`;
+    probedBwrap.set(key, why);
   }
-  return can;
+  return why;
 }
 
 let probed: Isolation | null = null;
@@ -353,7 +356,11 @@ async function rustStep(
     sandbox === 'none'
       ? envOf(dir, undefined, o.data ?? join(dir, 'data'))
       : { PATH: SANDBOX_PATH, TMPDIR: `${WORK}/tmp`, LANG: 'C.UTF-8', ESCOUADE_DATA_DIR: `${WORK}/data` };
-  if (sandbox !== 'none') env.ESCOUADE_RUST_TOOLCHAIN = sandbox.toolchain;
+  if (sandbox !== 'none') {
+    env.ESCOUADE_RUST_TOOLCHAIN = sandbox.toolchain;
+    // rustc finds its libraries by `$ORIGIN`, which ld.so reads in `/proc/self/exe`: the sandbox has none.
+    env.LD_LIBRARY_PATH = `${sandbox.toolchain}/lib`;
+  }
   if (!limits.network) env.CARGO_NET_OFFLINE = 'true';
   const named = words.map((w) => w.replace('{work}', at));
   const [program, ...before] = o.command;
@@ -372,7 +379,7 @@ async function rustStep(
 
 /** One compilation of a `run.wasm` plugin, in a new folder: its dependencies with a network, then the rest without. */
 async function compileRust(o: SandboxOptions, input: CompileRust): Promise<Compiled> {
-  if (!o.rust) throw new Error('no sandbox for a run.wasm plugin here: bubblewrap cannot run in this container (docs/STORE.md §3.3)');
+  if (!o.rust) throw new Error(`no sandbox for a run.wasm plugin here: ${o.noSandbox ?? 'not configured'} (docs/STORE.md §3.3)`);
   const dir = await mkdtemp(join(tmpdir(), 'escouade-compile-'));
   try {
     await materialise(input.files, join(dir, 'plugin'));
@@ -518,13 +525,15 @@ export function compilerOf(env: Env): CompileOne | null {
   const root = (env.STORE_COMPILE_ROOT ?? '').trim();
   const toolchain = (env.STORE_RUST_TOOLCHAIN ?? '').trim();
   const sandbox = root && toolchain ? { bwrap: 'bwrap', root, program: '/usr/local/bin/escouade-plugin', toolchain } : null;
-  const rust = isolation === 'none' && env.NODE_ENV !== 'production' ? 'none' : sandbox && canBubblewrap(sandbox) ? sandbox : undefined;
+  const off = isolation === 'none' && env.NODE_ENV !== 'production';
+  const noSandbox = off ? null : sandbox ? whyNoBubblewrap(sandbox) : 'STORE_COMPILE_ROOT and STORE_RUST_TOOLCHAIN are not set';
+  const rust = off ? 'none' : sandbox && !noSandbox ? sandbox : undefined;
   console.info(
     rust === 'none'
       ? '[store] run.wasm: without a sandbox (STORE_COMPILE_ISOLATION=none, outside production)'
       : rust
         ? '[store] run.wasm: in a sandbox (bubblewrap)'
-        : '[store] run.wasm: no sandbox here (bubblewrap cannot run in this container): such versions wait in error',
+        : `[store] run.wasm: no sandbox here (${noSandbox}): such versions wait in error`,
   );
   return sandboxedCompiler({
     // A script of Node (the end-to-end tests' fake, tests/fake/fake-escouade-plugin.mjs) runs on this Node.
@@ -532,5 +541,6 @@ export function compilerOf(env: Env): CompileOne | null {
     javy: (env.STORE_JAVY ?? '').trim() || undefined,
     isolation: isolation === 'require' || isolation === 'none' ? isolation : 'auto',
     rust,
+    noSandbox: noSandbox ?? undefined,
   });
 }

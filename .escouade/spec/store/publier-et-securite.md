@@ -62,3 +62,6 @@ Cette partie l'emporte sur ce qui précède pour le contrôle des binaires : la 
 - **Sans repli, et sans exception pour la première main.** Là où bubblewrap ne peut pas tourner, une version `run.wasm` attend, et le journal de démarrage le dit. `STORE_COMPILE_ISOLATION=none` n'est entendu que hors production.
 - **Les limites** d'un `run.wasm` : 5 minutes pour compiler, 2 pour télécharger, 2 Gio de mémoire, 4 Gio de disque. Celles d'un `run.js` ne changent pas.
 - **Il reste à l'hébergement** : le Docker par défaut refuse bubblewrap. Sans `--security-opt seccomp=unconfined` ou un profil plus étroit sur Coolify, aucun `run.wasm` ne compile en production. La revue ne recompile pas encore un `run.wasm` (A7) : `sign` le refuse d'ici là.
+
+- **Le bac à sable n'a aucun `/proc`** : ni un neuf, que le noyau peut refuser dans un conteneur, ni celui du conteneur, qui montrerait ses process. La sortie de `bwrap` est dite au démarrage du store et dans l'erreur d'une version qui attend.
+- **Sur un Docker d'Ubuntu 24.04**, il faut attendre au moins `seccomp=unconfined` et `apparmor=unconfined`, plus `kernel.apparmor_restrict_unprivileged_userns=0` sur l'hôte. La CI du store les confirme ; ESC-356 en tire un profil étroit.

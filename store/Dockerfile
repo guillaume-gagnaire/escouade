@@ -70,6 +70,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev c
   && ln -sf gcc /usr/bin/cc \
   && rm -rf /var/lib/apt/lists/* /var/cache/apt/*
 COPY --from=toolchain /usr/local/rustup/toolchains/1.98.0-x86_64-unknown-linux-gnu /opt/rust
+# The sandbox has no /proc, and rustc's `ld.lld`, which links `build.rs` and macros, looks for itself there: the same call,
+# by a script. A module does not go through it: it is linked by `rust-lld` itself.
+RUN printf '#!/bin/sh\nexec /opt/rust/lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-lld -flavor gnu "$@"\n' \
+  > /opt/rust/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld/ld.lld
 COPY --from=compiler /opt/escouade-plugin /usr/local/bin/escouade-plugin
 
 # The store, on glibc as its final image.

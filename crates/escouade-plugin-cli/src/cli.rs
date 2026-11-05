@@ -363,8 +363,20 @@ pub fn module_of_crate(
     data: &Path,
     lang: Lang,
 ) -> Result<rust::Built, String> {
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let exe = this_program().map_err(|e| e.to_string())?;
     rust::build(folder, cargo_file, data, &exe, &|| say_download(lang)).map_err(|f| f.message(lang))
+}
+
+/// This program, which serves as `rustc-canon`. The store's sandbox has no `/proc` (ESC-336), where Linux says it: its
+/// path is then the absolute one it was started by.
+fn this_program() -> std::io::Result<PathBuf> {
+    std::env::current_exe().or_else(|e| {
+        std::env::args_os()
+            .next()
+            .map(PathBuf::from)
+            .filter(|p| p.is_absolute())
+            .ok_or(e)
+    })
 }
 
 /// `fetch`: the dependencies of a `run.wasm` plugin, in the data folder. A line of ✗ is the plugin's fault; without one,
@@ -384,7 +396,7 @@ fn fetch(folder: &Path, lang: Lang, hand: manifest::Hand) -> i32 {
         );
         return 1;
     };
-    let exe = match std::env::current_exe() {
+    let exe = match this_program() {
         Ok(exe) => exe,
         Err(e) => {
             eprintln!("{e}");

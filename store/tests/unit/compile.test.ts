@@ -4,7 +4,6 @@ import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   bwrapArgs,
-  canBubblewrap,
   inSandbox,
   canUnshare,
   compileTwice,
@@ -13,6 +12,7 @@ import {
   materialise,
   Refused,
   sandboxedCompiler,
+  whyNoBubblewrap,
   type CompileJs,
   type CompileRust,
   type RustSandbox,
@@ -162,6 +162,8 @@ describe('the compilation of a run.wasm plugin', () => {
 
   it('never compiles without a sandbox: none outside production alone, and a version waits in error', async () => {
     await expect(sandboxedCompiler({ command: [process.execPath, FAKE] })(rust())).rejects.toThrow(/no sandbox/);
+    const said = sandboxedCompiler({ command: [process.execPath, FAKE], noSandbox: 'bwrap: No permissions' })(rust());
+    await expect(said).rejects.toThrow('no sandbox for a run.wasm plugin here: bwrap: No permissions');
     expect(await compilerOf({ STORE_ESCOUADE_PLUGIN: FAKE, STORE_COMPILE_ISOLATION: 'none' })!(rust())).toMatchObject({
       compiler: { rust: '1.98.0' },
     });
@@ -170,7 +172,7 @@ describe('the compilation of a run.wasm plugin', () => {
     expect(await made(input('console.log(1);\n'))).toMatchObject({ compiler: { javy: '9.1.0' } });
   });
 
-  it('the sandbox: nothing shared, no network to compile, no variable it was not given, an empty /etc', () => {
+  it('the sandbox: nothing shared, no network to compile, no variable it was not given, an empty /etc, no /proc', () => {
     const s: RustSandbox = { bwrap: 'bwrap', root: '/opt/sandbox/', program: '/usr/local/bin/escouade-plugin', toolchain: '/opt/rust' };
     const build = bwrapArgs(s, '/tmp/x', false, { PATH: '/usr/bin' });
     expect(build.slice(0, 4)).toEqual(['--unshare-all', '--clearenv', '--new-session', '--die-with-parent']);
@@ -184,7 +186,9 @@ describe('the compilation of a run.wasm plugin', () => {
     const fetch = bwrapArgs(s, '/tmp/x', true, {});
     expect(fetch).toContain('--share-net');
     expect(after(fetch, '--ro-bind')).toContain('/opt/sandbox/etc/ssl /etc/ssl');
-    if (process.platform !== 'linux') expect(canBubblewrap(s)).toBe(false);
+    expect(build).not.toContain('--proc');
+    expect(build.join(' ')).not.toContain('/proc');
+    if (process.platform !== 'linux') expect(whyNoBubblewrap(s)).toBe('not Linux');
     // Its pid 1 keeps the environment it started with: nothing of the store's goes there.
     process.env.STORE_TEST_SECRET = 'seen';
     expect(Object.keys(inSandbox(s, '/tmp/x', false, {}, ['/bin/true'])[2])).toEqual(['PATH']);

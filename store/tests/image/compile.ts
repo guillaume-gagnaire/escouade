@@ -2,11 +2,11 @@ import { spawnSync } from 'node:child_process';
 import { readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import {
-  canBubblewrap,
   compileTwice,
   compilerOf,
   inSandbox,
   Refused,
+  whyNoBubblewrap,
   type CompileRust,
   type RustSandbox,
 } from '../../server/utils/compile';
@@ -19,6 +19,22 @@ import {
 const one = compilerOf(process.env);
 if (!one) throw new Error('no compiler: STORE_ESCOUADE_PLUGIN is not set');
 
+const sandbox: RustSandbox = {
+  bwrap: 'bwrap',
+  root: process.env.STORE_COMPILE_ROOT!,
+  program: '/usr/local/bin/escouade-plugin',
+  toolchain: process.env.STORE_RUST_TOOLCHAIN!,
+};
+const why = whyNoBubblewrap(sandbox);
+const can = !why;
+// What a new /proc would have given here: the sandbox goes without one, because of what a container hides of its own.
+const [exe0, args0, env0] = inSandbox(sandbox, '/tmp', false, {}, ['/bin/true']);
+const tried = spawnSync(exe0, ['--proc', '/proc', ...args0], { encoding: 'utf8', env: env0 as NodeJS.ProcessEnv });
+const withProc = tried.status === 0 ? null : tried.stderr.trim();
+console.log(JSON.stringify({ bubblewrap: can, why, withProc }));
+// image-test.mjs asks this alone of each set of options.
+if (process.env.IMAGE_TEST_PROBE) process.exit(0);
+
 for (const plugin of ['team-rules', 'slack']) {
   const folder = `/plugins/${plugin}`;
   const manifest = await readFile(`${folder}/escouade-plugin.json`);
@@ -27,15 +43,6 @@ for (const plugin of ['team-rules', 'slack']) {
   const { compilation } = await compileTwice(one, { manifest, js, bundle, firstParty: true });
   console.log(JSON.stringify({ plugin, compilation }));
 }
-
-const sandbox: RustSandbox = {
-  bwrap: 'bwrap',
-  root: process.env.STORE_COMPILE_ROOT!,
-  program: '/usr/local/bin/escouade-plugin',
-  toolchain: process.env.STORE_RUST_TOOLCHAIN!,
-};
-const can = canBubblewrap(sandbox);
-console.log(JSON.stringify({ bubblewrap: can }));
 
 async function tree(dir: string, root = dir): Promise<[string, Buffer][]> {
   const found = await Promise.all(
@@ -79,16 +86,15 @@ if (!can) {
   await refusal('passwd', [['src/lib.rs', `${lib}\npub static P: &[u8] = include_bytes!("/etc/passwd");\n`]]);
   await refusal('store', [['src/lib.rs', `${lib}\npub static P: &[u8] = include_bytes!("/app/.output/server/index.mjs");\n`]]);
 
-  // What the sandbox shows: the store's folders, its processes, its variables and the network, from inside it.
+  // What the sandbox shows: the store's folders, a `/proc`, its variables and the network, from inside it.
   process.env.STORE_TEST_SECRET = 'seen';
   const inside = String.raw`
-    echo "app $(ls /app 2>&1 | wc -l) $(test -e /app && echo there || echo absent)"
+    echo "app $(test -e /app && echo there || echo absent)"
     echo "data $(test -e /data && echo there || echo absent)"
+    echo "proc $(test -e /proc && echo there || echo absent)"
     echo "etc [$(ls /etc)]"
-    echo "home [$HOME]"
-    echo "secret $(cat /proc/*/environ 2>/dev/null | tr '\0' '\n' | grep -c 'STOR[E]_' || true)"
-    echo "runtime $(cat /proc/*/cmdline 2>/dev/null | tr '\0' '\n' | grep -c 'no[d]e' || true)"
-    echo "links $(grep -c : /proc/net/dev)"
+    echo "env [$(env | cut -d= -f1 | tr '\n' ' ')]"
+    echo "net $(bash -c 'exec 3<>/dev/tcp/1.1.1.1/53' 2>&1 | grep -q 'Network is unreachable' && echo unreachable)"
   `;
   const [exe, args, env] = inSandbox(sandbox, '/tmp', false, { PATH: '/usr/bin:/bin' }, ['/bin/sh', '-c', inside]);
   const seen = spawnSync(exe, args, { encoding: 'utf8', env: env as NodeJS.ProcessEnv });
