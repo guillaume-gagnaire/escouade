@@ -1,9 +1,9 @@
 ---
-number: null
+number: 76
 id: "la-revue-joue-la-premiere-main-comme-la"
 title: "La revue joue la première main comme la version en développement"
 date: "2026-11-05"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-343"
 pages: ["store/revue-et-signature"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"store/revue-et-signature","added":6,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-05T01:54:43+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
