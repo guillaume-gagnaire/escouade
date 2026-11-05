@@ -1,9 +1,9 @@
 ---
-number: null
+number: 87
 id: "une-passe-de-l-ordonnanceur-relit-le-kan"
 title: "Une passe de l'ordonnanceur relit le Kanban avant chaque démarrage du pilote auto"
 date: "2026-11-05"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-357"
 pages: ["kanban/ci-des-branches"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"kanban/ci-des-branches","added":2,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-05T14:49:16+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

@@ -3,7 +3,7 @@ title: "CI de la cible et des branches poussées"
 subject: "kanban"
 sources: ["docs/TODO-1.8.md"]
 tickets: ["ESC-63","ESC-357"]
-decisions: [59,"une-passe-de-l-ordonnanceur-relit-le-kan"]
+decisions: [59,87]
 compared: null
 ---
 
