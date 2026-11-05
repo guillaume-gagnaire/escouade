@@ -1711,8 +1711,25 @@ async fn an_opencode_agent_says_its_plugin_is_off_and_talks_again_once_it_is_on(
     h.core.sync_harnesses();
     assert!(crate::plugins::harness::plugged(id).is_none());
     // The agent that ran stops, and says why.
-    wait_long(&h, "the plugin said off", 30, |h| said(h, &a).contains(id)).await;
-    wait_long(&h, "its stop", 30, |h| !h.agent(&a).status.is_active()).await;
+    // What the agent and its plugin are at, should its notice not come (the CI's Linux, 2026-11-05: nothing in 30 s,
+    // three times; never seen here).
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    while !said(&h, &a).contains(id) {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the plugin said off: status {:?}, alive {}, its plugin {}, items {}",
+            h.agent(&a).status,
+            h.alive(&a),
+            serde_json::to_string(&h.core.plugin_runtime.status(id)).unwrap_or_default(),
+            said(&h, &a)
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
+    // Its process gone too: a message sent before would reach the one that is stopping, and never be refused.
+    wait_long(&h, "its stop", 30, |h| {
+        !h.agent(&a).status.is_active() && !h.alive(&a)
+    })
+    .await;
     let session = h.agent(&a).session_id;
     assert!(session.is_some());
     // The next message says what to do.
