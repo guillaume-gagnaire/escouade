@@ -3,7 +3,7 @@ title: "Publier sur le store, la sécurité des plugins et l'essai réel"
 subject: "store"
 sources: ["docs/STORE.md","website/content/docs/fr/plugins/publishing.md","website/content/docs/fr/plugins/security.md","store/server/utils/checks.ts","store/server/utils/folder.ts","store/shared/folder.ts","store/server/utils/submissions.ts","store/server/utils/builtin.ts","store/tests/unit/trial.test.ts","store/deploy/seccomp-bubblewrap.json","store/deploy/apparmor-bubblewrap"]
 tickets: ["ESC-237","ESC-313","ESC-314","ESC-323","ESC-184","ESC-336","ESC-356"]
-decisions: [21,25,43,72,86,"le-conteneur-du-store-a-deux-profils-etr"]
+decisions: [21,25,43,72,86,91]
 compared: "2026-10-31T19:50:09+01:00"
 ---
 
