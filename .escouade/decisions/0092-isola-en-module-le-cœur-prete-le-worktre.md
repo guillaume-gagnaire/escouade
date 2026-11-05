@@ -1,9 +1,9 @@
 ---
-number: null
+number: 92
 id: "isola-en-module-le-cœur-prete-le-worktre"
 title: "isola en module : le cœur prête le worktree, et un projet privé doit l'activer"
 date: "2026-11-05"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-351"
 pages: ["plugins/tous-les-plugins-en-wasm","plugins/livres-avec-escouade","kanban/lancement-de-test"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/tous-les-plugins-en-wasm","added":8,"removed":0},{"page":"plugins/livres-avec-escouade","added":2,"removed":0},{"page":"kanban/lancement-de-test","added":4,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-06T00:14:48+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

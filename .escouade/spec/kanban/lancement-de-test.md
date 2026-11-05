@@ -3,7 +3,7 @@ title: "Lancement de test"
 subject: "Kanban"
 sources: ["docs/SPEC.md"]
 tickets: ["ESC-311","ESC-286","ESC-351"]
-decisions: [26,"isola-en-module-le-cœur-prete-le-worktre"]
+decisions: [26,92]
 compared: "2026-10-31T19:01:50+01:00"
 ---
 
