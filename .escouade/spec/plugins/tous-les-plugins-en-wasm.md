@@ -3,7 +3,7 @@ title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §8 (ESC-330)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »"]
 tickets: ["ESC-330","ESC-331","ESC-332","ESC-334","ESC-338"]
-decisions: [73,71,70,72,75,"l-amorce-des-plugins-installee-sans-rese"]
+decisions: [73,71,70,72,75,80]
 compared: null
 ---
 

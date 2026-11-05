@@ -1,9 +1,9 @@
 ---
-number: null
+number: 80
 id: "l-amorce-des-plugins-installee-sans-rese"
 title: "L'amorce des plugins : installée sans réseau par le chemin du store, plugins à part entière, sans mise à jour seule"
 date: "2026-11-05"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-338"
 pages: ["plugins/tous-les-plugins-en-wasm","plugins/livres-avec-escouade"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/tous-les-plugins-en-wasm","added":4,"removed":3},{"page":"plugins/livres-avec-escouade","added":12,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-05T06:27:02+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
