@@ -2060,7 +2060,9 @@ impl<R: Runtime> Core<R> {
         core.plugin_runtime
             .set_accounts(std::sync::Arc::new(move |plugin| {
                 weak.upgrade().map_or(Vec::new(), |c| {
-                    crate::plugins::accounts::hosts_of(&c.accounts.read(), plugin)
+                    let mut hosts = crate::plugins::accounts::hosts_of(&c.accounts.read(), plugin);
+                    hosts.extend(c.plugin_runtime.lent_host(plugin));
+                    hosts
                 })
             }));
         // The harnesses the plugins describe (PLG-6), before the window asks for the registry.

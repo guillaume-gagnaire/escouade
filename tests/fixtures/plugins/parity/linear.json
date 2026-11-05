@@ -1,0 +1,384 @@
+[
+  {
+    "asked": [
+      {
+        "body": "{\"operationName\":\"Me\",\"query\":\"query Me { viewer { id name displayName email } }\",\"variables\":{}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "lin_api_k1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      }
+    ],
+    "error": null,
+    "method": "account/me",
+    "result": {
+      "label": "ada@example.com",
+      "user": "u1"
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"operationName\":\"Teams\",\"query\":\"query Teams { teams(first: 100) { nodes { id key name } } }\",\"variables\":{}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "lin_api_k1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      }
+    ],
+    "error": null,
+    "method": "tickets/containers",
+    "result": [
+      {
+        "id": "team-1",
+        "name": "Engineering (ENG)"
+      }
+    ]
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"operationName\":\"States\",\"query\":\"query States($team: String!) { team(id: $team) { states { nodes { id name type position } } } }\",\"variables\":{\"team\":\"team-1\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "lin_api_k1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      }
+    ],
+    "error": null,
+    "method": "tickets/states",
+    "result": [
+      {
+        "id": "s-todo",
+        "name": "Todo"
+      },
+      {
+        "id": "s-review",
+        "name": "In Review"
+      },
+      {
+        "id": "s-done",
+        "name": "Done"
+      }
+    ]
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"operationName\":\"States\",\"query\":\"query States($team: String!) { team(id: $team) { states { nodes { id name type position } } } }\",\"variables\":{\"team\":\"team-1\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "lin_api_k1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      },
+      {
+        "body": "{\"operationName\":\"Issues\",\"query\":\"query Issues($filter: IssueFilter, $after: String, $first: Int) { issues(filter: $filter, first: $first, after: $after, orderBy: updatedAt) { nodes { id identifier title description url priorityLabel assignee { displayName name } state { id name } labels { nodes { name } } } pageInfo { hasNextPage endCursor } } }\",\"variables\":{\"after\":null,\"filter\":{\"state\":{\"type\":{\"nin\":[\"completed\",\"canceled\"]}},\"team\":{\"id\":{\"eq\":\"team-1\"}}},\"first\":50}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "lin_api_k1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      }
+    ],
+    "error": null,
+    "method": "tickets/issues",
+    "result": {
+      "filters": [
+        {
+          "id": "mine",
+          "label": "Mes issues"
+        },
+        {
+          "id": "state:s-todo",
+          "label": "Todo"
+        },
+        {
+          "id": "state:s-review",
+          "label": "In Review"
+        }
+      ],
+      "issues": [
+        {
+          "container": "team-1",
+          "criteria": ["Un critère", "Un autre critère", "Un autre critère", "Un autre critère", "Un autre critère"],
+          "description": "- [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. ",
+          "id": "id-0",
+          "imported": false,
+          "key": "ENG-0",
+          "kind": "Issue",
+          "kindCode": "issue",
+          "meta": ["State 3", "High", "ada", "bug", "backend"],
+          "service": "linear",
+          "title": "Une issue de démonstration, la numéro 0",
+          "url": "https://linear.app/acme/issue/ENG-0"
+        },
+        {
+          "container": "team-1",
+          "criteria": ["Un critère", "Un autre critère", "Un autre critère", "Un autre critère", "Un autre critère"],
+          "description": "- [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. ",
+          "id": "id-1",
+          "imported": false,
+          "key": "ENG-1",
+          "kind": "Issue",
+          "kindCode": "issue",
+          "meta": ["State 3", "High", "ada", "bug", "backend"],
+          "service": "linear",
+          "title": "Une issue de démonstration, la numéro 1",
+          "url": "https://linear.app/acme/issue/ENG-1"
+        },
+        {
+          "container": "team-1",
+          "criteria": ["Un critère", "Un autre critère", "Un autre critère", "Un autre critère", "Un autre critère"],
+          "description": "- [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. ",
+          "id": "id-2",
+          "imported": false,
+          "key": "ENG-2",
+          "kind": "Issue",
+          "kindCode": "issue",
+          "meta": ["State 3", "High", "ada", "bug", "backend"],
+          "service": "linear",
+          "title": "Une issue de démonstration, la numéro 2",
+          "url": "https://linear.app/acme/issue/ENG-2"
+        }
+      ],
+      "next": null,
+      "total": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"operationName\":\"States\",\"query\":\"query States($team: String!) { team(id: $team) { states { nodes { id name type position } } } }\",\"variables\":{\"team\":\"team-1\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "lin_api_k1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      },
+      {
+        "body": "{\"operationName\":\"Issues\",\"query\":\"query Issues($filter: IssueFilter, $after: String, $first: Int) { issues(filter: $filter, first: $first, after: $after, orderBy: updatedAt) { nodes { id identifier title description url priorityLabel assignee { displayName name } state { id name } labels { nodes { name } } } pageInfo { hasNextPage endCursor } } }\",\"variables\":{\"after\":null,\"filter\":{\"labels\":{\"some\":{\"name\":{\"eqIgnoreCase\":\"claude-ready\"}}},\"state\":{\"type\":{\"nin\":[\"completed\",\"canceled\"]}},\"team\":{\"id\":{\"eq\":\"team-1\"}},\"title\":{\"containsIgnoreCase\":\"token\"}},\"first\":50}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "lin_api_k1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      }
+    ],
+    "error": null,
+    "method": "tickets/issues",
+    "result": {
+      "filters": [
+        {
+          "id": "mine",
+          "label": "Mes issues"
+        },
+        {
+          "id": "state:s-todo",
+          "label": "Todo"
+        },
+        {
+          "id": "state:s-review",
+          "label": "In Review"
+        }
+      ],
+      "issues": [
+        {
+          "container": "team-1",
+          "criteria": ["Un critère", "Un autre critère", "Un autre critère", "Un autre critère", "Un autre critère"],
+          "description": "- [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. ",
+          "id": "id-0",
+          "imported": false,
+          "key": "ENG-0",
+          "kind": "Issue",
+          "kindCode": "issue",
+          "meta": ["State 3", "High", "ada", "bug", "backend"],
+          "service": "linear",
+          "title": "Une issue de démonstration, la numéro 0",
+          "url": "https://linear.app/acme/issue/ENG-0"
+        },
+        {
+          "container": "team-1",
+          "criteria": ["Un critère", "Un autre critère", "Un autre critère", "Un autre critère", "Un autre critère"],
+          "description": "- [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. ",
+          "id": "id-1",
+          "imported": false,
+          "key": "ENG-1",
+          "kind": "Issue",
+          "kindCode": "issue",
+          "meta": ["State 3", "High", "ada", "bug", "backend"],
+          "service": "linear",
+          "title": "Une issue de démonstration, la numéro 1",
+          "url": "https://linear.app/acme/issue/ENG-1"
+        },
+        {
+          "container": "team-1",
+          "criteria": ["Un critère", "Un autre critère", "Un autre critère", "Un autre critère", "Un autre critère"],
+          "description": "- [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. ",
+          "id": "id-2",
+          "imported": false,
+          "key": "ENG-2",
+          "kind": "Issue",
+          "kindCode": "issue",
+          "meta": ["State 3", "High", "ada", "bug", "backend"],
+          "service": "linear",
+          "title": "Une issue de démonstration, la numéro 2",
+          "url": "https://linear.app/acme/issue/ENG-2"
+        }
+      ],
+      "next": null,
+      "total": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"operationName\":\"States\",\"query\":\"query States($team: String!) { team(id: $team) { states { nodes { id name type position } } } }\",\"variables\":{\"team\":\"nowhere\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "lin_api_k1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      },
+      {
+        "body": "{\"operationName\":\"Issues\",\"query\":\"query Issues($filter: IssueFilter, $after: String, $first: Int) { issues(filter: $filter, first: $first, after: $after, orderBy: updatedAt) { nodes { id identifier title description url priorityLabel assignee { displayName name } state { id name } labels { nodes { name } } } pageInfo { hasNextPage endCursor } } }\",\"variables\":{\"after\":null,\"filter\":{\"state\":{\"type\":{\"nin\":[\"completed\",\"canceled\"]}},\"team\":{\"id\":{\"eq\":\"nowhere\"}}},\"first\":50}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "lin_api_k1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      }
+    ],
+    "error": null,
+    "method": "tickets/issues",
+    "result": {
+      "filters": [
+        {
+          "id": "mine",
+          "label": "Mes issues"
+        },
+        {
+          "id": "state:s-todo",
+          "label": "Todo"
+        },
+        {
+          "id": "state:s-review",
+          "label": "In Review"
+        }
+      ],
+      "issues": [
+        {
+          "container": "nowhere",
+          "criteria": ["Un critère", "Un autre critère", "Un autre critère", "Un autre critère", "Un autre critère"],
+          "description": "- [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. ",
+          "id": "id-0",
+          "imported": false,
+          "key": "ENG-0",
+          "kind": "Issue",
+          "kindCode": "issue",
+          "meta": ["State 3", "High", "ada", "bug", "backend"],
+          "service": "linear",
+          "title": "Une issue de démonstration, la numéro 0",
+          "url": "https://linear.app/acme/issue/ENG-0"
+        },
+        {
+          "container": "nowhere",
+          "criteria": ["Un critère", "Un autre critère", "Un autre critère", "Un autre critère", "Un autre critère"],
+          "description": "- [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. ",
+          "id": "id-1",
+          "imported": false,
+          "key": "ENG-1",
+          "kind": "Issue",
+          "kindCode": "issue",
+          "meta": ["State 3", "High", "ada", "bug", "backend"],
+          "service": "linear",
+          "title": "Une issue de démonstration, la numéro 1",
+          "url": "https://linear.app/acme/issue/ENG-1"
+        },
+        {
+          "container": "nowhere",
+          "criteria": ["Un critère", "Un autre critère", "Un autre critère", "Un autre critère", "Un autre critère"],
+          "description": "- [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. - [ ] Un critère\n- [ ] Un autre critère\n\nUn long texte. ",
+          "id": "id-2",
+          "imported": false,
+          "key": "ENG-2",
+          "kind": "Issue",
+          "kindCode": "issue",
+          "meta": ["State 3", "High", "ada", "bug", "backend"],
+          "service": "linear",
+          "title": "Une issue de démonstration, la numéro 2",
+          "url": "https://linear.app/acme/issue/ENG-2"
+        }
+      ],
+      "next": null,
+      "total": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"operationName\":\"SetState\",\"query\":\"mutation SetState($id: String!, $state: String!) { issueUpdate(id: $id, input: { stateId: $state }) { success } }\",\"variables\":{\"id\":\"i1\",\"state\":\"s-review\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "lin_api_k1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      }
+    ],
+    "error": null,
+    "method": "tickets/setState",
+    "result": null
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"operationName\":\"Comment\",\"query\":\"mutation Comment($id: String!, $body: String!) { commentCreate(input: { issueId: $id, body: $body }) { success } }\",\"variables\":{\"body\":\"Fait, voir la PR.\\n\\n— Escouade\",\"id\":\"i1\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "lin_api_k1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      }
+    ],
+    "error": {
+      "code": -32010,
+      "message": "Linear refuse le commentaire sur i1"
+    },
+    "method": "tickets/comment",
+    "result": null
+  },
+  {
+    "asked": [],
+    "error": {
+      "code": -32601,
+      "message": "no method tickets/nothing"
+    },
+    "method": "tickets/nothing",
+    "result": null
+  }
+]

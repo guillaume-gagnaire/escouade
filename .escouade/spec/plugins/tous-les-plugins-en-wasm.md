@@ -1,8 +1,8 @@
 ---
 title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire"]
-tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336"]
+sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","docs/PLUGINS.md §8.19 (ESC-344)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire"]
+tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344"]
 decisions: [73,71,70,72,75,80,84,86]
 compared: null
 ---
@@ -124,3 +124,17 @@ Ceci remplace la phrase « Le store ne compile pas encore un `run.wasm` » ci-de
 - `escouade-plugin fetch <dossier>` télécharge les dépendances d'un `run.wasm` depuis crates.io sans rien lancer du plugin, après les mêmes refus que `validate`. Un `Cargo.lock` qui ne correspond pas est refusé.
 - Aucun plugin de la première main n'est encore compilé par le store : il reste membre du workspace de l'app et n'a pas de `Cargo.lock`, et `escouade-plugin` le refuse donc.
 - En production, le Docker par défaut refuse le bac à sable. Tant que l'hébergement ne change pas de réglage, une version `run.wasm` attend.
+
+## Ce qui tourne déjà : Linear, Trello, Jira et ClickUp (ESC-344)
+
+Ces quatre plugins sont les premiers portés. Ce qui précède dit qu'aucun plugin n'est porté et qu'un plugin de la première main ne se compile pas seul dans son dossier : ce n'est plus vrai pour eux.
+
+- Chacun est en `run.wasm`, en version `2.2.0`, `escouade.min` `2.2.0`, ses identifiants inchangés. Il n'est plus dans `escouade-plugins`.
+- **Deux compilations.** Dans le dépôt, un second workspace, `plugins/Cargo.toml`, tient les plugins portés et les compile contre `crates/` par son `[patch.crates-io]` : tests de l'app et build de développement (`scripts/plugins-wasm.sh`). Dans son dossier, chaque plugin porté a son propre `Cargo.lock`, qui fixe les crates publiées sur crates.io. Cargo l'ignore dans le workspace ; `escouade-plugin build` et le store le lisent, dans le dossier seul. Le module que le store publie est celui-là. `scripts/plugin-lock.sh` écrit ce lock.
+- Pour les mêmes sources, chacun a la même empreinte sous Windows et sous Linux (`docs/PLUGINS.md` §8.19).
+- Chacun passe le banc avec `--first-party`, et `plugins/ci.mjs` le compile et le joue.
+- Chacun répond comme son natif : mêmes réponses et mêmes requêtes au service, sur neuf appels enregistrés avant le portage (`tests/fixtures/plugins/parity/`).
+- **Jira déclare `{account}`** : il joint le site que l'utilisateur a tapé, comme il le faisait en process. C'est la seule permission qui change.
+- **Jira sans site** répond comme à un jeton refusé (`-32401`), au lieu d'une erreur non typée.
+- **Avant Z2**, l'installeur n'a pas ces modules : l'app ne les trouve que dans un build de développement ou les tests, dans `<target>/plugins-wasm/<id-court>/`. Une release faite avant Z2 n'aurait pas ces quatre plugins.
+- Un build de développement et les tests laissent un plugin en WASM joindre un faux service par son adresse (`ESCOUADE_TRELLO_API`, `ESCOUADE_LINEAR_API`, `ESCOUADE_CLICKUP_API`). Une release n'a pas ce chemin.

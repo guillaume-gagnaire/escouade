@@ -2,7 +2,7 @@
 title: "Les plugins livrés avec Escouade"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.3, §4.4","docs/TODO-2.2.md (INT-4, INT-8.1)","src-tauri/src/plugins/builtin.rs","docs/PLUGINS.md §4.13","plugins/github/README.md","plugins/gitlab/README.md","plugins/gitea/README.md","plugins/azure-devops/README.md","docs/PLUGINS.md §8.7, §8.13","src-tauri/src/plugins/seed.rs"]
-tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338","ESC-339"]
+tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338","ESC-339","ESC-344"]
 decisions: [80]
 compared: null
 ---
@@ -80,3 +80,13 @@ Un identifiant que `seed.json` nomme n'est plus donné par l'app :
 Un utilisateur qui a déjà des choix sur un plugin de l'origine `builtin` les garde à son passage. Si l'amorce le refuse, le plugin continue de tourner comme avant, jusqu'à Z3.
 
 La release télécharge l'amorce (`store/scripts/seed.ts`), vérifie chaque signature, et échoue sur une version absente, non signée, révoquée ou qui ne tourne pas sur cette version d'Escouade : **le chef publie d'abord, la release ensuite**. Un build de développement accepte les modules non signés de `scripts/seed-dev.sh` ; une signature fausse reste refusée partout.
+
+## Les plugins du registre qui sont des modules (ESC-344)
+
+Linear, Trello, Jira et ClickUp restent au registre, mais ne sont plus dans `escouade-plugins` : leur programme est un module (`run.wasm`). La liste du registre est donc celle des dossiers dont le programme est `escouade-plugins` ou un module.
+
+- Leur version est toujours celle d'Escouade tant qu'ils ont l'origine `builtin`, et ils restent rangés dans « Livrés avec Escouade ».
+- Leur module n'est pas dans l'installeur : l'amorce le donnera (Z2). D'ici là, seuls un build de développement et les tests les lancent, depuis `<target>/plugins-wasm/<id-court>/plugin.wasm`, écrit par `scripts/plugins-wasm.sh`. Sans ce fichier, le plugin s'arrête et son journal dit pourquoi.
+
+- Un plugin du registre tourne toujours sur l'app qui le donne : tant qu'il est `builtin`, son `escouade.min` lu est la version de l'app, comme sa `version`.
+- Pendant qu'un compte se vérifie, avant d'être enregistré, le cœur prête l'hôte qu'il nomme au plugin, comme il lui prête son jeton : `{account}` l'atteint dès le premier appel.

@@ -741,7 +741,7 @@ impl Plugins {
     fn folder_of(&self, i: &Installed) -> PathBuf {
         match &i.origin {
             Origin::Dev { path } => PathBuf::from(path),
-            Origin::Builtin => self.app_dir.clone(),
+            Origin::Builtin => builtin::folder(&i.id, &self.app_dir),
             _ => self.data.plugins_dir().join(&i.id),
         }
     }

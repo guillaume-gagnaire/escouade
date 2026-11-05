@@ -43,21 +43,13 @@ const ENTRIES: &[Entry] = &[
     ("bitbucket", escouade_plugin_bitbucket::run),
     // Gitea and Forgejo (INT-8.4): its code host, in its crate (plugins/gitea).
     ("gitea", escouade_plugin_gitea::run),
-    // Trello (INT-7.1): the Kanban's source of Trello cards, in its crate (plugins/trello).
-    ("trello", escouade_plugin_trello::run),
     // Azure DevOps and Azure Boards (INT-8.5, ESC-280): its code host and its source, in its crate
     // (plugins/azure-devops).
     ("azure-devops", escouade_plugin_azure_devops::run),
     // The generic ACP plugin (PLG-6): the harnesses a manifest describes, in its crate (plugins/acp).
     ("acp", escouade_plugin_acp::run),
-    // Linear (INT-7.2): the Kanban's source of Linear issues, in its crate (plugins/linear).
-    ("linear", escouade_plugin_linear::run),
-    // Jira (INT-7.3): the Kanban's source of Jira issues, in its crate (plugins/jira).
-    ("jira", escouade_plugin_jira::run),
     // Cursor CLI (INT-10.1): its harness on the ACP client, in its crate (plugins/cursor).
     ("cursor", escouade_plugin_cursor::run),
-    // ClickUp (INT-7.4): the Kanban's source of ClickUp tasks, in its crate (plugins/clickup).
-    ("clickup", escouade_plugin_clickup::run),
     // Gemini CLI (INT-10.7): its harness on the ACP client, in its crate (plugins/gemini).
     ("gemini", escouade_plugin_gemini::run),
     // OpenCode (INT-10.2): its harness, the client of `opencode serve`, in its crate (plugins/opencode).

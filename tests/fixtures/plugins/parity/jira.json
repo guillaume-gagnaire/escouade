@@ -1,0 +1,278 @@
+[
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/json"],
+          ["authorization", "Basic YWRhQGF0bGFzLmRldjp0b2s="]
+        ],
+        "method": "GET",
+        "target": "/rest/api/3/myself"
+      }
+    ],
+    "error": null,
+    "method": "account/me",
+    "result": {
+      "label": "ada@atlas.dev · {host}",
+      "user": "acc-1"
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/json"],
+          ["authorization", "Basic YWRhQGF0bGFzLmRldjp0b2s="]
+        ],
+        "method": "GET",
+        "target": "/rest/api/3/project/search?maxResults=100&orderBy=key&startAt=0"
+      }
+    ],
+    "error": null,
+    "method": "tickets/containers",
+    "result": [
+      {
+        "id": "ATL",
+        "name": "ATL — Atlas"
+      }
+    ]
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/json"],
+          ["authorization", "Basic YWRhQGF0bGFzLmRldjp0b2s="]
+        ],
+        "method": "GET",
+        "target": "/rest/api/3/project/ATL/statuses"
+      }
+    ],
+    "error": null,
+    "method": "tickets/states",
+    "result": [
+      {
+        "id": "1",
+        "name": "To Do"
+      },
+      {
+        "id": "3",
+        "name": "In Progress"
+      }
+    ]
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"fields\":[\"summary\",\"status\",\"issuetype\",\"priority\",\"assignee\",\"description\",\"labels\"],\"jql\":\"project = \\\"ATL\\\" AND statusCategory != Done ORDER BY updated DESC\",\"maxResults\":50}",
+        "headers": [
+          ["accept", "application/json"],
+          ["authorization", "Basic YWRhQGF0bGFzLmRldjp0b2s="],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/rest/api/3/search/jql"
+      }
+    ],
+    "error": null,
+    "method": "tickets/issues",
+    "result": {
+      "filters": [
+        {
+          "id": "mine",
+          "label": "Assignés à moi"
+        },
+        {
+          "id": "sprint",
+          "label": "Sprint actif"
+        },
+        {
+          "id": "todo",
+          "label": "À faire"
+        }
+      ],
+      "issues": [
+        {
+          "container": "ATL",
+          "criteria": ["Tests unitaires"],
+          "description": "Acceptance criteria:\n\n- Tests unitaires",
+          "id": "10001",
+          "imported": false,
+          "key": "ATL-1",
+          "kind": "Tâche",
+          "kindCode": "task",
+          "meta": ["Haute", "Non assigné", "To Do"],
+          "service": "jira",
+          "title": "Rafraîchir le token",
+          "url": "{base}/browse/ATL-1"
+        }
+      ],
+      "next": null,
+      "total": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"fields\":[\"summary\",\"status\",\"issuetype\",\"priority\",\"assignee\",\"description\",\"labels\"],\"jql\":\"project = \\\"ATL\\\" AND statusCategory != Done AND labels = \\\"claude-ready\\\" AND text ~ \\\"token\\\" ORDER BY updated DESC\",\"maxResults\":50}",
+        "headers": [
+          ["accept", "application/json"],
+          ["authorization", "Basic YWRhQGF0bGFzLmRldjp0b2s="],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/rest/api/3/search/jql"
+      }
+    ],
+    "error": null,
+    "method": "tickets/issues",
+    "result": {
+      "filters": [
+        {
+          "id": "mine",
+          "label": "Assignés à moi"
+        },
+        {
+          "id": "sprint",
+          "label": "Sprint actif"
+        },
+        {
+          "id": "todo",
+          "label": "À faire"
+        }
+      ],
+      "issues": [
+        {
+          "container": "ATL",
+          "criteria": ["Tests unitaires"],
+          "description": "Acceptance criteria:\n\n- Tests unitaires",
+          "id": "10001",
+          "imported": false,
+          "key": "ATL-1",
+          "kind": "Tâche",
+          "kindCode": "task",
+          "meta": ["Haute", "Non assigné", "To Do"],
+          "service": "jira",
+          "title": "Rafraîchir le token",
+          "url": "{base}/browse/ATL-1"
+        }
+      ],
+      "next": null,
+      "total": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"fields\":[\"summary\",\"status\",\"issuetype\",\"priority\",\"assignee\",\"description\",\"labels\"],\"jql\":\"project = \\\"nowhere\\\" AND statusCategory != Done ORDER BY updated DESC\",\"maxResults\":50}",
+        "headers": [
+          ["accept", "application/json"],
+          ["authorization", "Basic YWRhQGF0bGFzLmRldjp0b2s="],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/rest/api/3/search/jql"
+      }
+    ],
+    "error": null,
+    "method": "tickets/issues",
+    "result": {
+      "filters": [
+        {
+          "id": "mine",
+          "label": "Assignés à moi"
+        },
+        {
+          "id": "sprint",
+          "label": "Sprint actif"
+        },
+        {
+          "id": "todo",
+          "label": "À faire"
+        }
+      ],
+      "issues": [
+        {
+          "container": "nowhere",
+          "criteria": ["Tests unitaires"],
+          "description": "Acceptance criteria:\n\n- Tests unitaires",
+          "id": "10001",
+          "imported": false,
+          "key": "ATL-1",
+          "kind": "Tâche",
+          "kindCode": "task",
+          "meta": ["Haute", "Non assigné", "To Do"],
+          "service": "jira",
+          "title": "Rafraîchir le token",
+          "url": "{base}/browse/ATL-1"
+        }
+      ],
+      "next": null,
+      "total": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/json"],
+          ["authorization", "Basic YWRhQGF0bGFzLmRldjp0b2s="]
+        ],
+        "method": "GET",
+        "target": "/rest/api/3/issue/ATL-1?fields=status"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/json"],
+          ["authorization", "Basic YWRhQGF0bGFzLmRldjp0b2s="]
+        ],
+        "method": "GET",
+        "target": "/rest/api/3/issue/ATL-1/transitions"
+      },
+      {
+        "body": "{\"transition\":{\"id\":\"31\"}}",
+        "headers": [
+          ["accept", "application/json"],
+          ["authorization", "Basic YWRhQGF0bGFzLmRldjp0b2s="],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/rest/api/3/issue/ATL-1/transitions"
+      }
+    ],
+    "error": null,
+    "method": "tickets/setState",
+    "result": null
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"body\":{\"content\":[{\"content\":[{\"text\":\"Fait, voir la PR.\",\"type\":\"text\"}],\"type\":\"paragraph\"},{\"content\":[{\"text\":\"— Escouade\",\"type\":\"text\"}],\"type\":\"paragraph\"}],\"type\":\"doc\",\"version\":1}}",
+        "headers": [
+          ["accept", "application/json"],
+          ["authorization", "Basic YWRhQGF0bGFzLmRldjp0b2s="],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/rest/api/3/issue/ATL-1/comment"
+      }
+    ],
+    "error": null,
+    "method": "tickets/comment",
+    "result": null
+  },
+  {
+    "asked": [],
+    "error": {
+      "code": -32601,
+      "message": "no method tickets/nothing"
+    },
+    "method": "tickets/nothing",
+    "result": null
+  }
+]

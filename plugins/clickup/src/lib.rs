@@ -7,6 +7,7 @@ use escouade_plugin_kit::errors::{http_error_in, HttpError, Refused};
 use escouade_plugin_kit::forge::BoxFuture;
 use escouade_plugin_kit::hosts::{Credentials, SourceKind, StatesView, TicketSource};
 use escouade_plugin_kit::http::encode;
+use escouade_plugin_kit::http::reqwest;
 use escouade_plugin_kit::i18n::{self, Lang};
 use escouade_plugin_kit::protocol::tickets::{
     Container, ExternalIssue, ExternalRef, ExternalState, IssueFilter, IssuePage, Query,
@@ -81,7 +82,7 @@ impl Clickup {
             Answer::Done(v) => Ok(v),
             Answer::Limited(wait) => match again {
                 Some(rb) if wait <= WAIT_MAX => {
-                    tokio::time::sleep(wait).await;
+                    escouade_plugin_kit::time::sleep(wait).await;
                     match self.once(rb).await? {
                         Answer::Done(v) => Ok(v),
                         Answer::Limited(_) => Err(limited()),
@@ -761,13 +762,15 @@ impl SourceKind for ClickupSource {
     }
 }
 
-/// What `escouade-plugins clickup` runs.
+/// What its module runs, on its first turn.
 pub fn run() -> i32 {
     escouade_plugin_kit::serve::run(
         "clickup",
         escouade_plugin_kit::hosts::Hosts::new(vec![], vec![Box::new(ClickupSource)]),
     )
 }
+
+escouade_plugin_kit::protocol::module!(run);
 
 #[cfg(test)]
 mod tests {

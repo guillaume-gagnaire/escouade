@@ -22,6 +22,9 @@ const FOR_ALL = [
   'src-tauri/rust-toolchain.toml',
   'plugins/ci.mjs',
   'plugins/ci-lib.mjs',
+  'plugins/Cargo.toml',
+  'plugins/Cargo.lock',
+  'plugins/rust-toolchain.toml',
 ];
 
 /** `name` and `version` of the [package] of a Cargo.toml, and the folders of its path dependencies under `plugins/`. */

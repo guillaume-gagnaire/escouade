@@ -1,6 +1,6 @@
 //! Tests of ClickUp as a plugin of the app (INT-7.4, ESC-216; `plugins/clickup`): the tests the
 //! core had for its own ClickUp client (`integrations/clickup.rs`), word for word, now played against the plugin
-//! started as the app starts it (`escouade-plugins clickup`, checked as the app's own before it runs) by the runtime
+//! started as the app starts it (its module, in the host, as `scripts/plugins-wasm.sh` built it) by the runtime
 //! and `ProcessTicketSource`, on the fake ClickUp of the integrations' tests; and what a process adds: the token
 //! fetched by the plugin and never sent, the plugin that is off or stopped saying so, the offer of the plugin to the
 //! registry of sources, the text of the form read in its manifest. The pure parts of the client (the ids a text
@@ -16,8 +16,10 @@ use crate::model::{Column, ExternalRef, ExternalState, Service};
 use crate::paths::DataDir;
 use crate::plugins::adapters::{is_down, ProcessTicketSource};
 use crate::plugins::runtime::{secret_name, Limits, Runtime};
+use crate::plugins::wasm::Net;
 use crate::plugins::{Origin, Plugins};
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -72,6 +74,11 @@ async fn clickup() -> Rig {
         user: "183".into(),
         ..Default::default()
     };
+    rt.set_net(Net {
+        routes: HashMap::from([("api.clickup.com".to_string(), server.url.clone())]),
+        dns: None,
+        ..Net::default()
+    });
     let t = ProcessTicketSource::new(rt.clone(), ID, "clickup", &account).with_api(&server.url);
     Rig {
         server,
@@ -82,7 +89,7 @@ async fn clickup() -> Rig {
 }
 
 /// The list l1 « Sprint 12 » and its statuses, out of order as ClickUp may give them.
-fn list(server: &FakeServer) {
+pub(crate) fn list(server: &FakeServer) {
     server.on(
         "GET",
         "/list/l1",
@@ -97,7 +104,7 @@ fn list(server: &FakeServer) {
     );
 }
 
-fn task(id: &str, custom: Option<&str>, name: &str, list: &str) -> Value {
+pub(crate) fn task(id: &str, custom: Option<&str>, name: &str, list: &str) -> Value {
     json!({
         "id": id, "custom_id": custom, "name": name,
         "markdown_description": "Exporter le journal.\n\n![capture](https://t.clickup.com/a.png)",
@@ -684,7 +691,7 @@ fn clickup_is_a_plugin_of_the_app_that_the_registry_of_sources_names() {
     let v = plugins.get(ID, Lang::En).expect("the registry gives it");
     assert_eq!(v.origin, Origin::Builtin);
     let m = v.manifest.unwrap();
-    assert_eq!(m.run.unwrap().command, "{escouade}/escouade-plugins");
+    assert_eq!(m.run.unwrap().wasm.as_deref(), Some("Cargo.toml"));
     assert_eq!(m.permissions.network, ["api.clickup.com"]);
     assert_eq!(m.permissions.secrets, ["account:clickup"]);
 }

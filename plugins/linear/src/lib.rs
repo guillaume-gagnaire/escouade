@@ -401,7 +401,7 @@ impl SourceKind for LinearSource {
     }
 }
 
-/// What `escouade-plugins linear` runs.
+/// What its module runs, on its first turn.
 pub fn run() -> i32 {
     escouade_plugin_kit::serve::run(
         "linear",

@@ -7,10 +7,11 @@ mod adf;
 use adf::{adf_to_markdown, markdown_to_adf};
 use anyhow::Result;
 use base64::Engine;
-use escouade_plugin_kit::errors::Refused;
+use escouade_plugin_kit::errors::{HttpError, Refused};
 use escouade_plugin_kit::forge::BoxFuture;
 use escouade_plugin_kit::hosts::{Credentials, SourceKind, TicketSource};
-use escouade_plugin_kit::http::{call, encode};
+use escouade_plugin_kit::http::reqwest;
+use escouade_plugin_kit::http::{self, encode};
 use escouade_plugin_kit::i18n::{self, Lang};
 use escouade_plugin_kit::protocol::tickets::{
     Container, ExternalIssue, ExternalRef, ExternalState, IssueFilter, IssuePage, Query,
@@ -163,8 +164,23 @@ impl Jira {
             .json(body)
     }
 
+    /// A call of its API. An account with no site has nowhere to go: said as a token refused, it can be put right.
+    async fn call(&self, rb: reqwest::RequestBuilder) -> Result<Value> {
+        if self.site.is_empty() {
+            return Err(HttpError {
+                status: 401,
+                message: tr!(
+                    "Jira : ce compte n'a pas de site. Reconnecte-le dans Réglages › Intégrations.",
+                    "Jira: this account has no site. Connect it again in Settings › Integrations."
+                ),
+            }
+            .into());
+        }
+        http::call(S, rb).await
+    }
+
     pub async fn me(&self) -> Result<(String, String)> {
-        let me = call(S, self.get("/rest/api/3/myself")).await?;
+        let me = self.call(self.get("/rest/api/3/myself")).await?;
         let who = me["emailAddress"]
             .as_str()
             .filter(|e| !e.is_empty())
@@ -180,14 +196,12 @@ impl Jira {
     pub async fn containers(&self) -> Result<Vec<Container>> {
         let mut out = Vec::new();
         for page in 0..5 {
-            let v = call(
-                S,
-                self.get(&format!(
+            let v = self
+                .call(self.get(&format!(
                     "/rest/api/3/project/search?maxResults=100&orderBy=key&startAt={}",
                     page * 100
-                )),
-            )
-            .await?;
+                )))
+                .await?;
             for p in v["values"].as_array().into_iter().flatten() {
                 let key = p["key"].as_str().unwrap_or_default();
                 let name = p["name"].as_str().unwrap_or_default();
@@ -207,11 +221,9 @@ impl Jira {
 
     /// The statuses of the project's issue types, each once.
     pub async fn states(&self, project: &str) -> Result<Vec<ExternalState>> {
-        let v = call(
-            S,
-            self.get(&format!("/rest/api/3/project/{}/statuses", encode(project))),
-        )
-        .await?;
+        let v = self
+            .call(self.get(&format!("/rest/api/3/project/{}/statuses", encode(project))))
+            .await?;
         let mut out: Vec<ExternalState> = Vec::new();
         for t in v.as_array().into_iter().flatten() {
             for s in t["statuses"].as_array().into_iter().flatten() {
@@ -258,7 +270,9 @@ impl Jira {
         if let Some(token) = q.page.as_deref().filter(|t| !t.is_empty()) {
             body["nextPageToken"] = json!(token);
         }
-        let v = call(S, self.post("/rest/api/3/search/jql", &body)).await?;
+        let v = self
+            .call(self.post("/rest/api/3/search/jql", &body))
+            .await?;
         let issues = v["issues"]
             .as_array()
             .into_iter()
@@ -286,10 +300,13 @@ impl Jira {
     /// then).
     async fn count(&self, jql: &str) -> Option<u64> {
         let body = json!({ "jql": jql });
-        match call(S, self.post("/rest/api/3/search/approximate-count", &body)).await {
+        match self
+            .call(self.post("/rest/api/3/search/approximate-count", &body))
+            .await
+        {
             Ok(v) => v["count"].as_u64(),
             Err(e) => {
-                eprintln!("escouade-plugins jira: count: {e:#}");
+                eprintln!("jira: count: {e:#}");
                 None
             }
         }
@@ -340,11 +357,9 @@ impl Jira {
     /// The transition that leads to `state`, unless the issue is there already.
     pub async fn set_state(&self, r: &ExternalRef, state: &ExternalState) -> Result<()> {
         let id = encode(&r.id);
-        let issue = call(
-            S,
-            self.get(&format!("/rest/api/3/issue/{id}?fields=status")),
-        )
-        .await?;
+        let issue = self
+            .call(self.get(&format!("/rest/api/3/issue/{id}?fields=status")))
+            .await?;
         let current = &issue["fields"]["status"];
         let named = |v: &Value| {
             v["name"]
@@ -354,7 +369,9 @@ impl Jira {
         if current["id"].as_str() == Some(state.id.as_str()) || named(current) {
             return Ok(());
         }
-        let v = call(S, self.get(&format!("/rest/api/3/issue/{id}/transitions"))).await?;
+        let v = self
+            .call(self.get(&format!("/rest/api/3/issue/{id}/transitions")))
+            .await?;
         let same = |t: &Value| t["to"]["id"].as_str() == Some(state.id.as_str()) || named(&t["to"]);
         let Some(t) = v["transitions"]
             .as_array()
@@ -371,25 +388,19 @@ impl Jira {
             ))
             .into());
         };
-        call(
-            S,
-            self.post(
-                &format!("/rest/api/3/issue/{id}/transitions"),
-                &json!({ "transition": { "id": t["id"] } }),
-            ),
-        )
+        self.call(self.post(
+            &format!("/rest/api/3/issue/{id}/transitions"),
+            &json!({ "transition": { "id": t["id"] } }),
+        ))
         .await?;
         Ok(())
     }
 
     pub async fn comment(&self, r: &ExternalRef, text: &str) -> Result<()> {
-        call(
-            S,
-            self.post(
-                &format!("/rest/api/3/issue/{}/comment", encode(&r.id)),
-                &json!({ "body": markdown_to_adf(text) }),
-            ),
-        )
+        self.call(self.post(
+            &format!("/rest/api/3/issue/{}/comment", encode(&r.id)),
+            &json!({ "body": markdown_to_adf(text) }),
+        ))
         .await?;
         Ok(())
     }
@@ -440,13 +451,15 @@ impl SourceKind for JiraSource {
     }
 }
 
-/// What `escouade-plugins jira` runs.
+/// What its module runs, on its first turn.
 pub fn run() -> i32 {
     escouade_plugin_kit::serve::run(
         "jira",
         escouade_plugin_kit::hosts::Hosts::new(vec![], vec![Box::new(JiraSource)]),
     )
 }
+
+escouade_plugin_kit::protocol::module!(run);
 
 #[cfg(test)]
 mod tests {
@@ -500,6 +513,13 @@ mod tests {
         assert_eq!(site("http://localhost:4101"), "http://localhost:4101");
         assert!(is_key("ATL-1287") && is_key("A1_B-2"));
         assert!(!is_key("ATL-") && !is_key("1A-2") && !is_key("token refresh"));
+    }
+
+    #[tokio::test]
+    async fn an_account_with_no_site_is_said_as_credentials_refused() {
+        let j = Jira::new(reqwest::Client::new(), &Credentials::default());
+        let e = j.me().await.unwrap_err();
+        assert_eq!(e.downcast_ref::<HttpError>().unwrap().status, 401);
     }
 
     #[test]

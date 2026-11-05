@@ -1,0 +1,4 @@
+# One target for the two workspaces of the plugins (this one and src-tauri): the modules are where the tests of the app
+# look for them, and CI caches it.
+[build]
+target-dir = "../src-tauri/target"

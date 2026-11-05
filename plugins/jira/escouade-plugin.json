@@ -2,7 +2,7 @@
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.jira",
   "name": "Jira",
-  "version": "0.0.0",
+  "version": "2.2.0",
   "description": {
     "fr": "Les tickets d'un projet Jira Cloud dans le Kanban, ses statuts comme colonnes.",
     "en": "A Jira Cloud project's issues in the Kanban, its statuses as columns."
@@ -10,11 +10,11 @@
   "author": { "name": "Escouade", "url": "https://escouade.dev" },
   "license": "GPL-3.0-or-later",
   "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/jira",
-  "escouade": { "api": "1", "min": "2.1.0" },
-  "run": { "command": "{escouade}/escouade-plugins", "args": ["jira"] },
+  "escouade": { "api": "1", "min": "2.2.0" },
+  "run": { "wasm": "Cargo.toml" },
   "activation": ["account:jira"],
   "permissions": {
-    "network": ["*.atlassian.net"],
+    "network": ["*.atlassian.net", "{account}"],
     "secrets": ["account:jira"]
   },
   "contributes": {

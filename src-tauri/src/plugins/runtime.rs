@@ -437,6 +437,8 @@ pub struct Runtime {
     /// account of the first hand as the core holds it, the user's or its CLI's (`gh auth token`), read before the
     /// keychain. Never another plugin's.
     lent: Mutex<HashMap<(String, String), String>>,
+    /// By plugin, the host of the account it was last asked about, saved or not yet.
+    lent_hosts: Mutex<HashMap<String, String>>,
     /// What a plugin the app gives is told when it starts (`ESCOUADE_LANG`, the network of Réglages › Réseau).
     builtin_env: parking_lot::RwLock<Vec<(String, String)>>,
     /// What a program of a plugin gets as an agent does (`set_agent_env`).
@@ -473,6 +475,19 @@ impl Runtime {
         } else {
             self.lent.lock().insert(at, secret.trim().to_string());
         }
+    }
+
+    /// Lends the plugin `id` the host the user typed for an account: `{account}` reaches it while the account is checked,
+    /// before it is saved.
+    pub fn lend_host(&self, id: &str, host: &str) {
+        self.lent_hosts
+            .lock()
+            .insert(id.to_string(), host.to_string());
+    }
+
+    /// The host lent to the plugin `id`.
+    pub fn lent_host(&self, id: &str) -> Option<String> {
+        self.lent_hosts.lock().get(id).cloned()
     }
 
     /// What a plugin the app gives is told when it starts: the interface's language and the network's settings. A
@@ -552,6 +567,7 @@ impl Runtime {
             modules: Arc::new(super::wasm::Modules::new(data, app_version)),
             net: parking_lot::RwLock::new(super::wasm::Net::default()),
             lent: Mutex::new(HashMap::new()),
+            lent_hosts: Mutex::new(HashMap::new()),
             builtin_env: parking_lot::RwLock::new(Vec::new()),
             agent_env: parking_lot::RwLock::new(Vec::new()),
             me: me.clone(),
@@ -581,6 +597,12 @@ impl Runtime {
     /// Who tells the hosts the user typed for the accounts of a plugin (`{account}`).
     pub fn set_accounts(&self, accounts: super::wasm::HostsOf) {
         self.net.write().accounts = Some(accounts);
+    }
+
+    /// The fake services of a build of development or a test (`Bases::faked`), for the instances to come.
+    #[cfg(any(debug_assertions, test))]
+    pub fn set_routes(&self, routes: std::collections::HashMap<String, String>) {
+        self.net.write().routes = routes;
     }
 
     /// The tests' network for `net/fetch` (a fake service, the resolver's answer), for the instances to come.

@@ -135,6 +135,40 @@ describe('touchedBy', () => {
   });
 });
 
+describe('the workspace of the modules', () => {
+  const ported = listPlugins('plugins').filter((p) => p.wasm && p.cargo);
+  const root = readFileSync('plugins/Cargo.toml', 'utf8');
+  const members = /^members = \[(.*)\]$/m
+    .exec(root)?.[1]
+    .split(',')
+    .map((m) => m.trim().replaceAll('"', ''));
+
+  it('holds each plugin in run.wasm, and only those', () => {
+    expect(ported.length).toBeGreaterThanOrEqual(4);
+    expect([...(members ?? [])].sort()).toEqual(ported.map((p) => p.name).sort());
+  });
+
+  it('gives each of them a form the store can compile, its folder alone', () => {
+    for (const { name } of ported) {
+      const toml = readFileSync(`plugins/${name}/Cargo.toml`, 'utf8');
+      expect(toml, name).toMatch(/^crate-type = \["cdylib"\]$/m);
+      expect(toml, name).not.toMatch(/^workspace\s*=/m);
+      expect(toml, name).not.toMatch(/path\s*=/);
+    }
+  });
+
+  it('pins the toolchain of the app', () => {
+    const lf = (f: string) => readFileSync(f, 'utf8').replace(/\r\n/g, '\n');
+    expect(lf('plugins/rust-toolchain.toml')).toBe(lf('src-tauri/rust-toolchain.toml'));
+  });
+
+  it('brings the kit back to crates/, for the crates its plugins stand on', () => {
+    const patch = /^\[patch\.crates-io\]\n((?:.+\n)+)/m.exec(root.replace(/\r\n/g, '\n'))?.[1] ?? '';
+    for (const name of ['escouade-plugin-protocol', 'escouade-plugin-kit'])
+      expect(patch).toContain(`${name} = { path = "../crates/${name}" }`);
+  });
+});
+
 describe('parseArgs', () => {
   it('reads nothing, --changed and --changed <revision>', () => {
     expect(parseArgs([])).toEqual({ changed: false });

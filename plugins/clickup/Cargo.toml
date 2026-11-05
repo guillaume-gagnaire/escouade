@@ -1,17 +1,17 @@
 [package]
 name = "escouade-plugin-clickup"
-version = "1.0.0"
+version = "2.2.0"
 description = "Le plugin ClickUp livré avec Escouade : les tâches d'une liste ClickUp dans le Kanban, ses statuts comme colonnes"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"
 edition = "2021"
 rust-version = "1.88"
-workspace = "../../src-tauri"
 
-# One of the plugins of `escouade-plugins` (docs/PLUGINS.md §4.3): its program is `escouade-plugins clickup`.
+# A module, compiled by `escouade-plugin build` (docs/PLUGINS.md §8.5).
+[lib]
+crate-type = ["cdylib"]
+
 [dependencies]
 escouade-plugin-kit = "0.1.0"
 serde_json = "1"
 anyhow = "1"
-tokio = { version = "1", features = ["time"] }
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }

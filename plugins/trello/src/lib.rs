@@ -4,6 +4,7 @@
 use anyhow::Result;
 use escouade_plugin_kit::forge::BoxFuture;
 use escouade_plugin_kit::hosts::{Credentials, SourceKind, TicketSource};
+use escouade_plugin_kit::http::reqwest;
 use escouade_plugin_kit::http::{call, encode};
 use escouade_plugin_kit::i18n::{self, Lang};
 use escouade_plugin_kit::protocol::tickets::{
@@ -313,13 +314,15 @@ impl SourceKind for TrelloSource {
     }
 }
 
-/// What `escouade-plugins trello` runs.
+/// What its module runs, on its first turn.
 pub fn run() -> i32 {
     escouade_plugin_kit::serve::run(
         "trello",
         escouade_plugin_kit::hosts::Hosts::new(vec![], vec![Box::new(TrelloSource)]),
     )
 }
+
+escouade_plugin_kit::protocol::module!(run);
 
 #[cfg(test)]
 mod tests {

@@ -1,6 +1,6 @@
 //! Tests of Jira as a plugin of the app (INT-7.3, ESC-215; `plugins/jira`): the tests the core
 //! had for its own Jira client (`integrations/jira.rs`), word for word, now played against the plugin started as the
-//! app starts it (`escouade-plugins jira`, checked as the app's own before it runs) by the runtime and
+//! app starts it (its module, in the host, as `scripts/plugins-wasm.sh` built it) by the runtime and
 //! `ProcessTicketSource`, on the fake Jira of the integrations' tests; and what a process adds: the token fetched by
 //! the plugin and never sent, the plugin that is off or stopped saying so, the offer of the plugin to the registry of
 //! sources, the texts of the form read in its manifest.
@@ -14,8 +14,10 @@ use crate::model::{ExternalRef, ExternalState, Service};
 use crate::paths::DataDir;
 use crate::plugins::adapters::{is_down, ProcessTicketSource};
 use crate::plugins::runtime::{secret_name, Limits, Runtime};
+use crate::plugins::wasm::Net;
 use crate::plugins::{Origin, Plugins};
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -58,6 +60,11 @@ async fn jira() -> Rig {
             ..Limits::default()
         },
     );
+    rt.set_net(Net {
+        routes: HashMap::from([("jira.test".to_string(), server.url.clone())]),
+        dns: None,
+        ..Net::default()
+    });
     let account = Account {
         site: format!("{}/", server.url),
         email: "ada@atlas.dev".into(),
@@ -504,8 +511,8 @@ fn jira_is_a_plugin_of_the_app_that_the_registry_of_sources_names() {
     let v = plugins.get(ID, Lang::En).expect("the registry gives it");
     assert_eq!(v.origin, Origin::Builtin);
     let m = v.manifest.unwrap();
-    assert_eq!(m.run.unwrap().command, "{escouade}/escouade-plugins");
-    assert_eq!(m.permissions.network, ["*.atlassian.net"]);
+    assert_eq!(m.run.unwrap().wasm.as_deref(), Some("Cargo.toml"));
+    assert_eq!(m.permissions.network, ["*.atlassian.net", "{account}"]);
     assert_eq!(m.permissions.secrets, ["account:jira"]);
 }
 

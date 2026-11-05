@@ -1041,9 +1041,10 @@ async fn a_site_behind_a_self_signed_certificate_is_reached_once_tls_verificatio
     );
     assert!(server.requests().is_empty());
     h.core.settings.write().insecure_tls = true;
-    // Jira is a plugin: it starts again with the network of now, as saving the settings makes it.
-    h.core.plugin_runtime.set_builtin_env(h.core.builtin_env());
-    h.core.plugin_runtime.forget(crate::plugins::builtin::JIRA);
+    // Jira is a module: its next call follows the network of now, as saving the settings makes it.
+    h.core
+        .plugin_runtime
+        .set_network(crate::voice::online::Net::of(&h.core.settings.read()));
     let view = h
         .core
         .integration_connect(Service::JIRA, account())

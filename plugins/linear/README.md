@@ -1,7 +1,7 @@
 # Linear
 
-`dev.escouade.linear`, a plugin [Escouade](https://escouade.dev) gives: it is shipped with the app, signed with it, and
-updated with it. Its version is Escouade's (the `0.0.0` of its manifest is replaced by the app's when it is read).
+`dev.escouade.linear`, a plugin of [Escouade](https://escouade.dev)'s own hand: a WASM module, with a version of its own, that
+the app runs in its host.
 
 Les issues d'une équipe Linear dans le Kanban, ses statuts comme colonnes. Le deuxième des plugins de première main qui
 sont des sources du Kanban (INT-7.2) : Jira et ClickUp suivent le même modèle.
@@ -41,19 +41,19 @@ and tries again later; nothing is lost.
 | `src/lib.rs`           | The client of Linear, and its `SourceKind` (the kit)  |
 | `README.md`            | This page                                             |
 
-Its program is `escouade-plugins linear` (`src-tauri/src/bin/escouade-plugins.rs` calls the crate's `run`), on the kit
-`crates/escouade-plugin-kit`, which answers the protocol, asks Escouade for the account's secret and keeps a client per
+Its program is a module (`run.wasm`), compiled by `escouade-plugin build` from this folder and its `Cargo.lock`, on the kit
+`escouade-plugin-kit`, which answers the protocol, asks Escouade for the account's secret and keeps a client per
 account. Its tests are `src-tauri/src/plugins_linear_tests.rs` (the plugin started as the app starts it, against the fake
 Linear of `src-tauri/src/integrations/fake.rs`) and the integration tests of the core (`integrations_tests.rs`), which go
 through it.
 
 ## Run it alone
 
-Against the fake Escouade of the plugins' bench, with the app's own `escouade-plugin` and `escouade-plugins` (built
-with `cargo build --bin escouade-plugin --bin escouade-plugins` in `src-tauri/`, side by side in `target/debug`):
+Against the fake Escouade of the plugins' bench, with the app's own `escouade-plugin` (`cargo build --bin escouade-plugin`
+in `src-tauri/`):
 
 ```sh
-escouade-plugin test plugins/linear --builtin
+escouade-plugin test plugins/linear --first-party --escouade 2.2.0
 ```
 
 The bench plays the handshake, the delays, the secret asked for, a crash and the shutdown, then one call of the

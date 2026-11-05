@@ -1160,7 +1160,9 @@ impl Checker {
                     me.problem(&at, Code::Cargo);
                     return false;
                 }
-                let found = file.is_none_or(|file| file(&icon_path(path)).is_some());
+                // The app gives a module, not its sources.
+                let found =
+                    (cargo && builtin) || file.is_none_or(|file| file(&icon_path(path)).is_some());
                 if !found {
                     me.problem(&at, Code::File);
                 }

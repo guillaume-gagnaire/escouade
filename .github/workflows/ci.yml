@@ -221,9 +221,17 @@ jobs:
 
       - name: Clippy for wasm32-wasip1
         working-directory: src-tauri
-        run: cargo clippy --locked --target wasm32-wasip1 -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp -p escouade-plugin-linear -p escouade-plugin-codex -- -D warnings
+        run: cargo clippy --locked --target wasm32-wasip1 -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp -p escouade-plugin-codex -- -D warnings
 
-      - name: Linear and Codex as modules
+      # The workspace of plugins/: the plugins in run.wasm, which that of src-tauri does not hold.
+      - name: The modules' workspace, formatted and without warnings
+        working-directory: plugins
+        run: |
+          cargo fmt --all --check
+          cargo clippy --locked --workspace --all-targets -- -D warnings
+          cargo clippy --locked --workspace --target wasm32-wasip1 -- -D warnings
+
+      - name: The modules
         run: sh scripts/plugins-wasm.sh
 
       - name: The examples and the documentation of the crates of crates.io
@@ -309,6 +317,12 @@ jobs:
         with:
           tool: cargo-nextest
 
+      # What the tests of the app and its end-to-end tests play in its host (docs/PLUGINS.md §8.6.4), in the archive below
+      # (.config/nextest.toml) and in the app's artifact.
+      - name: The modules of the plugins
+        shell: bash
+        run: sh scripts/plugins-wasm.sh
+
       # The test binaries, with what they run beside them (escouade-hook, examples/fake_codex): built once, run by
       # the two windows-rust runners.
       - name: Rust tests, built once (nextest archive)
@@ -343,6 +357,7 @@ jobs:
             src-tauri/target/debug/escouade.exe
             src-tauri/target/debug/escouade-hook.exe
             src-tauri/target/debug/escouade-plugins.exe
+            src-tauri/target/plugins-wasm/
           retention-days: 1
 
   windows-rust:
@@ -414,11 +429,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # src-tauri/target: the artifact holds debug/ and plugins-wasm/.
       - name: Download the app
         uses: actions/download-artifact@v7
         with:
           name: app-windows
-          path: src-tauri/target/debug
+          path: src-tauri/target
 
       # Surfaced as an annotation: the end-to-end tests need the Evergreen WebView2 runtime.
       - name: WebView2 runtime
@@ -506,6 +522,9 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
+
+      - name: The modules of the plugins, which the tests play
+        run: sh scripts/plugins-wasm.sh
 
       # The app's MCP server takes its port in 47000-47999, which a runner also hands out to the
       # outgoing connections of other programs: keep that range out of the ephemeral ones, so a test
@@ -623,6 +642,9 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
+
+      - name: The modules of the plugins, which the tests play
+        run: sh scripts/plugins-wasm.sh
 
       # One process per test (src-tauri/.config/nextest.toml): a test that hangs is killed after
       # 3 minutes and named, one that fails runs again twice. Reading the job's log takes admin

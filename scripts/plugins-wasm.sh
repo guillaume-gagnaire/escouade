@@ -1,26 +1,57 @@
 #!/bin/sh
-# Compiles the plugins in Rust that already build as modules, from their crates, into <target>/plugins-wasm/<name>.wasm:
-# what plugins_wasm_parity_tests.rs plays in the app's host, and CI's proof that the kit compiles for wasm32-wasip1
-# (docs/PLUGINS.md §8.10, A4). `rust-toolchain.toml` brings the target.
+# Compiles the plugins in Rust as modules, once, in a target they share, into <target>/plugins-wasm/<id-court>/plugin.wasm:
+# what the tests of the app play in its host, and what a build of development runs for a plugin of the registry until the
+# seed gives it (docs/PLUGINS.md §8.6.4, §8.7). `rust-toolchain.toml` brings the target.
 #
-# A plugin's crate is an rlib, for `escouade-plugins`, until Z3: `--crate-type cdylib` makes it a reactor here, with no
-# change to its manifest. This is no reproducible build: that is `escouade-plugin build` (A5).
+# Those whose manifest says `run.wasm` are the workspace of `plugins/`, against `crates/` by its `[patch.crates-io]`.
+# Codex is still an rlib of `escouade-plugins`, in the workspace of `src-tauri`, played by plugins_wasm_parity_tests.rs:
+# `--crate-type cdylib` makes it a reactor here. It moves to the first list at its port (P3).
 #
-#   sh scripts/plugins-wasm.sh [name...]     (by default, all of them)
+# This is no reproducible build, nor what the store publishes: that is `escouade-plugin build`, from the plugin's folder
+# alone, on the crates of crates.io (§8.17).
+#
+#   sh scripts/plugins-wasm.sh [id-court...]     (by default, all of them)
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
 cd "$here/../src-tauri"
+# Relative, like plugins/.cargo/config.toml: the two workspaces share it. An absolute CARGO_TARGET_DIR is taken as it is.
 target=${CARGO_TARGET_DIR:-target}
-# The profile of a module (docs/PLUGINS.md §8.5.2), over the app's, whose panics unwind.
+
+ported=$(cd ../plugins && grep -l '"wasm"[[:space:]]*:' ./*/escouade-plugin.json | xargs -n 1 dirname | xargs -n 1 basename)
+wanted=${*:-$ported codex}
+
+crate_of() {
+  sed -n 's/^name[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' "../plugins/$1/Cargo.toml" | head -n 1
+}
+
+# Copies the module of the plugin $1, compiled by its crate.
+keep() {
+  mkdir -p "$target/plugins-wasm/$1"
+  cp "$target/wasm32-wasip1/release/$(crate_of "$1" | tr - _).wasm" "$target/plugins-wasm/$1/plugin.wasm"
+  wc -c "$target/plugins-wasm/$1/plugin.wasm"
+}
+
+packages=
+for name in $wanted; do
+  case " $(echo $ported) " in
+    *" $name "*) packages="$packages -p $(crate_of "$name")" ;;
+  esac
+done
+if [ -n "$packages" ]; then
+  # shellcheck disable=SC2086
+  (cd ../plugins && cargo build --locked --release --target wasm32-wasip1 $packages)
+fi
+
+# The profile of a module, over the app's, whose panics unwind.
 export CARGO_PROFILE_RELEASE_PANIC=abort
 export CARGO_PROFILE_RELEASE_LTO=fat
 export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 export CARGO_PROFILE_RELEASE_OPT_LEVEL=3
 export CARGO_PROFILE_RELEASE_STRIP=true
-mkdir -p "$target/plugins-wasm"
-for name in ${*:-linear codex}; do
-  crate=escouade-plugin-$name
-  cargo rustc --locked --release --target wasm32-wasip1 -p "$crate" --lib --crate-type cdylib
-  cp "$target/wasm32-wasip1/release/escouade_plugin_$name.wasm" "$target/plugins-wasm/$name.wasm"
-  wc -c "$target/plugins-wasm/$name.wasm"
+for name in $wanted; do
+  case " $(echo $ported) " in
+    *" $name "*) ;;
+    *) cargo rustc --locked --release --target wasm32-wasip1 -p "$(crate_of "$name")" --lib --crate-type cdylib ;;
+  esac
+  keep "$name"
 done

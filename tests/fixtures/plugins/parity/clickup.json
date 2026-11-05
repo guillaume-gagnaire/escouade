@@ -1,0 +1,309 @@
+[
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "pk_1"]
+        ],
+        "method": "GET",
+        "target": "/user"
+      }
+    ],
+    "error": null,
+    "method": "account/me",
+    "result": {
+      "label": "Ada Lovelace",
+      "user": "183"
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "pk_1"]
+        ],
+        "method": "GET",
+        "target": "/team"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "pk_1"]
+        ],
+        "method": "GET",
+        "target": "/team/w1/space?archived=false"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "pk_1"]
+        ],
+        "method": "GET",
+        "target": "/space/s1/folder?archived=false"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "pk_1"]
+        ],
+        "method": "GET",
+        "target": "/space/s1/list?archived=false"
+      }
+    ],
+    "error": null,
+    "method": "tickets/containers",
+    "result": [
+      {
+        "group": "Produit",
+        "id": "l1",
+        "name": "Sprint 12"
+      }
+    ]
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "pk_1"]
+        ],
+        "method": "GET",
+        "target": "/list/l1"
+      }
+    ],
+    "error": null,
+    "method": "tickets/states",
+    "result": {
+      "defaults": {
+        "doing": {
+          "id": "in progress",
+          "name": "in progress"
+        },
+        "done": {
+          "id": "in review",
+          "name": "in review"
+        },
+        "review": {
+          "id": "in progress",
+          "name": "in progress"
+        }
+      },
+      "states": [
+        {
+          "id": "to do",
+          "name": "to do"
+        },
+        {
+          "id": "in progress",
+          "name": "in progress"
+        },
+        {
+          "id": "in review",
+          "name": "in review"
+        },
+        {
+          "id": "shipped",
+          "name": "shipped"
+        },
+        {
+          "id": "complete",
+          "name": "complete"
+        }
+      ]
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "pk_1"]
+        ],
+        "method": "GET",
+        "target": "/list/l1"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "pk_1"]
+        ],
+        "method": "GET",
+        "target": "/list/l1/task?archived=false&include_closed=false&include_markdown_description=true&subtasks=true&order_by=updated&page=0"
+      }
+    ],
+    "error": null,
+    "method": "tickets/issues",
+    "result": {
+      "filters": [
+        {
+          "id": "mine",
+          "label": "Mes tâches"
+        },
+        {
+          "id": "status:to do",
+          "label": "to do"
+        },
+        {
+          "id": "status:in progress",
+          "label": "in progress"
+        },
+        {
+          "id": "status:in review",
+          "label": "in review"
+        }
+      ],
+      "issues": [
+        {
+          "container": "l1",
+          "criteria": ["Un bouton Exporter", "Le fichier s'ouvre dans Excel"],
+          "description": "Exporter le journal.\n\n![capture](https://t.clickup.com/a.png)",
+          "id": "t1",
+          "imported": false,
+          "key": "ATL-1",
+          "kind": "Tâche",
+          "kindCode": "task",
+          "meta": ["to do", "high", "Ada Lovelace", "claude-ready"],
+          "service": "clickup",
+          "title": "Exporter le journal",
+          "url": "https://app.clickup.com/t/t1"
+        }
+      ],
+      "next": null,
+      "total": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "pk_1"]
+        ],
+        "method": "GET",
+        "target": "/list/l1"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "pk_1"]
+        ],
+        "method": "GET",
+        "target": "/list/l1/task?archived=false&include_closed=false&include_markdown_description=true&subtasks=true&order_by=updated&page=0&tags%5B%5D=claude-ready"
+      }
+    ],
+    "error": null,
+    "method": "tickets/issues",
+    "result": {
+      "filters": [
+        {
+          "id": "mine",
+          "label": "Mes tâches"
+        },
+        {
+          "id": "status:to do",
+          "label": "to do"
+        },
+        {
+          "id": "status:in progress",
+          "label": "in progress"
+        },
+        {
+          "id": "status:in review",
+          "label": "in review"
+        }
+      ],
+      "issues": [],
+      "next": null,
+      "total": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "pk_1"]
+        ],
+        "method": "GET",
+        "target": "/list/nowhere"
+      }
+    ],
+    "error": {
+      "code": -32404,
+      "message": "La liste ClickUp nowhere n'existe plus ou n'est plus accessible : choisis-en une autre dans Réglages › Intégrations"
+    },
+    "method": "tickets/issues",
+    "result": null
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "pk_1"]
+        ],
+        "method": "GET",
+        "target": "/list/"
+      }
+    ],
+    "error": {
+      "code": -32404,
+      "message": "La liste ClickUp  n'existe plus ou n'est plus accessible : choisis-en une autre dans Réglages › Intégrations"
+    },
+    "method": "tickets/setState",
+    "result": null
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"comment_text\":\"Fait, voir la PR.\\n\\n— Escouade\",\"notify_all\":false}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "pk_1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/task/t1/comment"
+      },
+      {
+        "body": "{\"comment_text\":\"Fait, voir la PR.\\n\\n— Escouade\",\"notify_all\":false}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "pk_1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/task/t1/comment"
+      }
+    ],
+    "error": {
+      "code": -32429,
+      "message": "ClickUp limite les requêtes (429) : réessaie dans un moment"
+    },
+    "method": "tickets/comment",
+    "result": null
+  },
+  {
+    "asked": [],
+    "error": {
+      "code": -32601,
+      "message": "no method tickets/nothing"
+    },
+    "method": "tickets/nothing",
+    "result": null
+  }
+]

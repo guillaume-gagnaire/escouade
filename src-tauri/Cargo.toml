@@ -72,15 +72,11 @@ escouade-plugin-github = { path = "../plugins/github" }
 escouade-plugin-gitlab = { path = "../plugins/gitlab" }
 escouade-plugin-bitbucket = { path = "../plugins/bitbucket" }
 escouade-plugin-gitea = { path = "../plugins/gitea" }
-escouade-plugin-trello = { path = "../plugins/trello" }
 escouade-plugin-azure-devops = { path = "../plugins/azure-devops" }
 escouade-plugin-acp = { path = "../plugins/acp" }
-escouade-plugin-linear = { path = "../plugins/linear" }
-escouade-plugin-jira = { path = "../plugins/jira" }
 escouade-plugin-cursor = { path = "../plugins/cursor" }
 # OpenCode (INT-10.2): its harness in a crate, its `opencode serve` run by the core (`Launch::shared`).
 escouade-plugin-opencode = { path = "../plugins/opencode" }
-escouade-plugin-clickup = { path = "../plugins/clickup" }
 escouade-plugin-mistral = { path = "../plugins/mistral" }
 escouade-plugin-gemini = { path = "../plugins/gemini" }
 # Copilot CLI (INT-10.3): its plugin, whose translation the core's « Vue Copilot » reads as a library, with its rules.
@@ -191,13 +187,9 @@ members = [
     "../plugins/gitlab",
     "../plugins/bitbucket",
     "../plugins/gitea",
-    "../plugins/trello",
     "../plugins/azure-devops",
     "../plugins/acp",
-    "../plugins/linear",
-    "../plugins/jira",
     "../plugins/cursor",
-    "../plugins/clickup",
     "../plugins/mistral",
     "../plugins/gemini",
     "../plugins/opencode",
@@ -215,13 +207,9 @@ default-members = [
     "../plugins/gitlab",
     "../plugins/bitbucket",
     "../plugins/gitea",
-    "../plugins/trello",
     "../plugins/azure-devops",
     "../plugins/acp",
-    "../plugins/linear",
-    "../plugins/jira",
     "../plugins/cursor",
-    "../plugins/clickup",
     "../plugins/mistral",
     "../plugins/gemini",
     "../plugins/opencode",

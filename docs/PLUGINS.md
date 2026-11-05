@@ -1088,7 +1088,7 @@ Les e2e, et donc la vue Plugins, le store dans l'app, les thèmes et les sceaux 
 
 Décidé par l'utilisateur le 2026-11-04 : « je veux que tous les plugins, même les builtins, passent par le même système : on livre un plugin, il est compilé pour qu'il soit utilisable sur tous les systèmes, et il fait ce qu'il a besoin de faire », puis « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté ». Le même jour, l'état de fin : « A la fin, je veux que tous les plugins builtins soient dans /plugins/* (exemple plugins/claude), tous publiés sur le store, vérifiés et signés. »
 
-Ce chapitre est l'étude, faite avant le portage. **A1, A2, A3, A4, A5, A8 et A9 sont faits** (ESC-331, §8.11 ; ESC-332, §8.12 ; ESC-334, §8.13 ; ESC-338, §8.14 ; ESC-333, §8.15 ; ESC-341, §8.16 ; ESC-335, §8.17) ; le reste du plan ne l'est pas. Le prototype, ses tests et ses mesures sont dans `prototypes/wasm-all/` (son README dit comment tout refaire). Il revoit le §5.7 (« le `run` natif, tranché ») et le §5.6 (« un `run.wasm` n'est pas ouvert ») : ces deux passages tiennent jusqu'à l'acceptation des décisions proposées par ESC-330. Sans numéro tant qu'elles ne sont pas acceptées, elles se citent par leur identifiant : `run-wasm-le-rust-des-plugins-compile-par`, `les-capacites-de-l-hote-ce-qu-un-plugin`, `la-premiere-main-dans-plugins-id-court-p`, `plus-aucun-run-command-le-store-le-refus`.
+Ce chapitre est l'étude, faite avant le portage. **A1 à A6, A8, A9 et P1 sont faits** (ESC-331, §8.11 ; ESC-332, §8.12 ; ESC-334, §8.13 ; ESC-338, §8.14 ; ESC-333, §8.15 ; ESC-341, §8.16 ; ESC-335, §8.17 ; ESC-336, §8.18 ; ESC-344, §8.19) ; le reste du plan ne l'est pas. Le prototype, ses tests et ses mesures sont dans `prototypes/wasm-all/` (son README dit comment tout refaire). Il revoit le §5.7 (« le `run` natif, tranché ») et le §5.6 (« un `run.wasm` n'est pas ouvert ») : ces deux passages tiennent jusqu'à l'acceptation des décisions proposées par ESC-330. Sans numéro tant qu'elles ne sont pas acceptées, elles se citent par leur identifiant : `run-wasm-le-rust-des-plugins-compile-par`, `les-capacites-de-l-hote-ce-qu-un-plugin`, `la-premiere-main-dans-plugins-id-court-p`, `plus-aucun-run-command-le-store-le-refus`.
 
 **En bref.**
 
@@ -1463,7 +1463,7 @@ Le store ne lit que le dossier du plugin (`docs/STORE.md` §3.6), à raison : c'
 
 Un job **reproductible** compare sous Windows et Linux, sur `main` : le même plugin, la même empreinte. Un écart est rouge. Un job de plus sur macOS le fait une fois par release.
 
-Les tests de l'app (`forge/*_tests`, `plugins_harness_tests`, le banc de flux) lancent aujourd'hui `escouade-plugins`. Ils lanceront les modules, construits une fois par CI comme `escouade-js` (`scripts/plugins-wasm.sh`), le `target` étant partagé : quelques minutes, pas 23 fois 12 s.
+Les tests de l'app (`forge/*_tests`, `plugins_harness_tests`, le banc de flux) lancent `escouade-plugins`, ou le module pour un plugin porté (§8.18), construit une fois par CI (`scripts/plugins-wasm.sh`), le `target` étant partagé : quelques minutes, pas 23 fois 12 s.
 
 ### 8.7 La distribution dans l'app
 
@@ -1577,7 +1577,7 @@ Les tickets du portage, dans l'ordre. **Les lettres sont des noms de travail**, 
 
 | Ticket | Plugins | Ce qui le distingue |
 | --- | --- | --- |
-| **P1** | Linear, Trello, Jira, ClickUp | le kit seul ; le plus simple |
+| **P1** (fait, §8.19) | Linear, Trello, Jira, ClickUp | le kit seul ; le plus simple |
 | **P2** | GitHub, GitLab, Bitbucket, Gitea, Azure DevOps | `{account}`, proxy, instances auto-hébergées ; essais contre `fake-trackers` |
 | **P3** | Codex, Copilot CLI, Cursor, Gemini, ACP, Vibe, Claude Code | les machines à états ; `fs/*` pour ACP ; `real-harnesses` rejoué |
 | **P4** | Antigravity | l'attente du transcript réécrite (§8.4.6) |
@@ -1693,7 +1693,7 @@ Les tickets du portage, dans l'ordre. **Les lettres sont des noms de travail**, 
 - **Les plugins dépendent par version** (`escouade-plugin-kit = "0.1.0"`). `[patch.crates-io]`, dans `src-tauri/Cargo.toml`, racine du workspace qui les tient, les ramène sur `crates/`. Le cœur garde ses `path` : il n'est pas publié.
 - **Entre crates, `path` et `version` à la fois.** `cargo publish` retire le `path` du manifeste publié. Avec la version seule, l'empaquetage cherche le crate sur crates.io et échoue tant qu'il n'y est pas : `[patch.crates-io]` ne l'atteint pas.
 - **Le README est la doc du crate** (`#![doc = include_str!("../README.md")]`), en anglais, avec un exemple que `cargo test --doc` compile. docs.rs construit les deux cibles (`[package.metadata.docs.rs]`). Le job `plugin-kit-wasm` passe les doctests et `cargo doc` sans avertissement. `scripts/crates-io.test.ts` garde les champs, la licence et le `[patch.crates-io]`.
-- **Il reste, pour que le store compile un plugin de la première main** : son manifeste porte `workspace = "../../src-tauri"`, que `cargo` refuse dans un dossier seul (essayé sur `plugins/linear`), et il n'a pas de `Cargo.lock` à lui, ce qu'un membre du workspace ne peut avoir et qui demande de toute façon les crates publiées. Sans cette ligne, `cargo metadata` cherche bien `escouade-plugin-kit` sur crates.io. **À traiter en A6 ou au portage de chaque plugin** : ce ticket ne fait que le dire.
+- **Il reste, pour que le store compile un plugin de la première main** : son manifeste porte `workspace = "../../src-tauri"`, que `cargo` refuse dans un dossier seul (essayé sur `plugins/linear`), et il n'a pas de `Cargo.lock` à lui, ce qu'un membre du workspace ne peut avoir et qui demande de toute façon les crates publiées. Sans cette ligne, `cargo metadata` cherche bien `escouade-plugin-kit` sur crates.io. **Réglé au portage** : §8.18.
 
 **Publier, dans cet ordre** (depuis `src-tauri/`, sur `main` à jour, arbre propre, « oui » de Florian Gagnaire en commentaire de #22, adresse e-mail du compte vérifiée sur crates.io) :
 
@@ -1731,3 +1731,49 @@ Le deuxième et le troisième attendent seuls que le premier soit dans l'index. 
 - **La preuve.** `store/tests/unit/compile.test.ts`, `tests/db/submissions.test.ts` (un faux GitHub, le faux `escouade-plugin`) et `scripts/image-test.mjs` (le vrai, dans le vrai bac à sable). `rust-build` donne `538b34fd…`, l'empreinte de `goldens.json`, deux fois, dans l'image sous Podman et sous Docker 27, et sous Windows par `STORE_TEST_ESCOUADE_PLUGIN`. Quatre choses que seuls le test d'image et la CI ont montrées : un `--proc /proc` que le runner refuse, d'où un bac à sable **sans `/proc`** (`argv[0]`, `LD_LIBRARY_PATH` et un `ld.lld` en script dans l'image, `docs/STORE.md` §3.3) ; `/usr/bin/cc` passe par `/etc/alternatives`, absent du `/etc` vide (l'image pose un lien direct) ; **le pid 1 de bubblewrap garde l'environnement de son démarrage, lisible en `/proc/1/environ`, malgré `--clearenv`** : `inSandbox` lance donc bubblewrap avec `PATH` seul ; et la nouvelle session sort la compilation du groupe de process (la mémoire se lit sur l'arbre).
 - **Il reste, pour la production** : sous le Docker par défaut de Coolify, aucun `run.wasm` ne compile, et chaque version attend en `error` : il faut au moins `--security-opt seccomp=unconfined --security-opt apparmor=unconfined`, ou le profil d'ESC-356 (`docs/STORE.md` §3.3), à régler par l'utilisateur. Ce ticket ne touche pas à Coolify. Les chemins surveillés de Coolify ne changent pas de ce fait : ceux du §1.3 de `docs/STORE.md` restent à ajouter à la main.
 - **Il reste, pour la première main** : les manifestes de `plugins/` gardent `workspace = "../../src-tauri"` et n'ont pas de `Cargo.lock` (§8.16). Ce ticket n'y touche pas : ils seront refusés au store, par `rust::check` (`package.workspace` sort du dossier), jusqu'à leur portage. Les trois crates sont sur crates.io en `0.1.0` depuis le 2026-11-05 : `cargo fetch --locked` peut les tirer dès qu'un plugin a son `Cargo.lock` (P1).
+
+### 8.19 Ce que P1 a construit (ESC-344)
+
+Linear, Trello, Jira et ClickUp sont les premiers plugins portés, en `2.2.0`, `escouade.min` `2.2.0`, `"run": { "wasm": "Cargo.toml" }`, `crate-type = ["cdylib"]`. Ils sortent d'`escouade-plugins` et du workspace de `src-tauri`. Le kit n'a pas changé, ni l'hôte, à une règle de test près (plus bas) : c'est ce que ce ticket devait éprouver.
+
+**La forme : un plugin porté a deux compilations** (le point ouvert du §8.16, décision proposée au ticket).
+
+- **Dans le dépôt**, contre `crates/`. `plugins/Cargo.toml` est un second workspace, qui ne tient que les plugins portés, avec le même `[patch.crates-io]` et le profil d'un module. Son `Cargo.lock` est commité. `plugins/rust-toolchain.toml` est la copie de celui de `src-tauri`, que `scripts/plugins-ci.test.ts` garde égal. `plugins/.cargo/config.toml` partage `src-tauri/target` : une compilation, le cache de la CI, et les modules là où les tests les cherchent.
+- **Au store**, contre crates.io. Chaque plugin porté a son propre `Cargo.lock`, dans son dossier, que cargo ignore dans le workspace et que `escouade-plugin build` lit, sur sa copie du dossier seul (§8.17). `sh scripts/plugin-lock.sh <id-court>` l'écrit : il part du `Cargo.lock` de `src-tauri`, ce qui garde les versions de la liste fermée, hors de tout workspace. **Aucun ajout à `rust_native.json`.**
+- Ce que le store publiera est donc le second. Les deux modules diffèrent : même source, chemins autres.
+- Le lock fixe le kit publié. Un changement de `crates/` n'atteint un plugin qu'après une publication et un nouveau `plugin-lock.sh`. Le dépôt peut donc tester un kit que le store ne compile pas encore : c'est `ci.mjs`, qui fait les deux, qui le voit.
+
+**Porter un plugin.**
+
+1. Dans son `Cargo.toml` : version, `crate-type = ["cdylib"]`, plus de `workspace`, plus de `reqwest` ni de `tokio`. Dans `src-tauri/Cargo.toml`, le retirer des dépendances, de `members` et de `default-members`, et de `ENTRIES` d'`escouade-plugins.rs`. L'ajouter aux `members` de `plugins/Cargo.toml`, et son crate du kit à `[patch.crates-io]` s'il n'y est pas (`escouade-acp`, par exemple).
+2. Dans le manifeste : `version`, `escouade.min`, `run.wasm`, et `{account}` s'il joint une adresse que l'utilisateur tape.
+3. Dans ses sources : `use escouade_plugin_kit::http::reqwest;`, `escouade_plugin_kit::time::sleep`, `escouade_plugin_kit::protocol::module!(run);`.
+4. `sh scripts/plugin-lock.sh <id-court>`, puis `sh scripts/plugins-wasm.sh` et les tests de l'app.
+
+**Un plugin du registre qui est un module.** L'installeur n'en a pas : l'amorce le donnera (Z2). D'ici là `builtin::folder` le prend, pour un build de développement et les tests seulement, dans `<target>/plugins-wasm/<id-court>/plugin.wasm`, que `scripts/plugins-wasm.sh` écrit (tous les `run.wasm` de `plugins/`, plus Codex tant qu'il est une `rlib`). Le manifeste lu en `Hand::Builtin` ne demande plus que son `Cargo.toml` soit dans ce dossier. **Une release sortie de `main` avant Z2 n'aurait pas ces quatre plugins** : leur page dirait que le manifeste n'est pas lisible, et `release.yml` ne l'arrête pas, puisque `seed.json` vide passe. Z2 passe avant la prochaine release.
+
+Lu en `Hand::Builtin`, son `escouade.min` devient la version de l'app, comme sa `version` : `main` dit encore `2.1.2` et ces manifestes `2.2.0`, que le store lira.
+
+**Les tests.** Les suites `plugins_{linear,trello,jira,clickup}_tests` n'ont pas changé d'une assertion sur le fond et jouent le module par le runtime. Deux choses les y aident :
+
+- **Un faux service par son adresse.** Le cœur donne à un plugin `account.api`, une adresse `http://127.0.0.1:…` en test, que `net/fetch` refuserait à juste titre. `Fetcher::fake` laisse passer une URL de même origine qu'une route. Une route n'existe que dans les tests et, par `Bases::faked` (`ESCOUADE_TRELLO_API`, etc.), dans un build de développement : les e2e s'en servent, une release n'a pas ce chemin.
+- **`{account}` pour Jira.** Son manifeste ne disait que `*.atlassian.net`, alors qu'un process joint le site que l'utilisateur tape. C'est un droit de plus dans la fenêtre, et la seule différence de permissions du portage. Sans lui, un site hors d'Atlassian, le faux service des e2e compris, serait refusé. **Un compte qu'on vérifie n'est pas encore enregistré** : le cœur prête donc son hôte au plugin (`Runtime::lend_host`), comme il lui prête le jeton. Le fetch `{account}` le voit le temps qu'un autre hôte le remplace. P2 s'en sert tel quel.
+
+**La parité.** `tests/fixtures/plugins/parity/<nom>.json` tient, pour chacun, ce que le natif de `d3c0024c` a répondu à neuf appels et ce qu'il a demandé au service : méthode, cible, en-têtes et corps, nominal, 401, 404, 429 et méthode inconnue. `plugins_wasm_parity_tests.rs` rejoue le module sur le même faux et compare tout, à l'adresse du faux près. Aucun écart : ni dans les réponses, ni dans les requêtes. `ESCOUADE_PARITY_RECORD=1` et `ESCOUADE_NATIVE_PLUGINS=<programme>` les réécrivent, depuis un programme d'avant le portage.
+
+**Une seule correction de fond, pour le banc.** Sans site, Jira disait une erreur non typée (`not a URL`) ; il répond maintenant comme à un jeton refusé (`-32401`), ce qui se répare. Le banc n'avait jamais joué Jira, qui n'avait pas de banc tant qu'il était un process.
+
+**Les empreintes** (compilées depuis crates.io, kit et protocole `0.1.0`, `escouade-plugin build`, deux fois sous Windows, deux dossiers sous Linux, `rust:1.98.0-bookworm`, Podman) :
+
+| Plugin | SHA-256 | Taille |
+| --- | --- | --- |
+| Linear | `3b848d1b83fe2d77339ae4ddf64811528d1851b22354d1d727480a87e09bd571` | 471 278 o |
+| Trello | `3b740bf171e8bfb28e5e88a398b1f44101a776291eaee92454787451d920a7c1` | 452 665 o |
+| Jira | `da402a2aa6ae1216626d2603c4176f1f976bc2576a0cb9281e913b4b8cdb6782` | 497 928 o |
+| ClickUp | `96ada120dacfbefcba23b934841846cfc9b74d8185ac6121e0992724b5d69896` | 542 884 o |
+
+Les quatre sont identiques sous Windows et sous Linux, dans deux dossiers (`sh scripts/plugin-build-linux.sh plugins/<id-court> --first-party`), `canon` `4d3e106a…`. Le §8.17 avait mesuré `00f840b4…` pour Linear, le kit copié dans son dossier : avec le kit publié le module change, et c'est celui-ci que le store publiera. macOS n'a pas été essayé.
+
+**INT-0.** `npm run bench:int0 -- --linear-only`, avec `ESCOUADE_NATIVE_PLUGINS` pour comparer au natif : 2 000 appels de `tickets/issues` (un `fetch`, un secret) sur un faux service sans délai, en release, sous Windows, avec d'autres compilations en cours sur le poste : **module 1,23 ms au 50e centile et 1,94 ms au 99e, natif 1,54 ms et 2,42 ms**. Le seuil (5 ms de plus au 99e centile) est tenu, et l'écart en faveur du module tient au bruit du poste et aux deux process à traverser : il ne dit pas que le WASM est plus rapide. Le test échoue au-delà du seuil. `npm run bench:int0` sans option rejoue aussi le reste.
+
+**Pas fait ici.** Le job `reproductible` du §8.6.4, qui compare Windows et Linux à chaque `main`. Ni étiquette ni soumission (Z1). La compilation au store, dans `bubblewrap`, est celle d'A6 (§8.18).

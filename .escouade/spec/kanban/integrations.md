@@ -2,7 +2,7 @@
 title: "Intégrations"
 subject: "Kanban"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-213","ESC-214","ESC-215","ESC-216"]
+tickets: ["ESC-213","ESC-214","ESC-215","ESC-216","ESC-344"]
 decisions: []
 compared: null
 ---
@@ -182,3 +182,9 @@ Dans Réglages › Intégrations › « Sources du Kanban » :
 - Il se voit dans la vue Plugins, sous « Livrés avec Escouade », et se coupe pour l'app ou pour un projet. Arrêté ou coupé, la synchro le dit (« Le plugin dev.escouade.clickup ne répond pas : … ») et réessaie plus tard ; rien n'est perdu.
 - « Connecter » vérifie le jeton par le plugin, à qui Escouade le prête le temps de l'appel. Le texte « Indique le jeton. » est celui du manifeste du plugin.
 - Le plugin reçoit de l'app l'adresse de l'API (`ESCOUADE_CLICKUP_API`), la langue, le proxy et la vérification TLS des réglages.
+
+## Linear, Trello, Jira et ClickUp en WASM (ESC-344)
+
+- Ces quatre plugins ne sont plus des process `escouade-plugins <nom>` : chacun est un module WASM, dans l'hôte de l'app (voir *Tous les plugins en WASM*). Ce que les sections ci-dessus disent de leur process ne vaut plus ; le reste, Kanban, import, synchro, comptes et trousseau, ne change pas.
+- Ils ne reçoivent plus le proxy et la vérification TLS au lancement : c'est l'hôte qui les suit, et un changement atteint l'appel suivant, sans relancer le plugin.
+- Jira déclare `{account}`, pour joindre le site du compte.

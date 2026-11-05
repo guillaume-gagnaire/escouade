@@ -359,6 +359,21 @@ impl Bases {
             clickup: var("ESCOUADE_CLICKUP_API", "https://api.clickup.com/api/v2"),
         }
     }
+
+    /// The fake services among the bases of the plugins in WASM, by the host they stand in for: what `net/fetch` lets
+    /// them reach in a build of development and the tests.
+    #[cfg(any(debug_assertions, test))]
+    pub fn faked(&self) -> std::collections::HashMap<String, String> {
+        [
+            ("api.trello.com", &self.trello),
+            ("api.linear.app", &self.linear),
+            ("api.clickup.com", &self.clickup),
+        ]
+        .into_iter()
+        .filter(|(host, base)| !base.contains(host))
+        .map(|(host, base)| (host.to_string(), base.clone()))
+        .collect()
+    }
 }
 
 /// Sends a request to a service known by its name only (a code host) and reads its JSON answer (null when empty); an

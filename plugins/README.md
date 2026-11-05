@@ -49,8 +49,8 @@ are published; `src-tauri/src/plugins/builtin.rs` lists the ids it may hold.
 The plugins shipped **with** the app, on their way to the store (docs/PLUGINS.md §8): for now each is embedded in the
 app and listed in its registry (`src-tauri/src/plugins/builtin.rs`); a test of the app checks that each folder has its
 manifest, its README, its LICENSE and its CHANGELOG, and is in the registry. Their program is `escouade-plugins <name>`,
-signed with the app, and their version is Escouade's. All are under **GPL-3.0-or-later**: their code comes from the
-app's. `ci.mjs` checks them too: their LICENSE and CHANGELOG, `escouade-plugin validate --builtin`, and for those with a crate
+signed with the app, and their version is Escouade's, or, once ported, a module (`run.wasm`) with a version of its own.
+All are under **GPL-3.0-or-later**: their code comes from the app's. `ci.mjs` checks them too: their LICENSE and CHANGELOG, `escouade-plugin validate --builtin`, and for those with a crate
 `cargo test` and the crate's version against the manifest's (a manifest at `0.0.0`, stamped by the app, passes). They have
 no bench until they are `run.wasm`: then `ci.mjs` builds the module and plays it.
 
@@ -80,6 +80,7 @@ no bench until they are `run.wasm`: then `ci.mjs` builds the module and plays it
 | `clickup/`      | `dev.escouade.clickup`         | GPL-3.0-or-later | ClickUp in the Kanban                                    |
 | `isola/`        | `dev.escouade.isola`           | GPL-3.0-or-later | isola as a launch environment                            |
 
-Those with a crate (`Cargo.toml`, `src/`) depend by version on the crates that go to crates.io, and `[patch.crates-io]` of `src-tauri/Cargo.toml` brings them back to `crates/` here. They stand on the kit of the Rust plugins (`crates/escouade-plugin-kit`) or on the
+Those with a crate (`Cargo.toml`, `src/`) depend by version on the crates that go to crates.io, and `[patch.crates-io]` of `src-tauri/Cargo.toml` brings them back to `crates/` here.
+A plugin in `run.wasm` (Linear, Trello, Jira, ClickUp) has left that workspace for the one of this folder, `Cargo.toml`, with the same patch: `sh scripts/plugins-wasm.sh` compiles its module from there against `crates/`, for the tests of the app and a build of development. Its folder also has a `Cargo.lock` of its own, which fixes the crates published: cargo does not read it here, `escouade-plugin build` and the store do, from the folder alone. To port a plugin: docs/PLUGINS.md §8.19. They stand on the kit of the Rust plugins (`crates/escouade-plugin-kit`) or on the
 ACP client (`crates/escouade-acp`). The demonstration, `dev.escouade.minimal` (in development builds only), is a fixture:
 `tests/fixtures/plugins/minimal/`.

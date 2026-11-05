@@ -1,0 +1,242 @@
+[
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [["accept", "*/*"]],
+        "method": "GET",
+        "target": "/members/me?fields=username,fullName&key=k1&token=t%201"
+      }
+    ],
+    "error": null,
+    "method": "account/me",
+    "result": {
+      "label": "@ada",
+      "user": "me"
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [["accept", "*/*"]],
+        "method": "GET",
+        "target": "/members/me/boards?filter=open&fields=name&key=k1&token=t%201"
+      }
+    ],
+    "error": null,
+    "method": "tickets/containers",
+    "result": [
+      {
+        "id": "b1",
+        "name": "Atlas"
+      }
+    ]
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [["accept", "*/*"]],
+        "method": "GET",
+        "target": "/boards/b1/lists?filter=open&fields=name&key=k1&token=t%201"
+      }
+    ],
+    "error": null,
+    "method": "tickets/states",
+    "result": [
+      {
+        "id": "l1",
+        "name": "Prêt pour Claude"
+      },
+      {
+        "id": "l2",
+        "name": "En cours"
+      },
+      {
+        "id": "l3",
+        "name": "Recette"
+      }
+    ]
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [["accept", "*/*"]],
+        "method": "GET",
+        "target": "/boards/b1/lists?filter=open&fields=name&key=k1&token=t%201"
+      },
+      {
+        "body": "",
+        "headers": [["accept", "*/*"]],
+        "method": "GET",
+        "target": "/boards/b1/cards/open?fields=name,desc,idList,idShort,shortUrl,labels,idMembers&key=k1&token=t%201"
+      },
+      {
+        "body": "",
+        "headers": [["accept", "*/*"]],
+        "method": "GET",
+        "target": "/boards/b1/checklists?fields=name,idCard&checkItem_fields=name,state&key=k1&token=t%201"
+      }
+    ],
+    "error": null,
+    "method": "tickets/issues",
+    "result": {
+      "filters": [
+        {
+          "id": "mine",
+          "label": "Mes cartes"
+        },
+        {
+          "id": "list:l1",
+          "label": "Prêt pour Claude"
+        },
+        {
+          "id": "list:l2",
+          "label": "En cours"
+        },
+        {
+          "id": "list:l3",
+          "label": "Recette"
+        }
+      ],
+      "issues": [
+        {
+          "container": "b1",
+          "criteria": ["Filtre par date", "Colonnes IP"],
+          "description": "Export CSV.",
+          "id": "c1",
+          "imported": false,
+          "key": "#151",
+          "kind": "Carte",
+          "kindCode": "card",
+          "meta": ["Prêt pour Claude", "claude-ready"],
+          "service": "trello",
+          "title": "Exporter le journal",
+          "url": "https://trello.com/c/abc"
+        },
+        {
+          "container": "b1",
+          "criteria": ["Template HTML"],
+          "description": "## Critères\n- Template HTML",
+          "id": "c2",
+          "imported": false,
+          "key": "#156",
+          "kind": "Carte",
+          "kindCode": "card",
+          "meta": ["En cours"],
+          "service": "trello",
+          "title": "Email de bienvenue",
+          "url": "https://trello.com/c/def"
+        }
+      ],
+      "next": null,
+      "total": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [["accept", "*/*"]],
+        "method": "GET",
+        "target": "/boards/b1/lists?filter=open&fields=name&key=k1&token=t%201"
+      },
+      {
+        "body": "",
+        "headers": [["accept", "*/*"]],
+        "method": "GET",
+        "target": "/boards/b1/cards/open?fields=name,desc,idList,idShort,shortUrl,labels,idMembers&key=k1&token=t%201"
+      },
+      {
+        "body": "",
+        "headers": [["accept", "*/*"]],
+        "method": "GET",
+        "target": "/boards/b1/checklists?fields=name,idCard&checkItem_fields=name,state&key=k1&token=t%201"
+      }
+    ],
+    "error": null,
+    "method": "tickets/issues",
+    "result": {
+      "filters": [
+        {
+          "id": "mine",
+          "label": "Mes cartes"
+        },
+        {
+          "id": "list:l1",
+          "label": "Prêt pour Claude"
+        },
+        {
+          "id": "list:l2",
+          "label": "En cours"
+        },
+        {
+          "id": "list:l3",
+          "label": "Recette"
+        }
+      ],
+      "issues": [],
+      "next": null,
+      "total": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [["accept", "*/*"]],
+        "method": "GET",
+        "target": "/boards/nowhere/lists?filter=open&fields=name&key=k1&token=t%201"
+      }
+    ],
+    "error": {
+      "code": -32404,
+      "message": "Trello : introuvable (404) — Not Found"
+    },
+    "method": "tickets/issues",
+    "result": null
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [["accept", "*/*"]],
+        "method": "PUT",
+        "target": "/cards/c1?idList=l2&key=k1&token=t%201"
+      }
+    ],
+    "error": null,
+    "method": "tickets/setState",
+    "result": null
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"text\":\"Fait, voir la PR.\\n\\n— Escouade\"}",
+        "headers": [
+          ["accept", "*/*"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/cards/c1/actions/comments?key=k1&token=t%201"
+      }
+    ],
+    "error": {
+      "code": -32401,
+      "message": "Trello refuse ces identifiants (401) — invalid token"
+    },
+    "method": "tickets/comment",
+    "result": null
+  },
+  {
+    "asked": [],
+    "error": {
+      "code": -32601,
+      "message": "no method tickets/nothing"
+    },
+    "method": "tickets/nothing",
+    "result": null
+  }
+]

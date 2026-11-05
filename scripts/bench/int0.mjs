@@ -30,6 +30,7 @@ const label = arg('label', 'run');
 const rounds = arg('rounds', '20');
 const launches = arg('launches', '10');
 const fluxOnly = process.argv.includes('--flux-only');
+const linearOnly = process.argv.includes('--linear-only');
 
 function run(what, command, args, cwd, env) {
   console.log(`\n== ${what}`);
@@ -42,6 +43,18 @@ function run(what, command, args, cwd, env) {
 
 const read = (file) => (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null);
 const fmt = (x, digits = 0) => (Number.isFinite(x) ? x.toFixed(digits) : '—');
+
+// A source in WASM (ESC-344): a call of Linear through the app's host. ESCOUADE_NATIVE_PLUGINS, a program of before its
+// port, measures the two and holds the threshold (5 ms more at the 99th percentile).
+run('the modules of the plugins', 'sh', ['scripts/plugins-wasm.sh', 'linear'], ROOT);
+run(
+  'Linear through the host (release)',
+  'cargo',
+  ['test', '--release', '--lib', 'plugins_wasm_parity_tests::int0_linear_bench', '--', '--ignored', '--exact', '--nocapture'],
+  path.join(ROOT, 'src-tauri'),
+  { ESCOUADE_BENCH_LABEL: label },
+);
+if (linearOnly) process.exit(0);
 
 // The harnesses that left the core (INT-10) are replayed through their plugin's process: the program of the plugins,
 // beside the release tests.

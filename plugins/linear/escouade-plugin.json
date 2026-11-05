@@ -2,7 +2,7 @@
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.linear",
   "name": "Linear",
-  "version": "0.0.0",
+  "version": "2.2.0",
   "description": {
     "fr": "Les issues d'une équipe Linear dans le Kanban, ses statuts comme colonnes.",
     "en": "A Linear team's issues in the Kanban, its workflow states as columns."
@@ -10,8 +10,8 @@
   "author": { "name": "Escouade", "url": "https://escouade.dev" },
   "license": "GPL-3.0-or-later",
   "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/linear",
-  "escouade": { "api": "1", "min": "2.1.0" },
-  "run": { "command": "{escouade}/escouade-plugins", "args": ["linear"] },
+  "escouade": { "api": "1", "min": "2.2.0" },
+  "run": { "wasm": "Cargo.toml" },
   "activation": ["account:linear"],
   "permissions": {
     "network": ["api.linear.app"],

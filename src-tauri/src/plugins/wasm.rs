@@ -1050,11 +1050,30 @@ impl Fetcher {
             )
     }
 
+    /// A call to a fake service of the tests by its own address, as `account.api` gives it to a plugin: the answer of a
+    /// route, which only the tests and a build of development have.
+    fn fake(&self, url: &reqwest::Url) -> Option<Judged> {
+        let origin = url.origin();
+        let faked = self
+            .routes
+            .values()
+            .any(|base| reqwest::Url::parse(base).is_ok_and(|b| b.origin() == origin));
+        faked.then(|| Judged {
+            name: url.host_str().unwrap_or_default().to_ascii_lowercase(),
+            target: url.clone(),
+            direct: true,
+            routed: true,
+        })
+    }
+
     /// The URL of a call, judged: the local server of its harness; a host of an account (its address not judged); or a
     /// host of `permissions.network` by https (`wss` for a socket), never an address written.
     fn judge(&self, url: &str, way: Way) -> Result<Judged, (i64, String)> {
         let invalid = || (super::runtime::INVALID_PARAMS, format!("not a URL: {url}"));
         let parsed = reqwest::Url::parse(url).map_err(|_| invalid())?;
+        if let Some(judged) = self.fake(&parsed) {
+            return Ok(judged);
+        }
         let local = way == Way::Http && self.is_local(&parsed);
         let account = !local && self.is_account(&parsed);
         let scheme = parsed.scheme();

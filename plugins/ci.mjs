@@ -4,7 +4,8 @@
 // - with a package.json: `npm install` (their package-lock.json is not committed: plugins/<id>/.gitignore), the
 //   typecheck, their tests against the SDK's fake Escouade, and their dist/plugin.mjs built again and compared to the
 //   one committed (Escouade runs the plugin as the repository holds it);
-// - with a Cargo.toml: their manifest's version against the crate's, and `cargo test`, all the crates at once;
+// - with a Cargo.toml: their manifest's version against the crate's, and `cargo test`, all the crates of a workspace at
+//   once (that of src-tauri, or this folder's for those in `run.wasm`);
 // - declarative: their `node --test`.
 // Then `escouade-plugin validate` and the conformance bench of the app (ESCOUADE_PLUGIN_BIN), `--first-party` for their
 // reserved ids: for a `run.js` plugin (slack, team-rules) the bench plays dist/plugin.mjs compiled to WASM in the app's
@@ -26,8 +27,8 @@ import { listPlugins, parseArgs, problemsOf, touchedBy } from './ci-lib.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = dirname(HERE);
-// The workspace of the plugins' crates, and the folder of the toolchain it pins: cargo run from a plugin's folder would
-// take the machine's default one.
+// The workspace of the plugins that are still crates of the app, and the folder of the toolchain it pins: cargo run from
+// the folder of one of them would take the machine's default one. Those in `run.wasm` are the workspace of this folder.
 const WORKSPACE = join(ROOT, 'src-tauri');
 
 let options;
@@ -139,10 +140,10 @@ function check(plugin) {
   return run(HERE, bin, 'build', name, ...hand, '--out', tmp) && run(HERE, bin, 'test', name, ...hand, ...judged, '--wasm', module);
 }
 
-/** The tests of the crates of `plugins`, in one go: one build, whatever their number. `--no-fail-fast`: as for the plugins. */
-function testCrates(crates) {
+/** The tests of the crates of a workspace, in one go: one build, whatever their number. `--no-fail-fast`: as for the plugins. */
+function testCrates(workspace, crates) {
   if (crates.length === 0) return true;
-  return run(WORKSPACE, 'cargo', 'test', '--locked', '--no-fail-fast', ...crates.flatMap((c) => ['-p', c]));
+  return run(workspace, 'cargo', 'test', '--locked', '--no-fail-fast', ...crates.flatMap((c) => ['-p', c]));
 }
 
 const lf = (s) => s.replace(/\r\n/g, '\n');
@@ -150,9 +151,13 @@ const tmp = mkdtempSync(join(tmpdir(), 'escouade-examples-'));
 try {
   const names = plugins.map((p) => p.name);
   // Every plugin, even after one that fails: one failure must not hide another.
-  const crates = plugins.flatMap((p) => (p.cargo?.name ? [p.cargo.name] : []));
+  const crates = plugins.filter((p) => p.cargo?.name);
+  const names_of = (list) => list.map((p) => p.cargo.name);
   const started = Date.now();
-  const tested = testCrates(crates);
+  const tested = [
+    testCrates(WORKSPACE, names_of(crates.filter((p) => !p.wasm))),
+    testCrates(HERE, names_of(crates.filter((p) => p.wasm))),
+  ].every(Boolean);
   if (crates.length > 0) console.log(`\ncargo test of ${crates.length} crates: ${Math.round((Date.now() - started) / 1000)} s`);
   const failed = plugins.filter((plugin) => !check(plugin)).map((p) => p.name);
   if (!tested) console.error(`\n✗ cargo test fails: its output above says for which crates`);

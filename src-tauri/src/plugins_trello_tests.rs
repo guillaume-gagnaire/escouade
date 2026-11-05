@@ -1,6 +1,6 @@
 //! Tests of Trello as a plugin of the app (INT-7.1, ESC-213; `plugins/trello`): the tests the core
 //! had for its own Trello client (`integrations/trello.rs`), word for word, now played against the plugin started as
-//! the app starts it (`escouade-plugins trello`, checked as the app's own before it runs) by the runtime and
+//! the app starts it (its module, in the host, as `scripts/plugins-wasm.sh` built it) by the runtime and
 //! `ProcessTicketSource`, on the fake Trello of the integrations' tests; and what a process adds: the key and the token
 //! fetched by the plugin and never sent, the plugin that is off or stopped saying so, the offer of the plugin to the
 //! registry of sources.
@@ -14,8 +14,10 @@ use crate::model::{ExternalRef, ExternalState, Service};
 use crate::paths::DataDir;
 use crate::plugins::adapters::{is_down, ProcessTicketSource};
 use crate::plugins::runtime::{secret_name, Limits, Runtime};
+use crate::plugins::wasm::Net;
 use crate::plugins::{Origin, Plugins};
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -66,6 +68,11 @@ async fn trello() -> Rig {
         user: "me".into(),
         ..Default::default()
     };
+    rt.set_net(Net {
+        routes: HashMap::from([("api.trello.com".to_string(), server.url.clone())]),
+        dns: None,
+        ..Net::default()
+    });
     let t = ProcessTicketSource::new(rt.clone(), ID, "trello", &account).with_api(&server.url);
     Rig {
         server,
@@ -75,7 +82,7 @@ async fn trello() -> Rig {
     }
 }
 
-fn board(server: &FakeServer) {
+pub(crate) fn board(server: &FakeServer) {
     server.on(
         "GET",
         "/boards/b1/lists",
@@ -345,7 +352,7 @@ fn trello_is_a_plugin_of_the_app_that_the_registry_of_sources_names() {
     let v = plugins.get(ID, Lang::En).expect("the registry gives it");
     assert_eq!(v.origin, Origin::Builtin);
     let m = v.manifest.unwrap();
-    assert_eq!(m.run.unwrap().command, "{escouade}/escouade-plugins");
+    assert_eq!(m.run.unwrap().wasm.as_deref(), Some("Cargo.toml"));
     assert_eq!(m.permissions.network, ["api.trello.com"]);
     assert_eq!(m.permissions.secrets, ["account:trello"]);
 }

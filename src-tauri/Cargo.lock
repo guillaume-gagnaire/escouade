@@ -1635,7 +1635,6 @@ dependencies = [
  "escouade-plugin-bitbucket",
  "escouade-plugin-claude",
  "escouade-plugin-cli",
- "escouade-plugin-clickup",
  "escouade-plugin-codex",
  "escouade-plugin-copilot",
  "escouade-plugin-cursor",
@@ -1643,13 +1642,10 @@ dependencies = [
  "escouade-plugin-gitea",
  "escouade-plugin-github",
  "escouade-plugin-gitlab",
- "escouade-plugin-jira",
  "escouade-plugin-kit",
- "escouade-plugin-linear",
  "escouade-plugin-mistral",
  "escouade-plugin-opencode",
  "escouade-plugin-protocol",
- "escouade-plugin-trello",
  "espeak-ng",
  "flate2",
  "futures-util",
@@ -1804,17 +1800,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "escouade-plugin-clickup"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "escouade-plugin-kit",
- "reqwest 0.12.28",
- "serde_json",
- "tokio",
-]
-
-[[package]]
 name = "escouade-plugin-codex"
 version = "1.0.0"
 dependencies = [
@@ -1887,17 +1872,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "escouade-plugin-jira"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "escouade-plugin-kit",
- "reqwest 0.12.28",
- "serde_json",
-]
-
-[[package]]
 name = "escouade-plugin-kit"
 version = "0.1.0"
 dependencies = [
@@ -1910,15 +1884,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
-]
-
-[[package]]
-name = "escouade-plugin-linear"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "escouade-plugin-kit",
- "serde_json",
 ]
 
 [[package]]
@@ -1949,16 +1914,6 @@ name = "escouade-plugin-protocol"
 version = "0.1.0"
 dependencies = [
  "serde",
- "serde_json",
-]
-
-[[package]]
-name = "escouade-plugin-trello"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "escouade-plugin-kit",
- "reqwest 0.12.28",
  "serde_json",
 ]
 

@@ -13,7 +13,7 @@
 //! the origin `builtin` and is installed from there, a plugin like any other. The list fills as the plugins are published
 //! (Z2); the origin `builtin` lasts until Z3.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// A plugin the app gives.
 pub struct Entry {
@@ -202,7 +202,35 @@ pub fn manifest_text(id: &str, app_version: &str) -> Option<String> {
     let entry = REGISTRY.iter().find(|e| e.id == id)?;
     let mut v: serde_json::Value = serde_json::from_str(entry.manifest).ok()?;
     v["version"] = app_version.into();
+    // Given by this app, it runs on it, whatever a port wrote for the store (`escouade.min`).
+    if let Some(range) = v.get_mut("escouade").and_then(|e| e.as_object_mut()) {
+        range.insert("min".to_string(), app_version.into());
+    }
     serde_json::to_string_pretty(&v).ok()
+}
+
+/// The folder the plugin of the registry `id` runs from: the app's (`app_dir`), but for one that is a module
+/// (`run.wasm`). The installers hold no such thing: it comes with the seed (Z2). Until then a build of development and
+/// the tests take the one `scripts/plugins-wasm.sh` left in `<target>/plugins-wasm/<id-court>/`, and a release says it
+/// has no module.
+pub fn folder(id: &str, app_dir: &Path) -> PathBuf {
+    match module_name(id) {
+        Some(name) if cfg!(any(debug_assertions, test)) => app_dir
+            .parent()
+            .unwrap_or(app_dir)
+            .join("plugins-wasm")
+            .join(name),
+        _ => app_dir.to_path_buf(),
+    }
+}
+
+/// The folder of `plugins/` of a plugin of the registry that is a module: the last word of its `repository`.
+fn module_name(id: &str) -> Option<String> {
+    let entry = REGISTRY.iter().find(|e| e.id == id)?;
+    let v: serde_json::Value = serde_json::from_str(entry.manifest).ok()?;
+    v["run"]["wasm"].as_str()?;
+    let repository = v["repository"].as_str()?;
+    repository.rsplit('/').next().map(str::to_string)
 }
 
 /// What a form of an account of the plugin `plugin` lacks, in a sentence: the first of the fields of its kind of account

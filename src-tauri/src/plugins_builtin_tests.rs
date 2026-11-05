@@ -71,6 +71,19 @@ fn the_registry_gives_the_demonstration_plugin_with_the_origin_builtin_and_the_v
     );
 }
 
+/// A plugin ported for the store says the version of Escouade it was ported for: the app that gives it runs it all the
+/// same, its version not yet there.
+#[test]
+fn a_plugin_of_the_registry_runs_on_the_app_that_gives_it() {
+    let dir = base("min");
+    let plugins = Plugins::load_in(DataDir::new(dir.join("data")), "2.1.2", dir.join("app"));
+    let v = plugins
+        .get("dev.escouade.linear", Lang::En)
+        .expect("the registry gives it");
+    assert!(v.manifest.is_some(), "{:?}", v.state);
+    assert_eq!(v.manifest.unwrap().escouade.min, "2.1.2");
+}
+
 /// The sorting is by the origin and the hand, never by the id: a reserved id of anyone else's hand is refused, and
 /// the app's programs are the app's alone.
 #[test]
@@ -174,14 +187,15 @@ fn a_copy_of_its_id_left_by_an_older_install_gives_way_and_keeps_the_choices() {
     assert!(!copy.exists(), "the stale copy goes");
 }
 
-/// The registry is the folders of `plugins/` whose program is `escouade-plugins` (`plugins/<id-court>/`, docs/PLUGINS.md
+/// The registry is the folders of `plugins/` whose program is `escouade-plugins` or a module (`plugins/<id-court>/`, docs/PLUGINS.md
 /// §8.6.1) and the demonstration, a fixture: each with its manifest and its README (the rule of INT-4: readable alone),
 /// each manifest holding as the app's own. A plugin to publish has its LICENSE, the root's, and its CHANGELOG too.
 #[test]
 fn every_folder_of_the_app_s_plugins_has_what_it_needs_and_is_in_the_registry() {
     let of_the_app = |dir: &PathBuf| {
-        std::fs::read_to_string(dir.join(manifest::FILE))
-            .is_ok_and(|text| text.contains("{escouade}/escouade-plugins"))
+        std::fs::read_to_string(dir.join(manifest::FILE)).is_ok_and(|text| {
+            text.contains("{escouade}/escouade-plugins") || text.contains("\"wasm\"")
+        })
     };
     let folders: Vec<PathBuf> = std::fs::read_dir(repo().join("plugins"))
         .unwrap()

@@ -494,6 +494,12 @@ impl<R: Runtime> Core<R> {
             };
             self.plugin_runtime
                 .lend(own, &format!("account:{host}"), &secret);
+            if !account.site.is_empty() {
+                self.plugin_runtime
+                    .lend_host(own, &crate::forge::host_of(&account.site));
+            }
+            #[cfg(any(debug_assertions, test))]
+            self.plugin_runtime.set_routes(bases.faked());
             if service == Service::GITHUB {
                 account.site = format!("https://{host}");
             }
