@@ -1900,6 +1900,7 @@ name = "escouade-plugin-kit"
 version = "1.0.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "chrono",
  "escouade-plugin-protocol",
  "parking_lot",
@@ -1915,7 +1916,6 @@ version = "1.0.0"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
- "reqwest 0.12.28",
  "serde_json",
 ]
 

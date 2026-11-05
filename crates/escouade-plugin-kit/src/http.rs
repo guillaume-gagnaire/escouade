@@ -1,16 +1,28 @@
 //! The calls of a plugin to its service: the HTTP client as Escouade's network settings make it, and a call whose
 //! failure says what the service said (`HttpError`).
+//!
+//! [`reqwest`] is what a plugin takes its client from, on both targets: the crate itself in process, in a module the part
+//! of it the plugins use, over the host's `net/fetch` (`fetch`).
 
+#[cfg(any(test, target_family = "wasm"))]
+pub mod fetch;
+
+#[cfg(not(target_family = "wasm"))]
+pub use ::reqwest;
+#[cfg(target_family = "wasm")]
+pub use fetch as reqwest;
+
+use self::reqwest::header::HeaderMap;
 use crate::errors::{http_error_in, HttpError};
 use crate::tr;
 use anyhow::{anyhow, Result};
-use reqwest::header::HeaderMap;
 use serde_json::Value;
 use std::time::Duration;
 
 /// The network as Escouade's settings say it (Réglages › Réseau), given to a plugin of the first hand when it starts:
 /// `ESCOUADE_PROXY` (empty: none), `ESCOUADE_NO_PROXY`, `ESCOUADE_INSECURE_TLS` (`1`: the certificates are not
-/// checked, for a proxy that inspects them without its root in the system's store).
+/// checked, for a proxy that inspects them without its root in the system's store). A module has no environment and needs
+/// none of it: the host keeps its network.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Network {
     pub proxy: String,

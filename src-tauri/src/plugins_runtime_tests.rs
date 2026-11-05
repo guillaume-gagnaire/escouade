@@ -176,6 +176,20 @@ async fn it_starts_at_its_first_activation_only_in_a_job_that_takes_its_tree() {
     ));
 }
 
+/// What a module cannot read from an environment (docs/PLUGINS.md §8.4.8): the language, for every plugin.
+#[tokio::test(flavor = "multi_thread")]
+async fn initialize_says_the_language_and_the_version() {
+    let f = fake("greeting", &[], quick());
+    f.rt.set_builtin_env(vec![("ESCOUADE_LANG".into(), "en".into())]);
+    let state = f.rt.call(ID, "test/state", json!({})).await.unwrap();
+    assert_eq!(state["greeting"]["lang"], "en", "{state}");
+    assert_eq!(state["greeting"]["escouade"]["version"], "2.1.1", "{state}");
+
+    let f = fake("greeting-default", &[], quick());
+    let state = f.rt.call(ID, "test/state", json!({})).await.unwrap();
+    assert_eq!(state["greeting"]["lang"], "fr", "the backend's: {state}");
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn initialize_negotiates_the_version_of_the_protocol() {
     let f = fake("version", &["--protocol", "2"], quick());

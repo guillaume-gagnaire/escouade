@@ -355,6 +355,7 @@ impl Session {
             "protocolVersion": version,
             "escouade": { "version": app_version },
             "plugin": { "id": manifest.id, "version": manifest.version },
+            "lang": "fr",
             "capabilities": { "batch": true, "secrets": true, "log": true, "attach": true },
         })
     }

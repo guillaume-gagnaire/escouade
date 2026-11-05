@@ -39,6 +39,7 @@ const decisions = [];
 const held = [];
 const asked = new Map();
 let nextAsk = 1;
+let greeting = null;
 
 function send(msg) {
   process.stdout.write(JSON.stringify(msg) + '\n');
@@ -70,6 +71,7 @@ function handle(msg) {
   switch (method) {
     case 'initialize':
       if (flag('--ignore-initialize')) return null;
+      greeting = params;
       // Its paused input no longer keeps node alive: a timer does, as a real plugin's work would.
       if (flag('--deaf')) setTimeout(() => (process.stdin.pause(), setInterval(() => {}, 1 << 30)), 0);
       return ok(id, {
@@ -90,7 +92,7 @@ function handle(msg) {
       attached.push(params.key);
       return ok(id, { attached: attached.length });
     case 'test/state':
-      return ok(id, { attached, facts, decisions, pid: process.pid });
+      return ok(id, { attached, facts, decisions, greeting, pid: process.pid });
     case 'permissions/decide': {
       decisions.push(params);
       const mode = option('--decide') ?? (flag('--silent-decisions') ? 'silent' : 'ask');

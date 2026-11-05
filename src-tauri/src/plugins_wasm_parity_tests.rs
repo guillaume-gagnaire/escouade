@@ -1,9 +1,9 @@
-//! The parity of the prototype (ESC-330, prototypes/wasm-all) through the host of the app (ESC-331): Linear and Codex
-//! compiled to `wasm32-wasip1`, played by `wasm::Instance` and `wasm::serve`, answer as their native plugin, the
+//! The parity of the modules (ESC-330, ESC-331, ESC-334) through the host of the app: Linear and Codex compiled to
+//! `wasm32-wasip1` from their crates, played by `wasm::Instance` and `wasm::serve`, answer as their native plugin, the
 //! `escouade-plugins` the build made beside the tests.
 //!
-//! Their modules come from the prototype: `node prepare.mjs && sh reproducible.sh` in prototypes/wasm-all, then
-//! `cargo build --bins`. Without them, each test says so and passes; with `ESCOUADE_PARITY=1` it fails.
+//! Their modules come from `sh scripts/plugins-wasm.sh`, beside `cargo build --bins`. Without them, each test says so and
+//! passes; with `ESCOUADE_PARITY=1` it fails.
 
 use crate::plugins::wasm::{self, Fetcher, Frame, Instance, Net, Wiring};
 use serde_json::{json, Value};
@@ -21,11 +21,15 @@ fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
 }
 
-/// A module of the prototype, compiled by the app's engine.
+/// `target`, as the tests run in `target/debug/deps`, wherever it is.
+fn target() -> PathBuf {
+    let exe = std::env::current_exe().unwrap();
+    exe.ancestors().nth(3).unwrap().to_path_buf()
+}
+
+/// A module of `scripts/plugins-wasm.sh`, compiled by the app's engine.
 fn module(name: &str) -> Option<wasmtime::Module> {
-    let path = root()
-        .join("prototypes/wasm-all/target/reproducible/wasm32-wasip1/release")
-        .join(format!("{name}.wasm"));
+    let path = target().join("plugins-wasm").join(format!("{name}.wasm"));
     match std::fs::read(&path) {
         Ok(bytes) => Some(wasm::reactor(&bytes).expect("a reactor")),
         Err(e) => {
@@ -166,6 +170,73 @@ fn hello() -> Value {
         "plugin": { "id": "dev.escouade.test", "version": "1.0.0" },
         "capabilities": {},
     })
+}
+
+/// The error of a call of Linear when the account has no key.
+fn without_a_key(p: &mut dyn Plugin) -> String {
+    p.send(
+        &json!({ "jsonrpc": "2.0", "id": 2, "method": "tickets/states", "params": linear_params(None) })
+            .to_string(),
+    );
+    loop {
+        let line = p.recv(Duration::from_secs(20)).expect("an answer");
+        let v: Value = serde_json::from_str(&line).expect("JSON");
+        if v["method"] == "secrets/get" {
+            p.send(&json!({ "jsonrpc": "2.0", "id": v["id"], "result": null }).to_string());
+        } else if v["id"] == json!(2) {
+            return v["error"]["message"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string();
+        }
+    }
+}
+
+/// A module has no environment: it writes in the language `initialize` says, as its native plugin does.
+#[test]
+fn linear_writes_in_the_language_of_initialize() {
+    let Some(linear) = module("linear") else {
+        return;
+    };
+    for (lang, word) in [
+        ("en", "Connect the account"),
+        ("fr", "Reconnecte le compte"),
+    ] {
+        let mut greeting = hello();
+        greeting["lang"] = json!(lang);
+        let net = Net::default();
+        let fetcher = Fetcher::new("dev.escouade.linear", &[], &net);
+        let mut hosted = Hosted::start(linear.clone(), fetcher);
+        let mut native = Native::start("linear");
+        assert!(call(&mut hosted, 1, "initialize", greeting.clone())["result"].is_object());
+        assert!(call(&mut native, 1, "initialize", greeting)["result"].is_object());
+        let said = without_a_key(&mut hosted);
+        assert!(said.contains(word), "{lang}: {said}");
+        assert_eq!(said, without_a_key(&mut native));
+    }
+}
+
+/// Its ids are told apart from those of the instance before it: `std::process::id()` traps in a module, WASI's random
+/// numbers stand in for it.
+#[test]
+fn two_instances_of_codex_have_ids_of_their_own() {
+    let Some(codex) = module("codex") else {
+        return;
+    };
+    let launch = || {
+        let net = Net::default();
+        let fetcher = Fetcher::new("dev.escouade.codex", &[], &net);
+        let mut hosted = Hosted::start(codex.clone(), fetcher);
+        let attach = json!({ "agent": "a", "cwd": "wt", "model": "gpt-6-luna", "mode": "default", "lang": "fr" });
+        let mut launch = attach.clone();
+        launch["start"] = json!({ "kind": "new" });
+        call(&mut hosted, 1, "initialize", hello());
+        call(&mut hosted, 2, "agent/attach", attach);
+        let v = call(&mut hosted, 3, "engine/launch", launch);
+        assert!(v["error"].is_null(), "{v}");
+        v["result"].to_string()
+    };
+    assert_ne!(launch(), launch());
 }
 
 /// A fake Linear, as the prototype's: GraphQL on a socket of its own, keep-alive, one thread a connection. `slow<ms>` in

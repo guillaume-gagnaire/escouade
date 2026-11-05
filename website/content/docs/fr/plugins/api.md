@@ -33,6 +33,7 @@ Le premier message d’Escouade est `initialize`. Il donne la version du protoco
     "protocolVersion": 1,
     "escouade": { "version": "2.1.1" },
     "plugin": { "id": "dev.escouade.slack", "version": "1.1.0" },
+    "lang": "fr",
     "capabilities": { "batch": true, "secrets": true, "settings": true, "log": true, "attach": true }
   }
 }
@@ -44,6 +45,7 @@ Le plugin répond la version qu’il parle et ses propres capacités :
 {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"capabilities":{"batch":true}}}
 ```
 
+- `lang` est la langue de l’interface (`fr`, `en`), pour ce que le plugin écrit à l’utilisateur.
 - Une autre version, ou une réponse sans version, arrête le plugin, avec la raison : « it speaks version 2 of the protocol; this Escouade speaks version 1 ».
 - Sans réponse en 10 secondes, le plugin est arrêté aussi.
 - Rien d’autre ne lui est envoyé avant sa réponse : ce qui arrive entre-temps attend dans une file.

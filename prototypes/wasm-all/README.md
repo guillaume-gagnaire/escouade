@@ -3,6 +3,10 @@
 L'étude, les capacités, les décisions et le plan sont dans `docs/PLUGINS.md` §8. Ce dossier n'est construit par rien dans
 l'app : il prouve le chemin, et garde de quoi refaire chaque mesure.
 
+**Depuis ESC-334, ce chemin est dans les crates du dépôt** : `escouade-turn`, le `serve` et la façade de reqwest ont rejoint
+`crates/`, et `sh scripts/plugins-wasm.sh` compile Linear et Codex sans `generated/`. `prepare.mjs` cherche le code d'avant et
+échoue : pour refaire ce qui suit, partir du commit `de8eba05`.
+
 - `guest/` : ce qui compile en `wasm32-wasip1`.
   - `linear/`, `codex/` : les plugins du dépôt. `generated/` est leur source, copiée par `prepare.mjs`, qui imprime ce
     qu'il change : le prix du portage.
@@ -28,9 +32,9 @@ cargo test --release                            # les 5 tests : les modules cont
 cargo run --release --example measure > ../results/measures-1.json
 ```
 
-Ces mêmes modules passent aussi par l'hôte de l'app, sans celui d'ici (ESC-331) : une fois `reproducible.sh` lancé,
-`ESCOUADE_PARITY=1 cargo nextest run --lib plugins_wasm_parity` dans `src-tauri/`, après `cargo build --bins`. Sans
-`ESCOUADE_PARITY`, ces tests se sautent quand les modules manquent.
+Les modules des crates passent par l'hôte de l'app : après `sh scripts/plugins-wasm.sh` et `cargo build --bins`,
+`ESCOUADE_PARITY=1 cargo nextest run --lib plugins_wasm_parity` dans `src-tauri/`. Sans `ESCOUADE_PARITY`, ces tests se
+sautent quand les modules manquent.
 
 `reproducible.sh` installe rust 1.98.0 en profil `minimal` dans `target/rustup` (avec `rust-src`, l'empreinte change),
 sans toucher à la chaîne d'outils de l'utilisateur. `--plain` compile sans `rustc-canon`, pour voir ce qu'il change.

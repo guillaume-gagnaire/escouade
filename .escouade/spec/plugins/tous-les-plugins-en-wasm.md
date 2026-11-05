@@ -2,7 +2,7 @@
 title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §8 (ESC-330)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »"]
-tickets: ["ESC-330","ESC-331","ESC-332"]
+tickets: ["ESC-330","ESC-331","ESC-332","ESC-334"]
 decisions: [73,71,70,72,75]
 compared: null
 ---
@@ -62,3 +62,12 @@ Pour `run.js` comme pour `run.wasm`, appliqué par Escouade et gardé au journal
 - Tout ce qui tourne ainsi s'arrête avec l'instance.
 - Le SDK donne `openStream` et `openSocket`. `escouade-plugin test --account <adresse>` donne une adresse à `{account}` au banc, qui sert toutes ces méthodes.
 - OpenCode n'utilise pas encore `local:shared`, et aucun plugin n'est porté : c'est la suite du plan.
+
+## Ce qui tourne déjà : le kit Rust (ESC-334)
+
+- `escouade-plugin-protocol`, `escouade-plugin-kit` et `escouade-acp` compilent en natif et pour `wasm32-wasip1`, sans tokio ni reqwest sur wasm. Un plugin écrit sur eux garde la même source sur les deux cibles. Aucun plugin livré n'a encore changé de manifeste : ils restent natifs jusqu'à leur portage.
+- `initialize` dit à tout plugin la langue de l'interface (`lang`) en plus de la version d'Escouade. C'est par là qu'un module la connaît : il n'a pas d'environnement. Un plugin de la première main y lit sa langue, en module comme en process.
+- En module, le réseau d'un plugin du kit passe par `net/fetch` : le proxy, les certificats et le délai restent à l'hôte, et ce que le plugin en dit n'a pas d'effet.
+- En module, `sleep` et `timeout` du kit reposent sur les minuteurs de l'hôte. Si l'hôte refuse un minuteur, le journal le dit et l'attente finit aussitôt, pour qu'un appel ne reste pas retenu pour toujours.
+- Linear et Codex, compilés depuis leurs crates, répondent dans l'hôte de l'app comme leur natif : Linear à ses appels, Codex ligne à ligne sur les flux enregistrés.
+- Les trois crates sont prêtes pour crates.io, avec licence, dépôt et README. Seul le chef les publie.

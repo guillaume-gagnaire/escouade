@@ -479,6 +479,17 @@ impl Runtime {
         self.builtin_env.read().clone()
     }
 
+    /// The language `initialize` says: the one the plugins the app gives are told, or the backend's. A module has no
+    /// environment, and a plugin of a third party gets none of `builtin_env` (docs/PLUGINS.md §8.4.8).
+    fn lang(&self) -> String {
+        let env = self.builtin_env.read();
+        let said = env.iter().find(|(k, _)| k == "ESCOUADE_LANG");
+        said.map_or_else(
+            || crate::i18n::kit(crate::i18n::ui()).code().to_string(),
+            |(_, code)| code.clone(),
+        )
+    }
+
     /// The core, once made: the projects whose settings a plugin may ask for.
     pub fn place_with(&self, p: Weak<dyn super::events::Place>) {
         *self.place.write() = Some(p);
@@ -1229,6 +1240,7 @@ impl Host {
             "protocolVersion": PROTOCOL,
             "escouade": { "version": rt.app_version },
             "plugin": { "id": self.id, "version": self.manifest.version },
+            "lang": rt.lang(),
             "capabilities": { "batch": true, "secrets": true, "settings": true, "log": true, "attach": true },
         });
         let answer = match self

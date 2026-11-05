@@ -12,6 +12,7 @@ use escouade_acp::vibe::worded;
 use escouade_plugin_protocol::engine::{
     AnswerPermission, Attach, EnvVar, Item, Launch, LaunchParams, StartAt,
 };
+use escouade_plugin_protocol::turn;
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -164,7 +165,7 @@ impl Agent {
                 })
                 .collect(),
             // Its ids are told apart from those of a process of this plugin before it restarted.
-            next: u64::from(std::process::id()) << 20,
+            next: turn::instance_id() << 20,
             ours: HashMap::new(),
             told: Translator::default(),
             own: Own::default(),
@@ -209,7 +210,7 @@ impl Agent {
             p.escouade.as_ref(),
             // Only for a refused server: an entry of the user's of its name is turned off.
             || {
-                home.and_then(|h| std::fs::read_to_string(h.join("config.toml")).ok())
+                home.and_then(|h| turn::read_file(&h.join("config.toml")))
                     .is_some_and(|text| words::declares_escouade(&text))
             },
         );

@@ -6,11 +6,12 @@
 pub mod engine;
 pub mod forge;
 pub mod tickets;
+pub mod turn;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::io::{BufRead, Write};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 /// The major version of the protocol, which `escouade.api` of a manifest and `protocolVersion` of the handshake name.
 pub const PROTOCOL: u64 = 1;
@@ -51,6 +52,10 @@ pub struct Hello {
     pub protocol_version: u64,
     pub escouade: Version,
     pub plugin: Named,
+    /// The language of the interface (`fr`, `en`), in which the plugin writes what the user reads: what a module cannot
+    /// get from its environment (docs/PLUGINS.md §8.4.8).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lang: Option<String>,
     #[serde(default)]
     pub capabilities: Value,
 }
@@ -78,9 +83,45 @@ impl Hello {
                 id: id.into(),
                 version: plugin_version.into(),
             },
+            lang: None,
             capabilities,
         }
     }
+}
+
+/// What Escouade said of itself at `initialize`, kept by [`greeted`]: what a process reads from its environment, a module
+/// has no other way to get (docs/PLUGINS.md §8.4.8).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Greeting {
+    /// The language of the interface, when it was said.
+    pub lang: Option<String>,
+    /// The version of Escouade.
+    pub version: String,
+}
+
+impl Greeting {
+    fn of(params: &Value) -> Self {
+        Self {
+            lang: params["lang"].as_str().map(str::to_string),
+            version: params["escouade"]["version"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string(),
+        }
+    }
+}
+
+static GREETING: OnceLock<Greeting> = OnceLock::new();
+
+/// What Escouade said at `initialize`: none before it. For the language of a plugin of the kit, see its `i18n`.
+pub fn greeting() -> Option<&'static Greeting> {
+    GREETING.get()
+}
+
+/// Keeps what the params of `initialize` say of Escouade (`serve`, the kit's loop). Only the first counts: a process, or
+/// an instance, is told once.
+pub fn greeted(params: &Value) {
+    let _ = GREETING.set(Greeting::of(params));
 }
 
 /// What the plugin answers to `initialize`: the version of the protocol it speaks (Escouade refuses any other) and
@@ -151,7 +192,10 @@ pub fn serve<R: BufRead, W: Write>(
             continue;
         };
         let result = match request.method.as_str() {
-            method::INITIALIZE => Ok(initialized(capabilities.clone())),
+            method::INITIALIZE => {
+                greeted(&request.params);
+                Ok(initialized(capabilities.clone()))
+            }
             method::SHUTDOWN => Ok(Value::Null),
             other => handler(other, request.params),
         };
@@ -229,7 +273,10 @@ pub fn serve_later<R: BufRead>(
             out: output.clone(),
         };
         match request.method.as_str() {
-            method::INITIALIZE => reply.send(Ok(initialized(capabilities.clone()))),
+            method::INITIALIZE => {
+                greeted(&request.params);
+                reply.send(Ok(initialized(capabilities.clone())));
+            }
             method::SHUTDOWN => {
                 reply.send(Ok(Value::Null));
                 return Ok(());
@@ -355,5 +402,29 @@ mod tests {
         assert_eq!(v["protocolVersion"], 1);
         assert_eq!(v["escouade"]["version"], "2.2.0");
         assert_eq!(v["plugin"]["id"], "dev.escouade.minimal");
+        assert!(v.get("lang").is_none(), "{v}");
+    }
+
+    #[test]
+    fn a_language_comes_with_the_hello_and_an_older_hello_still_reads() {
+        let mut hello = Hello::new("2.2.0", "dev.escouade.minimal", "2.2.0", json!({}));
+        hello.lang = Some("en".into());
+        let v = serde_json::to_value(&hello).unwrap();
+        assert_eq!(v["lang"], "en");
+        assert_eq!(serde_json::from_value::<Hello>(v).unwrap(), hello);
+        hello.lang = None;
+        let v = serde_json::to_value(&hello).unwrap();
+        assert_eq!(serde_json::from_value::<Hello>(v).unwrap(), hello);
+    }
+
+    #[test]
+    fn what_escouade_says_of_itself_is_read_from_the_params_of_initialize() {
+        let params = json!({ "lang": "en", "escouade": { "version": "2.2.0" } });
+        let said = Greeting::of(&params);
+        assert_eq!(
+            (said.lang.as_deref(), said.version.as_str()),
+            (Some("en"), "2.2.0")
+        );
+        assert_eq!(Greeting::of(&json!({})), Greeting::default());
     }
 }

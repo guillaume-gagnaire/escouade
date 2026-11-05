@@ -17,7 +17,7 @@ use escouade_plugin_protocol::engine::{
     method, AgentRef, AnswerPermission, AnswerQuestion, Attach, Compact, Compacted, Frames, Items,
     LaunchParams, SendMessage, SetValue, UsageAsked, Writes,
 };
-use escouade_plugin_protocol::{serve, Refusal};
+use escouade_plugin_protocol::{turn, Refusal};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
@@ -50,21 +50,14 @@ fn writes(lines: Vec<String>) -> Result<Value, Refusal> {
 
 pub fn run() -> i32 {
     let mut plugin = Plugin::default();
-    let stdin = std::io::stdin();
-    let result = serve(
-        stdin.lock(),
-        std::io::stdout().lock(),
+    turn::run(
+        "codex",
         json!({ "harnesses": ["codex"] }),
-        |m, params| plugin.handle(m, params),
-    );
-    match result {
-        Ok(()) => 0,
-        Err(e) => {
-            eprintln!("escouade-plugins codex: {e}");
-            1
-        }
-    }
+        move |m, params| plugin.handle(m, params),
+    )
 }
+
+escouade_plugin_protocol::module!(run);
 
 impl Plugin {
     fn agent(&mut self, key: &str) -> Result<&mut Agent, Refusal> {

@@ -106,6 +106,8 @@ export interface InitializeParams {
     id: string;
     version: string;
   };
+  /** The language of the interface (fr, en), for what the plugin writes for the user. A plugin in WASM has no other way to know it. */
+  lang?: string;
   capabilities: EscouadeCapabilities;
 }
 

@@ -446,6 +446,10 @@
           },
           "required": ["id", "version"]
         },
+        "lang": {
+          "description": "The language of the interface (fr, en), for what the plugin writes for the user. A plugin in WASM has no other way to know it.",
+          "type": "string"
+        },
         "capabilities": {
           "$ref": "#/definitions/EscouadeCapabilities"
         }

@@ -55,7 +55,7 @@ pub trait ForgeKind: Send + Sync {
         None
     }
     /// The client of one account.
-    fn client(&self, http: reqwest::Client, account: &Credentials) -> Box<dyn Forge>;
+    fn client(&self, http: crate::http::reqwest::Client, account: &Credentials) -> Box<dyn Forge>;
 }
 
 /// The states of a container and the state each column gives by default (`doing`, `review`, `done`).
@@ -96,7 +96,11 @@ pub trait SourceKind: Send + Sync {
     fn id(&self) -> &str;
     fn name(&self) -> &str;
     /// The client of one account (`url`: the instance of a code host's account; empty for a source's own).
-    fn client(&self, http: reqwest::Client, account: &Credentials) -> Box<dyn TicketSource>;
+    fn client(
+        &self,
+        http: crate::http::reqwest::Client,
+        account: &Credentials,
+    ) -> Box<dyn TicketSource>;
     /// The name of the account's secret (`account:<name>`) when the instance is `url`: by default its host, else the
     /// source's own id. A source whose instance is only an address typed by the user (Jira's site) keeps its own id.
     fn account_name(&self, url: &str) -> String {
@@ -178,7 +182,7 @@ impl Hosts {
         Ok(token.trim().to_string())
     }
 
-    fn http(&self) -> Result<reqwest::Client, Refusal> {
+    fn http(&self) -> Result<crate::http::reqwest::Client, Refusal> {
         self.network.client().map_err(|e| Refusal {
             code: -32000,
             message: format!("{e:#}"),

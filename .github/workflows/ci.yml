@@ -195,6 +195,35 @@ jobs:
             src-tauri/escouade-js/target/escouade-js.wasm.sha256
           retention-days: 7
 
+  # The kit of the plugins in Rust as modules (ESC-334, docs/PLUGINS.md §8.10, A4): these crates compile for wasm32-wasip1, the
+  # toolchain's file brings the target; Linear and Codex, compiled from their crates, prove it. What A9 will publish stays
+  # publishable.
+  plugin-kit-wasm:
+    name: Plugin kit (wasm32-wasip1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust toolchain (pinned in src-tauri/rust-toolchain.toml)
+        working-directory: src-tauri
+        run: rustup toolchain install
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Clippy for wasm32-wasip1
+        working-directory: src-tauri
+        run: cargo clippy --locked --target wasm32-wasip1 -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp -p escouade-plugin-linear -p escouade-plugin-codex -- -D warnings
+
+      - name: Linear and Codex as modules
+        run: sh scripts/plugins-wasm.sh
+
+      - name: The crates of crates.io can be published (a dry run)
+        working-directory: src-tauri
+        run: cargo publish --dry-run --locked -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp
+
   windows-lint:
     name: Windows (Rust format and Clippy)
     runs-on: windows-latest

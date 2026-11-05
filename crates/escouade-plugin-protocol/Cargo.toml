@@ -1,9 +1,13 @@
 [package]
 name = "escouade-plugin-protocol"
 version = "1.0.0"
-description = "Le protocole JSON-RPC des plugins d'Escouade : ses constantes, ses messages et la boucle d'un plugin en process"
+description = "Le protocole JSON-RPC des plugins d'Escouade : ses constantes, ses messages et la boucle d'un plugin, en process ou en module WASM"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"
+repository = "https://github.com/guillaume-gagnaire/escouade"
+homepage = "https://escouade.dev"
+readme = "README.md"
+include = ["src/**/*.rs", "Cargo.toml", "README.md", "LICENSE"]
 edition = "2021"
 rust-version = "1.88"
 workspace = "../../src-tauri"

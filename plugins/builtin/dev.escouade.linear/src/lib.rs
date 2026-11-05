@@ -6,6 +6,7 @@ use anyhow::{anyhow, Result};
 use escouade_plugin_kit::errors::{http_error_in, HttpError, Refused};
 use escouade_plugin_kit::forge::BoxFuture;
 use escouade_plugin_kit::hosts::{Credentials, SourceKind, TicketSource};
+use escouade_plugin_kit::http::reqwest;
 use escouade_plugin_kit::i18n::{self, Lang};
 use escouade_plugin_kit::protocol::tickets::{
     Container, ExternalIssue, ExternalRef, ExternalState, IssueFilter, IssuePage, Query,
@@ -407,6 +408,8 @@ pub fn run() -> i32 {
         escouade_plugin_kit::hosts::Hosts::new(vec![], vec![Box::new(LinearSource)]),
     )
 }
+
+escouade_plugin_kit::protocol::module!(run);
 
 #[cfg(test)]
 mod tests {
