@@ -265,7 +265,8 @@ describe('the bench in a container', () => {
     expect(developmentVersion("export const NEXT = '2.2';")).toBe('2.2.0');
     expect(developmentVersion("/** x */\nexport const NEXT = '2.3.1';\n")).toBe('2.3.1');
     expect(developmentVersion('export const NEXT = PLAN;')).toBeUndefined();
-    expect(readDevelopmentVersion(REPO)).toMatch(/^\d+\.\d+\.\d+$/);
+    // The store's image holds store/ alone: the site's file is read where the repository is whole.
+    if (existsSync(join(REPO, 'website', 'app', 'data', 'site.ts'))) expect(readDevelopmentVersion(REPO)).toMatch(/^\d+\.\d+\.\d+$/);
     expect(readDevelopmentVersion(join(REPO, 'nowhere'))).toBeUndefined();
   });
 
