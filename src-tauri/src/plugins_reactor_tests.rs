@@ -608,14 +608,17 @@ fn a_module_reads_every_byte_it_is_given_from_a_line_cut_in_two() {
     let text = json!({ "jsonrpc": "2.0", "id": 1, "method": "probe/turns", "params": {} });
     let text = format!("{text}\n").into_bytes();
     let (a, b) = text.split_at(10);
+    // The first piece is said written once it is on the module's input, before its turn runs: the second, sent after,
+    // comes to the next turn whatever the machine's speed (a sleep was not enough on a slow runner).
+    let (written, on_input) = tokio::sync::oneshot::channel();
     let s = Served::start(
         no_network(),
         wasm::Limits::default(),
         None,
-        vec![(a.to_vec(), None)],
+        vec![(a.to_vec(), Some(written))],
     );
     let tx = s.tx.as_ref().unwrap();
-    std::thread::sleep(Duration::from_millis(50));
+    on_input.blocking_recv().unwrap();
     tx.send((b.to_vec(), None)).unwrap();
     assert_eq!(s.answer()["result"]["turns"], 2);
 }
