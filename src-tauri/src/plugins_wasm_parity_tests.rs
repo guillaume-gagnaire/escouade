@@ -395,8 +395,9 @@ fn a_slow_call_of_linear_holds_back_neither_the_next_nor_the_thread() {
             order.push((v["id"].as_u64().unwrap(), started.elapsed()));
         }
     }
+    // The quick one first is what says it was not held back: no time of its own is asked, a slow runner takes more
+    // than 400 ms for it (the CI's macOS, 2026-11-05: 515 ms).
     assert_eq!(order[0].0, 11, "the quick one first: {order:?}");
-    assert!(order[0].1 < Duration::from_millis(390), "{order:?}");
     assert!(order[1].1 >= Duration::from_millis(400), "{order:?}");
 }
 

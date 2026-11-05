@@ -9141,6 +9141,12 @@ async fn an_agent_whose_account_is_gone_takes_another_of_its_harness_never_princ
     let (p, _) = h.project(false).await;
     let pro = second_account(&h);
     let a = agent_on(&h, &p, "pro").await;
+    // The warm-up of its creation started its process on « pro »: stopped first, or the turn would go to it and the
+    // account be read no more (the CI's macOS, 2026-11-05: « parti » three times).
+    h.wait("warm-up", |h| h.alive(&a.id)).await;
+    h.core.agent(&a.id).unwrap().lock().meta.last_activity = 0;
+    h.core.stop_idle_processes();
+    h.wait("idle stop", |h| !h.alive(&a.id)).await;
     // Its account gone (a state saved with an account removed since): the one a new agent of its
     // project goes to, Principal here, the only one left, as it serves the project.
     h.core.agent(&a.id).unwrap().lock().meta.account = "parti".into();
