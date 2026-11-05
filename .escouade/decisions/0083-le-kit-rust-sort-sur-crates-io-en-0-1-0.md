@@ -1,9 +1,9 @@
 ---
-number: null
+number: 83
 id: "le-kit-rust-sort-sur-crates-io-en-0-1-0"
 title: "Le kit Rust sort sur crates.io en 0.1.0 sous MIT, les plugins en dépendent par version"
 date: "2026-11-05"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-341"
 pages: ["plugins/tous-les-plugins-en-wasm"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/tous-les-plugins-en-wasm","added":6,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-05T09:07:14+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
