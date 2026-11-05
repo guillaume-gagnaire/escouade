@@ -2,7 +2,7 @@
 title: "Les programmes JS/TS des plugins, en WASM sans Node"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §5 (ESC-319, ESC-320, ESC-321, ESC-322, ESC-323)","docs/STORE.md §3.3, §3.4, §4.2, §5.2","prototypes/wasm-plugins/","Demande de l'utilisateur du 2026-11-01 : « je veux pas rendre node obligatoire… chaque plugin ts qui est soumis sera buildé en wasm »","Revue d'ESC-319 par le chef (2026-11-01) : l'adresse résolue","Consigne du chef au lancement d'ESC-323 (2026-11-01) : pas de socket Docker","Consignes du chef au lancement d'ESC-324 (2026-11-01) : le banc de run.js dans l'hôte WASM","Décisions de l'utilisateur des 2026-11-02 et 2026-11-04 (ESC-328) : le compilateur dans l'image du store, avant la 2.2.0","src-tauri/src/plugins/wasm.rs","src-tauri/src/plugins/store.rs","src-tauri/src/plugins/files.rs","src-tauri/src/plugins/bench/","crates/escouade-plugin-cli/","scripts/escouade-js.sh","store/Dockerfile","store/scripts/image-test.mjs","store/server/utils/compile.ts","store/server/utils/checks.ts","store/scripts/plugin-review/","sdk/plugin/src/index.ts","sdk/plugin/bin/escouade-plugin.mjs","schemas/plugin-protocol-1.json"]
-tickets: ["ESC-319","ESC-320","ESC-321","ESC-322","ESC-323","ESC-324","ESC-326","ESC-328"]
+tickets: ["ESC-319","ESC-320","ESC-321","ESC-322","ESC-323","ESC-324","ESC-326","ESC-328","ESC-332"]
 decisions: [29,32,36,38,43,46]
 compared: null
 ---
@@ -81,3 +81,15 @@ Un plugin dont le programme est écrit en JavaScript ou en TypeScript tourne **d
 - Un test de l'app les joue dans le runtime WASM avec un PATH sans `node` : Règles de l'équipe décide, Slack poste vers un faux Slack local (jamais slack.com).
 - **`escouade-plugin validate|test --escouade <version>`** juge le plugin pour cette version d'Escouade au lieu de celle du binaire, et `escouade-plugin --version` dit `wasm-since <version>` (la première version qui sert le WASM, une constante, `wasm::SERVED_SINCE`). `plugins/ci.mjs` lit cette ligne et juge les plugins du dépôt pour cette version : la CI de main passe avant que l'app ne soit bumpée en 2.2.0, sans écrire la version en dur.
 - Le chef pose les étiquettes `plugins/slack/v2.0.0` et `plugins/team-rules/v2.0.0`, soumet, revoit (la revue recompile), signe et publie ; les 1.x restent au store pour les apps d'avant.
+
+## Depuis ESC-332 : ce qui remplace les lignes plus haut
+
+Ce qui suit l'emporte sur ce que disent plus haut « Le SDK, sur les deux transports » et « Ce que l'hôte sert, et applique ». Le détail est sur la page *Tous les plugins en WASM*.
+
+- **Les minuteurs existent en WASM** : le prélude donne `setTimeout` et `clearTimeout`, servis par `timer/set`. Le SDK borne donc aussi `shutdown` par son propre délai.
+- **`net/fetch` suit le proxy et le TLS de Réglages › Réseau.** Par un proxy, seul le nom est jugé, et le journal le dit ; sans proxy, ou pour un hôte qu'il exclut, les adresses résolues sont jugées comme avant.
+- **http et le réseau local** restent refusés, sauf pour l'hôte qu'un utilisateur a saisi pour un compte du plugin (`{account}`), et pour le serveur local que le cœur a lancé pour lui (`local:shared`, en http).
+- **Les 10 s et 1 Mio** d'un appel sont ceux d'un plugin qui ne déclare rien : `limits` en demande plus, jusqu'à 120 s et 32 Mio.
+- **Un corps binaire** passe par `bodyBase64`, dans les deux sens. `fetch` prend un `Uint8Array` ou un `ArrayBuffer`, et `Response` a `bytes()` et `arrayBuffer()`.
+- Un plugin WASM n'ouvre toujours aucune socket lui-même : `net/stream` et `ws/*` sont servis par l'hôte, aux mêmes hôtes. Le SDK en fait `openStream` et `openSocket`.
+- Changer le prélude change les empreintes : celles de `crates/escouade-plugin-cli/goldens.json` sont refaites avec l'`escouade-js` de Linux.

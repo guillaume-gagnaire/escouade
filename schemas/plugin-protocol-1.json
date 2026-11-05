@@ -82,7 +82,7 @@
       "timeoutMs": 5000
     },
     "net/fetch": {
-      "description": "An HTTP request, for a plugin in WASM (run.js): the SDK's standard fetch goes by it. Escouade sends it in https only, to a host of permissions.network or one of its subdomains, never to an address of the machine or of the local network (judged on the addresses the name resolves to), without a proxy; it follows no redirection (the plugin gets the 3xx). The answer comes within 10 s and holds 1 MiB at most (failed past either). A plugin run by a command uses its own network, and is answered methodNotFound.",
+      "description": "An HTTP request, for a plugin in WASM (run.js, run.wasm): the SDK's standard fetch goes by it. Escouade sends it in https only, to a host of permissions.network or one of its subdomains, never to an address of the machine or of the local network (judged on the addresses the name resolves to). `{account}` in permissions.network opens the host the user typed for one of the plugin's accounts, on that port and that host alone, in http or on the local network; `local:shared` opens http to 127.0.0.1 on a port the core read in the output of the process it started for the plugin (Launch.shared.listens), while it lives. The proxy and the TLS of Réglages › Réseau are followed: through a proxy only the name is judged, and the journal says so. No redirection is followed (the plugin gets the 3xx). The answer comes within 10 s and holds 1 MiB at most (failed past either), unless the manifest's limits ask for more (120 s, 32 MiB at most). A plugin run by a command uses its own network, and is answered methodNotFound; the same for net/stream, ws/* and timer/*.",
       "direction": "toEscouade",
       "params": {
         "$ref": "#/definitions/NetFetchParams"
@@ -92,6 +92,127 @@
       },
       "errors": ["invalidParams", "refused", "failed"],
       "timeoutMs": 10000
+    },
+    "net/stream": {
+      "description": "A response in pieces, for a plugin in WASM: the rules of net/fetch at its opening, the answer once its headers are read. Then net/chunk, and net/end. The plugin holds 256 KiB it has not consumed (net/credit): past it Escouade does not read the socket. 8 streams at once. 120 s without a byte end a stream that is not declared sse.",
+      "direction": "toEscouade",
+      "params": {
+        "$ref": "#/definitions/NetStreamParams"
+      },
+      "result": {
+        "$ref": "#/definitions/NetStreamResult"
+      },
+      "errors": ["invalidParams", "refused", "failed"],
+      "timeoutMs": 10000
+    },
+    "net/chunk": {
+      "description": "A piece of a stream.",
+      "direction": "toPlugin",
+      "notification": true,
+      "params": {
+        "$ref": "#/definitions/NetChunkParams"
+      }
+    },
+    "net/end": {
+      "description": "The end of a stream; none after a net/cancel.",
+      "direction": "toPlugin",
+      "notification": true,
+      "params": {
+        "$ref": "#/definitions/NetEndParams"
+      }
+    },
+    "net/credit": {
+      "description": "The plugin consumed these bytes of a stream: as many more may come, never past 256 KiB waiting.",
+      "direction": "toEscouade",
+      "notification": true,
+      "params": {
+        "$ref": "#/definitions/NetCreditParams"
+      }
+    },
+    "net/cancel": {
+      "description": "The plugin lets go of a stream: its connection closes.",
+      "direction": "toEscouade",
+      "notification": true,
+      "params": {
+        "$ref": "#/definitions/NetCancelParams"
+      }
+    },
+    "ws/open": {
+      "description": "A WebSocket, for a plugin in WASM: wss only, to the hosts of net/fetch, the proxy and the TLS of Réglages › Réseau. 4 sockets at once, 1 MiB a message. Its headers never go to the journal.",
+      "direction": "toEscouade",
+      "params": {
+        "$ref": "#/definitions/WsOpenParams"
+      },
+      "result": {
+        "$ref": "#/definitions/WsOpenResult"
+      },
+      "errors": ["invalidParams", "refused", "failed"],
+      "timeoutMs": 10000
+    },
+    "ws/send": {
+      "description": "A message on a socket: refused past 1 MiB, or when what waits to be sent would pass 256 KiB (a long message goes when nothing waits).",
+      "direction": "toEscouade",
+      "params": {
+        "$ref": "#/definitions/WsSendParams"
+      },
+      "result": {
+        "type": "null"
+      },
+      "errors": ["invalidParams", "refused"]
+    },
+    "ws/close": {
+      "description": "Closes a socket: ws/closed follows.",
+      "direction": "toEscouade",
+      "params": {
+        "$ref": "#/definitions/WsCloseParams"
+      },
+      "result": {
+        "type": "null"
+      },
+      "errors": ["invalidParams", "refused"]
+    },
+    "ws/message": {
+      "description": "A message received on a socket.",
+      "direction": "toPlugin",
+      "notification": true,
+      "params": {
+        "$ref": "#/definitions/WsMessageParams"
+      }
+    },
+    "ws/closed": {
+      "description": "A socket ended, by either side.",
+      "direction": "toPlugin",
+      "notification": true,
+      "params": {
+        "$ref": "#/definitions/WsClosedParams"
+      }
+    },
+    "timer/set": {
+      "description": "A timer, for a plugin in WASM: 10 ms at least, 64 at once. The prelude makes setTimeout of it. It goes with the instance.",
+      "direction": "toEscouade",
+      "params": {
+        "$ref": "#/definitions/TimerSetParams"
+      },
+      "result": {
+        "$ref": "#/definitions/TimerSetResult"
+      },
+      "errors": ["invalidParams", "refused"]
+    },
+    "timer/cancel": {
+      "description": "Takes a timer back.",
+      "direction": "toEscouade",
+      "notification": true,
+      "params": {
+        "$ref": "#/definitions/TimerParams"
+      }
+    },
+    "timer/fired": {
+      "description": "A timer came due.",
+      "direction": "toPlugin",
+      "notification": true,
+      "params": {
+        "$ref": "#/definitions/TimerParams"
+      }
     },
     "log": {
       "description": "A line of its journal.",
@@ -434,7 +555,7 @@
       "type": "object",
       "properties": {
         "url": {
-          "description": "An https URL to a host of permissions.network.",
+          "description": "An https URL to a host of permissions.network; http too for a host of `{account}` or `local:shared`.",
           "type": "string"
         },
         "method": {
@@ -451,6 +572,10 @@
         "body": {
           "description": "The body of the request, as text.",
           "type": ["string", "null"]
+        },
+        "bodyBase64": {
+          "description": "The body of the request, as base64, for bytes: body or bodyBase64, not both.",
+          "type": "string"
         }
       },
       "required": ["url"]
@@ -470,11 +595,246 @@
           }
         },
         "body": {
-          "description": "Its body, as text (UTF-8, what is not replaced).",
+          "description": "Its body, when it is UTF-8.",
+          "type": "string"
+        },
+        "bodyBase64": {
+          "description": "Its body as base64, when it is not UTF-8.",
           "type": "string"
         }
       },
-      "required": ["status", "headers", "body"]
+      "required": ["status", "headers"]
+    },
+    "NetStreamParams": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "description": "An https URL to a host of permissions.network; http too for a host of `{account}` or `local:shared`.",
+          "type": "string"
+        },
+        "method": {
+          "description": "GET when left out.",
+          "type": "string"
+        },
+        "headers": {
+          "description": "The headers of the request (Host is set by Escouade).",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "body": {
+          "description": "The body of the request, as text.",
+          "type": ["string", "null"]
+        },
+        "bodyBase64": {
+          "description": "The body of the request, as base64, for bytes: body or bodyBase64, not both.",
+          "type": "string"
+        },
+        "sse": {
+          "description": "A stream of events, that may stay silent: it is never closed for that.",
+          "type": "boolean"
+        }
+      },
+      "required": ["url"]
+    },
+    "NetStreamResult": {
+      "type": "object",
+      "properties": {
+        "stream": {
+          "description": "What names it.",
+          "type": "integer"
+        },
+        "status": {
+          "description": "The HTTP status; a 3xx is given as it is, never followed.",
+          "type": "integer"
+        },
+        "headers": {
+          "description": "Its headers, by lower case name; a repeated one joined by \", \".",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["stream", "status", "headers"]
+    },
+    "NetChunkParams": {
+      "type": "object",
+      "properties": {
+        "stream": {
+          "description": "The stream.",
+          "type": "integer"
+        },
+        "data": {
+          "description": "The piece as text, when it is UTF-8: a character cut by a read waits for the next piece.",
+          "type": "string"
+        },
+        "dataBase64": {
+          "description": "The piece as base64, when it is not UTF-8.",
+          "type": "string"
+        }
+      },
+      "required": ["stream"]
+    },
+    "NetEndParams": {
+      "type": "object",
+      "properties": {
+        "stream": {
+          "description": "The stream.",
+          "type": "integer"
+        },
+        "error": {
+          "description": "Why it broke; none for a stream read to its end.",
+          "type": "string"
+        }
+      },
+      "required": ["stream"]
+    },
+    "NetCreditParams": {
+      "type": "object",
+      "properties": {
+        "stream": {
+          "description": "The stream.",
+          "type": "integer"
+        },
+        "bytes": {
+          "description": "How many bytes of it were consumed.",
+          "type": "integer"
+        }
+      },
+      "required": ["stream", "bytes"]
+    },
+    "NetCancelParams": {
+      "type": "object",
+      "properties": {
+        "stream": {
+          "description": "The stream.",
+          "type": "integer"
+        }
+      },
+      "required": ["stream"]
+    },
+    "WsOpenParams": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "description": "A wss URL to a host of net/fetch.",
+          "type": "string"
+        },
+        "headers": {
+          "description": "The headers of the handshake (Host is set by Escouade); never in the journal.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["url"]
+    },
+    "WsOpenResult": {
+      "type": "object",
+      "properties": {
+        "socket": {
+          "description": "What names it.",
+          "type": "integer"
+        }
+      },
+      "required": ["socket"]
+    },
+    "WsSendParams": {
+      "type": "object",
+      "properties": {
+        "socket": {
+          "description": "The socket.",
+          "type": "integer"
+        },
+        "text": {
+          "description": "A text message.",
+          "type": "string"
+        },
+        "dataBase64": {
+          "description": "A binary message, as base64: text or dataBase64, not both.",
+          "type": "string"
+        }
+      },
+      "required": ["socket"]
+    },
+    "WsCloseParams": {
+      "type": "object",
+      "properties": {
+        "socket": {
+          "description": "The socket.",
+          "type": "integer"
+        }
+      },
+      "required": ["socket"]
+    },
+    "WsMessageParams": {
+      "type": "object",
+      "properties": {
+        "socket": {
+          "description": "The socket.",
+          "type": "integer"
+        },
+        "text": {
+          "description": "A text message.",
+          "type": "string"
+        },
+        "dataBase64": {
+          "description": "A binary message, as base64.",
+          "type": "string"
+        }
+      },
+      "required": ["socket"]
+    },
+    "WsClosedParams": {
+      "type": "object",
+      "properties": {
+        "socket": {
+          "description": "The socket.",
+          "type": "integer"
+        },
+        "code": {
+          "description": "The close code; 1006 for a connection that broke, 1009 for a message over 1 MiB.",
+          "type": "integer"
+        },
+        "reason": {
+          "description": "Why, when it is said.",
+          "type": "string"
+        }
+      },
+      "required": ["socket", "code", "reason"]
+    },
+    "TimerSetParams": {
+      "type": "object",
+      "properties": {
+        "ms": {
+          "description": "In how long, in milliseconds; less than 10 is 10.",
+          "type": "number"
+        }
+      },
+      "required": ["ms"]
+    },
+    "TimerSetResult": {
+      "type": "object",
+      "properties": {
+        "timer": {
+          "description": "What names it.",
+          "type": "integer"
+        }
+      },
+      "required": ["timer"]
+    },
+    "TimerParams": {
+      "type": "object",
+      "properties": {
+        "timer": {
+          "description": "The timer.",
+          "type": "integer"
+        }
+      },
+      "required": ["timer"]
     },
     "LogParams": {
       "type": "object",

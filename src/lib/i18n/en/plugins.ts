@@ -351,6 +351,8 @@ export default defineZone('plugins', {
     commands: 'Runs commands',
     events: 'Gets these events',
     network: 'Connects to',
+    networkAccount: 'Connects to the instances you give it',
+    networkShared: 'Talks to the harness’s local server, started by Escouade',
     secret: 'Keeps a secret: {name}',
   },
 

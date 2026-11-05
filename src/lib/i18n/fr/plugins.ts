@@ -352,6 +352,8 @@ export default {
     commands: 'Lance des commandes',
     events: 'Reçoit ces événements',
     network: 'Se connecte à',
+    networkAccount: 'Se connecte aux instances que tu lui donnes',
+    networkShared: 'Parle au serveur local du harness, lancé par Escouade',
     secret: 'Garde un secret : {name}',
   },
 

@@ -163,6 +163,8 @@ mod plugins_jira_tests;
 #[cfg(test)]
 mod plugins_linear_tests;
 #[cfg(test)]
+mod plugins_net_tests;
+#[cfg(test)]
 mod plugins_protocol_tests;
 #[cfg(test)]
 mod plugins_reactor_tests;

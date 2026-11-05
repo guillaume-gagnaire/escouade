@@ -8,6 +8,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- Un plugin isolé peut joindre l’instance que tu lui donnes (GitLab maison, réseau local), en suivant le proxy et les certificats de Réglages › Réseau, et recevoir du réseau en continu ; la fenêtre d’installation le dit, et le journal garde chaque connexion.
 - Un plugin peut être écrit en Rust et tourner isolé dans Escouade, compilé en WASM, sur le même hôte qu’un plugin en JS/TS. Un plugin qui attend une réponse lente du réseau continue de répondre à tout le reste.
 - OpenCode est un plugin livré avec Escouade : ses agents conversent comme avant, sur le même serveur par compte, mais par un programme à part qu’Escouade lance et surveille. S’il plante, le serveur et le tour continuent ; coupé, un agent d’OpenCode dit qu’il faut le rallumer, et sa session est gardée.
 - Copilot CLI est un plugin livré avec Escouade : ses agents conversent par un programme à part, sans rien changer à leur usage, et un agent dit au lancement si le plugin est coupé. Il se voit dans la vue Plugins, et se coupe comme les autres.

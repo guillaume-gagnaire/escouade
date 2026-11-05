@@ -166,6 +166,7 @@ export function validate(manifest, options = {}) {
     'run',
     'activation',
     'permissions',
+    'limits',
     'contributes',
     'store',
     'icon',
@@ -245,6 +246,14 @@ export function validate(manifest, options = {}) {
       for (const key of ['events', 'network', 'secrets', 'commands']) if (key in p) words(p[key], `permissions.${key}`);
       if (Array.isArray(p.network)) network = p.network.filter((w) => typeof w === 'string');
       if ('decide' in p && typeof p.decide !== 'boolean') problem('permissions.decide', 'type', 'boolean');
+    }
+  }
+  if ('limits' in o) {
+    const l = object(o.limits, 'limits');
+    if (l) {
+      ignoreOthers(l, 'limits', ['fetchSeconds', 'fetchBytes']);
+      for (const key of ['fetchSeconds', 'fetchBytes'])
+        if (key in l && !(Number.isSafeInteger(l[key]) && l[key] > 0)) problem(`limits.${key}`, 'type', 'positive integer');
     }
   }
   if ('contributes' in o) {

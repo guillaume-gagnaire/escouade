@@ -75,6 +75,15 @@ pub enum Seen {
     Stray { line: String },
 }
 
+/// What a plugin in WASM reaches on the bench.
+#[derive(Debug, Clone, Default)]
+pub struct Reach {
+    /// No host at all (`--offline`).
+    pub offline: bool,
+    /// The hosts `{account}` opens (`--account`).
+    pub accounts: Vec<String>,
+}
+
 struct Shared {
     tx: Mutex<Option<mpsc::UnboundedSender<Vec<u8>>>>,
     pending: Mutex<HashMap<u64, oneshot::Sender<Result<Value, RemoteError>>>>,
@@ -270,7 +279,7 @@ impl Session {
         secrets: HashMap<String, String>,
         made: Option<String>,
         limits: wasm::Limits,
-        offline: bool,
+        reach: Reach,
     ) -> std::io::Result<Self> {
         let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
         let shared = Shared::new(tx, folder, manifest, secrets, made, true);
@@ -290,14 +299,19 @@ impl Session {
         // Offline (the review's bench), no host is covered: every fetch is refused, as the container's `--network=none`.
         let fetcher = wasm::Fetcher::new(
             &manifest.id,
-            if offline {
+            if reach.offline {
                 &[]
             } else {
                 &manifest.permissions.network
             },
-            &wasm::Net::default(),
-        );
-        let (s1, s2, s3, s4) = (
+            &wasm::Net {
+                accounts: Some(Arc::new(move |_| reach.accounts.clone())),
+                ..wasm::Net::default()
+            },
+        )
+        .limited(manifest.limits);
+        let (s1, s2, s3, s4, s5) = (
+            shared.clone(),
             shared.clone(),
             shared.clone(),
             shared.clone(),
@@ -315,6 +329,7 @@ impl Session {
                             line: Box::new(move |l| incoming(&s1, l)),
                             stderr: Box::new(move |l| s2.tell(l.to_string())),
                             refused: Arc::new(move |l| s3.tell(l.to_string())),
+                            said: Arc::new(move |l| s5.tell(l.to_string())),
                         };
                         wasm::serve(instance, fetcher, wiring)
                     }

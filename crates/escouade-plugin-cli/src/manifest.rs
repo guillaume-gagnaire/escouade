@@ -377,6 +377,24 @@ pub struct Permissions {
     pub decide: bool,
 }
 
+/// What a plugin in WASM asks of `net/fetch` above the host's defaults (`limits`, ESC-332): the host caps both.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Limits {
+    /// How long a call may take, in seconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fetch_seconds: Option<u64>,
+    /// How much an answer may hold, in bytes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fetch_bytes: Option<u64>,
+}
+
+impl Limits {
+    fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
 /// A manifest that holds: what the app reads of a plugin without running anything.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -397,6 +415,9 @@ pub struct Manifest {
     pub run: Option<Run>,
     pub activation: Vec<String>,
     pub permissions: Permissions,
+    /// What it asks of `net/fetch`.
+    #[serde(skip_serializing_if = "Limits::is_empty")]
+    pub limits: Limits,
     /// Its icon, a PNG of its folder (`icon_file` reads it).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub icon: Option<String>,
@@ -841,6 +862,7 @@ impl Checker {
                 "run",
                 "activation",
                 "permissions",
+                "limits",
                 "contributes",
                 "store",
                 "icon",
@@ -909,6 +931,7 @@ impl Checker {
             .get("permissions")
             .map(|v| self.permissions(v))
             .unwrap_or_default();
+        let limits = o.get("limits").map(|v| self.limits(v)).unwrap_or_default();
         let contributes = o
             .get("contributes")
             .map(|v| self.contributes(v, &permissions.network))
@@ -929,9 +952,30 @@ impl Checker {
             run,
             activation,
             permissions,
+            limits,
             icon,
             contributes,
         })
+    }
+
+    fn limits(&mut self, v: &Value) -> Limits {
+        let mut l = Limits::default();
+        let Some(o) = self.object(v, "limits") else {
+            return l;
+        };
+        self.ignore_others(o, "limits", &["fetchSeconds", "fetchBytes"]);
+        for (key, field) in [
+            ("fetchSeconds", &mut l.fetch_seconds),
+            ("fetchBytes", &mut l.fetch_bytes),
+        ] {
+            if let Some(v) = o.get(key) {
+                match v.as_u64().filter(|n| *n > 0) {
+                    Some(n) => *field = Some(n),
+                    None => self.wrong_type(&join("limits", key), "positive integer"),
+                }
+            }
+        }
+        l
     }
 
     /// A file of the folder: no address, no drive, no `..`; a PNG, never an SVG (it may carry a
@@ -1373,7 +1417,15 @@ pub fn schema() -> Value {
         "items": { "type": "string", "minLength": 1 },
     });
     let open = |about: &str| json!({ "type": "array", "description": about, "items": { "type": "object" } });
-    json!({
+    let limits = json!({
+        "type": "object",
+        "description": "What a plugin in WASM asks of `net/fetch` above the 10 s and the 1 MiB of a call; Escouade caps them at 120 s and 32 MiB.",
+        "properties": {
+            "fetchSeconds": { "type": "integer", "minimum": 1 },
+            "fetchBytes": { "type": "integer", "minimum": 1 },
+        },
+    });
+    let mut schema = json!({
         "$schema": "http://json-schema.org/draft-07/schema#",
         "$id": SCHEMA_URL,
         "title": "The manifest of an Escouade plugin (escouade-plugin.json)",
@@ -1497,5 +1549,8 @@ pub fn schema() -> Value {
                 },
             },
         },
-    })
+    });
+    // Beside it: one key more and `json!` runs out of its recursion.
+    schema["properties"]["limits"] = limits;
+    schema
 }

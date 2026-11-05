@@ -2,7 +2,7 @@
 title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §8 (ESC-330)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »"]
-tickets: ["ESC-330","ESC-331"]
+tickets: ["ESC-330","ESC-331","ESC-332"]
 decisions: [73,71,70,72,75]
 compared: null
 ---
@@ -46,3 +46,19 @@ Une instance par plugin, sur un fil, réveillée par les événements de l'hôte
 ## Les binaires natifs
 
 Le store refuse `run.command` à la soumission et l'app ne le lance plus, quelle que soit l'origine. Aucun n'est publié aujourd'hui.
+
+## Ce qui tourne déjà : le réseau de l'hôte (ESC-332)
+
+Pour `run.js` comme pour `run.wasm`, appliqué par Escouade et gardé au journal par la méthode et l'hôte, jamais le chemin, la requête ou les en-têtes. Un plugin lancé par une commande reçoit `methodNotFound` pour tout cela.
+
+- **`"network": ["{account}"]`** : l'hôte que l'utilisateur a saisi pour un compte que ce plugin sert, sur le port saisi (sans port saisi, celui du schéma), et lui seul, sans ses sous-domaines. Pour cet hôte, http et le réseau local sont permis. La liste est lue à chaque appel : un compte retiré ferme son hôte. La fenêtre d'installation dit « Se connecte aux instances que tu lui donnes ».
+- **`"network": ["local:shared"]`** : http vers `127.0.0.1:<port>`, seulement sur un port que le cœur a lu dans la sortie d'un process partagé qu'il a lancé pour ce plugin (`Launch::shared.listens`, dont l'hôte ne peut être que `127.0.0.1`), tant que ce process vit. Ce trafic ne passe jamais par le proxy. La fenêtre dit « Parle au serveur local du harness, lancé par Escouade ». Ni `{account}` ni `local:shared` n'est un hôte : le store les accepte tels quels.
+- **Réglages › Réseau** : le proxy, ses exclusions et les certificats non vérifiés sont suivis, et un changement atteint l'appel suivant, sans relancer le plugin. Le proxy du système n'est pas suivi. Par un proxy, seul le nom est jugé, et la ligne du journal le dit. Le nom du proxy lui-même peut résoudre vers le réseau local. `localhost` et ses sous-domaines sont refusés quand un proxy les emmènerait. Un proxy réglé qui n'est pas une adresse arrête l'appel au lieu de sortir sans lui.
+- **`bodyBase64`** dans les deux sens : une réponse UTF-8 vient dans `body`, une autre, entière, dans `bodyBase64`. Rien n'est remplacé.
+- **`limits`**, au manifeste : `fetchSeconds` et `fetchBytes`, 10 s et 1 Mio sans eux, plafonnés par l'hôte à 120 s et 32 Mio.
+- **`net/stream`**, avec `net/chunk`, `net/end`, `net/credit` et `net/cancel` : les règles de `net/fetch` à l'ouverture. Le plugin n'a jamais plus de 256 Kio non consommés : au-delà, l'hôte ne lit plus la socket. 8 flux à la fois. 120 s sans octet ferment un flux, sauf s'il est déclaré `"sse": true`. Un morceau vient dans `data` s'il est en UTF-8, un caractère coupé attendant la suite, sinon dans `dataBase64`.
+- **Le WebSocket** (`ws/open`, `ws/send`, `ws/close`, `ws/message`, `ws/closed`) : `wss` seulement, vers les mêmes hôtes, jamais `local:shared`. 4 sockets, 1 Mio par message. `ws/send` est refusé si ce qui attend dépasserait 256 Kio ; un message plus long passe quand rien n'attend. Un message reçu attend d'être remis au module avant que le suivant soit lu.
+- **Les minuteurs** (`timer/set`, `timer/cancel`, `timer/fired`) : un droit de base, 10 ms au moins (ce qui est dessous est ramené à 10 ms), 64 à la fois. `setTimeout` et `clearTimeout` existent en JS.
+- Tout ce qui tourne ainsi s'arrête avec l'instance.
+- Le SDK donne `openStream` et `openSocket`. `escouade-plugin test --account <adresse>` donne une adresse à `{account}` au banc, qui sert toutes ces méthodes.
+- OpenCode n'utilise pas encore `local:shared`, et aucun plugin n'est porté : c'est la suite du plan.

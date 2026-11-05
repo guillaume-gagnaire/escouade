@@ -334,6 +334,7 @@ fn launch(p: &LaunchParams) -> Launch {
         fence_by_client: true,
         read_only: true,
         shared: Some(SharedLaunch {
+            listens: None,
             ready: LISTENING.into(),
             one_agent_a_folder: true,
             keep: json!({ "password": password }),

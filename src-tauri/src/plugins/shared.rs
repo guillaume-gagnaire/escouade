@@ -16,7 +16,7 @@ use parking_lot::Mutex;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::process::Stdio;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -30,6 +30,8 @@ pub type End = (Option<i32>, String);
 
 pub struct Shared {
     key: String,
+    /// The port the core read in its output (`SharedLaunch::listens`), 0 before and without: what `local:shared` reaches.
+    port: Arc<AtomicU16>,
     /// The line that said it is ready, or why it never will.
     line: watch::Receiver<Option<Result<String, String>>>,
     /// What the plugin wants back with each agent (`SharedLaunch::keep`).
@@ -107,6 +109,31 @@ pub fn release(shared: &Arc<Shared>) {
     }
 }
 
+/// The ports the processes of `plugin` in the runtime `rt` said they listen on, while they live: all `local:shared` may
+/// reach. Never a port the plugin named.
+pub fn ports_of(rt: usize, plugin: &str) -> Vec<u16> {
+    let prefix = format!("{rt}|{plugin}|");
+    RUNNING.lock().as_ref().map_or(Vec::new(), |map| {
+        map.values()
+            .filter(|(s, _)| s.is_alive() && s.key.starts_with(&prefix))
+            .map(|(s, _)| s.port.load(Ordering::Acquire))
+            .filter(|p| *p != 0)
+            .collect()
+    })
+}
+
+/// The port the line `line` says, by the template `listens`: its text around `{host}` and `{port}`, the host being
+/// `127.0.0.1` and nothing else.
+pub fn port_in(listens: &str, line: &str) -> Option<u16> {
+    let (before, rest) = listens.split_once("{host}")?;
+    let (between, after) = rest.split_once("{port}")?;
+    let head = format!("{before}127.0.0.1{between}");
+    let tail = &line[line.find(&head)? + head.len()..];
+    let digits = tail.chars().take_while(char::is_ascii_digit).count();
+    tail[digits..].starts_with(after).then_some(())?;
+    tail[..digits].parse().ok().filter(|p| *p != 0)
+}
+
 /// How many run (the tests).
 #[cfg(test)]
 pub fn running() -> usize {
@@ -156,6 +183,8 @@ pub struct Start<'a> {
     pub remove_env: &'a [String],
     /// What the line that says it is ready holds.
     pub ready: &'a str,
+    /// The template of the line that says its address (`SharedLaunch::listens`).
+    pub listens: Option<&'a str>,
     pub keep: Value,
     pub dir: &'a std::path::Path,
 }
@@ -184,8 +213,10 @@ impl Shared {
         let (end_tx, end) = watch::channel(None);
         let (kill_tx, mut kill_rx) = oneshot::channel::<()>();
         let exited = Arc::new(AtomicBool::new(false));
+        let port = Arc::new(AtomicU16::new(0));
         let shared = Arc::new(Shared {
             key: s.key.to_string(),
+            port: port.clone(),
             line,
             keep: s.keep,
             job: job.clone(),
@@ -207,6 +238,7 @@ impl Shared {
         }
         let weak = Arc::downgrade(&shared);
         let ready = s.ready.to_string();
+        let listens = s.listens.map(str::to_string);
         let key = s.key.to_string();
         tokio::spawn(async move {
             let mut lines = BufReader::new(stdout).split(b'\n');
@@ -216,6 +248,11 @@ impl Shared {
                     line = lines.next_segment() => match line {
                         Ok(Some(line)) => {
                             let line = text_line(&line);
+                            if port.load(Ordering::Acquire) == 0 {
+                                if let Some(p) = listens.as_deref().and_then(|l| port_in(l, &line)) {
+                                    port.store(p, Ordering::Release);
+                                }
+                            }
                             if line_tx.is_some() && line.contains(&ready) {
                                 if let Some(tx) = line_tx.take() {
                                     let _ = tx.send(Some(Ok(line)));

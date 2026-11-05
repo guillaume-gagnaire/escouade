@@ -98,6 +98,11 @@ export interface Manifest {
   id: string;
   /** An SPDX identifier (`MIT`). */
   license?: string;
+  /** What a plugin in WASM asks of `net/fetch` above the 10 s and the 1 MiB of a call; Escouade caps them at 120 s and 32 MiB. */
+  limits?: {
+    fetchBytes?: number;
+    fetchSeconds?: number;
+  };
   /** One text, or a text by language (`en` first, then `fr`). */
   name: string | Record<string, string>;
   /** What it asks for, shown before it is installed. */

@@ -16,11 +16,12 @@ pub fn usage(lang: Lang) -> String {
         lang,
         "escouade-plugin : tester un plugin d'Escouade sans l'app.
 
-  escouade-plugin test <dossier> [--json] [--measure [n]] [--wasm <module>] [--offline] [--escouade <version>]
+  escouade-plugin test <dossier> [--json] [--measure [n]] [--wasm <module>] [--offline] [--account <adresse>] [--escouade <version>]
       Joue le banc de conformité : initialisation, version refusée, délais, un fait reçu,
       une décision, un secret, plantage, fermeture. Code de sortie 1 si un scénario échoue.
       --wasm joue ce module (celui du store) au lieu de compiler le bundle d'un plugin `run.js`
-      ou de prendre le plugin.wasm d'un plugin `run.wasm` ; --offline refuse tout fetch, quoi que dise permissions.network.
+      ou de prendre le plugin.wasm d'un plugin `run.wasm` ; --offline refuse tout fetch, quoi que dise permissions.network ;
+      --account donne une adresse à {{account}}, comme l'aurait saisie l'utilisateur.
   escouade-plugin validate <dossier> [--escouade <version>]
       Lit le manifeste (escouade-plugin.json) et dit ce qui ne va pas, champ par champ ; pour un
       plugin `run.js`, que son bundle peut tourner en WASM ; pour un `run.wasm`, que son plugin.wasm,
@@ -47,11 +48,12 @@ Options : --lang fr|en ; --escouade <version> joue le plugin comme cette version
 ",
         "escouade-plugin: test an Escouade plugin without the app.
 
-  escouade-plugin test <folder> [--json] [--measure [n]] [--wasm <module>] [--offline] [--escouade <version>]
+  escouade-plugin test <folder> [--json] [--measure [n]] [--wasm <module>] [--offline] [--account <address>] [--escouade <version>]
       Plays the conformance bench: initialization, version refused, delays, a fact received,
       a decision, a secret, crash, shutdown. Exit code 1 when a scenario fails.
       --wasm plays this module (the store's) instead of compiling a `run.js` plugin's bundle
-      or taking a `run.wasm` plugin's plugin.wasm; --offline refuses every fetch, whatever permissions.network says.
+      or taking a `run.wasm` plugin's plugin.wasm; --offline refuses every fetch, whatever permissions.network says;
+      --account gives {{account}} an address, as the user would have typed it.
   escouade-plugin validate <folder> [--escouade <version>]
       Reads the manifest (escouade-plugin.json) and says what is wrong, field by field; for a
       `run.js` plugin, that its bundle can run in WASM; for a `run.wasm` one, that its plugin.wasm,

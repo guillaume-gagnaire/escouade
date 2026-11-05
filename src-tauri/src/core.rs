@@ -2038,6 +2038,15 @@ impl<R: Runtime> Core<R> {
         core.plugin_runtime.place_with(place);
         // What the plugins the app gives are told when they start: the language, the network.
         core.plugin_runtime.set_builtin_env(core.builtin_env());
+        core.plugin_runtime
+            .set_network(crate::voice::online::Net::of(&core.settings.read()));
+        let weak = core.weak();
+        core.plugin_runtime
+            .set_accounts(std::sync::Arc::new(move |plugin| {
+                weak.upgrade().map_or(Vec::new(), |c| {
+                    crate::plugins::accounts::hosts_of(&c.accounts.read(), plugin)
+                })
+            }));
         // The harnesses the plugins describe (PLG-6), before the window asks for the registry.
         core.sync_harnesses();
         // The pinned Javy of the run.js plugins downloads through Réglages › Réseau (ESC-320); their modules are
@@ -2445,6 +2454,8 @@ impl<R: Runtime> Core<R> {
         self.schedule();
         // « Claude et les agents peuvent piloter Escouade » may have changed.
         self.sync_mcp();
+        self.plugin_runtime
+            .set_network(crate::voice::online::Net::of(&self.settings.read()));
         // The plugins the app gives start again with the language and the network of now.
         let env = self.builtin_env();
         if env != self.plugin_runtime.builtin_env() {

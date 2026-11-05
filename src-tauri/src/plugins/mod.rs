@@ -18,6 +18,7 @@ pub mod accounts;
 // The conformance bench and the fake Escouade, for `escouade-plugin` and the tests (PLG-3).
 pub mod adapters;
 pub mod bench;
+mod beside;
 /// The adapter of a harness in process (INT-9).
 pub mod harness;
 // A source on a code host's instances, one account each, served by its plugin (GitLab Issues, INT-8.2).

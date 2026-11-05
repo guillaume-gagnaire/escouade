@@ -255,6 +255,8 @@ pub struct Options {
     pub module: Option<PathBuf>,
     /// No `net/fetch` reaches the network, whatever `permissions.network` says (`--offline`): the review's bench.
     pub offline: bool,
+    /// The hosts `{account}` reaches here (`--account`): what the user would have typed.
+    pub accounts: Vec<String>,
 }
 
 impl Default for Options {
@@ -274,6 +276,7 @@ impl Default for Options {
             wasm: super::wasm::Limits::default(),
             module: None,
             offline: false,
+            accounts: Vec::new(),
         }
     }
 }
@@ -359,9 +362,18 @@ impl Program {
     ) -> std::io::Result<Session> {
         match self {
             Program::Process(p) => Session::start(folder, m, p, &o.app_version, secrets, made),
-            Program::Wasm { module, .. } => {
-                Session::start_wasm(folder, m, module.clone(), secrets, made, o.wasm, o.offline)
-            }
+            Program::Wasm { module, .. } => Session::start_wasm(
+                folder,
+                m,
+                module.clone(),
+                secrets,
+                made,
+                o.wasm,
+                fake::Reach {
+                    offline: o.offline,
+                    accounts: o.accounts.clone(),
+                },
+            ),
         }
     }
 }

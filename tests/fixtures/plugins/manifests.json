@@ -1148,6 +1148,85 @@
       },
       "errors": ["run.js type"],
       "ignored": []
+    },
+    {
+      "name": "the limits of net/fetch, and the words of the network that are no host",
+      "manifest": {
+        "id": "dev.exemple.net",
+        "name": "Net",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "dist/plugin.mjs"
+        },
+        "permissions": {
+          "network": ["{account}", "local:shared", "api.exemple.dev"]
+        },
+        "limits": {
+          "fetchSeconds": 120,
+          "fetchBytes": 33554432,
+          "other": 1
+        }
+      },
+      "files": {
+        "dist/plugin.mjs": {
+          "text": "export {}"
+        }
+      },
+      "errors": [],
+      "ignored": ["limits.other"]
+    },
+    {
+      "name": "limits that are no positive integers",
+      "manifest": {
+        "id": "dev.exemple.net",
+        "name": "Net",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "dist/plugin.mjs"
+        },
+        "limits": {
+          "fetchSeconds": 0,
+          "fetchBytes": "1"
+        }
+      },
+      "files": {
+        "dist/plugin.mjs": {
+          "text": "export {}"
+        }
+      },
+      "errors": ["limits.fetchSeconds type", "limits.fetchBytes type"],
+      "ignored": []
+    },
+    {
+      "name": "limits that are no object",
+      "manifest": {
+        "id": "dev.exemple.net",
+        "name": "Net",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "dist/plugin.mjs"
+        },
+        "limits": 3
+      },
+      "files": {
+        "dist/plugin.mjs": {
+          "text": "export {}"
+        }
+      },
+      "errors": ["limits type"],
+      "ignored": []
     }
   ],
   "hosts": {

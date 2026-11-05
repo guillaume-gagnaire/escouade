@@ -87,6 +87,18 @@ fn host_call(request: &str, cap: usize) -> (i64, String) {
 
 fn handle(me: &mut Reactor, line: &str, lines: usize, out: &mut String) {
     me.first.get_or_insert_with(|| line.to_string());
+    // What the host tells it (a piece of a stream, a timer): shown to the tests as it came.
+    if id_of(line).is_none() {
+        if matches!(
+            method_of(line),
+            Some("net/chunk" | "net/end" | "ws/message" | "ws/closed" | "timer/fired")
+        ) {
+            out.push_str(&format!(
+                "{{\"jsonrpc\":\"2.0\",\"method\":\"probe/seen\",\"params\":{line}}}\n"
+            ));
+        }
+        return;
+    }
     let Some(id) = id_of(line) else { return };
     let Some(method) = method_of(line) else {
         // The answer of the host to a fetch of ours: it ends the call that waits, the line as it came.
@@ -118,6 +130,16 @@ fn handle(me: &mut Reactor, line: &str, lines: usize, out: &mut String) {
             let url = url_of(params_of(line));
             out.push_str(&format!(
                 "{{\"jsonrpc\":\"2.0\",\"id\":{own},\"method\":\"net/fetch\",\"params\":{{\"url\":\"{url}\"}}}}\n"
+            ));
+        }
+        // Anything to the host, `{"method":…,"params":…}` as the tests wrote it: its answer ends the call.
+        "probe/host" => {
+            me.next += 1;
+            let own = 1_000_000 + me.next;
+            me.fetches.push((own, id.to_string()));
+            let asked = params_of(line).strip_prefix('{').unwrap_or("}");
+            out.push_str(&format!(
+                "{{\"jsonrpc\":\"2.0\",\"id\":{own},{asked}\n"
             ));
         }
         "probe/call" => {

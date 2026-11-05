@@ -1,0 +1,10 @@
+{
+  "id": "dev.test.sdk-net",
+  "name": "SDK net",
+  "version": "1.0.0",
+  "license": "MIT",
+  "escouade": { "api": "1", "min": "2.1.0" },
+  "run": { "js": "dist/plugin.mjs" },
+  "activation": ["event:ticket.column"],
+  "permissions": { "network": ["exemple.dev"] }
+}

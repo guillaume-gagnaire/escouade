@@ -133,7 +133,17 @@ export function permissionsOf(m: Record<string, unknown>, binaries: Record<strin
     out.push({ icon: 'tool', tone: '', text: t('Lance ces commandes', 'Runs these commands'), mono: list(p.commands).join(' · ') });
   if (list(p.events).length)
     out.push({ icon: 'bolt', tone: '', text: t('Reçoit ces événements', 'Gets these events'), mono: list(p.events).join(' · ') });
-  for (const host of list(p.network)) out.push({ icon: 'net', tone: '', text: t('Se connecte à', 'Connects to'), mono: host });
+  for (const host of list(p.network)) {
+    if (host === '{account}')
+      out.push({ icon: 'net', tone: '', text: t('Se connecte aux instances que tu lui donnes', 'Connects to the instances you give it') });
+    else if (host === 'local:shared')
+      out.push({
+        icon: 'net',
+        tone: '',
+        text: t('Parle au serveur local du harness, lancé par Escouade', 'Talks to the harness’s local server, started by Escouade'),
+      });
+    else out.push({ icon: 'net', tone: '', text: t('Se connecte à', 'Connects to'), mono: host });
+  }
   const titles = new Map(
     (Array.isArray(obj(m.contributes).secrets) ? (obj(m.contributes).secrets as unknown[]) : []).map((s) => [
       obj(s).key,

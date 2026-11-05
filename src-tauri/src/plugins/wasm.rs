@@ -17,17 +17,27 @@
 //! - **What it is served.** The runtime's methods (`secrets/get`, `settings/get`, `log`), and two that Node gave
 //!   before: the JSON files at the root of its folder (the first line, `escouade/boot`), and `net/fetch`
 //!   ([`Fetcher`]): https only, to a host of `permissions.network` or one of its subdomains, no redirection followed,
-//!   10 s and 1 MiB at most, and never to an address of the machine or of the local network, judged on the
-//!   addresses the name resolves to, by the resolver the connection itself uses ([`forbidden`]).
-//! - **Its thread** ([`serve`]) waits on one channel, whatever comes: a line of the core, the end of a fetch. It writes
-//!   all that came on the module's input, runs one turn, then serves what the module wrote. A fetch runs beside it, on
-//!   the host's runtime ([`net`]), and comes back on the channel: a slow call holds back neither the next nor the thread.
+//!   10 s and 1 MiB at most unless its manifest asks for more (`limits`, 120 s and 32 MiB at most), and never to an
+//!   address of the machine or of the local network, judged on the addresses the name resolves to, by the resolver the
+//!   connection itself uses ([`forbidden`]). Two things open this (ESC-332): `{account}`, the host the user typed for one
+//!   of its accounts and that host alone, in http or on the local network; and `local:shared`, in http, the port the core
+//!   read in the output of the process it started for the plugin, while it lives. The proxy and the TLS of Réglages ›
+//!   Réseau are followed: through a proxy only the name is judged, and the journal says so.
+//! - **Its thread** ([`serve`]) waits on one channel, whatever comes: a line of the core, the end of a fetch, a piece of
+//!   a stream, a timer. It writes all that came on the module's input, runs one turn, then serves what the module wrote.
+//!   What lasts runs beside it ([`Beside`]), on the host's runtime ([`net`]), and comes back on the channel: a slow call
+//!   holds back neither the next nor the thread.
 //! - **Its synchronous call** (`escouade.call`, [`Calls`]): a JSON request, its JSON answer, served on the thread, in
 //!   the time of the turn, for what a state machine must have before it answers.
 //!
 //! The transport is wired to the runtime's host in `runtime.rs`: same journal, same delays, same restarts.
 
+use super::beside::{request_of, Beside, WS_MESSAGE};
 use crate::paths::DataDir;
+use crate::voice::live::{Io, Ws};
+use crate::voice::online::Net as Settings;
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use parking_lot::RwLock;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -56,9 +66,17 @@ const TICK_MS: u64 = 10;
 pub const REFUSED: i64 = -32003;
 /// The error of a fetch that failed on the way (no answer, an answer too big).
 pub const FAILED: i64 = -32004;
-/// How long a fetch may take, and how much it may read.
+/// How long a fetch may take, and how much it may read, unless its manifest asks for more (`limits`)...
 const FETCH_TIME: Duration = Duration::from_secs(10);
 const FETCH_BYTES: usize = 1 << 20;
+/// ... within this.
+const FETCH_TIME_MAX: Duration = Duration::from_secs(120);
+const FETCH_BYTES_MAX: usize = 32 << 20;
+/// How long a stream that is not `sse` stays without a byte.
+const STREAM_IDLE: Duration = Duration::from_secs(120);
+/// The words of `permissions.network` that are no host.
+const ACCOUNT: &str = "{account}";
+const LOCAL_SHARED: &str = "local:shared";
 /// How many fetches of a plugin are under way at once; the others wait for their turn beside its thread.
 const FETCHES_AT_ONCE: usize = 16;
 /// The files of its folder a plugin is given: each, and all of them.
@@ -735,32 +753,53 @@ impl std::fmt::Display for Forbidden {
 
 impl std::error::Error for Forbidden {}
 
-type Dns = Arc<dyn Fn(&str) -> Vec<IpAddr> + Send + Sync>;
+pub type Dns = Arc<dyn Fn(&str) -> Vec<IpAddr> + Send + Sync>;
+/// Whether a name's addresses are not judged: the host the user typed, and the proxy of the settings.
+type Open = Arc<dyn Fn(&str) -> bool + Send + Sync>;
+/// The hosts the user typed for the accounts of a plugin (`{account}`), by its id; asked at each call.
+pub type HostsOf = Arc<dyn Fn(&str) -> Vec<String> + Send + Sync>;
+/// The ports the core read for a plugin's shared processes, while they live (`local:shared`), by its id.
+pub type PortsOf = Arc<dyn Fn(&str) -> Vec<u16> + Send + Sync>;
+
+/// What `name` resolves to, its forbidden addresses left out unless it is open; none at all is a refusal.
+async fn guarded_lookup(
+    dns: Option<&Dns>,
+    open: &Open,
+    name: &str,
+) -> Result<Vec<IpAddr>, Box<dyn std::error::Error + Send + Sync>> {
+    let all: Vec<IpAddr> = match dns {
+        Some(f) => f(name),
+        None => tokio::net::lookup_host((name, 0))
+            .await?
+            .map(|s| s.ip())
+            .collect(),
+    };
+    if open(name) {
+        return Ok(all);
+    }
+    let (bad, good): (Vec<IpAddr>, Vec<IpAddr>) = all.into_iter().partition(|ip| forbidden(*ip));
+    if good.is_empty() {
+        return Err(Box::new(Forbidden {
+            host: name.to_string(),
+            addrs: bad,
+        }));
+    }
+    Ok(good)
+}
 
 /// The resolver of `net/fetch`'s connections: the system's, its forbidden addresses left out, and none at all a
 /// refusal. The connection is made to what it gives, never to what another resolution would say.
 struct Guarded {
     dns: Option<Dns>,
+    open: Open,
 }
 
 impl reqwest::dns::Resolve for Guarded {
     fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
         let host = name.as_str().to_string();
-        let dns = self.dns.clone();
+        let (dns, open) = (self.dns.clone(), self.open.clone());
         Box::pin(async move {
-            let all: Vec<IpAddr> = match dns {
-                Some(f) => f(&host),
-                None => tokio::net::lookup_host((host.as_str(), 0))
-                    .await?
-                    .map(|s| s.ip())
-                    .collect(),
-            };
-            let (bad, good): (Vec<IpAddr>, Vec<IpAddr>) =
-                all.into_iter().partition(|ip| forbidden(*ip));
-            if good.is_empty() {
-                return Err(Box::new(Forbidden { host, addrs: bad })
-                    as Box<dyn std::error::Error + Send + Sync>);
-            }
+            let good = guarded_lookup(dns.as_ref(), &open, &host).await?;
             let addrs: reqwest::dns::Addrs =
                 Box::new(good.into_iter().map(|ip| SocketAddr::new(ip, 0)));
             Ok(addrs)
@@ -768,16 +807,23 @@ impl reqwest::dns::Resolve for Guarded {
     }
 }
 
-/// What the tests change of the network: a host served elsewhere (the fake Slack, in http, past the checks of the
-/// addresses), and the answer of the resolver.
+/// The network of the plugins in WASM: Réglages › Réseau, who tells the hosts of `{account}` and the ports of
+/// `local:shared`; and what the tests change: a host served elsewhere (the fake Slack, in http, past the checks of the
+/// addresses), the answer of the resolver, and how long a stream stays silent.
 #[derive(Clone, Default)]
 pub struct Net {
     pub routes: HashMap<String, String>,
     pub dns: Option<Dns>,
+    /// Réglages › Réseau, read at each call: a change reaches the instances that run.
+    pub network: Arc<RwLock<Settings>>,
+    pub accounts: Option<HostsOf>,
+    pub shared: Option<PortsOf>,
+    /// In place of the 120 s without a byte that end a stream.
+    pub idle: Option<Duration>,
 }
 
-/// The host's runtime: what runs beside the plugins' threads (their `net/fetch`).
-fn net() -> &'static tokio::runtime::Handle {
+/// The host's runtime: what runs beside the plugins' threads (their network, their timers).
+pub(super) fn net() -> &'static tokio::runtime::Handle {
     static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
     RUNTIME
         .get_or_init(|| {
@@ -791,36 +837,96 @@ fn net() -> &'static tokio::runtime::Handle {
         .handle()
 }
 
-/// A plugin's `net/fetch`: only to its hosts, by https, through the guarded resolver.
+/// What a URL was judged to be, and where its request goes.
+struct Judged {
+    /// The host it names, in lower case: all the journal says of it (a query may hold a key).
+    name: String,
+    target: reqwest::Url,
+    /// Straight to it, whatever the proxy: the local server of its harness, a route of the tests.
+    direct: bool,
+    routed: bool,
+}
+
+/// What a URL must be for the call that opens it.
+#[derive(Clone, Copy, PartialEq)]
+enum Way {
+    Http,
+    Socket,
+}
+
+/// The clients of the settings they were made for.
+struct Clients {
+    settings: Settings,
+    by_settings: Option<reqwest::Client>,
+    direct: Option<reqwest::Client>,
+}
+
+/// A plugin's way out: only to its hosts, by https (the hosts the user typed, and the local server of its harness, by
+/// http too), through the guarded resolver, or the proxy of the settings, which judges by the name alone.
 pub struct Fetcher {
     id: String,
     network: Vec<String>,
     routes: HashMap<String, String>,
-    client: Option<reqwest::Client>,
+    dns: Option<Dns>,
+    live: Arc<RwLock<Settings>>,
+    accounts: Option<HostsOf>,
+    shared: Option<PortsOf>,
+    idle: Duration,
+    seconds: Duration,
+    bytes: usize,
+    clients: Mutex<Option<Clients>>,
     at_once: tokio::sync::Semaphore,
 }
 
 impl Fetcher {
     pub fn new(id: &str, network: &[String], net: &Net) -> Self {
-        let client = reqwest::Client::builder()
-            .dns_resolver(Arc::new(Guarded {
-                dns: net.dns.clone(),
-            }))
-            // The plugin gets the 3xx: a fetch to its Location is judged again.
-            .redirect(reqwest::redirect::Policy::none())
-            // Straight to the host: a proxy would resolve the name where its address is not judged.
-            .no_proxy()
-            .timeout(FETCH_TIME)
-            .user_agent(concat!("escouade/", env!("CARGO_PKG_VERSION")))
-            .build()
-            .ok();
         Self {
             id: id.to_string(),
             network: network.to_vec(),
             routes: net.routes.clone(),
-            client,
+            dns: net.dns.clone(),
+            live: net.network.clone(),
+            accounts: net.accounts.clone(),
+            shared: net.shared.clone(),
+            idle: net.idle.unwrap_or(STREAM_IDLE),
+            seconds: FETCH_TIME,
+            bytes: FETCH_BYTES,
+            clients: Mutex::new(None),
             at_once: tokio::sync::Semaphore::new(FETCHES_AT_ONCE),
         }
+    }
+
+    /// With the limits its manifest declares, within the host's.
+    pub fn limited(mut self, limits: super::manifest::Limits) -> Self {
+        if let Some(s) = limits.fetch_seconds {
+            self.seconds = Duration::from_secs(s).min(FETCH_TIME_MAX);
+        }
+        if let Some(b) = limits.fetch_bytes {
+            self.bytes = usize::try_from(b)
+                .unwrap_or(FETCH_BYTES_MAX)
+                .min(FETCH_BYTES_MAX);
+        }
+        self
+    }
+
+    /// How long a stream may stay silent.
+    pub(super) fn idle(&self) -> Duration {
+        self.idle
+    }
+
+    /// How long a call may take, and a stream or a socket to open.
+    pub fn seconds(&self) -> Duration {
+        self.seconds
+    }
+
+    /// How much an answer may hold.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn bytes(&self) -> usize {
+        self.bytes
+    }
+
+    fn declares(&self, word: &str) -> bool {
+        self.network.iter().any(|w| w == word)
     }
 
     /// Whether `permissions.network` covers `host`: one of its hosts, or a subdomain of one (`slack.com` covers
@@ -841,58 +947,204 @@ impl Fetcher {
             })
     }
 
-    /// `{ url, method, headers, body }` → `{ status, headers, body }`, or why not (`REFUSED`, `FAILED`).
-    pub async fn fetch(&self, params: &Value) -> Result<Value, (i64, String)> {
-        let url = params.get("url").and_then(Value::as_str).unwrap_or("");
-        let parsed = reqwest::Url::parse(url)
-            .map_err(|_| (super::runtime::INVALID_PARAMS, format!("not a URL: {url}")))?;
-        if parsed.scheme() != "https" {
-            return Err((REFUSED, format!("only https: {url}")));
+    /// The hosts the user typed for its accounts, when it declares `{account}`.
+    fn account_hosts(&self) -> Vec<String> {
+        match &self.accounts {
+            Some(hosts) if self.declares(ACCOUNT) => hosts(&self.id),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Whether `url` is a host the user typed for one of its accounts, and on its port: that host alone, none of its
+    /// subdomains; no port typed is the scheme's own.
+    fn is_account(&self, url: &reqwest::Url) -> bool {
+        let Some(name) = url.host_str().map(str::to_ascii_lowercase) else {
+            return false;
+        };
+        self.account_hosts().iter().any(|typed| {
+            let typed = typed.to_ascii_lowercase();
+            let bare = crate::forge::bare_host(&typed);
+            let port = typed[bare.len()..].trim_start_matches(':');
+            bare == name
+                && match port.parse::<u16>() {
+                    Ok(p) => url.port_or_known_default() == Some(p),
+                    Err(_) => url.port().is_none(),
+                }
+        })
+    }
+
+    /// Whether `url` is the local server of its harness: http, 127.0.0.1, on a port the core read while it lives.
+    fn is_local(&self, url: &reqwest::Url) -> bool {
+        url.scheme() == "http"
+            && self.declares(LOCAL_SHARED)
+            && url.host_str() == Some("127.0.0.1")
+            && matches!(
+                (&self.shared, url.port()),
+                (Some(ports), Some(p)) if ports(&self.id).contains(&p)
+            )
+    }
+
+    /// The URL of a call, judged: the local server of its harness; a host of an account (its address not judged); or a
+    /// host of `permissions.network` by https (`wss` for a socket), never an address written.
+    fn judge(&self, url: &str, way: Way) -> Result<Judged, (i64, String)> {
+        let invalid = || (super::runtime::INVALID_PARAMS, format!("not a URL: {url}"));
+        let parsed = reqwest::Url::parse(url).map_err(|_| invalid())?;
+        let local = way == Way::Http && self.is_local(&parsed);
+        let account = !local && self.is_account(&parsed);
+        let scheme = parsed.scheme();
+        let wanted = if way == Way::Socket { "wss" } else { "https" };
+        let fine = local
+            || scheme == wanted
+            || (account && way == Way::Http && matches!(scheme, "http" | "https"));
+        if !fine {
+            return Err((
+                REFUSED,
+                format!("only {wanted}: {}", parsed.origin().ascii_serialization()),
+            ));
         }
         let name = parsed
             .host_str()
             .filter(|h| !h.is_empty())
-            .ok_or_else(|| (super::runtime::INVALID_PARAMS, format!("not a URL: {url}")))?
+            .ok_or_else(invalid)?
             .to_ascii_lowercase();
-        // An address written in the URL: never one of permissions.network, which names hosts.
-        if name.trim_matches(['[', ']']).parse::<IpAddr>().is_ok() {
-            return Err((
-                REFUSED,
-                format!("{name} is not in permissions.network of {}", self.id),
-            ));
+        if !local && !account {
+            // An address written in the URL: never one of permissions.network, which names hosts.
+            let written = name.trim_matches(['[', ']']).parse::<IpAddr>().is_ok();
+            if written || !self.covers(&name) {
+                return Err((
+                    REFUSED,
+                    format!("{name} is not in permissions.network of {}", self.id),
+                ));
+            }
+            // A proxy would take it for itself: no name of the machine, whoever declares it.
+            if (name == "localhost" || name.ends_with(".localhost")) && self.proxied(&name) {
+                return Err((REFUSED, format!("{name} is an address of this machine")));
+            }
         }
-        if !self.covers(&name) {
-            return Err((
-                REFUSED,
-                format!("{name} is not in permissions.network of {}", self.id),
-            ));
-        }
-        let target = match self.routes.get(&name) {
+        let route = self.routes.get(&name);
+        let target = match route {
             Some(base) => {
                 let mut rest = parsed.path().to_string();
                 if let Some(q) = parsed.query() {
                     rest.push('?');
                     rest.push_str(q);
                 }
-                format!("{}{rest}", base.trim_end_matches('/'))
+                reqwest::Url::parse(&format!("{}{rest}", base.trim_end_matches('/')))
+                    .map_err(|_| invalid())?
             }
-            None => parsed.to_string(),
+            None => parsed.clone(),
         };
-        let Some(client) = &self.client else {
-            return Err((FAILED, "no network client".into()));
+        Ok(Judged {
+            direct: local || route.is_some(),
+            routed: route.is_some(),
+            name,
+            target,
+        })
+    }
+
+    /// Whether a call to `name` goes through the proxy of the settings.
+    fn proxied(&self, name: &str) -> bool {
+        crate::voice::live::proxy_for(&self.live.read(), name).is_some()
+    }
+
+    /// What is told of a call: its method and its host, never its path nor its query, which may hold a key; and, through
+    /// the proxy, that its address was not judged.
+    pub fn describe(&self, params: &Value, method: &str) -> String {
+        let url = params.get("url").and_then(Value::as_str).unwrap_or("");
+        let parsed = reqwest::Url::parse(url).ok();
+        let host = parsed
+            .as_ref()
+            .and_then(|u| u.host_str().map(str::to_ascii_lowercase))
+            .unwrap_or_default();
+        let direct =
+            self.routes.contains_key(&host) || parsed.as_ref().is_some_and(|u| self.is_local(u));
+        let by = if !direct && self.proxied(&host) {
+            " (by the proxy: its name judged, not its addresses)"
+        } else {
+            ""
         };
+        format!("{method} {host}{by}")
+    }
+
+    /// Who may skip the judgment of the addresses: the hosts of its accounts, and the proxy of the settings.
+    fn open(&self) -> Open {
+        let (hosts, id, live) = (self.accounts.clone(), self.id.clone(), self.live.clone());
+        let declared = self.declares(ACCOUNT);
+        Arc::new(move |name: &str| {
+            let name = name.to_ascii_lowercase();
+            let proxy = crate::voice::live::proxy_url(&live.read());
+            if proxy.is_some_and(|p| p.host_str().is_some_and(|h| h.eq_ignore_ascii_case(&name))) {
+                return true;
+            }
+            declared
+                && hosts.as_ref().is_some_and(|hosts| {
+                    hosts(&id)
+                        .iter()
+                        .any(|h| crate::forge::bare_host(&h.to_ascii_lowercase()) == name)
+                })
+        })
+    }
+
+    fn build(&self, settings: &Settings, by_proxy: bool) -> Option<reqwest::Client> {
+        let mut b = reqwest::Client::builder()
+            .dns_resolver(Arc::new(Guarded {
+                dns: self.dns.clone(),
+                open: self.open(),
+            }))
+            // The plugin gets the 3xx: a fetch to its Location is judged again.
+            .redirect(reqwest::redirect::Policy::none())
+            // The settings' proxy alone, never the system's.
+            .no_proxy()
+            .danger_accept_invalid_certs(settings.insecure)
+            .user_agent(concat!("escouade/", env!("CARGO_PKG_VERSION")));
+        if by_proxy && !settings.proxy.is_empty() {
+            // A proxy that is no address stops the call: going around it would leave by a way the user closed.
+            let url = crate::voice::live::proxy_url(settings)?;
+            let proxy = reqwest::Proxy::all(url.as_str())
+                .ok()?
+                .no_proxy(reqwest::NoProxy::from_string(&settings.no_proxy));
+            b = b.proxy(proxy);
+        }
+        b.build().ok()
+    }
+
+    /// The client of the settings of now: `direct` around the proxy.
+    fn client(&self, direct: bool) -> Option<reqwest::Client> {
+        let settings = self.live.read().clone();
+        let mut clients = self.clients.lock().unwrap_or_else(|e| e.into_inner());
+        if clients.as_ref().is_none_or(|c| c.settings != settings) {
+            *clients = Some(Clients {
+                by_settings: self.build(&settings, true),
+                direct: self.build(&settings, false),
+                settings,
+            });
+        }
+        let c = clients.as_ref()?;
+        if direct {
+            c.direct.clone()
+        } else {
+            c.by_settings.clone()
+        }
+    }
+
+    /// The request of `params` (`url`, `method`, `headers`, `body` or `bodyBase64`) to what `judged` says.
+    fn request(
+        &self,
+        judged: &Judged,
+        params: &Value,
+    ) -> Result<reqwest::RequestBuilder, (i64, String)> {
+        let invalid = |m: String| (super::runtime::INVALID_PARAMS, m);
+        let client = self.client(judged.direct).ok_or((
+            FAILED,
+            "no network client: is the proxy of Réglages › Réseau an address?".to_string(),
+        ))?;
         let method = params
             .get("method")
             .and_then(Value::as_str)
             .unwrap_or("GET");
-        let method =
-            reqwest::Method::from_bytes(method.to_ascii_uppercase().as_bytes()).map_err(|_| {
-                (
-                    super::runtime::INVALID_PARAMS,
-                    format!("no HTTP method: {method}"),
-                )
-            })?;
-        let mut req = client.request(method, &target);
+        let method = reqwest::Method::from_bytes(method.to_ascii_uppercase().as_bytes())
+            .map_err(|_| invalid(format!("no HTTP method: {method}")))?;
+        let mut req = client.request(method, judged.target.clone());
         if let Some(h) = params.get("headers").and_then(Value::as_object) {
             for (k, v) in h {
                 if k.eq_ignore_ascii_case("host") {
@@ -901,48 +1153,215 @@ impl Fetcher {
                 req = req.header(k, v.as_str().unwrap_or(""));
             }
         }
-        if let Some(b) = params.get("body").and_then(Value::as_str) {
-            req = req.body(b.to_string());
+        let text = params.get("body").and_then(Value::as_str);
+        let binary = params.get("bodyBase64").and_then(Value::as_str);
+        match (text, binary) {
+            (Some(_), Some(_)) => return Err(invalid("body or bodyBase64, not both".into())),
+            (Some(b), None) => req = req.body(b.to_string()),
+            (None, Some(b)) => {
+                let bytes = BASE64
+                    .decode(b)
+                    .map_err(|_| invalid("bodyBase64 is not base64".into()))?;
+                req = req.body(bytes);
+            }
+            (None, None) => {}
         }
+        Ok(req)
+    }
+
+    /// `{ url, method, headers, body | bodyBase64 }` → `{ status, headers, body | bodyBase64 }`, or why not (`REFUSED`,
+    /// `FAILED`). An answer that is not UTF-8 comes in `bodyBase64`, whole.
+    pub async fn fetch(&self, params: &Value) -> Result<Value, (i64, String)> {
+        let url = params.get("url").and_then(Value::as_str).unwrap_or("");
+        let judged = self.judge(url, Way::Http)?;
+        let name = judged.name.clone();
+        let req = self.request(&judged, params)?.timeout(self.seconds);
         let _turn = self
             .at_once
             .acquire()
             .await
             .map_err(|e| (FAILED, e.to_string()))?;
-        let mut res = req.send().await.map_err(|e| refusal_of(&name, &e))?;
-        let status = res.status().as_u16();
-        let mut headers = serde_json::Map::new();
-        for (k, v) in res.headers() {
-            let v = v.to_str().unwrap_or("");
-            headers
-                .entry(k.as_str().to_string())
-                .and_modify(|old| {
-                    *old = json!(format!("{}, {v}", old.as_str().unwrap_or("")));
-                })
-                .or_insert_with(|| json!(v));
-        }
-        let mut body = Vec::new();
-        while let Some(chunk) = res
-            .chunk()
+        let mut res = req
+            .send()
             .await
-            .map_err(|e| (FAILED, format!("{name}: {e}")))?
-        {
-            if body.len() + chunk.len() > FETCH_BYTES {
-                return Err((FAILED, format!("{name}: an answer over 1 MiB")));
+            .map_err(|e| refusal_of(&name, e, self.seconds))?;
+        let status = res.status().as_u16();
+        let headers = headers_of(res.headers());
+        let mut body = Vec::new();
+        loop {
+            let chunk = res
+                .chunk()
+                .await
+                .map_err(|e| refusal_of(&name, e, self.seconds))?;
+            let Some(chunk) = chunk else { break };
+            if body.len() + chunk.len() > self.bytes {
+                return Err((
+                    FAILED,
+                    format!("{name}: an answer over {}", in_words(self.bytes)),
+                ));
             }
             body.extend_from_slice(&chunk);
         }
-        Ok(json!({
-            "status": status,
-            "headers": headers,
-            "body": String::from_utf8_lossy(&body),
-        }))
+        let mut answer = json!({ "status": status, "headers": headers });
+        match String::from_utf8(body) {
+            Ok(text) => answer["body"] = json!(text),
+            Err(e) => answer["bodyBase64"] = json!(BASE64.encode(e.as_bytes())),
+        }
+        Ok(answer)
+    }
+
+    /// The response of `net/stream`, its headers read: what `fetch` judges, within the time of a call.
+    pub(super) async fn open_stream(
+        &self,
+        params: &Value,
+    ) -> Result<reqwest::Response, (i64, String)> {
+        let url = params.get("url").and_then(Value::as_str).unwrap_or("");
+        let judged = self.judge(url, Way::Http)?;
+        let req = self.request(&judged, params)?;
+        match tokio::time::timeout(self.seconds, req.send()).await {
+            Ok(r) => r.map_err(|e| refusal_of(&judged.name, e, self.seconds)),
+            Err(_) => Err((
+                FAILED,
+                format!(
+                    "{}: no answer within {} s",
+                    judged.name,
+                    self.seconds.as_secs()
+                ),
+            )),
+        }
+    }
+
+    /// The connection of a socket to what `judged` says: through the proxy, or to an address the name resolves to.
+    async fn tcp_of(&self, judged: &Judged) -> Result<tokio::net::TcpStream, (i64, String)> {
+        let name = &judged.name;
+        let failed = |e: String| (FAILED, format!("{name}: {e}"));
+        let host = judged.target.host_str().unwrap_or_default().to_string();
+        let port = judged.target.port_or_known_default().unwrap_or(443);
+        if judged.routed {
+            return tokio::net::TcpStream::connect((host.as_str(), port))
+                .await
+                .map_err(|e| failed(e.to_string()));
+        }
+        let settings = self.live.read().clone();
+        if let Some(proxy) = crate::voice::live::proxy_for(&settings, &host) {
+            return crate::voice::live::tunnel(&proxy, &host, port)
+                .await
+                .map_err(failed);
+        }
+        let bare = host.trim_matches(['[', ']']);
+        let addrs = match bare.parse::<IpAddr>() {
+            Ok(ip) => vec![ip],
+            Err(_) => guarded_lookup(self.dns.as_ref(), &self.open(), bare)
+                .await
+                .map_err(|e| match e.downcast_ref::<Forbidden>() {
+                    Some(f) => (REFUSED, f.to_string()),
+                    None => failed(e.to_string()),
+                })?,
+        };
+        let mut last = "it resolves to nothing".to_string();
+        for ip in addrs {
+            match tokio::net::TcpStream::connect((ip, port)).await {
+                Ok(tcp) => return Ok(tcp),
+                Err(e) => last = e.to_string(),
+            }
+        }
+        Err(failed(last))
+    }
+
+    /// The socket of `ws/open`: `wss` to a host of `net/fetch`, the proxy and the TLS of the settings. What fails says
+    /// neither its query nor its headers, which hold the key of the service.
+    pub(super) async fn open_socket(&self, params: &Value) -> Result<Ws, (i64, String)> {
+        use tokio_tungstenite::tungstenite::{
+            client::IntoClientRequest,
+            http::{HeaderName, HeaderValue},
+            protocol::WebSocketConfig,
+        };
+        let url = params.get("url").and_then(Value::as_str).unwrap_or("");
+        let judged = self.judge(url, Way::Socket)?;
+        let name = judged.name.clone();
+        let failed = |e: String| (FAILED, format!("{name}: {e}"));
+        let tcp = self.tcp_of(&judged).await?;
+        let _ = tcp.set_nodelay(true);
+        let io: Box<dyn Io> = if judged.target.scheme() == "wss" {
+            let host = judged.target.host_str().unwrap_or_default();
+            let host = host.trim_matches(['[', ']']);
+            let tls_name = rustls::pki_types::ServerName::try_from(host.to_string())
+                .map_err(|e| failed(e.to_string()))?;
+            let insecure = self.live.read().insecure;
+            let connector =
+                tokio_rustls::TlsConnector::from(crate::voice::live::tls_config(insecure));
+            Box::new(
+                connector
+                    .connect(tls_name, tcp)
+                    .await
+                    .map_err(|e| failed(format!("TLS: {e}")))?,
+            )
+        } else {
+            Box::new(tcp)
+        };
+        let mut req = judged
+            .target
+            .as_str()
+            .into_client_request()
+            .map_err(|_| failed("not a socket's address".into()))?;
+        if let Some(h) = params.get("headers").and_then(Value::as_object) {
+            let invalid = |k: &str| {
+                (
+                    super::runtime::INVALID_PARAMS,
+                    format!("the header {k} does not hold"),
+                )
+            };
+            for (k, v) in h {
+                if k.eq_ignore_ascii_case("host") {
+                    continue;
+                }
+                let key = HeaderName::from_bytes(k.as_bytes()).map_err(|_| invalid(k))?;
+                let value =
+                    HeaderValue::from_str(v.as_str().unwrap_or("")).map_err(|_| invalid(k))?;
+                req.headers_mut().insert(key, value);
+            }
+        }
+        let config = WebSocketConfig::default()
+            .max_message_size(Some(WS_MESSAGE))
+            .max_frame_size(Some(WS_MESSAGE));
+        match tokio_tungstenite::client_async_with_config(req, io, Some(config)).await {
+            Ok((ws, _)) => Ok(ws),
+            Err(tokio_tungstenite::tungstenite::Error::Http(r)) => {
+                Err(failed(format!("HTTP {}", r.status().as_u16())))
+            }
+            Err(e) => Err(failed(e.to_string())),
+        }
     }
 }
 
-/// A failed request: refused when the guarded resolver refused its addresses, failed otherwise.
-fn refusal_of(name: &str, e: &reqwest::Error) -> (i64, String) {
-    let mut source: Option<&(dyn std::error::Error + 'static)> = Some(e);
+/// The headers of a response, by name; a repeated one joined.
+pub(super) fn headers_of(headers: &reqwest::header::HeaderMap) -> serde_json::Map<String, Value> {
+    let mut out = serde_json::Map::new();
+    for (k, v) in headers {
+        let v = v.to_str().unwrap_or("");
+        out.entry(k.as_str().to_string())
+            .and_modify(|old| {
+                *old = json!(format!("{}, {v}", old.as_str().unwrap_or("")));
+            })
+            .or_insert_with(|| json!(v));
+    }
+    out
+}
+
+/// A size, as a limit says it.
+fn in_words(bytes: usize) -> String {
+    if bytes.is_multiple_of(1 << 20) {
+        format!("{} MiB", bytes >> 20)
+    } else {
+        format!("{bytes} bytes")
+    }
+}
+
+/// A failed request: refused when the guarded resolver refused its addresses, failed otherwise. Without its URL: a query
+/// may hold a key, and this goes to the journal.
+pub(super) fn refusal_of(name: &str, e: reqwest::Error, within: Duration) -> (i64, String) {
+    let e = e.without_url();
+    let mut source: Option<&(dyn std::error::Error + 'static)> = Some(&e);
     while let Some(s) = source {
         if let Some(f) = s.downcast_ref::<Forbidden>() {
             return (REFUSED, f.to_string());
@@ -950,10 +1369,10 @@ fn refusal_of(name: &str, e: &reqwest::Error) -> (i64, String) {
         source = s.source();
     }
     let what = if e.is_timeout() {
-        format!("no answer within {} s", FETCH_TIME.as_secs())
+        format!("no answer within {} s", within.as_secs())
     } else {
         let mut s = e.to_string();
-        let mut src = std::error::Error::source(e);
+        let mut src = std::error::Error::source(&e);
         while let Some(x) = src {
             s = format!("{s}: {x}");
             src = x.source();
@@ -966,29 +1385,35 @@ fn refusal_of(name: &str, e: &reqwest::Error) -> (i64, String) {
 // ---- The plugin's thread ---------------------------------------------------------------------------------------
 
 /// What comes for a plugin, on the one channel its thread waits on: a line for its input, and who waits for it to be
-/// written (`runtime::Frame`). A line of the core, the end of a fetch: to the module, it is all lines.
+/// written (`runtime::Frame`). A line of the core, the end of a fetch, a piece of a stream: to the module, it is all lines.
 pub type Frame = (Vec<u8>, Option<tokio::sync::oneshot::Sender<()>>);
 
 /// What the thread of a plugin tells its host.
 pub struct Wiring {
-    /// What comes for it. Closed by the host: the end of the thread, a fetch under way or not.
+    /// What comes for it. Closed by the host: the end of the thread, what runs beside it dropped.
     pub rx: tokio::sync::mpsc::UnboundedReceiver<Frame>,
     /// The way back to `rx` of what runs beside the thread, which does not keep it open.
     pub back: tokio::sync::mpsc::WeakUnboundedSender<Frame>,
-    /// A line it wrote, but `net/fetch`'s requests (served here).
+    /// A line it wrote, but those of the host's own capabilities (served here).
     pub line: Box<dyn FnMut(&str) + Send>,
     /// A line of its standard error.
     pub stderr: Box<dyn FnMut(&str) + Send>,
-    /// A fetch refused or failed, for its journal: said from beside the thread.
+    /// Something refused or failed, for its journal: said from beside the thread.
     pub refused: Arc<dyn Fn(&str) + Send + Sync>,
+    /// What it reached, for its journal: the method and the host, never a header nor a query.
+    pub said: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
 /// Serves the instance until its host closes its input (None) or it is done (why).
 pub fn serve(mut instance: Instance, fetcher: Fetcher, mut wiring: Wiring) -> Option<Fault> {
     let limits = instance.limits();
-    let fetcher = Arc::new(fetcher);
     // What runs beside the thread: it goes with it, dropped here.
-    let mut beside = tokio::task::JoinSet::new();
+    let mut beside = Beside::new(
+        Arc::new(fetcher),
+        wiring.back.clone(),
+        wiring.refused.clone(),
+        wiring.said.clone(),
+    );
     let mut errors = String::new();
     let flush_stderr = |instance: &Instance, wiring: &mut Wiring, errors: &mut String| {
         errors.push_str(&instance.stderr());
@@ -1029,45 +1454,11 @@ pub fn serve(mut instance: Instance, fetcher: Fetcher, mut wiring: Wiring) -> Op
             }
         };
         for line in lines {
-            match fetch_request(&line) {
-                Some((id, params)) => {
-                    let (fetcher, back) = (fetcher.clone(), wiring.back.clone());
-                    let refused = wiring.refused.clone();
-                    beside.spawn_on(
-                        async move {
-                            let reply = match fetcher.fetch(&params).await {
-                                Ok(result) => {
-                                    json!({ "jsonrpc": "2.0", "id": id, "result": result })
-                                }
-                                Err((code, message)) => {
-                                    refused(&format!("net/fetch: {message}"));
-                                    json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
-                                }
-                            };
-                            if let Some(tx) = back.upgrade() {
-                                let _ = tx.send((format!("{reply}\n").into_bytes(), None));
-                            }
-                        },
-                        net(),
-                    );
-                }
+            match request_of(&line) {
+                Some(request) => beside.serve(request),
                 None => (wiring.line)(&line),
             }
         }
-        while beside.try_join_next().is_some() {}
+        beside.reap();
     }
-}
-
-/// A `net/fetch` request of the plugin: its id and parameters.
-fn fetch_request(line: &str) -> Option<(Value, Value)> {
-    if !line.contains("net/fetch") {
-        return None;
-    }
-    let v: Value = serde_json::from_str(line).ok()?;
-    (v.get("method")?.as_str()? == "net/fetch").then(|| {
-        (
-            v.get("id").cloned().unwrap_or(Value::Null),
-            v.get("params").cloned().unwrap_or(Value::Null),
-        )
-    })
 }

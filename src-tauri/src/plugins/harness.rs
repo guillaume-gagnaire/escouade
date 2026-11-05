@@ -1607,6 +1607,7 @@ impl ProcessEngineProcess {
                 env: &env,
                 remove_env: &launch.remove_env,
                 ready: &how.ready,
+                listens: how.listens.as_deref(),
                 keep: how.keep.clone(),
                 dir: &dir,
             })

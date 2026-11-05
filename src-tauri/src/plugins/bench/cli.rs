@@ -47,6 +47,14 @@ fn host(call: &Call) -> i32 {
             measure: measure.unwrap_or(0),
             module: call.value("--wasm").map(PathBuf::from),
             offline: call.flag("--offline"),
+            accounts: call
+                .args
+                .iter()
+                .enumerate()
+                .filter(|(_, a)| *a == "--account")
+                .filter_map(|(i, _)| call.args.get(i + 1))
+                .map(|url| crate::forge::host_of(url))
+                .collect(),
             ..Options::default()
         };
         let report = rt.block_on(run(folder, &options));

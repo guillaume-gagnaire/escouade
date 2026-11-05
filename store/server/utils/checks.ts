@@ -914,6 +914,8 @@ function checkPermissions(m: Manifest | null): CheckResult {
   }
   if (!runs) unused('commands', t('Un plugin sans programme ne lance pas de commande.', 'A plugin with no program runs no command.'));
   list(p.network).forEach((host, i) => {
+    // `{account}`, the hosts the user types for its accounts; `local:shared`, the server the core starts for it.
+    if (host === '{account}' || host === 'local:shared') return;
     if (!/^(\*\.)?[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+(:\d+)?$/.test(host))
       problems.push({
         path: `permissions.network[${i}]`,

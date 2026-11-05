@@ -638,10 +638,10 @@ async fn run(
 }
 
 /// What a WebSocket runs over: a TCP connection, TLS or not, through the proxy or not.
-trait Io: AsyncRead + AsyncWrite + Unpin + Send {}
+pub(crate) trait Io: AsyncRead + AsyncWrite + Unpin + Send {}
 impl<T: AsyncRead + AsyncWrite + Unpin + Send> Io for T {}
 
-type Ws = tokio_tungstenite::WebSocketStream<Box<dyn Io>>;
+pub(crate) type Ws = tokio_tungstenite::WebSocketStream<Box<dyn Io>>;
 
 /// Opens `url`, with the key of `spec`, through the settings' proxy and TLS.
 async fn connect(spec: &Spec, url: &str) -> Result<Ws, OnlineError> {
@@ -725,6 +725,14 @@ pub(crate) fn proxy_for(net: &super::online::Net, host: &str) -> Option<reqwest:
     if around {
         return None;
     }
+    proxy_url(net)
+}
+
+/// The proxy of the settings, as an address.
+pub(crate) fn proxy_url(net: &super::online::Net) -> Option<reqwest::Url> {
+    if net.proxy.is_empty() {
+        return None;
+    }
     let raw = if net.proxy.contains("://") {
         net.proxy.clone()
     } else {
@@ -734,7 +742,7 @@ pub(crate) fn proxy_for(net: &super::online::Net, host: &str) -> Option<reqwest:
 }
 
 /// A tunnel to `host:port` through the HTTP proxy `proxy` (CONNECT), its user and password sent when it has them.
-async fn tunnel(
+pub(crate) async fn tunnel(
     proxy: &reqwest::Url,
     host: &str,
     port: u16,
@@ -806,7 +814,7 @@ fn percent_decode(s: &str) -> String {
 
 /// rustls with ring (as reqwest), the system's roots and Mozilla's, HTTP/1.1 only (a WebSocket's upgrade);
 /// `insecure`: no certificate checked, as the settings may ask (a proxy that inspects TLS without its root installed).
-fn tls_config(insecure: bool) -> Arc<rustls::ClientConfig> {
+pub(crate) fn tls_config(insecure: bool) -> Arc<rustls::ClientConfig> {
     static CHECKED: std::sync::OnceLock<Arc<rustls::ClientConfig>> = std::sync::OnceLock::new();
     static UNCHECKED: std::sync::OnceLock<Arc<rustls::ClientConfig>> = std::sync::OnceLock::new();
     let provider = || Arc::new(rustls::crypto::ring::default_provider());

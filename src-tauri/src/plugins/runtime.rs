@@ -549,6 +549,16 @@ impl Runtime {
         &self.modules
     }
 
+    /// Réglages › Réseau, for the plugins in WASM: their next call follows it.
+    pub fn set_network(&self, network: crate::voice::online::Net) {
+        *self.net.read().network.write() = network;
+    }
+
+    /// Who tells the hosts the user typed for the accounts of a plugin (`{account}`).
+    pub fn set_accounts(&self, accounts: super::wasm::HostsOf) {
+        self.net.write().accounts = Some(accounts);
+    }
+
     /// The tests' network for `net/fetch` (a fake service, the resolver's answer), for the instances to come.
     #[cfg(test)]
     pub fn set_net(&self, net: super::wasm::Net) {
@@ -1484,8 +1494,16 @@ impl Host {
             inner.conn = Some(conn.clone());
         }
         let files = super::wasm::files_of(&self.folder);
-        let fetcher =
-            super::wasm::Fetcher::new(&self.id, &self.manifest.permissions.network, &rt.net.read());
+        let mut net = rt.net.read().clone();
+        if net.shared.is_none() {
+            // As `harness.rs` keys them: the processes of this runtime.
+            let owner = rt as *const Runtime as usize;
+            net.shared = Some(Arc::new(move |plugin| {
+                super::shared::ports_of(owner, plugin)
+            }));
+        }
+        let fetcher = super::wasm::Fetcher::new(&self.id, &self.manifest.permissions.network, &net)
+            .limited(self.manifest.limits);
         let limits = rt.limits.wasm;
         let (host, c) = (self.clone(), conn.clone());
         std::thread::Builder::new()
@@ -1495,13 +1513,14 @@ impl Host {
                     Err(f) => Some(f),
                     Ok(instance) => {
                         let (h1, c1) = (host.clone(), c.clone());
-                        let (h2, h3) = (host.clone(), host.clone());
+                        let (h2, h3, h4) = (host.clone(), host.clone(), host.clone());
                         let wiring = super::wasm::Wiring {
                             rx,
                             back,
                             line: Box::new(move |l| h1.incoming(&c1, l)),
                             stderr: Box::new(move |l| h2.journal.push(Kind::Stderr, l)),
                             refused: Arc::new(move |l| h3.journal.push(Kind::Refused, l)),
+                            said: Arc::new(move |l| h4.journal.push(Kind::Message, l)),
                         };
                         super::wasm::serve(instance, fetcher, wiring)
                     }

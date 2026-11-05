@@ -157,7 +157,7 @@ export interface FilesReadParams {
 }
 
 export interface NetFetchParams {
-  /** An https URL to a host of permissions.network. */
+  /** An https URL to a host of permissions.network; http too for a host of `{account}` or `local:shared`. */
   url: string;
   /** GET when left out. */
   method?: string;
@@ -165,6 +165,8 @@ export interface NetFetchParams {
   headers?: Record<string, string>;
   /** The body of the request, as text. */
   body?: string | null;
+  /** The body of the request, as base64, for bytes: body or bodyBase64, not both. */
+  bodyBase64?: string;
 }
 
 export interface NetFetchResult {
@@ -172,8 +174,121 @@ export interface NetFetchResult {
   status: number;
   /** Its headers, by lower case name; a repeated one joined by ", ". */
   headers: Record<string, string>;
-  /** Its body, as text (UTF-8, what is not replaced). */
-  body: string;
+  /** Its body, when it is UTF-8. */
+  body?: string;
+  /** Its body as base64, when it is not UTF-8. */
+  bodyBase64?: string;
+}
+
+export interface NetStreamParams {
+  /** An https URL to a host of permissions.network; http too for a host of `{account}` or `local:shared`. */
+  url: string;
+  /** GET when left out. */
+  method?: string;
+  /** The headers of the request (Host is set by Escouade). */
+  headers?: Record<string, string>;
+  /** The body of the request, as text. */
+  body?: string | null;
+  /** The body of the request, as base64, for bytes: body or bodyBase64, not both. */
+  bodyBase64?: string;
+  /** A stream of events, that may stay silent: it is never closed for that. */
+  sse?: boolean;
+}
+
+export interface NetStreamResult {
+  /** What names it. */
+  stream: number;
+  /** The HTTP status; a 3xx is given as it is, never followed. */
+  status: number;
+  /** Its headers, by lower case name; a repeated one joined by ", ". */
+  headers: Record<string, string>;
+}
+
+export interface NetChunkParams {
+  /** The stream. */
+  stream: number;
+  /** The piece as text, when it is UTF-8: a character cut by a read waits for the next piece. */
+  data?: string;
+  /** The piece as base64, when it is not UTF-8. */
+  dataBase64?: string;
+}
+
+export interface NetEndParams {
+  /** The stream. */
+  stream: number;
+  /** Why it broke; none for a stream read to its end. */
+  error?: string;
+}
+
+export interface NetCreditParams {
+  /** The stream. */
+  stream: number;
+  /** How many bytes of it were consumed. */
+  bytes: number;
+}
+
+export interface NetCancelParams {
+  /** The stream. */
+  stream: number;
+}
+
+export interface WsOpenParams {
+  /** A wss URL to a host of net/fetch. */
+  url: string;
+  /** The headers of the handshake (Host is set by Escouade); never in the journal. */
+  headers?: Record<string, string>;
+}
+
+export interface WsOpenResult {
+  /** What names it. */
+  socket: number;
+}
+
+export interface WsSendParams {
+  /** The socket. */
+  socket: number;
+  /** A text message. */
+  text?: string;
+  /** A binary message, as base64: text or dataBase64, not both. */
+  dataBase64?: string;
+}
+
+export interface WsCloseParams {
+  /** The socket. */
+  socket: number;
+}
+
+export interface WsMessageParams {
+  /** The socket. */
+  socket: number;
+  /** A text message. */
+  text?: string;
+  /** A binary message, as base64. */
+  dataBase64?: string;
+}
+
+export interface WsClosedParams {
+  /** The socket. */
+  socket: number;
+  /** The close code; 1006 for a connection that broke, 1009 for a message over 1 MiB. */
+  code: number;
+  /** Why, when it is said. */
+  reason: string;
+}
+
+export interface TimerSetParams {
+  /** In how long, in milliseconds; less than 10 is 10. */
+  ms: number;
+}
+
+export interface TimerSetResult {
+  /** What names it. */
+  timer: number;
+}
+
+export interface TimerParams {
+  /** The timer. */
+  timer: number;
 }
 
 export interface LogParams {
@@ -234,6 +349,16 @@ export interface ToPlugin {
   'events/fact': { params: Fact; result: void };
   /** A permission an agent asks for, before the user is asked (permissions.decide). Past the delay, the user is asked. */
   'permissions/decide': { params: DecideParams; result: Decision };
+  /** A piece of a stream. */
+  'net/chunk': { params: NetChunkParams; result: void };
+  /** The end of a stream; none after a net/cancel. */
+  'net/end': { params: NetEndParams; result: void };
+  /** A message received on a socket. */
+  'ws/message': { params: WsMessageParams; result: void };
+  /** A socket ended, by either side. */
+  'ws/closed': { params: WsClosedParams; result: void };
+  /** A timer came due. */
+  'timer/fired': { params: TimerParams; result: void };
 }
 
 /** What the plugin sends to Escouade: each method, its parameters and its answer (`void` for a notification). */
@@ -244,8 +369,24 @@ export interface ToEscouade {
   'settings/get': { params: SettingsGetParams; result: Record<string, string | number | boolean> };
   /** A file of the plugin's own folder, as text (UTF-8): a path relative to the folder, with / between its parts. Refused (refused) for a path that leaves the folder (absolute, .., a link that goes out of it), a hidden file or folder (.env, .git) and the manifest; notFound for a file that is not there; failed for a file over 256 KiB or not UTF-8. Both transports: the SDK's p.file(path). */
   'files/read': { params: FilesReadParams; result: string };
-  /** An HTTP request, for a plugin in WASM (run.js): the SDK's standard fetch goes by it. Escouade sends it in https only, to a host of permissions.network or one of its subdomains, never to an address of the machine or of the local network (judged on the addresses the name resolves to), without a proxy; it follows no redirection (the plugin gets the 3xx). The answer comes within 10 s and holds 1 MiB at most (failed past either). A plugin run by a command uses its own network, and is answered methodNotFound. */
+  /** An HTTP request, for a plugin in WASM (run.js, run.wasm): the SDK's standard fetch goes by it. Escouade sends it in https only, to a host of permissions.network or one of its subdomains, never to an address of the machine or of the local network (judged on the addresses the name resolves to). `{account}` in permissions.network opens the host the user typed for one of the plugin's accounts, on that port and that host alone, in http or on the local network; `local:shared` opens http to 127.0.0.1 on a port the core read in the output of the process it started for the plugin (Launch.shared.listens), while it lives. The proxy and the TLS of Réglages › Réseau are followed: through a proxy only the name is judged, and the journal says so. No redirection is followed (the plugin gets the 3xx). The answer comes within 10 s and holds 1 MiB at most (failed past either), unless the manifest's limits ask for more (120 s, 32 MiB at most). A plugin run by a command uses its own network, and is answered methodNotFound; the same for net/stream, ws/* and timer/*. */
   'net/fetch': { params: NetFetchParams; result: NetFetchResult };
+  /** A response in pieces, for a plugin in WASM: the rules of net/fetch at its opening, the answer once its headers are read. Then net/chunk, and net/end. The plugin holds 256 KiB it has not consumed (net/credit): past it Escouade does not read the socket. 8 streams at once. 120 s without a byte end a stream that is not declared sse. */
+  'net/stream': { params: NetStreamParams; result: NetStreamResult };
+  /** The plugin consumed these bytes of a stream: as many more may come, never past 256 KiB waiting. */
+  'net/credit': { params: NetCreditParams; result: void };
+  /** The plugin lets go of a stream: its connection closes. */
+  'net/cancel': { params: NetCancelParams; result: void };
+  /** A WebSocket, for a plugin in WASM: wss only, to the hosts of net/fetch, the proxy and the TLS of Réglages › Réseau. 4 sockets at once, 1 MiB a message. Its headers never go to the journal. */
+  'ws/open': { params: WsOpenParams; result: WsOpenResult };
+  /** A message on a socket: refused past 1 MiB, or when what waits to be sent would pass 256 KiB (a long message goes when nothing waits). */
+  'ws/send': { params: WsSendParams; result: null };
+  /** Closes a socket: ws/closed follows. */
+  'ws/close': { params: WsCloseParams; result: null };
+  /** A timer, for a plugin in WASM: 10 ms at least, 64 at once. The prelude makes setTimeout of it. It goes with the instance. */
+  'timer/set': { params: TimerSetParams; result: TimerSetResult };
+  /** Takes a timer back. */
+  'timer/cancel': { params: TimerParams; result: void };
   /** A line of its journal. */
   log: { params: LogParams; result: void };
 }
@@ -257,6 +398,8 @@ export const TIMEOUTS_MS = {
   'permissions/decide': 500,
   'files/read': 5000,
   'net/fetch': 10000,
+  'net/stream': 10000,
+  'ws/open': 10000,
 } as const;
 
 /** The delay of the other calls, in milliseconds. */

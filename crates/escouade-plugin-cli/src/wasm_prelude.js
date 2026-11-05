@@ -7,9 +7,10 @@
 //   channels.json), given by Escouade at the start, in the first line (`escouade/boot`); `p.file()` of the SDK reads
 //   the others (`files/read`);
 // - `fetch`, the standard one, served by Escouade (`net/fetch`), which lets out only the hosts of permissions.network;
+// - `setTimeout` and `clearTimeout`, served by Escouade (`timer/set`), 10 ms at least;
 // - `URL`, enough of it for `new URL('../rules.json', import.meta.url)`;
 // - `console`, which goes to the journal (standard error), never into the protocol.
-// No timer: `setTimeout` is not there (the SDK does without). `node:readline` is there for the SDK's import alone.
+// `node:readline` is there for the SDK's import alone.
 // Escouade calls the module's export `escouade-turn` each time it has written lines: the prelude hands them to the
 // plugin, and the call returns once the plugin has nothing left to run (QuickJS's job queue empty): no thread.
 const __esc = (globalThis.__esc ??= (() => {
@@ -22,6 +23,10 @@ const __esc = (globalThis.__esc ??= (() => {
   let seq = 0;
   let files = {};
   let ended = false;
+  // The timers of setTimeout, by the number it gave; the same, by the host's number once the host answered.
+  const timers = new Map();
+  const set = new Map();
+  let handles = 0;
 
   function readAvailable() {
     const buf = new Uint8Array(65536);
@@ -93,38 +98,129 @@ const __esc = (globalThis.__esc ??= (() => {
     }
   }
 
+  const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+  function toBase64(bytes) {
+    let s = '';
+    for (let i = 0; i < bytes.length; i += 3) {
+      const n = (bytes[i] << 16) | ((bytes[i + 1] ?? 0) << 8) | (bytes[i + 2] ?? 0);
+      s += LETTERS[n >> 18] + LETTERS[(n >> 12) & 63];
+      s += i + 1 < bytes.length ? LETTERS[(n >> 6) & 63] : '=';
+      s += i + 2 < bytes.length ? LETTERS[n & 63] : '=';
+    }
+    return s;
+  }
+
+  function fromBase64(text) {
+    const clean = text.replace(/=+$/, '');
+    const bytes = new Uint8Array(Math.floor((clean.length * 3) / 4));
+    let bits = 0;
+    let value = 0;
+    let at = 0;
+    for (const c of clean) {
+      value = (value << 6) | LETTERS.indexOf(c);
+      bits += 6;
+      if (bits >= 8) {
+        bits -= 8;
+        bytes[at++] = (value >> bits) & 255;
+      }
+    }
+    return bytes;
+  }
+
+  /** The bytes of a binary body; null for what is text. */
+  function binary(body) {
+    if (body instanceof ArrayBuffer) return new Uint8Array(body);
+    if (ArrayBuffer.isView(body)) return new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
+    return null;
+  }
+
   class Response {
     constructor(r) {
       this.status = r.status;
       this.ok = r.status >= 200 && r.status < 300;
       this.headers = new Headers(r.headers);
-      this.body_ = r.body ?? '';
+      this.body_ = r.body ?? null;
+      this.bytes_ = r.bodyBase64 == null ? null : fromBase64(r.bodyBase64);
     }
     async text() {
-      return this.body_;
+      return this.bytes_ ? dec.decode(this.bytes_) : (this.body_ ?? '');
     }
     async json() {
-      return JSON.parse(this.body_);
+      return JSON.parse(await this.text());
     }
+    async bytes() {
+      return this.bytes_ ?? enc.encode(this.body_ ?? '');
+    }
+    async arrayBuffer() {
+      return (await this.bytes()).slice().buffer;
+    }
+  }
+
+  /** A request to Escouade the prelude makes itself; `done` gets its answer as it is read, in the same turn. */
+  function ask(method, params, done) {
+    const id = `w${++seq}`;
+    waiting.set(id, done);
+    out(1, JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
   }
 
   /** A call to Escouade the prelude makes itself (`net/fetch`): its answer never reaches the plugin's listeners. */
   function call(method, params) {
-    const id = `w${++seq}`;
-    return new Promise((resolve, reject) => {
-      waiting.set(id, { resolve, reject });
-      out(1, JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
-    });
+    return new Promise((resolve, reject) => ask(method, params, { resolve, reject }));
   }
 
   function fetch(input, init = {}) {
     const headers = new Headers(init.headers ?? {}).map;
+    const bytes = binary(init.body);
     return call('net/fetch', {
       url: String(input && input.href ? input.href : input),
       method: init.method ?? 'GET',
       headers,
-      body: init.body == null ? null : String(init.body),
+      ...(bytes ? { bodyBase64: toBase64(bytes) } : { body: init.body == null ? null : String(init.body) }),
     }).then((r) => new Response(r));
+  }
+
+  /** The number is the prelude's: `clearTimeout` holds before the host's answer has come. */
+  function setTimeout(fn, ms, ...args) {
+    const handle = ++handles;
+    timers.set(handle, { fn, args, timer: null });
+    ask(
+      'timer/set',
+      { ms: Math.max(10, Number(ms) || 0) },
+      {
+        resolve(r) {
+          const t = timers.get(handle);
+          if (t) {
+            t.timer = r.timer;
+            set.set(r.timer, handle);
+          } else out(1, JSON.stringify({ jsonrpc: '2.0', method: 'timer/cancel', params: { timer: r.timer } }) + '\n');
+        },
+        reject(e) {
+          timers.delete(handle);
+          out(2, `setTimeout: ${e.message}\n`);
+        },
+      },
+    );
+    return handle;
+  }
+
+  function clearTimeout(handle) {
+    const t = timers.get(handle);
+    if (!t) return;
+    timers.delete(handle);
+    if (t.timer !== null) {
+      set.delete(t.timer);
+      out(1, JSON.stringify({ jsonrpc: '2.0', method: 'timer/cancel', params: { timer: t.timer } }) + '\n');
+    }
+  }
+
+  /** A timer of the host came due: what setTimeout was given runs, in this turn. */
+  function fired(timer) {
+    const handle = set.get(timer);
+    set.delete(timer);
+    const t = timers.get(handle);
+    timers.delete(handle);
+    if (t) t.fn(...t.args);
   }
 
   /** Just enough of URL for `new URL('../rules.json', import.meta.url)` and fetch's strings. */
@@ -196,6 +292,8 @@ const __esc = (globalThis.__esc ??= (() => {
       globalThis.fetch = fetch;
       globalThis.Headers ??= Headers;
       globalThis.Response ??= Response;
+      globalThis.setTimeout = setTimeout;
+      globalThis.clearTimeout = clearTimeout;
       globalThis.console = {
         log: (...a) => out(2, text(a)),
         info: (...a) => out(2, text(a)),
@@ -241,6 +339,10 @@ const __esc = (globalThis.__esc ??= (() => {
             e.code = m.error.code;
             w.reject(e);
           } else w.resolve(m.result);
+          continue;
+        }
+        if (m && m.method === 'timer/fired') {
+          fired(m.params.timer);
           continue;
         }
         for (const cb of listeners) cb(line);

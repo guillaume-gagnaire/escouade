@@ -489,6 +489,27 @@ pub fn forge_vault_names(host: &str) -> Vec<String> {
         .collect()
 }
 
+/// The hosts the user typed for the accounts `plugin` serves (`git.acme.dev:8443`, a Jira site's): all `{account}` of
+/// `permissions.network` reaches (ESC-332).
+pub fn hosts_of(accounts: &Accounts, plugin: &str) -> Vec<String> {
+    let mut hosts: Vec<String> = forge::accounts::all(accounts)
+        .iter()
+        .filter(|a| serving(&a.kind, &a.plugin) == plugin)
+        .map(|a| a.host())
+        .collect();
+    for service in source::registry().services() {
+        if let Some(a) = accounts.get(service) {
+            if !a.site.is_empty() && serving(&kind_of_source(service), &a.plugin) == plugin {
+                hosts.push(forge::host_of(&a.site));
+            }
+        }
+    }
+    hosts.retain(|h| !h.is_empty());
+    hosts.sort();
+    hosts.dedup();
+    hosts
+}
+
 /// One account and the points it serves, as Réglages and the plugins see it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]

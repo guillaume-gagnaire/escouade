@@ -272,6 +272,7 @@ fn slack(network: &[&str]) -> (W, Seen) {
     w.rt.set_net(Net {
         routes: HashMap::from([("slack.com".to_string(), base)]),
         dns: None,
+        ..Net::default()
     });
     w.store
         .set(&secret_name(&w.id, "token"), "xoxb-test-token")
@@ -676,6 +677,7 @@ async fn net_fetch_refuses_at_the_connection_a_declared_host_that_resolves_to_12
                 .map(|a| a.map(|s| s.ip()).collect())
                 .unwrap_or_default(),
         })),
+        ..Net::default()
     });
     let urls = [
         format!("https://slack.com:{port}/api/x"),
@@ -776,6 +778,7 @@ async fn net_fetch_refuses_every_address_of_the_machine_and_of_the_local_network
         dns: Some(Arc::new(move |h: &str| {
             answers.get(h).cloned().unwrap_or_default()
         })),
+        ..Net::default()
     };
     let f = Fetcher::new("dev.test.probe", &["exemple.dev".to_string()], &net);
     for host in ["a", "b", "c", "d", "e"] {
@@ -810,7 +813,7 @@ async fn net_fetch_refuses_every_address_of_the_machine_and_of_the_local_network
             "https://exemple.dev@evil.example/x",
             "evil.example is not in permissions.network of dev.test.probe",
         ),
-        ("http://exemple.dev/x", "only https: http://exemple.dev/x"),
+        ("http://exemple.dev/x", "only https: http://exemple.dev"),
     ];
     for (url, said) in names {
         assert_eq!(
@@ -846,6 +849,7 @@ async fn a_redirection_is_never_followed_out_of_the_permitted_hosts() {
     w.rt.set_net(Net {
         routes: HashMap::from([("slack.com".to_string(), base)]),
         dns: None,
+        ..Net::default()
     });
     let r =
         w.rt.call(&w.id, "try", json!({ "urls": ["https://slack.com/api/x"] }))
@@ -922,6 +926,7 @@ fn sdk_both(t: Transport) -> (W, Seen) {
         rt.set_net(Net {
             routes: HashMap::from([("hooks.example.dev".to_string(), hook)]),
             dns: None,
+            ..Net::default()
         });
         if let Some(h) = rt.prepare(&id) {
             let _ = h.join();
@@ -1036,6 +1041,104 @@ async fn a_bundle_that_reads_stdin_itself_says_to_build_it_again() {
 
 /// ESC-331: one host for `run.js` and `run.wasm`: a bundle's fetch runs beside its thread too.
 #[tokio::test(flavor = "multi_thread")]
+async fn the_timers_a_binary_fetch_a_stream_and_a_socket_of_the_sdk_run_in_wasm() {
+    use futures_util::{SinkExt, StreamExt};
+    if !ready() {
+        return;
+    }
+    let src = root().join("tests/fixtures/plugins/sdk-net");
+    let mut manifest: Value =
+        serde_json::from_str(&std::fs::read_to_string(src.join("escouade-plugin.json")).unwrap())
+            .unwrap();
+    manifest.as_object_mut().unwrap().remove("run");
+    let bundle = std::fs::read_to_string(src.join("dist/plugin.mjs")).unwrap();
+    let w = plugin("sdk-net", manifest, &bundle, &[], Limits::default());
+
+    // A server of bytes, of events; a socket.
+    let l = TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://{}", l.local_addr().unwrap());
+    std::thread::spawn(move || {
+        for stream in l.incoming().flatten() {
+            std::thread::spawn(move || {
+                let mut r = BufReader::new(stream.try_clone().unwrap());
+                let (mut first, mut len) = (String::new(), 0);
+                r.read_line(&mut first).unwrap();
+                loop {
+                    let mut h = String::new();
+                    r.read_line(&mut h).unwrap();
+                    if h.trim().is_empty() {
+                        break;
+                    }
+                    if let Some(v) = h.to_ascii_lowercase().strip_prefix("content-length:") {
+                        len = v.trim().parse().unwrap();
+                    }
+                }
+                let mut body = vec![0; len];
+                r.read_exact(&mut body).unwrap();
+                let mut s = stream;
+                if first.contains("/events") {
+                    let _ = write!(s, "HTTP/1.1 200 OK\r\n\r\ndata: é\n\n");
+                    let _ = s.flush();
+                    std::thread::sleep(Duration::from_millis(50));
+                    let _ = write!(s, "data: à\n\n");
+                } else {
+                    let _ = write!(
+                        s,
+                        "HTTP/1.1 200 OK\r\nconnection: close\r\ncontent-length: {}\r\n\r\n",
+                        body.len()
+                    );
+                    let _ = s.write_all(&body);
+                }
+            });
+        }
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let socket = format!("ws://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move {
+        while let Ok((tcp, _)) = listener.accept().await {
+            tokio::spawn(async move {
+                let mut ws = tokio_tungstenite::accept_async(tcp).await.unwrap();
+                while let Some(Ok(m)) = ws.next().await {
+                    if m.is_text() {
+                        let _ = ws.send(m).await;
+                    }
+                }
+            });
+        }
+    });
+    w.rt.set_net(Net {
+        routes: HashMap::from([
+            ("api.exemple.dev".to_string(), base),
+            ("live.exemple.dev".to_string(), socket),
+        ]),
+        ..Net::default()
+    });
+
+    let started = Instant::now();
+    let fired =
+        w.rt.call(&w.id, "later", json!({ "ms": 200 }))
+            .await
+            .unwrap();
+    assert_eq!(fired, "fired");
+    assert!(started.elapsed() >= Duration::from_millis(190));
+    let bytes = json!({ "url": "https://api.exemple.dev/echo", "bytes": [255, 0, 1, 2] });
+    assert_eq!(
+        w.rt.call(&w.id, "bytes", bytes).await.unwrap(),
+        json!([255, 0, 1, 2])
+    );
+    let url = json!({ "url": "https://api.exemple.dev/events" });
+    assert_eq!(
+        w.rt.call(&w.id, "stream", url).await.unwrap(),
+        json!({ "status": 200, "text": "data: é\n\ndata: à\n\n" })
+    );
+    let hello = json!({ "url": "wss://live.exemple.dev/", "text": "bonjour" });
+    let said = w.rt.call(&w.id, "socket", hello).await.unwrap();
+    assert_eq!(said["got"], "bonjour", "{said}");
+    assert!(said["closed"]["code"].is_u64(), "{said}");
+    w.rt.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_slow_fetch_of_a_bundle_holds_back_neither_the_next_nor_the_thread() {
     if !ready() {
         return;
@@ -1074,6 +1177,7 @@ async fn a_slow_fetch_of_a_bundle_holds_back_neither_the_next_nor_the_thread() {
     w.rt.set_net(Net {
         routes: HashMap::from([("api.exemple.dev".to_string(), base)]),
         dns: None,
+        ..Net::default()
     });
     let started = Instant::now();
     let (rt, id) = (w.rt.clone(), w.id.clone());

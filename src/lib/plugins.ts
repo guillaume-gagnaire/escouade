@@ -239,6 +239,16 @@ export function askOf(word: string, m: Manifest | null, lang: string): Ask {
     case 'events':
       return { word, icon: 'spark', text: t('plugins.ask.events'), detail: what, strong: false, red: false };
     case 'network':
+      // The hosts the user types for its accounts, and the local server of its harness: no host to name (ESC-332).
+      if (what === '{account}' || what === 'local:shared')
+        return {
+          word,
+          icon: 'globe',
+          text: t(what === '{account}' ? 'plugins.ask.networkAccount' : 'plugins.ask.networkShared'),
+          detail: '',
+          strong: false,
+          red: false,
+        };
       return {
         word,
         icon: 'globe',

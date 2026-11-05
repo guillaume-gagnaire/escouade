@@ -24,7 +24,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 
-fn fixture() -> PathBuf {
+pub(crate) fn fixture() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures/plugins/reactor")
 }
 
@@ -48,10 +48,11 @@ fn copied(name: &str) -> PathBuf {
 }
 
 /// The module's instance on a thread of its own, as `spawn_wasm` makes it, on the module of the fixture.
-struct Served {
+pub(crate) struct Served {
     tx: Option<UnboundedSender<Frame>>,
-    lines: Receiver<String>,
-    refused: Arc<Mutex<Vec<String>>>,
+    pub(crate) lines: Receiver<String>,
+    pub(crate) refused: Arc<Mutex<Vec<String>>>,
+    pub(crate) said: Arc<Mutex<Vec<String>>>,
     ended: Receiver<Option<Fault>>,
 }
 
@@ -62,7 +63,7 @@ fn line(id: u64, method: &str, params: Value) -> Frame {
 
 impl Served {
     /// `first`, written before the thread starts, comes to it together.
-    fn start(
+    pub(crate) fn start(
         fetcher: Fetcher,
         limits: wasm::Limits,
         calls: Option<Calls>,
@@ -76,7 +77,8 @@ impl Served {
         let (out, lines) = channel();
         let (done, ended) = channel();
         let refused = Arc::new(Mutex::new(Vec::new()));
-        let said = refused.clone();
+        let said = Arc::new(Mutex::new(Vec::new()));
+        let (no, told) = (refused.clone(), said.clone());
         let m = module();
         std::thread::spawn(move || {
             let fault = match Instance::start_with(&m, &BTreeMap::new(), limits, calls) {
@@ -91,7 +93,8 @@ impl Served {
                             let _ = out.send(l.to_string());
                         }),
                         stderr: Box::new(|_| {}),
-                        refused: Arc::new(move |l| said.lock().unwrap().push(l.to_string())),
+                        refused: Arc::new(move |l| no.lock().unwrap().push(l.to_string())),
+                        said: Arc::new(move |l| told.lock().unwrap().push(l.to_string())),
                     },
                 ),
             };
@@ -101,6 +104,7 @@ impl Served {
             tx: Some(tx),
             lines,
             refused,
+            said,
             ended,
         }
     }
@@ -109,7 +113,7 @@ impl Served {
         Self::start(no_network(), limits, calls, Vec::new())
     }
 
-    fn send(&self, id: u64, method: &str, params: Value) {
+    pub(crate) fn send(&self, id: u64, method: &str, params: Value) {
         let _ = self.tx.as_ref().unwrap().send(line(id, method, params));
     }
 
@@ -186,6 +190,7 @@ fn fake() -> Fake {
     let net = Net {
         routes: HashMap::from([("hooks.example.dev".to_string(), base)]),
         dns: None,
+        ..Net::default()
     };
     Fake {
         fetcher: Fetcher::new("dev.test.reactor", &["hooks.example.dev".to_string()], &net),

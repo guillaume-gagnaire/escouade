@@ -117,7 +117,11 @@ export function askedOf(v: CatalogVersion | null): Asked[] {
   const p = v.permissions ?? {};
   if (v.run) out.push({ text: t('plugins.store.runs'), kind: 'run' });
   if (p.decide) out.push({ text: t('plugins.store.decides'), kind: 'decide' });
-  for (const h of p.network ?? []) out.push({ text: h, kind: 'host' });
+  for (const h of p.network ?? []) {
+    if (h === '{account}') out.push({ text: t('plugins.ask.networkAccount'), kind: 'none' });
+    else if (h === 'local:shared') out.push({ text: t('plugins.ask.networkShared'), kind: 'none' });
+    else out.push({ text: h, kind: 'host' });
+  }
   const secrets = (p.secrets ?? []).length;
   if (secrets) out.push({ text: t('plugins.store.secrets', { count: secrets }), kind: 'secret' });
   if (!v.run && !out.length) out.push({ text: t('plugins.store.noProgram'), kind: 'none' });

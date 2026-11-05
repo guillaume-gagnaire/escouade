@@ -234,6 +234,10 @@ pub struct Launch {
 pub struct SharedLaunch {
     /// What the line that says it is ready holds: the line goes to the plugin (`SharedRef::line`).
     pub ready: String,
+    /// The template of the line where the server says its address (`http://{host}:{port}`): the port the core reads
+    /// there is the one `local:shared` lets the plugin reach (`{host}` is `127.0.0.1` and nothing else, ESC-332).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub listens: Option<String>,
     /// A folder has one agent per process: another agent in that folder gets a process of its own.
     #[serde(default)]
     pub one_agent_a_folder: bool,
@@ -246,6 +250,7 @@ impl std::fmt::Debug for SharedLaunch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SharedLaunch")
             .field("ready", &self.ready)
+            .field("listens", &self.listens)
             .field("one_agent_a_folder", &self.one_agent_a_folder)
             .field("keep", &"…")
             .finish()

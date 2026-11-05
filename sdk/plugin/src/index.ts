@@ -21,6 +21,7 @@ import {
 } from './protocol.js';
 
 export * from './protocol.js';
+export * from './net.js';
 export type { Manifest } from './manifest.js';
 
 /** An error to answer a call with: its code goes to Escouade as it is (`ERRORS`). */
@@ -296,7 +297,7 @@ export class Plugin {
       }
       case 'shutdown': {
         const all = Promise.allSettled(this.closing.map((h) => h()));
-        // No timer in WASM: Escouade's delay of shutdown bounds them there.
+        // A bound of its own where there is a timer; Escouade's delay of shutdown bounds them anyway.
         const bound =
           typeof setTimeout === 'function'
             ? [new Promise((r) => (setTimeout(r, this.options.shutdownMs ?? 800) as { unref?: () => void }).unref?.())]

@@ -71,6 +71,7 @@ impl Hosted {
                     }),
                     stderr: Box::new(|_| {}),
                     refused: Arc::new(|_| {}),
+                    said: Arc::new(|_| {}),
                 },
             );
             assert_eq!(fault, None);
@@ -267,6 +268,7 @@ fn linear_fetcher(base: &str) -> Fetcher {
     let net = Net {
         routes: HashMap::from([("api.linear.app".to_string(), base.to_string())]),
         dns: None,
+        ..Net::default()
     };
     Fetcher::new("dev.escouade.linear", &["linear.app".to_string()], &net)
 }
@@ -344,6 +346,7 @@ fn a_host_outside_the_manifest_is_refused_to_linear() {
     let net = Net {
         routes: HashMap::from([("api.linear.app".to_string(), base)]),
         dns: None,
+        ..Net::default()
     };
     let fetcher = Fetcher::new("dev.escouade.linear", &[], &net);
     let mut hosted = Hosted::start(linear, fetcher);
