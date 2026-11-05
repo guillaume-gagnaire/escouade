@@ -66,10 +66,7 @@ pub(crate) use vibe::bench::fake_vibe;
 pub use vibe::VIBE;
 
 #[cfg(test)]
-pub(crate) use claude::{
-    all_tools as claude_all_tools, claude_args, escaped_len, ClaudeProcess, SpawnOpts,
-    PROTOCOL_BUDGET,
-};
+pub(crate) use claude::{all_tools as claude_all_tools, escaped_len, PROTOCOL_BUDGET};
 
 use crate::agent::{AgentRt, Effects};
 use crate::core::Attachment;

@@ -54,6 +54,8 @@ Les modèles sont ceux que le Claude Code de chaque compte liste dans son `/mode
 
 Le coût d’un tour est celui que donne Claude Code. Le quota, ce sont la fenêtre de 5 heures et la fenêtre hebdomadaire de ton compte, dans la barre d’état. La [vue Claude Code](claude-code-view) fait tourner l’agent dans l’interface de Claude Code elle-même. Il est seul à avoir le [remote control](remote-control), les tâches de fond et la lecture des PDF.
 
+Claude Code est un plugin livré avec Escouade (`dev.escouade.claude-code`) : ses agents conversent par un programme à part qu’Escouade lance et surveille. Il se voit dans la vue Plugins, sous « Livrés avec Escouade » ; coupé, un agent de Claude Code dit au lancement qu’il faut le rallumer, et garde sa session.
+
 ## Codex
 
 Codex est un plugin livré avec Escouade (`dev.escouade.codex`) : ses agents conversent par un programme à part qu’Escouade lance et surveille. Il se voit dans la vue Plugins, sous « Livrés avec Escouade » ; coupé, un agent de Codex dit au lancement qu’il faut le rallumer, et garde sa session.

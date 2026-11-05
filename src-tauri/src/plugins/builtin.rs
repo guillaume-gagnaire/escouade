@@ -145,6 +145,13 @@ pub const REGISTRY: &[Entry] = &[
             "../../../plugins/builtin/dev.escouade.antigravity-cli/escouade-plugin.json"
         ),
     },
+    // Claude Code (INT-10.5): its agents' conversation, by the client of `claude` in its crate.
+    Entry {
+        id: CLAUDE,
+        manifest: include_str!(
+            "../../../plugins/builtin/dev.escouade.claude-code/escouade-plugin.json"
+        ),
+    },
 ];
 
 /// The plugin « GitHub »: github.com, GHE.com and GitHub Enterprise Server, their pull requests and GitHub Issues.
@@ -165,6 +172,8 @@ pub const TRELLO: &str = "dev.escouade.trello";
 
 /// The plugin « Codex »: OpenAI's Codex as a harness (INT-10.4).
 pub const CODEX: &str = "dev.escouade.codex";
+/// The plugin Claude Code.
+pub const CLAUDE: &str = "dev.escouade.claude-code";
 
 /// The plugin « Antigravity CLI »: Google's agent in a terminal as a harness (INT-10.8).
 pub const ANTIGRAVITY: &str = "dev.escouade.antigravity-cli";

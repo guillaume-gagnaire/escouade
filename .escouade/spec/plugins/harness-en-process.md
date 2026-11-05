@@ -2,7 +2,7 @@
 title: "Le contrat des harness en process"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.5 et §4.6","docs/TODO-2.2.md (INT-9)","crates/escouade-plugin-protocol/src/engine.rs","src-tauri/src/plugins/harness.rs","src-tauri/src/plugins/shared.rs"]
-tickets: ["ESC-221","ESC-223","ESC-225","ESC-224","ESC-283"]
+tickets: ["ESC-221","ESC-223","ESC-225","ESC-224","ESC-283","ESC-226"]
 decisions: [34,68]
 compared: null
 ---
@@ -73,3 +73,17 @@ Un agent d'`agy` a plusieurs programmes à la suite : il ne prend son modèle, s
 - le manifeste peut écarter des lignes de la sortie d'erreur du harness : ses journaux nomment le compte ;
 - un plugin qui redémarre retrouve le dossier de l'agent, ses dossiers lus, sa clôture, sa lecture seule et ses consignes, pour tout harness ;
 - **la clôture d'un projet privé** se lit aussi dans un fichier JSON, où les barres d'un chemin Windows sont doublées, quelle que soit la barre finale.
+
+## Ce que Claude Code a ajouté au contrat (INT-10.5)
+
+Pour tous :
+
+- **une réponse du harness attendue** : un appel peut dire ce qu'il écrit au harness et sous quel nom la réponse reviendra ; le cœur attend cette réponse sans retenir les appels suivants. C'est ce qui garde les erreurs d'un changement de modèle, d'effort ou de mode, d'une interruption et d'un titre ;
+- **les tâches de fond et le lien au site de l'éditeur** ont leurs appels (arrêter une tâche, lire sa sortie, lier la session) ; un plugin qui ne les a pas reste refusé ;
+- **la clôture d'un projet privé par un fichier** : le cœur écrit le fichier de réglages, et un lancement qui le nomme tient la clôture sans en épeler les chemins. Cela ne vaut que pour le fichier que le cœur a écrit lui-même ;
+- une carte peut porter ses règles de « Toujours », son titre et son défaut à non, et rendre ces règles dans la réponse ;
+- la fin d'un tour peut être comptée par le harness, modèle par modèle ; l'interruption reste décidée par le cœur ;
+- un agent attend la fin de son lancement avant son premier appel : un message envoyé tout de suite n'est plus perdu ;
+- **un plugin relancé sans plantage** (la langue ou le réseau changés relancent les plugins livrés) retrouve l'agent avant son prochain appel : une réponse à une carte n'est plus perdue ; coupé pendant un tour, l'agent s'arrête en le disant, sa session gardée ;
+- chaque carte et chaque fin de tour d'un lot s'applique à part : aucune notification ni fin de tour n'en remplace une autre ;
+- une ligne qui n'est pas du protocole, ou qui n'est pas de l'UTF-8, est gardée pour ce que dit la fin du harness ; les 30 dernières comptent.

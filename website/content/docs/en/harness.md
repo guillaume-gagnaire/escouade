@@ -54,6 +54,8 @@ The models are those the Claude Code of each account lists in its `/model`, with
 
 A turn’s cost is the one Claude Code gives. The quota is your account’s 5-hour window and weekly window, in the status bar. The [Claude Code view](claude-code-view) runs the agent in Claude Code’s own interface. It alone has [remote control](remote-control), background tasks and reading PDFs.
 
+Claude Code is a plugin shipped with Escouade (`dev.escouade.claude-code`): its agents talk through a program of its own that Escouade starts and watches. It shows in the Plugins view, under “Shipped with Escouade”; off, a Claude Code agent says at its start that it must be turned back on, and keeps its session.
+
 ## Codex
 
 Codex is a plugin shipped with Escouade (`dev.escouade.codex`): its agents talk through a program of its own that Escouade starts and watches. It shows in the Plugins view, under “Shipped with Escouade”; turned off, a Codex agent says at its start that it needs turning back on, and keeps its session.

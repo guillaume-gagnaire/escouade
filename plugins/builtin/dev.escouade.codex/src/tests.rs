@@ -109,6 +109,8 @@ fn answer(request: &str, allow: bool, message: Option<&str>) -> AnswerPermission
         input: Value::Null,
         message: message.map(str::to_string),
         resume: None,
+        call: String::new(),
+        rules: Value::Null,
     }
 }
 

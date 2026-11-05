@@ -10,11 +10,14 @@ use crate::model::{
     SavedWindows, Settings, SignInProblem, UsageSnapshot,
 };
 use anyhow::Result;
+pub use escouade_plugin_claude::signin::{
+    credentials_from, keychain_service, stored_from, Credentials, Stored,
+};
+#[cfg(test)]
+use escouade_plugin_claude::signin::{keychain_answer, KeychainAnswer, KeychainGate};
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use unicode_normalization::UnicodeNormalization;
 
 /// An account's quota meters as a reading finds them (`QuotaMeter`): Claude Code's 5-hour and
 /// weekly windows and its models' own, those it told.
@@ -152,38 +155,9 @@ pub async fn fetch_oauth(settings: &Settings, api: &str, token: &str) -> Result<
     Ok(parse_windows(&body))
 }
 
-/// What Claude Code keeps of an account's sign-in to claude.ai.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Credentials {
-    /// Signed in: its OAuth access token.
-    Token(String),
-    /// Signed in, the token out of date: Claude Code gets a new one when it runs.
-    Expired,
-    /// Not signed in (never, or with an API key).
-    Missing,
-}
-
-/// What Claude Code keeps of an account's sign-in, and which sign-in that is.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Stored {
-    pub credentials: Credentials,
-    /// A fingerprint of the sign-in (a hash, never the token): another after a new sign-in, the
-    /// same while it is out of date. None when not signed in.
-    pub stamp: Option<String>,
-}
-
 /// `read_credentials`, with which sign-in it is.
 pub async fn read_stored(dir: &Path, keychain_service: &str) -> Result<Stored> {
     stored_from(from_keychain(keychain_service).await?, dir).await
-}
-
-/// A short fingerprint of the sign-in in `oauth` (`claudeAiOauth`): a hash of its tokens, whose
-/// first bytes tell one sign-in from another without ever holding a token.
-fn stamp_of(oauth: &Value) -> Option<String> {
-    let token = oauth["accessToken"].as_str().filter(|t| !t.is_empty())?;
-    let refresh = oauth["refreshToken"].as_str().unwrap_or_default();
-    let hash = Sha256::digest(format!("{token}\n{refresh}").as_bytes());
-    Some(hash.iter().take(8).map(|b| format!("{b:02x}")).collect())
 }
 
 /// The account's sign-in, read-only, where Claude Code reads it: on macOS the keychain entry named
@@ -193,122 +167,11 @@ pub async fn read_credentials(dir: &Path, keychain_service: &str) -> Result<Cred
     credentials_from(from_keychain(keychain_service).await?, dir).await
 }
 
-/// The sign-in the keychain entry holds (`keychain`), else the one of `<dir>/.credentials.json`.
-async fn credentials_from(keychain: Option<Value>, dir: &Path) -> Result<Credentials> {
-    Ok(stored_from(keychain, dir).await?.credentials)
-}
-
-/// `credentials_from`, with which sign-in it is.
-async fn stored_from(keychain: Option<Value>, dir: &Path) -> Result<Stored> {
-    let missing = Stored {
-        credentials: Credentials::Missing,
-        stamp: None,
-    };
-    let creds: Value = match keychain {
-        Some(creds) => creds,
-        None => match tokio::fs::read_to_string(dir.join(".credentials.json")).await {
-            Ok(text) => serde_json::from_str(&text)?,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(missing),
-            Err(e) => return Err(e.into()),
-        },
-    };
-    let oauth = &creds["claudeAiOauth"];
-    let Some(token) = oauth["accessToken"].as_str().filter(|t| !t.is_empty()) else {
-        return Ok(missing);
-    };
-    let expired = oauth["expiresAt"]
-        .as_i64()
-        .is_some_and(|exp| exp < crate::model::now_ms());
-    Ok(Stored {
-        credentials: if expired {
-            Credentials::Expired
-        } else {
-            Credentials::Token(token.to_string())
-        },
-        stamp: stamp_of(oauth),
-    })
-}
-
-/// What `security find-generic-password -w` answered.
-#[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-enum KeychainAnswer {
-    /// The entry's secret: Claude Code's sign-in.
-    Entry(Value),
-    /// No such entry.
-    None,
-    /// The entry not given: the user denied the access, or the keychain could not be asked.
-    Refused,
-}
-
-/// The answer of `security` from its exit code (`code`, none when a signal ended it) and its
-/// output: 0 the entry, 44 none (`errSecItemNotFound`, whose low byte the tool exits with), any
-/// other a refusal (`errSecAuthFailed` 51, `errSecUserCanceled` 128…).
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn keychain_answer(code: Option<i32>, stdout: &[u8]) -> Result<KeychainAnswer> {
-    Ok(match code {
-        Some(0) => KeychainAnswer::Entry(serde_json::from_slice(stdout)?),
-        Some(44) => KeychainAnswer::None,
-        _ => KeychainAnswer::Refused,
-    })
-}
-
-/// How long a keychain entry whose access was refused is left alone: reading it again would ask
-/// the user again, every minute while the account looks not signed in.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-const KEYCHAIN_REFUSED_MS: i64 = 10 * 60_000;
-
-/// The keychain entries whose access was refused, and when.
-#[derive(Default)]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-struct KeychainGate {
-    refused: std::collections::HashMap<String, i64>,
-}
-
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-impl KeychainGate {
-    /// The entry `service` may be asked for at `now`: not refused in the last ten minutes.
-    fn open(&self, service: &str, now: i64) -> bool {
-        self.refused
-            .get(service)
-            .is_none_or(|&at| now - at >= KEYCHAIN_REFUSED_MS)
-    }
-
-    /// The entry `service` was refused at `now`.
-    fn refuse(&mut self, service: &str, now: i64) {
-        self.refused.insert(service.to_string(), now);
-    }
-}
-
-/// The keychain entry named `service`, where Claude Code keeps the sign-in on macOS; None when
-/// there is no such entry. An entry refused (`KeychainGate`) is an error for ten minutes, without
-/// asking again: the last values stand. Never in unit tests: the entry without a hash is the
-/// machine user's own (and reading it may ask them for their password).
+/// The keychain entry named `service`. Never in unit tests: the entry without a hash is the machine
+/// user's own (and reading it may ask them for their password).
 #[cfg(all(target_os = "macos", not(test)))]
 async fn from_keychain(service: &str) -> Result<Option<Value>> {
-    static GATE: std::sync::LazyLock<parking_lot::Mutex<KeychainGate>> =
-        std::sync::LazyLock::new(Default::default);
-    // The guard let go at once: never held across the wait below.
-    let open = GATE.lock().open(service, crate::model::now_ms());
-    if !open {
-        anyhow::bail!("keychain entry {service} refused a moment ago");
-    }
-    let out = tokio::process::Command::new("/usr/bin/security")
-        .args(["find-generic-password", "-s", service, "-w"])
-        .stdin(std::process::Stdio::null())
-        .output()
-        .await?;
-    match keychain_answer(out.status.code(), &out.stdout)? {
-        KeychainAnswer::Entry(v) => Ok(Some(v)),
-        KeychainAnswer::None => Ok(None),
-        KeychainAnswer::Refused => {
-            GATE.lock().refuse(service, crate::model::now_ms());
-            anyhow::bail!(
-                "keychain entry {service} refused: {}",
-                String::from_utf8_lossy(&out.stderr).trim()
-            )
-        }
-    }
+    escouade_plugin_claude::signin::from_keychain(service).await
 }
 
 /// Elsewhere Claude Code keeps it in the file only (and unit tests read no keychain).
@@ -377,26 +240,6 @@ pub fn sign_in_with(
             dir: accounts::config_dir_with(account, config_env, home),
             service: keychain_service(accounts::own_dir(account).or(config_env)),
         },
-    }
-}
-
-/// The name of the macOS keychain entry Claude Code keeps its sign-in in, run with
-/// `CLAUDE_CONFIG_DIR` set to `config_dir_env` (or the value that takes its place, `sign_in_with`):
-/// `Claude Code-credentials` without one, else followed by `-` and the first 8 hexadecimal
-/// characters of the SHA-256 of the value in NFC.
-pub fn keychain_service(config_dir_env: Option<&str>) -> String {
-    const SERVICE: &str = "Claude Code-credentials";
-    match config_dir_env.filter(|v| !v.is_empty()) {
-        None => SERVICE.to_string(),
-        Some(dir) => {
-            let nfc: String = dir.nfc().collect();
-            let hex: String = Sha256::digest(nfc.as_bytes())
-                .iter()
-                .take(4)
-                .map(|b| format!("{b:02x}"))
-                .collect();
-            format!("{SERVICE}-{hex}")
-        }
     }
 }
 

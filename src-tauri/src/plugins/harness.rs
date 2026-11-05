@@ -76,6 +76,12 @@ const OPEN_WITHIN: Duration = Duration::from_secs(150);
 /// How long a request of the plugin to its harness may take (`agent/letGo`, `agent/rename`, `agent/compact`).
 const REQUEST_WITHIN: Duration = Duration::from_secs(60);
 
+/// How long a harness may take to answer what it was asked (a change of model, effort or mode).
+const ANSWER_WITHIN: Duration = Duration::from_secs(15);
+
+/// How long a harness may take to take a title.
+const RENAME_WITHIN: Duration = Duration::from_secs(10);
+
 /// How often an agent on a shared harness looks at its plugin: no call is under way to tell it stopped.
 const WATCH_EVERY: Duration = Duration::from_millis(250);
 
@@ -283,6 +289,13 @@ pub const BUILTIN_HARNESSES: &[BuiltinHarness] = &[
         plugin: super::builtin::ANTIGRAVITY,
         native: None,
         prepare: Some(crate::engine::agy::prepare),
+    },
+    // Claude Code (INT-10.5): nothing to prepare; its plugin asks its first request (`opens`), and its fence is a settings
+    // file the core writes.
+    BuiltinHarness {
+        plugin: super::builtin::CLAUDE,
+        native: None,
+        prepare: None,
     },
 ];
 
@@ -743,6 +756,22 @@ pub(crate) fn framed(body: &[u8]) -> Vec<u8> {
     out
 }
 
+/// The arguments as the log shows them: a prompt among them (up to several KB of ticket text, `--append-system-prompt`) is
+/// only counted, not copied.
+pub(crate) fn args_for_log(args: &[String]) -> String {
+    let mut shown: Vec<String> = Vec::with_capacity(args.len());
+    let mut elide = false;
+    for a in args {
+        if std::mem::take(&mut elide) {
+            shown.push(format!("<{} chars>", a.chars().count()));
+            continue;
+        }
+        elide = a.starts_with("--") && a.ends_with("-prompt");
+        shown.push(a.clone());
+    }
+    shown.join(" ")
+}
+
 /// The variables of `base` with those of `more` over them.
 fn merged(base: &[(String, String)], more: &[proto::EnvVar]) -> Vec<(String, String)> {
     let mut out: Vec<(String, String)> = base
@@ -754,7 +783,7 @@ fn merged(base: &[(String, String)], more: &[proto::EnvVar]) -> Vec<(String, Str
     out
 }
 
-pub(super) fn command_of(
+pub(crate) fn command_of(
     program: &Program,
     cwd: &str,
     args: &[String],
@@ -922,9 +951,11 @@ impl Engine for ProcessEngine {
             told: Mutex::new(None),
             joins: Mutex::new(None),
             catalog: Mutex::new(None),
+            first_said: Mutex::new(None),
+            asks: Mutex::new(std::collections::HashMap::new()),
         });
         let _ = p.me.set(Arc::downgrade(&p));
-        tokio::spawn(control(Arc::downgrade(&p), control_rx));
+        tokio::spawn(control(Arc::downgrade(&p), p.ready.subscribe(), control_rx));
         tokio::spawn(p.clone().run(spawn, stdin_rx, on_frame, on_exit));
         Ok(p)
     }
@@ -1029,11 +1060,13 @@ impl Engine for ProcessEngine {
     }
 }
 
-/// A call the control task makes, in order, and who waits for it.
+/// A call the control task makes, in order, and who waits for it: its answer, its harness's when it asks it (`proto::Asked`,
+/// within `within`).
 struct Control {
     method: &'static str,
     params: Value,
-    done: Option<oneshot::Sender<Result<()>>>,
+    done: Option<oneshot::Sender<Result<Value>>>,
+    within: Duration,
 }
 
 /// The live process of an agent whose harness's plugin runs apart.
@@ -1102,6 +1135,12 @@ pub struct ProcessEngineProcess {
     joins: Mutex<Option<terminal::Attach>>,
     /// The models of its account, as `agent/open` said them.
     catalog: Mutex<Option<Vec<ToldModel>>>,
+    /// What its harness said when it started (`Item::Told`).
+    first_said: Mutex<Option<(Value, Value)>>,
+    /// Who waits for its harness's answer to a call (`proto::Asked`), by its `ask`.
+    asks: Mutex<
+        std::collections::HashMap<String, oneshot::Sender<std::result::Result<Value, String>>>,
+    >,
 }
 
 /// What is asked of its programs (`Item::Relaunch`, `Item::Pause`).
@@ -1150,7 +1189,7 @@ fn told(params: &Value) {
 }
 
 /// Where its conversation starts from, in the contract's words.
-fn start_at(start: &Start) -> proto::StartAt {
+pub(crate) fn start_at(start: &Start) -> proto::StartAt {
     match start {
         Start::New => proto::StartAt::New,
         Start::Resume { session } => proto::StartAt::Resume {
@@ -1177,16 +1216,56 @@ fn grant_of(escouade: &Escouade) -> Option<proto::Grant> {
 /// The calls of the control task, one after the other: their `writes` go to the harness in their order.
 async fn control(
     p: std::sync::Weak<ProcessEngineProcess>,
+    mut launched: watch::Receiver<Option<std::result::Result<(), String>>>,
     mut rx: mpsc::UnboundedReceiver<Control>,
 ) {
+    // Once its plugin was given the agent, however soon a message is sent.
+    let _ = launched.wait_for(Option::is_some).await;
     while let Some(c) = rx.recv().await {
         let Some(p) = p.upgrade() else { break };
         let result = p.call_writing(c.method, c.params).await;
-        if let Some(done) = c.done {
-            let _ = done.send(result);
-        } else if let Err(e) = result {
-            log::warn!("{}: {e:#}", p.key);
+        let Some(done) = c.done else {
+            if let Err(e) = result {
+                log::warn!("{}: {e:#}", p.key);
+            }
+            continue;
+        };
+        match result {
+            // Its harness tells the end: the next call does not wait for it.
+            Ok(Called::Asked(rx)) => {
+                let within = c.within;
+                tokio::spawn(async move {
+                    let _ = done.send(answer_of(rx, within).await);
+                });
+            }
+            Ok(Called::Over(v)) => {
+                let _ = done.send(Ok(v));
+            }
+            Err(e) => {
+                let _ = done.send(Err(e));
+            }
         }
+    }
+}
+
+/// What a call came to.
+enum Called {
+    /// Its answer.
+    Over(Value),
+    /// Its harness's to tell.
+    Asked(oneshot::Receiver<std::result::Result<Value, String>>),
+}
+
+/// What its harness says of a call, within `within`.
+async fn answer_of(
+    rx: oneshot::Receiver<std::result::Result<Value, String>>,
+    within: Duration,
+) -> Result<Value> {
+    match tokio::time::timeout(within, rx).await {
+        Ok(Ok(Ok(v))) => Ok(v),
+        Ok(Ok(Err(e))) => Err(anyhow!(e)),
+        Ok(Err(_)) => Err(anyhow!("process exited")),
+        Err(_) => Err(anyhow!("control request timed out")),
     }
 }
 
@@ -1222,26 +1301,50 @@ impl ProcessEngineProcess {
             )
             .await
         {
-            Err(e @ CallError::Stopped(_)) => Err(e),
+            Err(e @ (CallError::Stopped(_) | CallError::Unavailable(_))) => Err(e),
             _ => Ok(()),
         }
     }
 
+    /// Its plugin knows the agent: one forgotten since (the language or the network changed, and the plugins the app gives
+    /// start anew) is given it again before it is asked anything; one switched off stops it.
+    async fn known(&self) -> std::result::Result<(), CallError> {
+        match self.rt.status(&self.plugin).phase {
+            super::runtime::PhaseName::Idle => self.reattach().await,
+            _ => Ok(()),
+        }
+    }
+
+    /// `writes` to its harness, what it will answer waited for when they ask it (`ask`).
+    fn asking(&self, v: Value) -> Called {
+        let asked: proto::Asked = serde_json::from_value(v.clone()).unwrap_or_default();
+        let waiting = (!asked.ask.is_empty()).then(|| {
+            let (tx, rx) = oneshot::channel();
+            self.asks.lock().insert(asked.ask.clone(), tx);
+            rx
+        });
+        for w in &asked.writes {
+            self.write(w);
+        }
+        match waiting {
+            Some(rx) => Called::Asked(rx),
+            None => Called::Over(v),
+        }
+    }
+
     /// Calls `method`, given again after a crash; writes its `writes` to the harness.
-    async fn call_writing(&self, method: &str, params: Value) -> Result<()> {
+    async fn call_writing(&self, method: &str, params: Value) -> Result<Called> {
+        self.known().await.map_err(|e| down(self.name, e))?;
         for _ in 0..RETRIES {
             match self.rt.call(&self.plugin, method, params.clone()).await {
                 Ok(v) => {
                     let items = v["items"].as_array().cloned().unwrap_or_default();
-                    let writes: proto::Writes = serde_json::from_value(v).unwrap_or_default();
-                    for w in &writes.writes {
-                        self.write(w);
-                    }
+                    let called = self.asking(v);
                     let told = self.told.lock().clone();
                     if let (false, Some(on_frame)) = (items.is_empty(), told) {
                         self.deliver(items, &on_frame);
                     }
-                    return Ok(());
+                    return Ok(called);
                 }
                 Err(CallError::Crashed | CallError::Dropped) => {
                     self.reattach().await.map_err(|e| down(self.name, e))?;
@@ -1259,28 +1362,36 @@ impl ProcessEngineProcess {
         params: impl Serialize,
         wait: bool,
     ) -> Result<()> {
+        if !wait {
+            return self.send_ordered(method, serde_json::to_value(params)?);
+        }
+        self.ordered_within(method, params, ANSWER_WITHIN)
+            .await
+            .map(drop)
+    }
+
+    /// `ordered`, until it is done, its answer: its harness's within `within` when it is its to tell.
+    async fn ordered_within(
+        &self,
+        method: &'static str,
+        params: impl Serialize,
+        within: Duration,
+    ) -> Result<Value> {
         let params = serde_json::to_value(params)?;
-        let (done, rx) = if wait {
-            let (tx, rx) = oneshot::channel();
-            (Some(tx), Some(rx))
-        } else {
-            (None, None)
-        };
-        let sent = self.control.lock().as_ref().map(|tx| {
-            tx.send(Control {
+        let (tx, rx) = oneshot::channel();
+        let sent = self.control.lock().as_ref().map(|c| {
+            c.send(Control {
                 method,
                 params,
-                done,
+                done: Some(tx),
+                within,
             })
             .is_ok()
         });
         if sent != Some(true) {
             bail!("{} is gone", self.name);
         }
-        match rx {
-            Some(rx) => rx.await.map_err(|_| anyhow!("{} is gone", self.name))?,
-            None => Ok(()),
-        }
+        rx.await.map_err(|_| anyhow!("{} is gone", self.name))?
     }
 
     fn agent(&self) -> String {
@@ -1337,18 +1448,35 @@ impl ProcessEngineProcess {
             home: home.clone(),
             described: self.attach.lock().described.clone(),
             lang: crate::i18n::ui().tag().to_string(),
+            takes_effort: spawn.takes_effort,
+            settings: spawn
+                .settings
+                .as_ref()
+                .map(|f| f.to_string_lossy().into_owned()),
+            refusal_file: match &spawn.escouade {
+                Escouade::Denied { file } => {
+                    file.as_ref().map(|f| f.to_string_lossy().into_owned())
+                }
+                Escouade::Granted { .. } => None,
+            },
         };
+        let settings = params.settings.clone();
         let v = self
             .rt
             .call(&self.plugin, method::LAUNCH, serde_json::to_value(&params)?)
             .await
             .map_err(|e| down(self.name, e))?;
         let launch: proto::Launch = serde_json::from_value(v)?;
+        // The settings file the core wrote holds the fence: a launch that names it holds the fence too.
+        let in_settings = launch.fence_applied
+            && settings
+                .as_ref()
+                .is_some_and(|file| launch.args.iter().any(|a| a == file));
         check_launch(
             self.name,
             super::builtin::is_builtin(&self.plugin),
             token.as_deref(),
-            &fence,
+            if in_settings { &[] } else { &fence },
             spawn.read_only,
             home.as_deref(),
             &launch,
@@ -1392,10 +1520,11 @@ impl ProcessEngineProcess {
         added: &[String],
     ) -> Result<(tokio::process::Child, Option<Arc<Job>>)> {
         log::info!(
-            "{}: starting {} ({}) in {} (account {})",
+            "{}: starting {} ({}) {} in {} (account {})",
             spawn.label,
             spawn.program.describe(),
             self.name,
+            args_for_log(&launch.args),
             spawn.cwd,
             spawn.account
         );
@@ -1800,7 +1929,18 @@ impl ProcessEngineProcess {
         });
         self.compacting.lock().take();
         self.reading.lock().take();
+        // The exit is handled before what waits fails: who sees a call failed sees what the exit did too.
         on_exit(code, said);
+        self.asks.lock().clear();
+    }
+
+    /// A line its harness wrote, kept for what its end says.
+    fn said(&self, line: String) {
+        let mut tail = self.tail.lock();
+        tail.push_back(line);
+        if tail.len() > 30 {
+            tail.pop_front();
+        }
     }
 
     /// Its program's input, error output and lines hooked up; answers the task that reads its lines.
@@ -1822,17 +1962,15 @@ impl ProcessEngineProcess {
         if let Some(stderr) = child.stderr.take() {
             let me = Arc::downgrade(self);
             tokio::spawn(async move {
-                let mut lines = BufReader::new(stderr).lines();
-                while let Ok(Some(line)) = lines.next_line().await {
+                // As bytes: a line that is not UTF-8 (a message of `wsl.exe`) must not stop the reading.
+                let mut lines = BufReader::new(stderr).split(b'\n');
+                while let Ok(Some(line)) = lines.next_segment().await {
                     let Some(p) = me.upgrade() else { break };
+                    let line = String::from_utf8_lossy(&line).replace('\0', "");
                     if p.leaves_out.iter().any(|t| line.contains(t.as_str())) {
                         continue;
                     }
-                    let mut tail = p.tail.lock();
-                    tail.push_back(line);
-                    if tail.len() > 20 {
-                        tail.pop_front();
-                    }
+                    p.said(line.trim_end().to_string());
                 }
             });
         }
@@ -1966,6 +2104,9 @@ impl ProcessEngineProcess {
         .map_err(|e| e.to_string())?;
         let name = self.name;
         let mut told = false;
+        if let Err(e) = self.known().await {
+            return Err(stopped_line(name, &e));
+        }
         for _ in 0..RETRIES {
             match self
                 .rt
@@ -2029,14 +2170,14 @@ impl ProcessEngineProcess {
                     self.leave();
                     continue;
                 }
-                "start" | "session" => {
+                "start" | "session" | "conversation" => {
                     let mut a = self.attach.lock();
-                    if let Some(s) = item["session"].as_str() {
+                    if let Some(s) = item["session"].as_str().filter(|s| !s.is_empty()) {
                         a.session = Some(s.to_string());
                     }
                     a.running |= item["op"] == "start";
                 }
-                "permission" | "question" | "permissionCard" | "questionCard" => {
+                "permission" | "question" | "permissionCard" | "questionCard" | "ask" => {
                     let mut a = self.attach.lock();
                     if let Some(r) = item["request"].as_str() {
                         a.pending.push(r.to_string());
@@ -2044,7 +2185,7 @@ impl ProcessEngineProcess {
                     // Its harness's turn is over on this card: nothing to wait for from it.
                     a.running &= item["endsStream"] != true;
                 }
-                "turn" => {
+                "turn" | "result" => {
                     let mut a = self.attach.lock();
                     a.pending.clear();
                     a.running = false;
@@ -2084,6 +2225,29 @@ impl ProcessEngineProcess {
                     let _ = self.opened.send(Some(Ok(item["models"].clone())));
                     continue;
                 }
+                "told" => {
+                    *self.first_said.lock() =
+                        Some((item["commands"].clone(), item["models"].clone()));
+                    continue;
+                }
+                "answer" => {
+                    if let Some(tx) = item["ask"]
+                        .as_str()
+                        .and_then(|a| self.asks.lock().remove(a))
+                    {
+                        let _ = tx.send(match item["error"].as_str() {
+                            Some(e) => Err(e.to_string()),
+                            None => Ok(item["answer"].clone()),
+                        });
+                    }
+                    continue;
+                }
+                "said" => {
+                    if let Some(line) = item["line"].as_str() {
+                        self.said(line.to_string());
+                    }
+                    continue;
+                }
                 "usage" => {
                     if let Some(tx) = self.reading.lock().take() {
                         let _ = tx.send(item["usage"].clone());
@@ -2108,7 +2272,25 @@ impl ProcessEngineProcess {
                 }
                 _ => {}
             }
+            // A card and the end of a turn have their effects of their own (a notification, how it ended), which those of
+            // a batch applied whole would replace: each goes alone, what came before it shown first.
+            let alone = matches!(
+                item["op"].as_str().unwrap_or_default(),
+                "turn"
+                    | "result"
+                    | "ask"
+                    | "permission"
+                    | "question"
+                    | "permissionCard"
+                    | "questionCard"
+            );
+            if alone && !out.is_empty() {
+                on_frame(json!({ "items": std::mem::take(&mut out) }));
+            }
             out.push(item);
+            if alone {
+                on_frame(json!({ "items": std::mem::take(&mut out) }));
+            }
         }
         if !out.is_empty() {
             on_frame(json!({ "items": out }));
@@ -2316,12 +2498,16 @@ impl EngineProcess for ProcessEngineProcess {
                 .map_err(|_| anyhow!("{} is gone", self.name))?
                 .clone();
             match done {
-                Some(Ok(models)) => Ok(Ready {
-                    catalog: serde_json::from_value(models)
-                        .ok()
-                        .filter(|m: &Vec<_>| !m.is_empty()),
-                    ..Ready::default()
-                }),
+                Some(Ok(models)) => {
+                    let (commands, told) = self.first_said.lock().take().unwrap_or_default();
+                    Ok(Ready {
+                        commands: commands.as_array().cloned().unwrap_or_default(),
+                        models: told,
+                        catalog: serde_json::from_value(models)
+                            .ok()
+                            .filter(|m: &Vec<_>| !m.is_empty()),
+                    })
+                }
                 // Stopped by its plugin: gone by the time the core hears of it.
                 Some(Err(why)) => {
                     self.wait_exit(Duration::from_secs(5)).await;
@@ -2351,6 +2537,7 @@ impl EngineProcess for ProcessEngineProcess {
                 method: method::SEND_MESSAGE,
                 params,
                 done: None,
+                within: ANSWER_WITHIN,
             })
             .is_ok()
         });
@@ -2365,9 +2552,10 @@ impl EngineProcess for ProcessEngineProcess {
                 agent: self.agent(),
                 cancel_queued,
             };
-            tokio::time::timeout(timeout, self.ordered(method::INTERRUPT, a, true))
+            tokio::time::timeout(timeout, self.ordered_within(method::INTERRUPT, a, timeout))
                 .await
                 .map_err(|_| anyhow!("{}: no answer to the interruption", self.name))?
+                .map(drop)
         })
     }
     fn set_model<'a>(&'a self, model: &'a str) -> BoxFuture<'a, Result<()>> {
@@ -2396,12 +2584,24 @@ impl EngineProcess for ProcessEngineProcess {
     }
     fn answer_permission(&self, request_id: &str, answer: PermissionAnswer) -> Result<()> {
         self.answered(request_id);
-        let (allow, always, input, message, resume) = match answer {
-            PermissionAnswer::Allow { input, resume, .. } => (true, false, input, None, resume),
-            PermissionAnswer::Always { input, .. } => (true, true, input, None, None),
-            PermissionAnswer::Deny { message, .. } => {
-                (false, false, Value::Null, Some(message), None)
+        let (allow, always, input, message, resume, call, rules) = match answer {
+            PermissionAnswer::Allow {
+                call,
+                input,
+                resume,
+            } => (true, false, input, None, resume, call, Value::Null),
+            PermissionAnswer::Always { call, input, rules } => {
+                (true, true, input, None, None, call, rules)
             }
+            PermissionAnswer::Deny { call, message } => (
+                false,
+                false,
+                Value::Null,
+                Some(message),
+                None,
+                call,
+                Value::Null,
+            ),
         };
         let a = proto::AnswerPermission {
             agent: self.agent(),
@@ -2411,6 +2611,8 @@ impl EngineProcess for ProcessEngineProcess {
             input,
             message,
             resume,
+            call,
+            rules,
         };
         self.send_ordered(method::ANSWER_PERMISSION, serde_json::to_value(a)?)
     }
@@ -2422,6 +2624,7 @@ impl EngineProcess for ProcessEngineProcess {
             call: call.to_string(),
             answers: input["answers"].clone(),
             questions: input["questions"].clone(),
+            input,
         };
         self.send_ordered(method::ANSWER_QUESTION, serde_json::to_value(a)?)
     }
@@ -2429,6 +2632,7 @@ impl EngineProcess for ProcessEngineProcess {
         Box::pin(async move {
             let (tx, rx) = oneshot::channel();
             *self.reading.lock() = Some(tx);
+            self.known().await.map_err(|e| down(self.name, e))?;
             let v = self
                 .rt
                 .call(
@@ -2462,6 +2666,7 @@ impl EngineProcess for ProcessEngineProcess {
                 agent: self.agent(),
                 value: title.into(),
             };
+            self.known().await.map_err(|e| down(self.name, e))?;
             match self
                 .rt
                 .call_within(
@@ -2472,14 +2677,11 @@ impl EngineProcess for ProcessEngineProcess {
                 )
                 .await
             {
-                Ok(v) => {
-                    // A harness told through its input (`Writes`), or by the plugin itself (none).
-                    let w: proto::Writes = serde_json::from_value(v).unwrap_or_default();
-                    for line in &w.writes {
-                        self.write(line);
-                    }
-                    Ok(())
-                }
+                // A harness told through its input (`Writes`), or by the plugin itself (none).
+                Ok(v) => match self.asking(v) {
+                    Called::Asked(rx) => answer_of(rx, RENAME_WITHIN).await.map(drop),
+                    Called::Over(_) => Ok(()),
+                },
                 Err(CallError::Remote { code, .. }) if code == super::runtime::METHOD_NOT_FOUND => {
                     Ok(())
                 }
@@ -2526,14 +2728,55 @@ impl EngineProcess for ProcessEngineProcess {
     fn attach(&self) -> Option<terminal::Attach> {
         self.joins.lock().clone().filter(|_| self.is_alive())
     }
-    fn stop_task<'a>(&'a self, _: &'a str) -> BoxFuture<'a, Result<()>> {
-        ready(Err(anyhow!("not supported")))
+    fn stop_task<'a>(&'a self, task: &'a str) -> BoxFuture<'a, Result<()>> {
+        Box::pin(async move {
+            let t = proto::Task {
+                agent: self.agent(),
+                task: task.to_string(),
+            };
+            self.ordered_within(method::STOP_TASK, t, Duration::from_secs(15))
+                .await
+                .map(drop)
+                .map_err(not_supported)
+        })
     }
-    fn task_output<'a>(&'a self, _: &'a str) -> BoxFuture<'a, Result<Value>> {
-        ready(Err(anyhow!("not supported")))
+    fn task_output<'a>(&'a self, task: &'a str) -> BoxFuture<'a, Result<Value>> {
+        Box::pin(async move {
+            let t = proto::Task {
+                agent: self.agent(),
+                task: task.to_string(),
+            };
+            self.ordered_within(method::TASK_OUTPUT, t, Duration::from_secs(10))
+                .await
+                .map_err(not_supported)
+        })
     }
-    fn remote_control(&self, _: Remote, _: Duration) -> BoxFuture<'_, Result<Value>> {
-        ready(Err(anyhow!("not supported")))
+    fn remote_control(&self, request: Remote, timeout: Duration) -> BoxFuture<'_, Result<Value>> {
+        let link = match request {
+            Remote::Off => proto::RemoteLink {
+                agent: self.agent(),
+                enabled: false,
+                name: String::new(),
+                keep: false,
+                reattach: None,
+            },
+            Remote::On {
+                name,
+                keep,
+                reattach,
+            } => proto::RemoteLink {
+                agent: self.agent(),
+                enabled: true,
+                name,
+                keep,
+                reattach,
+            },
+        };
+        Box::pin(async move {
+            self.ordered_within(method::REMOTE, link, timeout)
+                .await
+                .map_err(not_supported)
+        })
     }
     fn control(&self, request: Value, timeout: Duration) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
@@ -2542,7 +2785,9 @@ impl EngineProcess for ProcessEngineProcess {
                 request,
                 within_ms: timeout.as_millis() as u64,
             };
-            self.rt
+            self.known().await.map_err(|e| down(self.name, e))?;
+            let v = self
+                .rt
                 .call_within(
                     &self.plugin,
                     method::CONTROL,
@@ -2550,11 +2795,24 @@ impl EngineProcess for ProcessEngineProcess {
                     timeout + Duration::from_secs(1),
                 )
                 .await
-                .map_err(|e| down(self.name, e))
+                .map_err(|e| down(self.name, e))?;
+            match self.asking(v) {
+                Called::Asked(rx) => answer_of(rx, timeout).await,
+                Called::Over(v) => Ok(v),
+            }
         })
     }
     fn reply(&self, _: &str, _: std::result::Result<Value, String>) -> Result<()> {
         bail!("not supported")
+    }
+}
+
+/// What a harness whose plugin has no such method says of a call it cannot make.
+fn not_supported(e: anyhow::Error) -> anyhow::Error {
+    if e.to_string().contains("not found") {
+        anyhow!("not supported")
+    } else {
+        e
     }
 }
 
@@ -2566,6 +2824,7 @@ impl ProcessEngineProcess {
                 method,
                 params,
                 done: None,
+                within: ANSWER_WITHIN,
             })
             .is_ok()
         });

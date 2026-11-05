@@ -1633,6 +1633,7 @@ dependencies = [
  "escouade-plugin-agy",
  "escouade-plugin-azure-devops",
  "escouade-plugin-bitbucket",
+ "escouade-plugin-claude",
  "escouade-plugin-cli",
  "escouade-plugin-clickup",
  "escouade-plugin-codex",
@@ -1768,6 +1769,19 @@ dependencies = [
  "reqwest 0.12.28",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "escouade-plugin-claude"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "escouade-plugin-protocol",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "unicode-normalization",
 ]
 
 [[package]]

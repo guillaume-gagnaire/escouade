@@ -534,6 +534,8 @@ impl Client {
                     input: Value::Null,
                     message: None,
                     resume: None,
+                    call: String::new(),
+                    rules: Value::Null,
                 },
                 out,
             );

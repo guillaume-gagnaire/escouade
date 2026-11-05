@@ -69,6 +69,8 @@ const ENTRIES: &[Entry] = &[
     // Antigravity CLI (INT-10.8): the client of `agy -p` and its translation, in its crate
     // (plugins/builtin/dev.escouade.antigravity-cli).
     ("agy", escouade_plugin_agy::run),
+    // Claude Code (INT-10.5): the client of `claude` and its translation, in its crate (plugins/builtin/dev.escouade.claude-code).
+    ("claude", escouade_plugin_claude::run),
 ];
 
 fn main() {

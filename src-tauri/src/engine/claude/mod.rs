@@ -1,34 +1,31 @@
-//! Claude Code, the first engine: a `claude` process driven over the stream-json protocol
-//! (docs/PROTOCOL.md), its frames translated by `AgentRt::claude_frame` (`agent/claude.rs`).
+//! Claude Code, the first engine. Since INT-10.5 its agents' conversation goes through its plugin
+//! (`dev.escouade.claude-code`): `claude` driven over the stream-json protocol (docs/PROTOCOL.md) by the client of that
+//! plugin, which translates its frames. This engine keeps its place in the registry: its capabilities, its accounts and
+//! their sign-in, the models of an account, the texts it writes, its terminal view, Escouade's server declared for the user.
 
 #[cfg(test)]
 mod bench;
 mod locate;
 mod mcp;
-mod process;
 pub(crate) mod terminal;
 
 #[cfg(test)]
 pub(crate) use mcp::all_tools;
-pub(crate) use process::{ClaudeProcess, SpawnOpts};
 
 use super::registry::{
     CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested,
     ToldModel,
 };
 use super::Program;
-use super::{
-    BoxFuture, Engine, EngineProcess, Escouade, Message, OneShot, PermissionAnswer, Process, Ready,
-    Remote, Spawn, Start, StartLost, Weight,
-};
+use super::{BoxFuture, Engine, Escouade, Message, OneShot, Process, Spawn, StartLost, Weight};
 use crate::agent::{AgentRt, Effects};
 use crate::core::{size_label, Attachment, MAX_IMAGE, MAX_TOTAL, MB};
 use crate::i18n::{self, Lang};
-use crate::job::JobUsage;
 use crate::mcp::install::{Entry, Standing, Target};
 #[cfg(test)]
 use crate::model::AgentMeta;
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
+use escouade_plugin_claude::client;
 use serde_json::{json, Value};
 use std::time::Duration;
 
@@ -243,24 +240,8 @@ pub(crate) fn escaped_len(s: &str) -> usize {
         .sum()
 }
 
-const CLAUDE_BASE_ARGS: &[&str] = &[
-    "--output-format",
-    "stream-json",
-    "--verbose",
-    "--input-format",
-    "stream-json",
-    "--permission-prompt-tool",
-    "stdio",
-    "--include-partial-messages",
-    // Messages sent from claude.ai (Remote Control) come back on stdout, so the app shows them.
-    "--replay-user-messages",
-    "--thinking-display",
-    "summarized",
-    "--allow-dangerously-skip-permissions",
-];
-
 pub fn supports_effort(model: &str) -> bool {
-    !model.to_lowercase().contains("haiku")
+    client::supports_effort(model)
 }
 
 /// Whether a model takes the permission mode `auto`, before its account's `claude` has told
@@ -384,101 +365,65 @@ pub async fn read_models(
     env: Vec<(String, String)>,
     dir: &std::path::Path,
 ) -> Result<Value> {
-    let mut args: Vec<String> = CLAUDE_BASE_ARGS.iter().map(|s| s.to_string()).collect();
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    let mut args: Vec<String> = client::BASE_ARGS.iter().map(|s| s.to_string()).collect();
     args.extend(
         ["--no-session-persistence", "--strict-mcp-config"]
             .iter()
             .map(|s| s.to_string()),
     );
-    let opts = SpawnOpts {
-        args,
-        program,
-        cwd: dir.to_string_lossy().into_owned(),
-        env,
+    let cwd = dir.to_string_lossy();
+    let mut child = crate::plugins::harness::command_of(&program, &cwd, &args, &env, &[])?
+        .spawn()
+        .with_context(|| {
+            let program = program.describe();
+            tr!("impossible de lancer {program}", "can’t start {program}")
+        })?;
+    let job = crate::job::Job::for_child(&child);
+    const ID: &str = "ccm_1";
+    let (Some(mut stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else {
+        bail!("no input or output to read its models from");
     };
-    let p = ClaudeProcess::spawn(opts, |_| {}, |_, _| {})?;
-    let resp = ClaudeProcess::control(
-        &p,
-        json!({ "subtype": "initialize" }),
-        Duration::from_secs(60),
-    )
+    let line = client::initialize_line(ID) + "\n";
+    let told = tokio::time::timeout(Duration::from_secs(60), async move {
+        stdin.write_all(line.as_bytes()).await?;
+        stdin.flush().await?;
+        let mut lines = BufReader::new(stdout).split(b'\n');
+        while let Some(line) = lines.next_segment().await? {
+            let line = String::from_utf8_lossy(&line).replace('\0', "");
+            let Ok(frame) = crate::text::json_line(line.trim()) else {
+                continue;
+            };
+            if let Some(answer) = client::initialized(&frame, ID) {
+                drop(stdin);
+                return answer.map_err(|e| anyhow!(e));
+            }
+        }
+        bail!("process exited")
+    })
     .await;
-    p.close_input();
-    p.kill();
-    Ok(resp?["models"].clone())
+    let _ = child.start_kill();
+    if let Some(job) = &job {
+        job.terminate();
+    }
+    let _ = child.wait().await;
+    let told = told.map_err(|_| anyhow!("control request timed out"))??;
+    Ok(told["models"].clone())
 }
 
 /// The arguments of the conversation of `s`: its model, effort and mode, its added instructions,
-/// and where it starts from.
+/// and where it starts from (the plugin's launch, as the tests read it).
+#[cfg(test)]
 fn conversation_args(s: &Spawn) -> Vec<String> {
-    let mut a: Vec<String> = CLAUDE_BASE_ARGS.iter().map(|s| s.to_string()).collect();
-    a.extend(["--model".into(), s.model.clone()]);
-    if s.takes_effort.unwrap_or_else(|| supports_effort(&s.model)) {
-        a.extend(["--effort".into(), s.effort.clone()]);
-    }
-    a.extend(["--permission-mode".into(), s.mode.clone()]);
-    // A discussion (ESC-261): its tools that write or run a command taken away, whatever its mode
-    // becomes (a plan approved puts it in another). In one value, comma separated, as the Agent
-    // SDK gives them: what follows is not read as more.
-    if s.read_only {
-        a.push(format!(
-            "--disallowedTools={}",
-            crate::discussion::WRITES.join(",")
-        ));
-    }
-    if let Some(p) = s.append_prompt.as_deref().filter(|p| !p.trim().is_empty()) {
-        // On one line: a `.cmd` launcher (npm's claude.cmd) takes no argument with line breaks.
-        let one_line = p.split_whitespace().collect::<Vec<_>>().join(" ");
-        a.extend(["--append-system-prompt".into(), one_line]);
-    }
-    match &s.start {
-        Start::New => {}
-        Start::Resume { session } => a.push(format!("--resume={session}")),
-        Start::Fork { of, at } => {
-            // A copy's conversation so far is its original's, under a new session: the original's
-            // is left as it is.
-            a.extend([format!("--resume={of}"), "--fork-session".into()]);
-            // As it was when copied: the turns the original ran since stay out.
-            if let Some(at) = at {
-                a.push(format!("--resume-session-at={at}"));
-            }
-        }
-    }
-    a
-}
-
-/// All the arguments of the process of `s`: its conversation's, then the folders it reads without
-/// a question, then what it is given of Escouade's server. Never the token, only the path of the
-/// file that holds it (a `.cmd` launcher takes 8,191 characters at most, and the app's log writes
-/// the arguments). `--disallowedTools` and `--mcp-config` take several values: given last, nothing
-/// after them is read as one.
-fn args(s: &Spawn) -> Vec<String> {
-    let mut a = conversation_args(s);
-    a.extend(
-        s.read_dirs
-            .iter()
-            .map(|d| format!("--add-dir={}", d.display())),
-    );
-    if let (Some(own), Escouade::Granted { .. }) = (&s.settings, &s.escouade) {
-        a.extend(["--settings".into(), own.to_string_lossy().into_owned()]);
-    }
-    a.extend(mcp::launch(&with_settings(s)).args);
-    a
-}
-
-/// What `s` is given of Escouade's server, its settings file of its own (`Spawn::settings`: its
-/// fence) read in place of the refusal's (Claude Code reads the last `--settings` only, and it
-/// holds the refusal too); given the server, its settings before it.
-fn with_settings(s: &Spawn) -> Escouade {
-    let Some(own) = &s.settings else {
-        return s.escouade.clone();
-    };
-    match &s.escouade {
-        Escouade::Denied { .. } => Escouade::Denied {
-            file: Some(own.clone()),
-        },
-        granted => granted.clone(),
-    }
+    client::conversation_args(&client::Conversation {
+        model: &s.model,
+        effort: &s.effort,
+        takes_effort: s.takes_effort,
+        mode: &s.mode,
+        read_only: s.read_only,
+        append_prompt: s.append_prompt.as_deref(),
+        start: &crate::plugins::harness::start_at(&s.start),
+    })
 }
 
 /// The arguments of the conversation of the agent of `m` (the tests').
@@ -489,22 +434,6 @@ pub(crate) fn claude_args(m: &AgentMeta) -> Vec<String> {
         Program::Native(std::path::PathBuf::new()),
         Vec::new(),
     ))
-}
-
-/// The arguments as the log shows them: the protocol appended to the system prompt (up to several
-/// KB of ticket text) is only counted, not copied.
-fn args_for_log(args: &[String]) -> String {
-    let mut shown: Vec<String> = Vec::with_capacity(args.len());
-    let mut elide = false;
-    for a in args {
-        if std::mem::take(&mut elide) {
-            shown.push(format!("<{} chars>", a.chars().count()));
-            continue;
-        }
-        elide = a == "--append-system-prompt";
-        shown.push(a.clone());
-    }
-    shown.join(" ")
 }
 
 /// The JSON answer of `claude -p --output-format json`: the whole output, or its last line that
@@ -747,32 +676,25 @@ impl Engine for Claude {
         on_frame: super::OnFrame,
         on_exit: super::OnExit,
     ) -> Result<Process> {
-        let mut env = spawn.env.clone();
-        env.extend(mcp::launch(&spawn.escouade).env);
-        let opts = SpawnOpts {
-            args: args(&spawn),
-            program: spawn.program,
-            cwd: spawn.cwd,
-            env,
-        };
-        log::info!(
-            "{}: starting {} {} in {} (account {})",
-            spawn.label,
-            opts.program.describe(),
-            args_for_log(&opts.args),
-            opts.cwd,
-            spawn.account
-        );
-        let p: Process = ClaudeProcess::spawn(opts, on_frame, on_exit)?;
-        Ok(p)
+        crate::plugins::harness::spawn_plugged(
+            crate::plugins::builtin::CLAUDE,
+            self.name(),
+            spawn,
+            on_frame,
+            on_exit,
+        )
     }
 
     fn message(&self, text: &str, attachments: &[Attachment]) -> Result<Message> {
         user_content(text, attachments).map(Message)
     }
 
+    /// The items of its plugin; a frame as it is (a test's, a recorded stream) goes through the same translation.
     fn translate(&self, rt: &mut AgentRt, frame: &Value, fx: &mut Effects) {
-        rt.claude_frame(frame, fx);
+        match frame["items"].as_array() {
+            Some(items) => rt.apply_items(items, fx),
+            None => rt.claude_frame(frame, fx),
+        }
     }
 
     fn start_lost(&self, stderr: &str) -> Option<StartLost> {
@@ -973,221 +895,11 @@ fn writer(weight: Weight) -> &'static str {
     }
 }
 
-/// The answer to a control request of the CLI that lets a tool run.
-fn allowed(call: &str, input: Value) -> Value {
-    json!({ "behavior": "allow", "updatedInput": input, "toolUseID": call })
-}
-
-/// How long a change of model, effort or mode may take.
-const SETTING: Duration = Duration::from_secs(15);
-
-impl EngineProcess for ClaudeProcess {
-    fn is_alive(&self) -> bool {
-        ClaudeProcess::is_alive(self)
-    }
-
-    fn usage(&self) -> Option<JobUsage> {
-        ClaudeProcess::usage(self)
-    }
-
-    fn still_running(&self) -> u32 {
-        ClaudeProcess::still_running(self)
-    }
-
-    fn pids(&self) -> Vec<u32> {
-        ClaudeProcess::pids(self)
-    }
-
-    fn close_input(&self) {
-        ClaudeProcess::close_input(self)
-    }
-
-    fn kill(&self) {
-        ClaudeProcess::kill(self)
-    }
-
-    fn wait_exit(&self, within: Duration) -> BoxFuture<'_, bool> {
-        Box::pin(ClaudeProcess::wait_exit(self, within))
-    }
-
-    fn wait_gone(&self, within: Duration) -> BoxFuture<'_, bool> {
-        Box::pin(ClaudeProcess::wait_gone(self, within))
-    }
-
-    fn initialize(&self) -> BoxFuture<'_, Result<Ready>> {
-        Box::pin(async move {
-            let resp = ClaudeProcess::control(
-                self,
-                json!({ "subtype": "initialize" }),
-                Duration::from_secs(90),
-            )
-            .await?;
-            Ok(Ready {
-                commands: resp["commands"].as_array().cloned().unwrap_or_default(),
-                models: resp["models"].clone(),
-                catalog: None,
-            })
-        })
-    }
-
-    fn send_message(&self, uuid: &str, message: &Message) -> Result<()> {
-        self.send(&json!({
-            "type": "user",
-            "message": { "role": "user", "content": message.0 },
-            "parent_tool_use_id": null,
-            "uuid": uuid,
-        }))
-    }
-
-    fn interrupt(&self, cancel_queued: bool, timeout: Duration) -> BoxFuture<'_, Result<()>> {
-        let request = if cancel_queued {
-            json!({ "subtype": "interrupt", "cancel_queued": true })
-        } else {
-            json!({ "subtype": "interrupt" })
-        };
-        Box::pin(async move {
-            ClaudeProcess::control(self, request, timeout)
-                .await
-                .map(drop)
-        })
-    }
-
-    fn set_model<'a>(&'a self, model: &'a str) -> BoxFuture<'a, Result<()>> {
-        let request = json!({ "subtype": "set_model", "model": model });
-        Box::pin(async move {
-            ClaudeProcess::control(self, request, SETTING)
-                .await
-                .map(drop)
-        })
-    }
-
-    fn set_effort<'a>(&'a self, effort: &'a str) -> BoxFuture<'a, Result<()>> {
-        let request =
-            json!({ "subtype": "apply_flag_settings", "settings": { "effortLevel": effort } });
-        Box::pin(async move {
-            ClaudeProcess::control(self, request, SETTING)
-                .await
-                .map(drop)
-        })
-    }
-
-    fn set_mode<'a>(&'a self, mode: &'a str) -> BoxFuture<'a, Result<()>> {
-        let request = json!({ "subtype": "set_permission_mode", "mode": mode });
-        Box::pin(async move {
-            ClaudeProcess::control(self, request, SETTING)
-                .await
-                .map(drop)
-        })
-    }
-
-    fn answer_permission(&self, request_id: &str, answer: PermissionAnswer) -> Result<()> {
-        let response = match answer {
-            PermissionAnswer::Allow {
-                call,
-                input,
-                resume,
-            } => {
-                let mut r = allowed(&call, input);
-                // A plan approved: Claude Code would leave Plan for `default` (ESC-277).
-                if let Some(mode) = resume {
-                    r["updatedPermissions"] =
-                        json!([{ "type": "setMode", "mode": mode, "destination": "session" }]);
-                }
-                r
-            }
-            PermissionAnswer::Always { call, input, rules } => {
-                let mut r = allowed(&call, input);
-                r["updatedPermissions"] = rules;
-                r
-            }
-            PermissionAnswer::Deny { call, message } => {
-                json!({ "behavior": "deny", "toolUseID": call, "message": message })
-            }
-        };
-        self.respond(request_id, response)
-    }
-
-    fn answer_question(&self, request_id: &str, call: &str, input: Value) -> Result<()> {
-        self.respond(request_id, allowed(call, input))
-    }
-
-    fn read_usage(&self) -> BoxFuture<'_, Result<Option<Value>>> {
-        Box::pin(async move {
-            let v = ClaudeProcess::control(
-                self,
-                json!({ "subtype": "get_usage", "skip_behaviors": true }),
-                Duration::from_secs(20),
-            )
-            .await?;
-            let windows = &v["rate_limits"];
-            Ok(windows.is_object().then(|| windows.clone()))
-        })
-    }
-
-    fn rename<'a>(&'a self, title: &'a str) -> BoxFuture<'a, Result<()>> {
-        let request = json!({ "subtype": "rename_session", "title": title, "source": "host" });
-        Box::pin(async move {
-            ClaudeProcess::control(self, request, Duration::from_secs(10))
-                .await
-                .map(drop)
-        })
-    }
-
-    fn stop_task<'a>(&'a self, task: &'a str) -> BoxFuture<'a, Result<()>> {
-        let request = json!({ "subtype": "stop_task", "task_id": task });
-        Box::pin(async move {
-            ClaudeProcess::control(self, request, Duration::from_secs(15))
-                .await
-                .map(drop)
-        })
-    }
-
-    fn task_output<'a>(&'a self, task: &'a str) -> BoxFuture<'a, Result<Value>> {
-        let request = json!({ "subtype": "get_task_output", "task_id": task });
-        Box::pin(ClaudeProcess::control(
-            self,
-            request,
-            Duration::from_secs(10),
-        ))
-    }
-
-    fn remote_control(&self, request: Remote, timeout: Duration) -> BoxFuture<'_, Result<Value>> {
-        let request = match request {
-            Remote::Off => json!({ "subtype": "remote_control", "enabled": false }),
-            Remote::On {
-                name,
-                keep,
-                reattach,
-            } => {
-                let mut r = json!({
-                    "subtype": "remote_control", "enabled": true, "name": name,
-                    "keep_session_on_exit": keep,
-                });
-                if let Some(s) = reattach {
-                    r["reattach_session_id"] = json!(s);
-                }
-                r
-            }
-        };
-        Box::pin(ClaudeProcess::control(self, request, timeout))
-    }
-
-    fn control(&self, request: Value, timeout: Duration) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(ClaudeProcess::control(self, request, timeout))
-    }
-
-    fn reply(&self, request_id: &str, answer: std::result::Result<Value, String>) -> Result<()> {
-        match answer {
-            Ok(response) => self.respond(request_id, response),
-            Err(error) => self.respond_error(request_id, &error),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::model::{Criterion, ModelInfo, Ticket};
+    use crate::plugins::harness::args_for_log;
 
     #[test]
     fn a_claude_not_found_is_said_with_what_puts_it_back() {

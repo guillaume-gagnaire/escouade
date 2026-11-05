@@ -77,6 +77,8 @@ fn answer(request: &str, allow: bool, always: bool) -> AnswerPermission {
         input: Value::Null,
         message: None,
         resume: None,
+        call: String::new(),
+        rules: Value::Null,
     }
 }
 

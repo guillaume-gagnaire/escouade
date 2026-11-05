@@ -1,0 +1,31 @@
+---
+title: "Claude Code en plugin"
+subject: "plugins"
+sources: ["docs/PLUGINS.md §4 (INT-10.5)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-226","plugins/builtin/dev.escouade.claude-code/README.md"]
+tickets: ["ESC-226"]
+decisions: []
+compared: null
+---
+
+# Claude Code en plugin
+
+La conversation des agents de Claude Code passe par le plugin de première main `dev.escouade.claude-code` (INT-10.5) : un process (`escouade-plugins claude`, sa crate `escouade-plugin-claude` dans `plugins/builtin/dev.escouade.claude-code/`), livré et signé avec l'app, au registre des plugins livrés et sur le store (sa page pointe vers ce dossier). Pour l'utilisateur, rien ne change : mêmes agents, mêmes comptes, mêmes modèles par compte, même quota et même changement de compte au seuil, même passation, mêmes textes rédigés, même vue terminal.
+
+## Ce que fait le plugin
+
+- Il décrit le lancement (le flux stream-json, le modèle, l'effort et le mode, les consignes ajoutées, la session à reprendre ou copier, les dossiers lus sans question, le serveur d'Escouade par un fichier privé de l'agent) ; le cœur trouve `claude`, vérifie la description et le lance, chaque compte dans son `CLAUDE_CONFIG_DIR`.
+- Il pose `initialize` comme première ligne, puis dit au cœur les commandes et les modèles du compte, et que l'agent est prêt.
+- Ce que Claude Code écrit lui arrive et repart en éléments de la conversation : textes et raisonnements au fil de l'écriture, appels avec leur diff, sous-agents et tâches de fond, cartes de permission et questions, estimation du tour en cours, fin de tour avec le coût par modèle, quota, limite d'usage, connexion perdue.
+- Un changement de modèle, d'effort ou de mode, une interruption, un titre, une tâche arrêtée et le lien à claude.ai passent par le protocole de contrôle : le cœur attend la réponse de Claude Code, comme avant.
+
+## Ce qui reste au cœur
+
+Le moteur `Claude` du registre garde ce qui n'est pas la conversation : ses capacités, les comptes, les modèles d'un compte sans agent, les textes rédigés (`claude -p`), la vue terminal et ses hooks, le serveur MCP d'Escouade. L'état de chaque agent reste au cœur : sa conversation, son plan, ses demandes en attente. Une lecture d'un fichier que l'utilisateur a joint reste acceptée sans carte, par le cœur.
+
+La lecture d'une connexion (ce que Claude Code garde dans son dossier et, sous macOS, son trousseau, l'empreinte d'une connexion, les mots d'une connexion perdue) est dans la crate, lue par le cœur comme une bibliothèque : le process du plugin ne la lit jamais. Le cœur garde ce qui décide : relancer un agent une fois sa connexion bonne, et le quota lu au point d'accès OAuth avec les réglages réseau de l'app.
+
+**La vue Claude Code lit son transcript par la traduction du plugin, prise comme une bibliothèque**, pour une seule traduction dans les deux vues.
+
+## Un arrêt se dit
+
+Coupé pour l'app ou pas chargé, un agent de Claude Code dit au lancement « Le plugin Claude Code (dev.escouade.claude-code) est coupé ou n'est pas chargé : rallume-le dans la vue Plugins… » et garde sa session ; rallumé, il reprend. Un plugin qui plante pendant un tour est relancé comme tout plugin de harness et la conversation le dit (voir *Le contrat des harness en process*). Les textes rédigés, le quota d'un compte et la vue terminal ne passent pas par lui.

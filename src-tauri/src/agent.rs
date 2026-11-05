@@ -27,7 +27,6 @@ mod copilot;
 mod copilot_tui;
 mod cursor;
 mod cursor_tui;
-mod localcmd;
 // The translation of the minimal fake engine of the conformance bench (`engine/minimal/`).
 mod gemini;
 mod gemini_tui;
@@ -41,6 +40,9 @@ mod transcript;
 mod vibe;
 mod vibe_tui;
 
+use escouade_plugin_claude::localcmd;
+pub use escouade_plugin_claude::words::strip_ansi;
+use escouade_plugin_claude::words::{strip_tags, tool_result_text};
 pub use transcript::HookOutcome;
 
 pub type AgentHandle = Arc<parking_lot::Mutex<AgentRt>>;
@@ -115,13 +117,6 @@ pub struct Effects {
     pub sent: Vec<(String, Value)>,
 }
 
-struct Block {
-    index: u64,
-    item_id: String,
-    kind: &'static str,
-    finalized: bool,
-}
-
 struct PendingReq {
     item_id: String,
     tool_use_id: String,
@@ -146,14 +141,6 @@ pub struct Waiting {
     pub input: Value,
 }
 
-#[derive(Debug, Clone, Default)]
-struct Counters {
-    input: u64,
-    output: u64,
-    cache: u64,
-    cost: f64,
-}
-
 pub struct AgentRt {
     pub meta: AgentMeta,
     /// Where its facts go (PLG-5): its status, its requests and their answers, told where they
@@ -169,16 +156,11 @@ pub struct AgentRt {
     pub context_window: u64,
     /// Model of the conversation's latest message (it may be switched mid-process).
     main_model: String,
-    /// This turn met the usage limit, and when the limit resets.
-    rate_limited: bool,
-    limit_resets_at: Option<i64>,
     /// The sign-in of its account when its process started (`usage::Stored::stamp`, ESC-162).
     pub(crate) launch_stamp: Option<String>,
     /// The restarts of its process since its turn stopped on a sign-in that could not be
     /// refreshed (`signin`): two at most, then it waits for a new one.
     pub(crate) sign_in_retries: u8,
-    /// Tasks run in the foreground: their tool rows show them end.
-    foreground_tasks: HashSet<String>,
     /// Background tasks whose end was shown, until Claude Code also replays it to Claude.
     announced_tasks: HashMap<String, u32>,
     pub commands: Vec<Value>,
@@ -232,11 +214,10 @@ pub struct AgentRt {
     /// Why the setup of its worktree failed, until its ticket's first message tells it (written in
     /// the language of the texts for Claude, as that message).
     pub setup_failure: Option<String>,
-    blocks: HashMap<String, Vec<Block>>,
-    current_msg: HashMap<String, String>,
+    /// What the translation of Claude Code keeps between the frames of its view's transcript (`agent/claude.rs`).
+    claude: claude::ClaudeState,
     /// Requests waiting for an answer, in the order they came (an item's id is its request's).
     pending: Vec<PendingReq>,
-    last_usage: HashMap<String, Counters>,
     /// Usage of the running turn's API messages (by message id, with their model), until the
     /// turn's result brings the exact figures.
     live: HashMap<String, (String, Usage)>,
@@ -527,11 +508,8 @@ impl AgentRt {
             context_tokens: 0,
             context_window: 0,
             main_model: String::new(),
-            rate_limited: false,
-            limit_resets_at: None,
             launch_stamp: None,
             sign_in_retries: 0,
-            foreground_tasks: HashSet::new(),
             announced_tasks: HashMap::new(),
             commands: Vec::new(),
             interrupted: false,
@@ -553,10 +531,8 @@ impl AgentRt {
             setup: None,
             setup_output: None,
             setup_failure: None,
-            blocks: HashMap::new(),
-            current_msg: HashMap::new(),
+            claude: claude::ClaudeState::default(),
             pending: Vec::new(),
-            last_usage: HashMap::new(),
             live: HashMap::new(),
             queued: 0,
             limit_rest: false,
@@ -671,10 +647,8 @@ impl AgentRt {
         self.proc = Some(proc);
         // A process that just started is not idle.
         self.meta.last_activity = now_ms();
-        self.blocks.clear();
-        self.current_msg.clear();
+        self.claude_new_stream();
         self.pending.clear();
-        self.last_usage.clear();
         self.live.clear();
         self.remote_state = None;
         self.remote_linked = false;
@@ -682,7 +656,6 @@ impl AgentRt {
         self.forget_turn();
         self.saw_init = false;
         self.queued = 0;
-        self.foreground_tasks.clear();
         self.announced_tasks.clear();
         self.codex = codex::CodexState::default();
         self.copilot = copilot::CopilotState::default();
@@ -1166,11 +1139,7 @@ impl AgentRt {
             };
             self.patch(&id, patch, fx);
         }
-        for blocks in self.blocks.values_mut() {
-            for b in blocks.iter_mut() {
-                b.finalized = true;
-            }
-        }
+        self.claude.finalize();
     }
 
     /// A request comes after those waiting already: the one asked first stays the one shown
@@ -1632,18 +1601,6 @@ fn handback_report(text: &str) -> Option<(Option<&str>, String)> {
     (!report.is_empty()).then(|| (from, report.to_string()))
 }
 
-fn tool_result_text(content: &Value) -> String {
-    match content {
-        Value::String(s) => s.clone(),
-        Value::Array(parts) => parts
-            .iter()
-            .filter_map(|b| b["text"].as_str())
-            .collect::<Vec<_>>()
-            .join("\n"),
-        _ => String::new(),
-    }
-}
-
 /// The `result` of a tool's item: `text`, the words of its result block, but a command's own
 /// output when the structured result (`tool_use_result` in the stream, `toolUseResult` in a
 /// transcript) has it, cut to `MAX_TEXT`; for a file it changed, the lines of its diff and its path.
@@ -1786,55 +1743,6 @@ fn trim_strings(v: &Value) -> Value {
         ),
         other => other.clone(),
     }
-}
-
-fn strip_tags(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut in_tag = false;
-    for c in s.chars() {
-        match c {
-            '<' => in_tag = true,
-            '>' if in_tag => in_tag = false,
-            _ if !in_tag => out.push(c),
-            _ => {}
-        }
-    }
-    strip_ansi(out.trim())
-}
-
-pub fn strip_ansi(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut chars = s.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '\u{1b}' {
-            match chars.peek() {
-                Some(&'[') => {
-                    chars.next();
-                    for n in chars.by_ref() {
-                        if n.is_ascii_alphabetic() {
-                            break;
-                        }
-                    }
-                }
-                // An OSC (a link, a title): to its BEL or its ST (ESC \).
-                Some(&']') => {
-                    while let Some(n) = chars.next() {
-                        if n == '\u{7}' {
-                            break;
-                        }
-                        if n == '\u{1b}' && chars.peek() == Some(&'\\') {
-                            chars.next();
-                            break;
-                        }
-                    }
-                }
-                _ => {}
-            }
-        } else {
-            out.push(c);
-        }
-    }
-    out
 }
 
 /// `text` in `MAX_PENDING_FIELD` characters at most; `cut` is set when it was longer.

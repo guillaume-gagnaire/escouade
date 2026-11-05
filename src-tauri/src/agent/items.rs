@@ -138,21 +138,143 @@ impl AgentRt {
                 if self.conv.get(&id).is_some_and(|i| i["status"] != "running") {
                     return;
                 }
-                if self.plan_calls.remove(&id) {
-                    fx.plan_files = true;
+                self.tool_done(id, output, error, tur, fx);
+            }
+            Item::ToolResult {
+                id,
+                output,
+                error,
+                result,
+            } => self.tool_done(id, output, error, result, fx),
+            Item::Conversation { session, notice } => self.on_conversation(session, notice, fx),
+            Item::Message {
+                id,
+                model,
+                usage,
+                main,
+            } => self.on_message(id, model, usage, main, fx),
+            Item::MessageOutput { id, output } => {
+                if let Some((_, u)) = self.live.get_mut(&id) {
+                    u.output = output;
+                    fx.agent_changed = true;
                 }
-                if self.plan_removals.remove(&id) && !error {
-                    self.plan_apply(fx, PlanState::finish_files);
+            }
+            Item::Tasks { frame } => {
+                self.plan_apply(fx, |plan| plan.on_system(&frame, now_ms()));
+                if frame["subtype"] == "task_notification" && frame["task_id"].is_string() {
+                    self.keep_report(&frame, fx);
                 }
-                self.plan_apply(fx, |plan| {
-                    plan.on_tool_result(&id, error, &output, &tur, now_ms())
+            }
+            Item::Event {
+                id,
+                source,
+                text,
+                from,
+            } => {
+                if source == "task" {
+                    if let Some(task) = tag(&text, "task-id") {
+                        *self.announced_tasks.entry(task.to_string()).or_default() += 1;
+                    }
+                }
+                let mut item = json!({
+                    "kind": "event", "id": id.unwrap_or_else(new_id), "source": source, "text": text,
+                    "ts": now_ms(),
                 });
-                let result = tool_result(output, error, &tur);
-                self.patch(
-                    &id,
-                    json!({ "status": if error { "error" } else { "ok" }, "result": result }),
-                    fx,
-                );
+                if let Some(from) = from {
+                    item["from"] = from.into();
+                }
+                self.append(item, fx);
+                fx.save = true;
+            }
+            Item::Output { id, level, text } => {
+                let id = id.unwrap_or_else(new_id);
+                if !self.conv.contains(&id) {
+                    let item = json!({ "kind": "notice", "id": id, "ts": now_ms(), "level": level, "text": text });
+                    self.append(item, fx);
+                }
+            }
+            Item::Call {
+                id,
+                name,
+                input,
+                parent,
+            } => self.on_call(id, name, input, parent, fx),
+            Item::Replayed {
+                id,
+                text,
+                origin,
+                from,
+                synthetic,
+                images,
+                files,
+            } => self.on_replay(id, text, origin, from, synthetic, images, files, fx),
+            Item::Ask {
+                request,
+                call,
+                tool,
+                input,
+                title,
+                description,
+                reason,
+                suggestions,
+                no_always,
+                default_no,
+                task,
+            } => self.on_ask(
+                claude::Asking {
+                    request,
+                    call,
+                    tool,
+                    input,
+                    title,
+                    description,
+                    reason,
+                    suggestions,
+                    no_always,
+                    default_no,
+                    task,
+                },
+                fx,
+            ),
+            Item::Result {
+                id,
+                failed,
+                error,
+                failure,
+                reply,
+                limited,
+                resets,
+                sign_in,
+                duration,
+                window,
+                cost,
+                tokens,
+                models,
+            } => self.on_result(
+                claude::TurnResult {
+                    id,
+                    failed,
+                    error,
+                    failure,
+                    reply,
+                    limited,
+                    resets,
+                    sign_in,
+                    duration,
+                    window,
+                    cost,
+                    tokens,
+                    models,
+                },
+                fx,
+            ),
+            Item::Limit { scoped } => {
+                self.meta.limit_model = scoped.then(|| self.model_in_use());
+            }
+            Item::Overage { on } => fx.overage = Some(on),
+            Item::Remote { state } => {
+                self.remote_state = state;
+                fx.agent_changed = true;
             }
             Item::Touched { path } => self.touch(&path, fx),
             Item::Permission {
@@ -557,6 +679,9 @@ impl AgentRt {
             }
             // Written by the process's adapter, in its order, before the items reach the agent; `Closed` is its own too.
             Item::Write { .. }
+            | Item::Told { .. }
+            | Item::Answer { .. }
+            | Item::Said { .. }
             | Item::Usage { .. }
             | Item::Ready { .. }
             | Item::Compacted { .. }
@@ -567,6 +692,25 @@ impl AgentRt {
             | Item::Closed
             | Item::Unknown => {}
         }
+    }
+
+    /// A tool's result: what it means for the plan, its row told.
+    fn tool_done(&mut self, id: String, output: String, error: bool, tur: Value, fx: &mut Effects) {
+        if self.plan_calls.remove(&id) {
+            fx.plan_files = true;
+        }
+        if self.plan_removals.remove(&id) && !error {
+            self.plan_apply(fx, PlanState::finish_files);
+        }
+        self.plan_apply(fx, |plan| {
+            plan.on_tool_result(&id, error, &output, &tur, now_ms())
+        });
+        let result = tool_result(output, error, &tur);
+        self.patch(
+            &id,
+            json!({ "status": if error { "error" } else { "ok" }, "result": result }),
+            fx,
+        );
     }
 
     /// A text or a reasoning whole: the end of what streamed under `id`, else an item of its own (under `id` when it has

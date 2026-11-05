@@ -54,6 +54,7 @@ fn plugged_by(harness: EngineId) -> Option<&'static str> {
         EngineId::COPILOT => Some(crate::plugins::builtin::COPILOT),
         EngineId::CODEX => Some(crate::plugins::builtin::CODEX),
         EngineId::AGY => Some(crate::plugins::builtin::ANTIGRAVITY),
+        EngineId::CLAUDE => Some(crate::plugins::builtin::CLAUDE),
         _ => None,
     }
 }
@@ -345,8 +346,8 @@ impl Bench {
         // Copilot's plugin opens its session itself, step by step, which no recording follows: it is given the sessions
         // of the recording as they open (`agent/attach`, as after a restart).
         let opens = flux.harness == EngineId::COPILOT;
-        // Antigravity's lines are its events alone, with no `dir`.
-        let only_said = flux.harness == EngineId::AGY;
+        // Antigravity's lines are its events alone, with no `dir`, and Claude Code's its frames.
+        let only_said = matches!(flux.harness, EngineId::AGY | EngineId::CLAUDE);
         let launch = rt
             .call(
                 plugin,
@@ -388,7 +389,8 @@ impl Bench {
         let tokio = tokio::runtime::Handle::current();
         // The client's settings of a Vibe recording are the ones it made itself at the session's start.
         let own_settings = flux.harness == EngineId::VIBE;
-        let opencode = flux.harness == EngineId::OPENCODE;
+        // What the plugin reads as it came: OpenCode's lines, and Claude Code's, which say no `dir`.
+        let as_it_came = matches!(flux.harness, EngineId::OPENCODE | EngineId::CLAUDE);
         let cpu = usage().cpu;
         let read = tokio::task::spawn_blocking(move || {
             let handle = core.agent(&agent).unwrap();
@@ -451,7 +453,7 @@ impl Bench {
                             }
                         }
                         // OpenCode's plugin reads the recording's own lines: no harness writes them to it.
-                        let frame = if opencode { line.clone() } else { msg.to_string() };
+                        let frame = if as_it_came { line.clone() } else { msg.to_string() };
                         let got = call(
                             "agent/frames",
                             json!({ "agent": key, "frames": [frame] }),

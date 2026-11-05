@@ -63,6 +63,12 @@ pub mod method {
     /// Its program ended by itself, for a harness that declares `relaunches` (`Gone` → `Items`): `Item::Relaunch` goes
     /// on with another, `Item::Stop` says why not, nothing ends the agent's process.
     pub const PROGRAM_GONE: &str = "agent/programGone";
+    /// Stop one of its background tasks (`Task` → `Asked`).
+    pub const STOP_TASK: &str = "agent/stopTask";
+    /// What a background task wrote so far (`Task` → `Asked`).
+    pub const TASK_OUTPUT: &str = "agent/taskOutput";
+    /// Link its session to its vendor's site, or end the link (`RemoteLink` → `Asked`).
+    pub const REMOTE: &str = "agent/remote";
 }
 
 /// How many bytes of lines a batch of `agent/frames` carries at most. A batch is what was read while the last one
@@ -152,6 +158,16 @@ pub struct LaunchParams {
     /// The language of the app (`fr`, `en`), for the lines the plugin writes in the conversation.
     #[serde(default)]
     pub lang: String,
+    /// Whether its model takes an effort, as its account's harness told it; None: the plugin's own rule.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub takes_effort: Option<bool>,
+    /// A settings file the core wrote for it (`Engine::fence_settings`): it holds the fence, and a launch that names
+    /// it needs not spell the paths (`fence`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings: Option<String>,
+    /// The file the core wrote to keep Escouade's server out of it (`Engine::refusal`), when it is refused.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refusal_file: Option<String>,
 }
 
 /// A variable of a launch.
@@ -454,6 +470,12 @@ pub struct AnswerPermission {
     /// A plan approved: the mode its work goes on in (the one the agent was in before Plan).
     #[serde(default)]
     pub resume: Option<String>,
+    /// The call it answers (`Item::Ask::call`).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub call: String,
+    /// « Toujours »: the rules of `Item::Ask::suggestions` it goes by.
+    #[serde(default, skip_serializing_if = "Value::is_null")]
+    pub rules: Value,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -466,6 +488,9 @@ pub struct AnswerQuestion {
     /// The questions they answer, as the card has them, for a harness that wants them in its order.
     #[serde(default)]
     pub questions: Value,
+    /// The call's input with its answers, for a harness that takes it whole.
+    #[serde(default, skip_serializing_if = "Value::is_null")]
+    pub input: Value,
 }
 
 /// The quota its process read (`usage::parse_windows` reads its windows); null when none.
@@ -481,6 +506,52 @@ pub struct Usage {
 pub struct UsageAsked {
     #[serde(default)]
     pub writes: Vec<String>,
+}
+
+/// The answer of a call whose end is the harness's to tell (`agent/interrupt`, `agent/setModel`, `agent/control`…): `writes` go
+/// to its input, and `Item::Answer` under `ask` brings what it said. An answer without `ask` is over as it is.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Asked {
+    #[serde(default)]
+    pub writes: Vec<String>,
+    #[serde(default)]
+    pub ask: String,
+}
+
+/// One of its background tasks.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Task {
+    pub agent: String,
+    pub task: String,
+}
+
+/// `method::REMOTE`: its session linked (`name` on the vendor's site, kept when it ends if `keep`, joining the session
+/// `reattach`), or unlinked.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteLink {
+    pub agent: String,
+    pub enabled: bool,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub keep: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reattach: Option<String>,
+}
+
+/// What a model cost in the turn that ends (`Item::Result`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct ModelTurn {
+    pub model: String,
+    #[serde(default)]
+    pub input: u64,
+    #[serde(default)]
+    pub output: u64,
+    #[serde(default)]
+    pub cache: u64,
+    #[serde(default)]
+    pub cost: f64,
 }
 
 /// The tokens and cost of a turn.
@@ -751,6 +822,170 @@ pub enum Item {
     File { path: String, text: String },
     /// Asked to stop gently (`method::CLOSE`), its turn is over: the agent has left its shared process.
     Closed,
+    /// The conversation it runs (a harness that says so at each start): another than the agent's starts anew, its plan
+    /// forgotten; `notice` is what the agent's conversation says when that happens to a process that had one.
+    Conversation {
+        session: String,
+        #[serde(default)]
+        notice: String,
+    },
+    /// A message of the model begins, under `id`: what it reads (`usage`, as the API tells it) counts in the running
+    /// turn until `Item::Result`; `main`: of the agent itself, not of a subagent.
+    Message {
+        id: String,
+        #[serde(default)]
+        model: String,
+        #[serde(default)]
+        usage: Value,
+        #[serde(default)]
+        main: bool,
+    },
+    /// What the message `id` wrote so far, in tokens.
+    MessageOutput { id: String, output: u64 },
+    /// What the harness says of its background tasks, for the plan (`task_started`, `task_progress`…).
+    Tasks { frame: Value },
+    /// A line of the conversation that comes from neither the user nor the model (a task that ended, a message of
+    /// another agent): `source` says which.
+    Event {
+        #[serde(default)]
+        id: Option<String>,
+        source: String,
+        text: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        from: Option<String>,
+    },
+    /// What a local command printed (`output`, `error`).
+    Output {
+        #[serde(default)]
+        id: Option<String>,
+        level: String,
+        text: String,
+    },
+    /// The whole call of a tool, once its message is whole: `Tool` began it if it was streamed, its row is then told
+    /// its input; the plan hears of it either way.
+    Call {
+        id: String,
+        name: String,
+        #[serde(default)]
+        input: Value,
+        #[serde(default)]
+        parent: Option<String>,
+    },
+    /// Its result, whatever the row says by now (`ToolDone` leaves a row that ended as it is).
+    ToolResult {
+        id: String,
+        #[serde(default)]
+        output: String,
+        #[serde(default)]
+        error: bool,
+        #[serde(default)]
+        result: Value,
+    },
+    /// A user's message the harness says back: the echo of one sent by the core, or one sent another way. `origin` is
+    /// who it comes from when no person wrote it (`task-notification`, `peer`…), `from` the agent that sent it.
+    Replayed {
+        #[serde(default)]
+        id: Option<String>,
+        #[serde(default)]
+        text: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        origin: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        from: Option<String>,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        synthetic: bool,
+        #[serde(default)]
+        images: u32,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        files: Vec<String>,
+    },
+    /// The harness asks leave for a call, or asks the user (`tool` `AskUserQuestion`): `suggestions` are the rules
+    /// « Toujours » would keep, given back in `AnswerPermission::rules`; `task` the subagent that asks. The core answers
+    /// by itself a read of a file the user joined.
+    #[serde(rename_all = "camelCase")]
+    Ask {
+        request: String,
+        call: String,
+        tool: String,
+        #[serde(default)]
+        input: Value,
+        #[serde(default)]
+        title: Option<String>,
+        #[serde(default)]
+        description: Option<String>,
+        #[serde(default)]
+        reason: Option<String>,
+        #[serde(default)]
+        suggestions: Value,
+        #[serde(default)]
+        no_always: bool,
+        #[serde(default)]
+        default_no: bool,
+        #[serde(default)]
+        task: Option<String>,
+    },
+    /// The end of a turn the harness counts itself: what each model cost, the context `window` of the one that ran,
+    /// whether it failed and why. `limited`: stopped by the usage limit, which resets at `resets` (ms) if told;
+    /// `sign_in`: by a sign-in of its account that could not be refreshed; `failure` is what a failure says, `reply`
+    /// what a good end says when the model wrote nothing.
+    #[serde(rename_all = "camelCase")]
+    Result {
+        #[serde(default)]
+        id: Option<String>,
+        #[serde(default)]
+        failed: bool,
+        #[serde(default)]
+        error: Option<String>,
+        #[serde(default)]
+        failure: String,
+        #[serde(default)]
+        reply: String,
+        #[serde(default)]
+        limited: bool,
+        #[serde(default)]
+        resets: Option<i64>,
+        #[serde(default)]
+        sign_in: bool,
+        #[serde(default)]
+        duration: Value,
+        #[serde(default)]
+        window: Option<u64>,
+        #[serde(default)]
+        cost: f64,
+        #[serde(default)]
+        tokens: u64,
+        #[serde(default)]
+        models: Vec<ModelTurn>,
+    },
+    /// A usage limit was met: `scoped` to the model it runs on, not to its account.
+    Limit {
+        #[serde(default)]
+        scoped: bool,
+    },
+    /// Whether its account answers as extra usage.
+    Overage { on: bool },
+    /// The state of its link to its vendor's site (`ready`, `connected`…).
+    Remote {
+        #[serde(default)]
+        state: Option<String>,
+    },
+    /// What its harness said when it started: its commands and its models (as it tells them), which `Ready` follows.
+    Told {
+        #[serde(default)]
+        commands: Value,
+        #[serde(default)]
+        models: Value,
+    },
+    /// What the harness said of the call `ask` (`Asked`): its answer, or why it refused.
+    Answer {
+        ask: String,
+        #[serde(default)]
+        answer: Value,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+    },
+    /// What the harness wrote that is none of its protocol, kept for what its end says.
+    Said { line: String },
     /// An item of a later version of the contract: left aside.
     #[serde(other)]
     Unknown,

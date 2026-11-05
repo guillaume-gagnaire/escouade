@@ -31,10 +31,8 @@ impl AgentRt {
     /// Its Claude Code interface starts: what was counted of the one before is gone with it.
     pub fn start_tui(&mut self) {
         self.meta.last_activity = now_ms();
-        self.blocks.clear();
-        self.current_msg.clear();
+        self.claude_new_stream();
         self.pending.clear();
-        self.last_usage.clear();
         self.live.clear();
         self.tui_usage.clear();
         self.tui_error = None;
@@ -42,7 +40,6 @@ impl AgentRt {
         self.forget_turn();
         self.interrupted = false;
         self.queued = 0;
-        self.foreground_tasks.clear();
         self.announced_tasks.clear();
         self.interrupt_plan();
         self.codex_new_conversation();
@@ -210,7 +207,7 @@ impl AgentRt {
                 "type": "user", "message": e["message"], "uuid": e["uuid"],
                 "parent_tool_use_id": null, "tool_use_result": e["toolUseResult"],
             });
-            return self.on_user(&frame, fx);
+            return self.claude_frame(&frame, fx);
         }
         let text = match content.as_str() {
             Some(s) => s.to_string(),
@@ -244,7 +241,7 @@ impl AgentRt {
                 "type": "user", "isReplay": true, "uuid": e["uuid"], "message": e["message"],
                 "origin": e["origin"],
             });
-            return self.on_replay(&frame, fx);
+            return self.claude_frame(&frame, fx);
         }
         let images = blocks.iter().filter(|b| b["type"] == "image").count() as u32;
         if text.trim().is_empty() && images == 0 {
@@ -298,6 +295,7 @@ impl AgentRt {
             // Each block of a message is an entry of its own, with the message's usage.
             if model != "<synthetic>" {
                 self.main_model = model.to_string();
+                self.claude.main_model = model.to_string();
                 self.tui_usage.insert(
                     mid.to_string(),
                     (model.to_string(), Usage::from_api(&msg["usage"])),
@@ -320,7 +318,7 @@ impl AgentRt {
             let error = e["error"].as_str().unwrap_or("api_error");
             frame["error"] = json!(error);
             if error == "rate_limit" {
-                self.rate_limited = true;
+                self.claude.rate_limited = true;
             }
             let text = msg["content"][0]["text"].as_str().unwrap_or(error);
             self.tui_error = Some(text.to_string());
@@ -328,7 +326,7 @@ impl AgentRt {
         if !self.meta.status.is_active() {
             self.set_status(AgentStatus::Running, fx);
         }
-        self.on_assistant(&frame, fx);
+        self.claude_frame(&frame, fx);
         fx.agent_changed = true;
     }
 
@@ -426,7 +424,7 @@ impl AgentRt {
             "modelUsage": models,
         });
         self.tui_prompt = None;
-        self.on_result(&result, fx);
+        self.claude_frame(&result, fx);
     }
 
     /// One of the hooks its Claude Code interface calls (`tui::tui_settings`).

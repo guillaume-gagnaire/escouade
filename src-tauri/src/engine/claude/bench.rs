@@ -35,8 +35,11 @@ impl Target for ClaudeCode {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn the_fake_claude_passes_the_bench() {
+    // Its conversation goes through its plugin (INT-10.5): the plugins the app gives, in a runtime of their own.
+    let (rt, plugins, _) = crate::plugins_acp_tests::runtime("int10-claude-bench");
+    crate::plugins::harness::sync(&rt, &plugins);
     let dir = bench_dir("esc35-bench-claude");
     let played = run(&ClaudeCode, &dir).await;
     // Claude Code can do everything the bench asks.

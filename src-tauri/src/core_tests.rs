@@ -3730,13 +3730,13 @@ async fn archiving_a_running_agent_ends_what_it_was_doing() {
 async fn the_end_of_the_turn_an_archive_stops_says_the_agent_is_archived() {
     let h = harness("archive-turn-end");
     let (p, _) = h.project(false).await;
-    // The stopped turn's end is read before the archive goes on.
+    // The stopped turn's end is read before the archive goes on; a turn that lasts, to be there to stop.
     let id = h
         .core
         .create_agent_with(
             &p.id,
             AgentOptions {
-                append_prompt: Some("[fin-d-abord]".into()),
+                append_prompt: Some("[lent] [fin-d-abord]".into()),
                 ..Default::default()
             },
         )

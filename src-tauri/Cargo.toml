@@ -87,6 +87,8 @@ escouade-plugin-gemini = { path = "../plugins/builtin/dev.escouade.gemini-cli" }
 escouade-plugin-copilot = { path = "../plugins/builtin/dev.escouade.copilot-cli" }
 escouade-plugin-codex = { path = "../plugins/builtin/dev.escouade.codex" }
 escouade-plugin-agy = { path = "../plugins/builtin/dev.escouade.antigravity-cli" }
+# Claude Code (INT-10.5): the core reads its view's transcript, an account's sign-in and quota through its code, as a library.
+escouade-plugin-claude = { path = "../plugins/builtin/dev.escouade.claude-code" }
 # A version's archive from the store (STORE-9): read in memory, its links and climbing paths refused.
 flate2 = "1"
 tar = { version = "0.4", default-features = false }

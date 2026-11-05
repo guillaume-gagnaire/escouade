@@ -47,12 +47,16 @@ const harness = (id: string, name: string, fr: string, en: string): Builtin => (
 });
 
 export const BUILTINS: Builtin[] = [
-  harness(
-    'claude-code',
-    'Claude Code',
-    'Claude Code comme harness : la conversation, sa vue terminal, les permissions, le plan, les comptes et leur quota.',
-    'Claude Code as a harness: the conversation, its terminal view, permissions, the plan, accounts and their quota.',
-  ),
+  {
+    ...harness(
+      'claude-code',
+      'Claude Code',
+      'Claude Code comme harness : la conversation, sa vue terminal, les permissions, le plan, les comptes et leur quota.',
+      'Claude Code as a harness: the conversation, its terminal view, permissions, the plan, accounts and their quota.',
+    ),
+    // Out of the core since INT-10.5.
+    source: 'plugins/builtin/dev.escouade.claude-code',
+  },
   {
     ...harness(
       'codex',

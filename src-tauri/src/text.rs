@@ -12,57 +12,7 @@ pub fn truncate(s: &str, max: usize) -> String {
     format!("{}…", &s[..end])
 }
 
-/// The JSON value of a harness's line. A harness written in JavaScript escapes a lone half of a
-/// UTF-16 pair (`\ud83c`), which JSON allows and serde refuses: the output of a tool that read a
-/// binary file was lost whole (ESC-290). Such a half is read as `�` (�).
-pub fn json_line(line: &str) -> serde_json::Result<serde_json::Value> {
-    match serde_json::from_str(line) {
-        Err(e) if line.contains("\\ud") || line.contains("\\uD") => {
-            serde_json::from_str(&lone_halves_replaced(line)).map_err(|_| e)
-        }
-        other => other,
-    }
-}
-
-/// `json` with each escaped half of a UTF-16 pair that has no other half written `�`.
-fn lone_halves_replaced(json: &str) -> String {
-    let half = |s: &str| -> Option<u16> {
-        let hex = s.strip_prefix("\\u").or_else(|| s.strip_prefix("\\U"))?;
-        u16::from_str_radix(hex.get(..4)?, 16)
-            .ok()
-            .filter(|c| (0xd800..=0xdfff).contains(c))
-    };
-    let mut out = String::with_capacity(json.len());
-    let mut i = 0;
-    while i < json.len() {
-        let rest = &json[i..];
-        if !rest.starts_with('\\') {
-            let c = rest.chars().next().unwrap_or_default();
-            out.push(c);
-            i += c.len_utf8().max(1);
-            continue;
-        }
-        match half(rest) {
-            Some(0xd800..=0xdbff)
-                if half(&rest[6..]).is_some_and(|low| (0xdc00..=0xdfff).contains(&low)) =>
-            {
-                out.push_str(&rest[..12]);
-                i += 12;
-            }
-            Some(_) => {
-                out.push_str("\\ufffd");
-                i += 6;
-            }
-            // Any other escape, kept whole: `\\u…` is a backslash, then text.
-            None => {
-                let next = rest[1..].chars().next().map_or(0, char::len_utf8);
-                out.push_str(&rest[..1 + next]);
-                i += 1 + next;
-            }
-        }
-    }
-    out
-}
+pub use escouade_plugin_protocol::json_line;
 
 #[cfg(test)]
 mod tests {
