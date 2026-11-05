@@ -24,7 +24,7 @@ import { checkRevocations, type RevocationList } from '../../server/utils/revoca
 import { checkVersionSignature } from '../../server/utils/signature';
 import { sha256 } from '../../server/utils/versions';
 import { testKey } from '../fake/minisign.mjs';
-import { FAKE_ADMIN_TOKEN, startReviewStore } from '../fake/review-store.mjs';
+import { FAKE_ADMIN_TOKEN, hasRustFixture, startReviewStore } from '../fake/review-store.mjs';
 
 // What the review sends to the store from the user's machine (scripts/plugin-review/admin.ts, docs/STORE.md §4.3, §4.5,
 // §4.6): the report, the signature of a version, the revocation lists. Signed by a stand-in for minisign
@@ -58,9 +58,8 @@ beforeAll(async () => {
     'io.github.q7x.slak-notify@0.0.1',
     'dev.exemple.rules-js@1.0.0',
     'dev.exemple.rules-js@1.0.2',
-    'dev.exemple.rust-lines@1.0.0',
-    'dev.exemple.rust-lines@1.0.1',
-    'dev.exemple.rust-lines@1.0.2',
+    // Without the repository's Rust fixture (the store's image), no run.wasm plugin.
+    ...(hasRustFixture ? ['dev.exemple.rust-lines@1.0.0', 'dev.exemple.rust-lines@1.0.1', 'dev.exemple.rust-lines@1.0.2'] : []),
   ])
     await review({
       ...parseTarget(t)!,
@@ -177,7 +176,7 @@ describe('the signature of a version', () => {
     expect(sent()).toBe(before);
   });
 
-  it('signs a run.wasm whose module the review compiled again, and nothing else (ESC-337)', async () => {
+  it.skipIf(!hasRustFixture)('signs a run.wasm whose module the review compiled again, and nothing else (ESC-337)', async () => {
     const done = await signVersion(admin(), 'dev.exemple.rust-lines', '1.0.0');
     expect(done.keyId).toBe(key.id);
     expect((last('signature')!.summary as { fr: string }).fr).toContain('module WASM recompilé, même empreinte');

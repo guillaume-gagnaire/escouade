@@ -30,6 +30,8 @@ const REPO = resolve(here, '../../..');
 const ENGINE = join(here, '../fake/fake-engine.mjs');
 const FAKE_CLI = join(here, '../fake/fake-escouade-plugin.mjs');
 const FIXTURE = join(REPO, 'tests/fixtures/plugins/rust-build');
+// The store's image holds store/ alone: these tests read the repository's fixtures and the closed list of crates/.
+const whole = existsSync(FIXTURE) && existsSync(join(REPO, 'crates/escouade-plugin-cli/src/rust_native.json'));
 
 const text = (o: Record<string, string>) => new Map(Object.entries(o).map(([k, v]) => [k, Buffer.from(v)]));
 const of = (leads: Lead[], kind: Lead['kind']) => leads.filter((l) => l.kind === kind);
@@ -41,7 +43,7 @@ function wasmWith(imports: [string, string][]): Buffer {
   return Buffer.from([0, 0x61, 0x73, 0x6d, 1, 0, 0, 0, 2, (body.length & 0x7f) | 0x80, body.length >> 7, ...body]);
 }
 
-describe('the leads of Rust', () => {
+describe.skipIf(!whole)('the leads of Rust', () => {
   const leads = (files: Record<string, string>, module: Buffer | null = null, permissions = {}) =>
     rustLeads(text(files), module, permissions, readNativeList());
 
@@ -216,7 +218,7 @@ describe('the leads of Rust', () => {
   });
 });
 
-describe('the steps of a third party’s compilation', () => {
+describe.skipIf(!whole)('the steps of a third party’s compilation', () => {
   const s = { engine: { program: 'podman' }, cli: '/opt/cli', image: 'img', work: '/w' };
   const volumes = (args: string[]) => args.filter((_, i) => args[i - 1] === '--volume');
 
@@ -254,7 +256,7 @@ describe('the steps of a third party’s compilation', () => {
 });
 
 // A review starts node several times by step: minutes on a machine other agents are using.
-describe('a run.wasm plugin', { timeout: 180_000 }, () => {
+describe.skipIf(!whole)('a run.wasm plugin', { timeout: 180_000 }, () => {
   let root: string;
   let store: Awaited<ReturnType<typeof startReviewStore>>;
   let log: string;
@@ -424,8 +426,9 @@ describe('a run.wasm plugin', { timeout: 180_000 }, () => {
 });
 
 describe.runIf(process.env.ESCOUADE_REVIEW_REAL_RUST === '1')('the real compilation, in a real container', () => {
-  const golden = (JSON.parse(readFileSync(join(REPO, 'crates/escouade-plugin-cli/goldens.json'), 'utf8')) as { rust: { module: string } })
-    .rust.module;
+  // Read when a test runs, not when the file is collected: the store's image has no crates/.
+  const golden = () =>
+    (JSON.parse(readFileSync(join(REPO, 'crates/escouade-plugin-cli/goldens.json'), 'utf8')) as { rust: { module: string } }).rust.module;
   const sources = () => {
     const files = new Map<string, Buffer>();
     const walk = (dir: string) => {
@@ -455,7 +458,7 @@ describe.runIf(process.env.ESCOUADE_REVIEW_REAL_RUST === '1')('the real compilat
     try {
       const files = sources();
       const got = await one({ manifest: files.get('escouade-plugin.json')!, wasm: 'Cargo.toml', files });
-      expect(got.sha256).toBe(golden);
+      expect(got.sha256).toBe(golden());
     } finally {
       rmSync(work, { recursive: true, force: true });
     }

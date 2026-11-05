@@ -10,7 +10,7 @@
 // of `npm run plugin-review` (ESCOUADE_STORE_URL, ESCOUADE_REVIEW_GITHUB_API). Nothing here is ever run: bytes.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
@@ -160,6 +160,8 @@ function runJs(version) {
 }
 
 const RUST_FIXTURE = fileURLToPath(new URL('../../../tests/fixtures/plugins/rust-build/', import.meta.url));
+/** The store's image holds store/ alone: without the repository's fixture, the fake store serves no `run.wasm` plugin. */
+export const hasRustFixture = existsSync(RUST_FIXTURE);
 
 /** The files of tests/fixtures/plugins/rust-build, the `run.wasm` of the tests, under `id` at `version`. */
 function runWasm(id, version, more = {}) {
@@ -188,7 +190,7 @@ checksum = "${'a'.repeat(64)}"
 `;
 
 /** A source and a lock that the leads of a `run.wasm` must all point at. */
-const RUST_TRAPS = {
+const rustTraps = () => ({
   'native/build.rs': 'fn main() {}\n',
   'src/trap.rs': [
     '// A comment that says unsafe does not count.',
@@ -206,7 +208,7 @@ name = "helper"
 version = "0.1.0"
 source = "git+https://github.com/q7x/helper#abcdef"
 `,
-};
+});
 
 /** What tests/fake/fake-escouade-plugin.mjs compiles a `run.wasm` to: its folder's files in order, each after its path. */
 const fakeRustModule = (files) => {
@@ -280,30 +282,34 @@ export function buildStore() {
     { id: 'dev.exemple.rules-js', repo: 'escouade-dev/plugin-rules-js', version: '1.0.1', files: runJs('1.0.1'), wasm: 'other' },
     { id: 'dev.exemple.rules-js', repo: 'escouade-dev/plugin-rules-js', version: '1.0.2', files: runJs('1.0.2'), wasm: 'old' },
     // A `run.wasm` plugin of a third party, and one of the first hand.
-    ...[
-      ['1.0.0', 'same', {}, true],
-      ['1.0.1', 'other', {}],
-      ['1.0.2', 'old', {}],
-      ['1.1.0', 'same', { 'Cargo.lock': grownLock() }],
-      ['1.2.0', 'same', RUST_TRAPS],
-    ].map(([version, wasm, more, verified]) => ({
-      id: 'dev.exemple.rust-lines',
-      repo: 'escouade-dev/plugin-rust-lines',
-      version,
-      files: runWasm('dev.exemple.rust-lines', version, more),
-      wasm,
-      verified: !!verified,
-      clean: !Object.keys(more).length,
-    })),
-    {
-      id: 'dev.escouade.rust-first',
-      repo: 'guillaume-gagnaire/escouade',
-      path: 'plugins/rust-first',
-      version: '1.0.0',
-      files: runWasm('dev.escouade.rust-first', '1.0.0'),
-      wasm: 'same',
-      clean: true,
-    },
+    ...(hasRustFixture
+      ? [
+          ...[
+            ['1.0.0', 'same', {}, true],
+            ['1.0.1', 'other', {}],
+            ['1.0.2', 'old', {}],
+            ['1.1.0', 'same', { 'Cargo.lock': grownLock() }],
+            ['1.2.0', 'same', rustTraps()],
+          ].map(([version, wasm, more, verified]) => ({
+            id: 'dev.exemple.rust-lines',
+            repo: 'escouade-dev/plugin-rust-lines',
+            version,
+            files: runWasm('dev.exemple.rust-lines', version, more),
+            wasm,
+            verified: !!verified,
+            clean: !Object.keys(more).length,
+          })),
+          {
+            id: 'dev.escouade.rust-first',
+            repo: 'guillaume-gagnaire/escouade',
+            path: 'plugins/rust-first',
+            version: '1.0.0',
+            files: runWasm('dev.escouade.rust-first', '1.0.0'),
+            wasm: 'same',
+            clean: true,
+          },
+        ]
+      : []),
     { id: 'io.github.q7x.slak-notify', repo: 'q7x/slak-notify', version: '0.0.1', files: TRAPPED, raw: TRAPPED_RAW, moved: true },
     {
       id: 'io.github.q7x.slak-notify',
