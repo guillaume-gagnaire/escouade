@@ -1,9 +1,9 @@
 ---
-number: null
+number: 88
 id: "un-plugin-porte-en-run-wasm-a-deux-compi"
 title: "Un plugin porté en run.wasm a deux compilations : un workspace plugins/ contre crates/, et son propre Cargo.lock contre crates.io"
 date: "2026-11-05"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-344"
 pages: ["plugins/tous-les-plugins-en-wasm","plugins/livres-avec-escouade","kanban/integrations"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/tous-les-plugins-en-wasm","added":11,"removed":0},{"page":"plugins/livres-avec-escouade","added":4,"removed":0},{"page":"kanban/integrations","added":4,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-05T15:04:24+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
