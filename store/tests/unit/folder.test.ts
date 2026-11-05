@@ -35,8 +35,6 @@ function snapshot(path: string, tag: string, over: Partial<Snapshot> = {}, files
     commit: COMMIT,
     archive: { size: gz.length, read },
     license: 'MIT',
-    binaries: [],
-    releaseAssets: null,
     existing: null,
     taken: [],
     latest: null,

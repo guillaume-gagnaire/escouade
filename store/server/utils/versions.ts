@@ -83,14 +83,15 @@ export interface VersionFile {
   /** Its icon re-encoded by the store (PLG-13), the SHA-256 of its PNG at 256 and at 64 px; absent without one. */
   icon?: { '256': string; '64': string };
   /**
-   * The module of a `run.js` plugin, compiled by the store twice to the same bytes (ESC-323), kept under its SHA-256
-   * like the archive, and what compiled it: Javy's version, escouade-js's SHA-256 and escouade-plugin's version (its
-   * prelude). Absent for a plugin of another kind. The fingerprint of the version covers it: what is signed runs.
+   * The module of a `run.js` or `run.wasm` plugin, compiled by the store twice to the same bytes (ESC-323, ESC-336), kept
+   * under its SHA-256 like the archive, and what compiled it: Javy's version, escouade-js's SHA-256 and escouade-plugin's
+   * version (its prelude), or rustc's version, its target, the SHA-256 of `rustc-canon` and of `Cargo.lock`. Absent for a
+   * plugin of another kind. The fingerprint of the version covers it: what is signed runs.
    */
-  wasm?: { sha256: string; size: number; compiler: { javy: string; engine: string; prelude: string } };
+  wasm?: { sha256: string; size: number; compiler: Compiler };
 }
 
-/** The module a `version.json` names (a `run.js` plugin's, ESC-323), or null. */
+/** The module a `version.json` names (a `run.js` or `run.wasm` plugin's), or null. */
 export function wasmOf(json: string | null | undefined): VersionFile['wasm'] | null {
   if (!json) return null;
   try {

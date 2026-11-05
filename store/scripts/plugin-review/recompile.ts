@@ -1,5 +1,5 @@
 import { Refused, type CompileOne } from '../../server/utils/compile';
-import type { Compiler } from '../../server/utils/checks';
+import type { Compiler, JsCompiler } from '../../server/utils/checks';
 import type { VersionFile } from '../../server/utils/versions';
 import { engineSteps } from './engine';
 
@@ -12,12 +12,13 @@ import { engineSteps } from './engine';
 // (`engine.ts`, ESC-343).
 
 export type Recompiled =
-  | { state: 'same'; sha256: string; compiler: Compiler }
-  | { state: 'different'; published: string; local: string; compiler: Compiler }
+  | { state: 'same'; sha256: string; compiler: JsCompiler }
+  | { state: 'different'; published: string; local: string; compiler: JsCompiler }
   | { state: 'not-done'; why: string };
 
-const same = (a: Compiler, b: Compiler) => a.javy === b.javy && a.engine === b.engine && a.prelude === b.prelude;
-const words = (c: Compiler) => `Javy ${c.javy}, escouade-js ${c.engine.slice(0, 12)}…, escouade-plugin ${c.prelude}`;
+const isJs = (c: Compiler): c is JsCompiler => 'javy' in c;
+const same = (a: JsCompiler, b: JsCompiler) => a.javy === b.javy && a.engine === b.engine && a.prelude === b.prelude;
+const words = (c: JsCompiler) => `Javy ${c.javy}, escouade-js ${c.engine.slice(0, 12)}…, escouade-plugin ${c.prelude}`;
 
 /**
  * Compiles `bundle` again with `one` and compares its module with `published` (the `wasm` of `version.json`). `one` is
@@ -26,9 +27,12 @@ const words = (c: Compiler) => `Javy ${c.javy}, escouade-js ${c.engine.slice(0, 
 export async function recompile(
   one: CompileOne | null,
   input: { manifest: Buffer; js: string; bundle: Buffer; firstParty?: boolean },
-  published: NonNullable<VersionFile['wasm']>,
+  module: NonNullable<VersionFile['wasm']>,
   engine: (sha256: string) => string = engineSteps,
 ): Promise<Recompiled> {
+  const compiler = module.compiler;
+  if (!isJs(compiler)) return { state: 'not-done', why: 'ce module vient de Rust : la revue ne le recompile pas encore' };
+  const published = { sha256: module.sha256, compiler };
   if (!one)
     return {
       state: 'not-done',
@@ -49,16 +53,18 @@ export async function recompile(
       why: e instanceof Refused ? `l’\`escouade-plugin\` de ce poste refuse le bundle : ${said}` : `la recompilation a échoué : ${said}`,
     };
   }
-  if (!same(got.compiler, published.compiler))
+  const made = got.compiler;
+  if (!isJs(made) || !same(made, published.compiler))
     return {
       state: 'not-done',
-      why: `l’\`escouade-plugin\` de ce poste compile avec ${words(got.compiler)} ; le store a compilé avec ${words(published.compiler)} : ${
-        got.compiler.engine === published.compiler.engine
-          ? 'installe cet escouade-plugin (ESCOUADE_PLUGIN) et relance la revue'
-          : engine(published.compiler.engine)
-      }`,
+      why: !isJs(made)
+        ? 'ce poste a compilé un module de Rust'
+        : `l’\`escouade-plugin\` de ce poste compile avec ${words(made)} ; le store a compilé avec ${words(published.compiler)} : ${
+            made.engine === published.compiler.engine
+              ? 'installe cet escouade-plugin (ESCOUADE_PLUGIN) et relance la revue'
+              : engine(published.compiler.engine)
+          }`,
     };
-  if (got.sha256 !== published.sha256)
-    return { state: 'different', published: published.sha256, local: got.sha256, compiler: got.compiler };
-  return { state: 'same', sha256: got.sha256, compiler: got.compiler };
+  if (got.sha256 !== published.sha256) return { state: 'different', published: published.sha256, local: got.sha256, compiler: made };
+  return { state: 'same', sha256: got.sha256, compiler: made };
 }

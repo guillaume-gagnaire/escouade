@@ -154,11 +154,15 @@ jobs:
           name: escouade-js
           path: src-tauri/escouade-js/target
 
+      # A run.wasm compiles in bubblewrap (ESC-336), which needs user namespaces: the runner's Ubuntu restricts them, and
+      # image-test.mjs lifts Docker's seccomp for its own run of it.
       - name: The compiler in the image
         working-directory: .
         env:
           IMAGE_TEST_DATABASE_URL: postgres://store:store@localhost:5432/store
-        run: node store/scripts/image-test.mjs escouade-store:ci src-tauri/escouade-js/target/escouade-js.wasm.sha256
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          node store/scripts/image-test.mjs escouade-store:ci src-tauri/escouade-js/target/escouade-js.wasm.sha256
 
   # escouade-js, the Javy plugin of the run.js plugins (ESC-320, docs/PLUGINS.md §5): built once for wasm32-wasip1 with the
   # pinned Javy (scripts/escouade-js.sh), its SHA-256 noted, then handed to every job that builds the app, which embeds it.

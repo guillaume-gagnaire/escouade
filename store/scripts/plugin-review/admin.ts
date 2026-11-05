@@ -206,7 +206,7 @@ export async function signVersion(a: Admin, id: string, version: string, now = n
   const wasm = wasmOf(json.toString('utf8'));
   if (wasm && (data.recompile?.state !== 'same' || data.recompile.sha256 !== wasm.sha256))
     throw new Error(
-      `le module WASM ${wasm.sha256} n’a pas été recompilé à la même empreinte par la revue : relance-la avec l’escouade-plugin ${wasm.compiler.prelude}`,
+      `le module WASM ${wasm.sha256} n’a pas été recompilé à la même empreinte par la revue : relance-la avec l’escouade-plugin ${'prelude' in wasm.compiler ? wasm.compiler.prelude : 'de cette version'}`,
     );
 
   const fr = join(a.reports, id, `${version}.public.md`);

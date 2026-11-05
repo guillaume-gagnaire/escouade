@@ -121,6 +121,8 @@ pub enum Refusal {
     NoLock(String),
     /// A `Cargo.lock` that does not read.
     BadLock(String),
+    /// A `Cargo.lock` that is not what `Cargo.toml` and crates.io say: what cargo said.
+    StaleLock(String),
     /// `[patch]` or `[replace]`: its table.
     Patch(String),
     /// A `path` that leaves the folder: what names it, and the path.
@@ -174,6 +176,11 @@ impl Refusal {
                 lang,
                 "Cargo.lock ne se lit pas : {why}",
                 "Cargo.lock does not read: {why}"
+            ),
+            Refusal::StaleLock(said) => tr_in!(
+                lang,
+                "Cargo.lock ne correspond pas à Cargo.toml ou à crates.io (cargo generate-lockfile, puis commite-le) : {said}",
+                "Cargo.lock does not match Cargo.toml or crates.io (cargo generate-lockfile, then commit it): {said}"
             ),
             Refusal::Patch(table) => tr_in!(
                 lang,
@@ -1005,18 +1012,19 @@ fn module_name(dir: &Path) -> Result<String, Failure> {
     Ok(format!("{}.wasm", name.replace('-', "_")))
 }
 
-/// Compiles the `run.wasm` plugin of `folder` (`cargo_file` is its `run.wasm`), with the tools of the data folder `data`.
-/// `wrapper` is the `escouade-plugin` that serves as `rustc-canon`; `say` is told when the toolchain must be downloaded.
-pub fn build(
-    folder: &Path,
-    cargo_file: &str,
-    data: &Path,
-    wrapper: &Path,
-    say: &dyn Fn(),
-) -> Result<Built, Failure> {
+/// The copy of a plugin a compilation works on, held until it is dropped.
+struct Copy {
+    _held: Held,
+    work: PathBuf,
+    /// The copy's root.
+    src: PathBuf,
+    /// The folder of its `Cargo.toml`.
+    dir: PathBuf,
+}
+
+/// `folder` copied to where it compiles, by its path and the compiler, for nothing around it to count.
+fn copy_of(folder: &Path, cargo_file: &str, data: &Path) -> Result<Copy, Failure> {
     let tool = |e: std::io::Error| Failure::Tools(e.to_string());
-    let lock = check(folder, cargo_file)?;
-    let root = toolchain(data, say).map_err(Failure::Tools)?;
     let absolute = std::path::absolute(folder).map_err(tool)?;
     let key = wasm::sha256(absolute.to_string_lossy().as_bytes());
     // By the compiler too: a target made by another rustc or wrapper gives a module that says nothing.
@@ -1032,6 +1040,76 @@ pub fn build(
     copy_plugin(folder, &src).map_err(tool)?;
     let dir = src.join(cargo_file);
     let dir = dir.parent().unwrap_or(&src).to_path_buf();
+    Ok(Copy {
+        _held,
+        work,
+        src,
+        dir,
+    })
+}
+
+/// Whether what `cargo fetch --locked` said is about the plugin's lock, not about the network.
+pub fn lock_at_fault(said: &str) -> bool {
+    [
+        "--locked",
+        "lock file",
+        "failed to select a version",
+        "no matching package",
+        "checksum",
+    ]
+    .iter()
+    .any(|word| said.contains(word))
+}
+
+/// Downloads the dependencies of the `run.wasm` plugin of `folder` from crates.io into the `CARGO_HOME` of the data
+/// folder `data`, where `build` finds them without a network (docs/PLUGINS.md §8.5.3). Nothing of the plugin runs, and
+/// [`check`] comes first: a `.cargo/config.toml` or a `[patch]` would otherwise choose where cargo goes.
+pub fn fetch(
+    folder: &Path,
+    cargo_file: &str,
+    data: &Path,
+    wrapper: &Path,
+    say: &dyn Fn(),
+) -> Result<(), Failure> {
+    check(folder, cargo_file)?;
+    let root = toolchain(data, say).map_err(Failure::Tools)?;
+    let copy = copy_of(folder, cargo_file, data)?;
+    let home = crate::paths::tools_dir(data).join("cargo-home");
+    let o = cargo(&root, &home, &copy.dir, &copy.src, wrapper)
+        .args(["fetch", "--locked"])
+        .output()
+        .map_err(|e| Failure::Tools(e.to_string()))?;
+    if o.status.success() {
+        return Ok(());
+    }
+    let said = tail(&o.stderr);
+    Err(if said.contains("manifest") {
+        Failure::Refused(Refusal::BadManifest(said))
+    } else if lock_at_fault(&said) {
+        Failure::Refused(Refusal::StaleLock(said))
+    } else {
+        Failure::Tools(said)
+    })
+}
+
+/// Compiles the `run.wasm` plugin of `folder` (`cargo_file` is its `run.wasm`), with the tools of the data folder `data`.
+/// `wrapper` is the `escouade-plugin` that serves as `rustc-canon`; `say` is told when the toolchain must be downloaded.
+pub fn build(
+    folder: &Path,
+    cargo_file: &str,
+    data: &Path,
+    wrapper: &Path,
+    say: &dyn Fn(),
+) -> Result<Built, Failure> {
+    let tool = |e: std::io::Error| Failure::Tools(e.to_string());
+    let lock = check(folder, cargo_file)?;
+    let root = toolchain(data, say).map_err(Failure::Tools)?;
+    let Copy {
+        _held,
+        work,
+        src,
+        dir,
+    } = copy_of(folder, cargo_file, data)?;
     let home = crate::paths::tools_dir(data).join("cargo-home");
     let command = || cargo(&root, &home, &dir, &src, wrapper);
     let target = work.join("target");

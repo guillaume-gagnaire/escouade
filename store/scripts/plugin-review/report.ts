@@ -164,9 +164,11 @@ export function renderReport(d: ReviewData): string {
   else out.push('- Binaires : aucun');
   if (d.wasm) {
     const c = d.wasm.compiler;
-    out.push(
-      `- Module WASM : ${code(d.wasm.sha256)}, ${d.wasm.size} octets, empreinte vérifiée ; compilé par le store avec Javy ${c.javy}, escouade-js ${code(c.engine.slice(0, 12))}…, escouade-plugin ${c.prelude}`,
-    );
+    const by =
+      'rust' in c
+        ? `rustc ${c.rust}, ${c.target}, rustc-canon ${code(c.canon.slice(0, 12))}…`
+        : `Javy ${c.javy}, escouade-js ${code(c.engine.slice(0, 12))}…, escouade-plugin ${c.prelude}`;
+    out.push(`- Module WASM : ${code(d.wasm.sha256)}, ${d.wasm.size} octets, empreinte vérifiée ; compilé par le store avec ${by}`);
   }
   if (d.recompile)
     out.push(

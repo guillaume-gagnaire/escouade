@@ -3,16 +3,14 @@ import { basename, dirname, join } from 'node:path';
 import { and, desc, eq, gte, inArray, isNotNull, ne, sql } from 'drizzle-orm';
 import { accountInstallations, accounts, installationRepos, installations, plugins, versions } from '../db/schema';
 import { note, type Account } from './accounts';
-import { judgeAttestations } from './attest';
 import {
   CHECK_KEYS,
   BUNDLE_MAX,
+  cargoOf,
   iconOf,
   jsOf,
   manifestOf,
   whole,
-  platformOf,
-  programs,
   rejectionText,
   runChecks,
   screenshotPaths,
@@ -20,10 +18,9 @@ import {
   verdict,
   type CheckKey,
   type CheckResult,
-  type FetchedBinary,
   type Snapshot,
 } from './checks';
-import { compileTwice, type CompileOne } from './compile';
+import { compileTwice, type CompileInput, type CompileOne } from './compile';
 import { firstPartyRepo, type Env } from './config';
 import type { Db } from './db';
 import { GithubError } from './github';
@@ -34,7 +31,7 @@ import { TooBig, type Source } from './source';
 import { ARCHIVE_MAX, readArchive, type ArchiveRead } from './tar';
 import { forgetCatalog } from './catalog';
 import { announce } from './discord';
-import { compareVersions, sha256, versionFile, type Binary, type Platform } from './versions';
+import { compareVersions, sha256, versionFile } from './versions';
 import { normalizePath, tagFor } from '../../shared/folder';
 import { packFolder, readFolder } from './folder';
 import { readmeSource } from './checks';
@@ -42,17 +39,13 @@ import { RESERVED_PREFIX } from '../../../schemas/plugin-manifest.mjs';
 
 // The submission of a version (docs/STORE.md, §3): an author picks a public repository the App reads and one of its
 // tags; the store resolves the tag into its commit once, downloads the commit's archive once and keeps it as it came,
-// with its SHA-256, takes the release's binaries the same way, runs the eleven checks on them (a run.js bundle compiled to WASM in a sandbox, nothing else run),
+// with its SHA-256, runs the eleven checks on it (a run.js bundle or the Rust of a run.wasm compiled to WASM in a sandbox, nothing else run),
 // and, if they pass, writes `version.json` and its fingerprint. The version then waits for its author's click (or is
 // published at once, for a plugin whose author asked it for new tags). A new tag pushed on the repository comes the
 // same way, by the App's webhooks; a tag moved after its version was published is noted and told, nothing else moves.
 
 /** Submissions an account may start in an hour: enough to fix and retry, too few to make the store a downloader. */
 export const SUBMISSIONS_PER_HOUR = 20;
-/** A binary of the release: 50 MB at most, as the archive. */
-export const BINARY_MAX = 50 * 1024 * 1024;
-/** Binaries a version may bring: three systems, two architectures. */
-export const BINARIES_MAX = 6;
 
 /** The categories of the store (choice 214 of the preview). */
 export const CATEGORIES = ['harness', 'ticket-sources', 'forges', 'themes', 'notifications', 'permissions', 'tools', 'languages'] as const;
@@ -69,7 +62,7 @@ export interface Deps {
   env: Env;
   /** The store's address, for the links of the e-mails. */
   site: string;
-  /** The compiler of the run.js bundles (compile.ts, STORE_ESCOUADE_PLUGIN); without it such a version waits in error. */
+  /** The compiler of the run.js and run.wasm plugins (compile.ts, STORE_ESCOUADE_PLUGIN); without it such a version waits in error. */
   compile?: CompileOne | null;
 }
 
@@ -346,8 +339,6 @@ export async function checkVersion(db: Db, deps: Deps, id: number, now = () => n
       commit: v.commit,
       archive: { size, read },
       license: null,
-      binaries: [],
-      releaseAssets: null,
       existing: existing
         ? {
             mine: existing.accountId !== null && existing.accountId === v.accountId,
@@ -366,54 +357,24 @@ export async function checkVersion(db: Db, deps: Deps, id: number, now = () => n
     snapshot.license = m ? await source.license(v.repoFullName, v.commit) : null;
     await step('binaries', running(runChecks(snapshot), ['screenshots', 'binaries', 'compile']));
 
-    // 3. The release's binaries, for the systems whose program is not in the archive: kept, and their attestations read.
-    const fetched: { bin: FetchedBinary; bytes: Buffer }[] = [];
-    const needs = programs(m, read).filter((p) => !p.inArchive);
-    if (needs.length) {
-      const assets = await source.release(v.repoFullName, v.tag);
-      snapshot.releaseAssets = assets?.map((a) => a.name) ?? null;
-      const wanted = (assets ?? [])
-        .map((a) => ({ a, platform: platformOf(a.name) }))
-        .filter(
-          (x): x is { a: (typeof x)['a']; platform: Platform } => !!x.platform && needs.some((n) => x.platform!.startsWith(`${n.system}-`)),
-        );
-      const seen = new Set<Platform>();
-      snapshot.oversized = [];
-      for (const { a, platform } of wanted) {
-        if (seen.has(platform) || seen.size >= BINARIES_MAX) continue;
-        seen.add(platform);
-        let bytes: Buffer;
-        try {
-          bytes = await source.asset(a, BINARY_MAX);
-        } catch (e) {
-          if (!(e instanceof TooBig)) throw e;
-          snapshot.oversized.push(a.name);
-          continue;
-        }
-        const hash = sha256(bytes);
-        const attestation = judgeAttestations(await source.attestations(v.repoFullName, hash), {
-          sha256: hash,
-          repository: v.repoFullName,
-          commit: v.commit,
-        });
-        fetched.push({ bin: { platform, name: a.name, sha256: hash, size: bytes.length, attestation }, bytes });
-      }
-      snapshot.binaries = fetched.map((f) => f.bin);
-    }
     await step('compile', running(runChecks(snapshot), ['screenshots', 'compile']));
 
-    // 3b. A run.js bundle compiled to WASM twice, each time in a new sandbox, never with an npm install (ESC-323).
+    // 3. A run.js bundle or the Rust of a run.wasm compiled to WASM twice, each time in a new sandbox, never with an
+    // npm install (ESC-323, ESC-336). Rust costs minutes and a download: a version already refused does not pay them.
     const js = jsOf(m);
+    const cargo = cargoOf(m);
     const bundle = js ? read.files.get(js) : undefined;
+    const manifestFile = read.files.get('escouade-plugin.json');
+    const soFar = runChecks(snapshot).filter((r) => r.key !== 'compile');
+    let input: CompileInput | null = null;
+    if (js && bundle && bundle.length <= BUNDLE_MAX && soFar.find((r) => r.key === 'manifest')?.status === 'pass')
+      input = { manifest: manifestFile!, js, bundle, firstParty };
+    else if (cargo && read.files.has(cargo) && soFar.every((r) => r.status === 'pass' || r.status === 'hold'))
+      input = { manifest: manifestFile!, wasm: cargo, files: read.files, firstParty };
     let wasm: Buffer | null = null;
-    if (js && bundle && bundle.length <= BUNDLE_MAX && runChecks(snapshot).find((r) => r.key === 'manifest')?.status === 'pass') {
-      if (!deps.compile) throw new Error('no compiler for the run.js plugins: STORE_ESCOUADE_PLUGIN is not set');
-      const made = await compileTwice(deps.compile, {
-        manifest: read.files.get('escouade-plugin.json')!,
-        js,
-        bundle,
-        firstParty,
-      });
+    if (input) {
+      if (!deps.compile) throw new Error('no compiler for the plugins in WASM: STORE_ESCOUADE_PLUGIN is not set');
+      const made = await compileTwice(deps.compile, input);
       snapshot.compiled = made.compilation;
       wasm = made.bytes ?? null;
     }
@@ -475,11 +436,6 @@ export async function checkVersion(db: Db, deps: Deps, id: number, now = () => n
       return state;
     }
     await keep(deps.archives, gz!, '.tar.gz');
-    const binaries: Partial<Record<Platform, Binary>> = {};
-    for (const { bin, bytes } of fetched) {
-      await keep(deps.archives, bytes, ext(bin.name));
-      binaries[bin.platform] = { name: bin.name, sha256: bin.sha256, size: bin.size, attested: bin.attestation.state === 'attested' };
-    }
     const screenshots = [];
     for (const s of shots) {
       const kept = await keep(deps.archives, s.bytes, `.${s.format === 'jpeg' ? 'jpg' : s.format}`);
@@ -507,7 +463,7 @@ export async function checkVersion(db: Db, deps: Deps, id: number, now = () => n
       tag: v.tag,
       commit: v.commit,
       archive: { sha256: base.archiveSha256!, size },
-      binaries,
+      binaries: {},
       manifest_sha256: base.manifestSha256!,
       escouade: { api: escouade.api, min: escouade.min, ...(escouade.max ? { max: escouade.max } : {}) },
       ...(iconKept ? { icon: iconKept } : {}),
@@ -515,7 +471,7 @@ export async function checkVersion(db: Db, deps: Deps, id: number, now = () => n
     });
     await db
       .update(versions)
-      .set({ ...base, state, binaries, screenshots, icon: iconKept, docs, versionJson: file.json, versionSha256: file.sha256 })
+      .set({ ...base, state, binaries: {}, screenshots, icon: iconKept, docs, versionJson: file.json, versionSha256: file.sha256 })
       .where(eq(versions.id, id));
     await note(db, `version.${state}`, { accountId: v.accountId }, { version: id, plugin: pluginId, sha256: file.sha256 });
     if (state === 'held') void announce({ kind: 'held', version: id });

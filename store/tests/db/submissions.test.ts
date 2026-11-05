@@ -27,7 +27,7 @@ import { buildCatalog } from '../../server/utils/catalog';
 import { authorPlugins } from '../../server/utils/author';
 import { fileReport } from '../../server/utils/reports';
 import { TRAPPED } from '../fake/catalog.mjs';
-import { attestation, monorepoFiles, pluginFiles, png, tarball, treeOf } from '../fake/plugins.mjs';
+import { monorepoFiles, pluginFiles, png, tarball, treeOf } from '../fake/plugins.mjs';
 
 // The submission against a real PostgreSQL (TEST_DATABASE_URL alone, emptied first; skipped without it), with a
 // fake GitHub in memory: a tag resolved once, the archive kept as it came and fingerprinted, the eleven checks, the
@@ -96,6 +96,7 @@ function fakeGithub() {
       return repo(name).licenses[commit] ?? null;
     },
     async release(name, tag) {
+      calls.push(`release ${name} ${tag}`);
       return repo(name).releases[tag] ?? null;
     },
     async asset(asset, max) {
@@ -246,7 +247,7 @@ describe.skipIf(!url)('the submission', () => {
     const seen: string[] = [];
     const one = sandboxedCompiler({ command: [process.execPath, FAKE], isolation: 'none' });
     deps.compile = async (i) => {
-      seen.push(i.bundle.toString());
+      seen.push('bundle' in i ? i.bundle.toString() : '');
       return one(i);
     };
     const { id, state } = await submit(sam, REPO, 'v0.3.0');
@@ -281,6 +282,93 @@ describe.skipIf(!url)('the submission', () => {
     const compile = v.checks.find((c: { key: string }) => c.key === 'compile');
     expect(compile).toMatchObject({ status: 'fail', detail: { fr: 'la compilation n’est pas reproductible' } });
     expect(v.version_json).toBeNull();
+  });
+
+  describe('a run.wasm plugin (ESC-336)', () => {
+    const SOURCES = { 'Cargo.toml': '[package]\nname = "ntfy"\n', 'Cargo.lock': 'version = 4\n', 'src/lib.rs': '' };
+    const wasm = (files: Record<string, unknown> = SOURCES) => pluginFiles(REPO, { manifest: { run: { wasm: 'Cargo.toml' } }, files });
+    const compile = () => sandboxedCompiler({ command: [process.execPath, FAKE], rust: 'none' });
+    const checkOf = async (id: number | undefined, key: string) => {
+      const [v] = await q('select checks, version_json from versions where id = $1', [id]);
+      return { check: v.checks.find((c: { key: string }) => c.key === key), json: v.version_json };
+    };
+
+    it('is compiled twice to the same fingerprint, its module kept, named and served as a run.js’s', async () => {
+      gh.push(REPO, 'v0.3.0', wasm());
+      const seen: Record<string, string>[] = [];
+      const one = compile();
+      deps.compile = async (i) => {
+        if ('files' in i) seen.push(Object.fromEntries([...i.files].map(([k, v]) => [k, v.toString()])));
+        return one(i);
+      };
+      const { id, state } = await submit(sam, REPO, 'v0.3.0');
+      expect(state).toBe('ready');
+      expect(seen).toHaveLength(2);
+      expect(seen[0]).toEqual(seen[1]);
+      expect(seen[0]).toMatchObject(SOURCES);
+      const [v] = await q('select * from versions where id = $1', [id]);
+      expect(v.checks.map((c: { status: string }) => c.status)).toEqual(Array(11).fill('pass'));
+      const file = JSON.parse(v.version_json);
+      expect(file.wasm).toMatchObject({
+        size: expect.any(Number),
+        compiler: { rust: '1.98.0', target: 'wasm32-wasip1', canon: 'c'.repeat(64), lock: sha256('version = 4\n') },
+      });
+      expect(file.binaries).toEqual({});
+      const kept = await readFile(join(dir, 'sha256', file.wasm.sha256.slice(0, 2), `${file.wasm.sha256}.wasm`));
+      expect(sha256(kept)).toBe(file.wasm.sha256);
+      expect(v.version_sha256).toBe(sha256(v.version_json));
+      await publishVersion(db, sam, id!, { categories: ['notifications'], review: 'on' });
+      const entry = (await buildCatalog(db)).plugins[0]!.versions[0]!;
+      expect(entry.files.wasm).toBe('/api/v1/plugins/io.github.sroux.escouade-ntfy/0.3.0/plugin.wasm');
+    });
+
+    it('a Cargo.lock that does not match is refused, with the reason, and no module is kept', async () => {
+      gh.push(REPO, 'v0.3.0', wasm({ ...SOURCES, 'Cargo.lock': 'STALE' }));
+      deps.compile = compile();
+      const { id, state } = await submit(sam, REPO, 'v0.3.0');
+      expect(state).toBe('rejected');
+      const { check, json } = await checkOf(id, 'compile');
+      expect(check.status).toBe('fail');
+      expect(check.problems[0].why.en).toContain('Cargo.lock does not match Cargo.toml or crates.io');
+      expect(json).toBeNull();
+    });
+
+    it('a build.rs off the list is refused, with the reason', async () => {
+      gh.push(REPO, 'v0.3.0', wasm({ ...SOURCES, 'build.rs': 'fn main() {}' }));
+      deps.compile = compile();
+      const { id, state } = await submit(sam, REPO, 'v0.3.0');
+      expect(state).toBe('rejected');
+      expect((await checkOf(id, 'compile')).check.problems[0].why.en).toContain('has a build.rs');
+    });
+
+    it('two modules that differ are refused', async () => {
+      gh.push(REPO, 'v0.3.0', wasm());
+      deps.compile = sandboxedCompiler({ command: [process.execPath, FAKE, '--random'], rust: 'none' });
+      const { id, state } = await submit(sam, REPO, 'v0.3.0');
+      expect(state).toBe('rejected');
+      expect((await checkOf(id, 'compile')).check.detail.fr).toBe('la compilation n’est pas reproductible');
+    });
+
+    it('is not compiled when another check has already failed: a link in the archive costs no download', async () => {
+      gh.push(REPO, 'v0.3.0', wasm({ ...SOURCES, 'src/key.rs': { symlink: '/home/me/.ssh/id_ed25519' } }));
+      let asked = 0;
+      deps.compile = async () => {
+        asked++;
+        throw new Error('not to be asked');
+      };
+      const { state } = await submit(sam, REPO, 'v0.3.0');
+      expect(state).toBe('rejected');
+      expect(asked).toBe(0);
+    });
+
+    it('waits in error, to retry, without a sandbox here or with a network that fails', async () => {
+      gh.push(REPO, 'v0.3.0', wasm());
+      deps.compile = sandboxedCompiler({ command: [process.execPath, FAKE] });
+      const { id, state } = await submit(sam, REPO, 'v0.3.0');
+      expect(state).toBe('error');
+      const [v] = await q('select error from versions where id = $1', [id]);
+      expect(v.error).toMatch(/no sandbox for a run\.wasm plugin/);
+    });
   });
 
   it('leaves a run.js version in error, to retry, while the store has no compiler (ESC-323)', async () => {
@@ -412,31 +500,16 @@ describe.skipIf(!url)('the submission', () => {
     await expect(readFile(join(dir, 'sha256', v.archive_sha256.slice(0, 2), `${v.archive_sha256}.tar.gz`))).rejects.toThrow();
   });
 
-  it('a version with a program: the release’s binaries kept, their attestations read, in version.json', async () => {
-    const commit = gh.push(REPO, 'v0.3.0', pluginFiles(REPO, { manifest: { run: { command: 'bin/ntfy', windows: 'bin/ntfy.exe' } } }));
-    const asset = (platform: string, bytes: Buffer): Asset & { bytes: Buffer } => ({
-      name: `ntfy-0.3.0-${platform}.tar.gz`,
-      size: bytes.length,
-      url: `https://api.github.test/assets/${platform}`,
-      bytes,
-    });
-    const bins = { 'windows-x64': Buffer.from('win'), 'macos-arm64': Buffer.from('mac'), 'linux-x64': Buffer.from('linux') };
-    gh.repos.get(REPO)!.releases['v0.3.0'] = Object.entries(bins).map(([p, b]) => asset(p, b));
-    for (const [p, b] of Object.entries(bins))
-      if (p !== 'linux-x64') gh.attestations.set(sha256(b), [attestation(sha256(b), { repo: REPO, commit })]);
+  it('a run.command is refused, the first hand’s too, and no release is read (ESC-336)', async () => {
+    gh.push(REPO, 'v0.3.0', pluginFiles(REPO, { manifest: { run: { command: 'bin/ntfy', windows: 'bin/ntfy.exe' } } }));
     const { id, state } = await submit(sam, REPO, 'v0.3.0');
-    expect(state).toBe('ready');
-    const [v] = await q('select version_json from versions where id = $1', [id]);
-    const file = JSON.parse(v.version_json);
-    expect(file.binaries).toEqual({
-      'windows-x64': { name: 'ntfy-0.3.0-windows-x64.tar.gz', sha256: sha256(bins['windows-x64']), size: 3, attested: true },
-      'macos-arm64': { name: 'ntfy-0.3.0-macos-arm64.tar.gz', sha256: sha256(bins['macos-arm64']), size: 3, attested: true },
-      'linux-x64': { name: 'ntfy-0.3.0-linux-x64.tar.gz', sha256: sha256(bins['linux-x64']), size: 5, attested: false },
-    });
-    const kept = await readFile(join(dir, 'sha256', sha256(bins['linux-x64']).slice(0, 2), `${sha256(bins['linux-x64'])}.tar.gz`));
-    expect(kept.toString()).toBe('linux');
-    const view = (await versionView(db, sam, id!))!;
-    expect(view.checks.find((c) => c.key === 'binaries')!.detail.fr).toMatch(/sans attestation de provenance pour 1/);
+    expect(state).toBe('rejected');
+    const [v] = await q('select checks, version_json from versions where id = $1', [id]);
+    const binaries = v.checks.find((c: { key: string }) => c.key === 'binaries');
+    expect(binaries.status).toBe('fail');
+    expect(binaries.problems.map((p: { path: string }) => p.path)).toEqual(['run.command', 'run.windows']);
+    expect(v.version_json).toBeNull();
+    expect(gh.calls).not.toContain(`release ${REPO} v0.3.0`);
   });
 
   it('an id of another author is refused; a name too close is held for a person', async () => {
