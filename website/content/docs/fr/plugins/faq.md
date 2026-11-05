@@ -6,7 +6,7 @@ Les questions qui reviennent sur les plugins, pour ceux qui les installent comme
 
 ### Faut-il Node pour faire tourner un plugin ?
 
-Non, pour un plugin publié en `run.js` : Escouade le fait tourner dans l’app, en WASM. Un plugin publié comme un programme (`run.command`) apporte son exécutable. Seul un plugin installé depuis un dossier ou un dépôt git dont la commande nomme `node` en a besoin ; le store refuse cette forme. Slack et Règles de l’équipe, deux des [plugins d’exemple](plugins/examples), tournent en `run.js` depuis leur 2.0.0.
+Non : un plugin du store tourne dans l’app, en WASM, qu’il soit écrit en TypeScript (`run.js`) ou en Rust (`run.wasm`). Seul un plugin installé depuis un dossier ou un dépôt git dont la commande nomme `node` en a besoin ; le store refuse cette forme. Slack et Règles de l’équipe, deux des [plugins d’exemple](plugins/examples), tournent en `run.js` depuis leur 2.0.0.
 
 ### « Vérifié par Escouade », « Non vérifié » : quelle différence ?
 
@@ -32,11 +32,11 @@ Sa copie dans `~/.escouade/plugins/<id>/`, la liste des plugins dans `~/.escouad
 
 ### Dans quel langage écrire un plugin ?
 
-Sans code, quand le manifeste suffit : un thème, des webhooks, un harness ACP. En JS ou en TypeScript avec [le SDK](plugins/sdk), publié en `run.js`. Dans tout autre langage, un programme qui parle [le protocole](plugins/api) sur son entrée et sa sortie standard, publié comme exécutable par système.
+Sans code, quand le manifeste suffit : un thème, des webhooks, un harness ACP. En JS ou en TypeScript avec [le SDK](plugins/sdk), publié en `run.js`. En Rust avec [le kit](plugins/rust), publié en `run.wasm`. Le store n’accepte pas d’autre langage : le protocole reste ouvert à tout programme, mais il ne se publie pas.
 
 ### Comment le tester sans lancer Escouade ?
 
-`escouade-plugin test` joue le banc de conformité, `escouade-plugin dev` le faux Escouade, à la main ; le SDK donne un faux en mémoire pour les tests unitaires (voir [tester un plugin](plugins/testing)).
+`escouade-plugin test` joue le banc de conformité, `escouade-plugin dev` le faux Escouade, à la main ; le SDK donne un faux en mémoire pour les tests unitaires, et le kit Rust `serve_on` (voir [tester un plugin](plugins/testing)).
 
 ### Puis-je utiliser `dev.escouade.*` comme identifiant ?
 

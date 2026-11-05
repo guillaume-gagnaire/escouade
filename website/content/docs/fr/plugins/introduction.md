@@ -20,10 +20,10 @@ Certaines intégrations d’Escouade sont elles-mêmes des plugins, livrés avec
 | Forme | Ce qu’elle est | Ce que dit la fenêtre d’installation |
 | --- | --- | --- |
 | Déclaratif | Le manifeste seul : un thème, des webhooks, un harness décrit. Rien ne s’exécute. | Ses permissions, sans programme |
-| Programme en JS ou en TypeScript | Un bundle (`run.js`) qu’Escouade fait tourner dans l’app, en WASM, sans Node chez toi. Il n’atteint le réseau que par Escouade, vers les hôtes qu’il déclare. | « Tourne dans Escouade, isolé » |
-| Programme | Un exécutable (`run.command`) lancé dans un process, avec tes droits. C’est la forme d’un plugin qui doit lancer un programme de ton ordinateur. | « Lance un programme sur ton ordinateur, avec tes droits » |
+| Programme en WASM | Un bundle en JS ou en TypeScript (`run.js`), ou un module en Rust (`run.wasm`), qu’Escouade fait tourner dans l’app, sans Node ni Rust chez toi. Il n’atteint le réseau, les fichiers et les programmes que par Escouade, et ce qu’il déclare seulement. | « Tourne dans Escouade, isolé » |
+| Programme natif | Un exécutable (`run.command`) lancé dans un process, avec tes droits. Le store n’en publie aucun : il ne vient que d’un dossier ou d’un dépôt git. | « Lance un programme sur ton ordinateur, avec tes droits » |
 
-Un programme parle à Escouade par [le protocole](plugins/api) ; le [SDK](plugins/sdk) l’écrit pour toi en TypeScript.
+Un programme parle à Escouade par [le protocole](plugins/api) ; [le SDK](plugins/sdk) l’écrit pour toi en TypeScript, [le kit](plugins/rust) en Rust.
 
 ## Ce qu’un plugin ne peut pas faire
 
@@ -43,6 +43,6 @@ Un programme parle à Escouade par [le protocole](plugins/api) ; le [SDK](plugin
 ## Par où commencer
 
 - **L’utiliser** : [installer un plugin](plugins/installer), puis [les permissions](plugins/permissions).
-- **En écrire un** : [un premier plugin](plugins/quick-start) en dix minutes, puis [le manifeste](plugins/manifest), [le SDK](plugins/sdk) et [les plugins d’exemple](plugins/examples).
+- **En écrire un** : [un premier plugin](plugins/quick-start) en dix minutes, en TypeScript ou en Rust, puis [le manifeste](plugins/manifest), [les capacités de l’hôte](plugins/capabilities), [les appels](plugins/calls) et [les plugins d’exemple](plugins/examples).
 - **Le publier** : [tester un plugin](plugins/testing), [publier sur le store](plugins/publishing), [la sécurité des plugins](plugins/security) et [les versions](plugins/versioning).
 - **Une question** : [les questions fréquentes](plugins/faq).

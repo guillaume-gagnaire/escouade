@@ -4,7 +4,7 @@ Escouade gives plugin authors a command, `escouade-plugin`, that runs a plugin w
 
 ## The command
 
-`escouade-plugin` ships with Escouade, beside its program: `%LOCALAPPDATA%\Escouade\escouade-plugin.exe` on Windows, `Escouade.app/Contents/MacOS/escouade-plugin` on macOS, `/usr/bin/escouade-plugin` with the `.deb` package. For a `run.js` plugin, it needs no Node: it compiles its bundle and plays it in WASM, in the app’s host. For a plugin started by a command, it needs what that program needs to start.
+`escouade-plugin` ships with Escouade, beside its program: `%LOCALAPPDATA%\Escouade\escouade-plugin.exe` on Windows, `Escouade.app/Contents/MacOS/escouade-plugin` on macOS, `/usr/bin/escouade-plugin` with the `.deb` package. For a `run.js` or `run.wasm` plugin, it needs neither Node nor Rust: it compiles its module as the store does and plays it in WASM, in the app’s host. For a plugin started by a command, it needs what that program needs to start.
 
 ```sh
 escouade-plugin validate my-plugin   # the manifest, field by field
@@ -104,6 +104,47 @@ slack/slack.cmd (pid 30112)
 ← null  (0 ms)
 ```
 
+## A plugin in Rust
+
+Three levels, from the quickest to the truest:
+
+```sh
+cargo test                                 # the plugin, natively, on your machine
+cargo check --target wasm32-wasip1         # it compiles as a module (rustup target add wasm32-wasip1)
+escouade-plugin test my-plugin             # the bench, on the module
+```
+
+- **`cargo test`** runs natively, with tokio and reqwest: the same source as the module, without its host. The kit’s `serve_on` plays the plugin on lines in memory, the ones Escouade sends. It needs a C compiler, for `ring`. The template’s tests:
+`sdk/create-escouade-plugin/templates/rust/src/tests.rs` (excerpt)
+
+```rust
+/// What the plugin writes for `messages`, one message a line.
+fn play(messages: &[Value]) -> Vec<Value> {
+    let input: String = messages.iter().map(|m| format!("{m}\n")).collect();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        let (output, written) = tokio::io::duplex(64 * 1024);
+        serve_on(Arc::new(Template), input.as_bytes(), output)
+            .await
+            .unwrap();
+        let mut lines = BufReader::new(written).lines();
+        let mut read = Vec::new();
+        while let Some(line) = lines.next_line().await.unwrap() {
+            read.push(serde_json::from_str(&line).unwrap());
+        }
+        read
+    })
+}
+```
+
+- **`wasm32-wasip1`** is the module’s target. `cargo check --target wasm32-wasip1` says fast what does not compile there: `tokio`, `std::process`, a dependency that assumes a system. It is not the published module: that one comes out of `escouade-plugin build`.
+- **The bench and the fake Escouade** compile the module as the store does, then play it in the app’s host. A store refusal shows here: no `Cargo.lock`, a crate off the list. The toolchain, rustc 1.98.0 and `wasm32-wasip1`, is downloaded the first time it is needed into `~/.escouade/tools` (650 MB, a minute) and checked at each use, without rustup. `ESCOUADE_RUST_TOOLCHAIN` names another one.
+
+`--wasm <module>` plays a given module instead of compiling; `--offline` refuses every network call, as the review does; `--account <address>` gives `{account}` an address. The bench serves `fs/*` and `proc/*` around an agent of its own, and `secrets/get`. It does not serve `settings/get`, which answers `-32601`: a plugin must survive that.
+
 ## In CI
 
 The bench fits in one step: install Escouade, then
@@ -113,4 +154,4 @@ escouade-plugin validate .
 escouade-plugin test .
 ```
 
-Escouade’s tests play this bench on its fake plugin and on its own plugins (`plugins/` of its repository), with `--first-party`: their ids `dev.escouade.*` are reserved, the bench refuses them to any other plugin. The [TypeScript SDK](plugins/sdk) (`@escouade-dev/plugin`) installs the same command in a plugin’s `node_modules`, and its CI plays this bench on both templates of `npm create escouade-plugin`.
+Escouade’s tests play this bench on its fake plugin and on its own plugins (`plugins/` of its repository), with `--first-party`: their ids `dev.escouade.*` are reserved, the bench refuses them to any other plugin. The [TypeScript SDK](plugins/sdk) (`@escouade-dev/plugin`) installs the same command in a plugin’s `node_modules`, and its CI plays this bench on the templates of `npm create escouade-plugin`.

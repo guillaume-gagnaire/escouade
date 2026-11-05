@@ -2,7 +2,7 @@
 title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","docs/PLUGINS.md §8.19 (ESC-344)","docs/PLUGINS.md §8.20 (ESC-337)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire"]
-tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337"]
+tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342"]
 decisions: [73,71,70,72,75,80,84,86,89]
 compared: null
 ---
@@ -141,3 +141,13 @@ Ces quatre plugins sont les premiers portés. Ce qui précède dit qu'aucun plug
 
 ## La revue locale d'un `run.wasm` (ESC-337)
 - La revue recompile les sources et compare l'empreinte au module publié, avant toute signature : sur le poste pour la première main, dans des conteneurs pour un tiers. Voir « La revue "Vérifié par Escouade" ».
+
+## La documentation pour écrire un plugin, et le modèle Rust (ESC-342)
+
+Un développeur externe écrit un plugin en TypeScript ou en Rust à partir du site seul, en français et en anglais.
+
+- `npm create escouade-plugin -- --kind rust` écrit un plugin en Rust qui dit la même chose que le gabarit TypeScript. Il dépend du kit par version, depuis crates.io, avec son propre `Cargo.lock`, et se compile seul dans son dossier. Il passe `cargo test`, `escouade-plugin validate` et le banc. La commande demande le genre parmi `program`, `rust` et `declarative`.
+- Le site gagne trois pages : *Les capacités de l'hôte* (ce que chaque capacité permet, ce qu'Escouade refuse, ce que dit la fenêtre d'installation), *Les appels* (chaque méthode, avec un exemple en TS et en Rust) et *Le kit Rust* (les trois crates, le modèle par tours, une source, un hébergeur, un harness, et les refus de la compilation).
+- La page de démarrage montre les deux langages côte à côte. Celle de publication dit les onze contrôles, la compilation de Rust, la revue, le sceau et les mises à jour proposées.
+- Aucun exemple de code n'est écrit dans une page. Un bloc de TypeScript ou de Rust est fait de lignes d'un fichier compilé, cité sous son chemin : un modèle, un plugin de `plugins/`, ou un des deux plugins de `sdk/doc-examples`, qui font la même chose dans chaque langage. Chaque morceau de manifeste d'une page passe `validate`. Les tests le tiennent.
+- Le banc ne sert pas `settings/get`, qui y répond `-32601`. La page de tests le dit.

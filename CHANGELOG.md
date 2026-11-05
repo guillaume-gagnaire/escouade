@@ -9,6 +9,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ### Nouveautés
 
 - Linear, Trello, Jira et ClickUp tournent désormais comme des plugins isolés en WASM, sans process à eux : ils répondent comme avant.
+- La documentation dit comment écrire un plugin en TypeScript ou en Rust, de `npm create escouade-plugin -- --kind rust` à la publication sur le store : ce que chaque capacité permet, chaque appel avec un exemple dans les deux langages, et le kit Rust.
 - `escouade-plugin build` compile un plugin en Rust en WASM, à l’octet près le même sous Windows et sous Linux, avec un compilateur qu’il télécharge lui-même ; `test` et `dev` le compilent aussi avant de le jouer.
 - Un plugin isolé peut joindre l’instance que tu lui donnes (GitLab maison, réseau local), en suivant le proxy et les certificats de Réglages › Réseau, et recevoir du réseau en continu ; la fenêtre d’installation le dit, et le journal garde chaque connexion.
 - Les plugins d’Escouade pourront se couper et se désinstaller comme les autres : ils arrivent avec l’installeur, s’installent sans réseau, et une nouvelle version est proposée, jamais installée sans toi. La vue Plugins repropose ce que tu as désinstallé.

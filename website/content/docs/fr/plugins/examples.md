@@ -15,11 +15,12 @@ Pour en faire le tien, copie son dossier et donne-lui un identifiant à toi (`io
 | Slack | La même chose dans Slack, dans le salon de chaque projet, avec un secret au trousseau | Programme TypeScript |
 | Règles de l’équipe | Les commandes des agents autorisées ou refusées selon un fichier du dépôt | Programme TypeScript |
 | Goose | Un agent qui parle ACP, ajouté comme harness | Déclaratif |
+| Linear | Une source du Kanban, sur le kit | Module Rust |
 
 Le code montré ici est celui du dépôt : un test du site vérifie qu’il n’a pas changé depuis.
 
 > [!NOTE]
-> Slack et Règles de l’équipe sont en `run.js` depuis leur 2.0.0 : Escouade fait tourner leur `dist/plugin.mjs` dans l’app, en WASM, sans Node sur la machine (voir [le protocole](plugins/api#un-programme-en-js-ou-en-typescript)). Il leur faut Escouade 2.2.0 ou plus récent (`escouade.min`) ; leurs versions 1.x, lancées par Node, restent au store pour les versions d’avant. Node ne sert qu’à leurs auteurs, pour les construire et les tester.
+> Slack et Règles de l’équipe sont en `run.js` depuis leur 2.0.0 : Escouade fait tourner leur `dist/plugin.mjs` dans l’app, en WASM, sans Node sur la machine (voir [le protocole](plugins/api#un-programme-en-wasm)). Il leur faut Escouade 2.2.0 ou plus récent (`escouade.min`) ; leurs versions 1.x, lancées par Node, restent au store pour les versions d’avant. Node ne sert qu’à leurs auteurs, pour les construire et les tester.
 
 ## Les essayer
 
@@ -411,6 +412,27 @@ void teamRules().start();
 ```
 
 Les règles sont lues une fois, au démarrage : une décision a 500 ms. En WASM, `rules.json` lui est donné au démarrage avec les autres fichiers JSON de la racine de son dossier ; il ne lance rien et n’atteint aucun réseau (il n’a pas de `permissions.network`). Une modification ou une lecture de fichier n’est pas une commande, et va à l’utilisateur.
+
+## Linear
+
+Une source du Kanban en Rust : `Hosts` du kit répond le protocole, et le plugin donne sa sorte et son client. Le modèle `npm create escouade-plugin -- --kind rust`, plus court, part d’une page blanche ; Linear montre un vrai service. Il est lu dans [le kit Rust](plugins/rust#ecrire-une-source), et son code est dans [`plugins/linear`](https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/linear).
+`plugins/linear/src/lib.rs` (extrait)
+
+```rust
+impl SourceKind for LinearSource {
+    fn id(&self) -> &str {
+        ID
+    }
+    fn name(&self) -> &str {
+        S
+    }
+    fn client(&self, http: reqwest::Client, account: &Credentials) -> Box<dyn TicketSource> {
+        let base = account.api.clone().filter(|a| !a.trim().is_empty());
+        Box::new(Linear::new(http, account, base.as_deref().unwrap_or(API)))
+    }
+}
+```
+
 
 ## Goose
 

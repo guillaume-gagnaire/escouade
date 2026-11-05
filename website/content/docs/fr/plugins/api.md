@@ -1,6 +1,8 @@
 # Le protocole
 
-Un plugin qui a un programme parle à Escouade en JSON-RPC 2.0 : sur son entrée et sa sortie standard s’il est un process (`run.command`), dans l’app en WASM, sans Node, s’il est en JS ou en TypeScript (`run.js`, [plus bas](#un-programme-en-js-ou-en-typescript)). Le protocole est le même ; cette page décrit le process, puis ce qui change en WASM.
+Un plugin qui a un programme parle à Escouade en JSON-RPC 2.0 : dans l’app, en WASM, s’il est en JS, en TypeScript ou en Rust ; sur son entrée et sa sortie standard s’il est un process. Cette page décrit les messages et le process.
+
+Un plugin `run.js` ou `run.wasm` parle le même protocole : [ce qui change en WASM](#un-programme-en-wasm) vient plus bas, et [les appels](plugins/calls) donnent un exemple en TS et en Rust pour chaque méthode.
 
 ## Quand le programme démarre
 
@@ -73,6 +75,7 @@ Chaque délai dépassé est noté au journal : « test/do: no answer within 300
 | `log` (notification) | `{ "level": "info", "message": "…" }` | Aucune : la ligne va au journal du plugin. |
 | `files/read` | `{ "path": "data/words.txt" }` | `"…"`, le texte d’un fichier de son dossier, en texte UTF-8, 256 Ko au plus, aux deux transports. Refusé (`-32003`, gardé au journal) : un chemin absolu, avec `..` ou un lecteur, un lien qui mène hors du dossier, un nom caché (`.env`, `.git`), le manifeste. `-32005` pour un fichier absent, `-32004` pour un fichier trop gros ou qui n’est pas du texte. |
 | `net/fetch` | `{ "url": "https://…", "method": "POST", "headers": {}, "body": "…" }` | `{ "status": 200, "headers": {}, "body": "…" }`, pour un plugin en WASM seulement : voir [le réseau](#le-reseau-par-escouade). |
+| `net/stream`, `ws/*`, `timer/*`, `fs/*`, `proc/*` | Voir [les appels](plugins/calls). | Pour un plugin en WASM seulement ; un process reçoit `-32601`. |
 
 Une autre méthode répond l’erreur `-32601` et le note au journal. Les erreurs propres à Escouade : `-32001` pour un secret qui n’est pas celui du plugin, `-32002` pour un trousseau injoignable, `-32003` pour ce que le plugin ne peut pas atteindre (un hôte, un fichier), `-32004` pour une requête qui échoue en route, `-32005` pour un fichier absent, `-32602` pour des paramètres qui ne tiennent pas.
 
@@ -113,43 +116,42 @@ Les 500 dernières lignes se lisent dans l’onglet Journal de sa page, dans la 
 
 Ses méthodes, leurs paramètres, leurs réponses et leurs délais sont décrits par un schéma, [`plugin-protocol-1.json`](/schemas/plugin-protocol-1.json), d’où viennent les types du [SDK en TypeScript](plugins/sdk). Pour vérifier qu’un plugin tient ce protocole sans lancer l’app, joue [le banc de conformité](plugins/testing) : `escouade-plugin test <dossier>`.
 
-## Un programme en JS ou en TypeScript
+## Un programme en WASM
 
-Un plugin dont le manifeste dit `"run": { "js": "dist/plugin.mjs" }` ne lance pas de process : Escouade fait tourner son bundle **dans l’app, en WASM**, sans Node sur la machine. Une instance par plugin, sur un fil à elle, qui garde son état d’un appel à l’autre comme un process. Le protocole est le même : les mêmes messages, portés par l’entrée et la sortie standard du module, la même poignée de main, les mêmes délais, le même journal et les mêmes relances ; le [SDK](plugins/sdk) parle l’un ou l’autre sans que le plugin le sache.
+Un plugin dont le manifeste dit `"run": { "js": "dist/plugin.mjs" }` ou `"run": { "wasm": "Cargo.toml" }` ne lance pas de process : Escouade fait tourner son module **dans l’app, en WASM**, sans Node sur la machine. Une instance par plugin, sur un fil à elle, qui garde son état d’un appel à l’autre comme un process. Le protocole est le même : les mêmes messages, portés par l’entrée et la sortie standard du module, la même poignée de main, les mêmes délais, le même journal et les mêmes relances ; [le SDK](plugins/sdk) et [le kit Rust](plugins/rust) le parlent pour toi.
 
-Le module est compilé une fois : par le store pour un plugin du store (l’app le télécharge et vérifie son empreinte contre `version.json`), par l’app pour un plugin installé depuis un dossier ou un dépôt git. L’app le précompile à l’installation, le garde dans son cache et le précompile à nouveau après une mise à jour d’Escouade. Il lui faut Escouade 2.2.0 ou plus récent.
+Le module est compilé une fois : par le store pour un plugin du store (l’app le télécharge et vérifie son empreinte contre `version.json`), par l’app pour un `run.js` installé depuis un dossier ou un dépôt git. Un `run.wasm` hors du store vient avec son `plugin.wasm`, à côté du manifeste. L’app le précompile à l’installation, le garde dans son cache et le précompile à nouveau après une mise à jour d’Escouade. Il lui faut Escouade 2.2.0 ou plus récent.
 
 ### Le réseau, par Escouade
 
-Un plugin en WASM n’ouvre pas de connexion : son `fetch` (le `fetch` standard) passe par Escouade, par `net/fetch`, que seul un plugin en WASM reçoit (un process a son propre réseau, et `net/fetch` lui répond `-32601`). Escouade envoie la requête :
+Un plugin en WASM n’ouvre pas de connexion : tout passe par Escouade, par `net/fetch`, `net/stream` et `ws/open`, que seul un plugin en WASM reçoit (un process a son propre réseau, et ces méthodes lui répondent `-32601`). `fetch` en JS et le client du kit en Rust y mènent. Escouade envoie la requête :
 
 - **en https seulement**, vers un hôte de `permissions.network` ou l’un de ses sous-domaines (`slack.com` couvre `api.slack.com`) ; jamais vers une adresse IP écrite dans l’URL, que `permissions.network` ne nomme pas ;
 - **sans suivre de redirection** : le plugin reçoit la réponse 3xx ;
-- **en 10 s, pour 1 Mo de réponse au plus** ;
+- **en 10 s, pour 1 Mio de réponse au plus**, sauf si `limits` en demande plus ;
 - **jamais vers une adresse de la machine ou du réseau local**, même pour un hôte déclaré : bouclage, privée, de lien local, non spécifiée, de multidiffusion ou de diffusion, en IPv4 comme en IPv6. Escouade juge les adresses que la connexion emploie elle-même, après la résolution du nom, et non une résolution à part que le DNS pourrait contredire ;
-- **sans proxy** : un proxy résoudrait le nom là où son adresse n’est pas jugée.
+- **par le proxy de Réglages › Réseau**, s’il y en a un : seul le nom est alors jugé, et le journal le dit.
 
-Un appel refusé répond `-32003` et le journal le garde (« slack.com resolves to 127.0.0.1, an address of this machine or of the local network », « example.org is not in permissions.network of … ») ; un appel qui échoue en route (pas de réponse en 10 s, une réponse de plus de 1 Mo, un hôte injoignable) répond `-32004`. Le plugin voit un `fetch` qui rejette.
+`{account}`, l’hôte d’un compte que l’utilisateur a saisi, et `local:shared`, le serveur local d’un harness, ouvrent http et le réseau local pour ces hôtes seuls : voir [les capacités de l’hôte](plugins/capabilities#le-reseau).
 
-> [!WARNING]
-> Sur un poste dont la sortie passe obligatoirement par un proxy (celui de Réglages › Réseau), le `fetch` d’un plugin `run.js` échoue : `net/fetch` ne passe jamais par lui.
+Un appel refusé répond `-32003` et le journal le garde (« slack.com resolves to 127.0.0.1, an address of this machine or of the local network », « example.org is not in permissions.network of … ») ; un appel qui échoue en route (pas de réponse à temps, une réponse trop grande, un hôte injoignable) répond `-32004`. Le plugin voit un `fetch` qui rejette.
 
 ### Les fichiers de son dossier
 
 - **Les fichiers JSON de sa racine** (`rules.json`, `channels.json`) lui sont donnés au démarrage : 256 Ko chacun, 1 Mo en tout, jamais son manifeste. `readFileSync` de `node:fs` les lit, comme sous Node (`readFileSync(new URL('../rules.json', import.meta.url), 'utf8')`).
 - **Les autres** se lisent par `files/read` (`p.file()` du SDK), en texte UTF-8, 256 Ko au plus, un sous-dossier compris (`data/words.txt`).
-- **Rien ne s’écrit.**
+- **Le reste** passe par `fs/*`, sous les racines de `permissions.files` : voir [les fichiers](plugins/capabilities#les-fichiers-files).
 
 ### Les limites
 
 - **64 Mo de mémoire, 2 s par tour de travail**, 500 ms quand il tient une décision.
 - **Une boucle sans fin, une mémoire qui grossit ou une exception non rattrapée** finissent l’instance, et le journal dit pourquoi (« a turn ran past 2000 ms: Escouade stopped its instance », « its instance crashed: … ») ; une nouvelle est faite, comme après le plantage d’un process, avec les mêmes trois relances en cinq minutes, puis le plugin est arrêté.
-- **Pas de minuteur** : `setTimeout` n’est pas défini, et une bibliothèque qui l’appelle échoue. Le SDK n’en a pas besoin ; à la fermeture, Escouade attend sa réponse à `shutdown` une seconde au plus.
+- **Des minuteurs** : `setTimeout` et `clearTimeout` existent en JS, `sleep` et `timeout` dans le kit, 10 ms au moins, 64 à la fois.
 - **Un bundle fait avec le SDK 0.2** ne tourne pas en WASM : le plugin s’arrête et son journal dit de le reconstruire avec `@escouade-dev/plugin` 0.3 ou plus récent.
 
 ### Ce qu’un plugin en WASM ne peut pas faire
 
-Il ne lance aucun programme, n’ouvre aucune socket, ne lit ni l’environnement ni un fichier hors de son dossier, n’écrit rien sur le disque et ne charge aucun module natif ou distant. Un bundle qui importe autre chose que `node:fs` et `node:readline`, ou qui a des `export`, n’est pas compilé, et le plugin s’arrête avec la raison. Ses secrets et ses réglages sont les siens seulement, comme pour un process. C’est pourquoi la fenêtre d’installation dit « Tourne dans Escouade, isolé », et non « Lance un programme sur ton ordinateur, avec tes droits ».
+Rien de ce qu’il ne déclare pas : ni réseau, ni fichier hors de son dossier, ni programme. Il ne lit pas l’environnement et ne charge aucun module natif ou distant. Un bundle qui importe autre chose que `node:fs` et `node:readline`, ou qui a des `export`, n’est pas compilé, et le plugin s’arrête avec la raison. Ses secrets et ses réglages sont les siens seulement, comme pour un process. C’est pourquoi la fenêtre d’installation dit « Tourne dans Escouade, isolé », puis chaque [capacité](plugins/capabilities) qu’il demande, et non « Lance un programme sur ton ordinateur, avec tes droits ».
 
 ## Ce que l’utilisateur change
 

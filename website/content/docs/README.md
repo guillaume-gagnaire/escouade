@@ -50,3 +50,5 @@ Un bloc de citation dont la première ligne est `[!NOTE]`, `[!TIP]` ou `[!WARNIN
 ## Exactitude
 
 La doc dit ce que fait l’app, rien d’autre. Chaque libellé vient des catalogues de l’app (`src/lib/i18n/fr/*.ts`, `src/lib/i18n/en/*.ts`), chaque comportement et chaque valeur par défaut du code (`src/`, `src-tauri/src/`). `README.md` et `CHANGELOG.md` aident à s’y retrouver, mais le code a raison. Ce qui sert à développer Escouade (build, tests, vidéo, site) reste dans le `README.md`.
+
+Dans `plugins/`, un bloc de TypeScript ou de Rust vient toujours d’un fichier compilé, cité sous son chemin : les deux plugins de `sdk/doc-examples/`, un modèle de `sdk/create-escouade-plugin/templates/` ou un plugin de `plugins/`. Le morceau d’un manifeste doit passer `validate`. Les tests le tiennent (`sdk/doc-examples/doc-examples.test.ts`, `tests/docs.test.ts`).

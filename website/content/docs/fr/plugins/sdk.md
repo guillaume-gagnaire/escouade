@@ -13,9 +13,10 @@ npm run validate    # le manifeste, champ par champ
 npm run bench       # le banc de conformité, sur le vrai programme
 ```
 
-La commande demande le genre de plugin ; `--kind program` ou `--kind declarative` le choisit sans demander, `--id` et `--name` donnent son identifiant et son nom.
+La commande demande le genre de plugin ; `--kind program`, `--kind rust` ou `--kind declarative` le choisit sans demander, `--id` et `--name` donnent son identifiant et son nom.
 
 - **Un programme** (`program`) : un plugin en TypeScript, avec ses tests. `src/plugin.ts` dit quand un ticket est prêt à tester et refuse les push forcés ; `src/main.ts` le démarre ; `npm run build` réunit les deux dans `dist/plugin.mjs`, que nomme `run.js` dans le manifeste : Escouade le fait tourner dans l’app, en WASM, sans Node.
+- **Un module en Rust** (`rust`) : le même plugin, sur [le kit Rust](plugins/rust), avec ses tests et son `Cargo.lock`. Ni `package.json`, ni `node_modules`.
 - **Un plugin déclaratif** (`declarative`) : un thème, décrit dans le manifeste. Rien ne s’exécute.
 
 Pour l’essayer dans Escouade, charge son dossier dans Réglages › Plugins, en mode développeur. Escouade lance un plugin tel que son dépôt le contient, sans `npm install` : commite `dist/` avant d’étiqueter une version.
@@ -69,6 +70,9 @@ void plugin.start();
 | `settings(projet?)` | Demande ses réglages (`settings/get`) ; avec l’id d’un projet, ceux que son `.escouade.yml` lui donne (`plugins.<id>`) passent devant. |
 | `log.debug/info/warn/error(message)` | Une ligne de son journal (`log`). |
 | `file(chemin)` | Lit un fichier de son dossier en texte (`files/read`), un sous-dossier compris (`data/words.txt`), 256 Ko au plus, sous Node comme en WASM : jamais son manifeste, un fichier caché ou un chemin qui en sort (`RpcError` `ERRORS.refused`) ; un fichier absent échoue par `ERRORS.notFound`. |
+| `fs.read/text/write/stat/list/canon(fichier)` | Les dossiers de `permissions.files`, en WASM ([les fichiers](plugins/calls#les-fichiers)). |
+| `runProgram(params, onOut?)` | Lance une ligne de `permissions.commands`, en WASM : `exited`, `write`, `close`, `kill` ([les programmes](plugins/calls#les-programmes-proc)). |
+| `openStream(p, url, init?)`, `openSocket(p, url, headers?)` | Importées à part : une réponse lue au fil de l’eau et un WebSocket, en WASM ([le réseau](plugins/calls#le-reseau)). |
 | `handle(méthode, fonction)` | Sert une autre méthode (un point d’extension à venir). Lance `new RpcError(code, message)` pour répondre une erreur. |
 | `onInitialize(fonction)`, `onShutdown(fonction)` | Appelée à `initialize`, ou avant la réponse à `shutdown` (800 ms au plus : Escouade attend une seconde). |
 | `call(méthode, params)`, `notify(méthode, params)` | Un appel ou une notification à Escouade, typés pour ses méthodes. |
@@ -140,7 +144,8 @@ Le SDK installe `escouade-plugin` dans les `node_modules` du plugin, pour ses sc
 | `escouade-plugin test [dossier]` | [Le banc de conformité](plugins/testing) : celui d’Escouade. |
 | `escouade-plugin dev [dossier]` | [Le faux Escouade](plugins/testing#le-faux-escouade) : des faits, des décisions et des appels tapés, à un programme qui tourne. |
 | `escouade-plugin pack [dossier]` | L’archive du plugin et son empreinte SHA-256. |
-| `escouade-plugin build [dossier]` | Compile `run.js` en WASM, comme le store : `packs/<id>-<version>.wasm` et son `.sha256`. |
+| `escouade-plugin build [dossier]` | Compile `run.js` ou `run.wasm` en WASM, comme le store : `packs/<id>-<version>.wasm` et son `.sha256`. |
+| `escouade-plugin fetch [dossier]` | Télécharge les dépendances d’un `run.wasm` depuis crates.io, sans rien lancer du plugin. |
 
 `test` et `dev` lancent l’`escouade-plugin` livré avec Escouade, pour qu’un plugin soit jugé par le banc de l’app : celui de `ESCOUADE_PLUGIN_BIN`, sinon celui du `PATH`, sinon celui de l’app (`%LOCALAPPDATA%\Escouade` sous Windows, `Escouade.app` sous macOS, `/usr/bin` avec le `.deb`). Sans lui, la commande dit où le trouver.
 
@@ -148,7 +153,7 @@ Le SDK installe `escouade-plugin` dans les `node_modules` du plugin, pour ses sc
 
 `escouade-plugin pack` écrit `packs/<id>-<version>.tar.gz` et son `.sha256`, avec tous les fichiers du dossier sauf `.git`, `node_modules` et `packs`. L’archive est la même, à l’octet près, pour les mêmes fichiers, sur n’importe quel système : les dates sont mises à zéro, et les programmes de `run` et les scripts qui commencent par `#!` sont exécutables. Un lien symbolique, ou une archive de plus de 50 Mo, est refusé, comme par le store.
 
-`--target windows-x64` (ou `macos-arm64`, `linux-x64`…) nomme l’archive d’un système, `<id>-<version>-windows-x64.tar.gz` : le nom que [le store](plugins/publishing) attend des fichiers de la release d’un plugin compilé.
+`--target windows-x64` (ou `macos-arm64`, `linux-x64`…) nomme l’archive d’un système, `<id>-<version>-windows-x64.tar.gz`.
 
 ## Sans Node
 
@@ -160,14 +165,14 @@ Un plugin en JS ou en TypeScript se publie par son bundle, nommé par `run.js` :
   "run": { "js": "dist/plugin.mjs" },
 ```
 
-Escouade le fait tourner **dans l’app, en WASM**, sans Node chez l’utilisateur : une instance isolée par plugin, qui garde son état d’un appel à l’autre comme un process. Le store compile le bundle à la soumission, et l’app télécharge ce module et le vérifie contre le `version.json` de la version ; un plugin installé depuis un dossier ou un dépôt git est compilé par l’app. La fenêtre d’installation dit « Tourne dans Escouade, isolé », et `permissions.network` y est appliquée : `fetch` passe par Escouade, en https, vers ces hôtes seulement (voir [le protocole](plugins/api#un-programme-en-js-ou-en-typescript)).
+Escouade le fait tourner **dans l’app, en WASM**, sans Node chez l’utilisateur : une instance isolée par plugin, qui garde son état d’un appel à l’autre comme un process. Le store compile le bundle à la soumission, et l’app télécharge ce module et le vérifie contre le `version.json` de la version ; un plugin installé depuis un dossier ou un dépôt git est compilé par l’app. La fenêtre d’installation dit « Tourne dans Escouade, isolé », et `permissions.network` y est appliquée : `fetch` passe par Escouade, en https, vers ces hôtes seulement (voir [le protocole](plugins/api#un-programme-en-wasm)).
 
 - **Le même code sur les deux transports** : `start()` parle à l’hôte WASM d’Escouade quand l’app fait tourner le plugin, sur l’entrée et la sortie standard sous Node (ses tests, un plugin lancé par une commande). Un plugin écrit pour le SDK tourne sans changement des deux côtés.
 - **Ses fichiers** : `readFileSync(new URL('../rules.json', import.meta.url), 'utf8')` lit toujours un JSON de la racine de son dossier ; `p.file()` lit les autres. Le `fetch` standard sert le réseau, par Escouade en WASM.
-- **Ce que le bundle peut importer** : `node:fs` et `node:readline`, que sert Escouade, et rien d’autre ; il tient en un fichier, sans `export`. Un autre `import` refuse sa compilation, et `escouade-plugin validate` le dit dans ta langue (« le bundle importe node:child_process, qu’un plugin en WASM n’a pas (seulement node:fs, node:readline) »). `setTimeout` n’y est pas défini.
+- **Ce que le bundle peut importer** : `node:fs` et `node:readline`, que sert Escouade, et rien d’autre ; il tient en un fichier, sans `export`. Un autre `import` refuse sa compilation, et `escouade-plugin validate` le dit dans ta langue (« le bundle importe node:child_process, qu’un plugin en WASM n’a pas (seulement node:fs, node:readline) »). `setTimeout` et `clearTimeout` y existent.
 - **Le SDK 0.3 ou plus récent** : un bundle fait avec le SDK 0.2 ne tourne pas en WASM ; reconstruis-le (`npm run build`).
 - **Les outils, sans Node** : `escouade-plugin build` fait le module comme le store, pour vérifier qu’il compile ; `test` et `dev` jouent le bundle en WASM, dans l’hôte de l’app. La Javy qui compile (9.1.0) est téléchargée au premier besoin dans `~/.escouade/tools` et vérifiée par son empreinte ; l’app et `escouade-plugin` la partagent. Node ne sert qu’à l’auteur, pour `npm run build` et les tests du plugin ; celui qui l’installe n’en a jamais besoin. Plus besoin d’en faire un exécutable (`deno compile`, `bun build --compile`) pour qui n’a pas Node.
-- Un plugin qui doit lancer un programme de l’ordinateur (un harness, une commande) garde un `run.command` : un exécutable par système, dans son dossier ou attaché à sa release avec son attestation de provenance (voir [publier](plugins/publishing)). Sa fenêtre d’installation dit « Lance un programme sur ton ordinateur, avec tes droits ». Le store refuse un `run.command` qui est un script ou qui nomme un interpréteur (`node`…) : un programme en JS ou en TypeScript se publie en `run.js`.
+- **Ce que le plugin peut demander en plus** : `p.fs` pour les dossiers de `permissions.files`, `p.runProgram` pour les programmes de `permissions.commands`, `openStream` et `openSocket` pour le réseau (voir [les appels](plugins/calls)). Le store ne publie plus de `run.command`.
 
 ## En CI
 
@@ -188,5 +193,5 @@ jobs:
           ESCOUADE_PLUGIN_BIN: /usr/bin/escouade-plugin
 ```
 
-La CI d’Escouade fait de même sur les deux gabarits de `npm create escouade-plugin`, contre le banc de chaque version construite.
+La CI d’Escouade fait de même sur les gabarits de `npm create escouade-plugin`, contre le banc de chaque version construite.
 

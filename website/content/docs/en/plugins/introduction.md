@@ -20,10 +20,10 @@ Some of Escouade’s integrations are plugins themselves, shipped with the app: 
 | Form | What it is | What the install window says |
 | --- | --- | --- |
 | Declarative | The manifest alone: a theme, webhooks, a described harness. Nothing runs. | Its permissions, with no program |
-| Program in JS or TypeScript | A bundle (`run.js`) that Escouade runs inside the app, in WASM, with no Node on your machine. It reaches the network only through Escouade, to the hosts it declares. | “Runs inside Escouade, isolated” |
-| Program | An executable (`run.command`) started in a process, with your rights. This is the form of a plugin that must start a program of your computer. | “Runs a program on your computer, with your rights” |
+| Program in WASM | A bundle in JS or TypeScript (`run.js`), or a module in Rust (`run.wasm`), that Escouade runs inside the app, with no Node or Rust on your machine. It reaches the network, files and programs only through Escouade, and only what it declares. | “Runs inside Escouade, isolated” |
+| Native program | An executable (`run.command`) started in a process, with your rights. The store publishes none: it only comes from a folder or a git repository. | “Runs a program on your computer, with your rights” |
 
-A program talks to Escouade through [the protocol](plugins/api); [the SDK](plugins/sdk) writes it for you in TypeScript.
+A program talks to Escouade through [the protocol](plugins/api); [the SDK](plugins/sdk) writes it for you in TypeScript, [the kit](plugins/rust) in Rust.
 
 ## What a plugin cannot do
 
@@ -43,6 +43,6 @@ A program talks to Escouade through [the protocol](plugins/api); [the SDK](plugi
 ## Where to start
 
 - **Using one**: [installing a plugin](plugins/installer), then [permissions](plugins/permissions).
-- **Writing one**: [a first plugin](plugins/quick-start) in ten minutes, then [the manifest](plugins/manifest), [the SDK](plugins/sdk) and [the example plugins](plugins/examples).
+- **Writing one**: [a first plugin](plugins/quick-start) in ten minutes, in TypeScript or in Rust, then [the manifest](plugins/manifest), [the host’s capabilities](plugins/capabilities), [the calls](plugins/calls) and [the example plugins](plugins/examples).
 - **Publishing it**: [testing a plugin](plugins/testing), [publishing on the store](plugins/publishing), [plugin security](plugins/security) and [versions](plugins/versioning).
 - **A question**: [the FAQ](plugins/faq).

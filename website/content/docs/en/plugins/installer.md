@@ -34,7 +34,7 @@ Nothing is installed at once: the plugin is read, set aside, and the install win
 
 Escouade offers **the last version it can run**: a version written for a newer Escouade is skipped, and so is one its author took back.
 
-**Install** downloads the version, then checks everything before the install window opens: `version.json` against the catalog’s fingerprint, the signature against the public keys Escouade embeds (the store cannot make a seal: it does not have the key), the archive and your system’s program against `version.json`, the manifest against its fingerprint. A gap stops everything and says so (“The archive received is not the one the store published”): nothing is installed. The catalog, the archives and the revocation list go through **Settings › Network** (proxy, the system’s certificates).
+**Install** downloads the version, then checks everything before the install window opens: `version.json` against the catalog’s fingerprint, the signature against the public keys Escouade embeds (the store cannot make a seal: it does not have the key), the archive and its module against `version.json`, the manifest against its fingerprint. A gap stops everything and says so (“The archive received is not the one the store published”): nothing is installed. The catalog, the archives and the revocation list go through **Settings › Network** (proxy, the system’s certificates).
 
 The install window then says “Verified by Escouade” and “Signature: checked here, by the app”; for an unverified version, a band: “Nobody has reviewed this version. It comes from the store, its archive is the one its author published, but nothing says what its program does”, and the button “Install anyway”.
 

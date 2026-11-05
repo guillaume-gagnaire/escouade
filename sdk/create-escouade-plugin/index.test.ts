@@ -42,6 +42,52 @@ describe('create-escouade-plugin', () => {
     expect(fs.readFileSync(path.join(folder, 'LICENSE'), 'utf8')).toContain(`Copyright (c) ${new Date().getFullYear()}`);
   });
 
+  it('writes a Rust module with its tests, its lock and a valid manifest, on the kit as an outside author has it (ESC-342)', () => {
+    const folder = path.join(tmp(), 'Mes Règles');
+    const written = create({ folder, kind: 'rust', id: 'dev.test.rules', name: 'Règles' });
+    const names = written.map((f) => path.relative(folder, f).split(path.sep).join('/')).sort();
+    expect(names).toEqual([
+      '.gitignore',
+      'Cargo.lock',
+      'Cargo.toml',
+      'LICENSE',
+      'README.md',
+      'escouade-plugin.json',
+      'src/lib.rs',
+      'src/tests.rs',
+    ]);
+    const manifest = fs.readFileSync(path.join(folder, 'escouade-plugin.json'), 'utf8');
+    expect(validateText(manifest)).toMatchObject({ ok: true, ignored: [] });
+    expect(JSON.parse(manifest)).toMatchObject({ run: { wasm: 'Cargo.toml' }, escouade: { min: '2.2.0' } });
+    expect(JSON.parse(manifest).run.command).toBeUndefined();
+    const cargo = fs.readFileSync(path.join(folder, 'Cargo.toml'), 'utf8');
+    expect(cargo).toContain('name = "escouade-plugin-mes-regles"');
+    // By version, never by path, git or a [patch]: what the store compiles.
+    expect(cargo).toContain('escouade-plugin-kit = "0.1.0"');
+    expect(cargo).not.toMatch(/path\s*=|git\s*=|\[patch/);
+    expect(cargo).toContain('[workspace]');
+    const lock = fs.readFileSync(path.join(folder, 'Cargo.lock'), 'utf8');
+    expect(lock).toContain('name = "escouade-plugin-mes-regles"');
+    expect(lock).not.toContain('{{');
+    expect(fs.readFileSync(path.join(folder, '.gitignore'), 'utf8')).toContain('plugin.wasm');
+  });
+
+  it('keeps the lock of the Rust template on the crates of the closed list (ESC-342)', () => {
+    // A crate that runs at compile time, on no other version than the list's: the store would refuse the template.
+    const closed = JSON.parse(
+      fs.readFileSync(path.join(__dirname, '..', '..', 'crates', 'escouade-plugin-cli', 'src', 'rust_native.json'), 'utf8'),
+    );
+    const lock = fs.readFileSync(path.join(__dirname, 'templates', 'rust', 'Cargo.lock'), 'utf8');
+    const locked = [...lock.matchAll(/name = "([^"]+)"\nversion = "([^"]+)"\nsource = "[^"]+"\nchecksum = "([0-9a-f]+)"/g)];
+    const onTheList = locked.filter(([, name, version, sum]) =>
+      closed.some(
+        (c: { name: string; version: string; checksum: string }) => c.name === name && c.version === version && c.checksum === sum,
+      ),
+    );
+    for (const name of ['serde', 'serde_derive', 'proc-macro2', 'quote', 'anyhow', 'parking_lot_core', 'num-traits'])
+      expect(onTheList.map(([, n]) => n)).toContain(name);
+  });
+
   it('writes a plugin in a folder of a repository with several: its repository named, its tags naming the folder (ESC-313)', () => {
     const repo = tmp();
     fs.mkdirSync(path.join(repo, '.git'));

@@ -22,7 +22,7 @@ Un plugin est **un dossier d’un dépôt** : la racine, ou un sous-dossier qui 
 3. Les onze contrôles tournent sur la page, une ligne chacun. Le store télécharge l’archive du commit une fois, la garde telle quelle et en calcule l’empreinte SHA-256 ; rien du plugin ne s’exécute sur le serveur.
 4. Si tout passe, publie : une première version demande une à trois catégories et des mots-clés. La version paraît **non vérifiée** ; la case « Demander la revue » (cochée) la met dans la file de la revue « Vérifié par Escouade », qui vaut pour cette version seulement.
 
-Chaque version publiée a son fichier `version.json` : l’identifiant, le numéro, le dépôt, le commit, l’empreinte de l’archive, du manifeste et de chaque binaire. Son empreinte est celle de la version, que l’app vérifie et que la revue signe. Une version publiée ne change plus, et son numéro ne se réutilise pas.
+Chaque version publiée a son fichier `version.json` : l’identifiant, le numéro, le dépôt, le commit, l’empreinte de l’archive, du manifeste et du module. Son empreinte est celle de la version, que l’app vérifie et que la revue signe. Une version publiée ne change plus, et son numéro ne se réutilise pas.
 
 ## Les onze contrôles
 
@@ -37,8 +37,8 @@ Chaque version publiée a son fichier `version.json` : l’identifiant, le numé
 | Captures | Celles de `store.screenshots` : 6 au plus, en PNG, JPEG ou WebP, 1600 px de large et 1 Mo chacune au plus. Le store les réencode, sans leurs métadonnées. |
 | Archive | 50 Mo au plus, sans lien symbolique, sans chemin absolu ni `..`, sans sous-module ni fichier Git LFS non résolu. |
 | Permissions | Cohérentes avec le plugin : sans programme ni webhook, il ne demande ni réseau, ni événements, ni secrets ; un secret demandé est déclaré dans `contributes.secrets` ; un hôte s’écrit seul (`hooks.slack.com`). |
-| Binaires | Le programme de `run.command` (ou de `run.windows`, `run.macos`, `run.linux`) est dans le dépôt, ou dans la release de l’étiquette pour chaque système (voir plus bas). Un script (`.cmd`, `.bat`, `.ps1`, `.sh`, `.js`…, ou un fichier qui commence par `#!`) ou un interpréteur (`node`, `deno`, `bun`, `npx`, `python`…) est refusé au champ fautif : un programme en JS ou en TypeScript se publie en `run.js`. Un plugin `run.js` n’a rien à fournir. |
-| Compilation | Pour un plugin `run.js` : son bundle, pris dans l’archive (5 Mo au plus, jamais de `npm install`), compilé en WASM deux fois par `escouade-plugin build`, isolé, chaque fois dans un dossier neuf. Deux modules différents refusent la version ; un `import` hors de `node:fs` et `node:readline` aussi. Le module gardé est celui que l’app télécharge et vérifie (voir plus bas). |
+| Binaires | Aucun : `run.command`, `run.windows`, `run.macos` et `run.linux` sont refusés à tout plugin, chacun à son champ : chaque plugin du store tourne en WASM. Un programme de l’utilisateur se déclare par `permissions.commands`. Un plugin `run.js` ou `run.wasm` n’a rien à fournir. |
+| Compilation | Pour un plugin `run.js` : son bundle, pris dans l’archive (5 Mo au plus, jamais de `npm install`), compilé en WASM deux fois par `escouade-plugin build`, isolé, chaque fois dans un dossier neuf. Pour un plugin `run.wasm` : son crate, une fois les autres contrôles passés, de la même façon (voir [plus bas](#un-plugin-en-rust)). Deux modules différents refusent la version ; un `import` hors de `node:fs` et `node:readline` aussi. Le module gardé est celui que l’app télécharge et vérifie. |
 
 ## Un plugin en JS ou en TypeScript
 
@@ -50,7 +50,22 @@ Un plugin écrit en JS ou en TypeScript se publie en `run.js` : son manifeste no
 - **La revue « Vérifié par Escouade »** recompile le bundle relu et compare l’empreinte à celle du module publié : ce qui a été lu est ce qui tourne. Une autre empreinte refuse la version.
 - **La page du plugin** dit « Tourne dans Escouade, isolé · compilé en WASM par le store », et sa ligne de liste « Compilé en WASM par le store ».
 
-Un plugin tiers ne publie pas un programme lancé par Node : le contrôle « Binaires » refuse `node` (comme tout interpréteur ou script) au champ de `run` qui le nomme, avec la raison (« Un plugin du store ne lance ni script ni interpréteur : un programme en JS/TS se publie en run.js, le store le compile en WASM. »). Un programme qui n’est pas en JS ou en TypeScript reste un binaire, attesté (voir [les binaires](#les-binaires)). Installé depuis un dossier ou un dépôt git, hors du store, un plugin lancé par Node reste permis, non vérifié.
+Un plugin du store ne lance ni Node ni aucun programme à lui : le contrôle « Binaires » refuse `run.command`, avec la raison (« `run.command` lancerait un programme natif : le store n’en publie plus, chaque plugin tourne en WASM. »). Installé depuis un dossier ou un dépôt git, hors du store, un plugin lancé par une commande reste permis, non vérifié.
+
+## Un plugin en Rust
+
+Un plugin écrit en Rust se publie en `run.wasm` : son manifeste nomme son `Cargo.toml`, `"run": { "wasm": "Cargo.toml" }`, commité avec ses sources et son `Cargo.lock`. Tu ne publies pas de `.wasm` : le store le fait, et il écrit le sien à la place de tout `plugin.wasm` que l’archive tiendrait.
+
+- **Une fois les autres contrôles passés**, le store compile le crate tel que l’archive le contient, seul dans son dossier : ce qui entoure le plugin dans ton dépôt, un workspace ou un `[patch]`, ne compte pas.
+- **Deux étapes, deux fois**, chaque fois dans un dossier neuf : `escouade-plugin fetch` télécharge les dépendances de crates.io sans rien lancer du plugin, puis `escouade-plugin build` compile sans réseau, dans un bac à sable (bubblewrap) sans Node, sans les variables du store, sans son `/etc`. 5 minutes et 2 Gio au plus.
+- **Reproductible** : rustc 1.98.0, `wasm32-wasip1`, un profil imposé, et `rustc-canon` qui retire ce qui tient à la machine. Pour les mêmes sources et le même `Cargo.lock`, le module est le même à l’octet sous Windows et sous Linux. Deux modules différents refusent la version, avec leurs deux empreintes.
+- **Ce qui est refusé**, avant que rien ne tourne : pas de `Cargo.lock`, un `build.rs`, une macro à toi, un crate hors de la liste fermée, un chemin hors du dossier. La liste est dans [le kit Rust](plugins/rust#ce-que-la-compilation-refuse), avec ce qu’il faut faire. Un `Cargo.lock` qui ne correspond pas à `Cargo.toml` ou à crates.io est refusé aussi.
+- **Essaie avant de pousser** : `escouade-plugin validate .` dit ces refus sans rien lancer, et `escouade-plugin build . --json` donne le module et l’empreinte que le store trouvera.
+- **Ce que garde le store** : le module, sous son SHA-256, et ce qui l’a fait, dans `version.json` (`wasm: { sha256, size, compiler: { rust, target, canon, lock } }`). L’empreinte de la version, donc sa signature, le couvre.
+- **La revue** recompile dans un conteneur sans réseau et compare l’empreinte. Elle lit en plus `Cargo.lock`, dépendance par dépendance, et son diff avec la version d’avant : ce que le lock ajoute est du code qui tourne. Le code `unsafe`, les `extern` et les `#[link]` se justifient.
+
+Une panne du store, un réseau coupé par exemple, ne refuse pas la version : elle attend, à relancer.
+
 
 ## La page du plugin
 
@@ -62,11 +77,14 @@ Le README y est rendu une fois, à la soumission, dans la langue du visiteur (`R
 
 Tout le monde peut signaler un plugin depuis sa page, sans compte, avec une adresse e-mail : une personne lit chaque signalement. Tu vois qu’un signalement est ouvert, jamais qui l’a fait.
 
-## Les binaires
+## La signature et le sceau
 
-Un plugin qui lance un programme compilé attache à la release de l’étiquette une archive par système, dont le nom dit le système et l’architecture : `…-windows-x64.zip`, `…-macos-arm64.tar.gz`, `…-linux-x64.tar.gz` (50 Mo au plus chacune). Chaque système qui lance un programme absent du dépôt doit avoir la sienne. Le store les télécharge une fois, les garde et en calcule l’empreinte.
+Une version vérifiée reçoit le sceau « Vérifié par Escouade » : la revue signe son `version.json`, donc ses empreintes, celle du module comprise, avec une clé qui ne quitte pas son poste. L’app contrôle cette signature elle-même, avec ses propres clés. Le sceau vaut pour cette version seulement : la suivante est « Non vérifié » jusqu’à sa propre revue. Ce qu’il couvre est dans [la sécurité des plugins](plugins/security#ce-que-le-sceau-couvre).
 
-Construis-les dans un workflow GitHub Actions public avec `actions/attest-build-provenance` : l’attestation de provenance lie chaque fichier au commit de l’étiquette. Un binaire sans attestation est publié non vérifié et ne pourra pas être vérifié ; un binaire attesté depuis un autre commit est refusé.
+## Les mises à jour
+
+Publier une version ne change rien chez ceux qui ont le plugin : Escouade la **propose, et ne l’installe jamais seule**, avec la même fenêtre que l’installation. Si elle demande plus, la fenêtre le dit, marque « nouveau » chaque permission en plus et redemande l’accord. Voir [installer un plugin](plugins/installer#les-mises-a-jour) et [les versions](plugins/versioning).
+
 
 ## Préparer la revue
 
@@ -75,7 +93,7 @@ La revue « Vérifié par Escouade » est faite à la main, version par versio
 - **des permissions exactes** : chaque hôte joint dans `permissions.network`, chaque secret dans `contributes.secrets`, rien de plus ;
 - **du code lisible** : un fichier compilé (`dist/`) a sa source dans le dépôt et s’en reconstruit ; pas de code minifié sans source, pas de texte encodé en base64 ;
 - **peu de dépendances**, à des versions fixes, sans script `postinstall` ni dépendance tirée d’un dépôt git ;
-- **des binaires attestés** (voir plus haut) : sans attestation, une version ne peut pas être vérifiée ;
+- **un `Cargo.lock` court** pour un plugin en Rust : chaque dépendance se relit ;
 - **des mises à jour courtes** : une nouvelle version se relit sur son diff avec la dernière vérifiée, les permissions qui grandissent en tête.
 
 Ce que la revue refuse, et ce que le sceau couvre : [la sécurité des plugins](plugins/security).

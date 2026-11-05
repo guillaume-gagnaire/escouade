@@ -111,6 +111,8 @@ Un plugin désinstallé ou désactivé (ou le plugin ACP lui-même) : ses agents
 
 Pour l’instant, un harness décrit n’a pas de vue terminal ni de textes rédigés.
 
+Un harness qui n’est pas décrit par ACP s’écrit en Rust : voir [écrire un harness](plugins/rust#ecrire-un-harness).
+
 ## L’essayer
 
 Installe le dossier de ton plugin depuis la vue Plugins (« En développement »), puis choisis son harness dans le menu « Harness ». Avant l’installation, la fenêtre montre le programme que ses agents lanceront (`goose acp`). Le banc des harness d’Escouade joue le même client sur un faux agent ACP décrit par un manifeste (`tests/fixtures/plugins/fake-acp/`).

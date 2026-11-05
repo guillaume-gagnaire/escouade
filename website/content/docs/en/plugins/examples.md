@@ -15,11 +15,12 @@ To make one yours, copy its folder and give it an id of your own (`io.github.<yo
 | Slack | The same in Slack, in each project’s channel, with a secret in the keychain | TypeScript program |
 | Team rules | The agents’ commands allowed or denied by a file of the repository | TypeScript program |
 | Goose | An agent that speaks ACP, added as a harness | Declarative |
+| Linear | A source of the Kanban, on the kit | Rust module |
 
 The code shown here is the repository’s: a test of the site checks it has not changed since.
 
 > [!NOTE]
-> Slack and Team rules are `run.js` plugins since their 2.0.0: Escouade runs their `dist/plugin.mjs` inside the app, in WASM, with no Node on the machine (see [the protocol](plugins/api#a-program-in-js-or-typescript)). They need Escouade 2.2.0 or later (`escouade.min`); their 1.x versions, started through Node, stay on the store for the versions before. Node only serves their authors, to build and test them.
+> Slack and Team rules are `run.js` plugins since their 2.0.0: Escouade runs their `dist/plugin.mjs` inside the app, in WASM, with no Node on the machine (see [the protocol](plugins/api#a-program-in-wasm)). They need Escouade 2.2.0 or later (`escouade.min`); their 1.x versions, started through Node, stay on the store for the versions before. Node only serves their authors, to build and test them.
 
 ## Trying them
 
@@ -411,6 +412,27 @@ void teamRules().start();
 ```
 
 The rules are read once, at start: a decision has 500 ms. In WASM, `rules.json` is given to it at its start with the other JSON files at the root of its folder; it starts nothing and reaches no network (it has no `permissions.network`). An edit or a file read is not a command, and goes to the user.
+
+## Linear
+
+A source of the Kanban in Rust: the kit’s `Hosts` answers the protocol, and the plugin gives its kind and its client. The `npm create escouade-plugin -- --kind rust` template, shorter, starts from a blank page; Linear shows a real service. It is read in [the Rust kit](plugins/rust#writing-a-source), and its code is in [`plugins/linear`](https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/linear).
+`plugins/linear/src/lib.rs` (excerpt)
+
+```rust
+impl SourceKind for LinearSource {
+    fn id(&self) -> &str {
+        ID
+    }
+    fn name(&self) -> &str {
+        S
+    }
+    fn client(&self, http: reqwest::Client, account: &Credentials) -> Box<dyn TicketSource> {
+        let base = account.api.clone().filter(|a| !a.trim().is_empty());
+        Box::new(Linear::new(http, account, base.as_deref().unwrap_or(API)))
+    }
+}
+```
+
 
 ## Goose
 

@@ -70,7 +70,8 @@ The `$schema` line gives completion and checks in VS Code and the editors that r
 | `icon` | no | Its logo: a square PNG of its folder, 256 px a side at least, 1 MB at most (see below). |
 | `run` | no | Its program. Without one, the plugin is declarative: nothing runs. |
 | `activation` | no | What starts it, for example `event:ticket.column`. Without an activation, its program does not run. |
-| `permissions` | no | What it asks for: `events`, `network`, `secrets`, `commands` (lists) and `decide` (`true` or `false`). |
+| `permissions` | no | What it asks for: `events`, `network`, `secrets`, `files`, `commands` (lists) and `decide` (`true` or `false`). See [the host’s capabilities](plugins/capabilities). |
+| `limits` | no | What more it asks of the host: `fetchSeconds`, `fetchBytes`, `fileBytes` ([the limits](plugins/capabilities#the-limits-limits)). |
 | `contributes` | no | Its extension points: what it adds to Escouade. |
 | `store` | no | What the marketplace shows of it: `categories`, `keywords`, `screenshots`, `docs`. |
 
@@ -94,7 +95,7 @@ The marketplace re-encodes it without its metadata at 256 and 64 px, and shows i
 
 ### The program
 
-A program is one or the other, never both:
+A program is one of the three, never two:
 
 - `js`: the bundle of a plugin in JS or TypeScript, in its folder. Escouade runs it inside the app, in WASM, without Node; the install window says “Runs inside Escouade, isolated”. This is what `npm create escouade-plugin` writes (see [the SDK](plugins/sdk#without-node)):
 
@@ -104,7 +105,15 @@ A program is one or the other, never both:
   "run": { "js": "dist/plugin.mjs" },
 ```
 
-- `command`: the path of a program in the plugin’s folder, which a process runs; `windows`, `macos` and `linux` give another one for each system that has its own; `args` adds arguments. The install window says “Runs a program on your computer, with your rights”.
+- `wasm`: the `Cargo.toml` of a plugin in Rust, never a binary. The store compiles it into a module, beside the manifest as `plugin.wasm`; the window says the same as for `js`, and the same [capabilities](plugins/capabilities) apply (see [the Rust kit](plugins/rust)):
+
+`sdk/create-escouade-plugin/templates/rust/escouade-plugin.json` (excerpt)
+
+```json
+  "run": { "wasm": "Cargo.toml" },
+```
+
+- `command`: the path of a program in the plugin’s folder, which a process runs; `windows`, `macos` and `linux` give another one for each system; `args` adds arguments. The install window says “Runs a program on your computer, with your rights”. **The store refuses it**: a plugin of the store never has a `run.command`, each one runs in WASM there. It is still started for a plugin installed from a folder or a git repository, unverified. To run a program of the computer, a plugin in WASM asks for `permissions.commands` ([the programs](plugins/capabilities#the-programs-commands)).
 
 An absolute path, or one that climbs up with `..`, is refused: a plugin only starts what it brings.
 

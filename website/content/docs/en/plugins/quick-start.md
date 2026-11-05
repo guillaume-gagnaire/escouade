@@ -1,12 +1,12 @@
 # A first plugin
 
-A working plugin in ten minutes: first a Discord webhook, without a line of code, then a TypeScript program that reacts to the same events. Each step is checked before the next.
+A working plugin in ten minutes: first a Discord webhook, without a line of code, then a program in TypeScript or in Rust that reacts to the same events. Each step is checked before the next.
 
 ## What you need
 
 - Escouade, which ships the `escouade-plugin` command beside its program (see [testing a plugin](plugins/testing));
 - for Discord, a channel and the URL of one of its webhooks (the channel’s settings › Integrations › Webhooks);
-- for the TypeScript part, Node 22.18 or later, to write and test the plugin. Whoever installs it does not need it.
+- for a program, Node 22.18 or later in TypeScript, Rust in Rust, to write and test the plugin. Whoever installs it needs neither.
 
 ## A Discord webhook, without code
 
@@ -50,7 +50,24 @@ An error is told field by field, with its path (“`escouade.min` is missing.”
 
 **5. Try it.** Move a ticket to “To review”: the message reaches the channel. The “Journal” tab of its page notes each call, by its host and its answer, never the whole URL.
 
-## The same, in TypeScript
+## A program, in TypeScript or in Rust
+
+Both give a WASM module that Escouade runs inside the app, on the same methods. The template of each language says when a ticket is ready to test and refuses force pushes:
+
+| | TypeScript | Rust |
+| --- | --- | --- |
+| You need | Node 22.18 | Rust, with `rustup target add wasm32-wasip1`, and a C compiler for `cargo test` |
+| Create it | `npm create escouade-plugin@latest my-plugin -- --kind program` | `npm create escouade-plugin@latest my-plugin -- --kind rust` |
+| The manifest says | `"run": { "js": "dist/plugin.mjs" }` | `"run": { "wasm": "Cargo.toml" }` |
+| Its tests | `npm test` | `cargo test` |
+| Check its manifest | `npm run validate` | `escouade-plugin validate .` |
+| The bench | `npm run bench` | `escouade-plugin test .` |
+| The module | `npm run build`, Escouade compiles the rest | `escouade-plugin build .` |
+| What you commit | `dist/plugin.mjs` and its sources | `Cargo.lock` and its sources |
+
+Pick TypeScript to go fast. Pick Rust for an API client that already exists, for work on bytes, or for [the kit](plugins/rust), which writes a source of the Kanban or a code host for you.
+
+### In TypeScript
 
 **1. The template.**
 
@@ -96,8 +113,66 @@ The [conformance bench](plugins/testing) plays your program as Escouade does: th
 
 **4. Load it**: `npm run build` bundles your code into `dist/plugin.mjs`, then load the folder like the first one, from “In development”. Its journal shows its lines live.
 
+### In Rust
+
+**1. The template.**
+
+```sh
+npm create escouade-plugin@latest my-plugin -- --kind rust
+cd my-plugin
+cargo test
+```
+
+`npm` only writes the folder: the plugin has no `package.json` and no `node_modules`. It depends on [the kit](plugins/rust) by version, with its `Cargo.lock`, and its code fits in one file:
+`sdk/create-escouade-plugin/templates/rust/src/lib.rs` (excerpt)
+
+```rust
+struct Template;
+
+impl Plugin for Template {
+    // Every method of Escouade comes here but `initialize` and `shutdown`, which the kit answers. A notification too: what
+    // it returns goes nowhere. Nothing may block here: an `.await` gives the turn back to Escouade.
+    fn call<'a>(
+        &'a self,
+        cx: &'a Cx,
+        method: &'a str,
+        params: Value,
+    ) -> BoxFuture<'a, Result<Value, Refusal>> {
+        Box::pin(async move {
+            match method {
+                "events/fact" => {
+                    fact(cx, &params);
+                    Ok(Value::Null)
+                }
+                "permissions/decide" => Ok(decide(&params)),
+                other => Err(Refusal::not_found(other)),
+            }
+        })
+    }
+}
+```
+
+What each call of the host does is in [the calls](plugins/calls), in TypeScript and in Rust.
+
+**2. The bench.**
+
+```sh
+escouade-plugin validate .
+escouade-plugin test .
+```
+
+`escouade-plugin` compiles the module as the store does, with a compiler it downloads itself the first time (650 MB, a minute), then plays it as Escouade does.
+
+**3. Load it.** `escouade-plugin build .` writes the module into `packs/`: copy it beside the manifest as `plugin.wasm`, which the template keeps out of git, then load the folder from “In development”. Copy it again after each change: the store, for its part, compiles the sources.
+
+```sh
+escouade-plugin build .
+cp packs/*.wasm plugin.wasm
+```
+
 ## Next
 
 - [The manifest](plugins/manifest), field by field, and [the events](plugins/events) a plugin can receive.
+- [The host’s capabilities](plugins/capabilities) and [the calls](plugins/calls), with an example in TS and in Rust for each.
 - [Permissions](plugins/permissions): what each one opens.
 - [Publishing on the store](plugins/publishing), when it is ready.

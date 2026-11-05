@@ -6,7 +6,7 @@ The questions that come back about plugins, for those who install them and for t
 
 ### Do I need Node to run a plugin?
 
-No, for a plugin published as `run.js`: Escouade runs it inside the app, in WASM. A plugin published as a program (`run.command`) brings its executable. Only a plugin installed from a folder or a git repository whose command names `node` needs it; the store refuses that form. Slack and Team rules, two of the [example plugins](plugins/examples), run as `run.js` since their 2.0.0.
+No: a plugin of the store runs inside the app, in WASM, whether it is written in TypeScript (`run.js`) or in Rust (`run.wasm`). Only a plugin installed from a folder or a git repository whose command names `node` needs it; the store refuses that form. Slack and Team rules, two of the [example plugins](plugins/examples), run as `run.js` since their 2.0.0.
 
 ### “Verified by Escouade”, “Unverified”: what is the difference?
 
@@ -32,11 +32,11 @@ Its copy in `~/.escouade/plugins/<id>/`, the list of plugins in `~/.escouade/plu
 
 ### Which language should I write a plugin in?
 
-None, when the manifest is enough: a theme, webhooks, an ACP harness. JS or TypeScript with [the SDK](plugins/sdk), published as `run.js`. Any other language, as a program that speaks [the protocol](plugins/api) on its standard input and output, published as one executable per system.
+None, when the manifest is enough: a theme, webhooks, an ACP harness. JS or TypeScript with [the SDK](plugins/sdk), published as `run.js`. Rust with [the kit](plugins/rust), published as `run.wasm`. The store takes no other language: the protocol stays open to any program, but it does not get published.
 
 ### How do I test it without starting Escouade?
 
-`escouade-plugin test` plays the conformance bench, `escouade-plugin dev` the fake Escouade, by hand; the SDK gives an in-memory fake for unit tests (see [testing a plugin](plugins/testing)).
+`escouade-plugin test` plays the conformance bench, `escouade-plugin dev` the fake Escouade, by hand; the SDK gives an in-memory fake for unit tests, and the Rust kit `serve_on` (see [testing a plugin](plugins/testing)).
 
 ### Can I use `dev.escouade.*` as an id?
 
