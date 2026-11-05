@@ -1,9 +1,9 @@
 ---
 title: "Les plugins livrés avec Escouade"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §4.3, §4.4","docs/TODO-2.2.md (INT-4, INT-8.1)","src-tauri/src/plugins/builtin.rs","docs/PLUGINS.md §4.13","plugins/builtin/dev.escouade.github/README.md","plugins/builtin/dev.escouade.gitlab/README.md","plugins/builtin/dev.escouade.gitea/README.md","plugins/builtin/dev.escouade.azure-devops/README.md"]
-tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226"]
-decisions: []
+sources: ["docs/PLUGINS.md §4.3, §4.4","docs/TODO-2.2.md (INT-4, INT-8.1)","src-tauri/src/plugins/builtin.rs","docs/PLUGINS.md §4.13","plugins/builtin/dev.escouade.github/README.md","plugins/builtin/dev.escouade.gitlab/README.md","plugins/builtin/dev.escouade.gitea/README.md","plugins/builtin/dev.escouade.azure-devops/README.md","docs/PLUGINS.md §8.7, §8.13","src-tauri/src/plugins/seed.rs"]
+tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338"]
+decisions: ["l-amorce-des-plugins-installee-sans-rese"]
 compared: null
 ---
 
@@ -62,3 +62,21 @@ Cursor CLI, Mistral Vibe (dans le plugin Mistral), Gemini CLI, OpenCode, Copilot
 
 Antigravity CLI aussi (`dev.escouade.antigravity-cli`, INT-10.8), ses comptes inchangés ; voir *Antigravity CLI en plugin*.
 Claude Code (`dev.escouade.claude-code`, INT-10.5) est servi lui aussi par un plugin livré ; voir *Claude Code en plugin*.
+
+## L'amorce : la sortie de l'origine `builtin` (ESC-338)
+
+L'installeur peut porter les versions publiées de la première main : pour chacune, les octets et la signature du store, plus la liste de révocation du jour. La liste est `plugins/seed.json`, embarquée : `id`, `version`, empreinte de `version.json`. Elle est vide tant que la première main n'est pas publiée (Z2) : d'ici là, tout ce qui précède reste vrai. `builtin.rs` dit quels identifiants elle peut tenir.
+
+Un identifiant que `seed.json` nomme n'est plus donné par l'app :
+
+- **Au premier lancement**, et après une mise à jour de l'app, Escouade installe ce que l'amorce tient et qui n'est pas installé, sans réseau, par le chemin d'une installation du store : mêmes contrôles (signature, empreintes, `dev.escouade.*` signé, révocation, `escouade.min` et `max`). L'origine est `store`, marquée `seed`, et sa page le dit. Le module se précompile à sa première activation.
+- **Une version refusée** n'installe rien, et la vue Plugins dit pourquoi sous « Proposés par Escouade ». Les autres passent.
+- **Une version retirée par la liste** (`disable`) s'installe coupée, sa raison dite. Un sceau retiré (`unverify`) n'installe rien. La liste du store l'emporte dès qu'elle est plus récente que celle de l'amorce.
+- **Rien ne se met à jour seul.** Une version plus récente, du store ou de l'amorce d'une nouvelle app, est proposée, et s'installe au clic avec la fenêtre habituelle. La plus récente des deux est proposée, jamais une plus ancienne que l'installée.
+- **Ces plugins se coupent et se désinstallent.** L'amorce ne remet pas ce que l'utilisateur a désinstallé : elle le note, et « Proposés par Escouade » le propose, depuis l'amorce sans réseau, ou depuis le store s'il a plus récent. Ses choix gardés reviennent avec lui.
+- **Sans son plugin**, un agent dit que le plugin n'est plus installé et que la vue Plugins propose de l'installer ; une source ou un hébergeur le dit dans son message habituel.
+- **Sans réseau ni store**, tout marche à la version installée ou à celle de l'amorce.
+
+Un utilisateur qui a déjà des choix sur un plugin de l'origine `builtin` les garde à son passage. Si l'amorce le refuse, le plugin continue de tourner comme avant, jusqu'à Z3.
+
+La release télécharge l'amorce (`store/scripts/seed.ts`), vérifie chaque signature, et échoue sur une version absente, non signée, révoquée ou qui ne tourne pas sur cette version d'Escouade : **le chef publie d'abord, la release ensuite**. Un build de développement accepte les modules non signés de `scripts/seed-dev.sh` ; une signature fausse reste refusée partout.

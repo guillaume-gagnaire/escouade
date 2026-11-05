@@ -21,15 +21,15 @@ fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
 }
 
-fn temp_dir(name: &str) -> PathBuf {
+pub(crate) fn temp_dir(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("store-{name}-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }
 
 /// The fake store, run by node; stopped when dropped.
-struct Fake {
-    url: String,
+pub(crate) struct Fake {
+    pub(crate) url: String,
     key: String,
     child: Child,
 }
@@ -42,7 +42,7 @@ impl Drop for Fake {
 }
 
 impl Fake {
-    fn start() -> Self {
+    pub(crate) fn start() -> Self {
         let mut child = Command::new("node")
             .arg(root().join("tests/fixtures/store/fake-store.mjs"))
             .stdout(Stdio::piped())
@@ -63,12 +63,12 @@ impl Fake {
 
     /// Trusts its key as the app trusts the store's (this test's process alone: nextest runs each
     /// test in its own).
-    fn trusted(self) -> Self {
+    pub(crate) fn trusted(self) -> Self {
         std::env::set_var("ESCOUADE_STORE_TEST_KEY", &self.key);
         self
     }
 
-    fn store(&self, data: &DataDir) -> Store {
+    pub(crate) fn store(&self, data: &DataDir) -> Store {
         Store::load(
             data,
             self.url.clone(),
@@ -77,7 +77,7 @@ impl Fake {
         )
     }
 
-    async fn post(&self, path: &str, body: Value) -> Value {
+    pub(crate) async fn post(&self, path: &str, body: Value) -> Value {
         reqwest::Client::new()
             .post(format!("{}{path}", self.url))
             .json(&body)
@@ -89,7 +89,7 @@ impl Fake {
             .unwrap()
     }
 
-    async fn state(&self) -> Value {
+    pub(crate) async fn state(&self) -> Value {
         reqwest::get(format!("{}/_fake/state", self.url))
             .await
             .unwrap()
@@ -99,7 +99,7 @@ impl Fake {
     }
 }
 
-fn http() -> reqwest::Client {
+pub(crate) fn http() -> reqwest::Client {
     reqwest::Client::builder().no_proxy().build().unwrap()
 }
 

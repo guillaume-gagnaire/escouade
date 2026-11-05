@@ -8,6 +8,10 @@
 //! comes with a release, and no revocation list for them. The user may turn them off for the app or for a project, never
 //! remove them; a plugin of the store with the same id is refused: the one the app gives wins, and is never replaced by
 //! a copy that could be older or not the app's.
+//!
+//! This registry is also the list of the ids of the app's seed (ESC-338, `seed`): an id `plugins/seed.json` names leaves
+//! the origin `builtin` and is installed from there, a plugin like any other. The list fills as the plugins are published
+//! (Z2); the origin `builtin` lasts until Z3.
 
 use std::path::Path;
 
@@ -208,6 +212,11 @@ pub const GEMINI: &str = "dev.escouade.gemini-cli";
 
 /// The plugin « OpenCode »: OpenCode as a harness, on its `opencode serve` (INT-10.2).
 pub const OPENCODE: &str = "dev.escouade.opencode";
+
+/// Whether the seed may hold `id`: a plugin of the registry, less the demonstration, which is no product.
+pub fn seeds(id: &str) -> bool {
+    id != "dev.escouade.minimal" && is_builtin(id)
+}
 
 /// Whether `id` is the id of a plugin the app gives.
 pub fn is_builtin(id: &str) -> bool {

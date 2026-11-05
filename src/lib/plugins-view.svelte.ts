@@ -3,7 +3,7 @@
 import { open } from '@tauri-apps/plugin-dialog';
 import { untrack } from 'svelte';
 import { t } from './i18n';
-import { pluginsApi, type Category, type PluginPreview, type PluginRefusal, type PluginView } from './plugins';
+import { pluginsApi, type Category, type PluginPreview, type PluginRefusal, type PluginView, type SeedOffer } from './plugins';
 import { storeApi, type CatalogPlugin, type DeepLink, type StoreView, type Suggestion } from './store';
 import { readSetAside, setAside } from './proposed-plugins';
 import { app } from './state.svelte';
@@ -41,6 +41,8 @@ const errorText = refusalText;
 
 class PluginsStore {
   list = $state<PluginView[]>([]);
+  /** What the app's seed holds that is not installed: proposed, never put back by itself (ESC-338). */
+  offers = $state<SeedOffer[]>([]);
   loaded = $state(false);
   page = $state<PluginsPage>({ kind: 'installed' });
   install = $state<InstallStep | null>(null);
@@ -193,10 +195,22 @@ class PluginsStore {
   async load() {
     try {
       this.list = (await pluginsApi.list()) ?? [];
+      await this.loadOffers();
     } catch (e) {
       this.error = errorText(e);
     }
     this.loaded = true;
+  }
+
+  private async loadOffers() {
+    this.offers = (await pluginsApi.seedOffers()) ?? [];
+  }
+
+  /** A plugin the seed proposes: from the store when it has a newer version, else from the seed, with no network. */
+  installOffer(o: SeedOffer) {
+    const best = this.store?.best?.[o.id];
+    if (best && best.localeCompare(o.version, undefined, { numeric: true }) > 0) return this.fromStore(o.id);
+    return this.inspect(() => pluginsApi.inspectSeed(o.id));
   }
 
   /** Reads the icon of the installed plugin `id` once; read again after it is installed anew. */
@@ -251,6 +265,7 @@ class PluginsStore {
       void app.refreshEngines();
       this.list = this.list.filter((p) => p.id !== id);
       delete this.icons[id];
+      await this.loadOffers();
       if (this.page.kind === 'plugin' && this.page.id === id) this.show({ kind: 'installed' });
     } catch (e) {
       this.error = errorText(e);
@@ -300,7 +315,8 @@ class PluginsStore {
   async update(p: PluginView) {
     if (!p.update) return;
     const o = p.origin;
-    if (o.kind === 'store') await this.fromStore(p.id, p.update.version);
+    if (p.update.seed) await this.inspect(() => pluginsApi.inspectSeed(p.id));
+    else if (o.kind === 'store') await this.fromStore(p.id, p.update.version);
     else if (o.kind === 'git' && p.update.tag) await this.inspect(() => pluginsApi.inspectGit(o.url, p.update!.tag!));
     else if (o.kind === 'folder') await this.inspect(() => pluginsApi.inspectFolder(o.path));
   }
@@ -340,6 +356,7 @@ class PluginsStore {
       this.put(view);
       void app.refreshEngines();
       this.install = null;
+      void this.loadOffers().catch(() => {});
       if (this.queue.length) await this.next();
       else this.openPlugin(view.id);
     } catch (e) {

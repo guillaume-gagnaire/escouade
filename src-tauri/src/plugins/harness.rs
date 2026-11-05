@@ -202,6 +202,11 @@ pub fn sync(rt: &Arc<Runtime>, plugins: &super::Plugins) -> Vec<EngineId> {
     let on = |v: &super::PluginView| v.state == super::State::Ready && v.choices.enabled;
     let list = plugins.list(crate::i18n::Lang::En);
     let acp_on = list.iter().any(|v| v.id == super::builtin::ACP && on(v));
+    *UNINSTALLED.lock() = BUILTIN_HARNESSES
+        .iter()
+        .map(|h| h.plugin)
+        .filter(|p| plugins.uninstalled(p))
+        .collect();
     for h in BUILTIN_HARNESSES {
         let plugin_on = list.iter().any(|v| v.id == h.plugin && on(v));
         sync_builtin(rt, h, plugin_on, plugins.app_dir());
@@ -301,6 +306,10 @@ pub const BUILTIN_HARNESSES: &[BuiltinHarness] = &[
 
 /// The harnesses of the plugins the app gives that are on, by their plugin, each made once for each runtime (by its
 /// address: a test makes several).
+/// The plugins of the core's harnesses the user uninstalled (`Plugins::uninstalled`): an agent of theirs says so, and that the
+/// view proposes them. As `sync` left it.
+static UNINSTALLED: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
+
 static PLUGGED: Mutex<Vec<(&'static str, usize, &'static ProcessEngine, bool)>> =
     Mutex::new(Vec::new());
 
@@ -362,6 +371,12 @@ pub fn spawn_plugged(
             .and_then(|m| serde_json::from_str::<Value>(&m).ok())
             .and_then(|m| m["name"].as_str().map(str::to_string))
             .unwrap_or_else(|| name.to_string());
+        if UNINSTALLED.lock().contains(&plugin) {
+            bail!(tr!(
+                "Le plugin {called} ({plugin}) n’est plus installé : la vue Plugins propose de l’installer, pour lancer un agent de {name}.",
+                "The {called} plugin ({plugin}) is no longer installed: the Plugins view offers to install it, to start a {name} agent."
+            ));
+        }
         bail!(tr!(
             "Le plugin {called} ({plugin}) est coupé ou n’est pas chargé : rallume-le dans la vue Plugins pour lancer un agent de {name}.",
             "The {called} plugin ({plugin}) is switched off or not loaded: turn it back on in the Plugins view to start a {name} agent."

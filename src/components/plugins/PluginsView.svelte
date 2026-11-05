@@ -9,6 +9,7 @@
   import PluginPage from './PluginPage.svelte';
   import PluginRows from './PluginRows.svelte';
   import PluginTile from './PluginTile.svelte';
+  import SeedOffers from './SeedOffers.svelte';
   import StoreHome from './StoreHome.svelte';
   import StorePluginPage from './StorePluginPage.svelte';
   import { app } from '../../lib/state.svelte';
@@ -172,6 +173,7 @@
               group={t('plugins.installed.builtin')}
               note={t('plugins.installed.builtinNote')}
             />{/if}
+          <SeedOffers />
           <p class="hint list">
             {list?.serial
               ? t('plugins.installed.revocations', {

@@ -392,6 +392,22 @@ pub async fn plugin_inspect_store(
     core.plugins.inspect_store(fetched, lang)
 }
 
+/// What installing the seed's version of the plugin `id` would do (ESC-338): read from the installer, every fingerprint and
+/// the signature checked, set aside until `plugin_install` or `plugin_discard`. No network.
+#[tauri::command(async)]
+pub fn plugin_inspect_seed(
+    core: CoreState,
+    id: String,
+) -> Result<crate::plugins::Preview, crate::plugins::Refusal> {
+    core.plugins.inspect_seed(&id, crate::i18n::ui())
+}
+
+/// What the app's seed holds that is not installed: what the user uninstalled, what it refused to install.
+#[tauri::command(async)]
+pub fn plugin_seed_offers(core: CoreState) -> Vec<crate::plugins::seed::Offer> {
+    core.plugins.seed_offers(crate::i18n::ui())
+}
+
 /// What installing the plugin of a git repository at a tag would do: cloned and set aside.
 #[tauri::command(async)]
 pub async fn plugin_inspect_git(

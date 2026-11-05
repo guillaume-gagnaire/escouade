@@ -52,7 +52,7 @@ pub fn mirror_url() -> String {
     debug_env("ESCOUADE_STORE_MIRROR_URL").unwrap_or_else(|| MIRROR_URL.into())
 }
 
-fn debug_env(name: &str) -> Option<String> {
+pub(super) fn debug_env(name: &str) -> Option<String> {
     if !cfg!(debug_assertions) {
         return None;
     }
@@ -457,6 +457,22 @@ impl Store {
         }
     }
 
+    /// Takes the list `seed` of the app's seed when it is newer than the one kept (or none is): without the store, the
+    /// seed's list is the one that holds (docs/PLUGINS.md §8.7). It is not kept: the seed stays where it is.
+    pub fn with_seed_list(self, seed: Option<RevocationList>) -> Self {
+        if let Some(list) = seed {
+            let mut c = self.cache.write();
+            if c.revocations
+                .as_ref()
+                .is_none_or(|l| l.serial < list.serial)
+            {
+                c.revocations = Some(list);
+                c.revocations_from = Some("seed".into());
+            }
+        }
+        self
+    }
+
     fn save_meta(&self) {
         let c = self.cache.read();
         let meta = Meta {
@@ -724,31 +740,7 @@ impl Store {
         let json = get(&entry.files.version_json, SMALL_MAX)
             .await
             .map_err(|e| fail("version.json", e))?;
-        if sha256(&json) != entry.sha256 {
-            return Err(tr_in!(
-                lang,
-                "Le version.json reçu ne correspond pas à celui que le catalogue annonce : rien n'est installé.",
-                "The version.json received is not the one the catalog names: nothing is installed."
-            ));
-        }
-        let file: VersionFile = serde_json::from_slice(&json).map_err(|e| e.to_string())?;
-        if !plain_folder(&file.path) {
-            return Err(tr_in!(
-                lang,
-                "Le version.json reçu nomme un dossier mal formé ({}) : rien n'est installé.",
-                "The version.json received names a malformed folder ({}): nothing is installed.",
-                file.path
-            ));
-        }
-        if file.id != id || file.version != entry.version {
-            return Err(tr_in!(
-                lang,
-                "Le version.json reçu est celui d'une autre version ({}@{}) : rien n'est installé.",
-                "The version.json received is another version's ({}@{}): nothing is installed.",
-                file.id,
-                file.version
-            ));
-        }
+        let file = check_version_json(&json, &entry.sha256, id, &entry.version, lang)?;
 
         // 2. The seal: checked here, with the app's keys, never taken from the store's word.
         let unverified = list
@@ -761,20 +753,7 @@ impl Store {
                     .await
                     .map_err(|e| fail(".minisig", e))?;
                 let sig = String::from_utf8(sig).map_err(|e| e.to_string())?;
-                let keys = trusted_keys(list.as_ref());
-                let refs: Vec<&str> = keys.iter().map(String::as_str).collect();
-                match store_keys::verified_with(&refs, &json, &sig, id, &entry.version) {
-                    Ok(()) => minisig = Some(sig),
-                    // An app that embeds no key yet shows no seal; it does not refuse.
-                    Err(store_keys::Refused::NoKey) => {}
-                    Err(_) => {
-                        return Err(tr_in!(
-                            lang,
-                            "La signature de cette version ne tient pas avec les clés d'Escouade : rien n'est installé.",
-                            "This version's signature does not hold with Escouade's keys: nothing is installed."
-                        ))
-                    }
-                }
+                minisig = check_seal(&json, sig, id, &entry.version, list.as_ref(), lang)?;
             }
         }
         if verified_only && minisig.is_none() {
@@ -790,32 +769,7 @@ impl Store {
         let archive = get(&entry.files.archive, ARCHIVE_MAX)
             .await
             .map_err(|e| fail("archive.tar.gz", e))?;
-        if sha256(&archive) != file.archive.sha256 || archive.len() as u64 != file.archive.size {
-            return Err(tr_in!(
-                lang,
-                "L'archive reçue ne correspond pas à celle que le store a publiée : rien n'est installé.",
-                "The archive received is not the one the store published: nothing is installed."
-            ));
-        }
-        let files = read_archive(&archive).map_err(|e| {
-            tr_in!(
-                lang,
-                "L'archive ne se lit pas sans danger ({e}) : rien n'est installé.",
-                "The archive does not read safely ({e}): nothing is installed."
-            )
-        })?;
-        let manifest_bytes = files
-            .iter()
-            .find(|(p, _)| p == manifest::FILE)
-            .map(|(_, b)| b.as_slice())
-            .unwrap_or_default();
-        if file.manifest_sha256.is_empty() || sha256(manifest_bytes) != file.manifest_sha256 {
-            return Err(tr_in!(
-                lang,
-                "Le manifeste de l'archive n'est pas celui que version.json décrit : rien n'est installé.",
-                "The archive's manifest is not the one version.json describes: nothing is installed."
-            ));
-        }
+        let files = check_archive(&archive, &file, lang)?;
 
         // 4. This system's program, when the release has one.
         let here = platform();
@@ -844,13 +798,7 @@ impl Store {
                 let bytes = get(&path, MODULE_MAX)
                     .await
                     .map_err(|e| fail("plugin.wasm", e))?;
-                if sha256(&bytes) != w.sha256 || bytes.len() as u64 != w.size {
-                    return Err(tr_in!(
-                        lang,
-                        "Le module WASM reçu ne correspond pas à celui que le store a compilé : rien n'est installé.",
-                        "The WASM module received is not the one the store compiled: nothing is installed."
-                    ));
-                }
+                check_module(&bytes, w, lang)?;
                 Some(bytes)
             }
             None => None,
@@ -872,6 +820,8 @@ impl Store {
             files,
             program,
             module,
+            seed: false,
+            unsigned: false,
         })
     }
 
@@ -892,6 +842,115 @@ impl Store {
             log::info!("the store's count of installs is not reached: {e}");
         }
     }
+}
+
+/// The bytes of `version.json` checked: those the catalogue (or the seed) names by `expected`, a plain folder, this id and
+/// this version. Shared by `Store::fetch` and the seed: an install from either passes the same checks.
+pub(super) fn check_version_json(
+    json: &[u8],
+    expected: &str,
+    id: &str,
+    version: &str,
+    lang: Lang,
+) -> Result<VersionFile, String> {
+    if sha256(json) != expected {
+        return Err(tr_in!(
+            lang,
+            "Le version.json reçu ne correspond pas à celui que le catalogue annonce : rien n'est installé.",
+            "The version.json received is not the one the catalog names: nothing is installed."
+        ));
+    }
+    let file: VersionFile = serde_json::from_slice(json).map_err(|e| e.to_string())?;
+    if !plain_folder(&file.path) {
+        return Err(tr_in!(
+            lang,
+            "Le version.json reçu nomme un dossier mal formé ({}) : rien n'est installé.",
+            "The version.json received names a malformed folder ({}): nothing is installed.",
+            file.path
+        ));
+    }
+    if file.id != id || file.version != version {
+        return Err(tr_in!(
+            lang,
+            "Le version.json reçu est celui d'une autre version ({}@{}) : rien n'est installé.",
+            "The version.json received is another version's ({}@{}): nothing is installed.",
+            file.id,
+            file.version
+        ));
+    }
+    Ok(file)
+}
+
+/// The seal of `json`, checked here with the app's keys less those `list` revokes, never taken from anyone's word: the
+/// signature when it holds, None for an app that embeds no key (it shows no seal, it does not refuse), a refusal for one
+/// that does not hold.
+pub(super) fn check_seal(
+    json: &[u8],
+    sig: String,
+    id: &str,
+    version: &str,
+    list: Option<&RevocationList>,
+    lang: Lang,
+) -> Result<Option<String>, String> {
+    let keys = trusted_keys(list);
+    let refs: Vec<&str> = keys.iter().map(String::as_str).collect();
+    match store_keys::verified_with(&refs, json, &sig, id, version) {
+        Ok(()) => Ok(Some(sig)),
+        Err(store_keys::Refused::NoKey) => Ok(None),
+        Err(_) => Err(tr_in!(
+            lang,
+            "La signature de cette version ne tient pas avec les clés d'Escouade : rien n'est installé.",
+            "This version's signature does not hold with Escouade's keys: nothing is installed."
+        )),
+    }
+}
+
+/// The archive checked against `version.json`, its size too, then read without danger; its manifest is the one
+/// `version.json` describes. Gives its files.
+pub(super) fn check_archive(
+    archive: &[u8],
+    file: &VersionFile,
+    lang: Lang,
+) -> Result<Vec<(String, Vec<u8>)>, String> {
+    if sha256(archive) != file.archive.sha256 || archive.len() as u64 != file.archive.size {
+        return Err(tr_in!(
+            lang,
+            "L'archive reçue ne correspond pas à celle que le store a publiée : rien n'est installé.",
+            "The archive received is not the one the store published: nothing is installed."
+        ));
+    }
+    let files = read_archive(archive).map_err(|e| {
+        tr_in!(
+            lang,
+            "L'archive ne se lit pas sans danger ({e}) : rien n'est installé.",
+            "The archive does not read safely ({e}): nothing is installed."
+        )
+    })?;
+    let manifest_bytes = files
+        .iter()
+        .find(|(p, _)| p == manifest::FILE)
+        .map(|(_, b)| b.as_slice())
+        .unwrap_or_default();
+    if file.manifest_sha256.is_empty() || sha256(manifest_bytes) != file.manifest_sha256 {
+        return Err(tr_in!(
+            lang,
+            "Le manifeste de l'archive n'est pas celui que version.json décrit : rien n'est installé.",
+            "The archive's manifest is not the one version.json describes: nothing is installed."
+        ));
+    }
+    Ok(files)
+}
+
+/// The module the store compiled, the bytes `version.json` names: what was signed is what runs.
+pub(super) fn check_module(bytes: &[u8], w: &WasmRef, lang: Lang) -> Result<(), String> {
+    if sha256(bytes) != w.sha256 || bytes.len() as u64 != w.size {
+        return Err(tr_in!(
+            lang,
+            "Le module WASM reçu ne correspond pas à celui que le store a compilé : rien n'est installé.",
+            "The WASM module received is not the one the store compiled: nothing is installed."
+        ));
+    }
+    Ok(())
 }
 
 /// The app's keys less those the list revokes.
@@ -1044,8 +1103,12 @@ pub struct Fetched {
     pub files: Vec<(String, Vec<u8>)>,
     /// This system's program from the release, when it has one.
     pub program: Option<Vec<u8>>,
-    /// The module the store compiled of a `run.js` plugin, checked against `version.json`.
+    /// The module the store compiled of a `run.js` or `run.wasm` plugin, checked against `version.json`.
     pub module: Option<Vec<u8>>,
+    /// Read from the app's seed, not downloaded (`seed`, ESC-338).
+    pub seed: bool,
+    /// A version of the seed a build of development takes without a signature (`scripts/seed-dev.sh`).
+    pub unsigned: bool,
 }
 
 /// The bytes of an answer, `max` at most.

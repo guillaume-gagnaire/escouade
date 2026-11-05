@@ -230,6 +230,7 @@
             <span class="k">{t('plugins.origin.tagLabel')}</span><span class="v mono"
               >{store.tag} → {store.commit.slice(0, 7)} · {t('plugins.origin.archiveSame')}</span
             >
+            {#if store.seed}<span class="k">{t('plugins.origin.seedLabel')}</span><span class="v">{t('plugins.origin.seed')}</span>{/if}
             <span class="k">{t('plugins.origin.fingerprint')}</span><span class="v mono" use:tip={{ text: plugin.fingerprint, aria: false }}
               >{shortPrint(plugin.fingerprint)}</span
             >

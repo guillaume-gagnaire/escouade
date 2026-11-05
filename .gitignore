@@ -11,5 +11,8 @@ playwright-report/
 # The results of the reference measures (INT-0, npm run bench:int0): Playwright empties test-results/ at each run.
 bench-results/
 
+# plugin.wasm is the module a plugin's folder is built to (scripts/plugins-wasm.sh); the store compiles the published one.
+plugins/*/plugin.wasm
+
 # The example plugins run as their folders hold them: their dist/ is built and committed (plugins/ci.mjs checks it).
 !plugins/*/dist/

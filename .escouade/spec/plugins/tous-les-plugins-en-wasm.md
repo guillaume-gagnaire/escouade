@@ -2,8 +2,8 @@
 title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §8 (ESC-330)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »"]
-tickets: ["ESC-330","ESC-331","ESC-332","ESC-334"]
-decisions: [73,71,70,72,75]
+tickets: ["ESC-330","ESC-331","ESC-332","ESC-334","ESC-338"]
+decisions: [73,71,70,72,75,"l-amorce-des-plugins-installee-sans-rese"]
 compared: null
 ---
 
@@ -20,6 +20,10 @@ compared: null
 - `escouade-plugin test` joue un `run.wasm`, son `plugin.wasm` ou le module de `--wasm`. `validate` accepte un `run.wasm` et juge `plugin.wasm` s'il est là.
 - `escouade.call`, l'appel synchrone vers l'hôte, existe et compte dans le temps du tour. Aucune méthode n'y est encore servie.
 
+## L'amorce (ESC-338)
+
+La mécanique est dans l'app, et `plugins/seed.json` reste vide tant que la première main n'est pas publiée (Z2) : d'ici là, rien ne change pour l'utilisateur. Le détail est dans *Les plugins livrés avec Escouade*.
+
 ## L'état de fin
 
 - Chaque plugin est un module WASM, le même pour tous les systèmes, compilé par le store depuis ses sources et signé : en JS/TS par Javy (`run.js`), en Rust par `run.wasm`.
@@ -30,9 +34,8 @@ compared: null
 ## Ce que l'utilisateur voit
 
 - L'app marche dès son installation et hors ligne : elle embarque une amorce, les versions publiées et signées de sa première main, installée sans réseau par le même chemin qu'une installation du store.
-- Une version du store plus récente reste en place à la mise à jour de l'app. On ne redescend jamais de version.
-- Une mise à jour de la première main signée se fait sans clic si ses permissions ne grandissent pas ; sinon elle attend l'accord. Un agent en cours garde sa version jusqu'à son prochain lancement.
-- Un plugin livré se coupe, mais ne se désinstalle pas.
+- Une version plus récente, du store ou de l'amorce d'une nouvelle app, est proposée, et s'installe au clic avec la fenêtre habituelle : aucune mise à jour automatique, la première main comprise. Une version du store plus récente reste en place à la mise à jour de l'app. On ne redescend jamais de version. Un agent en cours garde sa version jusqu'à son prochain lancement.
+- Les plugins de la première main sont des plugins à part entière : ils se coupent et se désinstallent. L'amorce ne remet pas ce que l'utilisateur a désinstallé : elle le note, et la vue Plugins le propose. Un harness ou une source qui n'a plus son plugin le dit, et renvoie à cette proposition.
 - Avant de lancer un plugin, l'app vérifie sa signature, les empreintes de son module et de son archive, sa révocation (la liste du store, sinon celle de l'amorce) et sa compatibilité. Un `dev.escouade.*` non signé est refusé.
 
 ## Les capacités

@@ -173,6 +173,8 @@ mod plugins_reader_tests;
 #[cfg(test)]
 mod plugins_runtime_tests;
 #[cfg(test)]
+mod plugins_seed_tests;
+#[cfg(test)]
 mod plugins_store_tests;
 #[cfg(test)]
 mod plugins_tests;
@@ -667,6 +669,8 @@ pub fn run() {
                 commands::plugin_inspect_dev,
                 commands::plugin_install,
                 commands::plugin_inspect_store,
+                commands::plugin_inspect_seed,
+                commands::plugin_seed_offers,
                 commands::store_view,
                 commands::deep_links_take,
                 commands::store_refresh,

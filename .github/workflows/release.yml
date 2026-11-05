@@ -146,6 +146,13 @@ jobs:
           node-version: 22
           cache: npm
 
+      # The seed of the plugins (ESC-338, docs/PLUGINS.md §8.7): what plugins/seed.json names, the store's bytes, every
+      # signature checked with the public keys of store/keys/. A version not published, not signed or revoked stops the
+      # release: the chef publishes first, the release comes after. Tauri packs src-tauri/seed/ in the installer.
+      - name: Download and check the seed of the plugins
+        shell: bash
+        run: npx --yes tsx@4.23.15 store/scripts/seed.ts fetch
+
       - name: Rust toolchain (pinned in src-tauri/rust-toolchain.toml)
         working-directory: src-tauri
         run: rustup toolchain install

@@ -6,6 +6,10 @@
 # will have schema files for capabilities auto-completion
 /gen/schemas
 
+# The seed of the plugins, fetched by store/scripts/seed.ts for a release, or made by scripts/plugins-wasm.sh for a build of development.
+/seed/*
+!/seed/README.md
+
 # Microsoft's ONNX Runtime for Intel Macs and Linux, fetched by scripts/onnxruntime.sh (ESC-97).
 /macos/onnxruntime/
 /linux/onnxruntime/

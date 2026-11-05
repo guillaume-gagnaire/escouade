@@ -615,7 +615,9 @@ impl Runtime {
                 .as_ref()
                 .and_then(|m| m.run.as_ref())
                 .is_some_and(|r| r.in_wasm().is_some());
-            if v.state == Loaded::Ready && in_wasm {
+            // A plugin of the seed is precompiled at its first activation: a start does not pay for those that do not serve.
+            let seeded = matches!(v.origin, super::Origin::Store { seed: true, .. });
+            if v.state == Loaded::Ready && in_wasm && !seeded {
                 if let Some(h) = self.prepare(&v.id) {
                     let _ = h.join();
                 }
@@ -631,10 +633,16 @@ impl Runtime {
         if self.quitting.load(Ordering::Acquire) {
             return Err(CallError::Stopped(Stop::Shutdown));
         }
-        let view = self
-            .plugins
-            .get(id, Lang::En)
-            .ok_or_else(|| CallError::Unavailable(format!("{id} is not installed")))?;
+        let view = self.plugins.get(id, Lang::En).ok_or_else(|| {
+            CallError::Unavailable(if self.plugins.uninstalled(id) {
+                tr!(
+                    "il n’est plus installé : la vue Plugins propose de l’installer.",
+                    "it is no longer installed: the Plugins view offers to install it."
+                )
+            } else {
+                format!("{id} is not installed")
+            })
+        })?;
         match &view.state {
             Loaded::Ready => {}
             Loaded::Disabled { reason } | Loaded::Invalid { reason, .. } => {

@@ -714,6 +714,7 @@ async fn a_newer_version_is_offered_and_never_installed_by_itself() {
             version: "1.1.0".into(),
             tag: Some("v1.1.0".into()),
             verified: None,
+            seed: false,
         })
     );
     assert_eq!(git.version, "1.0.0", "not installed by itself");

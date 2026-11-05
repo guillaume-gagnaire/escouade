@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/svelte';
+import { render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { setLang } from '../../lib/i18n';
@@ -342,6 +342,70 @@ describe('the view', () => {
     const shipped = screen.getByRole('table', { name: 'Livrés avec Escouade' });
     expect(shipped.textContent).toContain('GitHub');
     expect(shipped.textContent).not.toContain('Slack');
+  });
+
+  it('proposes what the seed holds and is not installed, and installs it on a click only (ESC-338)', async () => {
+    const calls: string[] = [];
+    fakeBackend({
+      plugins_list: () => [],
+      plugin_seed_offers: () => [
+        { id: 'dev.escouade.trello', name: 'Trello', version: '2.2.0', removed: '2.2.0', refused: null },
+        { id: 'dev.escouade.jira', name: 'dev.escouade.jira', version: '2.2.0', removed: null, refused: 'La signature ne tient pas.' },
+      ],
+      plugin_inspect_seed: ({ id }: { id: string }) => {
+        calls.push(id);
+        return preview({ id });
+      },
+    });
+    render(PluginsView);
+    const proposed = await screen.findByRole('region', { name: 'Proposés par Escouade' });
+    expect(proposed.textContent).toContain('Tu l’as désinstallé (v2.2.0)');
+    expect(proposed.textContent).toContain('Non installé : La signature ne tient pas.');
+    expect(calls).toEqual([]);
+    await userEvent.click(within(proposed).getAllByRole('button', { name: 'Installer' })[0]!);
+    expect(calls).toEqual(['dev.escouade.trello']);
+    expect(plugins.install?.kind).toBe('preview');
+  });
+
+  it('takes a proposed plugin from the store when the store has a newer version (ESC-338)', async () => {
+    plugins.offers = [];
+    const calls: string[] = [];
+    fakeBackend({
+      plugins_list: () => [],
+      plugin_seed_offers: () => [{ id: 'dev.escouade.trello', name: 'Trello', version: '2.2.0', removed: '2.2.0', refused: null }],
+      store_view: () => ({
+        url: '',
+        catalog: null,
+        readAt: '2026-11-05T00:00:00Z',
+        error: null,
+        best: { 'dev.escouade.trello': '2.10.0' },
+      }),
+      plugin_inspect_store: ({ id }: { id: string }) => {
+        calls.push(`store:${id}`);
+        return preview({ id });
+      },
+      plugin_inspect_seed: ({ id }: { id: string }) => {
+        calls.push(`seed:${id}`);
+        return preview({ id });
+      },
+    });
+    render(PluginsView);
+    const proposed = await screen.findByRole('region', { name: 'Proposés par Escouade' });
+    await waitFor(() => expect(plugins.store?.best).toBeTruthy());
+    await userEvent.click(within(proposed).getByRole('button', { name: 'Installer' }));
+    expect(calls).toEqual(['store:dev.escouade.trello']);
+  });
+
+  it('installs an update the seed holds from the seed, with no network (ESC-338)', async () => {
+    const calls: string[] = [];
+    fakeBackend({
+      plugin_inspect_seed: ({ id }: { id: string }) => {
+        calls.push(id);
+        return preview({ id });
+      },
+    });
+    await plugins.update(view({ id: 'dev.escouade.trello', update: { version: '2.3.0', verified: true, seed: true } }));
+    expect(calls).toEqual(['dev.escouade.trello']);
   });
 
   it('a plugin is uninstalled after its confirmation, its data kept if asked', async () => {

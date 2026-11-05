@@ -22,12 +22,18 @@
 // - dev.exemple.reactor: a run.wasm plugin (tests/fixtures/plugins/reactor), its archive with a plugin.wasm that is not the
 //   one the store compiled (ESC-331); dev.exemple.reactor-bare: the same without a module of the store (refused);
 // - dev.exemple.wasm: a run.js plugin (tests/fixtures/plugins/sdk-both), with the module the store compiled of it
-//   (ESC-323), named by its version.json; dev.exemple.wasm-changed: its module changed after its version.json (refused).
+//   (ESC-323), named by its version.json; dev.exemple.wasm-changed: its module changed after its version.json (refused);
+// - dev.escouade.trello: 2.2.0 and 2.3.0 verified, a run.wasm plugin of the first hand, for the app's seed (ESC-338);
+//   dev.escouade.seed-later: verified, for an Escouade to come (min 99.0.0); dev.escouade.seed-tampered: verified, its
+//   archive changed after its version.json.
 // Its controls: POST /_fake/revocations { entries, serial? } signs and serves the next list (the mirror too);
-// POST /_fake/down { down } makes /api/v1 answer 503; GET /_fake/state says the installs counted and the requests.
+// POST /_fake/down { down } makes /api/v1 answer 503; GET /_fake/state says the installs counted and the requests;
+// POST /_fake/seed { dir, plugins: [{ id, version }] } writes in `dir` the seed of those versions as the release makes it
+// (the bytes and the signatures of the store, the list of the day), with its seed.json.
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tarball, png } from '../../../store/tests/fake/plugins.mjs';
 import { exampleFiles } from '../../../store/tests/fake/review-store.mjs';
@@ -172,6 +178,45 @@ const SPEC = [
   // ESC-331: a run.wasm plugin and the module the store compiled of it; then one that came without any.
   { id: 'dev.exemple.reactor', v: '1.0.0', from: 'reactor', runWasm: true, cat: ['tools'], kw: ['wasm'], name: 'En Rust' },
   { id: 'dev.exemple.reactor-bare', v: '1.0.0', from: 'reactor', runWasm: true, bare: true, cat: ['tools'], kw: [], name: 'Sans module' },
+  // ESC-338: what the app's seed holds, a plugin of the first hand in run.wasm, and one for an Escouade to come.
+  ...['2.2.0', '2.3.0'].map((v) => ({
+    id: 'dev.escouade.trello',
+    v,
+    from: 'reactor',
+    runWasm: true,
+    verified: true,
+    cat: ['kanban'],
+    kw: ['trello'],
+    name: 'Trello',
+    path: 'plugins/trello',
+    repo: 'guillaume-gagnaire/escouade',
+  })),
+  {
+    id: 'dev.escouade.seed-later',
+    v: '1.0.0',
+    from: 'reactor',
+    runWasm: true,
+    verified: true,
+    cat: ['tools'],
+    kw: [],
+    name: 'Une version à venir',
+    min: '99.0.0',
+    path: 'plugins/seed-later',
+    repo: 'guillaume-gagnaire/escouade',
+  },
+  {
+    id: 'dev.escouade.seed-tampered',
+    v: '1.0.0',
+    from: 'reactor',
+    runWasm: true,
+    verified: true,
+    tampered: true,
+    cat: ['tools'],
+    kw: [],
+    name: 'Amorce changée',
+    path: 'plugins/seed-tampered',
+    repo: 'guillaume-gagnaire/escouade',
+  },
 ];
 
 /** The store's content: the catalogue, the files by path, signed with `key`. */
@@ -336,6 +381,23 @@ export function startFakeStore(port = 0) {
       state.serial = Math.max(state.serial, serial);
       state.list = signList(b.entries ?? [], serial);
       return send(200, JSON.stringify({ serial }));
+    }
+    if (path === '/_fake/seed' && req.method === 'POST') {
+      const b = json();
+      const plugins = b.plugins.map(({ id, version }) => {
+        const base = `/api/v1/plugins/${id}/${version}`;
+        const dir = join(b.dir, id);
+        mkdirSync(dir, { recursive: true });
+        for (const name of ['version.json', 'version.json.minisig', 'archive.tar.gz', 'plugin.wasm'])
+          if (files.has(`${base}/${name}`)) writeFileSync(join(dir, name), files.get(`${base}/${name}`));
+        return { id, version, sha256: sha256(files.get(`${base}/version.json`)) };
+      });
+      writeFileSync(join(b.dir, 'seed.json'), JSON.stringify({ format: 1, plugins }));
+      if (state.list) {
+        writeFileSync(join(b.dir, 'revocations.json'), state.list.json);
+        writeFileSync(join(b.dir, 'revocations.json.minisig'), state.list.minisig);
+      }
+      return send(200, JSON.stringify({ plugins }));
     }
     if (path === '/mirror/revocations.json' || path === '/mirror/revocations.json.minisig') {
       if (!state.list) return send(404, '{}');

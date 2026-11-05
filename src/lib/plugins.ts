@@ -19,6 +19,8 @@ export type Origin =
       path?: string;
       tag: string;
       commit: string;
+      /** Installed from the app's seed, with no network (ESC-338): the same bytes as the store's, a plugin like any other. */
+      seed?: boolean;
     }
   /**
    * A plugin the app gives (INT-4, ESC-210), read from the app's own files. Not the same as a `dev.escouade.*` of the store
@@ -81,6 +83,8 @@ export interface PluginUpdate {
   tag?: string;
   /** For a plugin of the store: whether that version is verified. */
   verified?: boolean;
+  /** That version is the one the app's seed holds: it installs from there, with no network. */
+  seed?: boolean;
 }
 
 /** What the revocation list says of the version a plugin runs (docs/STORE.md §4.6). */
@@ -117,6 +121,17 @@ export interface PluginView {
   withdrawn: Withdrawn | null;
   /** Not from the store, but the store has its id: the version it would install in its place. */
   inStore: { version: string; verified: boolean } | null;
+}
+
+/** A plugin of the app's seed that is not installed (ESC-338): uninstalled by the user, or refused by the seed. */
+export interface SeedOffer {
+  id: string;
+  name: string;
+  version: string;
+  /** The version the user uninstalled. */
+  removed: string | null;
+  /** Why the seed did not install it. */
+  refused: string | null;
 }
 
 /** A plugin read before it is installed: the install window's. */
@@ -176,6 +191,9 @@ export const pluginsApi = {
   inspectDev: (path: string) => invoke<PluginPreview>('plugin_inspect_dev', { path }),
   /** Downloads a version of the store and checks it (the last one this Escouade runs when none is named). */
   inspectStore: (id: string, version: string | null = null) => invoke<PluginPreview>('plugin_inspect_store', { id, version }),
+  /** Reads the seed's version of a plugin and checks it, with no network (ESC-338). */
+  inspectSeed: (id: string) => invoke<PluginPreview>('plugin_inspect_seed', { id }),
+  seedOffers: () => invoke<SeedOffer[]>('plugin_seed_offers'),
   install: (token: string) => invoke<PluginView>('plugin_install', { token }),
   discard: (token: string) => invoke<void>('plugin_discard', { token }),
   remove: (id: string, keep: boolean) => invoke<boolean>('plugin_remove', { id, keep }),

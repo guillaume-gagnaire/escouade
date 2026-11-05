@@ -29,6 +29,13 @@ To try one in Escouade: Plugins view › “In development”, then its folder. 
 an id of your own (`io.github.<your-login>.<plugin>`). The documentation shows each one whole:
 https://escouade.dev/en/docs/plugins/examples
 
+## `seed.json`: the app's seed
+
+`seed.json` names the versions of the plugins of the first hand the installer carries: `id`, `version` and the SHA-256 of
+their `version.json`, on the store already. The release downloads them and checks every signature (`store/scripts/seed.ts`);
+the app installs them with no network, by the path of an install from the store (docs/PLUGINS.md §8.7). It is filled once they
+are published; `src-tauri/src/plugins/builtin.rs` lists the ids it may hold.
+
 ## `builtin/`: the plugins the app gives
 
 `builtin/<id>/` holds the plugins shipped **with** the app, not published on the store: each with its manifest and its

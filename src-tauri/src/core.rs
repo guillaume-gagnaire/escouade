@@ -1862,16 +1862,30 @@ impl<R: Runtime> Core<R> {
                 .map(|s| s.inner().clone())
                 .unwrap_or_default()
         };
+        // The seed of the plugins of the first hand, in the installer (ESC-338): its list of revocations stands in for the
+        // store's until one newer is read.
+        let seed = {
+            use tauri::Manager;
+            crate::plugins::seed::Seed::of_app(
+                app.path().resource_dir().ok().map(|d| d.join("seed")),
+            )
+        };
+        let seed_list = seed.revocations();
         let plugins =
-            crate::plugins::Plugins::load_for_core(data.clone(), env!("CARGO_PKG_VERSION"));
-        let store = Arc::new(crate::plugins::store::Store::load(
-            &data,
-            crate::plugins::store::store_url(),
-            crate::plugins::store::mirror_url(),
-            env!("CARGO_PKG_VERSION"),
-        ));
+            crate::plugins::Plugins::load_seeded(data.clone(), env!("CARGO_PKG_VERSION"), seed);
+        let store = Arc::new(
+            crate::plugins::store::Store::load(
+                &data,
+                crate::plugins::store::store_url(),
+                crate::plugins::store::mirror_url(),
+                env!("CARGO_PKG_VERSION"),
+            )
+            .with_seed_list(seed_list),
+        );
         // What was cached applies from the start: a version withdrawn stays stopped offline.
         plugins.apply_store(store.revocations(), store.offers());
+        // What the seed holds and is not installed goes in now, with no network, before any plugin starts.
+        plugins.sync_seed(crate::i18n::ui());
         let plugin_runtime = crate::plugins::runtime::Runtime::new(
             plugins.clone(),
             secrets.clone(),

@@ -36,6 +36,8 @@ pub use escouade_plugin_cli::manifest;
 pub mod reader;
 #[cfg_attr(not(test), allow(dead_code))]
 pub mod runtime;
+// The app's seed: the plugins of the first hand the installer carries, installed with no network (ESC-338).
+pub mod seed;
 pub mod shared;
 // The store in the app: its catalogue, its revocation list, a version downloaded and checked (STORE-9).
 pub mod store;
@@ -93,6 +95,10 @@ pub enum Origin {
         tag: String,
         #[serde(default)]
         commit: String,
+        /// Installed from the app's seed, with no network (ESC-338): the same bytes as the store's, offered their updates
+        /// like any other.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        seed: bool,
     },
 }
 
@@ -101,11 +107,13 @@ pub enum Origin {
 /// to a folder in development; never to a folder copied or a repository cloned, which anyone may
 /// hand out. None of them takes the app's programs: that is a plugin the app gives (INT-4's origin
 /// `builtin`, read from the app's own files). The two are told apart by their origin, never by
-/// their id: a `dev.escouade.*` of the store is `Origin::Store`, kept in `<data>/plugins/<id>`.
+/// their id: a `dev.escouade.*` of the store is `Origin::Store`, kept in `<data>/plugins/<id>`. A build of development
+/// gives the same hand to a module of the seed that is not signed (`scripts/seed-dev.sh`); a release does not.
 pub(crate) fn hand_of(origin: &Origin) -> manifest::Hand {
     match origin {
         Origin::Builtin => manifest::Hand::Builtin,
         Origin::Store { verified: true, .. } | Origin::Dev { .. } => manifest::Hand::First,
+        Origin::Store { seed: true, .. } if cfg!(debug_assertions) => manifest::Hand::First,
         _ => manifest::Hand::Third,
     }
 }
@@ -315,6 +323,9 @@ pub struct Update {
     /// For a plugin of the store: whether that version is verified (« v1.3.0 · non vérifiée »).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub verified: Option<bool>,
+    /// That version is the one the app's seed holds: it installs from there, with no network.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub seed: bool,
 }
 
 /// A version withdrawn or unverified by the revocation list (docs/STORE.md §4.6).
@@ -511,6 +522,10 @@ pub struct Plugins {
     app_dir: PathBuf,
     /// What the store offers, by id (`Store::offers`).
     offers: RwLock<HashMap<String, store::Offer>>,
+    /// The app's seed (ESC-338).
+    seed: seed::Seed,
+    /// Why the seed did not install a plugin, by id.
+    seed_refused: RwLock<BTreeMap<String, String>>,
 }
 
 type ReloadHook = Box<dyn Fn(&str) + Send + Sync>;
@@ -572,13 +587,19 @@ impl Plugins {
             .unwrap_or_default();
         // The tests of the installs and of the runtime count on a list that holds what they put there: the registry
         // is loaded by `load_in`, which the tests of INT-4 use.
-        Self::load_with(data, app_version, app_dir, false)
+        Self::load_with(data, app_version, app_dir, false, seed::Seed::default())
     }
 
     /// The plugins of the app's core, the ones the app gives with them (the core uses them: a launch environment, GitHub's
     /// accounts). In
     /// the tests their program is the one the build made beside the tests (`deps/`'s parent).
+    #[cfg(test)]
     pub fn load_for_core(data: DataDir, app_version: &str) -> Arc<Self> {
+        Self::load_seeded(data, app_version, seed::Seed::default())
+    }
+
+    /// As `load_for_core`, with the app's seed: `sync_seed` installs what it holds once the revocation lists are known.
+    pub fn load_seeded(data: DataDir, app_version: &str, seed: seed::Seed) -> Arc<Self> {
         let mut app_dir = std::env::current_exe()
             .ok()
             .and_then(|p| p.parent().map(Path::to_path_buf))
@@ -586,16 +607,22 @@ impl Plugins {
         if cfg!(test) && app_dir.file_name().is_some_and(|n| n == "deps") {
             app_dir.pop();
         }
-        Self::load_with(data, app_version, app_dir, true)
+        Self::load_with(data, app_version, app_dir, true, seed)
     }
 
     /// As `load`, the app's programs in `app_dir` (the tests').
     #[cfg(test)]
     pub fn load_in(data: DataDir, app_version: &str, app_dir: PathBuf) -> Arc<Self> {
-        Self::load_with(data, app_version, app_dir, true)
+        Self::load_with(data, app_version, app_dir, true, seed::Seed::default())
     }
 
-    fn load_with(data: DataDir, app_version: &str, app_dir: PathBuf, builtin: bool) -> Arc<Self> {
+    fn load_with(
+        data: DataDir,
+        app_version: &str,
+        app_dir: PathBuf,
+        builtin: bool,
+        seed: seed::Seed,
+    ) -> Arc<Self> {
         let me = Arc::new_cyclic(|me| Self {
             me: me.clone(),
             data,
@@ -611,6 +638,8 @@ impl Plugins {
             revocations: RwLock::new(None),
             app_dir,
             offers: RwLock::new(HashMap::new()),
+            seed,
+            seed_refused: RwLock::new(BTreeMap::new()),
         });
         let index = me.index();
         let loaded: Vec<Loaded> = me
@@ -635,7 +664,8 @@ impl Plugins {
     /// The list `installed` with the plugins the app gives (`builtin::REGISTRY`) as the app has them now: those
     /// that left the registry gone, those it adds there with the user's choices kept, and a copy of the same id
     /// from elsewhere (a version of the store installed before the app gave it) replaced, its choices kept: the
-    /// plugin the app gives wins, and its version is the app's.
+    /// plugin the app gives wins, and its version is the app's. An id the seed names is no longer given: what is installed
+    /// of it stays, and an `Origin::Builtin` runs until `sync_seed` puts the seed's version in its place (until Z3).
     fn with_builtin(&self, installed: Vec<Installed>, registry: bool) -> Vec<Installed> {
         if !registry {
             return installed;
@@ -645,13 +675,13 @@ impl Plugins {
             if i.origin == Origin::Builtin && !builtin::is_builtin(&i.id) {
                 continue;
             }
-            if builtin::is_builtin(&i.id) && i.origin != Origin::Builtin {
+            if self.given(&i.id) && i.origin != Origin::Builtin {
                 remove_dir(&self.data.plugins_dir().join(&i.id));
                 remove_dir(&self.proof_dir(&i.id));
             }
             out.push(i);
         }
-        for e in builtin::REGISTRY {
+        for e in builtin::REGISTRY.iter().filter(|e| self.given(e.id)) {
             let choices = out
                 .iter()
                 .find(|i| i.id == e.id)
@@ -673,6 +703,11 @@ impl Plugins {
             });
         }
         out
+    }
+
+    /// Whether the app itself gives the plugin `id`: in the registry, and not yet moved to the seed.
+    fn given(&self, id: &str) -> bool {
+        builtin::is_builtin(id) && !self.seed.has(id)
     }
 
     fn index(&self) -> Index {
@@ -772,7 +807,12 @@ impl Plugins {
         self.loaded
             .read()
             .iter()
-            .filter(|l| l.installed.origin == Origin::Builtin)
+            .filter(|l| {
+                l.installed.origin == Origin::Builtin
+                    || (matches!(l.installed.origin, Origin::Store { .. })
+                        && hand_of(&l.installed.origin) == manifest::Hand::First
+                        && self.seed.has(&l.installed.id))
+            })
             .filter_map(|l| {
                 let m = l.read.as_ref().ok()?.manifest.as_ref().ok()?;
                 let items = m.contributes.get(point)?.as_array()?.clone();
@@ -1163,7 +1203,7 @@ impl Plugins {
             origin: installed.origin.clone(),
             fingerprint: installed.fingerprint.clone(),
             declarative: m.declarative(),
-            refusal: if builtin::is_builtin(&m.id) {
+            refusal: if self.given(&m.id) {
                 Some(Self::given_with_the_app(&m.id, lang))
             } else {
                 m.refusal(&self.app_version, lang)
@@ -1224,7 +1264,7 @@ impl Plugins {
                 "This install is no longer current: choose the plugin again."
             ))
         })?;
-        if builtin::is_builtin(&staged.installed.id) {
+        if self.given(&staged.installed.id) {
             if let Some(dir) = &staged.dir {
                 remove_dir(dir);
             }
@@ -1287,6 +1327,8 @@ impl Plugins {
         }
         let _ = std::fs::remove_file(self.kept_file(&id));
         self.updates.write().remove(&id);
+        self.seed_refused.write().remove(&id);
+        self.note_seed(|n| n.removed.remove(&id).is_some());
         let dev = match &installed.origin {
             Origin::Dev { path } => Some(PathBuf::from(path)),
             _ => None,
@@ -1363,7 +1405,13 @@ impl Plugins {
     /// its settings with it; `keep`: its choices kept for a later install of the same id. Its
     /// secrets are the caller's (`secret_keys`).
     pub fn remove(&self, id: &str, keep: bool) -> std::io::Result<bool> {
-        if builtin::is_builtin(id) {
+        let origin = self
+            .loaded
+            .read()
+            .iter()
+            .find(|l| l.installed.id == id)
+            .map(|l| l.installed.origin.clone());
+        if self.given(id) || origin == Some(Origin::Builtin) {
             return Err(std::io::Error::other(format!(
                 "{id} is given with Escouade: turn it off, it cannot be removed"
             )));
@@ -1379,6 +1427,22 @@ impl Plugins {
         };
         self.watchers.lock().remove(id);
         self.updates.write().remove(id);
+        // The seed does not put back what the user took away: it notes it, and the view proposes it.
+        if self.seed.has(id) {
+            let (version, name) = match gone.read.as_ref().map(|r| r.manifest.as_ref()) {
+                Ok(Ok(m)) => (m.version.clone(), m.name.clone()),
+                _ => (String::new(), manifest::Text::One(id.to_string())),
+            };
+            let name = store::Reason {
+                fr: name.get(Lang::Fr).to_string(),
+                en: name.get(Lang::En).to_string(),
+            };
+            self.note_seed(|n| {
+                n.removed
+                    .insert(id.to_string(), seed::Removed { version, name });
+                true
+            });
+        }
         if !matches!(gone.installed.origin, Origin::Dev { .. }) {
             remove_dir_patiently(&gone.folder);
         }
@@ -1425,19 +1489,11 @@ impl Plugins {
                             version: m.version,
                             tag: None,
                             verified: None,
+                            seed: false,
                         })
                 }
                 Origin::Dev { .. } | Origin::Builtin => None,
-                Origin::Store { .. } => self
-                    .offers
-                    .read()
-                    .get(&i.id)
-                    .filter(|o| manifest::version(&o.version) > manifest::version(&version))
-                    .map(|o| Update {
-                        version: o.version.clone(),
-                        tag: None,
-                        verified: Some(o.verified),
-                    }),
+                Origin::Store { .. } => self.store_update(&i.id, &version),
             };
             let mut updates = self.updates.write();
             match found {
@@ -1552,27 +1608,209 @@ impl Plugins {
                 hook(id);
             }
         }
-        let offers = self.offers.read().clone();
         let mut updates = self.updates.write();
         for l in self.loaded.read().iter() {
             let Origin::Store { version, .. } = &l.installed.origin else {
                 continue;
             };
-            match offers
-                .get(&l.installed.id)
-                .filter(|o| manifest::version(&o.version) > manifest::version(version))
-            {
-                Some(o) => updates.insert(
-                    l.installed.id.clone(),
-                    Update {
-                        version: o.version.clone(),
-                        tag: None,
-                        verified: Some(o.verified),
-                    },
-                ),
+            match self.store_update(&l.installed.id, version) {
+                Some(u) => updates.insert(l.installed.id.clone(), u),
                 None => updates.remove(&l.installed.id),
             };
         }
+    }
+
+    /// The newer version to offer a plugin of the store at `version`: the store's, or the seed's of a new app when that one
+    /// is the newest (nor withdrawn by the list). Offered, never installed by itself; never an older one.
+    fn store_update(&self, id: &str, version: &str) -> Option<Update> {
+        let mine = manifest::version(version);
+        let store = self
+            .offers
+            .read()
+            .get(id)
+            .filter(|o| manifest::version(&o.version) > mine)
+            .map(|o| Update {
+                version: o.version.clone(),
+                tag: None,
+                verified: Some(o.verified),
+                seed: false,
+            });
+        let list = self.revocations.read();
+        let seed = self
+            .seed
+            .entry(id)
+            .filter(|e| manifest::version(&e.version) > mine)
+            .filter(|e| {
+                !list.as_ref().is_some_and(|l| {
+                    l.find(id, &e.version, "disable").is_some()
+                        || l.find(id, &e.version, "unverify").is_some()
+                })
+            })
+            .map(|e| Update {
+                version: e.version.clone(),
+                tag: None,
+                verified: Some(true),
+                seed: true,
+            });
+        match (store, seed) {
+            (Some(s), Some(e)) => Some(
+                if manifest::version(&e.version) > manifest::version(&s.version) {
+                    e
+                } else {
+                    s
+                },
+            ),
+            (s, e) => s.or(e),
+        }
+    }
+
+    /// What the app keeps of the seed.
+    fn seed_notes_file(&self) -> PathBuf {
+        self.data.plugins_dir().join(".seed.json")
+    }
+
+    fn seed_notes(&self) -> seed::Notes {
+        std::fs::read(self.seed_notes_file())
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or_default()
+    }
+
+    /// Changes what the app keeps of the seed with `f`, saved when it says it changed something. Not saved, the seed would
+    /// put back a plugin the user took away: it is said in the log, and the list of installed plugins is not touched.
+    fn note_seed(&self, f: impl FnOnce(&mut seed::Notes) -> bool) {
+        let mut notes = self.seed_notes();
+        if !f(&mut notes) {
+            return;
+        }
+        let saved = serde_json::to_vec_pretty(&notes)
+            .map_err(std::io::Error::other)
+            .and_then(|bytes| {
+                std::fs::create_dir_all(self.data.plugins_dir())?;
+                crate::paths::write_atomic(&self.seed_notes_file(), &bytes)
+            });
+        if let Err(e) = saved {
+            log::warn!("what the app keeps of its seed is not saved: {e}");
+        }
+    }
+
+    /// The seed at the start of the app (its first start, or after an update): installs what it holds and is not installed,
+    /// with no network and by the store's own path, but what the user uninstalled. Replaces nothing that runs from the
+    /// store: a newer version of the seed is offered (`store_update`). Runs once the revocation lists are in
+    /// (`apply_store`), before any plugin starts. Nothing is precompiled here: a module is at its first activation.
+    pub fn sync_seed(&self, lang: Lang) {
+        let notes = self.seed_notes();
+        for e in &self.seed.entries {
+            let here = self
+                .loaded
+                .read()
+                .iter()
+                .find(|l| l.installed.id == e.id)
+                .map(|l| l.installed.origin.clone());
+            let wanted = match here {
+                None => !notes.removed.contains_key(&e.id),
+                Some(origin) => origin == Origin::Builtin,
+            };
+            if !wanted {
+                continue;
+            }
+            match self.install_seed(e, lang) {
+                Ok(v) => log::info!("plugin {} v{}: installed from the seed", v.id, v.version),
+                Err(r) => {
+                    log::warn!("plugin {}: the seed's v{} refused: {r}", e.id, e.version);
+                    self.seed_refused.write().insert(e.id.clone(), r.message);
+                }
+            }
+        }
+        let mut updates = self.updates.write();
+        for l in self.loaded.read().iter() {
+            if let Origin::Store { version, .. } = &l.installed.origin {
+                if let Some(u) = self.store_update(&l.installed.id, version) {
+                    updates.insert(l.installed.id.clone(), u);
+                }
+            }
+        }
+    }
+
+    fn install_seed(&self, e: &seed::Entry, lang: Lang) -> Result<PluginView, Refusal> {
+        let list = self.revocations.read().clone();
+        let f = self
+            .seed
+            .take(e, list.as_ref(), lang)
+            .map_err(Refusal::other)?;
+        let p = self.inspect_store(f, lang)?;
+        if let Some(reason) = p.refusal {
+            self.discard(&p.token);
+            return Err(Refusal::other(reason));
+        }
+        self.install(&p.token, lang)
+    }
+
+    /// What installing the seed's version of `id` would do, on the user's click: the install window of an update, or of a
+    /// plugin they uninstalled. Refused when a version as recent is installed, or when the list withdraws it.
+    pub fn inspect_seed(&self, id: &str, lang: Lang) -> Result<Preview, Refusal> {
+        let e = self.seed.entry(id).ok_or_else(|| {
+            Refusal::other(tr_in!(
+                lang,
+                "{id} n'est pas dans l'amorce de cette version d'Escouade.",
+                "{id} is not in this version of Escouade's seed."
+            ))
+        })?;
+        let installed = self
+            .get(id, lang)
+            .filter(|v| !matches!(v.origin, Origin::Builtin));
+        if installed.is_some_and(|v| manifest::version(&v.version) >= manifest::version(&e.version))
+        {
+            return Err(Refusal::other(tr_in!(
+                lang,
+                "La version installée de {id} est au moins aussi récente que celle de l'amorce (v{}) : on ne redescend pas de version.",
+                "The installed version of {id} is at least as recent as the seed's (v{}): a plugin never goes back a version.",
+                e.version
+            )));
+        }
+        let list = self.revocations.read().clone();
+        if list
+            .as_ref()
+            .is_some_and(|l| l.find(id, &e.version, "disable").is_some())
+        {
+            return Err(Refusal::other(tr_in!(
+                lang,
+                "Cette version a été retirée par Escouade : elle ne s'installe pas.",
+                "This version was withdrawn by Escouade: it does not install."
+            )));
+        }
+        let f = self
+            .seed
+            .take(e, list.as_ref(), lang)
+            .map_err(Refusal::other)?;
+        self.inspect_store(f, lang)
+    }
+
+    /// What the seed holds that is not installed, as the view proposes it: what the user uninstalled, and what it refused.
+    pub fn seed_offers(&self, lang: Lang) -> Vec<seed::Offer> {
+        let notes = self.seed_notes();
+        let refused = self.seed_refused.read();
+        let loaded = self.loaded.read();
+        self.seed
+            .entries
+            .iter()
+            .filter(|e| !loaded.iter().any(|l| l.installed.id == e.id))
+            .map(|e| {
+                let removed = notes.removed.get(&e.id);
+                seed::Offer {
+                    id: e.id.clone(),
+                    name: removed.map_or_else(|| e.id.clone(), |r| r.name.get(lang).to_string()),
+                    version: e.version.clone(),
+                    removed: removed.map(|r| r.version.clone()),
+                    refused: refused.get(&e.id).cloned(),
+                }
+            })
+            .collect()
+    }
+
+    /// Whether the user took the plugin `id` of the seed away: what is missing is said so, and proposed.
+    pub fn uninstalled(&self, id: &str) -> bool {
+        self.seed.has(id) && !self.loaded.read().iter().any(|l| l.installed.id == id)
     }
 
     /// What installing a version downloaded and checked from the store would do (`Store::fetch`):
@@ -1603,7 +1841,8 @@ impl Plugins {
             }
             // A plugin of Escouade's own hand (`dev.escouade.*`, ESC-314) comes from the store
             // signed alone: the store takes it from the app's repository only, then signs it.
-            let signed = f.minisig.is_some();
+            // A module of the seed that is not signed is a build of development's (`Seed::unsigned`).
+            let signed = f.minisig.is_some() || f.unsigned;
             if f.id.starts_with(manifest::RESERVED_PREFIX) && !signed {
                 return Err(Refusal::other(tr_in!(
                     lang,
@@ -1710,6 +1949,7 @@ impl Plugins {
                     path: f.path.clone(),
                     tag: f.tag.clone(),
                     commit: f.commit.clone(),
+                    seed: f.seed,
                 },
                 fingerprint: format!("store:{}", f.sha256),
                 digest,
@@ -1873,6 +2113,7 @@ async fn newer_tag(url: &str, version: &str) -> Option<Update> {
             version: v.to_string(),
             tag: Some(t),
             verified: None,
+            seed: false,
         })
 }
 
