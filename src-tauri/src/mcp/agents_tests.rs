@@ -972,8 +972,15 @@ async fn a_cursor_agent_reaches_escouade_by_the_server_its_session_is_given() {
         .send_message(&id, format!("outil escouade {TEST_TOOL}"), vec![])
         .await
         .unwrap();
-    h.wait("its answer", |h| said(h, &id, "Escouade a").is_some())
-        .await;
+    // Its whole answer: a text read while it still streams stops in the middle of its JSON ("Escouade a r", the CI's
+    // Linux, 2026-11-05).
+    let whole = |a: &str| {
+        serde_json::from_str::<Value>(a.trim_start_matches("Escouade a répondu : ")).is_ok()
+    };
+    h.wait("its answer", |h| {
+        said(h, &id, "Escouade a").is_some_and(|a| whole(&a))
+    })
+    .await;
     let answer = said(&h, &id, "Escouade a").unwrap();
     let who: Value = serde_json::from_str(answer.trim_start_matches("Escouade a répondu : "))
         .unwrap_or_else(|_| panic!("{answer}"));

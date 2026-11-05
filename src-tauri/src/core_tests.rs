@@ -5284,12 +5284,21 @@ async fn streaming_deltas_reach_the_ui_batched_and_in_order() {
         .filter(|o| o["id"] == text_id || o["item"]["id"] == text_id)
         .collect();
     let kinds: Vec<&str> = for_text.iter().map(|o| o["op"].as_str().unwrap()).collect();
-    assert_eq!(
-        kinds,
-        vec!["append", "delta", "patch"],
-        "the fake streams several chunks, merged into one delta"
+    // The fake streams the text in 5 chunks of 6 characters. They are merged: most often into one delta, but the
+    // 16 ms of `conv_flusher` may fall between two of them on a busy machine (the CI's Linux, 2026-11-05).
+    let deltas = &for_text[1..for_text.len() - 1];
+    assert_eq!(kinds.first(), Some(&"append"), "{kinds:?}");
+    assert_eq!(kinds.last(), Some(&"patch"), "{kinds:?}");
+    assert!(
+        !deltas.is_empty() && deltas.iter().all(|o| o["op"] == "delta"),
+        "{kinds:?}"
     );
-    assert_eq!(for_text[1]["text"], "Bonjour, tu as dit : Bonjour");
+    assert!(
+        deltas.len() < 5,
+        "the fake streams several chunks, merged: {kinds:?}"
+    );
+    let text: String = deltas.iter().map(|o| o["text"].as_str().unwrap()).collect();
+    assert_eq!(text, "Bonjour, tu as dit : Bonjour");
 }
 
 #[tokio::test]
