@@ -229,6 +229,28 @@ escouade-acp = { path = "../crates/escouade-acp" }
 [profile.dev.package."*"]
 debug = "line-tables-only"
 
+# wasmtime's compiler, optimized in a build of development and the tests too: unoptimized, Cranelift takes 10 to 30 s for
+# each module of a plugin in run.wasm, and every test whose core starts the plugins of the registry compiles theirs (the
+# CI's Linux tests went from 15 to 27 min with P1, ESC-344).
+[profile.dev.package.cranelift-codegen]
+opt-level = 3
+[profile.dev.package.cranelift-assembler-x64]
+opt-level = 3
+[profile.dev.package.cranelift-bforest]
+opt-level = 3
+[profile.dev.package.cranelift-entity]
+opt-level = 3
+[profile.dev.package.cranelift-frontend]
+opt-level = 3
+[profile.dev.package.regalloc2]
+opt-level = 3
+[profile.dev.package.wasmparser]
+opt-level = 3
+[profile.dev.package.wasmtime-environ]
+opt-level = 3
+[profile.dev.package.wasmtime-internal-cranelift]
+opt-level = 3
+
 [profile.release]
 codegen-units = 1
 lto = true
