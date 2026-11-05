@@ -36,7 +36,7 @@ fn module() -> wasmtime::Module {
     wasm::reactor(&std::fs::read(fixture().join(wasm::MODULE_FILE)).unwrap()).unwrap()
 }
 
-/// A copy of the fixture, in a folder of its own: its manifest, its module, its `Cargo.toml`.
+/// A copy of the fixture, in a folder of its own: its manifest, its module, its `Cargo.toml` and `Cargo.lock`.
 fn copied(name: &str) -> PathBuf {
     let to = std::env::temp_dir()
         .join(format!(
@@ -45,7 +45,12 @@ fn copied(name: &str) -> PathBuf {
         ))
         .join("reactor");
     std::fs::create_dir_all(&to).unwrap();
-    for f in ["escouade-plugin.json", "Cargo.toml", wasm::MODULE_FILE] {
+    for f in [
+        "escouade-plugin.json",
+        "Cargo.toml",
+        "Cargo.lock",
+        wasm::MODULE_FILE,
+    ] {
         std::fs::copy(fixture().join(f), to.join(f)).unwrap();
     }
     to
@@ -563,11 +568,9 @@ fn args(a: &[&str]) -> Vec<String> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_bench_plays_a_run_wasm_plugin_as_a_run_js_one() {
+    // The module given (`--wasm`) is played in place of the plugin's sources, which the bench compiles otherwise
+    // (plugins_rust_build_tests.rs, by the real program), and the `plugin.wasm` of the folder is not read.
     let folder = copied("bench");
-    let report = run(&folder, &bench_options()).await;
-    assert!(report.passed(), "{}", report.render(Lang::En));
-
-    // The module given (`--wasm`) is played in place of the plugin's.
     let elsewhere = folder.parent().unwrap().join("the-store.wasm");
     std::fs::rename(folder.join(wasm::MODULE_FILE), &elsewhere).unwrap();
     let report = run(
@@ -580,11 +583,13 @@ async fn the_bench_plays_a_run_wasm_plugin_as_a_run_js_one() {
     .await;
     assert!(report.passed(), "{}", report.render(Lang::En));
 
-    // Without it, the bench says what to do.
+    // Without it, the bench says what stops the compilation, and what to do.
+    std::fs::remove_file(folder.join("Cargo.lock")).unwrap();
     let report = run(&folder, &bench_options()).await;
     assert!(!report.passed());
     let first = report.render(Lang::En);
-    assert!(first.contains("wasm32-wasip1"), "{first}");
+    assert!(first.contains("no Cargo.lock"), "{first}");
+    assert!(first.contains("--wasm"), "{first}");
     assert!(report.outcomes.iter().any(|o| o.verdict == Verdict::Fail));
 }
 

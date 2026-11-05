@@ -9,7 +9,7 @@
 //!
 //! A `run.js` plugin is played in WASM (ESC-322), as the app runs it: its bundle compiled by the pinned Javy with the
 //! app's escouade-js and prelude (`plugins::wasm`), then its instance in the app's host, without Node. A `run.wasm`
-//! plugin too (ESC-331): its `plugin.wasm`, or the module given.
+//! plugin too (ESC-331, ESC-335): compiled as the store does, or the module given.
 
 pub mod cli;
 pub mod fake;
@@ -250,7 +250,7 @@ pub struct Options {
     pub data: PathBuf,
     /// The limits of an instance in WASM: the app's.
     pub wasm: super::wasm::Limits,
-    /// The module of a plugin in WASM to play as it is, in place of its bundle compiled here or of its `plugin.wasm`:
+    /// The module of a plugin in WASM to play as it is, in place of its sources compiled here:
     /// the one the store published, played by the local review (`--wasm`, ESC-324).
     pub module: Option<PathBuf>,
     /// No `net/fetch` reaches the network, whatever `permissions.network` says (`--offline`): the review's bench.
@@ -378,25 +378,28 @@ impl Program {
     }
 }
 
-/// The module of the `run.wasm` plugin of `folder`: the one given, or its `plugin.wasm`, as the app loads it. Why not,
-/// in words, and what the author should do.
-fn reactor_of(folder: &Path, o: &Options) -> Result<Program, (String, String)> {
+/// The module of the `run.wasm` plugin of `folder`, whose `run.wasm` is `cargo_file`: the one given, or compiled as the
+/// store does it. Why not, in words, and what the author should do.
+fn reactor_of(folder: &Path, cargo_file: &str, o: &Options) -> Result<Program, (String, String)> {
     let lang = o.lang;
-    let path = o
-        .module
-        .clone()
-        .unwrap_or_else(|| folder.join(super::wasm::MODULE_FILE));
+    let path = o.module.clone().unwrap_or_else(|| folder.join(cargo_file));
     let path = std::path::absolute(&path).unwrap_or(path);
     let build = || {
         tr_in!(
             lang,
-            "compile-le pour wasm32-wasip1 (crate-type = [\"cdylib\"]) et pose le .wasm en {} à côté du manifeste, ou donne-le par --wasm.",
-            "compile it for wasm32-wasip1 (crate-type = [\"cdylib\"]) and put the .wasm as {} beside the manifest, or give it by --wasm.",
-            super::wasm::MODULE_FILE
+            "un crate-type = [\"cdylib\"] avec son Cargo.lock, ou un module donné par --wasm.",
+            "a crate-type = [\"cdylib\"] with its Cargo.lock, or a module given by --wasm."
         )
     };
     let said = |e: String| (tr_in!(lang, "{} : {e}", "{}: {e}", path.display()), build());
-    let bytes = std::fs::read(&path).map_err(|e| said(e.to_string()))?;
+    let bytes = match &o.module {
+        Some(_) => std::fs::read(&path).map_err(|e| said(e.to_string()))?,
+        None => {
+            escouade_plugin_cli::cli::module_of_crate(folder, cargo_file, &o.data, lang)
+                .map_err(said)?
+                .bytes
+        }
+    };
     let module = super::wasm::reactor(&bytes).map_err(said)?;
     Ok(Program::Wasm {
         bundle: path,
@@ -409,8 +412,8 @@ fn reactor_of(folder: &Path, o: &Options) -> Result<Program, (String, String)> {
 pub fn program_of(folder: &Path, m: &Manifest, o: &Options) -> Result<Program, (String, String)> {
     let lang = o.lang;
     let run = m.run.as_ref().expect("a program");
-    if run.wasm.is_some() {
-        return reactor_of(folder, o);
+    if let Some(cargo_file) = &run.wasm {
+        return reactor_of(folder, cargo_file, o);
     }
     let Some(js) = &run.js else {
         return Ok(Program::Process(program_path(folder, run, &o.escouade_dir)));

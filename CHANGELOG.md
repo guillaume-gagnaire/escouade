@@ -8,6 +8,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- `escouade-plugin build` compile un plugin en Rust en WASM, à l’octet près le même sous Windows et sous Linux, avec un compilateur qu’il télécharge lui-même ; `test` et `dev` le compilent aussi avant de le jouer.
 - Un plugin isolé peut joindre l’instance que tu lui donnes (GitLab maison, réseau local), en suivant le proxy et les certificats de Réglages › Réseau, et recevoir du réseau en continu ; la fenêtre d’installation le dit, et le journal garde chaque connexion.
 - Les plugins d’Escouade pourront se couper et se désinstaller comme les autres : ils arrivent avec l’installeur, s’installent sans réseau, et une nouvelle version est proposée, jamais installée sans toi. La vue Plugins repropose ce que tu as désinstallé.
 - Un plugin isolé peut lire et écrire dans les dossiers de tes agents et lancer des commandes de ton ordinateur, mais seulement ce qu’il déclare : la fenêtre d’installation le dit, Escouade l’applique, et le journal du plugin garde chaque écriture, chaque commande et chaque refus.

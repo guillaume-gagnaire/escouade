@@ -1797,7 +1797,9 @@ dependencies = [
  "serde_json",
  "sha2",
  "sys-locale",
+ "tar",
  "tokio",
+ "toml 1.1.6+spec-1.1.0",
  "uuid",
 ]
 

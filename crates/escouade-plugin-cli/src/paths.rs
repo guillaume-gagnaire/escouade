@@ -33,7 +33,13 @@ pub fn plugin_wasm_dir(data: &Path) -> PathBuf {
     data.join("cache").join("plugins-wasm")
 }
 
-/// The programs Escouade downloads for itself (the pinned Javy of the `run.js` plugins), in the data folder `data`.
+/// Where the `run.wasm` plugins compile (copies of their folders, cargo's `target`), in the data folder `data`.
+pub fn plugin_rust_dir(data: &Path) -> PathBuf {
+    data.join("cache").join("plugins-rust")
+}
+
+/// The programs Escouade downloads for itself (the pinned Javy of the `run.js` plugins, the toolchain of the `run.wasm`
+/// ones), in the data folder `data`.
 pub fn tools_dir(data: &Path) -> PathBuf {
     data.join("tools")
 }

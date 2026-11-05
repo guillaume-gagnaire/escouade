@@ -1,13 +1,13 @@
 //! `escouade-plugin`, the command of the plugins' authors (PLG-3, ESC-175). Here, what needs no host (ESC-328):
-//! `validate` reads a plugin's manifest; `build` compiles a `run.js` plugin's bundle to its WASM module and says its
-//! SHA-256 (ESC-322): what the store and the review compile. None needs Node.
+//! `validate` reads a plugin's manifest; `build` compiles a `run.js` plugin's bundle (ESC-322) or a `run.wasm` plugin's
+//! crate (ESC-335) to its WASM module and says its SHA-256: what the store and the review compile. None needs Node.
 //!
 //! `test` and `dev` run the plugin, on the app's host: the app gives them through `more` (`plugins::bench::cli`). The
 //! store's program has none. A command that needs no host goes in the `match` of [`main`], and both programs have it.
 
 use crate::i18n::Lang;
 use crate::manifest::{self, Manifest};
-use crate::wasm;
+use crate::{canon, rust, wasm};
 use serde_json::json;
 use std::path::{Path, PathBuf};
 
@@ -19,15 +19,15 @@ pub fn usage(lang: Lang) -> String {
   escouade-plugin test <dossier> [--json] [--measure [n]] [--wasm <module>] [--offline] [--account <adresse>] [--escouade <version>]
       Joue le banc de conformité : initialisation, version refusée, délais, un fait reçu,
       une décision, un secret, plantage, fermeture. Code de sortie 1 si un scénario échoue.
-      --wasm joue ce module (celui du store) au lieu de compiler le bundle d'un plugin `run.js`
-      ou de prendre le plugin.wasm d'un plugin `run.wasm` ; --offline refuse tout fetch, quoi que dise permissions.network ;
+      --wasm joue ce module (celui du store) au lieu de compiler le plugin ;
+      --offline refuse tout fetch, quoi que dise permissions.network ;
       --account donne une adresse à {{account}}, comme l'aurait saisie l'utilisateur.
   escouade-plugin validate <dossier> [--escouade <version>]
       Lit le manifeste (escouade-plugin.json) et dit ce qui ne va pas, champ par champ ; pour un
-      plugin `run.js`, que son bundle peut tourner en WASM ; pour un `run.wasm`, que son plugin.wasm,
-      s'il est là, a la forme d'un réacteur.
+      plugin `run.js`, que son bundle peut tourner en WASM ; pour un `run.wasm`, que ses sources
+      seraient compilées, et que son plugin.wasm, s'il est là, a la forme d'un réacteur.
   escouade-plugin build <dossier> [--out <dossier>] [--json]
-      Compile le bundle d'un plugin `run.js` en WASM, comme le store : packs/<id>-<version>.wasm
+      Compile un plugin `run.js` ou `run.wasm` en WASM, comme le store : packs/<id>-<version>.wasm
       et son SHA-256, le même sur tous les systèmes.
   escouade-plugin dev <dossier> [--secret <clé>=<valeur>]... [--escouade <version>]
       Le faux Escouade : lance le plugin, puis envoie ce que tu tapes :
@@ -40,6 +40,9 @@ pub fn usage(lang: Lang) -> String {
 
 Un plugin `run.js` tourne en WASM, sans Node : la Javy épinglée ({javy}) est téléchargée à son
 premier besoin et vérifiée par son SHA-256 (ESCOUADE_JAVY en nomme une autre).
+Un plugin `run.wasm` se compile en Rust par une chaîne d'outils privée (rustc {rust}, {target}),
+téléchargée à son premier besoin dans le dossier des outils d'Escouade et vérifiée à chaque usage
+(ESCOUADE_RUST_TOOLCHAIN en nomme une autre). Il lui faut un Cargo.lock.
 
 Options : --lang fr|en ; --escouade <version> joue le plugin comme cette version d'Escouade, pour écrire pour une
   version à venir : la plage `escouade` du manifeste et ce que voit `initialize` se font contre elle (celle de
@@ -51,15 +54,15 @@ Options : --lang fr|en ; --escouade <version> joue le plugin comme cette version
   escouade-plugin test <folder> [--json] [--measure [n]] [--wasm <module>] [--offline] [--account <address>] [--escouade <version>]
       Plays the conformance bench: initialization, version refused, delays, a fact received,
       a decision, a secret, crash, shutdown. Exit code 1 when a scenario fails.
-      --wasm plays this module (the store's) instead of compiling a `run.js` plugin's bundle
-      or taking a `run.wasm` plugin's plugin.wasm; --offline refuses every fetch, whatever permissions.network says;
+      --wasm plays this module (the store's) instead of compiling the plugin;
+      --offline refuses every fetch, whatever permissions.network says;
       --account gives {{account}} an address, as the user would have typed it.
   escouade-plugin validate <folder> [--escouade <version>]
       Reads the manifest (escouade-plugin.json) and says what is wrong, field by field; for a
-      `run.js` plugin, that its bundle can run in WASM; for a `run.wasm` one, that its plugin.wasm,
-      when it is there, has the form of a reactor.
+      `run.js` plugin, that its bundle can run in WASM; for a `run.wasm` one, that its sources would
+      be compiled, and that its plugin.wasm, when it is there, has the form of a reactor.
   escouade-plugin build <folder> [--out <folder>] [--json]
-      Compiles a `run.js` plugin's bundle to WASM, as the store does: packs/<id>-<version>.wasm
+      Compiles a `run.js` or `run.wasm` plugin to WASM, as the store does: packs/<id>-<version>.wasm
       and its SHA-256, the same on every system.
   escouade-plugin dev <folder> [--secret <key>=<value>]... [--escouade <version>]
       The fake Escouade: starts the plugin, then sends what you type:
@@ -72,24 +75,33 @@ Options : --lang fr|en ; --escouade <version> joue le plugin comme cette version
 
 A `run.js` plugin runs in WASM, without Node: the pinned Javy ({javy}) is downloaded the first
 time it is needed and checked by its SHA-256 (ESCOUADE_JAVY names another).
+A `run.wasm` plugin compiles in Rust by a private toolchain (rustc {rust}, {target}), downloaded the
+first time it is needed into Escouade's tools folder and checked at each use
+(ESCOUADE_RUST_TOOLCHAIN names another). It needs a Cargo.lock.
 
 Options: --lang fr|en; --escouade <version> plays the plugin as this version of Escouade, to write for a
   version to come: the manifest's `escouade` range and what `initialize` shows go by it (this
   build's by default); --first-party for a plugin of Escouade's own (plugins/<id>/ of its repository,
   ids dev.escouade.*)
 ",
-        javy = wasm::JAVY_VERSION
+        javy = wasm::JAVY_VERSION,
+        rust = rust::VERSION,
+        target = rust::TARGET
     )
 }
 
-/// What compiles a `run.js` plugin here: this escouade-plugin, the pinned Javy, escouade-js and the prelude.
+/// What compiles a plugin here: this escouade-plugin; for `run.js` the pinned Javy, escouade-js and the prelude; for
+/// `run.wasm` the pinned rustc, its target and the wrapper.
 fn version() -> String {
     format!(
         "escouade-plugin {}
 javy {}
 escouade-js {}
 prelude {}
-wasm-since {}",
+wasm-since {}
+rust {}
+rust-target {}
+rustc-canon {}",
         env!("CARGO_PKG_VERSION"),
         wasm::JAVY_VERSION,
         match wasm::escouade_js() {
@@ -97,7 +109,10 @@ wasm-since {}",
             Err(_) => "absent".into(),
         },
         wasm::sha256(wasm::PRELUDE.as_bytes()),
-        wasm::SERVED_SINCE
+        wasm::SERVED_SINCE,
+        rust::VERSION,
+        rust::TARGET,
+        canon::sha256()
     )
 }
 
@@ -132,6 +147,10 @@ pub type More<'a> = &'a dyn Fn(&Call) -> i32;
 
 /// Runs the command of `args` (without the program's name), `test` and `dev` by `more`; gives its exit code.
 pub fn main(args: Vec<String>, more: Option<More>) -> i32 {
+    // Cargo running this program as `rustc-canon`, the `RUSTC_WRAPPER` of a `run.wasm` compilation.
+    if std::env::var_os(canon::ROOT).is_some() {
+        return canon::run(args);
+    }
     let mut lang = crate::i18n::system();
     if let Some(i) = args.iter().position(|a| a == "--lang") {
         if let Some(l) = args.get(i + 1) {
@@ -257,8 +276,13 @@ fn validate(folder: &Path, lang: Lang, hand: manifest::Hand, app_version: &str) 
             return 1;
         }
     }
-    // A `run.wasm` plugin: its module, when it is there, has the form the app runs; `build` comes later (A5).
-    if m.run.as_ref().is_some_and(|r| r.wasm.is_some()) {
+    // A `run.wasm` plugin: what `build` would refuse of its sources without running anything, and its module, when it
+    // is there, has the form the app runs.
+    if let Some(cargo_file) = m.run.as_ref().and_then(|r| r.wasm.as_ref()) {
+        if let Err(why) = rust::check(folder, cargo_file) {
+            eprintln!("✗ {}", why.message(lang));
+            return 1;
+        }
         let path = folder.join(wasm::MODULE_FILE);
         if let Ok(bytes) = std::fs::read(&path) {
             if let Err(why) = wasm::reactor_form(&bytes) {
@@ -288,41 +312,77 @@ fn bundle_of(folder: &Path, js: &str, lang: Lang) -> Result<String, String> {
     Ok(text)
 }
 
-/// `build`: the module of a `run.js` plugin, written with its SHA-256 (`<sha256>  <name>`, as `pack` writes its own).
+/// The module of the `run.js` plugin of `m`, and how it was made.
+fn module_of_bundle(
+    folder: &Path,
+    js: &str,
+    lang: Lang,
+) -> Result<(Vec<u8>, serde_json::Value), String> {
+    let bundle = bundle_of(folder, js, lang)?;
+    let compiler = wasm::Compiler::of_data(&crate::paths::tools_data_dir());
+    let bytes = compiler.build(&bundle).map_err(|e| {
+        tr_in!(
+            lang,
+            "{js} ne se compile pas en WASM : {e}",
+            "{js} does not compile to WASM: {e}"
+        )
+    })?;
+    let made = json!({
+        "javy": wasm::JAVY_VERSION,
+        "engine": wasm::escouade_js_sha256(),
+        "prelude": env!("CARGO_PKG_VERSION"),
+    });
+    Ok((bytes, made))
+}
+
+/// What the toolchain's first download says, as it takes minutes.
+pub fn say_download(lang: Lang) {
+    eprintln!(
+        "{}",
+        tr_in!(
+            lang,
+            "téléchargement de rustc {} pour {} (quelques centaines de Mo, une seule fois)…",
+            "downloading rustc {} for {} (a few hundred MB, once)…",
+            rust::VERSION,
+            rust::TARGET
+        )
+    );
+}
+
+/// The module of the `run.wasm` plugin of `folder`, with this program as `rustc-canon`; why not, in words.
+pub fn module_of_crate(
+    folder: &Path,
+    cargo_file: &str,
+    data: &Path,
+    lang: Lang,
+) -> Result<rust::Built, String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    rust::build(folder, cargo_file, data, &exe, &|| say_download(lang)).map_err(|f| f.message(lang))
+}
+
+/// `build`: the module of a `run.js` or `run.wasm` plugin, written with its SHA-256 (`<sha256>  <name>`, as `pack` writes
+/// its own).
 fn build(folder: &Path, lang: Lang, hand: manifest::Hand, out: Option<PathBuf>, json: bool) -> i32 {
     let Some(m) = read_manifest(folder, lang, hand) else {
         return 1;
     };
-    let Some(js) = m.run.as_ref().and_then(|r| r.js.as_ref()) else {
-        eprintln!(
-            "{}",
-            tr_in!(
-                lang,
-                "✗ seul un plugin `run.js` se compile en WASM",
-                "✗ only a `run.js` plugin compiles to WASM"
-            )
-        );
-        return 1;
+    let run = m.run.as_ref();
+    let made = if let Some(js) = run.and_then(|r| r.js.as_ref()) {
+        module_of_bundle(folder, js, lang)
+    } else if let Some(cargo_file) = run.and_then(|r| r.wasm.as_ref()) {
+        module_of_crate(folder, cargo_file, &crate::paths::tools_data_dir(), lang)
+            .map(|b| (b.bytes, rust::compiler(&b.lock)))
+    } else {
+        Err(tr_in!(
+            lang,
+            "seul un plugin `run.js` ou `run.wasm` se compile en WASM",
+            "only a `run.js` or `run.wasm` plugin compiles to WASM"
+        ))
     };
-    let bundle = match bundle_of(folder, js, lang) {
-        Ok(b) => b,
+    let (bytes, made) = match made {
+        Ok(m) => m,
         Err(why) => {
             eprintln!("✗ {why}");
-            return 1;
-        }
-    };
-    let compiler = wasm::Compiler::of_data(&crate::paths::tools_data_dir());
-    let bytes = match compiler.build(&bundle) {
-        Ok(b) => b,
-        Err(e) => {
-            eprintln!(
-                "{}",
-                tr_in!(
-                    lang,
-                    "✗ {js} ne se compile pas en WASM : {e}",
-                    "✗ {js} does not compile to WASM: {e}"
-                )
-            );
             return 1;
         }
     };
@@ -347,11 +407,7 @@ fn build(folder: &Path, lang: Lang, hand: manifest::Hand, out: Option<PathBuf>, 
             "file": path,
             "size": bytes.len(),
             "sha256": sha256,
-            "compiler": {
-                "javy": wasm::JAVY_VERSION,
-                "engine": wasm::escouade_js_sha256(),
-                "prelude": env!("CARGO_PKG_VERSION"),
-            },
+            "compiler": made,
         });
         println!(
             "{}",

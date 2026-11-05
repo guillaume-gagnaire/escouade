@@ -8,6 +8,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### New
 
+- `escouade-plugin build` compiles a plugin in Rust to WASM, the same to the byte on Windows and on Linux, with a compiler it downloads itself; `test` and `dev` compile it too before playing it.
 - A sandboxed plugin can reach the instance you give it (your own GitLab, your local network), follow the proxy and the certificates of Settings › Network, and receive live data; the install window says so, and its journal keeps each connection.
 - Escouade's own plugins can soon be switched off and uninstalled like any other: they come with the installer, install with no network, and a new version is offered, never installed without you. The Plugins view offers again what you uninstalled.
 - A sandboxed plugin can read and write in your agents’ folders and run commands on your computer, but only what it declares: the install window says so, Escouade enforces it, and the plugin’s journal keeps each write, each command and each refusal.

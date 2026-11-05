@@ -1,9 +1,9 @@
 ---
 title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire"]
-tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341"]
-decisions: [73,71,70,72,75,80]
+sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire"]
+tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335"]
+decisions: [73,71,70,72,75,80,"escouade-plugin-compile-le-rust-chaine-d"]
 compared: null
 ---
 
@@ -17,7 +17,7 @@ compared: null
 - Le fil d'un plugin attend sur un seul canal, écrit tout ce qui est arrivé sur l'entrée du module, et lance un tour pour le tout.
 - Pour `run.js` comme pour `run.wasm`, `net/fetch` est servi à côté du fil : un appel lent ne retient ni le suivant ni le reste du plugin. Seize appels au plus sont en cours à la fois par plugin, les suivants attendent leur tour sans le retenir. Le temps de cette attente ne compte pas dans les 10 s d'un appel.
 - Le précompilé se garde par l'empreinte du module et la version de l'app, fait à l'installation.
-- `escouade-plugin test` joue un `run.wasm`, son `plugin.wasm` ou le module de `--wasm`. `validate` accepte un `run.wasm` et juge `plugin.wasm` s'il est là.
+- `escouade-plugin test` joue un `run.wasm`, compilé depuis ses sources ou le module de `--wasm`. `validate` accepte un `run.wasm`, juge ses sources et juge `plugin.wasm` s'il est là.
 - `escouade.call`, l'appel synchrone vers l'hôte, compte dans le temps du tour. Il sert les fichiers et les programmes à `run.wasm`. `run.js` y va par une ligne (`p.fs`, `p.runProgram` du SDK) : mêmes refus, même journal. Une réponse trop grande pour la place donnée n'est pas servie deux fois : une écriture n'a lieu qu'une fois. Un plugin lancé par une commande n'a ni l'un ni l'autre.
 
 ### Les fichiers d'un dossier déclaré
@@ -96,6 +96,16 @@ Pour `run.js` comme pour `run.wasm`, appliqué par Escouade et gardé au journal
 - En module, `sleep` et `timeout` du kit reposent sur les minuteurs de l'hôte. Si l'hôte refuse un minuteur, le journal le dit et l'attente finit aussitôt, pour qu'un appel ne reste pas retenu pour toujours.
 - Linear et Codex, compilés depuis leurs crates, répondent dans l'hôte de l'app comme leur natif : Linear à ses appels, Codex ligne à ligne sur les flux enregistrés.
 - Les trois crates sont prêtes pour crates.io, avec licence, dépôt et README. Seul le chef les publie.
+
+## Ce qui tourne déjà : `escouade-plugin build` pour le Rust (ESC-335)
+
+- `escouade-plugin build` compile un plugin `run.wasm` comme un `run.js` : `packs/<id>-<version>.wasm`, son `.sha256`, et en `--json` `file`, `size`, `sha256` et `compiler` (`rust`, `target`, `canon`, `lock`). Pour les mêmes sources et le même `Cargo.lock`, l'empreinte est la même sous Windows et sous Linux, quels que soient le dossier du plugin et son `target`. macOS n'a pas été essayé.
+- **La chaîne d'outils est privée.** rustc 1.98.0, cargo et la bibliothèque standard de `wasm32-wasip1` sont téléchargés au premier besoin dans `<données>/tools/rust-1.98.0/`, sans rustup. Une archive dont l'empreinte n'est pas celle épinglée est refusée, et chaque fichier est revérifié à chaque usage : une chaîne changée est téléchargée à nouveau. `ESCOUADE_RUST_TOOLCHAIN` nomme une chaîne déjà là : elle doit être de cette version, avoir la cible et ne pas avoir `rust-src`. `--version` dit la chaîne et l'empreinte de l'enveloppeur.
+- **Ce qui entoure le plugin ne compte pas.** La compilation se fait sur une copie du dossier, avec un `CARGO_HOME` à part, `--locked`, et le profil imposé passe sur le `[profile]` de l'auteur. Ni un workspace, ni un `[patch]` à la racine d'un dépôt ne changent le module.
+- **`build` refuse, avec la raison en français et en anglais**, et `validate` dit la même chose pour ce qui se juge sans rien lancer : pas de `Cargo.lock` ; `[patch]` ou `[replace]` ; un `path` qui sort du dossier ; une dépendance git ou d'un autre registre ; une cible autre que `cdylib` (une `rlib` à côté est permise) ; un `build.rs` ou une macro procédurale dans les crates du plugin ; `.cargo/config.toml` ; `rust-toolchain` ; `[profile.*.package]` ou `build-override`.
+- **La liste fermée.** Tout crate qui tournerait en natif pendant la compilation, un script, une macro ou ce dont ils dépendent, doit être sur la liste d'`escouade-plugin`, par nom, version et somme de contrôle. Ce qui ne tourne qu'en WASM n'a pas besoin d'y être.
+- `test` et `dev` compilent un `run.wasm` puis le jouent. Ils ne lisent plus le `plugin.wasm` du dossier. `--wasm` joue toujours le module donné. `validate` juge toujours la forme de `plugin.wasm` s'il est là.
+- Le store ne compile pas encore un `run.wasm`, et aucun plugin livré n'est porté : c'est la suite du plan.
 
 ## Le kit sur crates.io (ESC-341, publication à venir)
 

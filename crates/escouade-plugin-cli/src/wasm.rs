@@ -410,7 +410,7 @@ pub fn javy_asset() -> Option<(&'static str, &'static str)> {
 }
 
 /// A future run to its end on a runtime of its own (the plugin's thread, a compilation), wherever it is called from.
-fn block_on<T: Send>(f: impl std::future::Future<Output = T> + Send) -> T {
+pub(crate) fn block_on<T: Send>(f: impl std::future::Future<Output = T> + Send) -> T {
     std::thread::scope(|s| {
         s.spawn(|| {
             tokio::runtime::Builder::new_current_thread()

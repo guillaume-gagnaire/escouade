@@ -1,0 +1,20 @@
+# A `run.wasm` plugin of the tests (ESC-335), compiled by `escouade-plugin build`: with what the kit brings to any plugin
+# (a build script, a macro, a module in a folder, a panic), so that its hash in goldens.json proves `rustc-canon` on every
+# system. Its `[profile]` is there to be passed over. A workspace of its own, which no build of the app reads.
+[package]
+name = "rust-build"
+version = "1.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[workspace]
+
+[profile.release]
+opt-level = "z"

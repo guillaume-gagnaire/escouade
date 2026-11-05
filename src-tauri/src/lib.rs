@@ -173,6 +173,8 @@ mod plugins_reader_tests;
 #[cfg(test)]
 mod plugins_runtime_tests;
 #[cfg(test)]
+mod plugins_rust_build_tests;
+#[cfg(test)]
 mod plugins_seed_tests;
 #[cfg(test)]
 mod plugins_store_tests;
