@@ -1637,9 +1637,13 @@ impl<R: Runtime> Core<R> {
         let _pass = self.board_lock.lock().await;
         // The window is told of the pause whatever else holds the tickets back.
         self.refresh_pause();
-        let projects = self.projects.read().clone();
+        let projects: Vec<String> = self.projects.read().iter().map(|p| p.id.clone()).collect();
         let mut missing = false;
-        for p in projects {
+        for project_id in projects {
+            // As it is now: the starts of the projects before it took seconds.
+            let Ok(p) = self.project(&project_id) else {
+                continue;
+            };
             // Without Claude Code (the one of the account it would go to) no agent can work:
             // rather than make every ticket's worktree and agent only to block it, none starts
             // until it is found (saving the settings looks again).
@@ -1762,12 +1766,23 @@ impl<R: Runtime> Core<R> {
                     }
                     continue;
                 }
+                // The board said stop while this pass started the ones before it.
+                if !t.forced && self.autopilot_stopped(&p.id) {
+                    continue;
+                }
                 self.start_ticket(&p, &id).await;
             }
         }
         if !missing {
             self.claude_missing.store(false, Ordering::Release);
         }
+    }
+
+    /// The autopilot of the project starts nothing now: turned off, or held by the target's CI
+    /// (a ticket launched by hand starts all the same).
+    fn autopilot_stopped(&self, project_id: &str) -> bool {
+        self.project(project_id)
+            .map_or(true, |p| !p.board.autopilot || self.red_target_holds(&p))
     }
 
     /// Why the project's board starts nothing, as the window is told (only when it changes):

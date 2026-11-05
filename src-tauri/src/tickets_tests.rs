@@ -207,7 +207,7 @@ impl Harness {
     }
 
     /// No scheduling pass is queued or running.
-    async fn wait_board_idle(&self) {
+    pub(crate) async fn wait_board_idle(&self) {
         self.wait("no scheduling pass queued", |h| {
             h.core.passes_queued.load(Ordering::SeqCst) == 0
         })

@@ -6,7 +6,7 @@
 
 use super::*;
 use crate::agentprs_tests::github_project;
-use crate::core_tests::{harness, Harness};
+use crate::core_tests::{harness, wt_step, Harness};
 use crate::i18n::Lang::{En, Fr};
 use crate::integrations::fake::FakeServer;
 use crate::tickets_tests::{draft, reviewed};
@@ -237,13 +237,13 @@ async fn the_target_ci_shows_on_the_header_and_pauses_the_autopilot_when_asked()
     );
     assert_eq!(h.core.target_cis().len(), 1);
 
-    // Off by default: the autopilot starts a ticket whatever the target's CI.
+    // The autopilot off first: on, with no pause yet, it may rightly start the ticket at once.
+    h.set_board(&p.id, |s| s.autopilot = false);
     let one = h
         .core
         .ticket_create(&p.id, draft("Un [ok]", &[], 5))
         .await
         .unwrap();
-    h.set_board(&p.id, |s| s.autopilot = false);
     h.set_board(&p.id, |s| {
         s.autopilot = true;
         s.pause_on_red_target = true;
@@ -293,6 +293,60 @@ async fn the_target_ci_shows_on_the_header_and_pauses_the_autopilot_when_asked()
         x.column != Column::Todo
     })
     .await;
+}
+
+/// A pass under way starts nothing more once the pause is on, or the autopilot off: each start takes
+/// seconds, and the board it decided on is no longer the one the user sees.
+#[tokio::test]
+async fn a_pass_under_way_starts_no_more_tickets_once_the_board_says_stop() {
+    for (name, stop) in [
+        (
+            "bci-mid-pause",
+            (|s| s.pause_on_red_target = true) as fn(&mut BoardSettings),
+        ),
+        ("bci-mid-off", |s| s.autopilot = false),
+    ] {
+        let h = harness(name);
+        let server = FakeServer::start().await;
+        let (p, _, _) = github_project(&h, &server, false).await;
+        red_main(&server);
+        assert!(target_ci(&h, &p.id).await.unwrap().red());
+        // Every ticket's worktree setup waits for the test's go: the pass stays on its first start.
+        h.set_worktree_steps(
+            &p.id,
+            vec![wt_step(
+                r#"node -e "const fs = require('fs'); const go = require('path').join(process.env.ESCOUADE_PROJECT_DIR, '..', 'go'); setInterval(() => { if (fs.existsSync(go)) process.exit(0) }, 50); setTimeout(() => process.exit(1), 20000)""#,
+                "",
+            )],
+            vec![],
+        );
+        h.set_board(&p.id, |s| s.autopilot = false);
+        let a = h
+            .core
+            .ticket_create(&p.id, draft("Un [ok]", &[], 5))
+            .await
+            .unwrap();
+        let b = h
+            .core
+            .ticket_create(&p.id, draft("Deux [ok]", &[], 5))
+            .await
+            .unwrap();
+        // Both are to start in the same pass.
+        h.set_board(&p.id, |s| s.autopilot = true);
+        h.wait("the first one setting its worktree up", |h| {
+            h.ticket(&a.id)
+                .agent_id
+                .is_some_and(|x| h.view(&x).setup.is_some())
+        })
+        .await;
+        assert_eq!(h.ticket(&b.id).column, Column::Todo);
+        h.set_board(&p.id, stop);
+        std::fs::write(h.dir.join("go"), "").unwrap();
+        h.wait_ticket(&a.id, "to test", |t| t.column == Column::Review)
+            .await;
+        h.wait_board_idle().await;
+        assert_eq!(h.ticket(&b.id).column, Column::Todo, "{name}");
+    }
 }
 
 /// A host out of reach: said on the pill, which keeps what it read last; a project without a

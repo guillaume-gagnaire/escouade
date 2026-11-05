@@ -75,6 +75,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Corrections
 
+- Le pilote auto éteint ou la pause sur CI rouge retiennent aussi les tickets qu’une passe de démarrage en cours n’a pas encore lancés.
 - Un plugin qui décide des autorisations démarre dès son installation, sa mise à jour ou sa réactivation : sa règle s’applique à la toute première demande.
 - La barre du quota de Fable s’appelle « Fable 7 j », comme les autres fenêtres, par sa durée.
 - Un agent enregistré sur un harness que cette version n’a pas (celui d’une version plus récente, ou d’un plugin retiré) est lu et gardé avec sa conversation, marqué « harness absent » ; il ne démarre pas, et aucun agent n’est créé sur ce harness.

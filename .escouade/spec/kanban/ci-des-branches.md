@@ -2,8 +2,8 @@
 title: "CI de la cible et des branches poussées"
 subject: "kanban"
 sources: ["docs/TODO-1.8.md"]
-tickets: ["ESC-63"]
-decisions: [59]
+tickets: ["ESC-63","ESC-357"]
+decisions: [59,"une-passe-de-l-ordonnanceur-relit-le-kan"]
 compared: null
 ---
 
@@ -42,6 +42,7 @@ Escouade montre la CI de ce qu'elle suit sans pull request : la branche cible de
 
 - « Pause quand la CI de la cible est rouge », dans les réglages du Kanban (pilote auto), éteint par défaut.
 - Allumé, le pilote auto ne démarre aucun ticket « À faire » tant que la CI de la cible est rouge, d'après la dernière lecture. Une ligne sous l'en-tête le dit (« Pilote auto en pause : la CI de main est rouge depuis 2 h », avec « Voir les jobs ») et les cartes « À faire » disent « En attente : CI de la cible rouge ».
+- La pause vaut dès qu'elle tient, y compris pendant une passe de l'ordonnanceur : chaque démarrage prend quelques secondes, et la pause allumée, la cible vue rouge ou le pilote auto éteint entre-temps retiennent les tickets que cette passe n'a pas encore démarrés (ESC-357).
 - Un ticket lancé à la main (« Lancer », `start_ticket`) part quand même. Les tickets déjà au travail continuent ; la correction de la CI d'un ticket « En revue » aussi.
 - La CI de la cible verte ou relancée : la pause se lève et les tickets partent.
 
@@ -65,3 +66,4 @@ Escouade montre la CI de ce qu'elle suit sans pull request : la branche cible de
 
 - Les essais réels : aucun ne relance ni n'écrit sur un vrai dépôt. GitHub, GitLab, Bitbucket Cloud, Gitea / Forgejo et Azure DevOps sont faits d'après leur documentation et leurs faux serveurs, à essayer en vrai avec l'utilisateur (ESC-53, ESC-70).
 - La pastille de la cible ne se montre que dans l'en-tête du Kanban.
+- La CI de la cible n'est connue qu'après sa première lecture, en mémoire seulement : au démarrage de l'app, tant qu'elle n'a pas été lue (une dizaine de secondes au moins), la pause ne retient rien, même si la cible est rouge.
