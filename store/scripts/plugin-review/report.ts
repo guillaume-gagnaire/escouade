@@ -38,14 +38,21 @@ export interface ReviewData {
   leads?: Lead[];
   base?: { version: string; grown: Grown[]; files: number; added: number; removed: number; diff: string } | null;
   bench?: BenchResult;
-  /** The module the store compiled of a `run.js` plugin, as `version.json` names it (ESC-323). */
+  /** The module the store compiled of a `run.js` or `run.wasm` plugin, as `version.json` names it (ESC-323, ESC-336). */
   wasm?: VersionFile['wasm'];
-  /** Its bundle compiled again here and compared (ESC-324); absent for a plugin that is not `run.js`. */
+  /** Its sources compiled again and compared (ESC-324, ESC-337); absent for a plugin without a module. */
   recompile?: Recompiled;
 }
 
-/** Whether the version is a `run.js` plugin's, whose module must be compiled again to be signed. */
-export const isRunJs = (d: ReviewData) => !!d.wasm || typeof ((d.manifest?.run ?? null) as { js?: unknown } | null)?.js === 'string';
+/** What the manifest compiles to a module: a `run.js` bundle, a `run.wasm` of Rust; null for a plugin without one. */
+export function moduleSource(manifest: ReviewData['manifest']): { js: string } | { rust: string } | null {
+  const run = (manifest?.run ?? null) as { js?: unknown; wasm?: unknown } | null;
+  if (typeof run?.js === 'string') return { js: run.js };
+  return typeof run?.wasm === 'string' ? { rust: run.wasm } : null;
+}
+
+/** Whether the version has a module, which must be compiled again to be signed. */
+export const hasModule = (d: ReviewData) => !!d.wasm || !!moduleSource(d.manifest);
 
 const PERMISSION_WORDS: Record<string, (v: unknown) => string> = {
   events: (v) => `reçoit les faits ${list(v)}`,
@@ -66,7 +73,8 @@ export function permissionLines(manifest: Record<string, unknown> | null | undef
   const out = Object.entries(p)
     .filter(([, v]) => (Array.isArray(v) ? v.length > 0 : v === true))
     .map(([k, v]) => (PERMISSION_WORDS[k] ? PERMISSION_WORDS[k]!(v) : `\`${k}\` : ${JSON.stringify(v)}`));
-  if (typeof (manifest?.run as { js?: unknown } | undefined)?.js === 'string') out.push('tourne en WASM (`run.js`)');
+  const source = moduleSource(manifest);
+  if (source) out.push(`tourne en WASM (\`${'js' in source ? 'run.js' : 'run.wasm'}\`)`);
   else if (manifest?.run) out.push('lance un programme');
   else if (manifest) out.push('déclaratif : aucun programme');
   const contributes = Object.keys((manifest?.contributes ?? {}) as object);
@@ -84,7 +92,7 @@ export function blockers(d: ReviewData): string[] {
   for (const b of d.binaries ?? [])
     if (b.attested.state !== 'verified') out.push(`le binaire ${b.platform} n’a pas d’attestation vérifiée pour ce commit`);
   if (d.bench?.played && !d.bench.passed) out.push('le banc de conformité échoue');
-  if (isRunJs(d) && d.recompile?.state !== 'same')
+  if (hasModule(d) && d.recompile?.state !== 'same')
     out.push(
       `la recompilation du module WASM n’a pas donné la même empreinte : ${
         d.recompile?.state === 'not-done' ? d.recompile.why : 'elle n’a pas été faite'
@@ -173,7 +181,7 @@ export function renderReport(d: ReviewData): string {
   if (d.recompile)
     out.push(
       d.recompile.state === 'same'
-        ? '- Recompilé ici avec les mêmes versions : **même empreinte**, ce qui a été lu est ce qui tourne'
+        ? `- Recompilé ${d.recompile.where === 'container' ? 'dans un conteneur sans réseau' : 'ici'} avec les mêmes versions : **même empreinte**, ce qui a été lu est ce qui tourne`
         : d.recompile.state === 'different'
           ? `- **Recompilé ici : autre empreinte** (${code(d.recompile.local)})`
           : `- **Pas recompilé** : ${d.recompile.why}`,
@@ -260,7 +268,10 @@ export function renderReport(d: ReviewData): string {
   if (b && !b.played) unverified.push('le comportement du plugin (banc non lancé)');
   for (const x of d.binaries ?? []) if (x.attested.state !== 'verified') unverified.push(`la provenance du binaire ${x.platform}`);
   if (d.tagCheck?.state === 'unknown') unverified.push('l’étiquette sur GitHub');
-  if (isRunJs(d) && d.recompile?.state !== 'same') unverified.push('que le module WASM publié soit le build du bundle relu');
+  if (hasModule(d) && d.recompile?.state !== 'same') {
+    const source = moduleSource(d.manifest);
+    unverified.push(`que le module WASM publié soit le build ${source && 'rust' in source ? 'des sources relues' : 'du bundle relu'}`);
+  }
   unverified.push('les dépendances que le plugin téléchargerait à l’installation (elles ne sont pas dans l’archive)');
   for (const u of unverified) out.push(`- ${u}`);
   out.push(
@@ -312,9 +323,10 @@ export function renderPublicEn(d: ReviewData): string {
   const perms = Object.entries(p)
     .filter(([, v]) => (Array.isArray(v) ? v.length > 0 : v === true))
     .map(([k, v]) => (PERMISSION_WORDS_EN[k] ? PERMISSION_WORDS_EN[k]!(v) : `\`${k}\`: ${JSON.stringify(v)}`));
+  const source = moduleSource(d.manifest);
   perms.push(
-    typeof (d.manifest?.run as { js?: unknown } | undefined)?.js === 'string'
-      ? 'runs in WASM (`run.js`)'
+    source
+      ? `runs in WASM (\`${'js' in source ? 'run.js' : 'run.wasm'}\`)`
       : d.manifest?.run
         ? 'runs a program'
         : 'declarative: no program',

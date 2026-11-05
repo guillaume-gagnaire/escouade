@@ -124,6 +124,8 @@ export interface SandboxOptions {
   /** `auto` (an empty network namespace when the kernel allows it), `require` (never without), `none`. */
   isolation?: 'auto' | 'require' | 'none';
   timeoutMs?: number;
+  /** How long `escouade-plugin fetch` may take: the local review's first one downloads the toolchain too. */
+  fetchTimeoutMs?: number;
   memoryBytes?: number;
   /**
    * Where a `run.wasm` compiles: bubblewrap, or `none` outside production (the tests, a developer's machine). Left out,
@@ -298,7 +300,7 @@ function envOf(dir: string, javy: string | undefined, data?: string): Env {
 }
 
 /** What the compilation said on its error output, for the author: from its line of ✗, else its last lines. */
-function said(stderr: string): string {
+export function said(stderr: string): string {
   const lines = stderr
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -320,21 +322,33 @@ export async function materialise(files: ReadonlyMap<string, Buffer>, to: string
   }
 }
 
+/** What a `run.wasm` was compiled with, as `build --json` says it; null when a word is missing. */
+export const rustCompilerOf = (c: Partial<RustCompiler>): Compiler | null =>
+  c.rust && c.target && c.canon && c.lock ? { rust: c.rust, target: c.target, canon: c.canon, lock: c.lock } : null;
+
 /** The module `build --json` left in `out`, once what it said of it is true; `compiler` reads what made it. */
 async function moduleOf(
   out: string,
   stdout: string,
   compiler: (c: Partial<JsCompiler & RustCompiler>) => Compiler | null,
 ): Promise<Compiled> {
+  const wasm = (await readdir(out)).filter((n) => n.endsWith('.wasm'));
+  if (wasm.length !== 1) throw new Error(`escouade-plugin build wrote ${wasm.length} modules`);
+  return checkedModule(await readFile(join(out, wasm[0]!)), stdout, compiler);
+}
+
+/** `bytes`, once what `build --json` said of them on `stdout` is true. */
+export function checkedModule(
+  bytes: Buffer,
+  stdout: string,
+  compiler: (c: Partial<JsCompiler & RustCompiler>) => Compiler | null,
+): Compiled {
   let report: { size?: number; sha256?: string; compiler?: Partial<JsCompiler & RustCompiler> };
   try {
     report = JSON.parse(stdout);
   } catch {
     throw new Error(`escouade-plugin build --json did not answer JSON: ${stdout.slice(0, 200)}`);
   }
-  const wasm = (await readdir(out)).filter((n) => n.endsWith('.wasm'));
-  if (wasm.length !== 1) throw new Error(`escouade-plugin build wrote ${wasm.length} modules`);
-  const bytes = await readFile(join(out, wasm[0]!));
   if (bytes.length > MODULE_MAX) throw new Refused(`the module weighs more than ${MODULE_MAX / 1024 / 1024} MB`);
   const hash = sha256(bytes);
   const made = report.compiler ? compiler(report.compiler) : null;
@@ -387,12 +401,14 @@ async function compileRust(o: SandboxOptions, input: CompileRust): Promise<Compi
     for (const name of ['out', 'data', 'tmp']) await mkdir(join(dir, name));
     const party = input.firstParty ? ['--first-party'] : [];
     const memory = o.memoryBytes ?? RUST_MEMORY;
-    await rustStep(o, dir, ['fetch', '{work}/plugin', '--lang', 'en', ...party], { network: true, timeout: FETCH_TIMEOUT, memory });
+    await rustStep(o, dir, ['fetch', '{work}/plugin', '--lang', 'en', ...party], {
+      network: true,
+      timeout: o.fetchTimeoutMs ?? FETCH_TIMEOUT,
+      memory,
+    });
     const words = ['build', '{work}/plugin', '--out', '{work}/out', '--json', '--lang', 'en', ...party];
     const stdout = await rustStep(o, dir, words, { network: false, timeout: o.timeoutMs ?? RUST_TIMEOUT, memory });
-    return await moduleOf(join(dir, 'out'), stdout, (c) =>
-      c.rust && c.target && c.canon && c.lock ? { rust: c.rust, target: c.target, canon: c.canon, lock: c.lock } : null,
-    );
+    return await moduleOf(join(dir, 'out'), stdout, rustCompilerOf);
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => {});
   }

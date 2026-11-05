@@ -1,5 +1,5 @@
-import { Refused, type CompileOne } from '../../server/utils/compile';
-import type { Compiler, JsCompiler } from '../../server/utils/checks';
+import { Refused, type CompileOne, type CompileRust } from '../../server/utils/compile';
+import type { Compiler, JsCompiler, RustCompiler } from '../../server/utils/checks';
 import type { VersionFile } from '../../server/utils/versions';
 import { engineSteps } from './engine';
 
@@ -10,13 +10,18 @@ import { engineSteps } from './engine';
 // `escouade-plugin` here, another version of it, a bundle it refuses): nothing can be signed until it is. An
 // `escouade-plugin` built without escouade-js, or with another one: the report says how to get the store's
 // (`engine.ts`, ESC-343).
+//
+// A `run.wasm` (ESC-337, docs/PLUGINS.md §8.5.5) is compiled the same way, from the sources of the archive and their
+// `Cargo.lock`: on this machine for the first hand, in a container for a third party (`container.ts`), whose scripts and
+// macros run in native. Both give the store's module: the compilation is the same on every system.
 
 export type Recompiled =
-  | { state: 'same'; sha256: string; compiler: JsCompiler }
-  | { state: 'different'; published: string; local: string; compiler: JsCompiler }
+  | { state: 'same'; sha256: string; compiler: Compiler; where?: 'container' | 'local' }
+  | { state: 'different'; published: string; local: string; compiler: Compiler }
   | { state: 'not-done'; why: string };
 
 const isJs = (c: Compiler): c is JsCompiler => 'javy' in c;
+const rustWords = (c: RustCompiler) => `rustc ${c.rust}, ${c.target}, rustc-canon ${c.canon.slice(0, 12)}…`;
 const same = (a: JsCompiler, b: JsCompiler) => a.javy === b.javy && a.engine === b.engine && a.prelude === b.prelude;
 const words = (c: JsCompiler) => `Javy ${c.javy}, escouade-js ${c.engine.slice(0, 12)}…, escouade-plugin ${c.prelude}`;
 
@@ -67,4 +72,42 @@ export async function recompile(
     };
   if (got.sha256 !== published.sha256) return { state: 'different', published: published.sha256, local: got.sha256, compiler: made };
   return { state: 'same', sha256: got.sha256, compiler: made };
+}
+
+/**
+ * Compiles the sources of a `run.wasm` plugin again with `one`, and compares its module with `published`. `one` is null
+ * when nothing here may compile it, which `missing` says; `where` is what the report tells.
+ */
+export async function recompileRust(
+  one: CompileOne | null,
+  input: CompileRust,
+  module: NonNullable<VersionFile['wasm']>,
+  missing: string,
+  where: 'container' | 'local',
+): Promise<Recompiled> {
+  const compiler = module.compiler;
+  if (isJs(compiler))
+    return { state: 'not-done', why: 'version.json dit qu’un bundle a fait ce module, le manifeste nomme des sources Rust' };
+  if (!one) return { state: 'not-done', why: missing };
+  let got;
+  try {
+    got = await one(input);
+  } catch (e) {
+    const said = e instanceof Error ? e.message : String(e);
+    return {
+      state: 'not-done',
+      why: e instanceof Refused ? `l’\`escouade-plugin\` de la revue refuse ces sources : ${said}` : `la recompilation a échoué : ${said}`,
+    };
+  }
+  const made = got.compiler;
+  if (isJs(made)) return { state: 'not-done', why: 'la revue a compilé un bundle, pas ces sources' };
+  if (made.rust !== compiler.rust || made.target !== compiler.target || made.canon !== compiler.canon)
+    return {
+      state: 'not-done',
+      why: `l’\`escouade-plugin\` de la revue compile avec ${rustWords(made)} ; le store a compilé avec ${rustWords(compiler)} : installe celui du store (ESCOUADE_PLUGIN pour la première main, ESCOUADE_PLUGIN_LINUX pour un tiers) et relance la revue`,
+    };
+  // Another `Cargo.lock` than the one the store compiled says as much as another module: these are not its sources.
+  if (got.sha256 !== module.sha256 || made.lock !== compiler.lock)
+    return { state: 'different', published: module.sha256, local: got.sha256, compiler: made };
+  return { state: 'same', sha256: got.sha256, compiler: made, where };
 }

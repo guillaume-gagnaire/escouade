@@ -1,9 +1,9 @@
 ---
 title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","docs/PLUGINS.md §8.19 (ESC-344)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire"]
-tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344"]
-decisions: [73,71,70,72,75,80,84,86]
+sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","docs/PLUGINS.md §8.19 (ESC-344)","docs/PLUGINS.md §8.20 (ESC-337)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire"]
+tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337"]
+decisions: [73,71,70,72,75,80,84,86,"la-revue-locale-recompile-les-run-wasm-s"]
 compared: null
 ---
 
@@ -138,3 +138,6 @@ Ces quatre plugins sont les premiers portés. Ce qui précède dit qu'aucun plug
 - **Jira sans site** répond comme à un jeton refusé (`-32401`), au lieu d'une erreur non typée.
 - **Avant Z2**, l'installeur n'a pas ces modules : l'app ne les trouve que dans un build de développement ou les tests, dans `<target>/plugins-wasm/<id-court>/`. Une release faite avant Z2 n'aurait pas ces quatre plugins.
 - Un build de développement et les tests laissent un plugin en WASM joindre un faux service par son adresse (`ESCOUADE_TRELLO_API`, `ESCOUADE_LINEAR_API`, `ESCOUADE_CLICKUP_API`). Une release n'a pas ce chemin.
+
+## La revue locale d'un `run.wasm` (ESC-337)
+- La revue recompile les sources et compare l'empreinte au module publié, avant toute signature : sur le poste pour la première main, dans des conteneurs pour un tiers. Voir « La revue "Vérifié par Escouade" ».

@@ -4,7 +4,9 @@
 // dev.escouade.discord from its folder of the app's repository, as the chief reviews it, and the others under a third
 // party's id at the root of a repository of their own (a 1.0.0 verified and a 1.1.0 of Slack that asks for more), a plugin booby-trapped on purpose, and a version whose archive was changed after
 // its fingerprint; and a `run.js` plugin (team-rules' bundle) with the module the store compiled of it (ESC-324): the
-// one tests/fake/fake-escouade-plugin.mjs makes again (1.0.0), another one (1.0.1), one of another compiler (1.0.2). Run alone (`node tests/fake/review-store.mjs`, FAKE_REVIEW_STORE_PORT), it serves them for a trial
+// one tests/fake/fake-escouade-plugin.mjs makes again (1.0.0), another one (1.0.1), one of another compiler (1.0.2); and
+// the same three of a `run.wasm` plugin (ESC-337), with a 1.1.0 whose `Cargo.lock` grows, a 1.2.0 full of leads, and one
+// of the first hand. Run alone (`node tests/fake/review-store.mjs`, FAKE_REVIEW_STORE_PORT), it serves them for a trial
 // of `npm run plugin-review` (ESCOUADE_STORE_URL, ESCOUADE_REVIEW_GITHUB_API). Nothing here is ever run: bytes.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -128,16 +130,19 @@ export const fakeModule = (bundle) => Buffer.concat([Buffer.from([0, 0x61, 0x73,
 
 /**
  * FAKE_REVIEW_ESCOUADE_PLUGIN names a real `escouade-plugin` (a trial by hand of the review, ESC-324): the modules of
- * the `run.js` plugin are then compiled by it, as the store compiles them, with the compiler it says.
+ * the `run.js` plugin are then compiled by it, as the store compiles them, with the compiler it says. FAKE_REVIEW_RUST_PLUGIN
+ * does the same for the `run.wasm` plugins (ESC-337), their sources left as the fixture's: the rest stays fake.
  */
 const realCompiler = process.env.FAKE_REVIEW_ESCOUADE_PLUGIN || null;
+const realRust = process.env.FAKE_REVIEW_RUST_PLUGIN || null;
 
-function realBuild(cli, manifest, js, bundle) {
+function realBuild(cli, files) {
   const dir = mkdtempSync(join(tmpdir(), 'fake-review-store-'));
   try {
-    mkdirSync(join(dir, 'plugin', dirname(js)), { recursive: true });
-    writeFileSync(join(dir, 'plugin', 'escouade-plugin.json'), manifest);
-    writeFileSync(join(dir, 'plugin', js), bundle);
+    for (const [path, bytes] of Object.entries(files)) {
+      mkdirSync(dirname(join(dir, 'plugin', path)), { recursive: true });
+      writeFileSync(join(dir, 'plugin', path), bytes);
+    }
     const r = spawnSync(cli, ['build', join(dir, 'plugin'), '--out', join(dir, 'out'), '--json', '--lang', 'en'], { encoding: 'utf8' });
     if (r.status !== 0) throw new Error(`${cli} build: ${r.stderr}`);
     const said = JSON.parse(r.stdout);
@@ -153,6 +158,67 @@ function runJs(version) {
   for (const k of Object.keys(f)) if (/^(?:team-rules(?:\.cmd)?|bin\/)/.test(k)) delete f[k];
   return f;
 }
+
+const RUST_FIXTURE = fileURLToPath(new URL('../../../tests/fixtures/plugins/rust-build/', import.meta.url));
+
+/** The files of tests/fixtures/plugins/rust-build, the `run.wasm` of the tests, under `id` at `version`. */
+function runWasm(id, version, more = {}) {
+  const out = { 'README.md': '# Rust build\n', LICENSE: MIT };
+  const walk = (dir, rest = '') => {
+    for (const name of readdirSync(dir)) {
+      const at = join(dir, name);
+      if (statSync(at).isDirectory()) walk(at, `${rest}${name}/`);
+      else out[`${rest}${name}`] = readFileSync(at).toString('utf8').replace(/\r\n/g, '\n');
+    }
+  };
+  walk(RUST_FIXTURE);
+  const m = JSON.parse(out['escouade-plugin.json']);
+  out['escouade-plugin.json'] = JSON.stringify({ ...m, id, version }, null, 2);
+  return { ...out, ...more };
+}
+
+/** A `Cargo.lock` that has one package more than the fixture's. */
+const grownLock = () =>
+  `${readFileSync(join(RUST_FIXTURE, 'Cargo.lock'), 'utf8').replace(/\r\n/g, '\n')}
+[[package]]
+name = "left-pad"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "${'a'.repeat(64)}"
+`;
+
+/** A source and a lock that the leads of a `run.wasm` must all point at. */
+const RUST_TRAPS = {
+  'native/build.rs': 'fn main() {}\n',
+  'src/trap.rs': [
+    '// A comment that says unsafe does not count.',
+    'pub static KEY: &[u8] = include_bytes!("/home/user/.ssh/id_ed25519");',
+    'pub static UP: &str = include_str!("../../secret.txt");',
+    'pub static NEAR: &str = include_str!("near.txt");',
+    'pub static MADE: &str = include_str!(concat!("/ho", "me/x"));',
+    'pub fn poke(p: *mut u8) { unsafe { *p = 1 } }',
+    '',
+  ].join('\n'),
+  'src/near.txt': 'beside the source\n',
+  'Cargo.lock': `${grownLock()}
+[[package]]
+name = "helper"
+version = "0.1.0"
+source = "git+https://github.com/q7x/helper#abcdef"
+`,
+};
+
+/** What tests/fake/fake-escouade-plugin.mjs compiles a `run.wasm` to: its folder's files in order, each after its path. */
+const fakeRustModule = (files) => {
+  const order = (a, b) => {
+    const [x, y] = [a.split('/'), b.split('/')];
+    for (let i = 0; ; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1;
+  };
+  const sources = Object.keys(files)
+    .sort(order)
+    .flatMap((f) => [Buffer.from(f), Buffer.from(files[f])]);
+  return Buffer.concat([Buffer.from([0, 0x61, 0x73, 0x6d, 1, 0, 0, 0]), ...sources]);
+};
 
 /** The versions the fake store holds, by plugin; each one's archive, version.json and binaries as the store keeps them. */
 export function buildStore() {
@@ -213,6 +279,31 @@ export function buildStore() {
     { id: 'dev.exemple.rules-js', repo: 'escouade-dev/plugin-rules-js', version: '1.0.0', files: runJs('1.0.0'), wasm: 'same' },
     { id: 'dev.exemple.rules-js', repo: 'escouade-dev/plugin-rules-js', version: '1.0.1', files: runJs('1.0.1'), wasm: 'other' },
     { id: 'dev.exemple.rules-js', repo: 'escouade-dev/plugin-rules-js', version: '1.0.2', files: runJs('1.0.2'), wasm: 'old' },
+    // A `run.wasm` plugin of a third party, and one of the first hand.
+    ...[
+      ['1.0.0', 'same', {}, true],
+      ['1.0.1', 'other', {}],
+      ['1.0.2', 'old', {}],
+      ['1.1.0', 'same', { 'Cargo.lock': grownLock() }],
+      ['1.2.0', 'same', RUST_TRAPS],
+    ].map(([version, wasm, more, verified]) => ({
+      id: 'dev.exemple.rust-lines',
+      repo: 'escouade-dev/plugin-rust-lines',
+      version,
+      files: runWasm('dev.exemple.rust-lines', version, more),
+      wasm,
+      verified: !!verified,
+      clean: !Object.keys(more).length,
+    })),
+    {
+      id: 'dev.escouade.rust-first',
+      repo: 'guillaume-gagnaire/escouade',
+      path: 'plugins/rust-first',
+      version: '1.0.0',
+      files: runWasm('dev.escouade.rust-first', '1.0.0'),
+      wasm: 'same',
+      clean: true,
+    },
     { id: 'io.github.q7x.slak-notify', repo: 'q7x/slak-notify', version: '0.0.1', files: TRAPPED, raw: TRAPPED_RAW, moved: true },
     {
       id: 'io.github.q7x.slak-notify',
@@ -224,6 +315,7 @@ export function buildStore() {
       binaries: { 'linux-x64': Buffer.from('\x7fELF fake binary') },
     },
   ];
+  let realModule = null;
   const files = new Map(); // path -> Buffer
   const tags = new Map(); // `${repo}@${tag}` -> commit
   const plugins = new Map();
@@ -242,11 +334,20 @@ export function buildStore() {
     let compiler = FAKE_COMPILER;
     if (s.wasm) {
       const m = JSON.parse(String(s.files['escouade-plugin.json']));
+      const rust = !!m.run.wasm;
+      if (rust) compiler = { rust: '1.98.0', target: 'wasm32-wasip1', canon: 'c'.repeat(64), lock: sha256(s.files['Cargo.lock']) };
       let bytes;
-      if (realCompiler) ({ bytes, compiler } = realBuild(realCompiler, s.files['escouade-plugin.json'], m.run.js, s.files[m.run.js]));
-      else bytes = fakeModule(s.files[m.run.js]);
+      if (rust && realRust && s.clean) {
+        realModule ??= realBuild(realRust, s.files);
+        ({ bytes, compiler } = realModule);
+      } else if (!rust && realCompiler)
+        ({ bytes, compiler } = realBuild(realCompiler, {
+          'escouade-plugin.json': s.files['escouade-plugin.json'],
+          [m.run.js]: s.files[m.run.js],
+        }));
+      else bytes = rust ? fakeRustModule(s.files) : fakeModule(s.files[m.run.js]);
       wasm = s.wasm === 'other' ? Buffer.concat([bytes, Buffer.from('changed')]) : bytes;
-      if (s.wasm === 'old') compiler = { ...compiler, prelude: '2.1.9' };
+      if (s.wasm === 'old') compiler = rust ? { ...compiler, canon: 'd'.repeat(64) } : { ...compiler, prelude: '2.1.9' };
       files.set(`${base}/plugin.wasm`, wasm);
     }
     const tag = s.path ? `${s.path}/v${s.version}` : `v${s.version}`;
@@ -375,6 +476,9 @@ export function startReviewStore(port = 0) {
     res.writeHead(404, { 'content-type': 'application/json' });
     res.end('{"message":"Not Found"}');
   });
+  // In the tests' own process: a spawnSync (minisign) stops this server too, past the 5 s it keeps an idle socket on a
+  // loaded machine, and the next request meets a socket being closed.
+  server.keepAliveTimeout = 300_000;
   return new Promise((done) =>
     server.listen(port, '127.0.0.1', () => {
       const url = `http://127.0.0.1:${server.address().port}`;

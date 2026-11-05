@@ -4,7 +4,20 @@
 
 import { hostCovered } from '../../../schemas/plugin-manifest.mjs';
 
-export type LeadKind = 'network' | 'host' | 'files' | 'secrets' | 'exec' | 'dynamic' | 'obscure' | 'dependencies' | 'instructions';
+export type LeadKind =
+  | 'network'
+  | 'host'
+  | 'files'
+  | 'secrets'
+  | 'exec'
+  | 'dynamic'
+  | 'native'
+  | 'unsafe'
+  | 'includes'
+  | 'imports'
+  | 'obscure'
+  | 'dependencies'
+  | 'instructions';
 
 export interface Lead {
   kind: LeadKind;
@@ -25,6 +38,10 @@ export const KINDS: Record<LeadKind, string> = {
   files: 'Fichiers hors du dossier du plugin',
   exec: 'Programmes lancés',
   dynamic: 'Code dynamique',
+  native: 'Code natif à la compilation (`build.rs`, macros procédurales)',
+  unsafe: 'Code `unsafe`',
+  includes: 'Fichiers inclus à la compilation',
+  imports: 'Imports du module, comparés aux capacités déclarées',
   obscure: 'Code illisible',
   dependencies: 'Dépendances',
   instructions: 'Consignes aux agents',
@@ -199,6 +216,9 @@ export function findLeads(files: Map<string, Buffer>, network: string[]): Lead[]
       if (prose) return;
       // The manifest's own repository is where it comes from, not a host it reaches (ESC-314: plugins/<id>/ of the app's).
       if (file === 'escouade-plugin.json' && /^\s*"repository"\s*:/.test(raw)) return;
+      // Where a crate comes from, and its own pages: `rust-leads.ts` judges the sources of a `Cargo.lock` (ESC-337).
+      if (/(?:^|\/)Cargo\.lock$/.test(file)) return;
+      if (/(?:^|\/)Cargo\.toml$/.test(file) && /^\s*(?:repository|homepage|documentation)\s*=/.test(raw)) return;
       for (const m of raw.matchAll(URL)) {
         const host = m[1]!.replace(/^\[|\]$/g, '');
         if (QUIET_HOSTS.test(host) || hostAllowed(host, network)) continue;

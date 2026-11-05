@@ -2,21 +2,22 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 
 import { join, relative, resolve } from 'node:path';
 import { verifyAttestation, type Runner } from './attest';
 import { benchFolder, firstPartyBench, playBench, playWasm, type BenchSetup } from './bench';
-import { recompile } from './recompile';
+import { recompile, recompileRust } from './recompile';
 import type { CompileOne } from '../../server/utils/compile';
 import { diffFolders, grownPermissions } from './diff';
 import { baseVersion, catalog, checkTag, download, Integrity, type Source } from './download';
 import { extract, problemText } from './extract';
 import { findLeads } from './leads';
+import { lockChanges, readNativeList, rustLeads } from './rust-leads';
 import { normalizePath } from '../../shared/folder';
-import { renderPublic, renderPublicEn, renderReport, proposed, type ReviewData } from './report';
+import { moduleSource, renderPublic, renderPublicEn, renderReport, proposed, type ReviewData } from './report';
 
 // The local review of a version (docs/STORE.md §4.2), the deterministic part, without AI: download and check, unpack
-// without danger in a new folder outside the repository, compile a `run.js` bundle again and compare its module with
-// the published one (ESC-324), prepare the leads, play the bench (in a container without network; a `run.js` plugin's
-// module in the app's WASM host, offline), diff with the last verified version, write the report outside the
-// repository. The plugin's folder is passed as an argument, never made the current folder of a program; nothing of
-// the plugin runs outside the container or the WASM host.
+// without danger in a new folder outside the repository, compile a `run.js` bundle or the sources of a `run.wasm` again
+// and compare the module with the published one (ESC-324, ESC-337), prepare the leads, play the bench (in a container
+// without network; the published module in the app's WASM host, offline), diff with the last verified version, write the
+// report outside the repository. The plugin's folder is passed as an argument, never made the current folder of a
+// program; nothing of a third party's plugin runs outside a container or the WASM host.
 
 export interface ReviewOptions {
   id: string;
@@ -30,8 +31,15 @@ export interface ReviewOptions {
   bench: BenchSetup;
   /** Why there is no engine, when there is none. */
   benchWhy?: string;
-  /** Compiles a `run.js` bundle again, by this machine's `escouade-plugin`; null without one. */
+  /**
+   * Compiles again on this machine, by its `escouade-plugin`: a `run.js` bundle, which runs nothing of the plugin in
+   * native, and a `run.wasm` of the first hand. Null without one. Never given a third party's `run.wasm`.
+   */
   compile?: CompileOne | null;
+  /** Compiles a third party's `run.wasm` again, in a container without network; null without an engine or a Linux tool. */
+  container?: CompileOne | null;
+  /** Why there is no `container`, when there is none. */
+  containerWhy?: string;
   /** Fetches the escouade-js of this fingerprint, when `escouade-plugin` has another one, and says what to do next. */
   engine?: (sha256: string) => string;
   /** The version of Escouade under development: a first-party plugin is played as it, a third party's never (ESC-343). */
@@ -101,31 +109,58 @@ export async function review(o: ReviewOptions): Promise<ReviewDone> {
     } catch {
       data.manifest = null;
     }
-    // A `run.js` plugin: its bundle compiled again here must give the module the store published, byte for byte; an
-    // other one stops the review, as an archive changed (ESC-324).
+    // A plugin with a module: its `run.js` bundle or its `run.wasm` sources compiled again must give the module the store
+    // published, byte for byte; an other one stops the review, as an archive changed (ESC-324, ESC-337).
     const firstParty = firstPartyBench(o.id, f.repository);
-    const js = ((data.manifest?.run ?? null) as { js?: unknown } | null)?.js;
+    const source = moduleSource(data.manifest);
+    const rust = source && 'rust' in source ? source.rust : null;
     let module: string | null = null;
-    if (typeof js === 'string') {
-      const at = js.replace(/^\.\//, '');
-      const bundle = unpacked.files.get(at);
-      if (!bundle) throw new Integrity(`le bundle ${js} que nomme le manifeste n’est pas dans l’archive`);
+    if (source) {
+      const js = 'js' in source ? source.js : null;
+      const at = js?.replace(/^\.\//, '');
+      const bundle = at ? unpacked.files.get(at) : undefined;
+      if (js && !bundle) throw new Integrity(`le bundle ${js} que nomme le manifeste n’est pas dans l’archive`);
       if (!f.wasm || !got.wasm)
-        data.recompile = { state: 'not-done', why: 'version.json ne nomme aucun module : le store n’a pas compilé ce bundle' };
+        data.recompile = {
+          state: 'not-done',
+          why: `version.json ne nomme aucun module : le store n’a pas compilé ${js ? 'ce bundle' : 'ces sources'}`,
+        };
       else {
         data.wasm = f.wasm;
         module = join(dir, 'plugin.wasm');
         writeFileSync(module, got.wasm);
-        data.recompile = await recompile(o.compile ?? null, { manifest: manifestBytes!, js: at, bundle, firstParty }, f.wasm, o.engine);
+        const manifest = manifestBytes!;
+        if (at) data.recompile = await recompile(o.compile ?? null, { manifest, js: at, bundle: bundle!, firstParty }, f.wasm, o.engine);
+        else if (firstParty)
+          data.recompile = await recompileRust(
+            o.compile ?? null,
+            { manifest, wasm: rust!, files: unpacked.files, firstParty },
+            f.wasm,
+            'pas d’`escouade-plugin` sur ce poste pour recompiler (ESCOUADE_PLUGIN, le PATH ou src-tauri/target)',
+            'local',
+          );
+        // A third party's scripts and macros run in native: a container or nothing, never this machine.
+        else
+          data.recompile = await recompileRust(
+            o.container ?? null,
+            { manifest, wasm: rust!, files: unpacked.files },
+            f.wasm,
+            `pas de recompilation d’un tiers sans conteneur : ${o.containerWhy ?? 'aucun moteur de conteneur'}`,
+            'container',
+          );
         if (data.recompile.state === 'different')
           throw new Integrity(
-            `le module publié (${data.recompile.published}) n’est pas la recompilation du bundle ${js} (${data.recompile.local}), avec les mêmes versions du compilateur`,
+            `le module publié (${data.recompile.published}) n’est pas la recompilation ${js ? `du bundle ${js}` : 'des sources de l’archive'} (${data.recompile.local}), avec les mêmes versions du compilateur`,
           );
       }
     }
 
     const network = ((data.manifest?.permissions ?? {}) as { network?: unknown }).network;
     data.leads = findLeads(unpacked.files, Array.isArray(network) ? network.map(String) : []);
+    if (rust)
+      data.leads.push(
+        ...rustLeads(unpacked.files, got.wasm, (data.manifest?.permissions ?? {}) as Record<string, unknown>, readNativeList()),
+      );
 
     // The binaries, kept to be checked, never run here.
     const repo = f.repository.replace(/^https:\/\/github\.com\//i, '');
@@ -152,6 +187,10 @@ export async function review(o: ReviewOptions): Promise<ReviewDone> {
       } catch {
         before = {};
       }
+      if (rust) {
+        const lock = (files: Map<string, Buffer>) => files.get('Cargo.lock')?.toString('utf8') ?? '';
+        data.leads.push(...lockChanges(lock(was.files), lock(unpacked.files)));
+      }
       const d = diffFolders(dir, 'base', 'plugin');
       const diffPath = join(dir, 'changes.diff');
       writeFileSync(diffPath, d.text);
@@ -165,7 +204,7 @@ export async function review(o: ReviewOptions): Promise<ReviewDone> {
       };
     } else data.base = null;
 
-    if (typeof js === 'string')
+    if (source)
       // The module published, in the WASM host, never in a container; not played when the review has none to play.
       data.bench = module
         ? await playWasm(o.bench, unpackedAt, module, firstParty, o.development)

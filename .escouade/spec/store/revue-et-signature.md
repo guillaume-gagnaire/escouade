@@ -1,9 +1,9 @@
 ---
 title: "La revue « Vérifié par Escouade » : la file, la signature, la révocation"
 subject: "store"
-sources: ["docs/STORE.md","design/store/index.html","design/app-redesign/UX-NOTES.md","store/server/utils/review.ts","store/server/utils/discord.ts","store/scripts/plugin-review/","docs/PLUGINS.md §5.6","Consignes du chef au lancement d'ESC-324 (2026-11-01)"]
-tickets: ["ESC-235","ESC-295","ESC-302","ESC-324","ESC-343"]
-decisions: [46,76]
+sources: ["docs/STORE.md","design/store/index.html","design/app-redesign/UX-NOTES.md","store/server/utils/review.ts","store/server/utils/discord.ts","store/scripts/plugin-review/","docs/PLUGINS.md §5.6","docs/PLUGINS.md §8.5.5, §8.20","Consignes du chef au lancement d'ESC-324 (2026-11-01)"]
+tickets: ["ESC-235","ESC-295","ESC-302","ESC-324","ESC-343","ESC-337"]
+decisions: [46,76,"la-revue-locale-recompile-les-run-wasm-s"]
 compared: "2026-10-30T03:23:39+01:00"
 ---
 
@@ -49,3 +49,14 @@ Détail et procédure : `docs/STORE.md` §4.1, §4.2, §4.5, §4.6 (il fait foi)
 - Le rapport dit la version jouée : « Joué comme Escouade 2.2.0, la version en développement » ou « la version de l'outil du poste ».
 - La recompilation ne change pas : elle se fait avec le compilateur que nomme `version.json`, sinon `sign` refuse.
 - Un `escouade-plugin` construit sans `escouade-js`, ou avec un autre que celui de `version.json` : la revue récupère le bon de la CI de main (artefact `escouade-js`, gardé 7 jours, par `gh run download`) dans `src-tauri/escouade-js/target/`. Elle ne garde que le fichier à l'empreinte de `version.json`. Le rapport dit ce qui reste à faire : `cargo build`, puis relancer la revue. Sans `gh` ou sans artefact, il dit comment l'obtenir à la main.
+
+## La revue locale d'un plugin `run.wasm` (ESC-337)
+- La revue télécharge le module et le vérifie comme pour un `run.js`, puis **recompile les sources de l'archive** : `escouade-plugin fetch` puis `build`, avec le `compiler` de `version.json` (`rust`, `target`, `canon`, `lock`).
+- **La première main** (`dev.escouade.*` du dépôt de l'app) compile sur le poste, par l'`escouade-plugin` du poste.
+- **Un tiers ne compile jamais sur le poste nu.** Son `build.rs` et ses macros sont du code natif, et un `include_bytes!` d'un chemin absolu ferait entrer un fichier du poste dans le module. Il compile dans des conteneurs neufs qui ne voient ni `HOME`, ni `~/.escouade-signing`, ni le dépôt : seulement les fichiers réguliers de l'archive et l'`escouade-plugin` Linux (`ESCOUADE_PLUGIN_LINUX`), en lecture seule. Aucun dossier du poste ne leur est ouvert en écriture.
+- Les étapes sont celles du store, en quatre conteneurs : préparer les volumes (sans le plugin), `fetch` avec réseau (rien du plugin ne s'exécute), `build` sans réseau (les outils en lecture seule), lire le module. Les outils et les crates restent dans un volume d'une revue à l'autre ; le reste est retiré.
+- **La même empreinte** : le rapport dit « Recompilé dans un conteneur sans réseau », ou « ici » pour la première main. **Une autre empreinte, ou un autre `lock`** : code 1, verdict « Refuser ». **Pas de recompilation** (pas de moteur de conteneur, pas de binaire Linux, un autre `rust`, `target` ou `canon`, des sources refusées, un conteneur tué) : la revue continue, et le verdict proposé est « Demander des changements ».
+- `sign` traite un `run.wasm` comme un `run.js` : sans recompilation à la même empreinte, il refuse.
+- **Le banc** joue le module publié dans l'hôte WASM, hors ligne, sans conteneur, comme pour un `run.js`.
+- **Les pistes de Rust** s'ajoutent aux autres : `build.rs` et macros procédurales ; `unsafe`, `extern`, `#[link]`, `#[no_mangle]`, `asm!`, `transmute` ; `include_bytes!`, `include_str!`, `include!` et `#[path]` vers un chemin absolu, qui sort du dossier ou calculé ; `env!` ; les imports du module, hors de `wasi_snapshot_preview1` et `escouade.call`, et les méthodes `net/*`, `ws/*`, `fs/*`, `proc/*` écrites dans le module, comparées à `permissions.network`, `files` et `commands` ; le `Cargo.lock` paquet par paquet (source, somme, liste fermée `rust_native.json`) et son diff avec la version d'avant ; le code illisible.
+- La lecture (`/review-plugin`) part de `Cargo.toml` et de `src/` : la recompilation à la même empreinte prouve que ces sources sont ce qui tourne.

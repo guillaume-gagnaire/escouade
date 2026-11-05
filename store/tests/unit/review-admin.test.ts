@@ -15,6 +15,7 @@ import {
   summaryLines,
   type Admin,
 } from '../../scripts/plugin-review/admin';
+import { containerCompiler } from '../../scripts/plugin-review/container';
 import { parseTarget } from '../../scripts/plugin-review/download';
 import { review } from '../../scripts/plugin-review/review';
 import { sandboxedCompiler } from '../../server/utils/compile';
@@ -33,6 +34,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(here, '../../..');
 const MINISIGN = join(here, '../fake/fake-minisign.mjs');
 const FAKE_CLI = join(here, '../fake/fake-escouade-plugin.mjs');
+const ENGINE = join(here, '../fake/fake-engine.mjs');
 
 let root: string;
 let store: Awaited<ReturnType<typeof startReviewStore>>;
@@ -56,6 +58,9 @@ beforeAll(async () => {
     'io.github.q7x.slak-notify@0.0.1',
     'dev.exemple.rules-js@1.0.0',
     'dev.exemple.rules-js@1.0.2',
+    'dev.exemple.rust-lines@1.0.0',
+    'dev.exemple.rust-lines@1.0.1',
+    'dev.exemple.rust-lines@1.0.2',
   ])
     await review({
       ...parseTarget(t)!,
@@ -64,11 +69,18 @@ beforeAll(async () => {
       reports: join(root, 'reports'),
       bench: { engine: null, cli: null, image: 'img', timeout: 10_000, local: FAKE_CLI },
       compile: sandboxedCompiler({ command: [process.execPath, FAKE_CLI], isolation: 'none' }),
+      container: containerCompiler({
+        engine: { program: process.execPath, prefix: [ENGINE] },
+        cli: '/opt/escouade-plugin',
+        image: 'img',
+        work: join(root, 'work'),
+      }),
       benchWhy: 'aucun moteur de conteneur (test)',
       repo: REPO,
       now: new Date('2026-10-29T10:00:00Z'),
     });
-});
+  // Seven reviews, each of which starts node several times.
+}, 180_000);
 afterAll(async () => {
   await store.close();
   rmSync(root, { recursive: true, force: true });
@@ -162,6 +174,22 @@ describe('the signature of a version', () => {
     } finally {
       writeFileSync(data, kept);
     }
+    expect(sent()).toBe(before);
+  });
+
+  it('signs a run.wasm whose module the review compiled again, and nothing else (ESC-337)', async () => {
+    const done = await signVersion(admin(), 'dev.exemple.rust-lines', '1.0.0');
+    expect(done.keyId).toBe(key.id);
+    expect((last('signature')!.summary as { fr: string }).fr).toContain('module WASM recompilé, même empreinte');
+    const before = sent();
+    // Another fingerprint: the review stopped there, « Refuser ».
+    await expect(signVersion(admin(), 'dev.exemple.rust-lines', '1.0.1')).rejects.toThrow(
+      /n’est pas la recompilation des sources de l’archive/,
+    );
+    // Another rustc-canon than the store's: not compiled again.
+    await expect(signVersion(admin(), 'dev.exemple.rust-lines', '1.0.2')).rejects.toThrow(
+      /la recompilation du module WASM n’a pas donné la même empreinte : .*rustc-canon dddddddddddd/,
+    );
     expect(sent()).toBe(before);
   });
 
