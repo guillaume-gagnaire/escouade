@@ -182,8 +182,8 @@ test('a run.wasm plugin is compiled by the store, and a native program is refuse
 
   await page.goto('/submit');
   await submit(page, `${login}/${native}`);
-  await expect(check(page, 'Binaires').locator('.why')).toContainText('run.command lancerait un programme natif');
-  await expect(check(page, 'Binaires').locator('.why')).toContainText('run.windows lancerait un programme natif');
+  await expect(check(page, 'Binaires').locator('.why').first()).toContainText('run.command lancerait un programme natif');
+  await expect(check(page, 'Binaires').locator('.why').nth(1)).toContainText('run.windows lancerait un programme natif');
   await expect(page.getByRole('button', { name: 'Continuer' })).toBeDisabled();
 });
 

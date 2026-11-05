@@ -42,7 +42,7 @@ export const FEATURES: readonly Feature[] = [
   {
     name: 'compiler',
     vars: ['STORE_ESCOUADE_PLUGIN'],
-    without: 'the run.js plugins are not compiled: their versions wait in error (docs/STORE.md §3.3)',
+    without: 'the run.js and run.wasm plugins are not compiled: their versions wait in error (docs/STORE.md §3.3)',
   },
   // The channels of Escouade's Discord (server/utils/discord.ts): each its own webhook, each optional.
   {

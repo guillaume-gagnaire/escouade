@@ -939,7 +939,11 @@ function checkPermissions(m: Manifest | null): CheckResult {
   if (problems.length) return fail('permissions', plural(problems.length, 'permission incohérente', 'inconsistent permission'), problems);
   const asks: Text[] = [];
   if (runs)
-    asks.push(jsOf(m) ? t('Tourne dans Escouade, isolé', 'Runs inside Escouade, sandboxed') : t('Lance un programme', 'Runs a program'));
+    asks.push(
+      jsOf(m) || cargoOf(m)
+        ? t('Tourne dans Escouade, isolé', 'Runs inside Escouade, sandboxed')
+        : t('Lance un programme', 'Runs a program'),
+    );
   if (p.decide === true) asks.push(t('décide des autorisations', 'decides permissions'));
   if (list(p.network).length) asks.push(t(`se connecte à ${list(p.network).join(', ')}`, `connects to ${list(p.network).join(', ')}`));
   if (list(p.events).length) asks.push(t('reçoit des événements', 'gets events'));
