@@ -1,9 +1,9 @@
 ---
-number: null
+number: 77
 id: "claude-code-passe-par-son-plugin-en-proc"
 title: "Claude Code passe par son plugin, en process, et le cœur garde l'état de l'agent et les comptes"
 date: "2026-11-04"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-226"
 pages: ["plugins/claude-code-en-plugin","plugins/harness-en-process","plugins/livres-avec-escouade"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/claude-code-en-plugin","added":13,"removed":0},{"page":"plugins/harness-en-process","added":11,"removed":0},{"page":"plugins/livres-avec-escouade","added":1,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-05T03:17:50+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
