@@ -1,0 +1,39 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.linear",
+  "name": "Linear",
+  "version": "0.0.0",
+  "description": {
+    "fr": "Les issues d'une équipe Linear dans le Kanban, ses statuts comme colonnes.",
+    "en": "A Linear team's issues in the Kanban, its workflow states as columns."
+  },
+  "author": { "name": "Escouade", "url": "https://escouade.dev" },
+  "license": "GPL-3.0-or-later",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/linear",
+  "escouade": { "api": "1", "min": "2.1.0" },
+  "run": { "command": "{escouade}/escouade-plugins", "args": ["linear"] },
+  "activation": ["account:linear"],
+  "permissions": {
+    "network": ["api.linear.app"],
+    "secrets": ["account:linear"]
+  },
+  "contributes": {
+    "accounts": [
+      {
+        "id": "linear",
+        "name": "Linear",
+        "defaultHost": "linear.app",
+        "connect": ["token"],
+        "fields": [
+          {
+            "key": "token",
+            "secret": true,
+            "missing": { "fr": "Indique le jeton.", "en": "Give the token." }
+          }
+        ],
+        "tokenPage": "https://linear.app/settings/account/security"
+      }
+    ],
+    "ticketSources": [{ "id": "linear", "name": "Linear", "account": "linear" }]
+  }
+}

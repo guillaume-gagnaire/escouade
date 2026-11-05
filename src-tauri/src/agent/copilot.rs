@@ -1,5 +1,5 @@
 //! Copilot CLI in the agent's conversation. Since INT-10.3 its agents' events are translated by its plugin
-//! (`dev.escouade.copilot-cli`, `plugins/builtin/dev.escouade.copilot-cli/src/translate.rs`) and applied as items
+//! (`dev.escouade.copilot-cli`, `plugins/copilot/src/translate.rs`) and applied as items
 //! (`AgentRt::apply_items`, through `Engine::translate`). Its terminal view stays the core's (`agent/copilot_tui.rs`): it
 //! reads the session's log through the same translation, as a library, for the same conversation in both.
 

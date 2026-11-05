@@ -1,6 +1,6 @@
 # Gitea and Forgejo: the recorded answers
 
-The answers the fake server gives the client of `plugins/builtin/dev.escouade.gitea`
+The answers the fake server gives the client of `plugins/gitea`
 (`src-tauri/src/forge/gitea_tests.rs`). `node make.mjs` writes them.
 
 **They are not recorded from a live instance** (decided on 2026-10-16: no real trial for Gitea and Forgejo). They are

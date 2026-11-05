@@ -1,5 +1,5 @@
 //! Codex in the agent's conversation. Since INT-10.4 its agents' messages are translated by its plugin
-//! (`dev.escouade.codex`, `plugins/builtin/dev.escouade.codex/src/translate.rs`) and applied as items
+//! (`dev.escouade.codex`, `plugins/codex/src/translate.rs`) and applied as items
 //! (`AgentRt::apply_items`, through `Engine::translate`). Its terminal view stays the core's (`agent/codex_tui.rs`): it
 //! reads the session's rollout through the same translation, as a library, for the same conversation in both.
 

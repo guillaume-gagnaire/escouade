@@ -174,40 +174,56 @@ fn a_copy_of_its_id_left_by_an_older_install_gives_way_and_keeps_the_choices() {
     assert!(!copy.exists(), "the stale copy goes");
 }
 
-/// The registry is the folders `plugins/builtin/<id>/` of the repository, each with its manifest and its README (the
-/// rule of INT-4: readable alone), and each manifest holds as the app's own, its id the folder's.
+/// The registry is the folders of `plugins/` whose program is `escouade-plugins` (`plugins/<id-court>/`, docs/PLUGINS.md
+/// §8.6.1) and the demonstration, a fixture: each with its manifest and its README (the rule of INT-4: readable alone),
+/// each manifest holding as the app's own. A plugin to publish has its LICENSE, the root's, and its CHANGELOG too.
 #[test]
-fn every_folder_of_plugins_builtin_has_its_manifest_and_its_readme_and_is_in_the_registry() {
-    let root = repo().join("plugins").join("builtin");
-    let mut folders: Vec<String> = std::fs::read_dir(&root)
+fn every_folder_of_the_app_s_plugins_has_what_it_needs_and_is_in_the_registry() {
+    let of_the_app = |dir: &PathBuf| {
+        std::fs::read_to_string(dir.join(manifest::FILE))
+            .is_ok_and(|text| text.contains("{escouade}/escouade-plugins"))
+    };
+    let folders: Vec<PathBuf> = std::fs::read_dir(repo().join("plugins"))
         .unwrap()
         .filter_map(Result::ok)
-        .filter(|e| e.path().is_dir())
-        .map(|e| e.file_name().to_string_lossy().to_string())
+        .map(|e| e.path())
+        .filter(of_the_app)
         .collect();
-    folders.sort();
-    let mut ids: Vec<&str> = REGISTRY.iter().map(|e| e.id).collect();
-    ids.sort();
-    assert_eq!(
-        folders, ids,
-        "the registry is the folders of plugins/builtin"
-    );
-    for id in ids {
-        let dir = root.join(id);
+    let license = std::fs::read_to_string(repo().join("LICENSE")).unwrap();
+    let fixture = repo().join("tests/fixtures/plugins/minimal");
+    let mut seen = Vec::new();
+    for dir in folders.iter().chain([&fixture]) {
+        let name = dir.display();
         let text = std::fs::read_to_string(dir.join(manifest::FILE))
-            .unwrap_or_else(|_| panic!("{id}: no {}", manifest::FILE));
+            .unwrap_or_else(|_| panic!("{name}: no {}", manifest::FILE));
         let readme = std::fs::read_to_string(dir.join("README.md"))
-            .unwrap_or_else(|_| panic!("{id}: no README.md"));
+            .unwrap_or_else(|_| panic!("{name}: no README.md"));
         assert!(
             readme.lines().count() > 5,
-            "{id}: a README that says something"
+            "{name}: a README that says something"
         );
         let m = manifest::read(&text, Hand::Builtin)
             .manifest
-            .unwrap_or_else(|p| panic!("{id}: {p:?}"));
-        assert_eq!(m.id, id, "the folder is named by the id");
-        assert!(id.starts_with(manifest::RESERVED_PREFIX));
+            .unwrap_or_else(|p| panic!("{name}: {p:?}"));
+        assert!(m.id.starts_with(manifest::RESERVED_PREFIX));
+        seen.push(m.id);
+        if dir != &fixture {
+            let own = std::fs::read_to_string(dir.join("LICENSE"))
+                .unwrap_or_else(|_| panic!("{name}: no LICENSE"));
+            assert_eq!(own, license, "{name}: the GPL of the code it came from");
+            assert!(
+                dir.join("CHANGELOG.md").is_file(),
+                "{name}: no CHANGELOG.md"
+            );
+        }
     }
+    seen.sort();
+    let mut ids: Vec<&str> = REGISTRY.iter().map(|e| e.id).collect();
+    ids.sort();
+    assert_eq!(
+        seen, ids,
+        "the registry is the folders of the app's plugins"
+    );
 }
 
 #[test]

@@ -1,6 +1,6 @@
 //! GitLab Issues against the fake server, its answers as the REST API v4's documentation gives
 //! them: gitlab.com and a self-hosted instance side by side. Since INT-8.2 its client is the plugin
-//! « GitLab »'s (`plugins/builtin/dev.escouade.gitlab/src/issues.rs`): the calls go to its process
+//! « GitLab »'s (`plugins/gitlab/src/issues.rs`): the calls go to its process
 //! by `ProcessTicketSource`, one account per instance, as the core makes them
 //! (`HostedTicketSource`), and the plugin calls the fake server.
 

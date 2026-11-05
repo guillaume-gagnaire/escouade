@@ -18,13 +18,13 @@ Escouade fait tourner ses agents sur huit harness : Claude Code, Codex, OpenCode
 
 La déclaration du serveur MCP d'Escouade dans la config de chaque harness, pour l'utilisateur, est commune : « Serveur MCP d'Escouade » › « Déclaration dans les harness ».
 
-**Où est le client de chaque harness.** Ce document dit ce qu'Escouade échange avec chaque harness ; ce protocole-là n'a pas changé quand ils sont sortis du cœur, seul le code a bougé (docs/PLUGINS.md §4.5). Le cœur lance le programme, et le plugin livré du harness tient sa conversation : le client de Codex (`plugins/builtin/dev.escouade.codex/`), de Copilot CLI (`dev.escouade.copilot-cli`) et d'OpenCode (`dev.escouade.opencode`) ; le client ACP partagé (`crates/escouade-acp`) et ses extensions pour Cursor CLI, Mistral Vibe et Gemini CLI, servis par leur plugin. `src-tauri/src/engine/<harness>/` garde la façade : capacités, comptes, quota, textes rédigés, vue terminal. Claude Code et Antigravity CLI sont encore au cœur (ESC-226, ESC-283).
+**Où est le client de chaque harness.** Ce document dit ce qu'Escouade échange avec chaque harness ; ce protocole-là n'a pas changé quand ils sont sortis du cœur, seul le code a bougé (docs/PLUGINS.md §4.5). Le cœur lance le programme, et le plugin livré du harness tient sa conversation : le client de Codex (`plugins/codex/`), de Copilot CLI (`dev.escouade.copilot-cli`) et d'OpenCode (`dev.escouade.opencode`) ; le client ACP partagé (`crates/escouade-acp`) et ses extensions pour Cursor CLI, Mistral Vibe et Gemini CLI, servis par leur plugin. `src-tauri/src/engine/<harness>/` garde la façade : capacités, comptes, quota, textes rédigés, vue terminal. Claude Code et Antigravity CLI sont encore au cœur (ESC-226, ESC-283).
 
 **Le protocole des plugins** n'est pas ici : c'est celui qu'Escouade parle à ses plugins, JSON-RPC 2.0, version 1 (`schemas/plugin-protocol-1.json` pour le socle, `crates/escouade-plugin-protocol` pour les points d'extension). Voir docs/PLUGINS.md §1 et, pour les auteurs, la page `plugins/api` du site.
 
 ## Claude Code (stream-json)
 
-Depuis INT-10.5, le client est dans le plugin `dev.escouade.claude-code` (`plugins/builtin/dev.escouade.claude-code/src/client.rs`, une machine à états sans process : le cœur lance `claude` et lui passe ses lignes), la traduction à côté (`translate.rs`).
+Depuis INT-10.5, le client est dans le plugin `dev.escouade.claude-code` (`plugins/claude/src/client.rs`, une machine à états sans process : le cœur lance `claude` et lui passe ses lignes), la traduction à côté (`translate.rs`).
 
 Les sections qui suivent, jusqu'à « Codex app-server », sont celles de Claude Code. Le protocole de base est validé empiriquement sur Claude Code 2.1.283 (types de référence : `@anthropic-ai/claude-agent-sdk` 0.3.283, `sdk.d.ts` / `sdk-tools.d.ts`). Les ajouts de la 1.7 l'ont été sur des versions plus récentes, dites à chaque section : 2.1.289 pour les comptes et la copie d'un agent, 2.1.296 pour le serveur MCP et l'avancée d'un plan.
 
@@ -140,7 +140,7 @@ Un compte est un dossier de config de Claude Code : `CLAUDE_CONFIG_DIR` (défaut
 - **Le jeton mort.** Un refus `invalid_grant` (jeton de rafraîchissement expiré, révoqué ou déjà utilisé) le met dans un ensemble en mémoire. Si le fichier le contient encore, Claude Code le vide (`accessToken`, `refreshToken` à `""`, `expiresAt` à 0), ce qu'Escouade lit comme « Pas connecté ». Le processus relit le fichier à chaque changement de sa date, et un jeton inutilisable au plus toutes les 30 s (`Mbn=30000`). Entre-temps, chacun de ses tours échoue tout de suite.
 - **Essais du 2026-10-23, sur un dossier jetable** (faux jetons, jamais ceux de l'utilisateur) : `claude -p` avec un jeton expiré et un faux jeton de rafraîchissement rend exactement ce texte (`result` en erreur, `subtype: success`) et vide le fichier. Un processus stream-json à qui l'on n'envoie qu'`initialize` rafraîchit aussi au démarrage, sous le verrou : sa réponse n'arrive qu'après (5 à 8 s), si bien que l'arrêt d'une lecture des modèles juste après sa réponse ne coupe pas un rafraîchissement.
 - **Le cas réel** (conversation du 2026-10-04) : un tour de 2 h 18 échoue à 09:37:59 UTC, le message suivant à 09:38:26 (27 s après), puis « continue » repart à 09:38:58. C'est le même processus, aucun lancement dans `app.log` : il a relu le disque après ses 30 s. Une bonne connexion y était donc arrivée, écrite par un autre processus du compte (Escouade en lance beaucoup : agents, `claude -p`, lecture des modèles).
-- **Ce qu'Escouade en fait** (`signin.rs` ; depuis INT-10.5, la lecture de la connexion est dans le plugin, `plugins/builtin/dev.escouade.claude-code/src/signin.rs`, lue par le cœur comme une bibliothèque). À la fin d'un tel tour, il relit la connexion du compte (`usage::read_stored`). Si le jeton est en date, ou si la connexion n'est plus celle du lancement du processus (`launch_stamp`), il arrête le processus et le relance sur sa session avec « continue », au plus deux fois (3 s puis 10 s). Sinon, l'agent attend une nouvelle connexion (`AgentMeta::sign_in`, lue toutes les 20 s). Le tour porte `signIn: true` et ne bloque pas un ticket (`TurnEnd::SignIn`). Les lancements d'un compte au jeton expiré passent un par un (`RefreshGate`) : le premier part et rafraîchit, les suivants attendent que la connexion change, 20 s au plus. Ils ne font donc pas la queue au verrou de Claude Code, qui ne patiente que 8 à 17 s.
+- **Ce qu'Escouade en fait** (`signin.rs` ; depuis INT-10.5, la lecture de la connexion est dans le plugin, `plugins/claude/src/signin.rs`, lue par le cœur comme une bibliothèque). À la fin d'un tel tour, il relit la connexion du compte (`usage::read_stored`). Si le jeton est en date, ou si la connexion n'est plus celle du lancement du processus (`launch_stamp`), il arrête le processus et le relance sur sa session avec « continue », au plus deux fois (3 s puis 10 s). Sinon, l'agent attend une nouvelle connexion (`AgentMeta::sign_in`, lue toutes les 20 s). Le tour porte `signIn: true` et ne bloque pas un ticket (`TurnEnd::SignIn`). Les lancements d'un compte au jeton expiré passent un par un (`RefreshGate`) : le premier part et rafraîchit, les suivants attendent que la connexion change, 20 s au plus. Ils ne font donc pas la queue au verrou de Claude Code, qui ne patiente que 8 à 17 s.
 
 ## Avancée : ce que le flux dit
 
@@ -531,7 +531,7 @@ Dans une build de debug, `ESCOUADE_CODEX` (les e2e) donne le programme quand auc
 
 ### Le protocole
 
-JSON-RPC, une ligne par message sur stdio. Depuis INT-10.4, le client est dans le plugin `dev.escouade.codex` (`plugins/builtin/dev.escouade.codex/src/client.rs`, une machine à états sans process : le cœur lance Codex et lui passe ses lignes). Il répond lui-même à ses requêtes et passe tout le reste à la traduction (`translate.rs`, à côté) : les notifications, et les requêtes de Codex (approbations, questions), dont il garde l'id, la méthode et les paramètres jusqu'à la réponse.
+JSON-RPC, une ligne par message sur stdio. Depuis INT-10.4, le client est dans le plugin `dev.escouade.codex` (`plugins/codex/src/client.rs`, une machine à états sans process : le cœur lance Codex et lui passe ses lignes). Il répond lui-même à ses requêtes et passe tout le reste à la traduction (`translate.rs`, à côté) : les notifications, et les requêtes de Codex (approbations, questions), dont il garde l'id, la méthode et les paramètres jusqu'à la réponse.
 
 | Étape | Message | Ce qu'Escouade y met |
 |---|---|---|
@@ -637,7 +637,7 @@ OpenCode est le troisième harness (docs/ENGINES.md). Testé avec **OpenCode 1.1
 opencode serve --hostname 127.0.0.1 --port 0
 ```
 
-Un serveur sert tous les agents d'un même compte (même programme, même environnement : `plugins/builtin/dev.escouade.opencode/src/server.rs`). Il est lancé au premier agent et arrêté avec le dernier, dans un Job (tout son arbre est tué avec lui), dans un dossier à lui (`escouade-opencode` du dossier temporaire) : jamais celui d'un agent, qu'un worktree supprimé trouverait tenu. Chaque agent est une session dans son dossier (`?directory=<dossier>` sur chaque requête) ; quand le dernier agent d'un dossier s'en va, Escouade le dit au serveur (`POST /instance/dispose`), qui lâche le dossier. Un serveur qui tombe arrête tous ses agents (ils redémarrent au message suivant, leur session reprise). Repli possible si un serveur commun pose problème : un serveur par agent (0,7 Go chacun).
+Un serveur sert tous les agents d'un même compte (même programme, même environnement : `plugins/opencode/src/server.rs`). Il est lancé au premier agent et arrêté avec le dernier, dans un Job (tout son arbre est tué avec lui), dans un dossier à lui (`escouade-opencode` du dossier temporaire) : jamais celui d'un agent, qu'un worktree supprimé trouverait tenu. Chaque agent est une session dans son dossier (`?directory=<dossier>` sur chaque requête) ; quand le dernier agent d'un dossier s'en va, Escouade le dit au serveur (`POST /instance/dispose`), qui lâche le dossier. Un serveur qui tombe arrête tous ses agents (ils redémarrent au message suivant, leur session reprise). Repli possible si un serveur commun pose problème : un serveur par agent (0,7 Go chacun).
 
 - `--port 0` prend 4096 s'il est libre, sinon un port au hasard : l'adresse est lue sur sa sortie (`opencode server listening on http://127.0.0.1:<port>`).
 - `OPENCODE_SERVER_PASSWORD` : tiré au hasard (24 octets) pour chaque serveur, en Basic `opencode:<mot de passe>`. Il ne sort jamais d'Escouade (`GET /config` rend la config résolue, jeton du serveur MCP compris).
@@ -795,7 +795,7 @@ copilot --server --stdio --no-auto-update --disable-builtin-mcps --disallow-temp
 
 ### Les modes
 
-En `manual`, Copilot demande tout, lectures comprises : les règles d'Escouade (`safe` de `plugins/builtin/dev.escouade.copilot-cli/src/translate.rs`) répondent sans carte aux demandes sûres, comme le bac à sable de Codex.
+En `manual`, Copilot demande tout, lectures comprises : les règles d'Escouade (`safe` de `plugins/copilot/src/translate.rs`) répondent sans carte aux demandes sûres, comme le bac à sable de Codex.
 
 | Escouade | Mode de l'agent | Permissions | Sans carte |
 |---|---|---|---|
@@ -968,7 +968,7 @@ Le mode Auto (`smart-approve`, absent d'une session sur deux dans les essais), l
 
 ## Antigravity CLI (`agy -p`, stream-json, ESC-270)
 
-Après les essais réels d'ESC-269 (docs/TODO-1.8.md, point 0, « Antigravity CLI » ; flux dans `tests/fixtures/agy/`). Depuis INT-10.8, le code est dans le plugin `dev.escouade.antigravity-cli` (`plugins/builtin/dev.escouade.antigravity-cli/src/` : `client.rs`, une machine à états sans process ; `words.rs`, lancement et règles ; `translate.rs`, les événements d'`agy` mis dans la forme d'ACP, puis lus par le client ACP avec les requêtes de Cursor) : le cœur lance `agy`, autant de fois que le client le demande, et lui passe ses lignes. « Le process » est ce client ci-dessous. Testé avec la 1.4.9. Pas d'ACP.
+Après les essais réels d'ESC-269 (docs/TODO-1.8.md, point 0, « Antigravity CLI » ; flux dans `tests/fixtures/agy/`). Depuis INT-10.8, le code est dans le plugin `dev.escouade.antigravity-cli` (`plugins/antigravity/src/` : `client.rs`, une machine à états sans process ; `words.rs`, lancement et règles ; `translate.rs`, les événements d'`agy` mis dans la forme d'ACP, puis lus par le client ACP avec les requêtes de Cursor) : le cœur lance `agy`, autant de fois que le client le demande, et lui passe ses lignes. « Le process » est ce client ci-dessous. Testé avec la 1.4.9. Pas d'ACP.
 
 ### Lancement
 

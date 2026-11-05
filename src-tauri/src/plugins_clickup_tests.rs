@@ -1,4 +1,4 @@
-//! Tests of ClickUp as a plugin of the app (INT-7.4, ESC-216; `plugins/builtin/dev.escouade.clickup`): the tests the
+//! Tests of ClickUp as a plugin of the app (INT-7.4, ESC-216; `plugins/clickup`): the tests the
 //! core had for its own ClickUp client (`integrations/clickup.rs`), word for word, now played against the plugin
 //! started as the app starts it (`escouade-plugins clickup`, checked as the app's own before it runs) by the runtime
 //! and `ProcessTicketSource`, on the fake ClickUp of the integrations' tests; and what a process adds: the token

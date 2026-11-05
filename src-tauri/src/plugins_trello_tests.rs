@@ -1,4 +1,4 @@
-//! Tests of Trello as a plugin of the app (INT-7.1, ESC-213; `plugins/builtin/dev.escouade.trello`): the tests the core
+//! Tests of Trello as a plugin of the app (INT-7.1, ESC-213; `plugins/trello`): the tests the core
 //! had for its own Trello client (`integrations/trello.rs`), word for word, now played against the plugin started as
 //! the app starts it (`escouade-plugins trello`, checked as the app's own before it runs) by the runtime and
 //! `ProcessTicketSource`, on the fake Trello of the integrations' tests; and what a process adds: the key and the token

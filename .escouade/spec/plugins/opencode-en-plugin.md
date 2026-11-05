@@ -9,7 +9,7 @@ compared: null
 
 # OpenCode en plugin
 
-La conversation des agents d'OpenCode passe par le plugin de première main `dev.escouade.opencode` : un process (`escouade-plugins opencode`, sa crate `escouade-plugin-opencode` dans `plugins/builtin/dev.escouade.opencode/`), livré et signé avec l'app, au registre des plugins livrés et sur le store (sa page pointe vers ce dossier). Pour l'utilisateur, rien ne change : mêmes agents, même serveur par compte, mêmes textes, même vue terminal.
+La conversation des agents d'OpenCode passe par le plugin de première main `dev.escouade.opencode` : un process (`escouade-plugins opencode`, sa crate `escouade-plugin-opencode` dans `plugins/opencode/`), livré et signé avec l'app, au registre des plugins livrés et sur le store (sa page pointe vers ce dossier). Pour l'utilisateur, rien ne change : mêmes agents, même serveur par compte, mêmes textes, même vue terminal.
 
 OpenCode est le premier harness sorti du cœur qui n'est pas un flux de lignes : un seul `opencode serve` sert les agents d'un compte, en HTTP et SSE, chacun dans sa session.
 

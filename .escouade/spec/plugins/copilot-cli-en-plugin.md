@@ -1,7 +1,7 @@
 ---
 title: "Copilot CLI en plugin"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §4.5, §4.6 (INT-10.3)","docs/TODO-2.2.md, INT-10","Ticket ESC-224","plugins/builtin/dev.escouade.copilot-cli/README.md"]
+sources: ["docs/PLUGINS.md §4.5, §4.6 (INT-10.3)","docs/TODO-2.2.md, INT-10","Ticket ESC-224","plugins/copilot/README.md"]
 tickets: ["ESC-224"]
 decisions: []
 compared: null
@@ -9,7 +9,7 @@ compared: null
 
 # Copilot CLI en plugin
 
-Copilot CLI est le premier harness sorti du cœur qui n'est pas ACP (INT-10.3) : sa conversation passe par le plugin de première main `dev.escouade.copilot-cli` (« Copilot CLI »), un process à lui (`escouade-plugins copilot`), sa crate `escouade-plugin-copilot` dans `plugins/builtin/dev.escouade.copilot-cli/`, livré et signé avec l'app, au registre des plugins livrés et sur le store (sa page pointe vers ce dossier). Pour l'utilisateur, ses agents, ses comptes, ses crédits, ses textes et sa vue terminal ne changent pas.
+Copilot CLI est le premier harness sorti du cœur qui n'est pas ACP (INT-10.3) : sa conversation passe par le plugin de première main `dev.escouade.copilot-cli` (« Copilot CLI »), un process à lui (`escouade-plugins copilot`), sa crate `escouade-plugin-copilot` dans `plugins/copilot/`, livré et signé avec l'app, au registre des plugins livrés et sur le store (sa page pointe vers ce dossier). Pour l'utilisateur, ses agents, ses comptes, ses crédits, ses textes et sa vue terminal ne changent pas.
 
 ## Ce que fait le plugin
 

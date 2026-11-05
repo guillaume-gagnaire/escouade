@@ -72,9 +72,14 @@ function check(name) {
 }
 
 const lf = (s) => s.replace(/\r\n/g, '\n');
+// Not the plugins the app still gives (docs/PLUGINS.md §8.6.1): their program is `escouade-plugins`, and their tests are
+// the app's (`cargo nextest run` in src-tauri/) until this script reads their Cargo.toml (M1).
+const ofTheApp = (name) =>
+  JSON.parse(readFileSync(join(HERE, name, 'escouade-plugin.json'), 'utf8')).run?.command === '{escouade}/escouade-plugins';
 const examples = readdirSync(HERE, { withFileTypes: true })
   .filter((d) => d.isDirectory() && existsSync(join(HERE, d.name, 'escouade-plugin.json')))
-  .map((d) => d.name);
+  .map((d) => d.name)
+  .filter((name) => !ofTheApp(name));
 const tmp = mkdtempSync(join(tmpdir(), 'escouade-examples-'));
 try {
   // Every example, even after one that fails: one failure must not hide another.

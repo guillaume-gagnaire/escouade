@@ -1,0 +1,21 @@
+[package]
+name = "escouade-plugin-copilot"
+version = "1.0.0"
+description = "Le plugin Copilot CLI livré avec Escouade : GitHub Copilot CLI comme harness, par le protocole de son SDK"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+workspace = "../../src-tauri"
+
+# One of the plugins of `escouade-plugins` (docs/PLUGINS.md §4.3): its program is `escouade-plugins copilot`. It is no
+# ACP harness: it holds the client of Copilot's server (`copilot --server --stdio`) and the translation of its events,
+# both without a process nor a runtime of their own. The core's « Vue Copilot » reads its session's log through that
+# same translation, as a library (`src-tauri/src/agent/copilot.rs`).
+[dependencies]
+escouade-acp = { path = "../../crates/escouade-acp" }
+escouade-plugin-protocol = { path = "../../crates/escouade-plugin-protocol" }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+url = "2"

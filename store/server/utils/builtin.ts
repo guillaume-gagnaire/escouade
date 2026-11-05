@@ -8,7 +8,7 @@ import type { Text } from './checks';
 // `dev.escouade.*`, which the store grants to the app's repository alone (STORE_FIRST_PARTY_REPO, ESC-314): a plugin of
 // that repository's `plugins/<id>/` is submitted as anyone's (decision 21), its link to its folder from its `path`, and
 // listed as a plugin of the store. What is listed below is what the app gives, nothing more; `source` is the folder of
-// one that left the core, `plugins/builtin/<id>/` (INT-4's rule, decided on 2026-10-29), which its page links to.
+// one that left the core, `plugins/<short name>/` (docs/PLUGINS.md §8.6.1), which its page links to.
 
 export interface Builtin {
   id: string;
@@ -24,7 +24,7 @@ export interface Builtin {
   /** Its tile (PLG-13): its brand's mark where the brand's published rules allow it without asking, else its
    * category's glyph (shared/marks.ts, docs/PLUGINS.md §3.1). */
   logo: Logo;
-  /** Its folder in the app's repository, once it is a plugin of its own there (`plugins/builtin/<id>`, INT-4's rule:
+  /** Its folder in the app's repository, once it is a plugin of its own there (`plugins/<short name>`, INT-4's rule:
    * manifest, README, tests): its page links to it. None for those still in the core. */
   source?: string;
 }
@@ -55,7 +55,7 @@ export const BUILTINS: Builtin[] = [
       'Claude Code as a harness: the conversation, its terminal view, permissions, the plan, accounts and their quota.',
     ),
     // Out of the core since INT-10.5.
-    source: 'plugins/builtin/dev.escouade.claude-code',
+    source: 'plugins/claude',
   },
   {
     ...harness(
@@ -64,7 +64,7 @@ export const BUILTINS: Builtin[] = [
       'Codex d’OpenAI comme harness : la conversation, sa vue terminal, les permissions, le plan et le coût par compte.',
       'OpenAI’s Codex as a harness: the conversation, its terminal view, permissions, the plan and the cost per account.',
     ),
-    source: 'plugins/builtin/dev.escouade.codex',
+    source: 'plugins/codex',
   },
   {
     ...harness(
@@ -74,7 +74,7 @@ export const BUILTINS: Builtin[] = [
       'GitHub Copilot CLI as a harness: the conversation, its terminal view, permissions and the account’s credits.',
     ),
     // Out of the core since INT-10.3.
-    source: 'plugins/builtin/dev.escouade.copilot-cli',
+    source: 'plugins/copilot',
   },
   {
     ...harness(
@@ -84,7 +84,7 @@ export const BUILTINS: Builtin[] = [
       'Cursor CLI as a harness, over ACP: the conversation, permissions, models and the account’s usage.',
     ),
     // The first harness to have left the core (INT-10.1).
-    source: 'plugins/builtin/dev.escouade.cursor-cli',
+    source: 'plugins/cursor',
   },
   {
     ...harness(
@@ -93,7 +93,7 @@ export const BUILTINS: Builtin[] = [
       'OpenCode comme harness : un serveur par compte, ses modèles (locaux compris), son budget par jour.',
       'OpenCode as a harness: one server per account, its models (local ones too), its daily budget.',
     ),
-    source: 'plugins/builtin/dev.escouade.opencode',
+    source: 'plugins/opencode',
   },
   {
     ...harness(
@@ -103,7 +103,7 @@ export const BUILTINS: Builtin[] = [
       'Mistral in Escouade: Mistral Vibe as a harness, over ACP (the conversation, its terminal view, the key and the cost per account), and the voice service, on one shared Mistral account.',
     ),
     // Out of the core since INT-10.6; one plugin with the voice since INT-10.6 bis.
-    source: 'plugins/builtin/dev.escouade.mistral',
+    source: 'plugins/mistral',
   },
   {
     ...harness(
@@ -113,7 +113,7 @@ export const BUILTINS: Builtin[] = [
       'Antigravity CLI as a harness: the conversation, its terminal view, permissions and Google accounts.',
     ),
     // Out of the core since INT-10.8.
-    source: 'plugins/builtin/dev.escouade.antigravity-cli',
+    source: 'plugins/antigravity',
   },
   {
     ...harness(
@@ -123,7 +123,7 @@ export const BUILTINS: Builtin[] = [
       'Gemini CLI as a harness, over ACP: the conversation, its terminal view, permissions and accounts.',
     ),
     // Out of the core since INT-10.7.
-    source: 'plugins/builtin/dev.escouade.gemini-cli',
+    source: 'plugins/gemini',
   },
   {
     ...harness(
@@ -133,7 +133,7 @@ export const BUILTINS: Builtin[] = [
       'The harnesses that speak ACP, described by a plugin without code (Goose, say): Escouade launches them, speaks to them and shows their conversation.',
     ),
     docs: doc('plugins/harnesses'),
-    source: 'plugins/builtin/dev.escouade.acp',
+    source: 'plugins/acp',
   },
   {
     id: 'dev.escouade.github',
@@ -147,7 +147,7 @@ export const BUILTINS: Builtin[] = [
     secrets: true,
     docs: doc('integrations'),
     logo: { brand: 'github' },
-    source: 'plugins/builtin/dev.escouade.github',
+    source: 'plugins/github',
   },
   {
     id: 'dev.escouade.gitlab',
@@ -161,7 +161,7 @@ export const BUILTINS: Builtin[] = [
     secrets: true,
     docs: doc('integrations'),
     logo: { category: 'forge' },
-    source: 'plugins/builtin/dev.escouade.gitlab',
+    source: 'plugins/gitlab',
   },
   {
     id: 'dev.escouade.azure-devops',
@@ -175,7 +175,7 @@ export const BUILTINS: Builtin[] = [
     secrets: true,
     docs: doc('integrations'),
     logo: { category: 'forge' },
-    source: 'plugins/builtin/dev.escouade.azure-devops',
+    source: 'plugins/azure-devops',
   },
   {
     id: 'dev.escouade.bitbucket',
@@ -189,7 +189,7 @@ export const BUILTINS: Builtin[] = [
     secrets: true,
     docs: doc('integrations'),
     logo: { category: 'forge' },
-    source: 'plugins/builtin/dev.escouade.bitbucket',
+    source: 'plugins/bitbucket',
   },
   {
     id: 'dev.escouade.gitea',
@@ -203,7 +203,7 @@ export const BUILTINS: Builtin[] = [
     secrets: true,
     docs: doc('integrations'),
     logo: { brand: 'gitea' },
-    source: 'plugins/builtin/dev.escouade.gitea',
+    source: 'plugins/gitea',
   },
   ...(
     [
@@ -246,7 +246,7 @@ export const BUILTINS: Builtin[] = [
     docs: doc('integrations'),
     logo: { category: 'source' },
     // Trello (INT-7.1), Linear (INT-7.2), Jira (INT-7.3) and ClickUp (INT-7.4) have left the core.
-    ...(id === 'trello' || id === 'linear' || id === 'jira' || id === 'clickup' ? { source: `plugins/builtin/dev.escouade.${id}` } : {}),
+    ...(id === 'trello' || id === 'linear' || id === 'jira' || id === 'clickup' ? { source: `plugins/${id}` } : {}),
   })),
 ];
 

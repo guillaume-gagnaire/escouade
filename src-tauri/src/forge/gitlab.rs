@@ -1,6 +1,6 @@
 //! GitLab: gitlab.com and the self-hosted instances. Its token is a personal one (`api`), or the
 //! `glab` CLI's. Its word is « MR ». What the core knows of it is declared here (its hosts, its
-//! rights, its CLI): its client is in the plugin « GitLab » (`plugins/builtin/dev.escouade.gitlab`,
+//! rights, its CLI): its client is in the plugin « GitLab » (`plugins/gitlab`,
 //! ESC-56), which serves its accounts in a process of its own; written from GitLab's documentation,
 //! to try on a real instance later (docs/TODO-2.2.md).
 

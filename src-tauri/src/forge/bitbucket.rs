@@ -1,7 +1,7 @@
 //! Bitbucket Cloud (bitbucket.org): an Atlassian API token with scopes, and the e-mail of its
 //! account. Bitbucket Data Center, whose API differs, waits for another version. What the core knows of it is
 //! declared here (its host, its rights, its capabilities: no auto-merge, its API has none): its client is in the
-//! plugin « Bitbucket » (`plugins/builtin/dev.escouade.bitbucket`, ESC-57), written from its documentation and
+//! plugin « Bitbucket » (`plugins/bitbucket`, ESC-57), written from its documentation and
 //! tried on a fake server only: to try for real later.
 
 use super::*;

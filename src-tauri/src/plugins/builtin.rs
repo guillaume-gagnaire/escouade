@@ -3,7 +3,7 @@
 //! app's own.
 //!
 //! Each is a process of its own, started by `runtime` like any plugin's, but its manifest is read from the app
-//! (`plugins/builtin/<id>/escouade-plugin.json` of the repository, embedded) and its program is `escouade-plugins`
+//! (`plugins/<id-court>/escouade-plugin.json` of the repository, embedded) and its program is `escouade-plugins`
 //! beside the app, which the release signs with it. Their version is Escouade's: there is no update of their own, a fix
 //! comes with a release, and no revocation list for them. The user may turn them off for the app or for a project, never
 //! remove them; a plugin of the store with the same id is refused: the one the app gives wins, and is never replaced by
@@ -22,9 +22,9 @@ pub struct Entry {
     manifest: &'static str,
 }
 
-/// The registry: the plugins the app gives, by id. Add the folder `plugins/builtin/<id>/` (manifest, README) and one
-/// line here; the test of the registry checks that each folder has its manifest and its README, and that each is in
-/// this list.
+/// The registry: the plugins the app gives, by id. Add the folder `plugins/<id-court>/` (manifest, README, LICENSE,
+/// CHANGELOG) and one line here; the test of the registry checks that each folder has them, and that each is in this
+/// list.
 ///
 /// The demonstration plugin is in the builds of development and the tests only: a release's registry holds the real ones
 /// (the five voice services, INT-13; isola, INT-14; GitHub, INT-8.1, its code host and GitHub Issues; GitLab, ESC-56, its
@@ -35,126 +35,100 @@ pub const REGISTRY: &[Entry] = &[
     #[cfg(any(debug_assertions, test))]
     Entry {
         id: "dev.escouade.minimal",
-        manifest: include_str!(
-            "../../../plugins/builtin/dev.escouade.minimal/escouade-plugin.json"
-        ),
+        manifest: include_str!("../../../tests/fixtures/plugins/minimal/escouade-plugin.json"),
     },
     Entry {
         id: "dev.escouade.openai",
-        manifest: include_str!("../../../plugins/builtin/dev.escouade.openai/escouade-plugin.json"),
+        manifest: include_str!("../../../plugins/openai/escouade-plugin.json"),
     },
     Entry {
         id: "dev.escouade.groq",
-        manifest: include_str!("../../../plugins/builtin/dev.escouade.groq/escouade-plugin.json"),
+        manifest: include_str!("../../../plugins/groq/escouade-plugin.json"),
     },
     Entry {
         id: MISTRAL,
-        manifest: include_str!(
-            "../../../plugins/builtin/dev.escouade.mistral/escouade-plugin.json"
-        ),
+        manifest: include_str!("../../../plugins/mistral/escouade-plugin.json"),
     },
     Entry {
         id: "dev.escouade.elevenlabs",
-        manifest: include_str!(
-            "../../../plugins/builtin/dev.escouade.elevenlabs/escouade-plugin.json"
-        ),
+        manifest: include_str!("../../../plugins/elevenlabs/escouade-plugin.json"),
     },
     Entry {
         id: "dev.escouade.deepgram",
-        manifest: include_str!(
-            "../../../plugins/builtin/dev.escouade.deepgram/escouade-plugin.json"
-        ),
+        manifest: include_str!("../../../plugins/deepgram/escouade-plugin.json"),
     },
     Entry {
         id: "dev.escouade.isola",
-        manifest: include_str!("../../../plugins/builtin/dev.escouade.isola/escouade-plugin.json"),
+        manifest: include_str!("../../../plugins/isola/escouade-plugin.json"),
     },
     Entry {
         id: GITHUB,
-        manifest: include_str!("../../../plugins/builtin/dev.escouade.github/escouade-plugin.json"),
+        manifest: include_str!("../../../plugins/github/escouade-plugin.json"),
     },
     Entry {
         id: GITLAB,
-        manifest: include_str!("../../../plugins/builtin/dev.escouade.gitlab/escouade-plugin.json"),
+        manifest: include_str!("../../../plugins/gitlab/escouade-plugin.json"),
     },
     Entry {
         id: BITBUCKET,
-        manifest: include_str!(
-            "../../../plugins/builtin/dev.escouade.bitbucket/escouade-plugin.json"
-        ),
+        manifest: include_str!("../../../plugins/bitbucket/escouade-plugin.json"),
     },
     Entry {
         id: GITEA,
-        manifest: include_str!("../../../plugins/builtin/dev.escouade.gitea/escouade-plugin.json"),
+        manifest: include_str!("../../../plugins/gitea/escouade-plugin.json"),
     },
     Entry {
         id: TRELLO,
-        manifest: include_str!("../../../plugins/builtin/dev.escouade.trello/escouade-plugin.json"),
+        manifest: include_str!("../../../plugins/trello/escouade-plugin.json"),
     },
     Entry {
         id: AZURE_DEVOPS,
-        manifest: include_str!(
-            "../../../plugins/builtin/dev.escouade.azure-devops/escouade-plugin.json"
-        ),
+        manifest: include_str!("../../../plugins/azure-devops/escouade-plugin.json"),
     },
     Entry {
         id: ACP,
-        manifest: include_str!("../../../plugins/builtin/dev.escouade.acp/escouade-plugin.json"),
+        manifest: include_str!("../../../plugins/acp/escouade-plugin.json"),
     },
     Entry {
         id: LINEAR,
-        manifest: include_str!("../../../plugins/builtin/dev.escouade.linear/escouade-plugin.json"),
+        manifest: include_str!("../../../plugins/linear/escouade-plugin.json"),
     },
     Entry {
         id: JIRA,
-        manifest: include_str!("../../../plugins/builtin/dev.escouade.jira/escouade-plugin.json"),
+        manifest: include_str!("../../../plugins/jira/escouade-plugin.json"),
     },
     Entry {
         id: CURSOR,
-        manifest: include_str!(
-            "../../../plugins/builtin/dev.escouade.cursor-cli/escouade-plugin.json"
-        ),
+        manifest: include_str!("../../../plugins/cursor/escouade-plugin.json"),
     },
     Entry {
         id: CLICKUP,
-        manifest: include_str!(
-            "../../../plugins/builtin/dev.escouade.clickup/escouade-plugin.json"
-        ),
+        manifest: include_str!("../../../plugins/clickup/escouade-plugin.json"),
     },
     Entry {
         id: GEMINI,
-        manifest: include_str!(
-            "../../../plugins/builtin/dev.escouade.gemini-cli/escouade-plugin.json"
-        ),
+        manifest: include_str!("../../../plugins/gemini/escouade-plugin.json"),
     },
     Entry {
         id: OPENCODE,
-        manifest: include_str!(
-            "../../../plugins/builtin/dev.escouade.opencode/escouade-plugin.json"
-        ),
+        manifest: include_str!("../../../plugins/opencode/escouade-plugin.json"),
     },
     Entry {
         id: COPILOT,
-        manifest: include_str!(
-            "../../../plugins/builtin/dev.escouade.copilot-cli/escouade-plugin.json"
-        ),
+        manifest: include_str!("../../../plugins/copilot/escouade-plugin.json"),
     },
     Entry {
         id: CODEX,
-        manifest: include_str!("../../../plugins/builtin/dev.escouade.codex/escouade-plugin.json"),
+        manifest: include_str!("../../../plugins/codex/escouade-plugin.json"),
     },
     Entry {
         id: ANTIGRAVITY,
-        manifest: include_str!(
-            "../../../plugins/builtin/dev.escouade.antigravity-cli/escouade-plugin.json"
-        ),
+        manifest: include_str!("../../../plugins/antigravity/escouade-plugin.json"),
     },
     // Claude Code (INT-10.5): its agents' conversation, by the client of `claude` in its crate.
     Entry {
         id: CLAUDE,
-        manifest: include_str!(
-            "../../../plugins/builtin/dev.escouade.claude-code/escouade-plugin.json"
-        ),
+        manifest: include_str!("../../../plugins/claude/escouade-plugin.json"),
     },
 ];
 

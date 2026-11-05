@@ -1,8 +1,8 @@
 ---
 title: "Les plugins livrés avec Escouade"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §4.3, §4.4","docs/TODO-2.2.md (INT-4, INT-8.1)","src-tauri/src/plugins/builtin.rs","docs/PLUGINS.md §4.13","plugins/builtin/dev.escouade.github/README.md","plugins/builtin/dev.escouade.gitlab/README.md","plugins/builtin/dev.escouade.gitea/README.md","plugins/builtin/dev.escouade.azure-devops/README.md","docs/PLUGINS.md §8.7, §8.13","src-tauri/src/plugins/seed.rs"]
-tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338"]
+sources: ["docs/PLUGINS.md §4.3, §4.4","docs/TODO-2.2.md (INT-4, INT-8.1)","src-tauri/src/plugins/builtin.rs","docs/PLUGINS.md §4.13","plugins/github/README.md","plugins/gitlab/README.md","plugins/gitea/README.md","plugins/azure-devops/README.md","docs/PLUGINS.md §8.7, §8.13","src-tauri/src/plugins/seed.rs"]
+tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338","ESC-339"]
 decisions: [80]
 compared: null
 ---
@@ -13,7 +13,7 @@ Certains plugins sont donnés par l'app : livrés avec elle, signés avec elle, 
 
 ## Le registre
 
-- La liste est celle des dossiers `plugins/builtin/<id>/` du dépôt, chacun avec son `escouade-plugin.json` et son `README.md`, embarqués dans l'app (`src-tauri/src/plugins/builtin.rs`). Un test vérifie que chaque dossier a son manifeste et son README et qu'il est dans le registre.
+- La liste est celle des dossiers `plugins/<id-court>/` du dépôt dont le programme est `escouade-plugins`, plus la démonstration (`tests/fixtures/plugins/minimal/`), chacun avec son `escouade-plugin.json` et son `README.md`, embarqués dans l'app (`src-tauri/src/plugins/builtin.rs`). Le dossier porte un nom court (`plugins/claude/`) ; l'identifiant reste celui du manifeste (`dev.escouade.claude-code`). Ces plugins sont sous GPL-3.0-or-later, avec leur `LICENSE` et leur `CHANGELOG.md` dans le dossier. Un test vérifie que chaque dossier a tout cela (la démonstration, son manifeste et son README seulement) et qu'il est dans le registre.
 - Leur version est celle d'Escouade (le `version` du manifeste est remplacé à la lecture), leur empreinte `builtin:<version>`. Ils n'ont ni mise à jour à part, ni liste de révocation : un correctif vient avec une release.
 - Le tri par l'origine, jamais par l'identifiant. Seule l'origine `builtin` peut lancer les programmes `{escouade}/…`.
 - `dev.escouade.minimal` est une démonstration, dans le registre des builds de développement et des tests seulement : la poignée de main du protocole, deux méthodes d'essai, et le harness « Minimal », qui prouve le contrat des harness en process (voir *Le contrat des harness en process*). Sa fiche dit qu'il ajoute un harness ; ce harness n'est pas proposé à la création d'un agent.

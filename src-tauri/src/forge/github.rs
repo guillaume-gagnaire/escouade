@@ -1,6 +1,6 @@
 //! GitHub: github.com, GHE.com (`<name>.ghe.com`) and GitHub Enterprise Server. Its token is the
 //! `gh` CLI's, else one the user makes. What the core knows of it is declared here (its hosts, its
-//! rights, its CLI): its client is in the plugin « GitHub » (`plugins/builtin/dev.escouade.github`,
+//! rights, its CLI): its client is in the plugin « GitHub » (`plugins/github`,
 //! INT-8.1), which serves its accounts in a process of its own.
 
 use super::*;

@@ -1,4 +1,4 @@
-//! GitLab's client (the plugin « GitLab », `plugins/builtin/dev.escouade.gitlab`, ESC-56) against a fake server fed
+//! GitLab's client (the plugin « GitLab », `plugins/gitlab`, ESC-56) against a fake server fed
 //! with answers recorded from gitlab.com (`tests/fixtures/forges/gitlab/`, see `record.mjs` and its README): a merged
 //! merge request of a project in a subgroup, opened from a fork three groups deep, with its approvals, reviewers,
 //! pipeline, jobs and a job's log; its discussions and the deployments are written from GitLab's documentation (gitlab.com

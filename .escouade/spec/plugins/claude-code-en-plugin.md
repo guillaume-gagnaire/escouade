@@ -1,7 +1,7 @@
 ---
 title: "Claude Code en plugin"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §4 (INT-10.5)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-226","plugins/builtin/dev.escouade.claude-code/README.md"]
+sources: ["docs/PLUGINS.md §4 (INT-10.5)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-226","plugins/claude/README.md"]
 tickets: ["ESC-226"]
 decisions: []
 compared: null
@@ -9,7 +9,7 @@ compared: null
 
 # Claude Code en plugin
 
-La conversation des agents de Claude Code passe par le plugin de première main `dev.escouade.claude-code` (INT-10.5) : un process (`escouade-plugins claude`, sa crate `escouade-plugin-claude` dans `plugins/builtin/dev.escouade.claude-code/`), livré et signé avec l'app, au registre des plugins livrés et sur le store (sa page pointe vers ce dossier). Pour l'utilisateur, rien ne change : mêmes agents, mêmes comptes, mêmes modèles par compte, même quota et même changement de compte au seuil, même passation, mêmes textes rédigés, même vue terminal.
+La conversation des agents de Claude Code passe par le plugin de première main `dev.escouade.claude-code` (INT-10.5) : un process (`escouade-plugins claude`, sa crate `escouade-plugin-claude` dans `plugins/claude/`), livré et signé avec l'app, au registre des plugins livrés et sur le store (sa page pointe vers ce dossier). Pour l'utilisateur, rien ne change : mêmes agents, mêmes comptes, mêmes modèles par compte, même quota et même changement de compte au seuil, même passation, mêmes textes rédigés, même vue terminal.
 
 ## Ce que fait le plugin
 

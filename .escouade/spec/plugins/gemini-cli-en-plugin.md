@@ -1,7 +1,7 @@
 ---
 title: "Gemini CLI en plugin"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §4.5, §4.6 (INT-10.7)","docs/TODO-2.2.md, INT-10.7","Ticket ESC-282","plugins/builtin/dev.escouade.gemini-cli/README.md"]
+sources: ["docs/PLUGINS.md §4.5, §4.6 (INT-10.7)","docs/TODO-2.2.md, INT-10.7","Ticket ESC-282","plugins/gemini/README.md"]
 tickets: ["ESC-282"]
 decisions: [63]
 compared: null
@@ -9,7 +9,7 @@ compared: null
 
 # Gemini CLI en plugin
 
-Gemini CLI est le troisième harness sorti du cœur (INT-10.7) : sa conversation passe par le plugin de première main `dev.escouade.gemini-cli`, un process (`escouade-plugins gemini`, sa crate `escouade-plugin-gemini` dans `plugins/builtin/dev.escouade.gemini-cli/`), livré et signé avec l'app, au registre des plugins livrés et sur le store (sa page pointe vers ce dossier). Pour l'utilisateur, rien ne change : mêmes agents, mêmes comptes, mêmes textes, même vue terminal.
+Gemini CLI est le troisième harness sorti du cœur (INT-10.7) : sa conversation passe par le plugin de première main `dev.escouade.gemini-cli`, un process (`escouade-plugins gemini`, sa crate `escouade-plugin-gemini` dans `plugins/gemini/`), livré et signé avec l'app, au registre des plugins livrés et sur le store (sa page pointe vers ce dossier). Pour l'utilisateur, rien ne change : mêmes agents, mêmes comptes, mêmes textes, même vue terminal.
 
 ## Ce que fait le plugin
 

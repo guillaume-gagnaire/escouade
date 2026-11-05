@@ -2,7 +2,7 @@
 //! (written from the swagger documents of both, not recorded from an instance: see its README), once as a Gitea
 //! 1.26 and once as a Forgejo 16, the two differing where the fixtures differ.
 //!
-//! The client is the plugin « Gitea / Forgejo »'s (`plugins/builtin/dev.escouade.gitea`): an account's calls go to its
+//! The client is the plugin « Gitea / Forgejo »'s (`plugins/gitea`): an account's calls go to its
 //! process (`escouade-plugins gitea`) by `ProcessForge`, as the core makes them, and the plugin calls the fake server.
 
 use super::*;

@@ -1,4 +1,4 @@
-//! Tests of Linear as a plugin of the app (INT-7.2, ESC-214; `plugins/builtin/dev.escouade.linear`): the tests the core
+//! Tests of Linear as a plugin of the app (INT-7.2, ESC-214; `plugins/linear`): the tests the core
 //! had for its own Linear client (`integrations/linear.rs`), word for word, now played against the plugin started as
 //! the app starts it (`escouade-plugins linear`, checked as the app's own before it runs) by the runtime and
 //! `ProcessTicketSource`, on the fake Linear of the integrations' tests; and what a process adds: the key fetched by

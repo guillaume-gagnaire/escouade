@@ -1,6 +1,6 @@
 //! isola (github.com/cyucelen/isola) runs each git worktree's services on ports and `*.localhost` addresses of its
 //! own, from the `.isola.toml` the project commits. Since INT-14 it is a launch environment, served by the plugin the
-//! app gives (`plugins/builtin/dev.escouade.isola/`, `launchenv`): the core only knows where the CLI is (`cli`) and
+//! app gives (`plugins/isola/`, `launchenv`): the core only knows where the CLI is (`cli`) and
 //! the shape of a service (`Service`). `isola up`, `ls`, `down` and `destroy` are the plugin's and the test launch's.
 
 use serde::{Deserialize, Serialize};

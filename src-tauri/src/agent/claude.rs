@@ -1,5 +1,5 @@
 //! Claude Code in the agent's conversation. Since INT-10.5 its agents' frames are translated by its plugin
-//! (`dev.escouade.claude-code`, `plugins/builtin/dev.escouade.claude-code/src/translate.rs`) and applied as items
+//! (`dev.escouade.claude-code`, `plugins/claude/src/translate.rs`) and applied as items
 //! (`AgentRt::apply_items`, through `Engine::translate`). Its terminal view stays the core's (`agent/transcript.rs`): it
 //! reads the session's transcript through the same translation, as a library, for the same conversation in both. What is
 //! here is the agent's own: its plan told of the calls, a message that comes back, a file sent to the user.

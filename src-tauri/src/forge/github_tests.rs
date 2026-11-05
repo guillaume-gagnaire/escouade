@@ -2,7 +2,7 @@
 //! request of a public repository, `tests/fixtures/forges/github/`, see `record.mjs`), and with
 //! small made-up ones for what the recording does not hold (a failing job, a refusal).
 //!
-//! Since INT-8.1 the client is the plugin « GitHub »'s (`plugins/builtin/dev.escouade.github`): an
+//! Since INT-8.1 the client is the plugin « GitHub »'s (`plugins/github`): an
 //! account's calls go to its process (`escouade-plugins github`) by `ProcessForge`, as the core
 //! makes them, and the plugin calls the fake server. What only the client itself shows (its pace,
 //! the answers it keeps) is read on it directly.

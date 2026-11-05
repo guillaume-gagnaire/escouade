@@ -68,27 +68,27 @@ escouade-plugin-cli = { path = "../crates/escouade-plugin-cli" }
 # The contract of a code host and its errors, shared with the Rust plugins of the first hand (docs/PLUGINS.md §4.5).
 escouade-plugin-kit = { path = "../crates/escouade-plugin-kit" }
 # The plugins of `escouade-plugins` (its entries): the core runs none of their code, it starts their process.
-escouade-plugin-github = { path = "../plugins/builtin/dev.escouade.github" }
-escouade-plugin-gitlab = { path = "../plugins/builtin/dev.escouade.gitlab" }
-escouade-plugin-bitbucket = { path = "../plugins/builtin/dev.escouade.bitbucket" }
-escouade-plugin-gitea = { path = "../plugins/builtin/dev.escouade.gitea" }
-escouade-plugin-trello = { path = "../plugins/builtin/dev.escouade.trello" }
-escouade-plugin-azure-devops = { path = "../plugins/builtin/dev.escouade.azure-devops" }
-escouade-plugin-acp = { path = "../plugins/builtin/dev.escouade.acp" }
-escouade-plugin-linear = { path = "../plugins/builtin/dev.escouade.linear" }
-escouade-plugin-jira = { path = "../plugins/builtin/dev.escouade.jira" }
-escouade-plugin-cursor = { path = "../plugins/builtin/dev.escouade.cursor-cli" }
+escouade-plugin-github = { path = "../plugins/github" }
+escouade-plugin-gitlab = { path = "../plugins/gitlab" }
+escouade-plugin-bitbucket = { path = "../plugins/bitbucket" }
+escouade-plugin-gitea = { path = "../plugins/gitea" }
+escouade-plugin-trello = { path = "../plugins/trello" }
+escouade-plugin-azure-devops = { path = "../plugins/azure-devops" }
+escouade-plugin-acp = { path = "../plugins/acp" }
+escouade-plugin-linear = { path = "../plugins/linear" }
+escouade-plugin-jira = { path = "../plugins/jira" }
+escouade-plugin-cursor = { path = "../plugins/cursor" }
 # OpenCode (INT-10.2): its harness in a crate, its `opencode serve` run by the core (`Launch::shared`).
-escouade-plugin-opencode = { path = "../plugins/builtin/dev.escouade.opencode" }
-escouade-plugin-clickup = { path = "../plugins/builtin/dev.escouade.clickup" }
-escouade-plugin-mistral = { path = "../plugins/builtin/dev.escouade.mistral" }
-escouade-plugin-gemini = { path = "../plugins/builtin/dev.escouade.gemini-cli" }
+escouade-plugin-opencode = { path = "../plugins/opencode" }
+escouade-plugin-clickup = { path = "../plugins/clickup" }
+escouade-plugin-mistral = { path = "../plugins/mistral" }
+escouade-plugin-gemini = { path = "../plugins/gemini" }
 # Copilot CLI (INT-10.3): its plugin, whose translation the core's « Vue Copilot » reads as a library, with its rules.
-escouade-plugin-copilot = { path = "../plugins/builtin/dev.escouade.copilot-cli" }
-escouade-plugin-codex = { path = "../plugins/builtin/dev.escouade.codex" }
-escouade-plugin-agy = { path = "../plugins/builtin/dev.escouade.antigravity-cli" }
+escouade-plugin-copilot = { path = "../plugins/copilot" }
+escouade-plugin-codex = { path = "../plugins/codex" }
+escouade-plugin-agy = { path = "../plugins/antigravity" }
 # Claude Code (INT-10.5): the core reads its view's transcript, an account's sign-in and quota through its code, as a library.
-escouade-plugin-claude = { path = "../plugins/builtin/dev.escouade.claude-code" }
+escouade-plugin-claude = { path = "../plugins/claude" }
 # A version's archive from the store (STORE-9): read in memory, its links and climbing paths refused.
 flate2 = "1"
 tar = { version = "0.4", default-features = false }
@@ -187,23 +187,23 @@ members = [
     "../crates/escouade-plugin-cli",
     "../crates/escouade-plugin-kit",
     "../crates/escouade-acp",
-    "../plugins/builtin/dev.escouade.github",
-    "../plugins/builtin/dev.escouade.gitlab",
-    "../plugins/builtin/dev.escouade.bitbucket",
-    "../plugins/builtin/dev.escouade.gitea",
-    "../plugins/builtin/dev.escouade.trello",
-    "../plugins/builtin/dev.escouade.azure-devops",
-    "../plugins/builtin/dev.escouade.acp",
-    "../plugins/builtin/dev.escouade.linear",
-    "../plugins/builtin/dev.escouade.jira",
-    "../plugins/builtin/dev.escouade.cursor-cli",
-    "../plugins/builtin/dev.escouade.clickup",
-    "../plugins/builtin/dev.escouade.mistral",
-    "../plugins/builtin/dev.escouade.gemini-cli",
-    "../plugins/builtin/dev.escouade.opencode",
-    "../plugins/builtin/dev.escouade.copilot-cli",
-    "../plugins/builtin/dev.escouade.codex",
-    "../plugins/builtin/dev.escouade.antigravity-cli",
+    "../plugins/github",
+    "../plugins/gitlab",
+    "../plugins/bitbucket",
+    "../plugins/gitea",
+    "../plugins/trello",
+    "../plugins/azure-devops",
+    "../plugins/acp",
+    "../plugins/linear",
+    "../plugins/jira",
+    "../plugins/cursor",
+    "../plugins/clickup",
+    "../plugins/mistral",
+    "../plugins/gemini",
+    "../plugins/opencode",
+    "../plugins/copilot",
+    "../plugins/codex",
+    "../plugins/antigravity",
 ]
 default-members = [
     ".",
@@ -211,23 +211,23 @@ default-members = [
     "../crates/escouade-plugin-cli",
     "../crates/escouade-plugin-kit",
     "../crates/escouade-acp",
-    "../plugins/builtin/dev.escouade.github",
-    "../plugins/builtin/dev.escouade.gitlab",
-    "../plugins/builtin/dev.escouade.bitbucket",
-    "../plugins/builtin/dev.escouade.gitea",
-    "../plugins/builtin/dev.escouade.trello",
-    "../plugins/builtin/dev.escouade.azure-devops",
-    "../plugins/builtin/dev.escouade.acp",
-    "../plugins/builtin/dev.escouade.linear",
-    "../plugins/builtin/dev.escouade.jira",
-    "../plugins/builtin/dev.escouade.cursor-cli",
-    "../plugins/builtin/dev.escouade.clickup",
-    "../plugins/builtin/dev.escouade.mistral",
-    "../plugins/builtin/dev.escouade.gemini-cli",
-    "../plugins/builtin/dev.escouade.opencode",
-    "../plugins/builtin/dev.escouade.copilot-cli",
-    "../plugins/builtin/dev.escouade.codex",
-    "../plugins/builtin/dev.escouade.antigravity-cli",
+    "../plugins/github",
+    "../plugins/gitlab",
+    "../plugins/bitbucket",
+    "../plugins/gitea",
+    "../plugins/trello",
+    "../plugins/azure-devops",
+    "../plugins/acp",
+    "../plugins/linear",
+    "../plugins/jira",
+    "../plugins/cursor",
+    "../plugins/clickup",
+    "../plugins/mistral",
+    "../plugins/gemini",
+    "../plugins/opencode",
+    "../plugins/copilot",
+    "../plugins/codex",
+    "../plugins/antigravity",
 ]
 
 [profile.dev.package."*"]

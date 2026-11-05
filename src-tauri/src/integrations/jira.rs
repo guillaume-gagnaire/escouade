@@ -1,4 +1,4 @@
-//! Jira, out of the core: its plugin serves it (`plugins/builtin/dev.escouade.jira`, INT-7.3). What stays is the
+//! Jira, out of the core: its plugin serves it (`plugins/jira`, INT-7.3). What stays is the
 //! address of a site and the rule that decides where a token may be sent, which the forms of the accounts apply.
 
 /// A site's address as typed ("atlas.atlassian.net/"), as the API is called on.

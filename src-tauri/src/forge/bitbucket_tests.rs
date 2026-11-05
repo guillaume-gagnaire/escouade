@@ -2,7 +2,7 @@
 //! written from its API documentation: nobody has an account to record from, see the README there), and with small
 //! made-up ones for what they do not hold (a refusal, a limit, a merge that goes on in the background).
 //!
-//! The client is the plugin « Bitbucket »'s (`plugins/builtin/dev.escouade.bitbucket`): an account's calls go to its
+//! The client is the plugin « Bitbucket »'s (`plugins/bitbucket`): an account's calls go to its
 //! process (`escouade-plugins bitbucket`) by `ProcessForge`, as the core makes them, and the plugin calls the fake
 //! server. What only the client itself shows (its pace, its count of the hour's calls) is read on it directly.
 

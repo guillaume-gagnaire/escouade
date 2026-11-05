@@ -1,7 +1,7 @@
 //! OpenCode, the third engine: OpenCode 1 (`opencode-ai`, 1.19) driven through `opencode serve`
 //! (HTTP + SSE, docs/PROTOCOL.md, « OpenCode serve »), one server for the agents of an account,
 //! each agent a session of its own. Since INT-10.2 the conversation of its agents goes through the
-//! plugin `dev.escouade.opencode` (`plugins/builtin/dev.escouade.opencode/`): the client of the
+//! plugin `dev.escouade.opencode` (`plugins/opencode/`): the client of the
 //! server and the translation of its events are there, the server run by the core
 //! (`plugins::shared`). What stays here is the rest of its engine: its capabilities and the meaning
 //! of its modes, its accounts, its models read without a server, the texts it writes (`run`).

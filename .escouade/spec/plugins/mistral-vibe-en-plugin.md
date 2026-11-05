@@ -1,7 +1,7 @@
 ---
 title: "Mistral Vibe en plugin"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §4.5, §4.6, §4.13 (INT-10.6, INT-10.6 bis)","docs/TODO-2.2.md, INT-10.6","Ticket ESC-281","Ticket ESC-327","plugins/builtin/dev.escouade.mistral/README.md"]
+sources: ["docs/PLUGINS.md §4.5, §4.6, §4.13 (INT-10.6, INT-10.6 bis)","docs/TODO-2.2.md, INT-10.6","Ticket ESC-281","Ticket ESC-327","plugins/mistral/README.md"]
 tickets: ["ESC-281","ESC-327"]
 decisions: [57]
 compared: null
@@ -9,7 +9,7 @@ compared: null
 
 # Mistral Vibe en plugin
 
-Mistral Vibe est le deuxième harness sorti du cœur (INT-10.6) : sa conversation passe par le plugin de première main `dev.escouade.mistral` (« Mistral », INT-10.6 bis), le même que sa voix : un seul process (`escouade-plugins mistral`), sa crate `escouade-plugin-mistral` dans `plugins/builtin/dev.escouade.mistral/`, livré et signé avec l'app, au registre des plugins livrés et sur le store (sa page pointe vers ce dossier). Pour l'utilisateur, les agents, les textes et la vue terminal ne changent pas ; ses comptes partagent désormais le compte Mistral (voir *Le compte Mistral*).
+Mistral Vibe est le deuxième harness sorti du cœur (INT-10.6) : sa conversation passe par le plugin de première main `dev.escouade.mistral` (« Mistral », INT-10.6 bis), le même que sa voix : un seul process (`escouade-plugins mistral`), sa crate `escouade-plugin-mistral` dans `plugins/mistral/`, livré et signé avec l'app, au registre des plugins livrés et sur le store (sa page pointe vers ce dossier). Pour l'utilisateur, les agents, les textes et la vue terminal ne changent pas ; ses comptes partagent désormais le compte Mistral (voir *Le compte Mistral*).
 
 ## Ce que fait le plugin
 

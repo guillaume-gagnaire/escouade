@@ -4,7 +4,7 @@ version = "0.0.0"
 edition = "2021"
 publish = false
 
-# plugins/builtin/dev.escouade.codex as a module: `generated/` is its source with the few lines a module changes
+# plugins/codex as a module: `generated/` is its source with the few lines a module changes
 # (`node prepare.mjs`, which prints them).
 [lib]
 path = "generated/lib.rs"

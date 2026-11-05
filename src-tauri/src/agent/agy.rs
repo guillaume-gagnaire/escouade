@@ -1,5 +1,5 @@
 //! Antigravity CLI in the agent's conversation. Since INT-10.8 what its agents say is translated by its plugin
-//! (`dev.escouade.antigravity-cli`, `plugins/builtin/dev.escouade.antigravity-cli/src/translate.rs`) and applied as items
+//! (`dev.escouade.antigravity-cli`, `plugins/antigravity/src/translate.rs`) and applied as items
 //! (`AgentRt::apply_items`, through `Engine::translate`). What stays is what its « Vue Antigravity » keeps
 //! (`agent/agy_tui.rs`), and, for the tests, the recorded streams (`tests/fixtures/agy/`) read through the same translation.
 

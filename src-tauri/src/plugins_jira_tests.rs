@@ -1,4 +1,4 @@
-//! Tests of Jira as a plugin of the app (INT-7.3, ESC-215; `plugins/builtin/dev.escouade.jira`): the tests the core
+//! Tests of Jira as a plugin of the app (INT-7.3, ESC-215; `plugins/jira`): the tests the core
 //! had for its own Jira client (`integrations/jira.rs`), word for word, now played against the plugin started as the
 //! app starts it (`escouade-plugins jira`, checked as the app's own before it runs) by the runtime and
 //! `ProcessTicketSource`, on the fake Jira of the integrations' tests; and what a process adds: the token fetched by

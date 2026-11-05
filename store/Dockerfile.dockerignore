@@ -8,7 +8,7 @@
 !LICENSE
 !plugins
 # The compiler of the `run.js` plugins (ESC-328): the crate of `escouade-plugin`, escouade-js, and the workspace they belong
-# to, of which the image reads only the manifests (the other crates, and plugins/builtin above).
+# to, of which the image reads only the manifests (the other crates, and those of plugins/ above).
 !crates
 !src-tauri/Cargo.toml
 !src-tauri/Cargo.lock

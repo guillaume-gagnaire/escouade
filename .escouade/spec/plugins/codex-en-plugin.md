@@ -1,7 +1,7 @@
 ---
 title: "Codex en plugin"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §4 (INT-10.4)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-225","plugins/builtin/dev.escouade.codex/README.md"]
+sources: ["docs/PLUGINS.md §4 (INT-10.4)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-225","plugins/codex/README.md"]
 tickets: ["ESC-225"]
 decisions: []
 compared: null
@@ -9,7 +9,7 @@ compared: null
 
 # Codex en plugin
 
-La conversation des agents de Codex passe par le plugin de première main `dev.escouade.codex` (INT-10.4) : un process (`escouade-plugins codex`, sa crate `escouade-plugin-codex` dans `plugins/builtin/dev.escouade.codex/`), livré et signé avec l'app, au registre des plugins livrés et sur le store (sa page pointe vers ce dossier). Pour l'utilisateur, rien ne change : mêmes agents, mêmes modes, même coût estimé, même vue terminal.
+La conversation des agents de Codex passe par le plugin de première main `dev.escouade.codex` (INT-10.4) : un process (`escouade-plugins codex`, sa crate `escouade-plugin-codex` dans `plugins/codex/`), livré et signé avec l'app, au registre des plugins livrés et sur le store (sa page pointe vers ce dossier). Pour l'utilisateur, rien ne change : mêmes agents, mêmes modes, même coût estimé, même vue terminal.
 
 Codex n'est pas un harness ACP : il garde son client propre, `codex app-server` en JSON-RPC, une ligne par message.
 

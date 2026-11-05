@@ -2,7 +2,7 @@
 //! (`tests/fixtures/forges/azure/`): its remotes in every form, its account (a PAT in Basic, `az`'s
 //! token in Bearer), each call of its pull requests' client, and its refusals.
 //!
-//! Since INT-8.5 the client is the plugin « Azure DevOps »'s (`plugins/builtin/dev.escouade.azure-devops`): an account's
+//! Since INT-8.5 the client is the plugin « Azure DevOps »'s (`plugins/azure-devops`): an account's
 //! calls go to its process (`escouade-plugins azure-devops`) by `ProcessForge`, as the core makes them, and the plugin
 //! calls the fake server; the tests that set the client's pace use it in process.
 

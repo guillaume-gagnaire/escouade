@@ -1,6 +1,6 @@
 //! Gitea and Forgejo (Codeberg, gitea.com and the self-hosted instances): an access token with
 //! scopes. What the core knows of them is declared here (their hosts, their rights, what they can
-//! do): their client is in the plugin « Gitea / Forgejo » (`plugins/builtin/dev.escouade.gitea`,
+//! do): their client is in the plugin « Gitea / Forgejo » (`plugins/gitea`,
 //! INT-8.4, ESC-58), which serves their accounts in a process of its own.
 
 use super::*;

@@ -1,7 +1,7 @@
 ---
 title: "Hébergeurs de code"
 subject: "Git & fichiers"
-sources: ["docs/SPEC.md","plugins/builtin/dev.escouade.gitlab/README.md","tests/fixtures/forges/gitlab/README.md","docs/TODO-2.2.md (Hébergeurs de code)","plugins/builtin/dev.escouade.gitea/README.md","tests/fixtures/forges/gitea/README.md"]
+sources: ["docs/SPEC.md","plugins/gitlab/README.md","tests/fixtures/forges/gitlab/README.md","docs/TODO-2.2.md (Hébergeurs de code)","plugins/gitea/README.md","tests/fixtures/forges/gitea/README.md"]
 tickets: ["ESC-54","ESC-55","ESC-56","ESC-58","ESC-70","ESC-241","ESC-212","ESC-57","ESC-67"]
 decisions: []
 compared: null

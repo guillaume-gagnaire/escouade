@@ -1,0 +1,52 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.opencode",
+  "name": "OpenCode",
+  "version": "0.0.0",
+  "description": {
+    "fr": "OpenCode comme harness, par son serveur : la conversation, sa vue terminal, les permissions, le plan, les fournisseurs et le coût par compte.",
+    "en": "OpenCode as a harness, through its server: the conversation, its terminal view, permissions, the plan, providers and the cost per account."
+  },
+  "author": {
+    "name": "Escouade",
+    "url": "https://escouade.dev"
+  },
+  "license": "GPL-3.0-or-later",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/opencode",
+  "escouade": {
+    "api": "1",
+    "min": "2.1.0"
+  },
+  "run": {
+    "command": "{escouade}/escouade-plugins",
+    "args": ["opencode"]
+  },
+  "contributes": {
+    "harnesses": [
+      {
+        "id": "opencode",
+        "name": "OpenCode",
+        "speaker": "OpenCode",
+        "writer": "OpenCode",
+        "locate": { "names": ["opencode"] },
+        "versionArgs": ["--version"],
+        "tested": { "oldest": "1.19.3", "newest": "1.19.3" },
+        "caps": {
+          "modes": ["default", "plan", "acceptEdits", "bypassPermissions"],
+          "effort": true,
+          "images": true,
+          "slashCommands": true,
+          "terminalView": true,
+          "readOnly": true
+        },
+        "efforts": ["low", "medium", "high", "xhigh", "max"],
+        "accountVar": "OPENCODE_CONFIG_DIR",
+        "install": {
+          "windows": "npm install -g opencode-ai",
+          "unix": "npm install -g opencode-ai"
+        },
+        "updateCommand": "npm install -g opencode-ai@latest"
+      }
+    ]
+  }
+}

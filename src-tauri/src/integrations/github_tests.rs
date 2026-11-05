@@ -1,5 +1,5 @@
 //! GitHub Issues against a fake server. Since INT-8.1 its client is the plugin « GitHub »'s
-//! (`plugins/builtin/dev.escouade.github/src/issues.rs`): the calls go to its process by
+//! (`plugins/github/src/issues.rs`): the calls go to its process by
 //! `ProcessTicketSource`, as the core makes them, and the plugin calls the fake server.
 
 use super::fake::FakeServer;

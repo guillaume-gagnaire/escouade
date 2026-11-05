@@ -2,7 +2,7 @@
 title: "Les plugins : vue d'ensemble"
 subject: "plugins"
 sources: ["docs/PLUGINS.md","docs/STORE.md","docs/TODO-2.2.md","schemas/plugin-1.json","schemas/plugin-protocol-1.json","website/content/docs/fr/plugins/introduction.md"]
-tickets: ["ESC-184"]
+tickets: ["ESC-184","ESC-339"]
 decisions: []
 compared: null
 ---
@@ -34,7 +34,7 @@ Le manifeste réserve `menus`, `statusBar`, `badges`, `projectTemplates` et `esc
 
 ## D'où ils viennent
 
-- **Livrés avec l'app** (origine `builtin`, `plugins/builtin/<id>/`) : signés et mis à jour avec elle, coupables, jamais désinstallables (*Les plugins livrés avec Escouade*).
+- **Livrés avec l'app** (origine `builtin`, `plugins/<id-court>/`) : signés et mis à jour avec elle, coupables, jamais désinstallables (*Les plugins livrés avec Escouade*).
 - **Du store** : store.escouade.dev, revue en local et sceau « Vérifié par Escouade », vérifié par l'app avec ses clés embarquées (*Le store dans l'app*). Les plugins de première main hors de l'app y passent comme ceux d'un tiers, signés seulement (*Les plugins d'exemple*).
 - **D'un dossier ou d'un dépôt git** : « non vérifié », jamais un id `dev.escouade.*`.
 - **En développement** : un dossier chargé en place, relu à chaque changement.

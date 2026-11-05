@@ -37,7 +37,7 @@ FROM toolchain AS manifests
 WORKDIR /repo
 COPY src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/
 COPY crates crates
-COPY plugins/builtin plugins/builtin
+COPY plugins plugins
 RUN find . -type f ! -name Cargo.toml ! -name Cargo.lock -delete \
   && find . -name Cargo.toml -execdir sh -c 'mkdir -p src && : > src/lib.rs' \; \
   && echo 'fn main() {}' | tee src-tauri/src/main.rs crates/escouade-plugin-cli/src/main.rs > /dev/null

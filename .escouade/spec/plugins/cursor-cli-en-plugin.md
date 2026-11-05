@@ -9,7 +9,7 @@ compared: null
 
 # Cursor CLI en plugin
 
-Cursor CLI est le premier harness sorti du cœur (INT-10.1) : sa conversation passe par le plugin de première main `dev.escouade.cursor-cli`, un process (`escouade-plugins cursor`, sa crate `escouade-plugin-cursor` dans `plugins/builtin/dev.escouade.cursor-cli/`), livré et signé avec l'app, au registre des plugins livrés et sur le store (sa page pointe vers ce dossier). Pour l'utilisateur, rien ne change : mêmes agents, mêmes textes, même vue terminal.
+Cursor CLI est le premier harness sorti du cœur (INT-10.1) : sa conversation passe par le plugin de première main `dev.escouade.cursor-cli`, un process (`escouade-plugins cursor`, sa crate `escouade-plugin-cursor` dans `plugins/cursor/`), livré et signé avec l'app, au registre des plugins livrés et sur le store (sa page pointe vers ce dossier). Pour l'utilisateur, rien ne change : mêmes agents, mêmes textes, même vue terminal.
 
 ## Ce que fait le plugin
 

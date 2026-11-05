@@ -4,7 +4,7 @@
 //! Bearer). Its repositories are an organization, a project and a repository: `RepoRef` keeps
 //! `org/project` as its namespace. What the core knows of it is declared here (its addresses, its rights, what it can
 //! do, the `az` CLI's token): its client, and Azure Boards', are in the plugin « Azure DevOps »
-//! (`plugins/builtin/dev.escouade.azure-devops`, INT-8.5, ESC-280), which serves its accounts in a process of its own.
+//! (`plugins/azure-devops`, INT-8.5, ESC-280), which serves its accounts in a process of its own.
 
 use super::*;
 

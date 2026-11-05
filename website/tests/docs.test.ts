@@ -457,10 +457,11 @@ describe('the page of the example plugins', () => {
     }
   });
 
-  it('shows every plugin of plugins/', () => {
+  it('shows every plugin of plugins/ but those the app still gives', () => {
     const examples = readdirSync(new URL('plugins/', REPO), { withFileTypes: true })
       .filter((d) => d.isDirectory() && existsSync(new URL(`plugins/${d.name}/escouade-plugin.json`, REPO)))
-      .map((d) => `plugins/${d.name}/escouade-plugin.json`);
+      .map((d) => `plugins/${d.name}/escouade-plugin.json`)
+      .filter((file) => JSON.parse(readFileSync(new URL(file, REPO), 'utf8')).run?.command !== '{escouade}/escouade-plugins');
     expect(examples.length).toBe(5);
     for (const lang of LANGS) {
       const shown = blocks(lang).map((b) => b.path);

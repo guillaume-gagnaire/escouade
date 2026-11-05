@@ -8,7 +8,7 @@
 //!
 //! An entry is a function from the name to a `fn() -> i32`: add the plugin's module and one line to `ENTRIES`. A
 //! plugin that serves code hosts or Kanban sources is a crate of its own beside its manifest
-//! (`plugins/builtin/<id>/`), on the kit `escouade-plugin-kit` (its loop, the service of `forge/*` and `tickets/*`).
+//! (`plugins/<id-court>/`), on the kit `escouade-plugin-kit` (its loop, the service of `forge/*` and `tickets/*`).
 
 #[path = "escouade-plugins/isola.rs"]
 mod isola;
@@ -31,45 +31,45 @@ const ENTRIES: &[Entry] = &[
     ("voice-openai", voice::openai),
     ("voice-groq", voice::groq),
     // Mistral (INT-13, INT-10.6 bis): one process, its voice service and Mistral Vibe, the harness on the ACP client in
-    // its crate (plugins/builtin/dev.escouade.mistral).
+    // its crate (plugins/mistral).
     ("mistral", voice::mistral),
     ("voice-elevenlabs", voice::elevenlabs),
     ("voice-deepgram", voice::deepgram),
-    // GitHub (INT-8.1): its code host and GitHub Issues, in its crate (plugins/builtin/dev.escouade.github).
+    // GitHub (INT-8.1): its code host and GitHub Issues, in its crate (plugins/github).
     ("github", escouade_plugin_github::run),
-    // GitLab (ESC-56): its code host, in its crate (plugins/builtin/dev.escouade.gitlab); GitLab Issues joins it (INT-8.2).
+    // GitLab (ESC-56): its code host, in its crate (plugins/gitlab); GitLab Issues joins it (INT-8.2).
     ("gitlab", escouade_plugin_gitlab::run),
-    // Bitbucket Cloud (INT-8.3, ESC-57): its code host, in its crate (plugins/builtin/dev.escouade.bitbucket).
+    // Bitbucket Cloud (INT-8.3, ESC-57): its code host, in its crate (plugins/bitbucket).
     ("bitbucket", escouade_plugin_bitbucket::run),
-    // Gitea and Forgejo (INT-8.4): its code host, in its crate (plugins/builtin/dev.escouade.gitea).
+    // Gitea and Forgejo (INT-8.4): its code host, in its crate (plugins/gitea).
     ("gitea", escouade_plugin_gitea::run),
-    // Trello (INT-7.1): the Kanban's source of Trello cards, in its crate (plugins/builtin/dev.escouade.trello).
+    // Trello (INT-7.1): the Kanban's source of Trello cards, in its crate (plugins/trello).
     ("trello", escouade_plugin_trello::run),
     // Azure DevOps and Azure Boards (INT-8.5, ESC-280): its code host and its source, in its crate
-    // (plugins/builtin/dev.escouade.azure-devops).
+    // (plugins/azure-devops).
     ("azure-devops", escouade_plugin_azure_devops::run),
-    // The generic ACP plugin (PLG-6): the harnesses a manifest describes, in its crate (plugins/builtin/dev.escouade.acp).
+    // The generic ACP plugin (PLG-6): the harnesses a manifest describes, in its crate (plugins/acp).
     ("acp", escouade_plugin_acp::run),
-    // Linear (INT-7.2): the Kanban's source of Linear issues, in its crate (plugins/builtin/dev.escouade.linear).
+    // Linear (INT-7.2): the Kanban's source of Linear issues, in its crate (plugins/linear).
     ("linear", escouade_plugin_linear::run),
-    // Jira (INT-7.3): the Kanban's source of Jira issues, in its crate (plugins/builtin/dev.escouade.jira).
+    // Jira (INT-7.3): the Kanban's source of Jira issues, in its crate (plugins/jira).
     ("jira", escouade_plugin_jira::run),
-    // Cursor CLI (INT-10.1): its harness on the ACP client, in its crate (plugins/builtin/dev.escouade.cursor-cli).
+    // Cursor CLI (INT-10.1): its harness on the ACP client, in its crate (plugins/cursor).
     ("cursor", escouade_plugin_cursor::run),
-    // ClickUp (INT-7.4): the Kanban's source of ClickUp tasks, in its crate (plugins/builtin/dev.escouade.clickup).
+    // ClickUp (INT-7.4): the Kanban's source of ClickUp tasks, in its crate (plugins/clickup).
     ("clickup", escouade_plugin_clickup::run),
-    // Gemini CLI (INT-10.7): its harness on the ACP client, in its crate (plugins/builtin/dev.escouade.gemini-cli).
+    // Gemini CLI (INT-10.7): its harness on the ACP client, in its crate (plugins/gemini).
     ("gemini", escouade_plugin_gemini::run),
-    // OpenCode (INT-10.2): its harness, the client of `opencode serve`, in its crate (plugins/builtin/dev.escouade.opencode).
+    // OpenCode (INT-10.2): its harness, the client of `opencode serve`, in its crate (plugins/opencode).
     ("opencode", escouade_plugin_opencode::run),
-    // Copilot CLI (INT-10.3): its harness on the client of its server, in its crate (plugins/builtin/dev.escouade.copilot-cli).
+    // Copilot CLI (INT-10.3): its harness on the client of its server, in its crate (plugins/copilot).
     ("copilot", escouade_plugin_copilot::run),
-    // Codex (INT-10.4): the client of its app-server and its translation, in its crate (plugins/builtin/dev.escouade.codex).
+    // Codex (INT-10.4): the client of its app-server and its translation, in its crate (plugins/codex).
     ("codex", escouade_plugin_codex::run),
     // Antigravity CLI (INT-10.8): the client of `agy -p` and its translation, in its crate
-    // (plugins/builtin/dev.escouade.antigravity-cli).
+    // (plugins/antigravity).
     ("agy", escouade_plugin_agy::run),
-    // Claude Code (INT-10.5): the client of `claude` and its translation, in its crate (plugins/builtin/dev.escouade.claude-code).
+    // Claude Code (INT-10.5): the client of `claude` and its translation, in its crate (plugins/claude).
     ("claude", escouade_plugin_claude::run),
 ];
 

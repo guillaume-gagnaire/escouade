@@ -44,11 +44,11 @@ make(join(here, 'guest', 'kit', 'src', 'generated'), join(repo, 'crates', 'escou
   'text.rs': [],
 });
 
-make(join(here, 'guest', 'linear', 'generated'), join(repo, 'plugins', 'builtin', 'dev.escouade.linear', 'src'), {
+make(join(here, 'guest', 'linear', 'generated'), join(repo, 'plugins', 'linear', 'src'), {
   'lib.rs': [[/$/, turn('escouade_plugin_kit::serve::turn()')]],
 });
 
-const codex = join(repo, 'plugins', 'builtin', 'dev.escouade.codex');
+const codex = join(repo, 'plugins', 'codex');
 cpSync(join(codex, 'escouade-plugin.json'), join(here, 'guest', 'codex', 'escouade-plugin.json'));
 make(join(here, 'guest', 'codex', 'generated'), join(codex, 'src'), {
   'lib.rs': [

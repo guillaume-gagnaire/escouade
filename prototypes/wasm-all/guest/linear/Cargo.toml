@@ -4,7 +4,7 @@ version = "0.0.0"
 edition = "2021"
 publish = false
 
-# plugins/builtin/dev.escouade.linear as a module: its one source file, unchanged but for the export of the turn
+# plugins/linear as a module: its one source file, unchanged but for the export of the turn
 # (`node prepare.mjs`).
 [lib]
 path = "generated/lib.rs"

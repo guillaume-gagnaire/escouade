@@ -1,7 +1,7 @@
 //! Azure Boards against the fake server, its answers as the REST API 7.1's documentation gives
 //! them: two organizations, and the processes Agile, Scrum and Basic.
 //!
-//! Since INT-8.5 the client is the plugin « Azure DevOps »'s (`plugins/builtin/dev.escouade.azure-devops`): each
+//! Since INT-8.5 the client is the plugin « Azure DevOps »'s (`plugins/azure-devops`): each
 //! organization's account is a `ProcessTicketSource` to its process (`escouade-plugins azure-devops`), as the core
 //! makes them, and `ByOrganization` sends a call to the organization its container names; the real trial uses the
 //! plugin's client in process.

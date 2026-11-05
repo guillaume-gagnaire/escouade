@@ -1,7 +1,7 @@
 ---
 title: "Antigravity CLI en plugin"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §4 (INT-10.8)","docs/PROTOCOL.md, Antigravity CLI","docs/TODO-2.2.md, INT-10.8","Ticket ESC-283","plugins/builtin/dev.escouade.antigravity-cli/README.md"]
+sources: ["docs/PLUGINS.md §4 (INT-10.8)","docs/PROTOCOL.md, Antigravity CLI","docs/TODO-2.2.md, INT-10.8","Ticket ESC-283","plugins/antigravity/README.md"]
 tickets: ["ESC-283"]
 decisions: [68]
 compared: null
@@ -9,7 +9,7 @@ compared: null
 
 # Antigravity CLI en plugin
 
-La conversation des agents d'Antigravity CLI passe par le plugin de première main `dev.escouade.antigravity-cli` (INT-10.8) : un process (`escouade-plugins agy`, sa crate `escouade-plugin-agy` dans `plugins/builtin/dev.escouade.antigravity-cli/`), livré et signé avec l'app, au registre des plugins livrés et sur le store (sa page pointe vers ce dossier). Pour l'utilisateur, rien ne change : mêmes agents, mêmes modes, mêmes comptes, même vue terminal.
+La conversation des agents d'Antigravity CLI passe par le plugin de première main `dev.escouade.antigravity-cli` (INT-10.8) : un process (`escouade-plugins agy`, sa crate `escouade-plugin-agy` dans `plugins/antigravity/`), livré et signé avec l'app, au registre des plugins livrés et sur le store (sa page pointe vers ce dossier). Pour l'utilisateur, rien ne change : mêmes agents, mêmes modes, mêmes comptes, même vue terminal.
 
 Antigravity CLI n'est pas un harness ACP : `agy -p` parle en stream-json, une ligne par message.
 

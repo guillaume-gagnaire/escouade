@@ -16,8 +16,8 @@ bytes = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "time"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }
 sysinfo = { version = "0.33", default-features = false, features = ["system"] }
-escouade-plugin-linear = { path = "../../../plugins/builtin/dev.escouade.linear" }
-escouade-plugin-codex = { path = "../../../plugins/builtin/dev.escouade.codex" }
+escouade-plugin-linear = { path = "../../../plugins/linear" }
+escouade-plugin-codex = { path = "../../../plugins/codex" }
 
 [[bin]]
 name = "native-linear"
