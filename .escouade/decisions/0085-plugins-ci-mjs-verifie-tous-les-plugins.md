@@ -1,9 +1,9 @@
 ---
-number: null
+number: 85
 id: "plugins-ci-mjs-verifie-tous-les-plugins"
 title: "plugins/ci.mjs vérifie tous les plugins, les crates compris, et --changed passe aux pull requests"
 date: "2026-11-05"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-340"
 pages: ["plugins/plugins-d-exemple"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/plugins-d-exemple","added":3,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-05T09:30:30+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
