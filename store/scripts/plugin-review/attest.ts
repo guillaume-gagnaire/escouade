@@ -26,7 +26,7 @@ interface Verified {
 
 export type Runner = (args: string[]) => { status: number | null; stdout: string; stderr: string; error?: Error };
 
-const gh: Runner = (args) => {
+export const gh: Runner = (args) => {
   const r = spawnSync('gh', args, { encoding: 'utf8', timeout: 120_000 });
   return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '', error: r.error };
 };

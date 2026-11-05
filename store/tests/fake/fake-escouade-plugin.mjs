@@ -27,6 +27,7 @@ if (words[0] === 'test') {
   console.log(
     JSON.stringify({
       plugin: 'x 1.0.0',
+      escouade: words.includes('--escouade') ? words[words.indexOf('--escouade') + 1] : '2.1.2',
       outcomes: [
         { scenario: 'manifest', verdict: 'pass', said: 'valide, en WASM' },
         { scenario: 'initialize', verdict: 'pass', said: `répond en 3 ms (module de ${wasm.length} octets)` },

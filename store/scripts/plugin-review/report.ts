@@ -221,6 +221,13 @@ export function renderReport(d: ReviewData): string {
         : `${b.passed ? 'Passé' : '**Échoué**'}, dans ${code(b.command)}.`,
       '',
     );
+    if (b.escouade)
+      out.push(
+        b.development
+          ? `Joué comme Escouade ${b.escouade}, la version en développement (\`--escouade\`, la première main seulement).`
+          : `Joué comme Escouade ${b.escouade}, la version de l’outil du poste.`,
+        '',
+      );
     for (const o of b.outcomes)
       out.push(
         `- ${o.verdict === 'pass' ? '✓' : o.verdict === 'fail' ? '✗' : '–'} ${o.scenario} : ${o.said}${o.missing ? ` — manque : ${o.missing}` : ''}`,

@@ -62,6 +62,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Gemini CLI est lui aussi un plugin livré avec Escouade : ses agents conversent comme avant, par un programme à part qu’Escouade lance et surveille. Coupé dans la vue Plugins, un agent de Gemini dit au lancement qu’il faut le rallumer, et garde sa session.
 - ClickUp est un plugin livré avec Escouade, comme Trello, Linear et Jira : il se voit dans la vue Plugins, s’arrête pour l’app ou pour un projet, et la synchronisation dit quand il ne répond pas. Ton jeton ClickUp, tes listes liées et les statuts de chaque liste restent tels quels.
 - Après le merge, la carte d’un ticket terminé dit où il tourne (« staging ✓ · production ⏳ »), et la vue « Environnements » du Kanban montre ce qui est déployé où, les tickets qui attendent la production et un déploiement en échec avec son job. Sur une carte « En revue », « Ouvrir l’aperçu » ouvre l’aperçu Vercel, Netlify ou Cloudflare Pages de la PR.
+- `escouade-plugin test`, `validate` et `dev` jouent un plugin comme la version d’Escouade de ton choix (`--escouade 2.2.0`), pour écrire pour une version à venir.
 
 ### Retiré
 

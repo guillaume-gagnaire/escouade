@@ -32,6 +32,10 @@ export interface ReviewOptions {
   benchWhy?: string;
   /** Compiles a `run.js` bundle again, by this machine's `escouade-plugin`; null without one. */
   compile?: CompileOne | null;
+  /** Fetches the escouade-js of this fingerprint, when `escouade-plugin` has another one, and says what to do next. */
+  engine?: (sha256: string) => string;
+  /** The version of Escouade under development: a first-party plugin is played as it, a third party's never (ESC-343). */
+  development?: string;
   /** Runs `gh` (the tests give a fake). */
   gh?: Runner;
   /** The repository the script lives in: neither the work nor the reports may be in it. */
@@ -112,7 +116,7 @@ export async function review(o: ReviewOptions): Promise<ReviewDone> {
         data.wasm = f.wasm;
         module = join(dir, 'plugin.wasm');
         writeFileSync(module, got.wasm);
-        data.recompile = await recompile(o.compile ?? null, { manifest: manifestBytes!, js: at, bundle, firstParty }, f.wasm);
+        data.recompile = await recompile(o.compile ?? null, { manifest: manifestBytes!, js: at, bundle, firstParty }, f.wasm, o.engine);
         if (data.recompile.state === 'different')
           throw new Integrity(
             `le module publié (${data.recompile.published}) n’est pas la recompilation du bundle ${js} (${data.recompile.local}), avec les mêmes versions du compilateur`,
@@ -163,11 +167,13 @@ export async function review(o: ReviewOptions): Promise<ReviewDone> {
 
     if (typeof js === 'string')
       // The module published, in the WASM host, never in a container; not played when the review has none to play.
-      data.bench = module ? await playWasm(o.bench, unpackedAt, module, firstParty) : { played: false, why: 'aucun module publié à jouer' };
+      data.bench = module
+        ? await playWasm(o.bench, unpackedAt, module, firstParty, o.development)
+        : { played: false, why: 'aucun module publié à jouer' };
     else {
       const linux = got.binaries['linux-x64'] ?? null;
       const benchDir = data.manifest?.run ? benchFolder(unpackedAt, join(dir, 'bench'), data.manifest, linux) : unpackedAt;
-      data.bench = await playBench(o.bench, benchDir, o.benchWhy, firstParty);
+      data.bench = await playBench(o.bench, benchDir, o.benchWhy, firstParty, o.development);
     }
   } catch (e) {
     if (!(e instanceof Integrity)) throw e;

@@ -28,7 +28,7 @@ pub fn usage(lang: Lang) -> String {
   escouade-plugin build <dossier> [--out <dossier>] [--json]
       Compile le bundle d'un plugin `run.js` en WASM, comme le store : packs/<id>-<version>.wasm
       et son SHA-256, le même sur tous les systèmes.
-  escouade-plugin dev <dossier> [--secret <clé>=<valeur>]...
+  escouade-plugin dev <dossier> [--secret <clé>=<valeur>]... [--escouade <version>]
       Le faux Escouade : lance le plugin, puis envoie ce que tu tapes :
         fact <nom> [json]       un fait (events/fact), ex. fact ticket.column
         decide [json]           une demande d'autorisation (permissions/decide)
@@ -40,13 +40,14 @@ pub fn usage(lang: Lang) -> String {
 Un plugin `run.js` tourne en WASM, sans Node : la Javy épinglée ({javy}) est téléchargée à son
 premier besoin et vérifiée par son SHA-256 (ESCOUADE_JAVY en nomme une autre).
 
-Options : --lang fr|en ; --escouade <version> la version d'Escouade pour laquelle le plugin est jugé (celle de
+Options : --lang fr|en ; --escouade <version> joue le plugin comme cette version d'Escouade, pour écrire pour une
+  version à venir : la plage `escouade` du manifeste et ce que voit `initialize` se font contre elle (celle de
   ce binaire par défaut) ; --first-party pour un plugin d'Escouade (plugins/<id>/ de son dépôt,
   identifiants dev.escouade.*)
 ",
         "escouade-plugin: test an Escouade plugin without the app.
 
-  escouade-plugin test <folder> [--json] [--measure [n]] [--wasm <module>] [--offline]
+  escouade-plugin test <folder> [--json] [--measure [n]] [--wasm <module>] [--offline] [--escouade <version>]
       Plays the conformance bench: initialization, version refused, delays, a fact received,
       a decision, a secret, crash, shutdown. Exit code 1 when a scenario fails.
       --wasm plays this module (the store's) instead of compiling a `run.js` plugin's bundle
@@ -58,7 +59,7 @@ Options : --lang fr|en ; --escouade <version> la version d'Escouade pour laquell
   escouade-plugin build <folder> [--out <folder>] [--json]
       Compiles a `run.js` plugin's bundle to WASM, as the store does: packs/<id>-<version>.wasm
       and its SHA-256, the same on every system.
-  escouade-plugin dev <folder> [--secret <key>=<value>]...
+  escouade-plugin dev <folder> [--secret <key>=<value>]... [--escouade <version>]
       The fake Escouade: starts the plugin, then sends what you type:
         fact <name> [json]       a fact (events/fact), e.g. fact ticket.column
         decide [json]            a permission request (permissions/decide)
@@ -70,7 +71,8 @@ Options : --lang fr|en ; --escouade <version> la version d'Escouade pour laquell
 A `run.js` plugin runs in WASM, without Node: the pinned Javy ({javy}) is downloaded the first
 time it is needed and checked by its SHA-256 (ESCOUADE_JAVY names another).
 
-Options: --lang fr|en; --escouade <version> the version of Escouade the plugin is judged for (this
+Options: --lang fr|en; --escouade <version> plays the plugin as this version of Escouade, to write for a
+  version to come: the manifest's `escouade` range and what `initialize` shows go by it (this
   build's by default); --first-party for a plugin of Escouade's own (plugins/<id>/ of its repository,
   ids dev.escouade.*)
 ",

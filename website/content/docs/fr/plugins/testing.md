@@ -14,6 +14,12 @@ escouade-plugin dev mon-plugin        # le faux Escouade
 
 `--lang fr` ou `--lang en` choisit la langue de ses messages ; sans lui, c’est celle du système.
 
+`--escouade <version>` joue le plugin comme cette version d’Escouade, avec `validate`, `test` et `dev` : la plage `escouade` du manifeste se contrôle contre elle, et c’est elle que le plugin voit dans `initialize`. Sans lui, c’est la version de la commande. Il sert à écrire pour une version à venir :
+
+```sh
+escouade-plugin test mon-plugin --escouade 2.2.0
+```
+
 ## Le banc de conformité
 
 `escouade-plugin test <dossier>` lit le manifeste, lance le programme de `run` comme Escouade le lance (dans son dossier, avec ses trois variables, avec tout ce qu’il démarre), et joue jusqu’à onze scénarios. Chacun dit ce qui s’est passé ; un scénario qui échoue dit aussi **ce qui manque**.

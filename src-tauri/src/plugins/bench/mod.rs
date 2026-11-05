@@ -151,6 +151,8 @@ pub struct Measure {
 pub struct Report {
     /// Its id and version, or its folder when its manifest does not hold.
     pub plugin: String,
+    /// The version of Escouade it was played as (`--escouade`, else this tool's): the local review reports it.
+    pub escouade: String,
     pub outcomes: Vec<Outcome>,
     pub timings: Vec<Timing>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -702,6 +704,7 @@ pub async fn run(folder: &Path, o: &Options) -> Report {
     let skip = b.seen.len().saturating_sub(SEEN_KEPT);
     Report {
         plugin,
+        escouade: o.app_version.clone(),
         outcomes,
         timings: b.timings,
         measure,

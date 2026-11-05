@@ -2,8 +2,8 @@
 title: "La revue « Vérifié par Escouade » : la file, la signature, la révocation"
 subject: "store"
 sources: ["docs/STORE.md","design/store/index.html","design/app-redesign/UX-NOTES.md","store/server/utils/review.ts","store/server/utils/discord.ts","store/scripts/plugin-review/","docs/PLUGINS.md §5.6","Consignes du chef au lancement d'ESC-324 (2026-11-01)"]
-tickets: ["ESC-235","ESC-295","ESC-302","ESC-324"]
-decisions: [46]
+tickets: ["ESC-235","ESC-295","ESC-302","ESC-324","ESC-343"]
+decisions: [46,"la-revue-joue-la-premiere-main-comme-la"]
 compared: "2026-10-30T03:23:39+01:00"
 ---
 
@@ -42,3 +42,10 @@ Détail et procédure : `docs/STORE.md` §4.1, §4.2, §4.5, §4.6 (il fait foi)
 ## Les annonces
 - Chaque version à revoir, signalement, nom trop proche, étiquette déplacée, retrait et révocation part aussi dans le salon privé des admins sur Discord. Pour une entrée de la liste, ce salon dit si l'auteur a été prévenu (« Auteur : prévenu » ou « non prévenu (--quiet) »).
 - Les badges et chaque nouvelle entrée de la liste partent dans le salon public fr et en, avec la raison publique de l'entrée dans la langue du salon : « Plugin retiré » / « Plugin taken off » pour `disable`, « Badge retiré » / « Badge withdrawn » pour `unverify`, avec ou sans `--quiet`. Une entrée déjà dans la liste précédente n'est pas annoncée de nouveau. Voir « Les annonces du store sur Discord », `docs/STORE.md` §4.7.
+
+## La première main avant sa release (ESC-343)
+- `escouade-plugin validate`, `test` et `dev` prennent `--escouade <version>` : le plugin est joué comme cette version d'Escouade. La plage `escouade` du manifeste se contrôle contre elle, et c'est elle que le plugin voit dans `initialize`. Sans l'option, c'est la version de l'outil. `dev` contrôle désormais la plage, comme `test`. Le rapport JSON du banc nomme la version jouée (`escouade`).
+- La revue locale joue la première main (`--first-party`) comme la version en développement : `NEXT` de `website/app/data/site.ts`, complété en `x.y.0`. Elle peut ainsi passer le banc et être signée avant que cette version existe. Un tiers est toujours joué comme l'outil du poste : `--escouade` ne part jamais sans `--first-party`.
+- Le rapport dit la version jouée : « Joué comme Escouade 2.2.0, la version en développement » ou « la version de l'outil du poste ».
+- La recompilation ne change pas : elle se fait avec le compilateur que nomme `version.json`, sinon `sign` refuse.
+- Un `escouade-plugin` construit sans `escouade-js`, ou avec un autre que celui de `version.json` : la revue récupère le bon de la CI de main (artefact `escouade-js`, gardé 7 jours, par `gh run download`) dans `src-tauri/escouade-js/target/`. Elle ne garde que le fichier à l'empreinte de `version.json`. Le rapport dit ce qui reste à faire : `cargo build`, puis relancer la revue. Sans `gh` ou sans artefact, il dit comment l'obtenir à la main.

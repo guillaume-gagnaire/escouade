@@ -9,7 +9,10 @@ import {
   DEFAULT_IMAGE,
   findCli,
   findEngine,
+  developmentVersion,
   firstPartyBench,
+  readDevelopmentVersion,
+  wasmArgs,
   playBench,
   refusals,
   runArgs,
@@ -247,6 +250,23 @@ describe('the bench in a container', () => {
     expect(a).toContain('/opt/escouade-plugin:/usr/local/bin/escouade-plugin:ro');
     expect(a.slice(a.indexOf('img'))).toEqual(['img', 'escouade-plugin', 'test', '/plugin', '--json', '--lang', 'fr']);
     expect(a.join(' ')).not.toMatch(/--privileged|--network=host|:rw\b(?!,size)/);
+  });
+
+  it('plays the first party as the version under development, never a third party (ESC-343)', () => {
+    const tail = (a: string[]) => a.slice(a.indexOf('img'));
+    expect(tail(runArgs('/r', '/c', 'img', 'n', true, '2.2.0')).slice(-3)).toEqual(['--first-party', '--escouade', '2.2.0']);
+    expect(runArgs('/r', '/c', 'img', 'n', false, '2.2.0')).not.toContain('--escouade');
+    expect(wasmArgs('/p', '/m', true, '2.2.0').slice(-3)).toEqual(['--first-party', '--escouade', '2.2.0']);
+    expect(wasmArgs('/p', '/m', false, '2.2.0')).not.toContain('--escouade');
+    expect(wasmArgs('/p', '/m', true)).not.toContain('--escouade');
+  });
+
+  it('reads the version under development from the site, as a version', () => {
+    expect(developmentVersion("export const NEXT = '2.2';")).toBe('2.2.0');
+    expect(developmentVersion("/** x */\nexport const NEXT = '2.3.1';\n")).toBe('2.3.1');
+    expect(developmentVersion('export const NEXT = PLAN;')).toBeUndefined();
+    expect(readDevelopmentVersion(REPO)).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(readDevelopmentVersion(join(REPO, 'nowhere'))).toBeUndefined();
   });
 
   it('plays a plugin of Escouade’s own with --first-party, from the app’s repository alone (ESC-314)', () => {
@@ -543,6 +563,39 @@ describe.runIf(real)('the bench in a real container', () => {
 
 // A `run.js` plugin (ESC-324): its bundle compiled again by this machine's escouade-plugin (here the fake one, which
 // compiles as the fake store's module was made), its module compared, then played in the WASM host without a container.
+describe('the first party, reviewed before its release (ESC-343)', () => {
+  const benchIn = (): Partial<ReviewOptions> => ({
+    bench: { engine: { program: process.execPath, prefix: [ENGINE] }, cli: '/opt/escouade-plugin', image: 'img', timeout: 30_000 },
+    development: '2.2.0',
+  });
+
+  it('is played as the version under development, and the report says so', async () => {
+    const log = join(root, 'first-party-engine.log');
+    process.env.FAKE_ENGINE_LOG = log;
+    try {
+      const done = await review(options('dev.escouade.discord@1.1.0', benchIn()));
+      const args = JSON.parse(readFileSync(log, 'utf8').trim().split('\n')[0]!) as string[];
+      expect(args.slice(-3)).toEqual(['--first-party', '--escouade', '2.2.0']);
+      expect(done.data.bench).toMatchObject({ played: true, development: true, escouade: '2.2.0' });
+      expect(readFileSync(done.report, 'utf8')).toContain('Joué comme Escouade 2.2.0, la version en développement');
+    } finally {
+      delete process.env.FAKE_ENGINE_LOG;
+    }
+  });
+
+  it('never for a third party in a container either', async () => {
+    const log = join(root, 'third-party-engine.log');
+    process.env.FAKE_ENGINE_LOG = log;
+    try {
+      const done = await review(options('dev.exemple.team-rules@1.0.0', benchIn()));
+      expect(done.data.bench).toMatchObject({ played: true });
+      expect(readFileSync(log, 'utf8')).not.toContain('--escouade');
+    } finally {
+      delete process.env.FAKE_ENGINE_LOG;
+    }
+  });
+});
+
 describe('a run.js plugin', () => {
   const FAKE_CLI = join(here, '../fake/fake-escouade-plugin.mjs');
   const compile = sandboxedCompiler({ command: [process.execPath, FAKE_CLI], isolation: 'none' });
@@ -604,6 +657,16 @@ describe('a run.js plugin', () => {
     expect(done.data.bench).toBeUndefined();
     expect(proposed(done.data).verdict).toBe('Refuser');
     expect(readFileSync(done.report, 'utf8')).toContain('Verdict proposé : **Refuser**');
+  });
+
+  it('plays a third party as this machine’s tool, whatever the version under development, and says it (ESC-343)', async () => {
+    const done = await review(options('dev.exemple.rules-js@1.0.0', withWasm({ development: '2.2.0' })));
+    const ran = JSON.parse(readFileSync(join(done.data.work!, 'plugin.wasm.args.json'), 'utf8')) as string[];
+    expect(ran).not.toContain('--escouade');
+    expect(done.data.bench).toMatchObject({ played: true, escouade: '2.1.2' });
+    expect(done.data.bench).not.toHaveProperty('development');
+    const md = readFileSync(done.report, 'utf8');
+    expect(md).toContain('Joué comme Escouade 2.1.2, la version de l’outil du poste.');
   });
 
   it('says the recompilation was not done: another escouade-plugin, or none here', async () => {

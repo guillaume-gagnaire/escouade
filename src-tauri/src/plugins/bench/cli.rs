@@ -5,8 +5,8 @@
 
 use super::fake::{Reply, Seen, Session};
 use super::{decision_request, fact, program_of, run, Options, Program};
-use crate::i18n::Lang;
-use crate::plugins::manifest::{self, Manifest};
+
+use crate::plugins::manifest::Manifest;
 use crate::plugins::runtime::{timeout_of, PROTOCOL};
 use escouade_plugin_cli::cli::{self, read_manifest, usage, Call};
 use serde_json::{json, Value};
@@ -68,7 +68,13 @@ fn host(call: &Call) -> i32 {
             }
         }
     }
-    rt.block_on(dev(folder, lang, secrets, hand))
+    let o = Options {
+        lang,
+        hand,
+        app_version: call.app_version.to_string(),
+        ..Options::default()
+    };
+    rt.block_on(dev(folder, &o, secrets))
 }
 
 /// `[json]` after a command's words: an object, or nothing.
@@ -123,9 +129,10 @@ async fn begin(
     folder: &Path,
     m: &Manifest,
     program: &Program,
+    o: &Options,
     secrets: &HashMap<String, String>,
 ) -> Option<Session> {
-    let s = match program.start(folder, m, &Options::default(), secrets.clone(), None) {
+    let s = match program.start(folder, m, o, secrets.clone(), None) {
         Ok(s) => s,
         Err(e) => {
             eprintln!("{}: {e}", program.path().display());
@@ -142,22 +149,23 @@ async fn begin(
             println!("{}", show_seen(&x));
         }
     });
-    let hello = Session::hello(m, env!("CARGO_PKG_VERSION"), PROTOCOL);
+    let hello = Session::hello(m, &o.app_version, PROTOCOL);
     println!("→ initialize");
     let reply = s.call("initialize", &hello, timeout_of("initialize")).await;
     println!("{}", show(&reply));
     Some(s)
 }
 
-async fn dev(
-    folder: &Path,
-    lang: Lang,
-    secrets: HashMap<String, String>,
-    hand: manifest::Hand,
-) -> i32 {
-    let Some(m) = read_manifest(folder, lang, hand) else {
+async fn dev(folder: &Path, o: &Options, secrets: HashMap<String, String>) -> i32 {
+    let lang = o.lang;
+    let Some(m) = read_manifest(folder, lang, o.hand) else {
         return 1;
     };
+    // As Escouade would: not a plugin of another version's range (`--escouade` plays another).
+    if let Some(why) = m.refusal(&o.app_version, lang) {
+        eprintln!("✗ {why}");
+        return 1;
+    }
     if m.run.is_none() {
         eprintln!(
             "{}",
@@ -169,12 +177,7 @@ async fn dev(
         );
         return 1;
     }
-    let o = Options {
-        lang,
-        hand,
-        ..Options::default()
-    };
-    let program = match program_of(folder, &m, &o) {
+    let program = match program_of(folder, &m, o) {
         Ok(p) => p,
         Err((said, missing)) => {
             eprintln!("✗ {said}");
@@ -184,7 +187,7 @@ async fn dev(
             return 1;
         }
     };
-    let Some(mut s) = begin(folder, &m, &program, &secrets).await else {
+    let Some(mut s) = begin(folder, &m, &program, o, &secrets).await else {
         return 1;
     };
     // What is typed, read off the runtime's threads.
@@ -211,7 +214,7 @@ async fn dev(
             "restart" => {
                 s.kill();
                 s.wait_end(Duration::from_secs(5)).await;
-                match begin(folder, &m, &program, &secrets).await {
+                match begin(folder, &m, &program, o, &secrets).await {
                     Some(n) => s = n,
                     None => return 1,
                 }

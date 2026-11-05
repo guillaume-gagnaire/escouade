@@ -1,8 +1,10 @@
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_IMAGE, DEFAULT_TIMEOUT, findCli, findEngine, findLocalCli, localCommand } from './bench';
+import { DEFAULT_IMAGE, DEFAULT_TIMEOUT, findCli, findEngine, findLocalCli, localCommand, readDevelopmentVersion } from './bench';
 import { sandboxedCompiler } from '../../server/utils/compile';
+import { firstPartyRepo } from '../../server/utils/config';
+import { engineFolder, engineHelp } from './engine';
 import { parseTarget, type Source } from './download';
 import { keysIn, readToken, revoke, saveToken, sendReport, signingKey, signVersion, workDir, type Admin } from './admin';
 import { review } from './review';
@@ -38,6 +40,10 @@ const USAGE = `npm run plugin-review -- <id>@<version> [--since <version>]
   compare l'empreinte du module (un écart : « Refuser »), prépare les pistes, passe le banc (dans un conteneur sans
   réseau ; le module d'un plugin run.js dans l'hôte WASM, hors ligne), fait le diff avec la dernière version vérifiée
   (ou --since), et écrit le rapport dans ~/.escouade-review/<id>/<version>.md.
+  La première main (dev.escouade.*) est jouée comme la version en développement (NEXT de website/app/data/site.ts) : elle
+  est signée avant sa release. Un tiers est toujours joué comme l'outil du poste ; le rapport dit la version jouée.
+  Sans le bon escouade-js dans escouade-plugin, la revue le récupère de la CI de main (gh run download, empreinte de
+  version.json vérifiée) dans src-tauri/escouade-js/target/ ; reste \`cargo build\`.
 
   report : envoie le rapport à la file du store (les administrateurs seuls le lisent).
   sign : après ta décision « Vérifier » (et, pour un plugin run.js, une recompilation à la même empreinte), signe version.json avec la clé du store (minisign demande son mot de
@@ -81,6 +87,8 @@ async function main(argv: string[]): Promise<number> {
     compile: local
       ? sandboxedCompiler({ command: localCommand(local), javy: env.ESCOUADE_JAVY, data: join(reports, '.escouade-plugin') })
       : null,
+    engine: (sha256) => engineHelp(sha256, engineFolder(repo), firstPartyRepo(env)),
+    development: readDevelopmentVersion(repo),
     repo,
   });
   const d = done.data;

@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -66,6 +66,10 @@ export type BenchResult =
       where?: 'container' | 'wasm';
       /** What came out when the bench did not answer its JSON (a crash, the time out). */
       raw?: string;
+      /** The version of Escouade it was played as, as the bench says it. */
+      escouade?: string;
+      /** It was played as the version under development, by `--escouade`: a first-party plugin, never a third party's. */
+      development?: boolean;
     };
 
 // Named in full (podman refuses a short name where no registry is set for it); Debian 13, whose glibc (2.41) runs the
@@ -149,8 +153,36 @@ export function firstPartyBench(id: string, repository: string, env: Env = proce
   return id.startsWith(RESERVED_PREFIX) && repo === firstPartyRepo(env).toLowerCase();
 }
 
+/**
+ * The version of Escouade under development (ESC-343): `NEXT` of the site, the version the roadmap announces, whose test
+ * fails once it is out. The first-party plugins need it before it exists: the chief publishes and signs them, the
+ * release comes after (docs/PLUGINS.md §8.7).
+ */
+export function developmentVersion(site: string): string | undefined {
+  const next = /^export const NEXT = '(\d+\.\d+)(\.\d+)?';/m.exec(site);
+  return next ? `${next[1]}${next[2] ?? '.0'}` : undefined;
+}
+
+/** `developmentVersion` of this repository; none when the site's file is not there. */
+export function readDevelopmentVersion(repo: string): string | undefined {
+  try {
+    return developmentVersion(readFileSync(join(repo, 'website', 'app', 'data', 'site.ts'), 'utf8'));
+  } catch {
+    return undefined;
+  }
+}
+
+/** The version the bench is asked to play: the one under development for a first-party plugin; a third party's, none. */
+export const playedAs = (firstParty: boolean, development?: string) => (firstParty ? development : undefined);
+
+/** What a bench is told of the plugin's hand; `--escouade` never goes without `--first-party`. */
+function handArgs(firstParty: boolean, development?: string): string[] {
+  const as = playedAs(firstParty, development);
+  return [...(firstParty ? ['--first-party'] : []), ...(as ? ['--escouade', as] : [])];
+}
+
 /** The arguments of `<engine> run`, every limit of the sandbox in them. */
-export function runArgs(folder: string, cli: string, image: string, name: string, firstParty = false): string[] {
+export function runArgs(folder: string, cli: string, image: string, name: string, firstParty = false, development?: string): string[] {
   return [
     'run',
     '--rm',
@@ -179,7 +211,7 @@ export function runArgs(folder: string, cli: string, image: string, name: string
     '--json',
     '--lang',
     'fr',
-    ...(firstParty ? ['--first-party'] : []),
+    ...handArgs(firstParty, development),
   ];
 }
 
@@ -195,8 +227,8 @@ export function refusals(seen: Seen[], raw = ''): string[] {
 }
 
 /** The arguments of the local `escouade-plugin` that plays a `run.js` plugin's module, offline. */
-export function wasmArgs(folder: string, module: string, firstParty = false): string[] {
-  return ['test', folder, '--wasm', module, '--offline', '--json', '--lang', 'fr', ...(firstParty ? ['--first-party'] : [])];
+export function wasmArgs(folder: string, module: string, firstParty = false, development?: string): string[] {
+  return ['test', folder, '--wasm', module, '--offline', '--json', '--lang', 'fr', ...handArgs(firstParty, development)];
 }
 
 /**
@@ -204,14 +236,20 @@ export function wasmArgs(folder: string, module: string, firstParty = false): st
  * app's WASM host, offline, without a container; in an environment of its own (none of the review's variables, the
  * administration token among them).
  */
-export async function playWasm(setup: BenchSetup, folder: string, module: string, firstParty = false): Promise<BenchResult> {
+export async function playWasm(
+  setup: BenchSetup,
+  folder: string,
+  module: string,
+  firstParty = false,
+  development?: string,
+): Promise<BenchResult> {
   if (!setup.local)
     return {
       played: false,
       why: 'pas d’`escouade-plugin` sur ce poste pour jouer le module WASM (ESCOUADE_PLUGIN, le PATH ou src-tauri/target)',
     };
   const [program, ...before] = localCommand(setup.local);
-  const args = wasmArgs(folder, module, firstParty);
+  const args = wasmArgs(folder, module, firstParty, development);
   const home = mkdtempSync(join(tmpdir(), 'escouade-review-bench-'));
   const env: NodeJS.ProcessEnv = { PATH: process.env.PATH, HOME: home, TMPDIR: home, LANG: 'C.UTF-8' };
   if (process.platform === 'win32') {
@@ -220,14 +258,20 @@ export async function playWasm(setup: BenchSetup, folder: string, module: string
   }
   try {
     const out = await spawnBench(program!, [...before, ...args], setup.timeout, env);
-    return withWhere(readBench(out, `escouade-plugin ${args.join(' ')}`, setup.timeout), 'wasm');
+    return withWhere(readBench(out, `escouade-plugin ${args.join(' ')}`, setup.timeout), 'wasm', playedAs(firstParty, development));
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
 }
 
 /** Plays the bench on `folder` in a container; the result says why when it was not played. */
-export async function playBench(setup: BenchSetup, folder: string, why?: string, firstParty = false): Promise<BenchResult> {
+export async function playBench(
+  setup: BenchSetup,
+  folder: string,
+  why?: string,
+  firstParty = false,
+  development?: string,
+): Promise<BenchResult> {
   if (!setup.engine) return { played: false, why: why ?? 'aucun moteur de conteneur' };
   if (!setup.cli)
     return {
@@ -235,16 +279,18 @@ export async function playBench(setup: BenchSetup, folder: string, why?: string,
       why: 'pas d’`escouade-plugin` pour Linux à mettre dans le conteneur (ESCOUADE_PLUGIN_LINUX : le binaire Linux x64, de l’AppImage ou de `cargo build --bin escouade-plugin` sous Linux)',
     };
   const name = `escouade-review-${randomBytes(6).toString('hex')}`;
-  const args = runArgs(folder, setup.cli, setup.image, name, firstParty);
+  const args = runArgs(folder, setup.cli, setup.image, name, firstParty, development);
   const { program, prefix = [] } = setup.engine;
   const command = [program, ...args].join(' ');
   const out = await spawnBench(program, [...prefix, ...args], setup.timeout, undefined, () => {
     spawnSync(program, [...prefix, 'kill', name], { timeout: 20_000 });
   });
-  return withWhere(readBench(out, command, setup.timeout), 'container');
+  return withWhere(readBench(out, command, setup.timeout), 'container', playedAs(firstParty, development));
 }
 
-const withWhere = (r: BenchResult, where: 'container' | 'wasm'): BenchResult => (r.played ? { ...r, where } : r);
+/** Where it ran, and the version it was asked to play: the bench's own word, else this one. */
+const withWhere = (r: BenchResult, where: 'container' | 'wasm', as?: string): BenchResult =>
+  r.played ? { ...r, where, ...(as ? { development: true, escouade: r.escouade ?? as } : {}) } : r;
 
 interface Ran {
   code: number | null;
@@ -281,7 +327,7 @@ function spawnBench(program: string, args: string[], timeout: number, env?: Node
 /** What the bench answered: its report, or what came out when it gave none. */
 function readBench(out: Ran, command: string, timeout: number): BenchResult {
   const raw = `${out.stdout}\n${out.stderr}`.trim();
-  type Answer = { outcomes?: BenchOutcome[]; seen?: Seen[] } | null;
+  type Answer = { outcomes?: BenchOutcome[]; seen?: Seen[]; escouade?: string } | null;
   let report: Answer;
   try {
     report = JSON.parse(out.stdout) as Answer;
@@ -310,5 +356,6 @@ function readBench(out: Ran, command: string, timeout: number): BenchResult {
     seen,
     refused: refusals(seen, [out.stderr, ...report.outcomes.map((o) => o.said)].join('\n')),
     command,
+    ...(report.escouade ? { escouade: report.escouade } : {}),
   };
 }

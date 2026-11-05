@@ -424,3 +424,59 @@ fn validate_judges_a_plugin_for_the_version_of_escouade_it_is_given() {
     assert_eq!(validate("2.1.2"), 1, "the 2.1 does not serve WASM");
     assert_eq!(validate(crate::plugins::wasm::SERVED_SINCE), 0);
 }
+
+/// ESC-343: `test --escouade <version>` plays the plugin as that version: its range and what `initialize` shows go by
+/// it, and the report names it. Without the option, the tool's own version, which refuses a range from a version to come.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_bench_plays_a_plugin_as_the_version_it_is_given() {
+    let dir = fake("as-a-version", &[]);
+    let path = dir.join("escouade-plugin.json");
+    let mut manifest: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    manifest["escouade"]["min"] = json!("2.2.0");
+    std::fs::write(&path, manifest.to_string()).unwrap();
+
+    let refused = run(&dir, &options()).await;
+    assert_eq!(verdict(&refused, Scenario::Manifest), Verdict::Fail);
+    assert!(said(&refused, Scenario::Manifest).contains("2.2.0"));
+    assert_eq!(refused.escouade, "2.1.1");
+
+    let o = Options {
+        app_version: "2.2.0".into(),
+        ..options()
+    };
+    let played = run(&dir, &o).await;
+    assert_eq!(verdict(&played, Scenario::Manifest), Verdict::Pass);
+    assert!(played.passed(), "{}", played.render(Lang::En));
+    assert_eq!(played.escouade, "2.2.0");
+
+    let m = crate::plugins::manifest::read(
+        &std::fs::read_to_string(&path).unwrap(),
+        crate::plugins::manifest::Hand::Third,
+    )
+    .manifest
+    .ok()
+    .unwrap();
+    let hello = crate::plugins::bench::fake::Session::hello(&m, &o.app_version, 1);
+    assert_eq!(hello["escouade"]["version"], "2.2.0");
+}
+
+/// ESC-343: `dev` plays the same way (standard input ends at once: `shutdown`, then the end). A range from far ahead
+/// is refused as this tool, and taken with `--escouade`.
+#[test]
+fn the_fake_escouade_plays_a_plugin_as_the_version_it_is_given() {
+    let dir = fake("dev-as-a-version", &[]);
+    let path = dir.join("escouade-plugin.json");
+    let mut manifest: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    manifest["escouade"]["min"] = json!("99.0.0");
+    std::fs::write(&path, manifest.to_string()).unwrap();
+    let folder = dir.to_string_lossy().into_owned();
+    let dev = |more: &[&str]| {
+        let mut a: Vec<String> = vec!["dev".into(), folder.clone()];
+        a.extend(more.iter().map(|s| s.to_string()));
+        cli::main(a)
+    };
+    assert_eq!(dev(&[]), 1);
+    assert_eq!(dev(&["--escouade", "99.0.0"]), 0);
+}
