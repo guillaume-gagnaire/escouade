@@ -98,18 +98,26 @@ export interface Manifest {
   id: string;
   /** An SPDX identifier (`MIT`). */
   license?: string;
-  /** What a plugin in WASM asks of `net/fetch` above the 10 s and the 1 MiB of a call; Escouade caps them at 120 s and 32 MiB. */
+  /** What a plugin in WASM asks for beyond the host's defaults; Escouade caps them at 120 s and 32 MiB for `net/fetch`, 4 MiB for `fs/read`. */
   limits?: {
     fetchBytes?: number;
     fetchSeconds?: number;
+    /** How much `fs/read` gives at most: 256 KiB without it. */
+    fileBytes?: number;
   };
   /** One text, or a text by language (`en` first, then `fr`). */
   name: string | Record<string, string>;
   /** What it asks for, shown before it is installed. */
   permissions?: {
+    /** The programs it may run (`proc/spawn`): a program's name, never a path, then its arguments, word for word. A last word `*` lets any more follow. */
     commands?: string[];
     decide?: boolean;
     events?: string[];
+    /** The folders it may read or write (`fs/*`): a root of the closed list, which the host resolves; no path of its own. `plugin` is read only. */
+    files?: Array<{
+      access: 'read' | 'write';
+      root: 'plugin' | 'agent' | 'agentRepo' | 'agentHome' | 'temp';
+    }>;
     network?: string[];
     secrets?: string[];
   };

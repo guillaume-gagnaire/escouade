@@ -25,7 +25,9 @@ export interface ManifestError {
     | 'small'
     | 'network'
     | 'exclusive'
-    | 'cargo';
+    | 'cargo'
+    | 'command'
+    | 'readOnly';
   /** The type, or the values, the field takes, for `type` and `enum`. */
   expected?: string;
 }
@@ -34,6 +36,9 @@ export interface ManifestError {
 export function writtenHost(url: string): string | null;
 /** Whether `permissions.network` covers `host`: itself, or `*.domain` for its subdomains (not the domain itself). */
 export function hostCovered(host: string, network: string[]): boolean;
+export const FILE_ROOTS: string[];
+export const FILE_ACCESS: string[];
+export function commandHolds(command: string): boolean;
 
 export interface Validation {
   ok: boolean;

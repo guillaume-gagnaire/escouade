@@ -1,11 +1,23 @@
-//! `files/read` (ESC-321, WASM-2): a file of the plugin's own folder, as text, for the SDK's `p.file(path)`, served
-//! the same to a plugin in WASM and to a process (schemas/plugin-protocol-1.json).
+//! The files a plugin reaches through its host.
 //!
-//! Only inside the folder: a relative path, `/` between its parts, no `..`, nothing hidden (`.env`, `.git`), not the
-//! manifest; and, links followed, still inside the folder. 256 KiB at most, UTF-8.
+//! - `files/read` (ESC-321, WASM-2): a file of the plugin's own folder, as text, for the SDK's `p.file(path)`, served the
+//!   same to a plugin in WASM and to a process (schemas/plugin-protocol-1.json). Only inside the folder: a relative path,
+//!   `/` between its parts, no `..`, nothing hidden (`.env`, `.git`), not the manifest; and, links followed, still inside
+//!   the folder. 256 KiB at most, UTF-8.
+//! - `fs/read`, `fs/write`, `fs/stat`, `fs/list`, `fs/canon` (ESC-333, docs/PLUGINS.md §8.4.6): what a plugin in WASM
+//!   reads and writes of its agents' folders, by [`Access`]. It names a root of `permissions.files`, a closed list the
+//!   core resolves, and never gets a folder of its own choice: the path, its links followed, must lie under a root of
+//!   that very agent, out of the agent's fence (« Projet privé »), whatever the plugin's code says. Each write and each
+//!   refusal goes to its journal.
 
-use serde_json::Value;
-use std::path::Path;
+use super::journal::Kind;
+use super::manifest::{FileAccess, Manifest};
+use base64::Engine as _;
+use parking_lot::Mutex;
+use serde_json::{json, Value};
+use std::collections::BTreeMap;
+use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
 
 /// A path the plugin may not read: outside its folder, hidden, its manifest (as `net/fetch`'s refusals).
 pub const REFUSED: i64 = -32003;
@@ -15,6 +27,11 @@ pub const FAILED: i64 = -32004;
 pub const NOT_FOUND: i64 = -32005;
 /// The most a file may hold.
 pub const FILE_BYTES: u64 = 256 << 10;
+/// The most `fs/read` gives: its default, and its ceiling whatever `limits.fileBytes` says; `fs/write` takes as much.
+pub const READ_BYTES: u64 = 256 << 10;
+pub const MOST_BYTES: u64 = 4 << 20;
+/// The most entries `fs/list` gives.
+const LIST_ENTRIES: usize = 4096;
 
 /// `{ path }` → the file's text, or why not.
 pub fn read(folder: &Path, params: &Value) -> Result<Value, (i64, String)> {
@@ -78,10 +95,421 @@ fn parts_of(path: &str) -> Option<Vec<&str>> {
         .then_some(parts)
 }
 
+// ---- fs/* ------------------------------------------------------------------------------------------------------
+
+/// Where an agent lives, as the core resolved it: what `fs/*` and `proc/spawn` take for the agent named by a plugin. The
+/// plugin is told its roots by `agent/attach`, and can change none of it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AgentPlace {
+    /// Its folder.
+    pub cwd: PathBuf,
+    /// The repository of its worktree; its folder when it has none.
+    pub repo: Option<PathBuf>,
+    /// The folder of its account.
+    pub home: Option<PathBuf>,
+    /// What « Projet privé » refuses it.
+    pub fence: crate::fence::Fence,
+    /// Its project.
+    pub project: String,
+}
+
+impl AgentPlace {
+    /// Its folder for the root `root`.
+    fn root(&self, root: &str) -> Option<&Path> {
+        match root {
+            "agent" => Some(&self.cwd),
+            "agentRepo" => self.repo.as_deref(),
+            "agentHome" => self.home.as_deref(),
+            _ => None,
+        }
+    }
+}
+
+/// The agents a plugin was given, by the key of `agent/attach`.
+pub type Agents = Arc<Mutex<BTreeMap<String, AgentPlace>>>;
+
+/// The repository `cwd` is a worktree of, or the one it is in: the folder that holds the real `.git`.
+pub fn repo_of(cwd: &Path) -> Option<PathBuf> {
+    let found = cwd.ancestors().find(|d| d.join(".git").exists())?;
+    let dot = found.join(".git");
+    if dot.is_dir() {
+        return Some(found.to_path_buf());
+    }
+    // A worktree: `gitdir: <repository>/.git/worktrees/<name>`, absolute or relative to it.
+    let text = std::fs::read_to_string(&dot).ok()?;
+    let gitdir = found.join(text.strip_prefix("gitdir:")?.trim());
+    let common = match std::fs::read_to_string(gitdir.join("commondir")) {
+        Ok(c) => gitdir.join(c.trim()),
+        Err(_) => gitdir,
+    };
+    std::fs::canonicalize(common)
+        .ok()?
+        .parent()
+        .map(Path::to_path_buf)
+}
+
+/// How a file of a plugin is named, as `fs/*` take it.
+struct Asked<'a> {
+    /// The path as it was given, for the journal.
+    path: &'a str,
+    root: Option<&'a str>,
+    agent: Option<&'a str>,
+}
+
+/// What a plugin may reach by `fs/*`.
+pub struct Access {
+    declared: Vec<FileAccess>,
+    folder: PathBuf,
+    temp: PathBuf,
+    read_bytes: u64,
+    agents: Agents,
+}
+
+impl Access {
+    /// What `manifest` (its permissions as they are granted) reaches; `temp` is a folder of its own, made when it is
+    /// first used.
+    pub fn new(manifest: &Manifest, folder: &Path, temp: PathBuf, agents: Agents) -> Self {
+        Self {
+            declared: manifest.permissions.files.clone(),
+            folder: folder.to_path_buf(),
+            temp,
+            read_bytes: manifest
+                .limits
+                .file_bytes
+                .map_or(READ_BYTES, |n| n.min(MOST_BYTES)),
+            agents,
+        }
+    }
+
+    /// The roots `place` gives the plugin, what `agent/attach` tells it: those it declares, and that exist for this agent.
+    pub fn roots_of(&self, place: &AgentPlace) -> BTreeMap<String, String> {
+        self.declared
+            .iter()
+            .filter_map(|f| {
+                let path = match f.root.as_str() {
+                    "plugin" => self.folder.clone(),
+                    "temp" => self.temp.clone(),
+                    root => place.root(root)?.to_path_buf(),
+                };
+                Some((f.root.clone(), path.to_string_lossy().into_owned()))
+            })
+            .collect()
+    }
+
+    /// Serves `fs/<method>`. What it wrote, and any refusal, is said by `told`.
+    pub fn serve(
+        &self,
+        method: &str,
+        params: &Value,
+        told: &dyn Fn(Kind, &str),
+    ) -> Result<Value, (i64, String)> {
+        let r = match method {
+            "fs/read" => self.read(params),
+            "fs/write" => self.write(params).inspect(|w| {
+                told(
+                    Kind::Message,
+                    &format!("fs/write{}: wrote {} bytes", root_of(params), w["bytes"]),
+                );
+            }),
+            "fs/stat" => self.stat(params),
+            "fs/list" => self.list(params),
+            "fs/canon" => self.canon(params),
+            _ => {
+                return Err((
+                    super::runtime::METHOD_NOT_FOUND,
+                    format!("unknown method {method}"),
+                ))
+            }
+        };
+        r.inspect_err(|(code, message)| {
+            if *code == REFUSED {
+                // The path stays out of it, as a query stays out of `net/fetch`'s.
+                let path = params.get("path").and_then(Value::as_str).unwrap_or("");
+                let why = message.replace(&format!("{path:?}"), "the path");
+                told(
+                    Kind::Refused,
+                    &format!("{method}{}: refused, {why}", root_of(params)),
+                );
+            }
+        })
+    }
+
+    fn asked<'a>(&self, params: &'a Value) -> Result<Asked<'a>, (i64, String)> {
+        let path = params.get("path").and_then(Value::as_str).ok_or_else(|| {
+            (
+                super::runtime::INVALID_PARAMS,
+                "fs/* takes a path".to_string(),
+            )
+        })?;
+        Ok(Asked {
+            path,
+            root: params.get("root").and_then(Value::as_str),
+            agent: params.get("agent").and_then(Value::as_str),
+        })
+    }
+
+    /// The folders the plugin may reach for `asked`, real (links followed), and the agent's fence.
+    fn folders(
+        &self,
+        asked: &Asked,
+        writing: bool,
+    ) -> Result<(Vec<PathBuf>, crate::fence::Fence), (i64, String)> {
+        let refused = |why: String| (REFUSED, why);
+        let place =
+            match asked.agent {
+                Some(key) => Some(self.agents.lock().get(key).cloned().ok_or_else(|| {
+                    refused(format!("no agent {key:?} was given to this plugin"))
+                })?),
+                None => None,
+            };
+        if self.declared.is_empty() {
+            return Err(refused(
+                "this plugin declares no folder (permissions.files)".into(),
+            ));
+        }
+        let mut folders = Vec::new();
+        for f in &self.declared {
+            if asked.root.is_some_and(|r| r != f.root) {
+                continue;
+            }
+            let folder = match f.root.as_str() {
+                "plugin" => self.folder.clone(),
+                "temp" => {
+                    let _ = std::fs::create_dir_all(&self.temp);
+                    self.temp.clone()
+                }
+                root => match place.as_ref().and_then(|p| p.root(root)) {
+                    Some(folder) => folder.to_path_buf(),
+                    None => continue,
+                },
+            };
+            if writing && !f.writes() {
+                continue;
+            }
+            // A root that is gone reaches nothing.
+            if let Ok(real) = std::fs::canonicalize(folder) {
+                folders.push(real);
+            }
+        }
+        if folders.is_empty() {
+            return Err(refused(match (asked.root, asked.agent) {
+                (Some(root), _) if !self.declared.iter().any(|f| f.root == root) => {
+                    format!("{root} is not in permissions.files")
+                }
+                (_, None) if !writing => "it names no agent, and no root of its own".to_string(),
+                _ if writing => format!("{:?}: it may not write there", asked.path),
+                _ => format!("{:?}: no such root for this agent", asked.path),
+            }));
+        }
+        Ok((folders, place.map(|p| p.fence).unwrap_or_default()))
+    }
+
+    /// The real path of what `params` names, links followed as far as it exists: under a root of that agent, out of its
+    /// fence, or refused, before anything says whether it exists. With what is left of it to make (`fs/write`).
+    fn real(&self, params: &Value, writing: bool) -> Result<PathBuf, (i64, String)> {
+        let asked = self.asked(params)?;
+        let (folders, fence) = self.folders(&asked, writing)?;
+        let refused = |why: &str| (REFUSED, format!("{:?} {why}", asked.path));
+        let named = named_path(asked.path).ok_or_else(|| refused("is no path of a root"))?;
+        let path = if named.is_absolute() {
+            if asked.root.is_some() {
+                return Err(refused("is not relative to its root"));
+            }
+            named
+        } else {
+            match (asked.root, folders.as_slice()) {
+                (Some(_), [folder]) => folder.join(named),
+                _ => return Err(refused("is relative, and names no root")),
+            }
+        };
+        let real = resolved(&path).ok_or_else(|| refused("is a link that leads nowhere"))?;
+        if !folders.iter().any(|f| real.starts_with(f)) {
+            return Err(refused("leads out of the plugin's folders"));
+        }
+        if fence.covers(&real.to_string_lossy()) {
+            return Err(refused("is refused to this agent (« Projet privé »)"));
+        }
+        Ok(real)
+    }
+
+    /// `{ agent?, root?, path }` → `{ text }`, or `{ dataBase64 }` when it is not UTF-8.
+    fn read(&self, params: &Value) -> Result<Value, (i64, String)> {
+        let real = self.real(params, false)?;
+        let at = real.display();
+        let meta = std::fs::metadata(&real).map_err(|_| absent(&real))?;
+        if !meta.is_file() {
+            return Err(absent(&real));
+        }
+        if meta.len() > self.read_bytes {
+            return Err((
+                FAILED,
+                format!("{at} is over {} KiB", self.read_bytes >> 10),
+            ));
+        }
+        let bytes = std::fs::read(&real).map_err(|e| (FAILED, format!("{at}: {e}")))?;
+        Ok(match String::from_utf8(bytes) {
+            Ok(text) => json!({ "text": text }),
+            Err(e) => json!({
+                "dataBase64": base64::engine::general_purpose::STANDARD.encode(e.as_bytes()),
+            }),
+        })
+    }
+
+    /// `{ agent?, root?, path, text | dataBase64, append? }` → `{ path, bytes }`; the folders it needs are made.
+    fn write(&self, params: &Value) -> Result<Value, (i64, String)> {
+        let bytes =
+            match (params.get("text"), params.get("dataBase64")) {
+                (Some(Value::String(t)), None) => t.clone().into_bytes(),
+                (None, Some(Value::String(b))) => base64::engine::general_purpose::STANDARD
+                    .decode(b)
+                    .map_err(|e| (super::runtime::INVALID_PARAMS, format!("dataBase64: {e}")))?,
+                _ => {
+                    return Err((
+                        super::runtime::INVALID_PARAMS,
+                        "fs/write takes text or dataBase64".into(),
+                    ))
+                }
+            };
+        if bytes.len() as u64 > MOST_BYTES {
+            return Err((FAILED, "fs/write takes 4 MiB at most".into()));
+        }
+        let real = self.real(params, true)?;
+        let at = real.display();
+        let failed = |e: std::io::Error| (FAILED, format!("{at}: {e}"));
+        if let Some(parent) = real.parent() {
+            std::fs::create_dir_all(parent).map_err(failed)?;
+        }
+        if params.get("append").and_then(Value::as_bool) == Some(true) {
+            use std::io::Write as _;
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&real)
+                .and_then(|mut f| f.write_all(&bytes))
+                .map_err(failed)?;
+        } else {
+            std::fs::write(&real, &bytes).map_err(failed)?;
+        }
+        Ok(json!({ "path": plain(&real), "bytes": bytes.len() }))
+    }
+
+    /// `{ agent?, root?, path }` → `{ kind, bytes, modified }`: `modified` in milliseconds since 1970.
+    fn stat(&self, params: &Value) -> Result<Value, (i64, String)> {
+        let real = self.real(params, false)?;
+        let meta = std::fs::metadata(&real).map_err(|_| absent(&real))?;
+        let modified = meta
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_millis() as u64);
+        Ok(json!({ "kind": kind_of(&meta), "bytes": meta.len(), "modified": modified }))
+    }
+
+    /// `{ agent?, root?, path }` → `{ entries: [{ name, kind, bytes }], truncated }`, by name; a link is a `link`, not followed.
+    fn list(&self, params: &Value) -> Result<Value, (i64, String)> {
+        let real = self.real(params, false)?;
+        let dir = std::fs::read_dir(&real).map_err(|_| absent(&real))?;
+        let mut entries: Vec<(String, Value)> = dir
+            .flatten()
+            .map(|e| {
+                let name = e.file_name().to_string_lossy().into_owned();
+                let meta = std::fs::symlink_metadata(e.path());
+                let (kind, bytes) = meta.map_or(("other", 0), |m| {
+                    (
+                        if m.file_type().is_symlink() {
+                            "link"
+                        } else {
+                            kind_of(&m)
+                        },
+                        m.len(),
+                    )
+                });
+                let v = json!({ "name": name, "kind": kind, "bytes": bytes });
+                (name, v)
+            })
+            .collect();
+        entries.sort_by(|a, b| a.0.cmp(&b.0));
+        let truncated = entries.len() > LIST_ENTRIES;
+        entries.truncate(LIST_ENTRIES);
+        let entries: Vec<Value> = entries.into_iter().map(|(_, v)| v).collect();
+        Ok(json!({ "entries": entries, "truncated": truncated }))
+    }
+
+    /// `{ agent?, root?, path }` → `{ path }`: its real path, in the plain form a harness writes it.
+    fn canon(&self, params: &Value) -> Result<Value, (i64, String)> {
+        Ok(json!({ "path": plain(&self.real(params, false)?) }))
+    }
+}
+
+/// The root `params` names, as the journal says it.
+fn root_of(params: &Value) -> String {
+    params
+        .get("root")
+        .and_then(Value::as_str)
+        .map_or(String::new(), |r| format!(" {r}"))
+}
+
+fn absent(path: &Path) -> (i64, String) {
+    (NOT_FOUND, format!("no {}", path.display()))
+}
+
+fn kind_of(meta: &std::fs::Metadata) -> &'static str {
+    if meta.is_file() {
+        "file"
+    } else if meta.is_dir() {
+        "dir"
+    } else {
+        "other"
+    }
+}
+
+/// The form a harness writes a path in: without the `\\?\` of Windows.
+fn plain(path: &Path) -> String {
+    let text = path.to_string_lossy();
+    match text.strip_prefix(r"\\?\UNC\") {
+        Some(rest) => format!(r"\\{rest}"),
+        None => text.strip_prefix(r"\\?\").unwrap_or(&text).to_string(),
+    }
+}
+
+/// `path` as `fs/*` take it: no `..`, no `~`, no stream of an NTFS file (`a.txt:b`), nothing a string could hide.
+fn named_path(path: &str) -> Option<PathBuf> {
+    if path.is_empty() || path.contains('\0') || path.starts_with('~') {
+        return None;
+    }
+    let named = PathBuf::from(path);
+    named
+        .components()
+        .all(|c| match c {
+            Component::ParentDir => false,
+            Component::Normal(part) => !part.to_string_lossy().contains(':'),
+            _ => true,
+        })
+        .then_some(named)
+}
+
+/// `path`, its links followed as far as it exists: what is left of it is what `fs/write` would make. A link that leads
+/// nowhere gives none: writing through it would land where nothing was judged.
+fn resolved(path: &Path) -> Option<PathBuf> {
+    let mut rest: Vec<&std::ffi::OsStr> = Vec::new();
+    let mut at = path;
+    loop {
+        if std::fs::symlink_metadata(at).is_ok() {
+            let real = std::fs::canonicalize(at).ok()?;
+            return Some(rest.iter().rev().fold(real, |p, part| p.join(part)));
+        }
+        rest.push(at.file_name()?);
+        at = at.parent()?;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fence::Fence;
+    use crate::plugins::runtime::INVALID_PARAMS;
     use serde_json::json;
+    use std::cell::RefCell;
 
     fn folder() -> std::path::PathBuf {
         let base =
@@ -168,5 +596,422 @@ mod tests {
             read(&f, &json!({ "path": "in.json" })).unwrap(),
             json!(r#"{"a":1}"#)
         );
+    }
+
+    // ---- fs/* ----
+
+    /// A link at `link` to the folder `to`: a junction under Windows, which needs no right.
+    fn link_folder(to: &Path, link: &Path) {
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(to, link).unwrap();
+        #[cfg(windows)]
+        assert!(std::process::Command::new("cmd")
+            .args(["/c", "mklink", "/J"])
+            .arg(link)
+            .arg(to)
+            .stdout(std::process::Stdio::null())
+            .status()
+            .unwrap()
+            .success());
+    }
+
+    /// Two agents, and the folders around them.
+    struct Bed {
+        base: PathBuf,
+        access: Access,
+        told: RefCell<Vec<String>>,
+    }
+
+    impl Bed {
+        fn new(files: Value) -> Self {
+            Self::with(files, json!({}))
+        }
+
+        fn with(files: Value, limits: Value) -> Self {
+            let base =
+                std::env::temp_dir().join(format!("plugin-fs-{}", uuid::Uuid::new_v4().simple()));
+            for d in ["plugin", "wt/src", "repo", "home", "other", "fenced"] {
+                std::fs::create_dir_all(base.join(d)).unwrap();
+            }
+            let base = base.canonicalize().unwrap();
+            std::fs::write(base.join("plugin/words.txt"), "mots").unwrap();
+            std::fs::write(base.join("wt/src/a.txt"), "dans le worktree").unwrap();
+            std::fs::write(base.join("repo/HEAD.txt"), "du dépôt").unwrap();
+            std::fs::write(base.join("home/auth.json"), "{}").unwrap();
+            std::fs::write(base.join("other/b.txt"), "à un autre").unwrap();
+            std::fs::write(base.join("fenced/c.txt"), "privé").unwrap();
+            let manifest = crate::plugins::manifest::check(
+                &json!({
+                    "id": "dev.exemple.fichiers",
+                    "name": "Fichiers",
+                    "version": "1.0.0",
+                    "escouade": { "api": "1", "min": "2.2.0" },
+                    "permissions": { "files": files },
+                    "limits": limits,
+                }),
+                crate::plugins::manifest::Hand::Third,
+            )
+            .manifest
+            .expect("a manifest that holds");
+            let agents: Agents = Arc::default();
+            agents.lock().insert(
+                "a".into(),
+                AgentPlace {
+                    cwd: base.join("wt"),
+                    repo: Some(base.join("repo")),
+                    home: Some(base.join("home")),
+                    project: "p".into(),
+                    ..AgentPlace::default()
+                },
+            );
+            agents.lock().insert(
+                "b".into(),
+                AgentPlace {
+                    cwd: base.join("other"),
+                    ..AgentPlace::default()
+                },
+            );
+            let access = Access::new(&manifest, &base.join("plugin"), base.join("temp"), agents);
+            Bed {
+                base,
+                access,
+                told: RefCell::default(),
+            }
+        }
+
+        fn call(&self, method: &str, params: Value) -> Result<Value, (i64, String)> {
+            let told = |_: Kind, l: &str| self.told.borrow_mut().push(l.to_string());
+            self.access.serve(method, &params, &told)
+        }
+
+        fn refused(&self, method: &str, params: Value) {
+            let r = self.call(method, params.clone());
+            assert_eq!(
+                r.as_ref().err().map(|e| e.0),
+                Some(REFUSED),
+                "{params}: {r:?}"
+            );
+        }
+
+        fn path(&self, p: &str) -> String {
+            self.base.join(p).to_string_lossy().into_owned()
+        }
+    }
+
+    fn all_read() -> Value {
+        json!([
+            { "root": "plugin", "access": "read" },
+            { "root": "agent", "access": "read" },
+            { "root": "agentRepo", "access": "read" },
+            { "root": "agentHome", "access": "read" },
+            { "root": "temp", "access": "write" },
+        ])
+    }
+
+    #[test]
+    fn each_root_is_resolved_by_the_host_for_its_agent() {
+        let b = Bed::new(all_read());
+        let read = |agent: &str, root: &str, path: &str| {
+            b.call(
+                "fs/read",
+                json!({ "agent": agent, "root": root, "path": path }),
+            )
+            .unwrap()["text"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        assert_eq!(read("a", "agent", "src/a.txt"), "dans le worktree");
+        assert_eq!(read("a", "agentRepo", "HEAD.txt"), "du dépôt");
+        assert_eq!(read("a", "agentHome", "auth.json"), "{}");
+        assert_eq!(read("b", "agent", "b.txt"), "à un autre");
+        // The plugin's own folder and its temporary one need no agent.
+        assert_eq!(
+            b.call("fs/read", json!({ "root": "plugin", "path": "words.txt" }))
+                .unwrap()["text"],
+            "mots"
+        );
+        b.call(
+            "fs/write",
+            json!({ "root": "temp", "path": "n/x.txt", "text": "t" }),
+        )
+        .unwrap();
+        assert_eq!(
+            b.call("fs/read", json!({ "root": "temp", "path": "n/x.txt" }))
+                .unwrap()["text"],
+            "t"
+        );
+        // A path of the host, as a harness writes it, under a root of that agent.
+        let path = b.path("wt/src/a.txt");
+        assert_eq!(
+            b.call("fs/read", json!({ "agent": "a", "path": path }))
+                .unwrap()["text"],
+            "dans le worktree"
+        );
+    }
+
+    #[test]
+    fn the_agent_tells_its_roots_those_it_declares_only() {
+        let b = Bed::new(json!([{ "root": "agent", "access": "read" }]));
+        let place = b.access.agents.lock().get("a").cloned().unwrap();
+        let roots = b.access.roots_of(&place);
+        assert_eq!(
+            roots.keys().map(String::as_str).collect::<Vec<_>>(),
+            vec!["agent"]
+        );
+        assert_eq!(roots["agent"], b.path("wt"));
+    }
+
+    #[test]
+    fn a_path_of_another_agent_a_dotdot_or_a_free_path_is_refused_and_said() {
+        let b = Bed::new(all_read());
+        // Another agent's folder, for this agent.
+        b.refused(
+            "fs/read",
+            json!({ "agent": "a", "path": b.path("other/b.txt") }),
+        );
+        // `..`, under any spelling.
+        b.refused(
+            "fs/read",
+            json!({ "agent": "a", "root": "agent", "path": "../other/b.txt" }),
+        );
+        b.refused(
+            "fs/read",
+            json!({ "agent": "a", "root": "agent", "path": "src/../../other/b.txt" }),
+        );
+        b.refused(
+            "fs/read",
+            json!({ "agent": "a", "path": format!("{}/../other/b.txt", b.path("wt")) }),
+        );
+        // No `~`, no agent that was not given, no root of its own.
+        b.refused(
+            "fs/read",
+            json!({ "agent": "a", "root": "agent", "path": "~/.ssh/id_rsa" }),
+        );
+        b.refused(
+            "fs/read",
+            json!({ "agent": "z", "root": "agent", "path": "src/a.txt" }),
+        );
+        b.refused(
+            "fs/read",
+            json!({ "agent": "a", "root": "/", "path": "etc/passwd" }),
+        );
+        // An absolute path does not go with a root; a relative one needs it.
+        b.refused(
+            "fs/read",
+            json!({ "agent": "a", "root": "agent", "path": b.path("wt/src/a.txt") }),
+        );
+        b.refused("fs/read", json!({ "agent": "a", "path": "src/a.txt" }));
+        // Not even a word of what is out of reach: gone or there, the same refusal.
+        b.refused(
+            "fs/stat",
+            json!({ "agent": "a", "path": b.path("other/nothing.txt") }),
+        );
+        // A stream of an NTFS file is no path of a root.
+        b.refused(
+            "fs/read",
+            json!({ "agent": "a", "root": "agent", "path": "src/a.txt:hidden" }),
+        );
+        assert!(b.told.borrow().iter().all(|l| l.contains("refused")));
+        assert_eq!(b.told.borrow().len(), 11);
+        // Its method and its root: never the path it named.
+        assert!(
+            !b.told.borrow().iter().any(|l| l.contains("other")),
+            "{:?}",
+            b.told.borrow()
+        );
+    }
+
+    #[test]
+    fn a_link_that_leaves_its_root_is_refused_one_that_stays_is_followed() {
+        let b = Bed::new(all_read());
+        link_folder(&b.base.join("other"), &b.base.join("wt/out"));
+        link_folder(&b.base.join("wt/src"), &b.base.join("wt/inside"));
+        b.refused(
+            "fs/read",
+            json!({ "agent": "a", "root": "agent", "path": "out/b.txt" }),
+        );
+        b.refused(
+            "fs/list",
+            json!({ "agent": "a", "root": "agent", "path": "out" }),
+        );
+        assert_eq!(
+            b.call(
+                "fs/read",
+                json!({ "agent": "a", "root": "agent", "path": "inside/a.txt" })
+            )
+            .unwrap()["text"],
+            "dans le worktree"
+        );
+    }
+
+    #[test]
+    fn a_write_through_a_link_that_leaves_its_root_touches_nothing() {
+        let b = Bed::new(json!([{ "root": "agent", "access": "write" }]));
+        link_folder(&b.base.join("other"), &b.base.join("wt/out"));
+        b.refused(
+            "fs/write",
+            json!({ "agent": "a", "root": "agent", "path": "out/new/x.txt", "text": "x" }),
+        );
+        assert!(!b.base.join("other/new").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_that_leads_nowhere_is_refused_for_a_write() {
+        let b = Bed::new(json!([{ "root": "agent", "access": "write" }]));
+        std::os::unix::fs::symlink(b.base.join("other/new.txt"), b.base.join("wt/dangling"))
+            .unwrap();
+        b.refused(
+            "fs/write",
+            json!({ "agent": "a", "root": "agent", "path": "dangling", "text": "x" }),
+        );
+        assert!(!b.base.join("other/new.txt").exists());
+    }
+
+    #[test]
+    fn the_fence_of_a_private_project_is_held_by_the_host() {
+        let b = Bed::new(all_read());
+        // Its account's folder holds what another project left there: refused, whatever its root says.
+        b.access.agents.lock().get_mut("a").unwrap().fence = Fence::new(vec![b.base.join("home")]);
+        b.refused(
+            "fs/read",
+            json!({ "agent": "a", "root": "agentHome", "path": "auth.json" }),
+        );
+        // Through a link of its own folder too.
+        link_folder(&b.base.join("home"), &b.base.join("wt/account"));
+        b.refused(
+            "fs/read",
+            json!({ "agent": "a", "root": "agent", "path": "account/auth.json" }),
+        );
+    }
+
+    #[test]
+    fn writing_takes_a_root_in_write_and_each_write_is_said() {
+        let b = Bed::new(json!([
+            { "root": "agent", "access": "write" },
+            { "root": "agentHome", "access": "read" },
+        ]));
+        let w = b
+            .call(
+                "fs/write",
+                json!({ "agent": "a", "root": "agent", "path": "n/e/w.txt", "text": "un" }),
+            )
+            .unwrap();
+        assert_eq!(w["bytes"], 2);
+        b.call("fs/write", json!({ "agent": "a", "root": "agent", "path": "n/e/w.txt", "text": "+", "append": true }))
+            .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(b.base.join("wt/n/e/w.txt")).unwrap(),
+            "un+"
+        );
+        b.refused(
+            "fs/write",
+            json!({ "agent": "a", "root": "agentHome", "path": "auth.json", "text": "x" }),
+        );
+        assert_eq!(
+            std::fs::read_to_string(b.base.join("home/auth.json")).unwrap(),
+            "{}"
+        );
+        let told = b.told.borrow();
+        assert!(told[0].contains("wrote 2 bytes"), "{told:?}");
+        assert!(told[2].contains("refused"), "{told:?}");
+    }
+
+    #[test]
+    fn nothing_declared_nothing_reached() {
+        let b = Bed::new(json!([]));
+        b.refused(
+            "fs/read",
+            json!({ "agent": "a", "root": "agent", "path": "src/a.txt" }),
+        );
+        b.refused("fs/list", json!({ "root": "temp", "path": "." }));
+    }
+
+    #[test]
+    fn a_read_stops_at_256_kib_or_at_its_limit_and_never_past_4_mib() {
+        let b = Bed::new(json!([{ "root": "agent", "access": "read" }]));
+        std::fs::write(b.base.join("wt/big"), vec![b'x'; READ_BYTES as usize + 1]).unwrap();
+        let big = json!({ "agent": "a", "root": "agent", "path": "big" });
+        assert_eq!(b.call("fs/read", big.clone()).unwrap_err().0, FAILED);
+        let files = json!([{ "root": "agent", "access": "read" }]);
+        let b = Bed::with(files.clone(), json!({ "fileBytes": 1 << 19 }));
+        std::fs::write(b.base.join("wt/big"), vec![b'x'; READ_BYTES as usize + 1]).unwrap();
+        assert!(b.call("fs/read", big.clone()).is_ok());
+        let b = Bed::with(files, json!({ "fileBytes": 1 << 30 }));
+        std::fs::write(b.base.join("wt/big"), vec![b'x'; MOST_BYTES as usize + 1]).unwrap();
+        assert_eq!(b.call("fs/read", big).unwrap_err().0, FAILED);
+    }
+
+    #[test]
+    fn stat_list_and_canon_say_what_is_there() {
+        let b = Bed::new(all_read());
+        let at = |path: &str| json!({ "agent": "a", "root": "agent", "path": path });
+        let s = b.call("fs/stat", at("src/a.txt")).unwrap();
+        assert_eq!(s["kind"], "file");
+        assert_eq!(s["bytes"], "dans le worktree".len());
+        assert_eq!(b.call("fs/stat", at("src")).unwrap()["kind"], "dir");
+        assert_eq!(b.call("fs/stat", at("nothing")).unwrap_err().0, NOT_FOUND);
+        std::fs::create_dir_all(b.base.join("wt/d")).unwrap();
+        let names: Vec<String> = b.call("fs/list", at(".")).unwrap()["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| {
+                format!(
+                    "{} {}",
+                    e["name"].as_str().unwrap(),
+                    e["kind"].as_str().unwrap()
+                )
+            })
+            .collect();
+        assert_eq!(names, vec!["d dir", "src dir"]);
+        let canon = b.call("fs/canon", at("src/a.txt")).unwrap();
+        let path = canon["path"].as_str().unwrap();
+        assert!(!path.starts_with(r"\\?\"), "{path}");
+        assert!(Path::new(path).ends_with("wt/src/a.txt"), "{path}");
+    }
+
+    #[test]
+    fn a_file_that_is_no_text_comes_in_base64_and_a_write_takes_it_back() {
+        let b = Bed::new(json!([{ "root": "agent", "access": "write" }]));
+        std::fs::write(b.base.join("wt/bin"), [0xff, 0xfe, 0x00]).unwrap();
+        let r = b
+            .call(
+                "fs/read",
+                json!({ "agent": "a", "root": "agent", "path": "bin" }),
+            )
+            .unwrap();
+        let data = r["dataBase64"].as_str().unwrap();
+        b.call(
+            "fs/write",
+            json!({ "agent": "a", "root": "agent", "path": "copy", "dataBase64": data }),
+        )
+        .unwrap();
+        assert_eq!(
+            std::fs::read(b.base.join("wt/copy")).unwrap(),
+            [0xff, 0xfe, 0x00]
+        );
+        let bad = json!({ "agent": "a", "root": "agent", "path": "x" });
+        assert_eq!(b.call("fs/write", bad).unwrap_err().0, INVALID_PARAMS);
+    }
+
+    #[test]
+    fn the_repository_of_a_worktree_is_found_from_its_git_file() {
+        let base =
+            std::env::temp_dir().join(format!("plugin-repo-{}", uuid::Uuid::new_v4().simple()));
+        let repo = base.join("repo");
+        let gitdir = repo.join(".git/worktrees/wt");
+        std::fs::create_dir_all(&gitdir).unwrap();
+        std::fs::write(gitdir.join("commondir"), "../..\n").unwrap();
+        let wt = repo.join(".claude/worktrees/wt");
+        std::fs::create_dir_all(wt.join("deep")).unwrap();
+        std::fs::write(wt.join(".git"), "gitdir: ../../../.git/worktrees/wt\n").unwrap();
+        let real = std::fs::canonicalize(&repo).unwrap();
+        assert_eq!(repo_of(&wt), Some(real.clone()));
+        assert_eq!(repo_of(&wt.join("deep")), Some(real.clone()));
+        std::fs::write(wt.join(".git"), format!("gitdir: {}\n", gitdir.display())).unwrap();
+        assert_eq!(repo_of(&wt), Some(real));
+        assert_eq!(repo_of(&repo), Some(repo.clone()));
     }
 }

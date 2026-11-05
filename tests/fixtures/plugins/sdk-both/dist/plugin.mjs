@@ -21,11 +21,11 @@ var ERRORS = {
   notYours: -32001,
   /** The system's keychain cannot be reached. */
   keychain: -32002,
-  /** What the plugin may not reach: a host outside permissions.network, http, an address of the machine or of the local network (net/fetch); a path outside its folder, hidden, or its manifest (files/read). */
+  /** What the plugin may not reach: a host outside permissions.network, http, an address of the machine or of the local network (net/fetch); a path outside its folder, hidden, or its manifest (files/read); a path out of its roots (fs/*); a program, an argument, a folder or a variable it may not name (proc/spawn). A capability it does not declare says the same. */
   refused: -32003,
   /** A request that failed on the way: no answer within its delay, an answer or a file too big, a file that is not UTF-8. */
   failed: -32004,
-  /** No such file in the plugin's folder (files/read). */
+  /** No such file in the plugin's folder (files/read), or under a root (fs/*). */
   notFound: -32005
 };
 
@@ -57,6 +57,7 @@ var Plugin = class {
   starting = [];
   waiting = /* @__PURE__ */ new Map();
   busy = /* @__PURE__ */ new Set();
+  programs = /* @__PURE__ */ new Map();
   next = 1;
   conn;
   /** Runs `handler` on each fact of `pattern` (the facts must be in the manifest's `permissions.events`). */
@@ -105,6 +106,59 @@ var Plugin = class {
    */
   file(path) {
     return this.call("files/read", { path });
+  }
+  /**
+   * Its folders, for a plugin in WASM (`permissions.files`): a root and a path in it, or a path of the host under a root of
+   * an agent, as `agent/attach` gave them. A path out of them, links followed, is refused (`RpcError` `ERRORS.refused`).
+   */
+  fs = {
+    read: (file) => this.call("fs/read", file),
+    /** Its text; `ERRORS.failed` for a file that is not UTF-8. */
+    text: async (file) => {
+      const r = await this.call("fs/read", file);
+      if (r.text === void 0) throw new RpcError(ERRORS.failed, `${file.path} is not text`);
+      return r.text;
+    },
+    write: (file) => this.call("fs/write", file),
+    stat: (file) => this.call("fs/stat", file),
+    list: (folder) => this.call("fs/list", folder),
+    canon: (file) => this.call("fs/canon", file)
+  };
+  /**
+   * Runs a program of `permissions.commands`, for a plugin in WASM. The command and its arguments must be an entry, word for
+   * word; never a shell. What it writes comes to `onOut`; `exited` says how it ended.
+   */
+  async runProgram(params, onOut) {
+    const { proc } = await this.call("proc/spawn", params);
+    return this.programOf(proc, onOut);
+  }
+  programOf(proc, onOut) {
+    const heard = this.programs.get(proc);
+    const program = {
+      proc,
+      exited: new Promise((resolve) => {
+        this.programs.set(proc, { onOut, onExit: resolve });
+      }),
+      write: (data, close) => this.call("proc/write", { proc, data, close }).then(() => void 0),
+      close: () => this.call("proc/write", { proc, close: true }).then(() => void 0),
+      kill: () => this.call("proc/kill", { proc }).then(() => void 0)
+    };
+    for (const m of heard?.early ?? []) this.heard(m);
+    return program;
+  }
+  /** `proc/out` or `proc/exit`; kept for a program whose answer is still to come. */
+  heard(m) {
+    const p = this.programs.get(m.proc);
+    if (!p?.onExit) {
+      const early = p ?? { early: [] };
+      early.early = [...early.early ?? [], m];
+      this.programs.set(m.proc, early);
+    } else if ("data" in m) {
+      p.onOut?.(m.data, m.stream);
+    } else {
+      this.programs.delete(m.proc);
+      p.onExit(m.code);
+    }
   }
   /** A line of its journal, in Réglages › Plugins. */
   log = {
@@ -240,6 +294,9 @@ var Plugin = class {
         if (!this.decide) return { decision: "ask" };
         return this.decide(params, this);
       }
+      case "proc/out":
+      case "proc/exit":
+        return this.heard(params);
       default: {
         const h = this.handlers.get(method);
         if (!h) throw new RpcError(ERRORS.methodNotFound, `unknown method ${method}`);
@@ -255,6 +312,19 @@ function createPlugin(options) {
 // tests/fixtures/plugins/sdk-both/src/main.ts
 var rules = JSON.parse(readFileSync(new URL("../rules.json", import.meta.url), "utf8"));
 var plugin = createPlugin();
+plugin.handle("probe/host", async (params, p) => {
+  const { agent, outside } = params;
+  const code = (e) => e instanceof RpcError ? e.code : -1;
+  const text = await p.fs.text({ agent, root: "agent", path: "notes.txt" });
+  await p.fs.write({ agent, root: "agent", path: "written.txt", text: `${text}!` });
+  const names = (await p.fs.list({ agent, root: "agent", path: "." })).entries.map((e) => e.name);
+  const refused = await p.fs.read({ agent, path: outside }).then(() => 0, code);
+  let out = "";
+  const program = await p.runProgram({ command: "git", args: ["--version"] }, (data) => out += data);
+  const exit = await program.exited;
+  const denied = await p.runProgram({ command: "git", args: ["status"] }).then(() => 0, code);
+  return { text, names, refused, out, exit, denied };
+});
 plugin.onEvent("ticket.column", async (fact, p) => {
   const words = await p.file("data/words.txt");
   const refused = await p.file("../escouade-plugin.json").then(

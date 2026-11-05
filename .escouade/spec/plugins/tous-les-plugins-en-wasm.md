@@ -2,14 +2,14 @@
 title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §8 (ESC-330)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »"]
-tickets: ["ESC-330","ESC-331","ESC-332","ESC-334","ESC-338"]
+tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338"]
 decisions: [73,71,70,72,75,80]
 compared: null
 ---
 
 **Cette page dit la cible, et ce qui en tourne déjà.** ESC-330 a fait l'étude et le prototype, le portage suit le plan de `docs/PLUGINS.md` §8.10. Seul ce que dit « Ce qui tourne déjà » est dans l'app. Pour le reste, *Les plugins livrés avec Escouade* et *Les programmes JS/TS des plugins, en WASM sans Node* disent ce qui est vrai aujourd'hui.
 
-## Ce qui tourne déjà (ESC-331)
+## Ce qui tourne déjà (ESC-331, ESC-333)
 
 - Un plugin déclare `"run": { "wasm": "Cargo.toml" }` : un programme est une commande, un bundle JS/TS ou un module Rust, un seul des trois, et `wasm` nomme le `Cargo.toml` du plugin, jamais un binaire.
 - Son module est `plugin.wasm`, à la racine de son dossier : celui que le store a compilé, écrit à l'installation à la place de tout ce que l'archive aurait sous ce nom, ou celui de l'auteur pour un dossier local. Une version du store sans module n'installe rien. Sans module, le plugin s'arrête et son journal dit pourquoi.
@@ -18,7 +18,29 @@ compared: null
 - Pour `run.js` comme pour `run.wasm`, `net/fetch` est servi à côté du fil : un appel lent ne retient ni le suivant ni le reste du plugin. Seize appels au plus sont en cours à la fois par plugin, les suivants attendent leur tour sans le retenir. Le temps de cette attente ne compte pas dans les 10 s d'un appel.
 - Le précompilé se garde par l'empreinte du module et la version de l'app, fait à l'installation.
 - `escouade-plugin test` joue un `run.wasm`, son `plugin.wasm` ou le module de `--wasm`. `validate` accepte un `run.wasm` et juge `plugin.wasm` s'il est là.
-- `escouade.call`, l'appel synchrone vers l'hôte, existe et compte dans le temps du tour. Aucune méthode n'y est encore servie.
+- `escouade.call`, l'appel synchrone vers l'hôte, compte dans le temps du tour. Il sert les fichiers et les programmes à `run.wasm`. `run.js` y va par une ligne (`p.fs`, `p.runProgram` du SDK) : mêmes refus, même journal. Une réponse trop grande pour la place donnée n'est pas servie deux fois : une écriture n'a lieu qu'une fois. Un plugin lancé par une commande n'a ni l'un ni l'autre.
+
+### Les fichiers d'un dossier déclaré
+
+- Un plugin déclare `"permissions": { "files": [{ "root": "agent", "access": "write" }] }`. Les racines sont une liste fermée, résolue par l'hôte : `plugin` (son dossier, en lecture seule), `agent` (le dossier de l'agent), `agentRepo` (son dépôt), `agentHome` (le dossier de son compte), `temp` (un dossier à lui). Aucun chemin libre, aucun `~`.
+- `fs/read`, `fs/write`, `fs/stat`, `fs/list`, `fs/canon` prennent une racine et un chemin relatif, ou un chemin de l'hôte sous une racine de cet agent.
+- Le chemin est jugé liens compris, avant de dire s'il existe : il doit être sous une racine de cet agent-là, sinon le refus est le même, qu'il existe ou non. La clôture du projet privé de l'agent est appliquée par l'hôte, quel que soit le code du plugin.
+- Une lecture rend 256 Kio au plus ; `limits.fileBytes` peut aller jusqu'à 4 Mio, l'écriture aussi. Chaque écriture et chaque refus vont au journal du plugin.
+- Un agent qui arrive reçoit ses racines par `agent/attach`, seulement celles que le plugin déclare. Seuls les plugins de harness reçoivent un agent. `agentHome` n'existe que si l'agent a un dossier de compte à part : le dossier par défaut de chaque harness viendra avec son portage.
+
+### Les programmes
+
+- Un plugin déclare `permissions.commands`. Le premier mot est un nom de programme, trouvé par le cœur sur le PATH, jamais un chemin.
+- `proc/spawn` refuse ce qui n'est pas une entrée, mot pour mot ; la suite n'est permise que si l'entrée finit par `*`. Pas de shell, donc sous Windows ni `.cmd` ni `.bat`.
+- `dir` est une racine (`agent`, `project`), jamais un chemin, et un projet privé la refuse si le plugin n'y est pas activé. Sans `dir`, le programme tourne dans `temp`.
+- L'environnement est celui d'un agent, sans les variables d'Escouade, plus celles que le plugin nomme. Il ne peut nommer ni `ESCOUADE_*`, ni `PATH`, ni ce qui ferait tourner autre chose que le programme déclaré.
+- Chaque programme meurt avec l'instance du plugin ou à `proc/kill`, avec ce qu'il a lancé. Quatre à la fois. Sa sortie arrive par `proc/out`, sa fin par `proc/exit` ; l'hôte ne lit plus sa sortie au-delà de 256 Kio qui n'ont pas atteint le module.
+- Chaque lancement va au journal avec ses arguments, secrets masqués.
+- Le banc joue ces méthodes par le même code, autour d'un agent à lui ; hors ligne, aucun programme ne tourne.
+
+### Ce que l'utilisateur voit
+
+La fenêtre d'installation et Réglages › Plugins disent une ligne par permission, que l'utilisateur peut retirer : « Lit les fichiers de tes agents », « Écrit dans les dossiers de tes agents » en orange, « Lit le dossier de compte de tes agents », et « Lance cette commande sur ton ordinateur » en rouge, suivie de la commande. Pour un plugin en WASM, chacune dit qu'Escouade l'applique ; pour un plugin lancé par une commande, qu'elle est seulement déclarée.
 
 ## L'amorce (ESC-338)
 

@@ -9,6 +9,7 @@
 use crate::i18n::Lang;
 use crate::integrations::secrets::{MemoryStore, SecretStore};
 use crate::paths::DataDir;
+use crate::plugins::files::AgentPlace;
 use crate::plugins::journal::Kind;
 use crate::plugins::runtime::{secret_name, CallError, Limits, PhaseName, Runtime, Stop};
 use crate::plugins::wasm::{self, Fetcher, Made, Net};
@@ -1197,5 +1198,63 @@ async fn a_slow_fetch_of_a_bundle_holds_back_neither_the_next_nor_the_thread() {
     assert_eq!(slow[0][0], 200, "{slow}");
     assert!(passed < took, "{passed:?} then {took:?}");
     assert!(took >= Duration::from_millis(1500), "{took:?}");
+    w.rt.shutdown();
+}
+
+/// A plugin written for the SDK, in WASM (ESC-333): it reads the folder of an agent, writes there, is refused what is
+/// not its own, runs a declared program, and is refused another.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_run_js_reads_the_folder_of_its_agent_and_runs_a_declared_command() {
+    if !ready() {
+        return;
+    }
+    let (w, _seen) = sdk_both(Transport::Wasm);
+    let base = w.folder.parent().unwrap().canonicalize().unwrap();
+    for d in ["wt", "other"] {
+        std::fs::create_dir_all(base.join(d)).unwrap();
+    }
+    std::fs::write(base.join("wt/notes.txt"), "dans son dossier").unwrap();
+    std::fs::write(base.join("other/secret.txt"), "à un autre").unwrap();
+    let roots =
+        w.rt.place_agent(
+            &w.id,
+            "a",
+            AgentPlace {
+                cwd: base.join("wt"),
+                ..AgentPlace::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(roots.keys().collect::<Vec<_>>(), vec!["agent"]);
+    let r =
+        w.rt.call_within(
+            &w.id,
+            "probe/host",
+            json!({ "agent": "a", "outside": base.join("other/secret.txt") }),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r["text"], "dans son dossier", "{r}");
+    assert_eq!(r["names"], json!(["notes.txt", "written.txt"]), "{r}");
+    assert_eq!(r["refused"], -32003, "{r}");
+    assert!(r["out"].as_str().unwrap().starts_with("git version"), "{r}");
+    assert_eq!(r["exit"], 0, "{r}");
+    assert_eq!(r["denied"], -32003, "{r}");
+    assert_eq!(
+        std::fs::read_to_string(base.join("wt/written.txt")).unwrap(),
+        "dans son dossier!"
+    );
+    assert!(journal_has(&w, Kind::Refused, "fs/read: refused"));
+    assert!(journal_has(
+        &w,
+        Kind::Message,
+        "fs/write agent: wrote 17 bytes"
+    ));
+    assert!(journal_has(
+        &w,
+        Kind::Message,
+        "proc/spawn: ran git --version"
+    ));
     w.rt.shutdown();
 }

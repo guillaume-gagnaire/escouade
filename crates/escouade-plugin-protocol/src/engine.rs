@@ -305,6 +305,10 @@ pub struct Attach {
     /// The shared process it is on (`Launch::shared`), once it runs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shared: Option<SharedRef>,
+    /// Its folders the plugin declares (`permissions.files`), by root (`agent`, `agentRepo`, `agentHome`, `temp`), resolved
+    /// by the core, for `fs/*`.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub roots: std::collections::BTreeMap<String, String>,
     /// As `LaunchParams::fence`, `read_only` and `append_prompt`, for a plugin that holds them itself, or starts again:
     /// on a session of its own (`Launch::shared`), in rules it writes.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

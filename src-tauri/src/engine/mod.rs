@@ -168,6 +168,8 @@ pub struct Spawn {
     pub program: Program,
     /// Its folder.
     pub cwd: String,
+    /// Its project.
+    pub project: String,
     /// The variables it gets on top of the app's.
     pub env: Vec<(String, String)>,
     /// Its model, effort, mode and added instructions (`AgentMeta`), and where it starts from.
@@ -206,6 +208,7 @@ impl Spawn {
         Spawn {
             program,
             cwd: meta.cwd.clone(),
+            project: meta.project_id.clone(),
             env,
             model: meta.model.clone(),
             effort: meta.effort.clone(),

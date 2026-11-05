@@ -29,6 +29,8 @@
 //!   holds back neither the next nor the thread.
 //! - **Its synchronous call** (`escouade.call`, [`Calls`]): a JSON request, its JSON answer, served on the thread, in
 //!   the time of the turn, for what a state machine must have before it answers.
+//! - **Its folders and its programs** ([`Capabilities`], ESC-333): `fs/*` (`files.rs`) and `proc/*` (`procs.rs`), on
+//!   `permissions.files` and `permissions.commands`, by `escouade.call` and by a line (`beside.rs`) alike.
 //!
 //! The transport is wired to the runtime's host in `runtime.rs`: same journal, same delays, same restarts.
 
@@ -421,15 +423,19 @@ struct State {
     wasi: WasiP1Ctx,
     limits: StoreLimits,
     calls: Option<Calls>,
+    /// The last answer that did not fit, and the request it answers: the same request comes for it, not to be served
+    /// twice (a write).
+    too_big: Option<(Vec<u8>, String)>,
 }
 
-/// What `escouade.call` serves: a method and its parameters, its result or why not. Served on the plugin's thread, in
-/// the time of its turn: nothing here may wait for long.
-pub type Calls = Arc<dyn Fn(&str, &Value) -> Result<Value, String> + Send + Sync>;
+/// What `escouade.call` serves: a method and its parameters, its result or why not (a code of the protocol, and its
+/// words). Served on the plugin's thread, in the time of its turn: nothing here may wait for long.
+pub type Calls = Arc<dyn Fn(&str, &Value) -> Result<Value, (i64, String)> + Send + Sync>;
 
-/// The import `escouade.call`: the JSON request at `request`, its JSON answer (`{"result":…}` or `{"error":"…"}`)
-/// written at `out`. How many bytes it took, or the opposite of how many it needs when `cap` is too small. A pointer out
-/// of its memory is a fault of the module, as any other trap.
+/// The import `escouade.call`: the JSON request at `request`, its JSON answer (`{"result":…}` or
+/// `{"error":"…","code":…}`) written at `out`. How many bytes it took, or the opposite of how many it needs when `cap` is
+/// too small: the same request then gets that answer, without being served again. A pointer out of its memory is a fault
+/// of the module, as any other trap.
 fn escouade_call(
     mut caller: Caller<'_, State>,
     request: u32,
@@ -444,25 +450,34 @@ fn escouade_call(
         ));
     };
     let (request, len) = (request as usize, len as usize);
-    let asked: Value = serde_json::from_slice(
-        memory
-            .data(&caller)
-            .get(request..request.saturating_add(len))
-            .ok_or_else(out_of_memory)?,
-    )
-    .unwrap_or(Value::Null);
-    let method = asked["method"].as_str().unwrap_or_default();
-    let answer = match &caller.data().calls {
-        Some(calls) => calls(method, &asked["params"]),
-        None => Err(format!("no call {method}")),
+    let bytes = memory
+        .data(&caller)
+        .get(request..request.saturating_add(len))
+        .ok_or_else(out_of_memory)?
+        .to_vec();
+    let answer = match caller.data_mut().too_big.take() {
+        Some((asked, answer)) if asked == bytes => answer,
+        _ => {
+            let asked: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+            let method = asked["method"].as_str().unwrap_or_default();
+            let answer = match &caller.data().calls {
+                Some(calls) => calls(method, &asked["params"]),
+                None => Err((
+                    super::runtime::METHOD_NOT_FOUND,
+                    format!("no call {method}"),
+                )),
+            };
+            match answer {
+                Ok(result) => json!({ "result": result }),
+                Err((code, error)) => json!({ "error": error, "code": code }),
+            }
+            .to_string()
+        }
     };
-    let answer = match answer {
-        Ok(result) => json!({ "result": result }),
-        Err(error) => json!({ "error": error }),
-    }
-    .to_string();
     if answer.len() > cap as usize {
-        return Ok(-(answer.len() as i64));
+        let needs = answer.len() as i64;
+        caller.data_mut().too_big = Some((bytes, answer));
+        return Ok(-needs);
     }
     let out = out as usize;
     memory
@@ -471,6 +486,55 @@ fn escouade_call(
         .ok_or_else(out_of_memory)?
         .copy_from_slice(answer.as_bytes());
     Ok(answer.len() as i64)
+}
+
+/// What a plugin in WASM reaches of the machine (ESC-333): its folders (`fs/*`) and its programs (`proc/*`). Served by
+/// `escouade.call` and by a line (`Beside`) alike, the same refusals, the same journal. One for an instance: its programs
+/// end with it.
+pub struct Capabilities {
+    files: super::files::Access,
+    procs: super::procs::Procs,
+    told: super::procs::Told,
+}
+
+impl Capabilities {
+    pub fn new(
+        files: super::files::Access,
+        procs: super::procs::Procs,
+        told: super::procs::Told,
+    ) -> Arc<Self> {
+        Arc::new(Self { files, procs, told })
+    }
+
+    /// Whether `method` is one of its methods.
+    pub fn serves(method: &str) -> bool {
+        method.starts_with("fs/") || method.starts_with("proc/")
+    }
+
+    pub fn call(&self, method: &str, params: &Value) -> Result<Value, (i64, String)> {
+        if method.starts_with("fs/") {
+            self.files
+                .serve(method, params, &|kind, line| (self.told)(kind, line))
+        } else if method.starts_with("proc/") {
+            self.procs.serve(method, params)
+        } else {
+            Err((
+                super::runtime::METHOD_NOT_FOUND,
+                format!("no call {method}"),
+            ))
+        }
+    }
+
+    /// What `escouade.call` serves.
+    pub fn calls(self: &Arc<Self>) -> Calls {
+        let me = self.clone();
+        Arc::new(move |method, params| me.call(method, params))
+    }
+
+    /// Its instance ended.
+    pub fn end(&self) {
+        self.procs.end();
+    }
 }
 
 /// Why an instance is done.
@@ -507,6 +571,7 @@ pub struct Instance {
 
 impl Instance {
     /// Its instance, without `escouade.call` to serve.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn start(
         module: &Module,
         files: &BTreeMap<String, String>,
@@ -549,6 +614,7 @@ impl Instance {
                     .instances(1)
                     .build(),
                 calls,
+                too_big: None,
             },
         );
         store.limiter(|s| &mut s.limits);
@@ -822,7 +888,7 @@ pub struct Net {
     pub idle: Option<Duration>,
 }
 
-/// The host's runtime: what runs beside the plugins' threads (their network, their timers).
+/// The host's runtime: what runs beside the plugins' threads (their network, their timers, their programs).
 pub(super) fn net() -> &'static tokio::runtime::Handle {
     static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
     RUNTIME
@@ -1402,6 +1468,8 @@ pub struct Wiring {
     pub refused: Arc<dyn Fn(&str) + Send + Sync>,
     /// What it reached, for its journal: the method and the host, never a header nor a query.
     pub said: Arc<dyn Fn(&str) + Send + Sync>,
+    /// Its folders and its programs, when it asks for them by a line.
+    pub capabilities: Option<Arc<Capabilities>>,
 }
 
 /// Serves the instance until its host closes its input (None) or it is done (why).
@@ -1413,6 +1481,7 @@ pub fn serve(mut instance: Instance, fetcher: Fetcher, mut wiring: Wiring) -> Op
         wiring.back.clone(),
         wiring.refused.clone(),
         wiring.said.clone(),
+        wiring.capabilities.clone(),
     );
     let mut errors = String::new();
     let flush_stderr = |instance: &Instance, wiring: &mut Wiring, errors: &mut String| {

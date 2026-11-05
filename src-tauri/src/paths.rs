@@ -335,6 +335,11 @@ impl DataDir {
 
     /// The modules of the `run.js` plugins, compiled and precompiled (`plugins::wasm::Modules`): a cache, made
     /// again when it is gone.
+    /// The temporary folders of the plugins (`fs/*`'s root `temp`), one each.
+    pub fn plugin_temp_dir(&self) -> PathBuf {
+        self.0.join("plugin-temp")
+    }
+
     pub fn plugin_wasm_dir(&self) -> PathBuf {
         escouade_plugin_cli::paths::plugin_wasm_dir(&self.0)
     }

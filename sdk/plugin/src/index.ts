@@ -5,7 +5,8 @@
 // through Escouade's WASM host when it runs inside the app (`run.js`, ESC-321); `start()` finds which, the plugin's
 // code is the same. `createPlugin()` gives a client that speaks it: it answers
 // `initialize` and `shutdown`, serves batches, routes each fact to its handlers (`onEvent`), each permission to
-// decide to its rule (`decidePermission`), and asks Escouade for secrets (`secret`) and journal lines (`log`).
+// decide to its rule (`decidePermission`), and asks Escouade for secrets (`secret`), journal lines (`log`), its folders
+// (`fs`) and its programs (`runProgram`).
 import { createInterface } from 'node:readline';
 import {
   ERRORS,
@@ -14,9 +15,14 @@ import {
   type DecideParams,
   type Fact,
   type FactName,
+  type FsPath,
+  type FsWriteParams,
   type InitializeParams,
   type InitializeResult,
   type LogParams,
+  type ProcExitParams,
+  type ProcOutParams,
+  type ProcSpawnParams,
   type ToEscouade,
 } from './protocol.js';
 
@@ -42,6 +48,24 @@ interface WasmHost {
   write(line: string): void;
   trace(line: string): void;
   end(): void;
+}
+
+/** A program it runs (`p.runProgram`). */
+export interface Program {
+  proc: number;
+  /** How it ended: its code, or `null` when it was killed. */
+  exited: Promise<number | null>;
+  /** Writes on its input, and ends that input with `close`. */
+  write(data: string, close?: boolean): Promise<void>;
+  close(): Promise<void>;
+  /** Ends it, and what it started. */
+  kill(): Promise<void>;
+}
+
+interface ProgramState {
+  onOut?: (data: string, stream: ProcOutParams['stream']) => void;
+  onExit?: (code: number | null) => void;
+  early?: (ProcOutParams | ProcExitParams)[];
 }
 
 /** The WASM host of Escouade, when the plugin runs inside the app (`run.js`); none under Node. */
@@ -100,6 +124,7 @@ export class Plugin {
   private readonly starting: Array<(params: InitializeParams) => void | Promise<void>> = [];
   private readonly waiting = new Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
   private readonly busy = new Set<Promise<unknown>>();
+  private readonly programs = new Map<number, ProgramState>();
   private next = 1;
   private conn?: Connection;
 
@@ -158,6 +183,64 @@ export class Plugin {
    */
   file(path: string): Promise<string> {
     return this.call('files/read', { path });
+  }
+
+  /**
+   * Its folders, for a plugin in WASM (`permissions.files`): a root and a path in it, or a path of the host under a root of
+   * an agent, as `agent/attach` gave them. A path out of them, links followed, is refused (`RpcError` `ERRORS.refused`).
+   */
+  readonly fs = {
+    read: (file: FsPath) => this.call('fs/read', file),
+    /** Its text; `ERRORS.failed` for a file that is not UTF-8. */
+    text: async (file: FsPath) => {
+      const r = await this.call('fs/read', file);
+      if (r.text === undefined) throw new RpcError(ERRORS.failed, `${file.path} is not text`);
+      return r.text;
+    },
+    write: (file: FsWriteParams) => this.call('fs/write', file),
+    stat: (file: FsPath) => this.call('fs/stat', file),
+    list: (folder: FsPath) => this.call('fs/list', folder),
+    canon: (file: FsPath) => this.call('fs/canon', file),
+  };
+
+  /**
+   * Runs a program of `permissions.commands`, for a plugin in WASM. The command and its arguments must be an entry, word for
+   * word; never a shell. What it writes comes to `onOut`; `exited` says how it ended.
+   */
+  async runProgram(params: ProcSpawnParams, onOut?: (data: string, stream: ProcOutParams['stream']) => void): Promise<Program> {
+    const { proc } = await this.call('proc/spawn', params);
+    return this.programOf(proc, onOut);
+  }
+
+  private programOf(proc: number, onOut?: (data: string, stream: ProcOutParams['stream']) => void): Program {
+    const heard = this.programs.get(proc);
+    const program: Program = {
+      proc,
+      exited: new Promise((resolve) => {
+        this.programs.set(proc, { onOut, onExit: resolve });
+      }),
+      write: (data, close) => this.call('proc/write', { proc, data, close }).then(() => undefined),
+      close: () => this.call('proc/write', { proc, close: true }).then(() => undefined),
+      kill: () => this.call('proc/kill', { proc }).then(() => undefined),
+    };
+    // What came before the answer to `proc/spawn`.
+    for (const m of heard?.early ?? []) this.heard(m);
+    return program;
+  }
+
+  /** `proc/out` or `proc/exit`; kept for a program whose answer is still to come. */
+  private heard(m: ProcOutParams | ProcExitParams): void {
+    const p = this.programs.get(m.proc);
+    if (!p?.onExit) {
+      const early = p ?? { early: [] };
+      early.early = [...(early.early ?? []), m];
+      this.programs.set(m.proc, early);
+    } else if ('data' in m) {
+      p.onOut?.(m.data, m.stream);
+    } else {
+      this.programs.delete(m.proc);
+      p.onExit(m.code);
+    }
   }
 
   /** A line of its journal, in Réglages › Plugins. */
@@ -316,6 +399,9 @@ export class Plugin {
         if (!this.decide) return { decision: 'ask' } satisfies Decision;
         return this.decide(params as DecideParams, this);
       }
+      case 'proc/out':
+      case 'proc/exit':
+        return this.heard(params as ProcOutParams | ProcExitParams);
       default: {
         const h = this.handlers.get(method);
         if (!h) throw new RpcError(ERRORS.methodNotFound, `unknown method ${method}`);

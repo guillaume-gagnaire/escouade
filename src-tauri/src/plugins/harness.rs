@@ -951,6 +951,7 @@ impl Engine for ProcessEngine {
             account_var: self.account_var,
             key,
             attach: Mutex::new(attach),
+            placed: Mutex::new(None),
             stdin: Mutex::new(Some(stdin_tx)),
             control: Mutex::new(Some(control_tx)),
             ready: ready_tx,
@@ -1126,6 +1127,8 @@ pub struct ProcessEngineProcess {
     key: String,
     /// What the plugin is given again after a restart: the session, the model, the mode, the requests waiting.
     attach: Mutex<proto::Attach>,
+    /// Where the agent lives, as the core resolved it (`fs/*`, `proc/*`).
+    placed: Mutex<Option<super::files::AgentPlace>>,
     stdin: Mutex<Option<mpsc::UnboundedSender<Vec<u8>>>>,
     control: Mutex<Option<mpsc::UnboundedSender<Control>>>,
     /// The end of its launch: Ok once its harness runs.
@@ -1301,6 +1304,12 @@ impl ProcessEngineProcess {
     }
 
     fn attach_params(&self) -> Value {
+        // Each time: a plugin started again from nothing (its folder reloaded) knows the agent from here.
+        if let Some(place) = self.placed.lock().clone() {
+            if let Ok(roots) = self.rt.place_agent(&self.plugin, &self.key, place) {
+                self.attach.lock().roots = roots;
+            }
+        }
         serde_json::to_value(&*self.attach.lock()).unwrap_or_default()
     }
 
@@ -1413,9 +1422,27 @@ impl ProcessEngineProcess {
         self.key.clone()
     }
 
+    /// Tells the plugin's host where the agent lives (`fs/*`, `proc/*`): what the core resolved, which the plugin cannot
+    /// change; `agent/attach` tells it the roots it declares.
+    fn place(&self, spawn: &Spawn) {
+        let cwd = PathBuf::from(&spawn.cwd);
+        *self.placed.lock() = Some(super::files::AgentPlace {
+            repo: super::files::repo_of(&cwd),
+            home: spawn
+                .env
+                .iter()
+                .find(|(k, _)| k == self.account_var)
+                .map(|(_, v)| PathBuf::from(v)),
+            cwd,
+            fence: spawn.fence.clone(),
+            project: spawn.project.clone(),
+        });
+    }
+
     /// Launches its harness from the plugin's description, checked: its child. The first call may start the plugin's
     /// process: it is given the time of a start (`ATTACH_WITHIN`), not that of a call.
     async fn launch(&self, spawn: &Spawn) -> Result<Launched> {
+        self.place(spawn);
         self.rt
             .attach_within(
                 &self.plugin,
@@ -1647,6 +1674,7 @@ impl ProcessEngineProcess {
             a.read_only = spawn.read_only;
             a.append_prompt = spawn.append_prompt.clone();
         }
+        self.place(spawn);
         self.rt
             .attach_within(
                 &self.plugin,

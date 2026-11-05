@@ -12,6 +12,11 @@
   "activation": ["event:ticket.column"],
   "permissions": {
     "events": ["ticket.column"],
-    "network": ["hooks.example.dev"]
+    "network": ["hooks.example.dev"],
+    "commands": ["git --version", "git rev-parse *", "git cat-file --batch"],
+    "files": [
+      { "root": "agent", "access": "write" },
+      { "root": "agentHome", "access": "read" }
+    ]
   }
 }

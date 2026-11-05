@@ -93,6 +93,18 @@ export function writtenHost(url) {
   return host ? host.replace(/\.+$/, '').toLowerCase() : null;
 }
 
+/** The folders a plugin may name (docs/PLUGINS.md §8.4.6): a closed list the host resolves. */
+export const FILE_ROOTS = ['plugin', 'agent', 'agentRepo', 'agentHome', 'temp'];
+export const FILE_ACCESS = ['read', 'write'];
+
+/** Whether a line of `permissions.commands` holds: a program's name first, never a path, and a `*` only as its last word. */
+export function commandHolds(command) {
+  const words = command.split(/\s+/).filter(Boolean);
+  if (!words.length) return false;
+  const first = words[0];
+  return !/[/\\:*~]/.test(first) && !first.startsWith('.') && !words.slice(1, -1).includes('*');
+}
+
 /**
  * Whether `permissions.network` covers `host`, without regard to case: a host written alone covers itself; `*.exemple.dev`
  * covers its subdomains at any depth, not `exemple.dev` itself (as a TLS certificate's); nothing else covers anything.
@@ -148,6 +160,31 @@ export function validate(manifest, options = {}) {
     if (s === null) return;
     if (s.startsWith(ESCOUADE_DIR)) return builtin ? undefined : problem(path, 'reserved');
     if (!isInnerPath(s)) problem(path, 'path');
+  };
+  const files = (v) => {
+    const path = 'permissions.files';
+    if (!Array.isArray(v)) return problem(path, 'type', 'array');
+    const seen = new Set();
+    v.forEach((item, i) => {
+      const at = `${path}[${i}]`;
+      const o = object(item, at);
+      if (!o) return;
+      ignoreOthers(o, at, ['root', 'access']);
+      const pick = (key, among) => {
+        const p = join(at, key);
+        if (!(key in o)) return problem(p, 'required');
+        const s = string(o[key], p);
+        if (s === null) return undefined;
+        if (!among.includes(s)) return problem(p, 'enum', among.join(', '));
+        return s;
+      };
+      const root = pick('root', FILE_ROOTS);
+      const access = pick('access', FILE_ACCESS);
+      if (!root || !access) return;
+      if (root === 'plugin' && access === 'write') problem(join(at, 'access'), 'readOnly');
+      else if (seen.has(root)) problem(join(at, 'root'), 'duplicate');
+      else seen.add(root);
+    });
   };
   const required = (o, key, path, then) => (key in o ? then(o[key], path) : problem(path, 'required'));
 
@@ -242,8 +279,13 @@ export function validate(manifest, options = {}) {
   if ('permissions' in o) {
     const p = object(o.permissions, 'permissions');
     if (p) {
-      ignoreOthers(p, 'permissions', ['events', 'network', 'secrets', 'commands', 'decide']);
+      ignoreOthers(p, 'permissions', ['events', 'network', 'secrets', 'commands', 'files', 'decide']);
       for (const key of ['events', 'network', 'secrets', 'commands']) if (key in p) words(p[key], `permissions.${key}`);
+      if (Array.isArray(p.commands))
+        p.commands.forEach((c, i) => {
+          if (typeof c === 'string' && c.trim() && !commandHolds(c)) problem(`permissions.commands[${i}]`, 'command');
+        });
+      if ('files' in p) files(p.files);
       if (Array.isArray(p.network)) network = p.network.filter((w) => typeof w === 'string');
       if ('decide' in p && typeof p.decide !== 'boolean') problem('permissions.decide', 'type', 'boolean');
     }
@@ -251,8 +293,8 @@ export function validate(manifest, options = {}) {
   if ('limits' in o) {
     const l = object(o.limits, 'limits');
     if (l) {
-      ignoreOthers(l, 'limits', ['fetchSeconds', 'fetchBytes']);
-      for (const key of ['fetchSeconds', 'fetchBytes'])
+      ignoreOthers(l, 'limits', ['fetchSeconds', 'fetchBytes', 'fileBytes']);
+      for (const key of ['fetchSeconds', 'fetchBytes', 'fileBytes'])
         if (key in l && !(Number.isSafeInteger(l[key]) && l[key] > 0)) problem(`limits.${key}`, 'type', 'positive integer');
     }
   }
@@ -433,6 +475,8 @@ const WHAT = {
     exclusive: () =>
       'ne va pas avec `run.command`, `run.js` ou `run.wasm` : un programme est une commande, un bundle JS/TS ou un module Rust, un seul des trois.',
     cargo: () => 'doit nommer le `Cargo.toml` du plugin, jamais un binaire.',
+    command: () => "doit commencer par le nom d'un programme, jamais un chemin, et `*` n'y vient qu'en dernier mot.",
+    readOnly: () => 'ne peut pas être en écriture : le dossier du plugin ne change pas.',
     square: () => "n'est pas carrée (un PNG carré de 256 px au moins, 512 conseillé).",
     small: () => 'fait moins de 256 px de côté (512 conseillé).',
   },
@@ -458,6 +502,8 @@ const WHAT = {
     exclusive: () =>
       'does not go with `run.command`, `run.js` or `run.wasm`: a program is a command, a JS/TS bundle or a Rust module, one of the three.',
     cargo: () => "must name the plugin's `Cargo.toml`, never a binary.",
+    command: () => "must start with a program's name, never a path, and `*` comes only as its last word.",
+    readOnly: () => "cannot be written: the plugin's folder does not change.",
     square: () => 'is not square (a square PNG of 256 px at least, 512 advised).',
     small: () => 'is under 256 px a side (512 advised).',
   },

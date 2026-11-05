@@ -1227,6 +1227,180 @@
       },
       "errors": ["limits type"],
       "ignored": []
+    },
+    {
+      "name": "folders and commands it declares",
+      "manifest": {
+        "id": "dev.exemple.outil",
+        "name": "Outil",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "dist/plugin.mjs"
+        },
+        "permissions": {
+          "commands": ["isola ls --json", "isola logs *"],
+          "files": [
+            {
+              "root": "agent",
+              "access": "write"
+            },
+            {
+              "root": "agentHome",
+              "access": "read"
+            },
+            {
+              "root": "plugin",
+              "access": "read"
+            }
+          ]
+        },
+        "limits": {
+          "fileBytes": 1048576
+        }
+      },
+      "files": {
+        "dist/plugin.mjs": {
+          "text": "x\n"
+        }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "a root of no list, an access of none",
+      "manifest": {
+        "id": "dev.exemple.outil",
+        "name": "Outil",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "dist/plugin.mjs"
+        },
+        "permissions": {
+          "files": [
+            {
+              "root": "home",
+              "access": "read"
+            },
+            {
+              "root": "agent",
+              "access": "all"
+            },
+            {
+              "root": "temp"
+            }
+          ]
+        }
+      },
+      "files": {
+        "dist/plugin.mjs": {
+          "text": "x\n"
+        }
+      },
+      "errors": ["permissions.files[0].root enum", "permissions.files[1].access enum", "permissions.files[2].access required"],
+      "ignored": []
+    },
+    {
+      "name": "its own folder is not written, a root is named once",
+      "manifest": {
+        "id": "dev.exemple.outil",
+        "name": "Outil",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "dist/plugin.mjs"
+        },
+        "permissions": {
+          "files": [
+            {
+              "root": "plugin",
+              "access": "write"
+            },
+            {
+              "root": "agent",
+              "access": "read"
+            },
+            {
+              "root": "agent",
+              "access": "write"
+            }
+          ]
+        }
+      },
+      "files": {
+        "dist/plugin.mjs": {
+          "text": "x\n"
+        }
+      },
+      "errors": ["permissions.files[0].access readOnly", "permissions.files[2].root duplicate"],
+      "ignored": []
+    },
+    {
+      "name": "a command is a name, never a path, and a star ends it",
+      "manifest": {
+        "id": "dev.exemple.outil",
+        "name": "Outil",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "dist/plugin.mjs"
+        },
+        "permissions": {
+          "commands": ["/usr/bin/isola ls", "C:\toolsisola.exe", "~/isola", "*", "isola * down"]
+        }
+      },
+      "files": {
+        "dist/plugin.mjs": {
+          "text": "x\n"
+        }
+      },
+      "errors": [
+        "permissions.commands[0] command",
+        "permissions.commands[1] command",
+        "permissions.commands[2] command",
+        "permissions.commands[3] command",
+        "permissions.commands[4] command"
+      ],
+      "ignored": []
+    },
+    {
+      "name": "a limit is a number of bytes",
+      "manifest": {
+        "id": "dev.exemple.outil",
+        "name": "Outil",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "dist/plugin.mjs"
+        },
+        "permissions": {},
+        "limits": {
+          "fileBytes": 0
+        }
+      },
+      "files": {
+        "dist/plugin.mjs": {
+          "text": "x\n"
+        }
+      },
+      "errors": ["limits.fileBytes type"],
+      "ignored": []
     }
   ],
   "hosts": {

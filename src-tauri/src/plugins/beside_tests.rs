@@ -87,7 +87,7 @@ async fn ws_send_says_no_past_its_queue_past_a_message_and_on_no_socket() {
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel::<Frame>();
     let fetcher = Arc::new(Fetcher::new("dev.test", &[], &Default::default()));
     let quiet: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|_| {});
-    let beside = Beside::new(fetcher, tx.downgrade(), quiet.clone(), quiet);
+    let beside = Beside::new(fetcher, tx.downgrade(), quiet.clone(), quiet, None);
     let (out, mut waiting) = unbounded_channel();
     let queued = Arc::new(AtomicUsize::new(0));
     locked(&beside.sockets).insert(

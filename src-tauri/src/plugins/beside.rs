@@ -9,10 +9,11 @@
 //! - **`ws/*`**: a WebSocket, `wss` to the same hosts. 4 sockets, 1 MiB a message, 256 KiB waiting to be sent. Each message
 //!   received waits to be on the module's input before the next is read.
 //! - **`timer/*`**: 10 ms at least, 64 at once.
+//! - **`fs/*` and `proc/*`** ([`Capabilities`]): the same service as `escouade.call`, for what asks by a line (`run.js`).
 //!
 //! What it reached goes to its journal by its method and its host alone: a query and headers hold keys.
 
-use super::wasm::{headers_of, net, refusal_of, Fetcher, Frame, FAILED, REFUSED};
+use super::wasm::{headers_of, net, refusal_of, Capabilities, Fetcher, Frame, FAILED, REFUSED};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
@@ -53,7 +54,12 @@ pub struct Request {
 
 /// The request of `line`, when it is one of the methods served here.
 pub fn request_of(line: &str) -> Option<Request> {
-    if !(line.contains("net/") || line.contains("ws/") || line.contains("timer/")) {
+    if !(line.contains("net/")
+        || line.contains("ws/")
+        || line.contains("timer/")
+        || line.contains("fs/")
+        || line.contains("proc/"))
+    {
         return None;
     }
     let v: Value = serde_json::from_str(line).ok()?;
@@ -69,6 +75,14 @@ pub fn request_of(line: &str) -> Option<Request> {
             | "ws/close"
             | "timer/set"
             | "timer/cancel"
+            | "fs/read"
+            | "fs/write"
+            | "fs/stat"
+            | "fs/list"
+            | "fs/canon"
+            | "proc/spawn"
+            | "proc/write"
+            | "proc/kill"
     )
     .then(|| Request {
         id: v.get("id").cloned(),
@@ -79,11 +93,11 @@ pub fn request_of(line: &str) -> Option<Request> {
 
 /// The way back to the module.
 #[derive(Clone)]
-struct Back(WeakUnboundedSender<Frame>);
+pub(super) struct Back(pub(super) WeakUnboundedSender<Frame>);
 
 impl Back {
     /// Whether the thread is still there to take it.
-    fn send(&self, line: &Value, written: Option<oneshot::Sender<()>>) -> bool {
+    pub(super) fn send(&self, line: &Value, written: Option<oneshot::Sender<()>>) -> bool {
         match self.0.upgrade() {
             Some(tx) => tx.send((format!("{line}\n").into_bytes(), written)).is_ok(),
             None => false,
@@ -103,7 +117,7 @@ impl Back {
         );
     }
 
-    fn tell(&self, method: &str, params: Value) -> bool {
+    pub(super) fn tell(&self, method: &str, params: Value) -> bool {
         self.send(
             &json!({ "jsonrpc": "2.0", "method": method, "params": params }),
             None,
@@ -255,6 +269,7 @@ pub struct Beside {
     back: Back,
     refused: Arc<dyn Fn(&str) + Send + Sync>,
     said: Arc<dyn Fn(&str) + Send + Sync>,
+    capabilities: Option<Arc<Capabilities>>,
     set: JoinSet<()>,
     streams: Arc<Mutex<HashMap<u64, OpenStream>>>,
     sockets: Arc<Mutex<HashMap<u64, OpenSocket>>>,
@@ -282,12 +297,14 @@ impl Beside {
         back: WeakUnboundedSender<Frame>,
         refused: Arc<dyn Fn(&str) + Send + Sync>,
         said: Arc<dyn Fn(&str) + Send + Sync>,
+        capabilities: Option<Arc<Capabilities>>,
     ) -> Self {
         Self {
             fetcher,
             back: Back(back),
             refused,
             said,
+            capabilities,
             set: JoinSet::new(),
             streams: Arc::default(),
             sockets: Arc::default(),
@@ -299,6 +316,17 @@ impl Beside {
     /// Serves a request of the module; what lasts goes beside the thread.
     pub fn serve(&mut self, r: Request) {
         let Request { id, method, params } = r;
+        // Refused or served, its journal is told by the capability.
+        if Capabilities::serves(&method) {
+            let answer = match &self.capabilities {
+                Some(c) => c.call(&method, &params),
+                None => Err((
+                    super::runtime::METHOD_NOT_FOUND,
+                    format!("unknown method {method}"),
+                )),
+            };
+            return self.back.reply(id, answer);
+        }
         let answer = match method.as_str() {
             "net/fetch" => return self.fetch(id, params),
             "net/stream" => return self.stream(id, params),

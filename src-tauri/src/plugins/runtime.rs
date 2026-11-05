@@ -402,6 +402,8 @@ struct Host {
     pending: Mutex<HashMap<u64, oneshot::Sender<Answer>>>,
     next_id: AtomicU64,
     journal: Arc<Journal>,
+    /// The agents it was given, for `fs/*` and `proc/*`.
+    agents: super::files::Agents,
 }
 
 /// The plugins' processes of the app.
@@ -409,6 +411,8 @@ pub struct Runtime {
     plugins: Arc<Plugins>,
     secrets: Arc<dyn SecretStore>,
     logs: PathBuf,
+    /// The temporary folders of the plugins, one each.
+    temps: PathBuf,
     app_version: String,
     /// The folder of the app's programs (`{escouade}` of a plugin of its own).
     escouade_dir: PathBuf,
@@ -435,6 +439,8 @@ pub struct Runtime {
     lent: Mutex<HashMap<(String, String), String>>,
     /// What a plugin the app gives is told when it starts (`ESCOUADE_LANG`, the network of Réglages › Réseau).
     builtin_env: parking_lot::RwLock<Vec<(String, String)>>,
+    /// What a program of a plugin gets as an agent does (`set_agent_env`).
+    agent_env: parking_lot::RwLock<Vec<(String, String)>>,
     me: Weak<Self>,
 }
 
@@ -471,6 +477,11 @@ impl Runtime {
 
     /// What a plugin the app gives is told when it starts: the interface's language and the network's settings. A
     /// change applies to its next process: the core stops the running ones (`forget`).
+    /// What a program of a plugin gets as an agent does (`proc/spawn`): the network of Réglages.
+    pub fn set_agent_env(&self, env: Vec<(String, String)>) {
+        *self.agent_env.write() = env;
+    }
+
     pub fn set_builtin_env(&self, env: Vec<(String, String)>) {
         *self.builtin_env.write() = env;
     }
@@ -528,6 +539,7 @@ impl Runtime {
             plugins: plugins.clone(),
             secrets,
             logs: data.plugin_logs_dir(),
+            temps: data.plugin_temp_dir(),
             app_version: app_version.to_string(),
             escouade_dir,
             limits,
@@ -541,6 +553,7 @@ impl Runtime {
             net: parking_lot::RwLock::new(super::wasm::Net::default()),
             lent: Mutex::new(HashMap::new()),
             builtin_env: parking_lot::RwLock::new(Vec::new()),
+            agent_env: parking_lot::RwLock::new(Vec::new()),
             me: me.clone(),
         });
         // A folder in development read again: its process stops, and the next one is given the
@@ -675,6 +688,7 @@ impl Runtime {
             pending: Mutex::new(HashMap::new()),
             next_id: AtomicU64::new(1),
             journal: self.journal_of(id),
+            agents: Arc::default(),
         });
         Ok(self
             .hosts
@@ -959,7 +973,40 @@ impl Runtime {
     pub fn detach(&self, id: &str, key: &str) {
         if let Some(h) = self.hosts.lock().get(id) {
             h.inner.lock().attached.remove(key);
+            h.agents.lock().remove(key);
         }
+    }
+
+    /// Where the agent `key` of the plugin `id` lives, as the core resolved it: its `fs/*` and `proc/*` are judged on it.
+    /// The roots it declares, what `agent/attach` tells it.
+    pub fn place_agent(
+        &self,
+        id: &str,
+        key: &str,
+        place: super::files::AgentPlace,
+    ) -> Result<BTreeMap<String, String>, CallError> {
+        let host = self.host(id)?;
+        let roots = host.access(self).roots_of(&place);
+        host.agents.lock().insert(key.to_string(), place);
+        Ok(roots)
+    }
+
+    /// The folder of the project `project` for the plugin `id`: a private project refuses a plugin not turned on for it.
+    fn project_folder(&self, id: &str, project: &str) -> Result<PathBuf, String> {
+        let place = self.place.read().as_ref().and_then(Weak::upgrade);
+        let place = place.ok_or("Escouade is closing")?;
+        let unknown = || format!("no project {project}");
+        let (private, _) = place.project_plugin(project, id).ok_or_else(unknown)?;
+        let choices = self.plugins.choices(id).ok_or("no such plugin")?;
+        if !super::active_in(&choices, project, private) {
+            return Err(format!(
+                "the project {project} is private, and this plugin is not turned on for it"
+            ));
+        }
+        place
+            .project_path(project)
+            .map(PathBuf::from)
+            .ok_or_else(unknown)
     }
 
     /// Stops the plugin `id`'s process; it does not start again until `restart`.
@@ -1496,6 +1543,7 @@ impl Host {
     ) -> std::io::Result<Option<Arc<Conn>>> {
         let (tx, rx) = mpsc::unbounded_channel::<Frame>();
         let back = tx.downgrade();
+        let capabilities = self.capabilities(rt, back.clone());
         let conn = Arc::new(Conn {
             generation,
             pid: None,
@@ -1529,7 +1577,9 @@ impl Host {
         std::thread::Builder::new()
             .name(format!("plugin {}", self.id))
             .spawn(move || {
-                let fault = match super::wasm::Instance::start(&module, &files, limits) {
+                let calls = Some(capabilities.calls());
+                let fault = match super::wasm::Instance::start_with(&module, &files, limits, calls)
+                {
                     Err(f) => Some(f),
                     Ok(instance) => {
                         let (h1, c1) = (host.clone(), c.clone());
@@ -1541,17 +1591,55 @@ impl Host {
                             stderr: Box::new(move |l| h2.journal.push(Kind::Stderr, l)),
                             refused: Arc::new(move |l| h3.journal.push(Kind::Refused, l)),
                             said: Arc::new(move |l| h4.journal.push(Kind::Message, l)),
+                            capabilities: Some(capabilities.clone()),
                         };
                         super::wasm::serve(instance, fetcher, wiring)
                     }
                 };
                 c.exited.store(true, Ordering::Release);
+                // Its programs end with it.
+                capabilities.end();
                 // Its input closed: it was stopped, and that was dealt with.
                 if let Some(f) = fault {
                     host.exited(&c, None, vec![f.to_string()]);
                 }
             })?;
         Ok(Some(conn))
+    }
+
+    /// What it may reach of its folders (`permissions.files`).
+    fn access(&self, rt: &Runtime) -> super::files::Access {
+        super::files::Access::new(
+            &self.manifest,
+            &self.folder,
+            rt.temps.join(&self.id),
+            self.agents.clone(),
+        )
+    }
+
+    /// What an instance reaches of the machine.
+    fn capabilities(
+        self: &Arc<Self>,
+        rt: &Runtime,
+        back: mpsc::WeakUnboundedSender<Frame>,
+    ) -> Arc<super::wasm::Capabilities> {
+        let journal = self.journal.clone();
+        let told: super::procs::Told = Arc::new(move |kind, line| journal.push(kind, line));
+        let (me, id) = (self.rt.clone(), self.id.clone());
+        let procs = super::procs::Procs::new(super::procs::ProcsOf {
+            commands: self.manifest.permissions.commands.clone(),
+            temp: rt.temps.join(&self.id),
+            agents: self.agents.clone(),
+            projects: Arc::new(move |project| {
+                me.upgrade()
+                    .ok_or_else(|| "Escouade is closing".to_string())?
+                    .project_folder(&id, project)
+            }),
+            agent_env: rt.agent_env.read().clone(),
+            back,
+            told: told.clone(),
+        });
+        super::wasm::Capabilities::new(self.access(rt), procs, told)
     }
 
     fn is_current(&self, conn: &Conn) -> bool {

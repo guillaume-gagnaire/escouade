@@ -468,13 +468,19 @@
       "type": "string"
     },
     "limits": {
-      "description": "What a plugin in WASM asks of `net/fetch` above the 10 s and the 1 MiB of a call; Escouade caps them at 120 s and 32 MiB.",
+      "description": "What a plugin in WASM asks for beyond the host's defaults; Escouade caps them at 120 s and 32 MiB for `net/fetch`, 4 MiB for `fs/read`.",
       "properties": {
         "fetchBytes": {
           "minimum": 1,
           "type": "integer"
         },
         "fetchSeconds": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "fileBytes": {
+          "description": "How much `fs/read` gives at most: 256 KiB without it.",
+          "maximum": 4194304,
           "minimum": 1,
           "type": "integer"
         }
@@ -508,6 +514,7 @@
       "description": "What it asks for, shown before it is installed.",
       "properties": {
         "commands": {
+          "description": "The programs it may run (`proc/spawn`): a program's name, never a path, then its arguments, word for word. A last word `*` lets any more follow.",
           "items": {
             "minLength": 1,
             "type": "string"
@@ -521,6 +528,22 @@
           "items": {
             "minLength": 1,
             "type": "string"
+          },
+          "type": "array"
+        },
+        "files": {
+          "description": "The folders it may read or write (`fs/*`): a root of the closed list, which the host resolves; no path of its own. `plugin` is read only.",
+          "items": {
+            "properties": {
+              "access": {
+                "enum": ["read", "write"]
+              },
+              "root": {
+                "enum": ["plugin", "agent", "agentRepo", "agentHome", "temp"]
+              }
+            },
+            "required": ["root", "access"],
+            "type": "object"
           },
           "type": "array"
         },

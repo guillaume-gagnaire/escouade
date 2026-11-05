@@ -29,6 +29,8 @@ export interface FakeOptions {
   projectSettings?: Record<string, Record<string, string | number | boolean>>;
   /** The files of its folder (`files/read`, `p.file`), by their path in it: `rules.json`, `data/words.txt`. */
   files?: Record<string, string>;
+  /** What `fs/*` and `proc/*` answer, by method: the app's rules are held by the bench (`escouade-plugin test`), not here. */
+  host?: Record<string, (params: any) => unknown>;
 }
 
 /**
@@ -177,6 +179,15 @@ export class FakeEscouade {
         return { jsonrpc: '2.0', id, error: { code: ERRORS.notFound, message: `no file ${JSON.stringify(path)} in the plugin's folder` } };
       }
       return { jsonrpc: '2.0', id, result: files[key] };
+    }
+    const served = this.options.host?.[method];
+    if (served) {
+      try {
+        return { jsonrpc: '2.0', id, result: served(params) ?? null };
+      } catch (e) {
+        const code = e instanceof RpcError ? e.code : ERRORS.internal;
+        return { jsonrpc: '2.0', id, error: { code, message: e instanceof Error ? e.message : String(e) } };
+      }
     }
     if (method !== 'secrets/get') {
       return { jsonrpc: '2.0', id, error: { code: ERRORS.methodNotFound, message: `unknown method ${method}` } };

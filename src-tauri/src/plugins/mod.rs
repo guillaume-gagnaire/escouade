@@ -33,6 +33,8 @@ pub mod events;
 pub mod files;
 pub use escouade_plugin_cli::manifest;
 // The reader of workflows a plugin brings (ESC-200).
+/// `proc/*`: the programs of a plugin in WASM.
+pub mod procs;
 pub mod reader;
 #[cfg_attr(not(test), allow(dead_code))]
 pub mod runtime;
@@ -235,7 +237,7 @@ pub fn project_settings(
 
 /// What a plugin may do, a word each, the strongest first (§3.4): `run` (it runs a program),
 /// `harness:<program> <args>` (an ACP harness it describes, which its agents run: PLG-6), `decide`
-/// (it decides the agents' permissions), then `commands:<c>`, `events:<e>`, `network:<host>` and
+/// (it decides the agents' permissions), then `commands:<c>`, `files:<root>:<access>`, `events:<e>`, `network:<host>` and
 /// `secrets:<key>`.
 pub fn asks(m: &Manifest) -> Vec<String> {
     let p = &m.permissions;
@@ -256,8 +258,9 @@ pub fn asks(m: &Manifest) -> Vec<String> {
     if p.decide {
         out.push("decide".to_string());
     }
+    out.extend(p.commands.iter().map(|w| format!("commands:{w}")));
+    out.extend(p.files.iter().map(|f| format!("files:{}", f.word())));
     for (kind, words) in [
-        ("commands", &p.commands),
         ("events", &p.events),
         ("network", &p.network),
         ("secrets", &p.secrets),
@@ -287,6 +290,8 @@ pub fn granted(m: &Manifest, revoked: &[String]) -> Manifest {
     keep("events", &mut p.events);
     keep("network", &mut p.network);
     keep("secrets", &mut p.secrets);
+    p.files
+        .retain(|f| !revoked.contains(&format!("files:{}", f.word())));
     if revoked.iter().any(|w| w == "decide") {
         p.decide = false;
     }

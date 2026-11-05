@@ -298,6 +298,109 @@ export interface LogParams {
   message: string;
 }
 
+/** What fs/* name: a path relative to root, or a path of the host (C:\wt\a.txt) under a root of the agent. root plugin and temp need no agent. */
+export interface FsPath {
+  /** The key of the agent, as agent/attach gave it. */
+  agent?: string;
+  /** A root of permissions.files. */
+  root?: 'plugin' | 'agent' | 'agentRepo' | 'agentHome' | 'temp';
+  /** Relative to root when there is one, absolute otherwise; never a .. nor a ~. */
+  path: string;
+}
+
+export interface FsReadResult {
+  /** The file, when it is UTF-8. */
+  text?: string;
+  /** The file, when it is not. */
+  dataBase64?: string;
+}
+
+export interface FsWriteParams {
+  /** As FsPath. */
+  agent?: string;
+  /** As FsPath. */
+  root?: 'plugin' | 'agent' | 'agentRepo' | 'agentHome' | 'temp';
+  /** As FsPath. */
+  path: string;
+  /** What to write, as text. */
+  text?: string;
+  /** What to write, in base64, in place of text. */
+  dataBase64?: string;
+  /** At the end of the file. */
+  append?: boolean;
+}
+
+export interface FsWriteResult {
+  /** Its real path. */
+  path: string;
+  bytes: number;
+}
+
+export interface FsStatResult {
+  kind: 'file' | 'dir' | 'other';
+  bytes: number;
+  /** In milliseconds since 1970. */
+  modified?: number | null;
+}
+
+export interface FsEntry {
+  name: string;
+  kind: 'file' | 'dir' | 'link' | 'other';
+  bytes: number;
+}
+
+export interface FsListResult {
+  entries: FsEntry[];
+  /** Past 4096 entries. */
+  truncated: boolean;
+}
+
+export interface FsCanonResult {
+  path: string;
+}
+
+export interface ProcSpawnParams {
+  /** The program's name, the first word of an entry of permissions.commands. */
+  command: string;
+  /** Its arguments. */
+  args?: string[];
+  /** Where it runs: a root, never a path. A private project refuses it unless the plugin was turned on for it. Left out: the plugin's temporary folder. */
+  dir?: 'agent' | 'project';
+  /** The key of the agent, for dir. */
+  agent?: string;
+  /** The id of a project, for dir project; the agent's when left out. */
+  project?: string;
+  /** The variables it names, over those of an agent; never ESCOUADE_*, PATH, LD_*, DYLD_*. */
+  env?: Record<string, string>;
+}
+
+export interface ProcSpawnResult {
+  proc: number;
+}
+
+export interface ProcRef {
+  proc: number;
+}
+
+export interface ProcWriteParams {
+  proc: number;
+  /** What to write on its input. */
+  data?: string;
+  /** Ends its input, after data. */
+  close?: boolean;
+}
+
+export interface ProcOutParams {
+  proc: number;
+  stream: 'stdout' | 'stderr';
+  data: string;
+}
+
+export interface ProcExitParams {
+  proc: number;
+  code: number | null;
+}
+
 /** Every fact, in the order of the schema. */
 export const FACT_NAMES: readonly FactName[] = [
   'agent.created',
@@ -351,6 +454,10 @@ export interface ToPlugin {
   'events/fact': { params: Fact; result: void };
   /** A permission an agent asks for, before the user is asked (permissions.decide). Past the delay, the user is asked. */
   'permissions/decide': { params: DecideParams; result: Decision };
+  /** What a program wrote, as text cut between two characters. Escouade stops reading it past 256 KiB not yet written on the input of the module. A notification: no answer. */
+  'proc/out': { params: ProcOutParams; result: void };
+  /** A program ended, after all it wrote; code is null when it was killed. A notification: no answer. */
+  'proc/exit': { params: ProcExitParams; result: void };
   /** A piece of a stream. */
   'net/chunk': { params: NetChunkParams; result: void };
   /** The end of a stream; none after a net/cancel. */
@@ -389,6 +496,22 @@ export interface ToEscouade {
   'timer/set': { params: TimerSetParams; result: TimerSetResult };
   /** Takes a timer back. */
   'timer/cancel': { params: TimerParams; result: void };
+  /** A file under a root: { text }, or { dataBase64 } when it is not UTF-8. For a plugin in WASM, by escouade.call (run.wasm) or by a line (run.js), on permissions.files: refused for a root it does not declare, a .., a ~, or a path that, links followed, is not under a root of that agent or that its fence refuses (« Projet privé »). failed past 256 KiB, or limits.fileBytes (4 MiB at most). */
+  'fs/read': { params: FsPath; result: FsReadResult };
+  /** Writes a file under a root in write access, the folders it needs made; each write goes to the plugin's journal. For a plugin in WASM, by escouade.call (run.wasm) or by a line (run.js), on permissions.files: refused for a root it does not declare, a .., a ~, or a path that, links followed, is not under a root of that agent or that its fence refuses (« Projet privé »). 4 MiB at most. */
+  'fs/write': { params: FsWriteParams; result: FsWriteResult };
+  /** What a path is. For a plugin in WASM, by escouade.call (run.wasm) or by a line (run.js), on permissions.files: refused for a root it does not declare, a .., a ~, or a path that, links followed, is not under a root of that agent or that its fence refuses (« Projet privé »). */
+  'fs/stat': { params: FsPath; result: FsStatResult };
+  /** The entries of a folder, by name, 4096 at most; a link is a link, not followed. For a plugin in WASM, by escouade.call (run.wasm) or by a line (run.js), on permissions.files: refused for a root it does not declare, a .., a ~, or a path that, links followed, is not under a root of that agent or that its fence refuses (« Projet privé »). */
+  'fs/list': { params: FsPath; result: FsListResult };
+  /** The real path of a path, links followed. For a plugin in WASM, by escouade.call (run.wasm) or by a line (run.js), on permissions.files: refused for a root it does not declare, a .., a ~, or a path that, links followed, is not under a root of that agent or that its fence refuses (« Projet privé »). */
+  'fs/canon': { params: FsPath; result: FsCanonResult };
+  /** Runs a program of permissions.commands, for a plugin in WASM: the command and its arguments must be an entry word for word, more following only an entry that ends in *. The program is found on the PATH, never a path; no shell; 4 at once; it ends with the plugin. Its environment is an agent's, without Escouade's variables, plus env. Its output comes by proc/out, its end by proc/exit; proc/out may come before this answer. Each start goes to the journal. */
+  'proc/spawn': { params: ProcSpawnParams; result: ProcSpawnResult };
+  /** Writes on the input of a program; close ends that input. failed past 1 MiB it has not read. */
+  'proc/write': { params: ProcWriteParams; result: null };
+  /** Ends a program and what it started; proc/exit follows. */
+  'proc/kill': { params: ProcRef; result: null };
   /** A line of its journal. */
   log: { params: LogParams; result: void };
 }
@@ -423,10 +546,10 @@ export const ERRORS = {
   notYours: -32001,
   /** The system's keychain cannot be reached. */
   keychain: -32002,
-  /** What the plugin may not reach: a host outside permissions.network, http, an address of the machine or of the local network (net/fetch); a path outside its folder, hidden, or its manifest (files/read). */
+  /** What the plugin may not reach: a host outside permissions.network, http, an address of the machine or of the local network (net/fetch); a path outside its folder, hidden, or its manifest (files/read); a path out of its roots (fs/*); a program, an argument, a folder or a variable it may not name (proc/spawn). A capability it does not declare says the same. */
   refused: -32003,
   /** A request that failed on the way: no answer within its delay, an answer or a file too big, a file that is not UTF-8. */
   failed: -32004,
-  /** No such file in the plugin's folder (files/read). */
+  /** No such file in the plugin's folder (files/read), or under a root (fs/*). */
   notFound: -32005,
 } as const;

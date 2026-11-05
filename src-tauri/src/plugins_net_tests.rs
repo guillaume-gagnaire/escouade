@@ -420,11 +420,13 @@ async fn the_limits_are_those_of_the_manifest_within_those_of_the_host() {
     let more = routed(port).limited(Declared {
         fetch_bytes: Some(3 << 20),
         fetch_seconds: None,
+        ..Declared::default()
     });
     assert_eq!(more.fetch(&get(url)).await.unwrap()["status"], 200);
     let quick = routed(port).limited(Declared {
         fetch_seconds: Some(1),
         fetch_bytes: Some(3 << 20),
+        ..Declared::default()
     });
     let (code, why) = quick
         .fetch(&get("https://api.exemple.dev/slow"))
@@ -435,6 +437,7 @@ async fn the_limits_are_those_of_the_manifest_within_those_of_the_host() {
     let asked = routed(port).limited(Declared {
         fetch_seconds: Some(3600),
         fetch_bytes: Some(1 << 40),
+        ..Declared::default()
     });
     assert_eq!(asked.seconds(), Duration::from_secs(120));
     assert_eq!(asked.bytes(), 32 << 20);

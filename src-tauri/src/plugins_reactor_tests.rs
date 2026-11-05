@@ -7,12 +7,16 @@
 use crate::i18n::Lang;
 use crate::integrations::secrets::MemoryStore;
 use crate::paths::DataDir;
+use crate::plugins::bench::fake::{Reach, Reply, Session, BENCH_AGENT};
 use crate::plugins::bench::{cli, run, Options, Verdict};
+use crate::plugins::events::Place;
+use crate::plugins::files::AgentPlace;
 use crate::plugins::journal::Kind;
-use crate::plugins::manifest::Hand;
+use crate::plugins::manifest::{self, Hand};
 use crate::plugins::runtime::{CallError, Limits, Runtime};
 use crate::plugins::wasm::{self, Calls, Fault, Fetcher, Frame, Instance, Made, Net, Wiring};
 use crate::plugins::Plugins;
+use crate::pty::ShellInfo;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap};
 use std::io::{BufRead, BufReader, Write};
@@ -95,6 +99,7 @@ impl Served {
                         stderr: Box::new(|_| {}),
                         refused: Arc::new(move |l| no.lock().unwrap().push(l.to_string())),
                         said: Arc::new(move |l| told.lock().unwrap().push(l.to_string())),
+                        capabilities: None,
                     },
                 ),
             };
@@ -297,7 +302,7 @@ fn a_fetch_refused_goes_to_the_journal_from_beside_the_thread() {
 
 fn echo() -> Calls {
     Arc::new(|method, params| match params.get("fail") {
-        Some(why) => Err(why.as_str().unwrap_or("").to_string()),
+        Some(why) => Err((-32003, why.as_str().unwrap_or("").to_string())),
         None => Ok(json!({ "method": method, "params": params })),
     })
 }
@@ -311,7 +316,11 @@ fn escouade_call_answers_within_the_turn() {
     assert_eq!(r["took"], expected.to_string().len());
     // Its refusal is said to the module, which goes on.
     let r = s.call(2, "probe/call", json!({ "fail": "not in permissions" }));
-    assert_eq!(r["answer"], json!({ "error": "not in permissions" }), "{r}");
+    assert_eq!(
+        r["answer"],
+        json!({ "error": "not in permissions", "code": -32003 }),
+        "{r}"
+    );
     // An answer too big for its room says what it needs, and writes nothing.
     let needed =
         json!({ "result": { "method": "probe/echo", "params": "a text longer than its room" } });
@@ -323,7 +332,11 @@ fn escouade_call_answers_within_the_turn() {
 fn escouade_call_without_a_method_to_serve_says_so() {
     let s = Served::plain(wasm::Limits::default(), None);
     let r = s.call(1, "probe/call", json!({}));
-    assert_eq!(r["answer"], json!({ "error": "no call probe/echo" }), "{r}");
+    assert_eq!(
+        r["answer"],
+        json!({ "error": "no call probe/echo", "code": -32601 }),
+        "{r}"
+    );
 }
 
 #[test]
@@ -605,4 +618,388 @@ fn a_module_reads_every_byte_it_is_given_from_a_line_cut_in_two() {
     std::thread::sleep(Duration::from_millis(50));
     tx.send((b.to_vec(), None)).unwrap();
     assert_eq!(s.answer()["result"]["turns"], 2);
+}
+
+// ---- Its folders and its programs (ESC-333) ----
+
+/// A project that the plugin of the test is not turned on for: refused when it is private.
+struct OnePlace {
+    private: bool,
+    folder: PathBuf,
+}
+
+impl Place for OnePlace {
+    fn shell(&self) -> Option<ShellInfo> {
+        None
+    }
+    fn project_path(&self, _: &str) -> Option<String> {
+        Some(self.folder.to_string_lossy().into_owned())
+    }
+    fn project_plugin(&self, _: &str, _: &str) -> Option<(bool, serde_json::Map<String, Value>)> {
+        Some((self.private, serde_json::Map::new()))
+    }
+}
+
+/// The agent `a` of the plugin, in a folder of the test beside another that is not its own.
+fn with_agent(w: &W) -> (PathBuf, BTreeMap<String, String>) {
+    let base = w.folder.parent().unwrap().canonicalize().unwrap();
+    for d in ["wt", "home", "other"] {
+        std::fs::create_dir_all(base.join(d)).unwrap();
+    }
+    std::fs::write(base.join("wt/notes.txt"), "dans son dossier").unwrap();
+    std::fs::write(base.join("home/config.toml"), "model = 1").unwrap();
+    std::fs::write(base.join("other/secret.txt"), "à un autre").unwrap();
+    let roots =
+        w.rt.place_agent(
+            ID,
+            "a",
+            AgentPlace {
+                cwd: base.join("wt"),
+                home: Some(base.join("home")),
+                project: "p".into(),
+                ..AgentPlace::default()
+            },
+        )
+        .unwrap();
+    (base, roots)
+}
+
+/// What the module was answered, by `escouade.call`.
+async fn host(w: &W, method: &str, params: Value) -> Value {
+    w.rt.call(
+        ID,
+        "probe/sync",
+        json!({ "method": method, "params": params }),
+    )
+    .await
+    .unwrap()
+}
+
+/// What the module was answered, by a line.
+async fn by_line(w: &W, method: &str, params: Value) -> Value {
+    w.rt.call(
+        ID,
+        "probe/host",
+        json!({ "method": method, "params": params }),
+    )
+    .await
+    .unwrap()
+}
+
+/// What its programs said, until one of them ended.
+async fn heard_until_exit(w: &W) -> (String, Value) {
+    let started = Instant::now();
+    let mut said = String::new();
+    loop {
+        let heard = w.rt.call(ID, "probe/heard", json!({})).await.unwrap();
+        for m in heard.as_array().unwrap() {
+            match m["method"].as_str() {
+                Some("proc/out") => said.push_str(m["params"]["data"].as_str().unwrap()),
+                Some("proc/exit") => return (said, m["params"]["code"].clone()),
+                _ => {}
+            }
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(20),
+            "no end: {said}"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_run_wasm_reads_the_folder_of_its_agent_and_runs_a_declared_command() {
+    let w = loaded("fs", Limits::default());
+    let (base, roots) = with_agent(&w);
+    assert_eq!(
+        roots.keys().map(String::as_str).collect::<Vec<_>>(),
+        vec!["agent", "agentHome"],
+        "those it declares"
+    );
+    let at = json!({ "agent": "a", "root": "agent", "path": "notes.txt" });
+    let read = host(&w, "fs/read", at.clone()).await;
+    assert_eq!(read["result"]["text"], "dans son dossier", "{read}");
+    // The same by a line, the door of `run.js`.
+    let read = by_line(&w, "fs/read", at).await;
+    assert_eq!(read["result"]["text"], "dans son dossier", "{read}");
+    let home = json!({ "agent": "a", "root": "agentHome", "path": "config.toml" });
+    assert_eq!(
+        host(&w, "fs/read", home).await["result"]["text"],
+        "model = 1"
+    );
+
+    let spawned = host(
+        &w,
+        "proc/spawn",
+        json!({ "command": "git", "args": ["--version"] }),
+    )
+    .await;
+    assert!(spawned["result"]["proc"].is_u64(), "{spawned}");
+    let (said, code) = heard_until_exit(&w).await;
+    assert!(said.starts_with("git version"), "{said}");
+    assert_eq!(code, 0);
+    assert!(journal_has(
+        &w.rt,
+        Kind::Message,
+        "proc/spawn: ran git --version"
+    ));
+
+    // What is not declared goes nowhere, by either door, and the journal keeps it.
+    for answer in [
+        host(
+            &w,
+            "fs/read",
+            json!({ "agent": "a", "path": base.join("other/secret.txt") }),
+        )
+        .await,
+        host(
+            &w,
+            "fs/read",
+            json!({ "agent": "a", "root": "agent", "path": "../other/secret.txt" }),
+        )
+        .await,
+        host(
+            &w,
+            "fs/write",
+            json!({ "agent": "a", "root": "agentHome", "path": "config.toml", "text": "x" }),
+        )
+        .await,
+        host(
+            &w,
+            "proc/spawn",
+            json!({ "command": "git", "args": ["status"] }),
+        )
+        .await,
+    ] {
+        assert_eq!(answer["code"], -32003, "{answer}");
+    }
+    let refused = by_line(
+        &w,
+        "proc/spawn",
+        json!({ "command": "git", "args": ["--version", "--x"] }),
+    )
+    .await;
+    assert_eq!(refused["error"]["code"], -32003, "{refused}");
+    assert!(journal_has(&w.rt, Kind::Refused, "fs/read: refused"));
+    assert!(journal_has(
+        &w.rt,
+        Kind::Refused,
+        "fs/write agentHome: refused"
+    ));
+    assert!(journal_has(
+        &w.rt,
+        Kind::Refused,
+        "git status is not in permissions.commands"
+    ));
+    assert_eq!(
+        std::fs::read_to_string(base.join("home/config.toml")).unwrap(),
+        "model = 1"
+    );
+    w.rt.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_write_is_made_once_even_when_its_answer_did_not_fit() {
+    let w = loaded("once", Limits::default());
+    let (base, _) = with_agent(&w);
+    let write = json!({
+        "method": "fs/write",
+        "params": { "agent": "a", "root": "agent", "path": "log.txt", "text": "x", "append": true },
+    });
+    let r = w.rt.call(ID, "probe/retry", write).await.unwrap();
+    assert_eq!(r["result"]["bytes"], 1, "{r}");
+    assert_eq!(
+        std::fs::read_to_string(base.join("wt/log.txt")).unwrap(),
+        "x"
+    );
+    w.rt.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_agent_is_given_again_to_the_next_instance_and_its_programs_end_with_the_last() {
+    // Time for a turn that starts a program, not for one that spins.
+    let mut limits = Limits::default();
+    limits.wasm.turn = Duration::from_secs(1);
+    let w = loaded("restart", limits);
+    let (base, _) = with_agent(&w);
+    std::process::Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(base.join("wt"))
+        .status()
+        .unwrap();
+    let place: Arc<dyn Place> = Arc::new(OnePlace {
+        private: false,
+        folder: base.join("wt"),
+    });
+    w.rt.place_with(Arc::downgrade(&place));
+    // It waits for its input: only the end of the instance ends it.
+    let batch =
+        json!({ "command": "git", "args": ["cat-file", "--batch"], "dir": "agent", "agent": "a" });
+    let spawned = host(&w, "proc/spawn", batch).await;
+    assert!(spawned["result"]["proc"].is_u64(), "{spawned}");
+    let _ = w.rt.call(ID, "probe/spin", json!({})).await;
+    let at = json!({ "agent": "a", "root": "agent", "path": "notes.txt" });
+    let asked = json!({ "method": "fs/read", "params": at });
+    let started = Instant::now();
+    loop {
+        if let Ok(v) = w.rt.call(ID, "probe/sync", asked.clone()).await {
+            assert_eq!(v["result"]["text"], "dans son dossier", "{v}");
+            break;
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(30),
+            "no new instance"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    while !journal_has(
+        &w.rt,
+        Kind::Message,
+        "proc/exit: git cat-file --batch ended",
+    ) {
+        assert!(
+            started.elapsed() < Duration::from_secs(30),
+            "{:?}",
+            w.rt.journal(ID)
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    w.rt.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_private_project_refuses_a_program_to_a_plugin_not_turned_on_for_it() {
+    let w = loaded("private", Limits::default());
+    let (base, _) = with_agent(&w);
+    let spawn = json!({ "command": "git", "args": ["--version"], "dir": "agent", "agent": "a" });
+    let place: Arc<dyn Place> = Arc::new(OnePlace {
+        private: true,
+        folder: base.join("wt"),
+    });
+    w.rt.place_with(Arc::downgrade(&place));
+    let r = host(&w, "proc/spawn", spawn.clone()).await;
+    assert_eq!(r["code"], -32003, "{r}");
+    assert!(r["error"].as_str().unwrap().contains("private"), "{r}");
+    let project =
+        json!({ "command": "git", "args": ["--version"], "dir": "project", "project": "p" });
+    assert_eq!(host(&w, "proc/spawn", project).await["code"], -32003);
+    // Not private: it runs.
+    let place: Arc<dyn Place> = Arc::new(OnePlace {
+        private: false,
+        folder: base.join("wt"),
+    });
+    w.rt.place_with(Arc::downgrade(&place));
+    let r = host(&w, "proc/spawn", spawn).await;
+    assert!(r["result"]["proc"].is_u64(), "{r}");
+    heard_until_exit(&w).await;
+    w.rt.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_program_goes_to_the_journal_its_secrets_masked() {
+    let w = loaded("mask", Limits::default());
+    w.rt.journal_of(ID).mask("le-secret-du-plugin");
+    let spawned = host(
+        &w,
+        "proc/spawn",
+        json!({ "command": "git", "args": ["rev-parse", "le-secret-du-plugin"] }),
+    )
+    .await;
+    assert!(spawned["result"]["proc"].is_u64(), "{spawned}");
+    heard_until_exit(&w).await;
+    assert!(journal_has(
+        &w.rt,
+        Kind::Message,
+        "proc/spawn: ran git rev-parse"
+    ));
+    assert!(!w
+        .rt
+        .journal(ID)
+        .iter()
+        .any(|e| e.text.contains("le-secret-du-plugin")));
+    w.rt.shutdown();
+}
+
+#[test]
+fn a_folder_or_a_command_taken_back_is_no_longer_given() {
+    let text = std::fs::read_to_string(fixture().join("escouade-plugin.json")).unwrap();
+    let read = manifest::read(&text, Hand::Third).manifest.unwrap();
+    let asks = crate::plugins::asks(&read);
+    assert!(asks.contains(&"files:agent:write".to_string()), "{asks:?}");
+    assert!(
+        asks.contains(&"commands:git --version".to_string()),
+        "{asks:?}"
+    );
+    let left = crate::plugins::granted(
+        &read,
+        &["files:agent:write".into(), "commands:git --version".into()],
+    );
+    assert_eq!(left.permissions.files.len(), 1);
+    assert_eq!(left.permissions.files[0].root, "agentHome");
+    assert!(!left
+        .permissions
+        .commands
+        .contains(&"git --version".to_string()));
+}
+
+async fn bench_host(s: &Session, method: &str, params: Value) -> Value {
+    let asked = json!({ "method": method, "params": params });
+    match s.call("probe/sync", &asked, Duration::from_secs(20)).await {
+        Reply::Answered { result, .. } => result.unwrap(),
+        other => panic!("{other:?}"),
+    }
+}
+
+/// The bench plays `fs/*` and `proc/*` by the app's rules, around an agent of its own; offline, no program runs.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_bench_serves_the_folders_and_the_programs_as_the_app() {
+    let folder = copied("bench");
+    let text = std::fs::read_to_string(folder.join("escouade-plugin.json")).unwrap();
+    let m = manifest::read(&text, Hand::First).manifest.unwrap();
+    let start = |offline| {
+        Session::start_wasm(
+            &folder,
+            &m,
+            module(),
+            HashMap::new(),
+            None,
+            wasm::Limits::default(),
+            Reach {
+                offline,
+                ..Reach::default()
+            },
+        )
+        .unwrap()
+    };
+    let s = start(false);
+    let at = json!({ "agent": BENCH_AGENT, "root": "agent", "path": "n.txt", "text": "un" });
+    assert_eq!(
+        bench_host(&s, "fs/write", at.clone()).await["result"]["bytes"],
+        2
+    );
+    assert_eq!(bench_host(&s, "fs/read", at).await["result"]["text"], "un");
+    let out = bench_host(
+        &s,
+        "fs/read",
+        json!({ "agent": BENCH_AGENT, "path": folder.join("Cargo.toml") }),
+    )
+    .await;
+    assert_eq!(out["code"], -32003, "{out}");
+    let ran = bench_host(
+        &s,
+        "proc/spawn",
+        json!({ "command": "git", "args": ["--version"] }),
+    )
+    .await;
+    assert!(ran["result"]["proc"].is_u64(), "{ran}");
+    s.kill();
+    let s = start(true);
+    let no = bench_host(
+        &s,
+        "proc/spawn",
+        json!({ "command": "git", "args": ["--version"] }),
+    )
+    .await;
+    assert_eq!(no["code"], -32003, "{no}");
+    s.kill();
 }

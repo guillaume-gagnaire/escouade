@@ -9,14 +9,15 @@
 //! A `run.js` plugin is played in WASM (ESC-322), in the app's own host (`plugins::wasm`): its module, an instance on a
 //! thread of its own, `net/fetch` served by the host and closed to what `permissions.network` does not name; no Node.
 //! As in the app, its instance ends once it answered `shutdown`, and a fault (its time, its memory, an exception) ends
-//! it as a crash ends a process.
+//! it as a crash ends a process. Its `fs/*` and `proc/*` are the app's (ESC-333), on the manifest as it is, around one agent
+//! of the bench, `BENCH_AGENT`, in a scratch folder that goes with the session; offline, it runs no program.
 
 use crate::job::Job;
 use crate::plugins::manifest::Manifest;
 use crate::plugins::runtime::{
     matches, notification_line, request_line, METHOD_NOT_FOUND, NOT_YOURS, PROTOCOL,
 };
-use crate::plugins::wasm;
+use crate::plugins::{files, procs, wasm};
 use parking_lot::Mutex;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -29,6 +30,52 @@ use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::{mpsc, oneshot, Notify};
+
+/// The key of the bench's agent, for `fs/*` and `proc/*`.
+pub const BENCH_AGENT: &str = "bench";
+
+/// What a plugin in WASM reaches in the bench: the app's rules, around a scratch folder and its one agent. `back` is the
+/// way to its channel; offline, the manifest's commands are not given.
+fn capabilities(
+    shared: Arc<Shared>,
+    manifest: &Manifest,
+    folder: &Path,
+    scratch: &Path,
+    offline: bool,
+    back: mpsc::WeakUnboundedSender<wasm::Frame>,
+) -> Arc<wasm::Capabilities> {
+    for d in ["agent", "repo", "home", "project", "temp"] {
+        let _ = std::fs::create_dir_all(scratch.join(d));
+    }
+    let agents: files::Agents = Arc::default();
+    agents.lock().insert(
+        BENCH_AGENT.to_string(),
+        files::AgentPlace {
+            cwd: scratch.join("agent"),
+            repo: Some(scratch.join("repo")),
+            home: Some(scratch.join("home")),
+            fence: crate::fence::Fence::default(),
+            project: "bench".into(),
+        },
+    );
+    let told: procs::Told = Arc::new(move |_, line| shared.tell(line.to_string()));
+    let project = scratch.join("project");
+    let procs = procs::Procs::new(procs::ProcsOf {
+        commands: if offline {
+            Vec::new()
+        } else {
+            manifest.permissions.commands.clone()
+        },
+        temp: scratch.join("temp"),
+        agents: agents.clone(),
+        projects: Arc::new(move |_| Ok(project.clone())),
+        agent_env: Vec::new(),
+        back,
+        told: told.clone(),
+    });
+    let access = files::Access::new(manifest, folder, scratch.join("temp"), agents);
+    wasm::Capabilities::new(access, procs, told)
+}
 
 /// How many lines of its standard error an end tells.
 const TAIL: usize = 10;
@@ -296,6 +343,7 @@ impl Session {
                 }
             })?;
         let files = wasm::files_of(folder);
+        let offline = reach.offline;
         // Offline (the review's bench), no host is covered: every fetch is refused, as the container's `--network=none`.
         let fetcher = wasm::Fetcher::new(
             &manifest.id,
@@ -310,6 +358,16 @@ impl Session {
             },
         )
         .limited(manifest.limits);
+        let scratch =
+            std::env::temp_dir().join(format!("escouade-bench-{}", uuid::Uuid::new_v4().simple()));
+        let reached = capabilities(
+            shared.clone(),
+            manifest,
+            folder,
+            &scratch,
+            offline,
+            back.clone(),
+        );
         let (s1, s2, s3, s4, s5) = (
             shared.clone(),
             shared.clone(),
@@ -320,7 +378,8 @@ impl Session {
         std::thread::Builder::new()
             .name(format!("bench {}", manifest.id))
             .spawn(move || {
-                let fault = match wasm::Instance::start(&module, &files, limits) {
+                let calls = Some(reached.calls());
+                let fault = match wasm::Instance::start_with(&module, &files, limits, calls) {
                     Err(f) => Some(f),
                     Ok(instance) => {
                         let wiring = wasm::Wiring {
@@ -330,10 +389,13 @@ impl Session {
                             stderr: Box::new(move |l| s2.tell(l.to_string())),
                             refused: Arc::new(move |l| s3.tell(l.to_string())),
                             said: Arc::new(move |l| s5.tell(l.to_string())),
+                            capabilities: Some(reached.clone()),
                         };
                         wasm::serve(instance, fetcher, wiring)
                     }
                 };
+                reached.end();
+                let _ = std::fs::remove_dir_all(&scratch);
                 // A fault ends it as a crash ends a process (code 1); its input closed, it was stopped.
                 let code = fault.map(|f| {
                     s4.tell(f.to_string());

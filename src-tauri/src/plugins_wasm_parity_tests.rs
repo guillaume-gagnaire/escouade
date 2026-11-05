@@ -76,6 +76,7 @@ impl Hosted {
                     stderr: Box::new(|_| {}),
                     refused: Arc::new(|_| {}),
                     said: Arc::new(|_| {}),
+                    capabilities: None,
                 },
             );
             assert_eq!(fault, None);

@@ -46,6 +46,22 @@
       },
       "timeoutMs": 500
     },
+    "proc/out": {
+      "description": "What a program wrote, as text cut between two characters. Escouade stops reading it past 256 KiB not yet written on the input of the module. A notification: no answer.",
+      "direction": "toPlugin",
+      "notification": true,
+      "params": {
+        "$ref": "#/definitions/ProcOutParams"
+      }
+    },
+    "proc/exit": {
+      "description": "A program ended, after all it wrote; code is null when it was killed. A notification: no answer.",
+      "direction": "toPlugin",
+      "notification": true,
+      "params": {
+        "$ref": "#/definitions/ProcExitParams"
+      }
+    },
     "secrets/get": {
       "description": "One of its secrets (a key of permissions.secrets), or null when none is kept.",
       "direction": "toEscouade",
@@ -214,6 +230,94 @@
         "$ref": "#/definitions/TimerParams"
       }
     },
+    "fs/read": {
+      "description": "A file under a root: { text }, or { dataBase64 } when it is not UTF-8. For a plugin in WASM, by escouade.call (run.wasm) or by a line (run.js), on permissions.files: refused for a root it does not declare, a .., a ~, or a path that, links followed, is not under a root of that agent or that its fence refuses (« Projet privé »). failed past 256 KiB, or limits.fileBytes (4 MiB at most).",
+      "direction": "toEscouade",
+      "params": {
+        "$ref": "#/definitions/FsPath"
+      },
+      "result": {
+        "$ref": "#/definitions/FsReadResult"
+      },
+      "errors": ["invalidParams", "refused", "notFound", "failed"]
+    },
+    "fs/write": {
+      "description": "Writes a file under a root in write access, the folders it needs made; each write goes to the plugin's journal. For a plugin in WASM, by escouade.call (run.wasm) or by a line (run.js), on permissions.files: refused for a root it does not declare, a .., a ~, or a path that, links followed, is not under a root of that agent or that its fence refuses (« Projet privé »). 4 MiB at most.",
+      "direction": "toEscouade",
+      "params": {
+        "$ref": "#/definitions/FsWriteParams"
+      },
+      "result": {
+        "$ref": "#/definitions/FsWriteResult"
+      },
+      "errors": ["invalidParams", "refused", "failed"]
+    },
+    "fs/stat": {
+      "description": "What a path is. For a plugin in WASM, by escouade.call (run.wasm) or by a line (run.js), on permissions.files: refused for a root it does not declare, a .., a ~, or a path that, links followed, is not under a root of that agent or that its fence refuses (« Projet privé »).",
+      "direction": "toEscouade",
+      "params": {
+        "$ref": "#/definitions/FsPath"
+      },
+      "result": {
+        "$ref": "#/definitions/FsStatResult"
+      },
+      "errors": ["invalidParams", "refused", "notFound"]
+    },
+    "fs/list": {
+      "description": "The entries of a folder, by name, 4096 at most; a link is a link, not followed. For a plugin in WASM, by escouade.call (run.wasm) or by a line (run.js), on permissions.files: refused for a root it does not declare, a .., a ~, or a path that, links followed, is not under a root of that agent or that its fence refuses (« Projet privé »).",
+      "direction": "toEscouade",
+      "params": {
+        "$ref": "#/definitions/FsPath"
+      },
+      "result": {
+        "$ref": "#/definitions/FsListResult"
+      },
+      "errors": ["invalidParams", "refused", "notFound"]
+    },
+    "fs/canon": {
+      "description": "The real path of a path, links followed. For a plugin in WASM, by escouade.call (run.wasm) or by a line (run.js), on permissions.files: refused for a root it does not declare, a .., a ~, or a path that, links followed, is not under a root of that agent or that its fence refuses (« Projet privé »).",
+      "direction": "toEscouade",
+      "params": {
+        "$ref": "#/definitions/FsPath"
+      },
+      "result": {
+        "$ref": "#/definitions/FsCanonResult"
+      },
+      "errors": ["invalidParams", "refused"]
+    },
+    "proc/spawn": {
+      "description": "Runs a program of permissions.commands, for a plugin in WASM: the command and its arguments must be an entry word for word, more following only an entry that ends in *. The program is found on the PATH, never a path; no shell; 4 at once; it ends with the plugin. Its environment is an agent's, without Escouade's variables, plus env. Its output comes by proc/out, its end by proc/exit; proc/out may come before this answer. Each start goes to the journal.",
+      "direction": "toEscouade",
+      "params": {
+        "$ref": "#/definitions/ProcSpawnParams"
+      },
+      "result": {
+        "$ref": "#/definitions/ProcSpawnResult"
+      },
+      "errors": ["invalidParams", "refused", "failed"]
+    },
+    "proc/write": {
+      "description": "Writes on the input of a program; close ends that input. failed past 1 MiB it has not read.",
+      "direction": "toEscouade",
+      "params": {
+        "$ref": "#/definitions/ProcWriteParams"
+      },
+      "result": {
+        "type": "null"
+      },
+      "errors": ["invalidParams", "failed"]
+    },
+    "proc/kill": {
+      "description": "Ends a program and what it started; proc/exit follows.",
+      "direction": "toEscouade",
+      "params": {
+        "$ref": "#/definitions/ProcRef"
+      },
+      "result": {
+        "type": "null"
+      },
+      "errors": ["invalidParams", "failed"]
+    },
     "log": {
       "description": "A line of its journal.",
       "direction": "toEscouade",
@@ -255,7 +359,7 @@
     },
     "refused": {
       "code": -32003,
-      "description": "What the plugin may not reach: a host outside permissions.network, http, an address of the machine or of the local network (net/fetch); a path outside its folder, hidden, or its manifest (files/read)."
+      "description": "What the plugin may not reach: a host outside permissions.network, http, an address of the machine or of the local network (net/fetch); a path outside its folder, hidden, or its manifest (files/read); a path out of its roots (fs/*); a program, an argument, a folder or a variable it may not name (proc/spawn). A capability it does not declare says the same."
     },
     "failed": {
       "code": -32004,
@@ -263,7 +367,7 @@
     },
     "notFound": {
       "code": -32005,
-      "description": "No such file in the plugin's folder (files/read)."
+      "description": "No such file in the plugin's folder (files/read), or under a root (fs/*)."
     }
   },
   "definitions": {
@@ -851,6 +955,235 @@
         }
       },
       "required": ["level", "message"]
+    },
+    "FsPath": {
+      "type": "object",
+      "description": "What fs/* name: a path relative to root, or a path of the host (C:\\wt\\a.txt) under a root of the agent. root plugin and temp need no agent.",
+      "properties": {
+        "agent": {
+          "type": "string",
+          "description": "The key of the agent, as agent/attach gave it."
+        },
+        "root": {
+          "description": "A root of permissions.files.",
+          "enum": ["plugin", "agent", "agentRepo", "agentHome", "temp"]
+        },
+        "path": {
+          "type": "string",
+          "description": "Relative to root when there is one, absolute otherwise; never a .. nor a ~."
+        }
+      },
+      "required": ["path"]
+    },
+    "FsReadResult": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "The file, when it is UTF-8."
+        },
+        "dataBase64": {
+          "type": "string",
+          "description": "The file, when it is not."
+        }
+      }
+    },
+    "FsWriteParams": {
+      "type": "object",
+      "properties": {
+        "agent": {
+          "type": "string",
+          "description": "As FsPath."
+        },
+        "root": {
+          "description": "As FsPath.",
+          "enum": ["plugin", "agent", "agentRepo", "agentHome", "temp"]
+        },
+        "path": {
+          "type": "string",
+          "description": "As FsPath."
+        },
+        "text": {
+          "type": "string",
+          "description": "What to write, as text."
+        },
+        "dataBase64": {
+          "type": "string",
+          "description": "What to write, in base64, in place of text."
+        },
+        "append": {
+          "type": "boolean",
+          "description": "At the end of the file."
+        }
+      },
+      "required": ["path"]
+    },
+    "FsWriteResult": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Its real path."
+        },
+        "bytes": {
+          "type": "integer"
+        }
+      },
+      "required": ["path", "bytes"]
+    },
+    "FsStatResult": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": ["file", "dir", "other"]
+        },
+        "bytes": {
+          "type": "integer"
+        },
+        "modified": {
+          "description": "In milliseconds since 1970.",
+          "type": ["integer", "null"]
+        }
+      },
+      "required": ["kind", "bytes"]
+    },
+    "FsEntry": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": ["file", "dir", "link", "other"]
+        },
+        "bytes": {
+          "type": "integer"
+        }
+      },
+      "required": ["name", "kind", "bytes"]
+    },
+    "FsListResult": {
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FsEntry"
+          }
+        },
+        "truncated": {
+          "type": "boolean",
+          "description": "Past 4096 entries."
+        }
+      },
+      "required": ["entries", "truncated"]
+    },
+    "FsCanonResult": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": ["path"]
+    },
+    "ProcSpawnParams": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "The program's name, the first word of an entry of permissions.commands."
+        },
+        "args": {
+          "description": "Its arguments.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dir": {
+          "description": "Where it runs: a root, never a path. A private project refuses it unless the plugin was turned on for it. Left out: the plugin's temporary folder.",
+          "enum": ["agent", "project"]
+        },
+        "agent": {
+          "type": "string",
+          "description": "The key of the agent, for dir."
+        },
+        "project": {
+          "type": "string",
+          "description": "The id of a project, for dir project; the agent's when left out."
+        },
+        "env": {
+          "description": "The variables it names, over those of an agent; never ESCOUADE_*, PATH, LD_*, DYLD_*.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["command"]
+    },
+    "ProcSpawnResult": {
+      "type": "object",
+      "properties": {
+        "proc": {
+          "type": "integer"
+        }
+      },
+      "required": ["proc"]
+    },
+    "ProcRef": {
+      "type": "object",
+      "properties": {
+        "proc": {
+          "type": "integer"
+        }
+      },
+      "required": ["proc"]
+    },
+    "ProcWriteParams": {
+      "type": "object",
+      "properties": {
+        "proc": {
+          "type": "integer"
+        },
+        "data": {
+          "type": "string",
+          "description": "What to write on its input."
+        },
+        "close": {
+          "type": "boolean",
+          "description": "Ends its input, after data."
+        }
+      },
+      "required": ["proc"]
+    },
+    "ProcOutParams": {
+      "type": "object",
+      "properties": {
+        "proc": {
+          "type": "integer"
+        },
+        "stream": {
+          "enum": ["stdout", "stderr"]
+        },
+        "data": {
+          "type": "string"
+        }
+      },
+      "required": ["proc", "stream", "data"]
+    },
+    "ProcExitParams": {
+      "type": "object",
+      "properties": {
+        "proc": {
+          "type": "integer"
+        },
+        "code": {
+          "type": ["integer", "null"]
+        }
+      },
+      "required": ["proc", "code"]
     }
   }
 }

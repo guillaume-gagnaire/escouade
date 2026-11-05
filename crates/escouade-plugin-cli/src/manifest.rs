@@ -161,6 +161,10 @@ pub enum Code {
     Exclusive,
     /// A `run.wasm` that names no `Cargo.toml`: a module is built, never brought (ESC-331).
     Cargo,
+    /// A command that does not start with a program's name, or a `*` that is not its last word (ESC-333).
+    Command,
+    /// Writing in the plugin's own folder: what the store signed stays as it was (ESC-333).
+    ReadOnly,
 }
 
 /// A field that is wrong, by its path (`contributes.settings[0].key`; empty for the whole file).
@@ -258,6 +262,16 @@ impl Problem {
                 lang,
                 "va vers un hôte que `permissions.network` ne déclare pas : l'utilisateur ne le verrait pas.",
                 "goes to a host `permissions.network` does not declare: the user would not see it."
+            ),
+            Code::Command => tr_in!(
+                lang,
+                "doit commencer par le nom d'un programme, jamais un chemin, et `*` n'y vient qu'en dernier mot.",
+                "must start with a program's name, never a path, and `*` comes only as its last word."
+            ),
+            Code::ReadOnly => tr_in!(
+                lang,
+                "ne peut pas être en écriture : le dossier du plugin ne change pas.",
+                "cannot be written: the plugin's folder does not change."
             ),
             Code::Exclusive => tr_in!(
                 lang,
@@ -366,6 +380,30 @@ impl Run {
     }
 }
 
+/// The folders a plugin may name (docs/PLUGINS.md §8.4.6), a closed list the host resolves: no path of its own, no `~`.
+pub const FILE_ROOTS: &[&str] = &["plugin", "agent", "agentRepo", "agentHome", "temp"];
+/// What it may do there.
+pub const FILE_ACCESS: &[&str] = &["read", "write"];
+
+/// A folder it asks for (`permissions.files`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileAccess {
+    pub root: String,
+    pub access: String,
+}
+
+impl FileAccess {
+    /// Whether it may write there.
+    pub fn writes(&self) -> bool {
+        self.access == "write"
+    }
+    /// Its word in `asks`.
+    pub fn word(&self) -> String {
+        format!("{}:{}", self.root, self.access)
+    }
+}
+
 /// What it asks for (`permissions`); a permission Escouade does not know is not given.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -374,19 +412,24 @@ pub struct Permissions {
     pub network: Vec<String>,
     pub secrets: Vec<String>,
     pub commands: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<FileAccess>,
     pub decide: bool,
 }
 
-/// What a plugin in WASM asks of `net/fetch` above the host's defaults (`limits`, ESC-332): the host caps both.
+/// What it asks for beyond the host's defaults (`limits`): the host holds them to its own ceilings.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Limits {
-    /// How long a call may take, in seconds.
+    /// How long a call of `net/fetch` may take, in seconds.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fetch_seconds: Option<u64>,
-    /// How much an answer may hold, in bytes.
+    /// How much its answer may hold, in bytes.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fetch_bytes: Option<u64>,
+    /// How much `fs/read` gives at most.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_bytes: Option<u64>,
 }
 
 impl Limits {
@@ -415,7 +458,7 @@ pub struct Manifest {
     pub run: Option<Run>,
     pub activation: Vec<String>,
     pub permissions: Permissions,
-    /// What it asks of `net/fetch`.
+    /// What it asks for beyond the host's defaults.
     #[serde(skip_serializing_if = "Limits::is_empty")]
     pub limits: Limits,
     /// Its icon, a PNG of its folder (`icon_file` reads it).
@@ -588,6 +631,20 @@ pub fn written_host(url: &str) -> Option<String> {
         None => host.split(':').next().unwrap_or(""),
     };
     (!host.is_empty()).then(|| host.trim_end_matches('.').to_ascii_lowercase())
+}
+
+/// Whether a line of `permissions.commands` holds: its first word is a program's name, never a path, and a `*` comes
+/// only as its last word.
+pub fn command_holds(command: &str) -> bool {
+    let words: Vec<&str> = command.split_whitespace().collect();
+    let Some((first, rest)) = words.split_first() else {
+        return false;
+    };
+    let args = rest.len().saturating_sub(1);
+    !first.is_empty()
+        && !first.contains(['/', '\\', ':', '*', '~'])
+        && !first.starts_with('.')
+        && !rest[..args].contains(&"*")
 }
 
 /// Whether `permissions.network` covers `host`, without regard to case: a host written alone
@@ -963,10 +1020,11 @@ impl Checker {
         let Some(o) = self.object(v, "limits") else {
             return l;
         };
-        self.ignore_others(o, "limits", &["fetchSeconds", "fetchBytes"]);
+        self.ignore_others(o, "limits", &["fetchSeconds", "fetchBytes", "fileBytes"]);
         for (key, field) in [
             ("fetchSeconds", &mut l.fetch_seconds),
             ("fetchBytes", &mut l.fetch_bytes),
+            ("fileBytes", &mut l.file_bytes),
         ] {
             if let Some(v) = o.get(key) {
                 match v.as_u64().filter(|n| *n > 0) {
@@ -1157,7 +1215,9 @@ impl Checker {
         self.ignore_others(
             o,
             "permissions",
-            &["events", "network", "secrets", "commands", "decide"],
+            &[
+                "events", "network", "secrets", "commands", "files", "decide",
+            ],
         );
         for (key, list) in [
             ("events", &mut p.events),
@@ -1169,6 +1229,14 @@ impl Checker {
                 *list = self.words(v, &join("permissions", key));
             }
         }
+        for (i, command) in p.commands.clone().iter().enumerate() {
+            if !command_holds(command) {
+                self.problem(&format!("permissions.commands[{i}]"), Code::Command);
+            }
+        }
+        if let Some(v) = o.get("files") {
+            p.files = self.files(v);
+        }
         if let Some(d) = o.get("decide") {
             match d.as_bool() {
                 Some(b) => p.decide = b,
@@ -1176,6 +1244,53 @@ impl Checker {
             }
         }
         p
+    }
+
+    /// `permissions.files`: a root of the closed list and what it may do there; each once.
+    fn files(&mut self, v: &Value) -> Vec<FileAccess> {
+        let path = "permissions.files";
+        let Some(items) = v.as_array() else {
+            self.wrong_type(path, "array");
+            return Vec::new();
+        };
+        let mut out: Vec<FileAccess> = Vec::new();
+        for (i, item) in items.iter().enumerate() {
+            let at = format!("{path}[{i}]");
+            let Some(o) = self.object(item, &at) else {
+                continue;
+            };
+            self.ignore_others(o, &at, &["root", "access"]);
+            let mut pick = |key: &str, among: &[&str]| -> Option<String> {
+                let at = join(&at, key);
+                let Some(v) = o.get(key) else {
+                    self.problem(&at, Code::Required);
+                    return None;
+                };
+                let s = self.string(v, &at)?;
+                if !among.contains(&s) {
+                    self.problems.push(Problem {
+                        path: at,
+                        code: Code::Enum,
+                        expected: Some(among.join(", ")),
+                    });
+                    return None;
+                }
+                Some(s.to_string())
+            };
+            let (root, access) = (pick("root", FILE_ROOTS), pick("access", FILE_ACCESS));
+            let (Some(root), Some(access)) = (root, access) else {
+                continue;
+            };
+            let file = FileAccess { root, access };
+            if file.root == "plugin" && file.writes() {
+                self.problem(&join(&at, "access"), Code::ReadOnly);
+            } else if out.iter().any(|f| f.root == file.root) {
+                self.problem(&join(&at, "root"), Code::Duplicate);
+            } else {
+                out.push(file);
+            }
+        }
+        out
     }
 
     /// The objects of the list of an extension point.
@@ -1417,12 +1532,84 @@ pub fn schema() -> Value {
         "items": { "type": "string", "minLength": 1 },
     });
     let open = |about: &str| json!({ "type": "array", "description": about, "items": { "type": "object" } });
+    // Apart: the macro of the whole schema would reach its limit of recursion.
+    let commands = json!({
+        "type": "array",
+        "description": "The programs it may run (`proc/spawn`): a program's name, never a path, then its arguments, word for word. A last word `*` lets any more follow.",
+        "items": { "type": "string", "minLength": 1 },
+    });
+    let files = json!({
+        "type": "array",
+        "description": "The folders it may read or write (`fs/*`): a root of the closed list, which the host resolves; no path of its own. `plugin` is read only.",
+        "items": {
+            "type": "object",
+            "required": ["root", "access"],
+            "properties": {
+                "root": { "enum": FILE_ROOTS },
+                "access": { "enum": FILE_ACCESS },
+            },
+        },
+    });
+    let permissions = json!({
+        "type": "object",
+        "description": "What it asks for, shown before it is installed.",
+        "properties": {
+            "events": words,
+            "network": words,
+            "secrets": words,
+            "commands": commands,
+            "files": files,
+            "decide": { "type": "boolean" },
+        },
+    });
+    let contributes = json!({
+        "type": "object",
+        "description": "Its extension points.",
+        "properties": {
+            "settings": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["key", "type", "title"],
+                    "properties": { "key": key, "type": { "enum": SETTING_TYPES }, "title": text },
+                },
+            },
+            "secrets": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["key", "title"],
+                    "properties": { "key": key, "title": text },
+                },
+            },
+            "accounts": with_id("A kind of account its points share.", false),
+            "ticketSources": with_id("Sources of the Kanban.", true),
+            "forges": with_id("Code hosts: pull requests, CI, deployments.", true),
+            "harnesses": with_id("Harnesses.", true),
+            "launchEnvironments": with_id("Launch environments: the up, ls, down and destroy of a worktree.", false),
+            "workflowReaders": readers,
+            "themes": open("Themes."),
+            "webhooks": open("Webhooks, without code."),
+            "commands": open("Commands run on an event."),
+            "menus": open("Menus."),
+            "statusBar": open("Items of the status bar."),
+            "badges": open("Badges of the cards."),
+            "projectTemplates": open("Templates of the project wizard."),
+            "escouadeYml": { "type": "object", "description": "Its keys of .escouade.yml." },
+        },
+    });
     let limits = json!({
         "type": "object",
-        "description": "What a plugin in WASM asks of `net/fetch` above the 10 s and the 1 MiB of a call; Escouade caps them at 120 s and 32 MiB.",
+        "description": "What a plugin in WASM asks for beyond the host's defaults; Escouade caps them at 120 s and 32 MiB for `net/fetch`, 4 MiB for `fs/read`.",
         "properties": {
             "fetchSeconds": { "type": "integer", "minimum": 1 },
             "fetchBytes": { "type": "integer", "minimum": 1 },
+            "fileBytes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4194304,
+                "description": "How much `fs/read` gives at most: 256 KiB without it.",
+            },
         },
     });
     let mut schema = json!({
@@ -1485,53 +1672,8 @@ pub fn schema() -> Value {
                 "description": "What starts it (`event:ticket.column`, `account:github`); without any, it does not run.",
                 "items": { "type": "string", "minLength": 1 },
             },
-            "permissions": {
-                "type": "object",
-                "description": "What it asks for, shown before it is installed.",
-                "properties": {
-                    "events": words,
-                    "network": words,
-                    "secrets": words,
-                    "commands": words,
-                    "decide": { "type": "boolean" },
-                },
-            },
-            "contributes": {
-                "type": "object",
-                "description": "Its extension points.",
-                "properties": {
-                    "settings": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "required": ["key", "type", "title"],
-                            "properties": { "key": key, "type": { "enum": SETTING_TYPES }, "title": text },
-                        },
-                    },
-                    "secrets": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "required": ["key", "title"],
-                            "properties": { "key": key, "title": text },
-                        },
-                    },
-                    "accounts": with_id("A kind of account its points share.", false),
-                    "ticketSources": with_id("Sources of the Kanban.", true),
-                    "forges": with_id("Code hosts: pull requests, CI, deployments.", true),
-                    "harnesses": with_id("Harnesses.", true),
-                    "launchEnvironments": with_id("Launch environments: the up, ls, down and destroy of a worktree.", false),
-                    "workflowReaders": readers,
-                    "themes": open("Themes."),
-                    "webhooks": open("Webhooks, without code."),
-                    "commands": open("Commands run on an event."),
-                    "menus": open("Menus."),
-                    "statusBar": open("Items of the status bar."),
-                    "badges": open("Badges of the cards."),
-                    "projectTemplates": open("Templates of the project wizard."),
-                    "escouadeYml": { "type": "object", "description": "Its keys of .escouade.yml." },
-                },
-            },
+            "permissions": permissions,
+            "contributes": contributes,
             "icon": {
                 "type": "string",
                 "minLength": 1,

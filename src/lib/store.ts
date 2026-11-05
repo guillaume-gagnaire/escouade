@@ -16,7 +16,14 @@ export interface CatalogVersion {
   review?: { signed_at: string; summary: { fr: string; en: string } | null };
   yanked: boolean;
   unverified?: { fr: string; en: string };
-  permissions: { events?: string[]; network?: string[]; secrets?: string[]; commands?: string[]; decide?: boolean };
+  permissions: {
+    events?: string[];
+    network?: string[];
+    secrets?: string[];
+    commands?: string[];
+    files?: { root: string; access: string }[];
+    decide?: boolean;
+  };
   run: boolean;
   contributes: string[];
   files: { version_json: string; archive: string; binaries: Record<string, string>; icon?: Record<string, string>; signature?: string };

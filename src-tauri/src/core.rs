@@ -2053,6 +2053,8 @@ impl<R: Runtime> Core<R> {
         // What the plugins the app gives are told when they start: the language, the network.
         core.plugin_runtime.set_builtin_env(core.builtin_env());
         core.plugin_runtime
+            .set_agent_env(core.settings.read().proxy_env());
+        core.plugin_runtime
             .set_network(crate::voice::online::Net::of(&core.settings.read()));
         let weak = core.weak();
         core.plugin_runtime
@@ -2468,6 +2470,9 @@ impl<R: Runtime> Core<R> {
         self.schedule();
         // « Claude et les agents peuvent piloter Escouade » may have changed.
         self.sync_mcp();
+        // A program of a plugin gets the network of now.
+        self.plugin_runtime
+            .set_agent_env(self.settings.read().proxy_env());
         self.plugin_runtime
             .set_network(crate::voice::online::Net::of(&self.settings.read()));
         // The plugins the app gives start again with the language and the network of now.

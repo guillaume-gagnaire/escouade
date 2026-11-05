@@ -17,6 +17,8 @@ struct Reactor {
     fetches: Vec<(u64, String)>,
     /// Its own ids.
     next: u64,
+    /// The lines of its programs.
+    heard: Vec<String>,
 }
 
 static STATE: Mutex<Option<Reactor>> = Mutex::new(None);
@@ -87,6 +89,10 @@ fn host_call(request: &str, cap: usize) -> (i64, String) {
 
 fn handle(me: &mut Reactor, line: &str, lines: usize, out: &mut String) {
     me.first.get_or_insert_with(|| line.to_string());
+    if matches!(method_of(line), Some("proc/out" | "proc/exit")) {
+        me.heard.push(line.to_string());
+        return;
+    }
     // What the host tells it (a piece of a stream, a timer): shown to the tests as it came.
     if id_of(line).is_none() {
         if matches!(
@@ -149,6 +155,26 @@ fn handle(me: &mut Reactor, line: &str, lines: usize, out: &mut String) {
             );
             let (n, text) = host_call(&request, 4096);
             answer(out, id, &format!("{{\"took\":{n},\"answer\":{text}}}"));
+        }
+        // A method of the host, by `escouade.call`: `{"method":…,"params":…}` as it came, its answer as it comes.
+        "probe/sync" => {
+            let (n, mut text) = host_call(params_of(line), 16 << 10);
+            if n < 0 {
+                text = host_call(params_of(line), (-n) as usize).1;
+            }
+            answer(out, id, &text);
+        }
+        // The same call twice, with no room for the first answer: the host answers the second without serving it again.
+        "probe/retry" => {
+            let (n, _) = host_call(params_of(line), 4);
+            let (_, text) = host_call(params_of(line), (-n) as usize);
+            answer(out, id, &text);
+        }
+        // What the programs wrote and how they ended, as it came.
+        "probe/heard" => {
+            let heard = me.heard.join(",");
+            me.heard.clear();
+            answer(out, id, &format!("[{heard}]"));
         }
         // An answer that does not fit says how much it needs.
         "probe/small" => {

@@ -65,7 +65,14 @@ export interface Manifest {
   /** A command (a process), or a JS/TS bundle that Escouade runs in WASM (`js`, ESC-320). */
   run?: { command: string; js?: string; wasm?: string; args: string[] };
   activation: string[];
-  permissions: { events: string[]; network: string[]; secrets: string[]; commands: string[]; decide: boolean };
+  permissions: {
+    events: string[];
+    network: string[];
+    secrets: string[];
+    commands: string[];
+    files?: { root: string; access: string }[];
+    decide: boolean;
+  };
   contributes: Record<string, unknown>;
 }
 
@@ -222,11 +229,13 @@ export function textOf(text: ManifestText | undefined, lang: string): string {
 /** A permission in words: its icon, what it says, its detail (a host, an event…), and how strong it is. */
 export interface Ask {
   word: string;
-  icon: 'term' | 'shield' | 'bash' | 'spark' | 'globe' | 'lock';
+  icon: 'term' | 'shield' | 'bash' | 'spark' | 'globe' | 'lock' | 'folder';
   text: string;
   detail: string;
   strong: boolean;
   red: boolean;
+  /** What writes on the user's disk, in orange (§8.4.6). */
+  orange?: boolean;
   /** What it says under it: whether Escouade enforces it (a host of a plugin in WASM) or only shows it. */
   note?: string;
 }
@@ -235,6 +244,25 @@ export interface Ask {
 function secretTitle(m: Manifest | null, key: string, lang: string) {
   const fields = (m?.contributes.secrets as { key: string; title?: ManifestText }[] | undefined) ?? [];
   return textOf(fields.find((f) => f.key === key)?.title, lang) || key;
+}
+
+/** A folder it asks for, `files:<root>:<access>` (§8.4.6): writing in the user's folders is in orange. */
+function askOfFiles(word: string, root: string, writes: boolean): Ask {
+  const note = t('plugins.perms.filesApplied');
+  const line = (text: string, orange = false): Ask => ({
+    word,
+    icon: 'folder',
+    text,
+    detail: root,
+    strong: orange,
+    red: false,
+    orange,
+    note,
+  });
+  if (root === 'plugin') return { ...line(t('plugins.ask.filesPlugin')), note: undefined };
+  if (root === 'temp') return { ...line(t('plugins.ask.filesTemp')), note: undefined };
+  if (writes) return line(t('plugins.ask.filesWrite'), true);
+  return line(t(root === 'agentHome' ? 'plugins.ask.filesHome' : 'plugins.ask.filesRead'));
 }
 
 /** What the permission `word` lets the plugin do, in words (§3.4). */
@@ -253,7 +281,18 @@ export function askOf(word: string, m: Manifest | null, lang: string): Ask {
       // A harness it describes (PLG-6): the program of the user's machine its agents run, with its arguments.
       return { word, icon: 'term', text: t('plugins.ask.harness'), detail: what, strong: true, red: false };
     case 'commands':
-      return { word, icon: 'bash', text: t('plugins.ask.commands'), detail: what, strong: false, red: false };
+      return {
+        word,
+        icon: 'bash',
+        text: t('plugins.ask.commands'),
+        detail: what,
+        strong: true,
+        red: true,
+        // A program of a plugin in WASM goes through Escouade (`proc/spawn`); a process runs what it likes.
+        note: t(m?.run?.js || m?.run?.wasm ? 'plugins.perms.commandsApplied' : 'plugins.perms.commandsNote'),
+      };
+    case 'files':
+      return askOfFiles(word, rest[0] ?? '', rest[1] === 'write');
     case 'events':
       return { word, icon: 'spark', text: t('plugins.ask.events'), detail: what, strong: false, red: false };
     case 'network':

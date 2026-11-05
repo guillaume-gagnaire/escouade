@@ -169,6 +169,42 @@ describe('the install window', () => {
     expect(dialog.textContent).not.toContain('ne filtre pas encore');
   });
 
+  it('says the folders and the commands of a plugin in WASM, writing in orange and commands in red (ESC-333)', () => {
+    const wasm = {
+      ...MANIFEST,
+      run: { command: '', js: 'dist/plugin.mjs', args: [] },
+      permissions: {
+        ...MANIFEST.permissions,
+        commands: ['isola ls --json'],
+        files: [
+          { root: 'agent', access: 'write' },
+          { root: 'agentRepo', access: 'read' },
+          { root: 'agentHome', access: 'read' },
+        ],
+      },
+    };
+    const asks = ['run', 'commands:isola ls --json', 'files:agent:write', 'files:agentRepo:read', 'files:agentHome:read'];
+    plugins.install = { kind: 'preview', preview: preview({ manifest: wasm, asks }), busy: false, error: null };
+    render(InstallModal, { step: plugins.install });
+    const dialog = screen.getByRole('dialog', { name: 'Installer Slack ?' });
+    const line = (text: string) => [...dialog.querySelectorAll('.asks li')].find((l) => l.textContent?.includes(text));
+    const command = line('Lance cette commande sur ton ordinateur');
+    expect(command?.textContent).toContain('isola ls --json');
+    expect(command?.textContent).toContain('appliqué par Escouade');
+    expect(command?.classList.contains('red')).toBe(true);
+    expect(line('Écrit dans les dossiers de tes agents')?.classList.contains('orange')).toBe(true);
+    expect(line('Lit les fichiers de tes agents')?.classList.contains('orange')).toBe(false);
+    expect(line('Lit le dossier de compte de tes agents')).toBeTruthy();
+  });
+
+  it('says a command of a process is only declared (ESC-333)', () => {
+    const asks = ['run', 'commands:isola down'];
+    plugins.install = { kind: 'preview', preview: preview({ asks }), busy: false, error: null };
+    render(InstallModal, { step: plugins.install });
+    const dialog = screen.getByRole('dialog', { name: 'Installer Slack ?' });
+    expect(dialog.textContent).toContain('déclaré par le plugin : Escouade ne filtre pas ce que lance son programme');
+  });
+
   it('says Escouade holds the webhooks of a declarative plugin to its hosts (ESC-184)', () => {
     const declarative = { ...MANIFEST, run: undefined };
     plugins.install = { kind: 'preview', preview: preview({ manifest: declarative }), busy: false, error: null };

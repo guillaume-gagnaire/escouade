@@ -19,6 +19,51 @@ function wired() {
   return { plugin, out, traces, ended: () => ended };
 }
 
+describe('its folders and its programs', () => {
+  it('fs and spawn go by their methods, and a program says what it wrote and how it ended', async () => {
+    const plugin = createPlugin();
+    const asked: unknown[] = [];
+    const fake = connect(plugin, {
+      host: {
+        'fs/read': (params) => (asked.push(params), { text: 'dans son dossier' }),
+        'proc/spawn': () => ({ proc: 7 }),
+        'proc/write': (params) => (asked.push(params), null),
+      },
+    });
+    await fake.initialize();
+    expect(await plugin.fs.text({ agent: 'a', root: 'agent', path: 'n.txt' })).toBe('dans son dossier');
+    const said: string[] = [];
+    // What comes before the answer of `proc/spawn` is not lost.
+    const started = plugin.runProgram({ command: 'git', args: ['--version'] }, (data, stream) => said.push(`${stream}:${data}`));
+    await fake.notify('proc/out', { proc: 7, stream: 'stdout', data: 'git version' });
+    const program = await started;
+    await fake.notify('proc/out', { proc: 7, stream: 'stderr', data: 'warn' });
+    await program.write('x', true);
+    await fake.notify('proc/exit', { proc: 7, code: 0 });
+    expect(await program.exited).toBe(0);
+    expect(said).toEqual(['stdout:git version', 'stderr:warn']);
+    expect(asked).toEqual([
+      { agent: 'a', root: 'agent', path: 'n.txt' },
+      { proc: 7, data: 'x', close: true },
+    ]);
+  });
+
+  it('a file that is no text and a refusal reject', async () => {
+    const plugin = createPlugin();
+    const fake = connect(plugin, {
+      host: {
+        'fs/read': (p: { path: string }) => {
+          if (p.path === 'out') throw new RpcError(ERRORS.refused, 'leads out');
+          return { dataBase64: '//4=' };
+        },
+      },
+    });
+    await fake.initialize();
+    await expect(plugin.fs.text({ root: 'temp', path: 'bin' })).rejects.toMatchObject({ code: ERRORS.failed });
+    await expect(plugin.fs.read({ root: 'temp', path: 'out' })).rejects.toMatchObject({ code: ERRORS.refused });
+  });
+});
+
 describe('@escouade-dev/plugin', () => {
   it('answers initialize with its version whatever is offered, and keeps what Escouade said', async () => {
     const { plugin, out } = wired();
