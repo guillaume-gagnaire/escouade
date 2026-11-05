@@ -1,9 +1,9 @@
 ---
-number: null
+number: 79
 id: "le-kit-rust-compile-en-wasm-le-tour-dans"
 title: "Le kit Rust compile en WASM : le tour dans le protocole, la langue dans initialize, reqwest par le kit"
 date: "2026-11-05"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-334"
 pages: ["plugins/tous-les-plugins-en-wasm"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/tous-les-plugins-en-wasm","added":7,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-05T05:15:09+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
