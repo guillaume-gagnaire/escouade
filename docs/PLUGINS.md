@@ -37,7 +37,7 @@ Ce document dit **ce qui a été construit**, et où. Il était l'analyse d'ESC-
 | Le journal | `src-tauri/src/plugins/journal.rs` | Démarrages, plantages, appels, décisions ; `<data>/plugin-logs/<id>.log`, secrets masqués |
 | Le store dans l'app | `src-tauri/src/plugins/store.rs`, `store_keys.rs` | Catalogue, liste de révocation, téléchargement et vérifications, sceau revérifié hors ligne |
 | Le banc | `src-tauri/src/plugins/bench/`, la CLI `escouade-plugin` (`test`, `dev`, `validate`, `build`) | La conformité d'un plugin, livrée avec l'app |
-| Le kit Rust | `crates/escouade-plugin-kit`, `crates/escouade-acp` (MIT, pour crates.io, §8.16) | La boucle des plugins Rust ; le client ACP |
+| Le kit Rust | `crates/escouade-plugin-kit`, `crates/escouade-acp` (MIT, sur crates.io en 0.1.0, §8.16) | La boucle des plugins Rust ; le client ACP |
 | Le SDK | `sdk/plugin` (`@escouade-dev/plugin`, MIT), `sdk/create-escouade-plugin` | TypeScript, faux Escouade, gabarit |
 | La fenêtre | `src/components/plugins/`, `src/lib/plugins*.ts`, `src/lib/plugin-theme*.ts`, `src/lib/proposed-plugins.ts` | La vue Plugins, le store, les thèmes, les plugins proposés |
 
@@ -1088,7 +1088,7 @@ Les e2e, et donc la vue Plugins, le store dans l'app, les thèmes et les sceaux 
 
 Décidé par l'utilisateur le 2026-11-04 : « je veux que tous les plugins, même les builtins, passent par le même système : on livre un plugin, il est compilé pour qu'il soit utilisable sur tous les systèmes, et il fait ce qu'il a besoin de faire », puis « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté ». Le même jour, l'état de fin : « A la fin, je veux que tous les plugins builtins soient dans /plugins/* (exemple plugins/claude), tous publiés sur le store, vérifiés et signés. »
 
-Ce chapitre est l'étude, faite avant le portage. **A1, A2, A3, A4, A5 et A8 sont faits** (ESC-331, §8.11 ; ESC-332, §8.12 ; ESC-334, §8.13 ; ESC-338, §8.14 ; ESC-333, §8.15 ; ESC-335, §8.17), **A9 est prêt et attend le geste du chef** (ESC-341, §8.16) ; le reste du plan ne l'est pas. Le prototype, ses tests et ses mesures sont dans `prototypes/wasm-all/` (son README dit comment tout refaire). Il revoit le §5.7 (« le `run` natif, tranché ») et le §5.6 (« un `run.wasm` n'est pas ouvert ») : ces deux passages tiennent jusqu'à l'acceptation des décisions proposées par ESC-330. Sans numéro tant qu'elles ne sont pas acceptées, elles se citent par leur identifiant : `run-wasm-le-rust-des-plugins-compile-par`, `les-capacites-de-l-hote-ce-qu-un-plugin`, `la-premiere-main-dans-plugins-id-court-p`, `plus-aucun-run-command-le-store-le-refus`.
+Ce chapitre est l'étude, faite avant le portage. **A1, A2, A3, A4, A5, A8 et A9 sont faits** (ESC-331, §8.11 ; ESC-332, §8.12 ; ESC-334, §8.13 ; ESC-338, §8.14 ; ESC-333, §8.15 ; ESC-341, §8.16 ; ESC-335, §8.17) ; le reste du plan ne l'est pas. Le prototype, ses tests et ses mesures sont dans `prototypes/wasm-all/` (son README dit comment tout refaire). Il revoit le §5.7 (« le `run` natif, tranché ») et le §5.6 (« un `run.wasm` n'est pas ouvert ») : ces deux passages tiennent jusqu'à l'acceptation des décisions proposées par ESC-330. Sans numéro tant qu'elles ne sont pas acceptées, elles se citent par leur identifiant : `run-wasm-le-rust-des-plugins-compile-par`, `les-capacites-de-l-hote-ce-qu-un-plugin`, `la-premiere-main-dans-plugins-id-court-p`, `plus-aucun-run-command-le-store-le-refus`.
 
 **En bref.**
 
@@ -1409,7 +1409,7 @@ Chaque plugin quitte `plugins/builtin/dev.escouade.<id>/` pour `plugins/<id-cour
 
 `dev.escouade.minimal` n'est pas un produit : il va dans `tests/fixtures/plugins/minimal/`, sans publication. `discord`, `goose`, `high-contrast`, `slack` et `team-rules` ne bougent pas. `plugins/builtin/` disparaît, et `plugins/README.md` avec sa section.
 
-**Fait (ESC-339, 2026-11-05)** : les dossiers sont à leur place, sans changement de code ni d'identifiant. Tant que `escouade-plugins` les sert, `plugins/ci.mjs` passe ceux dont le programme est `{escouade}/escouade-plugins` (M1 les y fera entrer).
+**Fait (ESC-339, 2026-11-05)** : les dossiers sont à leur place, sans changement de code ni d'identifiant. `plugins/ci.mjs` les vérifie depuis M1 (§8.6.4).
 
 **Le nom du dossier n'est pas le dernier mot de l'identifiant** pour six d'entre eux : il sert seulement à l'étiquette, et le store relie un dossier à un id par son manifeste (§3.6 de `docs/STORE.md`).
 
@@ -1447,6 +1447,19 @@ Le store ne lit que le dossier du plugin (`docs/STORE.md` §3.6), à raison : c'
 - `cargo test` en natif : les tests unitaires ne changent pas ;
 - `escouade-plugin build`, puis `validate` et `test --first-party` : le banc joue le module dans l'hôte de l'app ;
 - `--changed` : seulement les dossiers touchés, plus tous quand `crates/` bouge.
+
+**Fait (M1, ESC-340, 2026-11-05).** Pour chaque plugin de `plugins/` :
+
+- sa `LICENSE` et son `CHANGELOG.md`, présents et non vides, quelle que soit sa sorte ;
+- pour un crate, la version du manifeste face à celle de `Cargo.toml`, et `cargo test`, lancé une seule fois de `src-tauri/` sur tous les crates retenus (`-p` répétés, `--no-fail-fast`) : une compilation, et la chaîne d'outils épinglée de `src-tauri/rust-toolchain.toml`, qu'un `cargo` lancé du dossier du plugin ne verrait pas ;
+- `validate`, en `--builtin` tant que le programme est `{escouade}/escouade-plugins`, y compris pour les cinq sans crate (voix, isola) ;
+- le banc pour les `run.js`, et pour un `run.wasm` : `build --out`, puis `test --wasm` sur ce module, pour ne pas le compiler deux fois. `build` compile un `run.wasm` depuis A5. Aucun plugin n'a de banc tant que `escouade-plugins` le sert.
+
+**La version d'un plugin que l'app stampe.** Les 23 manifestes disent `0.0.0` et les crates `1.0.0` : `manifest_text` y met la version de l'app. La comparaison admet donc `0.0.0` tant que le programme est celui de l'app, et plus du tout dès qu'un plugin passe en `run.wasm` : c'est le portage qui lui donne sa version (§8.6.1).
+
+**`--changed [<révision>]`** compare à la révision donnée, ou à l'endroit où la branche a quitté `main` (`origin/main`, sinon `main`), arbre de travail et fichiers nouveaux compris. Sont touchés les dossiers modifiés et ce qui en dépend par `path` (`mistral` sur `acp`). **Tous passent** si bouge ce qui juge ou construit tous les plugins : `crates/`, `schemas/`, `sdk/plugin/`, `src-tauri/src/plugins/`, `src-tauri/src/bin/escouade-plugin.rs`, `src-tauri/Cargo.lock`, `src-tauri/rust-toolchain.toml` et le script lui-même. Si git ne sait pas comparer (clone trop court), tous passent aussi : une branche ne doit pas être verte faute de test. La logique est dans `plugins/ci-lib.mjs`, testée par `scripts/plugins-ci.test.ts`.
+
+**En CI**, le job Linux lance tout sur `main` et `--changed HEAD^1` sur une pull request, `fetch-depth: 2` donnant la fusion et sa base. Le job Windows ne le lance pas : les tests des crates y passent déjà (`default-members`), et le reste ne dépend pas du système ; la comparaison entre systèmes est le job reproductible ci-dessous, à poser quand un plugin sera en `run.wasm`.
 
 Un job **reproductible** compare sous Windows et Linux, sur `main` : le même plugin, la même empreinte. Un écart est rouge. Un job de plus sur macOS le fait une fois par release.
 
@@ -1558,7 +1571,7 @@ Les tickets du portage, dans l'ordre. **Les lettres sont des noms de travail**, 
 | **A6. Le store** (fait, §8.18) | le onzième contrôle pour `run.wasm`, bubblewrap, la liste fermée, l'image | `store/server/utils/{compile,checks}.ts`, `store/Dockerfile`, `docs/STORE.md` | A5, ESC-328 |
 | **A7. La revue locale** | `recompile.ts`, les pistes, le conteneur pour un tiers | `store/scripts/plugin-review/` | A6 |
 | **A8. L'amorce** (fait, §8.14) | `plugins/seed.json`, l'installation sans réseau, la révocation, plugins à part entière, `release.yml` | `plugins/seed.rs`, `plugins/store.rs`, `plugins/builtin.rs`, `plugins/mod.rs`, `src-tauri/tauri.conf.json`, `.github/workflows/release.yml` | A1 |
-| **A9. crates.io** (prêt, §8.16 ; la publication reste à faire) | publier les trois crates ; `[patch.crates-io]` | `crates/*/Cargo.toml` ; **geste de l'utilisateur** | A4 |
+| **A9. crates.io** (fait, §8.16 : publiées le 2026-11-05) | publier les trois crates ; `[patch.crates-io]` | `crates/*/Cargo.toml` ; **geste de l'utilisateur** | A4 |
 
 **P. Le portage, en parallèle une fois A1 à A5 faits** (rien n'empêche d'en porter en attendant A6, le banc suffit) :
 
@@ -1671,7 +1684,7 @@ Les tickets du portage, dans l'ordre. **Les lettres sont des noms de travail**, 
 
 ### 8.16 Ce qu'A9 a préparé (ESC-341)
 
-Rien n'est publié : c'est le geste du chef. Les trois crates sont prêtes et `cargo publish --dry-run` passe, en natif et pour `wasm32-wasip1`.
+**Publiées le 2026-11-05 par le chef**, en `0.1.0` : [escouade-plugin-protocol](https://crates.io/crates/escouade-plugin-protocol), [escouade-plugin-kit](https://crates.io/crates/escouade-plugin-kit) et [escouade-acp](https://crates.io/crates/escouade-acp), après le « oui » de Florian Gagnaire sur #22 (fermée) et la vérification de l'adresse e-mail du compte, que crates.io exige en plus de la connexion par GitHub. Le propriétaire est le compte `guillaume-gagnaire`. Un crate neuf qui dépend de `escouade-plugin-kit = "0.1.0"` compile pour `wasm32-wasip1` depuis crates.io. Ce qui suit est ce qu'A9 avait préparé.
 
 - **Les noms sont libres** : `escouade-plugin-protocol`, `escouade-plugin-kit` et `escouade-acp` n'étaient pas dans l'index de crates.io le 2026-11-05.
 - **`0.1.0`**, pas `1.0.0` : la version d'un crate n'est pas celle du protocole (`PROTOCOL`, 1), et son API bouge encore avec le portage. `"0.1.0"` veut dire `^0.1` : un changement cassant passe à `0.2.0`, avec l'exigence des plugins, dans le même commit.

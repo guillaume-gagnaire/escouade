@@ -20,14 +20,16 @@ Published on the store, submitted from their folder like anyone's plugin (docs/S
 A version is a tag `plugins/<folder>/v1.2.3` (never `v1.2.3`, the app's releases), then its submission on the store
 from its folder, its review and its signature.
 
-They are checked as an author checks a plugin before a tag: `node ci.mjs` runs each one's tests (the TypeScript ones'
-typecheck too, and checks that their `dist/` is the build of `src/`), then `escouade-plugin validate` and the
-conformance bench of Escouade (a `run.js` plugin is compiled to WASM and played in the app's host, with no Node), with
-`--first-party` for their reserved ids. The repository's CI runs it on each change.
+They are checked as an author checks a plugin before a tag: `node ci.mjs` looks for each one's LICENSE and CHANGELOG, runs
+its tests (the TypeScript ones' typecheck too, and checks that their `dist/` is the build of `src/`), then `escouade-plugin
+validate` and the conformance bench of Escouade (a `run.js` plugin is compiled to WASM and played in the app's host, with
+no Node), with `--first-party` for their reserved ids. The repository's CI runs it on each change: all of them on `main`,
+those a change touches on a pull request (`--changed`).
 
 ```sh
 npx tsc -p ../sdk/plugin/tsconfig.json                       # the SDK they use (file:../../sdk/plugin)
 ESCOUADE_PLUGIN_BIN=/path/to/escouade-plugin node ci.mjs     # all of them, as the CI does
+ESCOUADE_PLUGIN_BIN=/path/to/escouade-plugin node ci.mjs --changed   # those this branch touches, since main
 cd slack && npm install && npm test && npm run bench         # one of them
 ```
 
@@ -48,7 +50,9 @@ The plugins shipped **with** the app, on their way to the store (docs/PLUGINS.md
 app and listed in its registry (`src-tauri/src/plugins/builtin.rs`); a test of the app checks that each folder has its
 manifest, its README, its LICENSE and its CHANGELOG, and is in the registry. Their program is `escouade-plugins <name>`,
 signed with the app, and their version is Escouade's. All are under **GPL-3.0-or-later**: their code comes from the
-app's. `ci.mjs` does not run them yet; their tests run with the app's (`cargo nextest run` in `src-tauri/`).
+app's. `ci.mjs` checks them too: their LICENSE and CHANGELOG, `escouade-plugin validate --builtin`, and for those with a crate
+`cargo test` and the crate's version against the manifest's (a manifest at `0.0.0`, stamped by the app, passes). They have
+no bench until they are `run.wasm`: then `ci.mjs` builds the module and plays it.
 
 | Folder          | Id                             | License          | What it serves                                           |
 | --------------- | ------------------------------ | ---------------- | -------------------------------------------------------- |

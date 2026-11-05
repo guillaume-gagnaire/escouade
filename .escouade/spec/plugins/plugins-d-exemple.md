@@ -2,7 +2,7 @@
 title: "Les plugins d'exemple"
 subject: "plugins"
 sources: ["docs/TODO-2.1.md (PLG-10)","docs/PLUGINS.md","plugins/README.md","docs/STORE.md (§3.6, §9.2)","docs/TODO-2.2.md (décision 8)"]
-tickets: ["ESC-182","ESC-314","ESC-326","ESC-178","ESC-184"]
+tickets: ["ESC-182","ESC-314","ESC-326","ESC-178","ESC-184","ESC-340"]
 decisions: [4,21,25]
 compared: "2026-10-31T19:49:08+01:00"
 ---
@@ -43,3 +43,9 @@ Au 2026-11-04, sont publiés et signés : `high-contrast` 1.1.0, `discord` 1.1.0
 - L'essai réel du store (`tests/e2e/real-store.spec.ts`, sauté sans `ESCOUADE_E2E_REAL_STORE`) installe les quatre publiés depuis store.escouade.dev.
 - La revue locale du store relit leurs fichiers sans y trouver de piste hors de leurs permissions : leurs appels réseau sont écrits en clair (`fetch(`), aucun `package-lock.json` n'est versionné (esbuild figé dans `package.json`), et ni l'adresse de leur dépôt dans le manifeste ni leur identifiant `dev.escouade.*` ne comptent comme un hôte ou un dossier d'Escouade.
 - La page « Les plugins d'exemple » du site (`plugins/examples`, fr et en) montre leur code entier ; un test du site le compare aux fichiers de `plugins/`.
+
+## La CI de `plugins/`, pour tous les plugins du dossier
+
+Depuis ESC-340, `plugins/ci.mjs` ne juge plus seulement ces cinq plugins, mais tous ceux de `plugins/`, y compris ceux que l'app livre encore. Pour chacun : sa `LICENSE` et son `CHANGELOG.md`, non vides ; `escouade-plugin validate` (`--builtin` tant que son programme est `{escouade}/escouade-plugins`). Pour un plugin avec `Cargo.toml` : `cargo test`, tous les crates en une passe, et la version du manifeste face à celle du crate. Un manifeste à `0.0.0` n'est admis que pour un plugin dont l'app stampe la version. Le banc joue les `run.js` et les `run.wasm` (après `escouade-plugin build`) ; il ne joue pas un plugin servi par `escouade-plugins`.
+
+`--changed [<révision>]` ne prend que les plugins touchés depuis cette révision, par défaut depuis le point où la branche a quitté `main`, et ceux qui en dépendent par `path`. Tous passent quand bouge ce qui les juge ou les construit (`crates/`, `schemas/`, `sdk/plugin/`, le code des plugins dans l'app, `Cargo.lock`, le script), et quand git ne sait pas comparer. En CI Linux, tout sur `main`, `--changed` sur une pull request.
