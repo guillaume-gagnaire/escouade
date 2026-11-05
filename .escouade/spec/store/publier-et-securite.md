@@ -2,8 +2,8 @@
 title: "Publier sur le store, la sécurité des plugins et l'essai réel"
 subject: "store"
 sources: ["docs/STORE.md","website/content/docs/fr/plugins/publishing.md","website/content/docs/fr/plugins/security.md","store/server/utils/checks.ts","store/server/utils/folder.ts","store/shared/folder.ts","store/server/utils/submissions.ts","store/server/utils/builtin.ts","store/tests/unit/trial.test.ts"]
-tickets: ["ESC-237","ESC-313","ESC-314","ESC-323","ESC-184"]
-decisions: [21,25,43]
+tickets: ["ESC-237","ESC-313","ESC-314","ESC-323","ESC-184","ESC-336"]
+decisions: [21,25,43,72,"le-store-compile-les-run-wasm-dans-bubbl"]
 compared: "2026-10-31T19:50:09+01:00"
 ---
 
@@ -48,3 +48,20 @@ Détail : `docs/STORE.md` §3 (§3.6 pour les dossiers et la première main), §
 ## L'essai réel sur store.escouade.dev (ESC-184)
 - Fait le 2026-11-04 sous Windows sur les quatre plugins de première main publiés et signés, avec une app de debug qui vérifie les sceaux contre les vraies clés : `tests/e2e/real-store.spec.ts`, sauté sans `ESCOUADE_E2E_REAL_STORE`. Sceau, permissions, activation, désactivation, désinstallation ; Discord et Slack arrêtés à leur configuration, sans webhook ni jeton réels. Résultats : `docs/PLUGINS.md` §7.
 - Reste à faire à la release : macOS et Linux, la révocation (aucune liste publiée), une mise à jour réelle (aucune version installable plus récente).
+
+## Les plugins en Rust : la compilation au store (ESC-336)
+
+Cette partie l'emporte sur ce qui précède pour le contrôle des binaires : la phrase sur le script ou l'interpréteur refusés à un tiers, et les « binaires attestés » de la documentation des auteurs, sont d'avant la décision 72. La documentation du site suit à ESC-227.
+
+- **Aucun plugin ne fournit plus de programme.** Le contrôle « Binaires » passe pour un `run.js`, un `run.wasm` ou un plugin sans programme. `run.command`, `run.windows`, `run.macos` et `run.linux` sont refusés à tout plugin, la première main comprise, chacun à son champ, avec la raison et le correctif. Le store ne lit plus les releases. Les versions publiées avant gardent leurs binaires, servis tels quels.
+- **Le contrôle « Compilation » compile un `run.wasm`**, une fois tous les autres contrôles passés. Il prend tous les fichiers du dossier dans l'archive figée, sans lien ni fichier spécial, et il compile deux fois, chaque fois dans un dossier neuf. Deux empreintes différentes refusent la version. Le module est gardé sous son SHA-256, noté dans `version.json` (`wasm`, avec `compiler` : `rust`, `target`, `canon`, `lock`), couvert par la signature, et servi comme celui d'un `run.js`.
+- **Les dépendances viennent de crates.io, dans une étape à part.** `escouade-plugin fetch` juge d'abord le dossier sans rien lancer, puis fait `cargo fetch --locked` avec réseau ; rien du plugin ne s'exécute dans cette étape. La compilation tourne ensuite sans réseau. Le réseau de cette étape n'est pas filtré par hôte : ce sont ces refus qui gardent cargo sur crates.io.
+- **Refusée, avec la raison** : tout ce qu'`escouade-plugin` refuse, dont un `build.rs` ou une macro hors de la liste relue, un `Cargo.lock` qui ne correspond pas, une erreur de compilation, ou le dépassement d'une limite.
+- **En attente en `error`, à relancer** : un réseau en panne, un compilateur absent, ou pas de bac à sable.
+- **Le bac à sable est bubblewrap**, en plus de la liste relue, qui reste la première défense. Une racine à part, sans Node ni le store ; nouveaux espaces de noms, nouvelle session, aucune variable du store, pas de `HOME`, un `/etc` vide, le seul dossier de la compilation. Un `include_bytes!` avec un chemin absolu ne trouve rien. La compilation n'a pas de réseau.
+- **Sans repli, et sans exception pour la première main.** Là où bubblewrap ne peut pas tourner, une version `run.wasm` attend, et le journal de démarrage le dit. `STORE_COMPILE_ISOLATION=none` n'est entendu que hors production.
+- **Les limites** d'un `run.wasm` : 5 minutes pour compiler, 2 pour télécharger, 2 Gio de mémoire, 4 Gio de disque. Celles d'un `run.js` ne changent pas.
+- **Il reste à l'hébergement** : le Docker par défaut refuse bubblewrap. Sans `--security-opt seccomp=unconfined` ou un profil plus étroit sur Coolify, aucun `run.wasm` ne compile en production. La revue ne recompile pas encore un `run.wasm` (A7) : `sign` le refuse d'ici là.
+
+- **Le bac à sable n'a aucun `/proc`** : ni un neuf, que le noyau peut refuser dans un conteneur, ni celui du conteneur, qui montrerait ses process. La sortie de `bwrap` est dite au démarrage du store et dans l'erreur d'une version qui attend.
+- **Sur un Docker d'Ubuntu 24.04**, il faut attendre au moins `seccomp=unconfined` et `apparmor=unconfined`, plus `kernel.apparmor_restrict_unprivileged_userns=0` sur l'hôte. La CI du store les confirme ; ESC-356 en tire un profil étroit.

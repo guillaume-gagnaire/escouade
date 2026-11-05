@@ -60,6 +60,22 @@ RUN find ../crates/escouade-plugin-cli -type f -exec touch {} + \
   && cp target/release/escouade-plugin-cli /opt/escouade-plugin \
   && /opt/escouade-plugin --version
 
+# What a `run.wasm` plugin compiles in (ESC-336, docs/STORE.md §3.3): a tree of its own that bubblewrap shows the compilation
+# as its root, with neither Node nor the store. gcc links the `build.rs` and the macros of the closed list, which are native;
+# the toolchain is the image's, the one `ESCOUADE_RUST_TOOLCHAIN` names (rustc 1.98.0 and wasm32-wasip1, no `rust-src`), so that
+# a compilation downloads none. The certificates serve `cargo fetch`. `cc` is linked without /etc/alternatives: the sandbox's
+# /etc is empty.
+FROM debian:bookworm-slim@sha256:c67e92c8099ba22853ab4cfda7cfb494d253d6012ca82dee98ba8976772af018 AS sandbox
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev ca-certificates bubblewrap \
+  && ln -sf gcc /usr/bin/cc \
+  && rm -rf /var/lib/apt/lists/* /var/cache/apt/*
+COPY --from=toolchain /usr/local/rustup/toolchains/1.98.0-x86_64-unknown-linux-gnu /opt/rust
+# The sandbox has no /proc, and rustc's `ld.lld`, which links `build.rs` and macros, looks for itself there: the same call,
+# by a script. A module does not go through it: it is linked by `rust-lld` itself.
+RUN printf '#!/bin/sh\nexec /opt/rust/lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-lld -flavor gnu "$@"\n' \
+  > /opt/rust/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld/ld.lld
+COPY --from=compiler /opt/escouade-plugin /usr/local/bin/escouade-plugin
+
 # The store, on glibc as its final image.
 FROM node:24-bookworm-slim AS build
 # git: the tests of the local review diff two versions with it (scripts/plugin-review/, docs/STORE.md §4.2). busybox: a
@@ -75,14 +91,20 @@ WORKDIR /repo/store
 # A failing test fails the deployment: the store online stays the last one that passed.
 RUN npm ci && npm run build && env -u DATABASE_URL -u TEST_DATABASE_URL npm test && mkdir -p /out/archives
 
-# glibc for Javy, which alpine's musl does not run; this image's util-linux gives `unshare`, which sandboxes a compilation.
+# glibc for Javy, which alpine's musl does not run; this image's util-linux gives `unshare`, which sandboxes a `run.js`, and
+# bubblewrap comes from the stage above, for a `run.wasm`.
 FROM node:24-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000 ARCHIVE_DIR=/data/archives MIGRATIONS_DIR=/app/migrations
 # The eleventh check's compiler (server/utils/compile.ts): a compilation is given these, and nothing else of the store's.
-ENV STORE_ESCOUADE_PLUGIN=/usr/local/bin/escouade-plugin STORE_JAVY=/usr/local/bin/javy
+ENV STORE_ESCOUADE_PLUGIN=/usr/local/bin/escouade-plugin STORE_JAVY=/usr/local/bin/javy STORE_COMPILE_ROOT=/opt/sandbox STORE_RUST_TOOLCHAIN=/opt/rust
 COPY --from=compiler /opt/escouade-plugin /usr/local/bin/escouade-plugin
 COPY --from=toolchain /opt/javy /usr/local/bin/javy
+COPY --from=sandbox /usr/bin/bwrap /usr/local/bin/bwrap
+COPY --from=sandbox /usr/lib/x86_64-linux-gnu/libcap.so.2 /usr/lib/x86_64-linux-gnu/libcap.so.2
+COPY --from=sandbox /usr /opt/sandbox/usr
+COPY --from=sandbox /opt /opt/sandbox/opt
+COPY --from=sandbox /etc/ssl /opt/sandbox/etc/ssl
 # What asks /api/health, the image's own and Coolify's: this image has neither wget nor curl.
 COPY --from=build /bin/busybox /usr/local/bin/wget
 COPY --from=build /repo/store/.output ./.output

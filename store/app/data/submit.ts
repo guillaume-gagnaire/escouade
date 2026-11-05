@@ -76,7 +76,7 @@ const fr = {
     failedNote:
       'Un contrôle a échoué : rien n’est publié tant qu’il ne passe pas. Corrige, pousse une nouvelle étiquette : le store relancera les contrôles seul.',
     runningNote:
-      'Les contrôles tournent sur l’archive figée ; rien du plugin ne s’exécute. Un plugin en JS/TS (run.js) est compilé en WASM par le store, deux fois, sans réseau : son bundle commité, jamais de npm install.',
+      'Les contrôles tournent sur l’archive figée. Un plugin en JS/TS (run.js) ou en Rust (run.wasm) est compilé en WASM par le store, deux fois, sans réseau : son bundle commité, jamais de npm install ; ses sources et son Cargo.lock, les dépendances venant de crates.io.',
     heldNote: 'Tout passe, mais le nom est proche de celui d’un autre plugin : une personne le regarde avant la publication.',
     errorNote: 'Le store n’a pas pu finir les contrôles (une panne de son côté ou de GitHub, pas de ton plugin).',
     retry: 'Relancer les contrôles',
@@ -215,7 +215,7 @@ const en: Text = {
     continue: 'Continue',
     failedNote: 'A check failed: nothing is published until it passes. Fix it, push a new tag: the store runs the checks again by itself.',
     runningNote:
-      'The checks run on the frozen archive; nothing of the plugin runs. A JS/TS plugin (run.js) is compiled to WASM by the store, twice, without network: its committed bundle, never an npm install.',
+      'The checks run on the frozen archive. A JS/TS plugin (run.js) or a Rust plugin (run.wasm) is compiled to WASM by the store, twice, without network: its committed bundle, never an npm install; its sources and its Cargo.lock, the dependencies coming from crates.io.',
     heldNote: 'Everything passes, but the name is close to another plugin’s: a person looks at it before it is published.',
     errorNote: 'The store could not finish the checks (a failure on its side or GitHub’s, not your plugin’s).',
     retry: 'Run the checks again',

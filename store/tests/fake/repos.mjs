@@ -22,6 +22,7 @@ export function pushTag(fullName, tag, { extra = {}, manifest = {} } = {}) {
   const trap = name.endsWith('-trap');
   const bin = name.endsWith('-bin');
   const js = name.endsWith('-js');
+  const wasm = name.endsWith('-wasm');
   const node = name.endsWith('-node');
   const files = pluginFiles(fullName, {
     manifest: {
@@ -29,12 +30,14 @@ export function pushTag(fullName, tag, { extra = {}, manifest = {} } = {}) {
       name: { en: name, fr: name },
       ...(bin ? { run: { command: 'bin/plugin', windows: 'bin/plugin.exe' } } : {}),
       ...(js ? { run: { js: 'dist/plugin.mjs' } } : {}),
+      ...(wasm ? { run: { wasm: 'Cargo.toml' } } : {}),
       ...(node ? { run: { command: 'node' } } : {}),
       ...manifest,
     },
     files: {
       ...(trap ? { 'docs/key': { symlink: '/home/me/.ssh/id_ed25519' } } : {}),
       ...(js ? { 'dist/plugin.mjs': `console.log(${JSON.stringify(fullName)});\n` } : {}),
+      ...(wasm ? { 'Cargo.toml': `[package]\nname = "x"\n# ${fullName}\n`, 'Cargo.lock': 'version = 4\n', 'src/lib.rs': '' } : {}),
       ...extra,
     },
   });

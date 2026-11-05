@@ -8,6 +8,9 @@
 // The second argument is the escouade-js CI built for the app: the image must embed the same. ENGINE names the container
 // engine (docker by default). IMAGE_TEST_DATABASE_URL (a base reachable from the host's network) adds the start of
 // the store, on IMAGE_TEST_PORT (3000 by default). The test's own program, tests/image/compile.ts, runs in the image.
+//
+// A `run.wasm` plugin needs bubblewrap, which Docker's default seccomp refuses: under docker, the program runs twice, as
+// the image comes (it must say that such a version waits) and with what lets it run (`RUST_OPTIONS`, ESC-336).
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash, generateKeyPairSync, randomUUID } from 'node:crypto';
@@ -82,9 +85,36 @@ try {
       shell: process.platform === 'win32',
     },
   );
-  const out = inImage(['node', '/test/compile.mjs'], ['-v', `${work}:/test:ro`, '-v', `${join(repo, 'plugins')}:/plugins:ro`]);
+  const mounts = [
+    '-v',
+    `${work}:/test:ro`,
+    '-v',
+    `${join(repo, 'plugins')}:/plugins:ro`,
+    '-v',
+    `${join(repo, 'tests', 'fixtures', 'plugins', 'rust-build')}:/rust-build:ro`,
+  ];
+  const parsed = (text) =>
+    text
+      .split('\n')
+      .filter((l) => l.startsWith('{'))
+      .map((l) => JSON.parse(l));
+  let out = inImage(['node', '/test/compile.mjs'], mounts);
   console.log(out.trim());
-  const lines = out.split('\n').filter((l) => l.startsWith('{'));
+  if (!parsed(out).find((l) => 'bubblewrap' in l)?.bubblewrap) {
+    const waits = parsed(out).find((l) => 'rust' in l);
+    if (waits?.rust !== 'waits' || !/no sandbox/.test(waits.said) || waits.plugin) fail(`without bubblewrap: ${JSON.stringify(waits)}`);
+    console.log('✓ without bubblewrap, a run.wasm version waits');
+    // What each option does alone: the options a server needs, for the profile of ESC-356.
+    for (const option of ['seccomp=unconfined', 'apparmor=unconfined']) {
+      const probe = parsed(inImage(['node', '/test/compile.mjs'], ['-e', 'IMAGE_TEST_PROBE=1', '--security-opt', option, ...mounts]));
+      console.log(`${option} alone: ${JSON.stringify(probe.find((l) => 'bubblewrap' in l))}`);
+    }
+    const options = (process.env.RUST_OPTIONS ?? 'seccomp=unconfined apparmor=unconfined').split(' ').flatMap((o) => ['--security-opt', o]);
+    out = inImage(['node', '/test/compile.mjs'], [...options, ...mounts]);
+    console.log(out.trim());
+  }
+  const said2 = parsed(out);
+  const lines = said2.filter((l) => 'plugin' in l && l.plugin !== 'rust-build' && 'compilation' in l).map((l) => JSON.stringify(l));
   const goldens = JSON.parse(readFileSync(join(repo, 'crates', 'escouade-plugin-cli', 'goldens.json'), 'utf8'));
   const prelude = said('prelude');
   for (const line of lines) {
@@ -103,6 +133,30 @@ try {
     }
   }
   if (lines.length !== 2) fail(`${lines.length} plugins compiled, not 2`);
+
+  // ---- A `run.wasm` plugin: the hash of goldens.json, what is refused, and what its sandbox shows.
+  const sandbox = said2.find((l) => 'bubblewrap' in l);
+  if (!sandbox?.bubblewrap) fail(`bubblewrap cannot run in this container: ${sandbox?.why}`);
+  const rust = said2.find((l) => l.plugin === 'rust-build');
+  if (!rust || rust.compilation.state !== 'built') fail(`rust-build: ${JSON.stringify(rust)}`);
+  if (rust.compilation.sha256 !== goldens.rust.module)
+    fail(`rust-build: ${rust.compilation.sha256}, not the ${goldens.rust.module} of goldens.json`);
+  if (rust.compilation.compiler.canon !== goldens.rust.canon) fail('rust-build: another rustc-canon');
+  console.log(`✓ rust-build: twice the same module, the one of goldens.json (${rust.compilation.sha256}), in ${rust.seconds} s`);
+  const refused = (name, why) => {
+    const r = said2.find((l) => l.refused === name);
+    if (!r || !why.test(r.said)) fail(`${name}: ${JSON.stringify(r)}`);
+    console.log(`✓ refused, ${name}: ${r.said.slice(0, 120)}`);
+  };
+  refused('lock', /does not match|needs to be updated/);
+  refused('build.rs', /has a build\.rs/);
+  refused('passwd', /couldn't read|No such file/);
+  refused('store', /couldn't read|No such file/);
+  const inside = said2.find((l) => 'inside' in l)?.inside ?? [];
+  console.log(inside.join('\n'));
+  const want = ['app absent', 'data absent', 'proc absent', 'etc []', 'env [PATH PWD ]', 'net unreachable'];
+  if (want.join('|') !== inside.join('|')) fail(`the sandbox shows more than it should: ${inside.join(' | ')}`);
+  console.log('✓ the sandbox shows neither the store, nor its variables, nor a network');
 
   // ---- The store starts, and says what it has.
   const database = process.env.IMAGE_TEST_DATABASE_URL;
@@ -148,6 +202,7 @@ try {
       console.log(log.trim());
       if (!ok) fail('/api/health never said ok');
       if (!/\[store\] compiler: \/usr\/local\/bin\/escouade-plugin, /.test(log)) fail('the start does not name the compiler');
+      if (!log.includes('[store] run.wasm: ')) fail('the start does not say how a run.wasm compiles');
       if (!log.includes('[store] ready')) fail('the store did not say it is ready');
       console.log('✓ the store starts with its compiler');
     } finally {

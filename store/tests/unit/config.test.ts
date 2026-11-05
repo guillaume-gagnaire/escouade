@@ -28,7 +28,7 @@ describe('the variables the store reads', () => {
     expect(lines).toEqual([
       '[store] github off (missing GITHUB_APP_CLIENT_SECRET): signing in with GitHub, submissions and webhooks are off',
       '[store] mail off (missing SMTP_URL, MAIL_FROM): no e-mail is sent',
-      '[store] compiler off (missing STORE_ESCOUADE_PLUGIN): the run.js plugins are not compiled: their versions wait in error (docs/STORE.md §3.3)',
+      '[store] compiler off (missing STORE_ESCOUADE_PLUGIN): the run.js and run.wasm plugins are not compiled: their versions wait in error (docs/STORE.md §3.3)',
       '[store] discord admin off (missing STORE_DISCORD_ADMIN_WEBHOOK): the administrators’ channel gets nothing',
       '[store] discord fr off (missing STORE_DISCORD_PUBLIC_WEBHOOK_FR): the French public channel gets nothing',
       '[store] discord en off (missing STORE_DISCORD_PUBLIC_WEBHOOK_EN): the English public channel gets nothing',

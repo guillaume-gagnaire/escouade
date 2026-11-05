@@ -6,10 +6,10 @@ import { folderName, tagFor, tagsOf } from '../../shared/folder';
 import { compareVersions, type Platform } from './versions';
 
 // The eleven checks of a submitted version (docs/STORE.md, §3.3), on the archive the store froze, read in memory:
-// nothing of the plugin runs on the store's own (the eleventh, `Compilation`, reads what Javy made of a `run.js`
-// bundle in the sandbox of compile.ts). Each says, in French and in English, what failed, where (the field's path), why and how
+// nothing of the plugin runs on the store's own (the eleventh, `Compilation`, reads what the sandbox of compile.ts made
+// of a `run.js` bundle or of the Rust of a `run.wasm`). Each says, in French and in English, what failed, where (the field's path), why and how
 // to fix it, with the page of the documentation (§3.5). They read what the worker fetched before (the archive, the
-// license GitHub detects, the release's binaries and their attestations, the plugins already on the store); they
+// license GitHub detects, the plugins already on the store); they
 // fetch nothing themselves.
 
 export type Lang = 'fr' | 'en';
@@ -81,13 +81,24 @@ export interface FetchedBinary {
 
 /** What compiled the module of a `run.js` plugin (`escouade-plugin build --json`): Javy's version, the SHA-256 of
  * escouade-js and the version of escouade-plugin, whose prelude and rewriting of the imports wrapped the bundle. */
-export interface Compiler {
+export interface JsCompiler {
   javy: string;
   engine: string;
   prelude: string;
 }
 
-/** The two compilations of a `run.js` bundle (ESC-323): the same module twice, two different ones, or a refusal. */
+/** What compiled the module of a `run.wasm` plugin (ESC-336): rustc's version, its target, the SHA-256 of `rustc-canon`'s
+ * source and that of the plugin's `Cargo.lock`. */
+export interface RustCompiler {
+  rust: string;
+  target: string;
+  canon: string;
+  lock: string;
+}
+
+export type Compiler = JsCompiler | RustCompiler;
+
+/** The two compilations of a plugin (ESC-323, ESC-336): the same module twice, two different ones, or a refusal. */
 export type Compilation =
   | { state: 'built'; sha256: string; size: number; compiler: Compiler }
   | { state: 'different'; first: string; second: string }
@@ -110,12 +121,6 @@ export interface Snapshot {
   archive: { size: number; read: ArchiveRead };
   /** The license GitHub detects in the commit: its SPDX id, `NOASSERTION`, or null without a license file. */
   license: string | null;
-  /** The binaries of the release attached to the tag, as the worker kept them (empty without a release). */
-  binaries: FetchedBinary[];
-  /** The release's file names, to say which one was missing. Null when the tag has no release. */
-  releaseAssets: string[] | null;
-  /** The release's files for a system that the store did not take, past their size. */
-  oversized?: string[];
   /** The screenshots whose header read but which do not decode. */
   undecodable?: string[];
   /** The icon passed its header's checks but did not decode (PLG-13). */
@@ -131,7 +136,7 @@ export interface Snapshot {
   latest: string | null;
   /** The plugins of other accounts, for names too close (typosquatting). */
   others: { id: string; name: string }[];
-  /** The module of a `run.js` plugin, compiled twice by the store; absent until then, or for another plugin. */
+  /** The module of a `run.js` or `run.wasm` plugin, compiled twice by the store; absent until then, or for another plugin. */
   compiled?: Compilation;
 }
 
@@ -170,17 +175,6 @@ export function textOf(v: unknown): string {
   return '';
 }
 
-/** The program `run` gives each system, and whether the archive holds it; the others come from the release. */
-export function programs(m: Manifest | null, read: ArchiveRead): { system: System; program: string; inArchive: boolean }[] {
-  const run = m?.run;
-  if (!run || typeof run !== 'object') return [];
-  const r = run as Record<string, unknown>;
-  return SYSTEMS.flatMap((system) => {
-    const program = typeof r[system] === 'string' ? (r[system] as string) : typeof r.command === 'string' ? (r.command as string) : null;
-    return program ? [{ system, program, inArchive: read.files.has(program.replace(/^\.\//, '')) }] : [];
-  });
-}
-
 /** The bundle `run.js` names (`dist/plugin.mjs`), as a path of the archive; null for a plugin of another kind. */
 export function jsOf(m: Manifest | null): string | null {
   const run = m?.run;
@@ -189,10 +183,12 @@ export function jsOf(m: Manifest | null): string | null {
   return typeof js === 'string' && js ? js.replace(/^\.\//, '') : null;
 }
 
-/** The system and architecture a release's file is for, from its name (`escouade-slack-1.2.0-windows-x64.zip`). */
-export function platformOf(name: string): Platform | null {
-  const m = /(?:^|[-_.])(windows|macos|linux)[-_](x64|arm64)(?:[-_.]|$)/i.exec(name);
-  return m ? (`${m[1]!.toLowerCase()}-${m[2]!.toLowerCase()}` as Platform) : null;
+/** The `Cargo.toml` `run.wasm` names, as a path of the archive; null for a plugin of another kind. */
+export function cargoOf(m: Manifest | null): string | null {
+  const run = m?.run;
+  if (!run || typeof run !== 'object') return null;
+  const wasm = (run as Record<string, unknown>).wasm;
+  return typeof wasm === 'string' && wasm ? wasm.replace(/^\.\//, '') : null;
 }
 
 // ---- 1. The manifest ----
@@ -943,7 +939,11 @@ function checkPermissions(m: Manifest | null): CheckResult {
   if (problems.length) return fail('permissions', plural(problems.length, 'permission incohérente', 'inconsistent permission'), problems);
   const asks: Text[] = [];
   if (runs)
-    asks.push(jsOf(m) ? t('Tourne dans Escouade, isolé', 'Runs inside Escouade, sandboxed') : t('Lance un programme', 'Runs a program'));
+    asks.push(
+      jsOf(m) || cargoOf(m)
+        ? t('Tourne dans Escouade, isolé', 'Runs inside Escouade, sandboxed')
+        : t('Lance un programme', 'Runs a program'),
+    );
   if (p.decide === true) asks.push(t('décide des autorisations', 'decides permissions'));
   if (list(p.network).length) asks.push(t(`se connecte à ${list(p.network).join(', ')}`, `connects to ${list(p.network).join(', ')}`));
   if (list(p.events).length) asks.push(t('reçoit des événements', 'gets events'));
@@ -955,32 +955,11 @@ function checkPermissions(m: Manifest | null): CheckResult {
 
 // ---- 10. The binaries ----
 
-/**
- * The interpreters a third party's `run` may not name (docs/PLUGINS.md §5.7): a user without Node, Python… would
- * have a plugin that does not start, and the review would read a code that is not what runs.
- */
-const INTERPRETERS =
-  /^(node|nodejs|deno|bun|bunx|npx|npm|pnpm|pnpx|yarn|tsx|ts-node|python[0-9.]*|pythonw|py|pypy[0-9.]*|uv|uvx|pipx|ruby|perl|php|lua|java|javaw|dotnet|pwsh|powershell|cmd|sh|bash|zsh|dash|fish|wscript|cscript|osascript|rscript)$/i;
-/** The scripts a third party's `run` may not be, by their extension. */
-const SCRIPT = /\.(cmd|bat|ps1|psm1|vbs|sh|bash|js|mjs|cjs|ts|mts|py|rb|pl|php)$/i;
+/** The fields of `run` that name a native program, which the store no longer takes. */
+const NATIVE = ['command', 'windows', 'macos', 'linux'];
 
-/** Why the program `program` of `run` is a script or an interpreter; null for a program of its own. */
-export function scriptOrInterpreter(program: string, read: ArchiveRead): Text | null {
-  const name = program.replace(/\\/g, '/').split('/').pop() ?? program;
-  const bare = name.replace(/\.exe$/i, '');
-  if (INTERPRETERS.test(bare))
-    return t(`${code(program)} nomme un interpréteur (${bare}).`, `${code(program)} names an interpreter (${bare}).`);
-  if (SCRIPT.test(name)) return t(`${code(program)} est un script.`, `${code(program)} is a script.`);
-  const bytes = read.files.get(program.replace(/^\.\//, ''));
-  if (bytes && bytes[0] === 0x23 && bytes[1] === 0x21)
-    return t(
-      `${code(program)} est un script (il commence par ${code('#!')}).`,
-      `${code(program)} is a script (it starts with ${code('#!')}).`,
-    );
-  return null;
-}
-
-function checkBinaries(m: Manifest | null, s: Snapshot): CheckResult {
+/** No plugin brings a program: it is compiled to WASM by the store, the first hand's as a third party's (decision 72). */
+function checkBinaries(m: Manifest | null): CheckResult {
   if (!m) return skip('binaries', NO_MANIFEST);
   if (jsOf(m))
     return pass(
@@ -990,94 +969,31 @@ function checkBinaries(m: Manifest | null, s: Snapshot): CheckResult {
         'none to bring: a run.js plugin is compiled to WASM by the store',
       ),
     );
-  const progs = programs(m, s.archive.read);
-  if (!progs.length) return pass('binaries', t('aucun : le plugin ne lance pas de programme', 'none: the plugin runs no program'));
-  const problems: Problem[] = [];
-  // A plugin of Escouade's own hand (the app's repository, ESC-314) keeps its programs: they are built and signed
-  // with the app. A third party's program is a binary of its own, never a script nor an interpreter.
-  if (!s.firstParty) {
-    const run = m.run as Record<string, unknown>;
-    const seen = new Set<string>();
-    for (const { system, program } of progs) {
-      const field = typeof run[system] === 'string' ? `run.${system}` : 'run.command';
-      if (seen.has(field)) continue;
-      seen.add(field);
-      const why = scriptOrInterpreter(program, s.archive.read);
-      if (why)
-        problems.push({
-          path: field,
-          why: t(
-            `${why.fr} Un plugin du store ne lance ni script ni interpréteur : un programme en JS/TS se publie en run.js, le store le compile en WASM.`,
-            `${why.en} A plugin of the store runs neither a script nor an interpreter: a JS/TS program is published as run.js, the store compiles it to WASM.`,
-          ),
-          fix: t(
-            `Remplace ${code('command')} par ${code('"run": { "js": "dist/plugin.mjs" }')}, le bundle commité (${code('escouade-plugin build')} le vérifie) ; un programme natif se publie en binaires attestés, un par système.`,
-            `Replace ${code('command')} with ${code('"run": { "js": "dist/plugin.mjs" }')}, the committed bundle (${code('escouade-plugin build')} checks it); a native program is published as attested binaries, one per system.`,
-          ),
-        });
-    }
-    if (problems.length) return fail('binaries', plural(problems.length, 'programme refusé', 'program refused'), problems);
-  }
-  for (const { system, program, inArchive } of progs) {
-    if (inArchive) continue;
-    if (!s.binaries.some((b) => b.platform.startsWith(`${system}-`)))
-      problems.push({
-        path: m.run && typeof (m.run as Record<string, unknown>)[system] === 'string' ? `run.${system}` : 'run.command',
-        why:
-          s.releaseAssets === null
-            ? t(
-                `${code(program)} n’est pas dans le dépôt, et l’étiquette ${s.tag} n’a pas de release où le prendre pour ${system}.`,
-                `${code(program)} is not in the repository, and the tag ${s.tag} has no release to take it from for ${system}.`,
-              )
-            : t(
-                `${code(program)} n’est pas dans le dépôt, et la release ${s.tag} n’a pas de fichier pour ${system} (${code(`…-${system}-x64.zip`)}, ${code(`…-${system}-arm64.tar.gz`)}).`,
-                `${code(program)} is not in the repository, and the release ${s.tag} has no file for ${system} (${code(`…-${system}-x64.zip`)}, ${code(`…-${system}-arm64.tar.gz`)}).`,
-              ),
-        fix: t(
-          `Attache à la release l’archive de chaque système (${code('escouade-plugin pack')}), construite par un workflow public avec ${code('actions/attest-build-provenance')}.`,
-          `Attach to the release each system’s archive (${code('escouade-plugin pack')}), built by a public workflow with ${code('actions/attest-build-provenance')}.`,
-        ),
-      });
-  }
-  for (const name of s.oversized ?? [])
-    problems.push({
-      path: name,
-      why: t(`${code(name)} pèse plus de 50 Mo.`, `${code(name)} weighs more than 50 MB.`),
-      fix: t(
-        'Allège le binaire (sans symboles de débogage, compressé), puis pousse une nouvelle étiquette.',
-        'Make the binary lighter (no debug symbols, compressed), then push a new tag.',
-      ),
-    });
-  for (const b of s.binaries)
-    if (b.attestation.state === 'mismatch')
-      problems.push({
-        path: b.name,
-        why: t(
-          `L’attestation de ${code(b.name)} le dit construit depuis ${b.attestation.repository ?? '?'}@${(b.attestation.commit ?? '?').slice(0, 7)}, pas depuis ${s.repository}@${s.commit.slice(0, 7)}.`,
-          `The attestation of ${code(b.name)} says it was built from ${b.attestation.repository ?? '?'}@${(b.attestation.commit ?? '?').slice(0, 7)}, not from ${s.repository}@${s.commit.slice(0, 7)}.`,
-        ),
-        fix: t(
-          'Reconstruis les binaires depuis le commit de l’étiquette, puis pousse une nouvelle étiquette.',
-          'Build the binaries again from the tag’s commit, then push a new tag.',
-        ),
-      });
-  if (problems.length) return fail('binaries', plural(problems.length, 'binaire en défaut', 'binary at fault'), problems);
-  if (!s.binaries.length) return pass('binaries', t('le programme est dans le dépôt', 'the program is in the repository'));
-  const platforms = s.binaries.map((b) => b.platform).join(', ');
-  const attested = s.binaries.filter((b) => b.attestation.state === 'attested');
-  if (attested.length === s.binaries.length) {
-    const workflows = [...new Set(attested.map((b) => (b.attestation as { workflow: string }).workflow))].join(', ');
+  if (cargoOf(m))
     return pass(
       'binaries',
-      t(`${platforms} · attestés par le workflow ${workflows}`, `${platforms} · attested by the workflow ${workflows}`),
+      t(
+        'aucun à fournir : un plugin run.wasm est compilé en WASM par le store',
+        'none to bring: a run.wasm plugin is compiled to WASM by the store',
+      ),
     );
-  }
-  return pass(
+  const run = (m.run ?? {}) as Record<string, unknown>;
+  const native = NATIVE.filter((field) => typeof run[field] === 'string');
+  if (!native.length) return pass('binaries', t('aucun : le plugin ne lance pas de programme', 'none: the plugin runs no program'));
+  return fail(
     'binaries',
-    t(
-      `${platforms} · sans attestation de provenance pour ${s.binaries.length - attested.length} : publiable non vérifié, ne pourra pas être vérifié`,
-      `${platforms} · no provenance attestation for ${s.binaries.length - attested.length}: publishable unverified, cannot be verified`,
-    ),
+    plural(native.length, 'programme refusé', 'program refused'),
+    native.map((field) => ({
+      path: `run.${field}`,
+      why: t(
+        `${code(`run.${field}`)} lancerait un programme natif : le store n’en publie plus, chaque plugin tourne en WASM.`,
+        `${code(`run.${field}`)} would start a native program: the store no longer publishes one, every plugin runs in WASM.`,
+      ),
+      fix: t(
+        `Publie un bundle JS/TS par ${code('"run": { "js": "dist/plugin.mjs" }')} ou du Rust par ${code('"run": { "wasm": "Cargo.toml" }')}, le store les compile ; un programme de l’utilisateur se nomme dans ${code('permissions.commands')}.`,
+        `Publish a JS/TS bundle with ${code('"run": { "js": "dist/plugin.mjs" }')} or Rust with ${code('"run": { "wasm": "Cargo.toml" }')}, the store compiles them; a program of the user’s is named in ${code('permissions.commands')}.`,
+      ),
+    })),
   );
 }
 
@@ -1088,51 +1004,83 @@ const short = (sha: string) => sha.slice(0, 12);
 function checkCompile(m: Manifest | null, s: Snapshot): CheckResult {
   if (!m) return skip('compile', NO_MANIFEST);
   const js = jsOf(m);
-  if (!js) return pass('compile', t('rien à compiler : le plugin n’est pas en run.js', 'nothing to compile: the plugin is not run.js'));
-  const bundle = s.archive.read.files.get(js);
-  if (!bundle)
-    return fail('compile', t('pas de bundle', 'no bundle'), [
+  const cargo = cargoOf(m);
+  if (!js && !cargo)
+    return pass('compile', t('rien à compiler : ni run.js ni run.wasm', 'nothing to compile: neither run.js nor run.wasm'));
+  if (cargo && !s.archive.read.files.has(cargo))
+    return fail('compile', t(`pas de ${cargo}`, `no ${cargo}`), [
       {
-        path: 'run.js',
-        why: t(`${code(js)} n’est pas dans l’archive ${where(s.path).fr}.`, `${code(js)} is not in the archive ${where(s.path).en}.`),
+        path: 'run.wasm',
+        why: t(`${code(cargo)} n’est pas dans l’archive ${where(s.path).fr}.`, `${code(cargo)} is not in the archive ${where(s.path).en}.`),
         fix: t(
-          `Commite le bundle (${code('npm run build')} du SDK) : le store ne lance jamais ${code('npm install')}. Puis pousse une nouvelle étiquette.`,
-          `Commit the bundle (the SDK’s ${code('npm run build')}): the store never runs ${code('npm install')}. Then push a new tag.`,
+          `Commite les sources du plugin, ${code('Cargo.toml')} et ${code('Cargo.lock')} compris. Puis pousse une nouvelle étiquette.`,
+          `Commit the plugin’s sources, ${code('Cargo.toml')} and ${code('Cargo.lock')} included. Then push a new tag.`,
         ),
       },
     ]);
-  if (bundle.length > BUNDLE_MAX)
-    return fail('compile', t('bundle trop lourd', 'bundle too heavy'), [
-      {
-        path: js,
-        why: t(`${code(js)} pèse plus de 5 Mo.`, `${code(js)} weighs more than 5 MB.`),
-        fix: t(
-          'Allège le bundle (minifié, sans sources), puis pousse une nouvelle étiquette.',
-          'Make the bundle lighter (minified, without sources), then push a new tag.',
-        ),
-      },
-    ]);
+  if (js) {
+    const bundle = s.archive.read.files.get(js);
+    if (!bundle)
+      return fail('compile', t('pas de bundle', 'no bundle'), [
+        {
+          path: 'run.js',
+          why: t(`${code(js)} n’est pas dans l’archive ${where(s.path).fr}.`, `${code(js)} is not in the archive ${where(s.path).en}.`),
+          fix: t(
+            `Commite le bundle (${code('npm run build')} du SDK) : le store ne lance jamais ${code('npm install')}. Puis pousse une nouvelle étiquette.`,
+            `Commit the bundle (the SDK’s ${code('npm run build')}): the store never runs ${code('npm install')}. Then push a new tag.`,
+          ),
+        },
+      ]);
+    if (bundle.length > BUNDLE_MAX)
+      return fail('compile', t('bundle trop lourd', 'bundle too heavy'), [
+        {
+          path: js,
+          why: t(`${code(js)} pèse plus de 5 Mo.`, `${code(js)} weighs more than 5 MB.`),
+          fix: t(
+            'Allège le bundle (minifié, sans sources), puis pousse une nouvelle étiquette.',
+            'Make the bundle lighter (minified, without sources), then push a new tag.',
+          ),
+        },
+      ]);
+  }
+  const source = (js ?? cargo)!;
   const c = s.compiled;
-  if (!c) return skip('compile', t('Le bundle n’a pas été compilé.', 'The bundle was not compiled.'));
+  if (!c)
+    return skip(
+      'compile',
+      cargo
+        ? t('Les sources n’ont pas été compilées.', 'The sources were not compiled.')
+        : t('Le bundle n’a pas été compilé.', 'The bundle was not compiled.'),
+    );
   if (c.state === 'refused')
     return fail('compile', t('ne se compile pas en WASM', 'does not compile to WASM'), [
       {
-        path: js,
-        why: t(`${code(js)} ne se compile pas en WASM : ${c.message}`, `${code(js)} does not compile to WASM: ${c.message}`),
-        fix: t(
-          `Lance ${code('escouade-plugin build')} sur le dossier : il dit la même chose. Un plugin run.js n’importe que ${code('node:fs')} et ${code('node:readline')}.`,
-          `Run ${code('escouade-plugin build')} on the folder: it says the same. A run.js plugin imports only ${code('node:fs')} and ${code('node:readline')}.`,
-        ),
+        path: source,
+        why: t(`${code(source)} ne se compile pas en WASM : ${c.message}`, `${code(source)} does not compile to WASM: ${c.message}`),
+        fix: cargo
+          ? t(
+              `Lance ${code('escouade-plugin build')} sur le dossier : il dit la même chose. Un plugin run.wasm commite son ${code('Cargo.lock')}, à jour, et ne dépend que de crates.io ; ce qui s’exécute à la compilation (${code('build.rs')}, macros) doit être sur la liste relue.`,
+              `Run ${code('escouade-plugin build')} on the folder: it says the same. A run.wasm plugin commits its ${code('Cargo.lock')}, up to date, and depends on crates.io alone; what runs while compiling (${code('build.rs')}, macros) must be on the reviewed list.`,
+            )
+          : t(
+              `Lance ${code('escouade-plugin build')} sur le dossier : il dit la même chose. Un plugin run.js n’importe que ${code('node:fs')} et ${code('node:readline')}.`,
+              `Run ${code('escouade-plugin build')} on the folder: it says the same. A run.js plugin imports only ${code('node:fs')} and ${code('node:readline')}.`,
+            ),
       },
     ]);
   if (c.state === 'different')
     return fail('compile', t('la compilation n’est pas reproductible', 'the compilation is not reproducible'), [
       {
-        path: js,
-        why: t(
-          `La compilation n’est pas reproductible : deux compilations du même bundle ont donné deux modules (${short(c.first)}… et ${short(c.second)}…), et ce qui est publié doit être ce que la revue recompile.`,
-          `The compilation is not reproducible: two compilations of the same bundle gave two modules (${short(c.first)}… and ${short(c.second)}…), and what is published must be what the review compiles again.`,
-        ),
+        path: source,
+        why: cargo
+          ? t(
+              `La compilation n’est pas reproductible : deux compilations des mêmes sources ont donné deux modules (${short(c.first)}… et ${short(c.second)}…), et ce qui est publié doit être ce que la revue recompile.`,
+              `The compilation is not reproducible: two compilations of the same sources gave two modules (${short(c.first)}… and ${short(c.second)}…), and what is published must be what the review compiles again.`,
+            )
+          : t(
+              `La compilation n’est pas reproductible : deux compilations du même bundle ont donné deux modules (${short(c.first)}… et ${short(c.second)}…), et ce qui est publié doit être ce que la revue recompile.`,
+              `The compilation is not reproducible: two compilations of the same bundle gave two modules (${short(c.first)}… and ${short(c.second)}…), and what is published must be what the review compiles again.`,
+            ),
         fix: t(
           'Pousse une nouvelle étiquette pour réessayer ; si l’écart revient, signale-le à Escouade : c’est le compilateur du store.',
           'Push a new tag to try again; if the difference comes back, tell Escouade: it is the store’s compiler.',
@@ -1140,11 +1088,12 @@ function checkCompile(m: Manifest | null, s: Snapshot): CheckResult {
       },
     ]);
   const kb = Math.max(1, Math.round(c.size / 1024));
+  const by = 'rust' in c.compiler ? `rustc ${c.compiler.rust}` : `Javy ${c.compiler.javy}`;
   return pass(
     'compile',
     t(
-      `compilé en WASM par le store, deux fois, même empreinte · ${kb} Ko · sha256 ${short(c.sha256)}… · Javy ${c.compiler.javy}`,
-      `compiled to WASM by the store, twice, same fingerprint · ${kb} KB · sha256 ${short(c.sha256)}… · Javy ${c.compiler.javy}`,
+      `compilé en WASM par le store, deux fois, même empreinte · ${kb} Ko · sha256 ${short(c.sha256)}… · ${by}`,
+      `compiled to WASM by the store, twice, same fingerprint · ${kb} KB · sha256 ${short(c.sha256)}… · ${by}`,
     ),
   );
 }
@@ -1168,7 +1117,7 @@ export function runChecks(s: Snapshot): CheckResult[] {
     screenshots: checkScreenshots(m, read, s.undecodable),
     archive: checkArchive(s),
     permissions: checkPermissions(m),
-    binaries: checkBinaries(m, s),
+    binaries: checkBinaries(m),
     compile: checkCompile(m, s),
   };
   return CHECK_KEYS.map((k) => results[k]);

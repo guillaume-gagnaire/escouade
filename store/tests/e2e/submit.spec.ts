@@ -3,7 +3,7 @@ import { FAKE_GITHUB } from '../fake/env';
 
 // The submission through the fake GitHub (tests/fake/github.mjs and repos.mjs): an author installs the App on their
 // repositories, picks one and a tag, follows the eleven checks as they run, and publishes; a booby-trapped plugin is
-// rejected with its reasons; a program's binaries are taken with their attestations; a new tag comes by webhook and
+// rejected with its reasons; a run.wasm plugin is compiled, a native program refused; a new tag comes by webhook and
 // a moved tag is said; the page is measured against the preview (design/store/index.html, #submit). They need a
 // database (DATABASE_URL), as the accounts do.
 test.skip(!process.env.DATABASE_URL, 'the submission needs DATABASE_URL');
@@ -140,10 +140,7 @@ test('a run.js plugin is compiled to WASM by the store, and a third party that r
 
   await page.goto('/submit');
   await submit(page, `${login}/${relay}`);
-  await expect(check(page, 'Binaires').locator('.why')).toContainText('node nomme un interpréteur (node).');
-  await expect(check(page, 'Binaires').locator('.why')).toContainText(
-    'un programme en JS/TS se publie en run.js, le store le compile en WASM',
-  );
+  await expect(check(page, 'Binaires').locator('.why')).toContainText('le store n’en publie plus, chaque plugin tourne en WASM.');
   await expect(page.getByRole('button', { name: 'Continuer' })).toBeDisabled();
   if (shots) await page.screenshot({ path: `${shots}/submit-node-refused-fr.png`, fullPage: true });
 });
@@ -169,15 +166,25 @@ test('a booby-trapped plugin is rejected, each check saying what, where and how 
   await expect(check(page, 'License').locator('.why')).toContainText('The manifest says MIT, the LICENSE file is under Apache-2.0.');
 });
 
-test('a program’s binaries are taken from the release, with their attestations', async ({ page }) => {
-  const login = who('ada-bin');
-  await author(page, login, repo('pager', '-bin'));
-  await submit(page, `${login}/${repo('pager', '-bin')}`);
+test('a run.wasm plugin is compiled by the store, and a native program is refused (ESC-336)', async ({ page }) => {
+  const login = who('ada-wasm');
+  const rust = repo('pager', '-wasm');
+  const native = repo('pager', '-bin');
+  await author(page, login, `${rust}, ${native}`);
+  await submit(page, `${login}/${rust}`);
   await expect(page.locator('.check.pass')).toHaveCount(11);
-  await expect(check(page, 'Binaires')).toContainText(
-    'windows-x64, macos-arm64, linux-x64 · sans attestation de provenance pour 1 : publiable non vérifié, ne pourra pas être vérifié',
-  );
-  await expect(check(page, 'Permissions')).toContainText('Lance un programme');
+  await expect(check(page, 'Compilation')).toContainText('compilé en WASM par le store, deux fois, même empreinte');
+  await expect(check(page, 'Compilation')).toContainText('rustc 1.98.0');
+  await expect(check(page, 'Binaires')).toContainText('aucun à fournir : un plugin run.wasm est compilé en WASM par le store');
+  await expect(check(page, 'Permissions')).toContainText('Tourne dans Escouade, isolé');
+  const shots = process.env.SHOTS_DIR;
+  if (shots) await page.screenshot({ path: `${shots}/submit-run-wasm-fr.png`, fullPage: true });
+
+  await page.goto('/submit');
+  await submit(page, `${login}/${native}`);
+  await expect(check(page, 'Binaires').locator('.why').first()).toContainText('run.command lancerait un programme natif');
+  await expect(check(page, 'Binaires').locator('.why').nth(1)).toContainText('run.windows lancerait un programme natif');
+  await expect(page.getByRole('button', { name: 'Continuer' })).toBeDisabled();
 });
 
 test('a version is its author’s alone', async ({ page, browser }) => {

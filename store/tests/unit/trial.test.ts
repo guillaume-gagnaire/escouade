@@ -62,8 +62,6 @@ function snapshot(repo: string, path: string, tag: string, over: Partial<Snapsho
     archive: { size: gz.length, read },
     // What GitHub detects at the root: the app's license.
     license: 'GPL-3.0',
-    binaries: [],
-    releaseAssets: null,
     existing: null,
     taken: [],
     latest: null,

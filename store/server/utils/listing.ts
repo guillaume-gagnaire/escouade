@@ -92,7 +92,7 @@ export function localized(v: unknown): Text {
 export function asksOf(m: Record<string, unknown>): Ask[] {
   const p = obj(m.permissions);
   // A run.js plugin runs in Escouade, in WASM, the module compiled by the store (ESC-323): no program of its own.
-  const asks: Ask[] = [obj(m.run).js ? { kind: 'wasm' } : m.run ? { kind: 'run' } : { kind: 'none' }];
+  const asks: Ask[] = [obj(m.run).js || obj(m.run).wasm ? { kind: 'wasm' } : m.run ? { kind: 'run' } : { kind: 'none' }];
   if (p.decide === true) asks.push({ kind: 'decide' });
   for (const host of list(p.network)) asks.push({ kind: 'net', host });
   if (list(p.secrets).length) asks.push({ kind: 'secret' });
@@ -104,12 +104,12 @@ export function permissionsOf(m: Record<string, unknown>, binaries: Record<strin
   const p = obj(m.permissions);
   const run = obj(m.run);
   const out: Permission[] = [];
-  if (typeof run.js === 'string')
+  if (typeof run.js === 'string' || typeof run.wasm === 'string')
     out.push({
       icon: 'run',
       tone: '',
       text: t('Tourne dans Escouade, isolé', 'Runs inside Escouade, sandboxed'),
-      mono: run.js,
+      mono: (run.js ?? run.wasm) as string,
       detail: t('compilé en WASM par le store', 'compiled to WASM by the store'),
     });
   else if (m.run) {

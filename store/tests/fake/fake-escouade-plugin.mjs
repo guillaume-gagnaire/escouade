@@ -5,11 +5,16 @@
 // imports node:net is refused as the real one refuses it; one holding `LOOP` never ends; one holding `GREEDY` takes
 // memory. It fails when it is given a variable of the store's (the compilation's environment is its own).
 //
+// A `run.wasm` plugin (ESC-336): `fetch <folder>` stands for `cargo fetch --locked`, and refuses what the real one does
+// (no Cargo.lock, a build.rs off the list, a lock that does not match, here one that holds `STALE`); a Cargo.toml that
+// holds `NET-DOWN` fails as a network does, without a ✗. `build` then needs what `fetch` left in the data folder, and
+// no network, and makes its module of the sources.
+//
 // `test <folder> --wasm <module> --offline --json` answers as the bench of the local review (ESC-324) does when the
 // module passes, after writing its arguments beside it (<module>.args.json: the bench's environment is its own, so no
 // variable of the tests reaches it); it fails when it is given a variable of the review's (a token above all).
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const args = process.argv.slice(2);
@@ -38,6 +43,40 @@ if (words[0] === 'test') {
   );
   process.exit(0);
 }
+/** Every file under `dir`, by its path, sorted. */
+function tree(dir, rest = '') {
+  return readdirSync(join(dir, rest), { withFileTypes: true })
+    .sort((a, b) => (a.name < b.name ? -1 : 1))
+    .flatMap((e) => (e.isDirectory() ? tree(dir, join(rest, e.name)) : [join(rest, e.name).replace(/\\/g, '/')]));
+}
+
+if (words[0] === 'fetch') {
+  const folder = words[1];
+  const manifest = JSON.parse(readFileSync(join(folder, 'escouade-plugin.json'), 'utf8'));
+  if (!manifest.run?.wasm) {
+    console.error('✗ only a `run.wasm` plugin has dependencies to download');
+    process.exit(1);
+  }
+  if (!existsSync(join(folder, 'Cargo.lock'))) {
+    console.error('✗ no Cargo.lock: commit it, the store compiles exactly what it pins (cargo generate-lockfile)');
+    process.exit(1);
+  }
+  if (existsSync(join(folder, 'build.rs'))) {
+    console.error('✗ fake has a build.rs: a script runs in native while compiling, a plugin has none');
+    process.exit(1);
+  }
+  if (readFileSync(join(folder, 'Cargo.lock'), 'utf8').includes('STALE')) {
+    console.error('✗ Cargo.lock does not match Cargo.toml or crates.io (cargo generate-lockfile, then commit it): --locked');
+    process.exit(1);
+  }
+  if (readFileSync(join(folder, manifest.run.wasm), 'utf8').includes('NET-DOWN')) {
+    console.error('error: failed to download from `https://static.crates.io`');
+    process.exit(101);
+  }
+  mkdirSync(process.env.ESCOUADE_DATA_DIR, { recursive: true });
+  writeFileSync(join(process.env.ESCOUADE_DATA_DIR, 'fetched'), '');
+  process.exit(0);
+}
 if (words[0] !== 'build') {
   console.error(`✗ fake escouade-plugin: ${words.join(' ')}`);
   process.exit(2);
@@ -50,6 +89,35 @@ for (const k of Object.keys(process.env))
 const folder = words[1];
 const out = words[words.indexOf('--out') + 1];
 const manifest = JSON.parse(readFileSync(join(folder, 'escouade-plugin.json'), 'utf8'));
+if (manifest.run.wasm) {
+  if (!existsSync(join(process.env.ESCOUADE_DATA_DIR, 'fetched'))) {
+    console.error('error: the dependencies were not fetched');
+    process.exit(101);
+  }
+  if (process.env.CARGO_NET_OFFLINE !== 'true') {
+    console.error('error: build was given a network');
+    process.exit(101);
+  }
+  const files = tree(folder);
+  const sources = Buffer.concat(files.flatMap((f) => [Buffer.from(f), readFileSync(join(folder, f))]));
+  const bytes = Buffer.concat([Buffer.from([0, 0x61, 0x73, 0x6d, 1, 0, 0, 0]), sources, random ? randomBytes(8) : Buffer.alloc(0)]);
+  mkdirSync(out, { recursive: true });
+  const name = `${manifest.id}-${manifest.version}.wasm`;
+  writeFileSync(join(out, name), bytes);
+  const sha256 = createHash('sha256').update(bytes).digest('hex');
+  const lock = createHash('sha256')
+    .update(readFileSync(join(folder, 'Cargo.lock')))
+    .digest('hex');
+  console.log(
+    JSON.stringify({
+      file: join(out, name),
+      size: bytes.length,
+      sha256,
+      compiler: { rust: '1.98.0', target: 'wasm32-wasip1', canon: 'c'.repeat(64), lock },
+    }),
+  );
+  process.exit(0);
+}
 const bundle = readFileSync(join(folder, manifest.run.js));
 const text = bundle.toString('utf8');
 if (text.includes('CRASH')) {

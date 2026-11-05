@@ -56,6 +56,9 @@ export default defineConfig({
         STORE_FIRST_PARTY_REPO: E2E_FIRST_PARTY_REPO,
         // The compiler of the run.js plugins (ESC-323): the fake escouade-plugin, run by Node.
         STORE_ESCOUADE_PLUGIN: 'tests/fake/fake-escouade-plugin.mjs',
+        // No bubblewrap around it (ESC-336): outside production alone, and the fake runs nothing of a plugin.
+        STORE_COMPILE_ISOLATION: 'none',
+        NODE_ENV: 'test',
       },
       stdout: 'pipe',
     },

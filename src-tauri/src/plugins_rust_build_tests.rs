@@ -41,6 +41,24 @@ fn refused(name: &str, files: &[(&str, &str)]) -> Refusal {
 }
 
 #[test]
+fn what_cargo_fetch_says_of_a_lock_is_the_plugins_fault_and_a_network_is_not() {
+    for said in [
+        "error: the lock file /w/Cargo.lock needs to be updated but --locked was passed",
+        "error: failed to parse lock file at: /w/Cargo.lock",
+        "error: failed to select a version for the requirement `serde = \"=1.0.999\"`",
+        "error: checksum for `serde v1.0.228` changed between lock files",
+    ] {
+        assert!(rust::lock_at_fault(said), "{said}");
+    }
+    assert!(!rust::lock_at_fault(
+        "error: failed to download from `https://static.crates.io/crates/serde/serde-1.0.228.crate`"
+    ));
+    let why = Refusal::StaleLock("--locked".into());
+    assert!(why.message(Lang::Fr).contains("ne correspond pas"));
+    assert!(why.message(Lang::En).contains("does not match"));
+}
+
+#[test]
 fn a_plugin_without_its_lock_is_refused_with_the_reason() {
     let dir = folder("no-lock", &[]);
     std::fs::remove_file(dir.join("Cargo.lock")).unwrap();

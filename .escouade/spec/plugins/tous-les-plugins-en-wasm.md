@@ -1,9 +1,9 @@
 ---
 title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire"]
-tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335"]
-decisions: [73,71,70,72,75,80,84]
+sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire"]
+tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336"]
+decisions: [73,71,70,72,75,80,84,"le-store-compile-les-run-wasm-dans-bubbl"]
 compared: null
 ---
 
@@ -115,3 +115,12 @@ Publié le 2026-11-05 : `escouade-plugin-protocol`, `escouade-plugin-kit` et `es
 - Leur documentation, en anglais, se lira sur docs.rs pour le natif et pour `wasm32-wasip1`.
 - Les plugins dépendent de ces crates par version. Dans le dépôt, `[patch.crates-io]` les ramène sur `crates/`. Le store, qui ne lit que le dossier du plugin, compilera ce qui est publié.
 - Un plugin de la première main ne se compile pas encore seul dans son dossier : il reste membre du workspace de l'app et n'a pas de `Cargo.lock` à lui. C'est à régler avant que le store le compile (`docs/PLUGINS.md` §8.16).
+
+## Ce qui tourne déjà : le store compile un `run.wasm` (ESC-336)
+
+Ceci remplace la phrase « Le store ne compile pas encore un `run.wasm` » ci-dessus, et « Rien n'est publié » pour les trois crates : elles sont sur crates.io en `0.1.0` depuis le 2026-11-05.
+
+- Le store compile un `run.wasm` comme un `run.js`, deux fois, et publie le même module : le détail est dans *Publier sur le store*. La fixture du dépôt y donne la même empreinte que sous Windows, dans son bac à sable.
+- `escouade-plugin fetch <dossier>` télécharge les dépendances d'un `run.wasm` depuis crates.io sans rien lancer du plugin, après les mêmes refus que `validate`. Un `Cargo.lock` qui ne correspond pas est refusé.
+- Aucun plugin de la première main n'est encore compilé par le store : il reste membre du workspace de l'app et n'a pas de `Cargo.lock`, et `escouade-plugin` le refuse donc.
+- En production, le Docker par défaut refuse le bac à sable. Tant que l'hébergement ne change pas de réglage, une version `run.wasm` attend.

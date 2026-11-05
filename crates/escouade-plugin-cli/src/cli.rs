@@ -29,6 +29,9 @@ pub fn usage(lang: Lang) -> String {
   escouade-plugin build <dossier> [--out <dossier>] [--json]
       Compile un plugin `run.js` ou `run.wasm` en WASM, comme le store : packs/<id>-<version>.wasm
       et son SHA-256, le même sur tous les systèmes.
+  escouade-plugin fetch <dossier>
+      Télécharge les dépendances d'un plugin `run.wasm` depuis crates.io, sans rien lancer du
+      plugin : `build` les trouve ensuite hors ligne, comme au store.
   escouade-plugin dev <dossier> [--secret <clé>=<valeur>]... [--escouade <version>]
       Le faux Escouade : lance le plugin, puis envoie ce que tu tapes :
         fact <nom> [json]       un fait (events/fact), ex. fact ticket.column
@@ -64,6 +67,9 @@ Options : --lang fr|en ; --escouade <version> joue le plugin comme cette version
   escouade-plugin build <folder> [--out <folder>] [--json]
       Compiles a `run.js` or `run.wasm` plugin to WASM, as the store does: packs/<id>-<version>.wasm
       and its SHA-256, the same on every system.
+  escouade-plugin fetch <folder>
+      Downloads the dependencies of a `run.wasm` plugin from crates.io, running nothing of the
+      plugin: `build` then finds them offline, as at the store.
   escouade-plugin dev <folder> [--secret <key>=<value>]... [--escouade <version>]
       The fake Escouade: starts the plugin, then sends what you type:
         fact <name> [json]       a fact (events/fact), e.g. fact ticket.column
@@ -205,6 +211,7 @@ pub fn main(args: Vec<String>, more: Option<More>) -> i32 {
                 .map(PathBuf::from);
             build(&folder, lang, hand, out, flag("--json"))
         }
+        "fetch" => fetch(&folder, lang, hand),
         "test" | "dev" => match more {
             Some(more) => more(&Call {
                 command,
@@ -356,8 +363,58 @@ pub fn module_of_crate(
     data: &Path,
     lang: Lang,
 ) -> Result<rust::Built, String> {
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let exe = this_program().map_err(|e| e.to_string())?;
     rust::build(folder, cargo_file, data, &exe, &|| say_download(lang)).map_err(|f| f.message(lang))
+}
+
+/// This program, which serves as `rustc-canon`. The store's sandbox has no `/proc` (ESC-336), where Linux says it: its
+/// path is then the absolute one it was started by.
+fn this_program() -> std::io::Result<PathBuf> {
+    std::env::current_exe().or_else(|e| {
+        std::env::args_os()
+            .next()
+            .map(PathBuf::from)
+            .filter(|p| p.is_absolute())
+            .ok_or(e)
+    })
+}
+
+/// `fetch`: the dependencies of a `run.wasm` plugin, in the data folder. A line of ✗ is the plugin's fault; without one,
+/// the store takes it for its own (a network that fails) and the version waits to be checked again.
+fn fetch(folder: &Path, lang: Lang, hand: manifest::Hand) -> i32 {
+    let Some(m) = read_manifest(folder, lang, hand) else {
+        return 1;
+    };
+    let Some(cargo_file) = m.run.as_ref().and_then(|r| r.wasm.as_ref()) else {
+        eprintln!(
+            "✗ {}",
+            tr_in!(
+                lang,
+                "seul un plugin `run.wasm` a des dépendances à télécharger",
+                "only a `run.wasm` plugin has dependencies to download"
+            )
+        );
+        return 1;
+    };
+    let exe = match this_program() {
+        Ok(exe) => exe,
+        Err(e) => {
+            eprintln!("{e}");
+            return 1;
+        }
+    };
+    let data = crate::paths::tools_data_dir();
+    match rust::fetch(folder, cargo_file, &data, &exe, &|| say_download(lang)) {
+        Ok(()) => 0,
+        Err(rust::Failure::Refused(why)) => {
+            eprintln!("✗ {}", why.message(lang));
+            1
+        }
+        Err(rust::Failure::Tools(why)) => {
+            eprintln!("{why}");
+            1
+        }
+    }
 }
 
 /// `build`: the module of a `run.js` or `run.wasm` plugin, written with its SHA-256 (`<sha256>  <name>`, as `pack` writes
