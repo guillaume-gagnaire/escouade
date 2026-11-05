@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { startFakeStore } from '../../../tests/fixtures/store/fake-store.mjs';
 import { readPublicKey, type PublicKey } from '../../server/utils/minisign';
 import { devSeed, fetchSeed, keysOf, parseList, type Entry } from '../../scripts/seed';
 
@@ -11,37 +11,45 @@ import { devSeed, fetchSeed, keysOf, parseList, type Entry } from '../../scripts
 // check it, and a release that stops at the first gap.
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
+// The store's image holds store/ alone: these tests need the repository whole (the fake store, plugins/seed.json, the
+// keys, a fixture's module), and are skipped without it.
+const FAKE = path.join(ROOT, 'tests', 'fixtures', 'store', 'fake-store.mjs');
+const whole = fs.existsSync(FAKE);
+type Fake = { url: string; key: string; close: () => Promise<void> };
+let startFakeStore: (port: number) => Promise<Fake>;
 const TRELLO = 'dev.escouade.trello';
 const sha256 = (b: Buffer | string) => createHash('sha256').update(b).digest('hex');
 
-let fake: { url: string; key: string; close: () => Promise<void> };
+let fake: Fake | undefined;
 let keys: PublicKey[];
 
 beforeAll(async () => {
+  if (!whole) return;
+  ({ startFakeStore } = await import(pathToFileURL(FAKE).href));
   fake = await startFakeStore(0);
-  keys = [readPublicKey(fake.key)!];
+  keys = [readPublicKey(fake!.key)!];
   await post('/_fake/revocations', { entries: [] });
 });
-afterAll(() => fake.close());
+afterAll(() => fake?.close());
 
 const post = (p: string, body: unknown) =>
-  fetch(`${fake.url}${p}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  fetch(`${fake!.url}${p}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 const temp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'seed-'));
 const fingerprint = async (id: string, version: string) =>
-  sha256(Buffer.from(await (await fetch(`${fake.url}/api/v1/plugins/${id}/${version}/version.json`)).arrayBuffer()));
+  sha256(Buffer.from(await (await fetch(`${fake!.url}/api/v1/plugins/${id}/${version}/version.json`)).arrayBuffer()));
 const entry = async (id: string, version: string): Promise<Entry> => ({ id, version, sha256: await fingerprint(id, version) });
 const run = async (entries: Entry[], over: Partial<Parameters<typeof fetchSeed>[0]> = {}) => {
   const to = temp();
-  const said = await fetchSeed({ entries, to, store: fake.url, mirror: `${fake.url}/mirror`, keys, app: '2.2.0', ...over });
+  const said = await fetchSeed({ entries, to, store: fake!.url, mirror: `${fake!.url}/mirror`, keys, app: '2.2.0', ...over });
   return { to, said };
 };
 
-describe('the seed of a release', () => {
+describe.skipIf(!whole)('the seed of a release', () => {
   it('holds the bytes the store published, with their signature and the list of the day', async () => {
     const { to, said } = await run([await entry(TRELLO, '2.2.0')]);
     expect(fs.readdirSync(path.join(to, TRELLO)).sort()).toEqual(['archive.tar.gz', 'plugin.wasm', 'version.json', 'version.json.minisig']);
     for (const name of fs.readdirSync(path.join(to, TRELLO))) {
-      const served = await fetch(`${fake.url}/api/v1/plugins/${TRELLO}/2.2.0/${name}`);
+      const served = await fetch(`${fake!.url}/api/v1/plugins/${TRELLO}/2.2.0/${name}`);
       expect(fs.readFileSync(path.join(to, TRELLO, name)).equals(Buffer.from(await served.arrayBuffer()))).toBe(true);
     }
     expect(fs.existsSync(path.join(to, 'revocations.json.minisig'))).toBe(true);
@@ -115,7 +123,7 @@ const sha = async (url: string, id: string) =>
   sha256(Buffer.from(await (await fetch(`${url}/api/v1/plugins/${id}/2.2.0/version.json`)).arrayBuffer()));
 const testPub = async () => (await import('../fake/minisign.mjs')).testKey().pub;
 
-describe('the seed of a build of development', () => {
+describe.skipIf(!whole)('the seed of a build of development', () => {
   it('is made from a folder and its module, not signed, its list beside it', async () => {
     const to = temp();
     const folder = path.join(ROOT, 'tests', 'fixtures', 'plugins', 'reactor');
