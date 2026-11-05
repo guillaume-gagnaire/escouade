@@ -458,7 +458,10 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
+      # Two commits: on a pull request, the merge and its base, which `plugins/ci.mjs --changed` compares.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
 
       # escouade-js, embedded in the app (src-tauri/build.rs).
       - name: Download escouade-js
@@ -556,13 +559,15 @@ jobs:
           ESCOUADE_PLUGIN_BIN: src-tauri/target/debug/escouade-plugin
         run: node sdk/scripts/template-ci.mjs
 
-      # Escouade's own plugins (plugins/<id>/, PLG-10's examples, ESC-182 and ESC-314), as their author checks them before
-      # a tag: their tests, the TypeScript ones' dist/ rebuilt and compared, then validate and the bench for all
-      # (--first-party: their ids dev.escouade.*; the SDK built by the step above).
+      # Escouade's own plugins (plugins/<id>/, PLG-10's examples, ESC-182, ESC-314 and ESC-340), as their author checks them
+      # before a tag: LICENSE and CHANGELOG, their tests (cargo test for the crates), the TypeScript ones' dist/ rebuilt
+      # and compared, a crate's version against its manifest, then validate, and the bench for all but those the app still
+      # gives (--first-party: their ids dev.escouade.*; the SDK built by the step above). All of them on main; on a
+      # pull request, those it touches (docs/PLUGINS.md §8.6.4).
       - name: Escouade's own plugins pass their tests, validate and the bench
         env:
           ESCOUADE_PLUGIN_BIN: src-tauri/target/debug/escouade-plugin
-        run: node plugins/ci.mjs
+        run: node plugins/ci.mjs ${{ github.event_name == 'pull_request' && '--changed HEAD^1' || '' }}
 
       - name: Upload the packages
         uses: actions/upload-artifact@v7

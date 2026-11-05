@@ -1409,7 +1409,7 @@ Chaque plugin quitte `plugins/builtin/dev.escouade.<id>/` pour `plugins/<id-cour
 
 `dev.escouade.minimal` n'est pas un produit : il va dans `tests/fixtures/plugins/minimal/`, sans publication. `discord`, `goose`, `high-contrast`, `slack` et `team-rules` ne bougent pas. `plugins/builtin/` disparaît, et `plugins/README.md` avec sa section.
 
-**Fait (ESC-339, 2026-11-05)** : les dossiers sont à leur place, sans changement de code ni d'identifiant. Tant que `escouade-plugins` les sert, `plugins/ci.mjs` passe ceux dont le programme est `{escouade}/escouade-plugins` (M1 les y fera entrer).
+**Fait (ESC-339, 2026-11-05)** : les dossiers sont à leur place, sans changement de code ni d'identifiant. `plugins/ci.mjs` les vérifie depuis M1 (§8.6.4).
 
 **Le nom du dossier n'est pas le dernier mot de l'identifiant** pour six d'entre eux : il sert seulement à l'étiquette, et le store relie un dossier à un id par son manifeste (§3.6 de `docs/STORE.md`).
 
@@ -1447,6 +1447,19 @@ Le store ne lit que le dossier du plugin (`docs/STORE.md` §3.6), à raison : c'
 - `cargo test` en natif : les tests unitaires ne changent pas ;
 - `escouade-plugin build`, puis `validate` et `test --first-party` : le banc joue le module dans l'hôte de l'app ;
 - `--changed` : seulement les dossiers touchés, plus tous quand `crates/` bouge.
+
+**Fait (M1, ESC-340, 2026-11-05).** Pour chaque plugin de `plugins/` :
+
+- sa `LICENSE` et son `CHANGELOG.md`, présents et non vides, quelle que soit sa sorte ;
+- pour un crate, la version du manifeste face à celle de `Cargo.toml`, et `cargo test`, lancé une seule fois de `src-tauri/` sur tous les crates retenus (`-p` répétés, `--no-fail-fast`) : une compilation, et la chaîne d'outils épinglée de `src-tauri/rust-toolchain.toml`, qu'un `cargo` lancé du dossier du plugin ne verrait pas ;
+- `validate`, en `--builtin` tant que le programme est `{escouade}/escouade-plugins`, y compris pour les cinq sans crate (voix, isola) ;
+- le banc pour les `run.js`, et pour un `run.wasm` : `build --out`, puis `test --wasm` sur ce module, pour ne pas le compiler deux fois. `build` compile un `run.wasm` depuis A5. Aucun plugin n'a de banc tant que `escouade-plugins` le sert.
+
+**La version d'un plugin que l'app stampe.** Les 23 manifestes disent `0.0.0` et les crates `1.0.0` : `manifest_text` y met la version de l'app. La comparaison admet donc `0.0.0` tant que le programme est celui de l'app, et plus du tout dès qu'un plugin passe en `run.wasm` : c'est le portage qui lui donne sa version (§8.6.1).
+
+**`--changed [<révision>]`** compare à la révision donnée, ou à l'endroit où la branche a quitté `main` (`origin/main`, sinon `main`), arbre de travail et fichiers nouveaux compris. Sont touchés les dossiers modifiés et ce qui en dépend par `path` (`mistral` sur `acp`). **Tous passent** si bouge ce qui juge ou construit tous les plugins : `crates/`, `schemas/`, `sdk/plugin/`, `src-tauri/src/plugins/`, `src-tauri/src/bin/escouade-plugin.rs`, `src-tauri/Cargo.lock`, `src-tauri/rust-toolchain.toml` et le script lui-même. Si git ne sait pas comparer (clone trop court), tous passent aussi : une branche ne doit pas être verte faute de test. La logique est dans `plugins/ci-lib.mjs`, testée par `scripts/plugins-ci.test.ts`.
+
+**En CI**, le job Linux lance tout sur `main` et `--changed HEAD^1` sur une pull request, `fetch-depth: 2` donnant la fusion et sa base. Le job Windows ne le lance pas : les tests des crates y passent déjà (`default-members`), et le reste ne dépend pas du système ; la comparaison entre systèmes est le job reproductible ci-dessous, à poser quand un plugin sera en `run.wasm`.
 
 Un job **reproductible** compare sous Windows et Linux, sur `main` : le même plugin, la même empreinte. Un écart est rouge. Un job de plus sur macOS le fait une fois par release.
 
