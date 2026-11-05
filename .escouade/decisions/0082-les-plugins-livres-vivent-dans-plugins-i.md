@@ -1,9 +1,9 @@
 ---
-number: null
+number: 82
 id: "les-plugins-livres-vivent-dans-plugins-i"
 title: "Les plugins livrés vivent dans plugins/<id-court>/, et ci.mjs les laisse de côté jusqu'à M1"
 date: "2026-11-05"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-339"
 pages: ["plugins/livres-avec-escouade","plugins/vue-d-ensemble"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/livres-avec-escouade","added":1,"removed":1},{"page":"plugins/vue-d-ensemble","added":1,"removed":1}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-05T07:41:48+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
