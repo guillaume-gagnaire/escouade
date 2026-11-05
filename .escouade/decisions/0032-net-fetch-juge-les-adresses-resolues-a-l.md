@@ -3,14 +3,14 @@ number: 32
 id: "net-fetch-juge-les-adresses-resolues-a-l"
 title: "net/fetch juge les adresses résolues à la connexion, sans proxy, et escouade-js est embarqué dans l'exécutable"
 date: "2026-11-01"
-state: "accepted"
+state: "superseded"
 origin: "ticket"
 origin_ref: "ESC-320"
 pages: ["plugins/programmes-js-ts-en-wasm"]
 tickets: ["ESC-320"]
 documents: []
 supersedes: []
-superseded_by: null
+superseded_by: 78
 changes: [{"page":"plugins/programmes-js-ts-en-wasm","added":13,"removed":11}]
 accepted_at: "2026-11-01T14:50:40+01:00"
 accepted_by: "Guillaume Gagnaire"

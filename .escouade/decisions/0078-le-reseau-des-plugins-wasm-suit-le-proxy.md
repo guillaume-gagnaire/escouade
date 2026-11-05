@@ -1,9 +1,9 @@
 ---
-number: null
+number: 78
 id: "le-reseau-des-plugins-wasm-suit-le-proxy"
 title: "Le réseau des plugins WASM suit le proxy et le TLS de Réglages › Réseau, s'ouvre à {account} et local:shared, et gagne flux, WebSocket et minuteurs"
 date: "2026-11-05"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-332"
 pages: ["plugins/tous-les-plugins-en-wasm","plugins/programmes-js-ts-en-wasm"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: [32]
 superseded_by: null
 changes: [{"page":"plugins/tous-les-plugins-en-wasm","added":13,"removed":0},{"page":"plugins/programmes-js-ts-en-wasm","added":9,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-05T03:36:58+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
