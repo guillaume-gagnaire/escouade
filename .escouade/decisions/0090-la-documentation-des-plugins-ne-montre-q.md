@@ -1,9 +1,9 @@
 ---
-number: null
+number: 90
 id: "la-documentation-des-plugins-ne-montre-q"
 title: "La documentation des plugins ne montre que du code compilé, et le modèle Rust dépend du kit comme un tiers"
 date: "2026-11-05"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-342"
 pages: ["plugins/tous-les-plugins-en-wasm"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/tous-les-plugins-en-wasm","added":7,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-05T15:32:58+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
