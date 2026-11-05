@@ -154,16 +154,15 @@ jobs:
           name: escouade-js
           path: src-tauri/escouade-js/target
 
-      # A run.wasm compiles in bubblewrap (ESC-336), which needs user namespaces: the runner's Ubuntu restricts them, and
-      # image-test.mjs lifts Docker's seccomp and AppArmor for its own run of it. The first line says what the restriction
-      # does, for docs/STORE.md: it may fail, and only says so.
+      # A run.wasm compiles in bubblewrap (ESC-336), which Docker's default profiles refuse: image-test.mjs gives it the two
+      # of store/deploy (ESC-356, docs/STORE.md §3.3), and an AppArmor profile is loaded on the host. The runner keeps
+      # Ubuntu 24.04's restriction of user namespaces, as a server would: a named profile does not need it lifted.
       - name: The compiler in the image
         working-directory: .
         env:
           IMAGE_TEST_DATABASE_URL: postgres://store:store@localhost:5432/store
         run: |
-          docker run --rm --security-opt seccomp=unconfined --security-opt apparmor=unconfined --entrypoint bwrap escouade-store:ci --unshare-all --ro-bind /opt/sandbox/usr /usr --symlink usr/lib /lib --symlink usr/lib64 /lib64 --symlink usr/bin /bin /bin/true && echo "userns restricted: bwrap runs" || echo "userns restricted: bwrap refused"
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          sudo apparmor_parser -r store/deploy/apparmor-bubblewrap
           node store/scripts/image-test.mjs escouade-store:ci src-tauri/escouade-js/target/escouade-js.wasm.sha256
 
   # escouade-js, the Javy plugin of the run.js plugins (ESC-320, docs/PLUGINS.md §5): built once for wasm32-wasip1 with the
