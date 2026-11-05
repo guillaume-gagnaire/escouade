@@ -20,3 +20,5 @@ store/server/db/migrations/meta
 docs/archive/codeindex/codeindex-probes-reference*.json
 crates
 prototypes/**/target
+# moby's own seccomp profile, kept byte for byte: store/tests/unit/deploy-profiles.test.ts compares it to moby's (ESC-356).
+store/deploy/seccomp-bubblewrap.json

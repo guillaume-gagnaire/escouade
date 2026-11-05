@@ -62,6 +62,7 @@ Sur le Coolify de l'utilisateur, dans le projet « Escouade », à côté du sit
 | Port exposé | 3000 (Nitro) |
 | Vérification de santé | `GET /api/health`, toutes les 30 s ; un nouveau conteneur qui ne répond pas n'est pas mis en ligne, l'ancien reste |
 | Stockage persistant | un volume monté sur `/data/archives` |
+| Options Docker | la ligne « Custom Docker Options » des deux profils de `store/deploy`, et les fichiers à poser sur l'hôte avant : §3.3 (ESC-356) ; sans elles, aucun `run.wasm` ne compile |
 | Sauvegarde du volume | le volume `/data/archives` chaque nuit à 3 h 30 vers le bucket des sauvegardes, par Coolify (§1.4 ; décidé par le chef d'escouade le 2026-10-29, à la place d'une tâche `restic`) |
 | Notifications | échec de déploiement, conteneur arrêté, sauvegarde ratée : le salon Discord d'Escouade |
 
@@ -274,8 +275,67 @@ Le même Dockerfile, dans un vrai Docker 27 avec BuildKit (`docker:27-dind`) : 5
 
 Presque tout le poids vient de `/opt/sandbox` : la chaîne d'outils et `gcc`. Le temps de build bouge peu, car elle est copiée, pas compilée.
 
-- **`store/scripts/image-test.mjs` pour un `run.wasm`** : `rust-build` compilé deux fois à l'empreinte de `goldens.json`, par le code du store, dans le vrai bac à sable, réseau compris pour `cargo fetch` ; un `Cargo.lock` changé, un `build.rs`, `include_bytes!("/etc/passwd")` et un `include_bytes!` vers `/app` refusés ; vu de l'intérieur, ni `/app`, ni `/data`, ni `/etc`, ni `HOME`, ni variable `STORE_*`, ni process `node`, et `lo` pour seule interface. Sous Docker, le programme tourne deux fois : tel quel, il doit dire qu'une version attend ; avec `RUST_OPTIONS` (`seccomp=unconfined apparmor=unconfined` par défaut), il compile. Entre les deux, il essaie chaque option seule et imprime ce que bubblewrap répond. Le job de CI essaie aussi bubblewrap avant de lever `kernel.apparmor_restrict_unprivileged_userns`, qu'Ubuntu 24.04 pose.
-- **L'isolation réelle dépend du moteur.** Sous podman sans root, le journal dit « without network (unshare -rn) ». Sous Docker avec son seccomp par défaut (essayé sur `docker:27-dind` ; c'est aussi ce qu'on attend de Coolify sans option de conteneur, à lire dans le journal du premier déploiement), `unshare` est refusé (« Operation not permitted ») : le journal dit « with the container's network » et la compilation se fait quand même, comme `STORE_COMPILE_ISOLATION=auto` le prévoit. Javy n'a pas besoin du réseau et le code du plugin reste dans le bac à sable WASM (décision 43) ; il manque seulement la couche de l'espace de noms. L'obtenir demande une option de conteneur dans Coolify (un profil seccomp qui autorise `unshare`) : c'est un réglage de l'hébergement, à décider par l'utilisateur, pas un changement du Dockerfile. `STORE_COMPILE_ISOLATION=require` refuserait alors de compiler sans. **Pour un `run.wasm`, ce réglage n'est plus une couche de plus : sans lui, rien ne compile** (essayé le 2026-11-05 dans `docker:27-dind` : tel quel, `no sandbox here` et la version attend ; avec `--security-opt seccomp=unconfined`, seul, tout passe, empreinte et refus compris. **dind n'est pas un bon témoin** : son `--proc` passait, celui du runner non. **Options attendues sur un Docker d'Ubuntu 24.04**, à confirmer par le prochain run de CI, qui imprime l'effet de chacune : `--security-opt seccomp=unconfined --security-opt apparmor=unconfined`, plus `kernel.apparmor_restrict_unprivileged_userns=0` sur l'hôte ; plus de `systempaths=unconfined`, puisqu'aucun `/proc` n'est monté. ESC-356 en tirera un profil seccomp étroit, qui devra permettre `clone` avec `CLONE_NEWUSER`, `unshare`, `mount` et `pivot_root`. Ce réglage de Coolify reste à décider par l'utilisateur, il n'est pas fait).
+- **`store/scripts/image-test.mjs` pour un `run.wasm`** : `rust-build` compilé deux fois à l'empreinte de `goldens.json`, par le code du store, dans le vrai bac à sable, réseau compris pour `cargo fetch` ; un `Cargo.lock` changé, un `build.rs`, `include_bytes!("/etc/passwd")` et un `include_bytes!` vers `/app` refusés ; vu de l'intérieur, ni `/app`, ni `/data`, ni `/etc`, ni `HOME`, ni variable `STORE_*`, ni process `node`, et `lo` pour seule interface. Sous Docker, le programme tourne deux fois : tel quel, il doit dire qu'une version attend ; avec les deux profils de `store/deploy` (ci-dessous), il compile. Entre les deux, il essaie chaque profil seul, qui ne doit pas suffire, et imprime ce que bubblewrap répond. Ensuite, avec les profils : `keyctl`, `setns`, `unshare -rn` et un `clone` à un seul espace de noms restent refusés (`EPERM`, et le même appel passe sans eux, ou le refus ne prouverait rien) ; bubblewrap ne peut monter ni `mqueue`, ni `/app`, ni `/data`. Le store démarre deux fois, et son journal dit chacun des deux cas. Le job de CI charge le profil AppArmor par `apparmor_parser`, et garde la restriction d'Ubuntu 24.04. `RUST_OPTIONS` remplace les profils pour en essayer d'autres ; les vérifications de refus sautent alors.
+- **L'isolation réelle dépend du moteur.** Sous podman sans root, le journal dit « without network (unshare -rn) ». Sous Docker avec son seccomp par défaut (essayé sur `docker:27-dind` ; c'est aussi ce qu'on attend de Coolify sans option de conteneur, à lire dans le journal du premier déploiement), `unshare` est refusé (« Operation not permitted ») : le journal dit « with the container's network » et la compilation se fait quand même, comme `STORE_COMPILE_ISOLATION=auto` le prévoit. Javy n'a pas besoin du réseau et le code du plugin reste dans le bac à sable WASM (décision 43) ; il manque seulement la couche de l'espace de noms. L'obtenir demande une option de conteneur dans Coolify (un profil seccomp qui autorise `unshare`) : c'est un réglage de l'hébergement, à décider par l'utilisateur, pas un changement du Dockerfile. `STORE_COMPILE_ISOLATION=require` refuserait alors de compiler sans. **Pour un `run.wasm`, ce réglage n'est plus une couche de plus : sans lui, rien ne compile** (essayé le 2026-11-05 dans `docker:27-dind` : tel quel, `no sandbox here` et la version attend ; avec `--security-opt seccomp=unconfined`, seul, tout passe, empreinte et refus compris. **dind n'est pas un bon témoin** : son `--proc` passait, celui du runner non. Un Docker ordinaire demande les deux profils d'ESC-356, plus bas ; `systempaths=unconfined` ne sert plus, puisqu'aucun `/proc` n'est monté).
+
+**Les deux profils du conteneur** (ESC-356, décidé par l'utilisateur le 2026-11-05 : « Profil seccomp étroit »). Sans eux, aucun `run.wasm` ne compile en production. Il en faut deux, chacun lève un refus que l'autre laisse.
+
+| Tel quel, ou avec un seul profil | Ce que dit bubblewrap |
+| --- | --- |
+| Docker par défaut | `No permissions to create new namespace` (seccomp) |
+| Le profil seccomp seul | `Failed to make / slave: Permission denied` (AppArmor) |
+| Le profil AppArmor seul | `No permissions to create new namespace` (seccomp) |
+| Les deux | tourne, sans `/proc` ; `--proc` donne `Can't mount proc on /newroot/proc` |
+
+- **`store/deploy/seccomp-bubblewrap.json`** : le `default.json` de moby à l'étiquette `docker-v29.9.3` (`github.com/moby/profiles/seccomp` v0.2.4), celle du Docker que l'installateur de Coolify met par défaut (`latest` ce jour-là). Il est intact, avec quatre règles à la fin, en clair dans leur champ `comment` ; `tests/unit/deploy-profiles.test.ts` compare le reste à l'empreinte de moby. Chaque ajout :
+  - **`clone`, avec exactement `CLONE_NEWUSER|NEWNS|NEWPID|NEWNET|NEWIPC|NEWUTS|NEWCGROUP`** : le `--unshare-all` de `bwrapArgs`. Docker refuse tout `clone` qui demande un espace de noms, sans `CAP_SYS_ADMIN`. Le masque porte sur les sept drapeaux : un seul demandé, ou un autre jeu, reste refusé.
+  - **`clone`, le même jeu sans `CLONE_NEWNET`** : le `--share-net` de `cargo fetch`.
+  - **`unshare`, avec exactement `CLONE_NEWUSER`** : bubblewrap refait un espace utilisateur une fois `devpts` monté, pour rendre son uid (`bwrap: unshare user ns: Operation not permitted` sans cette règle).
+  - **`mount`, `umount2`, `pivot_root`** : la racine du bac à sable. Le noyau exige `CAP_SYS_ADMIN` sur l'espace de montage : hors d'un espace de noms à soi, ils échouent quand même.
+  - **Pas demandés, donc pas ajoutés** : `setns` et `clone3` (bubblewrap appelle `clone` ; `clone3` répond toujours `ENOSYS`, et la glibc se rabat sur `clone`).
+  - `unshare -rn` reste refusé : la compilation d'un `run.js` garde « with the container's network », comme avant.
+- **`store/deploy/apparmor-bubblewrap`**, le profil `escouade-store-bubblewrap` : `docker-default` (`github.com/moby/profiles/apparmor` v0.2.2) règle pour règle, signaux et `ptrace` à son nom, moins `deny mount,`, car un `deny` l'emporte toujours. Chaque ajout, relevé dans le journal d'audit :
+  - **`mount options=(rw, silent, rslave) -> /`** : couper l'espace de montage neuf de celui du conteneur. **`… rprivate) -> /oldroot/`** : lâcher l'ancienne racine.
+  - **`tmpfs` sur `/tmp/`, `/newroot/dev/`, `/newroot/tmp/`** : la racine du bac à sable, son `--dev` et son `--tmpfs`.
+  - **`devpts` sur `/newroot/dev/pts/`** : le `--dev`.
+  - **`rbind` de `/tmp/newroot/` sur lui-même** : la racine à pivoter.
+  - **`rbind` de `/oldroot/opt/sandbox/{usr,opt,etc/ssl}/`** : l'arbre de `STORE_COMPILE_ROOT`, jamais `/app` ni `/data`.
+  - **`rbind` de `/oldroot/dev/{null,zero,full,random,urandom,tty}`** : les périphériques du `--dev`.
+  - **`rbind` de `/oldroot/tmp/` et `/oldroot/tmp/escouade-compile-*/` sur `/newroot/work/`** : le dossier de la compilation, et `/tmp` pour l'essai du démarrage (`whyNoBubblewrap`).
+  - **`rbind` de `/oldroot/etc/{resolv.conf,hosts}`** : les noms pour `cargo fetch`.
+  - **`remount … /newroot/**`** : bubblewrap repasse chaque montage en lecture seule, `nosuid`, `nodev`. Ce doit être `remount` : une règle `mount options in (…)` sans `fstype` prend tous les systèmes de fichiers, et l'essai l'a montré (`--mqueue` passait).
+  - **`pivot_root oldroot=/tmp/oldroot/ /tmp/` et `oldroot=/newroot/ /newroot/`** : les deux pivots.
+- **Ce que cela ouvre.** Ces profils couvrent tout le conteneur, pas bubblewrap seul : un process du store peut créer un espace de noms utilisateur, avec ces deux jeux de drapeaux, et monter dedans ce qu'AppArmor laisse. C'est une surface du noyau que Docker ferme par défaut ; une faille de `userns` y deviendrait utile à qui prendrait la main sur le Node du store. C'est bien moins que `seccomp=unconfined apparmor=unconfined`, qui ouvrirait tout le reste, et cela ne donne rien sur l'hôte en soi.
+- **Le mode d'emploi pour Coolify.** Rien de ceci n'est fait : c'est un geste de l'utilisateur, sur l'hôte.
+  1. **Coolify 4.5.0 ou plus**, et un déploiement sans serveur de build. Le fichier seccomp est lu par `docker compose`, pas par le démon : il part en JSON dans la création du conteneur (ce qu'on voit dans `docker inspect`). Or Coolify lance compose dans son conteneur d'aide. Depuis la 4.5.0, `seccompProfileMountFlags` y monte le fichier, s'il est nommé par un chemin absolu fait de `A-Za-z0-9._/-`. Avant, ou avec un serveur de build, le chemin n'y existe pas.
+  2. **Les deux fichiers sur l'hôte**, depuis le dépôt à jour :
+     ```sh
+     sudo mkdir -p /etc/escouade-store
+     sudo cp store/deploy/seccomp-bubblewrap.json /etc/escouade-store/
+     sudo cp store/deploy/apparmor-bubblewrap /etc/apparmor.d/escouade-store-bubblewrap
+     sudo apparmor_parser -r /etc/apparmor.d/escouade-store-bubblewrap
+     sudo aa-status | grep escouade-store-bubblewrap
+     ```
+     Dans `/etc/apparmor.d`, le profil est rechargé à chaque démarrage de l'hôte (essayé). Le déploiement ne les met pas à jour : un changement de `store/deploy/` se recopie à la main.
+  3. **La ligne « Custom Docker Options »** de l'app du store, dans Coolify, à déployer ensuite :
+     ```
+     --security-opt seccomp=/etc/escouade-store/seccomp-bubblewrap.json --security-opt apparmor=escouade-store-bubblewrap
+     ```
+     Si `docker info --format '{{.SecurityOptions}}'` ne dit pas `name=apparmor`, l'hôte n'a pas AppArmor : le profil seccomp suffit, et seule sa moitié de ligne reste.
+  4. **`kernel.apparmor_restrict_unprivileged_userns`**, à lire par `sysctl kernel.apparmor_restrict_unprivileged_userns` (Ubuntu 24.04 : `1` ; clé absente ailleurs). **Avec ces profils, il n'y a rien à changer** : la restriction vise les process non confinés, et le store a maintenant un profil nommé. Essayé à `1` et à `0`, même résultat. C'est `apparmor=unconfined` qui l'exigerait à `0` : à `1`, `bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted`.
+  5. **Le journal du store au démarrage** dit lequel des cas est le bon :
+
+     | Cas | Ce qui s'écrit |
+     | --- | --- |
+     | Les deux profils | `[store] run.wasm: in a sandbox (bubblewrap)` |
+     | Aucun | `[store] run.wasm: no sandbox here (bwrap: No permissions to create new namespace, … (code 1)): such versions wait in error` |
+     | Seccomp seul | `[store] run.wasm: no sandbox here (bwrap: Failed to make / slave: Permission denied (code 1)): such versions wait in error` |
+     | AppArmor seul | comme aucun : `No permissions to create new namespace` |
+     | Le fichier seccomp absent de l'hôte | le déploiement échoue, le store en ligne reste le dernier : `opening seccomp profile (…) failed: open …: no such file or directory` |
+     | Le profil AppArmor pas chargé | le déploiement échoue : `unable to apply apparmor profile: apparmor failed to apply profile` |
+
+     La ligne du compilateur `run.js` reste `with the container's network`, avec ou sans profils.
+- **L'essai** (2026-11-05), une vraie VM Ubuntu 24.04.5 sous KVM, noyau 6.8.0-147, Docker CE 29.9.3, AppArmor 4.0.1 en `enforce`, `kernel.apparmor_restrict_unprivileged_userns=1` : `image-test.mjs` passe en entier, `rust-build` à `538b34fd…` en 7 s, tous les refus tenus. Seuls refus du journal d'audit : ceux que le test provoque. Le conteneur a aussi été lancé par `docker compose` comme le fait Coolify, profil lu dans `/proc/self/attr/current`. Ce qui n'a pas été essayé : une vraie instance de Coolify et son conteneur d'aide ; la lecture de son code tient lieu de preuve.
 
 ### 3.4 Chaque version figée
 

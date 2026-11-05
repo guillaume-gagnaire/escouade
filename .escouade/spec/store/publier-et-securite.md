@@ -1,9 +1,9 @@
 ---
 title: "Publier sur le store, la sécurité des plugins et l'essai réel"
 subject: "store"
-sources: ["docs/STORE.md","website/content/docs/fr/plugins/publishing.md","website/content/docs/fr/plugins/security.md","store/server/utils/checks.ts","store/server/utils/folder.ts","store/shared/folder.ts","store/server/utils/submissions.ts","store/server/utils/builtin.ts","store/tests/unit/trial.test.ts"]
-tickets: ["ESC-237","ESC-313","ESC-314","ESC-323","ESC-184","ESC-336"]
-decisions: [21,25,43,72,86]
+sources: ["docs/STORE.md","website/content/docs/fr/plugins/publishing.md","website/content/docs/fr/plugins/security.md","store/server/utils/checks.ts","store/server/utils/folder.ts","store/shared/folder.ts","store/server/utils/submissions.ts","store/server/utils/builtin.ts","store/tests/unit/trial.test.ts","store/deploy/seccomp-bubblewrap.json","store/deploy/apparmor-bubblewrap"]
+tickets: ["ESC-237","ESC-313","ESC-314","ESC-323","ESC-184","ESC-336","ESC-356"]
+decisions: [21,25,43,72,86,"le-conteneur-du-store-a-deux-profils-etr"]
 compared: "2026-10-31T19:50:09+01:00"
 ---
 
@@ -65,3 +65,14 @@ Cette partie l'emporte sur ce qui précède pour le contrôle des binaires : la 
 
 - **Le bac à sable n'a aucun `/proc`** : ni un neuf, que le noyau peut refuser dans un conteneur, ni celui du conteneur, qui montrerait ses process. La sortie de `bwrap` est dite au démarrage du store et dans l'erreur d'une version qui attend.
 - **Sur un Docker d'Ubuntu 24.04**, il faut attendre au moins `seccomp=unconfined` et `apparmor=unconfined`, plus `kernel.apparmor_restrict_unprivileged_userns=0` sur l'hôte. La CI du store les confirme ; ESC-356 en tire un profil étroit.
+
+## Les profils du conteneur du store (ESC-356)
+
+Cette partie remplace, dans la section précédente, « Il reste à l'hébergement » pour ce qui est du réglage, et « Sur un Docker d'Ubuntu 24.04 ».
+
+- **Deux profils, pas `unconfined`.** `store/deploy/seccomp-bubblewrap.json` est le profil de moby 29.9.3 plus quatre règles : `clone` à deux jeux exacts d'espaces de noms (ceux de `--unshare-all`, avec et sans le réseau), `unshare` de `CLONE_NEWUSER` seul, `mount`, `umount2`, `pivot_root`. `store/deploy/apparmor-bubblewrap` est `docker-default`, moins `deny mount`, plus les montages de bubblewrap nommés un à un : `tmpfs` et `devpts` seuls, et des sources tirées de l'arbre du bac à sable, jamais `/app` ni `/data`.
+- **Il n'y a rien à changer au noyau** : avec un profil AppArmor nommé, `kernel.apparmor_restrict_unprivileged_userns=1` n'empêche rien. C'est `apparmor=unconfined` qui l'exigerait à `0`.
+- **`setns`, `clone3` et `unshare -rn` restent refusés.** Un `run.js` garde donc le réseau du conteneur.
+- **Le réglage reste un geste de l'utilisateur sur l'hôte**, décrit dans `docs/STORE.md` §3.3 : Coolify 4.5.0 ou plus sans serveur de build, les deux fichiers posés, le profil AppArmor chargé, la ligne « Custom Docker Options ». Tant qu'il n'est pas fait, le journal du store le dit et chaque version `run.wasm` attend.
+- **Ce que cela ouvre** : tout process du conteneur, pas bubblewrap seul, peut créer un espace de noms utilisateur à ces jeux de drapeaux et y monter ce qu'AppArmor laisse. C'est une surface du noyau que Docker ferme par défaut.
+- **La preuve** : `store/scripts/image-test.mjs` essaie les deux profils, chacun seul et sans eux, et vérifie ce qui reste refusé. Joué sur une VM Ubuntu 24.04, Docker 29.9.3, AppArmor en `enforce`. Une vraie instance de Coolify n'a pas été essayée.
