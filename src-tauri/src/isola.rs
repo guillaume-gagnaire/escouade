@@ -18,7 +18,7 @@ static CLI: Mutex<Option<(Option<PathBuf>, Instant)>> = Mutex::new(None);
 pub static TEST_CLI: Mutex<Option<PathBuf>> = Mutex::new(None);
 
 /// The isola CLI, looked for on the PATH at most every 30 s: installed while the app runs, it is
-/// found soon after.
+/// found soon after. As the host looks for it (`proc/*`): what the plugin cannot run is not installed.
 pub fn cli() -> Option<PathBuf> {
     #[cfg(test)]
     {
@@ -32,7 +32,7 @@ pub fn cli() -> Option<PathBuf> {
                 return found.clone();
             }
         }
-        let found = crate::which::find("isola");
+        let found = crate::plugins::procs::locate("isola");
         *cached = Some((found.clone(), Instant::now()));
         found
     }

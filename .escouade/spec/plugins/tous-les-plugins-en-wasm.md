@@ -1,9 +1,9 @@
 ---
 title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","docs/PLUGINS.md §8.19 (ESC-344)","docs/PLUGINS.md §8.20 (ESC-337)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire"]
-tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342"]
-decisions: [73,71,70,72,75,80,84,86,89]
+sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","docs/PLUGINS.md §8.19 (ESC-344)","docs/PLUGINS.md §8.20 (ESC-337)","docs/PLUGINS.md §8.22 (ESC-351)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire"]
+tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351"]
+decisions: [73,71,70,72,75,80,84,86,89,"isola-en-module-le-cœur-prete-le-worktre"]
 compared: null
 ---
 
@@ -151,3 +151,13 @@ Un développeur externe écrit un plugin en TypeScript ou en Rust à partir du s
 - La page de démarrage montre les deux langages côte à côte. Celle de publication dit les onze contrôles, la compilation de Rust, la revue, le sceau et les mises à jour proposées.
 - Aucun exemple de code n'est écrit dans une page. Un bloc de TypeScript ou de Rust est fait de lignes d'un fichier compilé, cité sous son chemin : un modèle, un plugin de `plugins/`, ou un des deux plugins de `sdk/doc-examples`, qui font la même chose dans chaque langage. Chaque morceau de manifeste d'une page passe `validate`. Les tests le tiennent.
 - Le banc ne sert pas `settings/get`, qui y répond `-32601`. La page de tests le dit.
+
+## Ce qui tourne déjà : isola, le premier plugin qui lance un programme (ESC-351)
+
+- isola est en `run.wasm`, en version `2.2.0`, `escouade.min` `2.2.0`, son identifiant inchangé. Il n'est plus dans `escouade-plugins`. Il suit les *deux compilations* de ESC-344 : même module sous Windows et sous Linux (`docs/PLUGINS.md` §8.22).
+- **`proc/*`.** L'hôte lance `isola ls --json`, `isola down` et `isola destroy`, les trois lignes de `permissions.commands`, montrées dans la fenêtre des permissions. Un autre programme, ou les mêmes avec un argument de plus, est refusé et va au journal. `isola up` n'y est pas : le cœur le lance dans un terminal, une fois le `.isola.toml` approuvé.
+- **Le worktree est prêté le temps d'un appel.** Le plugin reçoit un nom (`agent`), jamais un chemin, et le donne à `proc/spawn`. Le prêt finit avec l'appel : le plugin ne garde aucun worktree. Un plugin qui n'est pas un harness n'a pas d'autre moyen de joindre un worktree.
+- **Il répond comme son natif** : mêmes réponses et mêmes commandes sur quinze appels enregistrés avant le portage. Seul le texte d'un programme qui ne démarre pas vient maintenant de l'hôte.
+- **Un programme introuvable pour l'hôte n'est pas installé.** Le cœur cherche `isola` comme l'hôte : sous Windows, un `.exe` ou un `.com`, jamais un `.cmd`. Sans lui, un worktree n'est à personne.
+- **isola n'a pas de release pour Windows** à ce jour (0.5.0 : Linux et macOS). Le vrai programme n'a pas été essayé avec le module : voir `docs/PLUGINS.md` §8.22, c'est à faire avant Z1.
+- **Avant Z2**, comme les quatre de ESC-344, son module n'est pas dans l'installeur.

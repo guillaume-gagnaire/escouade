@@ -2,8 +2,8 @@
 title: "Les plugins livrés avec Escouade"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.3, §4.4","docs/TODO-2.2.md (INT-4, INT-8.1)","src-tauri/src/plugins/builtin.rs","docs/PLUGINS.md §4.13","plugins/github/README.md","plugins/gitlab/README.md","plugins/gitea/README.md","plugins/azure-devops/README.md","docs/PLUGINS.md §8.7, §8.13","src-tauri/src/plugins/seed.rs"]
-tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338","ESC-339","ESC-344"]
-decisions: [80]
+tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338","ESC-339","ESC-344","ESC-351"]
+decisions: [80,"isola-en-module-le-cœur-prete-le-worktre"]
 compared: null
 ---
 
@@ -90,3 +90,7 @@ Linear, Trello, Jira et ClickUp restent au registre, mais ne sont plus dans `esc
 
 - Un plugin du registre tourne toujours sur l'app qui le donne : tant qu'il est `builtin`, son `escouade.min` lu est la version de l'app, comme sa `version`.
 - Pendant qu'un compte se vérifie, avant d'être enregistré, le cœur prête l'hôte qu'il nomme au plugin, comme il lui prête son jeton : `{account}` l'atteint dès le premier appel.
+
+## isola, un module du registre (ESC-351)
+
+isola rejoint Linear, Trello, Jira et ClickUp : il reste au registre, n'est plus dans `escouade-plugins`, et son programme est un module (`run.wasm`). Tout ce que dit la section précédente vaut pour lui. Comme tout plugin, il n'atteint un projet privé qu'une fois activé.

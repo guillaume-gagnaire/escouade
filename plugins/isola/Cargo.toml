@@ -1,0 +1,20 @@
+[package]
+name = "escouade-plugin-isola"
+version = "2.2.0"
+description = "Le plugin isola d'Escouade : les services de chaque worktree sur ses ports et ses adresses *.localhost"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+
+# A module, compiled by `escouade-plugin build` (docs/PLUGINS.md §8.5).
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+escouade-plugin-kit = "0.1.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
+tokio = { version = "1", features = ["io-util", "macros", "rt", "test-util"] }

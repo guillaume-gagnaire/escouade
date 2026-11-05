@@ -159,6 +159,8 @@ mod plugins_decide_tests;
 #[cfg(test)]
 mod plugins_harness_tests;
 #[cfg(test)]
+mod plugins_isola_tests;
+#[cfg(test)]
 mod plugins_jira_tests;
 #[cfg(test)]
 mod plugins_linear_tests;

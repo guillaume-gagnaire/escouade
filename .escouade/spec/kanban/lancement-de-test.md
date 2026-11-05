@@ -2,8 +2,8 @@
 title: "Lancement de test"
 subject: "Kanban"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-311","ESC-286"]
-decisions: [26]
+tickets: ["ESC-311","ESC-286","ESC-351"]
+decisions: [26,"isola-en-module-le-cœur-prete-le-worktre"]
 compared: "2026-10-31T19:01:50+01:00"
 ---
 
@@ -46,3 +46,8 @@ Tout agent qui a un worktree peut lancer l'app de sa branche pour qu'on l'essaie
 - « Tout arrêter », la validation, l'archivage et la fermeture du projet lancent `isola down`. La suppression du worktree lance `isola destroy`, après les commandes de démontage.
 
 - isola est un plugin livré avec Escouade (`dev.escouade.isola`), le premier « environnement de lancement » : un point d'extension des plugins qui prend en charge `up`, `ls`, `down` et `destroy` d'un worktree et ses services. Il est actif partout par défaut ; Réglages › Plugins le coupe pour l'app ou pour un projet (jamais désinstallé). Coupé, sans le CLI `isola` ou sans `.isola.toml`, un worktree n'est à personne : le ticket part comme sans isola, avec une recette sur les ports réservés. Seuls les plugins livrés avec l'app servent ce point pour l'instant.
+
+- Depuis ESC-351, isola est un module en WASM. Ce paragraphe remplace, pour ce qui suit, « actif partout par défaut » :
+  - actif par défaut partout **sauf dans les projets privés**, où il s'active un par un dans Réglages › Plugins, comme tout plugin. Sans activation, un worktree d'un projet privé n'est à personne : le ticket part comme sans isola, et sa recette n'est pas priée de laisser ses services à isola ;
+  - isola est « dans le PATH » quand l'hôte des plugins peut le lancer : sous Windows, un `.exe` ou un `.com`, jamais un `.cmd` ;
+  - à part le projet privé, rien ne change : mêmes commandes, mêmes adresses, mêmes erreurs, 60 s au plus pour `isola ls`, `down` et `destroy`.

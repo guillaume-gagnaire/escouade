@@ -79,6 +79,11 @@ pub fn environment(
 /// A program of the PATH by its name, its absolute folders only: no `.cmd` nor `.bat` under Windows, which need a shell,
 /// no file that does not run elsewhere.
 pub fn locate(name: &str) -> Option<PathBuf> {
+    // The test double is a script, which only its tests start.
+    #[cfg(test)]
+    if name == "isola" {
+        return crate::isola::cli();
+    }
     let path = std::env::var_os("PATH")?;
     std::env::split_paths(&path)
         .filter(|dir| dir.is_absolute())
@@ -741,6 +746,65 @@ mod tests {
         assert_eq!(b.told.lock().len(), 7);
         assert!(b.told.lock().iter().all(|l| l.contains("refused")));
         assert_eq!(b.procs.running(), 0);
+    }
+
+    /// isola is the one plugin of Escouade's own hand that runs a program: what its manifest names runs, and nothing else.
+    #[tokio::test]
+    async fn isola_runs_what_its_manifest_names_and_nothing_else() {
+        // The test double is a script of node's.
+        #[cfg(windows)]
+        crate::paths::trim_test_path();
+        crate::isola::tests::use_fake();
+        let manifest: Value =
+            serde_json::from_str(include_str!("../../../plugins/isola/escouade-plugin.json"))
+                .unwrap();
+        let list: Vec<&str> = manifest["permissions"]["commands"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c.as_str().unwrap())
+            .collect();
+        assert_eq!(list, ["isola ls --json", "isola down", "isola destroy"]);
+        let mut b = bed(&list);
+        let run = |command: &str, args: Value| json!({ "command": command, "args": args, "dir": "agent", "agent": "a" });
+        for (command, args) in [
+            // Another program, what isola's `.isola.toml` would run, and what could stand for it.
+            ("git", json!(["--version"])),
+            ("node", json!(["-e", "1"])),
+            ("sh", json!(["-c", "isola down"])),
+            ("cmd", json!(["/c", "isola down"])),
+            // isola, but not as it is declared: `up` only runs from the core's terminal, once the user read the file.
+            ("isola", json!(["up"])),
+            ("isola", json!(["ls"])),
+            ("isola", json!(["ls", "--json", "--all"])),
+            ("isola", json!(["down", "--force"])),
+            ("isola", json!(["destroy", "; calc"])),
+            ("isola", json!([])),
+            // A path, one word for two, another case.
+            ("./isola", json!(["down"])),
+            ("isola down", json!([])),
+            ("ISOLA", json!(["down"])),
+        ] {
+            b.refused(run(command, args));
+        }
+        let wt = b.base.join("wt");
+        assert!(
+            crate::isola::tests::calls(&wt).is_empty(),
+            "nothing ran for all that"
+        );
+        assert_eq!(
+            b.told
+                .lock()
+                .iter()
+                .filter(|l| l.contains("refused"))
+                .count(),
+            13,
+            "each refusal goes to the journal"
+        );
+        let id = b.spawn(run("isola", json!(["ls", "--json"])));
+        let (out, code) = b.run(id, "stdout").await;
+        assert_eq!((out.trim(), code), ("[]", json!(0)));
+        assert_eq!(crate::isola::tests::calls(&wt), ["ls --json"]);
     }
 
     #[tokio::test]

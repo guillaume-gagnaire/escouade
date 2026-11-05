@@ -999,6 +999,15 @@ impl Runtime {
         }
     }
 
+    /// How many places the plugin `id` was given and still holds.
+    #[cfg(test)]
+    pub fn lent_places(&self, id: &str) -> usize {
+        self.hosts
+            .lock()
+            .get(id)
+            .map_or(0, |h| h.agents.lock().len())
+    }
+
     /// Where the agent `key` of the plugin `id` lives, as the core resolved it: its `fs/*` and `proc/*` are judged on it.
     /// The roots it declares, what `agent/attach` tells it.
     pub fn place_agent(
@@ -1011,6 +1020,16 @@ impl Runtime {
         let roots = host.access(self).roots_of(&place);
         host.agents.lock().insert(key.to_string(), place);
         Ok(roots)
+    }
+
+    /// Whether the plugin `id` reaches the project `project`, by its `choices`: a private project only when it is turned
+    /// on there. A project that is not known any more (one being closed) is not private.
+    pub fn reaches(&self, id: &str, project: &str, choices: &super::Choices) -> bool {
+        let place = self.place.read().as_ref().and_then(Weak::upgrade);
+        let private = place
+            .and_then(|p| p.project_plugin(project, id))
+            .is_some_and(|(private, _)| private);
+        super::active_in(choices, project, private)
     }
 
     /// The folder of the project `project` for the plugin `id`: a private project refuses a plugin not turned on for it.

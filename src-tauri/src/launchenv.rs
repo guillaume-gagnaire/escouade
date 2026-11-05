@@ -1,6 +1,6 @@
 //! The launch environment of a worktree (INT-14, ESC-286; docs/PLUGINS.md §4.12): what runs a worktree's services on
 //! ports and addresses of their own, so that a test launch needs no recipe on the reserved ports. isola is the first,
-//! a plugin the app gives (`dev.escouade.isola`, origin `builtin`), in a process of its own.
+//! a plugin of Escouade's own hand (`dev.escouade.isola`), a module (`run.wasm`).
 //!
 //! A plugin declares an environment in `contributes.launchEnvironments`:
 //!
@@ -11,8 +11,10 @@
 //!
 //! The core does what needs no process: tell whether a worktree is the environment's (`Launch::for_dir`), read the file
 //! whole for the user, run `up`. The plugin does the rest, by JSON-RPC: `launch/ls` (the services of the worktree, and
-//! their addresses), `launch/down` and `launch/destroy`. With the plugin off (for the app, or for the project), or
-//! without its program, or without its file, a worktree is nobody's and a ticket starts as it did without isola.
+//! their addresses), `launch/down` and `launch/destroy`. A module holds no path: each call lends it the worktree, under a
+//! name of the call's, and it asks the host to run what its manifest names there (`proc/*`, docs/PLUGINS.md §8.4.7). With
+//! the plugin off (for the app, or for the project; a private project only has it once it is turned on there), or without
+//! its program, or without its file, a worktree is nobody's and a ticket starts as it did without isola.
 //!
 //! Only the plugins the app gives serve this point for now: `up` is a command of the core's terminal, which a plugin
 //! from elsewhere is not trusted with.
@@ -20,8 +22,9 @@
 use crate::i18n::{self, Lang};
 use crate::isola::Service;
 use crate::plugins::adapters::PluginDown;
+use crate::plugins::files::AgentPlace;
 use crate::plugins::runtime::{CallError, Runtime};
-use crate::plugins::{active_in, Plugins};
+use crate::plugins::Plugins;
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -48,20 +51,19 @@ struct Decl {
     up: String,
 }
 
-/// An environment that runs a worktree: its plugin, what it declares, and the program it found.
+/// An environment that runs a worktree: its plugin and what it declares.
 #[derive(Clone)]
 pub struct Env {
     rt: Arc<Runtime>,
     decl: Decl,
-    program: PathBuf,
 }
 
-/// The CLI `name`, on the PATH (the tests' own for isola).
+/// The CLI `name`, on the PATH, as the host finds what a plugin runs (the tests' own for isola).
 fn find(name: &str) -> Option<PathBuf> {
     if name == "isola" {
         crate::isola::cli()
     } else {
-        crate::which::find(name)
+        crate::plugins::procs::locate(name)
     }
 }
 
@@ -75,13 +77,13 @@ impl Launch {
         Arc::new(Self { plugins, rt })
     }
 
-    /// The environments on in `project`: the plugin on for the app and for it (the plugins the app gives are on in
-    /// every project unless the user turned them off there).
+    /// The environments on in `project`: the plugin on for the app and for it, as any plugin (a private project only has
+    /// it once it is turned on there).
     fn decls(&self, project: &str) -> Vec<Decl> {
         self.plugins
             .builtin_contributions(POINT)
             .into_iter()
-            .filter(|(_, choices, _)| active_in(choices, project, false))
+            .filter(|(plugin, choices, _)| self.rt.reaches(plugin, project, choices))
             .flat_map(|(plugin, _, items)| {
                 items.into_iter().filter_map(move |item| {
                     let text = |k: &str| item.get(k).and_then(Value::as_str).map(str::to_string);
@@ -102,11 +104,10 @@ impl Launch {
     pub fn for_dir(&self, dir: &str, project: &str) -> Option<Env> {
         self.decls(project).into_iter().find_map(|decl| {
             Path::new(dir).join(&decl.detect).is_file().then_some(())?;
-            let program = find(&decl.program)?;
+            find(&decl.program)?;
             Some(Env {
                 rt: self.rt.clone(),
                 decl,
-                program,
             })
         })
     }
@@ -173,28 +174,40 @@ impl Env {
         read_file(dir, &self.decl.detect)
     }
 
+    /// A call of the plugin, the worktree at `dir` lent to it for that time under a name of the call's: `proc/spawn` takes
+    /// that name, never a path. The core judged the project in `for_dir`: no project goes with the loan, and one being
+    /// closed still has its services stopped.
     async fn call(&self, method: &str, dir: &str, branch: &str) -> Result<Value> {
         let lang = match i18n::ui() {
             Lang::Fr => "fr",
             Lang::En => "en",
         };
+        let plugin = &self.decl.plugin;
+        let key = format!("worktree-{}", uuid::Uuid::new_v4().simple());
+        let place = AgentPlace {
+            cwd: PathBuf::from(dir),
+            ..AgentPlace::default()
+        };
         self.rt
+            .place_agent(plugin, &key, place)
+            .map_err(|e| failed(plugin, e))?;
+        let answer = self
+            .rt
             .call(
-                &self.decl.plugin,
+                plugin,
                 method,
-                json!({
-                    "program": self.program,
-                    "dir": dir,
-                    "branch": branch,
-                    "lang": lang,
-                }),
+                json!({ "agent": key, "branch": branch, "lang": lang }),
             )
-            .await
-            .map_err(|e| failed(&self.decl.plugin, e))
+            .await;
+        self.rt.detach(plugin, &key);
+        answer.map_err(|e| failed(plugin, e))
     }
 
     /// The services of the worktree at `dir`, on `branch`.
     pub async fn services(&self, dir: &str, branch: &str) -> Result<Vec<Service>> {
+        if !Path::new(dir).is_dir() {
+            bail!("{dir} is not a folder");
+        }
         let v = self.call("launch/ls", dir, branch).await?;
         serde_json::from_value(v).map_err(|e| {
             anyhow!(tr!(

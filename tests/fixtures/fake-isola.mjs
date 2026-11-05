@@ -2,7 +2,8 @@
 // Test double of the isola CLI, run in a worktree. `up` marks it up (`.isola-up`), `ls --json` then
 // lists its service `web` on the worktree's branch (`.isola-branch`, else git's), on the proxy at
 // http://<branch>.demo.localhost:3000 and on its own at http://127.0.0.1:<.isola-port, else 9>,
-// `down` and `destroy` mark it down. With `.isola-fail` in the folder, every call fails.
+// `down` and `destroy` mark it down. With `.isola-fail` in the folder, every call fails; with
+// `.isola-garbage`, `ls` prints what is no JSON.
 // Each call appends its arguments to <tmp>/fake-isola-<cwd with non-alphanumerics replaced by _>.log.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -28,6 +29,10 @@ switch (argv[0]) {
     process.stdout.write('✓ 1 service started\n');
     break;
   case 'ls': {
+    if (fs.existsSync(here('.isola-garbage'))) {
+      process.stdout.write('isola: not a repo\n');
+      break;
+    }
     if (!fs.existsSync(here('.isola-up'))) {
       process.stdout.write('[]\n');
       break;

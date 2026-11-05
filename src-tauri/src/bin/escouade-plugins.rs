@@ -10,8 +10,6 @@
 //! plugin that serves code hosts or Kanban sources is a crate of its own beside its manifest
 //! (`plugins/<id-court>/`), on the kit `escouade-plugin-kit` (its loop, the service of `forge/*` and `tickets/*`).
 
-#[path = "escouade-plugins/isola.rs"]
-mod isola;
 #[path = "escouade-plugins/minimal.rs"]
 mod minimal;
 #[path = "escouade-plugins/minimal_harness.rs"]
@@ -25,7 +23,6 @@ type Entry = (&'static str, fn() -> i32);
 /// The plugins of this program. `minimal-harness` is none: the harness of the demonstration plugin, which the core
 /// launches from the plugin's description (INT-9).
 const ENTRIES: &[Entry] = &[
-    ("isola", isola::run_plugin),
     ("minimal", minimal::run),
     ("minimal-harness", minimal_harness::run),
     ("voice-openai", voice::openai),

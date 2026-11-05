@@ -1,7 +1,7 @@
 # isola
 
-`dev.escouade.isola`, a plugin [Escouade](https://escouade.dev) gives: it is shipped with the app, signed with it, and
-updated with it. Its version is Escouade's (the `0.0.0` of its manifest is replaced by the app's when it is read).
+`dev.escouade.isola`, a plugin of [Escouade](https://escouade.dev)'s own hand: a WASM module (`run.wasm`), compiled
+from this folder, run in Escouade's host. Its version is its own.
 
 It is the first **launch environment** (INT-14, `contributes.launchEnvironments`): what runs each git worktree's
 services on ports and `*.localhost` addresses of their own, so that a ticket's test launch needs no recipe on the
@@ -9,8 +9,8 @@ reserved ports. It drives [isola](https://github.com/cyucelen/isola) (`isola up`
 
 ## Use it
 
-Nothing to do: it is on in every project, in Réglages › Plugins under « Livrés avec Escouade ». A worktree is isola's
-when the project commits an `.isola.toml` **and** the `isola` program is installed. Then:
+Nothing to do: it is on in every project but the private ones, where it has to be turned on, in Réglages › Plugins. A
+worktree is isola's when the project commits an `.isola.toml` **and** the `isola` program is installed. Then:
 
 - « ▶ Tester » shows the `.isola.toml` first (it may declare commands), and runs `isola up` once the user approved
   exactly that file; the services' addresses, from `isola ls --json`, are what the test modal opens and probes;
@@ -18,7 +18,7 @@ when the project commits an `.isola.toml` **and** the `isola` program is install
 - `isola destroy` tears them down, with what they keep (databases), before the worktree goes.
 
 Turned off for the app or for a project, or without `isola` or without the file, a worktree is nobody's: a ticket
-starts as it did without isola (a recipe on the reserved ports). It can be turned off, never removed.
+starts as it did without isola (a recipe on the reserved ports).
 
 ## What it declares
 
@@ -28,39 +28,43 @@ starts as it did without isola (a recipe on the reserved ports). It can be turne
 | `program`  | `isola`       | the CLI, looked for on the PATH by the app                                          |
 | `up`       | `isola up`    | the command a test launch runs in a terminal (its input is not one: no password)   |
 
-The plugin's process answers `launch/ls`, `launch/down` and `launch/destroy`; the app hands it the program it found,
-the worktree and its branch.
+The module answers `launch/ls`, `launch/down` and `launch/destroy`. The app lends it the worktree for the time of a
+call, under a name it gives in `agent`, with its branch and the language of its messages: the module holds no path.
 
 ## What it may do
 
-- run the `isola` program the app found, in a worktree of the user's project: `ls --json`, `down` and `destroy`, which
-  run no command the `.isola.toml` declares (only `up` does, and the user reads that file first). That holds for the
-  current upstream isola, and is to be checked again when isola changes;
-- nothing else: no network, no secret, no account, no event.
+- run, through the host (`proc/spawn`), the three commands of `permissions.commands`, word for word, in a worktree the
+  app lent it: `isola ls --json`, `isola down` and `isola destroy`. They show in the window of its permissions, and the
+  host refuses any other. They run no command the `.isola.toml` declares (only `up` does, which the app runs itself, and
+  the user reads that file first). That holds for the current upstream isola, and is to be checked again when isola
+  changes;
+- nothing else: no network, no secret, no account, no event, no file. It is isolated; the program is not, and has the
+  user's rights.
+
+The host finds `isola` on the PATH. Under Windows it only starts an `.exe` or a `.com`, never a `.cmd`, and isola has no
+release for Windows: a build of it must be on the PATH.
 
 ## What is in this folder
 
-| File                   | What it is   |
-| ---------------------- | ------------ |
-| `escouade-plugin.json` | The manifest |
-| `README.md`            | This page    |
+| File                   | What it is                                                            |
+| ---------------------- | --------------------------------------------------------------------- |
+| `escouade-plugin.json` | The manifest                                                          |
+| `Cargo.toml`           | Its crate, on `escouade-plugin-kit`                                   |
+| `Cargo.lock`           | The crates of crates.io the store compiles (`scripts/plugin-lock.sh`) |
+| `src/lib.rs`           | Its code and its unit tests                                           |
+| `README.md`            | This page                                                             |
 
-Its program is `src-tauri/src/bin/escouade-plugins/isola.rs` (with its unit tests); the app's side is
-`src-tauri/src/launchenv.rs`. The tests of the launches (`src-tauri/src/core_tests.rs`, « isola ») run the plugin's
-real process against the test double `tests/fixtures/fake-isola.mjs`, which stands for the `isola` CLI.
+The app's side is `src-tauri/src/launchenv.rs`. The tests of the launches (`src-tauri/src/core_tests.rs`, « isola ») and
+`src-tauri/src/plugins_isola_tests.rs` run the module in the app's host against the test double
+`tests/fixtures/fake-isola.mjs`, which stands for the `isola` CLI.
 
 ## Run it alone
 
-Against the test double and the app's own `escouade-plugins` (built with `cargo build --bin escouade-plugins` in
-`src-tauri/`):
+Against the fake Escouade of the plugins' bench, as every plugin of the app, from `plugins/`:
 
 ```sh
-printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"launch/ls","params":{"program":"tests/fixtures/fake-isola","dir":".","branch":"main","lang":"en"}}' \
-  | src-tauri/target/debug/escouade-plugins isola
+cargo test -p escouade-plugin-isola
+escouade-plugin test isola --first-party --escouade 2.2.0
 ```
 
-or against the fake Escouade of the plugins' bench, as every plugin of the app:
-
-```sh
-escouade-plugin test plugins/isola --builtin
-```
+The bench starts no `isola`: `launch/*` is the app's to call, with a worktree it lends.
