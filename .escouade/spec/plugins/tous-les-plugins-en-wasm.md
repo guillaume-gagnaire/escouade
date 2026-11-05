@@ -107,9 +107,9 @@ Pour `run.js` comme pour `run.wasm`, appliqué par Escouade et gardé au journal
 - `test` et `dev` compilent un `run.wasm` puis le jouent. Ils ne lisent plus le `plugin.wasm` du dossier. `--wasm` joue toujours le module donné. `validate` juge toujours la forme de `plugin.wasm` s'il est là.
 - Le store ne compile pas encore un `run.wasm`, et aucun plugin livré n'est porté : c'est la suite du plan.
 
-## Le kit sur crates.io (ESC-341, publication à venir)
+## Le kit sur crates.io (ESC-341)
 
-Rien n'est publié : seul le chef publie, après l'accord écrit de Florian Gagnaire sur sa contribution. D'ici là, un auteur tiers ne peut pas encore tirer ces crates.
+Publié le 2026-11-05 : `escouade-plugin-protocol`, `escouade-plugin-kit` et `escouade-acp` sont sur crates.io en `0.1.0`, après l'accord écrit de Florian Gagnaire sur sa contribution. Un auteur tiers peut en dépendre par version.
 
 - `escouade-plugin-protocol`, `escouade-plugin-kit` et `escouade-acp` sortent en `0.1.0`, sous licence MIT comme le SDK. Un plugin en Rust garde ainsi le choix de sa licence. Les plugins de la première main et l'app restent en GPL-3.0-or-later.
 - Leur documentation, en anglais, se lira sur docs.rs pour le natif et pour `wasm32-wasip1`.
