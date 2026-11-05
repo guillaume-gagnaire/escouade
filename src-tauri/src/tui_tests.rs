@@ -1159,8 +1159,10 @@ async fn a_message_goes_through_the_interface_and_its_turn_comes_back_from_the_t
         .send_message(&id, "bonjour".into(), Vec::new())
         .await
         .unwrap();
+    // The turn's row, then its status: the row can be shown a moment before the agent is told done (the CI's Windows,
+    // 2026-11-05: `Running`).
     h.wait("the turn's end", |h| {
-        h.items(&id).iter().any(|i| i["kind"] == "turn")
+        h.items(&id).iter().any(|i| i["kind"] == "turn") && h.agent(&id).status == AgentStatus::Done
     })
     .await;
     let user = h
@@ -1172,7 +1174,6 @@ async fn a_message_goes_through_the_interface_and_its_turn_comes_back_from_the_t
     assert_eq!(user["origin"], "terminal");
     assert_eq!(texts(&h, &id, "text"), ["Fini : bonjour"]);
     let a = h.agent(&id);
-    assert_eq!(a.status, AgentStatus::Done);
     assert_eq!(a.prompts, 1);
     assert!(a.cost > 0.0, "counted at list prices");
     assert_eq!(a.session_id.as_deref(), Some(session.as_str()));
