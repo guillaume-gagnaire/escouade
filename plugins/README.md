@@ -30,7 +30,7 @@ those a change touches on a pull request (`--changed`).
 npx tsc -p ../sdk/plugin/tsconfig.json                       # the SDK they use (file:../../sdk/plugin)
 ESCOUADE_PLUGIN_BIN=/path/to/escouade-plugin node ci.mjs     # all of them, as the CI does
 ESCOUADE_PLUGIN_BIN=/path/to/escouade-plugin node ci.mjs --changed   # those this branch touches, since main
-cd slack && npm ci && npm test && npm run bench         # one of them
+cd slack && npm install && npm test && npm run bench         # one of them
 ```
 
 To try one in Escouade: Plugins view › “In development”, then its folder. To make one yours, copy its folder and give it

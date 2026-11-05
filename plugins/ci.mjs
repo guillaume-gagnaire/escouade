@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // The plugins of Escouade's own hand in plugins/<id>/ (PLG-10's examples, ESC-182; their ids dev.escouade.*, ESC-314),
 // each as its author checks it before a tag (docs/PLUGINS.md §8.6.4). For all, their LICENSE and CHANGELOG. Then by sort:
-// - with a package.json: `npm ci`, the typecheck, their tests against the SDK's fake Escouade, and their
-//   dist/plugin.mjs built again and compared to the one committed (Escouade runs the plugin as the repository holds it);
+// - with a package.json: `npm install` (their package-lock.json is not committed: plugins/<id>/.gitignore), the
+//   typecheck, their tests against the SDK's fake Escouade, and their dist/plugin.mjs built again and compared to the
+//   one committed (Escouade runs the plugin as the repository holds it);
 // - with a Cargo.toml: their manifest's version against the crate's, and `cargo test`, all the crates at once;
 // - declarative: their `node --test`.
 // Then `escouade-plugin validate` and the conformance bench of the app (ESCOUADE_PLUGIN_BIN), `--first-party` for their
@@ -99,7 +100,7 @@ function run(cwd, command, ...args) {
 
 /** The steps of a plugin in TypeScript, until one fails: whether all passed. */
 function checkTypeScript({ name }, folder) {
-  if (!run(folder, 'npm', 'ci', '--no-audit', '--no-fund')) return false;
+  if (!run(folder, 'npm', 'install', '--no-audit', '--no-fund')) return false;
   if (!run(folder, 'npm', 'run', 'typecheck') || !run(folder, 'npm', 'test')) return false;
   const built = join(tmp, `${name}.mjs`);
   if (
