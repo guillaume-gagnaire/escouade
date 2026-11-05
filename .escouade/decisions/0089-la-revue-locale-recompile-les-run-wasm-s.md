@@ -1,9 +1,9 @@
 ---
-number: null
+number: 89
 id: "la-revue-locale-recompile-les-run-wasm-s"
 title: "La revue locale recompile les run.wasm : sur le poste pour la première main, dans des conteneurs pour un tiers"
 date: "2026-11-05"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-337"
 pages: ["store/revue-et-signature","plugins/tous-les-plugins-en-wasm"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"store/revue-et-signature","added":10,"removed":0},{"page":"plugins/tous-les-plugins-en-wasm","added":2,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-05T15:26:14+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
