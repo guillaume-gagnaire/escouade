@@ -2335,6 +2335,31 @@ pub fn merge_meters(old: &[QuotaMeter], new: &[QuotaMeter]) -> Vec<QuotaMeter> {
     all
 }
 
+/// Two windows ending this close to each other are one: the endpoint tells its end to the microsecond, the
+/// headers of a request to the second. The next one ends a whole window later.
+const SAME_WINDOW_MS: i64 = 30 * 60_000;
+
+/// What a process saw (`usage::Reading::Seen`) over the meters `old`. Its age is unknown, so it only tells what
+/// shows it is newer: a window's use only grows until its end, so less of the same window is older, and a window
+/// that ended before is over; a later one has begun since. A meter not read yet is taken.
+pub fn seen_meters(old: &[QuotaMeter], seen: &[QuotaMeter]) -> Vec<QuotaMeter> {
+    let mut all = old.to_vec();
+    for n in seen {
+        let Some(m) = all.iter_mut().find(|m| m.same_kind(n)) else {
+            all.push(n.clone());
+            continue;
+        };
+        let gap = n.resets_at.zip(m.resets_at).map_or(0, |(n, m)| n - m);
+        if gap > SAME_WINDOW_MS {
+            *m = n.clone();
+        } else if gap >= -SAME_WINDOW_MS {
+            m.pct = m.pct.max(n.pct);
+        }
+    }
+    all.sort_by_key(|m| m.minutes.unwrap_or(u32::MAX));
+    all
+}
+
 /// Claude Code's two windows (5 hours, week) as meters, those it read.
 pub fn claude_meters(
     five_hour: Option<RateWindow>,

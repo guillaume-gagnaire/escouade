@@ -4,7 +4,7 @@
   import { accountName, metersShown, projectedDayCost, projectionLevel, projectionMode, quotaGroups, meterKey } from '../lib/accounts';
   import { capsOf, showsCost, usagePage, usageSite } from '../lib/engines';
   import { trapFocus } from '../lib/focus';
-  import { fUsd } from '../lib/format';
+  import { fAgo, fUsd } from '../lib/format';
   import { t } from '../lib/i18n';
   import { estimatedBy, estimateHint, fSpentUsd } from '../lib/spend';
   import { app } from '../lib/state.svelte';
@@ -20,6 +20,8 @@
 
   /** The width of the panel. */
   const WIDTH = 440;
+  /** A quota is read every five minutes: past three readings missed, what it shows may no longer be true. */
+  const STALE_MS = 15 * 60_000;
 
   const groups = $derived(quotaGroups(app.now));
   /** Some cost is estimated (Codex): the panel says how. */
@@ -151,6 +153,9 @@
                 <QuotaMeter minutes={m.minutes} model={m.model} usage={m.usage} now={app.now} detail />
               {/each}
             </div>
+            {#if meters.length && u?.updatedAt && app.now - u.updatedAt > STALE_MS}
+              <div class="why">{t('accounts.panel.readAgo', { ago: fAgo(u.updatedAt / 1000, app.now) })}</div>
+            {/if}
           {/if}
           {#if u?.overage}
             <p class="bill"><Icon name="info" size={14} /><span>{overage(r.account.id, accountName(r.account), g.engine)}</span></p>

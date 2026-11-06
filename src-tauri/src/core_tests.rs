@@ -11188,3 +11188,16 @@ async fn an_agent_moved_to_an_account_without_its_model_takes_the_default_one_an
         "{said:?}"
     );
 }
+
+#[test]
+fn the_process_asked_for_a_quota_is_the_last_to_have_spoken() {
+    let spoke = [
+        ("pro".to_string(), 10, "at rest"),
+        ("equipe".to_string(), 5, "alone"),
+        ("pro".to_string(), 30, "last"),
+        ("pro".to_string(), 20, "before"),
+    ];
+    let last = crate::core::last_to_speak(spoke);
+    assert_eq!(last["pro"], "last");
+    assert_eq!(last["equipe"], "alone");
+}

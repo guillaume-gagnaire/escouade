@@ -2004,7 +2004,7 @@ impl<R: Runtime> Core<R> {
         tauri::async_runtime::spawn(async move {
             tokio::time::sleep(Duration::from_secs(2)).await;
             loop {
-                c.refresh_usage().await;
+                c.read_accounts(true).await;
                 tokio::time::sleep(Duration::from_secs(60)).await;
             }
         });
@@ -9888,30 +9888,41 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// Every account's quota read again: from a process of the account when one runs
-    /// (`get_usage`), else, for an active account, from the usage endpoint with its own sign-in,
-    /// at most every five minutes (`usage::OAUTH_POLL_MS`).
+    /// Every account's quota read again, now: the window or the agents asked for it.
     pub async fn refresh_usage(self: &Arc<Self>) {
+        self.read_accounts(false).await;
+    }
+
+    /// Every account's quota read: from a process of the account when one runs (`get_usage`), the
+    /// one that spoke last, else, for an active account, from the usage endpoint with its own sign-in,
+    /// at most every five minutes (`usage::OAUTH_POLL_MS`). `paced`: `get_usage` of Claude Code
+    /// asks that endpoint too, and is held to the same five minutes.
+    pub(crate) async fn read_accounts(self: &Arc<Self>, paced: bool) {
         let settings = self.settings.read().clone();
-        // One running process per account, its first.
-        let mut procs: HashMap<String, Process> = HashMap::new();
-        for h in self.agents.read().values() {
-            let rt = h.lock();
-            if let Some(p) = rt.proc.clone() {
+        let spoke: Vec<_> = self
+            .agents
+            .read()
+            .values()
+            .filter_map(|h| {
+                let rt = h.lock();
                 let account = accounts::get(&settings, &rt.meta.account).id;
-                procs.entry(account).or_insert(p);
-            }
-        }
+                Some((account, rt.meta.last_activity, rt.proc.clone()?))
+            })
+            .collect();
+        let procs = last_to_speak(spoke);
         let mut readings = Vec::new();
         for account in &settings.accounts {
             let proc = procs.get(&account.id).cloned();
-            if let Some(r) = self.read_quota(&settings, account, proc).await {
+            if let Some(r) = self.read_quota(&settings, account, proc, paced).await {
                 readings.push((account.id.clone(), r));
             }
         }
-        let read = readings
-            .iter()
-            .any(|(_, r)| matches!(r, usage::Reading::Windows(_) | usage::Reading::Full(_)));
+        let read = readings.iter().any(|(_, r)| {
+            matches!(
+                r,
+                usage::Reading::Windows(_) | usage::Reading::Full(_) | usage::Reading::Seen(_)
+            )
+        });
         self.update_usage(|u| {
             for (account, reading) in readings {
                 u.record(&account, reading, now_ms());
@@ -9961,18 +9972,38 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// One reading of the account's quota, if one is to be had: its process's, else the
-    /// endpoint's when the account is active and was not asked in the last five minutes. None
-    /// also for an error of the network or of the server: the last values stand.
+    /// One reading of the account's quota, if one is to be had: its process's (`paced`: not asked
+    /// more often than the endpoint), else the endpoint's when the account is active and was not
+    /// asked in the last five minutes. None also for an error of the network or of the server: the
+    /// last values stand. What a process only saw (`Reading::Seen`) means the endpoint does not
+    /// answer: it is not asked again by another way.
     async fn read_quota(
         &self,
         settings: &Settings,
         account: &Account,
         proc: Option<Process>,
+        paced: bool,
     ) -> Option<usage::Reading> {
+        let oauth = account.engine == EngineId::Claude;
         if let Some(p) = proc {
+            let mut before = None;
+            if oauth {
+                let mut last = self.last_oauth_call.lock();
+                if paced && !usage::oauth_due(last.get(&account.id).copied(), now_ms()) {
+                    return None;
+                }
+                before = Some(last.insert(account.id.clone(), now_ms()));
+            }
             if let Ok(Some(v)) = p.read_usage().await {
                 return Some(usage::reading_of(&v));
+            }
+            // No answer of it: the endpoint may be asked.
+            if let Some(before) = before {
+                let mut last = self.last_oauth_call.lock();
+                match before {
+                    Some(t) => last.insert(account.id.clone(), t),
+                    None => last.remove(&account.id),
+                };
             }
         }
         if !account.active {
@@ -9981,7 +10012,7 @@ impl<R: Runtime> Core<R> {
         // The usage endpoint is Claude Code's: another harness's accounts are read by a process of
         // their own (Codex: an app-server, `Engine::read_quota`), at most every five minutes, or not
         // at all (a harness without a quota).
-        if account.engine != EngineId::Claude {
+        if !oauth {
             return self.read_quota_apart(settings, account).await;
         }
         // Noted before asking: two readings at once ask the endpoint once.
@@ -10011,6 +10042,20 @@ impl<R: Runtime> Core<R> {
             }
         }
     }
+}
+
+/// Of each account, the process that spoke last: `(account, when, process)`. While the endpoint does
+/// not answer, a process tells what it last saw, so that of a process at rest is the oldest there is.
+pub(crate) fn last_to_speak<P>(
+    spoke: impl IntoIterator<Item = (String, i64, P)>,
+) -> HashMap<String, P> {
+    let mut last: HashMap<String, (i64, P)> = HashMap::new();
+    for (account, at, process) in spoke {
+        if last.get(&account).is_none_or(|(when, _)| at > *when) {
+            last.insert(account, (at, process));
+        }
+    }
+    last.into_iter().map(|(a, (_, p))| (a, p)).collect()
 }
 
 #[cfg(test)]

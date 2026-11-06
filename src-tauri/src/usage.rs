@@ -6,8 +6,8 @@ use crate::accounts;
 use crate::board;
 use crate::i18n::Lang;
 use crate::model::{
-    claude_meters, merge_meters, Account, AccountUsage, Hold, QuotaMeter, RateWindow, SavedPause,
-    SavedWindows, Settings, SignInProblem, UsageSnapshot,
+    claude_meters, merge_meters, seen_meters, Account, AccountUsage, Hold, QuotaMeter, RateWindow,
+    SavedPause, SavedWindows, Settings, SignInProblem, UsageSnapshot,
 };
 use anyhow::Result;
 use serde_json::Value;
@@ -88,12 +88,14 @@ fn limit_meters(rows: &[Value]) -> Windows {
 }
 
 /// What a process's `get_usage` (`EngineProcess::read_usage`) found: Claude Code's `rate_limits`,
-/// every meter of its account (`Reading::Full`); another harness's meters (`{meters}`), those it
-/// read (`Reading::Windows`).
+/// every meter of its account (`Reading::Full`), or without `limits` what the process last saw
+/// (`Reading::Seen`); another harness's meters (`{meters}`), those it read (`Reading::Windows`).
 pub fn reading_of(v: &Value) -> Reading {
     let meters = parse_windows(v);
     if v.get("meters").is_some_and(Value::is_array) {
         Reading::Windows(meters)
+    } else if v.get("limits").is_none() {
+        Reading::Seen(meters)
     } else {
         Reading::Full(meters)
     }
@@ -410,6 +412,10 @@ pub enum Reading {
     /// those read before, one the server no longer tells is gone (a plan without a 5-hour window,
     /// ESC-312).
     Full(Windows),
+    /// What a process of the account last saw: Claude Code's `get_usage` while the endpoint does not
+    /// answer it (a 429 is held up to an hour). It comes from the process's last request, however
+    /// old, and only says it by leaving out `limits` (docs/PROTOCOL.md): see `seen_meters`.
+    Seen(Windows),
     /// No sign-in to ask the endpoint with.
     NotSignedIn,
     /// Its sign-in is out of date.
@@ -523,6 +529,15 @@ impl UsageSnapshot {
                 a.meters = meters;
                 a.updated_at = now;
                 a.problem = None;
+            }
+            // Read only if it told something new; it says nothing of the sign-in, the endpoint having
+            // perhaps refused it.
+            Reading::Seen(meters) => {
+                let seen = seen_meters(&a.meters, &meters);
+                if seen != a.meters {
+                    a.meters = seen;
+                    a.updated_at = now;
+                }
             }
             // Its windows stay as last read: they still say what it used until their end.
             Reading::NotSignedIn => a.problem = Some(SignInProblem::NotSignedIn),
@@ -643,8 +658,8 @@ impl UsageSnapshot {
     }
 }
 
-/// Minimum delay between two calls to the OAuth usage endpoint for one account (fallback path
-/// only).
+/// Minimum delay between two calls to the OAuth usage endpoint for one account. `get_usage` is one
+/// too: Claude Code keeps its answer a minute, then asks the endpoint.
 pub const OAUTH_POLL_MS: i64 = 5 * 60_000;
 
 /// Whether the fallback endpoint may be called again.
@@ -660,6 +675,66 @@ mod tests {
     use crate::paths::test_dir;
     use serde_json::json;
     use std::collections::BTreeMap;
+
+    /// The 5 hours as a reading tells them.
+    fn five(pct: f64, resets_at: i64) -> Vec<QuotaMeter> {
+        claude_meters(
+            Some(RateWindow {
+                pct,
+                resets_at: Some(resets_at),
+            }),
+            None,
+        )
+    }
+
+    #[test]
+    fn get_usage_without_limits_is_what_its_process_saw() {
+        let live = usage_fixture("real-2.1.314");
+        assert!(matches!(reading_of(&live), Reading::Full(_)));
+        let mut empty = live.clone();
+        empty["limits"] = Value::Null;
+        assert!(matches!(reading_of(&empty), Reading::Full(_)));
+        let mut seen = live.clone();
+        seen.as_object_mut().unwrap().remove("limits");
+        assert!(matches!(reading_of(&seen), Reading::Seen(_)));
+        let meters = json!({ "meters": [] });
+        assert!(matches!(reading_of(&meters), Reading::Windows(_)));
+    }
+
+    #[test]
+    fn what_a_process_saw_only_says_what_shows_it_is_newer() {
+        const END: i64 = 1_900_000_000_000;
+        const WINDOW: i64 = 5 * 3_600_000;
+        let pct = |u: &UsageSnapshot| u.account("principal").unwrap().meters[0].pct;
+        let read_at = |u: &UsageSnapshot| u.account("principal").unwrap().updated_at;
+        let mut u = UsageSnapshot::default();
+        // Nothing read yet: better than an empty bar.
+        u.record("principal", Reading::Seen(five(37.0, END)), 1_000);
+        assert_eq!((pct(&u), read_at(&u)), (37.0, 1_000));
+        u.record("principal", Reading::Windows(five(63.0, END)), 2_000);
+        // Less of the same window is older, even told to the second and not the microsecond.
+        u.record("principal", Reading::Seen(five(37.0, END + 147)), 3_000);
+        assert_eq!((pct(&u), read_at(&u)), (63.0, 2_000));
+        // More is news.
+        u.record("principal", Reading::Seen(five(70.0, END - 147)), 4_000);
+        assert_eq!((pct(&u), read_at(&u)), (70.0, 4_000));
+        // A window that ended before this one is over; a later one has begun.
+        u.record("principal", Reading::Seen(five(99.0, END - WINDOW)), 5_000);
+        assert_eq!((pct(&u), read_at(&u)), (70.0, 4_000));
+        u.record("principal", Reading::Seen(five(2.0, END + WINDOW)), 6_000);
+        assert_eq!((pct(&u), read_at(&u)), (2.0, 6_000));
+    }
+
+    #[test]
+    fn what_a_process_saw_says_nothing_of_the_sign_in() {
+        let mut u = UsageSnapshot::default();
+        u.record("principal", Reading::Expired, 1_000);
+        u.record("principal", Reading::Seen(five(37.0, 2_000)), 2_000);
+        assert_eq!(
+            u.account("principal").unwrap().problem,
+            Some(SignInProblem::Expired)
+        );
+    }
 
     /// Settings with Principal alone, and its usage in extra usage with its 5-hour window at `pct`.
     fn in_overage(pct: f64, resets_at: i64) -> (Settings, UsageSnapshot) {

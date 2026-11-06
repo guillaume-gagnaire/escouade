@@ -4,6 +4,12 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
+## [2.1.3] — 2026-11-06
+
+### Corrections
+
+- **Quotas qui restaient figés :** un compte pouvait afficher 37 % sur 5 h alors qu'il était à 100 %. Quand le serveur des quotas ne répondait plus, Escouade prenait la dernière valeur connue d'un agent au repos pour une lecture fraîche. Il ne la laisse plus écraser une valeur plus récente, l'interroge moins souvent, et le panneau des quotas dit depuis quand une valeur n'a pas été relue.
+
 ## [2.1.2] — 2026-10-31
 
 ### Nouveautés

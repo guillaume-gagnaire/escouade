@@ -65,7 +65,7 @@ Compaction : la chaîne repart de l'entrée `compact_boundary` (`parentUuid: nul
       - Modèles vus sur ce poste (2.1.302) : `default` et `opus` (Opus 5.5), `fable` (Fable 5.1), `sonnet` (Sonnet 5.5), `haiku` (Haiku 5.5), puis les ids `claude-haiku-4-5-20251001`, `claude-sonnet-5`, `claude-opus-5`, `claude-fable-5`, `claude-opus-4-8`, `claude-opus-4-7`, `claude-opus-4-6`, `claude-sonnet-4-6` ; tous en `supportsAutoMode` sauf Haiku 4.5. La réponse dit aussi `claude_code_version` depuis la 2.1.302 (Escouade lit la version par `--version`).
   - `interrupt` (`cancel_queued?: bool`).
   - `set_model` `{model}` · `set_permission_mode` `{mode}` · `apply_flag_settings` `{settings:{effortLevel}}`.
-  - `get_usage` `{skip_behaviors:true}` → `rate_limits.five_hour/seven_day.{utilization (0-100), resets_at}`, `subscription_type`, coût de session.
+  - `get_usage` `{skip_behaviors:true}` → `rate_limits.five_hour/seven_day.{utilization (0-100), resets_at}`, `subscription_type`, coût de session. Ce n'est pas une lecture locale : voir « Ce que vaut `get_usage` ».
     Depuis 2.1.314 (ESC-312), `rate_limits` est le corps de `/api/oauth/usage` : `limits[]` (`kind` `session` / `weekly_all` / `weekly_scoped`, `group` `session` / `weekly`, `percent` 0-100, `resets_at` ISO, `scope` `{model:{display_name}}` ou `{surface:{display_name}}`, `severity`, `is_active` ; `null` d'un serveur plus ancien, vide sans compteur), `model_scoped[]` (`display_name`, `utilization`, `resets_at`), `weekly_scoped_shares[]`. `five_hour` est null sur un forfait Max sans fenêtre de 5 h. Exemple : `tests/fixtures/claude-usage/real-2.1.314.json`.
   - `file_suggestions` `{query}` → `{suggestions, cwd}` (autocomplétion `@`).
   - `rename_session` `{title, source:"host"}` : change bien le titre de la session distante sur claude.ai quand le remote control est allumé (« Session title updated successfully », vérifié sur Claude Code 2.1.300 et 2.1.301).
@@ -125,6 +125,21 @@ Un compte est un dossier de config de Claude Code : `CLAUDE_CONFIG_DIR` (défaut
 - Sous Windows (et hors macOS), la connexion est `<dossier>/.credentials.json` (`claudeAiOauth.accessToken`, `expiresAt`). Un drapeau distant, `tengu_windows_credman`, pourrait la faire passer au Gestionnaire d'identification avec les mêmes noms : hors périmètre. L'e-mail du compte est `oauthAccount.emailAddress` du `.claude.json`, qui est `<dossier>/.claude.json` quand la variable est définie, sinon `~/.claude.json` (à côté de `~/.claude/`, pas dedans).
 - **Reprise dans un autre dossier** : un transcript `projects/<cwd encodé>/<id>.jsonl` copié dans le `CLAUDE_CONFIG_DIR` d'un autre compte est trouvé par `claude -p --resume <id>` lancé depuis le même dossier de travail (sans connexion, le refus porte sur elle : « Not logged in » ; un identifiant inconnu donne « No conversation found with session ID »). Escouade copie `projects/*/<id>.jsonl` et le dossier voisin `<id>/` (sous-agents, résultats d'outils), pas `file-history/`, `todos/` ni `session-env/`, après avoir arrêté le process de l'agent. **Non vérifié avec un second compte réel** : que l'API accepte une conversation commencée sur un autre compte (blocs de réflexion signés) ; un refus arrive comme un `result` en erreur au premier tour.
 - Quota d'un compte : `get_usage` sur un process vivant du compte, sinon l'endpoint de `/usage` avec le jeton OAuth de sa connexion (voir « CLI → hôte » pour `rate_limit_event`).
+
+### Ce que vaut `get_usage` (lu dans le binaire 2.1.318, mesuré le 2026-11-06)
+
+`get_usage` interroge `/api/oauth/usage` dès que sa dernière réponse a plus de 60 s (`cachedUsageUtilization`, partagée par les process d'un dossier de config, gardée 1 h). L'endpoint répond vite 429 : mesuré sur un compte, à deux lecteurs d'une lecture par minute, 3 ou 4 appels passent, puis 429. Claude Code retient alors le jeton (`Retry-After`, 5 min sans lui, 1 h au plus).
+
+Pendant cette retenue, ou sur toute autre erreur de l'endpoint, `get_usage` ne répond pas d'erreur (`status: "seeded"`) :
+
+- `rate_limits` vient des en-têtes de **la dernière requête de ce process**, sans contrôle d'âge, sinon de `cachedUsageUtilization` ;
+- seule trace : la clé `limits` manque, alors que le corps de l'endpoint l'a toujours (`null` compris) ; `rate_limits_available` reste `true`.
+
+Escouade en tire trois règles (`usage.rs`, `Core::read_quota`) :
+
+- une réponse sans `limits` est ce que le process a vu (`Reading::Seen`), pas une lecture : elle ne fait jamais baisser une fenêtre (`seen_meters`), et l'endpoint n'est pas réinterrogé par un autre chemin ;
+- le process interrogé est celui qui a parlé le dernier ;
+- la lecture de fond est tenue aux 5 min de l'endpoint (`OAUTH_POLL_MS`). Seule une demande de la fenêtre lit tout de suite.
 
 ### Connexion qui ne se rafraîchit pas (lu dans le binaire 2.1.309, ESC-162)
 
