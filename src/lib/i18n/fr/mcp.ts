@@ -47,6 +47,7 @@ export default {
     named: 'Escouade · {tool}',
     listProjects: 'Lister les projets',
     listAgents: 'Lister les agents',
+    listFolders: 'Lister les dossiers d’agents',
     listTickets: 'Lister les tickets',
     getTicket: 'Lire un ticket',
     getTicketImage: 'Lire une image d’un ticket',

@@ -37,6 +37,7 @@ export default defineZone('mcp', {
     named: 'Escouade · {tool}',
     listProjects: 'List the projects',
     listAgents: 'List the agents',
+    listFolders: 'List the agent folders',
     listTickets: 'List the tickets',
     getTicket: 'Read a ticket',
     getTicketImage: 'Read a ticket image',

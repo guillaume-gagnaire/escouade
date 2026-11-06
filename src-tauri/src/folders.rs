@@ -1,9 +1,6 @@
 //! Agent folders: the pure rules of the sidebar's order. The core reads the agents, builds the
 //! `Member`s and calls these under the `projects` lock alone.
 
-// `shown`, `shown_agents` and `shown_agents_of` serve the MCP tools and the window (next tasks).
-#![allow(dead_code)]
-
 use crate::core::{agent_not_found, project_not_found, Core};
 use crate::model::{AgentFolder, AgentStatus, Project};
 use anyhow::{bail, Result};

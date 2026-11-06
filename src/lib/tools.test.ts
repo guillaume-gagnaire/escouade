@@ -116,6 +116,7 @@ describe('the tools of Escouade’s own server', () => {
     expect(toolLabel('mcp__escouade__create_ticket')).toBe('Escouade · Créer un ticket');
     expect(toolLabel('mcp__escouade__create_agent')).toBe('Escouade · Lancer un agent');
     expect(toolLabel('mcp__escouade__list_projects')).toBe('Escouade · Lister les projets');
+    expect(toolLabel('mcp__escouade__list_folders')).toBe('Escouade · Lister les dossiers d’agents');
     expect(toolLabel('mcp__escouade__get_agent_summary')).toBe('Escouade · Résumer un agent');
     expect(toolLabel('mcp__escouade__list_requests')).toBe('Escouade · Lister les demandes en attente');
     expect(toolLabel('mcp__escouade__answer_permission')).toBe('Escouade · Répondre à une demande d’autorisation');

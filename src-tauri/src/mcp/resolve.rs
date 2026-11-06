@@ -11,7 +11,7 @@
 use super::tools::ToolError;
 use super::Caller;
 use crate::core::Core;
-use crate::model::{AgentMeta, Project, Ticket};
+use crate::model::{AgentFolder, AgentMeta, Project, Ticket};
 use std::collections::{HashMap, HashSet};
 use tauri::Runtime;
 
@@ -101,6 +101,55 @@ pub(crate) fn project<R: Runtime>(
                 &projects.iter().collect::<Vec<_>>(),
                 asked,
                 |p| &p.name,
+                label
+            )
+        ))),
+    }
+}
+
+/// The folder of `project` that `asked` names: its id, else its name in any case.
+// The folder write tools (next task) name their folder with it.
+#[allow(dead_code)]
+pub(crate) fn folder<R: Runtime>(
+    core: &Core<R>,
+    caller: &Caller,
+    asked: &str,
+    project: &Project,
+) -> Result<AgentFolder, ToolError> {
+    let asked = asked.trim();
+    if asked.is_empty() {
+        return Err(ToolError::Failed(tr!(
+            "Donne un dossier : son id ou son nom.",
+            "Give a folder: its id or its name."
+        )));
+    }
+    // What the caller does not see is not found, as what does not exist.
+    let folders: &[AgentFolder] = if Sight::of(core, caller).sees(&project.id) {
+        &project.agent_folders
+    } else {
+        &[]
+    };
+    let label = |f: &AgentFolder| format!("{} (id {})", f.name, f.id);
+    match named(folders, asked, |f| &f.id, |f| &f.name) {
+        Named::One(f) => Ok(f.clone()),
+        Named::Several(found) => Err(ToolError::Failed(tr!(
+            "Plusieurs dossiers s’appellent « {asked} » : {choices} Donne son id.",
+            "Several folders are named “{asked}”: {choices} Give its id.",
+            choices = listed(&found, asked, |f| &f.name, label)
+        ))),
+        Named::None if folders.is_empty() => Err(ToolError::Failed(tr!(
+            "Aucun dossier « {asked} » dans le projet {project} : il n’en a aucun.",
+            "No folder “{asked}” in the project {project}: it has none.",
+            project = project.name
+        ))),
+        Named::None => Err(ToolError::Failed(tr!(
+            "Aucun dossier « {asked} » dans le projet {project}. Dossiers : {choices}",
+            "No folder “{asked}” in the project {project}. Folders: {choices}",
+            project = project.name,
+            choices = listed(
+                &folders.iter().collect::<Vec<_>>(),
+                asked,
+                |f| &f.name,
                 label
             )
         ))),

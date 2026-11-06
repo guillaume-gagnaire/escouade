@@ -19,6 +19,7 @@ const ESCOUADE = 'mcp__escouade__';
 const ESCOUADE_TOOLS: Record<string, Key> = {
   list_projects: 'mcp.tools.listProjects',
   list_agents: 'mcp.tools.listAgents',
+  list_folders: 'mcp.tools.listFolders',
   list_tickets: 'mcp.tools.listTickets',
   get_ticket: 'mcp.tools.getTicket',
   get_ticket_image: 'mcp.tools.getTicketImage',

@@ -255,6 +255,14 @@ pub struct ListAgentsArgs {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ListFoldersArgs {
+    #[schemars(
+        description = "The project: its id, or its name in any case. An agent of Escouade may leave it out for its own."
+    )]
+    pub project: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ListTicketsArgs {
     #[schemars(description = "The project: its id, or its name in any case.")]
     pub project: String,
@@ -1094,7 +1102,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "List Escouade's Claude Code agents, oldest first (archived ones left out), of every project or of one: their id, name, project (its name) and projectId, status (idle, running, waiting, done or error), whether a question or a permission waits for the user's answer and how many (requests; list_requests gives them), the key of their ticket (null when none), their harness (engine: claude for Claude Code, codex, copilot, cursor or opencode), their model, their Claude account, what they cost so far in US dollars, how many subagents and background tasks they have running (subagentsRunning: the subagents at work, in the foreground or the background; backgroundTasksRunning: the commands, monitors, remote agents, teammates and workflows Claude Code runs for them, never the subagents; an agent that finished its turn may still have some going on, and list_background_work lists them), and their Remote Control: remoteControl (in force now, so the agent is reachable from claude.ai), remoteSource (what turned it on: hand, project or global; off when the user set the agent apart with « Désactiver le remote control », so no setting gives it back; null otherwise), remoteState (the link's state Claude Code reports: ready, connected, unavailable; null without a link) and interfaceRemote (in the Claude Code view: true when its interface runs and was started with Remote Control, so it stays linked to claude.ai until its next launch even after Remote Control was turned off; false when it runs without; null when none runs), and workflow (where it is in its project's workflow: name, step, turn, since in epoch milliseconds, and outside when it does something else; null when it follows none; get_workflow gives the workflow). Remote Control is only read here: no tool turns Remote Control on or off, since it exposes a session on the internet and stays the user's choice in the window.",
+        description = "List Escouade's Claude Code agents in the sidebar's order (archived ones left out), project by project in the app's order, of every project or of one: their id, name, project (its name) and projectId, folder (the agent folder they are in: id and name; null when in none; list_folders gives the folders), principal (true when the agent is its folder's principal), status (idle, running, waiting, done or error), whether a question or a permission waits for the user's answer and how many (requests; list_requests gives them), the key of their ticket (null when none), their harness (engine: claude for Claude Code, codex, copilot, cursor or opencode), their model, their Claude account, what they cost so far in US dollars, how many subagents and background tasks they have running (subagentsRunning: the subagents at work, in the foreground or the background; backgroundTasksRunning: the commands, monitors, remote agents, teammates and workflows Claude Code runs for them, never the subagents; an agent that finished its turn may still have some going on, and list_background_work lists them), and their Remote Control: remoteControl (in force now, so the agent is reachable from claude.ai), remoteSource (what turned it on: hand, project or global; off when the user set the agent apart with « Désactiver le remote control », so no setting gives it back; null otherwise), remoteState (the link's state Claude Code reports: ready, connected, unavailable; null without a link) and interfaceRemote (in the Claude Code view: true when its interface runs and was started with Remote Control, so it stays linked to claude.ai until its next launch even after Remote Control was turned off; false when it runs without; null when none runs), and workflow (where it is in its project's workflow: name, step, turn, since in epoch milliseconds, and outside when it does something else; null when it follows none; get_workflow gives the workflow). Remote Control is only read here: no tool turns Remote Control on or off, since it exposes a session on the internet and stays the user's choice in the window.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn list_agents(
@@ -1105,6 +1113,20 @@ impl<R: Runtime> Tools<R> {
         let result = read::agents(&ctx.core, &ctx.caller, args.project.as_deref());
         let asked = summary(&[("project", args.project.as_deref())]);
         ctx.reply("list_agents", &asked, result)
+    }
+
+    #[tool(
+        description = "List the agent folders of a project, in the sidebar's order: their id, name, principal (the agent that leads the folder: id and name; null when none) and agents (id, name and status of each, the principal first, archived ones left out). Agents that are in no folder are listed by list_agents.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn list_folders(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<ListFoldersArgs>,
+    ) -> CallToolResult {
+        let result = read::folders(&ctx.core, &ctx.caller, args.project.as_deref());
+        let asked = summary(&[("project", args.project.as_deref())]);
+        ctx.reply("list_folders", &asked, result)
     }
 
     #[tool(

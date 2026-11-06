@@ -229,6 +229,7 @@ async fn the_reading_tools_say_they_only_read_and_what_they_take() {
     for name in [
         "list_projects",
         "list_agents",
+        "list_folders",
         "list_requests",
         "get_ticket",
         "get_ticket_image",
@@ -242,6 +243,7 @@ async fn the_reading_tools_say_they_only_read_and_what_they_take() {
     // Every argument says what it takes, in English, and a column is one of the four.
     for name in [
         "list_agents",
+        "list_folders",
         "list_requests",
         "list_tickets",
         "get_ticket",
@@ -366,10 +368,10 @@ async fn the_agents_are_listed_with_what_waits_their_ticket_model_account_and_co
         .iter()
         .map(|a| a["id"].as_str().unwrap())
         .collect();
-    // Oldest first, the archived one left out.
-    assert_eq!(ids, [worker.id.as_str(), &asking.id, &elsewhere.id]);
+    // The sidebar's order (the one that waits first, then the oldest), the archived one left out.
+    assert_eq!(ids, [asking.id.as_str(), &worker.id, &elsewhere.id]);
     assert_eq!(
-        all[0],
+        all[1],
         json!({
             "id": worker.id,
             "name": "dem-1-ajouter",
@@ -390,18 +392,20 @@ async fn the_agents_are_listed_with_what_waits_their_ticket_model_account_and_co
             "remoteState": null,
             "interfaceRemote": null,
             "workflow": null,
+            "folder": null,
+            "principal": false,
         })
     );
     assert_eq!(
         (
-            &all[1]["status"],
-            &all[1]["waiting"],
-            &all[1]["requests"],
-            &all[1]["ticket"]
+            &all[0]["status"],
+            &all[0]["waiting"],
+            &all[0]["requests"],
+            &all[0]["ticket"]
         ),
         (&json!("waiting"), &json!(true), &json!(1), &json!(null))
     );
-    assert!(all[1]["cost"].is_number(), "{}", all[1]);
+    assert!(all[0]["cost"].is_number(), "{}", all[0]);
     assert_eq!(
         (&all[2]["project"], &all[2]["projectId"]),
         (&json!("autre"), &json!(other.id))
@@ -421,6 +425,102 @@ async fn the_agents_are_listed_with_what_waits_their_ticket_model_account_and_co
     let autre = read(&c, "list_agents", json!({ "project": other.id })).await;
     assert_eq!(autre[0]["id"], json!(elsewhere.id));
     assert_eq!(autre.as_array().unwrap().len(), 1);
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn list_agents_follows_the_sidebar_order_with_folders() {
+    let h = harness("mcp-list-agents-folders");
+    let p = project(&h).await;
+    let other = other_project(&h, "autre").await;
+    let a = put_agent(&h, &p, "a", 1);
+    let b = put_agent(&h, &p, "b", 2);
+    let c = put_agent(&h, &p, "c", 3);
+    let d = put_agent(&h, &p, "d", 4);
+    let x = put_agent(&h, &other, "x", 0);
+    let f = h
+        .core
+        .folder_create(
+            &p.id,
+            Some("Front"),
+            &[c.id.clone(), b.id.clone()],
+            Some(&b.id),
+            None,
+        )
+        .unwrap();
+    let cl = external(&h).await;
+    let all = read(&cl, "list_agents", json!({})).await;
+    let rows: Vec<(&str, bool)> = all
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| (r["id"].as_str().unwrap(), r["principal"].as_bool().unwrap()))
+        .collect();
+    // Loose agents, then the folder with its principal first; the other project comes after.
+    assert_eq!(
+        rows,
+        [
+            (a.id.as_str(), false),
+            (&d.id, false),
+            (&b.id, true),
+            (&c.id, false),
+            (&x.id, false)
+        ]
+    );
+    assert_eq!(all[0]["folder"], json!(null));
+    assert_eq!(all[2]["folder"], json!({ "id": f.id, "name": "Front" }));
+    assert_eq!(all[3]["folder"], json!({ "id": f.id, "name": "Front" }));
+    cl.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn list_folders_gives_each_folder_with_its_principal_and_agents() {
+    let h = harness("mcp-list-folders");
+    let p = project(&h).await;
+    let a = put_agent(&h, &p, "a", 1);
+    let b = put_agent(&h, &p, "b", 2);
+    let gone = put_agent(&h, &p, "gone", 3);
+    let f = h
+        .core
+        .folder_create(
+            &p.id,
+            Some("Front"),
+            &[a.id.clone(), b.id.clone(), gone.id.clone()],
+            Some(&b.id),
+            None,
+        )
+        .unwrap();
+    h.core.agent(&gone.id).unwrap().lock().meta.archived = true;
+    let c = external(&h).await;
+    let folders = read(&c, "list_folders", json!({ "project": "DEMO" })).await;
+    assert_eq!(
+        folders,
+        json!([{
+            "id": f.id,
+            "name": "Front",
+            "principal": { "id": b.id, "name": "b" },
+            "agents": [
+                { "id": b.id, "name": "b", "status": "idle" },
+                { "id": a.id, "name": "a", "status": "idle" },
+            ],
+        }])
+    );
+    assert_eq!(
+        last_entry(&h),
+        (
+            "Claude (hors Escouade)".into(),
+            "list_folders".into(),
+            "project: DEMO".into(),
+            "ok"
+        )
+    );
+    // An agent of Escouade may leave the project out; Claude outside may not.
+    let own = as_agent(&h, &a.id).await;
+    assert_eq!(read(&own, "list_folders", json!({})).await, folders);
+    own.cancel().await.unwrap();
+    assert!(call(&c, "list_folders", json!({})).await.1);
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }

@@ -78,6 +78,7 @@ enum Names {
 fn naming_calls() -> Vec<(&'static str, Names, Value)> {
     vec![
         ("list_agents", Names::Project, json!({ "project": "{}" })),
+        ("list_folders", Names::Project, json!({ "project": "{}" })),
         ("list_tickets", Names::Project, json!({ "project": "{}" })),
         ("get_board", Names::Project, json!({ "project": "{}" })),
         ("get_workflow", Names::Project, json!({ "project": "{}" })),
