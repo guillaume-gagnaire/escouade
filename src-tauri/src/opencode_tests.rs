@@ -1812,6 +1812,15 @@ async fn an_opencode_agent_stops_with_its_plugin_and_says_why_its_session_kept()
     opencode_account(&h);
     let a = new_agent(&h, &p.id).await;
     let session = h.agent(&a).session_id;
+    // A first answer: its session comes before its start ends, and a start cut short fails, another story.
+    h.core
+        .send_message(&a, "bonjour".into(), vec![])
+        .await
+        .unwrap();
+    wait_long(&h, "its first answer", 30, |h| {
+        texts(h, &a).iter().any(|t| t.contains("bonjour")) && !h.agent(&a).status.is_active()
+    })
+    .await;
     let id = crate::plugins::builtin::OPENCODE;
     let rt = h.core.plugin_runtime.clone();
     // Until it gives up, not ten times: on a busy machine a restart takes seconds, and ten rounds of 400 ms saw three.

@@ -157,8 +157,10 @@ async fn the_weekly_window_past_the_threshold_moves_the_agent_too() {
     uses(&pro, "fake-week-pct", 97);
     let id = agent_on(&h, &p, "pro").await.id;
     turn_over(&h, &id, "Bonjour").await;
-    h.wait("on Équipe", |h| h.agent(&id).account == "equipe")
-        .await;
+    h.wait("on Équipe, and it says so", |h| {
+        h.agent(&id).account == "equipe" && !notices(h, &id).is_empty()
+    })
+    .await;
     assert_eq!(
         notices(&h, &id),
         ["L’agent passe sur le compte Équipe : Pro est à 97 % de sa fenêtre hebdomadaire (au rythme actuel, 113 % à sa remise à zéro)."]
@@ -322,8 +324,10 @@ async fn an_agent_does_not_go_back_to_the_account_it_left_before_that_one_resets
     h.wait_quotas_read().await;
     read_as(&h, "pro", 5.0);
     turn_over(&h, &id, "Encore une fois").await;
-    h.wait("back on Pro", |h| h.agent(&id).account == "pro")
-        .await;
+    h.wait("back on Pro, and it says so", |h| {
+        h.agent(&id).account == "pro" && notices(h, &id).len() > 2
+    })
+    .await;
     assert_eq!(
         notices(&h, &id)[2],
         "L’agent passe sur le compte Pro : Équipe est à 97 % de sa fenêtre de 5 h."
@@ -440,8 +444,10 @@ async fn a_week_that_would_not_last_moves_the_agent_at_the_threshold_and_says_th
     week_of(&pro, 85, TWO_DAYS_LEFT);
     let id = agent_on(&h, &p, "pro").await.id;
     turn_over(&h, &id, "Bonjour").await;
-    h.wait("on Équipe", |h| h.agent(&id).account == "equipe")
-        .await;
+    h.wait("on Équipe, and it says so", |h| {
+        h.agent(&id).account == "equipe" && !notices(h, &id).is_empty()
+    })
+    .await;
     let said = "L’agent passe sur le compte Équipe : Pro est à 85 % de sa fenêtre hebdomadaire (au rythme actuel, 119 % à sa remise à zéro).";
     assert_eq!(notices(&h, &id), [said]);
     // The notification goes just after the conversation's line: a loaded runner reads in between.
@@ -566,8 +572,11 @@ async fn fables_week_past_the_threshold_moves_a_fable_agent_and_leaves_an_opus_o
     turn_over(&h, &opus, "Bonjour").await;
     let fable = agent_of_model(&h, &p, "pro", "fable").await;
     turn_over(&h, &fable, "Bonjour").await;
-    h.wait("Fable on Équipe", |h| h.agent(&fable).account == "equipe")
-        .await;
+    // Its account changes first, what it says about it next.
+    h.wait("Fable on Équipe, and it says so", |h| {
+        h.agent(&fable).account == "equipe" && !notices(h, &fable).is_empty()
+    })
+    .await;
     assert_eq!(
         notices(&h, &fable),
         ["L’agent passe sur le compte Équipe : Pro est à 97 % de sa fenêtre hebdomadaire Fable (au rythme actuel, 113 % à sa remise à zéro)."]

@@ -303,7 +303,10 @@ mod tests {
             .unwrap();
         let started = Instant::now();
         p.push(&vec![0.5; 8_000]);
-        std::thread::sleep(Duration::from_millis(100));
+        // Its thread may be late on a busy machine: the level comes with it.
+        while p.level() <= 0.4 && started.elapsed() < Duration::from_secs(2) {
+            std::thread::sleep(Duration::from_millis(5));
+        }
         assert!(p.level() > 0.4, "{}", p.level());
         p.push(&vec![0.5; 8_000]);
         p.finish();
