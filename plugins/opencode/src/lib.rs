@@ -1,5 +1,6 @@
-//! The plugin OpenCode (`dev.escouade.opencode`, INT-10.2, docs/PLUGINS.md §4): OpenCode 1 (`opencode-ai`, 1.19) as a
-//! harness, driven through `opencode serve` (HTTP + SSE, docs/PROTOCOL.md, « OpenCode serve »).
+//! The plugin OpenCode (`dev.escouade.opencode`, INT-10.2, docs/PLUGINS.md §4, §8): OpenCode 1 (`opencode-ai`, 1.19) as a
+//! harness, driven through `opencode serve` (HTTP + SSE, docs/PROTOCOL.md, « OpenCode serve »). A module (`run.wasm`)
+//! without tokio: its tasks turn on the events of the host (`host`, `Reactor`).
 //!
 //! OpenCode is no process with an input and an output for each agent: one server serves the agents of an account, each
 //! a session of its own. The core finds `opencode`, starts that server (`Launch::shared`) in its Job object, and keeps
@@ -9,7 +10,11 @@
 //!
 //! What it does as Escouade drives it comes from the real runs of OpenCode 1.19.3 with local models (ESC-25), whose
 //! streams are in `tests/fixtures/opencode/` and whose schema is `tests/fixtures/engines/opencode-1.19.3.openapi.json`.
+//!
+//! The core still links this crate as a library, for its « Vue OpenCode » and its accounts (`rules`, `translate`), until
+//! P8 (docs/PLUGINS.md §8.2): hence the `rlib` beside the `cdylib`.
 
+mod host;
 pub mod rules;
 mod server;
 mod session;
@@ -23,7 +28,10 @@ use escouade_plugin_protocol::engine::{
     EnvVar, Frames, Interrupt, Items, Launch, LaunchParams, Open, SendMessage, SetValue,
     SharedLaunch, SharedRef, Usage, Writes,
 };
-use escouade_plugin_protocol::{serve_later, Output, Refusal, Reply};
+use escouade_plugin_protocol::{
+    answer, code, greeted, initialized, method as handshake, Refusal, Request,
+};
+use host::Host;
 use parking_lot::Mutex;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -40,8 +48,11 @@ pub const MANIFEST: &str = include_str!("../escouade-plugin.json");
 /// What the line that says a server is ready holds, its address after it.
 pub(crate) const LISTENING: &str = "listening on ";
 
+/// That line, as the core reads the port in it (`local:shared`, docs/PLUGINS.md §8.4.2).
+const LISTENS: &str = "opencode server listening on http://{host}:{port}";
+
 struct Plugin {
-    out: Output,
+    host: Arc<Host>,
     agents: Mutex<HashMap<String, Arc<Session>>>,
     /// The clients of the servers, by what the core calls them (`SharedRef::key`).
     servers: Mutex<HashMap<String, Arc<Server>>>,
@@ -73,38 +84,67 @@ fn no_writes() -> Result<Value, Refusal> {
     give(Writes::default())
 }
 
-/// The program of the plugin: `escouade-plugins opencode`.
-pub fn run() -> i32 {
-    let tokio = match tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(2)
-        .enable_all()
-        .build()
-    {
-        Ok(rt) => rt,
-        Err(e) => {
-            eprintln!("escouade-plugins opencode: {e}");
-            return 1;
+/// The plugin between two turns: what comes in by lines, what goes out by lines. A module has one; a test drives its own.
+pub struct Reactor(Arc<Plugin>);
+
+impl Default for Reactor {
+    fn default() -> Self {
+        Self(Arc::new(Plugin {
+            host: Arc::default(),
+            agents: Mutex::default(),
+            servers: Mutex::default(),
+        }))
+    }
+}
+
+impl Reactor {
+    /// One turn on what came: the lines to write.
+    pub fn turn(&self, lines: impl IntoIterator<Item = String>) -> Vec<String> {
+        for line in lines {
+            if let Some(msg) = self.0.host.arrived(&line) {
+                self.0.called(msg);
+            }
         }
-    };
-    let _in_it = tokio.enter();
-    let out = Output::new(std::io::stdout());
-    let plugin = Arc::new(Plugin {
-        out: out.clone(),
-        agents: Mutex::default(),
-        servers: Mutex::default(),
-    });
-    let stdin = std::io::stdin();
-    let result = serve_later(
-        stdin.lock(),
-        out,
-        json!({ "harnesses": ["opencode"] }),
-        |m, params, reply| plugin.handle(m, params, reply),
-    );
-    match result {
-        Ok(()) => 0,
-        Err(e) => {
-            eprintln!("escouade-plugins opencode: {e}");
-            1
+        self.0.host.run();
+        self.0.host.lines()
+    }
+}
+
+/// The plugin of this module, once its first turn made it.
+#[cfg(target_family = "wasm")]
+static PLUGIN: std::sync::OnceLock<Reactor> = std::sync::OnceLock::new();
+
+#[cfg(target_family = "wasm")]
+fn turn() {
+    use escouade_plugin_protocol::turn;
+    let Some(plugin) = PLUGIN.get() else { return };
+    for line in plugin.turn(turn::lines()) {
+        turn::write(&line);
+    }
+    turn::flush();
+}
+
+/// What the module's first turn runs: the plugin kept for the turns to come.
+#[cfg(target_family = "wasm")]
+fn run() -> i32 {
+    let _ = PLUGIN.set(Reactor::default());
+    escouade_plugin_protocol::turn::set_turn(turn);
+    0
+}
+
+escouade_plugin_protocol::module!(run);
+
+/// How a request is answered, now or by the task that waits; a notification has nothing to answer.
+#[derive(Clone)]
+struct Reply {
+    id: Option<Value>,
+    host: Arc<Host>,
+}
+
+impl Reply {
+    fn send(&self, result: Result<Value, Refusal>) {
+        if let Some(id) = &self.id {
+            self.host.write(answer(id, result));
         }
     }
 }
@@ -117,7 +157,32 @@ impl Plugin {
         })
     }
 
-    /// The client of the server `s`, one made when it is new to this process.
+    /// A line that is a call: the handshake is answered here, the rest by `handle`.
+    fn called(self: &Arc<Self>, msg: Value) {
+        let Ok(request) = serde_json::from_value::<Request>(msg) else {
+            let refusal = Refusal {
+                code: code::PARSE,
+                message: "not a JSON-RPC request".into(),
+            };
+            self.host.write(answer(&Value::Null, Err(refusal)));
+            return;
+        };
+        let reply = Reply {
+            id: request.id,
+            host: self.host.clone(),
+        };
+        match request.method.as_str() {
+            handshake::INITIALIZE => {
+                greeted(&request.params);
+                let can = json!({ "harnesses": ["opencode"] });
+                reply.send(Ok(initialized(can)));
+            }
+            handshake::SHUTDOWN => reply.send(Ok(Value::Null)),
+            other => self.handle(other, request.params, reply),
+        }
+    }
+
+    /// The client of the server `s`, one made when it is new to this instance.
     fn server(&self, s: &SharedRef) -> anyhow::Result<Arc<Server>> {
         let base = server::listening(&s.line)?;
         let password = s.keep["password"].as_str().unwrap_or_default().to_string();
@@ -129,7 +194,7 @@ impl Plugin {
         {
             return Ok(known.clone());
         }
-        let server = Server::connect(base, password)?;
+        let server = Server::connect(&self.host, base, password);
         servers.insert(s.key.clone(), server.clone());
         Ok(server)
     }
@@ -156,7 +221,7 @@ impl Plugin {
                         let mut agents = self.agents.lock();
                         agents
                             .entry(a.agent.clone())
-                            .or_insert_with(|| Session::new(&a, self.out.clone()))
+                            .or_insert_with(|| Session::new(&a, self.host.clone()))
                             .clone()
                     };
                     let server = a
@@ -169,7 +234,8 @@ impl Plugin {
                     // Heard from now on when the plugin started again, its session known.
                     if a.shared.is_some() {
                         let running = a.running;
-                        tokio::spawn(async move { session.listen_again(running).await });
+                        self.host
+                            .spawn(async move { session.listen_again(running).await });
                     }
                     Ok(json!({}))
                 }
@@ -260,7 +326,7 @@ impl Plugin {
         };
         let me = self.clone();
         let m = m.to_string();
-        tokio::spawn(async move {
+        self.host.spawn(async move {
             let answer = me.later(&m, params).await;
             reply.send(answer);
         });
@@ -334,7 +400,7 @@ fn launch(p: &LaunchParams) -> Launch {
         fence_by_client: true,
         read_only: true,
         shared: Some(SharedLaunch {
-            listens: None,
+            listens: Some(LISTENS.into()),
             ready: LISTENING.into(),
             one_agent_a_folder: true,
             keep: json!({ "password": password }),
@@ -344,36 +410,4 @@ fn launch(p: &LaunchParams) -> Launch {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_server_is_described_shared_with_its_password_never_among_its_arguments() {
-        let l = launch(&LaunchParams {
-            model: "ollama/qwen3-coder:30b-32k".into(),
-            ..LaunchParams::default()
-        });
-        let password = l
-            .env
-            .iter()
-            .find(|v| v.name == "OPENCODE_SERVER_PASSWORD")
-            .map(|v| v.value.clone())
-            .unwrap();
-        assert_eq!(password.len(), 48);
-        assert!(!l.args.iter().any(|a| a.contains(&password)));
-        let shared = l.shared.unwrap();
-        assert!(shared.one_agent_a_folder);
-        assert_eq!(shared.keep["password"], password.as_str());
-        assert!(l.fence_by_client && l.read_only);
-    }
-
-    #[test]
-    fn its_manifest_declares_the_harness_opencode() {
-        let m: Value = serde_json::from_str(MANIFEST).unwrap();
-        assert_eq!(m["id"], "dev.escouade.opencode");
-        assert_eq!(m["run"]["args"][0], "opencode");
-        let h = &m["contributes"]["harnesses"][0];
-        assert_eq!(h["id"], "opencode");
-        assert_eq!(h["accountVar"], "OPENCODE_CONFIG_DIR");
-    }
-}
+mod tests;

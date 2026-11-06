@@ -1680,21 +1680,6 @@ async fn compact_typed_to_an_opencode_agent_summarizes_its_session() {
     h.core.stop_for_good();
 }
 
-/// Stops the process `pid` as a crash would.
-fn crash(pid: u32) {
-    let pid = pid.to_string();
-    let killed = if cfg!(windows) {
-        std::process::Command::new("taskkill")
-            .args(["/F", "/PID", pid.as_str()])
-            .output()
-    } else {
-        std::process::Command::new("kill")
-            .args(["-9", pid.as_str()])
-            .output()
-    };
-    assert!(killed.unwrap().status.success());
-}
-
 fn said(h: &Harness, id: &str) -> String {
     Value::Array(h.items(id)).to_string()
 }
@@ -1798,7 +1783,7 @@ async fn a_crash_of_the_opencode_plugin_leaves_its_server_and_the_agents_turn_go
     })
     .await;
     let id = crate::plugins::builtin::OPENCODE;
-    crash(h.core.plugin_runtime.status(id).pid.unwrap());
+    h.core.plugin_runtime.crash_instance(id);
     wait_long(&h, "the plugin said it started again", 30, |h| {
         said(h, &a).contains("a redémarré")
     })
@@ -1832,9 +1817,7 @@ async fn an_opencode_agent_stops_with_its_plugin_and_says_why_its_session_kept()
     // Until it gives up, not ten times: on a busy machine a restart takes seconds, and ten rounds of 400 ms saw three.
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
     while rt.status(id).stop.is_none() && std::time::Instant::now() < deadline {
-        if let Some(pid) = rt.status(id).pid {
-            crash(pid);
-        }
+        rt.crash_instance(id);
         tokio::time::sleep(std::time::Duration::from_millis(400)).await;
     }
     wait_long(&h, "the agent said why", 30, |h| {

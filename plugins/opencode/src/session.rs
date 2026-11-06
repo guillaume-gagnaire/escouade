@@ -7,6 +7,7 @@
 //! (`session.idle` of the agent's own session, once it was seen busy: an `idle` of the turn before
 //! can come after the next message is sent).
 
+use crate::host::Host;
 use crate::rules::{self, agent_of, session_rules, split_model, tr, Settings, SERVER};
 use crate::server::{self, Listener, Server};
 use crate::translate::{contexts_event, Translator};
@@ -14,9 +15,7 @@ use anyhow::{anyhow, bail, Result};
 use escouade_plugin_protocol::engine::{
     method, AnswerPermission, Attach, EnvVar, Grant, Item, Launch, Open, Opened, Pushed, StartAt,
 };
-use escouade_plugin_protocol::Output;
 use parking_lot::Mutex;
-use reqwest::Method;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -59,7 +58,7 @@ pub(crate) struct Session {
     instructions: Mutex<Option<String>>,
     state: Mutex<State>,
     translator: Mutex<Translator>,
-    out: Output,
+    host: Arc<Host>,
     /// Its session is heard (`Server::listen`).
     heard: AtomicBool,
     /// Closed gently: `Item::Closed` said once.
@@ -78,7 +77,7 @@ impl Listener for Hears {
 }
 
 impl Session {
-    pub(crate) fn new(a: &Attach, out: Output) -> Arc<Self> {
+    pub(crate) fn new(a: &Attach, host: Arc<Host>) -> Arc<Self> {
         let settings = Settings {
             model: a.model.clone(),
             effort: a.effort.clone(),
@@ -103,7 +102,7 @@ impl Session {
                 a.session.clone(),
                 &a.lang,
             )),
-            out,
+            host,
             heard: AtomicBool::new(false),
             closed: AtomicBool::new(false),
         })
@@ -153,7 +152,7 @@ impl Session {
 
     fn push(&self, items: Vec<Item>) {
         if !items.is_empty() {
-            self.out.notify(
+            self.host.notify(
                 method::ITEMS,
                 &Pushed {
                     agent: self.agent.clone(),
@@ -271,10 +270,10 @@ impl Session {
         };
         self.translator.lock().began();
         let me = self.clone();
-        tokio::spawn(async move {
+        self.host.spawn(async move {
             let path = format!("/session/{session}/prompt_async");
             let said = match me.srv() {
-                Ok(srv) => srv.call(Method::POST, &path, &me.cwd, Some(body)).await,
+                Ok(srv) => srv.call("POST", &path, &me.cwd, Some(body)).await,
                 Err(e) => Err(e),
             };
             if let Err(e) = said {
@@ -294,9 +293,9 @@ impl Session {
     }
 
     /// A request sent without waiting for its answer (a failure is only logged).
-    fn fire(self: &Arc<Self>, method: Method, path: String, body: Option<Value>) {
+    fn fire(self: &Arc<Self>, method: &'static str, path: String, body: Option<Value>) {
         let me = self.clone();
-        tokio::spawn(async move {
+        self.host.spawn(async move {
             let said = match me.srv() {
                 Ok(srv) => srv.call(method, &path, &me.cwd, body).await,
                 Err(e) => Err(e),
@@ -316,7 +315,7 @@ impl Session {
             session_rules(&s.settings)
         };
         self.fire(
-            Method::PATCH,
+            "PATCH",
             format!("/session/{session}"),
             Some(json!({ "permission": rules })),
         );
@@ -345,7 +344,7 @@ impl Session {
         };
         if now {
             if let (true, Some(session)) = (busy, session) {
-                self.fire(Method::POST, format!("/session/{session}/abort"), None);
+                self.fire("POST", format!("/session/{session}/abort"), None);
             }
             self.closed.store(true, Ordering::Release);
             self.forget();
@@ -358,7 +357,7 @@ impl Session {
     /// removed under Windows would find held.
     pub(crate) async fn let_go(&self) -> Result<()> {
         self.srv()?
-            .call(Method::POST, "/instance/dispose", &self.cwd, None)
+            .call("POST", "/instance/dispose", &self.cwd, None)
             .await
             .map(|_| ())
     }
@@ -373,7 +372,7 @@ impl Session {
         match grant {
             Some(Grant { url, token }) => {
                 let body = rules::entry(url, token);
-                match srv.call(Method::POST, "/mcp", &self.cwd, Some(body)).await {
+                match srv.call("POST", "/mcp", &self.cwd, Some(body)).await {
                     Ok(said) if said[SERVER]["status"] == "connected" => {}
                     Ok(said) => eprintln!(
                         "opencode: Escouade's server not connected in {}: {}",
@@ -384,13 +383,13 @@ impl Session {
             }
             None => {
                 // Its config keeps it out; one an instance would still have, disconnected.
-                let status = srv.call(Method::GET, "/mcp", &self.cwd, None).await;
+                let status = srv.call("GET", "/mcp", &self.cwd, None).await;
                 let on = status
                     .as_ref()
                     .is_ok_and(|s| s.get(SERVER).is_some_and(|e| e["status"] != "disabled"));
                 if on {
                     let path = format!("/mcp/{SERVER}/disconnect");
-                    if let Err(e) = srv.call(Method::POST, &path, &self.cwd, None).await {
+                    if let Err(e) = srv.call("POST", &path, &self.cwd, None).await {
                         eprintln!("opencode: Escouade's server kept: {e:#}");
                     }
                 }
@@ -408,7 +407,7 @@ impl Session {
         match start {
             StartAt::Resume { session } => {
                 match srv
-                    .call(Method::GET, &format!("/session/{session}"), &self.cwd, None)
+                    .call("GET", &format!("/session/{session}"), &self.cwd, None)
                     .await
                 {
                     Ok(info) => return Ok((info, "resume")),
@@ -422,12 +421,7 @@ impl Session {
                 // OpenCode copies the messages before the one it is given: the one after `at`,
                 // none when `at` is the last (all of them).
                 let messages = srv
-                    .call(
-                        Method::GET,
-                        &format!("/session/{of}/message"),
-                        &self.cwd,
-                        None,
-                    )
+                    .call("GET", &format!("/session/{of}/message"), &self.cwd, None)
                     .await;
                 match messages {
                     Ok(list) => {
@@ -447,7 +441,7 @@ impl Session {
                         };
                         let info = srv
                             .call(
-                                Method::POST,
+                                "POST",
                                 &format!("/session/{of}/fork"),
                                 &self.cwd,
                                 Some(body),
@@ -463,27 +457,27 @@ impl Session {
             }
             StartAt::New => {}
         }
-        let info = srv
-            .call(Method::POST, "/session", &self.cwd, Some(new()))
-            .await?;
+        let info = srv.call("POST", "/session", &self.cwd, Some(new())).await?;
         Ok((info, "new"))
     }
 
     /// The models of the server, read once.
-    async fn read_catalog(&self, srv: &Server) -> Result<rules::Catalog> {
-        let mut cached = srv.catalog.lock().await;
-        if cached.is_none() {
-            let providers = srv
-                .call(Method::GET, "/config/providers", &self.cwd, None)
-                .await?;
-            let config = srv
-                .call(Method::GET, "/config", &self.cwd, None)
-                .await
-                .unwrap_or(Value::Null);
-            *cached =
-                Some(json!({ "providers": providers, "config": { "model": config["model"] } }));
-        }
-        let v = cached.as_ref().unwrap();
+    async fn read_catalog(&self, srv: &Arc<Server>) -> Result<rules::Catalog> {
+        let v = match srv.catalog().await {
+            Ok(known) => known,
+            Err(reading) => {
+                let providers = srv
+                    .call("GET", "/config/providers", &self.cwd, None)
+                    .await?;
+                let config = srv
+                    .call("GET", "/config", &self.cwd, None)
+                    .await
+                    .unwrap_or(Value::Null);
+                let v = json!({ "providers": providers, "config": { "model": config["model"] } });
+                reading.keep(v.clone());
+                v
+            }
+        };
         Ok(rules::catalog(&v["providers"], &v["config"]))
     }
 
@@ -577,9 +571,7 @@ impl Session {
         self.state.lock().busy = true;
         self.state.lock().saw_busy = true;
         self.translator.lock().in_turn();
-        let status = srv
-            .call(Method::GET, "/session/status", &self.cwd, None)
-            .await;
+        let status = srv.call("GET", "/session/status", &self.cwd, None).await;
         // Its turn was over before it was heard again: only this says so.
         if status.is_ok_and(|s| s[&session]["type"].as_str().is_none_or(|t| t == "idle")) {
             self.clone().on_event(json!({
@@ -620,7 +612,7 @@ impl Session {
         self.translator.lock().interrupted();
         let path = format!("/session/{session}/abort");
         self.srv()?
-            .call(Method::POST, &path, &self.cwd, None)
+            .call("POST", &path, &self.cwd, None)
             .await
             .map(|_| ())
     }
@@ -676,7 +668,7 @@ impl Session {
             json!({ "reply": "once" })
         };
         self.fire(
-            Method::POST,
+            "POST",
             format!("/permission/{}/reply", a.request),
             Some(body),
         );
@@ -690,7 +682,7 @@ impl Session {
         given: &Value,
     ) {
         self.fire(
-            Method::POST,
+            "POST",
             format!("/question/{request}/reply"),
             Some(json!({ "answers": rules::answers(questions, given) })),
         );
@@ -714,19 +706,16 @@ impl Session {
         };
         self.translator.lock().began();
         let me = self.clone();
-        tokio::spawn(async move {
+        self.host.spawn(async move {
             let path = format!("/session/{session}/summarize");
             let said = match me.srv() {
-                Ok(srv) => srv.call(Method::POST, &path, &me.cwd, Some(body)).await,
+                Ok(srv) => srv.call("POST", &path, &me.cwd, Some(body)).await,
                 Err(e) => Err(e),
             };
             if let Err(e) = said {
                 // A compaction that lasts past the request's limit still runs: told by its
                 // events, and its end by `idle`.
-                if e.chain().any(|c| {
-                    c.downcast_ref::<reqwest::Error>()
-                        .is_some_and(reqwest::Error::is_timeout)
-                }) {
+                if server::late(&e) {
                     return;
                 }
                 eprintln!("opencode: {e:#}");
@@ -744,7 +733,7 @@ impl Session {
         let session = self.session()?;
         self.srv()?
             .call(
-                Method::PATCH,
+                "PATCH",
                 &format!("/session/{session}"),
                 &self.cwd,
                 Some(json!({ "title": title })),
@@ -755,17 +744,14 @@ impl Session {
 
     /// A request to the server: `{"method", "path", "body"}`, in the agent's folder.
     pub(crate) async fn control(&self, request: Value, within: Duration) -> Result<Value> {
-        let method = request["method"]
-            .as_str()
-            .unwrap_or("GET")
-            .parse::<Method>()
-            .map_err(|e| anyhow!("{e}"))?;
+        let method = request["method"].as_str().unwrap_or("GET");
         let path = request["path"].as_str().unwrap_or("/").to_string();
         let body = request.get("body").filter(|b| !b.is_null()).cloned();
         let srv = self.srv()?;
-        tokio::time::timeout(within, srv.call(method, &path, &self.cwd, body))
+        self.host
+            .timeout(within, srv.call(method, &path, &self.cwd, body))
             .await
-            .map_err(|_| anyhow!("{path}: no answer in time"))?
+            .ok_or_else(|| anyhow!("{path}: no answer in time"))?
     }
 }
 

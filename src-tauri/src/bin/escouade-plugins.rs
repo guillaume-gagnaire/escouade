@@ -49,8 +49,6 @@ const ENTRIES: &[Entry] = &[
     ("cursor", escouade_plugin_cursor::run),
     // Gemini CLI (INT-10.7): its harness on the ACP client, in its crate (plugins/gemini).
     ("gemini", escouade_plugin_gemini::run),
-    // OpenCode (INT-10.2): its harness, the client of `opencode serve`, in its crate (plugins/opencode).
-    ("opencode", escouade_plugin_opencode::run),
     // Copilot CLI (INT-10.3): its harness on the client of its server, in its crate (plugins/copilot).
     ("copilot", escouade_plugin_copilot::run),
     // Codex (INT-10.4): the client of its app-server and its translation, in its crate (plugins/codex).

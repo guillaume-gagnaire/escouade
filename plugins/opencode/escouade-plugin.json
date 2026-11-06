@@ -2,7 +2,7 @@
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.opencode",
   "name": "OpenCode",
-  "version": "0.0.0",
+  "version": "2.2.0",
   "description": {
     "fr": "OpenCode comme harness, par son serveur : la conversation, sa vue terminal, les permissions, le plan, les fournisseurs et le coût par compte.",
     "en": "OpenCode as a harness, through its server: the conversation, its terminal view, permissions, the plan, providers and the cost per account."
@@ -15,11 +15,17 @@
   "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/opencode",
   "escouade": {
     "api": "1",
-    "min": "2.1.0"
+    "min": "2.2.0"
   },
   "run": {
-    "command": "{escouade}/escouade-plugins",
-    "args": ["opencode"]
+    "wasm": "Cargo.toml"
+  },
+  "permissions": {
+    "network": ["local:shared"]
+  },
+  "limits": {
+    "fetchSeconds": 60,
+    "fetchBytes": 16777216
   },
   "contributes": {
     "harnesses": [

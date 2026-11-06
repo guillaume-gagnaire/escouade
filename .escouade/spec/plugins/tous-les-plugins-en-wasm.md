@@ -1,9 +1,9 @@
 ---
 title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","docs/PLUGINS.md §8.19 (ESC-344)","docs/PLUGINS.md §8.20 (ESC-337)","docs/PLUGINS.md §8.22 (ESC-351)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire"]
-tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351"]
-decisions: [73,71,70,72,75,80,84,86,89,92]
+sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","docs/PLUGINS.md §8.19 (ESC-344)","docs/PLUGINS.md §8.20 (ESC-337)","docs/PLUGINS.md §8.22 (ESC-351)","docs/PLUGINS.md §8.23 (ESC-349)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire"]
+tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351","ESC-349"]
+decisions: [73,71,70,72,75,80,84,86,89,92,"opencode-est-un-module-sans-tokio-son-pr"]
 compared: null
 ---
 
@@ -161,3 +161,10 @@ Un développeur externe écrit un plugin en TypeScript ou en Rust à partir du s
 - **Un programme introuvable pour l'hôte n'est pas installé.** Le cœur cherche `isola` comme l'hôte : sous Windows, un `.exe` ou un `.com`, jamais un `.cmd`. Sans lui, un worktree n'est à personne.
 - **isola n'a pas de release pour Windows** à ce jour (0.5.0 : Linux et macOS). Le vrai programme n'a pas été essayé avec le module : voir `docs/PLUGINS.md` §8.22, c'est à faire avant Z1.
 - **Avant Z2**, comme les quatre de ESC-344, son module n'est pas dans l'installeur.
+
+## OpenCode, le premier harness porté à un serveur local (ESC-349)
+
+OpenCode est en `run.wasm`, en version `2.2.0`, `escouade.min` `2.2.0`, comme les plugins de P1. Ce qui précède dit qu'il n'utilise pas encore `local:shared` : ce n'est plus vrai.
+
+- **Sa crate reste liée au cœur** en bibliothèque (`crate-type = ["cdylib", "rlib"]`), pour la vue OpenCode et les comptes, jusqu'à P8. Elle est membre du workspace de `plugins/`, pas de celui de `src-tauri`, et n'a plus de `tokio` ni de `reqwest`, sur aucune cible.
+- **Il n'utilise pas le kit**, seulement `escouade-plugin-protocol` : le réacteur du kit ne sait pas lancer une tâche qu'aucun appel du cœur n'a commencée, ce qu'est la lecture du flux. Son module se compile donc sur la version publiée sans changer le kit. Le détail est à la page « OpenCode en plugin ».

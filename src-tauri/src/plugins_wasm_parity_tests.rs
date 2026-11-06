@@ -929,3 +929,859 @@ fn codex_translates_a_whole_turn_as_its_native_plugin() {
     }
     assert!(n > 300 && items > 200, "{n} lines, {items} items");
 }
+
+// ---- OpenCode (ESC-349) ---------------------------------------------------------------------------------------------
+
+/// A `opencode serve` of the tests (tests/fixtures/fake-opencode.mjs), its requests in a file of its own.
+struct FakeOpencode {
+    child: Child,
+    port: u16,
+    line: String,
+    log: PathBuf,
+    dir: PathBuf,
+    /// What the file held at the last look.
+    seen: usize,
+}
+
+impl FakeOpencode {
+    fn start(name: &str) -> Self {
+        let dir = std::env::temp_dir().join(format!(
+            "esc-opencode-parity-{name}-{}-{:?}",
+            std::process::id(),
+            Instant::now()
+        ));
+        let dir = PathBuf::from(dir.to_string_lossy().replace(['{', '}', ' ', ':', '.'], ""));
+        std::fs::create_dir_all(dir.join("wt/src")).unwrap();
+        std::fs::write(dir.join("wt/src/app.ts"), "const a = 1;\n").unwrap();
+        let log = dir.join("requests.jsonl");
+        let mut child = Command::new("node")
+            .arg(root().join("tests/fixtures/fake-opencode.mjs"))
+            .args(["serve", "--hostname", "127.0.0.1", "--port", "0"])
+            .env("OPENCODE_SERVER_PASSWORD", "pw")
+            .env(
+                "OPENCODE_CONFIG_CONTENT",
+                r#"{"model":"ollama/qwen3-coder:30b-32k"}"#,
+            )
+            .env("FAKE_OPENCODE_HOME", dir.join("home"))
+            .env("FAKE_OPENCODE_LOG", &log)
+            .env("FAKE_OPENCODE_STEP_MS", "5")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("node");
+        let output = child.stdout.take().unwrap();
+        let mut lines = BufReader::new(output).lines();
+        let line = lines
+            .find_map(|l| l.ok().filter(|l| l.contains("listening on")))
+            .expect("the line of the server");
+        let port = line.rsplit(':').next().unwrap().trim().parse().unwrap();
+        Self {
+            child,
+            port,
+            line,
+            log,
+            dir,
+            seen: 0,
+        }
+    }
+
+    fn wt(&self) -> String {
+        self.dir.join("wt").to_string_lossy().into_owned()
+    }
+
+    /// A request of the test itself, outside what is compared.
+    fn ask(&self, target: &str) -> String {
+        let mut c = std::net::TcpStream::connect(("127.0.0.1", self.port)).unwrap();
+        // Base64 of `opencode:pw`.
+        let head = format!(
+            "POST {target} HTTP/1.1\r\nHost: x\r\nAuthorization: Basic b3BlbmNvZGU6cHc=\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"
+        );
+        c.write_all(head.as_bytes()).unwrap();
+        let mut said = String::new();
+        let _ = c.read_to_string(&mut said);
+        said.rsplit("\r\n\r\n").next().unwrap_or("").to_string()
+    }
+
+    /// Who reads the event stream.
+    fn readers(&self) -> u64 {
+        self.ask("/fake/readers").trim().parse().unwrap_or(0)
+    }
+
+    fn wait_readers(&self, n: u64) {
+        let until = Instant::now() + Duration::from_secs(10);
+        while self.readers() != n {
+            assert!(Instant::now() < until, "nobody reads the stream again");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    /// What was asked of it since the last look.
+    fn asked(&mut self) -> Vec<Value> {
+        let text = std::fs::read_to_string(&self.log).unwrap_or_default();
+        let new = text[self.seen..].to_string();
+        self.seen = text.len();
+        let mut asked: Vec<Value> = new
+            .lines()
+            .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+            .filter_map(|v| v.get("req").cloned())
+            .filter(|r| r["path"] != "/global/event")
+            .collect();
+        // Sent side by side, in no fixed order.
+        asked.sort_by_key(|r| format!("{} {} {}", r["path"], r["method"], r["body"]));
+        asked
+    }
+}
+
+impl Drop for FakeOpencode {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+
+/// A plugin of OpenCode and what it said so far, its answers apart.
+struct Speaker<'a> {
+    plugin: &'a mut dyn Plugin,
+    next: u64,
+    items: Vec<Value>,
+    answers: BTreeMap<u64, Value>,
+}
+
+impl Speaker<'_> {
+    fn read(&mut self, within: Duration) -> bool {
+        let Some(line) = self.plugin.recv(within) else {
+            return false;
+        };
+        let v: Value = serde_json::from_str(&line).unwrap();
+        if v["method"] == "agent/items" {
+            self.items
+                .extend(v["params"]["items"].as_array().unwrap().iter().cloned());
+        } else if let Some(id) = v["id"].as_u64() {
+            self.answers.insert(id, v);
+        }
+        true
+    }
+
+    fn send(&mut self, method: &str, params: Value) -> u64 {
+        self.next += 1;
+        let line = json!({ "jsonrpc": "2.0", "id": self.next, "method": method, "params": params });
+        self.plugin.send(&line.to_string());
+        self.next
+    }
+
+    /// The answer to the call `id`.
+    fn answer(&mut self, id: u64) -> Value {
+        let until = Instant::now() + Duration::from_secs(20);
+        loop {
+            if let Some(v) = self.answers.remove(&id) {
+                return v;
+            }
+            assert!(Instant::now() < until, "no answer to {id}");
+            self.read(Duration::from_millis(200));
+        }
+    }
+
+    fn call(&mut self, method: &str, params: Value) -> Value {
+        let id = self.send(method, params);
+        self.answer(id)
+    }
+
+    /// Reads until the item `op` came since `from`.
+    fn until(&mut self, op: &str, from: usize) -> Value {
+        let until = Instant::now() + Duration::from_secs(30);
+        loop {
+            if let Some(i) = self.items[from..].iter().find(|i| i["op"] == op) {
+                return i.clone();
+            }
+            assert!(
+                Instant::now() < until,
+                "no {op} in {:?}, after {} items: {:?}",
+                &self.items[from..],
+                from,
+                self.items.iter().rev().take(4).collect::<Vec<_>>()
+            );
+            self.read(Duration::from_millis(200));
+        }
+    }
+
+    /// Reads until nothing more comes.
+    fn settle(&mut self) {
+        while self.read(Duration::from_millis(250)) {}
+    }
+}
+
+/// `text` with what changes from one run to the next as the same words: ids by their first appearance, the address.
+fn same_words(text: &str, ids: &mut HashMap<String, String>, fake: &FakeOpencode) -> String {
+    // Its folder as it is, in JSON, and as a path of the fake's file; the same on every system.
+    let wt = fake.wt();
+    let text = text
+        .replace(&fake.port.to_string(), "{port}")
+        .replace(&wt, "{wt}")
+        .replace(&wt.replace('\\', "\\\\"), "{wt}")
+        .replace(&wt.replace('\\', "/").replace(':', ""), "{wt}")
+        .replace("\\\\", "/");
+    let mut out = String::new();
+    let mut word = String::new();
+    let mut flush = |word: &mut String, out: &mut String| {
+        let id = word.split_once('_').is_some_and(|(kind, rest)| {
+            kind.len() >= 3 && rest.len() >= 12 && rest.bytes().all(|b| b.is_ascii_hexdigit())
+        });
+        if id {
+            let n = ids.len();
+            out.push_str(ids.entry(word.clone()).or_insert(format!("id{n}")));
+        } else {
+            out.push_str(word);
+        }
+        word.clear();
+    };
+    for c in text.chars() {
+        if c.is_ascii_alphanumeric() || c == '_' {
+            word.push(c);
+        } else {
+            flush(&mut word, &mut out);
+            out.push(c);
+        }
+    }
+    flush(&mut word, &mut out);
+    out
+}
+
+/// A step: what the plugin told of the conversation, what it answered, and what it asked the server, its order kept.
+fn step(
+    s: &mut Speaker,
+    name: &str,
+    answer: Value,
+    fake: &mut FakeOpencode,
+    from: &mut usize,
+    played: &mut Vec<Value>,
+) {
+    s.settle();
+    let items = s.items[*from..].to_vec();
+    *from = s.items.len();
+    played.push(json!({
+        "step": name,
+        "answer": { "result": answer["result"], "error": answer["error"] },
+        "items": items,
+        "asked": fake.asked(),
+    }));
+}
+
+/// The fields that hold a time or a duration of the run.
+fn without_times(v: Value) -> Value {
+    match v {
+        Value::Object(o) => o
+            .into_iter()
+            .filter(|(k, _)| !matches!(k.as_str(), "took" | "time" | "duration" | "at"))
+            .map(|(k, v)| (k, without_times(v)))
+            .collect(),
+        Value::Array(a) => a.into_iter().map(without_times).collect(),
+        other => other,
+    }
+}
+
+/// The turns of an agent of OpenCode, on the fake server: what the plugin says and asks, a cut of its stream, and the
+/// plugin started again in a turn.
+fn opencode_transcript(plugin: &mut dyn Plugin, fake: &mut FakeOpencode) -> Value {
+    let (agent, wt) = ("a1", fake.wt());
+    let attach = json!({
+        "agent": agent,
+        "cwd": wt,
+        "model": "ollama/qwen3-coder:30b-32k",
+        "mode": "default",
+        "lang": "fr",
+        "shared": { "key": "k", "line": fake.line, "keep": { "password": "pw" } },
+    });
+    let mut played = Vec::new();
+    let mut from = 0;
+    let mut s = Speaker {
+        plugin,
+        next: 0,
+        items: Vec::new(),
+        answers: BTreeMap::new(),
+    };
+    let s = &mut s;
+    let mut greeting = hello();
+    greeting["lang"] = json!("fr");
+    assert!(s.call("initialize", greeting)["result"].is_object());
+    assert!(s.call("agent/attach", attach.clone())["error"].is_null());
+    let a = s.call(
+        "agent/open",
+        json!({ "agent": agent, "start": { "kind": "new" } }),
+    );
+    assert!(a["error"].is_null(), "{a}");
+    step(s, "open", a, fake, &mut from, &mut played);
+
+    let say = |s: &mut Speaker, text: &str| {
+        let params = json!({ "agent": agent, "text": text, "uuid": text });
+        s.call("agent/sendMessage", params)
+    };
+    for text in [
+        "bonjour",
+        "raisonnement",
+        "étapes",
+        "sous-agent",
+        "deux appels",
+        "fichier",
+    ] {
+        let a = say(s, text);
+        s.until("turn", from);
+        step(s, text, a, fake, &mut from, &mut played);
+    }
+
+    let a = say(s, "commande");
+    let card = s.until("permission", from);
+    assert!(card["request"].is_string(), "{card}");
+    let yes = s.call(
+        "agent/answerPermission",
+        json!({ "agent": agent, "request": card["request"], "allow": true }),
+    );
+    s.until("turn", from);
+    step(s, "commande", json!([a, yes]), fake, &mut from, &mut played);
+
+    let a = say(s, "commande");
+    let card = s.until("permission", from);
+    let no = s.call(
+        "agent/answerPermission",
+        json!({ "agent": agent, "request": card["request"], "allow": false, "message": "pas ça" }),
+    );
+    s.until("turn", from);
+    step(
+        s,
+        "commande refusée",
+        json!([a, no]),
+        fake,
+        &mut from,
+        &mut played,
+    );
+
+    let a = say(s, "question");
+    let card = s.until("question", from);
+    let first = &card["questions"][0];
+    let answers = json!({ first["question"].as_str().unwrap_or(""): first["options"][0]["label"] });
+    let yes = s.call(
+        "agent/answerQuestion",
+        json!({
+            "agent": agent, "request": card["request"], "call": card["call"],
+            "answers": answers, "questions": card["questions"],
+        }),
+    );
+    s.until("turn", from);
+    step(s, "question", json!([a, yes]), fake, &mut from, &mut played);
+
+    // A message of a turn waits for its end.
+    let first = say(s, "lent");
+    s.until("text", from);
+    let held = say(s, "gardé pour après");
+    let stop = s.call("agent/interrupt", json!({ "agent": agent }));
+    let end = s.items.iter().rposition(|i| i["op"] == "turn").unwrap();
+    s.until("turn", end + 1);
+    step(
+        s,
+        "interruption",
+        json!([first, held, stop]),
+        fake,
+        &mut from,
+        &mut played,
+    );
+
+    // The plan, its mode set, approved.
+    let mode = s.call("agent/setMode", json!({ "agent": agent, "value": "plan" }));
+    let a = say(s, "propose un plan");
+    let card = s.until("permission", from);
+    let yes = s.call(
+        "agent/answerPermission",
+        json!({ "agent": agent, "request": card["request"], "allow": true, "resume": "default" }),
+    );
+    s.until("turn", from);
+    step(
+        s,
+        "plan",
+        json!([mode, a, yes]),
+        fake,
+        &mut from,
+        &mut played,
+    );
+
+    let a = s.call("agent/compact", json!({ "agent": agent }));
+    s.until("turn", from);
+    step(s, "compaction", a, fake, &mut from, &mut played);
+
+    let a = s.call(
+        "agent/rename",
+        json!({ "agent": agent, "value": "Nouveau titre" }),
+    );
+    step(s, "renommage", a, fake, &mut from, &mut played);
+    let request = json!({ "method": "GET", "path": "/nothing/here" });
+    let a = s.call(
+        "agent/control",
+        json!({ "agent": agent, "request": request, "withinMs": 5000 }),
+    );
+    step(s, "contrôle refusé", a, fake, &mut from, &mut played);
+
+    // The stream cut between two turns: read again, the next turn goes as any other.
+    fake.wait_readers(1);
+    fake.ask("/fake/cut");
+    fake.wait_readers(1);
+    let a = say(s, "bonjour après la coupure");
+    s.until("turn", from);
+    step(
+        s,
+        "coupure entre deux tours",
+        a,
+        fake,
+        &mut from,
+        &mut played,
+    );
+
+    // Cut in a turn: what was lost is lost, the rest comes, and the turn can be stopped.
+    let a = say(s, "lent");
+    s.until("text", from);
+    s.settle();
+    fake.ask("/fake/cut");
+    fake.wait_readers(1);
+    let stop = s.call("agent/interrupt", json!({ "agent": agent }));
+    s.until("turn", from);
+    step(
+        s,
+        "coupure dans un tour",
+        json!([a, stop]),
+        fake,
+        &mut from,
+        &mut played,
+    );
+
+    // The session as a copy, then resumed.
+    let session = s.items.iter().find_map(|i| {
+        (i["op"] == "session")
+            .then(|| i["session"].clone())
+            .filter(Value::is_string)
+    });
+    let session = session.expect("its session");
+    let d = s.call("agent/detach", json!({ "agent": agent }));
+    assert!(d["error"].is_null(), "{d}");
+    let mut other = attach.clone();
+    other["agent"] = json!("a2");
+    assert!(s.call("agent/attach", other)["error"].is_null());
+    let a = s.call(
+        "agent/open",
+        json!({ "agent": "a2", "start": { "kind": "fork", "of": session } }),
+    );
+    step(s, "copie", a, fake, &mut from, &mut played);
+    let mut other = attach.clone();
+    other["agent"] = json!("a3");
+    assert!(s.call("agent/attach", other)["error"].is_null());
+    let a = s.call(
+        "agent/open",
+        json!({ "agent": "a3", "start": { "kind": "resume", "session": session } }),
+    );
+    step(s, "reprise", a, fake, &mut from, &mut played);
+    let a = s.call("agent/letGo", json!({ "agent": "a3" }));
+    step(s, "lâché", a, fake, &mut from, &mut played);
+    let a = s.call(
+        "agent/open",
+        json!({ "agent": "a4", "start": { "kind": "new" } }),
+    );
+    step(s, "agent inconnu", a, fake, &mut from, &mut played);
+
+    let mut ids = HashMap::new();
+    let text = serde_json::to_string(&without_times(Value::Array(played))).unwrap();
+    serde_json::from_str(&same_words(&text, &mut ids, fake)).unwrap()
+}
+
+/// `played` and `was` side by side, a step at a time: the first that differs says so.
+fn same_steps(played: &Value, was: &Value) {
+    for (a, b) in played
+        .as_array()
+        .unwrap()
+        .iter()
+        .zip(was.as_array().unwrap())
+    {
+        assert_eq!(
+            serde_json::to_string_pretty(a).unwrap(),
+            serde_json::to_string_pretty(b).unwrap(),
+            "OpenCode, the step {}",
+            a["step"]
+        );
+    }
+    assert_eq!(played, was, "OpenCode: not the same steps");
+}
+
+/// The module on a port the core read; only that one.
+fn opencode_hosted(module: wasmtime::Module, port: u16) -> Hosted {
+    let net = Net {
+        shared: Some(Arc::new(move |_| vec![port])),
+        ..Net::default()
+    };
+    let network = ["local:shared".to_string()];
+    let manifest = root().join("plugins/opencode/escouade-plugin.json");
+    let manifest: Value = serde_json::from_slice(&std::fs::read(manifest).unwrap()).unwrap();
+    let limits = crate::plugins::manifest::Limits {
+        fetch_seconds: manifest["limits"]["fetchSeconds"].as_u64(),
+        fetch_bytes: manifest["limits"]["fetchBytes"].as_u64(),
+        ..Default::default()
+    };
+    Hosted::start(
+        module,
+        Fetcher::new("dev.escouade.opencode", &network, &net).limited(limits),
+    )
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn opencode_says_and_asks_as_its_native_plugin() {
+    let Some(module) = module("opencode") else {
+        return;
+    };
+    let mut fake = FakeOpencode::start("module");
+    let mut hosted = opencode_hosted(module, fake.port);
+    let played = tokio::task::block_in_place(|| opencode_transcript(&mut hosted, &mut fake));
+    let path = recording("opencode");
+    if std::env::var_os("ESCOUADE_PARITY_RECORD").is_some() {
+        let mut fake = FakeOpencode::start("native");
+        let mut native = Native::start("opencode");
+        let was = tokio::task::block_in_place(|| opencode_transcript(&mut native, &mut fake));
+        std::fs::write(&path, serde_json::to_string_pretty(&was).unwrap()).unwrap();
+    }
+    let was: Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).expect("a recording");
+    same_steps(&played, &was);
+}
+
+/// A plugin started again in a turn, as the core gives it its agent: it hears its session again, and a turn that ended
+/// meanwhile is closed.
+#[tokio::test(flavor = "multi_thread")]
+async fn opencode_started_again_goes_on_as_its_native_plugin() {
+    let Some(module) = module("opencode") else {
+        return;
+    };
+    let run = |plugin: &mut dyn Plugin,
+               fake: &mut FakeOpencode,
+               restart: &mut dyn FnMut() -> Box<dyn Plugin>| {
+        let attach = json!({
+            "agent": "a1",
+            "cwd": fake.wt(),
+            "model": "ollama/qwen3-coder:30b-32k",
+            "mode": "default",
+            "lang": "fr",
+            "shared": { "key": "k", "line": fake.line, "keep": { "password": "pw" } },
+        });
+        let mut s = Speaker {
+            plugin,
+            next: 0,
+            items: Vec::new(),
+            answers: BTreeMap::new(),
+        };
+        s.call("initialize", hello());
+        s.call("agent/attach", attach.clone());
+        s.call(
+            "agent/open",
+            json!({ "agent": "a1", "start": { "kind": "new" } }),
+        );
+        let session = s.items.iter().find_map(|i| {
+            (i["op"] == "session")
+                .then(|| i["session"].clone())
+                .filter(Value::is_string)
+        });
+        let params = json!({ "agent": "a1", "text": "bonjour", "uuid": "1" });
+        s.call("agent/sendMessage", params);
+        s.until("turn", 0);
+        s.settle();
+        // Its turn ended while the plugin was down, a turn the core still thinks runs.
+        let mut again = restart();
+        let mut s = Speaker {
+            plugin: &mut *again,
+            next: 0,
+            items: Vec::new(),
+            answers: BTreeMap::new(),
+        };
+        let mut attach = attach;
+        attach["session"] = session.expect("its session");
+        attach["running"] = json!(true);
+        s.call("initialize", hello());
+        s.call("agent/attach", attach);
+        s.until("turn", 0);
+        s.settle();
+        let mut ids = HashMap::new();
+        let text = serde_json::to_string(&without_times(json!(s.items))).unwrap();
+        serde_json::from_str::<Value>(&same_words(&text, &mut ids, fake)).unwrap()
+    };
+    let mut fake = FakeOpencode::start("again-module");
+    let port = fake.port;
+    let mut first = opencode_hosted(module.clone(), port);
+    let played = tokio::task::block_in_place(|| {
+        run(&mut first, &mut fake, &mut || {
+            Box::new(opencode_hosted(module.clone(), port))
+        })
+    });
+    assert!(
+        played.as_array().unwrap().iter().any(|i| i["op"] == "turn"),
+        "{played}"
+    );
+    let name = "opencode-again";
+    if std::env::var_os("ESCOUADE_PARITY_RECORD").is_some() {
+        let mut fake = FakeOpencode::start("again-native");
+        let mut native = Native::start("opencode");
+        let was = tokio::task::block_in_place(|| {
+            run(&mut native, &mut fake, &mut || {
+                Box::new(Native::start("opencode"))
+            })
+        });
+        std::fs::write(recording(name), serde_json::to_string_pretty(&was).unwrap()).unwrap();
+    }
+    let was: Value = serde_json::from_str(&std::fs::read_to_string(recording(name)).unwrap())
+        .expect("a recording");
+    assert_eq!(played, was);
+}
+
+// ---- INT-0 on the stream of OpenCode ---------------------------------------------------------------------------------
+
+/// A server of the bench: what `agent/open` needs, then the stream it is told to write, without a delay of its own.
+fn stream_server() -> (u16, Receiver<std::net::TcpStream>) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let (tx, streams) = channel();
+    std::thread::spawn(move || {
+        for mut c in listener.incoming().map_while(Result::ok) {
+            let tx = tx.clone();
+            std::thread::spawn(move || loop {
+                let mut head = Vec::new();
+                let mut byte = [0u8; 1];
+                while !head.ends_with(b"\r\n\r\n") {
+                    if !matches!(c.read(&mut byte), Ok(1)) {
+                        return;
+                    }
+                    head.push(byte[0]);
+                }
+                let text = String::from_utf8_lossy(&head).to_lowercase();
+                let length = text
+                    .lines()
+                    .find_map(|l| l.strip_prefix("content-length: "))
+                    .and_then(|l| l.trim().parse::<usize>().ok())
+                    .unwrap_or(0);
+                let mut body = vec![0u8; length];
+                if c.read_exact(&mut body).is_err() {
+                    return;
+                }
+                let target = text.split_whitespace().nth(1).unwrap_or("").to_string();
+                if target.starts_with("/global/event") {
+                    let head = "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ntransfer-encoding: identity\r\nconnection: close\r\n\r\n";
+                    c.write_all(head.as_bytes()).unwrap();
+                    let _ = c.set_nodelay(true);
+                    let _ = tx.send(c);
+                    return;
+                }
+                let big;
+                let json = if target.starts_with("/session/ses_big/message") {
+                    big = big_session();
+                    big.as_str()
+                } else if target.starts_with("/session") {
+                    r#"{"id":"ses_bench"}"#
+                } else if target.starts_with("/config/providers") {
+                    r#"{"providers":[],"default":{}}"#
+                } else {
+                    "{}"
+                };
+                let answer = format!(
+                    "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\n\r\n{json}",
+                    json.len()
+                );
+                if c.write_all(answer.as_bytes()).is_err() {
+                    return;
+                }
+            });
+        }
+    });
+    (port, streams)
+}
+
+/// The messages of a long session: close to all a request of the plugin may read (`limits.fetchBytes`).
+fn big_session() -> String {
+    let words = "x".repeat(1 << 20);
+    let messages: Vec<Value> = (0..15)
+        .map(|n| json!({ "info": { "id": format!("m{n}") }, "parts": [{ "text": words }] }))
+        .collect();
+    Value::Array(messages).to_string()
+}
+
+/// A delta of a text: one event, one item.
+fn delta_event(n: usize) -> String {
+    let event = json!({ "payload": { "type": "message.part.delta", "properties": {
+        "sessionID": "ses_bench", "messageID": "msg_b", "partID": format!("prt_{n}"),
+        "field": "text", "delta": "Une ligne de texte comme un modèle en écrit, mot à mot. ",
+    } } });
+    format!("data: {event}\n\n")
+}
+
+/// The events of a real turn, as the stream wrote them, on the session of the bench.
+fn recorded_events() -> Vec<String> {
+    let path = root().join("tests/fixtures/opencode/full-turn.jsonl");
+    let text = std::fs::read_to_string(path).expect("a recording");
+    let session = "ses_eb4a5d013ffe3bev1AKFcCo7Cs";
+    text.lines()
+        .filter_map(|l| {
+            let v: Value = serde_json::from_str(l).ok()?;
+            let event = v["msg"].get("event").filter(|_| v["dir"] == "s2c")?;
+            let payload = json!({ "payload": event }).to_string();
+            Some(format!(
+                "data: {}\n\n",
+                payload.replace(session, "ses_bench")
+            ))
+        })
+        .collect()
+}
+
+/// What the plugin takes of the stream of OpenCode: the time from an event written on its socket to the item of it on
+/// the plugin's output, in turn (`rounds` events, each waited for), then how many lines a second it reads when they come
+/// at once, a delta each and the events of a real turn.
+fn stream_measures(
+    plugin: &mut dyn Plugin,
+    port: u16,
+    streams: &Receiver<std::net::TcpStream>,
+    rounds: usize,
+) -> Value {
+    let attach = json!({
+        "agent": "a1",
+        "cwd": "C:\\wt",
+        "model": "ollama/m",
+        "lang": "fr",
+        "shared": {
+            "key": "k",
+            "line": format!("opencode server listening on http://127.0.0.1:{port}"),
+            "keep": { "password": "pw" },
+        },
+    });
+    let mut s = Speaker {
+        plugin,
+        next: 0,
+        items: Vec::new(),
+        answers: BTreeMap::new(),
+    };
+    s.call("initialize", hello());
+    s.call("agent/attach", attach);
+    let a = s.call(
+        "agent/open",
+        json!({ "agent": "a1", "start": { "kind": "new" } }),
+    );
+    assert!(a["error"].is_null(), "{a}");
+    s.settle();
+    let mut c = streams
+        .recv_timeout(Duration::from_secs(5))
+        .expect("its stream");
+
+    let mut times = Vec::with_capacity(rounds);
+    for n in 0..rounds {
+        let event = delta_event(n);
+        let at = Instant::now();
+        c.write_all(event.as_bytes()).unwrap();
+        let line = s.plugin.recv(Duration::from_secs(5)).expect("its item");
+        times.push(at.elapsed().as_secs_f64() * 1000.0);
+        // Its own item, not one of an event before it.
+        assert!(line.contains(&format!("\"id\":\"prt_{n}\"")), "{n}: {line}");
+    }
+    times.sort_by(f64::total_cmp);
+    let at = |q: f64| times[((times.len() as f64 * q) as usize).min(times.len() - 1)];
+
+    let sent = 20_000;
+    let burst: String = (0..sent).map(delta_event).collect();
+    let writer = {
+        let mut c = c.try_clone().unwrap();
+        std::thread::spawn(move || c.write_all(burst.as_bytes()).unwrap())
+    };
+    let start = Instant::now();
+    let mut got = 0;
+    while got < sent {
+        let line = s.plugin.recv(Duration::from_secs(30)).expect("its items");
+        got += usize::from(line.contains("\"op\":\"delta\""));
+    }
+    let deltas = sent as f64 / start.elapsed().as_secs_f64();
+    writer.join().unwrap();
+
+    // A real turn, 20 times, its end marked by a delta.
+    let events = recorded_events();
+    let turn: String = events.concat();
+    let lines = events.len() * 20;
+    let mut all = turn.repeat(20);
+    all.push_str(&delta_event(sent + 1));
+    let writer = {
+        let mut c = c.try_clone().unwrap();
+        std::thread::spawn(move || c.write_all(all.as_bytes()).unwrap())
+    };
+    let target = format!("\"id\":\"prt_{}\"", sent + 1);
+    let start = Instant::now();
+    loop {
+        let line = s.plugin.recv(Duration::from_secs(60)).expect("its items");
+        if line.contains(&target) {
+            break;
+        }
+    }
+    let real = lines as f64 / start.elapsed().as_secs_f64();
+    writer.join().unwrap();
+    json!({
+        "p50": at(0.5), "p99": at(0.99), "deltas_per_second": deltas,
+        "real_lines_per_second": real, "real_lines": lines,
+    })
+}
+
+/// A copy reads every message of the session: they fit in the memory of an instance (64 Mio) up to what the manifest lets
+/// a request read.
+#[test]
+fn a_long_session_is_copied_within_the_memory_of_the_module() {
+    let Some(module) = module("opencode") else {
+        return;
+    };
+    let (port, _streams) = stream_server();
+    let mut hosted = opencode_hosted(module, port);
+    let mut s = Speaker {
+        plugin: &mut hosted,
+        next: 0,
+        items: Vec::new(),
+        answers: BTreeMap::new(),
+    };
+    s.call("initialize", hello());
+    let attach = json!({
+        "agent": "a1",
+        "cwd": "C:\\wt",
+        "model": "ollama/m",
+        "shared": {
+            "key": "k",
+            "line": format!("opencode server listening on http://127.0.0.1:{port}"),
+            "keep": { "password": "pw" },
+        },
+    });
+    s.call("agent/attach", attach);
+    let start = json!({ "kind": "fork", "of": "ses_big", "at": "m3" });
+    let a = s.call("agent/open", json!({ "agent": "a1", "start": start }));
+    assert!(a["error"].is_null(), "{a}");
+}
+
+/// INT-0 on `net/stream` (ESC-349): `npm run bench:int0 -- --opencode-only`, a release. With `ESCOUADE_NATIVE_PLUGINS`, a
+/// program of before the port, it compares the two and holds the thresholds: 5 ms more at the 99th percentile, 2 200
+/// lines a second.
+#[test]
+#[ignore = "a measure: npm run bench:int0"]
+fn int0_opencode_stream_bench() {
+    let module = module("opencode").expect("sh scripts/plugins-wasm.sh opencode");
+    let rounds = 2000;
+    let (port, streams) = stream_server();
+    let mut hosted = opencode_hosted(module, port);
+    let wasm = stream_measures(&mut hosted, port, &streams, rounds);
+    println!("module: {wasm}");
+    assert!(
+        wasm["real_lines_per_second"].as_f64().unwrap() >= 2200.0,
+        "{wasm}"
+    );
+    assert!(
+        wasm["deltas_per_second"].as_f64().unwrap() >= 2200.0,
+        "{wasm}"
+    );
+    if std::env::var_os("ESCOUADE_NATIVE_PLUGINS").is_none() {
+        return;
+    }
+    let (port, streams) = stream_server();
+    let mut native = Native::start("opencode");
+    let was = stream_measures(&mut native, port, &streams, rounds);
+    println!("native: {was}");
+    let more = wasm["p99"].as_f64().unwrap() - was["p99"].as_f64().unwrap();
+    assert!(more <= 5.0, "{more} ms more at the 99th percentile");
+}

@@ -9,6 +9,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ### New
 
 - Linear, Trello, Jira and ClickUp now run as sandboxed WASM plugins, with no process of their own: they answer as before.
+- OpenCode too: its agents converse as before, and its sandboxed plugin reaches only the local server Escouade started for them.
 - The documentation says how to write a plugin in TypeScript or in Rust, from `npm create escouade-plugin -- --kind rust` to publishing on the store: what each capability allows, each call with an example in both languages, and the Rust kit.
 - isola now runs as an isolated WASM plugin: Escouade runs `isola ls`, `down` and `destroy` for it, and nothing else. In a private project it now has to be turned on, like any plugin.
 - `escouade-plugin build` compiles a plugin in Rust to WASM, the same to the byte on Windows and on Linux, with a compiler it downloads itself; `test` and `dev` compile it too before playing it.

@@ -1,10 +1,9 @@
 # OpenCode
 
-`dev.escouade.opencode`, a plugin [Escouade](https://escouade.dev) gives: it is shipped with the app, signed with it,
-and updated with it. Its version is Escouade's (the `0.0.0` of its manifest is replaced by the app's when it is read).
+`dev.escouade.opencode`, a plugin of [Escouade](https://escouade.dev)'s own hand: a WASM module, with a version of its own, that
+the app runs in its host.
 
-OpenCode comme harness, par son serveur HTTP : ses agents conversent comme avant, par un programme à part qu'Escouade
-lance et surveille.
+OpenCode comme harness, par son serveur HTTP : ses agents conversent comme avant, par un module qu'Escouade fait tourner.
 
 ## What it does
 
@@ -30,7 +29,9 @@ writes (`opencode run`), Escouade's MCP server.
 ## What it may do
 
 - describe the launch of OpenCode: the core launches it, never this plugin;
-- speak to the server on 127.0.0.1, which listens on a port of its own and behind a password that never leaves Escouade;
+- speak to the server on 127.0.0.1 (`local:shared`): the host opens the port the core read in the server's own output, while it
+  runs, and no other; the server stands behind a password that never leaves Escouade. Requests go by `net/fetch`, its events by
+  `net/stream`, up to 16 Mio an answer: a copy of a session whose messages weigh more than that is refused;
 - hold the fence of a private project and the read-only of a discussion as rules of the agent's session (OpenCode has
   no sandbox: only they protect; a plugin of the app alone is believed on this, `fenceByClient`);
 - nothing else: no other address, no secret of the keychain, no file, no command to run. An account's folder and its
@@ -58,15 +59,18 @@ stop, they say why, and their sessions are kept for their next message once it i
 | ---------------------- | ---------------------------------------------------------------------------------- |
 | `escouade-plugin.json` | The manifest: the harness, its modes, efforts, account folder, how to install it   |
 | `Cargo.toml`           | The crate `escouade-plugin-opencode`                                               |
-| `src/lib.rs`           | Its `run`, the methods of the contract, the description of the launch              |
+| `src/lib.rs`           | Its turn, the methods of the contract, the description of the launch               |
+| `src/host.rs`          | Its one thread: its tasks, on the lines of the host (requests, stream, timers)     |
 | `src/server.rs`        | The client of `opencode serve`: its requests, its event stream                     |
 | `src/session.rs`       | An agent's session on it: messages held, permissions, questions, modes             |
 | `src/translate.rs`     | Its events into the items of the conversation                                      |
 | `src/rules.rs`         | The rules of each mode, the fence, the config, the models as OpenCode lists them   |
 | `README.md`            | This page                                                                          |
 
-Its program is `escouade-plugins opencode` (`src-tauri/src/bin/escouade-plugins.rs` calls the crate's `run`). Its tests:
-those of the crate, the bench of the harnesses on the fake `opencode serve` (`src-tauri/src/engine/opencode/bench.rs`), the
+It compiles to a module by `escouade-plugin build` (`sh scripts/plugins-wasm.sh opencode` for the tests of the app). The
+core still links the crate as a library, for its « Vue OpenCode » and its accounts. Its tests: those of the crate, played on
+its lines without a module (`src/tests.rs`), its parity with the native plugin
+(`src-tauri/src/plugins_wasm_parity_tests.rs`, `tests/fixtures/plugins/parity/opencode*.json`), the bench of the harnesses on the fake `opencode serve` (`src-tauri/src/engine/opencode/bench.rs`), the
 recorded streams of OpenCode 1.19.3 replayed through it (`tests/fixtures/replays/opencode/`), the tests of the core that go
 through it (`src-tauri/src/opencode_tests.rs`, `src-tauri/src/agent/opencode_tests.rs`), the e2e
 `tests/e2e/opencode.spec.ts`, and the real runs (`real_opencode`, `real_opencode_view`, `real_fence`,
@@ -74,9 +78,9 @@ through it (`src-tauri/src/opencode_tests.rs`, `src-tauri/src/agent/opencode_tes
 
 ## Run it alone
 
-Against the fake Escouade of the plugins' bench, with the app's own `escouade-plugin` and `escouade-plugins` (built with
-`cargo build --bin escouade-plugin --bin escouade-plugins` in `src-tauri/`, side by side in `target/debug`):
+Against the fake Escouade of the plugins' bench, with the app's own `escouade-plugin` (`cargo build --bin escouade-plugin`
+in `src-tauri/`):
 
 ```sh
-escouade-plugin test plugins/opencode --builtin
+escouade-plugin test plugins/opencode --first-party --escouade 2.2.0
 ```

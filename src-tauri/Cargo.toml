@@ -76,6 +76,8 @@ escouade-plugin-azure-devops = { path = "../plugins/azure-devops" }
 escouade-plugin-acp = { path = "../plugins/acp" }
 escouade-plugin-cursor = { path = "../plugins/cursor" }
 # OpenCode (INT-10.2): its harness in a crate, its `opencode serve` run by the core (`Launch::shared`).
+# A module since its port (docs/PLUGINS.md §8.23): what is linked is its rules and its translation, for « Vue OpenCode » and
+# the accounts, until P8 (§8.2). It stays a member of the workspace of `plugins/`.
 escouade-plugin-opencode = { path = "../plugins/opencode" }
 escouade-plugin-mistral = { path = "../plugins/mistral" }
 escouade-plugin-gemini = { path = "../plugins/gemini" }
@@ -192,7 +194,6 @@ members = [
     "../plugins/cursor",
     "../plugins/mistral",
     "../plugins/gemini",
-    "../plugins/opencode",
     "../plugins/copilot",
     "../plugins/codex",
     "../plugins/antigravity",
@@ -212,7 +213,6 @@ default-members = [
     "../plugins/cursor",
     "../plugins/mistral",
     "../plugins/gemini",
-    "../plugins/opencode",
     "../plugins/copilot",
     "../plugins/codex",
     "../plugins/antigravity",

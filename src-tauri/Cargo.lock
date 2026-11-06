@@ -1897,16 +1897,15 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-opencode"
-version = "1.0.0"
+version = "2.2.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "escouade-plugin-protocol",
  "getrandom 0.4.3",
  "parking_lot",
- "reqwest 0.12.28",
  "serde",
  "serde_json",
- "tokio",
 ]
 
 [[package]]

@@ -758,6 +758,19 @@ impl Runtime {
         started
     }
 
+    /// A crash of the instance of the plugin `id`, which has no process to kill: as a fault of its module.
+    #[cfg(test)]
+    pub fn crash_instance(&self, id: &str) {
+        let Some(h) = self.hosts.lock().get(id).cloned() else {
+            return;
+        };
+        let conn = h.inner.lock().conn.clone();
+        if let Some(c) = conn {
+            c.kill();
+            h.exited(&c, None, vec!["a crash of the tests".to_string()]);
+        }
+    }
+
     /// Where the plugin `id`'s process stands; idle for one that never started.
     pub fn status(&self, id: &str) -> Status {
         let Some(h) = self.hosts.lock().get(id).cloned() else {

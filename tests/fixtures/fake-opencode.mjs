@@ -780,6 +780,15 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(401).end('Unauthorized');
     return;
   }
+  // What the test of the parity asks, out of OpenCode's API: how many read the stream, and its cut.
+  if (url.pathname === '/fake/readers') return res.end(String(clients.size));
+  if (url.pathname === '/fake/cut') {
+    for (const client of clients) {
+      clients.delete(client);
+      client.destroy();
+    }
+    return res.end('cut');
+  }
   const body = await readBody(req);
   const dir = url.searchParams.get('directory') || process.cwd();
   const p = url.pathname;

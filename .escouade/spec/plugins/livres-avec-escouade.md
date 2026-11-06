@@ -2,7 +2,7 @@
 title: "Les plugins livrés avec Escouade"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.3, §4.4","docs/TODO-2.2.md (INT-4, INT-8.1)","src-tauri/src/plugins/builtin.rs","docs/PLUGINS.md §4.13","plugins/github/README.md","plugins/gitlab/README.md","plugins/gitea/README.md","plugins/azure-devops/README.md","docs/PLUGINS.md §8.7, §8.13","src-tauri/src/plugins/seed.rs"]
-tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338","ESC-339","ESC-344","ESC-351"]
+tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338","ESC-339","ESC-344","ESC-351","ESC-349"]
 decisions: [80,92]
 compared: null
 ---
@@ -94,3 +94,5 @@ Linear, Trello, Jira et ClickUp restent au registre, mais ne sont plus dans `esc
 ## isola, un module du registre (ESC-351)
 
 isola rejoint Linear, Trello, Jira et ClickUp : il reste au registre, n'est plus dans `escouade-plugins`, et son programme est un module (`run.wasm`). Tout ce que dit la section précédente vaut pour lui. Comme tout plugin, il n'atteint un projet privé qu'une fois activé.
+
+OpenCode est aussi un module du registre (ESC-349), avec les mêmes règles que ces quatre plugins : il n'est plus dans `escouade-plugins`, et une release faite avant Z2 ne l'aurait pas.
