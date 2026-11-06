@@ -3,7 +3,7 @@ title: "Antigravity CLI en plugin"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4 (INT-10.8)","docs/PLUGINS.md §8.24 (ESC-348)","docs/PROTOCOL.md, Antigravity CLI","docs/TODO-2.2.md, INT-10.8","Ticket ESC-283","Ticket ESC-348","plugins/antigravity/README.md"]
 tickets: ["ESC-283","ESC-348"]
-decisions: [68,"l-attente-du-transcript-d-antigravity-de"]
+decisions: [68,94]
 compared: null
 ---
 

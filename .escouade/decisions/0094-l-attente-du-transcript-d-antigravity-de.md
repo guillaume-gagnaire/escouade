@@ -1,9 +1,9 @@
 ---
-number: null
+number: 94
 id: "l-attente-du-transcript-d-antigravity-de"
 title: "L'attente du transcript d'Antigravity devient des lignes gardées et un minuteur, avec agent/items et fs/read tail"
 date: "2026-11-05"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-348"
 pages: ["plugins/antigravity-en-plugin","plugins/tous-les-plugins-en-wasm","plugins/livres-avec-escouade"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/antigravity-en-plugin","added":14,"removed":5},{"page":"plugins/tous-les-plugins-en-wasm","added":6,"removed":0},{"page":"plugins/livres-avec-escouade","added":1,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-06T07:11:45+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
