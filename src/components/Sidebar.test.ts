@@ -3285,6 +3285,34 @@ describe('Sidebar agent folders', () => {
     expect(folderOf('f1')).not.toHaveClass('over');
   });
 
+  it('a folder dragged over the inside of another folder has no place, not the bottom of the list', async () => {
+    resetApp({
+      projects: [
+        project({
+          agentFolders: [
+            { id: 'f1', name: 'Auth', named: true, principal: null, agents: ['a1'] },
+            { id: 'f2', name: 'Autre', named: true, principal: null, agents: ['a2'] },
+          ],
+          agentOrder: ['f2', 'f1', 'a3'],
+        }),
+      ],
+      agents: [
+        agent({ id: 'a1', name: 'un' }),
+        agent({ id: 'a2', name: 'deux', createdAt: 2 }),
+        agent({ id: 'a3', name: 'seul', createdAt: 3 }),
+      ],
+    });
+    const backend = fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    await fireEvent.dragStart(folderOf('f2').querySelector('.folder-h')!);
+    await fireEvent.dragOver(card('a1'));
+    expect(document.querySelector('.drop')).toBeNull();
+    await fireEvent.dragOver(folderOf('f1').querySelector('.folder-b')!);
+    expect(document.querySelector('.drop')).toBeNull();
+    await fireEvent.drop(card('a1'));
+    expect(backend.called('agent_folder_move')).toHaveLength(0);
+  });
+
   it('Nouveau dossier in the new agent menu creates one', async () => {
     withFolders();
     const backend = fakeBackend({

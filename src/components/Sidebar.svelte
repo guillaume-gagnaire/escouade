@@ -314,12 +314,18 @@
     dragId = drop = overFolder = null;
   }
 
+  /** The dragged item may not land here: no line, the drop refused, and the list around it not asked. */
+  function refuse(e: DragEvent) {
+    e.stopPropagation();
+    drop = overFolder = null;
+  }
+
   /** Over a drawn row (an agent's card or a folder's header at the project level): the line goes above it or under it. */
   function overRow(e: DragEvent, id: string) {
     if (dragId === null) return;
     const level = folderOf(id)?.folder.id ?? null;
-    // A folder goes among the project's rows only.
-    if (level && isFolder(dragId)) return;
+    // A folder goes among the project's rows only: inside another folder it has no place (and the list below gets none).
+    if (level && isFolder(dragId)) return refuse(e);
     e.preventDefault();
     e.stopPropagation();
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -339,7 +345,8 @@
   }
   /** Over the free space of a folder's body: the end of that folder. */
   function overBody(e: DragEvent, id: string) {
-    if (dragId === null || isFolder(dragId)) return;
+    if (dragId === null) return;
+    if (isFolder(dragId)) return refuse(e);
     e.preventDefault();
     e.stopPropagation();
     overFolder = null;
