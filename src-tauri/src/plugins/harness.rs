@@ -1853,12 +1853,13 @@ impl ProcessEngineProcess {
                         restarts = status.restarts;
                     }
                     if again {
+                        // Attached first: whoever reads this acts at once, on a plugin that must know its turn.
+                        let _ = self.reattach().await;
                         let text = tr!(
                             "Le plugin de {name} a redémarré.",
                             "The plugin of {name} started again."
                         );
                         on_frame(json!({ "items": [{ "op": "notice", "level": "warning", "text": text }] }));
-                        let _ = self.reattach().await;
                     }
                 }
             }

@@ -450,6 +450,35 @@ fn a_plugin_started_again_hears_its_session_and_closes_a_turn_ended_meanwhile() 
     assert!(items(&out).iter().any(|i| i["op"] == "turn"), "{out:?}");
 }
 
+/// A stop that comes while the plugin started again still reads its server: its turn was running, and the stop would be
+/// lost (the CI's macOS, 2026-11-06).
+#[test]
+fn a_stop_right_after_the_plugin_started_again_reaches_the_server() {
+    let mut f = Fake::default();
+    let attach = json!({
+        "agent": "a1",
+        "cwd": r"C:\wt",
+        "session": "ses_1",
+        "model": "ollama/qwen",
+        "running": true,
+        "shared": {
+            "key": "k",
+            "line": format!("opencode server listening on {BASE}"),
+            "keep": { "password": "pw" },
+        },
+    });
+    f.call(method::ATTACH, attach);
+    let out = f.call(
+        method::INTERRUPT,
+        json!({ "agent": "a1", "cancelQueued": false }),
+    );
+    assert_eq!(
+        fetched(&out),
+        ("POST".into(), "/session/ses_1/abort".into()),
+        "{out:?}"
+    );
+}
+
 #[test]
 fn a_server_started_again_is_read_at_its_new_address_and_the_old_one_let_go() {
     let mut f = Fake::default();

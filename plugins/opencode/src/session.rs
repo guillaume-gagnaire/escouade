@@ -554,23 +554,25 @@ impl Session {
         let (Some(session), Ok(srv)) = (self.state.lock().session.clone(), self.srv()) else {
             return;
         };
-        if self.heard.swap(true, Ordering::AcqRel) {
-            return;
+        // At once: a stop that comes while the server is asked would find no turn, and be lost.
+        if running {
+            self.state.lock().busy = true;
+            self.state.lock().saw_busy = true;
+            self.translator.lock().in_turn();
         }
-        if srv.ready(&self.lang).await.is_err() {
-            return;
-        }
-        srv.listen(&session, Arc::new(Hears(Arc::downgrade(self))));
-        if let Ok(c) = self.read_catalog(&srv).await {
-            self.emit(contexts_event(&session, &c.contexts));
-            self.known_models(&c);
+        if !self.heard.swap(true, Ordering::AcqRel) {
+            if srv.ready(&self.lang).await.is_err() {
+                return;
+            }
+            srv.listen(&session, Arc::new(Hears(Arc::downgrade(self))));
+            if let Ok(c) = self.read_catalog(&srv).await {
+                self.emit(contexts_event(&session, &c.contexts));
+                self.known_models(&c);
+            }
         }
         if !running {
             return;
         }
-        self.state.lock().busy = true;
-        self.state.lock().saw_busy = true;
-        self.translator.lock().in_turn();
         let status = srv.call("GET", "/session/status", &self.cwd, None).await;
         // Its turn was over before it was heard again: only this says so.
         if status.is_ok_and(|s| s[&session]["type"].as_str().is_none_or(|t| t == "idle")) {
