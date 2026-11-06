@@ -1801,11 +1801,7 @@ impl ProcessEngineProcess {
                 Some(stop) => Some(CallError::Stopped(stop)),
                 None => me.rt.refusal(&me.plugin),
             }?;
-            // The app quitting is no reason to tell: every agent stops with it.
-            if matches!(e, CallError::Stopped(Stop::Shutdown)) {
-                return None;
-            }
-            let why = stopped_line(name, &e);
+            let why = stop_told(name, &e)?;
             on_frame(json!({ "items": [{ "op": "notice", "level": "error", "text": why }] }));
             Some(why)
         };
@@ -1826,13 +1822,10 @@ impl ProcessEngineProcess {
                 }
                 _ = watch.tick() => {
                     let status = self.rt.status(&self.plugin);
-                    if let Some(stop) = status.stop.filter(|_| {
-                        matches!(status.phase, super::runtime::PhaseName::Stopped)
-                    }) {
-                        let why = stopped_line(name, &CallError::Stopped(stop));
-                        on_frame(json!({ "items": [{ "op": "notice", "level": "error", "text": why }] }));
+                    if status.stop.is_some() && matches!(status.phase, super::runtime::PhaseName::Stopped) {
+                        let why = off(&self);
                         self.leave();
-                        break (None, why);
+                        break why.map_or((Some(0), String::new()), |why| (None, why));
                     }
                     // Forgotten (switched off, its permissions changed): started anew when it may be.
                     if matches!(status.phase, super::runtime::PhaseName::Idle) {
@@ -1841,10 +1834,12 @@ impl ProcessEngineProcess {
                             .attach(&self.plugin, &self.key, method::ATTACH, self.attach_params())
                             .await;
                         if let Err(e @ (CallError::Unavailable(_) | CallError::Stopped(_))) = again {
-                            let why = stopped_line(name, &e);
-                            on_frame(json!({ "items": [{ "op": "notice", "level": "error", "text": why }] }));
+                            let why = stop_told(name, &e);
+                            if let Some(why) = &why {
+                                on_frame(json!({ "items": [{ "op": "notice", "level": "error", "text": why }] }));
+                            }
                             self.leave();
-                            break (None, why);
+                            break why.map_or((Some(0), String::new()), |why| (None, why));
                         }
                     }
                     let running = matches!(status.phase, super::runtime::PhaseName::Running);
@@ -2206,32 +2201,35 @@ impl ProcessEngineProcess {
             if stopped.is_some() {
                 continue;
             }
-            if let Err(why) = self.translate_batch(batch, on_frame).await {
-                on_frame(json!({ "items": [{ "op": "notice", "level": "error", "text": why }] }));
+            if let Err(e) = self.translate_batch(batch, on_frame).await {
+                let why = stop_told(self.name, &e);
+                if let Some(why) = &why {
+                    on_frame(
+                        json!({ "items": [{ "op": "notice", "level": "error", "text": why }] }),
+                    );
+                }
                 self.kill();
-                stopped = Some(why);
+                stopped = Some(why.unwrap_or_default());
             }
         }
         stopped
     }
 
-    /// One batch, given to the plugin until it answers (again after a crash); its items applied. Err: the plugin is
-    /// stopped, and why.
+    /// One batch, given to the plugin until it answers (again after a crash); its items applied. Err: why the plugin
+    /// is stopped.
     async fn translate_batch(
         &self,
         batch: Vec<String>,
         on_frame: &OnFrame,
-    ) -> std::result::Result<(), String> {
+    ) -> std::result::Result<(), CallError> {
         let params = serde_json::value::to_raw_value(&proto::Frames {
             agent: self.key.clone(),
             frames: batch,
         })
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| CallError::Unavailable(e.to_string()))?;
         let name = self.name;
         let mut told = false;
-        if let Err(e) = self.known().await {
-            return Err(stopped_line(name, &e));
-        }
+        self.known().await?;
         for _ in 0..RETRIES {
             match self
                 .rt
@@ -2257,11 +2255,9 @@ impl ProcessEngineProcess {
                             json!({ "items": [{ "op": "notice", "level": "warning", "text": text }] }),
                         );
                     }
-                    if let Err(e) = self.reattach().await {
-                        return Err(stopped_line(name, &e));
-                    }
+                    self.reattach().await?;
                 }
-                Err(e @ CallError::Stopped(_)) => return Err(stopped_line(name, &e)),
+                Err(e @ CallError::Stopped(_)) => return Err(e),
                 Err(e) => {
                     let n = params.get().len();
                     log::warn!("{}: a batch of {n} bytes left untranslated: {e}", self.key);
@@ -2276,7 +2272,7 @@ impl ProcessEngineProcess {
                 }
             }
         }
-        Err(stopped_line(name, &CallError::Crashed))
+        Err(CallError::Crashed)
     }
 
     /// The items of a batch: its writes to the harness, what the plugin is to be told again after a restart, the rest
@@ -2466,6 +2462,12 @@ impl ProcessEngineProcess {
     }
 }
 
+/// Why the agent stops with its plugin, to say in its conversation. The app closing is no reason to tell: every agent
+/// stops with it, and a turn it cuts goes on at the next start.
+fn stop_told(name: &str, e: &CallError) -> Option<String> {
+    (!matches!(e, CallError::Stopped(Stop::Shutdown))).then(|| stopped_line(name, e))
+}
+
 /// Why the agent stops with its plugin.
 fn stopped_line(name: &str, e: &CallError) -> String {
     match e {
@@ -2478,6 +2480,18 @@ fn stopped_line(name: &str, e: &CallError) -> String {
             "The plugin of {name} is stopped ({e}): the agent stops, its session kept."
         ),
     }
+}
+
+#[cfg(test)]
+#[test]
+fn the_app_closing_is_no_reason_to_tell_an_agent_why_it_stops() {
+    assert_eq!(
+        stop_told("OpenCode", &CallError::Stopped(Stop::Shutdown)),
+        None
+    );
+    let crashed = CallError::Stopped(Stop::Crashed { times: 3 });
+    assert!(stop_told("OpenCode", &crashed).is_some_and(|why| why.contains("3 plantages")));
+    assert!(stop_told("OpenCode", &CallError::Crashed).is_some());
 }
 
 fn ready<'a, T: Send + 'a>(v: T) -> BoxFuture<'a, T> {
