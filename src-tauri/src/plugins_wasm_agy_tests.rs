@@ -69,6 +69,15 @@ fn lines_of(stream: &str, home: &Path) -> Vec<String> {
     text.unwrap()
         .lines()
         .map(|l| l.replace("C:\\\\tmp\\\\esc269\\\\home1", &home))
+        // The streams were recorded under Windows: elsewhere what follows the home is a path by its slashes, or the plan
+        // would be written and read beside it (the CI's Linux, 2026-11-06).
+        .map(|l| {
+            if cfg!(windows) {
+                l
+            } else {
+                l.replace("\\\\", "/")
+            }
+        })
         .collect()
 }
 

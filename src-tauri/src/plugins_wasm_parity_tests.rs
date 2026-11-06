@@ -1127,7 +1127,9 @@ fn same_words(text: &str, ids: &mut HashMap<String, String>, fake: &FakeOpencode
         .replace(&wt, "{wt}")
         .replace(&wt.replace('\\', "\\\\"), "{wt}")
         .replace(&wt.replace('\\', "/").replace(':', ""), "{wt}")
-        .replace("\\\\", "/");
+        .replace("\\\\", "/")
+        // Under Windows the fake keeps its folder inside itself (`path.join` of a path without its `:`).
+        .replace("{wt}/{wt}", "{wt}");
     let mut out = String::new();
     let mut word = String::new();
     let mut flush = |word: &mut String, out: &mut String| {

@@ -854,7 +854,7 @@
       {
         "id": "id17",
         "input": {
-          "file_path": "{wt}/{wt}/README.md"
+          "file_path": "{wt}/README.md"
         },
         "name": "Read",
         "op": "tool",
@@ -964,7 +964,7 @@
       {
         "id": "id20",
         "input": {
-          "file_path": "{wt}/{wt}/src/app.ts",
+          "file_path": "{wt}/src/app.ts",
           "new_string": "const a = 2;",
           "old_string": "const a = 1;"
         },
@@ -974,7 +974,7 @@
       },
       {
         "op": "touched",
-        "path": "{wt}/{wt}/src/app.ts"
+        "path": "{wt}/src/app.ts"
       },
       {
         "error": false,
@@ -982,7 +982,7 @@
         "op": "toolDone",
         "output": "Edit applied successfully.",
         "result": {
-          "filePath": "{wt}/{wt}/src/app.ts",
+          "filePath": "{wt}/src/app.ts",
           "structuredPatch": [
             {
               "lines": ["-const a = 1;", "+const a = 2;"],
