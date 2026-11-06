@@ -71,15 +71,15 @@ cargo test --lib real_azure_boards -- --ignored --nocapture
 | `Cargo.toml`, `src/`   | Its crate: `lib.rs` (its kinds), `pulls.rs` (the code host's client), `boards.rs` (Azure Boards), `html.rs` (the HTML of the work items' fields as markdown) |
 
 Its tests: the crate's own (`cargo test -p escouade-plugin-azure-devops`: the HTML of a field), and those of the app that
-run its process against a fake Azure DevOps: `src-tauri/src/forge/azure_tests.rs` (the pull requests, from the fixtures
+run its module against a fake Azure DevOps: `src-tauri/src/forge/azure_tests.rs` (the pull requests, from the fixtures
 of `tests/fixtures/forges/azure/`) and `src-tauri/src/integrations/azure_tests.rs` (Azure Boards, two organizations),
 and `tests/e2e/azure-devops.spec.ts` (the window).
 
 ## Run it alone
 
-Against the fake Escouade of the plugins' bench, with the app's own `escouade-plugin` and `escouade-plugins` (built
-with `cargo build --bin escouade-plugin --bin escouade-plugins` in `src-tauri/`, side by side in `target/debug`):
+Against the fake Escouade of the plugins' bench, with the app's own `escouade-plugin` (`cargo build --bin escouade-plugin`
+in `src-tauri/`):
 
 ```sh
-escouade-plugin test plugins/azure-devops --builtin
+escouade-plugin test plugins/azure-devops --first-party --escouade 2.2.0
 ```

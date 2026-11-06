@@ -1,7 +1,7 @@
 # GitLab
 
-`dev.escouade.gitlab`, a plugin [Escouade](https://escouade.dev) gives: it is shipped with the app, signed with it, and
-updated with it. Its version is Escouade's (the `0.0.0` of its manifest is replaced by the app's when it is read).
+`dev.escouade.gitlab`, a plugin of [Escouade](https://escouade.dev)'s own hand: a WASM module, with a version of its own, that
+the app runs in its host.
 
 Les issues dans le Kanban, les MR, les pipelines, les discussions et les déploiements de tes projets GitLab, sur gitlab.com et tes instances.
 
@@ -34,7 +34,7 @@ its boards' lists, its other labels), an issue closed, opened again or given a l
 container is `<host>/<groups>/<project>`, so that the instance goes with it: Escouade asks the account whose host the
 container names.
 
-Its program is `escouade-plugins gitlab`, a process of its own. The code is the crate of this folder (`src/merges.rs`
+Its program is a module (`run.wasm`), which reaches gitlab.com and the instance the account names (`{account}`). The code is the crate of this folder (`src/merges.rs`
 for the code host), on the kit of the Rust plugins of Escouade (`crates/escouade-plugin-kit`), which speaks the
 protocol, asks Escouade for each account's token and keeps one client per account.
 
@@ -73,9 +73,9 @@ issues (gitlab.com and an instance side by side; `real_gitlab_issues`, ignored, 
 
 ## Run it alone
 
-Against the fake Escouade of the plugins' bench, with the app's own `escouade-plugin` and `escouade-plugins` (built
-with `cargo build --bin escouade-plugin --bin escouade-plugins` in `src-tauri/`, side by side in `target/debug`):
+Against the fake Escouade of the plugins' bench, with the app's own `escouade-plugin` (`cargo build --bin escouade-plugin`
+in `src-tauri/`):
 
 ```sh
-escouade-plugin test plugins/gitlab --builtin
+escouade-plugin test plugins/gitlab --first-party --escouade 2.2.0
 ```

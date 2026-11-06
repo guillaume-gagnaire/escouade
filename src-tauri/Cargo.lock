@@ -1631,17 +1631,12 @@ dependencies = [
  "escouade-acp",
  "escouade-plugin-acp",
  "escouade-plugin-agy",
- "escouade-plugin-azure-devops",
- "escouade-plugin-bitbucket",
  "escouade-plugin-claude",
  "escouade-plugin-cli",
  "escouade-plugin-codex",
  "escouade-plugin-copilot",
  "escouade-plugin-cursor",
  "escouade-plugin-gemini",
- "escouade-plugin-gitea",
- "escouade-plugin-github",
- "escouade-plugin-gitlab",
  "escouade-plugin-kit",
  "escouade-plugin-mistral",
  "escouade-plugin-opencode",
@@ -1743,31 +1738,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "escouade-plugin-azure-devops"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "escouade-plugin-kit",
- "futures-util",
- "parking_lot",
- "reqwest 0.12.28",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "escouade-plugin-bitbucket"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "escouade-plugin-kit",
- "parking_lot",
- "reqwest 0.12.28",
- "serde_json",
- "tokio",
-]
-
-[[package]]
 name = "escouade-plugin-claude"
 version = "1.0.0"
 dependencies = [
@@ -1834,41 +1804,6 @@ name = "escouade-plugin-gemini"
 version = "1.0.0"
 dependencies = [
  "escouade-plugin-acp",
-]
-
-[[package]]
-name = "escouade-plugin-gitea"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "escouade-plugin-kit",
- "parking_lot",
- "reqwest 0.12.28",
- "serde_json",
-]
-
-[[package]]
-name = "escouade-plugin-github"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "escouade-plugin-kit",
- "parking_lot",
- "reqwest 0.12.28",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "escouade-plugin-gitlab"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "escouade-plugin-kit",
- "parking_lot",
- "reqwest 0.12.28",
- "serde_json",
- "tokio",
 ]
 
 [[package]]

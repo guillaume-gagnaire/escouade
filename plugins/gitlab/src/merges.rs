@@ -11,10 +11,12 @@
 //! (`blocking_discussions_resolved`), a fork's path is read once, and the client slows down as the limit comes near
 //! (`RateLimit-*`), and waits what a 429 asks (`Retry-After`) before trying once more.
 
+use crate::redirect::{self, Reply};
 use anyhow::{anyhow, Result};
-use escouade_plugin_kit::errors::{http_error_in, HttpError};
+use escouade_plugin_kit::errors::HttpError;
 use escouade_plugin_kit::forge::*;
 use escouade_plugin_kit::http::encode;
+use escouade_plugin_kit::http::reqwest;
 use escouade_plugin_kit::tr;
 use parking_lot::Mutex;
 use reqwest::header::HeaderMap;
@@ -36,12 +38,6 @@ const LIMITED_WAIT: Duration = Duration::from_secs(60);
 const DEPLOYMENTS_READ: usize = 50;
 
 /// What a call answered.
-struct Reply {
-    status: u16,
-    headers: HeaderMap,
-    text: String,
-}
-
 pub struct Gitlab {
     http: reqwest::Client,
     /// `https://gitlab.com/api/v4`.
@@ -314,7 +310,7 @@ impl Gitlab {
         if !delay.is_zero() {
             self.waited
                 .fetch_add(delay.as_millis() as u64, Ordering::Relaxed);
-            tokio::time::sleep(delay).await;
+            escouade_plugin_kit::time::sleep(delay).await;
         }
     }
 
@@ -340,27 +336,13 @@ impl Gitlab {
             None => Duration::ZERO,
         };
         self.pause(delay).await;
-        let resp = rb.send().await.map_err(|e| {
-            let e = anyhow::Error::from(e.without_url());
-            anyhow!(tr!(
-                "{NAME} injoignable : {e:#}",
-                "{NAME} can’t be reached: {e:#}"
-            ))
-        })?;
-        let status = resp.status().as_u16();
-        let headers = resp.headers().clone();
-        let text = resp.text().await.unwrap_or_default();
-        self.learn_limit(&headers);
-        Ok(Reply {
-            status,
-            headers,
-            text,
-        })
+        let reply = redirect::reply(NAME, rb).await?;
+        self.learn_limit(&reply.headers);
+        Ok(reply)
     }
 
-    /// Sends a call; a 429 is waited out (`Retry-After`, at most `Pace::max_wait`) and the call sent once more. A
-    /// status other than a success is an error that says what GitLab said.
-    async fn send(&self, rb: reqwest::RequestBuilder) -> Result<Reply> {
+    /// Sends a call; a 429 is waited out (`Retry-After`, at most `Pace::max_wait`) and the call sent once more.
+    async fn attempt(&self, rb: reqwest::RequestBuilder) -> Result<Reply> {
         let again = rb.try_clone();
         let mut reply = self.transmit(rb).await?;
         if let (429, Some(again)) = (reply.status, again) {
@@ -370,19 +352,39 @@ impl Gitlab {
             self.pause(asked.min(self.pace.max_wait)).await;
             reply = self.transmit(again).await?;
         }
-        if !(200..300).contains(&reply.status) {
-            return Err(HttpError {
-                status: reply.status,
-                message: http_error_in(
-                    escouade_plugin_kit::i18n::ui(),
-                    NAME,
-                    reply.status,
-                    &reply.text,
-                ),
-            }
-            .into());
-        }
         Ok(reply)
+    }
+
+    /// A call of the API, as `attempt` sends it, and wherever it is redirected (an instance moved to https). A status
+    /// other than a success is an error that says what GitLab said; another host gets neither the token nor the body.
+    async fn send(&self, method: Method, path: &str, body: Option<&Value>) -> Result<Reply> {
+        let url = if path.starts_with("http") {
+            path.to_string()
+        } else {
+            format!("{}{path}", self.base)
+        };
+        let reply = redirect::follow(
+            NAME,
+            method,
+            url,
+            body,
+            |method, url, own, body| async move {
+                let rb = if own {
+                    self.request(method, &url)
+                } else {
+                    self.http
+                        .request(method, &url)
+                        .header("User-Agent", "escouade")
+                };
+                self.attempt(match body {
+                    Some(body) => rb.json(body),
+                    None => rb,
+                })
+                .await
+            },
+        )
+        .await?;
+        redirect::success(NAME, reply)
     }
 
     fn json(reply: &Reply) -> Result<Value> {
@@ -393,7 +395,7 @@ impl Gitlab {
     }
 
     async fn get(&self, path: &str) -> Result<Value> {
-        Self::json(&self.send(self.request(Method::GET, path)).await?)
+        Self::json(&self.send(Method::GET, path, None).await?)
     }
 
     /// Every item of a list, page after page (`Link`).
@@ -401,7 +403,7 @@ impl Gitlab {
         let mut out = Vec::new();
         let mut url = path.to_string();
         for _ in 0..MAX_PAGES {
-            let reply = self.send(self.request(Method::GET, &url)).await?;
+            let reply = self.send(Method::GET, &url, None).await?;
             out.extend(Self::json(&reply)?.as_array().cloned().unwrap_or_default());
             match header(&reply.headers, "link").and_then(next_link) {
                 Some(n) => url = n,
@@ -412,7 +414,7 @@ impl Gitlab {
     }
 
     async fn write(&self, method: Method, path: &str, body: Value) -> Result<Value> {
-        Self::json(&self.send(self.request(method, path).json(&body)).await?)
+        Self::json(&self.send(method, path, Some(&body)).await?)
     }
 
     fn mr_path(repo: &RepoRef, number: u64) -> String {
@@ -840,7 +842,7 @@ impl Forge for Gitlab {
                 Some((pid, id)) => format!("/projects/{}/jobs/{}/trace", encode(pid), encode(id)),
                 None => format!("{}/jobs/{}/trace", project(repo), encode(job)),
             };
-            Ok(self.send(self.request(Method::GET, &path)).await?.text)
+            Ok(self.send(Method::GET, &path, None).await?.text)
         })
     }
 
@@ -1174,3 +1176,7 @@ mod tests {
         assert_eq!(job_ref(Some(2), Some(1), 9), "2:9");
     }
 }
+
+#[cfg(test)]
+#[path = "merges_tests.rs"]
+mod client_tests;

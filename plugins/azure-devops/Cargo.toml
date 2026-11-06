@@ -1,19 +1,21 @@
 [package]
 name = "escouade-plugin-azure-devops"
-version = "1.0.0"
+version = "2.2.0"
 description = "Le plugin Azure DevOps livré avec Escouade : les PR, la CI (stratégies et Azure Pipelines), les relectures et le merge d'Azure Repos, et les éléments de travail d'Azure Boards"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"
 edition = "2021"
 rust-version = "1.88"
-workspace = "../../src-tauri"
 
-# One of the plugins of `escouade-plugins` (docs/PLUGINS.md §4.3): its program is `escouade-plugins azure-devops`.
+# A module, compiled by `escouade-plugin build` (docs/PLUGINS.md §8.5).
+[lib]
+crate-type = ["cdylib"]
+
 [dependencies]
 escouade-plugin-kit = "0.1.0"
 serde_json = "1"
 anyhow = "1"
 parking_lot = "0.12"
-tokio = { version = "1", features = ["time"] }
-futures-util = { version = "0.3", default-features = false, features = ["std"] }
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt", "net", "io-util", "time"] }

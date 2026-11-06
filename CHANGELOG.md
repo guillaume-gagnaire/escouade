@@ -9,6 +9,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ### Nouveautés
 
 - Linear, Trello, Jira et ClickUp tournent désormais comme des plugins isolés en WASM, sans process à eux : ils répondent comme avant.
+- GitHub, GitLab, Bitbucket, Gitea et Azure DevOps aussi : tes PR, ta CI, tes relectures et tes déploiements marchent comme avant, sans process à eux. Un journal de CI de plus de 8 Mio se dit trop long au lieu de s’afficher.
 - OpenCode aussi : ses agents conversent comme avant, son plugin isolé ne joint que le serveur local qu’Escouade a lancé pour eux.
 - La documentation dit comment écrire un plugin en TypeScript ou en Rust, de `npm create escouade-plugin -- --kind rust` à la publication sur le store : ce que chaque capacité permet, chaque appel avec un exemple dans les deux langages, et le kit Rust.
 - isola tourne désormais comme un plugin isolé en WASM : Escouade lance pour lui `isola ls`, `down` et `destroy`, et rien d’autre. Dans un projet privé, il faut maintenant l’activer, comme tout plugin.

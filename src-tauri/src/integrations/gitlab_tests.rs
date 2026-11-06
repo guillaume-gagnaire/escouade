@@ -20,6 +20,7 @@ const S: Service = Service::GITLAB;
 async fn gitlab() -> (FakeServer, HostedTicketSource) {
     let server = FakeServer::start().await;
     let rt = crate::plugins::builtin::test_runtime("gitlab-issues");
+    crate::plugins::builtin::let_reach(&rt, &[("fake.test", &server.url)]);
     let inst = |host: &str, at: &str, token: &str, user: &str| {
         rt.lend(GITLAB, &format!("account:{host}"), token);
         let account = Account {

@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 
-fn root() -> PathBuf {
+pub(crate) fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
 }
 
@@ -31,7 +31,7 @@ fn target() -> PathBuf {
 }
 
 /// A module of `scripts/plugins-wasm.sh`, compiled by the app's engine.
-fn module(name: &str) -> Option<wasmtime::Module> {
+pub(crate) fn module(name: &str) -> Option<wasmtime::Module> {
     let path = target()
         .join("plugins-wasm")
         .join(name)
@@ -51,19 +51,19 @@ fn module(name: &str) -> Option<wasmtime::Module> {
 }
 
 /// How the core speaks to a plugin, module or process: lines.
-trait Plugin {
+pub(crate) trait Plugin {
     fn send(&mut self, line: &str);
     fn recv(&mut self, within: Duration) -> Option<String>;
 }
 
 /// A plugin in the host of the app, wired as `spawn_wasm` wires it.
-struct Hosted {
+pub(crate) struct Hosted {
     tx: UnboundedSender<Frame>,
     lines: Receiver<String>,
 }
 
 impl Hosted {
-    fn start(module: wasmtime::Module, fetcher: Fetcher) -> Self {
+    pub(crate) fn start(module: wasmtime::Module, fetcher: Fetcher) -> Self {
         Self::start_with(module, fetcher, None)
     }
 
@@ -107,14 +107,14 @@ impl Plugin for Hosted {
 }
 
 /// A native plugin: `escouade-plugins <name>`, its lines on its pipes.
-struct Native {
+pub(crate) struct Native {
     child: Child,
     input: ChildStdin,
     lines: Receiver<String>,
 }
 
 impl Native {
-    fn start(name: &str) -> Self {
+    pub(crate) fn start(name: &str) -> Self {
         let exe = std::env::current_exe().unwrap();
         let dir = exe.parent().unwrap().parent().unwrap();
         let program = std::env::var_os("ESCOUADE_NATIVE_PLUGINS")
@@ -170,7 +170,13 @@ fn call(p: &mut dyn Plugin, id: u64, method: &str, params: Value) -> Value {
 }
 
 /// `call`, `secrets/get` answering `secret`.
-fn call_with(p: &mut dyn Plugin, id: u64, method: &str, params: Value, secret: &Value) -> Value {
+pub(crate) fn call_with(
+    p: &mut dyn Plugin,
+    id: u64,
+    method: &str,
+    params: Value,
+    secret: &Value,
+) -> Value {
     p.send(&json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }).to_string());
     loop {
         let line = p.recv(Duration::from_secs(20)).expect("an answer");
@@ -183,7 +189,7 @@ fn call_with(p: &mut dyn Plugin, id: u64, method: &str, params: Value, secret: &
     }
 }
 
-fn hello() -> Value {
+pub(crate) fn hello() -> Value {
     json!({
         "protocolVersion": 1,
         "escouade": { "version": "2.2.0" },
@@ -751,7 +757,7 @@ fn transcript(plugin: &mut dyn Plugin, s: &Source, server: &FakeServer) -> Value
 }
 
 /// What each HTTP client adds on its own: not the plugin's words.
-const HEADERS_OF_THE_CLIENT: [&str; 5] = [
+pub(crate) const HEADERS_OF_THE_CLIENT: [&str; 5] = [
     "host",
     "user-agent",
     "accept-encoding",

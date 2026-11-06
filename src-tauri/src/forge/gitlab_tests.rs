@@ -5,16 +5,14 @@
 //! refuses them without a token), and small made-up answers stand for what the recording does not hold (a conflict, a
 //! failed job, a limit).
 //!
-//! An account's calls go to the plugin's process (`escouade-plugins gitlab`) by `ProcessForge`, as the core makes them,
+//! An account's calls go to the plugin's module by `ProcessForge`, as the core makes them,
 //! and the plugin calls the fake server: on gitlab.com's account (its API said, as the core says a fake one) and on a
 //! self-managed instance's (its API found from its address, `/api/v4`). What only the client itself shows (its pace) is
 //! read on it directly.
 
 use super::*;
 use crate::integrations::fake::FakeServer;
-use escouade_plugin_gitlab::merges::Gitlab;
 use serde_json::json;
-use std::time::Duration;
 
 fn fixture(name: &str) -> Value {
     let text = match name {
@@ -734,82 +732,6 @@ async fn the_deployments_of_a_branch_are_the_last_of_each_environment() {
     );
 }
 
-#[tokio::test]
-async fn what_gitlab_says_of_its_limit_reaches_escouade_and_a_429_is_waited_out() {
-    let server = FakeServer::start().await;
-    let reset = (now_secs() + 60).to_string();
-    server.on_with(
-        "GET",
-        MR,
-        200,
-        fixture("merge-request"),
-        &[
-            ("ratelimit-limit", "2000"),
-            ("ratelimit-remaining", "1990"),
-            ("ratelimit-reset", &reset),
-        ],
-    );
-    server.on("GET", &format!("{MR}/approvals"), 200, fixture("approvals"));
-    server.on("GET", "/projects/65275361", 200, fixture("fork-project"));
-    let c = client(&server);
-    c.pull_request(&repo(), 3101).await.unwrap();
-    assert_eq!(
-        c.rate_limit().map(|l| (l.limit, l.remaining)),
-        Some((2000, 1990)),
-        "the account's budget, from the plugin's answer"
-    );
-
-    // Refused for a moment: what GitLab asks is waited, then the call is sent once more.
-    server.on("GET", "/user", 200, json!({"username": "ada"}));
-    server.on_once(
-        "GET",
-        "/user",
-        429,
-        json!({"message": "Retry later"}),
-        &[("retry-after", "30")],
-    );
-    server.on("GET", "/personal_access_tokens/self", 404, Value::Null);
-    let gitlab =
-        Gitlab::new(reqwest::Client::new(), server.url.clone(), "t".into()).with_pace(Pace {
-            slow_below: 0.1,
-            max_wait: Duration::from_millis(300),
-        });
-    assert_eq!(gitlab.me().await.unwrap().user, "ada");
-    assert!(gitlab.waited() >= Duration::from_millis(250));
-    assert_eq!(requests_to(&server, "/user"), 2, "asked once more");
-}
-
-#[tokio::test]
-async fn near_its_limit_the_client_slows_down() {
-    let server = FakeServer::start().await;
-    let reset = (now_secs() + 30).to_string();
-    server.on_with(
-        "GET",
-        "/user",
-        200,
-        json!({"username": "ada"}),
-        &[
-            ("ratelimit-limit", "2000"),
-            ("ratelimit-remaining", "3"),
-            ("ratelimit-reset", &reset),
-        ],
-    );
-    server.on("GET", "/personal_access_tokens/self", 404, Value::Null);
-    let gitlab =
-        Gitlab::new(reqwest::Client::new(), server.url.clone(), "t".into()).with_pace(Pace {
-            slow_below: 0.1,
-            max_wait: Duration::from_millis(300),
-        });
-    gitlab.me().await.unwrap();
-    assert!(
-        gitlab.waited() > Duration::ZERO,
-        "the second call of me waited"
-    );
-    let before = gitlab.waited();
-    gitlab.me().await.unwrap();
-    assert!(gitlab.waited() >= before + Duration::from_millis(250));
-}
-
 fn now_secs() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -904,6 +826,32 @@ async fn a_branchs_checks_are_its_last_pipelines_jobs_retried_in_one_call() {
 /// How a merge request may merge (ESC-62): `squash_option` says whether a merge commit or a
 /// squash is allowed; GitLab's auto-merge is always there.
 #[tokio::test]
+async fn what_gitlab_says_of_its_limit_reaches_escouade() {
+    let server = FakeServer::start().await;
+    let reset = (now_secs() + 60).to_string();
+    server.on_with(
+        "GET",
+        MR,
+        200,
+        fixture("merge-request"),
+        &[
+            ("ratelimit-limit", "2000"),
+            ("ratelimit-remaining", "1990"),
+            ("ratelimit-reset", &reset),
+        ],
+    );
+    server.on("GET", &format!("{MR}/approvals"), 200, fixture("approvals"));
+    server.on("GET", "/projects/65275361", 200, fixture("fork-project"));
+    let c = client(&server);
+    c.pull_request(&repo(), 3101).await.unwrap();
+    assert_eq!(
+        c.rate_limit().map(|l| (l.limit, l.remaining)),
+        Some((2000, 1990)),
+        "the account's budget, from the plugin's answer"
+    );
+}
+
+#[tokio::test]
 async fn the_projects_squash_option_says_how_a_merge_request_may_merge() {
     let server = FakeServer::start().await;
     server.on(
@@ -915,13 +863,4 @@ async fn the_projects_squash_option_says_how_a_merge_request_may_merge() {
     let o = client(&server).merge_options(&repo(), 7).await.unwrap();
     assert_eq!(o.strategies, vec![MergeStrategy::Squash]);
     assert!(o.auto_merge);
-    use escouade_plugin_gitlab::merges::merge_options_of;
-    assert_eq!(
-        merge_options_of(&json!({ "squash_option": "never" })).strategies,
-        vec![MergeStrategy::Merge]
-    );
-    assert_eq!(
-        merge_options_of(&json!({ "squash_option": "default_on" })).strategies,
-        vec![MergeStrategy::Merge, MergeStrategy::Squash]
-    );
 }

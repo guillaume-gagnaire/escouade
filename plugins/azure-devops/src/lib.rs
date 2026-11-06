@@ -2,7 +2,7 @@
 //! former `<org>.visualstudio.com` too) and Azure DevOps Server, on one account per organization (a Server's:
 //! collection). It serves the code host `azure` (pull requests, merge and auto-complete, the policies' and Azure
 //! Pipelines' checks, the builds' logs and their retry, threads, reviews: `pulls`) and, on the same account, the
-//! Kanban's source `azure` (Azure Boards: `boards`). Its program is `escouade-plugins azure-devops`; the kit
+//! Kanban's source `azure` (Azure Boards: `boards`). It is a module (`run.wasm`); the kit
 //! (`escouade-plugin-kit::hosts`) answers the protocol, gets each account's token from Escouade and keeps one client per
 //! account.
 //!
@@ -11,10 +11,17 @@
 
 pub mod boards;
 pub mod html;
+mod joined;
 pub mod pulls;
+mod redirect;
+
+#[cfg(test)]
+#[path = "../../fake_service.rs"]
+mod fake;
 
 use escouade_plugin_kit::forge::{Forge, RepoRef};
 use escouade_plugin_kit::hosts::{Credentials, ForgeKind, Hosts, SourceKind, TicketSource};
+use escouade_plugin_kit::http::reqwest;
 
 /// Its name, in what it says.
 pub const NAME: &str = "Azure DevOps";
@@ -100,10 +107,12 @@ impl SourceKind for AzureBoards {
     }
 }
 
-/// What `escouade-plugins azure-devops` runs.
+/// What its module runs, on its first turn.
 pub fn run() -> i32 {
     escouade_plugin_kit::serve::run(
         "azure-devops",
         Hosts::new(vec![Box::new(AzureForge)], vec![Box::new(AzureBoards)]),
     )
 }
+
+escouade_plugin_kit::protocol::module!(run);

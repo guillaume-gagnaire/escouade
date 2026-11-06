@@ -2065,6 +2065,9 @@ impl<R: Runtime> Core<R> {
                     hosts
                 })
             }));
+        #[cfg(any(debug_assertions, test))]
+        core.plugin_runtime
+            .set_routes(crate::integrations::Bases::from_env().faked());
         // The harnesses the plugins describe (PLG-6), before the window asks for the registry.
         core.sync_harnesses();
         // The pinned Javy of the run.js plugins downloads through Réglages › Réseau (ESC-320); their modules are

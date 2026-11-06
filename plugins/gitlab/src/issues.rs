@@ -4,11 +4,13 @@
 //! container names). An issue's state on the Kanban is opened or closed, or a label of the project (a board's lists are
 //! labels: they come first).
 
+use crate::redirect;
 use anyhow::{anyhow, Result};
 use escouade_plugin_kit::errors::HttpError;
 use escouade_plugin_kit::forge::BoxFuture;
 use escouade_plugin_kit::hosts::TicketSource;
-use escouade_plugin_kit::http::{encode, send_named};
+use escouade_plugin_kit::http::encode;
+use escouade_plugin_kit::http::reqwest;
 use escouade_plugin_kit::i18n::{self, Lang};
 use escouade_plugin_kit::protocol::tickets::{
     Container, ExternalIssue, ExternalRef, ExternalState, IssueFilter, IssuePage, Query,
@@ -62,15 +64,32 @@ impl Gitlab {
         Ok(path)
     }
 
-    fn req(&self, method: reqwest::Method, path: &str) -> reqwest::RequestBuilder {
-        self.http
-            .request(method, format!("{}{path}", self.base))
-            .header("PRIVATE-TOKEN", &self.token)
-            .header("User-Agent", "escouade")
+    /// A call of the API, wherever it is redirected (an instance moved to https): its JSON and its headers.
+    async fn send(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<&Value>,
+    ) -> Result<(Value, HeaderMap)> {
+        let url = format!("{}{path}", self.base);
+        redirect::send_named(NAME, method, url, body, |method, url, own, body| {
+            let mut rb = self
+                .http
+                .request(method, url)
+                .header("User-Agent", "escouade");
+            if own {
+                rb = rb.header("PRIVATE-TOKEN", &self.token);
+            }
+            match body {
+                Some(body) => rb.json(body),
+                None => rb,
+            }
+        })
+        .await
     }
 
     async fn get(&self, path: &str) -> Result<(Value, HeaderMap)> {
-        send_named(NAME, self.req(reqwest::Method::GET, path)).await
+        self.send(reqwest::Method::GET, path, None).await
     }
 
     /// The account, once its token is accepted.
@@ -289,25 +308,18 @@ impl Gitlab {
         if body.is_empty() {
             return Ok(());
         }
-        send_named(
-            NAME,
-            self.req(reqwest::Method::PUT, &url)
-                .json(&Value::Object(body)),
-        )
-        .await?;
+        self.send(reqwest::Method::PUT, &url, Some(&Value::Object(body)))
+            .await?;
         Ok(())
     }
 
     /// A note on the issue, as markdown.
     pub async fn comment(&self, r: &ExternalRef, text: &str) -> Result<()> {
         let path = self.of(&r.container)?;
-        send_named(
-            NAME,
-            self.req(
-                reqwest::Method::POST,
-                &format!("{}/notes", Self::issue_path(path, r)),
-            )
-            .json(&json!({ "body": text })),
+        self.send(
+            reqwest::Method::POST,
+            &format!("{}/notes", Self::issue_path(path, r)),
+            Some(&json!({ "body": text })),
         )
         .await?;
         Ok(())

@@ -242,6 +242,18 @@ impl Modules {
         let native = self
             .cache
             .join(format!("{}-{}.cwasm", sha256(&bytes), self.app_version));
+        // A module of `scripts/plugins-wasm.sh` is precompiled once for all the tests: each has its own data, and this
+        // takes seconds in a debug build. A test that loses the race to write it has its module all the same.
+        #[cfg(test)]
+        let (native, shared) = match (
+            folder.parent().and_then(Path::file_name),
+            native.file_name(),
+        ) {
+            (Some(parent), Some(name)) if parent == "plugins-wasm" => (folder.join(name), true),
+            _ => (native, false),
+        };
+        #[cfg(not(test))]
+        let shared = false;
         let _one = self.busy.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(m) = precompiled(&native) {
             return Ok((m, Made::Cache));
@@ -249,7 +261,10 @@ impl Modules {
         let module = reactor(&bytes)?;
         std::fs::create_dir_all(&self.cache).map_err(|e| e.to_string())?;
         let pre = w(module.serialize())?;
-        crate::paths::write_atomic(&native, &pre).map_err(|e| e.to_string())?;
+        match crate::paths::write_atomic(&native, &pre) {
+            Err(_) if shared => {}
+            written => written.map_err(|e| e.to_string())?,
+        }
         Ok((module, Made::Precompiled))
     }
 

@@ -10,9 +10,11 @@
 //! `X-RateLimit-NearLimit` for what it says, and slows down as the hour's budget runs low. A refusal (429) is waited
 //! out (its `Retry-After`, at most `Pace::max_wait`) and the call sent once more.
 
+use crate::redirect::{self, Reply};
 use anyhow::{anyhow, Result};
-use escouade_plugin_kit::errors::{http_error_in, HttpError};
+use escouade_plugin_kit::errors::HttpError;
 use escouade_plugin_kit::forge::*;
+use escouade_plugin_kit::http::reqwest;
 use escouade_plugin_kit::tr;
 use parking_lot::Mutex;
 use reqwest::header::HeaderMap;
@@ -41,12 +43,6 @@ const DEPLOYMENT_PAGES: usize = 3;
 const DEPLOYMENTS: usize = 10;
 
 /// What a call answered.
-struct Reply {
-    status: u16,
-    headers: HeaderMap,
-    text: String,
-}
-
 /// The calls of the current hour.
 struct Budget {
     limit: u32,
@@ -169,7 +165,7 @@ impl Bitbucket {
         if !delay.is_zero() {
             self.waited
                 .fetch_add(delay.as_millis() as u64, Ordering::Relaxed);
-            tokio::time::sleep(delay).await;
+            escouade_plugin_kit::time::sleep(delay).await;
         }
     }
 
@@ -209,28 +205,14 @@ impl Bitbucket {
             b.roll(now());
             b.used = b.used.saturating_add(1);
         }
-        let resp = rb.send().await.map_err(|e| {
-            let e = anyhow::Error::from(e.without_url());
-            anyhow!(tr!(
-                "{NAME} injoignable : {e:#}",
-                "{NAME} can’t be reached: {e:#}"
-            ))
-        })?;
-        let status = resp.status().as_u16();
-        let headers = resp.headers().clone();
-        let text = resp.text().await.unwrap_or_default();
-        self.learn(&headers);
-        Ok(Reply {
-            status,
-            headers,
-            text,
-        })
+        let reply = redirect::reply(NAME, rb).await?;
+        self.learn(&reply.headers);
+        Ok(reply)
     }
 
     /// Sends a call after the wait the hour's budget asks. A refusal for the limit (429) is waited out, at most
-    /// `Pace::max_wait`, then the call is sent once more; if it is refused again the hour is taken as spent. A status
-    /// other than a success is an error that says what Bitbucket said.
-    async fn send(&self, rb: reqwest::RequestBuilder) -> Result<Reply> {
+    /// `Pace::max_wait`, then the call is sent once more; if it is refused again the hour is taken as spent.
+    async fn attempt(&self, rb: reqwest::RequestBuilder) -> Result<Reply> {
         let again = rb.try_clone();
         let mut reply = self.transmit(rb).await?;
         if reply.status == 429 {
@@ -246,19 +228,44 @@ impl Bitbucket {
                 b.used = b.limit;
             }
         }
-        if !(200..300).contains(&reply.status) {
-            return Err(HttpError {
-                status: reply.status,
-                message: http_error_in(
-                    escouade_plugin_kit::i18n::ui(),
-                    NAME,
-                    reply.status,
-                    &reply.text,
-                ),
-            }
-            .into());
-        }
         Ok(reply)
+    }
+
+    /// A call of the API, as `attempt` sends it, and wherever it is redirected. A status other than a success is an
+    /// error that says what Bitbucket said; another host gets neither the credentials nor the body.
+    async fn send(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<&Value>,
+    ) -> Result<Reply> {
+        let url = if path.starts_with("http") {
+            path.to_string()
+        } else {
+            format!("{}{path}", self.base)
+        };
+        let reply = redirect::follow(
+            NAME,
+            method,
+            url,
+            body,
+            |method, url, own, body| async move {
+                let rb = if own {
+                    self.request(method, &url)
+                } else {
+                    self.http
+                        .request(method, &url)
+                        .header("User-Agent", "escouade")
+                };
+                self.attempt(match body {
+                    Some(body) => rb.json(body),
+                    None => rb,
+                })
+                .await
+            },
+        )
+        .await?;
+        redirect::success(NAME, reply)
     }
 
     fn json(reply: &Reply) -> Result<Value> {
@@ -274,7 +281,7 @@ impl Bitbucket {
     }
 
     async fn get(&self, path: &str) -> Result<Value> {
-        let reply = self.send(self.request(reqwest::Method::GET, path)).await?;
+        let reply = self.send(reqwest::Method::GET, path, None).await?;
         Self::json(&reply)
     }
 
@@ -295,8 +302,7 @@ impl Bitbucket {
     }
 
     async fn write(&self, path: &str, body: Value) -> Result<Reply> {
-        self.send(self.request(reqwest::Method::POST, path).json(&body))
-            .await
+        self.send(reqwest::Method::POST, path, Some(&body)).await
     }
 
     fn repo_path(repo: &RepoRef) -> String {
@@ -926,10 +932,11 @@ impl Forge for Bitbucket {
             let mut out = String::new();
             for (uuid, title) in &steps {
                 let log = match self
-                    .send(self.request(
+                    .send(
                         reqwest::Method::GET,
                         &format!("{run_path}/steps/{}/log", enc(uuid)),
-                    ))
+                        None,
+                    )
                     .await
                 {
                     Ok(reply) => reply.text,
@@ -1186,3 +1193,7 @@ impl Forge for Bitbucket {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "pulls_tests.rs"]
+mod client_tests;

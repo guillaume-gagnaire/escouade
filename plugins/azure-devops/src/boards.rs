@@ -12,6 +12,7 @@ use escouade_plugin_kit::errors::HttpError;
 use escouade_plugin_kit::forge::BoxFuture;
 use escouade_plugin_kit::hosts::{StatesView, TicketSource};
 use escouade_plugin_kit::http::encode;
+use escouade_plugin_kit::http::reqwest;
 use escouade_plugin_kit::i18n::{self, Lang};
 use escouade_plugin_kit::protocol::tickets::{
     Container, ExternalIssue, ExternalRef, ExternalState, IssueFilter, IssuePage, Query,
@@ -751,3 +752,7 @@ impl TicketSource for Boards {
         Box::pin(Boards::comment(self, r, text))
     }
 }
+
+#[cfg(test)]
+#[path = "boards_tests.rs"]
+mod client_tests;

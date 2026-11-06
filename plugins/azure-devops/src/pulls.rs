@@ -9,10 +9,12 @@
 //! refusal. A limit (429, or 503 with `Retry-After`) is waited out once, at most
 //! `Pace::max_wait`; the `X-RateLimit-*` headers slow the calls down as for GitHub.
 
+use crate::redirect::{self, Reply};
 use crate::{decode, parts, CLOUD, NAME};
 use anyhow::{anyhow, Result};
 use escouade_plugin_kit::errors::{http_error_in, HttpError, Refused};
 use escouade_plugin_kit::forge::*;
+use escouade_plugin_kit::http::reqwest;
 use escouade_plugin_kit::http::{encode as enc, host_of};
 use escouade_plugin_kit::tr;
 use parking_lot::Mutex;
@@ -54,12 +56,6 @@ fn header<'a>(h: &'a HeaderMap, name: &str) -> Option<&'a str> {
 }
 
 /// What a call answered.
-struct Reply {
-    status: u16,
-    headers: HeaderMap,
-    text: String,
-}
-
 fn refusal() -> anyhow::Error {
     HttpError {
         status: 401,
@@ -344,7 +340,7 @@ impl Azure {
         if !delay.is_zero() {
             self.waited
                 .fetch_add(delay.as_millis() as u64, Ordering::Relaxed);
-            tokio::time::sleep(delay).await;
+            escouade_plugin_kit::time::sleep(delay).await;
         }
     }
 
@@ -369,28 +365,14 @@ impl Azure {
             None => Duration::ZERO,
         };
         self.pause(delay).await;
-        let resp = rb.send().await.map_err(|e| {
-            let e = anyhow::Error::from(e.without_url());
-            anyhow!(tr!(
-                "{NAME} injoignable : {e:#}",
-                "{NAME} can’t be reached: {e:#}"
-            ))
-        })?;
-        let status = resp.status().as_u16();
-        let headers = resp.headers().clone();
-        let text = resp.text().await.unwrap_or_default();
-        self.learn_limit(&headers);
-        Ok(Reply {
-            status,
-            headers,
-            text,
-        })
+        let reply = redirect::reply(NAME, rb).await?;
+        self.learn_limit(&reply.headers);
+        Ok(reply)
     }
 
     /// Sends a call; a limit with its `Retry-After` is waited out (at most `Pace::max_wait`) and
-    /// the call sent once more. A refused token (401, 203) and any other failure are errors that
-    /// say what Azure said.
-    async fn send(&self, rb: reqwest::RequestBuilder) -> Result<Reply> {
+    /// the call sent once more.
+    async fn attempt(&self, rb: reqwest::RequestBuilder) -> Result<Reply> {
         let again = rb.try_clone();
         let mut reply = self.transmit(rb).await?;
         let asked = matches!(reply.status, 429 | 503)
@@ -402,23 +384,57 @@ impl Azure {
                 .await;
             reply = self.transmit(again).await?;
         }
-        // Azure's answer to a token it does not take: its sign-in page, with a 203.
-        if reply.status == 203 {
+        // Azure's answer to a token it does not take: its sign-in page, with a 203, or a redirection to it, which no
+        // module may follow to Entra ID's hosts.
+        let signing_in = (300..400).contains(&reply.status)
+            && header(&reply.headers, "location")
+                .is_some_and(|l| l.contains("_signin") || l.contains("login.microsoftonline.com"));
+        if reply.status == 203 || signing_in {
             return Err(refusal());
         }
-        if !(200..300).contains(&reply.status) {
-            return Err(HttpError {
-                status: reply.status,
-                message: http_error_in(
-                    escouade_plugin_kit::i18n::ui(),
-                    NAME,
-                    reply.status,
-                    &reply.text,
-                ),
-            }
-            .into());
-        }
         Ok(reply)
+    }
+
+    /// A call to `url`, as `attempt` sends it, and wherever it is redirected. A refused token (401, 203) and any other
+    /// failure are errors that say what Azure said; another host gets neither the token nor the body. `accept`: what it
+    /// asks in place of JSON; `body`: what it sends, with its content type.
+    async fn send(
+        &self,
+        method: reqwest::Method,
+        url: &str,
+        accept: Option<&str>,
+        body: Option<(&str, &str)>,
+    ) -> Result<Reply> {
+        // An account with no organization has nowhere to go: said as a token refused, it can be put right.
+        if host_of(url).is_empty() {
+            return Err(refusal());
+        }
+        let reply = redirect::follow(
+            NAME,
+            method,
+            url.to_string(),
+            body,
+            |method, url, own, body| async move {
+                let mut rb = if own {
+                    self.request(method, &url)
+                } else {
+                    self.http
+                        .request(method, &url)
+                        .header("User-Agent", "escouade")
+                };
+                if let Some(accept) = accept {
+                    rb = rb.header("Accept", accept);
+                }
+                if let Some((text, content_type)) = body {
+                    rb = rb
+                        .header("Content-Type", content_type)
+                        .body(text.to_string());
+                }
+                self.attempt(rb).await
+            },
+        )
+        .await?;
+        redirect::success(NAME, reply)
     }
 
     fn json(reply: &Reply) -> Result<Value> {
@@ -434,17 +450,15 @@ impl Azure {
     }
 
     async fn get(&self, url: String) -> Result<Value> {
-        let reply = self
-            .send(self.request(reqwest::Method::GET, &v(url, VERSION)))
-            .await?;
+        let url = v(url, VERSION);
+        let reply = self.send(reqwest::Method::GET, &url, None, None).await?;
         Self::json(&reply)
     }
 
     /// The items of a list (`value`).
     async fn list(&self, url: String, version: &str) -> Result<Vec<Value>> {
-        let reply = self
-            .send(self.request(reqwest::Method::GET, &v(url, version)))
-            .await?;
+        let url = v(url, version);
+        let reply = self.send(reqwest::Method::GET, &url, None, None).await?;
         Ok(Self::json(&reply)?["value"]
             .as_array()
             .cloned()
@@ -452,8 +466,9 @@ impl Azure {
     }
 
     async fn write(&self, method: reqwest::Method, url: String, body: Value) -> Result<Value> {
+        let (url, body) = (v(url, VERSION), body.to_string());
         let reply = self
-            .send(self.request(method, &v(url, VERSION)).json(&body))
+            .send(method, &url, None, Some((&body, "application/json")))
             .await?;
         Self::json(&reply)
     }
@@ -467,21 +482,23 @@ impl Azure {
         url: &str,
         body: Option<(&Value, &str)>,
     ) -> Result<(Value, HeaderMap)> {
-        let mut rb = self.request(method, url);
-        if let Some((b, content_type)) = body {
-            rb = rb.header("Content-Type", content_type).body(b.to_string());
-        }
-        let reply = self.send(rb).await?;
+        let body = body.map(|(b, content_type)| (b.to_string(), content_type));
+        let body = body
+            .as_ref()
+            .map(|(b, content_type)| (b.as_str(), *content_type));
+        let reply = self.send(method, url, None, body).await?;
         Ok((Self::json(&reply)?, reply.headers))
     }
 
     /// The token's identity in `org`: its id and its name.
     async fn identity(&self, org: &str) -> Result<(String, Value)> {
         let data = self
-            .send(self.request(
+            .send(
                 reqwest::Method::GET,
                 &format!("{}/_apis/connectionData", self.org_url(org)),
-            ))
+                None,
+                None,
+            )
             .await?;
         let data = Self::json(&data)?;
         let user = data["authenticatedUser"].clone();
@@ -1049,8 +1066,7 @@ impl Forge for Azure {
                     VERSION,
                 )
                 .await?;
-            let reads =
-                futures_util::future::join_all(found.iter().map(|p| self.full(repo, p))).await;
+            let reads = crate::joined::join_all(found.iter().map(|p| self.full(repo, p))).await;
             reads.into_iter().collect()
         })
     }
@@ -1064,8 +1080,7 @@ impl Forge for Azure {
     ) -> BoxFuture<'a, Result<Vec<PullRequest>>> {
         Box::pin(async move {
             let reads =
-                futures_util::future::join_all(numbers.iter().map(|n| self.pull_request(repo, *n)))
-                    .await;
+                crate::joined::join_all(numbers.iter().map(|n| self.pull_request(repo, *n))).await;
             let mut out = Vec::new();
             for read in reads {
                 match read {
@@ -1205,11 +1220,10 @@ impl Forge for Azure {
                 let id = r["log"]["id"].as_u64().unwrap_or(0);
                 let reply = self
                     .send(
-                        self.request(
-                            reqwest::Method::GET,
-                            &v(format!("{build}/logs/{id}"), VERSION),
-                        )
-                        .header("Accept", "text/plain"),
+                        reqwest::Method::GET,
+                        &v(format!("{build}/logs/{id}"), VERSION),
+                        Some("text/plain"),
+                        None,
                     )
                     .await?;
                 if !out.is_empty() {
@@ -1440,3 +1454,7 @@ impl Forge for Azure {
         *self.limit.lock()
     }
 }
+
+#[cfg(test)]
+#[path = "pulls_tests.rs"]
+mod client_tests;

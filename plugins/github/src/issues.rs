@@ -1,15 +1,18 @@
 //! GitHub Issues (REST API), with a token: one given, or the GitHub CLI's. An issue's state on the
 //! Kanban is open or closed, or a label of the repository.
 
+use crate::redirect;
 use anyhow::Result;
 use escouade_plugin_kit::errors::HttpError;
-use escouade_plugin_kit::http::{call, call_page, encode};
+use escouade_plugin_kit::http::encode;
+use escouade_plugin_kit::http::reqwest;
 use escouade_plugin_kit::i18n::{self, Lang};
 use escouade_plugin_kit::protocol::tickets::{
     Container, ExternalIssue, ExternalRef, ExternalState, IssueFilter, IssuePage, Query,
 };
 use escouade_plugin_kit::text::criteria_of;
 use escouade_plugin_kit::tr_in;
+use reqwest::header::{HeaderMap, LINK};
 use serde_json::{json, Value};
 
 /// The source's id, and its name in what it says.
@@ -36,32 +39,61 @@ impl Github {
         }
     }
 
-    fn req(&self, method: reqwest::Method, path: &str) -> reqwest::RequestBuilder {
-        self.http
-            .request(method, format!("{}{path}", self.base))
-            .bearer_auth(&self.token)
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-            .header("User-Agent", "escouade")
+    /// A call of the API, wherever it is redirected (a renamed repository): its JSON and its headers.
+    async fn send(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<&Value>,
+    ) -> Result<(Value, HeaderMap)> {
+        let url = format!("{}{path}", self.base);
+        redirect::send_named(S, method, url, body, |method, url, own, body| {
+            let mut rb = self
+                .http
+                .request(method, url)
+                .header("User-Agent", "escouade");
+            if own {
+                rb = rb
+                    .bearer_auth(&self.token)
+                    .header("Accept", "application/vnd.github+json")
+                    .header("X-GitHub-Api-Version", "2022-11-28");
+            }
+            match body {
+                Some(body) => rb.json(body),
+                None => rb,
+            }
+        })
+        .await
     }
 
-    fn get(&self, path: &str) -> reqwest::RequestBuilder {
-        self.req(reqwest::Method::GET, path)
+    /// A read: its JSON.
+    async fn get(&self, path: &str) -> Result<Value> {
+        Ok(self.send(reqwest::Method::GET, path, None).await?.0)
+    }
+
+    /// A read, and whether the answer's `Link` header points to a next page.
+    async fn get_page(&self, path: &str) -> Result<(Value, bool)> {
+        let (v, headers) = self.send(reqwest::Method::GET, path, None).await?;
+        let next = headers
+            .get_all(LINK)
+            .iter()
+            .filter_map(|h| h.to_str().ok())
+            .flat_map(|h| h.split(','))
+            .any(|link| link.contains("rel=\"next\""));
+        Ok((v, next))
     }
 
     pub async fn me(&self) -> Result<(String, String)> {
-        let me = call(S, self.get("/user")).await?;
+        let me = self.get("/user").await?;
         let login = me["login"].as_str().unwrap_or("?").to_string();
         Ok((format!("@{login}"), login))
     }
 
     /// The repositories I can reach, the last pushed first.
     pub async fn containers(&self) -> Result<Vec<Container>> {
-        let v = call(
-            S,
-            self.get("/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member"),
-        )
-        .await?;
+        let v = self
+            .get("/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member")
+            .await?;
         Ok(v.as_array()
             .into_iter()
             .flatten()
@@ -76,7 +108,9 @@ impl Github {
     }
 
     async fn labels(&self, repo: &str) -> Result<Vec<String>> {
-        let v = call(S, self.get(&format!("/repos/{repo}/labels?per_page=100"))).await?;
+        let v = self
+            .get(&format!("/repos/{repo}/labels?per_page=100"))
+            .await?;
         Ok(v.as_array()
             .into_iter()
             .flatten()
@@ -121,7 +155,7 @@ impl Github {
         };
         let (items, more, total): (Vec<Value>, bool, Option<u64>) = if number {
             // The issue itself: none when there is no such issue.
-            let items = match call(S, self.get(&format!("/repos/{repo}/issues/{text}"))).await {
+            let items = match self.get(&format!("/repos/{repo}/issues/{text}")).await {
                 Ok(i) if i["state"].as_str() == Some(OPEN) => vec![i],
                 Ok(_) => Vec::new(),
                 Err(e)
@@ -134,11 +168,9 @@ impl Github {
             };
             (items, false, None)
         } else if text.is_empty() && !mine && label.is_none() {
-            let (v, more) = call_page(
-                S,
-                self.get(&format!("/repos/{repo}/issues?state=open&per_page=100{at}")),
-            )
-            .await?;
+            let (v, more) = self
+                .get_page(&format!("/repos/{repo}/issues?state=open&per_page=100{at}"))
+                .await?;
             (v.as_array().cloned().unwrap_or_default(), more, None)
         } else {
             let mut terms = vec![format!("repo:{repo}"), "is:issue".into(), "is:open".into()];
@@ -151,14 +183,12 @@ impl Github {
             if !text.is_empty() {
                 terms.push(text.replace('"', " "));
             }
-            let (v, more) = call_page(
-                S,
-                self.get(&format!(
+            let (v, more) = self
+                .get_page(&format!(
                     "/search/issues?per_page=50{at}&q={}",
                     encode(&terms.join(" "))
-                )),
-            )
-            .await?;
+                ))
+                .await?;
             let items = v["items"].as_array().cloned().unwrap_or_default();
             (items, more, v["total_count"].as_u64())
         };
@@ -208,22 +238,21 @@ impl Github {
         mapped: &[ExternalState],
     ) -> Result<()> {
         let path = Self::issue_path(r);
-        let issue = call(S, self.get(&path)).await?;
+        let issue = self.get(&path).await?;
         let open = issue["state"].as_str() != Some(CLOSED);
         let has = label_names(&issue);
-        let patch = |body: Value| self.req(reqwest::Method::PATCH, &path).json(&body);
+        let patch = |body: Value| {
+            let path = &path;
+            async move { self.send(reqwest::Method::PATCH, path, Some(&body)).await }
+        };
         if state.id == CLOSED {
             if open {
-                call(
-                    S,
-                    patch(json!({ "state": "closed", "state_reason": "completed" })),
-                )
-                .await?;
+                patch(json!({ "state": "closed", "state_reason": "completed" })).await?;
             }
             return Ok(());
         }
         if !open {
-            call(S, patch(json!({ "state": "open" }))).await?;
+            patch(json!({ "state": "open" })).await?;
         }
         let wanted = state.id.strip_prefix(LABEL);
         for m in mapped {
@@ -231,21 +260,19 @@ impl Github {
                 continue;
             };
             if Some(other) != wanted && has.iter().any(|h| h == other) {
-                call(
-                    S,
-                    self.req(
-                        reqwest::Method::DELETE,
-                        &format!("{path}/labels/{}", encode(other)),
-                    ),
+                self.send(
+                    reqwest::Method::DELETE,
+                    &format!("{path}/labels/{}", encode(other)),
+                    None,
                 )
                 .await?;
             }
         }
         if let Some(w) = wanted.filter(|w| !has.iter().any(|h| h == w)) {
-            call(
-                S,
-                self.req(reqwest::Method::POST, &format!("{path}/labels"))
-                    .json(&json!({ "labels": [w] })),
+            self.send(
+                reqwest::Method::POST,
+                &format!("{path}/labels"),
+                Some(&json!({ "labels": [w] })),
             )
             .await?;
         }
@@ -253,13 +280,10 @@ impl Github {
     }
 
     pub async fn comment(&self, r: &ExternalRef, text: &str) -> Result<()> {
-        call(
-            S,
-            self.req(
-                reqwest::Method::POST,
-                &format!("{}/comments", Self::issue_path(r)),
-            )
-            .json(&json!({ "body": text })),
+        self.send(
+            reqwest::Method::POST,
+            &format!("{}/comments", Self::issue_path(r)),
+            Some(&json!({ "body": text })),
         )
         .await?;
         Ok(())

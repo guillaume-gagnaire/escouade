@@ -17,10 +17,12 @@
 //! instance's version (`/version`: Forgejo's carries `+gitea-<version>`) is asked once per client, and what its
 //! version lacks is `Unsupported`.
 
+use crate::redirect;
 use anyhow::{anyhow, Result};
-use escouade_plugin_kit::errors::{http_error_in, HttpError, Refused};
+use escouade_plugin_kit::errors::Refused;
 use escouade_plugin_kit::forge::*;
-use escouade_plugin_kit::http::{encode as enc, send_named};
+use escouade_plugin_kit::http::encode as enc;
+use escouade_plugin_kit::http::reqwest;
 use escouade_plugin_kit::tr;
 use parking_lot::Mutex;
 use reqwest::Method;
@@ -117,21 +119,57 @@ impl Gitea {
         }
     }
 
-    fn request(&self, method: Method, path: &str) -> reqwest::RequestBuilder {
-        self.http
-            .request(method, format!("{}{path}", self.base))
-            .header("Authorization", format!("token {}", self.token))
-            .header("Accept", "application/json")
+    /// The request of a call to `url`: with the token while it is the instance's (`own`), and `body`.
+    fn request(
+        &self,
+        method: Method,
+        url: &str,
+        own: bool,
+        body: Option<&Value>,
+    ) -> reqwest::RequestBuilder {
+        let mut rb = self.http.request(method, url);
+        if own {
+            rb = rb
+                .header("Authorization", format!("token {}", self.token))
+                .header("Accept", "application/json");
+        }
+        match body {
+            Some(body) => rb.json(body),
+            None => rb,
+        }
+    }
+
+    /// A call of the API, wherever it is redirected (a renamed repository): its JSON.
+    async fn send(&self, method: Method, path: &str, body: Option<&Value>) -> Result<Value> {
+        let url = format!("{}{path}", self.base);
+        let make = |method, url: &str, own, body| self.request(method, url, own, body);
+        Ok(redirect::send_named(NAME, method, url, body, make).await?.0)
     }
 
     async fn get(&self, path: &str) -> Result<Value> {
-        Ok(send_named(NAME, self.request(Method::GET, path)).await?.0)
+        self.send(Method::GET, path, None).await
+    }
+
+    /// The text of a call (a job's log), whatever it holds.
+    async fn text(&self, path: &str) -> Result<String> {
+        let url = format!("{}{path}", self.base);
+        let none: Option<&Value> = None;
+        let reply = redirect::follow(
+            NAME,
+            Method::GET,
+            url,
+            none,
+            |method, url, own, body| async move {
+                let rb = self.request(method, &url, own, body);
+                redirect::reply(NAME, rb.header("Accept", "text/plain")).await
+            },
+        )
+        .await?;
+        Ok(redirect::success(NAME, reply)?.text)
     }
 
     async fn write(&self, method: Method, path: &str, body: Value) -> Result<Value> {
-        Ok(send_named(NAME, self.request(method, path).json(&body))
-            .await?
-            .0)
+        self.send(method, path, Some(&body)).await
     }
 
     /// Every item of a list, page after page. The list is the answer, or the array under `key`.
@@ -537,27 +575,6 @@ fn method_name(strategy: MergeStrategy) -> &'static str {
     }
 }
 
-/// The text of a call (a job's log), whatever it holds.
-async fn text(rb: reqwest::RequestBuilder) -> Result<String> {
-    let resp = rb.send().await.map_err(|e| {
-        let e = anyhow::Error::from(e.without_url());
-        anyhow!(tr!(
-            "{NAME} injoignable : {e:#}",
-            "{NAME} can’t be reached: {e:#}"
-        ))
-    })?;
-    let status = resp.status().as_u16();
-    let body = resp.text().await.unwrap_or_default();
-    if !(200..300).contains(&status) {
-        return Err(HttpError {
-            status,
-            message: http_error_in(escouade_plugin_kit::i18n::ui(), NAME, status, &body),
-        }
-        .into());
-    }
-    Ok(body)
-}
-
 /// What a repository's settings allow (`GET /repos/{owner}/{repo}`), and whether its pull request's target branch is
 /// protected, where alone Gitea merges by itself once the checks pass (`merge_when_checks_succeed`).
 pub fn merge_options_of(repo: &Value, protected: bool) -> MergeOptions {
@@ -824,11 +841,7 @@ impl Forge for Gitea {
                 return Err(Unsupported("job_log").into());
             }
             let path = format!("{}/actions/jobs/{}/logs", Self::repo_path(repo), enc(job));
-            text(
-                self.request(Method::GET, &path)
-                    .header("Accept", "text/plain"),
-            )
-            .await
+            self.text(&path).await
         })
     }
 

@@ -428,3 +428,30 @@ async fn isola_is_the_launch_environment_of_its_worktrees_unless_it_is_off_or_mi
     // A path or an option is no file name: the manifest of a plugin cannot reach outside the worktree.
     rt.shutdown();
 }
+
+/// The code hosts are modules (ESC-345): what they reach is their manifest's, and the hosts of their accounts for those
+/// that have instances; a call that may be long has the time and the room a process had.
+#[test]
+fn the_code_hosts_are_modules_that_reach_their_hosts_and_their_instances() {
+    let dir = base("hosts");
+    let plugins = Plugins::load_in(DataDir::new(dir.join("data")), "2.2.0", dir.join("app"));
+    for (id, instances) in [
+        ("dev.escouade.github", true),
+        ("dev.escouade.gitlab", true),
+        ("dev.escouade.bitbucket", false),
+        ("dev.escouade.gitea", true),
+        ("dev.escouade.azure-devops", true),
+    ] {
+        let view = plugins.get(id, Lang::En).expect("the registry gives it");
+        let m = view.manifest.expect("its manifest");
+        assert_eq!(
+            m.run.as_ref().and_then(|r| r.wasm.as_deref()),
+            Some("Cargo.toml"),
+            "{id}"
+        );
+        let declared = m.permissions.network.iter().any(|h| h == "{account}");
+        assert_eq!(declared, instances, "{id}");
+        assert_eq!(m.limits.fetch_seconds, Some(15), "{id}");
+        assert_eq!(m.limits.fetch_bytes, Some(8 << 20), "{id}");
+    }
+}

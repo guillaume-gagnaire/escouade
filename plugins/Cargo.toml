@@ -6,7 +6,7 @@
 # A plugin joins this list when it leaves the workspace of `src-tauri`, at its port.
 [workspace]
 resolver = "2"
-members = ["antigravity", "clickup", "isola", "jira", "linear", "opencode", "trello"]
+members = ["antigravity", "azure-devops", "bitbucket", "clickup", "gitea", "github", "gitlab", "isola", "jira", "linear", "opencode", "trello"]
 
 [patch.crates-io]
 escouade-plugin-protocol = { path = "../crates/escouade-plugin-protocol" }

@@ -414,7 +414,8 @@ mod tests {
 }
 
 /// The runtime of the plugins the app gives, as a test has it: their programs those the build made beside the tests
-/// (`target/debug/escouade-plugins`), its keychain empty. A test lends the tokens (`Runtime::lend`).
+/// (`target/debug/escouade-plugins`, `target/plugins-wasm`), its keychain empty. A test lends the tokens
+/// (`Runtime::lend`), and says where a module's fake service is (`let_reach`).
 #[cfg(test)]
 pub fn test_runtime(name: &str) -> std::sync::Arc<super::runtime::Runtime> {
     let data =
@@ -430,6 +431,18 @@ pub fn test_runtime(name: &str) -> std::sync::Arc<super::runtime::Runtime> {
     )
 }
 
+/// What a test lets the modules of `rt` reach beside their hosts: its fake services by their own address, as `account.api`
+/// names them, and the hosts they stand in for.
+#[cfg(test)]
+pub fn let_reach(rt: &super::runtime::Runtime, routes: &[(&str, &str)]) {
+    rt.set_routes(
+        routes
+            .iter()
+            .map(|(host, base)| (host.to_string(), base.to_string()))
+            .collect(),
+    );
+}
+
 /// A client of the code host `kind` for the account `creds`, served by the plugin the app gives for it (`plugin`), its
 /// token lent: what the core does for an account of the first hand.
 #[cfg(test)]
@@ -438,11 +451,23 @@ pub fn served_forge(
     kind: &str,
     creds: &crate::forge::Credentials,
 ) -> Box<dyn crate::forge::Forge> {
+    served_forge_on(plugin, kind, creds, &[])
+}
+
+/// `served_forge`, its module reaching the fake services of `routes` by the hosts of its manifest.
+#[cfg(test)]
+pub fn served_forge_on(
+    plugin: &str,
+    kind: &str,
+    creds: &crate::forge::Credentials,
+    routes: &[(&str, &str)],
+) -> Box<dyn crate::forge::Forge> {
     let rt = test_runtime(kind);
-    rt.lend(
-        plugin,
-        &format!("account:{}", crate::forge::host_of(&creds.url)),
-        &creds.token,
-    );
+    let host = crate::forge::host_of(&creds.url);
+    rt.lend(plugin, &format!("account:{host}"), &creds.token);
+    rt.set_accounts(std::sync::Arc::new(move |_| vec![host.clone()]));
+    let mut reached = routes.to_vec();
+    reached.push(("fake.test", creds.api.as_deref().unwrap_or(&creds.url)));
+    let_reach(&rt, &reached);
     Box::new(super::adapters::ProcessForge::new(rt, plugin, kind, creds))
 }

@@ -1,8 +1,8 @@
 ---
 title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","docs/PLUGINS.md §8.19 (ESC-344)","docs/PLUGINS.md §8.20 (ESC-337)","docs/PLUGINS.md §8.22 (ESC-351)","docs/PLUGINS.md §8.23 (ESC-349)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire","docs/PLUGINS.md §8.24 (ESC-348)"]
-tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351","ESC-349","ESC-348"]
+sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","docs/PLUGINS.md §8.19 (ESC-344)","docs/PLUGINS.md §8.20 (ESC-337)","docs/PLUGINS.md §8.22 (ESC-351)","docs/PLUGINS.md §8.23 (ESC-349)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire","docs/PLUGINS.md §8.24 (ESC-348)","docs/PLUGINS.md §8.25 (ESC-345)"]
+tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351","ESC-349","ESC-348","ESC-345"]
 decisions: [73,71,70,72,75,80,84,86,89,92,93]
 compared: null
 ---
@@ -151,6 +151,21 @@ Un développeur externe écrit un plugin en TypeScript ou en Rust à partir du s
 - La page de démarrage montre les deux langages côte à côte. Celle de publication dit les onze contrôles, la compilation de Rust, la revue, le sceau et les mises à jour proposées.
 - Aucun exemple de code n'est écrit dans une page. Un bloc de TypeScript ou de Rust est fait de lignes d'un fichier compilé, cité sous son chemin : un modèle, un plugin de `plugins/`, ou un des deux plugins de `sdk/doc-examples`, qui font la même chose dans chaque langage. Chaque morceau de manifeste d'une page passe `validate`. Les tests le tiennent.
 - Le banc ne sert pas `settings/get`, qui y répond `-32601`. La page de tests le dit.
+
+## Ce qui tourne déjà : les hébergeurs (ESC-345)
+
+GitHub, GitLab, Bitbucket, Gitea et Azure DevOps sont portés comme les quatre sources d'ESC-344 : `run.wasm`, version `2.2.0`, `escouade.min` `2.2.0`, identifiants inchangés, hors d'`escouade-plugins`, un `Cargo.lock` à chacun, le banc `--first-party` vert. Ce qui les distingue :
+
+- **`{account}`** : GitHub, GitLab, Gitea et Azure DevOps le déclarent, pour joindre l'instance que l'utilisateur a saisie, http et réseau local compris. Bitbucket Cloud n'a pas d'instance et ne le déclare pas. L'hôte d'une instance vient toujours du compte, et pendant qu'un compte se vérifie le cœur le prête au plugin.
+- **Le plugin suit lui-même les redirections.** L'hôte rend un 3xx au module, pour juger l'adresse suivante comme toute autre. Chaque plugin fait donc ce que faisait son client natif : dix sauts au plus, un GET après 301, 302 et 303, le même appel après 307 et 308. Il garde ses identifiants sur le même hôte et de http vers https, et les retire sinon. Un dépôt renommé continue de marcher, en lecture et en écriture. Une adresse hors du manifeste et hors du compte est refusée et le plugin le dit.
+- **Les journaux de GitHub Actions** sont rangés sur un stockage hors de l'API : le manifeste de GitHub déclare `*.actions.githubusercontent.com` et `*.blob.core.windows.net`, joints sans le jeton. Une Enterprise Server dont le stockage est sur un autre hôte que l'instance n'y arrive pas : rien ne peut nommer cet hôte, et le journal dit le refus. Le reste de ce qu'elle sert marche.
+- **Azure DevOps et sa page de connexion** : la redirection vers elle se lit comme un jeton refusé, sans la suivre.
+- **Les limites** : chaque hébergeur déclare `fetchSeconds: 15`, le délai qu'avait son process, et `fetchBytes: 8388608`. 8 Mio tiennent dans les 64 Mio d'un module, avec de la marge : 16 Mio le faisaient tomber. Un journal plus long, que le process lisait, se dit trop long.
+- **Un compte vide** n'est plus une erreur non typée : Gitea part de Codeberg, Azure DevOps répond comme à un jeton refusé (`-32401`). Dans l'app, un compte a toujours son adresse.
+- **La parité** couvre tout `forge/*`, plus les sources GitHub Issues, GitLab Issues et Azure Boards, nominal, 401, 404, 429, une lecture et une écriture redirigées : `tests/fixtures/plugins/parity/<nom>-host.json` et `<nom>-source.json`, enregistrés sur le programme d'avant le portage. Deux différences assumées : reqwest ajoutait un `Referer` en suivant une redirection, et Bitbucket compte un saut dans son budget de l'heure, puisque c'en est un.
+- **Le fait qu'on puisse joindre un faux service** s'étend en développement et en test à `ESCOUADE_GITHUB_API` et `ESCOUADE_AZURE_DEVOPS_API`. `ESCOUADE_BITBUCKET_API` disparaît : un module n'a pas d'environnement, et rien ne s'en servait.
+- **Tests déplacés** : ceux qui appelaient un client directement (son allure, ce qu'il attend) vivent dans la crate du plugin, un `cdylib` ne se liant plus à l'app. Tous les autres tests des hébergeurs passent par le module, sans changer d'assertion, sauf le journal redirigé : sa cible est maintenant un hôte du manifeste.
+- **Un corps ne quitte pas le service.** Ceci précise « le même appel après 307 et 308 » ci-dessus. Si un saut sort de l'hôte du service, ou passe de https à http, et que l'appel a encore son corps, quel que soit le 3xx, le plugin s'arrête là : rien ne part vers l'autre hôte, et l'appel finit en erreur avec ce statut. Un appel sans corps, ou dont un 301, 302 ou 303 sur le service a retiré le corps, suit toujours, sans les identifiants. Le natif renvoyait le corps : un stockage comme `*.blob.core.windows.net` est ouvert à tout compte Azure, et un commentaire ou un merge n'a rien à y faire. Les lectures redirigées ne changent pas.
 
 ## Ce qui tourne déjà : isola, le premier plugin qui lance un programme (ESC-351)
 

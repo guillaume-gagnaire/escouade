@@ -3,7 +3,7 @@
 //! 1.26 and once as a Forgejo 16, the two differing where the fixtures differ.
 //!
 //! The client is the plugin « Gitea / Forgejo »'s (`plugins/gitea`): an account's calls go to its
-//! process (`escouade-plugins gitea`) by `ProcessForge`, as the core makes them, and the plugin calls the fake server.
+//! module by `ProcessForge`, as the core makes them, and the plugin calls the fake server.
 
 use super::*;
 use crate::integrations::fake::FakeServer;

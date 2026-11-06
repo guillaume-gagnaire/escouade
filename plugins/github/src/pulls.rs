@@ -7,9 +7,10 @@
 //! the limit, the answer kept from before is served), and it slows down as the limit comes near
 //! (`X-RateLimit-*`).
 
+use crate::redirect::{self, Reply};
 use anyhow::{anyhow, Result};
-use escouade_plugin_kit::errors::{http_error_in, HttpError};
 use escouade_plugin_kit::forge::*;
+use escouade_plugin_kit::http::reqwest;
 use escouade_plugin_kit::tr;
 use parking_lot::Mutex;
 use reqwest::header::HeaderMap;
@@ -36,12 +37,6 @@ const ENVIRONMENTS_READ: usize = 30;
 const ENVIRONMENT_STATUSES: usize = 12;
 
 /// What a call answered.
-struct Reply {
-    status: u16,
-    headers: HeaderMap,
-    text: String,
-}
-
 /// The answers of conditional reads, by URL: the entity tag and the JSON it went with. At most
 /// `CACHE_MAX` of them; the one stored first is the one let go.
 #[derive(Default)]
@@ -157,7 +152,7 @@ impl Github {
         if !delay.is_zero() {
             self.waited
                 .fetch_add(delay.as_millis() as u64, Ordering::Relaxed);
-            tokio::time::sleep(delay).await;
+            escouade_plugin_kit::time::sleep(delay).await;
         }
     }
 
@@ -209,47 +204,69 @@ impl Github {
     /// Sends a call once, after the wait the limit of `resource` asks for, whatever it answers.
     async fn transmit(&self, resource: &str, rb: reqwest::RequestBuilder) -> Result<Reply> {
         self.slow_down(resource).await;
-        let resp = rb.send().await.map_err(|e| {
-            let e = anyhow::Error::from(e.without_url());
-            anyhow!(tr!(
-                "{NAME} injoignable : {e:#}",
-                "{NAME} can’t be reached: {e:#}"
-            ))
-        })?;
-        let status = resp.status().as_u16();
-        let headers = resp.headers().clone();
-        let text = resp.text().await.unwrap_or_default();
-        self.learn_limit(&headers);
-        Ok(Reply {
-            status,
-            headers,
-            text,
-        })
+        let reply = redirect::reply(NAME, rb).await?;
+        self.learn_limit(&reply.headers);
+        Ok(reply)
     }
 
     /// Sends a call after the wait the limit asks for. A secondary limit is waited out, at most
-    /// `Pace::max_wait`, then the call is sent once more. A status other than a success or a 304
-    /// is an error that says what GitHub said.
-    async fn send(&self, resource: &str, rb: reqwest::RequestBuilder) -> Result<Reply> {
+    /// `Pace::max_wait`, then the call is sent once more.
+    async fn attempt(&self, resource: &str, rb: reqwest::RequestBuilder) -> Result<Reply> {
         let again = rb.try_clone();
         let mut reply = self.transmit(resource, rb).await?;
         if let (Some(again), Some(asked)) = (again, Self::secondary_limit(&reply)) {
             self.pause(asked.min(self.pace.max_wait)).await;
             reply = self.transmit(resource, again).await?;
         }
-        if !(200..300).contains(&reply.status) && reply.status != 304 {
-            return Err(HttpError {
-                status: reply.status,
-                message: http_error_in(
-                    escouade_plugin_kit::i18n::ui(),
-                    NAME,
-                    reply.status,
-                    &reply.text,
-                ),
-            }
-            .into());
-        }
         Ok(reply)
+    }
+
+    /// A status other than a success or a 304 is an error that says what GitHub said.
+    fn judged(reply: Reply) -> Result<Reply> {
+        if reply.status == 304 {
+            return Ok(reply);
+        }
+        redirect::success(NAME, reply)
+    }
+
+    /// A call of the API, as `attempt` sends it, and wherever it is redirected: GitHub moves a renamed repository
+    /// (301, 307), and a job's log. Another host than the API gets none of what `request` adds.
+    async fn go(
+        &self,
+        method: reqwest::Method,
+        url: &str,
+        tag: Option<&str>,
+        body: Option<&Value>,
+    ) -> Result<Reply> {
+        let url = if url.starts_with("http") {
+            url.to_string()
+        } else {
+            format!("{}{url}", self.base)
+        };
+        let reply = redirect::follow(
+            NAME,
+            method,
+            url,
+            body,
+            |method, url, own, body| async move {
+                let mut rb = if own {
+                    self.request(method, &url)
+                } else {
+                    self.http
+                        .request(method, &url)
+                        .header("User-Agent", "escouade")
+                };
+                if let Some(tag) = tag {
+                    rb = rb.header("If-None-Match", tag);
+                }
+                if let Some(body) = body {
+                    rb = rb.json(body);
+                }
+                self.attempt("core", rb).await
+            },
+        )
+        .await?;
+        Self::judged(reply)
     }
 
     fn json(reply: &Reply) -> Result<Value> {
@@ -267,25 +284,22 @@ impl Github {
     /// A read, conditional when it was made before: GitHub answers 304 (not counted against the
     /// limit) when nothing changed, and the answer kept is served. With the next page's address.
     async fn read(&self, url: &str) -> Result<(Value, Option<String>)> {
-        let mut rb = self.request(reqwest::Method::GET, url);
         let key = if url.starts_with("http") {
             url.to_string()
         } else {
             format!("{}{url}", self.base)
         };
-        if let Some((tag, _)) = self.cache.lock().get(&key) {
-            rb = rb.header("If-None-Match", tag);
-        }
-        let reply = self.send("core", rb).await?;
+        let tag = self.cache.lock().get(&key).map(|(tag, _)| tag.clone());
+        let reply = self
+            .go(reqwest::Method::GET, url, tag.as_deref(), None)
+            .await?;
         let next = header(&reply.headers, "link").and_then(next_link);
         if reply.status == 304 {
             if let Some((_, v)) = self.cache.lock().get(&key) {
                 return Ok((v.clone(), next));
             }
             // Nothing kept to serve (not supposed to happen): ask again without the condition.
-            let reply = self
-                .send("core", self.request(reqwest::Method::GET, url))
-                .await?;
+            let reply = self.go(reqwest::Method::GET, url, None, None).await?;
             return Ok((Self::json(&reply)?, next));
         }
         let value = Self::json(&reply)?;
@@ -325,9 +339,7 @@ impl Github {
     }
 
     async fn write(&self, method: reqwest::Method, path: &str, body: Value) -> Result<Value> {
-        let reply = self
-            .send("core", self.request(method, path).json(&body))
-            .await?;
+        let reply = self.go(method, path, None, Some(&body)).await?;
         Self::json(&reply)
     }
 
@@ -340,7 +352,7 @@ impl Github {
             .bearer_auth(&self.token)
             .header("User-Agent", "escouade");
         let reply = self
-            .send(
+            .attempt(
                 "graphql",
                 rb.json(&json!({
                     "operationName": operation,
@@ -349,7 +361,7 @@ impl Github {
                 })),
             )
             .await?;
-        let v = Self::json(&reply)?;
+        let v = Self::json(&Self::judged(reply)?)?;
         if v["data"].is_null() {
             let said = v["errors"]
                 .as_array()
@@ -649,9 +661,7 @@ pub fn merge_options_of(repo: &Value) -> MergeOptions {
 impl Forge for Github {
     fn me(&self) -> BoxFuture<'_, Result<Identity>> {
         Box::pin(async move {
-            let reply = self
-                .send("core", self.request(reqwest::Method::GET, "/user"))
-                .await?;
+            let reply = self.go(reqwest::Method::GET, "/user", None, None).await?;
             let me = Self::json(&reply)?;
             let login = me["login"].as_str().unwrap_or("?").to_string();
             // A classic token lists its rights; a fine-grained one, none.
@@ -934,13 +944,12 @@ impl Forge for Github {
     }
 
     /// The log of an Actions job: GitHub answers with a redirect to the text, which the client
-    /// follows (without the token, as it leaves GitHub's host).
+    /// follows (without the token, as it leaves GitHub's host). Its storage is in `permissions.network` (Azure's
+    /// blobs, on github.com); an Enterprise Server's, when it is another host than the instance, is not reached.
     fn job_log<'a>(&'a self, repo: &'a RepoRef, job: &'a str) -> BoxFuture<'a, Result<String>> {
         Box::pin(async move {
             let path = format!("{}/actions/jobs/{}/logs", Self::repo_path(repo), enc(job));
-            let reply = self
-                .send("core", self.request(reqwest::Method::GET, &path))
-                .await?;
+            let reply = self.go(reqwest::Method::GET, &path, None, None).await?;
             Ok(reply.text)
         })
     }
@@ -1229,3 +1238,7 @@ impl Forge for Github {
             .copied()
     }
 }
+
+#[cfg(test)]
+#[path = "pulls_tests.rs"]
+mod client_tests;

@@ -1088,7 +1088,7 @@ Les e2e, et donc la vue Plugins, le store dans l'app, les thèmes et les sceaux 
 
 Décidé par l'utilisateur le 2026-11-04 : « je veux que tous les plugins, même les builtins, passent par le même système : on livre un plugin, il est compilé pour qu'il soit utilisable sur tous les systèmes, et il fait ce qu'il a besoin de faire », puis « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté ». Le même jour, l'état de fin : « A la fin, je veux que tous les plugins builtins soient dans /plugins/* (exemple plugins/claude), tous publiés sur le store, vérifiés et signés. »
 
-Ce chapitre est l'étude, faite avant le portage. **A1 à A8, A9, P1, P4, P5, P7 et D1 sont faits** (ESC-331, §8.11 ; ESC-332, §8.12 ; ESC-334, §8.13 ; ESC-338, §8.14 ; ESC-333, §8.15 ; ESC-341, §8.16 ; ESC-335, §8.17 ; ESC-336, §8.18 ; ESC-344, §8.19 ; ESC-351, §8.22 ; ESC-349, §8.23 ; ESC-348, §8.24 ; ESC-337, §8.20 ; ESC-342, §8.21) ; le reste du plan ne l'est pas. Le prototype, ses tests et ses mesures sont dans `prototypes/wasm-all/` (son README dit comment tout refaire). Il revoit le §5.7 (« le `run` natif, tranché ») et le §5.6 (« un `run.wasm` n'est pas ouvert ») : ces deux passages tiennent jusqu'à l'acceptation des décisions proposées par ESC-330. Sans numéro tant qu'elles ne sont pas acceptées, elles se citent par leur identifiant : `run-wasm-le-rust-des-plugins-compile-par`, `les-capacites-de-l-hote-ce-qu-un-plugin`, `la-premiere-main-dans-plugins-id-court-p`, `plus-aucun-run-command-le-store-le-refus`.
+Ce chapitre est l'étude, faite avant le portage. **A1 à A8, A9, P1, P2, P4, P5, P7 et D1 sont faits** (ESC-331, §8.11 ; ESC-332, §8.12 ; ESC-334, §8.13 ; ESC-338, §8.14 ; ESC-333, §8.15 ; ESC-341, §8.16 ; ESC-335, §8.17 ; ESC-336, §8.18 ; ESC-344, §8.19 ; ESC-351, §8.22 ; ESC-349, §8.23 ; ESC-348, §8.24 ; ESC-345, §8.25 ; ESC-337, §8.20 ; ESC-342, §8.21) ; le reste du plan ne l'est pas. Le prototype, ses tests et ses mesures sont dans `prototypes/wasm-all/` (son README dit comment tout refaire). Il revoit le §5.7 (« le `run` natif, tranché ») et le §5.6 (« un `run.wasm` n'est pas ouvert ») : ces deux passages tiennent jusqu'à l'acceptation des décisions proposées par ESC-330. Sans numéro tant qu'elles ne sont pas acceptées, elles se citent par leur identifiant : `run-wasm-le-rust-des-plugins-compile-par`, `les-capacites-de-l-hote-ce-qu-un-plugin`, `la-premiere-main-dans-plugins-id-court-p`, `plus-aucun-run-command-le-store-le-refus`.
 
 **En bref.**
 
@@ -1126,7 +1126,7 @@ Relevé sur `main` au 2026-11-04, et sur `ticket/esc-226` (c291625b) pour Claude
 | `dev.escouade.clickup` | `api.clickup.com` | une attente de limite d'appels, l'heure | `src/lib.rs:84`, `:692` |
 | `dev.escouade.github` | `api.github.com`, `*.ghe.com`, `api.*.ghe.com` ; toute instance Server | une pause par limite d'appels, l'heure | `src/pulls.rs:160`, `:107` |
 | `dev.escouade.gitlab` | `gitlab.com` ; toute instance | une pause, l'heure | `src/merges.rs:317`, `:62` |
-| `dev.escouade.bitbucket` | `api.bitbucket.org` | une pause, l'heure ; `ESCOUADE_BITBUCKET_API` (essais) | `src/pulls.rs:172`, `:93` ; `src/lib.rs:21` |
+| `dev.escouade.bitbucket` | `api.bitbucket.org` | une pause, l'heure | `src/pulls.rs:172`, `:93` |
 | `dev.escouade.gitea` | `codeberg.org`, `gitea.com` ; toute instance | rien | `src/pulls.rs` |
 | `dev.escouade.azure-devops` | `dev.azure.com`, `*.dev.azure.com`, `*.visualstudio.com` ; toute instance Server | une pause, l'heure | `src/pulls.rs:347`, `:46` |
 
@@ -1579,7 +1579,7 @@ Les tickets du portage, dans l'ordre. **Les lettres sont des noms de travail**, 
 | Ticket | Plugins | Ce qui le distingue |
 | --- | --- | --- |
 | **P1** (fait, §8.19) | Linear, Trello, Jira, ClickUp | le kit seul ; le plus simple |
-| **P2** | GitHub, GitLab, Bitbucket, Gitea, Azure DevOps | `{account}`, proxy, instances auto-hébergées ; essais contre `fake-trackers` |
+| **P2** (fait, §8.25) | GitHub, GitLab, Bitbucket, Gitea, Azure DevOps | `{account}`, proxy, instances auto-hébergées ; essais contre `fake-trackers` |
 | **P3** | Codex, Copilot CLI, Cursor, Gemini, ACP, Vibe, Claude Code | les machines à états ; `fs/*` pour ACP ; `real-harnesses` rejoué |
 | **P4** (fait, §8.24) | Antigravity | l'attente du transcript réécrite (§8.4.6) |
 | **P5** (fait, §8.23) | OpenCode | SSE, `local:shared`, ses trois tâches ; le plus risqué des harness |
@@ -1797,6 +1797,7 @@ Les quatre sont identiques sous Windows et sous Linux, dans deux dossiers (`sh s
 - **Trois pages** : `plugins/capabilities`, `plugins/calls`, `plugins/rust`. `plugins/api` garde la forme des messages, et sa section WASM s'appelle maintenant « Un programme en WASM ».
 - **Vu en le faisant.** Un `cargo update` monte vite `serde` hors de la liste fermée : la page du kit le dit. `settings/get` n'est pas servi par le banc et répond `-32601` : la page de tests le dit, et le corriger reste à décider. `fs/list` refuse un chemin vide, `.` nomme la racine. Le `timer/fired` d'un plugin du kit ne passe pas par `Plugin::call` : `arrived` le garde pour `time::sleep`. Un plugin du kit n'appelle donc pas `timer/set` lui-même.
 - **Écrit pour l'état de fin, en avance sur le code** : la revue qui recompile un `run.wasm` (A7) et le bac à sable en production. `docs/STORE.md` §3.3 dit où ils en sont.
+
 ### 8.22 Ce que P7 a construit (ESC-351)
 
 isola est en `run.wasm`, en `2.2.0`, `escouade.min` `2.2.0`, sorti d'`escouade-plugins` et du registre des programmes natifs. C'est le premier plugin de la première main qui lance un programme par `proc/*`. La recette du §8.19 s'applique telle quelle, à trois choses près.
@@ -1910,3 +1911,39 @@ Antigravity CLI est le premier harness porté de bout en bout, en `2.2.0`, `esco
 - Le même fichier : un transcript en retard arrive derrière, par `agent/items`, sans tenir le tour ; un transcript jamais écrit lâche après sa patience.
 - `the_fake_agy_passes_the_bench_with_its_transcript_late` : le banc des harness sur le faux `agy`, chaque ligne de transcript écrite 150 ms en retard (`FAKE_AGY_LATE_MS`), par le vrai `spawn_plugged`.
 - `plugins/antigravity/src/tests.rs` : `tick` à la main, sans minuteur.
+
+### 8.25 Ce que P2 a construit (ESC-345)
+
+GitHub, GitLab, Bitbucket, Gitea et Azure DevOps suivent la marche à suivre du §8.19 : `2.2.0`, `escouade.min` `2.2.0`, `"run": { "wasm": "Cargo.toml" }`, hors d'`escouade-plugins` et du workspace de `src-tauri`, dans celui de `plugins/`, un `Cargo.lock` à chacun. L'hôte n'a pas changé, le kit non plus. **Aucun ajout à `rust_native.json`.** Ce que P1 ne pouvait pas voir :
+
+**Les redirections.** L'hôte rend les 3xx au plugin (`Policy::none`), pour juger chaque adresse. La façade `http::reqwest` du kit ne les suit pas, là où reqwest le faisait sans rien dire : un dépôt renommé (301, 307), une instance passée en https ou un journal de GitHub Actions (302) auraient fini en erreur. Le kit publié ne bouge pas sans une publication, chaque hébergeur a donc `src/redirect.rs`, la règle de reqwest à une différence près : dix sauts, un GET sans corps après 301, 302 et 303, le même appel après 307 et 308. Les identifiants restent sur le même hôte, port compris, et jamais de https vers http. **Un corps ne quitte pas le service** : si un saut sort de cet hôte, ou passe de https à http, et que l'appel a encore son corps, quel que soit le 3xx, `follow` s'arrête, rend ce 3xx comme dernière réponse et n'envoie rien à l'autre hôte ; `success` en fait une erreur qui dit le statut. reqwest renvoyait le corps : `*.blob.core.windows.net` est ouvert à tout compte Azure, et un commentaire ou un merge n'a rien à y faire. Un appel sans corps, ou dont un 301, 302 ou 303 sur le service a retiré le corps, suit toujours, sans les identifiants. Les redirections de lecture ne changent pas. **À remonter dans le kit à sa prochaine publication**, suivie d'un `plugin-lock.sh` par plugin.
+
+**Ce que joint un saut.** Il est jugé comme tout `net/fetch`. GitHub déclare donc où il range ses journaux : `*.actions.githubusercontent.com` et `*.blob.core.windows.net`, joints sans le jeton. C'est une permission large, mais elle ne porte aucun droit : le jeton n'y va pas, et rien de ce qu'on y lit ne sort ailleurs que dans le journal affiché. **Limite connue** : une Enterprise Server qui garde ses journaux sur un autre hôte qu'elle-même n'y arrive pas, puisqu'un hôte d'instance ne vient que du compte. Le refus se dit, le reste marche. Azure DevOps ne suit pas sa page de connexion (`_signin`, `login.microsoftonline.com`), hors de ses hôtes : la redirection se lit comme un jeton refusé, et c'est ce que le natif finissait par dire.
+
+**Les limites.** `"limits": { "fetchSeconds": 15, "fetchBytes": 8388608 }`. 15 s est le délai qu'avait le process (`http::Network::client`). Pour la taille, le plafond de l'hôte (32 Mio) ne dit pas ce qu'un module tient : 64 Mio de mémoire et trois copies d'une réponse (la ligne, le JSON, la réponse au cœur). Mesuré sur GitHub : 15,3 Mo passent, 16,6 Mo tuent le module (`the plugin ended before it answered`). 8 Mio laissent de la marge à ce qu'il garde par ailleurs (500 réponses conditionnelles). Un journal plus long, que le process lisait, se dit trop long (`an answer over 8 MiB`). `net/stream` lèverait cette limite, mais la façade du kit ne le propose pas.
+
+**`rustc-canon` et Windows.** Il passe un `--remap-path-prefix` par fichier source d'un crate. Les fichiers de `futures-util` dépassent les 32 767 caractères d'une ligne de commande (`os error 206`), dans le seul dossier d'Azure DevOps : c'était son seul usage, deux `join_all`. Il a maintenant `src/joined.rs`, vingt lignes. Corriger `canon` par un fichier d'arguments changerait son empreinte, donc celles déjà notées : **ce n'est pas fait, et un portage qui tirerait une aussi grosse dépendance le rencontrera.**
+
+**Le banc.** Il envoie un compte vide. Gitea n'avait pas d'adresse par défaut et Azure Boards visait `https:///_apis` : Gitea répond maintenant depuis Codeberg, Azure comme à un jeton refusé (`-32401`). Dans l'app, un compte a toujours son adresse.
+
+**Les tests.**
+
+- Les suites `forge/{github,gitlab,bitbucket,gitea,azure}_tests`, `integrations/{github,gitlab,azure}_tests` jouent le module par le runtime, sans changer d'assertion. Une exception : le journal redirigé va maintenant vers un hôte du manifeste, par une route (`builtin::served_forge_on`), puisqu'un faux serveur sur une autre origine serait refusé à juste titre.
+- Les tests qui appelaient un client directement (son allure, ce qu'il attend, `merge_options_of`, `real_azure_*`) ne peuvent plus lier un `cdylib`. Ils sont dans la crate : `src/pulls_tests.rs`, `merges_tests.rs`, `boards_tests.rs`, avec `plugins/fake_service.rs`, la part de `integrations/fake.rs` qui leur sert, pris par `#[path]` sous `cfg(test)` : le store ne le voit pas.
+- `Bases::faked` s'étend à `ESCOUADE_GITHUB_API` et `ESCOUADE_AZURE_DEVOPS_API`, posées au démarrage du cœur : les e2e et `fake-trackers` passent par là, en build de développement. `ESCOUADE_BITBUCKET_API` disparaît : un module n'a pas d'environnement, et aucun essai ne s'en servait.
+
+**La parité.** `plugins_wasm_hosts_parity_tests.rs` joue, sur le module et sur le programme de `6dbd1223`, tout `forge/*` sur les fixtures de `tests/fixtures/forges/` (ESC-56, 57, 58, 217 à 220, 280), puis une lecture redirigée, une écriture redirigée, 404, 401 et 429, et neuf appels de GitHub Issues, GitLab Issues et Azure Boards : huit transcriptions dans `tests/fixtures/plugins/parity/<nom>-host.json` et `<nom>-source.json`. Mêmes réponses et mêmes requêtes, méthode, cible, en-têtes et corps, à deux différences près, que le test écarte : reqwest ajoutait un `Referer` en suivant, et Bitbucket compte un saut dans son budget de l'heure, ce qui est plus juste. Certains pas restent des 404 ou des refus : ils ne prouvent que l'égalité des deux côtés, pas le nominal, que les suites ci-dessus couvrent.
+
+**Les empreintes** (compilées depuis crates.io, kit et protocole `0.1.0`, `escouade-plugin build --first-party`) :
+
+| Plugin | SHA-256 | Taille |
+| --- | --- | --- |
+| GitHub | `d21ce07aea2b649b9704bf3a834c2e857a03a21944a115ec988d9ea38c7bdb75` | 611 873 o |
+| GitLab | `4906536d56bea8d8591d7fb741655673e13fd0e0b1a16e709a8b393a31f77651` | 596 635 o |
+| Bitbucket | `2b2794d4df2b4ae4e471ef8e22fb5c93d8931f483f83e831de39b4912c05effb` | 559 561 o |
+| Gitea | `750e3204223d60b4a58a9ab3a49b534f8daeacf596dec06843ccba2f44be59f7` | 535 569 o |
+| Azure DevOps | `b82bf40e6a3da404176531b26a8a46b953d35b98e6b0191d2b304999aa09827d` | 716 949 o |
+
+Les cinq sont identiques sous Windows et sous Linux, dans deux dossiers (`sh scripts/plugin-build-linux.sh plugins/<id-court> --first-party`, `rust:1.98.0-bookworm`, Podman), `canon` `4d3e106a…`. macOS n'a pas été essayé.
+
+**Pas fait ici.** Ni étiquette, ni soumission, ni crates.io. Une release sortie avant Z2 n'aurait plus ces cinq hébergeurs (§8.19). INT-0 n'a pas été rejoué : un hébergeur fait un `fetch` et un secret par appel, comme Linear, mesuré au §8.19.

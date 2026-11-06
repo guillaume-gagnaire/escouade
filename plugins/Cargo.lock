@@ -190,12 +190,66 @@ dependencies = [
 ]
 
 [[package]]
+name = "escouade-plugin-azure-devops"
+version = "2.2.0"
+dependencies = [
+ "anyhow",
+ "escouade-plugin-kit",
+ "parking_lot",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "escouade-plugin-bitbucket"
+version = "2.2.0"
+dependencies = [
+ "anyhow",
+ "escouade-plugin-kit",
+ "parking_lot",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "escouade-plugin-clickup"
 version = "2.2.0"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
  "serde_json",
+]
+
+[[package]]
+name = "escouade-plugin-gitea"
+version = "2.2.0"
+dependencies = [
+ "anyhow",
+ "escouade-plugin-kit",
+ "parking_lot",
+ "serde_json",
+]
+
+[[package]]
+name = "escouade-plugin-github"
+version = "2.2.0"
+dependencies = [
+ "anyhow",
+ "escouade-plugin-kit",
+ "parking_lot",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "escouade-plugin-gitlab"
+version = "2.2.0"
+dependencies = [
+ "anyhow",
+ "escouade-plugin-kit",
+ "parking_lot",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]

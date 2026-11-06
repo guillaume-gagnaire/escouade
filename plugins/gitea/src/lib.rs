@@ -1,7 +1,7 @@
 //! The plugin « Gitea / Forgejo » (`dev.escouade.gitea`, docs/PLUGINS.md §4.4): Gitea, Forgejo and Codeberg (a Forgejo)
 //! and every instance of them, on one account per instance. It serves the code host `gitea`: pull requests, merge and
-//! auto-merge (on a protected branch), combined statuses and Actions (logs, reruns), reviews and their threads. Its
-//! program is `escouade-plugins gitea`; the kit (`escouade-plugin-kit::hosts`) answers the protocol, gets each
+//! auto-merge (on a protected branch), combined statuses and Actions (logs, reruns), reviews and their threads. It
+//! is a module (`run.wasm`); the kit (`escouade-plugin-kit::hosts`) answers the protocol, gets each
 //! account's token from Escouade and keeps one client per account.
 //!
 //! It has no source of the Kanban, and no deployments: neither Gitea nor Forgejo has an API for them (the code host's
@@ -9,9 +9,11 @@
 //! is told by the client itself, which asks the instance's version once: `Unsupported`, never a wrong answer.
 
 pub mod pulls;
+mod redirect;
 
 use escouade_plugin_kit::forge::Forge;
 use escouade_plugin_kit::hosts::{Credentials, ForgeKind, Hosts};
+use escouade_plugin_kit::http::reqwest;
 
 /// Its name, in what it says.
 pub const NAME: &str = "Gitea";
@@ -31,6 +33,11 @@ impl ForgeKind for GiteaForge {
     fn name(&self) -> &str {
         "Gitea / Forgejo"
     }
+    /// An account always names its instance: this is for the bench, whose account is empty, so that it is refused like a
+    /// token and not as a malformed call.
+    fn default_url(&self) -> Option<&str> {
+        Some("https://codeberg.org")
+    }
     fn client(&self, http: reqwest::Client, account: &Credentials) -> Box<dyn Forge> {
         let base = account
             .api
@@ -41,10 +48,12 @@ impl ForgeKind for GiteaForge {
     }
 }
 
-/// What `escouade-plugins gitea` runs.
+/// What its module runs, on its first turn.
 pub fn run() -> i32 {
     escouade_plugin_kit::serve::run("gitea", Hosts::new(vec![Box::new(GiteaForge)], vec![]))
 }
+
+escouade_plugin_kit::protocol::module!(run);
 
 #[cfg(test)]
 mod tests {

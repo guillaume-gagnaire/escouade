@@ -1,16 +1,22 @@
 //! The plugin « GitHub » (`dev.escouade.github`, docs/PLUGINS.md §4.4): github.com, GHE.com and GitHub Enterprise
 //! Server, on one account per instance. It serves the code host `github` (pull requests, merge and auto-merge, checks,
 //! Actions logs and reruns, reviews and their threads, deployments: `pulls`) and, on github.com's account, the Kanban's
-//! source `github` (GitHub Issues: `issues`). Its program is `escouade-plugins github`; the kit
+//! source `github` (GitHub Issues: `issues`). It is a module (`run.wasm`); the kit
 //! (`escouade-plugin-kit::hosts`) answers the protocol, gets each account's token from Escouade and keeps one client
 //! per account.
 
 pub mod issues;
 pub mod pulls;
+mod redirect;
+
+#[cfg(test)]
+#[path = "../../fake_service.rs"]
+mod fake;
 
 use escouade_plugin_kit::forge::Forge;
 use escouade_plugin_kit::hosts::{Credentials, ForgeKind, Hosts, SourceKind, TicketSource};
 use escouade_plugin_kit::http::host_of;
+use escouade_plugin_kit::http::reqwest;
 
 /// Its name, in what it says.
 pub const NAME: &str = "GitHub";
@@ -73,13 +79,15 @@ impl SourceKind for GithubIssues {
     }
 }
 
-/// What `escouade-plugins github` runs.
+/// What its module runs, on its first turn.
 pub fn run() -> i32 {
     escouade_plugin_kit::serve::run(
         "github",
         Hosts::new(vec![Box::new(GithubForge)], vec![Box::new(GithubIssues)]),
     )
 }
+
+escouade_plugin_kit::protocol::module!(run);
 
 #[cfg(test)]
 mod tests {

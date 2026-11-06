@@ -2,7 +2,7 @@
 title: "Hébergeurs de code"
 subject: "Git & fichiers"
 sources: ["docs/SPEC.md","plugins/gitlab/README.md","tests/fixtures/forges/gitlab/README.md","docs/TODO-2.2.md (Hébergeurs de code)","plugins/gitea/README.md","tests/fixtures/forges/gitea/README.md"]
-tickets: ["ESC-54","ESC-55","ESC-56","ESC-58","ESC-70","ESC-241","ESC-212","ESC-57","ESC-67"]
+tickets: ["ESC-54","ESC-55","ESC-56","ESC-58","ESC-70","ESC-241","ESC-212","ESC-57","ESC-67","ESC-345"]
 decisions: []
 compared: null
 ---
@@ -111,3 +111,11 @@ Une opération de plus des hébergeurs, `environments` (`forge/environments` des
 - **Bitbucket Cloud** : les environnements, puis les déploiements (3 pages), rangés par leur date ; pas d'adresse d'environnement ni d'auteur ; job : l'exécution du pipeline.
 - Une PR lue mergée dit aussi le commit de son merge (`mergeCommit` de GitHub, `squash_commit_sha` / `merge_commit_sha` / `sha` de GitLab, `merge_commit` de Bitbucket).
 - Un déploiement lu dit aussi son commit, sa date, son auteur et son job, dans `deployments` comme dans `environments`.
+
+## Les hébergeurs en WASM (ESC-345)
+
+Les cinq hébergeurs ne sont plus des process `escouade-plugins <nom>` : chacun est un module WASM, dans l'hôte de l'app (voir *Tous les plugins en WASM*). Tout ce qui précède reste vrai, à ceci près :
+
+- Le proxy et la vérification TLS sont ceux de l'hôte : un changement de Réglages › Réseau atteint l'appel suivant, sans relancer le plugin.
+- Un journal de CI de plus de 8 Mio se dit trop long. En process, il se lisait.
+- Sur une GitHub Enterprise Server dont le stockage des journaux est sur un autre hôte que l'instance, le journal d'un job ne se lit pas : le plugin dit le refus. Le reste marche.

@@ -1,7 +1,7 @@
 # Bitbucket
 
-`dev.escouade.bitbucket`, a plugin [Escouade](https://escouade.dev) gives: it is shipped with the app, signed with it, and
-updated with it. Its version is Escouade's (the `0.0.0` of its manifest is replaced by the app's when it is read).
+`dev.escouade.bitbucket`, a plugin of [Escouade](https://escouade.dev)'s own hand: a WASM module, with a version of its own, that
+the app runs in its host.
 
 Les PR, les statuts, les pipelines, leurs journaux, les commentaires et les déploiements de tes dépôts Bitbucket Cloud.
 
@@ -30,7 +30,7 @@ remain: the client counts its own calls over the hour, believes the `X-RateLimit
 `X-RateLimit-NearLimit` for « a fifth left », and slows down as the budget runs out. A refusal (429) is waited out, at
 most 30 seconds, then asked once more. Each answer tells Escouade what the account has left (`rateLimit`).
 
-Its program is `escouade-plugins bitbucket`, a process of its own. The code is the crate of this folder (`src/pulls.rs`),
+Its program is a module (`run.wasm`), which reaches api.bitbucket.org. The code is the crate of this folder (`src/pulls.rs`),
 on the kit of the Rust plugins of Escouade (`crates/escouade-plugin-kit`).
 
 ## Its account

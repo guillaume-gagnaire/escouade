@@ -2,15 +2,21 @@
 //! one account per instance. It serves the code host `gitlab` (merge requests, merge and auto-merge, pipelines and their
 //! jobs, a job's log, reruns, approvals, discussions, deployments: `merges`) and the Kanban's source `gitlab` (GitLab
 //! Issues, on the same accounts: `issues`; one account per instance, the core asks the one whose host a container
-//! names). Its program is `escouade-plugins gitlab`; the kit (`escouade-plugin-kit::hosts`)
+//! names). It is a module (`run.wasm`); the kit (`escouade-plugin-kit::hosts`)
 //! answers the protocol, gets each account's token from Escouade and keeps one client per account.
 
 pub mod issues;
 pub mod merges;
+mod redirect;
+
+#[cfg(test)]
+#[path = "../../fake_service.rs"]
+mod fake;
 
 use escouade_plugin_kit::forge::Forge;
 use escouade_plugin_kit::hosts::{Credentials, ForgeKind, Hosts, SourceKind, TicketSource};
 use escouade_plugin_kit::http::host_of;
+use escouade_plugin_kit::http::reqwest;
 
 /// Its name, in what it says.
 pub const NAME: &str = "GitLab";
@@ -76,13 +82,15 @@ impl SourceKind for GitlabIssues {
     }
 }
 
-/// What `escouade-plugins gitlab` runs.
+/// What its module runs, on its first turn.
 pub fn run() -> i32 {
     escouade_plugin_kit::serve::run(
         "gitlab",
         Hosts::new(vec![Box::new(GitlabForge)], vec![Box::new(GitlabIssues)]),
     )
 }
+
+escouade_plugin_kit::protocol::module!(run);
 
 #[cfg(test)]
 mod tests {

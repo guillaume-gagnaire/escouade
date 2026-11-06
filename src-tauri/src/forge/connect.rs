@@ -358,6 +358,9 @@ impl<R: Runtime> Core<R> {
                 &format!("account:{}", host_of(&creds.url)),
                 &creds.token,
             );
+            self.plugin_runtime.lend_host(own, &host_of(&creds.url));
+            #[cfg(any(debug_assertions, test))]
+            self.plugin_runtime.set_routes(self.bases.read().faked());
         }
         if let Some(plugin) = first_hand.or((!plugin.is_empty()).then_some(plugin)) {
             return Ok(Box::new(crate::plugins::adapters::ProcessForge::new(

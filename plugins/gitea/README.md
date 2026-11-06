@@ -1,7 +1,7 @@
 # Gitea / Forgejo
 
-`dev.escouade.gitea`, a plugin [Escouade](https://escouade.dev) gives: it is shipped with the app, signed with it, and
-updated with it. Its version is Escouade's (the `0.0.0` of its manifest is replaced by the app's when it is read).
+`dev.escouade.gitea`, a plugin of [Escouade](https://escouade.dev)'s own hand: a WASM module, with a version of its own, that
+the app runs in its host.
 
 Les PR, la CI (statuts et Actions), les relectures et le merge de tes dépôts Gitea, Forgejo et Codeberg, sur un seul
 compte.
@@ -63,13 +63,13 @@ Actions above all, is listed in `docs/TODO-2.2.md` (« Hébergeurs de code »).
 | `Cargo.toml`, `src/`   | Its crate: `lib.rs` (its kind), `pulls.rs` (the client)     |
 
 Its tests: the crate's own (`cargo test -p escouade-plugin-gitea`: versions, the address of a job), and those of the app
-that run its process against a fake Gitea and a fake Forgejo: `src-tauri/src/forge/gitea_tests.rs`.
+that run its module against a fake Gitea and a fake Forgejo: `src-tauri/src/forge/gitea_tests.rs`.
 
 ## Run it alone
 
-Against the fake Escouade of the plugins' bench, with the app's own `escouade-plugin` and `escouade-plugins` (built
-with `cargo build --bin escouade-plugin --bin escouade-plugins` in `src-tauri/`, side by side in `target/debug`):
+Against the fake Escouade of the plugins' bench, with the app's own `escouade-plugin` (`cargo build --bin escouade-plugin`
+in `src-tauri/`):
 
 ```sh
-escouade-plugin test plugins/gitea --builtin
+escouade-plugin test plugins/gitea --first-party --escouade 2.2.0
 ```

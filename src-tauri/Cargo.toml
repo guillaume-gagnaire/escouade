@@ -68,11 +68,6 @@ escouade-plugin-cli = { path = "../crates/escouade-plugin-cli" }
 # The contract of a code host and its errors, shared with the Rust plugins of the first hand (docs/PLUGINS.md §4.5).
 escouade-plugin-kit = { path = "../crates/escouade-plugin-kit" }
 # The plugins of `escouade-plugins` (its entries): the core runs none of their code, it starts their process.
-escouade-plugin-github = { path = "../plugins/github" }
-escouade-plugin-gitlab = { path = "../plugins/gitlab" }
-escouade-plugin-bitbucket = { path = "../plugins/bitbucket" }
-escouade-plugin-gitea = { path = "../plugins/gitea" }
-escouade-plugin-azure-devops = { path = "../plugins/azure-devops" }
 escouade-plugin-acp = { path = "../plugins/acp" }
 escouade-plugin-cursor = { path = "../plugins/cursor" }
 # OpenCode (INT-10.2): its harness in a crate, its `opencode serve` run by the core (`Launch::shared`).
@@ -185,11 +180,6 @@ members = [
     "../crates/escouade-plugin-cli",
     "../crates/escouade-plugin-kit",
     "../crates/escouade-acp",
-    "../plugins/github",
-    "../plugins/gitlab",
-    "../plugins/bitbucket",
-    "../plugins/gitea",
-    "../plugins/azure-devops",
     "../plugins/acp",
     "../plugins/cursor",
     "../plugins/mistral",
@@ -203,11 +193,6 @@ default-members = [
     "../crates/escouade-plugin-cli",
     "../crates/escouade-plugin-kit",
     "../crates/escouade-acp",
-    "../plugins/github",
-    "../plugins/gitlab",
-    "../plugins/bitbucket",
-    "../plugins/gitea",
-    "../plugins/azure-devops",
     "../plugins/acp",
     "../plugins/cursor",
     "../plugins/mistral",

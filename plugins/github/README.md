@@ -1,7 +1,7 @@
 # GitHub
 
-`dev.escouade.github`, a plugin [Escouade](https://escouade.dev) gives: it is shipped with the app, signed with it, and
-updated with it. Its version is Escouade's (the `0.0.0` of its manifest is replaced by the app's when it is read).
+`dev.escouade.github`, a plugin of [Escouade](https://escouade.dev)'s own hand: a WASM module, with a version of its own, that
+the app runs in its host.
 
 Les issues dans le Kanban, les PR, la CI, les relectures et les déploiements de tes dépôts GitHub, sur un seul compte.
 
@@ -19,7 +19,9 @@ It serves two points of Escouade on one account per instance (github.com, GHE.co
   or a label as states, the open issues listed or searched (pull requests aside), a state pushed back (closed, opened
   again, a label given) and the closing comment.
 
-Its program is `escouade-plugins github`, a process of its own. The code is the crate of this folder (`src/pulls.rs`
+Its program is a module (`run.wasm`), which reaches github.com, GHE.com and the Enterprise Server the account names (`{account}`), and the storage of the Actions logs: GitHub keeps a job's log on Azure's blobs or
+under `*.actions.githubusercontent.com`, where it goes without the token. An Enterprise Server that keeps its logs on another host
+than itself is not reached, as nothing names that host: the log says so. The code is the crate of this folder (`src/pulls.rs`
 for the code host, `src/issues.rs` for the issues), on the kit of the Rust plugins of Escouade
 (`crates/escouade-plugin-kit`), which speaks the protocol, asks Escouade for each account's token and keeps one client
 per account.
@@ -56,11 +58,11 @@ written) and `src-tauri/src/integrations/github_tests.rs` (GitHub Issues).
 
 ## Run it alone
 
-Against the fake Escouade of the plugins' bench, with the app's own `escouade-plugin` and `escouade-plugins` (built
-with `cargo build --bin escouade-plugin --bin escouade-plugins` in `src-tauri/`, side by side in `target/debug`):
+Against the fake Escouade of the plugins' bench, with the app's own `escouade-plugin` (`cargo build --bin escouade-plugin`
+in `src-tauri/`):
 
 ```sh
-escouade-plugin test plugins/github --builtin
+escouade-plugin test plugins/github --first-party --escouade 2.2.0
 ```
 
 The real github.com, read only, through the plugin as the app runs it:

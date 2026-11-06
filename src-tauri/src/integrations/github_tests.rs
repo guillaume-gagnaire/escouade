@@ -22,6 +22,7 @@ async fn github() -> (FakeServer, ProcessTicketSource) {
     };
     let rt = crate::plugins::builtin::test_runtime("github-issues");
     rt.lend(GITHUB, "account:github.com", &account.token);
+    crate::plugins::builtin::let_reach(&rt, &[("fake.test", &server.url)]);
     let g = ProcessTicketSource::new(rt, GITHUB, "github", &account).with_api(&server.url);
     (server, g)
 }
