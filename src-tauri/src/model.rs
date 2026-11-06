@@ -793,6 +793,28 @@ pub struct Project {
     /// written again.
     #[serde(default, rename = "codeIndex", skip_serializing)]
     pub code_index_before: bool,
+    /// Its agent folders (`folders`): groups of agents in the sidebar, with a principal.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub agent_folders: Vec<AgentFolder>,
+    /// The sidebar's order: the ids of the agents out of any folder and of the folders.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub agent_order: Vec<String>,
+}
+
+/// A group of agents in the sidebar.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AgentFolder {
+    pub id: String,
+    pub name: String,
+    /// Renamed (by the user or `update_folder`): it no longer follows its principal's name.
+    pub named: bool,
+    /// Always one of `agents`.
+    pub principal: Option<String>,
+    /// Its members in their order, archived ones included.
+    pub agents: Vec<String>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub folded: bool,
 }
 
 impl Project {

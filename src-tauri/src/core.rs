@@ -1605,6 +1605,8 @@ pub(crate) fn blank_project(path: &str) -> Project {
         workflows_in_repo: true,
         code_index: None,
         code_index_before: false,
+        agent_folders: Vec::new(),
+        agent_order: Vec::new(),
     }
 }
 

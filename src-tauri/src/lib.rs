@@ -97,6 +97,9 @@ mod fileorigin;
 mod fileorigin_tests;
 #[cfg(test)]
 mod first_message_tests;
+mod folders;
+#[cfg(test)]
+mod folders_tests;
 mod forge;
 mod fsedit;
 #[cfg(test)]
