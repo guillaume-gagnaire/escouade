@@ -1,9 +1,9 @@
 ---
-number: null
+number: 98
 id: "la-voix-en-ligne-sort-du-cœur-dans-la-cr"
 title: "La voix en ligne sort du cœur dans la crate escouade-voice, sans repli sur un service du cœur"
 date: "2026-11-06"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-350"
 pages: ["plugins/tous-les-plugins-en-wasm","plugins/mistral-vibe-en-plugin","plugins/livres-avec-escouade","voix/dictee"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/mistral-vibe-en-plugin","added":3,"removed":3}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-06T17:31:41+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
