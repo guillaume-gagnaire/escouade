@@ -1245,9 +1245,10 @@ But : Escouade suit le travail des agents après le push, jusqu'à la production
   - « Faire relire par un agent » (ci-dessous).
   - Fait : liste dense, filtres « Les miennes » (le login du compte), « Relecture demandée » (relectures demandées et pas encore rendues : `reviewers` de chaque plugin), « Toutes » ; lancement par `Provider::pull_fetch` (`refs/pull/<n>/head` GitHub et Gitea, `refs/merge-requests/<n>/head` GitLab, second parent de `refs/pull/<n>/merge` Azure DevOps, la branche du fork lui-même sur Bitbucket Cloud) dans `pr-<n>` / `mr-<n>`.
   - Reste : essai réel sur GitHub (compte de l'utilisateur) ; GitLab, Bitbucket Cloud, Gitea/Forgejo et Azure DevOps d'après leur documentation, à essayer en vrai plus tard. La carte d'un agent sur une PR de fork ne montre pas cette PR (sa branche `pr-<n>` n'est pas celle du fork).
-- [ ] **Relecture par un agent** : un agent lit le diff d'une PR et rédige une relecture, avec des commentaires par fichier et par ligne.
-  - L'utilisateur les garde, les corrige ou les écarte un par un dans Escouade, puis publie : review de GitHub et de Gitea, discussions de GitLab, commentaires de ligne de Bitbucket.
+- [x] **Relecture par un agent** : un agent lit le diff d'une PR et rédige une relecture, avec des commentaires par fichier et par ligne. *Fait (ESC-66) : `prreview.rs`, vue `PrReviewView.svelte`, page *Relecture d'une PR par un agent* de la spec.*
+  - L'utilisateur les garde, les corrige ou les écarte un par un dans Escouade, puis publie : review de GitHub et de Gitea, discussions de GitLab, commentaires de ligne de Bitbucket, fils d'Azure DevOps.
   - Rien ne part sans lui.
+  - [ ] **À essayer en vrai** (avec l'utilisateur ; essayé sur le faux GitHub seulement) : une vraie relecture publiée sur GitHub, puis sur GitLab, Bitbucket Cloud, Gitea / Forgejo et Azure DevOps ; un échec au milieu d'une publication sur ces derniers, qui posent leurs commentaires un par un (certains ont pu partir).
 
 ### La CI
 - [x] **La branche cible** : une pastille dans l'en-tête du projet (« main ✗ depuis 2 h »). Réglage du pilote auto « Pause quand la CI de la cible est rouge », désactivé par défaut. *Fait (ESC-63) : pastille dans l'en-tête du Kanban, lue dans la boucle des PR des tickets (`branchci.rs`), `forge/branchChecks` servi par les 5 plugins.*

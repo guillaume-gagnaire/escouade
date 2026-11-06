@@ -520,7 +520,8 @@ fn message(text: &str, attachments: &[Attachment]) -> Result<Value> {
 }
 
 /// One question to a process of its own (`agent acp`, in its mode Ask, on Auto), in a configuration
-/// folder of its own removed once answered: its last words.
+/// folder of its own removed once answered: its last words. Its mode Ask reads the disk and nothing
+/// cuts that off: it does not say `answers_without_tools`, so a `Weight::Given` never gets here.
 async fn one_shot(ask: OneShot<'_>) -> Result<String> {
     let home =
         std::env::temp_dir().join(format!("escouade-cursor-{}", uuid::Uuid::new_v4().simple()));

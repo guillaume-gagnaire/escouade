@@ -508,6 +508,10 @@ impl Engine for Codex {
         Box::pin(exec::one_shot(ask))
     }
 
+    fn answers_without_tools(&self) -> bool {
+        true
+    }
+
     fn writer(&self, _weight: Weight) -> &'static str {
         exec::WRITER
     }

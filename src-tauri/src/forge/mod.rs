@@ -40,11 +40,9 @@ pub use remote::RepoRef;
 pub use escouade_plugin_kit::forge::BoxFuture;
 
 // The data of the hosts, shared with the plugins that serve them (docs/PLUGINS.md §4.5).
-#[cfg(test)]
-pub use escouade_plugin_protocol::forge::ReviewLine;
 pub use escouade_plugin_protocol::forge::{
     Check, CheckState, Deployment, Identity, MergeOptions, MergeStrategy, PrState, PullRequest,
-    PullRequestDraft, RateLimit, Review, ReviewComment, ReviewDraft, ReviewState,
+    PullRequestDraft, RateLimit, Review, ReviewComment, ReviewDraft, ReviewLine, ReviewState,
 };
 
 /// What a host can do, declared by its provider: the window and the PR's cycle offer only these.

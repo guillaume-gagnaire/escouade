@@ -2310,6 +2310,8 @@ pub struct PersistedState {
     /// could not be removed: given back to their project, or erased. The next start tries again
     /// to remove them, and never reads them (`closed::scan`).
     pub leftover_histories: Vec<String>,
+    /// The reviews written by an agent, waiting for the user or published (ESC-66).
+    pub pr_reviews: Vec<crate::prreview::PrReview>,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -3001,6 +3003,16 @@ pub enum UiEvent {
     },
     /// Why no ticket of the project's board starts (its target branch has no commit yet, or is
     /// gone), or None once they may start again.
+    /// A review of a pull request written by an agent, changed (ESC-66).
+    PrReview {
+        review: crate::prreview::PrReview,
+    },
+    /// That review, dropped.
+    #[serde(rename_all = "camelCase")]
+    PrReviewGone {
+        project_id: String,
+        number: u64,
+    },
     /// The environments of a project's host, as last read (ESC-67).
     Environments {
         environments: crate::deploys::ProjectEnvironments,

@@ -340,6 +340,14 @@ fn result_of(out: &[u8]) -> Result<String> {
         .to_string())
 }
 
+/// The model of a text of `weight`: every tool is refused whatever it is (`write_no_tools`).
+pub(crate) fn text_model(weight: Weight) -> String {
+    match weight {
+        Weight::Light => format!("{DEFAULT}-low"),
+        Weight::Reading | Weight::Given => format!("{DEFAULT}-medium"),
+    }
+}
+
 /// One question to `agy -p`, in a home of its own removed once answered, on its fastest Gemini,
 /// every tool refused (ESC-271); its time bounded by `oneshot::LIMIT`.
 async fn one_shot(ask: OneShot<'_>) -> Result<String> {
@@ -349,10 +357,7 @@ async fn one_shot(ask: OneShot<'_>) -> Result<String> {
         bail!("agy: its tools not refused for a text: {e:#}");
     }
     let env = home_env(&ask.env, &home);
-    let model = match ask.weight {
-        Weight::Light => format!("{DEFAULT}-low"),
-        Weight::Reading => format!("{DEFAULT}-medium"),
-    };
+    let model = text_model(ask.weight);
     let mut args = launch_args(&Settings::default(), None);
     args.extend(["--model".to_string(), model]);
     let question = if ask.system.trim().is_empty() {
@@ -661,6 +666,10 @@ impl Engine for Agy {
 
     fn one_shot<'a>(&'a self, ask: OneShot<'a>) -> BoxFuture<'a, Result<String>> {
         Box::pin(one_shot(ask))
+    }
+
+    fn answers_without_tools(&self) -> bool {
+        true
     }
 
     fn writer(&self, _weight: Weight) -> &'static str {

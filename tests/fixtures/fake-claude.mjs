@@ -102,6 +102,9 @@
 // of the project, one that holds a line break), only refused ones in a folder named "all-refused", or
 // nothing readable in a folder named "unreadable". Asked for a direct commit's message (<fichiers>, <files>),
 // it names the latest commit subject (<sujets-recents>, <recent-subjects>) and the files of the diff it read.
+// Asked to review a pull request (<pr-diff>, ESC-66), it answers a comment on the first added line of the diff and one on
+// a line out of it, its text saying whether its folder is empty and repeating the title it read; a diff that says
+// [relecture-illisible] gets prose.
 // Asked for a pull request (<commits>), it answers a title (« Le travail de l’agent, proposé par le faux claude », with
 // " (en)" in English) and the commits it read as the description.
 // Asked to name a task (<tache>, <task>), it answers with its first two words. Asked in English (its
@@ -509,6 +512,26 @@ if (argv[0] === 'mcp') {
       return;
     }
     // A pull request's title and description (ESC-64): from the commits it read.
+    if (input.includes('<pr-diff>')) {
+      if (input.includes('[relecture-illisible]')) {
+        process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result: 'Tout me semble bon.' }));
+        return;
+      }
+      const path_ = input.match(/<file path="([^"]+)">/)?.[1] ?? '';
+      const line = Number(input.match(/^\s*(\d+) \+ /m)?.[1] ?? 0);
+      const folder = fs.readdirSync(process.cwd()).length ? 'dossier plein' : 'dossier vide';
+      const title = input.match(/<title>(.*)<\/title>/)?.[1] ?? '';
+      const review = {
+        summary: `Relu par le faux claude (${folder}) : ${title}`,
+        comments: [
+          { path: path_, line, body: 'Cette ligne mérite un test.' },
+          { path: path_, line: 9999, body: 'Hors du diff.' },
+        ],
+      };
+      const text = 'Voici ma relecture :\n```json\n' + JSON.stringify(review) + '\n```';
+      process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result: text }));
+      return;
+    }
     if (input.includes('<commits>')) {
       const commits = input.match(/<commits>\n([\s\S]*?)<\/commits>/)?.[1].trim() ?? '';
       const asked = tongue(input.startsWith('Write the title'));

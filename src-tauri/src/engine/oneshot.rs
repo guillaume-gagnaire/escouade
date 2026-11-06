@@ -2,7 +2,7 @@
 //! description, the commands of a worktree): asked of the harness the settings name, each one
 //! within its limit and with its answer read up to `ANSWER_MAX`, whatever the harness.
 
-use super::{Engine, OneShot, Program};
+use super::{Engine, OneShot, Program, Weight};
 use crate::model::EngineId;
 use anyhow::{anyhow, bail, Result};
 use std::path::Path;
@@ -34,6 +34,9 @@ pub fn writer(chosen: Option<EngineId>, found: &[EngineId]) -> Option<EngineId> 
 /// dropped (its process killed with all it started) and the answer refused.
 pub async fn ask(engine: &dyn Engine, ask: OneShot<'_>) -> Result<String> {
     let (limit, weight) = (ask.limit, ask.weight);
+    if weight == Weight::Given && !engine.answers_without_tools() {
+        bail!(no_tools_refused(engine.name()));
+    }
     let answer = tokio::time::timeout(limit, engine.one_shot(ask))
         .await
         .map_err(|_| {
@@ -49,6 +52,14 @@ pub async fn ask(engine: &dyn Engine, ask: OneShot<'_>) -> Result<String> {
         bail!(too_long(engine.writer(weight)));
     }
     Ok(answer)
+}
+
+/// Why a text from a third party is not asked of the harness `name`: its tools would read.
+pub fn no_tools_refused(name: &str) -> String {
+    tr!(
+        "{name} ne sait pas répondre sans outil : il pourrait lire tes fichiers à la demande du texte relu. Choisis un autre harness dans Réglages › Application › Textes rédigés.",
+        "{name} can’t answer without tools: it could read your files at the request of the text reviewed. Choose another harness in Settings › Application › Written texts."
+    )
 }
 
 fn too_long(who: &str) -> String {

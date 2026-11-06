@@ -336,11 +336,19 @@ impl<R: Runtime> Core<R> {
             }
         };
         match again!(client.open_pull_requests(&remote.repo)) {
-            Ok(prs) => Read::ok(ProjectPrs {
-                word: provider.request_word().to_string(),
-                prs,
-                me: self.forge_login(&remote.host),
-            }),
+            Ok(prs) => {
+                let numbers: Vec<u64> = prs.iter().map(|p| p.number).collect();
+                self.pr_reviews_prune(
+                    project_id,
+                    &numbers,
+                    prs.len() < escouade_plugin_protocol::forge::OPEN_PRS,
+                );
+                Read::ok(ProjectPrs {
+                    word: provider.request_word().to_string(),
+                    prs,
+                    me: self.forge_login(&remote.host),
+                })
+            }
             Err(e) => Read::failed(&e, client.rate_limit()),
         }
     }

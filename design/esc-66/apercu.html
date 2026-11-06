@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>ESC-66 — relecture d'une PR</title>
+<link rel="stylesheet" href="../../src/app.css">
+<style>
+body{margin:0;background:var(--panel);color:var(--text);font:13px/1.45 Inter,system-ui,sans-serif;height:100vh;display:flex;flex-direction:column}
+.head{flex:none;display:flex;align-items:center;gap:12px;min-height:60px;padding:0 14px 0 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+.back{display:grid;place-items:center;width:28px;height:28px;border:0;border-radius:7px;background:transparent;color:var(--muted)}
+.h{display:grid;gap:2px;min-width:0;margin-right:auto}
+h1{margin:0;font-size:15px;font-weight:620;letter-spacing:-.015em;overflow:hidden;text-overflow:ellipsis}
+.crumbs{color:var(--muted);font-size:12px}
+.body{flex:1;min-height:0;overflow:auto;padding:18px 22px 24px}
+.col{max-width:860px;margin:0 auto;display:grid;gap:18px}
+.sum{display:grid;gap:6px}
+.lab{font-size:12px;color:var(--muted);font-weight:520}
+.sum textarea{width:100%;box-sizing:border-box;min-height:64px;resize:vertical}
+.file{display:grid;gap:8px}
+.fname{display:flex;gap:8px;align-items:baseline;font:12.5px ui-monospace,Consolas,monospace;color:var(--soft)}
+.fname span{color:var(--dim);font:12px Inter,sans-serif}
+.note{border-radius:9px;background:var(--raise);box-shadow:inset 0 0 0 1px var(--line);overflow:hidden}
+.code{margin:0;padding:6px 0;background:var(--well);font:12px/1.55 ui-monospace,Consolas,monospace;border-bottom:1px solid var(--line)}
+.code div{display:grid;grid-template-columns:44px 16px 1fr;white-space:pre;color:var(--soft)}
+.code i{font-style:normal;text-align:right;padding-right:10px;color:var(--dim)}
+.code .add{background:color-mix(in oklch,var(--add) 10%,transparent)}
+.code .add b{color:var(--add);font-weight:400}
+.code .on{box-shadow:inset 0 0 0 1px color-mix(in oklch,var(--p) 50%,transparent)}
+.txt{padding:10px 12px;line-height:1.5;max-width:75ch}
+.ctl{display:flex;align-items:center;gap:6px;padding:0 10px 10px}
+.btn.small{height:26px;padding:0 9px;font-size:12px}
+.state{margin-left:auto;font-size:12px;color:var(--muted)}
+.kept{color:var(--run)} .note.dropped .txt{color:var(--muted);text-decoration:line-through}
+.note.dropped .code{display:none}
+.note.is-kept{box-shadow:inset 0 0 0 1px color-mix(in oklch,var(--run) 34%,transparent)}
+.warn{display:flex;gap:6px;padding:8px 12px 0;color:var(--wait);font-size:12px}
+.foot{flex:none;display:flex;align-items:center;gap:14px;padding:10px 22px;border-top:1px solid var(--line);background:var(--panel)}
+.left{margin-right:auto;color:var(--muted);font-size:12.5px}
+.left b{color:var(--text);font-weight:560}
+</style></head>
+<body>
+<header class="head"><button class="back" aria-label="Retour">←</button>
+<div class="h"><h1>#127 Ajoute la connexion par lien magique</h1><div class="crumbs">Relu par Claude Sonnet · marta:login-lien → main · il y a 2 min</div></div>
+<button class="btn">Relire à nouveau</button><button class="btn ghost">Écarter la relecture</button></header>
+<div class="body"><div class="col">
+<section class="sum"><span class="lab">Texte de la relecture</span><textarea>Le flux tient, mais le jeton n'expire jamais et l'adresse n'est pas normalisée avant la recherche du compte. Un test manque sur le renvoi du lien.</textarea></section>
+<section class="file"><div class="fname">src/auth/magic.ts <span>2 commentaires</span></div>
+<article class="note is-kept"><pre class="code"><div><i>41</i><b> </b>const token = randomBytes(32).toString('hex');</div><div class="add on"><i>42</i><b>+</b>await store.set(email, token);</div></pre>
+<div class="txt">Le jeton n'a pas de durée de vie : un lien volé reste valable. Pose une expiration sur <code>store.set</code>.</div>
+<div class="ctl"><button class="btn small">Corriger</button><button class="btn small">Écarter</button><span class="state kept">Gardé</span></div></article>
+<article class="note"><pre class="code"><div><i>57</i><b> </b>const user = await users.find({ email });</div><div class="add on"><i>58</i><b>+</b>if (!user) throw new NotFound(email);</div></pre>
+<div class="txt">Répondre différemment selon que le compte existe permet d'énumérer les adresses.</div>
+<div class="ctl"><button class="btn small primary">Garder</button><button class="btn small">Corriger</button><button class="btn small">Écarter</button></div></article></section>
+<section class="file"><div class="fname">tests/magic.test.ts <span>1 commentaire</span></div>
+<article class="note dropped"><div class="txt">Ce test dépend de l'heure système.</div><div class="ctl"><button class="btn small">Reprendre</button><span class="state">Écarté</span></div></article></section>
+</div></div>
+<footer class="foot"><span class="left"><b>1 à trancher</b> · 1 gardé · 1 écarté · rien n'est publié avant ton clic</span>
+<div class="segmented small"><button aria-selected="true">Commenter</button><button>Demander des changements</button><button>Approuver</button></div>
+<button class="btn primary" disabled>Publier sur GitHub</button></footer>
+</body></html>

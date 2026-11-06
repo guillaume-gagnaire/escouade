@@ -191,6 +191,13 @@ fn a_text_is_asked_of_gemini_p_without_any_tool_its_question_on_its_input() {
     assert_eq!(at("-e"), Some("none"));
     assert_eq!(at("--policy"), Some("C:/x/escouade-policy.toml"));
     assert_eq!(one_shot_args(Weight::Reading, policy)[5], "flash");
+    // A text given: the model of a reading, under the same rules.
+    let given = one_shot_args(Weight::Given, policy);
+    assert_eq!(given[5], "flash");
+    assert_eq!(
+        given.last().map(String::as_str),
+        Some("C:/x/escouade-policy.toml")
+    );
     // Every tool refused, whatever its name.
     let rules: toml_edit::DocumentMut = NO_TOOLS.parse().unwrap();
     let rule = &rules["rule"].as_array_of_tables().unwrap().get(0).unwrap();

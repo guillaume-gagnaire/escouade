@@ -211,6 +211,16 @@
               })}{/if}{#if p.created && p.author}{' '}{/if}{#if p.author}{t('prs.view.by', { author: p.author })}{/if}</span
           >
         {/if}
+        {#if p.state === 'open' && !p.hostRepo}
+          <!-- ESC-66: a review by an agent, a draft in the project's « Pull requests » view until the user publishes it. -->
+          <span class="acts">
+            <button
+              class="btn"
+              use:tip={t('prs.review.askHint', { word })}
+              onclick={() => agent && void app.askPrReview(agent.projectId, p.number)}>{t('prs.review.askLong')}</button
+            >
+          </span>
+        {/if}
         {#if !agent.archived && (canFixChecks(p) || canFixReviews(p))}
           <!-- The corrections of ESC-64: handed to the agent on a click, never by themselves. -->
           <span class="acts">

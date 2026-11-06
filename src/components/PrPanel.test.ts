@@ -66,6 +66,25 @@ const open = (over = {}) =>
     ...over,
   });
 
+describe('« Faire relire par un agent » from the tab (ESC-66)', () => {
+  it('shows the draft a pull request already has rather than starting over, and starts one otherwise', async () => {
+    const started: number[] = [];
+    fakeBackend({
+      pr_reviews: () => [{ number: 7, projectId: 'p1', phase: 'ready', notes: [] }],
+      pr_review_start: (a: { number: number }) => {
+        started.push(a.number);
+        return {};
+      },
+    });
+    await app.askPrReview('p1', 7);
+    expect(started).toEqual([]);
+    expect(app.prReviewOpen.p1).toBe(7);
+    await app.askPrReview('p1', 8);
+    expect(started).toEqual([8]);
+    expect(app.prReviewOpen.p1).toBe(8);
+  });
+});
+
 describe('the checks of a pull request', () => {
   it('say their phase, their order and how long they ran', () => {
     expect(checkPhase(check({ state: 'pending' }))).toBe('queued');

@@ -207,6 +207,7 @@ mod projectfile;
 #[cfg(test)]
 mod projectfile_tests;
 mod projectlogo;
+mod prreview;
 mod prview;
 #[cfg(test)]
 mod prview_tests;
@@ -829,6 +830,12 @@ pub fn run() {
                 commands::agent_pr_rerun,
                 commands::agent_no_pr,
                 commands::project_prs,
+                commands::pr_reviews,
+                commands::pr_review_start,
+                commands::pr_review_note,
+                commands::pr_review_summary,
+                commands::pr_review_publish,
+                commands::pr_review_discard,
                 commands::project_environments,
                 commands::project_environments_read,
                 commands::create_agent_on_pr,

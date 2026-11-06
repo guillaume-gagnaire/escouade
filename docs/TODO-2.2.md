@@ -25,7 +25,7 @@ Depuis ESC-203, chaque hébergeur est un plugin de première main, et le plugin 
   - [ ] **À essayer en vrai** (aucun jeton Azure DevOps sous la main) : les essais réels `real_azure_devops` (`forge/azure_tests.rs`) et `real_azure_boards` (`integrations/azure_tests.rs`) sont gardés, compilés et ignorés, rejouables avec `ESCOUADE_TEST_AZURE_URL`, `ESCOUADE_TEST_AZURE_PAT`, `ESCOUADE_TEST_AZURE_REPO` et `ESCOUADE_TEST_AZURE_PROJECT` ; `real_azure_devops` passe par le plugin (`served_forge`), `real_azure_boards` par le client du plugin en process. À rejouer sur une vraie organisation (et le jeton de `az`, prêté par le cœur) avant la release.
 - [ ] PR des tickets : ouverture par l'API, colonne « En revue », suivi jusqu'au merge (ESC-59). Puis la CI en échec corrigée par l'agent (ESC-60), les retours de relecture et les conflits (ESC-61), le merge depuis Escouade (ESC-62).
 - [ ] CI de la branche cible et des branches poussées (ESC-63).
-- [ ] Vue « Pull requests » du projet (ESC-65), et la relecture d'une PR par un agent (ESC-66).
+- [x] Vue « Pull requests » du projet (ESC-65), et la relecture d'une PR par un agent (ESC-66).
 - [ ] Déploiements (ESC-67).
 - [ ] Notifications, vue d'ensemble et outils MCP des PR (ESC-68).
 - [ ] Docs, site et statistiques (ESC-69).

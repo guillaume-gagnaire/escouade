@@ -310,6 +310,10 @@ pub enum Weight {
     Light,
     /// A text written after reading its folder: a stronger model, with tools that only read.
     Reading,
+    /// A text written from what the question gives, which comes from a third party: the model of
+    /// `Reading`, and no tool at all (ESC-66). A harness that cannot cut its tools refuses it
+    /// (`Engine::answers_without_tools`).
+    Given,
 }
 
 /// One question asked of a harness with no session, no settings of the user's and no MCP server.
@@ -512,6 +516,12 @@ pub trait Engine: Send + Sync {
     /// The model that answers its one-shot questions of `weight`, as the interface names it
     /// (« Modèle des textes rédigés »: `Claude Haiku`).
     fn writer(&self, weight: Weight) -> &'static str;
+
+    /// It can answer with no tool at all, reading included (`Weight::Given`): not by default, as a
+    /// harness has to say so; `oneshot::ask` refuses that question to the others.
+    fn answers_without_tools(&self) -> bool {
+        false
+    }
     /// Its one-shot questions go to the model Escouade chooses (`OneShot::model`: the setting
     /// « Modèle » of the texts, else its default one), rather than one of its own: OpenCode, whose
     /// models are those of the providers connected to it.

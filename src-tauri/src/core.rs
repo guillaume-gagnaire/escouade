@@ -877,6 +877,8 @@ pub struct Core<R: Runtime = Wry> {
     /// The ids of the histories whose file could not be removed once the state held the truth
     /// (`PersistedState::leftover_histories`).
     pub(crate) leftover_histories: Mutex<Vec<String>>,
+    /// The reviews written by an agent (ESC-66), one per pull request.
+    pub(crate) pr_reviews: RwLock<Vec<crate::prreview::PrReview>>,
     /// Serializes agent creation so that concurrent creations get distinct names.
     create_lock: tokio::sync::Mutex<()>,
     conv_buffer: Mutex<HashMap<String, Vec<ConvOp>>>,
@@ -1771,6 +1773,7 @@ impl<R: Runtime> Core<R> {
         // The histories whose file could not be removed at the last run are not read: removed, if
         // they can be now.
         let mut leftover = std::mem::take(&mut state.leftover_histories);
+        let pr_reviews = std::mem::take(&mut state.pr_reviews);
         closed::retry_leftovers(&data, &mut leftover);
         // The folder of the closed projects is read here, once: the index (`closed_index`) keeps
         // what the app needs of it from now on.
@@ -1947,6 +1950,7 @@ impl<R: Runtime> Core<R> {
             closing: Mutex::default(),
             closed_index: Mutex::new(closed_index),
             leftover_histories: Mutex::new(leftover),
+            pr_reviews: RwLock::new(pr_reviews),
             create_lock: tokio::sync::Mutex::new(()),
             conv_buffer: Mutex::default(),
             conv_flush: tokio::sync::Notify::new(),
@@ -2304,6 +2308,9 @@ impl<R: Runtime> Core<R> {
         let hold = self.hold.lock().clone();
         let pause = self.usage.lock().saved(hold);
         let leftover_histories = self.leftover_histories.lock().clone();
+        let pr_reviews = crate::prreview::kept_reviews(&self.pr_reviews.read(), |id| {
+            projects.iter().any(|p| p.id == id)
+        });
         PersistedState {
             projects,
             agents,
@@ -2314,6 +2321,7 @@ impl<R: Runtime> Core<R> {
             tickets,
             pause,
             leftover_histories,
+            pr_reviews,
         }
     }
 
@@ -7127,6 +7135,29 @@ impl<R: Runtime> Core<R> {
     ) -> Result<String> {
         self.ask_harness(Ask {
             weight: Weight::Reading,
+            cwd,
+            system,
+            prompt,
+            limit,
+            agent: None,
+            project: Some(project_id),
+        })
+        .await
+    }
+
+    /// The answer of the strong model to `prompt`, which holds all it needs and comes from a third
+    /// party: no tool at all, in `cwd`, within `limit` (ESC-66). A harness that cannot cut its tools
+    /// is refused (`Engine::answers_without_tools`).
+    pub(crate) async fn ask_given(
+        &self,
+        project_id: &str,
+        cwd: &Path,
+        system: &str,
+        prompt: &str,
+        limit: Duration,
+    ) -> Result<String> {
+        self.ask_harness(Ask {
+            weight: Weight::Given,
             cwd,
             system,
             prompt,

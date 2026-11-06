@@ -1003,7 +1003,9 @@ impl Engine for ProcessEngine {
             let cwd = ask.cwd.to_string_lossy().into_owned();
             let params = proto::OneShotParams {
                 weight: match ask.weight {
-                    Weight::Light => "light",
+                    // A plugin's harness does not say `answers_without_tools`: `Given` stops at
+                    // `oneshot::ask`, and would go as the only weight the protocol says has no tool.
+                    Weight::Light | Weight::Given => "light",
                     Weight::Reading => "reading",
                 }
                 .into(),

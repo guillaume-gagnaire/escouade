@@ -1887,6 +1887,68 @@ pub async fn create_agent_on_branch(
     Ok(agent)
 }
 
+/// The reviews written by an agent of a project (ESC-66).
+#[tauri::command]
+pub fn pr_reviews(core: CoreState<'_>, project_id: String) -> Vec<crate::prreview::PrReview> {
+    core.pr_reviews_of(&project_id)
+}
+
+/// « Faire relire par un agent » (ESC-66): the review starts; nothing leaves for the host.
+#[tauri::command]
+pub async fn pr_review_start(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+) -> Res<crate::prreview::PrReview> {
+    core.pr_review_start(&project_id, number).await.map_err(err)
+}
+
+/// A comment of a review kept, edited or dropped.
+#[tauri::command]
+pub fn pr_review_note(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+    id: u32,
+    choice: crate::prreview::NoteChoice,
+    body: Option<String>,
+) -> Res<crate::prreview::PrReview> {
+    core.pr_review_note(&project_id, number, id, choice, body)
+        .map_err(err)
+}
+
+/// The text of a review, edited.
+#[tauri::command]
+pub fn pr_review_summary(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+    summary: String,
+) -> Res<crate::prreview::PrReview> {
+    core.pr_review_summary(&project_id, number, summary)
+        .map_err(err)
+}
+
+/// « Publier la relecture »: the only way a review reaches the host, on the user's click.
+#[tauri::command]
+pub async fn pr_review_publish(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+    verdict: crate::forge::ReviewState,
+    accept_moved: bool,
+) -> Res<crate::prreview::Published> {
+    core.pr_review_publish(&project_id, number, verdict, accept_moved)
+        .await
+        .map_err(err)
+}
+
+/// A review dropped.
+#[tauri::command]
+pub fn pr_review_discard(core: CoreState<'_>, project_id: String, number: u64) {
+    core.pr_review_discard(&project_id, number);
+}
+
 /// « Lancer un agent sur cette PR » (ESC-65): an agent in a worktree on the branch of the project's
 /// open pull request `number`, a fork's too.
 #[tauri::command]

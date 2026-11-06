@@ -716,6 +716,10 @@ impl Engine for Claude {
         writer(weight)
     }
 
+    fn answers_without_tools(&self) -> bool {
+        true
+    }
+
     fn models_by_alias(&self) -> bool {
         true
     }
@@ -860,11 +864,23 @@ async fn one_shot(ask: OneShot<'_>) -> Result<String> {
         limit: _,
         model: _,
     } = ask;
+    let args = one_shot_args(weight, system);
+    // Reading needs no permission in its folder, and is refused outside of it: nothing more is
+    // allowed.
+    let out = super::oneshot::run(&program, cwd, &args, &env, prompt, writer(weight)).await?;
+    let v = json_answer(&out)?;
+    Ok(v["result"].as_str().unwrap_or("").to_string())
+}
+
+/// The arguments of a one-shot question of `weight`: its model and its tools, none of the user's
+/// settings, no MCP server, nothing kept.
+fn one_shot_args(weight: Weight, system: &str) -> [String; 13] {
     let (model, tools) = match weight {
         Weight::Light => ("haiku", ""),
         Weight::Reading => ("sonnet", "Read,Glob,Grep"),
+        Weight::Given => ("sonnet", ""),
     };
-    let args = [
+    [
         "-p",
         "--model",
         model,
@@ -880,19 +896,14 @@ async fn one_shot(ask: OneShot<'_>) -> Result<String> {
         "--system-prompt",
         system,
     ]
-    .map(String::from);
-    // Reading needs no permission in its folder, and is refused outside of it: nothing more is
-    // allowed.
-    let out = super::oneshot::run(&program, cwd, &args, &env, prompt, writer(weight)).await?;
-    let v = json_answer(&out)?;
-    Ok(v["result"].as_str().unwrap_or("").to_string())
+    .map(String::from)
 }
 
 /// The model that answers a one-shot question of `weight`, as the interface names it.
 fn writer(weight: Weight) -> &'static str {
     match weight {
         Weight::Light => "Claude Haiku",
-        Weight::Reading => "Claude Sonnet",
+        Weight::Reading | Weight::Given => "Claude Sonnet",
     }
 }
 
@@ -901,6 +912,23 @@ mod tests {
     use super::*;
     use crate::model::{Criterion, ModelInfo, Ticket};
     use crate::plugins::harness::args_for_log;
+
+    /// Its `--tools`, after its model: the model of a reading, and none of its tools.
+    #[test]
+    fn a_text_given_has_the_model_of_a_reading_and_no_tool() {
+        let after = |args: &[String], flag: &str| {
+            let at = args.iter().position(|a| a == flag).unwrap();
+            args[at + 1].clone()
+        };
+        let given = one_shot_args(Weight::Given, "Relis.");
+        assert_eq!(after(&given, "--model"), "sonnet");
+        assert_eq!(after(&given, "--tools"), "");
+        assert_eq!(after(&given, "--system-prompt"), "Relis.");
+        assert!(given.contains(&"--strict-mcp-config".to_string()));
+        let reading = one_shot_args(Weight::Reading, "Lis.");
+        assert_eq!(after(&reading, "--tools"), "Read,Glob,Grep");
+        assert_eq!(writer(Weight::Given), "Claude Sonnet");
+    }
 
     #[test]
     fn a_claude_not_found_is_said_with_what_puts_it_back() {

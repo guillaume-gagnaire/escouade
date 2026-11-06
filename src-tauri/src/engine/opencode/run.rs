@@ -134,7 +134,7 @@ pub(crate) async fn one_shot(ask: OneShot<'_>) -> Result<String> {
         bail!(escouade_plugin_opencode::no_model(i18n::ui().tag()));
     }
     let cwd: PathBuf = match ask.weight {
-        Weight::Light => light_dir(),
+        Weight::Light | Weight::Given => light_dir(),
         Weight::Reading => ask.cwd.to_path_buf(),
     };
     let mut env = ask.env.clone();
@@ -209,6 +209,15 @@ mod tests {
         assert!(a.windows(2).any(|w| w == ["--model", "ollama/q"]));
         assert!(a.windows(2).any(|w| w == ["--agent", AGENT]));
         assert!(a.windows(2).any(|w| w == ["--format", "json"]));
+    }
+
+    #[test]
+    fn a_text_given_has_no_tool_as_a_short_one() {
+        let given = config("ollama/q", Weight::Given, "Relis.");
+        let agent = &given["agent"][AGENT];
+        assert_eq!(agent["tools"], json!({ "*": false }));
+        assert_eq!(agent["permission"]["*"], "deny");
+        assert_eq!(agent["permission"]["read"], Value::Null);
     }
 
     #[test]

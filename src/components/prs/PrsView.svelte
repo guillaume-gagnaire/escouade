@@ -22,11 +22,13 @@
     type PrFilter,
   } from '../../lib/prlist';
   import { openPr, prKey } from '../../lib/prs';
+  import { reviewMark } from '../../lib/prreview';
   import { failureTitle } from '../../lib/prview';
   import { app } from '../../lib/state.svelte';
   import { tip } from '../../lib/tip';
   import type { PrFailure, PrRead, Project, ProjectPrs, PullRequest } from '../../lib/types';
   import Icon from '../Icon.svelte';
+  import PrReviewView from './PrReviewView.svelte';
 
   // The project's « Pull requests » view (ESC-65, direction A of design/esc-65): beside the Kanban, its open pull requests
   // in a dense list (CI, reviews, conflict, author, age), three filters, and on the row chosen « Lancer un agent » (Entrée)
@@ -50,6 +52,12 @@
   const counts = $derived(filterCounts(all, me));
   const agents = $derived(Object.values(app.agents).filter((a) => a.projectId === project.id));
   const at = $derived(shown.findIndex((p) => prKey(p) === chosen));
+  const reviews = $derived(app.prReviews[project.id] ?? {});
+  /** The review that fills the view, in place of the list (ESC-66). */
+  const reviewing = $derived.by(() => {
+    const n = app.prReviewOpen[project.id];
+    return n == null ? null : (reviews[n] ?? null);
+  });
 
   async function load() {
     const id = project.id;
@@ -78,6 +86,7 @@
       readAt = null;
       chosen = null;
       void load();
+      app.loadPrReviews(project.id).catch(() => {});
     });
     const timer = setInterval(() => {
       if (document.visibilityState === 'visible' && !reading) void load();
@@ -137,117 +146,137 @@
   </div>
 {/snippet}
 
-<main class="prs" aria-busy={reading}>
-  <header class="head">
-    <div class="h-title">
-      <h1>{word === 'MR' ? t('prs.list.titleMr') : t('prs.list.title')}</h1>
-      <div class="crumbs">
-        <span class="proj-name">{project.name}</span>
-        {#if data}<span aria-hidden="true">·</span><span class="num">{t('prs.list.open', { count: all.length })}</span>{/if}
+{#if reviewing}
+  <PrReviewView {project} review={reviewing} {me} />
+{:else}
+  <main class="prs" aria-busy={reading}>
+    <header class="head">
+      <div class="h-title">
+        <h1>{word === 'MR' ? t('prs.list.titleMr') : t('prs.list.title')}</h1>
+        <div class="crumbs">
+          <span class="proj-name">{project.name}</span>
+          {#if data}<span aria-hidden="true">·</span><span class="num">{t('prs.list.open', { count: all.length })}</span>{/if}
+        </div>
       </div>
-    </div>
-    <div class="segmented filters" role="tablist" aria-label={t('prs.list.filterLabel', { word })}>
-      {#each FILTERS as f (f)}
-        <button role="tab" aria-selected={filter === f} onclick={() => setFilter(f)}
-          >{t(`prs.list.filter.${f}`)}{#if data}<span class="count num">{counts[f]}</span>{/if}</button
-        >
-      {/each}
-    </div>
-    {#if readAt}<span class="read">{t('prs.list.readAt', { time: fTime(readAt) })}</span>{/if}
-    <button
-      class="icon-btn"
-      class:spin={reading}
-      aria-label={t('prs.list.refresh')}
-      use:tip={t('prs.list.refresh')}
-      onclick={() => void load()}><Icon name="restart" size={15} /></button
-    >
-  </header>
-
-  {#if !read}
-    <div class="state" role="status">
-      <span class="spinner" aria-hidden="true"></span>
-      <p>{t('prs.view.project.loading', { word })}</p>
-    </div>
-  {:else if !data && read.failure}
-    <div class="state">{@render failed(read.failure, false)}</div>
-  {:else if data}
-    {#if read.failure}{@render failed(read.failure, true)}{/if}
-    {#if !me && filter !== 'all'}<p class="note">{t('prs.list.noMe')}</p>{/if}
-    {#if !shown.length}
-      <div class="state">
-        <span class="empty-icon"><Icon name="pr" size={22} /></span>
-        <p class="empty-t">{t(`prs.list.empty.${filter}`, { word })}</p>
-        <p>{t('prs.list.emptyHint', { word })}</p>
-        {#if filter !== 'all'}
-          <button class="btn ghost" onclick={() => setFilter('all')}><Icon name="pr" size={14} />{t('prs.list.showAll', { word })}</button>
-        {/if}
-      </div>
-    {:else}
-      <ul class="list" aria-label={t('prs.list.filterLabel', { word })}>
-        {#each shown as p, i (prKey(p))}
-          {@const owner = ownerOf(agents, p, word)}
-          {@const ci = ciOf(p)}
-          {@const fork = forkOwner(p)}
-          {@const branch = p.fork ? forkBranch(word, p.number) : p.head}
-          <li class="row" class:on={i === at} class:draft={p.draft}>
-            <button
-              class="main"
-              bind:this={rows[i]}
-              aria-label={t('prs.list.row', { word, number: p.number, title: p.title })}
-              aria-current={i === at ? 'true' : undefined}
-              onclick={() => choose(i)}
-              ondblclick={() => void act(p)}
-              onkeydown={(e) => onKey(e, i)}
-            >
-              <span class="st {rowTone(p)}"><Icon name={p.draft ? 'pr' : ci.icon} size={14} /></span>
-              <span class="n num">#{p.number}</span>
-              <span class="title">
-                <span class="t">{p.title}</span>
-                {#if p.draft}<span class="tag">{t('prs.list.draft')}</span>{/if}
-                {#if fork}<span class="tag fork" use:tip={t('prs.list.forkHint', { repo: p.headRepo ?? '?', branch: p.head })}
-                    ><Icon name="branch" size={11} />{t('prs.list.fork', { owner: fork })}</span
-                  >{/if}
-                {#if owner}<span class="tag agent" use:tip={t('prs.list.agentHint', { agent: owner.name })}
-                    ><Icon name="agents" size={11} />{owner.name}</span
-                  >{/if}
-              </span>
-              <span class="chips">
-                {#each chipsOf(p, me) as c (c.key)}<span class="chip {c.tone}"><Icon name={c.icon} size={12} />{c.text}</span>{/each}
-              </span>
-              <span class="ci {ci.tone}">{ci.text}</span>
-              <span class="by">{p.author ?? ''}</span>
-              <span class="age num">{ageOf(p, app.now)}</span>
-            </button>
-            <span class="acts">
-              {#if owner}
-                <button
-                  class="btn small"
-                  onclick={() => app.selectAgent(owner.id)}
-                  use:tip={t('prs.list.openAgentHint', { agent: owner.name, word })}
-                  ><Icon name="agents" size={13} />{t('prs.list.openAgent')}</button
-                >
-              {:else}
-                <button
-                  class="btn small"
-                  disabled={starting !== null}
-                  onclick={() => void act(p)}
-                  use:tip={t('prs.list.launchHint', { word, branch })}
-                  ><Icon name="agents" size={13} />{starting === p.number ? t('prs.list.launching') : t('prs.list.launch')}</button
-                >
-              {/if}
-              <button
-                class="icon-btn"
-                aria-label={t('prs.view.openInBrowser')}
-                use:tip={t('prs.view.openInBrowser')}
-                onclick={() => openPr(p)}><Icon name="ext" size={14} /></button
-              >
-            </span>
-          </li>
+      <div class="segmented filters" role="tablist" aria-label={t('prs.list.filterLabel', { word })}>
+        {#each FILTERS as f (f)}
+          <button role="tab" aria-selected={filter === f} onclick={() => setFilter(f)}
+            >{t(`prs.list.filter.${f}`)}{#if data}<span class="count num">{counts[f]}</span>{/if}</button
+          >
         {/each}
-      </ul>
+      </div>
+      {#if readAt}<span class="read">{t('prs.list.readAt', { time: fTime(readAt) })}</span>{/if}
+      <button
+        class="icon-btn"
+        class:spin={reading}
+        aria-label={t('prs.list.refresh')}
+        use:tip={t('prs.list.refresh')}
+        onclick={() => void load()}><Icon name="restart" size={15} /></button
+      >
+    </header>
+
+    {#if !read}
+      <div class="state" role="status">
+        <span class="spinner" aria-hidden="true"></span>
+        <p>{t('prs.view.project.loading', { word })}</p>
+      </div>
+    {:else if !data && read.failure}
+      <div class="state">{@render failed(read.failure, false)}</div>
+    {:else if data}
+      {#if read.failure}{@render failed(read.failure, true)}{/if}
+      {#if !me && filter !== 'all'}<p class="note">{t('prs.list.noMe')}</p>{/if}
+      {#if !shown.length}
+        <div class="state">
+          <span class="empty-icon"><Icon name="pr" size={22} /></span>
+          <p class="empty-t">{t(`prs.list.empty.${filter}`, { word })}</p>
+          <p>{t('prs.list.emptyHint', { word })}</p>
+          {#if filter !== 'all'}
+            <button class="btn ghost" onclick={() => setFilter('all')}><Icon name="pr" size={14} />{t('prs.list.showAll', { word })}</button
+            >
+          {/if}
+        </div>
+      {:else}
+        <ul class="list" aria-label={t('prs.list.filterLabel', { word })}>
+          {#each shown as p, i (prKey(p))}
+            {@const owner = ownerOf(agents, p, word)}
+            {@const ci = ciOf(p)}
+            {@const fork = forkOwner(p)}
+            {@const branch = p.fork ? forkBranch(word, p.number) : p.head}
+            {@const review = reviews[p.number]}
+            <li class="row" class:on={i === at} class:draft={p.draft}>
+              <button
+                class="main"
+                bind:this={rows[i]}
+                aria-label={t('prs.list.row', { word, number: p.number, title: p.title })}
+                aria-current={i === at ? 'true' : undefined}
+                onclick={() => choose(i)}
+                ondblclick={() => void act(p)}
+                onkeydown={(e) => onKey(e, i)}
+              >
+                <span class="st {rowTone(p)}"><Icon name={p.draft ? 'pr' : ci.icon} size={14} /></span>
+                <span class="n num">#{p.number}</span>
+                <span class="title">
+                  <span class="t">{p.title}</span>
+                  {#if p.draft}<span class="tag">{t('prs.list.draft')}</span>{/if}
+                  {#if fork}<span class="tag fork" use:tip={t('prs.list.forkHint', { repo: p.headRepo ?? '?', branch: p.head })}
+                      ><Icon name="branch" size={11} />{t('prs.list.fork', { owner: fork })}</span
+                    >{/if}
+                  {#if owner}<span class="tag agent" use:tip={t('prs.list.agentHint', { agent: owner.name })}
+                      ><Icon name="agents" size={11} />{owner.name}</span
+                    >{/if}
+                  {#if review}{@const mark = reviewMark(review)}<span class="tag review {mark.tone}">{mark.text}</span>{/if}
+                </span>
+                <span class="chips">
+                  {#each chipsOf(p, me) as c (c.key)}<span class="chip {c.tone}"><Icon name={c.icon} size={12} />{c.text}</span>{/each}
+                </span>
+                <span class="ci {ci.tone}">{ci.text}</span>
+                <span class="by">{p.author ?? ''}</span>
+                <span class="age num">{ageOf(p, app.now)}</span>
+              </button>
+              <span class="acts">
+                {#if review}
+                  <button
+                    class="btn small"
+                    use:tip={t('prs.review.showHint', { word })}
+                    onclick={() => app.showPrReview(project.id, p.number)}><Icon name="read" size={13} />{t('prs.review.show')}</button
+                  >
+                {:else}
+                  <button
+                    class="btn small"
+                    use:tip={t('prs.review.askHint', { word })}
+                    onclick={() => void app.startPrReview(project.id, p.number)}><Icon name="read" size={13} />{t('prs.review.ask')}</button
+                  >
+                {/if}
+                {#if owner}
+                  <button
+                    class="btn small"
+                    onclick={() => app.selectAgent(owner.id)}
+                    use:tip={t('prs.list.openAgentHint', { agent: owner.name, word })}
+                    ><Icon name="agents" size={13} />{t('prs.list.openAgent')}</button
+                  >
+                {:else}
+                  <button
+                    class="btn small"
+                    disabled={starting !== null}
+                    onclick={() => void act(p)}
+                    use:tip={t('prs.list.launchHint', { word, branch })}
+                    ><Icon name="agents" size={13} />{starting === p.number ? t('prs.list.launching') : t('prs.list.launch')}</button
+                  >
+                {/if}
+                <button
+                  class="icon-btn"
+                  aria-label={t('prs.view.openInBrowser')}
+                  use:tip={t('prs.view.openInBrowser')}
+                  onclick={() => openPr(p)}><Icon name="ext" size={14} /></button
+                >
+              </span>
+            </li>
+          {/each}
+        </ul>
+      {/if}
     {/if}
-  {/if}
-</main>
+  </main>
+{/if}
 
 <style>
   .prs {
@@ -522,6 +551,13 @@
   .tag.fork {
     color: var(--info);
     box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--info) 35%, transparent);
+  }
+  .tag.review.ask {
+    color: var(--wait);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
+  }
+  .tag.review.fail {
+    color: var(--del);
   }
   .tag.agent {
     color: var(--p-ink);

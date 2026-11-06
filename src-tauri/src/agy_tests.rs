@@ -501,3 +501,18 @@ async fn real_agy_writes_a_text() {
     println!("answer in {:?}: {answer}", started.elapsed());
     assert!(!answer.trim().is_empty() && answer.len() < 200, "{answer}");
 }
+
+/// A text given (ESC-66): the model of a reading; `one_shot` refuses every tool whatever the weight.
+#[test]
+fn a_text_given_has_the_model_of_a_reading() {
+    use crate::engine::{agy, Engine, Weight};
+    assert_eq!(
+        agy::text_model(Weight::Given),
+        agy::text_model(Weight::Reading)
+    );
+    assert_ne!(
+        agy::text_model(Weight::Given),
+        agy::text_model(Weight::Light)
+    );
+    assert!(crate::engine::AGY.answers_without_tools());
+}

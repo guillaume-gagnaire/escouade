@@ -8,6 +8,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- « Faire relire » dans la vue Pull requests : un agent lit le diff d'une PR et rédige ses commentaires par fichier et par ligne. Tu gardes, corriges ou écartes chacun, puis tu publies le tout d'un coup ; rien ne part sans toi.
 - Claude Code et les harness décrits par ACP, Goose compris, tournent désormais comme des plugins isolés en WASM, sans process à eux : ils conversent comme avant. Par Escouade, un agent ACP lit dans son dossier et son dépôt et écrit dans son dossier, rien d’autre.
 - Linear, Trello, Jira et ClickUp tournent désormais comme des plugins isolés en WASM, sans process à eux : ils répondent comme avant.
 - GitHub, GitLab, Bitbucket, Gitea et Azure DevOps aussi : tes PR, ta CI, tes relectures et tes déploiements marchent comme avant, sans process à eux. Un journal de CI de plus de 8 Mio se dit trop long au lieu de s’afficher.

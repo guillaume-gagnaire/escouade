@@ -656,7 +656,7 @@ async fn read_models(
 fn writer_model(weight: Weight) -> &'static str {
     match weight {
         Weight::Light => "flash-lite",
-        Weight::Reading => "flash",
+        Weight::Reading | Weight::Given => "flash",
     }
 }
 
@@ -1022,6 +1022,11 @@ impl Engine for Gemini {
 
     fn one_shot<'a>(&'a self, ask: OneShot<'a>) -> BoxFuture<'a, Result<String>> {
         Box::pin(one_shot(ask))
+    }
+
+    /// Its rules refuse every tool, whatever the weight (`NO_TOOLS`).
+    fn answers_without_tools(&self) -> bool {
+        true
     }
 
     fn writer(&self, _weight: Weight) -> &'static str {

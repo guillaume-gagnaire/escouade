@@ -2623,6 +2623,8 @@ export type UiEvent =
   /** Why no ticket of the project's board starts (its target branch), or null once they may. */
   | { type: 'boardIssue'; projectId: string; issue: string | null }
   | { type: 'environments'; environments: ProjectEnvironments }
+  | { type: 'prReview'; review: AgentReview }
+  | { type: 'prReviewGone'; projectId: string; number: number }
   /** Why no ticket of a project that goes to any account starts for now, or null once they may; `projects`: the same for the paused projects that prefer an account. */
   | { type: 'autopilotPause'; pause: AutopilotPause | null; projects?: Record<string, AutopilotPause> }
   /** The CI of a project's target branch as last read (ESC-63), or null when there is none to show. */
@@ -2950,6 +2952,56 @@ export interface ProjectPrs {
   prs: PullRequest[];
   /** The login of the account they were read with; empty when it does not say. */
   me?: string;
+}
+
+/** What the user decided of a comment of a review (`prreview::NoteChoice`). */
+export type NoteChoice = 'open' | 'kept' | 'dropped';
+
+/** What a published review says (`forge::ReviewState`). */
+export type ReviewVerdict = 'approved' | 'changesRequested' | 'commented';
+
+/** A line of the diff above a comment (`prreview::DiffLine`). */
+export interface ReviewDiffLine {
+  kind: '+' | '-' | ' ' | '@';
+  /** Its number in the new version; none for a line removed. */
+  line?: number;
+  text: string;
+}
+
+/** A comment of a review, on a file and a line (`prreview::ReviewNote`). */
+export interface ReviewNote {
+  id: number;
+  path: string;
+  line: number;
+  body: string;
+  /** What the agent wrote. */
+  proposed: string;
+  choice: NoteChoice;
+  excerpt: ReviewDiffLine[];
+  /** Its line is not in the diff: it goes in the review's text. */
+  outside: boolean;
+}
+
+/** The review of a pull request written by an agent (`prreview::PrReview`, ESC-66). */
+export interface AgentReview {
+  projectId: string;
+  number: number;
+  word: string;
+  host: string;
+  author: string;
+  title: string;
+  head: string;
+  base: string;
+  url: string;
+  headSha: string;
+  phase: 'reading' | 'ready' | 'publishing' | 'failed' | 'published';
+  error?: string;
+  summary: string;
+  notes: ReviewNote[];
+  leftOut: string[];
+  by: string;
+  at: number;
+  publishedAt?: number;
 }
 
 /** A check or a status of a pull request's last commit (`forge::Check`). */

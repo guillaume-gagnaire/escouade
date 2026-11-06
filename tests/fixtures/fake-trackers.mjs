@@ -922,6 +922,7 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
     if (m) {
       const pull = g.pulls.find((x) => x.number === Number(m[1]));
       if (!pull) return send(404, { message: 'Not Found' });
+      if (m[2] && method === 'POST') return send(200, { id: 1 });
       if (m[2])
         return send(200, pull.changesRequested ? [{ user: { login: 'bob' }, state: 'CHANGES_REQUESTED', body: 'Ajoute un test.' }] : []);
       return send(200, { number: pull.number, head: { sha: `sha${pull.number}`, ref: pull.head } });

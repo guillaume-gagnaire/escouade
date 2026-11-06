@@ -45,6 +45,7 @@ import type {
   EngineDecl,
   EngineId,
   PageEvent,
+  AgentReview,
   Project,
   ProjectEnvironments,
   Resources,
@@ -385,6 +386,10 @@ class AppState {
   docs = $state<Record<string, boolean>>({});
   /** Projects whose « Pull requests » view (ESC-65) fills the main area, in place of the agents (not saved). */
   prs = $state<Record<string, boolean>>({});
+  /** The reviews written by an agent (ESC-66), by project then by pull request. */
+  prReviews = $state<Record<string, Record<number, AgentReview>>>({});
+  /** The pull request whose review fills the « Pull requests » view, by project. */
+  prReviewOpen = $state<Record<string, number | null>>({});
   /** The word of each project's code host for a pull request (« PR », « MR » on GitLab), once read (ESC-65). */
   prWords = $state<Record<string, string>>({});
   /** The space of the Docs tab each project shows: the spec, the decisions or the documents. */
@@ -777,6 +782,12 @@ class AppState {
         break;
       case 'docsCompared':
         this.docsComparing[e.projectId] = e.comparing;
+        break;
+      case 'prReview':
+        this.gotPrReview(e.review);
+        break;
+      case 'prReviewGone':
+        if (this.prReviews[e.projectId]) delete this.prReviews[e.projectId][e.number];
         break;
       case 'environments':
         this.environments[e.environments.projectId] = e.environments;
@@ -1215,6 +1226,54 @@ class AppState {
 
   closePrs(projectId = this.ui.activeProject) {
     if (projectId) this.prs[projectId] = false;
+  }
+
+  /** A review as the backend has it; one that ends out of sight says so. */
+  private gotPrReview(r: AgentReview) {
+    const was = this.prReviews[r.projectId]?.[r.number];
+    (this.prReviews[r.projectId] ??= {})[r.number] = r;
+    const shown = this.prs[r.projectId] && this.prReviewOpen[r.projectId] === r.number;
+    if (was?.phase !== 'reading' || r.phase === 'reading' || shown) return;
+    const params = { word: r.word, number: r.number };
+    const action = { label: t('prs.review.open'), onClick: () => this.showPrReview(r.projectId, r.number) };
+    if (r.phase === 'failed') this.toast(t('prs.review.failedToast', params), 'error', action);
+    else this.toast(t('prs.review.ready', params), 'ok', action);
+  }
+
+  /** The reviews of a project, read again (a start finds its drafts). */
+  async loadPrReviews(projectId: string) {
+    const all = await api.prReviews(projectId);
+    this.prReviews[projectId] = Object.fromEntries(all.map((r) => [r.number, r]));
+  }
+
+  showPrReview(projectId: string, number: number) {
+    this.prReviewOpen[projectId] = number;
+    this.openPrs(projectId);
+  }
+
+  closePrReview(projectId: string) {
+    this.prReviewOpen[projectId] = null;
+  }
+
+  /** « Faire relire par un agent »: the review, started by a click, in place of the one before. */
+  async startPrReview(projectId: string, number: number) {
+    try {
+      await api.prReviewStart(projectId, number);
+      this.showPrReview(projectId, number);
+    } catch (e) {
+      this.toast(errorText(e), 'error');
+    }
+  }
+
+  /** The review of a pull request: the one it has, or a new one. Never replaces a draft by itself. */
+  async askPrReview(projectId: string, number: number) {
+    try {
+      await this.loadPrReviews(projectId);
+    } catch (e) {
+      return this.toast(errorText(e), 'error');
+    }
+    if (this.prReviews[projectId]?.[number]) this.showPrReview(projectId, number);
+    else await this.startPrReview(projectId, number);
   }
 
   /** A project as the backend now has it (its board settings, mostly). */

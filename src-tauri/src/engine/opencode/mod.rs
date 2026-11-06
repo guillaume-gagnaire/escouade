@@ -428,6 +428,10 @@ impl Engine for Opencode {
         true
     }
 
+    fn answers_without_tools(&self) -> bool {
+        true
+    }
+
     fn writer(&self, _weight: Weight) -> &'static str {
         "OpenCode"
     }

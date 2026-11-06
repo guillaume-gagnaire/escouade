@@ -207,7 +207,7 @@ pub fn settled(prs: &[PullRequest]) -> bool {
 }
 
 /// "pull request" or "merge request", as the host says it.
-fn long_word(word: &str) -> &'static str {
+pub(crate) fn long_word(word: &str) -> &'static str {
     if word == "MR" {
         "merge request"
     } else {

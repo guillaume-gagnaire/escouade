@@ -30,7 +30,7 @@ const LIGHT_OFF: [&str; 5] = [
 pub(crate) fn args(weight: Weight, sandbox: Option<&str>) -> Vec<String> {
     let effort = match weight {
         Weight::Light => "low",
-        Weight::Reading => "medium",
+        Weight::Reading | Weight::Given => "medium",
     };
     let mut a: Vec<String> = [
         "exec",
@@ -51,7 +51,7 @@ pub(crate) fn args(weight: Weight, sandbox: Option<&str>) -> Vec<String> {
     .to_vec();
     a.push(format!("model_reasoning_effort=\"{effort}\""));
     match weight {
-        Weight::Light => {
+        Weight::Light | Weight::Given => {
             for f in LIGHT_OFF {
                 a.extend(["--disable".to_string(), f.to_string()]);
             }
@@ -193,6 +193,20 @@ mod tests {
         assert!(!args(Weight::Reading, None)
             .iter()
             .any(|x| x.contains("windows")));
+    }
+
+    /// `--sandbox read-only` reads the whole disk: a text from a third party goes without shell.
+    #[test]
+    fn a_text_given_has_the_effort_of_a_reading_and_no_tool() {
+        let given = args(Weight::Given, Some("elevated"));
+        assert!(given.contains(&"model_reasoning_effort=\"medium\"".to_string()));
+        for f in LIGHT_OFF {
+            assert!(
+                given.windows(2).any(|w| w == ["--disable", f]),
+                "{f}: {given:?}"
+            );
+        }
+        assert!(!given.iter().any(|x| x.contains("windows.sandbox")));
     }
 
     #[test]

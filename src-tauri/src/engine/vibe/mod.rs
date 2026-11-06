@@ -938,6 +938,11 @@ impl Engine for Vibe {
         Box::pin(one_shot(ask))
     }
 
+    /// `print_args` names no tool, whatever the weight.
+    fn answers_without_tools(&self) -> bool {
+        true
+    }
+
     fn writer(&self, _weight: Weight) -> &'static str {
         "Mistral Vibe"
     }
