@@ -12,6 +12,7 @@
   import { t } from '../lib/i18n';
   import { branchSummary, deltaDetail, repoLabel } from '../lib/repos';
   import { api } from '../lib/ipc';
+  import { dropPlace, stepPlace, type Place } from '../lib/agent-folders';
   import { fDur, fUsd, fWhen, tildify } from '../lib/format';
   import { accountName, addAccount, defaultEngine, hasAccount, newAgentAccount, newAgentDefaults } from '../lib/accounts';
   import {
@@ -22,6 +23,8 @@
     listRequest,
     listStep,
     listTarget,
+    foldedCards,
+    type SidebarItem,
     type ListDecision,
     type ListRequest,
   } from '../lib/sidebar';
@@ -63,7 +66,7 @@
   import { closeTerminal, newTerminal, terminalIn } from '../lib/term-actions';
   import { canPrepare, prepareLaunch, stopTests } from '../lib/test-launch.svelte';
   import { backTarget, forwardTargets } from '../lib/handover';
-  import type { Agent, AgentStatus, BranchInfo, EngineId, Project } from '../lib/types';
+  import type { Agent, AgentFolder, AgentStatus, BranchInfo, EngineId, Project } from '../lib/types';
   import RunsSection from './RunsSection.svelte';
   import EngineMark from './EngineMark.svelte';
   import StatusDot from './StatusDot.svelte';
@@ -136,6 +139,9 @@
   const review = $derived(app.reviewCount(project.id));
   /** Who waits for an answer goes first (2.0 design). */
   const agents = $derived(app.projectAgents);
+  /** What the list shows: folders and loose agents (`agents`, flat, is the same in shown order: the keys' and Ctrl+J's). */
+  const items = $derived(app.projectItems);
+  type FolderItem = Extract<SidebarItem, { kind: 'folder' }>;
   /** The requests answered from the list, until the agent's request is gone: one click answers once. */
   let answering = $state<Record<string, string>>({});
   /** The cards that flash green a moment, their agent sent off again from the list. */
@@ -256,9 +262,104 @@
     app.toast(t('nav.sidebar.answered', { name: a.name, choice: said }), 'ok');
   }
 
-  /** Enter opens a card, as a click does. */
+  /** Enter opens a card, as a click does; Alt+↑ / Alt+↓ move it one step (into a folder, out of it at its edges). */
   function cardKey(e: KeyboardEvent, a: Agent) {
-    if (e.target === e.currentTarget && e.key === 'Enter') app.selectAgent(a.id);
+    if (e.target !== e.currentTarget) return;
+    if (e.key === 'Enter') app.selectAgent(a.id);
+    else stepKey(e, a.id, `.agent[data-agent="${CSS.escape(a.id)}"]`);
+  }
+
+  /** The folder an agent is in, null when it is loose. */
+  const folderOf = (id: string) =>
+    items.find((it): it is FolderItem => it.kind === 'folder' && (it.principal?.id === id || it.agents.some((a) => a.id === id)));
+
+  /** The ids of a level as it is drawn (null: the project's): what a drop line can sit before. */
+  function rowIds(level: string | null): string[] {
+    if (!level) return items.map((it) => (it.kind === 'agent' ? it.agent.id : it.folder.id));
+    const f = items.find((it): it is FolderItem => it.kind === 'folder' && it.folder.id === level);
+    if (!f) return [];
+    return (f.folder.folded ? foldedCards(f, selectedAgentId) : [...(f.principal ? [f.principal] : []), ...f.agents]).map((a) => a.id);
+  }
+
+  const isFolder = (id: string) => items.some((it) => it.kind === 'folder' && it.folder.id === id);
+
+  const move = (id: string, p: Place) => app.run(api.agentFolderMove(project.id, id, p.folderId, p.index ?? undefined));
+
+  /** Alt+↑ / Alt+↓ on a card or a folder's chevron: one step; the focus stays on what moved, wherever it is drawn next. */
+  async function stepKey(e: KeyboardEvent, id: string, focus: string) {
+    if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+    e.preventDefault();
+    const p = stepPlace(project, items, id, e.key === 'ArrowUp' ? -1 : 1);
+    if (!p) return;
+    await move(id, p);
+    await tick();
+    document.querySelector<HTMLElement>(focus)?.focus();
+  }
+
+  // Dragging, as the project rail's tiles do (ProjectRail.svelte): a line shows where it lands, a folder's header lights up
+  // when an agent hovers it (it goes in at the bottom).
+  let dragId = $state<string | null>(null);
+  /** The drop line: sits before the drawn row `before` of level `level` (a folder's id; null: the project's), null at its end. */
+  let drop = $state<{ level: string | null; before: string | null } | null>(null);
+  let overFolder = $state<string | null>(null);
+  /** Where the dragged item would land, null when it would not move or may not go there: no line then. */
+  const place = $derived(dragId && drop ? dropPlace(project, items, dragId, drop.level, drop.before) : null);
+
+  function onDragStart(e: DragEvent, id: string) {
+    e.stopPropagation();
+    dragId = id;
+    e.dataTransfer?.setData('text/plain', id);
+  }
+  function endDrag() {
+    dragId = drop = overFolder = null;
+  }
+
+  /** Over a drawn row (an agent's card or a folder's header at the project level): the line goes above it or under it. */
+  function overRow(e: DragEvent, id: string) {
+    if (dragId === null) return;
+    const level = folderOf(id)?.folder.id ?? null;
+    // A folder goes among the project's rows only.
+    if (level && isFolder(dragId)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const row = rowIds(level);
+    const i = row.indexOf(id);
+    overFolder = null;
+    drop = { level, before: e.clientY < r.top + r.height / 2 ? id : (row[i + 1] ?? null) };
+  }
+  /** Over a folder's header: an agent goes in (it lights up); a folder goes before or after it. */
+  function overHeader(e: DragEvent, id: string) {
+    if (dragId === null) return;
+    if (isFolder(dragId)) return overRow(e, id);
+    e.preventDefault();
+    e.stopPropagation();
+    drop = null;
+    overFolder = id;
+  }
+  /** Over the free space of a folder's body: the end of that folder. */
+  function overBody(e: DragEvent, id: string) {
+    if (dragId === null || isFolder(dragId)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    overFolder = null;
+    drop = { level: id, before: null };
+  }
+  /** Over the free space of the list: the end of the project's rows. */
+  function overList(e: DragEvent) {
+    if (dragId === null) return;
+    e.preventDefault();
+    overFolder = null;
+    drop = { level: null, before: null };
+  }
+  /** Dropped: on a folder's header (`into`) an agent goes in at the bottom; elsewhere where the line is. */
+  function onDrop(e: DragEvent, into?: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    const id = dragId;
+    const p = id && (into && !isFolder(id) ? dropPlace(project, items, id, into, null) : place);
+    endDrag();
+    if (id && p) void move(id, p);
   }
 
   /**
@@ -306,12 +407,103 @@
     if (kept) app.toast(kept, 'info');
   }
 
+  function startFolderRename(f: AgentFolder) {
+    renaming = f.id;
+    renameValue = f.name;
+  }
+
+  async function commitFolderRename(f: AgentFolder) {
+    // Enter then the blur of the removed input: rename once.
+    if (renaming !== f.id) return;
+    const v = renameValue.trim();
+    renaming = null;
+    if (v && v !== f.name) await app.run(api.agentFolderRename(project.id, f.id, v));
+  }
+
+  /** A new folder (holding `agentId`, if any), its name asked at once, once it is drawn. */
+  async function newFolder(agentId?: string) {
+    const f = await app.run(api.agentFolderCreate(project.id, agentId));
+    if (f) startFolderRename(f);
+  }
+
+  /** « 2 en cours, 1 en attente »: what the pills of a folder's header say, for the screen readers. */
+  const folderCounts = (it: FolderItem) =>
+    [
+      it.running && t('nav.sidebar.folders.running', { count: it.running }),
+      it.waiting && t('nav.sidebar.folders.waiting', { count: it.waiting }),
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+  /** Monter / Descendre, greyed at the ends of what `id` can step through. */
+  function stepItems(id: string): MenuItem[] {
+    return [
+      { label: t('nav.rail.up'), hint: t('nav.rail.upKey'), disabled: !stepPlace(project, items, id, -1), onClick: () => stepMove(id, -1) },
+      {
+        label: t('nav.rail.down'),
+        hint: t('nav.rail.downKey'),
+        disabled: !stepPlace(project, items, id, 1),
+        onClick: () => stepMove(id, 1),
+      },
+    ];
+  }
+  function stepMove(id: string, by: -1 | 1) {
+    const p = stepPlace(project, items, id, by);
+    if (p) void move(id, p);
+  }
+
+  /** What an agent's menu offers about folders: where to move it, a folder made of it, its star, a step up or down. */
+  function folderItems(e: MouseEvent, a: Agent): MenuItem[] {
+    if (a.archived) return [];
+    const mine = folderOf(a.id);
+    return [
+      { label: t('nav.sidebar.folders.moveTo'), onClick: () => moveMenu(e, a) },
+      ...(mine
+        ? [
+            {
+              label: t(mine.principal?.id === a.id ? 'nav.sidebar.folders.removeStar' : 'nav.sidebar.folders.makePrincipal'),
+              onClick: () => app.run(api.agentFolderPrincipal(project.id, mine.folder.id, mine.principal?.id === a.id ? null : a.id)),
+            },
+          ]
+        : [{ label: t('nav.sidebar.folders.createWith'), onClick: () => newFolder(a.id) }]),
+      ...stepItems(a.id),
+    ];
+  }
+
+  /** « Déplacer vers… »: each other folder, a new one, out of any, where the agent's menu was (no submenus: a second menu). */
+  async function moveMenu(e: MouseEvent, a: Agent) {
+    const at = { x: e.clientX, y: e.clientY };
+    const mine = folderOf(a.id)?.folder.id ?? null;
+    await tick();
+    menu.open = {
+      ...at,
+      items: [
+        ...items
+          .filter((it): it is FolderItem => it.kind === 'folder' && it.folder.id !== mine)
+          .map((it) => ({ label: it.folder.name, onClick: () => move(a.id, { folderId: it.folder.id, index: null }) })),
+        { label: t('nav.sidebar.folders.create'), onClick: () => newFolder(a.id) },
+        ...(mine ? [{ label: t('nav.sidebar.folders.outOf'), onClick: () => move(a.id, { folderId: null, index: null }) }] : []),
+      ],
+    };
+  }
+
+  /** The menu of a folder's header. */
+  function folderMenu(e: MouseEvent, f: AgentFolder) {
+    menu.show(e, [
+      { label: t('common.rename'), onClick: () => startFolderRename(f) },
+      ...stepItems(f.id),
+      { label: '', separator: true },
+      { label: t('nav.sidebar.folders.delete'), danger: true, onClick: () => app.run(api.agentFolderDelete(project.id, f.id)) },
+    ]);
+  }
+
   /** `folded`: what the header of its conversation, too narrow, no longer shows (ESC-166), offered here instead. */
   function agentMenu(e: MouseEvent, a: Agent, folded?: HeaderFolded) {
     // A copy is made from a conversation at rest: during a turn, the original's session moves on.
     const turn = a.status === 'running' || a.status === 'waiting';
     menu.show(e, [
       { label: t('common.rename'), onClick: () => startRename(a) },
+      ...folderItems(e, a),
       // Only for a harness that copies a conversation.
       ...(a.archived || !canFork(a)
         ? []
@@ -609,6 +801,8 @@
         },
       },
       { label: '', separator: true },
+      { label: t('nav.sidebar.folders.create'), icon: 'folder', onClick: () => newFolder() },
+      { label: '', separator: true },
       {
         label: t('nav.sidebar.defaultHarness'),
         icon: 'sliders',
@@ -682,6 +876,11 @@
 <!-- The chevron of a list that folds: down when open. -->
 {#snippet chev(open: boolean)}
   <span class="chev" aria-hidden="true"><Icon name={open ? 'down' : 'right'} size={12} /></span>
+{/snippet}
+
+<!-- The line where a dragged agent or folder lands: before the row `before` of its level, null at the end of it. -->
+{#snippet line(level: string | null, before: string | null)}
+  {#if place && drop && drop.level === level && drop.before === before}<div class="drop" aria-hidden="true"></div>{/if}
 {/snippet}
 
 <!-- The button of a list that shows only its first rows: it unrolls the others, then folds them back (the focus stays). -->
@@ -793,380 +992,456 @@
       >
     </div>
 
-    <div class="agents">
-      {#each agents as a (a.id)}
-        {@const sel = a.id === selectedAgentId && !otherView}
-        {@const s = spent(a)}
-        {@const ticket = app.ticketOf(a.id)}
-        {@const plan = planView(a)?.mini}
-        {@const wfStep = cardStep(workflows.scans[project.id]?.workflows ?? [], workflows.tracks[project.id]?.[a.id])}
-        {@const wfNext = cardNext(workflows.scans[project.id]?.workflows ?? [], workflows.tracks[project.id]?.[a.id])}
-        {@const inBg = can(a, 'backgroundTasks') ? bgCount(a.plan) : 0}
-        {@const subsRunning = (a.plan?.agents ?? []).filter((x) => x.status === 'running').length}
-        {@const remote = remoteStateOf(a)}
-        {@const pending = pendingFor(a, app.agents, app.tickets, app.now, can(a, 'backgroundTasks'))}
-        {@const ask = listRequest(a)}
-        {@const act = cardActivity(a, git?.agents[a.id] ?? 0, pending)}
-        <div
-          class="agent card"
-          class:waiting={a.status === 'waiting'}
-          class:done={a.status === 'done' && !pending}
-          class:idle={a.status === 'idle' && !pending}
-          class:error={a.status === 'error'}
-          class:awaits={!!pending}
-          class:sel
-          class:alert={app.attention[a.id]}
-          class:flash={flashing[a.id]}
-          style:--alert={a.status === 'error' ? 'var(--del)' : a.status === 'waiting' ? 'var(--wait)' : 'var(--run)'}
-          role="button"
-          tabindex="0"
-          aria-current={sel ? 'true' : undefined}
-          data-agent={a.id}
-          onclick={() => app.selectAgent(a.id)}
-          onkeydown={(e) => cardKey(e, a)}
-          oncontextmenu={(e) => agentMenu(e, a)}
-        >
-          <div class="a-top">
-            <StatusDot status={a.status} awaits={!!pending} />
-            {#if renaming === a.id}
-              <!-- svelte-ignore a11y_autofocus -->
-              <input
-                class="rename"
-                bind:value={renameValue}
-                autofocus
-                onclick={(e) => e.stopPropagation()}
-                onkeydown={(e) => {
-                  e.stopPropagation();
-                  if (e.key === 'Enter') commitRename(a);
-                  if (e.key === 'Escape') renaming = null;
-                }}
-                onblur={() => commitRename(a)}
-              />
-            {:else}
-              <span class="name" ondblclick={() => startRename(a)} role="presentation">{a.name}</span>
-            {/if}
-            {#if subsRunning + inBg > 0}
-              <!-- Its subagents and its background tasks at work (choice 10): their lists unfold under the card of the agent open. -->
-              <span class="bg-chip">
-                {#if subsRunning}
-                  {@const label = t('subagents.chipLabel', { count: subsRunning })}
-                  <span
-                    class="part"
-                    role="img"
-                    aria-label={label}
-                    use:tip={{ text: label, aria: false }}
-                    data-sub-chip
-                    data-count={subsRunning}><Icon name="sub" size={12} />{subsRunning}</span
-                  >
-                {/if}
-                {#if inBg}
-                  {@const label = t('bgtasks.chipLabel', { count: inBg })}
-                  <span class="part" role="img" aria-label={label} use:tip={{ text: label, aria: false }} data-bg-chip data-count={inBg}
-                    ><Icon name="clock" size={12} />{inBg}</span
-                  >
-                {/if}
-              </span>
-            {/if}
-            {#if remote}
-              <span class="rc" class:on={remote === 'connected'} class:warn={remote === 'stillOn'} use:tip={remoteTitle(a, remote)}>
-                <Icon name="remote" size={13} />{#if remote === 'stillOn'}<span class="bar" aria-hidden="true"></span>{/if}
-              </span>
-            {/if}
-            {#if a.status === 'waiting'}
-              <span class="a-state status">{statusLabel('waiting')}</span>
-            {:else if a.resumeAt}
-              <span class="a-state status wk" use:tip={t('nav.sidebar.resumeTitle', { when: fWhen(a.resumeAt, app.now) })}
-                ><Icon name="clock" size={12} />{t('nav.sidebar.resumes', { when: fWhen(a.resumeAt, app.now) })}</span
-              >
-            {:else if a.setup}
-              <span class="a-state status wk" use:tip={t('nav.sidebar.settingUpTitle', { step: a.setup })}
-                >{t('nav.sidebar.settingUp')}</span
-              >
-            {:else if pending}
-              <!-- Its turn is over, but what it left goes on (ESC-138): not « Terminé » yet. -->
-              <span class="a-state status wk" use:tip={pendingText(pending, app.now)} data-pending
-                >{#if pending.wake}<Icon name="clock" size={12} />{/if}{pendingLabel(pending, app.now)}</span
-              >
-            {:else}
-              <span class="a-state status">{statusLabel(a.status)}</span>
-            {/if}
-          </div>
-          {#if a.progressLine}
-            <!-- What the agent reported through Escouade's MCP server, until its next report. -->
-            <div class="said" use:tip={{ text: a.progressLine, cut: true }}>
-              <span class="sr">{t('mcp.progress.label')}{' '}</span>{a.progressLine}
-            </div>
+    {#snippet card(a: Agent, principal = false)}
+      {@const sel = a.id === selectedAgentId && !otherView}
+      {@const s = spent(a)}
+      {@const ticket = app.ticketOf(a.id)}
+      {@const plan = planView(a)?.mini}
+      {@const wfStep = cardStep(workflows.scans[project.id]?.workflows ?? [], workflows.tracks[project.id]?.[a.id])}
+      {@const wfNext = cardNext(workflows.scans[project.id]?.workflows ?? [], workflows.tracks[project.id]?.[a.id])}
+      {@const inBg = can(a, 'backgroundTasks') ? bgCount(a.plan) : 0}
+      {@const subsRunning = (a.plan?.agents ?? []).filter((x) => x.status === 'running').length}
+      {@const remote = remoteStateOf(a)}
+      {@const pending = pendingFor(a, app.agents, app.tickets, app.now, can(a, 'backgroundTasks'))}
+      {@const ask = listRequest(a)}
+      {@const act = cardActivity(a, git?.agents[a.id] ?? 0, pending)}
+      <div
+        class="agent card"
+        class:waiting={a.status === 'waiting'}
+        class:done={a.status === 'done' && !pending}
+        class:idle={a.status === 'idle' && !pending}
+        class:error={a.status === 'error'}
+        class:awaits={!!pending}
+        class:sel
+        class:alert={app.attention[a.id]}
+        class:flash={flashing[a.id]}
+        class:dragging={dragId === a.id}
+        style:--alert={a.status === 'error' ? 'var(--del)' : a.status === 'waiting' ? 'var(--wait)' : 'var(--run)'}
+        role="button"
+        tabindex="0"
+        aria-current={sel ? 'true' : undefined}
+        data-agent={a.id}
+        onclick={() => app.selectAgent(a.id)}
+        onkeydown={(e) => cardKey(e, a)}
+        oncontextmenu={(e) => agentMenu(e, a)}
+        draggable={renaming !== a.id}
+        ondragstart={(e) => onDragStart(e, a.id)}
+        ondragover={(e) => overRow(e, a.id)}
+        ondrop={onDrop}
+        ondragend={endDrag}
+      >
+        <div class="a-top">
+          <StatusDot status={a.status} awaits={!!pending} />
+          {#if renaming === a.id}
+            <!-- svelte-ignore a11y_autofocus -->
+            <input
+              class="rename"
+              bind:value={renameValue}
+              autofocus
+              onclick={(e) => e.stopPropagation()}
+              onkeydown={(e) => {
+                e.stopPropagation();
+                if (e.key === 'Enter') commitRename(a);
+                if (e.key === 'Escape') renaming = null;
+              }}
+              onblur={() => commitRename(a)}
+            />
+          {:else}
+            <span class="name" ondblclick={() => startRename(a)} role="presentation">{a.name}</span>
           {/if}
-          <div class="a-meta">
-            <EngineMark engine={a.engine} />
-            {#if ticket?.column === 'doing' || ticket?.column === 'review'}
-              <span class="ticket-chip">{ticket.key}</span>
-              {#if ticket.column === 'doing'}
-                <!-- The ticket's loop keeps its place; the step of its workflow, if it follows one, is in the tooltip (choice 145). -->
+          {#if principal}
+            <span
+              class="star"
+              role="img"
+              aria-label={t('nav.sidebar.folders.principal')}
+              use:tip={{ text: t('nav.sidebar.folders.principal'), aria: false }}><Icon name="star" size={12} /></span
+            >
+          {/if}
+          {#if subsRunning + inBg > 0}
+            <!-- Its subagents and its background tasks at work (choice 10): their lists unfold under the card of the agent open. -->
+            <span class="bg-chip">
+              {#if subsRunning}
+                {@const label = t('subagents.chipLabel', { count: subsRunning })}
                 <span
-                  class="loop"
-                  use:tip={wfStep
-                    ? [t('workflow.cardStep', { step: wfStep }), wfNext].filter(Boolean).join('\n')
-                    : t('workflow.next', { what: t('board.columns.review') })}
-                  ><span>{t('nav.sidebar.loop', { iteration: ticket.iteration, max: ticket.maxLoops })}</span>
-                  <span class="loops" aria-hidden="true"
-                    >{#each { length: Math.min(ticket.maxLoops, 10) } as _, i (i)}<i class:on={i < ticket.iteration}></i>{/each}</span
-                  ></span
-                >
-              {:else}
-                <span>{t('nav.sidebar.toTest')}</span>
-              {/if}
-            {:else}
-              <span class="model">{modelLabel(a.model, app.models)}</span>
-              {#if a.prompts || a.activeMs || a.activeSince}
-                <span class="sep">·</span><span class="num">{duration(a)}</span>
-              {:else}
-                <span class="sep">·</span><span>{t('nav.sidebar.noMessage')}</span>
-              {/if}
-              {#if wfStep}
-                <!-- Where it is in its workflow takes the place of its plan, which stays in its banner (choice 145). -->
-                <span class="sep">·</span><span class="wf-mini" use:tip={wfNext}><Icon name="flow" size={14} /><span>{wfStep}</span></span>
-              {:else if plan}
-                <!-- How far the agent is through its plan: the bar says it at a glance, the words are read. -->
-                <span class="sep">·</span><span class="plan-mini"
-                  ><span class="plan-text"
-                    >{plan.subs
-                      ? t('plan.miniSubs', { done: plan.done, total: plan.total, count: plan.subs })
-                      : t('plan.mini', { done: plan.done, total: plan.total })}</span
-                  ><span class="plan-bar" aria-hidden="true"><i style:--pct={plan.percent}></i></span></span
-                >
-              {:else if a.worktree}
-                <!-- Its own branch, when the line has room for it (no plan): whole in the tooltip. -->
-                <span class="sep">·</span><span class="branch" use:tip={a.worktree.branch}
-                  ><Icon name="branch" size={12} /><span class="bn"
-                    >{shortBranch(a.worktree.branch, a.worktree.existing ? '' : project.agentBranchPrefix)}</span
-                  ></span
+                  class="part"
+                  role="img"
+                  aria-label={label}
+                  use:tip={{ text: label, aria: false }}
+                  data-sub-chip
+                  data-count={subsRunning}><Icon name="sub" size={12} />{subsRunning}</span
                 >
               {/if}
-            {/if}
-            {#if a.worktreePending}<span class="sep">·</span><span class="wt" use:tip={t('nav.sidebar.worktreeLaterTitle')}
-                >{t('nav.sidebar.worktreeLater')}</span
-              >{/if}
-          </div>
+              {#if inBg}
+                {@const label = t('bgtasks.chipLabel', { count: inBg })}
+                <span class="part" role="img" aria-label={label} use:tip={{ text: label, aria: false }} data-bg-chip data-count={inBg}
+                  ><Icon name="clock" size={12} />{inBg}</span
+                >
+              {/if}
+            </span>
+          {/if}
+          {#if remote}
+            <span class="rc" class:on={remote === 'connected'} class:warn={remote === 'stillOn'} use:tip={remoteTitle(a, remote)}>
+              <Icon name="remote" size={13} />{#if remote === 'stillOn'}<span class="bar" aria-hidden="true"></span>{/if}
+            </span>
+          {/if}
           {#if a.status === 'waiting'}
-            <!-- What it waits on, answered from here (2.0, new): its choices clicked, or its keys 1, 2… (listKey). Questions one
-               after the other; a permission allowed, for good or for the session, or refused. What does not hold on the card
-               is answered in its conversation. -->
-            {@const req = a.requests?.[0]}
-            <div class="a-ask">
-              {#if ask?.kind === 'question'}
-                {@const step = shownStep(ask)}
-                {#if ask.note}<p class="note">{revealHidden(ask.note)}</p>{/if}
-                {#if ask.questions.length > 1}
-                  <span class="step">{t('nav.sidebar.step', { n: step + 1, count: ask.questions.length })}</span>
-                {/if}
-                <p>{ask.questions[step].question}</p>
-                {@render choices(a, ask)}
-              {:else if ask}
-                <p class="perm"><span class="tool">{toolLabel(ask.tool)}</span> <span class="arg mono">{revealHidden(ask.arg)}</span></p>
-                {#if ask.note}<p class="note">{revealHidden(ask.note)}</p>{/if}
-                {@render choices(a, ask)}
-              {:else if req}
-                <p class="clip">
-                  {req.kind === 'question'
-                    ? req.questions.map((x) => x.question).join(' · ')
-                    : req.tool === 'ExitPlanMode'
-                      ? t('stats.overview.proposesPlanThen', { engine: speakerOf(a.engine), mode: modeLabel(planResume(a)) })
-                      : `${req.tool}${req.arg ? ` ${req.arg.split('\n')[0]}` : ''}`}
-                </p>
-                <button
-                  class="in-conv"
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    app.selectAgent(a.id);
-                  }}>{t('nav.sidebar.inConversation')}<Icon name="right" size={12} /></button
-                >
-              {/if}
-            </div>
-          {:else if act || s.tokens > 0 || s.cost > 0}
-            <div class="a-act" use:tip={s.estimated ? estimateHint(s) : undefined}>
-              {#if act?.kind === 'doing'}
-                <b>{act.verb}</b>{#if act.what}<span class="tgt mono">{act.what}</span>{/if}
-              {:else if act?.kind === 'thinking'}
-                <span class="tgt">{t('stats.overview.thinking')}</span>
-              {:else if act?.kind === 'over'}
-                <span class="ok"><Icon name="check" size={14} /></span><span class="tgt">{t('nav.sidebar.over')} · {act.goes}</span>
-              {:else if act?.kind === 'result'}
-                <span class="ok"><Icon name="check" size={14} /></span><span class="tgt"
-                  >{t('nav.sidebar.changed', { count: act.files })}</span
-                >
-              {/if}
-              <span class="spend">{cardSpend(a)}</span>
-            </div>
+            <span class="a-state status">{statusLabel('waiting')}</span>
+          {:else if a.resumeAt}
+            <span class="a-state status wk" use:tip={t('nav.sidebar.resumeTitle', { when: fWhen(a.resumeAt, app.now) })}
+              ><Icon name="clock" size={12} />{t('nav.sidebar.resumes', { when: fWhen(a.resumeAt, app.now) })}</span
+            >
+          {:else if a.setup}
+            <span class="a-state status wk" use:tip={t('nav.sidebar.settingUpTitle', { step: a.setup })}>{t('nav.sidebar.settingUp')}</span>
+          {:else if pending}
+            <!-- Its turn is over, but what it left goes on (ESC-138): not « Terminé » yet. -->
+            <span class="a-state status wk" use:tip={pendingText(pending, app.now)} data-pending
+              >{#if pending.wake}<Icon name="clock" size={12} />{/if}{pendingLabel(pending, app.now)}</span
+            >
+          {:else}
+            <span class="a-state status">{statusLabel(a.status)}</span>
           {/if}
         </div>
-        {@const prs = cardPrs(a)}
-        {#if prs.length}
-          <!-- Under the card, not in it (the card is a button): its pull requests (ESC-64), the ones to merge first; a number
+        {#if a.progressLine}
+          <!-- What the agent reported through Escouade's MCP server, until its next report. -->
+          <div class="said" use:tip={{ text: a.progressLine, cut: true }}>
+            <span class="sr">{t('mcp.progress.label')}{' '}</span>{a.progressLine}
+          </div>
+        {/if}
+        <div class="a-meta">
+          <EngineMark engine={a.engine} />
+          {#if ticket?.column === 'doing' || ticket?.column === 'review'}
+            <span class="ticket-chip">{ticket.key}</span>
+            {#if ticket.column === 'doing'}
+              <!-- The ticket's loop keeps its place; the step of its workflow, if it follows one, is in the tooltip (choice 145). -->
+              <span
+                class="loop"
+                use:tip={wfStep
+                  ? [t('workflow.cardStep', { step: wfStep }), wfNext].filter(Boolean).join('\n')
+                  : t('workflow.next', { what: t('board.columns.review') })}
+                ><span>{t('nav.sidebar.loop', { iteration: ticket.iteration, max: ticket.maxLoops })}</span>
+                <span class="loops" aria-hidden="true"
+                  >{#each { length: Math.min(ticket.maxLoops, 10) } as _, i (i)}<i class:on={i < ticket.iteration}></i>{/each}</span
+                ></span
+              >
+            {:else}
+              <span>{t('nav.sidebar.toTest')}</span>
+            {/if}
+          {:else}
+            <span class="model">{modelLabel(a.model, app.models)}</span>
+            {#if a.prompts || a.activeMs || a.activeSince}
+              <span class="sep">·</span><span class="num">{duration(a)}</span>
+            {:else}
+              <span class="sep">·</span><span>{t('nav.sidebar.noMessage')}</span>
+            {/if}
+            {#if wfStep}
+              <!-- Where it is in its workflow takes the place of its plan, which stays in its banner (choice 145). -->
+              <span class="sep">·</span><span class="wf-mini" use:tip={wfNext}><Icon name="flow" size={14} /><span>{wfStep}</span></span>
+            {:else if plan}
+              <!-- How far the agent is through its plan: the bar says it at a glance, the words are read. -->
+              <span class="sep">·</span><span class="plan-mini"
+                ><span class="plan-text"
+                  >{plan.subs
+                    ? t('plan.miniSubs', { done: plan.done, total: plan.total, count: plan.subs })
+                    : t('plan.mini', { done: plan.done, total: plan.total })}</span
+                ><span class="plan-bar" aria-hidden="true"><i style:--pct={plan.percent}></i></span></span
+              >
+            {:else if a.worktree}
+              <!-- Its own branch, when the line has room for it (no plan): whole in the tooltip. -->
+              <span class="sep">·</span><span class="branch" use:tip={a.worktree.branch}
+                ><Icon name="branch" size={12} /><span class="bn"
+                  >{shortBranch(a.worktree.branch, a.worktree.existing ? '' : project.agentBranchPrefix)}</span
+                ></span
+              >
+            {/if}
+          {/if}
+          {#if a.worktreePending}<span class="sep">·</span><span class="wt" use:tip={t('nav.sidebar.worktreeLaterTitle')}
+              >{t('nav.sidebar.worktreeLater')}</span
+            >{/if}
+        </div>
+        {#if a.status === 'waiting'}
+          <!-- What it waits on, answered from here (2.0, new): its choices clicked, or its keys 1, 2… (listKey). Questions one
+               after the other; a permission allowed, for good or for the session, or refused. What does not hold on the card
+               is answered in its conversation. -->
+          {@const req = a.requests?.[0]}
+          <div class="a-ask">
+            {#if ask?.kind === 'question'}
+              {@const step = shownStep(ask)}
+              {#if ask.note}<p class="note">{revealHidden(ask.note)}</p>{/if}
+              {#if ask.questions.length > 1}
+                <span class="step">{t('nav.sidebar.step', { n: step + 1, count: ask.questions.length })}</span>
+              {/if}
+              <p>{ask.questions[step].question}</p>
+              {@render choices(a, ask)}
+            {:else if ask}
+              <p class="perm"><span class="tool">{toolLabel(ask.tool)}</span> <span class="arg mono">{revealHidden(ask.arg)}</span></p>
+              {#if ask.note}<p class="note">{revealHidden(ask.note)}</p>{/if}
+              {@render choices(a, ask)}
+            {:else if req}
+              <p class="clip">
+                {req.kind === 'question'
+                  ? req.questions.map((x) => x.question).join(' · ')
+                  : req.tool === 'ExitPlanMode'
+                    ? t('stats.overview.proposesPlanThen', { engine: speakerOf(a.engine), mode: modeLabel(planResume(a)) })
+                    : `${req.tool}${req.arg ? ` ${req.arg.split('\n')[0]}` : ''}`}
+              </p>
+              <button
+                class="in-conv"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  app.selectAgent(a.id);
+                }}>{t('nav.sidebar.inConversation')}<Icon name="right" size={12} /></button
+              >
+            {/if}
+          </div>
+        {:else if act || s.tokens > 0 || s.cost > 0}
+          <div class="a-act" use:tip={s.estimated ? estimateHint(s) : undefined}>
+            {#if act?.kind === 'doing'}
+              <b>{act.verb}</b>{#if act.what}<span class="tgt mono">{act.what}</span>{/if}
+            {:else if act?.kind === 'thinking'}
+              <span class="tgt">{t('stats.overview.thinking')}</span>
+            {:else if act?.kind === 'over'}
+              <span class="ok"><Icon name="check" size={14} /></span><span class="tgt">{t('nav.sidebar.over')} · {act.goes}</span>
+            {:else if act?.kind === 'result'}
+              <span class="ok"><Icon name="check" size={14} /></span><span class="tgt"
+                >{t('nav.sidebar.changed', { count: act.files })}</span
+              >
+            {/if}
+            <span class="spend">{cardSpend(a)}</span>
+          </div>
+        {/if}
+      </div>
+      {@const prs = cardPrs(a)}
+      {#if prs.length}
+        <!-- Under the card, not in it (the card is a button): its pull requests (ESC-64), the ones to merge first; a number
              opens it, the corrections go to the agent on a click only. -->
-          {@const word = prWord(a)}
-          <div class="prs" role="group" aria-label={t('prs.group', { name: a.name })} data-prs={a.id}>
-            {#each prs as p (prKey(p))}
-              <div class="pr" data-pr={p.number}>
+        {@const word = prWord(a)}
+        <div class="prs" role="group" aria-label={t('prs.group', { name: a.name })} data-prs={a.id}>
+          {#each prs as p (prKey(p))}
+            <div class="pr" data-pr={p.number}>
+              <button
+                class="prnum {prTone(p)}"
+                aria-label={t('prs.chipLabel', { word, number: p.number, state: stateWord(p) })}
+                use:tip={{ text: prTip(word, p), aria: false }}
+                onclick={() => openPr(p)}><Icon name={prIcon(p)} size={12} />{p.repo ? `${repoLabel(p.repo)} ` : ''}#{p.number}</button
+              >
+              {#if !a.archived && canFixChecks(p)}
                 <button
-                  class="prnum {prTone(p)}"
-                  aria-label={t('prs.chipLabel', { word, number: p.number, state: stateWord(p) })}
-                  use:tip={{ text: prTip(word, p), aria: false }}
-                  onclick={() => openPr(p)}><Icon name={prIcon(p)} size={12} />{p.repo ? `${repoLabel(p.repo)} ` : ''}#{p.number}</button
+                  class="prfix"
+                  use:tip={t('prs.fixChecksHint', { agent: a.name, word, number: p.number })}
+                  onclick={() => fixPr(a, p, 'checks')}>{t('prs.fixChecks')}</button
                 >
-                {#if !a.archived && canFixChecks(p)}
-                  <button
-                    class="prfix"
-                    use:tip={t('prs.fixChecksHint', { agent: a.name, word, number: p.number })}
-                    onclick={() => fixPr(a, p, 'checks')}>{t('prs.fixChecks')}</button
-                  >
-                {/if}
-                {#if !a.archived && canFixReviews(p)}
-                  <button
-                    class="prfix"
-                    use:tip={t('prs.fixReviewsHint', { agent: a.name, word, number: p.number })}
-                    onclick={() => fixPr(a, p, 'reviews')}>{t('prs.fixReviews')}</button
-                  >
-                {/if}
-              </div>
-            {/each}
-          </div>
-        {/if}
-        {@const subs = a.id === selectedAgentId ? sidebarSubs(a) : null}
-        {#if subs}
-          <!-- Under the card of the agent open only (choice 10 of the 2.0 design): its subagents, unfolded while one runs. -->
-          {@const open = app.subsOpen[a.id] ?? subs.running.length > 0}
-          {@const doneOpen = finishedOpen[a.id] ?? false}
-          <div class="subl" class:sel role="group" aria-label={t('subagents.toggle', { name: a.name })}>
-            <button class="sh subs-toggle" aria-expanded={open} onclick={() => (app.subsOpen[a.id] = !open)}>
-              {@render chev(open)}
-              <span class="lbl">{t('subagents.title')}</span>
-              {#if subs.running.length}<span class="cnt run">{t('subagents.runningCount', { count: subs.running.length })}</span>{/if}
-              {#if subs.finished.length}<span class="cnt">{t('subagents.finishedCount', { count: subs.finished.length })}</span>{/if}
-            </button>
-            {#if open}
-              <!-- The role is said again: a list with no bullets is a list no more for the web views of macOS. -->
-              <!-- svelte-ignore a11y_no_redundant_roles -->
-              <ul class="sub-list" role="list">
-                {#each runningAll[a.id] ? subs.running : subs.running.slice(0, RUNNING_SHOWN) as s (s.id)}
-                  {@render subRow(a, s)}
-                {/each}
-                {#if subs.running.length > RUNNING_SHOWN}
-                  {@render moreRows(
-                    runningAll[a.id] ?? false,
-                    t('subagents.moreRunning', { count: subs.running.length - RUNNING_SHOWN }),
-                    () => (runningAll[a.id] = !runningAll[a.id]),
-                  )}
-                {/if}
-                {#if subs.finished.length}
-                  <li class="finished">
-                    <button class="done-toggle" aria-expanded={doneOpen} onclick={() => (finishedOpen[a.id] = !doneOpen)}>
-                      {@render chev(doneOpen)}{t('subagents.finishedToggle', { count: subs.finished.length })}
-                    </button>
-                    {#if doneOpen}
-                      <!-- svelte-ignore a11y_no_redundant_roles -->
-                      <ul class="sub-list done" role="list">
-                        {#each finishedAll[a.id] ? subs.finished : subs.finished.slice(0, FINISHED_SHOWN) as s (s.id)}
-                          {@render subRow(a, s)}
-                        {/each}
-                        {#if subs.finished.length > FINISHED_SHOWN}
-                          {@render moreRows(
-                            finishedAll[a.id] ?? false,
-                            t('subagents.moreFinished', { count: subs.finished.length - FINISHED_SHOWN }),
-                            () => (finishedAll[a.id] = !finishedAll[a.id]),
-                          )}
-                        {/if}
-                      </ul>
-                    {/if}
-                  </li>
-                {/if}
-              </ul>
-            {/if}
-          </div>
-        {/if}
-        {@const bg =
-          a.id === selectedAgentId && can(a, 'backgroundTasks')
-            ? sidebarBg(a.plan, { running: bgRunningAll[a.id], finished: bgFinishedAll[a.id] })
-            : null}
-        {#if bg}
-          <!-- Under the card of the agent open too, after the subagents: what its harness runs in the background. -->
-          {@const open = app.bgOpen[a.id] ?? bg.runningTotal > 0}
-          {@const doneOpen = bgFinishedOpen[a.id] ?? false}
-          <div class="subl bgs" class:sel role="group" aria-label={t('bgtasks.toggle', { name: a.name })} data-bg-group={a.id}>
-            <button class="sh subs-toggle" aria-expanded={open} onclick={() => (app.bgOpen[a.id] = !open)}>
-              {@render chev(open)}
-              <span class="lbl">{t('bgtasks.title')}</span>
-              {#if bg.runningTotal}<span class="cnt run">{t('bgtasks.runningCount', { count: bg.runningTotal })}</span>{/if}
-              {#if bg.finishedTotal}<span class="cnt">{t('bgtasks.finishedCount', { count: bg.finishedTotal })}</span>{/if}
-            </button>
-            {#if open}
-              <!-- svelte-ignore a11y_no_redundant_roles -->
-              <ul class="sub-list" role="list">
-                {#each bg.running as r (r.id)}
-                  {@render bgItem(a, r)}
-                {/each}
-                {#if bg.runningTotal > BG_RUNNING_SHOWN}
-                  {@render moreRows(
-                    bgRunningAll[a.id] ?? false,
-                    t('bgtasks.moreRunning', { count: bg.runningTotal - BG_RUNNING_SHOWN }),
-                    () => (bgRunningAll[a.id] = !bgRunningAll[a.id]),
-                    t('bgtasks.lessList'),
-                  )}
-                {/if}
-                {#if bg.finishedTotal}
-                  <li class="finished">
-                    <button class="done-toggle" aria-expanded={doneOpen} onclick={() => (bgFinishedOpen[a.id] = !doneOpen)}>
-                      {@render chev(doneOpen)}{t('bgtasks.finishedToggle', { count: bg.finishedTotal })}
-                    </button>
-                    {#if doneOpen}
-                      <!-- svelte-ignore a11y_no_redundant_roles -->
-                      <ul class="sub-list done" role="list">
-                        {#each bg.finished as r (r.id)}
-                          {@render bgItem(a, r)}
-                        {/each}
-                        {#if bg.finishedTotal > BG_FINISHED_SHOWN}
-                          {@render moreRows(
-                            bgFinishedAll[a.id] ?? false,
-                            t('bgtasks.moreFinished', { count: bg.finishedTotal - BG_FINISHED_SHOWN }),
-                            () => (bgFinishedAll[a.id] = !bgFinishedAll[a.id]),
-                            t('bgtasks.lessList'),
-                          )}
-                        {/if}
-                      </ul>
-                    {/if}
-                  </li>
-                {/if}
-              </ul>
-            {/if}
-          </div>
-        {/if}
-        {@const driven = drivenAgents(a.plan, app.agents, app.tickets, a.id)}
-        {#if driven.length}
-          <!-- Under the card too (ESC-138): the agents of Escouade it set to work through the MCP server, while they work. -->
-          {@const open = drivenOpen[a.id] ?? true}
-          <div class="subl" class:sel role="group" aria-label={t('bgtasks.later.drivenToggle', { name: a.name })} data-driven-group={a.id}>
-            <button class="sh subs-toggle" aria-expanded={open} onclick={() => (drivenOpen[a.id] = !open)}>
-              {@render chev(open)}
-              <span class="lbl">{t('bgtasks.later.drivenTitle')}</span>
-              <span class="cnt run">{t('bgtasks.later.drivenCount', { count: driven.length })}</span>
-            </button>
-            {#if open}
-              <!-- svelte-ignore a11y_no_redundant_roles -->
-              <ul class="sub-list" role="list">
-                {#each driven as d (d.id)}
-                  <li>
-                    <button class="sub" aria-label={t('bgtasks.later.drivenOpen', { name: d.name })} onclick={() => app.selectAgent(d.id)}>
-                      <span class="sdot running" aria-hidden="true"></span>
-                      <span class="stext"
-                        ><span class="sline"><span class="stitle">{d.name}</span><span class="sstate">{statusLabel(d.status)}</span></span
-                        ></span
-                      >
-                    </button>
-                  </li>
-                {/each}
-              </ul>
-            {/if}
-          </div>
+              {/if}
+              {#if !a.archived && canFixReviews(p)}
+                <button
+                  class="prfix"
+                  use:tip={t('prs.fixReviewsHint', { agent: a.name, word, number: p.number })}
+                  onclick={() => fixPr(a, p, 'reviews')}>{t('prs.fixReviews')}</button
+                >
+              {/if}
+            </div>
+          {/each}
+        </div>
+      {/if}
+      {@const subs = a.id === selectedAgentId ? sidebarSubs(a) : null}
+      {#if subs}
+        <!-- Under the card of the agent open only (choice 10 of the 2.0 design): its subagents, unfolded while one runs. -->
+        {@const open = app.subsOpen[a.id] ?? subs.running.length > 0}
+        {@const doneOpen = finishedOpen[a.id] ?? false}
+        <div class="subl" class:sel role="group" aria-label={t('subagents.toggle', { name: a.name })}>
+          <button class="sh subs-toggle" aria-expanded={open} onclick={() => (app.subsOpen[a.id] = !open)}>
+            {@render chev(open)}
+            <span class="lbl">{t('subagents.title')}</span>
+            {#if subs.running.length}<span class="cnt run">{t('subagents.runningCount', { count: subs.running.length })}</span>{/if}
+            {#if subs.finished.length}<span class="cnt">{t('subagents.finishedCount', { count: subs.finished.length })}</span>{/if}
+          </button>
+          {#if open}
+            <!-- The role is said again: a list with no bullets is a list no more for the web views of macOS. -->
+            <!-- svelte-ignore a11y_no_redundant_roles -->
+            <ul class="sub-list" role="list">
+              {#each runningAll[a.id] ? subs.running : subs.running.slice(0, RUNNING_SHOWN) as s (s.id)}
+                {@render subRow(a, s)}
+              {/each}
+              {#if subs.running.length > RUNNING_SHOWN}
+                {@render moreRows(
+                  runningAll[a.id] ?? false,
+                  t('subagents.moreRunning', { count: subs.running.length - RUNNING_SHOWN }),
+                  () => (runningAll[a.id] = !runningAll[a.id]),
+                )}
+              {/if}
+              {#if subs.finished.length}
+                <li class="finished">
+                  <button class="done-toggle" aria-expanded={doneOpen} onclick={() => (finishedOpen[a.id] = !doneOpen)}>
+                    {@render chev(doneOpen)}{t('subagents.finishedToggle', { count: subs.finished.length })}
+                  </button>
+                  {#if doneOpen}
+                    <!-- svelte-ignore a11y_no_redundant_roles -->
+                    <ul class="sub-list done" role="list">
+                      {#each finishedAll[a.id] ? subs.finished : subs.finished.slice(0, FINISHED_SHOWN) as s (s.id)}
+                        {@render subRow(a, s)}
+                      {/each}
+                      {#if subs.finished.length > FINISHED_SHOWN}
+                        {@render moreRows(
+                          finishedAll[a.id] ?? false,
+                          t('subagents.moreFinished', { count: subs.finished.length - FINISHED_SHOWN }),
+                          () => (finishedAll[a.id] = !finishedAll[a.id]),
+                        )}
+                      {/if}
+                    </ul>
+                  {/if}
+                </li>
+              {/if}
+            </ul>
+          {/if}
+        </div>
+      {/if}
+      {@const bg =
+        a.id === selectedAgentId && can(a, 'backgroundTasks')
+          ? sidebarBg(a.plan, { running: bgRunningAll[a.id], finished: bgFinishedAll[a.id] })
+          : null}
+      {#if bg}
+        <!-- Under the card of the agent open too, after the subagents: what its harness runs in the background. -->
+        {@const open = app.bgOpen[a.id] ?? bg.runningTotal > 0}
+        {@const doneOpen = bgFinishedOpen[a.id] ?? false}
+        <div class="subl bgs" class:sel role="group" aria-label={t('bgtasks.toggle', { name: a.name })} data-bg-group={a.id}>
+          <button class="sh subs-toggle" aria-expanded={open} onclick={() => (app.bgOpen[a.id] = !open)}>
+            {@render chev(open)}
+            <span class="lbl">{t('bgtasks.title')}</span>
+            {#if bg.runningTotal}<span class="cnt run">{t('bgtasks.runningCount', { count: bg.runningTotal })}</span>{/if}
+            {#if bg.finishedTotal}<span class="cnt">{t('bgtasks.finishedCount', { count: bg.finishedTotal })}</span>{/if}
+          </button>
+          {#if open}
+            <!-- svelte-ignore a11y_no_redundant_roles -->
+            <ul class="sub-list" role="list">
+              {#each bg.running as r (r.id)}
+                {@render bgItem(a, r)}
+              {/each}
+              {#if bg.runningTotal > BG_RUNNING_SHOWN}
+                {@render moreRows(
+                  bgRunningAll[a.id] ?? false,
+                  t('bgtasks.moreRunning', { count: bg.runningTotal - BG_RUNNING_SHOWN }),
+                  () => (bgRunningAll[a.id] = !bgRunningAll[a.id]),
+                  t('bgtasks.lessList'),
+                )}
+              {/if}
+              {#if bg.finishedTotal}
+                <li class="finished">
+                  <button class="done-toggle" aria-expanded={doneOpen} onclick={() => (bgFinishedOpen[a.id] = !doneOpen)}>
+                    {@render chev(doneOpen)}{t('bgtasks.finishedToggle', { count: bg.finishedTotal })}
+                  </button>
+                  {#if doneOpen}
+                    <!-- svelte-ignore a11y_no_redundant_roles -->
+                    <ul class="sub-list done" role="list">
+                      {#each bg.finished as r (r.id)}
+                        {@render bgItem(a, r)}
+                      {/each}
+                      {#if bg.finishedTotal > BG_FINISHED_SHOWN}
+                        {@render moreRows(
+                          bgFinishedAll[a.id] ?? false,
+                          t('bgtasks.moreFinished', { count: bg.finishedTotal - BG_FINISHED_SHOWN }),
+                          () => (bgFinishedAll[a.id] = !bgFinishedAll[a.id]),
+                          t('bgtasks.lessList'),
+                        )}
+                      {/if}
+                    </ul>
+                  {/if}
+                </li>
+              {/if}
+            </ul>
+          {/if}
+        </div>
+      {/if}
+      {@const driven = drivenAgents(a.plan, app.agents, app.tickets, a.id)}
+      {#if driven.length}
+        <!-- Under the card too (ESC-138): the agents of Escouade it set to work through the MCP server, while they work. -->
+        {@const open = drivenOpen[a.id] ?? true}
+        <div class="subl" class:sel role="group" aria-label={t('bgtasks.later.drivenToggle', { name: a.name })} data-driven-group={a.id}>
+          <button class="sh subs-toggle" aria-expanded={open} onclick={() => (drivenOpen[a.id] = !open)}>
+            {@render chev(open)}
+            <span class="lbl">{t('bgtasks.later.drivenTitle')}</span>
+            <span class="cnt run">{t('bgtasks.later.drivenCount', { count: driven.length })}</span>
+          </button>
+          {#if open}
+            <!-- svelte-ignore a11y_no_redundant_roles -->
+            <ul class="sub-list" role="list">
+              {#each driven as d (d.id)}
+                <li>
+                  <button class="sub" aria-label={t('bgtasks.later.drivenOpen', { name: d.name })} onclick={() => app.selectAgent(d.id)}>
+                    <span class="sdot running" aria-hidden="true"></span>
+                    <span class="stext"
+                      ><span class="sline"><span class="stitle">{d.name}</span><span class="sstate">{statusLabel(d.status)}</span></span
+                      ></span
+                    >
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
+      {/if}
+    {/snippet}
+
+    <div class="agents" ondragover={overList} ondrop={onDrop} role="presentation">
+      {#each items as it (it.kind === 'agent' ? it.agent.id : it.folder.id)}
+        {@render line(null, it.kind === 'agent' ? it.agent.id : it.folder.id)}
+        {#if it.kind === 'agent'}
+          {@render card(it.agent)}
+        {:else}
+          {@const f = it.folder}
+          {@const cards = f.folded ? foldedCards(it, selectedAgentId) : [...(it.principal ? [it.principal] : []), ...it.agents]}
+          <section class="folder" class:over={overFolder === f.id} class:dragging={dragId === f.id} data-folder={f.id}>
+            <div
+              class="folder-h"
+              role="group"
+              aria-label={f.name}
+              draggable={renaming !== f.id}
+              ondragstart={(e) => onDragStart(e, f.id)}
+              ondragover={(e) => overHeader(e, f.id)}
+              ondrop={(e) => onDrop(e, f.id)}
+              ondragend={endDrag}
+              oncontextmenu={(e) => folderMenu(e, f)}
+            >
+              <button
+                class="chev fold"
+                aria-expanded={!f.folded}
+                aria-label={t(f.folded ? 'nav.sidebar.folders.expand' : 'nav.sidebar.folders.collapse', { name: f.name })}
+                onclick={() => app.run(api.agentFolderFold(project.id, f.id, !f.folded))}
+                onkeydown={(e) => stepKey(e, f.id, `[data-folder="${CSS.escape(f.id)}"] .chev`)}
+              >
+                <Icon name={f.folded ? 'right' : 'down'} size={12} />
+              </button>
+              {#if renaming === f.id}
+                <!-- svelte-ignore a11y_autofocus -->
+                <input
+                  class="rename"
+                  aria-label={t('nav.sidebar.folders.rename')}
+                  bind:value={renameValue}
+                  autofocus
+                  onkeydown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === 'Enter') commitFolderRename(f);
+                    if (e.key === 'Escape') renaming = null;
+                  }}
+                  onblur={() => commitFolderRename(f)}
+                />
+              {:else}
+                <span class="name" ondblclick={() => startFolderRename(f)} role="presentation">{f.name}</span>
+              {/if}
+              <span class="cnt" aria-hidden="true">{(it.principal ? 1 : 0) + it.agents.length}</span>
+              {#if it.running}<span class="pill run" aria-hidden="true">{it.running}</span>{/if}
+              {#if it.waiting}<span class="pill wait" aria-hidden="true">{it.waiting}</span>{/if}
+              <span class="sr">{folderCounts(it)}</span>
+            </div>
+            <div class="folder-b" ondragover={(e) => overBody(e, f.id)} role="presentation">
+              {#each cards as a (a.id)}
+                {@render line(f.id, a.id)}
+                {@render card(a, a.id === it.principal?.id)}
+              {/each}
+              {@render line(f.id, null)}
+              {#if !it.principal && !it.agents.length}
+                <p class="folder-empty">{t('nav.sidebar.folders.empty')}</p>
+              {/if}
+            </div>
+          </section>
         {/if}
       {:else}
         <div class="empty">
@@ -1174,6 +1449,7 @@
           <button class="btn" onclick={() => app.newAgent(project.id)}><Icon name="plus" size={14} />{t('nav.sidebar.createAgent')}</button>
         </div>
       {/each}
+      {@render line(null, null)}
 
       {#if app.archivedAgents.length}
         <button class="archived-h" aria-expanded={app.showArchived} onclick={() => (app.showArchived = !app.showArchived)}>
@@ -2111,6 +2387,87 @@
     white-space: nowrap;
   }
 
+  /* A folder of agents: a frame (never `.agent`, which the cards are), its cards under a rule. */
+  .folder {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    margin: 2px 0 4px;
+    background: color-mix(in oklch, var(--p-ink) 3%, var(--panel));
+  }
+  .folder.over {
+    box-shadow: inset 0 0 0 1px var(--p-ink);
+  }
+  .folder.dragging,
+  .agent.dragging {
+    opacity: 0.45;
+  }
+  .folder-h {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+  .folder-h .name {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+  .folder-h .rename {
+    flex: 1;
+    min-width: 0;
+  }
+  .folder-h .cnt {
+    margin-right: auto;
+  }
+  .folder-h .fold {
+    padding: 0;
+    cursor: pointer;
+  }
+  .folder-h .pill {
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
+  .pill.run {
+    color: var(--run);
+  }
+  .pill.wait {
+    color: var(--wait);
+  }
+  .folder-b {
+    margin: 0 6px 4px 14px;
+    padding: 0 0 0 8px;
+    border-left: 1px solid var(--line-2);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-height: 4px;
+  }
+  .folder-empty {
+    margin: 0;
+    padding: 6px 4px;
+    color: var(--dim);
+    font-size: 11.5px;
+  }
+  .star {
+    display: inline-flex;
+    margin-left: auto;
+    color: var(--p-ink);
+  }
+  .star :global(svg) {
+    fill: currentColor;
+  }
+  /* Where a dragged agent or folder lands. */
+  .drop {
+    flex: none;
+    height: 3px;
+    margin: -2px 0;
+    border-radius: 2px;
+    background: var(--p-ink);
+  }
   .empty {
     display: grid;
     justify-items: center;

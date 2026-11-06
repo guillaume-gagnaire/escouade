@@ -100,6 +100,23 @@ export default {
     noRepo: 'Pas de dépôt git',
     /** The project's folder in the footer: it opens the editor on it. */
     browseFolder: 'Parcourir {path}',
+    /** The folders of agents (docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md). */
+    folders: {
+      collapse: 'Replier {name}',
+      expand: 'Déplier {name}',
+      principal: 'Agent principal',
+      empty: 'Glisse un agent ici',
+      running: { one: '{count} en cours', other: '{count} en cours' },
+      waiting: { one: '{count} en attente', other: '{count} en attente' },
+      rename: 'Nom du dossier',
+      create: 'Nouveau dossier',
+      createWith: 'Nouveau dossier avec cet agent',
+      moveTo: 'Déplacer vers…',
+      outOf: 'Hors dossier',
+      makePrincipal: 'Faire l’agent principal',
+      removeStar: 'Retirer l’étoile',
+      delete: 'Supprimer le dossier',
+    },
     // The menu of an agent's card.
     menu: {
       duplicate: 'Dupliquer la conversation',

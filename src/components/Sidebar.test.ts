@@ -186,6 +186,8 @@ describe('Sidebar', () => {
         'Nouvel agent sur une branche…',
         'Nouvel agent depuis une autre branche…',
         '',
+        'Nouveau dossier',
+        '',
         'Harness par défaut du projet…',
       ]);
       // The button itself still makes an agent at once.
@@ -277,6 +279,8 @@ describe('Sidebar', () => {
         'New agent in a worktree',
         'New agent on a branch…',
         'New agent from another branch…',
+        '',
+        'New folder',
         '',
         'Project’s default harness…',
       ]);
@@ -1795,6 +1799,10 @@ describe('Sidebar in English', () => {
     await fireEvent.contextMenu(card);
     expect(items()).toEqual([
       'Rename',
+      'Move to…',
+      'New folder with this agent',
+      'Move up',
+      'Move down',
       'Duplicate the conversation',
       'Archive',
       'Prepare launch',
@@ -3190,5 +3198,116 @@ describe('Sidebar of the 2.0 design (ESC-73)', () => {
       expect(document.querySelector(`[data-icon="${name}"]`), name).not.toBeNull();
     }
     expect(document.body.textContent).not.toMatch(/[▾▸⎇✦⟳■▶×]/);
+  });
+});
+
+describe('Sidebar agent folders', () => {
+  const folderOf = (id: string) => document.querySelector<HTMLElement>(`section.folder[data-folder="${id}"]`)!;
+  const card = (id: string) => document.querySelector<HTMLElement>(`.agent[data-agent="${id}"]`)!;
+  const withFolders = (folded = false) =>
+    resetApp({
+      projects: [
+        project({
+          agentFolders: [{ id: 'f1', name: 'Auth', named: true, principal: 'a1', agents: ['a2', 'a1', 'a4'], folded }],
+          agentOrder: ['f1', 'a3'],
+        }),
+      ],
+      agents: [
+        agent({ id: 'a1', name: 'chef', status: 'running' }),
+        agent({ id: 'a2', name: 'tests', status: 'waiting', createdAt: 2 }),
+        agent({ id: 'a3', name: 'seul', status: 'idle', createdAt: 3 }),
+        agent({ id: 'a4', name: 'calme', status: 'idle', createdAt: 4 }),
+      ],
+    });
+  const names = (el: HTMLElement) => [...el.querySelectorAll('.agent .name')].map((n) => n.textContent);
+
+  it('a folder shows its principal first with a star', () => {
+    withFolders();
+    fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    expect(names(folderOf('f1'))).toEqual(['chef', 'tests', 'calme']);
+    expect(card('a3').closest('section.folder')).toBeNull();
+    expect(getByTip(card('a1'), 'Agent principal')).toBeInTheDocument();
+    expect(within(card('a2')).queryByRole('img', { name: 'Agent principal' })).toBeNull();
+  });
+
+  it('a folded folder still shows the agent that waits', () => {
+    withFolders(true);
+    // The agent open stays drawn too: pick a loose one.
+    app.ui.selectedAgent = { p1: 'a3' };
+    fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    expect(names(folderOf('f1'))).toEqual(['tests']);
+    expect(within(folderOf('f1')).getByRole('button', { name: 'Déplier Auth' })).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('the folder header says its counts to screen readers', () => {
+    withFolders();
+    fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    expect(folderOf('f1').querySelector('.folder-h')).toHaveTextContent('1 en cours, 1 en attente');
+  });
+
+  it('Déplacer vers puts the agent in a folder', async () => {
+    withFolders();
+    const backend = fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    await fireEvent.contextMenu(card('a3'));
+    menu.open!.items.find((i) => i.label === 'Déplacer vers…')!.onClick!();
+    await waitFor(() => expect(menu.open!.items.some((i) => i.label === 'Auth')).toBe(true));
+    menu.open!.items.find((i) => i.label === 'Auth')!.onClick!();
+    await waitFor(() => expect(backend.called('agent_folder_move')).toHaveLength(1));
+    expect(backend.called('agent_folder_move')[0].args).toMatchObject({ projectId: 'p1', itemId: 'a3', folderId: 'f1' });
+  });
+
+  it('Alt+ArrowUp moves the focused card, into the folder above it', async () => {
+    withFolders();
+    const backend = fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    card('a3').focus();
+    await fireEvent.keyDown(card('a3'), { key: 'ArrowUp', altKey: true });
+    await waitFor(() => expect(backend.called('agent_folder_move')).toHaveLength(1));
+    expect(backend.called('agent_folder_move')[0].args).toMatchObject({ itemId: 'a3', folderId: 'f1' });
+    expect(backend.called('agent_folder_move')[0].args.index).toBeUndefined();
+  });
+
+  it('dragging a card onto a folder asks for the move', async () => {
+    withFolders();
+    const backend = fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    const header = folderOf('f1').querySelector<HTMLElement>('.folder-h')!;
+    await fireEvent.dragStart(card('a3'));
+    await fireEvent.dragOver(header);
+    expect(folderOf('f1')).toHaveClass('over');
+    await fireEvent.drop(header);
+    await waitFor(() => expect(backend.called('agent_folder_move')).toHaveLength(1));
+    expect(backend.called('agent_folder_move')[0].args).toMatchObject({ itemId: 'a3', folderId: 'f1' });
+    expect(folderOf('f1')).not.toHaveClass('over');
+  });
+
+  it('Nouveau dossier in the new agent menu creates one', async () => {
+    withFolders();
+    const backend = fakeBackend({
+      agent_folder_create: () => ({ id: 'f2', name: 'Nouveau dossier', named: false, principal: null, agents: [] }),
+    });
+    render(Sidebar, { project: app.projects[0] });
+    await userEvent.click(screen.getByRole('button', { name: 'Autres façons de créer un agent' }));
+    await waitFor(() => expect(menu.open).not.toBeNull());
+    menu.open!.items.find((i) => i.label === 'Nouveau dossier')!.onClick!();
+    await waitFor(() => expect(backend.called('agent_folder_create')).toHaveLength(1));
+    expect(backend.called('agent_folder_create')[0].args).toMatchObject({ projectId: 'p1' });
+    expect(backend.called('agent_folder_create')[0].args.agentId).toBeUndefined();
+  });
+
+  it('Supprimer le dossier asks for its deletion', async () => {
+    withFolders();
+    const backend = fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    await fireEvent.contextMenu(folderOf('f1').querySelector('.folder-h')!);
+    const labels = menu.open!.items.filter((i) => !i.separator).map((i) => i.label);
+    expect(labels).toEqual(['Renommer', 'Monter', 'Descendre', 'Supprimer le dossier']);
+    menu.open!.items.find((i) => i.label === 'Supprimer le dossier')!.onClick!();
+    await waitFor(() => expect(backend.called('agent_folder_delete')).toHaveLength(1));
+    expect(backend.called('agent_folder_delete')[0].args).toMatchObject({ projectId: 'p1', folderId: 'f1' });
   });
 });
