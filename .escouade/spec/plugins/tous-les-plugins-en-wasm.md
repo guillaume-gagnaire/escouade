@@ -3,7 +3,7 @@ title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","docs/PLUGINS.md §8.19 (ESC-344)","docs/PLUGINS.md §8.20 (ESC-337)","docs/PLUGINS.md §8.22 (ESC-351)","docs/PLUGINS.md §8.23 (ESC-349)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire","docs/PLUGINS.md §8.24 (ESC-348)","docs/PLUGINS.md §8.25 (ESC-345)","docs/PLUGINS.md §8.27 (ESC-347)","docs/PLUGINS.md §8.28 (ESC-350)","docs/PLUGINS.md §8.29 (ESC-358)","Accord de l'utilisateur du 2026-11-06 : publication et MIT d'escouade-voice"]
 tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351","ESC-349","ESC-348","ESC-345","ESC-346","ESC-347","ESC-350","ESC-358"]
-decisions: [73,71,70,72,75,80,84,86,89,92,93,96,"le-kit-suit-les-redirections-et-rejoue-l"]
+decisions: [73,71,70,72,75,80,84,86,89,92,93,96,99]
 compared: null
 ---
 

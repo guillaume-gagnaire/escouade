@@ -1,9 +1,9 @@
 ---
-number: null
+number: 99
 id: "le-kit-suit-les-redirections-et-rejoue-l"
 title: "Le kit suit les redirections et rejoue les tâches réveillées : 0.1.1, tous les plugins en run.wasm sur le publié"
 date: "2026-11-06"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-358"
 pages: ["plugins/tous-les-plugins-en-wasm"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/tous-les-plugins-en-wasm","added":7,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-06T19:28:23+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
