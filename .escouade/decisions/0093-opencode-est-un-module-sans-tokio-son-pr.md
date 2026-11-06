@@ -1,9 +1,9 @@
 ---
-number: null
+number: 93
 id: "opencode-est-un-module-sans-tokio-son-pr"
 title: "OpenCode est un module sans tokio : son propre réacteur sur le protocole, sa crate liée au cœur jusqu'à P8"
 date: "2026-11-05"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-349"
 pages: ["plugins/opencode-en-plugin","plugins/tous-les-plugins-en-wasm","plugins/livres-avec-escouade"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/opencode-en-plugin","added":8,"removed":1},{"page":"plugins/tous-les-plugins-en-wasm","added":4,"removed":0},{"page":"plugins/livres-avec-escouade","added":2,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-06T01:42:33+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

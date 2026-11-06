@@ -3,7 +3,7 @@ title: "OpenCode en plugin"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4 (INT-10.2)","docs/PLUGINS.md §8.23 (ESC-349)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-223","Ticket ESC-349"]
 tickets: ["ESC-223","ESC-349"]
-decisions: ["opencode-est-un-module-sans-tokio-son-pr"]
+decisions: [93]
 compared: null
 ---
 
