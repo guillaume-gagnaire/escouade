@@ -708,6 +708,17 @@ export interface EngineInfo extends EngineDecl {
   note: string | null;
 }
 
+/** A group of agents in the sidebar. */
+export interface AgentFolder {
+  id: string;
+  name: string;
+  /** Renamed: it no longer follows its principal's name. */
+  named: boolean;
+  principal: string | null;
+  agents: string[];
+  folded?: boolean;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -782,6 +793,10 @@ export interface Project {
   workflowsInRepo?: boolean;
   /** « Index du code » (ESC-251), the project's own choice (ESC-293): absent, it follows « Index du code sur tous les projets » (`codeIndexOn`, lib/codeindex.ts). Set by `set_code_index` (Réglages › Projets, ESC-254). */
   codeIndexChoice?: boolean;
+  /** Its agent folders; absent when it has none. */
+  agentFolders?: AgentFolder[];
+  /** The sidebar's order: the agents out of any folder and the folders. */
+  agentOrder?: string[];
 }
 
 /** What a project's code index holds (ESC-251). */

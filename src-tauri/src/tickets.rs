@@ -482,7 +482,7 @@ impl<R: Runtime> Core<R> {
         Ok(out)
     }
 
-    fn emit_project(&self, project_id: &str) {
+    pub(crate) fn emit_project(&self, project_id: &str) {
         if let Ok(project) = self.project(project_id) {
             self.hub.emit(UiEvent::Project { project });
         }
@@ -2089,6 +2089,7 @@ impl<R: Runtime> Core<R> {
                     ticket_id: Some(t.id.clone()),
                     port_base: ports,
                     select: false,
+                    folder: None,
                     copy_of: None,
                     account: Some(account),
                     isolated: None,

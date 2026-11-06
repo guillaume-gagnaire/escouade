@@ -1,12 +1,14 @@
 //! Agent folders: the pure rules of the sidebar's order. The core reads the agents, builds the
 //! `Member`s and calls these under the `projects` lock alone.
 
-// The core, the MCP tools and the window use it from the next tasks; drop this then.
+// `shown`, `shown_agents` and `shown_agents_of` serve the MCP tools and the window (next tasks).
 #![allow(dead_code)]
 
-use crate::model::{AgentFolder, Project};
-use anyhow::bail;
+use crate::core::{agent_not_found, project_not_found, Core};
+use crate::model::{AgentFolder, AgentStatus, Project};
+use anyhow::{bail, Result};
 use std::collections::HashSet;
+use tauri::Runtime;
 
 /// An agent of the project as the sidebar sees it; `waiting` is computed by the caller.
 pub struct Member<'a> {
@@ -260,4 +262,216 @@ pub fn shown_agents(p: &Project, members: &[Member]) -> Vec<String> {
             Shown::Folder { agents, .. } => agents,
         })
         .collect()
+}
+
+impl<R: Runtime> Core<R> {
+    /// The project's agents as `Member`s, read before any write of `projects`.
+    fn folder_members(&self, project_id: &str) -> Vec<(String, i64, bool, bool)> {
+        self.project_agents(project_id)
+            .iter()
+            .map(|h| {
+                let m = &h.lock().meta;
+                (
+                    m.id.clone(),
+                    m.created_at,
+                    m.status == AgentStatus::Waiting,
+                    m.archived,
+                )
+            })
+            .collect()
+    }
+
+    /// Settles the project's layout, runs `f` on it, then saves and tells the window.
+    fn edit_layout<T>(
+        &self,
+        project_id: &str,
+        f: impl FnOnce(&mut Project) -> Result<T>,
+    ) -> Result<T> {
+        let owned = self.folder_members(project_id);
+        let members: Vec<Member> = owned
+            .iter()
+            .map(|(id, created_at, waiting, archived)| Member {
+                id,
+                created_at: *created_at,
+                waiting: *waiting,
+                archived: *archived,
+            })
+            .collect();
+        let out = {
+            let mut projects = self.projects.write();
+            let p = projects
+                .iter_mut()
+                .find(|p| p.id == project_id)
+                .ok_or_else(project_not_found)?;
+            settle(p, &members);
+            f(p)?
+        };
+        self.request_save();
+        self.emit_project(project_id);
+        Ok(out)
+    }
+
+    /// A new folder (named « Dossier », « Dossier 2 »… without a name) holding `agents`, in the
+    /// place of `at` (the bottom without it).
+    pub fn folder_create(
+        &self,
+        project_id: &str,
+        name: Option<&str>,
+        agents: &[String],
+        principal: Option<&str>,
+        at: Option<&str>,
+    ) -> Result<AgentFolder> {
+        let name = name.map(str::trim);
+        if name == Some("") {
+            bail!(tr!("nom vide", "empty name"));
+        }
+        for a in agents {
+            if self.agent(a)?.lock().meta.project_id != project_id {
+                return Err(agent_not_found());
+            }
+        }
+        if principal.is_some_and(|x| !agents.iter().any(|a| a == x)) {
+            bail!(tr!(
+                "Le principal doit être dans le dossier",
+                "The principal must be in the folder"
+            ));
+        }
+        self.edit_layout(project_id, |p| {
+            let name = match name {
+                Some(n) => n.to_string(),
+                None => (1..)
+                    .map(|n| match n {
+                        1 => tr!("Dossier", "Folder"),
+                        n => tr!("Dossier {n}", "Folder {n}", n = n),
+                    })
+                    .find(|c| !p.agent_folders.iter().any(|f| &f.name == c))
+                    .unwrap(),
+            };
+            let f = AgentFolder {
+                id: uuid::Uuid::new_v4().to_string(),
+                name,
+                named: true,
+                principal: principal.map(Into::into),
+                agents: agents.to_vec(),
+                folded: false,
+            };
+            insert_folder(p, f.clone(), at);
+            Ok(f)
+        })
+    }
+
+    fn folder_mut<'a>(p: &'a mut Project, folder: &str) -> Result<&'a mut AgentFolder> {
+        p.agent_folders
+            .iter_mut()
+            .find(|f| f.id == folder)
+            .ok_or_else(|| {
+                anyhow::anyhow!(tr!(
+                    "Le dossier {folder} n'existe pas",
+                    "The folder {folder} doesn’t exist"
+                ))
+            })
+    }
+
+    pub fn folder_rename(&self, project_id: &str, folder: &str, name: &str) -> Result<()> {
+        let name = name.trim();
+        if name.is_empty() {
+            bail!(tr!("nom vide", "empty name"));
+        }
+        self.edit_layout(project_id, |p| {
+            let f = Self::folder_mut(p, folder)?;
+            f.name = name.to_string();
+            f.named = true;
+            Ok(())
+        })
+    }
+
+    pub fn folder_delete(&self, project_id: &str, folder: &str) -> Result<()> {
+        self.edit_layout(project_id, |p| remove_folder(p, folder))
+    }
+
+    pub fn folder_principal(
+        &self,
+        project_id: &str,
+        folder: &str,
+        agent: Option<&str>,
+    ) -> Result<()> {
+        self.edit_layout(project_id, |p| {
+            let f = Self::folder_mut(p, folder)?;
+            if agent.is_some_and(|a| !f.agents.iter().any(|x| x == a)) {
+                bail!(tr!(
+                    "Cet agent n'est pas dans le dossier",
+                    "This agent isn’t in the folder"
+                ));
+            }
+            f.principal = agent.map(Into::into);
+            Ok(())
+        })
+    }
+
+    pub fn folder_fold(&self, project_id: &str, folder: &str, folded: bool) -> Result<()> {
+        self.edit_layout(project_id, |p| {
+            Self::folder_mut(p, folder)?.folded = folded;
+            Ok(())
+        })
+    }
+
+    pub fn item_move(
+        &self,
+        project_id: &str,
+        item: &str,
+        folder: Option<&str>,
+        index: Option<usize>,
+    ) -> Result<()> {
+        self.edit_layout(project_id, |p| move_item(p, item, folder, index))
+    }
+
+    /// The agents the sidebar shows, top to bottom (`shown_agents`).
+    pub fn shown_agents_of(&self, project_id: &str) -> Vec<String> {
+        let owned = self.folder_members(project_id);
+        let members: Vec<Member> = owned
+            .iter()
+            .map(|(id, created_at, waiting, archived)| Member {
+                id,
+                created_at: *created_at,
+                waiting: *waiting,
+                archived: *archived,
+            })
+            .collect();
+        self.project(project_id)
+            .map(|p| shown_agents(&p, &members))
+            .unwrap_or_default()
+    }
+
+    /// Hook of `create_agent_with`, `duplicate_agent`, `delete_agent`: edits the layout without
+    /// failing the caller (the project may be gone).
+    pub(crate) fn layout_hook(&self, project_id: &str, f: impl FnOnce(&mut Project)) {
+        let _ = self.edit_layout(project_id, |p| {
+            f(p);
+            Ok(())
+        });
+    }
+
+    /// The folders of the project whose principal is `agent` and not renamed take its name.
+    pub(crate) fn follow_principal(&self, agent_id: &str) {
+        let Ok(h) = self.agent(agent_id) else { return };
+        let (pid, name) = {
+            let m = &h.lock().meta;
+            (m.project_id.clone(), m.name.clone())
+        };
+        let follows = |p: &Project| {
+            p.agent_folders
+                .iter()
+                .any(|f| !f.named && f.principal.as_deref() == Some(agent_id) && f.name != name)
+        };
+        if !self.project(&pid).is_ok_and(|p| follows(&p)) {
+            return;
+        }
+        self.layout_hook(&pid, |p| {
+            for f in &mut p.agent_folders {
+                if !f.named && f.principal.as_deref() == Some(agent_id) {
+                    f.name = name.clone();
+                }
+            }
+        });
+    }
 }

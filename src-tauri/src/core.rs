@@ -756,6 +756,8 @@ pub struct AgentOptions {
     pub port_base: Option<u16>,
     /// Selected in the sidebar (the user created it).
     pub select: bool,
+    /// The folder it goes into (gone: it goes out of any folder).
+    pub folder: Option<String>,
     /// A copy of this agent (`duplicate_agent`): named after it, and working where it does.
     pub copy_of: Option<CopyOf>,
     /// The Claude account it runs on (an `Account`'s id); None: Principal.
@@ -6202,6 +6204,9 @@ impl<R: Runtime> Core<R> {
                 .selected_agent
                 .insert(project_id.to_string(), id.clone());
         }
+        self.layout_hook(project_id, |p| {
+            crate::folders::add_agent(p, &id, o.folder.as_deref())
+        });
         self.request_save();
         self.emit_agent(&h);
         self.git.refresh(project_id);
@@ -6261,30 +6266,35 @@ impl<R: Runtime> Core<R> {
                 Err(e) => log::warn!("agent {id}: its worktree's changes not read: {e:#}"),
             }
         }
-        self.create_agent_with(
-            &original.project_id,
-            AgentOptions {
-                // The harness it has now: the session it forks is that one's.
-                engine: Some(original.engine),
-                model: Some(original.model),
-                effort: Some(original.effort),
-                mode: Some(original.mode),
-                // Where the session it forks is kept.
-                account: Some(original.account),
-                select: true,
-                copy_of: Some(CopyOf {
-                    name: original.name,
-                    session_id,
-                    entry,
-                    worktree: original.worktree,
-                    items,
-                    notice,
-                    remote_off: original.remote_off,
-                }),
-                ..Default::default()
-            },
-        )
-        .await
+        let copy = self
+            .create_agent_with(
+                &original.project_id,
+                AgentOptions {
+                    // The harness it has now: the session it forks is that one's.
+                    engine: Some(original.engine),
+                    model: Some(original.model),
+                    effort: Some(original.effort),
+                    mode: Some(original.mode),
+                    // Where the session it forks is kept.
+                    account: Some(original.account),
+                    select: true,
+                    copy_of: Some(CopyOf {
+                        name: original.name,
+                        session_id,
+                        entry,
+                        worktree: original.worktree,
+                        items,
+                        notice,
+                        remote_off: original.remote_off,
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await?;
+        self.layout_hook(&original.project_id, |p| {
+            crate::folders::place_after(p, &copy.meta.id, id)
+        });
+        Ok(copy)
     }
 
     // ---------- worktree setup and teardown ----------
@@ -7299,6 +7309,9 @@ impl<R: Runtime> Core<R> {
         // The name is set: the next one in the project need not wait for the session rename.
         drop(naming_guard);
         self.emit_agent(h);
+        if named_now {
+            self.follow_principal(id);
+        }
         self.request_save();
         if !named_now {
             return Ok(());
@@ -7347,6 +7360,7 @@ impl<R: Runtime> Core<R> {
         };
         drop(naming_guard);
         self.emit_agent(&h);
+        self.follow_principal(id);
         self.request_save();
         if let Some(p) = proc {
             let _ = p.rename(&title).await;
@@ -7511,6 +7525,11 @@ impl<R: Runtime> Core<R> {
         } else {
             self.restore_worktree(id).await;
             self.apply_remote_soon(id);
+            // Back at the bottom of its level.
+            self.layout_hook(&pid, |p| {
+                let folder = crate::folders::folder_of(p, id).map(|f| f.id.clone());
+                let _ = crate::folders::move_item(p, id, folder.as_deref(), None);
+            });
         }
         Ok(())
     }
@@ -7587,6 +7606,7 @@ impl<R: Runtime> Core<R> {
             id: id.to_string(),
             project_id: pid.clone(),
         });
+        self.layout_hook(&pid, |p| crate::folders::remove_agent(p, id));
         self.request_save();
         self.update_tray();
         self.stop_test_runs(id);

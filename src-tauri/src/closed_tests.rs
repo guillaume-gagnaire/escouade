@@ -38,12 +38,12 @@ fn as_json<T: serde::Serialize>(v: &T) -> Value {
 }
 
 /// The project closed, its history kept.
-async fn close(h: &Harness, id: &str) {
+pub(crate) async fn close(h: &Harness, id: &str) {
     h.core.remove_project(id, false).await.unwrap();
 }
 
 /// The folder added again as the window does, the history coming back with it if there is one.
-async fn add_again(h: &Harness, folder: &Path) -> Project {
+pub(crate) async fn add_again(h: &Harness, folder: &Path) -> Project {
     h.core
         .create_project(&folder.to_string_lossy(), "", COLOR, false, None, true)
         .await

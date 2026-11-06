@@ -31,6 +31,7 @@ const FAMILIES: &[(&str, &str)] = &[
     ("voice_", "voice"),
     ("conversation_", "voice"),
     ("speech_", "voice"),
+    ("agent_folder_", "agent_folder"),
 ];
 
 /// The lane of the command `name`: its family's, else its own.
