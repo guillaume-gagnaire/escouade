@@ -83,6 +83,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Corrections
 
+- **Quotas qui restaient figés :** un compte pouvait afficher 37 % sur 5 h alors qu'il était à 100 %. Quand le serveur des quotas ne répondait plus, Escouade prenait la dernière valeur connue d'un agent au repos pour une lecture fraîche. Il ne la laisse plus écraser une valeur plus récente, l'interroge moins souvent, et le panneau des quotas dit depuis quand une valeur n'a pas été relue.
 - Le pilote auto éteint ou la pause sur CI rouge retiennent aussi les tickets qu’une passe de démarrage en cours n’a pas encore lancés.
 - Un plugin qui décide des autorisations démarre dès son installation, sa mise à jour ou sa réactivation : sa règle s’applique à la toute première demande.
 - La barre du quota de Fable s’appelle « Fable 7 j », comme les autres fenêtres, par sa durée.

@@ -3071,10 +3071,11 @@ function startSession() {
           if (isPaced()) {
             const w = windows();
             const said = (x) => ({ utilization: x.utilization * 100, resets_at: new Date(x.resetsAt * 1000).toISOString() });
-            return ok(m.request_id, { rate_limits: { five_hour: said(w.five_hour), seven_day: said(w.seven_day) } });
+            return ok(m.request_id, { rate_limits: { limits: null, five_hour: said(w.five_hour), seven_day: said(w.seven_day) } });
           }
           return ok(m.request_id, {
             rate_limits: {
+              limits: null,
               five_hour: { utilization: limited() ? 100 : 12, resets_at: '2026-09-28T01:20:00+00:00' },
               seven_day: { utilization: 34, resets_at: '2026-09-30T22:00:00+00:00' },
             },

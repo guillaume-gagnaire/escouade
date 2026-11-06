@@ -586,3 +586,67 @@ async fn fables_week_past_the_threshold_moves_a_fable_agent_and_leaves_an_opus_o
     assert_eq!(h.agent(&opus).account, "pro");
     assert!(notices(&h, &opus).is_empty());
 }
+
+/// What `get_usage` tells while the endpoint refuses it, a 429 held for up to an hour (read in the binary of
+/// Claude Code 2.1.318): the windows of the last request of this process, however old, and no `limits`.
+fn seen_by_its_process(account: &Account, pct: u32, resets_at: i64) {
+    let at = chrono::DateTime::from_timestamp_millis(resets_at)
+        .unwrap()
+        .to_rfc3339();
+    let body = json!({ "five_hour": { "utilization": pct, "resets_at": at } });
+    std::fs::write(
+        Path::new(&account.config_dir).join("fake-usage.json"),
+        body.to_string(),
+    )
+    .unwrap();
+}
+
+/// The quota of `account` over 5 hours, as read now.
+fn five_hours_of(h: &Harness, account: &str) -> f64 {
+    let u = h.core.usage.lock();
+    u.account(account).unwrap().five_hour().unwrap().pct
+}
+
+#[tokio::test]
+async fn the_minute_s_reading_asks_claude_code_as_often_as_the_endpoint() {
+    let h = harness("usage-paced");
+    let (p, _) = h.project(true).await;
+    let (pro, _) = pro_and_team(&h);
+    let id = agent_on(&h, &p, "pro").await.id;
+    turn_over(&h, &id, "Bonjour").await;
+    let resets_at = now_ms() + 3_600_000;
+    seen_by_its_process(&pro, 40, resets_at);
+    h.core.read_accounts(true).await;
+    assert_eq!(five_hours_of(&h, "pro"), 40.0);
+    // A minute later: `get_usage` would ask the endpoint, not due for five.
+    seen_by_its_process(&pro, 50, resets_at);
+    h.core.read_accounts(true).await;
+    assert_eq!(five_hours_of(&h, "pro"), 40.0);
+    // The window asking for it reads at once.
+    h.core.refresh_usage().await;
+    assert_eq!(five_hours_of(&h, "pro"), 50.0);
+}
+
+#[tokio::test]
+async fn a_process_at_rest_does_not_take_back_what_the_account_used() {
+    let h = harness("usage-seen");
+    let (p, _) = h.project(true).await;
+    let (pro, _) = pro_and_team(&h);
+    let id = agent_on(&h, &p, "pro").await.id;
+    turn_over(&h, &id, "Bonjour").await;
+    let resets_at = now_ms() + 3_600_000;
+    let window = RateWindow {
+        pct: 63.0,
+        resets_at: Some(resets_at),
+    };
+    h.core
+        .record_usage("pro", Reading::claude((Some(window), None)));
+    // The report: 37 % on the app, the account's 5 hours past that since.
+    seen_by_its_process(&pro, 37, resets_at);
+    h.core.refresh_usage().await;
+    assert_eq!(five_hours_of(&h, "pro"), 63.0);
+    // What it saw is still news when it is past what was read.
+    seen_by_its_process(&pro, 80, resets_at);
+    h.core.refresh_usage().await;
+    assert_eq!(five_hours_of(&h, "pro"), 80.0);
+}

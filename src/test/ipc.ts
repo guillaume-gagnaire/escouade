@@ -556,7 +556,7 @@ export function usageOf(id: string, over: Partial<AccountUsage> & ClaudeWindows 
     connected: true,
     reason: null,
     todayCost: 0,
-    updatedAt: 1,
+    updatedAt: 0,
     ...rest,
   };
 }

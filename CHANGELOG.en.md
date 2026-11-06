@@ -83,6 +83,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### Fixes
 
+- **Quotas that stayed frozen:** an account could show 37% over 5 h while at 100%. When the quota server stopped answering, Escouade took the last value known to an idle agent for a fresh reading. It no longer lets it overwrite a newer value, asks the server less often, and the quota panel says how long ago a value was read.
 - Turning the autopilot off or the pause on a red CI also holds back the tickets a start pass under way had not launched yet.
 - A plugin that decides permissions starts as soon as it is installed, updated or switched back on: its rule applies to the very first request.
 - Fable’s quota bar is named “Fable 7d”, like the other windows, by its length.

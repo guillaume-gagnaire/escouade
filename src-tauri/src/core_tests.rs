@@ -11240,3 +11240,16 @@ async fn an_agent_whose_harness_is_absent_is_kept_and_starts_nothing() {
     };
     assert!(why.to_string().contains("hermes"), "{why}");
 }
+
+#[test]
+fn the_process_asked_for_a_quota_is_the_last_to_have_spoken() {
+    let spoke = [
+        ("pro".to_string(), 10, "at rest"),
+        ("equipe".to_string(), 5, "alone"),
+        ("pro".to_string(), 30, "last"),
+        ("pro".to_string(), 20, "before"),
+    ];
+    let last = crate::core::last_to_speak(spoke);
+    assert_eq!(last["pro"], "last");
+    assert_eq!(last["equipe"], "alone");
+}

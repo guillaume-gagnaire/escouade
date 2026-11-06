@@ -321,6 +321,8 @@ export default {
     /** Cursor CLI (ESC-43): it tells Escouade neither its quota nor its cost. */
     usageElsewhere: '{harness} ne donne ni son usage ni son coût à Escouade.',
     usageLink: 'Voir l’usage sur {site}',
+    /** Under a quota not read for a while (`{ago}`: « il y a 2 h »). */
+    readAgo: 'Dernière lecture {ago} : ce compte a pu consommer depuis.',
     budget: 'Budget par jour',
     budgetReset: 'Remise à zéro à minuit.',
     projectionNote:

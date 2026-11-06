@@ -261,6 +261,7 @@ export default defineZone('accounts', {
     noQuota: 'No quota: only what its turns cost counts.',
     usageElsewhere: '{harness} gives Escouade neither its usage nor its cost.',
     usageLink: 'See the usage on {site}',
+    readAgo: 'Last read {ago}: this account may have used more since.',
     budget: 'Daily budget',
     budgetReset: 'Reset at midnight.',
     projectionNote:
