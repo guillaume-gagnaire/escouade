@@ -1,9 +1,9 @@
 ---
-number: null
+number: 96
 id: "un-harness-en-wasm-demande-a-l-hote-ce-q"
 title: "Un harness en WASM demande à l'hôte ce qu'il ne peut pas lire : fs/gitProtected, et le service ACP passe dans escouade-acp"
 date: "2026-11-05"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-346"
 pages: ["plugins/tous-les-plugins-en-wasm","plugins/codex-en-plugin","plugins/copilot-cli-en-plugin","plugins/cursor-cli-en-plugin","plugins/gemini-cli-en-plugin"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/tous-les-plugins-en-wasm","added":10,"removed":0},{"page":"plugins/codex-en-plugin","added":2,"removed":0},{"page":"plugins/copilot-cli-en-plugin","added":2,"removed":0},{"page":"plugins/cursor-cli-en-plugin","added":2,"removed":0},{"page":"plugins/gemini-cli-en-plugin","added":2,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-06T08:49:46+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
