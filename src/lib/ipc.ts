@@ -291,12 +291,10 @@ export const api = {
   sharedPreview: (path: string) => invoke<Project | null>('shared_preview', { path }),
   reorderProjects: (ids: string[]) => invoke<void>('reorder_projects', { ids }),
   /** With an agent, the folder takes its place and holds it. */
-  agentFolderCreate: (projectId: string, agentId?: string) =>
-    invoke<AgentFolder>('agent_folder_create', { projectId, agentId }),
+  agentFolderCreate: (projectId: string, agentId?: string) => invoke<AgentFolder>('agent_folder_create', { projectId, agentId }),
   agentFolderRename: (projectId: string, folderId: string, name: string) =>
     invoke<void>('agent_folder_rename', { projectId, folderId, name }),
-  agentFolderDelete: (projectId: string, folderId: string) =>
-    invoke<void>('agent_folder_delete', { projectId, folderId }),
+  agentFolderDelete: (projectId: string, folderId: string) => invoke<void>('agent_folder_delete', { projectId, folderId }),
   agentFolderPrincipal: (projectId: string, folderId: string, agentId: string | null) =>
     invoke<void>('agent_folder_principal', { projectId, folderId, agentId }),
   agentFolderFold: (projectId: string, folderId: string, folded: boolean) =>
