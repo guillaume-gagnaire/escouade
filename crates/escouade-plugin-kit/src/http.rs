@@ -6,6 +6,7 @@
 
 #[cfg(any(test, target_family = "wasm"))]
 pub mod fetch;
+pub mod redirect;
 
 #[cfg(not(target_family = "wasm"))]
 pub use ::reqwest;

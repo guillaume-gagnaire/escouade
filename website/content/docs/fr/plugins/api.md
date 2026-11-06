@@ -127,7 +127,7 @@ Le module est compilé une fois : par le store pour un plugin du store (l’app 
 Un plugin en WASM n’ouvre pas de connexion : tout passe par Escouade, par `net/fetch`, `net/stream` et `ws/open`, que seul un plugin en WASM reçoit (un process a son propre réseau, et ces méthodes lui répondent `-32601`). `fetch` en JS et le client du kit en Rust y mènent. Escouade envoie la requête :
 
 - **en https seulement**, vers un hôte de `permissions.network` ou l’un de ses sous-domaines (`slack.com` couvre `api.slack.com`) ; jamais vers une adresse IP écrite dans l’URL, que `permissions.network` ne nomme pas ;
-- **sans suivre de redirection** : le plugin reçoit la réponse 3xx ;
+- **sans suivre de redirection** : le plugin reçoit la réponse 3xx, que le client du kit suit en Rust ;
 - **en 10 s, pour 1 Mio de réponse au plus**, sauf si `limits` en demande plus ;
 - **jamais vers une adresse de la machine ou du réseau local**, même pour un hôte déclaré : bouclage, privée, de lien local, non spécifiée, de multidiffusion ou de diffusion, en IPv4 comme en IPv6. Escouade juge les adresses que la connexion emploie elle-même, après la résolution du nom, et non une résolution à part que le DNS pourrait contredire ;
 - **par le proxy de Réglages › Réseau**, s’il y en a un : seul le nom est alors jugé, et le journal le dit.

@@ -47,7 +47,7 @@ describe.each(CRATES)('%s', (name) => {
   // With both: `cargo publish` strips the path, and the version alone would have it look for the crate on crates.io
   // before it is there (`[patch.crates-io]` does not reach the packaging).
   it('reaches the others by a version, which is all that gets published', () => {
-    for (const line of kitLines(toml)) expect(line).toMatch(/^(\S+) = \{ path = "\.\.\/\1", version = "0\.1\.0" \}$/);
+    for (const line of kitLines(toml)) expect(line).toMatch(/^(\S+) = \{ path = "\.\.\/\1", version = "0\.1\.\d+" \}$/);
   });
 });
 

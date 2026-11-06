@@ -1,31 +1,31 @@
-//! A call and its redirections. In a process reqwest follows them; in a module the host hands the 3xx to the plugin, so
-//! that a fetch to its `Location` is judged like any other (docs/PLUGINS.md §8.4.1): this does here what reqwest did, on
-//! both targets, so that a module answers as the process did. A renamed repository, or a host that moved to https, leads
-//! the next call to its new address; a host that is not the service's gets neither its credentials nor a body: a call
-//! that still has one stops at the redirection that would leave, and gives it back.
+//! A call and its redirections, on both targets (docs/PLUGINS.md §8.4.1). In a process reqwest follows them. In a module
+//! the host hands the 3xx to the plugin, so that a fetch to its `Location` is judged like any other, and the façade's
+//! `send` follows them here, by the same rules: ten hops, a GET without a body after 301, 302 and 303, the same call after
+//! 307 and 308, and what would leave the service stays behind. A renamed repository, or a host that moved to https, leads
+//! the next call to its new address; a host that is not the service's gets neither its credentials nor a body: a call that
+//! still has one stops at the redirection that would leave, and gives it back.
+//!
+//! [`follow`] is for a client that has its say at each hop: its own credentials, what it counts or waits for. [`reply`]
+//! sends one call and hands its 3xx back, on both targets as long as the client's redirections are its own.
 
-use escouade_plugin_kit::errors::{http_error_in, HttpError};
-use escouade_plugin_kit::http::{host_of, reqwest};
-use escouade_plugin_kit::tr;
-
+use super::host_of;
+use super::reqwest;
+use super::reqwest::header::HeaderMap;
+use super::reqwest::Method;
+use crate::errors::{http_error_in, HttpError};
+use crate::tr;
 use anyhow::{anyhow, Result};
-use reqwest::header::HeaderMap;
-use reqwest::Method;
+use serde_json::Value;
 use std::future::Future;
 
 /// How many in a row: reqwest's limit.
-const MAX: usize = 10;
+pub(crate) const MAX: usize = 10;
 
 /// What a call answered, whatever its status.
-pub(crate) struct Reply {
-    pub(crate) status: u16,
-    pub(crate) headers: HeaderMap,
-    pub(crate) text: String,
-}
-
-/// A header, its name in any case.
-fn location(headers: &HeaderMap) -> Option<&str> {
-    headers.get("location").and_then(|v| v.to_str().ok())
+pub struct Reply {
+    pub status: u16,
+    pub headers: HeaderMap,
+    pub text: String,
 }
 
 /// `location`, against the address that answered it.
@@ -52,15 +52,15 @@ fn absolute(from: &str, location: &str) -> Option<String> {
 
 /// Where a redirection leads.
 #[derive(Debug, PartialEq)]
-struct Hop {
-    url: String,
+pub(crate) struct Hop {
+    pub(crate) url: String,
     /// 301, 302 and 303 end in a GET without a body; 307 and 308 send the same call again, on the service alone.
-    as_get: bool,
+    pub(crate) as_get: bool,
     /// Still the service: never an other host, nor from https to http.
-    own: bool,
+    pub(crate) own: bool,
 }
 
-fn hop(status: u16, from: &str, location: Option<&str>) -> Option<Hop> {
+pub(crate) fn hop(status: u16, from: &str, location: Option<&str>) -> Option<Hop> {
     if !matches!(status, 301 | 302 | 303 | 307 | 308) {
         return None;
     }
@@ -74,8 +74,12 @@ fn hop(status: u16, from: &str, location: Option<&str>) -> Option<Hop> {
 }
 
 /// Sends a call once and reads what it answered; only a failure to reach the service `name` is an error.
-pub(crate) async fn reply(name: &str, rb: reqwest::RequestBuilder) -> Result<Reply> {
-    let resp = rb.send().await.map_err(|e| {
+pub async fn reply(name: &str, rb: reqwest::RequestBuilder) -> Result<Reply> {
+    #[cfg(target_family = "wasm")]
+    let sent = rb.once().await;
+    #[cfg(not(target_family = "wasm"))]
+    let sent = rb.send().await;
+    let resp = sent.map_err(|e| {
         let e = anyhow::Error::from(e.without_url());
         anyhow!(tr!(
             "{name} injoignable : {e:#}",
@@ -97,7 +101,7 @@ pub(crate) async fn reply(name: &str, rb: reqwest::RequestBuilder) -> Result<Rep
 /// that would take it elsewhere, or from https to http, is that last answer, and nothing goes to the other host.
 // `Method` is `Copy` in a module, not in a process.
 #[allow(clippy::clone_on_copy)]
-pub(crate) async fn follow<B: Copy, F: Future<Output = Result<Reply>>>(
+pub async fn follow<B: Copy, F: Future<Output = Result<Reply>>>(
     name: &str,
     method: Method,
     url: String,
@@ -107,7 +111,8 @@ pub(crate) async fn follow<B: Copy, F: Future<Output = Result<Reply>>>(
     let (mut method, mut url, mut body, mut own) = (method, url, body, true);
     for _ in 0..MAX {
         let answer = send(method.clone(), url.clone(), own, body).await?;
-        let Some(next) = hop(answer.status, &url, location(&answer.headers)) else {
+        let location = answer.headers.get("location").and_then(|v| v.to_str().ok());
+        let Some(next) = hop(answer.status, &url, location) else {
             return Ok(answer);
         };
         own = own && next.own;
@@ -126,19 +131,41 @@ pub(crate) async fn follow<B: Copy, F: Future<Output = Result<Reply>>>(
     )))
 }
 
+/// `http::send_named`, its redirections followed: its JSON (null when empty) and its headers, `make` giving the request
+/// for an address, whether that is still the service's. A status other than a success is an `HttpError`.
+pub async fn send_named<B: Copy>(
+    name: &str,
+    method: Method,
+    url: String,
+    body: Option<B>,
+    make: impl Fn(Method, &str, bool, Option<B>) -> reqwest::RequestBuilder,
+) -> Result<(Value, HeaderMap)> {
+    let make = &make;
+    let answer = follow(name, method, url, body, |m, u, own, b| async move {
+        reply(name, make(m, &u, own, b)).await
+    })
+    .await?;
+    let answer = success(name, answer)?;
+    if answer.text.trim().is_empty() {
+        return Ok((Value::Null, answer.headers));
+    }
+    let v = serde_json::from_str(&answer.text).map_err(|_| {
+        anyhow!(tr!(
+            "{name} : réponse illisible",
+            "{name}: unreadable answer"
+        ))
+    })?;
+    Ok((v, answer.headers))
+}
+
 /// An answer other than a success is an error that says what the service said.
-pub(crate) fn success(name: &str, answer: Reply) -> Result<Reply> {
+pub fn success(name: &str, answer: Reply) -> Result<Reply> {
     if (200..300).contains(&answer.status) {
         return Ok(answer);
     }
     Err(HttpError {
         status: answer.status,
-        message: http_error_in(
-            escouade_plugin_kit::i18n::ui(),
-            name,
-            answer.status,
-            &answer.text,
-        ),
+        message: http_error_in(crate::i18n::ui(), name, answer.status, &answer.text),
     }
     .into())
 }
@@ -219,7 +246,7 @@ mod tests {
         first: &str,
         body: Option<&'static str>,
         answers: &[(u16, &str)],
-    ) -> (Vec<(String, bool, bool)>, u16) {
+    ) -> (Vec<(String, bool, bool)>, Result<u16>) {
         let sent = std::cell::RefCell::new(Vec::new());
         let at = std::cell::Cell::new(0);
         let send = |_: Method, url: String, own: bool, body: Option<&'static str>| {
@@ -241,7 +268,7 @@ mod tests {
         let std::task::Poll::Ready(answer) = run.as_mut().poll(&mut cx) else {
             panic!("nothing here waits");
         };
-        (sent.take(), answer.unwrap().status)
+        (sent.take(), answer.map(|a| a.status))
     }
 
     #[test]
@@ -257,7 +284,7 @@ mod tests {
                 [("https://a.dev/x".to_string(), true, true)],
                 "{status}"
             );
-            assert_eq!(last, status);
+            assert_eq!(last.unwrap(), status);
         }
     }
 
@@ -269,7 +296,7 @@ mod tests {
             &[(308, "http://a.dev/x"), (200, "")],
         );
         assert_eq!(sent.len(), 1);
-        assert_eq!(last, 308);
+        assert_eq!(last.unwrap(), 308);
     }
 
     #[test]
@@ -286,7 +313,7 @@ mod tests {
                 ("https://a.dev/y".to_string(), true, true),
             ]
         );
-        assert_eq!(last, 307);
+        assert_eq!(last.unwrap(), 307);
     }
 
     #[test]
@@ -299,7 +326,7 @@ mod tests {
                 ("https://a.dev/y".to_string(), true, true),
             ]
         );
-        assert_eq!(last, 200);
+        assert_eq!(last.unwrap(), 200);
     }
 
     #[test]
@@ -316,7 +343,7 @@ mod tests {
                 ("https://b.dev/y".to_string(), false, false),
             ]
         );
-        assert_eq!(last, 200);
+        assert_eq!(last.unwrap(), 200);
     }
 
     #[test]
@@ -334,6 +361,14 @@ mod tests {
                 ("https://b.dev/z".to_string(), false, false),
             ]
         );
-        assert_eq!(last, 200);
+        assert_eq!(last.unwrap(), 200);
+    }
+
+    #[test]
+    fn ten_hops_and_no_more() {
+        let hops = [(302, "/y"); 11];
+        let (sent, last) = played("https://a.dev/x", None, &hops);
+        assert_eq!(sent.len(), MAX);
+        assert!(last.unwrap_err().to_string().contains("redirect"));
     }
 }

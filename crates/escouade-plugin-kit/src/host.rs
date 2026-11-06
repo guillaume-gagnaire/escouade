@@ -1,29 +1,42 @@
-//! The one thread of a plugin of voice (docs/PLUGINS.md §8.3, §8.4), without tokio: its tasks turn on the events of the
-//! host, each arriving as a line of a turn. It is `plugins/opencode/src/host.rs` (ESC-349) with the sockets of `ws/*`: the
-//! kit `0.1.0` has neither a stream nor a socket, nor a way to start a task that outlives its call, which a stream is.
+//! The one thread of a module whose tasks are not its calls (docs/PLUGINS.md §8.3, §8.4), without tokio: what were tasks of
+//! a process (reading a stream, a socket, the requests that wait, a timer) are events of the host, each arriving as a line
+//! of a turn. `serve::run` is the simple way, a task a call; this is for a plugin that reads a stream, keeps a socket, or
+//! starts a task no call began, and serves its lines itself.
 //!
-//! The host writes what came on the module's input, then calls one turn. A turn gives each line to whom it is for, polls
-//! every task, and writes their lines: a task that needs the host writes a line, gives the thread back, and goes on at a
-//! later turn. Nothing waits inside a turn. Nothing wakes a task but a turn, so a turn polls them all, and again while one
-//! started another or changed what another waits for (`stir`): nothing posted in a turn sleeps until the next line.
+//! The host writes what came on the module's input, then calls one turn. A turn gives each line to whom it is for
+//! (`arrived`), polls the tasks (`run`) and writes their lines (`lines`): a task that needs the host writes a line, gives
+//! the thread back, and goes on at a later turn. Nothing waits inside a turn. A task that waits for what another sets is
+//! woken like any future, or by `stir` when what it waits for has no waker: nothing posted in a turn sleeps until the next
+//! line.
 //!
 //! Everything here is plain code on lines: `cargo test` plays it natively, without a module.
 
-use crate::live::Frame;
-use crate::online::{redact, Call, OnlineError, Spec};
+use crate::serve::tasks::Tasks;
 use base64::Engine;
-use escouade_plugin_kit::protocol::Refusal;
+use escouade_plugin_protocol::Refusal;
 use parking_lot::Mutex;
+use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::future::{poll_fn, Future};
-use std::pin::{pin, Pin};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::pin::pin;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::task::{Context, Poll, Waker};
+use std::task::Poll;
 use std::time::Duration;
 
-type Task = Pin<Box<dyn Future<Output = ()> + Send>>;
+/// What goes to a socket.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Frame {
+    Text(String),
+    Binary(Vec<u8>),
+}
+
+impl Frame {
+    pub fn text(text: impl Into<String>) -> Self {
+        Frame::Text(text.into())
+    }
+}
 
 /// What the host refuses while its queue is full (`ws/send`): the code of a refusal.
 const REFUSED: i64 = -32003;
@@ -74,11 +87,7 @@ pub struct Host {
     /// What the sockets said and was not read yet; those let go.
     sockets: Mutex<HashMap<String, VecDeque<SocketEvent>>>,
     gone: Mutex<HashSet<String>>,
-    /// The tasks waiting for a turn; those started in it, while the others are polled.
-    tasks: Mutex<Vec<Task>>,
-    born: Mutex<Vec<Task>>,
-    /// Something changed that a task polled earlier in this turn may wait for.
-    stirred: AtomicBool,
+    tasks: Tasks,
 }
 
 impl Host {
@@ -87,19 +96,19 @@ impl Host {
     }
 
     /// Tells the host or the core something, without waiting for an answer.
-    pub fn notify(&self, method: &str, params: Value) {
+    pub fn notify(&self, method: &str, params: impl Serialize) {
         let line = json!({ "jsonrpc": "2.0", "method": method, "params": params });
         self.write(line.to_string());
     }
 
     /// Starts `task`: it is polled in this turn.
     pub fn spawn(&self, task: impl Future<Output = ()> + Send + 'static) {
-        self.born.lock().push(Box::pin(task));
+        self.tasks.spawn(Box::pin(task));
     }
 
-    /// What a task waits for changed: the tasks are polled once more in this turn.
+    /// What a task waits for changed, and nothing wakes it: the tasks are polled once more in this turn.
     pub fn stir(&self) {
-        self.stirred.store(true, Ordering::Release);
+        self.tasks.stir();
     }
 
     /// A line that came: what the plugin has to serve, when it is a call. The rest is dealt with here.
@@ -113,6 +122,12 @@ impl Host {
         if msg.get("method").is_none() && msg.get("id").is_some() {
             self.answered(&msg);
             return None;
+        }
+        if let Value::Array(items) = &msg {
+            if !items.is_empty() && items.iter().all(|m| m.get("method").is_none()) {
+                items.iter().for_each(|m| self.answered(m));
+                return None;
+            }
         }
         let params = &msg["params"];
         match msg["method"].as_str() {
@@ -214,20 +229,12 @@ impl Host {
         }
     }
 
-    /// Polls every task, again while one of them changed what another waits for; then gives the host back what the
-    /// streams consumed, one line a stream a turn.
+    /// Polls every task, again those that were woken or started meanwhile; then gives the host back what the streams
+    /// consumed, one line a stream a turn. Tasks that a turn could not bring to rest get the next one from an empty timer.
     pub fn run(&self) {
-        let mut waker = Context::from_waker(Waker::noop());
-        let mut tasks = std::mem::take(&mut *self.tasks.lock());
-        loop {
-            self.stirred.store(false, Ordering::Release);
-            tasks.append(&mut self.born.lock());
-            tasks.retain_mut(|t| t.as_mut().poll(&mut waker).is_pending());
-            if !self.stirred.load(Ordering::Acquire) && self.born.lock().is_empty() {
-                break;
-            }
+        if self.tasks.run() {
+            self.notify("timer/set", json!({ "ms": 0 }));
         }
-        *self.tasks.lock() = tasks;
         self.fired.lock().clear();
         let mut flows = self.flows.lock();
         for (stream, flow) in flows.iter_mut().filter(|(_, f)| f.read > 0) {
@@ -275,12 +282,9 @@ impl Host {
         answer
     }
 
-    /// An HTTP request (`net/fetch`): its status and its text; a refusal of the host is a network's error.
-    pub async fn fetch_text(&self, call: &Call, spec: &Spec) -> Result<(u16, String), OnlineError> {
-        let v = self
-            .request("net/fetch", call.params())
-            .await
-            .map_err(|e| OnlineError::Network(spec.provider, redact(&e.message, &spec.key)))?;
+    /// An HTTP request (`net/fetch`): its status and its text, what is not UTF-8 replaced.
+    pub async fn fetch(&self, request: Value) -> Result<(u16, String), Refusal> {
+        let v = self.request("net/fetch", request).await?;
         let status = u16::try_from(v["status"].as_u64().unwrap_or(0)).unwrap_or(0);
         let text = match (v["body"].as_str(), v["bodyBase64"].as_str()) {
             (Some(text), _) => text.to_string(),
@@ -330,7 +334,8 @@ impl Host {
         let timer = match self.request("timer/set", json!({ "ms": ms })).await {
             Ok(v) => v.get("timer").cloned(),
             Err(e) => {
-                eprintln!("voice: no timer: {}", e.message);
+                let message = format!("no timer: {}", e.message);
+                self.notify("log", json!({ "level": "warn", "message": message }));
                 return;
             }
         };
@@ -414,21 +419,23 @@ impl Stream {
 
     /// What came since the last time, counted for its credit; None once it ended and all of it was read; an error once it
     /// broke.
+    pub fn poll_next(&mut self) -> Poll<Option<Result<Vec<u8>, String>>> {
+        let mut flows = self.host.flows.lock();
+        let flow = flows.entry(self.key.clone()).or_default();
+        if !flow.data.is_empty() {
+            flow.read += flow.data.len() as u64;
+            return Poll::Ready(Some(Ok(std::mem::take(&mut flow.data))));
+        }
+        if flow.ended {
+            self.ended = true;
+            return Poll::Ready(flow.error.take().map(Err));
+        }
+        Poll::Pending
+    }
+
+    /// `poll_next`, waited for.
     pub async fn next(&mut self) -> Option<Result<Vec<u8>, String>> {
-        poll_fn(|_| {
-            let mut flows = self.host.flows.lock();
-            let flow = flows.entry(self.key.clone()).or_default();
-            if !flow.data.is_empty() {
-                flow.read += flow.data.len() as u64;
-                return Poll::Ready(Some(Ok(std::mem::take(&mut flow.data))));
-            }
-            if flow.ended {
-                self.ended = true;
-                return Poll::Ready(flow.error.take().map(Err));
-            }
-            Poll::Pending
-        })
-        .await
+        poll_fn(|_| self.poll_next()).await
     }
 }
 
@@ -510,6 +517,7 @@ impl Drop for Socket {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::AtomicBool;
 
     fn answer(id: u64, result: Value) -> String {
         json!({ "jsonrpc": "2.0", "id": id, "result": result }).to_string()
@@ -562,6 +570,93 @@ mod tests {
     }
 
     #[test]
+    fn a_task_woken_by_a_later_one_goes_on_in_the_same_turn() {
+        let host = Arc::new(Host::default());
+        let waker = Arc::new(Mutex::new(None::<std::task::Waker>));
+        let opened = Arc::new(AtomicBool::new(false));
+        let done = Arc::new(AtomicBool::new(false));
+        let (o, d, w) = (opened.clone(), done.clone(), waker.clone());
+        host.spawn(async move {
+            poll_fn(|task| {
+                if o.load(Ordering::Acquire) {
+                    return Poll::Ready(());
+                }
+                *w.lock() = Some(task.waker().clone());
+                Poll::Pending
+            })
+            .await;
+            d.store(true, Ordering::Release);
+        });
+        host.spawn(async move {
+            opened.store(true, Ordering::Release);
+            if let Some(waker) = waker.lock().take() {
+                waker.wake();
+            }
+        });
+        turn(&host, &[]);
+        assert!(done.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn a_task_that_wakes_itself_asks_for_another_turn() {
+        let host = Host::default();
+        host.spawn(poll_fn(|task| {
+            task.waker().wake_by_ref();
+            Poll::<()>::Pending
+        }));
+        let out = turn(&host, &[]);
+        assert_eq!(out[0]["method"], "timer/set");
+        assert_eq!(out[0]["params"]["ms"], 0);
+        assert!(out[0].get("id").is_none());
+    }
+
+    #[test]
+    fn a_host_that_refuses_a_timer_does_not_hold_a_sleep_and_the_journal_says_it() {
+        let host = Arc::new(Host::default());
+        let (h, slept) = (host.clone(), Arc::new(AtomicBool::new(false)));
+        let s = slept.clone();
+        host.spawn(async move {
+            h.sleep(Duration::from_secs(1)).await;
+            s.store(true, Ordering::Release);
+        });
+        turn(&host, &[]);
+        let out = turn(&host, &[refusal(1, REFUSED, "64 timers")]);
+        assert_eq!(out[0]["method"], "log");
+        assert!(slept.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn a_batch_of_answers_reaches_its_calls() {
+        let host = Arc::new(Host::default());
+        let said = Arc::new(Mutex::new(Vec::new()));
+        for method in ["a", "b"] {
+            let (h, s) = (host.clone(), said.clone());
+            host.spawn(async move {
+                let v = h.request(method, json!({})).await.unwrap();
+                s.lock().push(v);
+            });
+        }
+        turn(&host, &[]);
+        let batch = format!("[{},{}]", answer(1, json!(1)), answer(2, json!(2)));
+        turn(&host, &[batch]);
+        assert_eq!(*said.lock(), [json!(1), json!(2)]);
+    }
+
+    #[test]
+    fn what_is_not_utf8_reads_with_its_replacement() {
+        let host = Arc::new(Host::default());
+        let said = Arc::new(Mutex::new(None));
+        let (h, s) = (host.clone(), said.clone());
+        host.spawn(async move {
+            *s.lock() = h.fetch(json!({ "url": "u" })).await.ok();
+        });
+        turn(&host, &[]);
+        let out = json!({ "status": 200, "bodyBase64": "Yf8=" });
+        turn(&host, &[answer(1, out)]);
+        assert_eq!(*said.lock(), Some((200, "a\u{fffd}".to_string())));
+    }
+
+    #[test]
     fn a_timeout_cancels_its_timer_and_drops_what_it_waited_for() {
         let host = Arc::new(Host::default());
         let said = Arc::new(Mutex::new(Vec::new()));
@@ -586,6 +681,78 @@ mod tests {
         turn(&host, &[event("timer/fired", json!({ "timer": 5 }))]);
         assert_eq!(*said.lock(), [true, false]);
         assert!(host.waiting.lock().is_empty(), "nothing waits any more");
+    }
+
+    #[test]
+    fn a_sleep_ends_when_its_timer_rings_and_another_timer_does_nothing() {
+        let fired = |timer: u64| event("timer/fired", json!({ "timer": timer }));
+        let host = Arc::new(Host::default());
+        let done = Arc::new(AtomicBool::new(false));
+        let (h, d) = (host.clone(), done.clone());
+        host.spawn(async move {
+            h.sleep(Duration::from_millis(200)).await;
+            d.store(true, Ordering::Release);
+        });
+        let out = turn(&host, &[]);
+        assert_eq!(out[0]["method"], "timer/set");
+        assert_eq!(out[0]["params"]["ms"], 200);
+        assert!(turn(&host, &[answer(1, json!({ "timer": 7 })), fired(9)]).is_empty());
+        assert!(!done.load(Ordering::Acquire));
+        assert!(turn(&host, &[fired(7)]).is_empty());
+        assert!(done.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn a_stream_gives_its_credit_back_once_a_turn() {
+        let host = Arc::new(Host::default());
+        let read = Arc::new(Mutex::new(Vec::new()));
+        let (h, r) = (host.clone(), read.clone());
+        host.spawn(async move {
+            let mut stream = h.stream(json!({ "url": "u" })).await.unwrap();
+            assert_eq!(stream.status(), 200);
+            while let Some(Ok(bytes)) = poll_fn(|_| stream.poll_next()).await {
+                r.lock().extend(bytes);
+            }
+        });
+        let out = turn(&host, &[]);
+        assert_eq!(out[0]["method"], "net/stream");
+        let chunk = |data: Value| event("net/chunk", data);
+        // A chunk may come in the turn of its opening; `é` is two bytes.
+        let out = turn(
+            &host,
+            &[
+                answer(1, json!({ "stream": 4, "status": 200, "headers": {} })),
+                chunk(json!({ "stream": 4, "data": "é" })),
+                chunk(json!({ "stream": 4, "data": "a" })),
+            ],
+        );
+        assert_eq!(out.len(), 1, "{out:?}");
+        assert_eq!(out[0]["method"], "net/credit");
+        assert_eq!(out[0]["params"], json!({ "stream": 4, "bytes": 3 }));
+        let end = event("net/end", json!({ "stream": 4 }));
+        let out = turn(
+            &host,
+            &[chunk(json!({ "stream": 4, "dataBase64": "/w==" })), end],
+        );
+        assert!(out.is_empty(), "no credit nor net/cancel after its end");
+        assert_eq!(*read.lock(), [0xc3, 0xa9, b'a', 0xff]);
+        assert!(host.flows.lock().is_empty());
+    }
+
+    #[test]
+    fn a_stream_let_go_is_cancelled_and_what_was_on_its_way_dropped() {
+        let host = Arc::new(Host::default());
+        let h = host.clone();
+        host.spawn(async move {
+            let _stream = h.stream(json!({ "url": "u" })).await.unwrap();
+        });
+        turn(&host, &[]);
+        let opened = answer(1, json!({ "stream": 4, "status": 500, "headers": {} }));
+        let out = turn(&host, &[opened]);
+        assert_eq!(out[0]["method"], "net/cancel");
+        let late = event("net/chunk", json!({ "stream": 4, "data": "x" }));
+        assert!(turn(&host, &[late]).is_empty());
+        assert!(host.flows.lock().is_empty());
     }
 
     #[test]

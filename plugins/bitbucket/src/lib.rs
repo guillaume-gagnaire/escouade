@@ -6,7 +6,6 @@
 //! account's token from Escouade and keeps one client per account.
 
 pub mod pulls;
-mod redirect;
 
 #[cfg(test)]
 #[path = "../../fake_service.rs"]

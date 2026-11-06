@@ -4,11 +4,11 @@ A plugin in Rust is a WASM module, compiled by the store from its sources, on th
 
 ## The three crates
 
-They are on crates.io in `0.1.0`, under the MIT license: a plugin keeps the choice of its own. Their documentation is on docs.rs, for native and for `wasm32-wasip1`.
+They are on crates.io in `0.1`, under the MIT license: a plugin keeps the choice of its own. Their documentation is on docs.rs, for native and for `wasm32-wasip1`.
 
 | Crate | What it gives | When to use it |
 | --- | --- | --- |
-| [`escouade-plugin-kit`](https://docs.rs/escouade-plugin-kit) | The loop (`serve`), the http client, `sleep` and `timeout`, the service of code hosts and sources (`hosts`), the typed errors, the language. | Nearly always. |
+| [`escouade-plugin-kit`](https://docs.rs/escouade-plugin-kit) | The loop (`serve`), the http client, `sleep` and `timeout`, the turns of a plugin that reads a stream (`host`), the service of code hosts and sources (`hosts`), the typed errors, the language. | Nearly always. |
 | [`escouade-plugin-protocol`](https://docs.rs/escouade-plugin-protocol) | The protocol: its types, `turn` and `module!`, the contract of harnesses (`engine`). The kit reexports it (`escouade_plugin_kit::protocol`). | For a harness, alone. |
 | [`escouade-acp`](https://docs.rs/escouade-acp) | The ACP client, a state machine without a process. | For a harness that speaks ACP and that [the manifest alone](plugins/harnesses) cannot describe. |
 
@@ -22,7 +22,7 @@ name = "plugin"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-escouade-plugin-kit = "0.1.0"
+escouade-plugin-kit = "0.1.1"
 serde_json = "1"
 
 # Only for `cargo test`, on your machine: the module has no tokio.
@@ -92,7 +92,9 @@ One instance per plugin, on one thread, woken by what comes: a line of Escouade,
 - An `.await` gives the hand back. The kit keeps the task and resumes it at the turn its answer comes: several calls go on at once, and a slow call does not hold the others back.
 - What blocks the thread blocks the whole plugin: a loop, a long computation, `std::thread::sleep`. There is no thread, and `std::process` fails. `escouade_plugin_kit::time::sleep` replaces the wait.
 - There is no environment: the language comes from `initialize`, read by `escouade_plugin_kit::i18n`, and an agent’s folder from `agent/attach`.
-- The network goes through `http::reqwest`, the kit’s facade: the part of reqwest plugins use, over `net/fetch`. The proxy, the certificates and the delay stay with the host, and what the plugin says of them has no effect.
+- The network goes through `http::reqwest`, the kit’s facade: the part of reqwest plugins use, over `net/fetch`. The proxy, the certificates and the delay stay with the host, and what the plugin says of them has no effect. `send` follows redirects as reqwest does: ten hops, a GET after 301, 302 and 303, the same call after 307 and 308. Off the service, only `Accept`, `Accept-Language` and `User-Agent` stay, and a call that still has its body stops at the 3xx. `http::redirect` is for a client that decides at each hop.
+- A task woken by another goes on in the same turn: a `Waker` works as anywhere else.
+- `serve::run` makes a task of each call. To read `net/stream`, keep a `ws/*` socket or start a task no call began, `host::Host` gives the same turns to a plugin that serves its lines itself.
 
 A turn keeps nothing for itself: the state lives in the plugin, between two turns, as in a process. It is not kept from one instance to the next.
 
@@ -173,6 +175,11 @@ impl ForgeKind for GiteaForge {
     }
     fn name(&self) -> &str {
         "Gitea / Forgejo"
+    }
+    /// An account always names its instance: this is for the bench, whose account is empty, so that it is refused like a
+    /// token and not as a malformed call.
+    fn default_url(&self) -> Option<&str> {
+        Some("https://codeberg.org")
     }
     fn client(&self, http: reqwest::Client, account: &Credentials) -> Box<dyn Forge> {
         let base = account

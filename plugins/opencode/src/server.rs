@@ -8,10 +8,10 @@
 //! `/global/event` (all its folders) and handed to the session they are about: each agent is a session of its own, and
 //! the sessions its subagents open (`parentID`) go to the agent whose session opened them.
 
-use crate::host::{Host, Stream};
 use crate::rules::tr;
 use anyhow::{anyhow, bail, Result};
 use base64::Engine;
+use escouade_plugin_kit::host::{Host, Stream};
 use parking_lot::Mutex;
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
@@ -348,10 +348,10 @@ async fn read_stream(mut stream: Stream, server: &Weak<Server>) {
             if server.strong_count() == 0 {
                 return Poll::Ready(None);
             }
-            stream.poll_read()
+            stream.poll_next()
         })
         .await;
-        let Some(piece) = piece else {
+        let Some(Ok(piece)) = piece else {
             return;
         };
         buf.extend_from_slice(&piece);

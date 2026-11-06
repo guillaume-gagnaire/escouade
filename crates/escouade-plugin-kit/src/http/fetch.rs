@@ -1,14 +1,22 @@
 //! The part of reqwest the plugins of Escouade use, over the host's `net/fetch` (docs/PLUGINS.md §8.4.1): what
 //! `escouade_plugin_kit::http::reqwest` is in a module, where reqwest does not compile, so that a plugin's client is the
-//! same source on both targets. What `net/fetch` cannot give (a stream, bytes) is not here: `net/stream` will bring them.
+//! same source on both targets. What `net/fetch` cannot give (a stream) is not here: `crate::host` reads `net/stream`.
+//!
+//! As reqwest does, `send` follows redirections, by the rules of `super::redirect`. A header other than those that say
+//! what is wanted may hold a key, whatever its name, so none of them leaves the service.
 //!
 //! The network is the host's: a proxy, the certificates and the time a call may take are settled there, so what says them
 //! here is accepted and has no effect.
 
+use super::redirect::{hop, MAX};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
+use std::future::Future;
 use std::time::Duration;
+
+/// The headers a call keeps once it left its service.
+const HARMLESS: [&str; 3] = ["accept", "accept-language", "user-agent"];
 
 /// A call that failed: what the host said.
 #[derive(Debug)]
@@ -262,13 +270,62 @@ impl RequestBuilder {
         p
     }
 
-    pub async fn send(self) -> Result<Response, Error> {
+    /// The call, once: a 3xx is its answer.
+    pub async fn once(self) -> Result<Response, Error> {
+        Self::fetched(self.params()).await
+    }
+
+    async fn fetched(params: Value) -> Result<Response, Error> {
         let cx = crate::serve::reactor::cx().ok_or_else(|| Error::of("no host"))?;
         let v = cx
-            .request("net/fetch", self.params())
+            .request("net/fetch", params)
             .await
             .map_err(|e| Error::of(e.message))?;
         Ok(Response::of(&v))
+    }
+
+    /// The call, and again wherever it is redirected: its last answer.
+    pub async fn send(self) -> Result<Response, Error> {
+        self.walk(Self::fetched).await
+    }
+
+    /// `send`, each call made by `fetch`. A body never leaves the service: the redirection that would take it elsewhere,
+    /// or from https to http, is the last answer.
+    async fn walk<F, A>(mut self, mut fetch: F) -> Result<Response, Error>
+    where
+        F: FnMut(Value) -> A,
+        A: Future<Output = Result<Response, Error>>,
+    {
+        let mut own = true;
+        for _ in 0..MAX {
+            let answer = fetch(self.params()).await?;
+            let location = answer
+                .headers()
+                .get("location")
+                .and_then(|v| v.to_str().ok());
+            let Some(next) = hop(answer.status().as_u16(), &self.url, location) else {
+                return Ok(answer);
+            };
+            own = own && next.own;
+            if !own && self.body.is_some() {
+                return Ok(answer);
+            }
+            if next.as_get {
+                self.method = Method::GET;
+                self.body = None;
+                self.headers
+                    .retain(|k, _| !k.eq_ignore_ascii_case("content-type"));
+            }
+            if !own {
+                let kept = |k: &str| HARMLESS.iter().any(|h| k.eq_ignore_ascii_case(h));
+                self.headers.retain(|k, _| kept(k));
+            }
+            self.url = next.url;
+        }
+        Err(Error::of(format!(
+            "{}: too many redirects",
+            super::host_of(&self.url)
+        )))
     }
 }
 
@@ -309,10 +366,19 @@ impl Response {
                 })
                 .collect()
         });
+        use base64::Engine;
+        let body = match (v["body"].as_str(), v["bodyBase64"].as_str()) {
+            (Some(text), _) => text.to_string(),
+            (None, Some(bytes)) => {
+                let bytes = base64::engine::general_purpose::STANDARD.decode(bytes);
+                String::from_utf8_lossy(&bytes.unwrap_or_default()).into_owned()
+            }
+            (None, None) => String::new(),
+        };
         Self {
             status: StatusCode(u16::try_from(v["status"].as_u64().unwrap_or(0)).unwrap_or(0)),
             headers: header::HeaderMap(headers),
-            body: v["body"].as_str().unwrap_or_default().to_string(),
+            body,
         }
     }
 
@@ -414,6 +480,95 @@ mod tests {
         assert_eq!(link.to_str().unwrap(), "<u>; rel=\"next\"");
         assert_eq!(r.headers().get_all("x-other").iter().count(), 1);
         assert_eq!(r.headers().clone().get("nothing"), None);
+    }
+
+    #[test]
+    fn what_is_not_utf8_reads_with_its_replacement() {
+        let r = Response::of(&json!({ "status": 200, "bodyBase64": "Yf8=" }));
+        assert_eq!(r.body, "a\u{fffd}");
+    }
+
+    /// Plays `send` on the given answers, each a status and its `Location`: what `net/fetch` was asked each time, then
+    /// the status it gave back.
+    fn walked(rb: RequestBuilder, answers: &[(u16, &str)]) -> (Vec<Value>, Result<u16, Error>) {
+        let sent = std::cell::RefCell::new(Vec::new());
+        let at = std::cell::Cell::new(0);
+        let fetch = |params: Value| {
+            sent.borrow_mut().push(params);
+            let (status, to) = answers[at.replace(at.get() + 1)];
+            let headers = json!({ "Location": to });
+            std::future::ready(Ok(Response::of(
+                &json!({ "status": status, "headers": headers, "body": "" }),
+            )))
+        };
+        let run = rb.walk(fetch);
+        let mut run = std::pin::pin!(run);
+        let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+        let std::task::Poll::Ready(answer) = run.as_mut().poll(&mut cx) else {
+            panic!("nothing here waits");
+        };
+        (sent.take(), answer.map(|r| r.status().as_u16()))
+    }
+
+    #[test]
+    fn a_read_follows_and_leaves_its_credentials_behind() {
+        let rb = Client::new()
+            .get("https://a.dev/x")
+            .bearer_auth("k")
+            .header("PRIVATE-TOKEN", "k")
+            .header("Accept", "text/plain");
+        let (sent, last) = walked(rb, &[(301, "/y"), (302, "https://b.dev/z"), (200, "")]);
+        assert_eq!(last.unwrap(), 200);
+        assert_eq!(sent[1]["url"], "https://a.dev/y");
+        assert_eq!(
+            sent[1]["headers"]["Authorization"], "Bearer k",
+            "the service still"
+        );
+        assert_eq!(sent[2]["url"], "https://b.dev/z");
+        assert_eq!(sent[2]["headers"], json!({ "Accept": "text/plain" }));
+    }
+
+    #[test]
+    fn a_write_turns_into_a_get_after_a_303_and_stays_one_after_a_307() {
+        let rb = || {
+            Client::new()
+                .post("https://a.dev/x")
+                .json(&json!({ "a": 1 }))
+        };
+        let (sent, _) = walked(rb(), &[(303, "/y"), (200, "")]);
+        assert_eq!(sent[1]["method"], "GET");
+        assert!(sent[1].get("body").is_none());
+        assert_eq!(sent[1]["headers"], json!({}));
+        let (sent, _) = walked(rb(), &[(307, "/y"), (200, "")]);
+        assert_eq!(sent[1]["method"], "POST");
+        assert_eq!(sent[1]["body"], r#"{"a":1}"#);
+    }
+
+    #[test]
+    fn a_body_does_not_leave_the_service() {
+        let rb = || {
+            Client::new()
+                .post("https://a.dev/x")
+                .json(&json!({ "a": 1 }))
+        };
+        for (status, to) in [(307, "https://b.dev/y"), (308, "http://a.dev/x")] {
+            let (sent, last) = walked(rb(), &[(status, to), (200, "")]);
+            assert_eq!(sent.len(), 1, "{to}");
+            assert_eq!(last.unwrap(), status);
+        }
+    }
+
+    #[test]
+    fn ten_hops_and_no_more() {
+        let (sent, last) = walked(Client::new().get("https://a.dev/x"), &[(302, "/y"); 11]);
+        assert_eq!(sent.len(), MAX);
+        assert!(last.unwrap_err().to_string().contains("too many redirects"));
+    }
+
+    #[test]
+    fn a_3xx_without_a_location_is_an_answer() {
+        let (sent, last) = walked(Client::new().get("https://a.dev/x"), &[(304, "")]);
+        assert_eq!((sent.len(), last.unwrap()), (1, 304));
     }
 
     #[test]

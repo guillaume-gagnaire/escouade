@@ -10,10 +10,10 @@
 //! `X-RateLimit-NearLimit` for what it says, and slows down as the hour's budget runs low. A refusal (429) is waited
 //! out (its `Retry-After`, at most `Pace::max_wait`) and the call sent once more.
 
-use crate::redirect::{self, Reply};
 use anyhow::{anyhow, Result};
 use escouade_plugin_kit::errors::HttpError;
 use escouade_plugin_kit::forge::*;
+use escouade_plugin_kit::http::redirect::{self, Reply};
 use escouade_plugin_kit::http::reqwest;
 use escouade_plugin_kit::tr;
 use parking_lot::Mutex;

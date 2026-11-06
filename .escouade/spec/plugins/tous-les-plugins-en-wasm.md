@@ -1,9 +1,9 @@
 ---
 title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","docs/PLUGINS.md §8.19 (ESC-344)","docs/PLUGINS.md §8.20 (ESC-337)","docs/PLUGINS.md §8.22 (ESC-351)","docs/PLUGINS.md §8.23 (ESC-349)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire","docs/PLUGINS.md §8.24 (ESC-348)","docs/PLUGINS.md §8.25 (ESC-345)","docs/PLUGINS.md §8.27 (ESC-347)","docs/PLUGINS.md §8.28 (ESC-350)"]
-tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351","ESC-349","ESC-348","ESC-345","ESC-346","ESC-347","ESC-350"]
-decisions: [73,71,70,72,75,80,84,86,89,92,93,96]
+sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","docs/PLUGINS.md §8.19 (ESC-344)","docs/PLUGINS.md §8.20 (ESC-337)","docs/PLUGINS.md §8.22 (ESC-351)","docs/PLUGINS.md §8.23 (ESC-349)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire","docs/PLUGINS.md §8.24 (ESC-348)","docs/PLUGINS.md §8.25 (ESC-345)","docs/PLUGINS.md §8.27 (ESC-347)","docs/PLUGINS.md §8.28 (ESC-350)","docs/PLUGINS.md §8.29 (ESC-358)","Accord de l'utilisateur du 2026-11-06 : publication et MIT d'escouade-voice"]
+tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351","ESC-349","ESC-348","ESC-345","ESC-346","ESC-347","ESC-350","ESC-358"]
+decisions: [73,71,70,72,75,80,84,86,89,92,93,96,"le-kit-suit-les-redirections-et-rejoue-l"]
 compared: null
 ---
 
@@ -227,3 +227,13 @@ La voix est le cas le plus serré du chantier : du son binaire, un WebSocket, un
 - **`ws/open` dit ce que le service a répondu**, sans les valeurs de ses en-têtes : la raison d'un refus reste visible.
 - **Il n'y a plus de service dans le cœur.** Un plugin qui ne démarre pas se dit à son premier appel.
 - **Second passage** : `escouade-voice` `0.1.0` et `escouade-acp` `0.1.1` à publier, puis les `Cargo.lock` et les empreintes des cinq. D'ici là, ils restent dans `AWAITING_PUBLICATION`.
+
+## Le kit 0.1.1 sur crates.io (K1, ESC-358)
+
+Publiés le 2026-11-06 par l'utilisateur : `escouade-plugin-kit` `0.1.1`, `escouade-acp` `0.1.1`, `escouade-voice` `0.1.0`, en MIT. `escouade-plugin-protocol` reste en `0.1.0`. Ceci remplace, plus haut, tout ce qui attendait ces versions : `AWAITING_PUBLICATION` n'existe plus, et les 23 plugins en `run.wasm` ont leur `Cargo.lock` sur ce qui est publié.
+
+- **Une tâche réveillée repart dans le même tour.** En module, un `Waker` marche comme ailleurs : une tâche qui attend ce qu'une plus récente pose n'a plus besoin d'une ligne de plus. Un tour est borné : des tâches qui se réveillent sans fin passent au tour suivant par un minuteur vide, et les autres lignes passent.
+- **Le client du kit suit les redirections.** Ceci remplace « Le plugin suit lui-même les redirections » : les règles sont celles d'ESC-345, et elles sont dans le kit. En module, `send` les applique à tout plugin du kit, donc aussi à Jira, Linear, Trello et ClickUp, qui finissaient en erreur sur un 3xx. Hors du service, seuls `Accept`, `Accept-Language` et `User-Agent` restent, et un appel qui a encore son corps s'arrête là. Un hébergeur garde la main à chaque saut par `http::redirect`.
+- **`host::Host` donne les mêmes tours à un plugin qui sert ses lignes lui-même**, avec `net/stream`, `ws/*` et des tâches qu'aucun appel n'a commencées. OpenCode et la voix s'en servent : ceci remplace « Il n'utilise pas le kit » pour OpenCode. Un minuteur refusé va au journal du plugin.
+- **Un corps qui n'est pas de l'UTF-8** arrive au client du kit avec ses caractères de remplacement, au lieu d'arriver vide.
+- **`proc/*` reste sans API dans le kit** : seul isola lance un programme, et le réacteur réglé, son code n'a plus de contournement.

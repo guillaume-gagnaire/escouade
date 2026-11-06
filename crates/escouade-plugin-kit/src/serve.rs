@@ -4,7 +4,8 @@
 //! (`Cx::log`). `initialize` and `shutdown` are answered here.
 //!
 //! The same [`Plugin`] and the same [`Cx`] on both targets. In process, the loop is on tokio's threads (`process`); in a
-//! module, a reactor on one thread, without tokio (`reactor`, docs/PLUGINS.md §8.3).
+//! module, a reactor on one thread, without tokio (`reactor`, docs/PLUGINS.md §8.3). A module whose tasks outlive its
+//! calls, or that reads a stream, has [`crate::host`].
 
 use crate::forge::BoxFuture;
 use escouade_plugin_protocol::{code, greeted, initialized, method};
@@ -20,6 +21,7 @@ use std::task::{Poll, Waker};
 mod process;
 #[cfg(any(test, target_family = "wasm"))]
 pub(crate) mod reactor;
+pub(crate) mod tasks;
 
 #[cfg(not(target_family = "wasm"))]
 pub use process::{run, serve_on};

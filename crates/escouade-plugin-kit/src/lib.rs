@@ -2,6 +2,7 @@
 
 pub mod errors;
 pub mod forge;
+pub mod host;
 pub mod hosts;
 pub mod http;
 pub mod i18n;

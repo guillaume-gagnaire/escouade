@@ -13,7 +13,6 @@ pub mod boards;
 pub mod html;
 mod joined;
 pub mod pulls;
-mod redirect;
 
 #[cfg(test)]
 #[path = "../../fake_service.rs"]

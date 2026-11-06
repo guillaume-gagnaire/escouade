@@ -7,9 +7,9 @@
 //! the limit, the answer kept from before is served), and it slows down as the limit comes near
 //! (`X-RateLimit-*`).
 
-use crate::redirect::{self, Reply};
 use anyhow::{anyhow, Result};
 use escouade_plugin_kit::forge::*;
+use escouade_plugin_kit::http::redirect::{self, Reply};
 use escouade_plugin_kit::http::reqwest;
 use escouade_plugin_kit::tr;
 use parking_lot::Mutex;

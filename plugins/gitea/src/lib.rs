@@ -9,7 +9,6 @@
 //! is told by the client itself, which asks the instance's version once: `Unsupported`, never a wrong answer.
 
 pub mod pulls;
-mod redirect;
 
 use escouade_plugin_kit::forge::Forge;
 use escouade_plugin_kit::hosts::{Credentials, ForgeKind, Hosts};

@@ -21,9 +21,9 @@
 //!   detection), `input_audio_buffer.append`, then `input_audio_buffer.commit`;
 //!   `conversation.item.input_audio_transcription.delta`, then `.completed`.
 
-use crate::host::{Host, SocketEvent};
 use crate::online::{key_header, redact, said, OnlineError, Provider, Spec};
 use base64::Engine as _;
+use escouade_plugin_kit::host::{Host, SocketEvent};
 use escouade_plugin_kit::tr;
 use parking_lot::Mutex;
 use std::collections::VecDeque;
@@ -32,25 +32,14 @@ use std::sync::Arc;
 use std::task::Poll;
 use std::time::Duration;
 
+pub use escouade_plugin_kit::host::Frame;
+
 /// The stream opens within this (the proxy, TLS and the WebSocket's handshake), or the sentence goes by request.
 pub const CONNECT_WAIT: Duration = Duration::from_secs(5);
 /// Once the sentence ended, its final text comes within this, or it goes by request.
 pub const FINAL_WAIT: Duration = Duration::from_secs(5);
 /// What is sent at a time: 100 ms of sound.
 const CHUNK_MS: usize = 100;
-
-/// A frame of a WebSocket.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Frame {
-    Text(String),
-    Binary(Vec<u8>),
-}
-
-impl Frame {
-    fn text(text: impl Into<String>) -> Self {
-        Frame::Text(text.into())
-    }
-}
 
 /// What the sentence's side tells its stream.
 pub(crate) enum Cmd {

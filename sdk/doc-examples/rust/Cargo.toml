@@ -10,7 +10,7 @@ name = "plugin"
 crate-type = ["cdylib"]
 
 [dependencies]
-escouade-plugin-kit = "0.1.0"
+escouade-plugin-kit = "0.1.1"
 serde_json = "1"
 
 [workspace]

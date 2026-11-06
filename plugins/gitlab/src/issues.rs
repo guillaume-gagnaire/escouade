@@ -4,12 +4,12 @@
 //! container names). An issue's state on the Kanban is opened or closed, or a label of the project (a board's lists are
 //! labels: they come first).
 
-use crate::redirect;
 use anyhow::{anyhow, Result};
 use escouade_plugin_kit::errors::HttpError;
 use escouade_plugin_kit::forge::BoxFuture;
 use escouade_plugin_kit::hosts::TicketSource;
 use escouade_plugin_kit::http::encode;
+use escouade_plugin_kit::http::redirect;
 use escouade_plugin_kit::http::reqwest;
 use escouade_plugin_kit::i18n::{self, Lang};
 use escouade_plugin_kit::protocol::tickets::{

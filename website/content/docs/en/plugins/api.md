@@ -127,7 +127,7 @@ The module is compiled once: by the store for a plugin of the store (the app dow
 A plugin in WASM opens no connection: everything goes through Escouade, by `net/fetch`, `net/stream` and `ws/open`, which only a plugin in WASM gets (a process has its own network, and these methods answer it `-32601`). `fetch` in JS and the kit’s client in Rust lead there. Escouade sends the request:
 
 - **over https only**, to a host of `permissions.network` or one of its subdomains (`slack.com` covers `api.slack.com`); never to an IP address written in the URL, which `permissions.network` does not name;
-- **following no redirect**: the plugin gets the 3xx answer;
+- **following no redirect**: the plugin gets the 3xx answer, which the kit’s client follows in Rust;
 - **within 10 s, for an answer of 1 MiB at most**, unless `limits` asks for more;
 - **never to an address of the machine or of the local network**, even for a declared host: loopback, private, link-local, unspecified, multicast or broadcast, in IPv4 as in IPv6. Escouade judges the addresses the connection itself uses, once the name is resolved, not a separate lookup the DNS could contradict;
 - **through the proxy of Settings › Network**, if there is one: only the name is judged then, and the journal says so.

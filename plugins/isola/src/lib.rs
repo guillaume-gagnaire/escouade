@@ -15,7 +15,7 @@
 
 use escouade_plugin_kit::forge::BoxFuture;
 use escouade_plugin_kit::serve::{self, Cx, Plugin, Refusal};
-use escouade_plugin_kit::time::{sleep, timeout};
+use escouade_plugin_kit::time::timeout;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -269,9 +269,6 @@ impl Isola {
             }
             "proc/exit" => {
                 self.ended(&params);
-                // The reactor of the kit polls this notification after the tasks that came before it, and only a line
-                // makes a turn: the call that waits for this end would stay asleep. An empty timer brings that line.
-                sleep(Duration::ZERO).await;
                 Ok(Value::Null)
             }
             "launch/ls" => {

@@ -6,8 +6,8 @@
 //!
 //! What goes to the service to list them: the key only.
 
-use crate::host::Host;
 use crate::online::{key_header, query, said, Call, OnlineError, Provider, Spec};
+use escouade_plugin_kit::host::Host;
 use escouade_plugin_kit::tr;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -431,7 +431,7 @@ async fn get_json(
     };
     let (name, value) = key_header(spec);
     let call = Call::get(url).header(name, value);
-    let (status, body) = host.fetch_text(&call, spec).await?;
+    let (status, body) = crate::serve::fetch_text(host, &call, spec).await?;
     match status {
         401 | 403 => return Err(OnlineError::KeyRefused(p)),
         429 => return Err(OnlineError::Quota(p, said(&body, &spec.key))),

@@ -7,11 +7,11 @@
 //! (`session.idle` of the agent's own session, once it was seen busy: an `idle` of the turn before
 //! can come after the next message is sent).
 
-use crate::host::Host;
 use crate::rules::{self, agent_of, session_rules, split_model, tr, Settings, SERVER};
 use crate::server::{self, Listener, Server};
 use crate::translate::{contexts_event, Translator};
 use anyhow::{anyhow, bail, Result};
+use escouade_plugin_kit::host::Host;
 use escouade_plugin_protocol::engine::{
     method, AnswerPermission, Attach, EnvVar, Grant, Item, Launch, Open, Opened, Pushed, StartAt,
 };

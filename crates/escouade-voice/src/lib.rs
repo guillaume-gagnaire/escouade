@@ -1,7 +1,6 @@
 #![doc = include_str!("../README.md")]
 
 pub mod catalog;
-pub mod host;
 pub mod live;
 pub mod online;
 pub mod serve;

@@ -7,9 +7,9 @@
 //! PCM). The key is never written down, nor the text read.
 
 use crate::catalog::speed_range;
-use crate::host::Host;
 use crate::online::{query, redact, said, Call, OnlineError, Provider, Spec};
 use base64::Engine as _;
+use escouade_plugin_kit::host::Host;
 use std::future::{poll_fn, Future};
 use std::pin::pin;
 use std::sync::atomic::{AtomicBool, Ordering};

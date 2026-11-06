@@ -1,10 +1,10 @@
 //! GitHub Issues (REST API), with a token: one given, or the GitHub CLI's. An issue's state on the
 //! Kanban is open or closed, or a label of the repository.
 
-use crate::redirect;
 use anyhow::Result;
 use escouade_plugin_kit::errors::HttpError;
 use escouade_plugin_kit::http::encode;
+use escouade_plugin_kit::http::redirect;
 use escouade_plugin_kit::http::reqwest;
 use escouade_plugin_kit::i18n::{self, Lang};
 use escouade_plugin_kit::protocol::tickets::{

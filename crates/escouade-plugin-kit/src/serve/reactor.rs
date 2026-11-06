@@ -1,23 +1,19 @@
 //! The loop as a module (docs/PLUGINS.md §8.3): the same `Plugin` and the same `Cx` as in process, on one thread, without
 //! tokio. A call is a task; a task that asks the host (`secrets/get`, `net/fetch`, `timer/set`) gives the thread back and
 //! waits for a line of a later turn. Each turn reads what came, gives the answers to the tasks that wait for them, starts
-//! the new calls, polls them all, and writes their lines.
+//! the new calls, polls them all, again those that were woken meanwhile (`tasks`), and writes their lines.
 
+use super::tasks::Tasks;
 use super::{arrived, called, Cx, Plugin};
 use parking_lot::Mutex;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{Context, Waker};
-
-type Task = Pin<Box<dyn Future<Output = ()> + Send>>;
 
 /// A plugin kept between its turns.
 pub(crate) struct Reactor {
     plugin: Arc<dyn Plugin>,
     cx: Arc<Cx>,
     out: Arc<Mutex<Vec<String>>>,
-    tasks: Mutex<Vec<Task>>,
+    tasks: Tasks,
 }
 
 impl Reactor {
@@ -32,7 +28,7 @@ impl Reactor {
             plugin: Arc::new(plugin),
             cx: Arc::new(cx),
             out,
-            tasks: Mutex::new(Vec::new()),
+            tasks: Tasks::default(),
         }
     }
 
@@ -42,25 +38,24 @@ impl Reactor {
 
     /// One turn on what came: the lines to write.
     ///
-    /// Nothing wakes a task but a line, and a line makes a turn: every task is polled, so no waker is needed. A timer that
-    /// rang has been seen by now, or nobody waits for it any more.
+    /// A task woken by another goes on in this turn. A timer that rang has been seen by now, or nobody waits for it any
+    /// more. Tasks that a turn could not bring to rest get the next one from an empty timer: nothing else may come.
     pub(crate) fn turn(&self, lines: impl IntoIterator<Item = String>) -> Vec<String> {
-        let mut tasks = self.tasks.lock();
         for line in lines {
             let Some(msg) = arrived(&self.cx, &line) else {
                 continue;
             };
             let (plugin, cx) = (self.plugin.clone(), self.cx.clone());
-            tasks.push(Box::pin(async move {
+            self.tasks.spawn(Box::pin(async move {
                 let (out, _) = called(&*plugin, &cx, msg).await;
                 if let Some(out) = out {
                     cx.send(out.to_string());
                 }
             }));
         }
-        let mut task = Context::from_waker(Waker::noop());
-        tasks.retain_mut(|t| t.as_mut().poll(&mut task).is_pending());
-        drop(tasks);
+        if self.tasks.run() {
+            self.cx.notify("timer/set", serde_json::json!({ "ms": 0 }));
+        }
         self.cx.fired.lock().clear();
         std::mem::take(&mut *self.out.lock())
     }
@@ -99,7 +94,101 @@ mod tests {
     use crate::time::{sleep_on, timeout_on};
     use escouade_plugin_protocol::{code, Refusal};
     use serde_json::{json, Value};
+    use std::future::poll_fn;
+    use std::task::{Poll, Waker};
     use std::time::Duration;
+
+    /// A call that waits for what a later one sets, as one that waits for `proc/exit`.
+    #[derive(Default)]
+    struct Waits {
+        set: bool,
+        waker: Option<Waker>,
+    }
+
+    struct Pair(Mutex<Waits>);
+
+    impl Plugin for Pair {
+        fn call<'a>(
+            &'a self,
+            _cx: &'a Cx,
+            method: &'a str,
+            _params: Value,
+        ) -> BoxFuture<'a, Result<Value, Refusal>> {
+            Box::pin(async move {
+                match method {
+                    "wait" => {
+                        poll_fn(|task| {
+                            let mut w = self.0.lock();
+                            if w.set {
+                                return Poll::Ready(());
+                            }
+                            w.waker = Some(task.waker().clone());
+                            Poll::Pending
+                        })
+                        .await;
+                        Ok(json!("woken"))
+                    }
+                    "set" => {
+                        let mut w = self.0.lock();
+                        w.set = true;
+                        if let Some(waker) = w.waker.take() {
+                            waker.wake();
+                        }
+                        Ok(json!("set"))
+                    }
+                    other => Err(Refusal::not_found(other)),
+                }
+            })
+        }
+    }
+
+    /// The second task wakes the first and no line comes after it: on the kit 0.1.0, the first stayed asleep for ever.
+    #[test]
+    fn a_task_woken_by_a_later_one_goes_on_in_the_same_turn() {
+        let r = Reactor::new(Pair(Mutex::default()));
+        let out = parsed(r.turn([call(1, "wait"), call(2, "set")]));
+        assert_eq!(out.len(), 2, "{out:?}");
+        assert_eq!(
+            (out[0]["id"].clone(), out[0]["result"].clone()),
+            (json!(2), json!("set"))
+        );
+        assert_eq!(
+            (out[1]["id"].clone(), out[1]["result"].clone()),
+            (json!(1), json!("woken"))
+        );
+    }
+
+    #[test]
+    fn a_call_that_wakes_itself_gives_the_turn_back_and_asks_for_another() {
+        struct Spins;
+
+        impl Plugin for Spins {
+            fn call<'a>(
+                &'a self,
+                _cx: &'a Cx,
+                method: &'a str,
+                _params: Value,
+            ) -> BoxFuture<'a, Result<Value, Refusal>> {
+                Box::pin(async move {
+                    if method == "spin" {
+                        poll_fn(|task| {
+                            task.waker().wake_by_ref();
+                            Poll::<()>::Pending
+                        })
+                        .await;
+                    }
+                    Ok(json!("done"))
+                })
+            }
+        }
+
+        let r = Reactor::new(Spins);
+        let out = parsed(r.turn([call(1, "spin"), call(2, "other")]));
+        assert_eq!(out[0]["id"], 2, "{out:?}");
+        assert_eq!(out[1]["method"], "timer/set");
+        assert_eq!(out[1]["params"]["ms"], 0);
+        assert!(out[1].get("id").is_none(), "nobody waits for its answer");
+    }
 
     struct Echo;
 

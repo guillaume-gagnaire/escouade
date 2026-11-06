@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-kit"
-version = "0.1.0"
+version = "0.1.1"
 description = "What Escouade's plugins in Rust share, in process or as a WASM module: the loop, the service of code hosts and Kanban sources, their typed errors and their rate limits"
 authors = ["Guillaume Gagnaire"]
 license = "MIT"
@@ -10,7 +10,7 @@ documentation = "https://docs.rs/escouade-plugin-kit"
 readme = "README.md"
 keywords = ["escouade","plugin","sdk","wasm","async"]
 categories = ["development-tools","wasm","asynchronous"]
-include = ["src/**/*.rs", "Cargo.toml", "README.md", "LICENSE"]
+include = ["src/**/*.rs", "Cargo.toml", "README.md", "CHANGELOG.md", "LICENSE"]
 edition = "2021"
 rust-version = "1.88"
 workspace = "../../src-tauri"

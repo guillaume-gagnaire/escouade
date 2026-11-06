@@ -11,11 +11,11 @@
 //! (`blocking_discussions_resolved`), a fork's path is read once, and the client slows down as the limit comes near
 //! (`RateLimit-*`), and waits what a 429 asks (`Retry-After`) before trying once more.
 
-use crate::redirect::{self, Reply};
 use anyhow::{anyhow, Result};
 use escouade_plugin_kit::errors::HttpError;
 use escouade_plugin_kit::forge::*;
 use escouade_plugin_kit::http::encode;
+use escouade_plugin_kit::http::redirect::{self, Reply};
 use escouade_plugin_kit::http::reqwest;
 use escouade_plugin_kit::tr;
 use parking_lot::Mutex;

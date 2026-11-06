@@ -17,11 +17,11 @@
 //! instance's version (`/version`: Forgejo's carries `+gitea-<version>`) is asked once per client, and what its
 //! version lacks is `Unsupported`.
 
-use crate::redirect;
 use anyhow::{anyhow, Result};
 use escouade_plugin_kit::errors::Refused;
 use escouade_plugin_kit::forge::*;
 use escouade_plugin_kit::http::encode as enc;
+use escouade_plugin_kit::http::redirect;
 use escouade_plugin_kit::http::reqwest;
 use escouade_plugin_kit::tr;
 use parking_lot::Mutex;

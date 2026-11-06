@@ -63,7 +63,7 @@ describe('create-escouade-plugin', () => {
     const cargo = fs.readFileSync(path.join(folder, 'Cargo.toml'), 'utf8');
     expect(cargo).toContain('name = "escouade-plugin-mes-regles"');
     // By version, never by path, git or a [patch]: what the store compiles.
-    expect(cargo).toContain('escouade-plugin-kit = "0.1.0"');
+    expect(cargo).toContain('escouade-plugin-kit = "0.1.1"');
     expect(cargo).not.toMatch(/path\s*=|git\s*=|\[patch/);
     expect(cargo).toContain('[workspace]');
     const lock = fs.readFileSync(path.join(folder, 'Cargo.lock'), 'utf8');

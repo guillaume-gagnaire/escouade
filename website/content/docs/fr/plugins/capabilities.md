@@ -56,7 +56,7 @@ Tout ce qui sort passe par `net/fetch`, `net/stream` ou `ws/open` : voir [les ap
 - http, et tout autre hôte ;
 - une adresse IP écrite dans l’URL, que `permissions.network` ne nomme pas ;
 - une adresse de la machine ou du réseau local, même pour un hôte déclaré : bouclage, privée, de lien local, non spécifiée, de multidiffusion ou de diffusion, en IPv4 comme en IPv6. Escouade juge les adresses que la connexion emploie, après la résolution du nom ;
-- les redirections : le plugin reçoit la réponse 3xx et décide.
+- les redirections : le plugin reçoit la réponse 3xx et décide. En Rust, le client du kit les suit pour lui, et chaque saut est jugé comme un appel.
 
 Un appel refusé répond `-32003`. Un appel qui échoue en route répond `-32004`.
 

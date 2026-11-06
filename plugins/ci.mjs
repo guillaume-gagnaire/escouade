@@ -23,7 +23,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AWAITING_PUBLICATION, listPlugins, parseArgs, problemsOf, touchedBy } from './ci-lib.mjs';
+import { listPlugins, parseArgs, problemsOf, touchedBy } from './ci-lib.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = dirname(HERE);
@@ -132,16 +132,6 @@ function check(plugin) {
   // By its relative folder, as an author runs it beside the plugin; a reserved id is Escouade's own hand.
   const hand = plugin.ofTheApp ? ['--builtin'] : String(id).startsWith('dev.escouade.') ? ['--first-party'] : [];
   const judged = ['--escouade', since];
-  const waits = AWAITING_PUBLICATION[name];
-  if (waits) {
-    const built = join(ROOT, 'src-tauri', 'target', 'plugins-wasm', name, 'plugin.wasm');
-    console.log(`\n⚠ ${name}: no validate nor build until ${waits} is on crates.io; the bench plays ${built}`);
-    if (!existsSync(built)) {
-      console.error(`✗ ${name}: its module is not built (sh scripts/plugins-wasm.sh)`);
-      return false;
-    }
-    return run(HERE, bin, 'test', name, ...hand, ...judged, '--wasm', built);
-  }
   if (!run(HERE, bin, 'validate', name, ...hand, ...judged)) return false;
   if (plugin.ofTheApp) return true;
   if (!plugin.wasm) return run(HERE, bin, 'test', name, ...hand, ...judged);

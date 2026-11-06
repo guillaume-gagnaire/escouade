@@ -56,7 +56,7 @@ Everything that goes out goes through `net/fetch`, `net/stream` or `ws/open`: se
 - http, and any other host;
 - an IP address written in the URL, which `permissions.network` does not name;
 - an address of the machine or of the local network, even for a declared host: loopback, private, link-local, unspecified, multicast or broadcast, in IPv4 as in IPv6. Escouade judges the addresses the connection uses, after the name is resolved;
-- redirects: the plugin gets the 3xx response and decides.
+- redirects: the plugin gets the 3xx response and decides. In Rust, the kit’s client follows them for it, and each hop is judged as a call.
 
 A refused call answers `-32003`. A call that fails on the way answers `-32004`.
 

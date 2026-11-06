@@ -6,11 +6,11 @@
 //! sentence is read, then the call's answer.
 
 use crate::catalog::{self, Listed};
-use crate::host::Host;
 use crate::live::{self, Cmd, Inbox, FINAL_WAIT};
-use crate::online::{self, OnlineError, Provider, Spec};
+use crate::online::{self, redact, Call, OnlineError, Provider, Spec};
 use crate::speech::{self, Audio, SpeakChoice};
 use crate::wire;
+use escouade_plugin_kit::host::Host;
 use escouade_plugin_kit::protocol::{
     answer, code, greeted, initialized, method as handshake, Refusal, Request,
 };
@@ -330,6 +330,17 @@ impl Plugin {
     }
 }
 
+/// An HTTP request of a service: its status and its text; a refusal of the host is a network's error, its key taken out.
+pub(crate) async fn fetch_text(
+    host: &Host,
+    call: &Call,
+    spec: &Spec,
+) -> Result<(u16, String), OnlineError> {
+    host.fetch(call.params())
+        .await
+        .map_err(|e| OnlineError::Network(spec.provider, redact(&e.message, &spec.key)))
+}
+
 /// Sends `pcm` to the service of `spec`, gives its text; gives up once `cancel` is set, with no text. Ten minutes are 19 Mo
 /// here: each copy is dropped as the next is made, for the memory of a module.
 async fn dictation(
@@ -343,7 +354,7 @@ async fn dictation(
     drop(pcm);
     let call = online::request(spec, &audio, language);
     drop(audio);
-    let Some(answered) = speech::or_cancelled(cancel, host.fetch_text(&call, spec)).await else {
+    let Some(answered) = speech::or_cancelled(cancel, fetch_text(host, &call, spec)).await else {
         return Ok(String::new());
     };
     let (status, body) = answered?;

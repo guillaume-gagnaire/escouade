@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { AWAITING_PUBLICATION, listPlugins, parseArgs, problemsOf, readCargo, readPlugin, touchedBy } from '../plugins/ci-lib.mjs';
+import { listPlugins, parseArgs, problemsOf, readCargo, readPlugin, touchedBy } from '../plugins/ci-lib.mjs';
 
 const made: string[] = [];
 const folder = (files: Record<string, string>) => {
@@ -158,12 +158,8 @@ describe('the workspace of the modules', () => {
     }
   });
 
-  it('has a Cargo.lock for each, but those a crate of crates.io holds back, which are out of the list once it is there', () => {
-    for (const { name } of ported) {
-      const waiting = name in AWAITING_PUBLICATION;
-      expect(existsSync(`plugins/${name}/Cargo.lock`), `${name}: AWAITING_PUBLICATION of plugins/ci-lib.mjs`).toBe(!waiting);
-    }
-    for (const name of Object.keys(AWAITING_PUBLICATION)) expect(ported.map((p) => p.name)).toContain(name);
+  it('has a Cargo.lock for each', () => {
+    for (const { name } of ported) expect(existsSync(`plugins/${name}/Cargo.lock`), name).toBe(true);
   });
 
   it('pins the toolchain of the app', () => {

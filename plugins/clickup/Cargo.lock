@@ -152,9 +152,9 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-kit"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "072b01540a59589bf4b0270da2f022df5ab106927666722dc5a5c87d72b6c16c"
+checksum = "a35c6c15ec7f906450439f1a7f8c9c71a6a83fd4fe0cf7f763cb3293b4001eb6"
 dependencies = [
  "anyhow",
  "base64 0.22.1",

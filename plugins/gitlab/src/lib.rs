@@ -7,7 +7,6 @@
 
 pub mod issues;
 pub mod merges;
-mod redirect;
 
 #[cfg(test)]
 #[path = "../../fake_service.rs"]

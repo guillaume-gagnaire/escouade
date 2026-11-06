@@ -14,7 +14,6 @@
 //! The core still links this crate as a library, for its « Vue OpenCode » and its accounts (`rules`, `translate`), until
 //! P8 (docs/PLUGINS.md §8.2): hence the `rlib` beside the `cdylib`.
 
-mod host;
 pub mod rules;
 mod server;
 mod session;
@@ -23,6 +22,7 @@ pub mod translate;
 pub use rules::{catalog, listed, no_model, split_model};
 pub use translate::{absolute, patch_file, Translator};
 
+use escouade_plugin_kit::host::Host;
 use escouade_plugin_protocol::engine::{
     method, AgentRef, AnswerPermission, AnswerQuestion, Attach, Close, Compact, Compacted, Control,
     EnvVar, Frames, Interrupt, Items, Launch, LaunchParams, Open, SendMessage, SetValue,
@@ -31,7 +31,6 @@ use escouade_plugin_protocol::engine::{
 use escouade_plugin_protocol::{
     answer, code, greeted, initialized, method as handshake, Refusal, Request,
 };
-use host::Host;
 use parking_lot::Mutex;
 use serde::de::DeserializeOwned;
 use serde::Serialize;

@@ -9,11 +9,11 @@
 //! refusal. A limit (429, or 503 with `Retry-After`) is waited out once, at most
 //! `Pace::max_wait`; the `X-RateLimit-*` headers slow the calls down as for GitHub.
 
-use crate::redirect::{self, Reply};
 use crate::{decode, parts, CLOUD, NAME};
 use anyhow::{anyhow, Result};
 use escouade_plugin_kit::errors::{http_error_in, HttpError, Refused};
 use escouade_plugin_kit::forge::*;
+use escouade_plugin_kit::http::redirect::{self, Reply};
 use escouade_plugin_kit::http::reqwest;
 use escouade_plugin_kit::http::{encode as enc, host_of};
 use escouade_plugin_kit::tr;
