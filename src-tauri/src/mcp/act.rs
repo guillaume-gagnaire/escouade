@@ -43,14 +43,16 @@ use super::activity;
 use super::files::{self, Drafted};
 use super::images;
 use super::read::{
-    answerable, asked_questions, board_view, json, request_type, ticket_view, todo_keys, TicketView,
+    answerable, asked_questions, board_view, folder_rows, json, request_type, ticket_view,
+    todo_keys, TicketView,
 };
 use super::resolve::{self, Sight};
 use super::tools::{
-    AnswerPermissionArgs, AnswerQuestionArgs, ApproveTicketArgs, CreateAgentArgs, CreateTicketArgs,
-    DecisionArg, DeleteTicketArgs, DismissBlockArgs, MoveTicketArgs, PositionArg, QuestionAnswer,
-    RejectTicketArgs, ReportProgressArgs, ResolveConflictArgs, ResumeTicketArgs, SendMessageArgs,
-    SetBoardArgs, SplitTicketArgs, StartTicketArgs, StopAgentArgs, SubTicket, ToolError,
+    AnswerPermissionArgs, AnswerQuestionArgs, ApproveTicketArgs, CreateAgentArgs, CreateFolderArgs,
+    CreateTicketArgs, DecisionArg, DeleteFolderArgs, DeleteTicketArgs, DismissBlockArgs,
+    MoveAgentArgs, MoveTicketArgs, PositionArg, QuestionAnswer, RejectTicketArgs,
+    ReportProgressArgs, ResolveConflictArgs, ResumeTicketArgs, SendMessageArgs, SetBoardArgs,
+    SplitTicketArgs, StartTicketArgs, StopAgentArgs, SubTicket, ToolError, UpdateFolderArgs,
     UpdateTicketArgs, SPLIT_MAX,
 };
 use super::wait;
@@ -59,6 +61,7 @@ use crate::accounts;
 use crate::agent::Waiting;
 use crate::board::{Held, MoveTo};
 use crate::core::{AgentOptions, Core};
+use crate::folders;
 use crate::git;
 use crate::i18n;
 use crate::model::{
@@ -2305,4 +2308,190 @@ pub(super) async fn split_ticket<R: Runtime>(
     } else {
         json(&json!({ "tickets": made, "skipped": skipped }))
     }
+}
+
+// ---------- the agents' folders ----------
+
+/// The project's folder `id` as `list_folders` gives it.
+fn folder_answer<R: Runtime>(
+    core: &Core<R>,
+    project_id: &str,
+    id: &str,
+) -> Result<String, ToolError> {
+    let project = core.project(project_id).map_err(failure)?;
+    let row = folder_rows(core, &project).into_iter().find(|r| r.id == id);
+    json(&row)
+}
+
+/// `create_folder`: the window's « Nouveau dossier » (a folder at the bottom of the list, holding
+/// `agents`), through the core. Answers the folder as `list_folders` does.
+pub(super) fn create_folder<R: Runtime>(
+    core: &Core<R>,
+    caller: &Caller,
+    a: CreateFolderArgs,
+) -> Result<(String, String), ToolError> {
+    let project = resolve::project_or_own(core, caller, a.project.as_deref())?;
+    may_act_on(core, caller, &project.id)?;
+    let named = |asked: &String| resolve::agent(core, caller, asked, Some(&project)).map(|f| f.id);
+    let agents = a
+        .agents
+        .iter()
+        .flatten()
+        .map(named)
+        .collect::<Result<Vec<_>, _>>()?;
+    let principal = a.principal.as_ref().map(named).transpose()?;
+    let made = core
+        .folder_create(
+            &project.id,
+            Some(&a.name),
+            &agents,
+            principal.as_deref(),
+            None,
+        )
+        .map_err(failure)?;
+    let (name, count) = (&made.name, agents.len());
+    let changed = tr_n!(
+        count,
+        "Dossier « {name} » créé avec {count} agent.",
+        "Dossier « {name} » créé avec {count} agents.",
+        "Folder “{name}” created with {count} agent.",
+        "Folder “{name}” created with {count} agents."
+    );
+    Ok((folder_answer(core, &project.id, &made.id)?, changed))
+}
+
+/// `update_folder`: the window's rename, principal and drag of a folder. What is asked is checked
+/// before anything changes.
+pub(super) fn update_folder<R: Runtime>(
+    core: &Core<R>,
+    caller: &Caller,
+    a: UpdateFolderArgs,
+) -> Result<(String, String), ToolError> {
+    let project = resolve::project_or_own(core, caller, a.project.as_deref())?;
+    may_act_on(core, caller, &project.id)?;
+    let folder = resolve::folder(core, caller, &a.folder, &project)?;
+    let name = a.name.as_deref().map(str::trim);
+    if name == Some("") {
+        return Err(ToolError::Failed(tr!("nom vide", "empty name")));
+    }
+    if name.is_none() && a.principal.is_none() && a.position.is_none() {
+        return Err(ToolError::Failed(tr!(
+            "Rien à changer : donne un nom, un principal ou une position.",
+            "Nothing to change: give a name, a principal or a position."
+        )));
+    }
+    // `Some(None)`: no principal.
+    let principal = match a.principal.as_deref().map(str::trim) {
+        None => None,
+        Some("") => Some(None),
+        Some(asked) => {
+            let found = resolve::agent(core, caller, asked, Some(&project))?;
+            if !folder.agents.contains(&found.id) {
+                let (agent, folder) = (&found.name, &folder.name);
+                return Err(ToolError::Failed(tr!(
+                    "L’agent {agent} n’est pas dans le dossier {folder}.",
+                    "The agent {agent} is not in the folder {folder}."
+                )));
+            }
+            Some(Some(found.id))
+        }
+    };
+    let mut changes = Vec::new();
+    if let Some(name) = name {
+        core.folder_rename(&project.id, &folder.id, name)
+            .map_err(failure)?;
+        changes.push(tr!("renommé « {name} »", "renamed “{name}”"));
+    }
+    if let Some(principal) = principal {
+        core.folder_principal(&project.id, &folder.id, principal.as_deref())
+            .map_err(failure)?;
+        changes.push(match principal {
+            Some(_) => tr!("principal changé", "principal changed"),
+            None => tr!("sans principal", "no principal"),
+        });
+    }
+    if let Some(position) = a.position {
+        core.item_move(&project.id, &folder.id, None, Some(position as usize))
+            .map_err(failure)?;
+        changes.push(tr!("rang {position}", "rank {position}"));
+    }
+    let (old, changes) = (&folder.name, changes.join(", "));
+    let changed = tr!(
+        "Dossier « {old} » : {changes}.",
+        "Folder “{old}”: {changes}."
+    );
+    Ok((folder_answer(core, &project.id, &folder.id)?, changed))
+}
+
+/// `delete_folder`: the window's deletion of a folder; its agents go out of it, none is touched.
+pub(super) fn delete_folder<R: Runtime>(
+    core: &Core<R>,
+    caller: &Caller,
+    a: DeleteFolderArgs,
+) -> Result<(String, String), ToolError> {
+    let project = resolve::project_or_own(core, caller, a.project.as_deref())?;
+    may_act_on(core, caller, &project.id)?;
+    let folder = resolve::folder(core, caller, &a.folder, &project)?;
+    core.folder_delete(&project.id, &folder.id)
+        .map_err(failure)?;
+    let (name, count) = (&folder.name, folder.agents.len());
+    let changed = tr_n!(
+        count,
+        "Dossier « {name} » supprimé : son agent est hors dossier.",
+        "Dossier « {name} » supprimé : ses {count} agents sont hors dossier.",
+        "Folder “{name}” deleted: its agent is out of any folder.",
+        "Folder “{name}” deleted: its {count} agents are out of any folder."
+    );
+    let answer = json(&json!({ "id": folder.id, "name": folder.name, "deleted": true }))?;
+    Ok((answer, changed))
+}
+
+/// `move_agent`: the window's drag of an agent into a folder, out of it, or to another rank. Without
+/// `folder` it stays where it is (a folder, or the list).
+pub(super) fn move_agent<R: Runtime>(
+    core: &Core<R>,
+    caller: &Caller,
+    a: MoveAgentArgs,
+) -> Result<(String, String), ToolError> {
+    let scope = a
+        .project
+        .as_deref()
+        .map(|p| resolve::project(core, caller, p))
+        .transpose()?;
+    let found = resolve::agent(core, caller, &a.agent, scope.as_ref())?;
+    may_act_on(core, caller, &found.project_id)?;
+    let project = core.project(&found.project_id).map_err(failure)?;
+    let target: Option<String> = match a.folder.as_deref().map(str::trim) {
+        None => folders::folder_of(&project, &found.id).map(|f| f.id.clone()),
+        Some("") => None,
+        Some(asked) => Some(resolve::folder(core, caller, asked, &project)?.id),
+    };
+    core.item_move(
+        &project.id,
+        &found.id,
+        target.as_deref(),
+        a.position.map(|p| p as usize),
+    )
+    .map_err(failure)?;
+    let project = core.project(&project.id).map_err(failure)?;
+    let folder = target
+        .as_deref()
+        .and_then(|t| project.agent_folders.iter().find(|f| f.id == t));
+    let agent = &found.name;
+    let changed = match folder {
+        Some(f) => {
+            let folder = &f.name;
+            tr!(
+                "{agent} est dans le dossier « {folder} ».",
+                "{agent} is in the folder “{folder}”."
+            )
+        }
+        None => tr!("{agent} est hors dossier.", "{agent} is out of any folder."),
+    };
+    let answer = json(&json!({
+        "id": found.id,
+        "name": found.name,
+        "folder": folder.map(|f| json!({ "id": f.id, "name": f.name })),
+    }))?;
+    Ok((answer, changed))
 }

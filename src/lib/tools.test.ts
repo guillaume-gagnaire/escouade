@@ -117,6 +117,10 @@ describe('the tools of Escouade’s own server', () => {
     expect(toolLabel('mcp__escouade__create_agent')).toBe('Escouade · Lancer un agent');
     expect(toolLabel('mcp__escouade__list_projects')).toBe('Escouade · Lister les projets');
     expect(toolLabel('mcp__escouade__list_folders')).toBe('Escouade · Lister les dossiers d’agents');
+    expect(toolLabel('mcp__escouade__create_folder')).toBe('Escouade · Créer un dossier d’agents');
+    expect(toolLabel('mcp__escouade__update_folder')).toBe('Escouade · Modifier un dossier d’agents');
+    expect(toolLabel('mcp__escouade__delete_folder')).toBe('Escouade · Supprimer un dossier d’agents');
+    expect(toolLabel('mcp__escouade__move_agent')).toBe('Escouade · Ranger un agent');
     expect(toolLabel('mcp__escouade__get_agent_summary')).toBe('Escouade · Résumer un agent');
     expect(toolLabel('mcp__escouade__list_requests')).toBe('Escouade · Lister les demandes en attente');
     expect(toolLabel('mcp__escouade__answer_permission')).toBe('Escouade · Répondre à une demande d’autorisation');
@@ -161,6 +165,10 @@ describe('the tools of Escouade’s own server', () => {
     expect(arg('report_progress', { line: 'Tests verts' })).toBe('Tests verts');
     expect(arg('list_tickets', { project: 'demo', column: 'todo' })).toBe('demo');
     expect(arg('list_projects', {})).toBe('');
+    // A folder: the one it acts on, else its project; an agent put in a folder is the agent.
+    expect(arg('update_folder', { folder: 'Front', name: 'Interface' })).toBe('Front');
+    expect(arg('move_agent', { agent: 'fix-login', folder: 'Front' })).toBe('fix-login');
+    expect(arg('create_folder', { name: 'Front' })).toBe('');
     // The Kanban a tool reads or sets is its project's; a ticket started with its own model is the ticket.
     expect(arg('get_board', { project: 'demo' })).toBe('demo');
     expect(arg('set_board', { project: 'demo', autopilot: true, model: 'sonnet' })).toBe('demo');

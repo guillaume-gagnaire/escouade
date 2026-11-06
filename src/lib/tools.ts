@@ -20,6 +20,10 @@ const ESCOUADE_TOOLS: Record<string, Key> = {
   list_projects: 'mcp.tools.listProjects',
   list_agents: 'mcp.tools.listAgents',
   list_folders: 'mcp.tools.listFolders',
+  create_folder: 'mcp.tools.createFolder',
+  update_folder: 'mcp.tools.updateFolder',
+  delete_folder: 'mcp.tools.deleteFolder',
+  move_agent: 'mcp.tools.moveAgent',
   list_tickets: 'mcp.tools.listTickets',
   get_ticket: 'mcp.tools.getTicket',
   get_ticket_image: 'mcp.tools.getTicketImage',
@@ -77,9 +81,9 @@ const ESCOUADE_TOOLS: Record<string, Key> = {
 /**
  * What a tool of Escouade is about, first found first (`ESCOUADE_MAIN_ARGS` of the backend's `tool_arg` reads them in
  * the same order): the ticket it makes, the ticket or the agent it acts on, what an agent it starts is told, the line an
- * agent reports, the project it reads.
+ * agent reports, the project it reads, the folder it acts on.
  */
-const ESCOUADE_MAIN_ARGS = ['title', 'ticket', 'agent', 'message', 'line', 'project'];
+const ESCOUADE_MAIN_ARGS = ['title', 'ticket', 'agent', 'message', 'line', 'project', 'folder'];
 
 /** The most characters of a value the permission card of a tool of Escouade shows. */
 export const ARG_MAX = 2000;

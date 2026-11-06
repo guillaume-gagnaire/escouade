@@ -107,9 +107,25 @@ pub(crate) fn project<R: Runtime>(
     }
 }
 
+/// `asked` as `project` names it; without it, the calling agent's own project (Claude outside
+/// Escouade is asked for one).
+pub(crate) fn project_or_own<R: Runtime>(
+    core: &Core<R>,
+    caller: &Caller,
+    asked: Option<&str>,
+) -> Result<Project, ToolError> {
+    let own = match (asked, caller) {
+        (Some(p), _) => p.to_string(),
+        (None, Caller::Agent(id)) => core
+            .agent(id)
+            .map(|h| h.lock().meta.project_id.clone())
+            .unwrap_or_default(),
+        (None, Caller::External) => String::new(),
+    };
+    project(core, caller, &own)
+}
+
 /// The folder of `project` that `asked` names: its id, else its name in any case.
-// The folder write tools (next task) name their folder with it.
-#[allow(dead_code)]
 pub(crate) fn folder<R: Runtime>(
     core: &Core<R>,
     caller: &Caller,

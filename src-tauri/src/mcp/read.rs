@@ -371,36 +371,22 @@ pub(super) fn agents<R: Runtime>(
 }
 
 #[derive(Serialize)]
-struct FolderMember {
+pub(super) struct FolderMember {
     id: String,
     name: String,
     status: AgentStatus,
 }
 
 #[derive(Serialize)]
-struct FolderRow {
-    id: String,
+pub(super) struct FolderRow {
+    pub(super) id: String,
     name: String,
     principal: Option<FolderRef>,
     agents: Vec<FolderMember>,
 }
 
-/// `list_folders`: the folders of `project` in the sidebar's order, archived agents left out.
-/// Without `project`, the calling agent's own.
-pub(super) fn folders<R: Runtime>(
-    core: &Core<R>,
-    caller: &Caller,
-    project: Option<&str>,
-) -> Result<String, ToolError> {
-    let own = match (project, caller) {
-        (Some(p), _) => p.to_string(),
-        (None, Caller::Agent(id)) => core
-            .agent(id)
-            .map(|h| h.lock().meta.project_id.clone())
-            .unwrap_or_default(),
-        (None, Caller::External) => String::new(),
-    };
-    let project = resolve::project(core, caller, &own)?;
+/// The folders of `project` in the sidebar's order, archived agents left out.
+pub(super) fn folder_rows<R: Runtime>(core: &Core<R>, project: &Project) -> Vec<FolderRow> {
     let owned = core.folder_members(&project.id);
     let members: Vec<_> = owned.iter().map(folders::OwnedMember::as_member).collect();
     let member = |id: &str| {
@@ -413,7 +399,7 @@ pub(super) fn folders<R: Runtime>(
             }
         })
     };
-    let rows: Vec<FolderRow> = folders::shown(&project, &members)
+    folders::shown(project, &members)
         .into_iter()
         .filter_map(|s| match s {
             folders::Shown::Agent(_) => None,
@@ -435,8 +421,17 @@ pub(super) fn folders<R: Runtime>(
                 })
             }
         })
-        .collect();
-    json(&rows)
+        .collect()
+}
+
+/// `list_folders`: the folders of `project`, or of the calling agent's own project without it.
+pub(super) fn folders<R: Runtime>(
+    core: &Core<R>,
+    caller: &Caller,
+    project: Option<&str>,
+) -> Result<String, ToolError> {
+    let project = resolve::project_or_own(core, caller, project)?;
+    json(&folder_rows(core, &project))
 }
 
 /// A cost without the float's noise (0.30000000000000004).

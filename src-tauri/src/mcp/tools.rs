@@ -263,6 +263,72 @@ pub struct ListFoldersArgs {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct CreateFolderArgs {
+    #[schemars(
+        description = "The project: its id, or its name in any case. An agent of Escouade may leave it out for its own."
+    )]
+    pub project: Option<String>,
+    #[schemars(description = "The folder's name, as the sidebar shows it.")]
+    pub name: String,
+    #[schemars(
+        description = "The agents to put in it, in this order: each one's id, or its name in any case. They leave their place."
+    )]
+    pub agents: Option<Vec<String>>,
+    #[schemars(
+        description = "The folder's principal, shown first and standing for the folder: one of its agents, by id or name."
+    )]
+    pub principal: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct UpdateFolderArgs {
+    #[schemars(
+        description = "The project: its id, or its name in any case. An agent of Escouade may leave it out for its own."
+    )]
+    pub project: Option<String>,
+    #[schemars(description = "The folder: its id, or its name in any case.")]
+    pub folder: String,
+    #[schemars(description = "The new name of the folder.")]
+    pub name: Option<String>,
+    #[schemars(
+        description = "The new principal: an agent of the folder, by id or name, or an empty string for none."
+    )]
+    pub principal: Option<String>,
+    #[schemars(
+        description = "The folder's rank in the project's list, from 0, among the folders and the agents outside any folder."
+    )]
+    pub position: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct DeleteFolderArgs {
+    #[schemars(
+        description = "The project: its id, or its name in any case. An agent of Escouade may leave it out for its own."
+    )]
+    pub project: Option<String>,
+    #[schemars(description = "The folder: its id, or its name in any case.")]
+    pub folder: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct MoveAgentArgs {
+    #[schemars(description = "The agent: its id, or its name in any case.")]
+    pub agent: String,
+    #[schemars(
+        description = "The folder to put it in: its id, or its name in any case; an empty string for outside any folder. Left out, it stays where it is."
+    )]
+    pub folder: Option<String>,
+    #[schemars(
+        description = "Its rank in the folder, or in the project's list outside any folder, from 0. Left out, the bottom."
+    )]
+    pub position: Option<u32>,
+    #[schemars(
+        description = "The project to look for its name in (two projects may each have an agent of that name): its id, or its name in any case."
+    )]
+    pub project: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ListTicketsArgs {
     #[schemars(description = "The project: its id, or its name in any case.")]
     pub project: String,
@@ -1127,6 +1193,91 @@ impl<R: Runtime> Tools<R> {
         let result = read::folders(&ctx.core, &ctx.caller, args.project.as_deref());
         let asked = summary(&[("project", args.project.as_deref())]);
         ctx.reply("list_folders", &asked, result)
+    }
+
+    #[tool(
+        description = "Make an agent folder in a project's sidebar, as the window's New folder does: at the bottom of the list, holding the agents given in this order (they leave their place) with one of them as its principal, if asked. An agent of Escouade may leave the project out for its own; it acts on its own project and on every project that is not private. Folders hold agents only, never another folder. Answers the folder as list_folders does.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn create_folder(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<CreateFolderArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("name", Some(&args.name)),
+        ]);
+        let result = act::create_folder(&ctx.core, &ctx.caller, args);
+        ctx.reply_changed("create_folder", &asked, result)
+    }
+
+    #[tool(
+        description = "Change an agent folder: its name, its principal (an agent of the folder, or an empty string for none) and its rank in the project's list. What you leave out stays as it is; nothing changes when one of them is refused. A folder that was never renamed follows its principal's name until you give it one. Answers the folder as list_folders does, after the change.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn update_folder(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<UpdateFolderArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("folder", Some(&args.folder)),
+        ]);
+        let result = act::update_folder(&ctx.core, &ctx.caller, args);
+        ctx.reply_changed("update_folder", &asked, result)
+    }
+
+    #[tool(
+        description = "Delete an agent folder, as the window does: its agents come out of it and take its place in their order; no agent is stopped, archived or deleted. Answers the folder's id and name and deleted (true).",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn delete_folder(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<DeleteFolderArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("folder", Some(&args.folder)),
+        ]);
+        let result = act::delete_folder(&ctx.core, &ctx.caller, args);
+        ctx.reply_changed("delete_folder", &asked, result)
+    }
+
+    #[tool(
+        description = "Put an agent in an agent folder, out of any folder (folder: an empty string) or at another rank of where it is, as dragging it in the sidebar does. Left out, the folder is the agent's own and the rank the bottom. The agent keeps running: only its place changes. Answers the agent's id and name and its folder (id and name; null when it is out of any).",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn move_agent(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<MoveAgentArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("agent", Some(&args.agent)),
+            ("folder", args.folder.as_deref()),
+            ("project", args.project.as_deref()),
+        ]);
+        let result = act::move_agent(&ctx.core, &ctx.caller, args);
+        ctx.reply_changed("move_agent", &asked, result)
     }
 
     #[tool(

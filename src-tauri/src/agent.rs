@@ -1817,8 +1817,10 @@ const ESCOUADE_TOOLS: &str = "mcp__escouade__";
 
 /// What a tool of Escouade is about, first found first (`toolArg` in `src/lib/tools.ts` reads
 /// them in the same order): the ticket it makes, the ticket or the agent it acts on, what an agent
-/// it starts is told, the line an agent reports, the project it reads.
-const ESCOUADE_MAIN_ARGS: &[&str] = &["title", "ticket", "agent", "message", "line", "project"];
+/// it starts is told, the line an agent reports, the project it reads, the folder it acts on.
+const ESCOUADE_MAIN_ARGS: &[&str] = &[
+    "title", "ticket", "agent", "message", "line", "project", "folder",
+];
 
 /// What a tool is asked to act on, as the conversation's card sums it up (`toolArg` in
 /// `src/lib/tools.ts`): the command, the file from the agent's folder, the search…, its line

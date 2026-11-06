@@ -27,7 +27,9 @@ pub(super) const EXPOSED: &[&str] = &[
     "answer_question",
     "approve_ticket",
     "create_agent",
+    "create_folder",
     "create_ticket",
+    "delete_folder",
     "delete_ticket",
     "dismiss_block",
     "forget_memory",
@@ -56,6 +58,7 @@ pub(super) const EXPOSED: &[&str] = &[
     "list_requests",
     "list_tickets",
     "message_subagent",
+    "move_agent",
     "move_ticket",
     "propose_decision",
     "read_decision",
@@ -77,6 +80,7 @@ pub(super) const EXPOSED: &[&str] = &[
     "start_ticket",
     "stop_agent",
     "stop_background_work",
+    "update_folder",
     "update_ticket",
     "wait_ticket",
     "write_memory",
@@ -126,11 +130,14 @@ pub(super) const ACTING: &[&str] = &[
     "answer_question",
     "approve_ticket",
     "create_agent",
+    "create_folder",
     "create_ticket",
+    "delete_folder",
     "delete_ticket",
     "dismiss_block",
     "forget_memory",
     "message_subagent",
+    "move_agent",
     "move_ticket",
     "propose_decision",
     "reject_ticket",
@@ -143,6 +150,7 @@ pub(super) const ACTING: &[&str] = &[
     "start_ticket",
     "stop_agent",
     "stop_background_work",
+    "update_folder",
     "update_ticket",
     "write_memory",
     "write_spec_page",
@@ -153,7 +161,11 @@ pub(super) const ANSWERING: &[&str] = &["answer_permission", "answer_question"];
 
 /// The flow tools named for what they do, as the window's buttons are: (tool, the word of
 /// `FORBIDDEN` it holds).
-const NAMED_FOR_IT: &[(&str, &str)] = &[("approve_ticket", "approve"), ("delete_ticket", "delete")];
+const NAMED_FOR_IT: &[(&str, &str)] = &[
+    ("approve_ticket", "approve"),
+    ("delete_folder", "delete"),
+    ("delete_ticket", "delete"),
+];
 
 /// Those an external Claude is refused.
 pub(super) const AGENTS_ONLY: &[&str] = &["report_progress", "split_ticket"];
@@ -323,7 +335,7 @@ async fn claude_outside_escouade_initializes_and_lists_the_tools_with_its_token(
 }
 
 #[tokio::test]
-async fn the_server_offers_exactly_its_tools_and_only_two_are_named_for_approving_or_deleting() {
+async fn the_server_offers_exactly_its_tools_and_only_three_are_named_for_approving_or_deleting() {
     // The router the app ships, without the test's tool.
     let shipped = names(&Tools::<MockRuntime>::tool_router().list_all());
     assert_eq!(shipped, EXPOSED);
@@ -341,7 +353,7 @@ async fn the_server_offers_exactly_its_tools_and_only_two_are_named_for_approvin
             if ANSWERING.contains(&name.as_str()) && ["permission", "answer"].contains(word) {
                 continue;
             }
-            // So are the two of the flow that approve (tests, commit, merge) and delete.
+            // So are the three that approve (tests, commit, merge) or delete (a ticket, a folder).
             if NAMED_FOR_IT.contains(&(name.as_str(), *word)) {
                 continue;
             }
