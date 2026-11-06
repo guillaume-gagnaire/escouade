@@ -829,6 +829,10 @@ pub struct StartTicketArgs {
         description = "The effort of this ticket's agent (low, medium, high, xhigh or max: those of its harness and model, see list_projects), for this ticket alone: it takes precedence over the Kanban's (a model that takes none, Haiku, goes without). An empty string, or auto, goes back to the Kanban's. Leave it out to leave it as it is."
     )]
     pub effort: Option<String>,
+    #[schemars(
+        description = "The folder the agents of this ticket go in (their sidebar folder), kept on the ticket (also when it is resumed): its id or its name in any case, made under that name if there is none. Leave it out: your own folder, made for you (named after you) if you have none. An empty string: no folder. Not for an agent of another project, nor from outside Escouade (no folder then)."
+    )]
+    pub folder: Option<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -1086,6 +1090,10 @@ pub struct CreateAgentArgs {
         description = "The model, as the project's harness names it (sonnet, opus, haiku for Claude Code; gpt-6-luna… for Codex; list_projects gives its models). Leave it out for the default model."
     )]
     pub model: Option<String>,
+    #[schemars(
+        description = "The folder the new agent goes in (its sidebar folder): its id or its name in any case, made under that name if there is none. Leave it out: your own folder, made for you (named after you) if you have none. An empty string: no folder. Not for an agent of another project, nor from outside Escouade (no folder then)."
+    )]
+    pub folder: Option<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]

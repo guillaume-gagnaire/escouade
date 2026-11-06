@@ -769,6 +769,21 @@ pub(super) async fn start_ticket<R: Runtime>(
             )));
         }
     }
+    // Told with `create_agent`'s: one at a time, so the two never make a folder each for a caller.
+    let folder = if t.column == Column::Todo {
+        let _one = core.mcp.acting.lock().await;
+        let folder = core
+            .auto_folder(&t.project_id, caller, a.folder.as_deref())
+            .map_err(failure)?;
+        core.edit_ticket(&t.id, |x| {
+            x.folder = folder.clone();
+            Ok(())
+        })
+        .map_err(refusal)?;
+        folder
+    } else {
+        None
+    };
     core.ticket_start_on(&t.id, account, model, effort)
         .map_err(refusal)?;
     // The pass of the board that takes it up may meet what the checks above did not (a usage
@@ -787,6 +802,13 @@ pub(super) async fn start_ticket<R: Runtime>(
     // The model its harness runs it on (a harness other than Claude Code: its own, by default).
     let model = core.model_for(engine, model);
     let mut answer = json!({ "key": started.key, "starting": true, "model": model });
+    answer["folder"] = folder
+        .and_then(|id| {
+            let p = core.project(&started.project_id).ok()?;
+            let f = p.agent_folders.iter().find(|f| f.id == id)?;
+            Some(json!({ "id": f.id, "name": f.name }))
+        })
+        .unwrap_or(serde_json::Value::Null);
     // A model that takes no effort (Haiku) goes without one: none is said.
     if crate::engine::by_id(engine).supports_effort(&model) {
         answer["effort"] = json!(effort);
@@ -1719,12 +1741,16 @@ pub(super) async fn create_agent<R: Runtime>(
             project = project.name
         )));
     }
+    let folder = core
+        .auto_folder(&project.id, caller, a.folder.as_deref())
+        .map_err(failure)?;
     let view = core
         .create_agent_with(
             &project.id,
             AgentOptions {
                 model,
                 isolated: a.worktree,
+                folder,
                 // Its Claude account is the project's, else the first usable one: one of those
                 // `not_held` found free.
                 ..Default::default()
@@ -1744,7 +1770,15 @@ pub(super) async fn create_agent<R: Runtime>(
             "The agent {name} (id {id}) is created, but its message could not be sent: {e:#}"
         )));
     }
-    json(&json!({ "id": id, "name": name }))
+    json(&json!({ "id": id, "name": name, "folder": folder_ref(core, &project.id, &id) }))
+}
+
+/// `{ id, name }` of the folder holding `agent`, as the tools that file agents say it; null when loose.
+fn folder_ref<R: Runtime>(core: &Core<R>, project_id: &str, agent: &str) -> serde_json::Value {
+    core.project(project_id)
+        .ok()
+        .and_then(|p| folders::folder_of(&p, agent).map(|f| json!({ "id": f.id, "name": f.name })))
+        .unwrap_or(serde_json::Value::Null)
 }
 
 /// The agent `asked` names (in the project `project` when given), who is not the caller and,

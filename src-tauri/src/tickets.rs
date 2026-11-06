@@ -2089,7 +2089,8 @@ impl<R: Runtime> Core<R> {
                     ticket_id: Some(t.id.clone()),
                     port_base: ports,
                     select: false,
-                    folder: None,
+                    // Where the agent that started the ticket asked (gone: out of any folder).
+                    folder: t.folder.clone(),
                     copy_of: None,
                     account: Some(account),
                     isolated: None,

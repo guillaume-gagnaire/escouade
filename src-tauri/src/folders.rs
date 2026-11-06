@@ -324,6 +324,19 @@ impl<R: Runtime> Core<R> {
         principal: Option<&str>,
         at: Option<&str>,
     ) -> Result<AgentFolder> {
+        self.folder_build(project_id, name, true, agents, principal, at)
+    }
+
+    /// `folder_create`; `named` false: the folder follows its principal's name (`follow_principal`).
+    fn folder_build(
+        &self,
+        project_id: &str,
+        name: Option<&str>,
+        named: bool,
+        agents: &[String],
+        principal: Option<&str>,
+        at: Option<&str>,
+    ) -> Result<AgentFolder> {
         let name = name.map(str::trim);
         if name == Some("") {
             bail!(tr!("nom vide", "empty name"));
@@ -353,7 +366,7 @@ impl<R: Runtime> Core<R> {
             let f = AgentFolder {
                 id: uuid::Uuid::new_v4().to_string(),
                 name,
-                named: true,
+                named,
                 principal: principal.map(Into::into),
                 agents: agents.to_vec(),
                 folded: false,
@@ -435,6 +448,73 @@ impl<R: Runtime> Core<R> {
         self.project(project_id)
             .map(|p| shown_agents(&p, &members))
             .unwrap_or_default()
+    }
+
+    /// The folder a new agent made on behalf of `caller` goes into (`create_agent`, `start_ticket`).
+    /// `asked`: "" none; a folder's id or name (made under that name when none is, the caller,
+    /// if an agent of this project with no folder, going in it as its principal); None: the caller's
+    /// folder if it is an agent of this project, made after it (its name, following it, it the
+    /// principal) when it has none. Anyone else: none.
+    pub fn auto_folder(
+        &self,
+        project_id: &str,
+        caller: &crate::mcp::Caller,
+        asked: Option<&str>,
+    ) -> Result<Option<String>> {
+        let own = match caller {
+            crate::mcp::Caller::Agent(id) => self
+                .agent(id)
+                .ok()
+                .map(|h| {
+                    let m = &h.lock().meta;
+                    (m.id.clone(), m.project_id.clone(), m.name.clone())
+                })
+                .filter(|(_, pid, _)| pid == project_id),
+            crate::mcp::Caller::External => None,
+        };
+        let project = self.project(project_id)?;
+        let held = own
+            .as_ref()
+            .and_then(|(id, ..)| folder_of(&project, id).map(|f| f.id.clone()));
+        let loose = held.is_none();
+        let (name, named) = match asked.map(str::trim) {
+            Some("") => return Ok(None),
+            Some(asked) => {
+                let lower = asked.to_lowercase();
+                let found = |f: &&AgentFolder| f.id == asked;
+                let by_name = |f: &&AgentFolder| f.name.to_lowercase() == lower;
+                let same: Vec<&AgentFolder> = match project.agent_folders.iter().find(found) {
+                    Some(f) => vec![f],
+                    None => project.agent_folders.iter().filter(by_name).collect(),
+                };
+                match same.as_slice() {
+                    [f] => return Ok(Some(f.id.clone())),
+                    [] => (asked.to_string(), true),
+                    _ => bail!(tr!(
+                        "Plusieurs dossiers s’appellent « {asked} » : donne son id.",
+                        "Several folders are named “{asked}”: give its id."
+                    )),
+                }
+            }
+            None => match (&own, held) {
+                (_, Some(f)) => return Ok(Some(f)),
+                (Some((_, _, name)), None) => (name.clone(), false),
+                (None, None) => return Ok(None),
+            },
+        };
+        // The caller goes in it as its principal, unless it has a folder already.
+        let star = own.filter(|_| loose);
+        let who = star.as_ref().map(|(id, ..)| id.clone());
+        let agents: Vec<String> = who.iter().cloned().collect();
+        let f = self.folder_build(
+            project_id,
+            Some(&name),
+            named,
+            &agents,
+            who.as_deref(),
+            who.as_deref(),
+        )?;
+        Ok(Some(f.id))
     }
 
     /// Hook of `create_agent_with`, `duplicate_agent`, `delete_agent`: edits the layout without

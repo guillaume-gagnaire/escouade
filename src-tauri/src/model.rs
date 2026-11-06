@@ -1198,6 +1198,11 @@ pub struct Ticket {
     /// next one it gets (sent back to do and started again), until the user turns Remote Control
     /// on for one by hand.
     pub remote_off: bool,
+    /// The folder (`AgentFolder::id`) its agents are filed in when made (`start_ticket`'s `folder`,
+    /// else the caller's); a folder that went means no folder. The autopilot and the window never
+    /// set it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
     /// The images pasted or dropped in its form, in their order: files of its folder
     /// (`DataDir::ticket_dir`), sent to its agent with its first message.
     pub images: Vec<TicketImage>,
