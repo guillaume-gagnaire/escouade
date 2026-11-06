@@ -101,10 +101,14 @@ describe('the AppArmor profile', () => {
     expect(rules).not.toContain('pivot_root,');
     expect(mounts.length).toBeGreaterThan(0);
     for (const m of mounts) expect(m, m).toMatch(/ -> \/\S*,$/);
-    // Without an fstype, a `mount` rule takes any filesystem: its flags must say a bind or a change of propagation.
+    // Without an fstype, a `mount` rule takes any filesystem: its flags must say a bind or a change of propagation, or
+    // the remount of a bind in its sandbox, by its exact flags (AppArmor 3.0 reads no other).
+    const remounts = /^mount options=\((ro|rw), nosuid, nodev, remount, bind, silent, (relatime|noatime)\) -> \/newroot\/\*\*,$/;
     for (const m of mounts.filter((r) => !r.includes('fstype='))) {
+      if (remounts.test(m)) continue;
       expect(m, m).toMatch(/^mount options=\(rw, (rbind|silent, (rslave|rprivate))\) /);
     }
+    expect(mounts.filter((m) => remounts.test(m))).toHaveLength(3);
     expect(rules.filter((l) => l.startsWith('remount')).map((l) => l.split(' ').at(-1))).toEqual(['/newroot/**,']);
   });
 

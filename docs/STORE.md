@@ -308,11 +308,12 @@ Presque tout le poids vient de `/opt/sandbox` : la chaîne d'outils et `gcc`. Le
 - **Ce que cela ouvre.** Ces profils couvrent tout le conteneur, pas bubblewrap seul : un process du store peut créer un espace de noms utilisateur, avec ces deux jeux de drapeaux, et monter dedans ce qu'AppArmor laisse. C'est une surface du noyau que Docker ferme par défaut ; une faille de `userns` y deviendrait utile à qui prendrait la main sur le Node du store. C'est bien moins que `seccomp=unconfined apparmor=unconfined`, qui ouvrirait tout le reste, et cela ne donne rien sur l'hôte en soi.
 - **Le mode d'emploi pour Coolify.** Rien de ceci n'est fait : c'est un geste de l'utilisateur, sur l'hôte.
   1. **Coolify 4.5.0 ou plus**, et un déploiement sans serveur de build. Le fichier seccomp est lu par `docker compose`, pas par le démon : il part en JSON dans la création du conteneur (ce qu'on voit dans `docker inspect`). Or Coolify lance compose dans son conteneur d'aide. Depuis la 4.5.0, `seccompProfileMountFlags` y monte le fichier, s'il est nommé par un chemin absolu fait de `A-Za-z0-9._/-`. Avant, ou avec un serveur de build, le chemin n'y existe pas.
-  2. **Les deux fichiers sur l'hôte**, depuis le dépôt à jour :
+  2. **Les deux fichiers sur l'hôte**, pas dans le conteneur : le serveur n'a pas de clone du dépôt, ils se prennent sur GitHub.
      ```sh
+     BASE=https://raw.githubusercontent.com/guillaume-gagnaire/escouade/main/store/deploy
      sudo mkdir -p /etc/escouade-store
-     sudo cp store/deploy/seccomp-bubblewrap.json /etc/escouade-store/
-     sudo cp store/deploy/apparmor-bubblewrap /etc/apparmor.d/escouade-store-bubblewrap
+     sudo curl -fsSL "$BASE/seccomp-bubblewrap.json" -o /etc/escouade-store/seccomp-bubblewrap.json
+     sudo curl -fsSL "$BASE/apparmor-bubblewrap" -o /etc/apparmor.d/escouade-store-bubblewrap
      sudo apparmor_parser -r /etc/apparmor.d/escouade-store-bubblewrap
      sudo aa-status | grep escouade-store-bubblewrap
      ```
@@ -335,6 +336,7 @@ Presque tout le poids vient de `/opt/sandbox` : la chaîne d'outils et `gcc`. Le
      | Le profil AppArmor pas chargé | le déploiement échoue : `unable to apply apparmor profile: apparmor failed to apply profile` |
 
      La ligne du compilateur `run.js` reste `with the container's network`, avec ou sans profils.
+- **AppArmor 3.0, le serveur de production** (Debian 12, noyau 6.1, parseur 3.0.8, ESC-356 rouvert le 2026-11-06). Le profil validé sur AppArmor 4.0.1 y échouait au premier montage : `Can't bind mount /oldroot/opt/sandbox/usr on /newroot/usr: Unable to remount destination`, et au journal du noyau `failed flags match`, `flags="ro, nosuid, nodev, remount, bind, silent, relatime"`. Ce parseur retire `bind` d'une règle `remount`. Le profil dit donc aussi ces appels par leurs options exactes, en règles `mount`. Le banc, avec le vrai parseur de Debian 12 (compilé dans `debian:bookworm-slim`, chargé par `-B` sur `ubuntu-22.04`) et l'hôte `ubuntu-24.04` en 4.0.1 : compilation et téléchargement passent, `--mqueue`, `/app` et `/data` restent refusés, sur les deux. Les autres écritures essayées laissent passer ce qu'il faut refuser : `mount options in (…) -> /newroot/**` ouvre `--mqueue`, `mount -> /newroot/**` ouvre aussi `/app` et `/data`, et `remount /newroot/**` seul ne change rien.
 - **L'essai** (2026-11-05), une vraie VM Ubuntu 24.04.5 sous KVM, noyau 6.8.0-147, Docker CE 29.9.3, AppArmor 4.0.1 en `enforce`, `kernel.apparmor_restrict_unprivileged_userns=1` : `image-test.mjs` passe en entier, `rust-build` à `538b34fd…` en 7 s, tous les refus tenus. Seuls refus du journal d'audit : ceux que le test provoque. Le conteneur a aussi été lancé par `docker compose` comme le fait Coolify, profil lu dans `/proc/self/attr/current`. Ce qui n'a pas été essayé : une vraie instance de Coolify et son conteneur d'aide ; la lecture de son code tient lieu de preuve.
 
 ### 3.4 Chaque version figée

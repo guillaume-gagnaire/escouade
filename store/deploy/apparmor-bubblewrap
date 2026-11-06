@@ -70,6 +70,11 @@ profile escouade-store-bubblewrap flags=(attach_disconnected,mediate_deleted) {
   # Each of these binds read-only, or without suid and devices: bubblewrap keeps the flags the source had. `remount`, not
   # `mount options in`, which would let any filesystem through: without an fstype, a `mount` rule matches them all.
   remount options in (rw, ro, bind, silent, nosuid, nodev, noexec, relatime, noatime, nodiratime) /newroot/**,
+  # AppArmor 3.0 (Debian 12) leaves `bind` out of that rule: « failed flags match ». The same calls by their exact flags,
+  # the sources read-only, then the folder of a compilation. Not `options in`, which lets `--mqueue` through there too.
+  mount options=(ro, nosuid, nodev, remount, bind, silent, relatime) -> /newroot/**,
+  mount options=(ro, nosuid, nodev, remount, bind, silent, noatime) -> /newroot/**,
+  mount options=(rw, nosuid, nodev, remount, bind, silent, relatime) -> /newroot/**,
   # The old root let go, and the second pivot.
   mount options=(rw, silent, rprivate) -> /oldroot/,
   pivot_root oldroot=/newroot/ /newroot/,
