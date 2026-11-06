@@ -156,6 +156,8 @@ impl KeychainGate {
 /// there is no such entry. An entry refused (`KeychainGate`) is an error for ten minutes, without
 /// asking again: the last values stand.
 #[cfg(target_os = "macos")]
+// Its tests read no keychain: `usage::from_keychain` has another body there, and a `pub` of the core is not spared.
+#[cfg_attr(test, allow(dead_code))]
 pub async fn from_keychain(service: &str) -> Result<Option<Value>> {
     static GATE: std::sync::LazyLock<std::sync::Mutex<KeychainGate>> =
         std::sync::LazyLock::new(Default::default);
