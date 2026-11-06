@@ -1,9 +1,9 @@
 ---
-number: null
+number: 100
 id: "la-relecture-d-une-pr-par-un-agent-un-br"
 title: "La relecture d'une PR par un agent : un brouillon, un agent sans outil, un seul chemin vers l'hébergeur"
 date: "2026-11-06"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-66"
 pages: ["git-fichiers/relecture-par-un-agent","git-fichiers/vue-pull-requests","git-fichiers/pull-requests"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"git-fichiers/relecture-par-un-agent","added":47,"removed":0},{"page":"git-fichiers/vue-pull-requests","added":4,"removed":4},{"page":"git-fichiers/pull-requests","added":3,"removed":3}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-07T00:10:56+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

@@ -3,7 +3,7 @@ title: "Relecture d'une PR par un agent"
 subject: "git-fichiers"
 sources: ["docs/TODO-1.8.md","design/esc-66/README.md","src-tauri/src/prreview.rs","src/components/prs/PrReviewView.svelte","src/lib/prreview.ts"]
 tickets: ["ESC-66"]
-decisions: ["la-relecture-d-une-pr-par-un-agent-un-br"]
+decisions: [100]
 compared: null
 ---
 
