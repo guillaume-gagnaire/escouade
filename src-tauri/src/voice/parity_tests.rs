@@ -6,7 +6,7 @@
 //! and `ESCOUADE_NATIVE_PLUGINS=<a program of then>` write them again: the module's text of a network error is the host's
 //! and not reqwest's, the rest is compared word for word. No path and no port goes in them: they hold on every system.
 
-use super::live::tests::{fake, speech, Conn, Mode};
+use super::live::tests::{fake, Conn, Mode};
 use super::online::tests::{nowhere, serve_with, Got, Reply, KEY};
 use super::online::{Provider, Spec};
 use crate::plugins::wasm::{Fetcher, Net};
@@ -17,6 +17,19 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
+
+/// The sound of the recordings: `live_tests::speech`, as it came out where they were made. A sine is not the same to its
+/// last bit on every system, and each body is compared to the bit: computed here, macOS would hear another sound.
+fn sound_of(secs: f32) -> Vec<f32> {
+    let table = include_str!("../../../tests/fixtures/plugins/parity/voice-sound.b64");
+    let bytes = wire::unb64(table.trim()).expect("the table of the sound");
+    let (samples, _) = bytes.as_chunks::<4>();
+    samples
+        .iter()
+        .take((48_000.0 * secs) as usize)
+        .map(|b| f32::from_le_bytes(*b))
+        .collect()
+}
 
 /// What tells two bodies apart without keeping them.
 fn digest(bytes: &[u8]) -> String {
@@ -280,8 +293,8 @@ fn transcript(plugin: &mut dyn Plugin, p: Provider, rt: &tokio::runtime::Runtime
 
     // A dictation, as the service answers it, then its refusals.
     // `pcm` for the programs of then, `pcm16` for the modules: the same sound.
-    let sound = wire::floats_to_b64(&speech(0.25));
-    let sound16 = wire::pcm16_to_b64(&speech(0.25));
+    let sound = wire::floats_to_b64(&sound_of(0.25));
+    let sound16 = wire::pcm16_to_b64(&sound_of(0.25));
     for (at, status, body, language) in [
         ("dictation", 200, dictated(p), "fr"),
         ("any language", 200, dictated(p), "auto"),
@@ -383,7 +396,7 @@ fn transcript(plugin: &mut dyn Plugin, p: Provider, rt: &tokio::runtime::Runtime
             live.live = Some(p.live_model(p.model()));
             let open = json!({ "stream": at, "spec": wire::spec_json(&live), "language": "fr", "rate": 48000 });
             let opened = s.call(wire::LIVE_OPEN, open);
-            for frame in speech(0.3).chunks(960) {
+            for frame in sound_of(0.3).chunks(960) {
                 let pcm = wire::floats_to_b64(frame);
                 s.tell(wire::LIVE_AUDIO, json!({ "stream": at, "pcm": pcm }));
             }

@@ -384,28 +384,27 @@ async fn a_barge_in_gives_up_the_stream_at_once() {
     let (url, _) = serve_with(Arc::new(move |_: &Got| reply.clone())).await;
     let cancel = Arc::new(AtomicBool::new(false));
     let c = cancel.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(300)).await;
-        c.store(true, Ordering::Release);
-    });
-    let started = Instant::now();
+    // On what is heard, not on a delay: its service starts its module at this first call.
+    let mut heard = None;
     let mut n = 0;
     let first = speak(
         &spec(Provider::OpenAi, &url),
         &choice("gpt-4o-mini-tts", "marin", "fr", 1.0),
         "Une longue phrase.",
         &cancel,
-        &mut |a| n += a.samples.len(),
+        &mut |a| {
+            n += a.samples.len();
+            heard.get_or_insert_with(Instant::now);
+            c.store(true, Ordering::Release);
+        },
     )
     .await
     .unwrap();
     assert!(first.is_some());
     assert!(n < 48_000);
-    assert!(
-        started.elapsed() < Duration::from_secs(1),
-        "{:?}",
-        started.elapsed()
-    );
+    // Left to run, the stream lasts 4 s.
+    let left = heard.unwrap().elapsed();
+    assert!(left < Duration::from_secs(1), "{left:?}");
 }
 
 #[test]
