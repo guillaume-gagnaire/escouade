@@ -19,10 +19,10 @@ pub fn capabilities() -> Value {
 
 /// The answer of the harness to a request that is not `voice/*`.
 pub fn handler() -> impl FnMut(&str, Value) -> Result<Value, Refusal> {
-    let own = escouade_plugin_acp::harnesses_of(MANIFEST)
+    let own = escouade_acp::plugin::harnesses_of(MANIFEST)
         .into_iter()
         .next();
-    escouade_plugin_acp::handler(own)
+    escouade_acp::plugin::handler(own)
 }
 
 #[cfg(test)]
@@ -31,7 +31,7 @@ mod tests {
 
     #[test]
     fn its_manifest_declares_vibe_on_the_client_with_its_extension() {
-        let h = escouade_plugin_acp::harnesses_of(super::MANIFEST);
+        let h = escouade_acp::plugin::harnesses_of(super::MANIFEST);
         assert_eq!(h.len(), 1);
         assert_eq!(h[0].id, "vibe");
         assert_eq!(h[0].account_var.as_deref(), Some("VIBE_HOME"));

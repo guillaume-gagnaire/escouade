@@ -87,6 +87,10 @@ pub(crate) fn not_absolute(path: &str) -> String {
     format!("Refused by Escouade: {path} is not an absolute path.")
 }
 
+pub(crate) fn out_of_reach(path: &str) -> String {
+    format!("Refused by Escouade: {path} is out of this agent's folders.")
+}
+
 pub(crate) fn read_only_file(path: &str) -> String {
     format!("Refused by Escouade: this agent is read-only, {path} is not written.")
 }

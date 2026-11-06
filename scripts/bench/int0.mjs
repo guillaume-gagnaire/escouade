@@ -47,7 +47,7 @@ const fmt = (x, digits = 0) => (Number.isFinite(x) ? x.toFixed(digits) : '—');
 
 // A source in WASM (ESC-344): a call of Linear through the app's host. ESCOUADE_NATIVE_PLUGINS, a program of before its
 // port, measures the two and holds the threshold (5 ms more at the 99th percentile).
-run('the modules of the plugins', 'sh', ['scripts/plugins-wasm.sh', 'linear', 'opencode'], ROOT);
+run('the modules of the plugins', 'sh', ['scripts/plugins-wasm.sh', 'linear', 'opencode', 'claude', 'acp'], ROOT);
 if (!opencodeOnly)
   run(
     'Linear through the host (release)',

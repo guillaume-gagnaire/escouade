@@ -6,10 +6,10 @@
 //!
 //! The description comes with each agent (`described` of `engine/launch` and `agent/attach`): this plugin holds no
 //! harness of its own, and keeps nothing on disk. Its service is `escouade_acp::plugin`, which Cursor CLI, Gemini CLI and
-//! Mistral run too.
-
-pub use escouade_acp::plugin::{handler, harnesses_of, serve_as};
+//! Mistral run too; the files an agent gives it go by `fs/*` of the host (docs/PLUGINS.md §8.4.6).
 
 pub fn run() -> i32 {
-    serve_as("acp", None)
+    escouade_acp::plugin::serve_as("acp", None)
 }
+
+escouade_plugin_protocol::module!(run);

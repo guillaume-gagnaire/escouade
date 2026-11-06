@@ -3,13 +3,13 @@
 //! (`agent/frames`) and goes back as the items of the conversation and the lines to write to it, by the client of
 //! `client`.
 //!
-//! `translate`, `words`, `localcmd`, `signin` and `client`'s arguments are also read by the core, as a library, for what
-//! stays in it: « Vue Claude Code » reads its session's transcript through the same translation, an account's sign-in and
-//! quota read the same files, and the launch of its interface speaks the same words.
+//! A WASM module on `wasm32-wasip1`: no process, no file and no runtime of its own. It is an `rlib` too, for the core, which
+//! reads `translate`, `words`, `localcmd` and `client`'s arguments as a library for what stays in it: « Vue Claude Code »
+//! reads its session's transcript through the same translation, and the launch of its interface speaks the same words
+//! (until P8, docs/PLUGINS.md §8.10).
 
 pub mod client;
 pub mod localcmd;
-pub mod signin;
 pub mod translate;
 pub mod words;
 
@@ -18,7 +18,7 @@ use escouade_plugin_protocol::engine::{
     method, AgentRef, AnswerPermission, AnswerQuestion, Asked, Attach, Control, Frames, Interrupt,
     Items, LaunchParams, RemoteLink, SendMessage, SetValue, Task, UsageAsked, Writes,
 };
-use escouade_plugin_protocol::{serve, Refusal};
+use escouade_plugin_protocol::{turn, Refusal};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
@@ -55,21 +55,14 @@ fn asked(a: Asked) -> Result<Value, Refusal> {
 
 pub fn run() -> i32 {
     let mut plugin = Plugin::default();
-    let stdin = std::io::stdin();
-    let result = serve(
-        stdin.lock(),
-        std::io::stdout().lock(),
+    turn::run(
+        "claude",
         json!({ "harnesses": ["claude"] }),
-        |m, params| plugin.handle(m, params),
-    );
-    match result {
-        Ok(()) => 0,
-        Err(e) => {
-            eprintln!("escouade-plugins claude: {e}");
-            1
-        }
-    }
+        move |m, params| plugin.handle(m, params),
+    )
 }
+
+escouade_plugin_protocol::module!(run);
 
 impl Plugin {
     fn agent(&mut self, key: &str) -> Result<&mut Agent, Refusal> {

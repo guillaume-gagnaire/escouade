@@ -4,17 +4,17 @@
 
 use crate::accounts;
 use crate::board;
+pub use crate::engine::claude::signin::{
+    credentials_from, keychain_service, stored_from, Credentials, Stored,
+};
+#[cfg(test)]
+use crate::engine::claude::signin::{keychain_answer, KeychainAnswer, KeychainGate};
 use crate::i18n::Lang;
 use crate::model::{
     claude_meters, merge_meters, Account, AccountUsage, Hold, QuotaMeter, RateWindow, SavedPause,
     SavedWindows, Settings, SignInProblem, UsageSnapshot,
 };
 use anyhow::Result;
-pub use escouade_plugin_claude::signin::{
-    credentials_from, keychain_service, stored_from, Credentials, Stored,
-};
-#[cfg(test)]
-use escouade_plugin_claude::signin::{keychain_answer, KeychainAnswer, KeychainGate};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -171,7 +171,7 @@ pub async fn read_credentials(dir: &Path, keychain_service: &str) -> Result<Cred
 /// user's own (and reading it may ask them for their password).
 #[cfg(all(target_os = "macos", not(test)))]
 async fn from_keychain(service: &str) -> Result<Option<Value>> {
-    escouade_plugin_claude::signin::from_keychain(service).await
+    crate::engine::claude::signin::from_keychain(service).await
 }
 
 /// Elsewhere Claude Code keeps it in the file only (and unit tests read no keychain).

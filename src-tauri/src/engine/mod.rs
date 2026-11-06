@@ -10,7 +10,7 @@
 mod absent;
 pub use absent::line as absent_line;
 pub(crate) mod agy;
-mod claude;
+pub(crate) mod claude;
 pub(crate) mod codex;
 pub(crate) mod copilot;
 pub(crate) mod cursor;

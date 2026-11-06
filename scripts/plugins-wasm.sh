@@ -25,6 +25,7 @@ crate_of() {
 # Copies the module of the plugin $1, compiled by its crate.
 keep() {
   mkdir -p "$target/plugins-wasm/$1"
+  rm -f "$target/plugins-wasm/$1/"*.cwasm
   cp "$target/wasm32-wasip1/release/$(crate_of "$1" | tr - _).wasm" "$target/plugins-wasm/$1/plugin.wasm"
   wc -c "$target/plugins-wasm/$1/plugin.wasm"
 }

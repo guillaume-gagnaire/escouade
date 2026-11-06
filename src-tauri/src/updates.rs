@@ -2917,11 +2917,13 @@ mod tests {
                 .is_ok_and(|h| h.lock().meta.status == AgentStatus::Running);
             !running && c.works.load(Ordering::Acquire) > 0
         });
-        within(
-            "the message",
+        // Its first message starts its process: longer than `within` on a loaded machine.
+        tokio::time::timeout(
+            Duration::from_secs(60),
             h.core.send_message(&id, "Bonjour".into(), vec![]),
         )
         .await
+        .expect("the message")
         .unwrap();
         stop.store(true, Ordering::Release);
         let seen = sampler.join().unwrap();

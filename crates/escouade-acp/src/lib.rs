@@ -19,6 +19,7 @@
 
 pub mod agent;
 pub mod cursor;
+mod files;
 pub mod gemini;
 pub mod git;
 pub mod limits;

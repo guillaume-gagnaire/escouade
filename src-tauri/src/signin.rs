@@ -21,12 +21,12 @@
 use crate::accounts;
 use crate::agent::{AgentAlert, AgentHandle, NotifyKind};
 use crate::core::Core;
+pub(crate) use crate::engine::claude::signin::can_go_on;
 use crate::i18n::{self, Lang};
 use crate::model::*;
 use crate::usage::{self, Credentials, Stored};
-pub(crate) use escouade_plugin_claude::signin::can_go_on;
 #[cfg(test)]
-pub(crate) use escouade_plugin_claude::signin::lost;
+pub(crate) use escouade_plugin_claude::translate::lost;
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::future::Future;

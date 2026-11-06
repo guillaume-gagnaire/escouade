@@ -8275,6 +8275,8 @@ async fn the_end_of_a_turn_is_not_told_while_the_window_holds_a_message_for_it()
     let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
     *h.core.held.lock() = [id.clone()].into();
     h.turn(&id, "Bonjour").await;
+    // The status comes before the end of the turn is judged: nothing to wait for, as nothing is told.
+    tokio::time::sleep(Duration::from_millis(500)).await;
     h.core.held.lock().clear();
     h.turn(&id, "Encore").await;
     h.wait_alerts(1).await;

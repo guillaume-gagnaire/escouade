@@ -1195,13 +1195,12 @@ impl Agent {
                 self.through.push(path.clone());
                 let l = match self.file_of(&path) {
                     Err(why) => reply_error(&id, -32000, &why),
-                    Ok(real) => match std::fs::read(&real) {
-                        Ok(bytes) => {
-                            let text = String::from_utf8_lossy(&bytes);
+                    Ok(real) => match crate::files::read(&self.key, &real) {
+                        Ok(text) => {
                             let from = params["line"].as_u64().unwrap_or(1).max(1) as usize - 1;
                             let limit = params["limit"].as_u64().map(|l| l as usize);
                             let content = if from == 0 && limit.is_none() {
-                                text.into_owned()
+                                text
                             } else {
                                 let lines = text.split_inclusive('\n').skip(from);
                                 match limit {
@@ -1227,12 +1226,8 @@ impl Agent {
                     reply_error(&id, -32000, &texts::read_only_file(&path))
                 } else {
                     let real = file.unwrap_or_default();
-                    let before = std::fs::read_to_string(&real).ok();
-                    let made = real
-                        .parent()
-                        .map_or(Ok(()), std::fs::create_dir_all)
-                        .and_then(|_| std::fs::write(&real, &content));
-                    match made {
+                    let before = crate::plugin::agent_file(&self.key, &real);
+                    match crate::files::write(&self.key, &real, &content) {
                         Ok(()) => {
                             self.written.insert(path.clone(), (before, content));
                             if crate::inside(&path, &self.cwd) {
@@ -1285,11 +1280,12 @@ impl Agent {
     /// is refused: not absolute (ACP asks it), or in a private project (by its components, its links followed:
     /// `paths`).
     fn file_of(&self, path: &str) -> Result<std::path::PathBuf, String> {
-        let real = crate::paths::resolve(path).ok_or_else(|| texts::not_absolute(path))?;
-        if crate::paths::within(&real, &self.fence_keys) {
-            return Err(texts::fenced_file(path));
-        }
-        Ok(real)
+        use crate::files::Refused;
+        crate::files::real_of(&self.key, path, &self.fence_keys).map_err(|why| match why {
+            Refused::NotAbsolute => texts::not_absolute(path),
+            Refused::Fenced => texts::fenced_file(path),
+            Refused::OutOfReach => texts::out_of_reach(path),
+        })
     }
 
     /// Who an update is of: the agent (`Some(None)`), one of its subagents (its call), or none of them.
@@ -1551,7 +1547,7 @@ impl Agent {
             return None;
         }
         let path = input["file_path"].as_str()?.to_string();
-        let before = std::fs::read_to_string(&path).ok();
+        let before = crate::plugin::agent_file(&self.key, std::path::Path::new(&path));
         Some((path, before, content.to_string()))
     }
 

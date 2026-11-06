@@ -1,8 +1,8 @@
 ---
 title: "Les harness ACP décrits"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §1.1, §4.4, §4.12","docs/TODO-2.2.md, PLG-6","Essai réel de Goose 1.57.0 sur Ollama, 2026-11-01 (ESC-178)"]
-tickets: ["ESC-178","ESC-222","ESC-281","ESC-282"]
+sources: ["docs/PLUGINS.md §1.1, §4.4, §4.12, §8.27","docs/TODO-2.2.md, PLG-6","Essai réel de Goose 1.57.0 sur Ollama, 2026-11-01 (ESC-178)"]
+tickets: ["ESC-178","ESC-222","ESC-281","ESC-282","ESC-347"]
 decisions: []
 compared: null
 ---
@@ -52,3 +52,12 @@ Le plugin `dev.escouade.goose` (`plugins/goose/`) décrit Goose : `goose acp`, m
 
 - Gemini CLI est sorti du cœur à son tour (*Gemini CLI en plugin*) : l'extension `gemini` du client (`crates/escouade-acp`, `gemini.rs`) tient ses appels sans `rawInput`, son mode dit par un texte, son plan lu dans un fichier, son tour tenu pour une question, ses jetons et sa limite d'usage.
 - Pour tout harness `questionsInText` : un bloc qui n'est pas une question est montré tel qu'il a été écrit, et l'arrêt d'un tour tenu par une question le finit.
+
+## Ajouts d'ESC-347 : `dev.escouade.acp` en module
+
+- `dev.escouade.acp` est un module WASM (`run.wasm`), plus l'entrée `escouade-plugins acp` : la phrase du début le dit encore. Son service est `escouade_acp::plugin`.
+- **Les fichiers qui passent par le client** vont à l'hôte, par `fs/*`, avec la clé de l'agent. Lecture dans le dossier de l'agent et dans son dépôt, écriture dans le dossier de l'agent, 4 Mio par fichier. Avant, le client atteignait tout chemin absolu hors clôture.
+- Ce qui sort de ces dossiers est refusé en `-32000` : « Refused by Escouade: … is out of this agent's folders. » L'agent garde les mêmes codes et les mêmes textes pour le reste : `-32000` pour un chemin relatif, un projet privé, un agent en lecture seule, `-32002` pour un fichier qu'on ne lit pas.
+- **La clôture** est appliquée par l'hôte sur ces fichiers, liens suivis, quel que soit le code du plugin.
+- Une carte de permission juge un chemin par son texte, d'après la forme du chemin et non le système de la cible : `C:\Prive` et `c:\prive` sont le même chemin sous Windows, y compris dans un module.
+- Le diff d'un `write` de Goose lit le fichier par le même chemin : hors de ces dossiers, il se montre comme un fichier nouveau.

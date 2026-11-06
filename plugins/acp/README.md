@@ -1,7 +1,7 @@
 # ACP
 
-`dev.escouade.acp`, a plugin [Escouade](https://escouade.dev) gives: it is shipped with the app, signed with it, and
-updated with it. Its version is Escouade's (the `0.0.0` of its manifest is replaced by the app's when it is read).
+`dev.escouade.acp`, a plugin of [Escouade](https://escouade.dev)'s own hand: a WASM module, with a version of its own, that
+the app runs in its host.
 
 Le client ACP générique d'Escouade : les harness qui parlent ACP, décrits par un plugin sans code.
 
@@ -38,7 +38,8 @@ Cursor CLI is driven with; what is Cursor's own (`cursor/*`) is the extension `c
 
 - `acp.args`: its arguments; `acp.env` and `acp.removeEnv`: variables of its own, and those of the app it must not get.
 - `acp.fs`: it reads and writes files through Escouade (`fs/read_text_file`, `fs/write_text_file`; true by default).
-  The fence of private projects is held there; false, no agent of a private project starts on it.
+  The fence of private projects is held there, by the host; false, no agent of a private project starts on it. It reads in
+  the agent's folder and its repository, writes in the agent's folder, 4 MiB a file at most; anything else is refused.
 - `acp.modes`: the ACP mode (`session/set_mode`) of each mode of Escouade; `acp.readOnlyMode` the one that changes
   nothing (a discussion of the Docs tab needs it); `acp.modelOption`: the configuration option of the model, else
   `session/set_model`.
@@ -51,12 +52,14 @@ their conversations, and come back with it.
 
 - describe the launch of a harness a manifest describes, and translate what it says: the core launches it, never
   this plugin;
-- read and write the files the agent asks it to (`fs/*`), but those of a private project, which it refuses;
+- read what the agent asks it to in the agent's folder and its repository, and write in the agent's folder
+  (`permissions.files`, the roots `agent` and `agentRepo`). The host judges each path, its links followed, and refuses a
+  private project's, whatever the code here says;
 - nothing else: no network, no secret, no account, no command to run.
 
 ## Run it alone
 
-`escouade-plugins acp` speaks the protocol of the plugins on its standard input and output; its code is this folder's
-crate (`Cargo.toml`, `src/lib.rs`, a member of the app's workspace); its tests are those of
-`crates/escouade-acp` and `src-tauri/src/plugins_acp_tests.rs` (the bench of the harnesses on a fake ACP agent
-described by `tests/fixtures/plugins/fake-acp/escouade-plugin.json`).
+Its code is this folder's crate, three lines over `escouade_acp::plugin`; `sh scripts/plugins-wasm.sh acp` compiles it. Its
+tests are those of `crates/escouade-acp`, `src-tauri/src/plugins_acp_tests.rs` (the bench of the harnesses on a fake ACP agent
+described by `tests/fixtures/plugins/fake-acp/escouade-plugin.json`, played on the module) and the parity with the native
+plugin, line by line on the recorded streams (`src-tauri/src/plugins_claude_acp_parity_tests.rs`).

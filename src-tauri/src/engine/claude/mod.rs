@@ -7,6 +7,7 @@
 mod bench;
 mod locate;
 mod mcp;
+pub(crate) mod signin;
 pub(crate) mod terminal;
 
 #[cfg(test)]

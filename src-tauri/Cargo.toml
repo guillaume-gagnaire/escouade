@@ -68,7 +68,6 @@ escouade-plugin-cli = { path = "../crates/escouade-plugin-cli" }
 # The contract of a code host and its errors, shared with the Rust plugins of the first hand (docs/PLUGINS.md §4.5).
 escouade-plugin-kit = { path = "../crates/escouade-plugin-kit" }
 # The plugins of `escouade-plugins` (its entries): the core runs none of their code, it starts their process.
-escouade-plugin-acp = { path = "../plugins/acp" }
 # OpenCode (INT-10.2): its harness in a crate, its `opencode serve` run by the core (`Launch::shared`).
 # A module since its port (docs/PLUGINS.md §8.23): what is linked is its rules and its translation, for « Vue OpenCode » and
 # the accounts, until P8 (§8.2). It stays a member of the workspace of `plugins/`.
@@ -179,7 +178,6 @@ members = [
     "../crates/escouade-plugin-cli",
     "../crates/escouade-plugin-kit",
     "../crates/escouade-acp",
-    "../plugins/acp",
     "../plugins/mistral",
 ]
 default-members = [
@@ -188,7 +186,6 @@ default-members = [
     "../crates/escouade-plugin-cli",
     "../crates/escouade-plugin-kit",
     "../crates/escouade-acp",
-    "../plugins/acp",
     "../plugins/mistral",
 ]
 

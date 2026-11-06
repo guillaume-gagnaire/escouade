@@ -13,6 +13,6 @@ workspace = "../../src-tauri"
 # the harness is this crate, on the ACP client of `crates/escouade-acp` (PLG-6) with its extension `vibe`, served as
 # the generic ACP plugin serves the harnesses a manifest describes. What is not `voice/*` comes here.
 [dependencies]
-escouade-plugin-acp = { path = "../acp" }
+escouade-acp = "0.1.1"
 escouade-plugin-protocol = "0.1.0"
 serde_json = "1"

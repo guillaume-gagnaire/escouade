@@ -1,25 +1,13 @@
-//! What Claude Code keeps of an account's sign-in, read-only, and how a turn says it lost it (ESC-162): the files and the
-//! keychain entry it writes, the words of its error. The core reads this as a library: it holds the accounts, and starts an
-//! agent's process again once its sign-in is good (`src-tauri/src/signin.rs`, docs/PROTOCOL.md, « Connexion qui ne se
-//! rafraîchit pas »). Neither a token nor a sign-in leaves this: what is said of one is a fingerprint.
+//! What Claude Code keeps of an account's sign-in, read-only (ESC-162): the file and the keychain entry it writes. The core
+//! holds the accounts, and starts an agent's process again once its sign-in is good (`src-tauri/src/signin.rs`,
+//! docs/PROTOCOL.md, « Connexion qui ne se rafraîchit pas »); the plugin reads none of it. Neither a token nor a sign-in
+//! leaves this: what is said of one is a fingerprint.
 
 use anyhow::Result;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::path::Path;
 use unicode_normalization::UnicodeNormalization;
-
-/// What Claude Code says of a sign-in its process could not refresh: refused (`OAuthRefreshDeadError`),
-/// or held by another process past its wait (`OAuthRefreshLockTimeoutError`).
-const LOST: [&str; 2] = [
-    "OAuth session expired and could not be refreshed",
-    "Failed to refresh OAuth token: another Claude Code process is refreshing it",
-];
-
-/// Whether `text`, the error of a turn, is a sign-in Claude Code could not refresh.
-pub fn lost(text: &str) -> bool {
-    LOST.iter().any(|l| text.contains(l))
-}
 
 /// Whether the process can go on with the sign-in read now (`now`), having started with `launch`:
 /// a token in date, or another sign-in than its own (another process refreshed it, or the user
@@ -95,9 +83,6 @@ impl Stored {
     }
 }
 
-// What reads the outside, and nothing else does in this crate: the file, the keychain, the clock. The client and the
-// translation are state machines, with no process, thread, network, file nor timer of their own.
-
 /// The sign-in the keychain entry holds (`keychain`), else the one of `<dir>/.credentials.json`.
 pub async fn credentials_from(keychain: Option<Value>, dir: &Path) -> Result<Credentials> {
     Ok(stored_from(keychain, dir).await?.credentials)
@@ -117,6 +102,7 @@ pub async fn stored_from(keychain: Option<Value>, dir: &Path) -> Result<Stored> 
 }
 
 /// What `security find-generic-password -w` answered.
+#[cfg(any(target_os = "macos", test))]
 #[derive(Debug, Clone, PartialEq)]
 pub enum KeychainAnswer {
     /// The entry's secret: Claude Code's sign-in.
@@ -130,6 +116,7 @@ pub enum KeychainAnswer {
 /// The answer of `security` from its exit code (`code`, none when a signal ended it) and its
 /// output: 0 the entry, 44 none (`errSecItemNotFound`, whose low byte the tool exits with), any
 /// other a refusal (`errSecAuthFailed` 51, `errSecUserCanceled` 128…).
+#[cfg(any(target_os = "macos", test))]
 pub fn keychain_answer(code: Option<i32>, stdout: &[u8]) -> Result<KeychainAnswer> {
     Ok(match code {
         Some(0) => KeychainAnswer::Entry(serde_json::from_slice(stdout)?),
@@ -140,14 +127,17 @@ pub fn keychain_answer(code: Option<i32>, stdout: &[u8]) -> Result<KeychainAnswe
 
 /// How long a keychain entry whose access was refused is left alone: reading it again would ask
 /// the user again, every minute while the account looks not signed in.
+#[cfg(any(target_os = "macos", test))]
 pub const KEYCHAIN_REFUSED_MS: i64 = 10 * 60_000;
 
 /// The keychain entries whose access was refused, and when.
+#[cfg(any(target_os = "macos", test))]
 #[derive(Default)]
 pub struct KeychainGate {
     refused: std::collections::HashMap<String, i64>,
 }
 
+#[cfg(any(target_os = "macos", test))]
 impl KeychainGate {
     /// The entry `service` may be asked for at `now`: not refused in the last ten minutes.
     pub fn open(&self, service: &str, now: i64) -> bool {
@@ -214,5 +204,26 @@ pub fn keychain_service(config_dir_env: Option<&str>) -> String {
                 .collect();
             format!("{SERVICE}-{hex}")
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn what_a_sign_in_says_is_read_without_touching_anything() {
+        let creds = json!({ "claudeAiOauth": { "accessToken": "tok", "refreshToken": "r", "expiresAt": 100 } });
+        assert_eq!(
+            stored_of(&creds, 99).credentials,
+            Credentials::Token("tok".into())
+        );
+        let late = stored_of(&creds, 101);
+        assert_eq!(late.credentials, Credentials::Expired);
+        // The same sign-in out of date, told by its fingerprint, never its token.
+        assert_eq!(late.stamp, stored_of(&creds, 99).stamp);
+        assert!(!late.stamp.unwrap().contains("tok"));
+        assert_eq!(stored_of(&json!({}), 0).credentials, Credentials::Missing);
     }
 }

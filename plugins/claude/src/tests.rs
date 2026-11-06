@@ -52,7 +52,7 @@ fn its_manifest_declares_claude_code_with_its_own_folder_variable() {
     assert_eq!(h["id"], "claude");
     assert_eq!(h["accountVar"], "CLAUDE_CONFIG_DIR");
     assert_eq!(h["opens"], true);
-    assert_eq!(m["run"]["args"], json!(["claude"]));
+    assert_eq!(m["run"]["wasm"], "Cargo.toml");
 }
 
 #[test]
@@ -657,21 +657,4 @@ fn a_new_conversation_is_told_in_the_language_of_the_app() {
             notice: "New Claude conversation (context cleared)".into(),
         }]
     );
-}
-
-#[test]
-fn what_a_sign_in_says_is_read_without_touching_anything() {
-    use crate::signin::{stored_of, Credentials};
-    let creds =
-        json!({ "claudeAiOauth": { "accessToken": "tok", "refreshToken": "r", "expiresAt": 100 } });
-    assert_eq!(
-        stored_of(&creds, 99).credentials,
-        Credentials::Token("tok".into())
-    );
-    let late = stored_of(&creds, 101);
-    assert_eq!(late.credentials, Credentials::Expired);
-    // The same sign-in out of date, told by its fingerprint, never its token.
-    assert_eq!(late.stamp, stored_of(&creds, 99).stamp);
-    assert!(!late.stamp.unwrap().contains("tok"));
-    assert_eq!(stored_of(&json!({}), 0).credentials, Credentials::Missing);
 }

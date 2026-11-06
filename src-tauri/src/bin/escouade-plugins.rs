@@ -32,10 +32,6 @@ const ENTRIES: &[Entry] = &[
     ("mistral", voice::mistral),
     ("voice-elevenlabs", voice::elevenlabs),
     ("voice-deepgram", voice::deepgram),
-    // The generic ACP plugin (PLG-6): the harnesses a manifest describes, in its crate (plugins/acp).
-    ("acp", escouade_plugin_acp::run),
-    // Claude Code (INT-10.5): the client of `claude` and its translation, in its crate (plugins/claude).
-    ("claude", escouade_plugin_claude::run),
 ];
 
 fn main() {

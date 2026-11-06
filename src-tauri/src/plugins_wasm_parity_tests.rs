@@ -64,16 +64,29 @@ pub(crate) struct Hosted {
 
 impl Hosted {
     pub(crate) fn start(module: wasmtime::Module, fetcher: Fetcher) -> Self {
-        Self::start_with(module, fetcher, None)
+        Self::run(module, fetcher, wasm::Limits::default(), None)
+    }
+
+    /// `start`, under `limits`.
+    pub(crate) fn within(module: wasmtime::Module, fetcher: Fetcher, limits: wasm::Limits) -> Self {
+        Self::run(module, fetcher, limits, None)
     }
 
     /// With what `escouade.call` serves.
     fn start_with(module: wasmtime::Module, fetcher: Fetcher, calls: Option<wasm::Calls>) -> Self {
+        Self::run(module, fetcher, wasm::Limits::default(), calls)
+    }
+
+    fn run(
+        module: wasmtime::Module,
+        fetcher: Fetcher,
+        limits: wasm::Limits,
+        calls: Option<wasm::Calls>,
+    ) -> Self {
         let (tx, rx) = unbounded_channel::<Frame>();
         let back = tx.downgrade();
         let (out, lines) = channel();
         std::thread::spawn(move || {
-            let limits = wasm::Limits::default();
             let instance = Instance::start_with(&module, &BTreeMap::new(), limits, calls)
                 .expect("an instance");
             let fault = wasm::serve(
@@ -123,6 +136,7 @@ impl Native {
                 dir.join(format!("escouade-plugins{}", std::env::consts::EXE_SUFFIX))
             });
         let mut child = Command::new(&program)
+            .env("ESCOUADE_VERSION", "2.2.0")
             .arg(name)
             .env("ESCOUADE_VERSION", "2.2.0")
             .stdin(Stdio::piped())

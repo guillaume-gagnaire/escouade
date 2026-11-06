@@ -172,10 +172,19 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 name = "escouade-acp"
 version = "0.1.1"
 dependencies = [
+ "base64 0.22.1",
  "dunce",
  "escouade-plugin-protocol",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "escouade-plugin-acp"
+version = "2.2.0"
+dependencies = [
+ "escouade-acp",
+ "escouade-plugin-protocol",
 ]
 
 [[package]]
@@ -209,6 +218,15 @@ dependencies = [
  "parking_lot",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "escouade-plugin-claude"
+version = "2.2.0"
+dependencies = [
+ "escouade-plugin-protocol",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

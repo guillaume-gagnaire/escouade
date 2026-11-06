@@ -1629,7 +1629,6 @@ dependencies = [
  "ctor",
  "dirs 6.0.0",
  "escouade-acp",
- "escouade-plugin-acp",
  "escouade-plugin-agy",
  "escouade-plugin-claude",
  "escouade-plugin-cli",
@@ -1708,17 +1707,11 @@ dependencies = [
 name = "escouade-acp"
 version = "0.1.1"
 dependencies = [
+ "base64 0.22.1",
  "dunce",
  "escouade-plugin-protocol",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "escouade-plugin-acp"
-version = "1.0.0"
-dependencies = [
- "escouade-acp",
 ]
 
 [[package]]
@@ -1734,15 +1727,11 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-claude"
-version = "1.0.0"
+version = "2.2.0"
 dependencies = [
- "anyhow",
  "escouade-plugin-protocol",
  "serde",
  "serde_json",
- "sha2",
- "tokio",
- "unicode-normalization",
 ]
 
 [[package]]
@@ -1804,7 +1793,7 @@ dependencies = [
 name = "escouade-plugin-mistral"
 version = "1.0.0"
 dependencies = [
- "escouade-plugin-acp",
+ "escouade-acp",
  "escouade-plugin-protocol",
  "serde_json",
 ]

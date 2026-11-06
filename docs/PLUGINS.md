@@ -1089,7 +1089,7 @@ Les e2e, et donc la vue Plugins, le store dans l'app, les thèmes et les sceaux 
 
 Décidé par l'utilisateur le 2026-11-04 : « je veux que tous les plugins, même les builtins, passent par le même système : on livre un plugin, il est compilé pour qu'il soit utilisable sur tous les systèmes, et il fait ce qu'il a besoin de faire », puis « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté ». Le même jour, l'état de fin : « A la fin, je veux que tous les plugins builtins soient dans /plugins/* (exemple plugins/claude), tous publiés sur le store, vérifiés et signés. »
 
-Ce chapitre est l'étude, faite avant le portage. **A1 à A8, A9, P1, P2, P3 (Codex, Copilot CLI, Cursor, Gemini), P4, P5, P7 et D1 sont faits** (ESC-331, §8.11 ; ESC-332, §8.12 ; ESC-334, §8.13 ; ESC-338, §8.14 ; ESC-333, §8.15 ; ESC-341, §8.16 ; ESC-335, §8.17 ; ESC-336, §8.18 ; ESC-344, §8.19 ; ESC-351, §8.22 ; ESC-349, §8.23 ; ESC-348, §8.24 ; ESC-345, §8.25 ; ESC-346, §8.26 ; ESC-337, §8.20 ; ESC-342, §8.21) ; le reste du plan ne l'est pas. Le prototype, ses tests et ses mesures sont dans `prototypes/wasm-all/` (son README dit comment tout refaire). Il revoit le §5.7 (« le `run` natif, tranché ») et le §5.6 (« un `run.wasm` n'est pas ouvert ») : ces deux passages tiennent jusqu'à l'acceptation des décisions proposées par ESC-330. Sans numéro tant qu'elles ne sont pas acceptées, elles se citent par leur identifiant : `run-wasm-le-rust-des-plugins-compile-par`, `les-capacites-de-l-hote-ce-qu-un-plugin`, `la-premiere-main-dans-plugins-id-court-p`, `plus-aucun-run-command-le-store-le-refus`.
+Ce chapitre est l'étude, faite avant le portage. **A1 à A8, A9, P3b, P1, P2, P3 (Codex, Copilot CLI, Cursor, Gemini), P4, P5, P7 et D1 sont faits** (ESC-331, §8.11 ; ESC-332, §8.12 ; ESC-334, §8.13 ; ESC-338, §8.14 ; ESC-333, §8.15 ; ESC-341, §8.16 ; ESC-335, §8.17 ; ESC-336, §8.18 ; ESC-344, §8.19 ; ESC-351, §8.22 ; ESC-349, §8.23 ; ESC-348, §8.24 ; ESC-345, §8.25 ; ESC-346, §8.26 ; ESC-337, §8.20 ; ESC-342, §8.21 ; ESC-347, §8.27) ; le reste du plan ne l'est pas. Le prototype, ses tests et ses mesures sont dans `prototypes/wasm-all/` (son README dit comment tout refaire). Il revoit le §5.7 (« le `run` natif, tranché ») et le §5.6 (« un `run.wasm` n'est pas ouvert ») : ces deux passages tiennent jusqu'à l'acceptation des décisions proposées par ESC-330. Sans numéro tant qu'elles ne sont pas acceptées, elles se citent par leur identifiant : `run-wasm-le-rust-des-plugins-compile-par`, `les-capacites-de-l-hote-ce-qu-un-plugin`, `la-premiere-main-dans-plugins-id-court-p`, `plus-aucun-run-command-le-store-le-refus`.
 
 **En bref.**
 
@@ -1581,7 +1581,7 @@ Les tickets du portage, dans l'ordre. **Les lettres sont des noms de travail**, 
 | --- | --- | --- |
 | **P1** (fait, §8.19) | Linear, Trello, Jira, ClickUp | le kit seul ; le plus simple |
 | **P2** (fait, §8.25) | GitHub, GitLab, Bitbucket, Gitea, Azure DevOps | `{account}`, proxy, instances auto-hébergées ; essais contre `fake-trackers` |
-| **P3** (Codex, Copilot CLI, Cursor, Gemini : fait, §8.26) | Codex, Copilot CLI, Cursor, Gemini, ACP, Vibe, Claude Code | les machines à états ; `fs/*` pour ACP ; `real-harnesses` rejoué |
+| **P3** (Codex, Copilot CLI, Cursor, Gemini : fait, §8.26 ; ACP, Claude Code : fait, §8.27) | Codex, Copilot CLI, Cursor, Gemini, ACP, Vibe, Claude Code | les machines à états ; `fs/*` pour ACP ; `real-harnesses` rejoué |
 | **P4** (fait, §8.24) | Antigravity | l'attente du transcript réécrite (§8.4.6) |
 | **P5** (fait, §8.23) | OpenCode | SSE, `local:shared`, ses trois tâches ; le plus risqué des harness |
 | **P6** | OpenAI, Groq, Mistral, ElevenLabs, Deepgram | sortir `voice/online*`, `live.rs`, `wire.rs` du crate de l'app dans une crate commune ; WebSocket ; INT-13 rejoué |
@@ -2006,3 +2006,58 @@ Codex, Copilot CLI, Cursor CLI et Gemini CLI sont des modules, en `2.2.0`, `esco
 **Le piège du `Reactor` du kit** (ESC-351) ne les touche pas : ces quatre plugins ne dépendent pas du kit, et `turn::run` traite chaque ligne jusqu'au bout, sans tâche qui attend.
 
 **Pas fait ici.** Le portage d'ACP, de Claude Code (P3b) et de Vibe (P6) : `plugins/acp` et `plugins/mistral` restent natifs. Les vues « Vue X » (P8). Ni étiquette ni soumission.
+
+### 8.27 Ce que P3b a construit (ESC-347)
+
+ACP (`dev.escouade.acp`) et Claude Code (`dev.escouade.claude-code`) sont en `run.wasm`, `2.2.0`, `escouade.min` `2.2.0`, membres du workspace de `plugins/`, sortis d'`escouade-plugins`. Goose reste un manifeste sans code, servi par ACP : il tourne donc sur le module. La recette du §8.19 a suffi, à cinq écarts près.
+
+**Claude Code reste aussi une `rlib`.** Le cœur lit encore `translate`, `words`, `localcmd` et les arguments de `client` pour « Vue Claude Code » : `crate-type = ["cdylib", "rlib"]`, ce que `rust::check` permet, et `src-tauri` le prend par chemin. Il sort du workspace de `src-tauri`, pas de ses dépendances, jusqu'à P8. Cargo accepte qu'une dépendance par chemin soit membre d'un autre workspace.
+
+**`signin.rs` est au cœur** (`src-tauri/src/engine/claude/signin.rs`), avec `tokio`, `sha2`, `unicode-normalization` et `anyhow`, qui quittent le plugin. Le plugin n'a jamais lu une connexion : c'était le cœur qui lisait ce fichier en bibliothèque. Il n'y a donc ni `escouade.call` ni `fs/*` à ajouter, et le manifeste de Claude Code ne déclare aucune permission. Seul `lost`, les mots d'un tour qui a perdu sa connexion, reste au plugin (`translate::lost`) : c'est de la traduction. Ce qui ne sert que sous macOS (`KeychainGate`, `keychain_answer`) est compilé pour macOS et les tests.
+
+**Les fichiers d'ACP** (`crates/escouade-acp/src/files.rs`). En natif, rien ne change. Cursor, Gemini, Vibe et Goose déclarent `"fs": false` : leurs harness ne passent pas par ces fichiers, en module comme en process ; ils servent les harness décrits qui les demandent (`"fs": true`). En module, le chemin va à l'hôte avec la clé de l'agent :
+
+- le client retire `.` et `..` par le texte (`plain`), selon le système du chemin et non celui de la cible, un module ne sachant pas lire `C:\wt` : `Path::is_absolute` y est faux ;
+- `fs/canon` juge le chemin, liens compris, sous les racines de cet agent et hors de sa clôture ;
+- `fs/read` et `fs/write` servent ensuite, `dataBase64` redevenant du texte remplacé comme en natif.
+
+Les réponses à l'agent gardent leurs codes et leurs textes : `-32000` pour un refus, `-32002` pour un échec, `fenced_file` pour la clôture, reconnue aux mots de l'hôte (`host_call` perd le code). **Une seule différence de comportement, voulue** : le client natif atteignait tout chemin hors clôture ; le module lit dans `agent` et `agentRepo` et écrit dans `agent` (`permissions.files`), 4 Mio par fichier (`limits.fileBytes`). Le reste est refusé en `-32000`, nouveau texte `out_of_reach`. `agentRepo` est en lecture seule : le ticket le demande comme racine, et rien n'écrit dans le dépôt principal depuis un worktree. Goose (`"fs": false`) n'est touché que par le diff d'un `write`, lu au même endroit.
+
+**`limits.memoryBytes` et `limits.turnSeconds`, nouveaux.** Un message peut porter 18 Mio de fichiers, soit 24 Mio en base64, envoyés puis renvoyés par `--replay-user-messages`. Dans 64 Mio de mémoire linéaire, le module s'arrêtait, et avec lui tous les agents du harness : un plugin n'a qu'une instance. Essayé : `the_biggest_message_passes_through_the_module` tombe à 64 Mio. Lire ce message en entier prend 1,1 s à l'aller et 0,8 s au retour sur un poste chargé, trop près des 2 s d'un tour. Le manifeste peut donc demander plus, jamais moins que le défaut : 256 Mio (`wasm::MEMORY_MAX`) et 10 s (`wasm::TURN_MAX`) au plus. Un tour de décision garde ses 500 ms. Claude Code et ACP demandent les deux plafonds ; les autres harness portés en ont le même besoin. La mémoire d'une instance ne redescend pas : le pic d'un gros PDF reste jusqu'à son arrêt.
+
+**Le précompilé d'un module de `scripts/plugins-wasm.sh`** se garde à côté de lui (`<target>/plugins-wasm/<id-court>/`) dans les tests : sans ça, chaque process de nextest recompilait chaque module, et Claude Code sert presque tous les tests d'un agent. C'est le chemin de `main` (`Modules::prepare_reactor`), arrivé par une autre voie en même temps ; `plugins-wasm.sh` retire les précompilés périmés.
+
+**`escouade_acp::plugin`** (ESC-346) porte le service qui était dans `plugins/acp` : Cursor, Gemini et Mistral en dépendent sans chemin vers un autre plugin. `plugins/acp` tient en trois lignes.
+
+**La parité** (`plugins_claude_acp_parity_tests.rs`, `tests/fixtures/plugins/parity/{claude,acp}.json`) compare chaque ligne de chaque flux enregistré au natif de 6dbd1223 : toutes les `real-run-*.jsonl` et le long tour pour Claude Code (3 725 lignes), ceux de Cursor, Vibe et Gemini pour ACP, y compris par la description de Goose, plus chaque méthode du contrat, à l'élément près (un condensé par ligne, les genres d'éléments à côté pour lire un écart). Écart trouvé : aucun, hormis deux non-écarts écartés du test. L'ordre des réponses d'une interruption vient d'une `HashMap`, dans le natif aussi ; le plan de Gemini `plan-exit-approval` se lit à un chemin qui n'existe que sur le poste qui l'a enregistré. Les fichiers d'ACP, qui demandent un agent connu de l'hôte, sont joués sur le module par `plugins_acp_tests` (`fs/*`, clôture, `..`, lien, lecture seule).
+
+**INT-0.** Le banc de flux rejoue Claude Code par le module (`ESCOUADE_BENCH_ONLY=claude`, puis `claude/long-turn`), en release sans LTO, poste chargé, face aux chiffres du process (ESC-226) :
+
+| Claude Code | Le process (ESC-226) | Le module |
+| --- | --- | --- |
+| Ses trois flux, au plus vite : médiane | 110 µs | 90 µs |
+| Ses trois flux, au plus vite : 99e centile | 835 µs | 655 µs |
+| Ses trois flux, au plus vite : débit | 6 573 lignes/s | 4 800 lignes/s |
+| Le long tour, à son rythme : médiane | 24,1 ms | 24,1 ms |
+| Le long tour, à son rythme : 99e centile | 32,2 ms | 32,5 ms |
+| Le long tour, à son rythme : CPU | 1 250 ms | 1 562 ms |
+| Le long tour, au plus vite : 99e centile | 30,5 ms | 30,7 ms |
+| Le long tour, au plus vite : débit | 17 320 lignes/s | 15 493 lignes/s |
+
+Dans les seuils : +0,3 ms au 99e centile, plus de 2 200 lignes/s. Le module coûte un peu de débit et de CPU, pas de délai. La mémoire du process de tests reste à 56 Mo.
+
+**L'essai réel.** `real-harnesses` a rejoué le vrai Claude Code 2.1.318 sur le module : un ticket jusqu'à sa fusion, et sa vue terminal. Goose n'est pas installé sur ce poste : `real_goose` n'a pas tourné. Il tourne sur le module par `acp-harness.spec.ts` et `plugins_acp_tests`, sur un faux agent.
+
+**L'empreinte de Claude Code**, compilée depuis crates.io, kit `0.1.0`, `escouade-plugin build` sous Windows : `b3fd405448a7b0b3ddcdfeaf9ee2a439a7c388a2b54304d36a00da66feaa6b36`, 500 919 o. La même sous Linux n'a pas pu être vérifiée : WSL, donc Podman, ne répond pas sur ce poste.
+
+**Le piège de `Reactor::turn`** (P7) ne les touche pas : ni ACP ni Claude Code n'utilisent le kit. Une machine à états répond dans le tour, par `turn::run`.
+
+**Ce qui attend `escouade-acp 0.1.1`** (le chef la publie après la fusion d'ESC-346 et d'ESC-347 : une version ne se retire pas, et chacune porte une part de la crate). Tant qu'elle n'est pas sur crates.io :
+
+- `plugins/acp` n'a pas de `Cargo.lock` : `sh scripts/plugin-lock.sh acp` échoue, cargo ne trouve pas la version ;
+- `escouade-plugin validate acp` refuse (« pas de Cargo.lock »), `escouade-plugin build acp` et `fetch` aussi, donc le store ne peut pas le compiler ;
+- l'empreinte d'ACP n'existe pas, sous Windows comme sous Linux.
+
+`plugins/ci.mjs` l'écarte de façon explicite pour que `main` reste verte : `AWAITING_PUBLICATION` de `plugins/ci-lib.mjs` nomme le plugin et ce qu'il attend. Pour lui, `ci.mjs` saute `validate` et `build`, et joue au banc le module de `scripts/plugins-wasm.sh`, compilé contre `crates/`, en le disant dans son journal. `cargo test` et les contrôles du dossier tournent comme pour les autres. `scripts/plugins-ci.test.ts` refuse qu'un plugin de cette liste ait un `Cargo.lock` : un lock posé sans retirer l'écart fait échouer la CI.
+
+**Le second passage**, une fois la version publiée : `sh scripts/plugin-lock.sh acp`, retirer `acp` d'`AWAITING_PUBLICATION`, `escouade-plugin build acp --first-party` sous Windows et Linux, noter les empreintes ici, puis le banc `--first-party --escouade 2.2.0` sur ce module. Rien d'autre ne change.

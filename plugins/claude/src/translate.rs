@@ -6,11 +6,22 @@
 //! as a library (`src-tauri/src/agent/claude.rs`).
 
 use crate::localcmd::{self, Part};
-use crate::signin;
 use crate::words::{rate_meters, said, strip_tags, tool_result_text};
 use escouade_plugin_protocol::engine::{Item, ModelTurn};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
+
+/// What Claude Code says of a sign-in its process could not refresh: refused (`OAuthRefreshDeadError`),
+/// or held by another process past its wait (`OAuthRefreshLockTimeoutError`).
+const LOST: [&str; 2] = [
+    "OAuth session expired and could not be refreshed",
+    "Failed to refresh OAuth token: another Claude Code process is refreshing it",
+];
+
+/// Whether `text`, the error of a turn, is a sign-in Claude Code could not refresh.
+pub fn lost(text: &str) -> bool {
+    LOST.iter().any(|l| text.contains(l))
+}
 
 struct Block {
     index: u64,
@@ -277,7 +288,7 @@ impl Translator {
             }
             let text = msg["content"][0]["text"].as_str().unwrap_or(err);
             // Its turn says it, and is taken up by itself (`signin`): no error in red before.
-            if parent.is_none() && signin::lost(text) {
+            if parent.is_none() && lost(text) {
                 return;
             }
             out.push(Item::Notice {
@@ -492,7 +503,7 @@ impl Translator {
             None
         };
         // A sign-in that could not be refreshed: the core looks at the account's (ESC-162).
-        let sign_in = is_error && !limited && error.as_deref().is_some_and(signin::lost);
+        let sign_in = is_error && !limited && error.as_deref().is_some_and(lost);
         // Always with words: the frame's, else the kind of result it is, else a generic one.
         let failure = error
             .clone()

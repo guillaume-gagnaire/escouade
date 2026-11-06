@@ -1,8 +1,8 @@
 ---
 title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","docs/PLUGINS.md §8.19 (ESC-344)","docs/PLUGINS.md §8.20 (ESC-337)","docs/PLUGINS.md §8.22 (ESC-351)","docs/PLUGINS.md §8.23 (ESC-349)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire","docs/PLUGINS.md §8.24 (ESC-348)","docs/PLUGINS.md §8.25 (ESC-345)"]
-tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351","ESC-349","ESC-348","ESC-345","ESC-346"]
+sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","docs/PLUGINS.md §8.19 (ESC-344)","docs/PLUGINS.md §8.20 (ESC-337)","docs/PLUGINS.md §8.22 (ESC-351)","docs/PLUGINS.md §8.23 (ESC-349)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire","docs/PLUGINS.md §8.24 (ESC-348)","docs/PLUGINS.md §8.25 (ESC-345)","docs/PLUGINS.md §8.27 (ESC-347)"]
+tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351","ESC-349","ESC-348","ESC-345","ESC-346","ESC-347"]
 decisions: [73,71,70,72,75,80,84,86,89,92,93,96]
 compared: null
 ---
@@ -204,3 +204,16 @@ Ces quatre plugins sont en `run.wasm`, en version `2.2.0`, `escouade.min` `2.2.0
 - **Une adresse dans une permission de Copilot** dont l'hôte n'est pas en ASCII n'est permise que pour une fois, au lieu de la session.
 - **Chacun répond comme son natif**, sur 2 256 pas enregistrés avant le portage : ses lancements, ses flux enregistrés, les appels du contrat (`tests/fixtures/plugins/parity/`).
 - **Le service du protocole ACP** est dans la crate `escouade-acp`, plus dans `plugins/acp`. Cursor et Gemini en dépendent par version, comme tout plugin que le store compile seul. Cela demande `escouade-acp` `0.1.1` sur crates.io, publiée par le chef après la fusion d'ESC-346 et d'ESC-347. Tant qu'elle n'y est pas, ces quatre plugins n'ont ni `Cargo.lock` ni empreinte, ne se compilent que dans le dépôt, et `plugins/ci.mjs` les écarte de `validate` et de `build` par une liste que le second passage vide.
+
+## Ce qui tourne déjà : ACP et Claude Code (ESC-347)
+
+Ces deux plugins sont portés à leur tour. Goose, manifeste sans code servi par ACP, tourne donc sur le module.
+
+- Chacun est en `run.wasm`, en version `2.2.0`, `escouade.min` `2.2.0`, ses identifiants inchangés. Il n'est plus dans `escouade-plugins`.
+- Chacun répond comme son natif, à l'élément près, sur chaque ligne des flux enregistrés de ses tests et sur chaque méthode du contrat (`tests/fixtures/plugins/parity/`).
+- **Claude Code ne déclare aucune permission.** Ce qu'il garde d'une connexion (`.credentials.json`, le trousseau de macOS) n'est lu que par le cœur : le plugin ne voit jamais une connexion. Il reste aussi une bibliothèque pour le cœur, qui lit sa traduction pour « Vue Claude Code », jusqu'à P8.
+- **ACP déclare `agent` en écriture et `agentRepo` en lecture.** Les fichiers qu'un agent lui confie passent par `fs/*` de l'hôte, et la clôture du projet privé y est appliquée. Un agent ACP lit et écrit donc moins qu'avant par Escouade : voir *Les harness ACP décrits*.
+- **`limits.memoryBytes` et `limits.turnSeconds`.** Un plugin en WASM peut demander plus que les 64 Mio de mémoire et les 2 s d'un tour par défaut, 256 Mio et 10 s au plus, jamais moins. Une ligne plus longue que le défaut n'est ni un droit ni une capacité : ce n'est pas dit dans la fenêtre d'installation. Un tour qui tient une décision garde ses 500 ms. Claude Code et ACP demandent les deux plafonds : un message peut porter 24 Mio en base64, et une instance sert tous les agents du harness. Une fois montée, la mémoire d'une instance ne redescend pas avant son arrêt.
+- Dans les tests, le précompilé d'un module de `scripts/plugins-wasm.sh` se garde à côté de lui. Une release n'a pas ce chemin.
+- **`escouade-acp` passe à `0.1.1`, publiée par le chef après la fusion.** Tant qu'elle n'est pas sur crates.io, le plugin ACP n'a ni `Cargo.lock` ni empreinte : il se compile dans le dépôt et passe le banc par `--wasm`, mais `escouade-plugin validate` et `build` le refusent seul dans son dossier, donc le store ne le compile pas. `plugins/ci.mjs` l'écarte de façon explicite (`AWAITING_PUBLICATION`), et un test refuse un lock posé sans retirer cet écart.
+- **Avant Z2**, comme pour les plugins précédents, seuls un build de développement et les tests trouvent ces modules. Une release faite avant Z2 n'aurait pas Claude Code.
