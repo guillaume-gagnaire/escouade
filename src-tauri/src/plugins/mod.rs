@@ -41,6 +41,7 @@ pub mod runtime;
 // The app's seed: the plugins of the first hand the installer carries, installed with no network (ESC-338).
 pub mod seed;
 pub mod shared;
+pub mod socket;
 // The store in the app: its catalogue, its revocation list, a version downloaded and checked (STORE-9).
 pub mod store;
 // The seal of a version from the store, checked with the keys the app embeds (STORE-8).

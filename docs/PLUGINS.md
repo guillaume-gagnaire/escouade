@@ -821,6 +821,8 @@ Les docs elles-mêmes (§1.1, §1.5, §4.7, §4.8, §4.10, le tableau des versio
 
 ### 4.13 Les services de voix en plugins (INT-13, ESC-285, fait le 2026-11-01)
 
+**Depuis P6 (ESC-350, §8.28), ces cinq plugins sont des modules** et le code des services est la crate `escouade-voice` : ce qui suit reste vrai du protocole `voice/*` et du compte Mistral, plus du programme `escouade-plugins`, de `plugin_guest.rs` ni du service du cœur qui répondait à la place d'un plugin.
+
 **Ce qui est livré.** OpenAI, Groq, Mistral, ElevenLabs et Deepgram sont cinq plugins de première main (`plugins/<service>/` : manifeste, README), au registre des plugins livrés avec l'app (`plugins/builtin.rs`), chacun un process `escouade-plugins voice-<service>` (`src-tauri/src/bin/escouade-plugins/voice.rs`). Le cœur ne les appelle que par le contrat d'INT-12 : `ProcessVoiceService: VoiceService` (`voice/plugin_host.rs`, sur le modèle de `ProcessTicketSource`) répond à la dictée, au direct, à la synthèse et au catalogue par JSON-RPC ; le côté plugin (`voice/plugin_guest.rs`) sert `voice/*` avec le code des cinq services tel qu'il était dans le cœur (`online.rs`, `live.rs`, `online_speech.rs`, `online_catalog.rs`), sans le changer. **Écart assumé avec §4.3** : le programme `escouade-plugins` n'est donc plus sans `escouade_lib` pour ces cinq entrées. Sortir ce code dans une crate à part (la forme de §4.3) demanderait de défaire son lien avec les réglages, le trousseau et la conversation, pour un gain de taille du seul exécutable ; elle reste à faire quand INT-10 aura fixé la forme des crates.
 
 **Le contrat s'est ouvert** (revue d'INT-12) : `Provider` n'est plus une énumération mais l'identifiant du service, interné (`Provider::of(id)`, `Copy`) ; les cinq du cœur en sont les constantes (`Provider::OpenAi`…) et ni `Spec` ni `OnlineError` n'en dépendent plus. Le registre (`voice/service.rs`) liste aussi les services des plugins : `register`, `unregister`, `hide`, `services`, `find`, `of`. Un plugin d'un id du cœur prend sa place ; un service dont le plugin est parti répond par une erreur (`Gone`), jamais par un plantage. `core.rs` met le registre d'accord avec les interrupteurs des plugins (`plugin_host::sync_builtin`) au démarrage et à chaque changement : un plugin coupé retire son service (la dictée repasse en local), un plugin qui ne démarre pas laisse le service du cœur répondre, le journal du plugin disant pourquoi.
@@ -1089,7 +1091,7 @@ Les e2e, et donc la vue Plugins, le store dans l'app, les thèmes et les sceaux 
 
 Décidé par l'utilisateur le 2026-11-04 : « je veux que tous les plugins, même les builtins, passent par le même système : on livre un plugin, il est compilé pour qu'il soit utilisable sur tous les systèmes, et il fait ce qu'il a besoin de faire », puis « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté ». Le même jour, l'état de fin : « A la fin, je veux que tous les plugins builtins soient dans /plugins/* (exemple plugins/claude), tous publiés sur le store, vérifiés et signés. »
 
-Ce chapitre est l'étude, faite avant le portage. **A1 à A8, A9, P3b, P1, P2, P3 (Codex, Copilot CLI, Cursor, Gemini), P4, P5, P7 et D1 sont faits** (ESC-331, §8.11 ; ESC-332, §8.12 ; ESC-334, §8.13 ; ESC-338, §8.14 ; ESC-333, §8.15 ; ESC-341, §8.16 ; ESC-335, §8.17 ; ESC-336, §8.18 ; ESC-344, §8.19 ; ESC-351, §8.22 ; ESC-349, §8.23 ; ESC-348, §8.24 ; ESC-345, §8.25 ; ESC-346, §8.26 ; ESC-337, §8.20 ; ESC-342, §8.21 ; ESC-347, §8.27) ; le reste du plan ne l'est pas. Le prototype, ses tests et ses mesures sont dans `prototypes/wasm-all/` (son README dit comment tout refaire). Il revoit le §5.7 (« le `run` natif, tranché ») et le §5.6 (« un `run.wasm` n'est pas ouvert ») : ces deux passages tiennent jusqu'à l'acceptation des décisions proposées par ESC-330. Sans numéro tant qu'elles ne sont pas acceptées, elles se citent par leur identifiant : `run-wasm-le-rust-des-plugins-compile-par`, `les-capacites-de-l-hote-ce-qu-un-plugin`, `la-premiere-main-dans-plugins-id-court-p`, `plus-aucun-run-command-le-store-le-refus`.
+Ce chapitre est l'étude, faite avant le portage. **A1 à A8, A9, P3b, P1, P2, P3 (Codex, Copilot CLI, Cursor, Gemini), P4, P5, P6, P7 et D1 sont faits** (ESC-331, §8.11 ; ESC-332, §8.12 ; ESC-334, §8.13 ; ESC-338, §8.14 ; ESC-333, §8.15 ; ESC-341, §8.16 ; ESC-335, §8.17 ; ESC-336, §8.18 ; ESC-344, §8.19 ; ESC-351, §8.22 ; ESC-349, §8.23 ; ESC-348, §8.24 ; ESC-345, §8.25 ; ESC-346, §8.26 ; ESC-350, §8.28 ; ESC-337, §8.20 ; ESC-342, §8.21 ; ESC-347, §8.27) ; le reste du plan ne l'est pas. Le prototype, ses tests et ses mesures sont dans `prototypes/wasm-all/` (son README dit comment tout refaire). Il revoit le §5.7 (« le `run` natif, tranché ») et le §5.6 (« un `run.wasm` n'est pas ouvert ») : ces deux passages tiennent jusqu'à l'acceptation des décisions proposées par ESC-330. Sans numéro tant qu'elles ne sont pas acceptées, elles se citent par leur identifiant : `run-wasm-le-rust-des-plugins-compile-par`, `les-capacites-de-l-hote-ce-qu-un-plugin`, `la-premiere-main-dans-plugins-id-court-p`, `plus-aucun-run-command-le-store-le-refus`.
 
 **En bref.**
 
@@ -1584,7 +1586,7 @@ Les tickets du portage, dans l'ordre. **Les lettres sont des noms de travail**, 
 | **P3** (Codex, Copilot CLI, Cursor, Gemini : fait, §8.26 ; ACP, Claude Code : fait, §8.27) | Codex, Copilot CLI, Cursor, Gemini, ACP, Vibe, Claude Code | les machines à états ; `fs/*` pour ACP ; `real-harnesses` rejoué |
 | **P4** (fait, §8.24) | Antigravity | l'attente du transcript réécrite (§8.4.6) |
 | **P5** (fait, §8.23) | OpenCode | SSE, `local:shared`, ses trois tâches ; le plus risqué des harness |
-| **P6** | OpenAI, Groq, Mistral, ElevenLabs, Deepgram | sortir `voice/online*`, `live.rs`, `wire.rs` du crate de l'app dans une crate commune ; WebSocket ; INT-13 rejoué |
+| **P6** (fait, §8.28) | OpenAI, Groq, Mistral, ElevenLabs, Deepgram | sortir `voice/online*`, `live.rs`, `wire.rs` du crate de l'app dans une crate commune ; WebSocket ; INT-13 rejoué |
 | **P7** (fait, §8.22) | isola | `proc/*` |
 | **P8** | les « Vue X » | `view/translate` ; le cœur ne lie plus aucun plugin ; peut suivre la 2.2 |
 
@@ -2061,3 +2063,60 @@ Dans les seuils : +0,3 ms au 99e centile, plus de 2 200 lignes/s. Le module coû
 `plugins/ci.mjs` l'écarte de façon explicite pour que `main` reste verte : `AWAITING_PUBLICATION` de `plugins/ci-lib.mjs` nomme le plugin et ce qu'il attend. Pour lui, `ci.mjs` saute `validate` et `build`, et joue au banc le module de `scripts/plugins-wasm.sh`, compilé contre `crates/`, en le disant dans son journal. `cargo test` et les contrôles du dossier tournent comme pour les autres. `scripts/plugins-ci.test.ts` refuse qu'un plugin de cette liste ait un `Cargo.lock` : un lock posé sans retirer l'écart fait échouer la CI.
 
 **Le second passage**, une fois la version publiée : `sh scripts/plugin-lock.sh acp`, retirer `acp` d'`AWAITING_PUBLICATION`, `escouade-plugin build acp --first-party` sous Windows et Linux, noter les empreintes ici, puis le banc `--first-party --escouade 2.2.0` sur ce module. Rien d'autre ne change.
+
+### 8.28 Ce que P6 a construit (ESC-350)
+
+OpenAI, Groq, Mistral, ElevenLabs et Deepgram sont des modules, en `2.2.0`, `escouade.min` `2.2.0`, `"run": { "wasm": "Cargo.toml" }`, sortis d'`escouade-plugins`. Mistral porte sa voix et Vibe dans la même instance. L'app ne garde de la voix que ce qui est du cœur : la capture, Whisper, Piper, le trousseau, le choix du service dans les réglages et le client de `voice/*` (`plugin_host.rs`).
+
+**La crate `crates/escouade-voice` (`0.1.0`, MIT, à publier).** Elle tient `voice/online*`, `live.rs` et `wire.rs`, sans tokio ni reqwest :
+
+- `online`, `speech`, `catalog` : ce que chaque service demande et ce que ses réponses veulent dire, en code pur. Une requête est une valeur (`Call`), un flux des trames (`Frame`).
+- `wire` : le protocole `voice/*`, que l'app lit aussi.
+- `host` : le réacteur de P5 (`plugins/opencode/src/host.rs`), avec les sockets de `ws/*`.
+- `serve` : le service, `Reactor::turn(lignes) -> lignes`, joué par `cargo test` sans module.
+
+Les quatre plugins de voix tiennent en une ligne (`escouade_voice::serve::run("deepgram", …)`). Elle dépend du kit pour `i18n` et le protocole, et l'app la lie pour `wire`, `Provider`, `OnlineError` et les catalogues livrés : le registre doit décrire les cinq services sans démarrer leur module. **Elle est en MIT**, comme les trois crates du kit, alors que son code vient du cœur : `scripts/crates-io.test.ts` l'exige de toute crate publiée, et `escouade-acp` a fait pareil.
+
+**Le réacteur et l'ordre des tâches** (§8.22, §8.23). Le kit `0.1.0` n'a ni flux ni socket, et ne sait pas lancer une tâche qui survit à son appel : la voix n'y passe pas. Elle n'est pas exposée au piège du kit : `Host::run` refait un passage tant qu'une tâche est née ou que `stir` a été appelé, comme chez P5. Les trois états qu'une autre tâche attend l'appellent : la commande d'un flux, la fin d'un flux, l'annulation. `a_task_waiting_for_another_goes_on_in_the_same_turn` le prouve. **Rien de ce ticket ne doit monter dans le kit pour fonctionner** ; ESC-358 peut y faire monter `host.rs`, dont les deux copies diffèrent par `ws/*` et par ce que laisse un appel abandonné.
+
+**Ce qui a dû changer, en dehors du déplacement.**
+
+- **La dictée passe en PCM 16 bits.** Dix minutes de son (`MAX_LISTEN`) en flottants faisaient tomber le module, par manque de mémoire, là où le natif n'avait pas de limite. `voice/transcribe` porte maintenant `pcm16` : les mêmes octets au final dans le WAV, deux fois moins lourds, et chaque copie est lâchée avant la suivante. `a_long_dictation_goes_through_the_module` joue les dix minutes. Le direct reste en flottants : ses morceaux sont courts.
+- **`ws/open` dit ce que le service a répondu.** L'hôte ne donnait que `HTTP 429`, or le natif montre le message du service. Il donne maintenant `HTTP 429: <réponse>`, 512 caractères au plus, les valeurs des en-têtes (donc la clé) retirées, parce que ce texte va aussi au journal.
+- **Un appel abandonné referme ce qu'il ouvrait.** Une attente dépassée sur `ws/open` ou `net/stream` aurait laissé un socket ouvert dont personne ne sait le numéro. `Host` retient l'appel, et ferme ce que sa réponse nomme quand elle arrive.
+- **Un flux sans texte final se referme.** En natif, le socket restait ouvert jusqu'à ce que le service le ferme. Un plugin n'en a que 4 : le flux se ferme quand plus personne n'attend.
+- **`ws/send` attend sa réponse.** Un flux qui s'ouvre avec du son en attente peut remplir la file de 256 Kio : la trame est renvoyée 10 ms plus tard, à sa place.
+- **Les services démarrent à leur premier appel.** Le registre décrit les cinq par les tables de la crate (`ProcessVoiceService::described`), sans démarrer de module : sinon chaque lancement de l'app compilerait cinq modules pour une voix que personne n'utilise, le problème de P3. `a_service_of_the_registry_starts_its_module_at_its_first_call_only` le vérifie, et compare cette description à celle des modules.
+- **Plus de service dans le cœur.** `CoreService` est retiré, et avec lui le repli quand un plugin ne démarre pas : le service le dit à son premier appel (`Gone`, ou l'erreur du runtime), et le journal du plugin dit pourquoi. Tant qu'un des cinq n'a pas de plugin, ses réglages et sa clé restent atteignables. Un plugin coupé ou désinstallé retire son service.
+- **Les limites, déclarées par les cinq** : `fetchSeconds` 120, `fetchBytes` 32 Mio, `memoryBytes` 256 Mio, `turnSeconds` 10. Le natif n'avait pas de limite de durée totale ; une dictée qu'un service met plus de 120 s à lire échoue maintenant en le disant.
+
+**Ce qui diffère encore du natif, tout le reste étant au mot près.**
+
+- Le texte d'une erreur réseau vient de l'hôte et non de reqwest. Son type ne change pas : la phrase part par requête, ou le service dit qu'il ne répond pas.
+- 4 sockets et 8 flux par plugin, au lieu de pas de limite. Au-delà, le flux dit qu'il n'a pas ouvert et la phrase part par requête.
+- Une dictée annulée n'interrompt pas sa requête, `net/fetch` n'a pas d'annulation : l'hôte la mène à son terme et sa réponse se perd. Une lecture, elle, coupe son flux.
+- Le proxy n'est plus dans `Spec` : l'hôte suit Réglages › Réseau (§8.4.4). Les tests de proxy de la voix sont retirés, `plugins_net_tests.rs` les couvre pour `net/fetch`, `net/stream` et `ws/open`. Les fonctions du tunnel sont passées de `voice/live.rs` à `plugins/socket.rs`.
+- Vibe dit sa vraie version à `initialize` : le natif de `mistral` envoyait `clientInfo.version` vide, sa boucle n'appelant pas `greeted`.
+
+**La parité.** `tests/fixtures/plugins/parity/voice-<id>.json` tient ce que le natif de `6e0203a5` a fait, service par service, en 20 pas pour Groq et 28 pour les autres : la description, le catalogue, une dictée avec ses refus (401, 403, 429, 500, la clé citée par le service, un corps illisible, une réponse sans texte, le réseau coupé), une lecture à deux allures avec ses refus, la liste de l'API et le catalogue qui en sort, et un flux jusqu'à chacune de ses fins (parle, refusé, quota, échec, coupé, coupé à sa fin, muet). Pour chaque pas : la réponse, les requêtes au faux service, le son entendu, les textes partiels et ce que le socket a reçu. **Aucun écart**, requêtes comprises. Les bords de multipart, les temps et les messages réseau sont normalisés, et aucun chemin ni port n'y entre : elle tient sous Linux et macOS. `mistral.jsonl` ajoute Vibe à `plugins_harness_parity_tests.rs`, sur 11 enregistrements de `tests/fixtures/vibe/`. Sa seule retouche est le `clientInfo.version` ci-dessus.
+
+**Les tests de l'app.** `online_tests`, `live_tests`, `online_speech_tests`, `online_catalog_tests`, `conv_tests` et `tests` gardent leurs faux services et jouent le module : `service::of` passe, sous test, par `voice/plugged.rs`. Une route sans port (`Fetcher::fake`) laisse un plugin joindre tout port de `127.0.0.1`, en http et ws ; seuls les tests et un build de développement ont des routes. Il faut donc `sh scripts/plugins-wasm.sh` avant ces suites, ce que la CI fait déjà.
+
+**Le délai du direct, contre le « moins de 1 ms » du §8.4.4.** `int13_measure`, build de debug, Windows, 20 phrases par service : le texte final après la fin de la phrase, en médiane (99e centile).
+
+| Service | Cœur, avant | Process, avant | Module |
+| --- | --- | --- | --- |
+| OpenAI | 0,5 ms (0,8 à 3,2) | 1,0 ms (1,2 à 1,8) | 0,9 ms (1,4) |
+| Mistral | 0,5 ms (0,7 à 1,2) | 1,0 ms (1,3 à 1,7) | 0,9 ms (1,5) |
+| ElevenLabs | 0,5 ms (0,7 à 1,1) | 1,0 ms (1,2 à 2,3) | 0,8 ms (1,1) |
+| Deepgram | 0,6 ms (0,7 à 0,9) | 1,0 ms (1,5 à 1,8) | 1,6 ms (2,1) |
+
+La colonne « avant » vient de sept passes du même test sur un autre build, et le module d'une seule : **ce n'est pas une mesure à conditions égales**. Elle suffit à dire que le module tient la promesse pour OpenAI, Mistral et ElevenLabs. **Deepgram dépasse d'environ 1 ms le cœur d'avant.** Il envoie deux trames à la fin de la phrase et chaque `ws/send` attend sa réponse, ce qui est l'explication probable, pas une cause mesurée. Le seuil d'INT-0 (5 ms) reste tenu partout.
+
+**Le banc** `escouade-plugin test <court> --first-party --escouade 2.2.0 --wasm`, sur le module du dépôt : 6 réussis, 0 échoué, 5 sans objet pour chacun des cinq.
+
+**L'essai réel** (`int13_real_elevenlabs_through_the_plugin`, la clé d'ElevenLabs du poste, donnée à ce seul process), par le module : la dictée d'une phrase en 2,1 s, la mauvaise clé refusée, quatre textes partiels et le final 188 ms après la fin de la phrase, une phrase lue (premier son en 1,3 s, 41 morceaux), 9 modèles et 31 voix listés. **Pas rejoués** : OpenAI, Groq, Deepgram et Mistral, faute de clé sur ce poste, comme Vibe réel.
+
+**Second passage, après la publication.** Le store compile le dossier d'un plugin seul, et `rust::check` n'accepte que crates.io, dans le `Cargo.toml` comme dans le `Cargo.lock`, ni chemin, ni git, ni `[patch]`. Il ne trouvera donc `escouade-voice` que publiée. Or `escouade-voice` `0.1.0` et `escouade-acp` `0.1.1` ne sont pas sur crates.io : les cinq plugins n'ont ni `Cargo.lock` ni empreinte. Ils sont dans `AWAITING_PUBLICATION` (`plugins/ci-lib.mjs`), et le banc les joue sur le module du dépôt. Le second passage lance `sh scripts/plugin-lock.sh openai groq mistral elevenlabs deepgram`, note les empreintes Windows et Linux ici et les retire de la liste. Rien n'a été publié. `cargo publish --dry-run -p escouade-voice` passe : la crate compile contre le kit `0.1.0` de crates.io, et son paquet compile aussi pour `wasm32-wasip1`. Elle ne demande donc aucune nouvelle version du kit. **Aucun ajout à `rust_native.json`** à prévoir : la crate ne tire ni macro ni `build.rs` de plus que P5, ce que `plugin-lock.sh` confirmera.
+
+**Pas fait ici.** Ni étiquette ni soumission (Z1). `host.rs` reste en deux copies (OpenCode, voix) jusqu'à ESC-358. Le kit n'a pas changé.

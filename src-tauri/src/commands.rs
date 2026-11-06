@@ -3379,9 +3379,7 @@ pub async fn voice_online_catalog(
 ) -> Res<crate::voice::online_catalog::ServiceCatalog> {
     let svc = crate::voice::service::find(&service)
         .ok_or_else(|| format!("unknown service {service}"))?;
-    let p = svc
-        .provider()
-        .ok_or_else(|| format!("unknown service {service}"))?;
+    let p = crate::voice::online::Provider::of(&svc.id());
     let kept = voice.catalog.get(p);
     if !refresh && kept.is_some() {
         return Ok(svc.catalog(kept.as_ref(), None));
@@ -3402,7 +3400,7 @@ pub async fn voice_online_catalog(
             }
             Ok(svc.catalog(Some(&listed), None))
         }
-        Err(e) => Ok(svc.catalog(kept.as_ref(), Some(e.message(i18n::ui())))),
+        Err(e) => Ok(svc.catalog(kept.as_ref(), Some(e.message(i18n::kit(i18n::ui()))))),
     }
 }
 
@@ -3617,8 +3615,8 @@ pub fn speech_preview_online(
     lang: String,
 ) -> Res<()> {
     let settings = core.settings.read().clone();
-    let p = crate::voice::online::Provider::find(&service)
-        .ok_or_else(|| format!("unknown service {service}"))?;
+    let p =
+        crate::voice::online::find(&service).ok_or_else(|| format!("unknown service {service}"))?;
     let spec = crate::voice::online::keyed(p, &settings, &*core.secrets)
         .map_err(voice_err)?
         .with_model(&model);
@@ -3640,7 +3638,7 @@ pub fn speech_preview_online(
             preview_text(lang),
             settings.voice.speech.volume.clamp(0.0, 1.0),
         )
-        .map_err(|e| e.message(i18n::ui()))
+        .map_err(|e| e.message(i18n::kit(i18n::ui())))
 }
 
 fn preview_text(lang: &str) -> &'static str {

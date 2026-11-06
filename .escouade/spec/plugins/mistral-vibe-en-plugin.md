@@ -1,19 +1,19 @@
 ---
 title: "Mistral Vibe en plugin"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §4.5, §4.6, §4.13 (INT-10.6, INT-10.6 bis)","docs/TODO-2.2.md, INT-10.6","Ticket ESC-281","Ticket ESC-327","plugins/mistral/README.md"]
-tickets: ["ESC-281","ESC-327"]
+sources: ["docs/PLUGINS.md §4.5, §4.6, §4.13 (INT-10.6, INT-10.6 bis), §8.28","docs/TODO-2.2.md, INT-10.6","Ticket ESC-281","Ticket ESC-327","Ticket ESC-350","plugins/mistral/README.md"]
+tickets: ["ESC-281","ESC-327","ESC-350"]
 decisions: [57]
 compared: null
 ---
 
 # Mistral Vibe en plugin
 
-Mistral Vibe est le deuxième harness sorti du cœur (INT-10.6) : sa conversation passe par le plugin de première main `dev.escouade.mistral` (« Mistral », INT-10.6 bis), le même que sa voix : un seul process (`escouade-plugins mistral`), sa crate `escouade-plugin-mistral` dans `plugins/mistral/`, livré et signé avec l'app, au registre des plugins livrés et sur le store (sa page pointe vers ce dossier). Pour l'utilisateur, les agents, les textes et la vue terminal ne changent pas ; ses comptes partagent désormais le compte Mistral (voir *Le compte Mistral*).
+Mistral Vibe est le deuxième harness sorti du cœur (INT-10.6) : sa conversation passe par le plugin de première main `dev.escouade.mistral` (« Mistral », INT-10.6 bis), le même que sa voix. Depuis ESC-350 c'est un module (`run.wasm`) : une seule instance sert les deux côtés, sa crate `escouade-plugin-mistral` est dans `plugins/mistral/`, et il a sa version et sa page au store. Pour l'utilisateur, les agents, les textes et la vue terminal ne changent pas ; ses comptes partagent le compte Mistral (voir *Le compte Mistral*).
 
 ## Ce que fait le plugin
 
-- Il sert le harness que son manifeste déclare (`contributes.harnesses[0]`, id `vibe`, objet `acp` avec l'extension `vibe`) par le client ACP de `crates/escouade-acp`, comme Cursor CLI ; ce qui n'est pas `voice/*` va à ce client, dans son ordre.
+- Il sert le harness que son manifeste déclare (`contributes.harnesses[0]`, id `vibe`, objet `acp` avec l'extension `vibe`) par le client ACP de `crates/escouade-acp`, comme Cursor CLI ; ce qui n'est pas `voice/*` va à ce client, dans son ordre, et `voice/*` à la crate `escouade-voice`.
 - Le cœur trouve `vibe-acp`, écrit dans le `VIBE_HOME` de l'agent la confiance de son dossier et, pour un projet privé, le `denylist` de ses outils de fichiers (à côté des règles de « Pour cet agent »), demande au plugin la description du lancement (télémétrie coupée), la vérifie et lance Vibe.
 - Ce que Vibe écrit va au plugin et revient en éléments de la conversation, comme le faisait le cœur : session (nouvelle, reprise, ou copiée par `session/fork`), agent de Vibe pour le mode d'Escouade, modèle (laissé au défaut de Vibe s'il n'est pas offert) et réflexion pour l'effort, textes, raisonnements, outils sous les noms de Claude Code (`agents.spawn` en `Task`, outils MCP), permissions nommées par leur seul appel, questions en formulaire, tâches, fin de tour avec ce dont le coût de la session a grandi, limite de débit (« limité », reprise une minute après).
 - **Le mode Plan** est joué par Escouade (Vibe n'en a pas) : chaque message dit d'étudier sans rien changer, ses écritures sont refusées, ses derniers mots arrivent en carte « Plan à approuver » ; approuvé, Vibe le met en œuvre dans le mode choisi.
@@ -43,7 +43,7 @@ Coupé pour l'app ou pas chargé, le plugin n'est plus branché derrière Vibe, 
 
 ## Les harness livrés, une table
 
-Les harness sortis du cœur se branchent par une table (l'id du plugin, comment lancer son programme, ce que le cœur écrit avant le lancement) : Cursor CLI et Mistral Vibe y ont chacun une ligne, et les suivants n'y ajoutent que la leur.
+Les harness sortis du cœur se branchent par une table (l'id du plugin, ce que le cœur écrit avant le lancement) : Cursor CLI et Mistral Vibe y ont chacun une ligne, et les suivants n'y ajoutent que la leur.
 
 ## Différence assumée
 

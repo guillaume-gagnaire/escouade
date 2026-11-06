@@ -62,6 +62,7 @@ minisign-verify = "0.2"
 escouade-plugin-protocol = { path = "../crates/escouade-plugin-protocol" }
 # The ACP client (PLG-6), which the core's ACP harnesses share until they come out in process (INT-10).
 escouade-acp = { path = "../crates/escouade-acp" }
+escouade-voice = { path = "../crates/escouade-voice" }
 # What `escouade-plugin` does without the app's host, which the store's image builds alone (ESC-328): the manifest's
 # reader and the compiler of the `run.js` plugins.
 escouade-plugin-cli = { path = "../crates/escouade-plugin-cli" }
@@ -72,7 +73,6 @@ escouade-plugin-kit = { path = "../crates/escouade-plugin-kit" }
 # A module since its port (docs/PLUGINS.md §8.23): what is linked is its rules and its translation, for « Vue OpenCode » and
 # the accounts, until P8 (§8.2). It stays a member of the workspace of `plugins/`.
 escouade-plugin-opencode = { path = "../plugins/opencode" }
-escouade-plugin-mistral = { path = "../plugins/mistral" }
 # Copilot CLI and Codex: modules, whose translation the core's « Vue Copilot » and « Vue Codex » read as a library, with
 # their rules, until P8. They are members of the workspace of `plugins/`, not of this one.
 escouade-plugin-copilot = { path = "../plugins/copilot" }
@@ -178,7 +178,7 @@ members = [
     "../crates/escouade-plugin-cli",
     "../crates/escouade-plugin-kit",
     "../crates/escouade-acp",
-    "../plugins/mistral",
+    "../crates/escouade-voice",
 ]
 default-members = [
     ".",
@@ -186,7 +186,7 @@ default-members = [
     "../crates/escouade-plugin-cli",
     "../crates/escouade-plugin-kit",
     "../crates/escouade-acp",
-    "../plugins/mistral",
+    "../crates/escouade-voice",
 ]
 
 # The plugins depend on the kit by version, as the store reads them (their folder, published crates, the checksum of their
@@ -196,6 +196,7 @@ default-members = [
 escouade-plugin-protocol = { path = "../crates/escouade-plugin-protocol" }
 escouade-plugin-kit = { path = "../crates/escouade-plugin-kit" }
 escouade-acp = { path = "../crates/escouade-acp" }
+escouade-voice = { path = "../crates/escouade-voice" }
 
 [profile.dev.package."*"]
 debug = "line-tables-only"

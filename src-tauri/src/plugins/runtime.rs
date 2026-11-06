@@ -590,7 +590,7 @@ impl Runtime {
     }
 
     /// Réglages › Réseau, for the plugins in WASM: their next call follows it.
-    pub fn set_network(&self, network: crate::voice::online::Net) {
+    pub fn set_network(&self, network: super::socket::Net) {
         *self.net.read().network.write() = network;
     }
 

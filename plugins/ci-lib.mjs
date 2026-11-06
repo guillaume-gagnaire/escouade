@@ -19,7 +19,12 @@ export const AWAITING_PUBLICATION = {
   codex: 'escouade-acp 0.1.1',
   copilot: 'escouade-acp 0.1.1',
   cursor: 'escouade-acp 0.1.1',
+  deepgram: 'escouade-voice 0.1.0',
+  elevenlabs: 'escouade-voice 0.1.0',
   gemini: 'escouade-acp 0.1.1',
+  groq: 'escouade-voice 0.1.0',
+  mistral: 'escouade-voice 0.1.0, escouade-acp 0.1.1',
+  openai: 'escouade-voice 0.1.0',
 };
 
 /**

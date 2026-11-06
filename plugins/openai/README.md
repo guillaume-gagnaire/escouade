@@ -26,18 +26,20 @@ One key per service, in the system's keychain (`dictation-openai`).
 
 ## Run it alone
 
-Against a fake Escouade, with the app's own `escouade-plugin` and `escouade-plugins` (`cargo build --bin escouade-plugin --bin escouade-plugins` in `src-tauri/`):
+A module: `sh scripts/plugins-wasm.sh openai` builds it against this repository's crates, then, with the app's own `escouade-plugin`
+(`cargo build --bin escouade-plugin` in `src-tauri/`):
 
 ```sh
-escouade-plugin test plugins/openai --builtin
+escouade-plugin test plugins/openai --first-party --escouade 2.2.0 --wasm
 ```
 
-Its tests are those of the service as it was in the core (`src-tauri/src/voice/*_tests.rs`, against fake servers) and
-`src-tauri/src/voice/plugin_tests.rs` (the same fake servers, through the plugin's process).
+Its service is the crate `crates/escouade-voice`, and its tests are there (`cargo test -p escouade-voice`, the reactor played
+without a module) and in `src-tauri/src/voice/*_tests.rs` (the module, against fake servers). `voice/parity_tests.rs` compares it
+to what the native plugin did (`tests/fixtures/plugins/parity/voice-openai.json`).
 
 | File | What it is |
 | ---- | ---------- |
 | `escouade-plugin.json` | The manifest |
+| `Cargo.toml` | The crate `escouade-plugin-openai` |
+| `src/lib.rs` | One line: the service of `escouade-voice` |
 | `README.md` | This page |
-
-Its program is `src-tauri/src/bin/escouade-plugins/voice.rs` (`escouade-plugins voice-openai`), on `src-tauri/src/voice/plugin_guest.rs`.

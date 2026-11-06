@@ -268,6 +268,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "escouade-plugin-deepgram"
+version = "2.2.0"
+dependencies = [
+ "escouade-voice",
+ "serde_json",
+]
+
+[[package]]
+name = "escouade-plugin-elevenlabs"
+version = "2.2.0"
+dependencies = [
+ "escouade-voice",
+ "serde_json",
+]
+
+[[package]]
 name = "escouade-plugin-gemini"
 version = "2.2.0"
 dependencies = [
@@ -305,6 +321,14 @@ dependencies = [
  "parking_lot",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "escouade-plugin-groq"
+version = "2.2.0"
+dependencies = [
+ "escouade-voice",
+ "serde_json",
 ]
 
 [[package]]
@@ -353,6 +377,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "escouade-plugin-mistral"
+version = "2.2.0"
+dependencies = [
+ "escouade-acp",
+ "escouade-plugin-protocol",
+ "escouade-voice",
+ "serde_json",
+]
+
+[[package]]
+name = "escouade-plugin-openai"
+version = "2.2.0"
+dependencies = [
+ "escouade-voice",
+ "serde_json",
+]
+
+[[package]]
 name = "escouade-plugin-opencode"
 version = "2.2.0"
 dependencies = [
@@ -379,6 +421,17 @@ version = "2.2.0"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
+ "serde_json",
+]
+
+[[package]]
+name = "escouade-voice"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "escouade-plugin-kit",
+ "parking_lot",
+ "serde",
  "serde_json",
 ]
 

@@ -1729,12 +1729,9 @@ fn below_root(root: &str, path: &str) -> Option<String> {
 }
 
 impl<R: Runtime> Core<R> {
-    /// The voice services in line with the plugins that serve them (INT-13): started in the background.
+    /// The voice services in line with the plugins that serve them (INT-13): each module starts at its first call.
     pub(crate) fn sync_voice_plugins(&self) {
-        let (rt, plugins) = (self.plugin_runtime.clone(), self.plugins.clone());
-        tauri::async_runtime::spawn(async move {
-            crate::voice::plugin_host::sync_builtin(&rt, &plugins).await;
-        });
+        crate::voice::plugin_host::sync_builtin(&self.plugin_runtime, &self.plugins);
     }
 
     /// Reads the store's catalogue and revocation list again (through Réglages › Réseau), and
@@ -2055,7 +2052,7 @@ impl<R: Runtime> Core<R> {
         core.plugin_runtime
             .set_agent_env(core.settings.read().proxy_env());
         core.plugin_runtime
-            .set_network(crate::voice::online::Net::of(&core.settings.read()));
+            .set_network(crate::plugins::socket::Net::of(&core.settings.read()));
         let weak = core.weak();
         core.plugin_runtime
             .set_accounts(std::sync::Arc::new(move |plugin| {
@@ -2479,7 +2476,7 @@ impl<R: Runtime> Core<R> {
         self.plugin_runtime
             .set_agent_env(self.settings.read().proxy_env());
         self.plugin_runtime
-            .set_network(crate::voice::online::Net::of(&self.settings.read()));
+            .set_network(crate::plugins::socket::Net::of(&self.settings.read()));
         // The plugins the app gives start again with the language and the network of now.
         let env = self.builtin_env();
         if env != self.plugin_runtime.builtin_env() {

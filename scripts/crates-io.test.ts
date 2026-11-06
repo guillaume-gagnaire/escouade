@@ -6,7 +6,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = path.resolve(__dirname, '..');
-const CRATES = ['escouade-plugin-protocol', 'escouade-plugin-kit', 'escouade-acp'];
+const CRATES = ['escouade-plugin-protocol', 'escouade-plugin-kit', 'escouade-acp', 'escouade-voice'];
 const read = (...parts: string[]) => fs.readFileSync(path.join(ROOT, ...parts), 'utf8');
 const field = (toml: string, name: string) => new RegExp(`^${name} = (.+)$`, 'm').exec(toml)?.[1];
 const list = (value: string | undefined): string[] => JSON.parse(value ?? '[]');

@@ -220,7 +220,7 @@ jobs:
 
       - name: Clippy for wasm32-wasip1
         working-directory: src-tauri
-        run: cargo clippy --locked --target wasm32-wasip1 -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp -- -D warnings
+        run: cargo clippy --locked --target wasm32-wasip1 -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp -p escouade-voice -- -D warnings
 
       # The workspace of plugins/: the plugins in run.wasm, which that of src-tauri does not hold.
       - name: The modules' workspace, formatted and without warnings
@@ -238,13 +238,13 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
         run: |
-          cargo test --doc --locked -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp
-          cargo doc --no-deps --locked -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp
-          cargo doc --no-deps --locked --target wasm32-wasip1 -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp
+          cargo test --doc --locked -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp -p escouade-voice
+          cargo doc --no-deps --locked -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp -p escouade-voice
+          cargo doc --no-deps --locked --target wasm32-wasip1 -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp -p escouade-voice
 
       - name: The crates of crates.io can be published (a dry run)
         working-directory: src-tauri
-        run: cargo publish --dry-run --locked -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp
+        run: cargo publish --dry-run --locked -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp -p escouade-voice
 
   windows-lint:
     name: Windows (Rust format and Clippy)

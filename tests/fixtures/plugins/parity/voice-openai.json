@@ -1,0 +1,669 @@
+[
+  {
+    "at": "initialize",
+    "can": true
+  },
+  {
+    "answer": {
+      "jsonrpc": "2.0",
+      "result": {
+        "baseUrl": "https://api.openai.com",
+        "defaultModel": "gpt-4o-mini-transcribe",
+        "id": "openai",
+        "label": "OpenAI",
+        "liveModel": "gpt-live-transcribe",
+        "maxChars": 4000,
+        "offersLive": true
+      }
+    },
+    "at": "describe"
+  },
+  {
+    "answer": {
+      "jsonrpc": "2.0",
+      "result": {
+        "defaultSpeak": "gpt-4o-mini-tts",
+        "defaultTranscribe": "gpt-4o-mini-transcribe",
+        "defaultVoices": {
+          "gpt-4o-mini-tts|en": "marin",
+          "gpt-4o-mini-tts|fr": "marin",
+          "tts-1-hd|en": "alloy",
+          "tts-1-hd|fr": "alloy",
+          "tts-1|en": "alloy",
+          "tts-1|fr": "alloy"
+        },
+        "error": null,
+        "listed": false,
+        "listedAt": 0,
+        "service": "openai",
+        "speak": [
+          {
+            "id": "gpt-4o-mini-tts",
+            "label": "GPT-4o mini TTS",
+            "langs": [],
+            "note": "le plus naturel"
+          },
+          {
+            "id": "tts-1",
+            "label": "TTS-1",
+            "langs": [],
+            "note": "rapide"
+          },
+          {
+            "id": "tts-1-hd",
+            "label": "TTS-1 HD",
+            "langs": [],
+            "note": "qualité"
+          }
+        ],
+        "speed": [0.25, 4.0],
+        "transcribe": [
+          {
+            "id": "gpt-4o-mini-transcribe",
+            "label": "GPT-4o mini Transcribe",
+            "langs": [],
+            "note": "rapide"
+          },
+          {
+            "id": "gpt-4o-transcribe",
+            "label": "GPT-4o Transcribe",
+            "langs": [],
+            "note": "plus précis"
+          },
+          {
+            "id": "whisper-1",
+            "label": "Whisper",
+            "langs": [],
+            "note": ""
+          }
+        ],
+        "voiceExample": "marin, cedar, coral, alloy…",
+        "voices": null,
+        "voicesByModel": false,
+        "voicesUrl": "https://platform.openai.com/docs/guides/text-to-speech#voice-options"
+      }
+    },
+    "at": "catalog"
+  },
+  {
+    "answer": {
+      "jsonrpc": "2.0",
+      "result": {
+        "text": "Bonjour le monde"
+      }
+    },
+    "asked": [
+      {
+        "body": "93e3d46cf90886b4:24362",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "dictation"
+  },
+  {
+    "answer": {
+      "jsonrpc": "2.0",
+      "result": {
+        "text": "Bonjour le monde"
+      }
+    },
+    "asked": [
+      {
+        "body": "7f6722c0ccbfb169:24302",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "any language"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32102,
+        "message": ""
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "93e3d46cf90886b4:24362",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "key refused"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32102,
+        "message": ""
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "93e3d46cf90886b4:24362",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "key forbidden"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32105,
+        "message": "trop de requêtes"
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "93e3d46cf90886b4:24362",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "quota"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32104,
+        "message": "500|en panne"
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "93e3d46cf90886b4:24362",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "failure"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32104,
+        "message": "400|mauvaise clé ***"
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "93e3d46cf90886b4:24362",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "the key said"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32104,
+        "message": "200|<html>"
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "93e3d46cf90886b4:24362",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "no json"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32104,
+        "message": "200|réponse sans texte"
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "93e3d46cf90886b4:24362",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "no text"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32103,
+        "message": "(network)"
+      },
+      "jsonrpc": "2.0"
+    },
+    "at": "cut"
+  },
+  {
+    "answer": {
+      "jsonrpc": "2.0",
+      "result": {
+        "firstMs": "(a time)"
+      }
+    },
+    "asked": [
+      {
+        "body": "{\"input\":\"Bonjour, ça va ?\",\"instructions\":\"Lis en français, d’une voix naturelle.\",\"model\":\"gpt-4o-mini-tts\",\"response_format\":\"pcm\",\"voice\":\"marin\"}",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "application/json"
+        },
+        "line": "POST /v1/audio/speech HTTP/1.1"
+      }
+    ],
+    "at": "speak: read",
+    "heard": {
+      "pcm": "f6782947a600d0a0:9600",
+      "rates": [24000]
+    }
+  },
+  {
+    "answer": {
+      "jsonrpc": "2.0",
+      "result": {
+        "firstMs": "(a time)"
+      }
+    },
+    "asked": [
+      {
+        "body": "{\"input\":\"Bonjour, ça va ?\",\"instructions\":\"Read in English, in a natural voice.\",\"model\":\"gpt-4o-mini-tts\",\"response_format\":\"pcm\",\"speed\":1.2999999523162842,\"voice\":\"marin\"}",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "application/json"
+        },
+        "line": "POST /v1/audio/speech HTTP/1.1"
+      }
+    ],
+    "at": "speak: read faster",
+    "heard": {
+      "pcm": "f6782947a600d0a0:9600",
+      "rates": [24000]
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32106,
+        "message": "422|voix inconnue"
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "{\"input\":\"Bonjour, ça va ?\",\"instructions\":\"Lis en français, d’une voix naturelle.\",\"model\":\"gpt-4o-mini-tts\",\"response_format\":\"pcm\",\"voice\":\"marin\"}",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "application/json"
+        },
+        "line": "POST /v1/audio/speech HTTP/1.1"
+      }
+    ],
+    "at": "speak: voice refused",
+    "heard": {
+      "pcm": "cbf29ce484222325:0",
+      "rates": []
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32102,
+        "message": ""
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "{\"input\":\"Bonjour, ça va ?\",\"instructions\":\"Lis en français, d’une voix naturelle.\",\"model\":\"gpt-4o-mini-tts\",\"response_format\":\"pcm\",\"voice\":\"marin\"}",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "application/json"
+        },
+        "line": "POST /v1/audio/speech HTTP/1.1"
+      }
+    ],
+    "at": "speak: key refused",
+    "heard": {
+      "pcm": "cbf29ce484222325:0",
+      "rates": []
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32105,
+        "message": "trop"
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "{\"input\":\"Bonjour, ça va ?\",\"instructions\":\"Lis en français, d’une voix naturelle.\",\"model\":\"gpt-4o-mini-tts\",\"response_format\":\"pcm\",\"voice\":\"marin\"}",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "application/json"
+        },
+        "line": "POST /v1/audio/speech HTTP/1.1"
+      }
+    ],
+    "at": "speak: quota",
+    "heard": {
+      "pcm": "cbf29ce484222325:0",
+      "rates": []
+    }
+  },
+  {
+    "answer": {
+      "jsonrpc": "2.0",
+      "result": {
+        "firstMs": "(a time)"
+      }
+    },
+    "asked": [
+      {
+        "body": "{\"input\":\"Bonjour, ça va ?\",\"instructions\":\"Lis en français, d’une voix naturelle.\",\"model\":\"gpt-4o-mini-tts\",\"response_format\":\"pcm\",\"voice\":\"marin\"}",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "application/json"
+        },
+        "line": "POST /v1/audio/speech HTTP/1.1"
+      }
+    ],
+    "at": "speak: no sound",
+    "heard": {
+      "pcm": "08f74707b5924930:2",
+      "rates": [24000]
+    }
+  },
+  {
+    "answer": {
+      "jsonrpc": "2.0",
+      "result": {
+        "at": "(a time)",
+        "speak": [
+          {
+            "id": "gpt-4o-mini-tts",
+            "label": "GPT-4o mini TTS",
+            "langs": [],
+            "note": "le plus naturel"
+          },
+          {
+            "id": "tts-1",
+            "label": "TTS-1",
+            "langs": [],
+            "note": "rapide"
+          },
+          {
+            "id": "voxtral-mini-tts-2603",
+            "label": "voxtral-mini-tts-2603",
+            "langs": [],
+            "note": ""
+          }
+        ],
+        "transcribe": [
+          {
+            "id": "gpt-4o-transcribe",
+            "label": "GPT-4o Transcribe",
+            "langs": [],
+            "note": "plus précis"
+          },
+          {
+            "id": "whisper-1",
+            "label": "Whisper",
+            "langs": [],
+            "note": ""
+          },
+          {
+            "id": "whisper-large-v3",
+            "label": "whisper-large-v3",
+            "langs": [],
+            "note": ""
+          }
+        ],
+        "voices": null
+      }
+    },
+    "asked": [
+      {
+        "body": "",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef"
+        },
+        "line": "GET /v1/models HTTP/1.1"
+      }
+    ],
+    "at": "list",
+    "catalog": {
+      "jsonrpc": "2.0",
+      "result": {
+        "defaultSpeak": "gpt-4o-mini-tts",
+        "defaultTranscribe": "gpt-4o-mini-transcribe",
+        "defaultVoices": {
+          "gpt-4o-mini-tts|en": "marin",
+          "gpt-4o-mini-tts|fr": "marin",
+          "tts-1-hd|en": "alloy",
+          "tts-1-hd|fr": "alloy",
+          "tts-1|en": "alloy",
+          "tts-1|fr": "alloy"
+        },
+        "error": null,
+        "listed": false,
+        "listedAt": 0,
+        "service": "openai",
+        "speak": [
+          {
+            "id": "gpt-4o-mini-tts",
+            "label": "GPT-4o mini TTS",
+            "langs": [],
+            "note": "le plus naturel"
+          },
+          {
+            "id": "tts-1",
+            "label": "TTS-1",
+            "langs": [],
+            "note": "rapide"
+          },
+          {
+            "id": "tts-1-hd",
+            "label": "TTS-1 HD",
+            "langs": [],
+            "note": "qualité"
+          }
+        ],
+        "speed": [0.25, 4.0],
+        "transcribe": [
+          {
+            "id": "gpt-4o-mini-transcribe",
+            "label": "GPT-4o mini Transcribe",
+            "langs": [],
+            "note": "rapide"
+          },
+          {
+            "id": "gpt-4o-transcribe",
+            "label": "GPT-4o Transcribe",
+            "langs": [],
+            "note": "plus précis"
+          },
+          {
+            "id": "whisper-1",
+            "label": "Whisper",
+            "langs": [],
+            "note": ""
+          }
+        ],
+        "voiceExample": "marin, cedar, coral, alloy…",
+        "voices": null,
+        "voicesByModel": false,
+        "voicesUrl": "https://platform.openai.com/docs/guides/text-to-speech#voice-options"
+      }
+    }
+  },
+  {
+    "answer": {
+      "jsonrpc": "2.0",
+      "result": {
+        "text": "bonjour tout le monde"
+      }
+    },
+    "at": "live: speaks",
+    "partials": ["bonjour"],
+    "streams": [
+      {
+        "audio": "367b293e0333838a:14400",
+        "commits": 1,
+        "ended": true,
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef"
+        },
+        "line": "GET /v1/realtime?intent=transcription HTTP/1.1",
+        "texts": [
+          "{\"session\":{\"audio\":{\"input\":{\"format\":{\"rate\":24000,\"type\":\"audio/pcm\"},\"transcription\":{\"language\":\"fr\",\"model\":\"gpt-live-transcribe\"},\"turn_detection\":null}},\"type\":\"transcription\"},\"type\":\"session.update\"}",
+          "{\"audio\":\"…\",\"type\":\"input_audio_buffer.append\"}",
+          "{\"audio\":\"…\",\"type\":\"input_audio_buffer.append\"}",
+          "{\"audio\":\"…\",\"type\":\"input_audio_buffer.append\"}",
+          "{\"type\":\"input_audio_buffer.commit\"}"
+        ]
+      }
+    ]
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32102,
+        "message": ""
+      },
+      "jsonrpc": "2.0"
+    },
+    "at": "live: refused",
+    "partials": [],
+    "streams": ["GET /v1/realtime?intent=transcription HTTP/1.1"]
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32105,
+        "message": "invalid key"
+      },
+      "jsonrpc": "2.0"
+    },
+    "at": "live: quota",
+    "partials": [],
+    "streams": ["GET /v1/realtime?intent=transcription HTTP/1.1"]
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32104,
+        "message": "500|invalid key"
+      },
+      "jsonrpc": "2.0"
+    },
+    "at": "live: failure",
+    "partials": [],
+    "streams": ["GET /v1/realtime?intent=transcription HTTP/1.1"]
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32104,
+        "message": "0|boom"
+      },
+      "jsonrpc": "2.0"
+    },
+    "at": "live: fails",
+    "partials": [],
+    "streams": ["GET /v1/realtime?intent=transcription HTTP/1.1"]
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32103,
+        "message": "(network)"
+      },
+      "jsonrpc": "2.0"
+    },
+    "at": "live: closes",
+    "partials": [],
+    "streams": ["GET /v1/realtime?intent=transcription HTTP/1.1"]
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32103,
+        "message": "(network)"
+      },
+      "jsonrpc": "2.0"
+    },
+    "at": "live: closes at its end",
+    "partials": ["bonjour"],
+    "streams": ["GET /v1/realtime?intent=transcription HTTP/1.1"]
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32103,
+        "message": "(network)"
+      },
+      "jsonrpc": "2.0"
+    },
+    "at": "live: mute",
+    "partials": ["bonjour"],
+    "streams": [
+      {
+        "audio": "367b293e0333838a:14400",
+        "commits": 1,
+        "ended": true,
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef"
+        },
+        "line": "GET /v1/realtime?intent=transcription HTTP/1.1",
+        "texts": [
+          "{\"session\":{\"audio\":{\"input\":{\"format\":{\"rate\":24000,\"type\":\"audio/pcm\"},\"transcription\":{\"language\":\"fr\",\"model\":\"gpt-live-transcribe\"},\"turn_detection\":null}},\"type\":\"transcription\"},\"type\":\"session.update\"}",
+          "{\"audio\":\"…\",\"type\":\"input_audio_buffer.append\"}",
+          "{\"audio\":\"…\",\"type\":\"input_audio_buffer.append\"}",
+          "{\"audio\":\"…\",\"type\":\"input_audio_buffer.append\"}",
+          "{\"type\":\"input_audio_buffer.commit\"}"
+        ]
+      }
+    ]
+  }
+]

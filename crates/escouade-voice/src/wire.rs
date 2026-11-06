@@ -3,9 +3,9 @@
 //!
 //! The app calls, the plugin answers (`voice/*`); the plugin tells the app what comes while it works with notifications
 //! (`voice/partial`: the text understood so far, `voice/audio`: a piece of sound). The sound crosses as base64 of
-//! 32-bit floats (the dictation, the stream) or of 16-bit samples (the synthesis).
+//! 32-bit floats (the stream) or of 16-bit samples (the dictation, whose ten minutes must fit a module, and the synthesis).
 
-use super::online::{Net, OnlineError, Provider, Spec};
+use crate::online::{OnlineError, Provider, Spec};
 use base64::Engine;
 use serde_json::{json, Value};
 
@@ -83,39 +83,21 @@ pub fn pcm16_from_b64(text: &str) -> Option<Vec<f32>> {
     )
 }
 
-/// What the plugin is told of a `Spec`: its key, where the service is, the model, the model of the stream, and the
-/// network settings. The key goes to the plugin of this service alone.
+/// What the plugin is told of a `Spec`: its key, where the service is, the model and the model of the stream. The key goes
+/// to the plugin of this service alone. The network settings are not said: the host of the plugin follows them.
 pub fn spec_json(spec: &Spec) -> Value {
     json!({
         "model": spec.model,
         "key": spec.key,
         "base": spec.base,
         "live": spec.live,
-        "net": { "proxy": spec.net.proxy, "noProxy": spec.net.no_proxy, "insecure": spec.net.insecure },
     })
 }
 
 /// The `Spec` of what the app said, for the service `provider`. `base` empty: the service's own address.
-pub fn spec_from(provider: Provider, v: &Value) -> Result<Spec, String> {
+pub fn spec_from(provider: Provider, v: &Value) -> Spec {
     let text = |k: &str| v.get(k).and_then(Value::as_str).unwrap_or("").to_string();
-    let net = v.get("net").cloned().unwrap_or(Value::Null);
-    let net = Net {
-        proxy: net["proxy"].as_str().unwrap_or("").to_string(),
-        no_proxy: net["noProxy"].as_str().unwrap_or("").to_string(),
-        insecure: net["insecure"].as_bool().unwrap_or(false),
-    };
-    let mut b = reqwest::Client::builder()
-        .connect_timeout(std::time::Duration::from_secs(15))
-        .read_timeout(std::time::Duration::from_secs(60))
-        .danger_accept_invalid_certs(net.insecure);
-    if !net.proxy.is_empty() {
-        let proxy = reqwest::Proxy::all(&net.proxy)
-            .map_err(|e| e.to_string())?
-            .no_proxy(reqwest::NoProxy::from_string(&net.no_proxy));
-        b = b.proxy(proxy);
-    }
-    let client = b.build().map_err(|e| e.to_string())?;
-    let mut spec = Spec::new(provider, text("key"), client);
+    let mut spec = Spec::new(provider, text("key"));
     if !text("base").is_empty() {
         spec.base = text("base");
     }
@@ -127,8 +109,7 @@ pub fn spec_from(provider: Provider, v: &Value) -> Result<Spec, String> {
         .and_then(Value::as_str)
         .filter(|m| !m.is_empty())
         .map(String::from);
-    spec.net = net;
-    Ok(spec)
+    spec
 }
 
 /// An error of the service as a refusal: its code and its message (the status in front, for those that carry one).

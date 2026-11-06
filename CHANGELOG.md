@@ -13,6 +13,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - GitHub, GitLab, Bitbucket, Gitea et Azure DevOps aussi : tes PR, ta CI, tes relectures et tes déploiements marchent comme avant, sans process à eux. Un journal de CI de plus de 8 Mio se dit trop long au lieu de s’afficher.
 - Les plugins Codex, Copilot CLI, Cursor CLI et Gemini CLI tournent à leur tour en WASM : tes agents conversent comme avant, et leur page dit ce qu’ils lisent.
 - OpenCode aussi : ses agents conversent comme avant, son plugin isolé ne joint que le serveur local qu’Escouade a lancé pour eux.
+- La voix en ligne et Mistral Vibe aussi : OpenAI, Groq, Mistral, ElevenLabs et Deepgram dictent, transcrivent en direct et lisent comme avant, et chacun ne démarre que quand tu t’en sers. Si le plugin d’un service ne répond pas, Escouade le dit, sans repli caché.
 - La documentation dit comment écrire un plugin en TypeScript ou en Rust, de `npm create escouade-plugin -- --kind rust` à la publication sur le store : ce que chaque capacité permet, chaque appel avec un exemple dans les deux langages, et le kit Rust.
 - isola tourne désormais comme un plugin isolé en WASM : Escouade lance pour lui `isola ls`, `down` et `destroy`, et rien d’autre. Dans un projet privé, il faut maintenant l’activer, comme tout plugin.
 - Le plugin Antigravity CLI tourne désormais lui aussi en WASM, sans process à lui : ses agents se comportent comme avant, et une lenteur d’`agy` à écrire son transcript ne retient plus les autres agents.

@@ -1,0 +1,32 @@
+[package]
+name = "escouade-voice"
+version = "0.1.0"
+description = "Escouade's voice services on line (OpenAI, Groq, Mistral, ElevenLabs, Deepgram): the dictation, the live transcription and the reading, as a plugin in WASM serves them"
+authors = ["Guillaume Gagnaire"]
+license = "MIT"
+repository = "https://github.com/guillaume-gagnaire/escouade"
+homepage = "https://escouade.dev"
+documentation = "https://docs.rs/escouade-voice"
+readme = "README.md"
+keywords = ["escouade","voice","transcription","wasm","websocket"]
+categories = ["multimedia::audio","api-bindings","wasm"]
+include = ["src/**/*.rs", "Cargo.toml", "README.md", "LICENSE"]
+edition = "2021"
+rust-version = "1.88"
+workspace = "../../src-tauri"
+
+# The services of `voice/*` (docs/PLUGINS.md §1.4, §4.13, « Ce que P6 a construit »), without a process nor a runtime of
+# their own: what each asks and what its answers mean, then a reactor on the events of the host (`net/fetch`, `net/stream`,
+# `ws/*`, `timer/*`). The four plugins of voice are this crate and one line; Mistral serves its harness beside it. The app
+# links it for what crosses the wire, the names of the services and their catalogs.
+[dependencies]
+escouade-plugin-kit = { path = "../escouade-plugin-kit", version = "0.1.0" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+parking_lot = "0.12"
+
+# docs.rs builds the two targets a plugin compiles for.
+[package.metadata.docs.rs]
+default-target = "x86_64-unknown-linux-gnu"
+targets = ["x86_64-unknown-linux-gnu", "wasm32-wasip1"]

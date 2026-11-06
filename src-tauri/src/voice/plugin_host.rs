@@ -1,5 +1,5 @@
 //! A voice service that a plugin serves, in the app (INT-13, ESC-285; `docs/PLUGINS.md` §4.13): `ProcessVoiceService:
-//! VoiceService` answers the core's calls by JSON-RPC to the plugin's process (`voice/*`, see `wire`), as
+//! VoiceService` answers the core's calls by JSON-RPC to the plugin's module (`voice/*`, `escouade_voice::wire`), as
 //! `ProcessTicketSource` does for the tickets, so that the dictation, the stream, the reading and the catalog do not
 //! see the difference. The key stays in the app's keychain (`dictation-<id>`): each call carries it to the plugin of
 //! this service, which keeps nothing.
@@ -10,8 +10,8 @@ use super::online_catalog::{Listed, ServiceCatalog};
 use super::online_speech::SpeakChoice;
 use super::service::{LocalFuture, SendFuture, VoiceService};
 use super::speech::Audio;
-use super::wire;
 use crate::plugins::runtime::{CallError, Runtime};
+use escouade_voice::wire;
 use parking_lot::Mutex;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -42,8 +42,27 @@ pub struct ProcessVoiceService {
 }
 
 impl ProcessVoiceService {
-    /// Starts the plugin if it does not run, asks it what it is, and listens to it. The service is not in the
-    /// registry yet: `service::register` puts it there.
+    /// One of Escouade's five, as `escouade_voice` describes it, listened to without starting its module: its first call
+    /// does, so that a start of the app pays nothing for a voice nobody uses. The service is not in the registry yet:
+    /// `service::register` puts it there.
+    pub fn described(rt: Arc<Runtime>, plugin: &str, provider: Provider) -> Arc<Self> {
+        let (partials, sounds) = Self::listen(&rt, plugin);
+        Arc::new(Self {
+            rt,
+            plugin: plugin.to_string(),
+            provider,
+            label: provider.label().to_string(),
+            default_model: provider.model().to_string(),
+            offers_live: provider.offers_live(),
+            live_model: Some(provider.live_model("")).filter(|m| !m.is_empty()),
+            max_chars: escouade_voice::speech::max_chars(provider),
+            partials,
+            sounds,
+        })
+    }
+
+    /// Starts the plugin if it does not run, asks it what it is, and listens to it.
+    #[cfg(test)]
     pub async fn connect(rt: Arc<Runtime>, plugin: &str) -> Result<Arc<Self>, CallError> {
         let d = rt.call(plugin, wire::DESCRIBE, json!({})).await?;
         let text = |k: &str| d.get(k).and_then(Value::as_str).unwrap_or("").to_string();
@@ -51,32 +70,11 @@ impl ProcessVoiceService {
         if id.is_empty() {
             return Err(CallError::Invalid("voice/describe: no id".into()));
         }
-        let partials: Arc<Partials> = Arc::default();
-        let sounds: Arc<Sounds> = Arc::default();
-        {
-            let (partials, sounds) = (partials.clone(), sounds.clone());
-            rt.on_notification(plugin, move |method, params| match method {
-                wire::PARTIAL => {
-                    let stream = params["stream"].as_str().unwrap_or("");
-                    let found = partials.lock().get(stream).cloned();
-                    if let Some(p) = found {
-                        (p.lock())(params["text"].as_str().unwrap_or("").to_string());
-                    }
-                }
-                wire::AUDIO => {
-                    let call = params["call"].as_str().unwrap_or("");
-                    let rate = params["rate"].as_u64().unwrap_or(24_000) as u32;
-                    let samples = params["pcm"].as_str().and_then(wire::pcm16_from_b64);
-                    if let (Some(samples), Some(tx)) = (samples, sounds.lock().get(call)) {
-                        let _ = tx.send(Audio { samples, rate });
-                    }
-                }
-                _ => {}
-            });
-        }
+        let (partials, sounds) = Self::listen(&rt, plugin);
         Ok(Arc::new(Self {
             rt,
             plugin: plugin.to_string(),
+            // The id is the service's, not the plugin's.
             provider: Provider::of(&id),
             label: text("label"),
             default_model: text("defaultModel"),
@@ -85,8 +83,33 @@ impl ProcessVoiceService {
             max_chars: d["maxChars"].as_u64().unwrap_or(1000) as usize,
             partials,
             sounds,
-            // The id is the service's, not the plugin's.
         }))
+    }
+
+    /// What the plugin tells while it works goes to whom waits for it.
+    fn listen(rt: &Runtime, plugin: &str) -> (Arc<Partials>, Arc<Sounds>) {
+        let partials: Arc<Partials> = Arc::default();
+        let sounds: Arc<Sounds> = Arc::default();
+        let (texts, audio) = (partials.clone(), sounds.clone());
+        rt.on_notification(plugin, move |method, params| match method {
+            wire::PARTIAL => {
+                let stream = params["stream"].as_str().unwrap_or("");
+                let found = texts.lock().get(stream).cloned();
+                if let Some(p) = found {
+                    (p.lock())(params["text"].as_str().unwrap_or("").to_string());
+                }
+            }
+            wire::AUDIO => {
+                let call = params["call"].as_str().unwrap_or("");
+                let rate = params["rate"].as_u64().unwrap_or(24_000) as u32;
+                let samples = params["pcm"].as_str().and_then(wire::pcm16_from_b64);
+                if let (Some(samples), Some(tx)) = (samples, audio.lock().get(call)) {
+                    let _ = tx.send(Audio { samples, rate });
+                }
+            }
+            _ => {}
+        });
+        (partials, sounds)
     }
 
     /// The error of a failed call, as the core says it.
@@ -162,9 +185,6 @@ impl VoiceService for ProcessVoiceService {
     fn label(&self) -> String {
         self.label.clone()
     }
-    fn provider(&self) -> Option<Provider> {
-        None
-    }
     fn account_entry(&self) -> String {
         self.provider.entry()
     }
@@ -184,7 +204,7 @@ impl VoiceService for ProcessVoiceService {
             "call": call,
             "spec": wire::spec_json(spec),
             "language": language,
-            "pcm": wire::floats_to_b64(samples),
+            "pcm16": wire::pcm16_to_b64(samples),
         });
         let (rt, plugin, cancel) = (self.rt.clone(), self.plugin.clone(), cancel.clone());
         let r = block(async move {
@@ -365,31 +385,21 @@ impl VoiceService for ProcessVoiceService {
 /// The ids of the services whose plugins the app gives (`dev.escouade.<id>`).
 pub const BUILTIN: [&str; 5] = ["openai", "groq", "mistral", "elevenlabs", "deepgram"];
 
-/// Puts the registry of the voice services in line with the plugins' switches: a plugin that is on serves its service
-/// (started, asked what it is, registered); one that is off takes its service away, and its process stops. A plugin
-/// that does not start leaves the core's own service for this id answering, and the journal of the plugin says why.
-pub async fn sync_builtin(rt: &Arc<Runtime>, plugins: &crate::plugins::Plugins) {
+/// Puts the registry of the voice services in line with the plugins' switches: a plugin that is on serves its service; one
+/// that is off or uninstalled takes its service away, and it stops. A plugin that does not start says so at the first call
+/// that needs it, and its journal says why.
+pub fn sync_builtin(rt: &Arc<Runtime>, plugins: &crate::plugins::Plugins) {
     for id in BUILTIN {
         let plugin = format!("dev.escouade.{id}");
         let on = plugins.choices(&plugin).map(|c| c.enabled).unwrap_or(false);
         if !on {
-            if super::online::Provider::core(id).is_some() && plugins.choices(&plugin).is_some() {
-                super::service::hide(id);
-            }
+            super::service::hide(id);
             rt.stop(&plugin);
             continue;
         }
-        if super::service::is_plugin(id) {
-            continue;
-        }
-        match ProcessVoiceService::connect(rt.clone(), &plugin).await {
-            Ok(service) => super::service::register(service),
-            Err(e) => {
-                log::warn!(
-                    "voice: the plugin {plugin} did not start: {e}; the core's service answers"
-                );
-                super::service::unregister(id);
-            }
+        if !super::service::is_plugin(id) {
+            let service = ProcessVoiceService::described(rt.clone(), &plugin, Provider::of(id));
+            super::service::register(service);
         }
     }
 }

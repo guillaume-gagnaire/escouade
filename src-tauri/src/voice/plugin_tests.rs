@@ -1,64 +1,21 @@
-//! The five voice services as plugins (INT-13, ESC-285), played through their processes against the same fake servers
-//! as the core's own tests (`online_tests`, `live_tests`, `online_speech_tests`): what the service says through
-//! `ProcessVoiceService` is what `CoreService` says. Needs `escouade-plugins` built beside the tests
-//! (`cargo build --bin escouade-plugins`).
+//! The five voice services as plugins (INT-13, ESC-285, ESC-350), played by their modules against the same fake servers as
+//! the tests of the dictation, of a stream and of a reading. `sh scripts/plugins-wasm.sh` builds them.
 
 use super::live::tests::{fake, speech, Mode};
 use super::live::{LiveStream, FINAL_WAIT};
 use super::online::tests::{serve, KEY};
 use super::online::{OnlineError, Provider, Spec, PROVIDERS};
 use super::online_speech::SpeakChoice;
-use super::plugin_host::ProcessVoiceService;
-use super::service::{CoreService, VoiceService};
-use crate::engine::bench::bench_dir;
-use crate::integrations::secrets::MemoryStore;
-use crate::paths::DataDir;
-use crate::plugins::builtin;
-use crate::plugins::runtime::{Limits, Runtime};
-use crate::plugins::Plugins;
+use super::plugged::{runtime, through};
+use super::service::VoiceService;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-const VERSION: &str = "2.2.0";
-
-fn app_dir() -> std::path::PathBuf {
-    let exe = std::env::current_exe().unwrap();
-    let dir = exe.parent().unwrap().parent().unwrap().to_path_buf();
-    assert!(
-        dir.join(builtin::program_name()).is_file(),
-        "{} is not built beside the tests (cargo build --bin escouade-plugins)",
-        dir.join(builtin::program_name()).display()
-    );
-    dir
-}
-
-fn runtime(name: &str) -> Arc<Runtime> {
-    let data = DataDir::new(bench_dir(&format!("int13-{name}")).join("data"));
-    let plugins = Plugins::load_in(data.clone(), VERSION, app_dir());
-    Runtime::new(
-        plugins,
-        Arc::new(MemoryStore::default()),
-        &data,
-        VERSION,
-        Limits {
-            initialize: Duration::from_secs(20),
-            ..Limits::default()
-        },
-    )
-}
-
-/// The service `p` as its plugin serves it.
-async fn through(rt: &Arc<Runtime>, p: Provider) -> Arc<ProcessVoiceService> {
-    ProcessVoiceService::connect(rt.clone(), &format!("dev.escouade.{}", p.id()))
-        .await
-        .unwrap_or_else(|e| panic!("{}: {e}", p.id()))
-}
-
 fn spec(p: Provider, base: &str) -> Spec {
     Spec {
         base: base.into(),
-        ..Spec::new(p, KEY.into(), reqwest::Client::new())
+        ..Spec::new(p, KEY.into())
     }
 }
 
@@ -67,20 +24,57 @@ async fn each_plugin_describes_the_service_the_core_had() {
     let rt = runtime("describe");
     for p in PROVIDERS {
         let svc = through(&rt, p).await;
-        let core = CoreService(p);
-        assert_eq!(svc.id(), core.id());
-        assert_eq!(svc.label(), core.label());
-        assert_eq!(svc.account_entry(), core.account_entry());
-        assert_eq!(svc.default_model(), core.default_model());
-        assert_eq!(svc.offers_live(), core.offers_live());
-        assert_eq!(svc.live_model("x"), core.live_model("x"));
-        assert_eq!(svc.max_chars(), core.max_chars());
+        assert_eq!(svc.id(), p.id());
+        assert_eq!(svc.label(), p.label());
+        assert_eq!(svc.account_entry(), p.entry());
+        assert_eq!(svc.default_model(), p.model());
+        assert_eq!(svc.offers_live(), p.offers_live());
+        assert_eq!(svc.live_model("x"), p.live_model("x"));
+        assert_eq!(svc.max_chars(), escouade_voice::speech::max_chars(p));
         let (a, b) = (svc.clone(), p);
         let catalog = tokio::task::spawn_blocking(move || a.catalog(None, None))
             .await
             .unwrap();
-        assert_eq!(catalog, core.catalog(None, None), "{}", b.id());
+        assert_eq!(
+            catalog,
+            super::online_catalog::catalog(p, None, None),
+            "{}",
+            b.id()
+        );
     }
+    rt.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_service_of_the_registry_starts_its_module_at_its_first_call_only() {
+    use crate::plugins::runtime::PhaseName;
+    let told = runtime("told");
+    let rt = runtime("lazy");
+    for p in PROVIDERS {
+        let plugin = format!("dev.escouade.{}", p.id());
+        let svc = super::plugin_host::ProcessVoiceService::described(rt.clone(), &plugin, p);
+        let module = through(&told, p).await;
+        // What the settings read of it starts nothing, and is what its module says.
+        assert_eq!(svc.id(), module.id());
+        assert_eq!(svc.label(), module.label());
+        assert_eq!(svc.default_model(), module.default_model());
+        assert_eq!(svc.offers_live(), module.offers_live());
+        assert_eq!(svc.live_model("x"), module.live_model("x"));
+        assert_eq!(svc.max_chars(), module.max_chars());
+        assert!(
+            matches!(rt.status(&plugin).phase, PhaseName::Idle),
+            "{plugin}"
+        );
+        let catalog = tokio::task::spawn_blocking(move || svc.catalog(None, None))
+            .await
+            .unwrap();
+        assert!(!catalog.speak.is_empty());
+        assert!(
+            matches!(rt.status(&plugin).phase, PhaseName::Running),
+            "{plugin}"
+        );
+    }
+    told.shutdown();
     rt.shutdown();
 }
 
@@ -148,18 +142,19 @@ async fn the_live_transcription_goes_through_the_plugin_and_says_what_the_core_s
                 .finish(FINAL_WAIT)
                 .unwrap_or_else(|e| panic!("{}: {e}", p.id()));
 
-            let f2 = fake(p, Mode::Speaks);
-            let stream = LiveStream::open(&f2.spec(p), "fr", 48_000, Box::new(|_| {}));
-            for frame in sound.chunks(960) {
-                stream.push(frame);
-            }
-            let direct = stream.finish(FINAL_WAIT).unwrap();
-            assert_eq!(via.text, direct.text, "{}", p.id());
-            // The same sound reached the service, in the same bytes.
-            assert_eq!(
-                f.conns().iter().map(|c| c.audio).sum::<usize>(),
-                f2.conns().iter().map(|c| c.audio).sum::<usize>(),
-                "{}",
+            assert_eq!(via.text, super::live::tests::FINAL, "{}", p.id());
+            // All of the sound reached the service, at the rate it takes: half a second, in 16 bits. ElevenLabs' commit rides
+            // on a hundredth of a second of zeros.
+            let rate = if p == Provider::OpenAi {
+                24_000
+            } else {
+                16_000
+            };
+            let bytes = f.conns().iter().map(|c| c.audio).sum::<usize>();
+            let whole = rate;
+            assert!(
+                bytes >= whole - rate / 50 && bytes <= whole + rate / 25,
+                "{}: {bytes} bytes",
                 p.id()
             );
             assert!(!heard.lock().is_empty(), "{}: partial texts came", p.id());
@@ -227,8 +222,26 @@ async fn a_plugin_that_is_gone_leaves_its_service_answering_with_an_error() {
     rt.shutdown();
 }
 
-/// INT-13, voice: the delay of the final text after the end of a sentence, in the core and through the plugin's
-/// process, the numbers of `docs/PLUGINS.md` §1.4. By hand (`cargo nextest run --run-ignored only int13_measure
+/// A dictation of 10 minutes: its sound crosses in one line, then one request, within the memory of a module and its turns.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_long_dictation_goes_through_the_module() {
+    let rt = runtime("long");
+    let p = Provider::Groq;
+    let svc = through(&rt, p).await;
+    let (url, got) = serve(200, answer(p)).await;
+    let s = spec(p, &url);
+    let text = tokio::task::spawn_blocking(move || {
+        let sound = vec![0.1f32; 10 * 60 * 16_000];
+        svc.transcribe(&s, &sound, "fr", &Arc::new(AtomicBool::new(false)))
+    })
+    .await
+    .unwrap();
+    assert_eq!(text.unwrap(), "Bonjour le monde");
+    assert!(got.lock()[0].body.len() > 19 * 1000 * 1000);
+    rt.shutdown();
+}
+
+/// INT-13, voice: the delay of the final text after the end of a sentence through the plugin's module, the numbers of `docs/PLUGINS.md` §1.4. By hand (`cargo nextest run --run-ignored only int13_measure
 /// --no-capture`), as INT-12's: two medians of a few ms on a loaded runner would fail at random.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "INT-13 measure: run by hand"]
@@ -239,7 +252,7 @@ async fn int13_measure_the_live_delay_through_the_plugin() {
         let svc = through(&rt, p).await;
         let n = 20;
         let (a, snd) = (svc.clone(), sound.clone());
-        let (core, plug) = tokio::task::spawn_blocking(move || {
+        let plug = tokio::task::spawn_blocking(move || {
             let delay = |open: &dyn Fn(&Spec) -> LiveStream| {
                 let f = fake(p, Mode::Speaks);
                 let s = f.spec(p);
@@ -258,21 +271,16 @@ async fn int13_measure_the_live_delay_through_the_plugin() {
                 ms.sort_by(|a, b| a.partial_cmp(b).unwrap());
                 (ms[n / 2], ms[(n * 99 / 100).min(n - 1)])
             };
-            let core = delay(&|s| LiveStream::open(s, "fr", 48_000, Box::new(|_| {})));
-            let plug = delay(&|s| a.open_live(s, "fr", 48_000, Box::new(|_| {})));
-            (core, plug)
+            delay(&|s| a.open_live(s, "fr", 48_000, Box::new(|_| {})))
         })
         .await
         .unwrap();
         eprintln!(
-            "INT-13 {}: core median {:.1} ms (p99 {:.1}), plugin median {:.1} ms (p99 {:.1})",
+            "INT-13 {}: module median {:.1} ms (p99 {:.1})",
             p.id(),
-            core.0,
-            core.1,
             plug.0,
             plug.1
         );
-        assert!(plug.1 < core.1 + 5.0 + 50.0, "{}: the p99 grew", p.id());
     }
     rt.shutdown();
 }
@@ -295,10 +303,8 @@ async fn int13_real_elevenlabs_through_the_plugin() {
         .samples::<i16>()
         .map(|s| s.unwrap() as f32 / i16::MAX as f32)
         .collect();
-    let new_spec = move |key: &str| {
-        Spec::new(p, key.into(), reqwest::Client::new())
-            .with_live(Some("scribe_v2_realtime".into()))
-    };
+    let new_spec =
+        move |key: &str| Spec::new(p, key.into()).with_live(Some("scribe_v2_realtime".into()));
 
     // The dictation of the file, and a wrong key refused.
     let (a, k, snd) = (
@@ -360,8 +366,8 @@ async fn int13_real_elevenlabs_through_the_plugin() {
 
     // The voice, and the catalog.
     let s = new_spec(&key);
-    let model = super::online_catalog::default_speak_model(p);
-    let voice = super::online_catalog::default_voice(p, model, "fr").unwrap();
+    let model = escouade_voice::catalog::default_speak_model(p);
+    let voice = escouade_voice::catalog::default_voice(p, model, "fr").unwrap();
     let choice = SpeakChoice {
         model: model.into(),
         voice: voice.into(),
@@ -399,67 +405,6 @@ async fn int13_real_elevenlabs_through_the_plugin() {
     rt.shutdown();
 }
 
-/// ESC-327: one process for the voice and what the plugin serves beside it (Mistral, its harness): `voice/*` to the
-/// voice, the rest to `other` in its order, both said by `initialize`.
-#[test]
-fn a_plugin_serves_its_voice_and_what_it_serves_beside_it_in_one_process() {
-    use std::io::Write;
-    use std::sync::{Arc, Mutex};
-    #[derive(Clone, Default)]
-    struct Lines(Arc<Mutex<Vec<u8>>>);
-    impl Write for Lines {
-        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
-            self.0.lock().unwrap().extend_from_slice(b);
-            Ok(b.len())
-        }
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
-    let lines = Lines::default();
-    let out: Arc<Mutex<Box<dyn Write + Send>>> = Arc::new(Mutex::new(Box::new(lines.clone())));
-    let input = [
-        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#,
-        r#"{"jsonrpc":"2.0","id":2,"method":"voice/describe","params":{}}"#,
-        r#"{"jsonrpc":"2.0","id":3,"method":"agent/frames","params":{"n":1}}"#,
-        r#"{"jsonrpc":"2.0","id":4,"method":"agent/frames","params":{"n":2}}"#,
-    ]
-    .join("\n");
-    let mut seen = Vec::new();
-    let other: super::plugin_guest::Other = Box::new(|m, p| {
-        seen.push(p["n"].as_u64().unwrap());
-        Ok(serde_json::json!({ "method": m }))
-    });
-    super::plugin_guest::serve_with(
-        super::online::Provider::Mistral,
-        input.as_bytes(),
-        out,
-        serde_json::json!({ "harnesses": ["vibe"] }),
-        Some(other),
-    )
-    .unwrap();
-    assert_eq!(seen, [1, 2], "in their order");
-    let answer = |id: u64| -> serde_json::Value {
-        for _ in 0..500 {
-            let text = String::from_utf8(lines.0.lock().unwrap().clone()).unwrap();
-            let found = text
-                .lines()
-                .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
-                .find(|v| v["id"] == id);
-            if let Some(v) = found {
-                return v;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-        panic!("no answer {id}");
-    };
-    let init = answer(1);
-    let says = init["result"].to_string();
-    assert!(says.contains("voice") && says.contains("vibe"), "{says}");
-    assert_eq!(answer(2)["result"]["id"], "mistral");
-    assert_eq!(answer(3)["result"]["method"], "agent/frames");
-}
-
 /// The real Mistral through its plugin (ESC-327), the process that serves Vibe too: `MISTRAL_API_KEY` given to this
 /// process only, never written. By hand: `cargo nextest run --run-ignored only real_mistral_through --no-capture`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -478,7 +423,7 @@ async fn real_mistral_through_the_plugin() {
         .map(|s| s.unwrap() as f32 / i16::MAX as f32)
         .collect();
     let sound = crate::voice::audio::resample(&samples, rate, 16_000);
-    let spec = move |key: &str| Spec::new(p, key.into(), reqwest::Client::new());
+    let spec = move |key: &str| Spec::new(p, key.into());
     let (text, refused) = tokio::task::spawn_blocking(move || {
         let no = Arc::new(AtomicBool::new(false));
         (

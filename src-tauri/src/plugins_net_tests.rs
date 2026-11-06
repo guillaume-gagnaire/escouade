@@ -5,9 +5,9 @@
 
 use crate::plugins::bench::fake::{Reach, Seen, Session};
 use crate::plugins::manifest::{self, Hand, Limits as Declared};
+use crate::plugins::socket::Net as Settings;
 use crate::plugins::wasm::{self, Dns, Fetcher, HostsOf, Net, PortsOf, FAILED, REFUSED};
 use crate::plugins_reactor_tests::{fixture, Served};
-use crate::voice::online::Net as Settings;
 use futures_util::{SinkExt, StreamExt};
 use parking_lot::RwLock;
 use serde_json::{json, Value};
@@ -903,6 +903,36 @@ async fn a_socket_that_is_not_opened_says_the_status_and_nothing_of_its_key() {
     assert!(why.contains("HTTP 401"), "{why}");
     let refused = p.served.refused.lock().unwrap().join("\n");
     assert!(!refused.contains("s3cret") && !refused.contains("h3ader"));
+}
+
+/// A service that quotes the key it refuses: alone, as `Bearer <key>` is sent, and across the end of what is kept.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_refused_socket_says_what_the_service_answered_and_never_its_key() {
+    const KEY: &str = "sk-0123456789abcdefghij";
+    let answer = |body: String| {
+        format!(
+            "HTTP/1.1 401 Unauthorized\r\ncontent-length: {}\r\n\r\n{body}",
+            body.len()
+        )
+    };
+    let bodies = [
+        format!("Invalid API key: {KEY}"),
+        format!("{}{KEY} is not a key", "x".repeat(500)),
+    ];
+    for body in bodies {
+        let reply = answer(body);
+        let port = server(move |_, _, mut s| {
+            let _ = s.write_all(reply.as_bytes());
+        });
+        let p = socket_probe(port);
+        let headers = json!({ "authorization": format!("Bearer {KEY}") });
+        let a = p.ask("ws/open", json!({ "url": LIVE, "headers": headers }));
+        let why = a["error"]["message"].as_str().unwrap();
+        assert!(why.contains("HTTP 401"), "{why}");
+        assert!(!why.contains("sk-0"), "{why}");
+        let refused = p.served.refused.lock().unwrap().join("\n");
+        assert!(!refused.contains("sk-0"), "{refused}");
+    }
 }
 
 /// `wss` itself: the TLS of a self-signed server, by the name the user typed, through a proxy's tunnel; then straight.

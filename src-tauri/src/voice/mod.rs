@@ -16,7 +16,10 @@ pub mod models;
 pub mod online;
 pub mod online_catalog;
 pub mod online_speech;
-pub mod plugin_guest;
+#[cfg(test)]
+mod parity_tests;
+#[cfg(test)]
+mod plugged;
 pub mod plugin_host;
 #[cfg(test)]
 mod plugin_tests;
@@ -28,7 +31,6 @@ pub mod spoken;
 mod tests;
 pub mod transcribe;
 pub mod vad;
-pub mod wire;
 
 use crate::i18n::Lang;
 use models::{ModelView, Store};
@@ -104,7 +106,7 @@ impl VoiceError {
                 "No sound system answers. Start PulseAudio or PipeWire (or check ALSA), then try again."
             ),
             VoiceError::AlreadyListening => tr_in!(lang, "Une dictée est déjà en cours.", "A dictation is already under way."),
-            VoiceError::Online(e) => e.message(lang),
+            VoiceError::Online(e) => e.message(crate::i18n::kit(lang)),
             VoiceError::Other(e) => tr_in!(lang, "La dictée a échoué : {e}", "Dictation failed: {e}"),
         }
     }
@@ -221,7 +223,7 @@ pub struct Choice {
 /// The service of « En ligne », when the settings choose it (ESC-110); none: Whisper, on the machine.
 pub fn online_provider(settings: &crate::model::VoiceSettings) -> Option<online::Provider> {
     (settings.transcription == "online")
-        .then(|| online::Provider::find(&settings.online_service))
+        .then(|| online::find(&settings.online_service))
         .flatten()
 }
 

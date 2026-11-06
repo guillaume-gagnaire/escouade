@@ -1,10 +1,10 @@
-//! The harness side of the plugin Mistral (`dev.escouade.mistral`, INT-10.6 bis, docs/PLUGINS.md §4.13): Mistral Vibe
-//! as a harness, over ACP. The same process serves the voice service (`voice/*`, `escouade_lib::voice_plugin_with`):
-//! what is not `voice/*` comes to `handler`. The harness its manifest declares (`contributes.harnesses[0]`, its `acp`
-//! object with the extension `vibe`) is served by the client of `escouade_acp`, as the generic ACP plugin serves those
-//! other plugins describe: the core finds `vibe-acp`, writes the trust of the agent's folder and the refusals of a
-//! private project in its `VIBE_HOME`, checks the launch this plugin describes and starts it; what Vibe writes comes
-//! here (`agent/frames`) and goes back as the items of the conversation and the lines to write to it.
+//! The plugin Mistral (`dev.escouade.mistral`, INT-13, INT-10.6 bis, docs/PLUGINS.md §4.13): the voice service, and Mistral
+//! Vibe as a harness, over ACP, in one instance. What is `voice/*` goes to `escouade_voice`; the rest comes to `handler`.
+//! The harness its manifest declares (`contributes.harnesses[0]`, its `acp` object with the extension `vibe`) is served by
+//! the client of `escouade_acp`, as the generic ACP plugin serves those other plugins describe: the core finds `vibe-acp`,
+//! writes the trust of the agent's folder and the refusals of a private project in its `VIBE_HOME`, checks the launch this
+//! plugin describes and starts it; what Vibe writes comes here (`agent/frames`) and goes back as the items of the
+//! conversation and the lines to write to it.
 
 use escouade_plugin_protocol::Refusal;
 use serde_json::{json, Value};
@@ -24,6 +24,12 @@ pub fn handler() -> impl FnMut(&str, Value) -> Result<Value, Refusal> {
         .next();
     escouade_acp::plugin::handler(own)
 }
+
+pub fn run() -> i32 {
+    escouade_voice::serve::run("mistral", capabilities(), Some(Box::new(handler())))
+}
+
+escouade_plugin_protocol::module!(run);
 
 #[cfg(test)]
 mod tests {

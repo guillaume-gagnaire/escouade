@@ -1,8 +1,8 @@
 ---
 title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","docs/PLUGINS.md §8.19 (ESC-344)","docs/PLUGINS.md §8.20 (ESC-337)","docs/PLUGINS.md §8.22 (ESC-351)","docs/PLUGINS.md §8.23 (ESC-349)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire","docs/PLUGINS.md §8.24 (ESC-348)","docs/PLUGINS.md §8.25 (ESC-345)","docs/PLUGINS.md §8.27 (ESC-347)"]
-tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351","ESC-349","ESC-348","ESC-345","ESC-346","ESC-347"]
+sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","docs/PLUGINS.md §8.19 (ESC-344)","docs/PLUGINS.md §8.20 (ESC-337)","docs/PLUGINS.md §8.22 (ESC-351)","docs/PLUGINS.md §8.23 (ESC-349)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire","docs/PLUGINS.md §8.24 (ESC-348)","docs/PLUGINS.md §8.25 (ESC-345)","docs/PLUGINS.md §8.27 (ESC-347)","docs/PLUGINS.md §8.28 (ESC-350)"]
+tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351","ESC-349","ESC-348","ESC-345","ESC-346","ESC-347","ESC-350"]
 decisions: [73,71,70,72,75,80,84,86,89,92,93,96]
 compared: null
 ---
@@ -217,3 +217,13 @@ Ces deux plugins sont portés à leur tour. Goose, manifeste sans code servi par
 - Dans les tests, le précompilé d'un module de `scripts/plugins-wasm.sh` se garde à côté de lui. Une release n'a pas ce chemin.
 - **`escouade-acp` passe à `0.1.1`, publiée par le chef après la fusion.** Tant qu'elle n'est pas sur crates.io, le plugin ACP n'a ni `Cargo.lock` ni empreinte : il se compile dans le dépôt et passe le banc par `--wasm`, mais `escouade-plugin validate` et `build` le refusent seul dans son dossier, donc le store ne le compile pas. `plugins/ci.mjs` l'écarte de façon explicite (`AWAITING_PUBLICATION`), et un test refuse un lock posé sans retirer cet écart.
 - **Avant Z2**, comme pour les plugins précédents, seuls un build de développement et les tests trouvent ces modules. Une release faite avant Z2 n'aurait pas Claude Code.
+
+## La voix et Vibe (P6, ESC-350)
+
+La voix est le cas le plus serré du chantier : du son binaire, un WebSocket, un flux, et un délai de l'ordre de la milliseconde. Elle sort dans la crate `crates/escouade-voice`, en MIT comme le kit : ce que chaque service demande et ce que ses réponses veulent dire en code pur, le réacteur d'OpenCode augmenté de `ws/*`, et le service de `voice/*`. Quatre plugins y tiennent en une ligne ; Mistral y ajoute Vibe, sur le client d'`escouade-acp`, dans la même instance. L'app garde la capture, Whisper, Piper, le trousseau et le choix du service, et lit la crate pour décrire les cinq services sans démarrer leur module.
+
+- **La parité** : `tests/fixtures/plugins/parity/voice-<id>.json` et `mistral.jsonl` tiennent ce que le natif a répondu et demandé. Aucun écart, en dehors de ce que dit le §8.28 de `docs/PLUGINS.md`.
+- **La dictée passe en PCM 16 bits** dans `voice/transcribe` : dix minutes de son en flottants ne tenaient pas dans la mémoire d'un module.
+- **`ws/open` dit ce que le service a répondu**, sans les valeurs de ses en-têtes : la raison d'un refus reste visible.
+- **Il n'y a plus de service dans le cœur.** Un plugin qui ne démarre pas se dit à son premier appel.
+- **Second passage** : `escouade-voice` `0.1.0` et `escouade-acp` `0.1.1` à publier, puis les `Cargo.lock` et les empreintes des cinq. D'ici là, ils restent dans `AWAITING_PUBLICATION`.

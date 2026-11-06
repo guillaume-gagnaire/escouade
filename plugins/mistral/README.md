@@ -33,8 +33,8 @@ alone, which keeps nothing, and to Vibe by `MISTRAL_API_KEY`, given by the core,
 
 ## What it does for the voice
 
-Default model: `voxtral-mini-latest`; live model: `voxtral-mini-transcribe-realtime-2602`. Its program answers `voice/*` with the
-code of the service as it was in the core (`src-tauri/src/voice/plugin_guest.rs`), the sound going to `api.mistral.ai`.
+Default model: `voxtral-mini-latest`; live model: `voxtral-mini-transcribe-realtime-2602`. Its module answers `voice/*` with the
+crate `crates/escouade-voice`, the sound going to `api.mistral.ai`.
 
 ## What it does for Mistral Vibe
 
@@ -79,13 +79,12 @@ A discussion of the Docs tab never goes to it: it has no mode that changes nothi
 | ---------------------- | ---------------------------------------------------------------------- |
 | `escouade-plugin.json` | The manifest: its account, the harness, its modes, models, efforts, `acp` |
 | `Cargo.toml`           | The crate `escouade-plugin-mistral`                                    |
-| `src/lib.rs`           | The harness side: the ACP plugin's service, with its own harness       |
+| `src/lib.rs`           | The module: `escouade-voice`, and the service of `escouade-acp` beside it |
 | `README.md`            | This page                                                              |
 
-Its program is `escouade-plugins mistral` (`src-tauri/src/bin/escouade-plugins/voice.rs`), on `src-tauri/src/voice/plugin_guest.rs`
-for `voice/*`, and on the service of `plugins/acp` (`handler`) and the client of `crates/escouade-acp` (`vibe.rs`)
-for the rest. Its tests: the service as it was in the core (`src-tauri/src/voice/*_tests.rs`) and through the plugin's process
-(`voice/plugin_tests.rs`), the account (`src-tauri/src/plugins_accounts_tests.rs`, on a fake keychain), the bench of the harnesses on
+It is a module: its first turn serves `voice/*` by `crates/escouade-voice`, and the rest by the service of
+`escouade_acp::plugin` and the client of `crates/escouade-acp` (`vibe.rs`), in one instance. Its tests: the service in
+`cargo test -p escouade-voice`, the module against fake servers (`src-tauri/src/voice/*_tests.rs`, `voice/parity_tests.rs`), the account (`src-tauri/src/plugins_accounts_tests.rs`, on a fake keychain), the bench of the harnesses on
 the fake Vibe (`src-tauri/src/engine/vibe/bench.rs`), the recorded streams of Mistral Vibe 3.0.3 replayed by its client
 (`src-tauri/src/plugins_acp_tests.rs`, `agent/vibe_tests.rs`), the tests of the core that go through it (`src-tauri/src/vibe_tests.rs`,
 `vibe_tui_tests.rs`), the e2e `tests/e2e/vibe.spec.ts` and `voice.spec.ts`, and the real runs (`real_vibe`, `real_vibe_writes_a_text`,

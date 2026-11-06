@@ -1635,9 +1635,9 @@ dependencies = [
  "escouade-plugin-codex",
  "escouade-plugin-copilot",
  "escouade-plugin-kit",
- "escouade-plugin-mistral",
  "escouade-plugin-opencode",
  "escouade-plugin-protocol",
+ "escouade-voice",
  "espeak-ng",
  "flate2",
  "futures-util",
@@ -1790,15 +1790,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "escouade-plugin-mistral"
-version = "1.0.0"
-dependencies = [
- "escouade-acp",
- "escouade-plugin-protocol",
- "serde_json",
-]
-
-[[package]]
 name = "escouade-plugin-opencode"
 version = "2.2.0"
 dependencies = [
@@ -1815,6 +1806,17 @@ dependencies = [
 name = "escouade-plugin-protocol"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "escouade-voice"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "escouade-plugin-kit",
+ "parking_lot",
  "serde",
  "serde_json",
 ]

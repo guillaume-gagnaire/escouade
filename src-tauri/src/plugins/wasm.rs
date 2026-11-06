@@ -35,9 +35,9 @@
 //! The transport is wired to the runtime's host in `runtime.rs`: same journal, same delays, same restarts.
 
 use super::beside::{request_of, Beside, WS_MESSAGE};
+use super::socket::Net as Settings;
+use super::socket::{Io, Ws};
 use crate::paths::DataDir;
-use crate::voice::live::{Io, Ws};
-use crate::voice::online::Net as Settings;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use parking_lot::RwLock;
 use serde_json::{json, Value};
@@ -1081,13 +1081,18 @@ impl Fetcher {
     }
 
     /// A call to a fake service of the tests by its own address, as `account.api` gives it to a plugin: the answer of a
-    /// route, which only the tests and a build of development have.
+    /// route, which only the tests and a build of development have. A route without a port stands for every port of its
+    /// host, by http or ws: the fake services of the voice open one each.
     fn fake(&self, url: &reqwest::Url) -> Option<Judged> {
         let origin = url.origin();
-        let faked = self
-            .routes
-            .values()
-            .any(|base| reqwest::Url::parse(base).is_ok_and(|b| b.origin() == origin));
+        let faked = self.routes.values().any(|base| {
+            reqwest::Url::parse(base).is_ok_and(|b| {
+                b.origin() == origin
+                    || (b.port().is_none()
+                        && matches!(url.scheme(), "http" | "ws")
+                        && b.host_str() == url.host_str())
+            })
+        });
         faked.then(|| Judged {
             name: url.host_str().unwrap_or_default().to_ascii_lowercase(),
             target: url.clone(),
@@ -1159,7 +1164,7 @@ impl Fetcher {
 
     /// Whether a call to `name` goes through the proxy of the settings.
     fn proxied(&self, name: &str) -> bool {
-        crate::voice::live::proxy_for(&self.live.read(), name).is_some()
+        super::socket::proxy_for(&self.live.read(), name).is_some()
     }
 
     /// What is told of a call: its method and its host, never its path nor its query, which may hold a key; and, through
@@ -1187,7 +1192,7 @@ impl Fetcher {
         let declared = self.declares(ACCOUNT);
         Arc::new(move |name: &str| {
             let name = name.to_ascii_lowercase();
-            let proxy = crate::voice::live::proxy_url(&live.read());
+            let proxy = super::socket::proxy_url(&live.read());
             if proxy.is_some_and(|p| p.host_str().is_some_and(|h| h.eq_ignore_ascii_case(&name))) {
                 return true;
             }
@@ -1214,7 +1219,7 @@ impl Fetcher {
             .user_agent(concat!("escouade/", env!("CARGO_PKG_VERSION")));
         if by_proxy && !settings.proxy.is_empty() {
             // A proxy that is no address stops the call: going around it would leave by a way the user closed.
-            let url = crate::voice::live::proxy_url(settings)?;
+            let url = super::socket::proxy_url(settings)?;
             let proxy = reqwest::Proxy::all(url.as_str())
                 .ok()?
                 .no_proxy(reqwest::NoProxy::from_string(&settings.no_proxy));
@@ -1358,8 +1363,8 @@ impl Fetcher {
                 .map_err(|e| failed(e.to_string()));
         }
         let settings = self.live.read().clone();
-        if let Some(proxy) = crate::voice::live::proxy_for(&settings, &host) {
-            return crate::voice::live::tunnel(&proxy, &host, port)
+        if let Some(proxy) = super::socket::proxy_for(&settings, &host) {
+            return super::socket::tunnel(&proxy, &host, port)
                 .await
                 .map_err(failed);
         }
@@ -1403,8 +1408,7 @@ impl Fetcher {
             let tls_name = rustls::pki_types::ServerName::try_from(host.to_string())
                 .map_err(|e| failed(e.to_string()))?;
             let insecure = self.live.read().insecure;
-            let connector =
-                tokio_rustls::TlsConnector::from(crate::voice::live::tls_config(insecure));
+            let connector = tokio_rustls::TlsConnector::from(super::socket::tls_config(insecure));
             Box::new(
                 connector
                     .connect(tls_name, tcp)
@@ -1419,7 +1423,8 @@ impl Fetcher {
             .as_str()
             .into_client_request()
             .map_err(|_| failed("not a socket's address".into()))?;
-        if let Some(h) = params.get("headers").and_then(Value::as_object) {
+        let headers = params.get("headers").and_then(Value::as_object);
+        if let Some(h) = headers {
             let invalid = |k: &str| {
                 (
                     super::runtime::INVALID_PARAMS,
@@ -1441,8 +1446,21 @@ impl Fetcher {
             .max_frame_size(Some(WS_MESSAGE));
         match tokio_tungstenite::client_async_with_config(req, io, Some(config)).await {
             Ok((ws, _)) => Ok(ws),
+            // What it answered, for the plugin to say: a service says here why it refuses. Its headers' values, which hold
+            // its key, never: this goes to the journal too.
             Err(tokio_tungstenite::tungstenite::Error::Http(r)) => {
-                Err(failed(format!("HTTP {}", r.status().as_u16())))
+                let body = r.body().as_deref().unwrap_or_default();
+                let mut said = String::from_utf8_lossy(body).into_owned();
+                // Its last word: `Bearer <key>` is sent, and a service quotes the key alone. Before it is cut: the
+                // start of a key across the cut would stay.
+                for v in headers.iter().flat_map(|h| h.values()) {
+                    let key = v.as_str().and_then(|v| v.split_whitespace().last());
+                    if let Some(key) = key.filter(|k| k.len() >= 4) {
+                        said = said.replace(key, "***");
+                    }
+                }
+                let said: String = said.chars().take(512).collect();
+                Err(failed(format!("HTTP {}: {said}", r.status().as_u16())))
             }
             Err(e) => Err(failed(e.to_string())),
         }

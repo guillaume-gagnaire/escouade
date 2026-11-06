@@ -1,0 +1,16 @@
+[package]
+name = "escouade-plugin-openai"
+version = "2.2.0"
+description = "Le plugin OpenAI livré avec Escouade : le service de voix (dictée, direct, voix de l'agent)"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+
+# A module, compiled by `escouade-plugin build` (docs/PLUGINS.md §8.5). The service is the crate `escouade-voice`.
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+escouade-voice = "0.1.0"
+serde_json = "1"

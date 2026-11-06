@@ -1,5 +1,5 @@
-//! The parity of the harnesses in modules (ESC-346, docs/PLUGINS.md §8.26): played by the host of the app, Codex, Copilot
-//! CLI, Cursor CLI and Gemini CLI answer what their native plugins answered, call by call, on the recordings of their
+//! The parity of the harnesses in modules (ESC-346, ESC-350, docs/PLUGINS.md §8.26): played by the host of the app, Codex,
+//! Copilot CLI, Cursor CLI, Gemini CLI and Mistral Vibe answer what their native plugins answered, call by call, on the recordings of their
 //! harness: the description of their launches, the items of each line, what they write back, every call of the contract.
 //!
 //! `tests/fixtures/plugins/parity/<short>.jsonl` holds, one step a line, what each native plugin answered before its
@@ -121,6 +121,29 @@ const GEMINI: Harness = Harness {
     answers: &[],
 };
 
+const VIBE: Harness = Harness {
+    short: "mistral",
+    id: "dev.escouade.mistral",
+    fixtures: "vibe",
+    files: &[
+        "cancel-config-options",
+        "error-invalid-key",
+        "full-turn",
+        "hooks-deny",
+        "init-session",
+        "load-fork-reject",
+        "mcp-session-new",
+        "permission-allow-always",
+        "question-elicitation",
+        "todo-subagent",
+        "trust-project-hooks",
+    ],
+    message: "session/prompt",
+    interrupt: "session/cancel",
+    model: "mistral-medium-3.5",
+    answers: &[],
+};
+
 /// The lines of a recording, as a client saw them: (`c2s` or `s2c`, the message).
 fn recorded(h: &Harness, file: &str) -> Vec<(String, Value)> {
     let path = root()
@@ -138,6 +161,12 @@ fn recorded(h: &Harness, file: &str) -> Vec<(String, Value)> {
             let dir = v.as_object_mut()?.remove("dir")?.as_str()?.to_string();
             // Gemini's are the messages themselves, the others' hold them in `msg`.
             let msg = v.get("msg").cloned().unwrap_or(v);
+            // Vibe's say `out` and `in`, seen from the client.
+            let dir = match dir.as_str() {
+                "out" => "c2s".to_string(),
+                "in" => "s2c".to_string(),
+                _ => dir,
+            };
             matches!(dir.as_str(), "c2s" | "s2c").then_some((dir, msg))
         })
         .collect()
@@ -393,6 +422,11 @@ fn parity_of(h: &Harness) {
     }
     assert_eq!(steps.len(), native.len());
     assert!(steps.len() > 30, "{} steps", steps.len());
+}
+
+#[test]
+fn vibe_answers_as_its_native_plugin() {
+    parity_of(&VIBE);
 }
 
 #[test]

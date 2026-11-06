@@ -575,7 +575,7 @@ impl Beside {
 
 /// Carries a socket's two directions until it ends: its code, and why.
 async fn carry(
-    ws: crate::voice::live::Ws,
+    ws: super::socket::Ws,
     socket: u64,
     mut rx: tokio::sync::mpsc::UnboundedReceiver<Out>,
     queued: &AtomicUsize,

@@ -2,7 +2,7 @@
 title: "Les plugins livrés avec Escouade"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.3, §4.4","docs/TODO-2.2.md (INT-4, INT-8.1)","src-tauri/src/plugins/builtin.rs","docs/PLUGINS.md §4.13","plugins/github/README.md","plugins/gitlab/README.md","plugins/gitea/README.md","plugins/azure-devops/README.md","docs/PLUGINS.md §8.7, §8.13","src-tauri/src/plugins/seed.rs"]
-tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338","ESC-339","ESC-344","ESC-351","ESC-349","ESC-348","ESC-345"]
+tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338","ESC-339","ESC-344","ESC-351","ESC-349","ESC-348","ESC-345","ESC-350"]
 decisions: [80,92]
 compared: null
 ---
@@ -44,11 +44,11 @@ Certains plugins sont donnés par l'app : livrés avec elle, signés avec elle, 
 
 ## Les services de voix en ligne (INT-13)
 
-- OpenAI, Groq, Mistral, ElevenLabs et Deepgram sont cinq plugins livrés, `dev.escouade.openai` (etc.), au registre de tous les builds. Chacun est l'entrée `escouade-plugins voice-<service>`, sauf Mistral (`escouade-plugins mistral`). Réglages › Voix se comporte comme avant : la clé reste au trousseau (`dictation-<service>`), la dictée, le direct et la voix de l'agent passent par le plugin, sans différence visible.
-- Les couper dans la vue Plugins retire le service de Réglages › Voix (la dictée repasse en local). Un plugin qui ne démarre pas laisse le service du cœur répondre, et son journal dit pourquoi.
+- OpenAI, Groq, Mistral, ElevenLabs et Deepgram sont cinq plugins livrés, `dev.escouade.openai` (etc.), au registre de tous les builds. Chacun est un module, depuis ESC-350. Réglages › Voix se comporte comme avant : la clé reste au trousseau (`dictation-<service>`), la dictée, le direct et la voix de l'agent passent par le plugin, sans différence visible.
+- Les couper dans la vue Plugins retire le service de Réglages › Voix (la dictée repasse en local). Un plugin qui ne démarre pas le dit à son premier appel, et son journal dit pourquoi : le cœur n'a plus de service qui répondrait à sa place.
 - Un plugin d'un autre auteur peut servir un nouveau service de voix ou prendre la place de l'un des cinq (même identifiant de service).
-- Délais : le plugin ajoute moins de 1 ms au texte final du direct (médiane et 99e centile), son poussé au rythme du micro ; détail et protocole `voice/*` dans `docs/PLUGINS.md` §4.13.
-- Le compte Mistral : le plugin « Mistral » (`dev.escouade.mistral`) porte la voix et Mistral Vibe (INT-10.6 bis), un seul process et un seul compte, partagé ; voir *Mistral Vibe en plugin*. Couper ce plugin retire les deux.
+- Délais : le plugin ajoute moins de 1 ms au texte final du direct (médiane et 99e centile), son poussé au rythme du micro, sauf Deepgram, à 1 ms environ ; détail et protocole `voice/*` dans `docs/PLUGINS.md` §4.13 et §8.28.
+- Le compte Mistral : le plugin « Mistral » (`dev.escouade.mistral`) porte la voix et Mistral Vibe (INT-10.6 bis), une seule instance et un seul compte, partagé ; voir *Mistral Vibe en plugin*. Couper ce plugin retire les deux.
 
 - Gemini CLI est un plugin livré, `dev.escouade.gemini-cli` (INT-10.7, voir *Gemini CLI en plugin*), ses comptes inchangés.
 
@@ -100,3 +100,7 @@ isola rejoint Linear, Trello, Jira et ClickUp : il reste au registre, n'est plus
 OpenCode est aussi un module du registre (ESC-349), avec les mêmes règles que ces quatre plugins : il n'est plus dans `escouade-plugins`, et une release faite avant Z2 ne l'aurait pas.
 
 Antigravity CLI suit le même chemin (ESC-348) : au registre, en module, plus dans `escouade-plugins`, et son module n'est que dans un build de développement et les tests jusqu'à Z2. Sa vue terminal reste au cœur.
+
+## La voix et Mistral sont des modules (ESC-350)
+
+OpenAI, Groq, Mistral, ElevenLabs et Deepgram sont sortis d'`escouade-plugins` : ce sont des modules (`run.wasm`) en `2.2.0`, sur la crate `escouade-voice`, à publier sur crates.io avant leur `Cargo.lock`. Il ne reste à `escouade-plugins` que la démonstration. Un plugin de voix ne démarre qu'à son premier appel ; coupé ou désinstallé, il retire son service ; qui ne démarre pas le dit, sans repli dans le cœur. Une release faite avant Z2 n'aurait plus de voix en ligne.

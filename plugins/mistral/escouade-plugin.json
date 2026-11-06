@@ -2,7 +2,7 @@
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.mistral",
   "name": "Mistral",
-  "version": "0.0.0",
+  "version": "2.2.0",
   "description": {
     "fr": "Mistral dans Escouade : le service de voix (dictée, direct, voix de l'agent) et Mistral Vibe comme harness, par ACP, sur un compte Mistral partagé ; ta clé reste dans le trousseau, le plugin ne la garde pas.",
     "en": "Mistral in Escouade: the voice service (dictation, live, the agent's voice) and Mistral Vibe as a harness, over ACP, on one shared Mistral account; your key stays in the keychain, the plugin keeps nothing."
@@ -15,12 +15,10 @@
   "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/mistral",
   "escouade": {
     "api": "1",
-    "min": "2.1.0"
+    "min": "2.2.0"
   },
-  "run": {
-    "command": "{escouade}/escouade-plugins",
-    "args": ["mistral"]
-  },
+  "run": { "wasm": "Cargo.toml" },
+  "limits": { "fetchSeconds": 120, "fetchBytes": 33554432, "memoryBytes": 268435456, "turnSeconds": 10 },
   "activation": ["voice:mistral"],
   "permissions": {
     "network": ["api.mistral.ai"]

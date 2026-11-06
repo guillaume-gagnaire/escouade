@@ -1044,7 +1044,7 @@ async fn a_site_behind_a_self_signed_certificate_is_reached_once_tls_verificatio
     // Jira is a module: its next call follows the network of now, as saving the settings makes it.
     h.core
         .plugin_runtime
-        .set_network(crate::voice::online::Net::of(&h.core.settings.read()));
+        .set_network(crate::plugins::socket::Net::of(&h.core.settings.read()));
     let view = h
         .core
         .integration_connect(Service::JIRA, account())
