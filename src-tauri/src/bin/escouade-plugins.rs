@@ -34,14 +34,6 @@ const ENTRIES: &[Entry] = &[
     ("voice-deepgram", voice::deepgram),
     // The generic ACP plugin (PLG-6): the harnesses a manifest describes, in its crate (plugins/acp).
     ("acp", escouade_plugin_acp::run),
-    // Cursor CLI (INT-10.1): its harness on the ACP client, in its crate (plugins/cursor).
-    ("cursor", escouade_plugin_cursor::run),
-    // Gemini CLI (INT-10.7): its harness on the ACP client, in its crate (plugins/gemini).
-    ("gemini", escouade_plugin_gemini::run),
-    // Copilot CLI (INT-10.3): its harness on the client of its server, in its crate (plugins/copilot).
-    ("copilot", escouade_plugin_copilot::run),
-    // Codex (INT-10.4): the client of its app-server and its translation, in its crate (plugins/codex).
-    ("codex", escouade_plugin_codex::run),
     // Claude Code (INT-10.5): the client of `claude` and its translation, in its crate (plugins/claude).
     ("claude", escouade_plugin_claude::run),
 ];

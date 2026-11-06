@@ -1,10 +1,9 @@
 # Copilot CLI
 
-`dev.escouade.copilot-cli`, a plugin [Escouade](https://escouade.dev) gives: it is shipped with the app, signed with it,
-and updated with it. Its version is Escouade's (the `0.0.0` of its manifest is replaced by the app's when it is read).
+`dev.escouade.copilot-cli`, a plugin of [Escouade](https://escouade.dev)'s own hand: a WASM module, with a version of its own, that
+the app runs in its host.
 
-GitHub Copilot CLI comme harness, sorti du cœur d'Escouade (INT-10.3). Ses agents conversent comme avant, par un
-programme à part qu'Escouade lance et surveille.
+GitHub Copilot CLI comme harness, sorti du cœur d'Escouade (INT-10.3). Ses agents conversent comme avant, dans l'hôte des plugins d'Escouade.
 
 ## What it does
 
@@ -34,8 +33,8 @@ in each account's folder), an account's quota and models read by a server of the
 
 - describe the launch of Copilot and translate what it says: the core launches it, never this plugin;
 - answer the safe permissions by Escouade's rules (a read in the agent's folder; a write there, but in the mode Plan;
-  `git add` and `git commit` of its worktree in « Accepter les modifications » and « Auto », for which it asks `git`
-  where the repository's folder and hooks are);
+  `git add` and `git commit` of its worktree in « Accepter les modifications » and « Auto », for which Escouade reads the
+  repository's configuration and hooks, by `fs/gitProtected`, which asks for the root `agentRepo`);
 - refuse at once a permission that names a path of a private project: a guard, as its modes' meanings say;
 - nothing else: no network and no secret. Escouade's token and the account's sign-in reach Copilot by the core, and
   this client never calls what gives a token in clear (`account.getAllUsers`, `account.getCurrentAuth`).
@@ -48,8 +47,7 @@ from an account of its own (`GH_TOKEN`, `GITHUB_TOKEN`, `COPILOT_GITHUB_TOKEN`).
 
 ## Turned off
 
-It can be turned off for the app, never removed, and a plugin of the store with the same id is refused: this one is
-the app's. Turned off or not loaded, an agent of Copilot says at its start « Le plugin Copilot CLI
+It is a plugin like any other: it can be turned off, and uninstalled. Turned off or not loaded, an agent of Copilot says at its start « Le plugin Copilot CLI
 (dev.escouade.copilot-cli) est coupé ou n'est pas chargé : rallume-le dans la vue Plugins… », and keeps its session; a
 plugin that stops while an agent runs is started again, as every plugin is, and says so in the conversation.
 
@@ -66,7 +64,9 @@ plugin that stops while an agent runs is started again, as every plugin is, and 
 | `src/tests.rs`         | The client on its own                                                        |
 | `README.md`            | This page                                                                    |
 
-Its program is `escouade-plugins copilot` (`src-tauri/src/bin/escouade-plugins.rs` calls the crate's `run`). Its other
+Its program is a module (`run.wasm`), compiled by `escouade-plugin build` from this folder and its `Cargo.lock`, on the
+crates `escouade-plugin-protocol` and `escouade-acp`. Until P8 the core also links this crate, for its view. The parity
+with the native plugin it was: `src-tauri/src/plugins_harness_parity_tests.rs`, `tests/fixtures/plugins/parity/copilot.jsonl`. Its other
 tests: the bench of the harnesses on the fake Copilot (`src-tauri/src/engine/copilot/bench.rs`), the recorded streams of
 Copilot CLI 1.0.98 (`src-tauri/src/agent/copilot_tests.rs`, `tests/fixtures/replays/copilot/`), the tests of the core
 that go through it (`src-tauri/src/copilot_tests.rs`, `copilot_tui_tests.rs`), the e2e `tests/e2e/copilot.spec.ts`, and
@@ -74,9 +74,9 @@ the real runs (`real_copilot`, `real_copilot_view`, `real-harnesses.spec.ts`).
 
 ## Run it alone
 
-Against the fake Escouade of the plugins' bench, with the app's own `escouade-plugin` and `escouade-plugins` (built with
-`cargo build --bin escouade-plugin --bin escouade-plugins` in `src-tauri/`, side by side in `target/debug`):
+Against the fake Escouade of the plugins' bench, with the app's own `escouade-plugin` (`cargo build --bin escouade-plugin`
+in `src-tauri/`):
 
 ```sh
-escouade-plugin test plugins/copilot --builtin
+escouade-plugin test plugins/copilot --first-party --escouade 2.2.0
 ```

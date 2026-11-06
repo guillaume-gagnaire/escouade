@@ -430,6 +430,12 @@ pub struct Limits {
     /// How much `fs/read` gives at most.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file_bytes: Option<u64>,
+    /// How much linear memory its instance may take: for what is as big as a message.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memory_bytes: Option<u64>,
+    /// How long a turn of its instance may take, in seconds: for what takes time to read whole.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub turn_seconds: Option<u64>,
 }
 
 impl Limits {
@@ -1020,11 +1026,23 @@ impl Checker {
         let Some(o) = self.object(v, "limits") else {
             return l;
         };
-        self.ignore_others(o, "limits", &["fetchSeconds", "fetchBytes", "fileBytes"]);
+        self.ignore_others(
+            o,
+            "limits",
+            &[
+                "fetchSeconds",
+                "fetchBytes",
+                "fileBytes",
+                "memoryBytes",
+                "turnSeconds",
+            ],
+        );
         for (key, field) in [
             ("fetchSeconds", &mut l.fetch_seconds),
             ("fetchBytes", &mut l.fetch_bytes),
             ("fileBytes", &mut l.file_bytes),
+            ("memoryBytes", &mut l.memory_bytes),
+            ("turnSeconds", &mut l.turn_seconds),
         ] {
             if let Some(v) = o.get(key) {
                 match v.as_u64().filter(|n| *n > 0) {
@@ -1602,7 +1620,7 @@ pub fn schema() -> Value {
     });
     let limits = json!({
         "type": "object",
-        "description": "What a plugin in WASM asks for beyond the host's defaults; Escouade caps them at 120 s and 32 MiB for `net/fetch`, 4 MiB for `fs/read`.",
+        "description": "What a plugin in WASM asks for beyond the host's defaults; Escouade caps them at 120 s and 32 MiB for `net/fetch`, 4 MiB for `fs/read`, 256 MiB for its memory, 10 s for a turn.",
         "properties": {
             "fetchSeconds": { "type": "integer", "minimum": 1 },
             "fetchBytes": { "type": "integer", "minimum": 1 },
@@ -1611,6 +1629,18 @@ pub fn schema() -> Value {
                 "minimum": 1,
                 "maximum": 4194304,
                 "description": "How much `fs/read` gives at most: 256 KiB without it.",
+            },
+            "memoryBytes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 268435456,
+                "description": "How much linear memory its instance may take: 64 MiB without it.",
+            },
+            "turnSeconds": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10,
+                "description": "How long a turn of its instance may take: 2 s without it.",
             },
         },
     });

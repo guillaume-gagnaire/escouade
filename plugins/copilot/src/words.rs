@@ -216,10 +216,7 @@ pub fn session_approval(data: &Value) -> Value {
         "write" => json!({ "kind": "write" }),
         "mcp" => json!({ "kind": "mcp", "serverName": r["serverName"], "toolName": r["toolName"] }),
         "url" => {
-            let host = r["url"]
-                .as_str()
-                .and_then(|u| url::Url::parse(u).ok())
-                .and_then(|u| u.host_str().map(str::to_string));
+            let host = r["url"].as_str().and_then(host_of);
             return match host {
                 Some(domain) => json!({ "kind": "approve-for-session", "domain": domain }),
                 None => json!({ "kind": "approve-once" }),
@@ -228,6 +225,27 @@ pub fn session_approval(data: &Value) -> Value {
         _ => return json!({ "kind": "approve-once" }),
     };
     json!({ "kind": "approve-for-session", "approval": approval })
+}
+
+/// The host of an address, in lower case. An address it cannot tell, a name beyond ASCII among them, has none: its
+/// permission goes for once. By hand: the crate `url` would bring macros out of the closed list (`rust_native.json`).
+pub(crate) fn host_of(url: &str) -> Option<String> {
+    let (scheme, rest) = url.split_once("://")?;
+    let scheme_ok = scheme.starts_with(|c: char| c.is_ascii_alphabetic())
+        && scheme
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'));
+    let end = rest.find(['/', '?', '#', '\\']).unwrap_or(rest.len());
+    let authority = rest[..end].rsplit('@').next()?;
+    let host = match authority.strip_prefix('[') {
+        Some(v6) => format!("[{}]", v6.split_once(']')?.0),
+        None => authority.split(':').next()?.to_string(),
+    };
+    let host_ok = !host.is_empty()
+        && host
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '[' | ']' | ':'));
+    (scheme_ok && host_ok).then(|| host.to_ascii_lowercase())
 }
 
 /// The values of a form (`elicitation.requested`) from its card: each field's answer (by the question the card made of

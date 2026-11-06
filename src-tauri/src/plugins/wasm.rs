@@ -85,6 +85,12 @@ const FETCHES_AT_ONCE: usize = 16;
 const FILE_BYTES: u64 = 256 << 10;
 const FILES_BYTES: usize = 1 << 20;
 
+/// The most linear memory `limits.memoryBytes` gets a plugin.
+pub const MEMORY_MAX: u64 = 256 << 20;
+
+/// The longest turn `limits.turnSeconds` gets a plugin.
+pub const TURN_MAX: Duration = Duration::from_secs(10);
+
 /// What a plugin's instance may take.
 #[derive(Debug, Clone, Copy)]
 pub struct Limits {
@@ -94,6 +100,24 @@ pub struct Limits {
     pub turn: Duration,
     /// A turn that holds a decision (`permissions/*`).
     pub decision: Duration,
+}
+
+impl Limits {
+    /// These, with what a manifest asks: more memory and longer turns, up to the host's ceilings, never less. A turn that
+    /// holds a decision keeps its time: the agent waits for it.
+    pub fn asked(self, manifest: super::manifest::Limits) -> Self {
+        let memory = manifest
+            .memory_bytes
+            .map_or(self.memory, |n| self.memory.max(n.min(MEMORY_MAX) as usize));
+        let turn = manifest.turn_seconds.map_or(self.turn, |n| {
+            self.turn.max(Duration::from_secs(n).min(TURN_MAX))
+        });
+        Self {
+            memory,
+            turn,
+            ..self
+        }
+    }
 }
 
 impl Default for Limits {
@@ -239,31 +263,24 @@ impl Modules {
         let path = folder.join(MODULE_FILE);
         let bytes =
             std::fs::read(&path).map_err(|e| format!("its module {}: {e}", path.display()))?;
-        let native = self
-            .cache
-            .join(format!("{}-{}.cwasm", sha256(&bytes), self.app_version));
-        // A module of `scripts/plugins-wasm.sh` is precompiled once for all the tests: each has its own data, and this
-        // takes seconds in a debug build. A test that loses the race to write it has its module all the same.
-        #[cfg(test)]
-        let (native, shared) = match (
-            folder.parent().and_then(Path::file_name),
-            native.file_name(),
-        ) {
-            (Some(parent), Some(name)) if parent == "plugins-wasm" => (folder.join(name), true),
-            _ => (native, false),
-        };
-        #[cfg(not(test))]
-        let shared = false;
+        let name = format!("{}-{}.cwasm", sha256(&bytes), self.app_version);
+        let shared = of_the_build(folder);
+        let native = shared.unwrap_or(&self.cache).join(name);
         let _one = self.busy.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(m) = precompiled(&native) {
             return Ok((m, Made::Cache));
         }
         let module = reactor(&bytes)?;
-        std::fs::create_dir_all(&self.cache).map_err(|e| e.to_string())?;
         let pre = w(module.serialize())?;
-        match crate::paths::write_atomic(&native, &pre) {
-            Err(_) if shared => {}
-            written => written.map_err(|e| e.to_string())?,
+        match shared {
+            // Another process may be writing the same bytes: it is only a cache.
+            Some(_) => {
+                let _ = crate::paths::write_atomic(&native, &pre);
+            }
+            None => {
+                std::fs::create_dir_all(&self.cache).map_err(|e| e.to_string())?;
+                crate::paths::write_atomic(&native, &pre).map_err(|e| e.to_string())?;
+            }
         }
         Ok((module, Made::Precompiled))
     }
@@ -327,6 +344,14 @@ impl Modules {
 }
 
 /// The precompiled module of `path`, in the cache, when it is one wasmtime can load.
+/// The folder `folder` itself when it holds a module of `scripts/plugins-wasm.sh`: its precompiled one is kept there, in a
+/// build of development and the tests alone. Each test has a data folder of its own, and Cranelift, unoptimized in such a
+/// build, would take seconds a module in each of them.
+fn of_the_build(folder: &Path) -> Option<&Path> {
+    let built = folder.parent()?.file_name()? == "plugins-wasm";
+    (cfg!(any(debug_assertions, test)) && built).then_some(folder)
+}
+
 fn precompiled(path: &Path) -> Option<Module> {
     // Read whole, not mapped: under Windows a mapped file could be neither replaced nor taken out of the cache.
     let pre = std::fs::read(path).ok()?;

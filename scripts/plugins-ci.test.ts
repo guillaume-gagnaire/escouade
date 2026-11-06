@@ -1,10 +1,10 @@
 // @vitest-environment node
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { listPlugins, parseArgs, problemsOf, readCargo, readPlugin, touchedBy } from '../plugins/ci-lib.mjs';
+import { AWAITING_PUBLICATION, listPlugins, parseArgs, problemsOf, readCargo, readPlugin, touchedBy } from '../plugins/ci-lib.mjs';
 
 const made: string[] = [];
 const folder = (files: Record<string, string>) => {
@@ -151,11 +151,19 @@ describe('the workspace of the modules', () => {
   it('gives each of them a form the store can compile, its folder alone', () => {
     for (const { name } of ported) {
       const toml = readFileSync(`plugins/${name}/Cargo.toml`, 'utf8');
-      // An `rlib` too for what the core still links (OpenCode, Antigravity, until P8): docs/PLUGINS.md §8.2.
+      // An `rlib` too for what the core still links (Codex, Copilot, OpenCode, Antigravity, until P8): docs/PLUGINS.md §8.2.
       expect(toml, name).toMatch(/^crate-type = \["cdylib"(, "rlib")?\]$/m);
       expect(toml, name).not.toMatch(/^workspace\s*=/m);
       expect(toml, name).not.toMatch(/path\s*=/);
     }
+  });
+
+  it('has a Cargo.lock for each, but those a crate of crates.io holds back, which are out of the list once it is there', () => {
+    for (const { name } of ported) {
+      const waiting = name in AWAITING_PUBLICATION;
+      expect(existsSync(`plugins/${name}/Cargo.lock`), `${name}: AWAITING_PUBLICATION of plugins/ci-lib.mjs`).toBe(!waiting);
+    }
+    for (const name of Object.keys(AWAITING_PUBLICATION)) expect(ported.map((p) => p.name)).toContain(name);
   });
 
   it('pins the toolchain of the app', () => {

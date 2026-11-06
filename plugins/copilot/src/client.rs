@@ -180,7 +180,7 @@ impl Agent {
             how: "new",
             listed: None,
             // Its ids are told apart from those of a process of this plugin before it restarted.
-            next: u64::from(std::process::id()) << 20,
+            next: escouade_plugin_protocol::turn::instance_id() << 20,
             ours: HashMap::new(),
             busy: false,
             active: a.session.is_some(),

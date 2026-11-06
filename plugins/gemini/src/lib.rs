@@ -9,17 +9,19 @@
 pub const MANIFEST: &str = include_str!("../escouade-plugin.json");
 
 pub fn run() -> i32 {
-    let own = escouade_plugin_acp::harnesses_of(MANIFEST)
+    let own = escouade_acp::plugin::harnesses_of(MANIFEST)
         .into_iter()
         .next();
-    escouade_plugin_acp::serve_as("gemini", own)
+    escouade_acp::plugin::serve_as("gemini", own)
 }
+
+escouade_plugin_protocol::module!(run);
 
 #[cfg(test)]
 mod tests {
     #[test]
     fn its_manifest_declares_gemini_on_the_client_with_its_extension() {
-        let h = escouade_plugin_acp::harnesses_of(super::MANIFEST);
+        let h = escouade_acp::plugin::harnesses_of(super::MANIFEST);
         assert_eq!(h.len(), 1);
         assert_eq!(h[0].id, "gemini");
         assert_eq!(h[0].account_var.as_deref(), Some("GEMINI_CLI_HOME"));

@@ -2,7 +2,7 @@
 title: "Gemini CLI en plugin"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.5, §4.6 (INT-10.7)","docs/TODO-2.2.md, INT-10.7","Ticket ESC-282","plugins/gemini/README.md"]
-tickets: ["ESC-282"]
+tickets: ["ESC-282","ESC-346"]
 decisions: [63]
 compared: null
 ---
@@ -42,3 +42,7 @@ En « Accepter les modifications », un `git add` ou `git commit` du worktree qu
 ## Sans compte
 
 Aucun tour avec un vrai modèle n'a été joué : l'essai réel `real_gemini` reste écrit et ignoré, faute de compte sur le poste. Le plugin est prouvé par le banc, les flux de l'étude de Gemini CLI 0.66.0 rejoués par son client et les e2e sur le faux Gemini.
+
+## Un module, plus un process (ESC-346)
+
+Le plugin est un module (`run.wasm`), en version `2.2.0`, et n'a plus d'entrée `escouade-plugins gemini`. Il sert le harness par le service de `escouade_acp::plugin`. Le plan que nomme `exit_plan_mode` se lit par l'hôte, dans le dossier du compte de l'agent (racine `agentHome`). Ce qui précède reste vrai pour la conversation. Voir *Tous les plugins en WASM*.

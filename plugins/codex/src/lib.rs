@@ -1,9 +1,9 @@
 //! The plugin Codex (`dev.escouade.codex`, INT-10.4, docs/PLUGINS.md §4): OpenAI's Codex as a harness. It is no ACP
 //! harness: the core finds `codex`, checks the launch this plugin describes and starts its `app-server`; what Codex
 //! writes comes here (`agent/frames`) and goes back as the items of the conversation and the messages to write to it,
-//! by the client of `client`.
+//! by the client of `client`. It is a module (`run.wasm`): what it needs of the disk comes through the host (`fs/*`).
 //!
-//! `translate`, `words` and `prices` are also read by the core, as a library, for what stays in it: its « Vue Codex »
+//! `translate`, `words` and `prices` are also read by the core, as a library, until P8, for what stays in it: its « Vue Codex »
 //! reads the session's rollout through the same translation, and the launch of its interface, an account's quota and
 //! models speak the same words.
 

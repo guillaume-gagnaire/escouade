@@ -1,11 +1,9 @@
 # Gemini CLI
 
-`dev.escouade.gemini-cli`, a plugin [Escouade](https://escouade.dev) gives: it is shipped with the app, signed with
-it, and updated with it. Its version is Escouade's (the `0.0.0` of its manifest is replaced by the app's when it is
-read).
+`dev.escouade.gemini-cli`, a plugin of [Escouade](https://escouade.dev)'s own hand: a WASM module, with a version of its own, that
+the app runs in its host.
 
-Gemini CLI comme harness, par ACP : le troisième harness sorti du cœur d'Escouade (INT-10.7). Ses agents conversent
-comme avant, par un programme à part qu'Escouade lance et surveille.
+Gemini CLI comme harness, par ACP : le troisième harness sorti du cœur d'Escouade (INT-10.7). Ses agents conversent comme avant, dans l'hôte des plugins d'Escouade.
 
 ## What it does
 
@@ -39,11 +37,12 @@ files of its `GEMINI_CLI_HOME`, Escouade's MCP server.
 ## What it may do
 
 - describe the launch of Gemini CLI and translate what it says: the core launches it, never this plugin;
-- read the plan Gemini wrote, from the file its `exit_plan_mode` names;
+- read the plan Gemini wrote, from the file its `exit_plan_mode` names, through the host: the folder of the agent's account
+  (`agentHome`), and nothing else;
 - refuse at once a permission that names a path of a private project (`fenceOnPermissions`: Gemini reads and writes by
   itself; its rules refuse those paths to its file tools and its commands, in every mode);
 - refuse the writes and commands of a discussion of the Docs tab, as its rules do (`readOnlyMode`);
-- nothing else: no network, no secret, no command to run. An account's key or sign-in is given to Gemini by the core,
+- nothing else: no network, no secret, no file written, no command to run. An account's key or sign-in is given to Gemini by the core,
   never to this plugin.
 
 ## Accounts
@@ -53,8 +52,8 @@ Each agent has a home of its own and never reads `~/.gemini`, shared with Antigr
 
 ## Turned off
 
-It can be turned off for the app, never removed, and a plugin of the store with the same id is refused: this one is the
-app's. Turned off or not loaded, an agent of Gemini CLI says at its start « Le plugin Gemini CLI
+It is a plugin like any other: it can be turned off, and uninstalled. Turned off or not loaded, an agent of Gemini CLI
+says at its start « Le plugin Gemini CLI
 (dev.escouade.gemini-cli) est coupé ou n'est pas chargé : rallume-le dans la vue Plugins… », and keeps its session; a
 plugin that stops while an agent runs is started again, as every plugin is.
 
@@ -67,8 +66,9 @@ plugin that stops while an agent runs is started again, as every plugin is.
 | `src/lib.rs`           | Its `run`: the ACP plugin's service, with its own harness |
 | `README.md`            | This page                                                 |
 
-Its program is `escouade-plugins gemini` (`src-tauri/src/bin/escouade-plugins.rs` calls the crate's `run`), on the
-service of `plugins/acp` (`serve_as`) and the client of `crates/escouade-acp` (`gemini.rs`). Its
+Its program is a module (`run.wasm`), compiled by `escouade-plugin build` from this folder and its `Cargo.lock`, on the
+service and the client of `crates/escouade-acp` (`plugin.rs`, `gemini.rs`). The parity with the native plugin it was:
+`src-tauri/src/plugins_harness_parity_tests.rs`, `tests/fixtures/plugins/parity/gemini.jsonl`. Its
 tests: the bench of the harnesses on the fake Gemini (`src-tauri/src/engine/gemini/bench.rs`), the streams of the study
 of Gemini CLI 0.66.0 replayed by its client (`src-tauri/src/plugins_acp_tests.rs`, `agent/gemini_tests.rs`), the tests of
 the core that go through it (`gemini_tui_tests.rs`), the e2e `tests/e2e/gemini.spec.ts`, and the real run `real_gemini`,
@@ -76,9 +76,9 @@ written and ignored: no account has run it yet.
 
 ## Run it alone
 
-Against the fake Escouade of the plugins' bench, with the app's own `escouade-plugin` and `escouade-plugins` (built with
-`cargo build --bin escouade-plugin --bin escouade-plugins` in `src-tauri/`, side by side in `target/debug`):
+Against the fake Escouade of the plugins' bench, with the app's own `escouade-plugin` (`cargo build --bin escouade-plugin`
+in `src-tauri/`):
 
 ```sh
-escouade-plugin test plugins/gemini --builtin
+escouade-plugin test plugins/gemini --first-party --escouade 2.2.0
 ```

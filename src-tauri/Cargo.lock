@@ -1127,7 +1127,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d045de693cb712d0b22c6a64be5b953f67b3ce00ab5ad3dd5d8b441886ab8e1a"
 dependencies = [
  "quote",
- "syn 3.0.6",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -1635,8 +1635,6 @@ dependencies = [
  "escouade-plugin-cli",
  "escouade-plugin-codex",
  "escouade-plugin-copilot",
- "escouade-plugin-cursor",
- "escouade-plugin-gemini",
  "escouade-plugin-kit",
  "escouade-plugin-mistral",
  "escouade-plugin-opencode",
@@ -1708,7 +1706,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-acp"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "dunce",
  "escouade-plugin-protocol",
@@ -1721,9 +1719,6 @@ name = "escouade-plugin-acp"
 version = "1.0.0"
 dependencies = [
  "escouade-acp",
- "escouade-plugin-protocol",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -1771,9 +1766,8 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-codex"
-version = "1.0.0"
+version = "2.2.0"
 dependencies = [
- "dirs 6.0.0",
  "escouade-acp",
  "escouade-plugin-protocol",
  "serde",
@@ -1782,28 +1776,13 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-copilot"
-version = "1.0.0"
+version = "2.2.0"
 dependencies = [
  "chrono",
  "escouade-acp",
  "escouade-plugin-protocol",
  "serde",
  "serde_json",
- "url",
-]
-
-[[package]]
-name = "escouade-plugin-cursor"
-version = "1.0.0"
-dependencies = [
- "escouade-plugin-acp",
-]
-
-[[package]]
-name = "escouade-plugin-gemini"
-version = "1.0.0"
-dependencies = [
- "escouade-plugin-acp",
 ]
 
 [[package]]

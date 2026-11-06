@@ -293,8 +293,9 @@ export function validate(manifest, options = {}) {
   if ('limits' in o) {
     const l = object(o.limits, 'limits');
     if (l) {
-      ignoreOthers(l, 'limits', ['fetchSeconds', 'fetchBytes', 'fileBytes']);
-      for (const key of ['fetchSeconds', 'fetchBytes', 'fileBytes'])
+      const known = ['fetchSeconds', 'fetchBytes', 'fileBytes', 'memoryBytes', 'turnSeconds'];
+      ignoreOthers(l, 'limits', known);
+      for (const key of known)
         if (key in l && !(Number.isSafeInteger(l[key]) && l[key] > 0)) problem(`limits.${key}`, 'type', 'positive integer');
     }
   }

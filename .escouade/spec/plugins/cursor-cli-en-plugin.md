@@ -2,7 +2,7 @@
 title: "Cursor CLI en plugin"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4 (INT-10.1)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-222"]
-tickets: ["ESC-222","ESC-281","ESC-282"]
+tickets: ["ESC-222","ESC-281","ESC-282","ESC-346"]
 decisions: []
 compared: null
 ---
@@ -40,3 +40,7 @@ Le branchement de Cursor CLI n'est plus propre à lui : il est une ligne de la t
 ## Depuis INT-10.7
 
 Gemini CLI a sa ligne dans la même table (*Gemini CLI en plugin*). La traduction de `agent/cursor.rs` ne reste que pour Antigravity CLI.
+
+## Un module, plus un process (ESC-346)
+
+Le plugin est un module (`run.wasm`), en version `2.2.0`, et n'a plus d'entrée `escouade-plugins cursor`. Il sert le harness par le service de `escouade_acp::plugin`, et ne dépend plus de `plugins/acp`. Il ne déclare aucun fichier. Ce qui précède reste vrai pour la conversation. Voir *Tous les plugins en WASM*.

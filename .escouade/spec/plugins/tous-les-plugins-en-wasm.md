@@ -2,8 +2,8 @@
 title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","docs/PLUGINS.md §8.19 (ESC-344)","docs/PLUGINS.md §8.20 (ESC-337)","docs/PLUGINS.md §8.22 (ESC-351)","docs/PLUGINS.md §8.23 (ESC-349)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire","docs/PLUGINS.md §8.24 (ESC-348)","docs/PLUGINS.md §8.25 (ESC-345)"]
-tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351","ESC-349","ESC-348","ESC-345"]
-decisions: [73,71,70,72,75,80,84,86,89,92,93]
+tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351","ESC-349","ESC-348","ESC-345","ESC-346"]
+decisions: [73,71,70,72,75,80,84,86,89,92,93,"un-harness-en-wasm-demande-a-l-hote-ce-q"]
 compared: null
 ---
 
@@ -191,3 +191,16 @@ OpenCode est en `run.wasm`, en version `2.2.0`, `escouade.min` `2.2.0`, comme le
 - **`agent/items` atteint tout agent d'un plugin de harness**, plus seulement ceux d'un process partagé. Pour un agent dont le programme est le sien, ce qu'un plugin dit sans qu'on lui demande passe derrière la réponse du lot d'avant.
 - **`fs/read` prend `tail`** : un fichier au-delà de la limite rend sa fin et `cut`, à partir d'un caractère entier, au lieu d'échouer. Sans `tail`, rien ne change.
 - Comme Linear et les autres, son module n'est pas dans l'installeur : avant Z2, seuls un build de développement et les tests le lancent. **Une release sortie avant Z2 n'aurait pas Antigravity CLI.**
+
+## Les harness en modules : Codex, Copilot CLI, Cursor CLI et Gemini CLI (ESC-346)
+
+Ces quatre plugins sont en `run.wasm`, en version `2.2.0`, `escouade.min` `2.2.0`, leurs identifiants inchangés. Ils ne sont plus dans `escouade-plugins`. Le cœur lance toujours leur harness et ne lie plus que Codex et Copilot, pour leurs vues, jusqu'à P8. Ce qui précède disait que le harness est servi par un process : ce n'est plus vrai pour eux.
+
+- **Ce que l'installation dit.** Codex lit le dépôt de l'agent et le dossier de son compte ; Copilot CLI lit le dépôt ; Gemini CLI lit le dossier du compte ; Cursor CLI ne déclare aucun fichier.
+- **`git add` et `git commit` restent acceptés sans carte** pour Codex et Copilot CLI, dans les modes qui le permettent. C'est maintenant Escouade qui regarde la configuration du dépôt et ses hooks, à chaque demande, par `fs/gitProtected` : un module ne lit pas `.git` et ne lance pas `git`. La méthode prend le dossier d'un agent de ce plugin et demande la racine `agentRepo`. Si la permission est retirée, ou si git ne répond pas en une seconde, la carte s'affiche : le pire cas est une question de plus, jamais une commande acceptée à tort.
+- **Le plan de Gemini** se lit par l'hôte, dans le dossier du compte de l'agent : la carte « Plan à approuver » montre le plan comme avant. Sans cette permission, elle montre le nom du fichier.
+- **La clôture sur les permissions** (Cursor, Gemini) reste insensible à la casse sous Windows : un module décide d'après le chemin.
+- **Le dossier d'un compte par défaut.** Un agent sans dossier de compte a celui où son harness regarde : `~/.codex` (ou `CODEX_HOME`), `~/.copilot`, `~/.cursor`, `~/.gemini`. Pour Gemini, c'est ce dossier-là et jamais tout `~`.
+- **Une adresse dans une permission de Copilot** dont l'hôte n'est pas en ASCII n'est permise que pour une fois, au lieu de la session.
+- **Chacun répond comme son natif**, sur 2 256 pas enregistrés avant le portage : ses lancements, ses flux enregistrés, les appels du contrat (`tests/fixtures/plugins/parity/`).
+- **Le service du protocole ACP** est dans la crate `escouade-acp`, plus dans `plugins/acp`. Cursor et Gemini en dépendent par version, comme tout plugin que le store compile seul. Cela demande `escouade-acp` `0.1.1` sur crates.io, publiée par le chef après la fusion d'ESC-346 et d'ESC-347. Tant qu'elle n'y est pas, ces quatre plugins n'ont ni `Cargo.lock` ni empreinte, ne se compilent que dans le dépôt, et `plugins/ci.mjs` les écarte de `validate` et de `build` par une liste que le second passage vide.

@@ -12,6 +12,8 @@
 //! `dev.escouade.acp` (`escouade-plugins acp`) runs one for each agent of a harness a manifest describes
 //! (`contributes.harnesses[].acp`).
 //!
+//! `plugin` is the service of the protocol around them, which a plugin of a harness on this client runs.
+//!
 //! The helpers at the top are those of the ACP harnesses, and of Antigravity CLI, whose client puts its stream in the
 //! form of this one (`plugins/antigravity`, INT-10.8).
 
@@ -21,6 +23,7 @@ pub mod gemini;
 pub mod git;
 pub mod limits;
 pub mod paths;
+pub mod plugin;
 pub mod questions;
 mod texts;
 pub mod tools;
@@ -74,13 +77,30 @@ pub fn option_of(params: &Value, kind: &str) -> String {
         .unwrap_or_else(|| kind.replace('_', "-"))
 }
 
+/// Whether the system of `path` ignores the case of its paths. A module is compiled for no system and runs on all of them:
+/// there, the path itself tells.
+fn case_ignored(path: &str) -> bool {
+    if cfg!(target_family = "wasm") {
+        windows_path(path)
+    } else {
+        cfg!(windows)
+    }
+}
+
+/// Whether `path` is a path of Windows: a drive, or the two backslashes of a share.
+fn windows_path(path: &str) -> bool {
+    let b = path.as_bytes();
+    path.starts_with(r"\\") || (b.len() >= 2 && b[0].is_ascii_alphabetic() && b[1] == b':')
+}
+
 /// Whether `text` (a path, a command) names `path` or a path under it, whatever its separators and, under Windows, its
 /// case. A guard: a longer name that starts alike counts too.
 pub fn names(text: &str, path: &str) -> bool {
+    let folded = case_ignored(path);
     let norm = |s: &str| {
         let s = s.replace('\\', "/");
         let s = s.trim_end_matches('/').to_string();
-        if cfg!(windows) {
+        if folded {
             s.to_lowercase()
         } else {
             s
@@ -130,6 +150,16 @@ pub fn inside(path: &str, dir: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_path_tells_whether_it_is_of_windows() {
+        for path in ["C:\\Prive", "c:/prive", r"\\serveur\partage"] {
+            assert!(windows_path(path), "{path}");
+        }
+        for path in ["/home/moi", "prive", ""] {
+            assert!(!windows_path(path), "{path}");
+        }
+    }
 
     #[test]
     fn the_token_goes_in_a_header_never_elsewhere() {

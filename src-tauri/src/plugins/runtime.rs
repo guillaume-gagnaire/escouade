@@ -651,7 +651,11 @@ impl Runtime {
                 .and_then(|m| m.run.as_ref())
                 .is_some_and(|r| r.in_wasm().is_some());
             // A plugin of the seed is precompiled at its first activation: a start does not pay for those that do not serve.
-            let seeded = matches!(v.origin, super::Origin::Store { seed: true, .. });
+            // Those of the registry in a module are the seed to come (a harness's is first used by its first agent).
+            let seeded = matches!(
+                v.origin,
+                super::Origin::Store { seed: true, .. } | super::Origin::Builtin
+            );
             if v.state == Loaded::Ready && in_wasm && !seeded {
                 if let Some(h) = self.prepare(&v.id) {
                     let _ = h.join();
@@ -1641,7 +1645,7 @@ impl Host {
         }
         let fetcher = super::wasm::Fetcher::new(&self.id, &self.manifest.permissions.network, &net)
             .limited(self.manifest.limits);
-        let limits = rt.limits.wasm;
+        let limits = rt.limits.wasm.asked(self.manifest.limits);
         let (host, c) = (self.clone(), conn.clone());
         std::thread::Builder::new()
             .name(format!("plugin {}", self.id))

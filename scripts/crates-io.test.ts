@@ -18,7 +18,7 @@ describe.each(CRATES)('%s', (name) => {
   const toml = read('crates', name, 'Cargo.toml');
 
   it('says all crates.io and docs.rs show', () => {
-    expect(field(toml, 'version')).toBe('"0.1.0"');
+    expect(field(toml, 'version')).toMatch(/^"0\.1\.\d+"$/);
     expect(field(toml, 'license')).toBe('"MIT"');
     expect(field(toml, 'repository')).toBe('"https://github.com/guillaume-gagnaire/escouade"');
     expect(field(toml, 'documentation')).toBe(`"https://docs.rs/${name}"`);
@@ -68,6 +68,6 @@ describe('the workspace', () => {
     expect(manifests.length).toBeGreaterThan(0);
     const lines = manifests.flatMap((f) => kitLines(fs.readFileSync(f, 'utf8')));
     expect(lines.length).toBeGreaterThan(0);
-    for (const line of lines) expect(line).toMatch(/^\S+ = "0\.1\.0"$/);
+    for (const line of lines) expect(line).toMatch(/^\S+ = "0\.1\.\d+"$/);
   });
 });

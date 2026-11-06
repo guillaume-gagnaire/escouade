@@ -170,7 +170,7 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
 name = "escouade-acp"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "dunce",
  "escouade-plugin-protocol",
@@ -218,6 +218,43 @@ dependencies = [
  "anyhow",
  "escouade-plugin-kit",
  "serde_json",
+]
+
+[[package]]
+name = "escouade-plugin-codex"
+version = "2.2.0"
+dependencies = [
+ "escouade-acp",
+ "escouade-plugin-protocol",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "escouade-plugin-copilot"
+version = "2.2.0"
+dependencies = [
+ "chrono",
+ "escouade-acp",
+ "escouade-plugin-protocol",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "escouade-plugin-cursor"
+version = "2.2.0"
+dependencies = [
+ "escouade-acp",
+ "escouade-plugin-protocol",
+]
+
+[[package]]
+name = "escouade-plugin-gemini"
+version = "2.2.0"
+dependencies = [
+ "escouade-acp",
+ "escouade-plugin-protocol",
 ]
 
 [[package]]

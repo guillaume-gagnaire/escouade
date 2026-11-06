@@ -94,6 +94,10 @@ impl Own {
 
 /// The client of one agent's Codex.
 pub struct Agent {
+    /// How the core names it: what `fs/read` takes.
+    key: String,
+    /// The folder of its account, as the host resolved it (`roots` of `agent/attach`).
+    home: Option<PathBuf>,
     cwd: String,
     lang: String,
     settings: Settings,
@@ -124,6 +128,10 @@ pub struct Agent {
     own: Own,
 }
 
+fn agent_home(a: &Attach) -> Option<PathBuf> {
+    a.roots.get("agentHome").map(PathBuf::from)
+}
+
 fn write(line: String) -> Item {
     Item::Write { line }
 }
@@ -131,6 +139,8 @@ fn write(line: String) -> Item {
 impl Agent {
     pub fn new(a: &Attach) -> Self {
         Self {
+            key: a.agent.clone(),
+            home: agent_home(a),
             cwd: a.cwd.clone(),
             lang: a.lang.clone(),
             settings: Settings {
@@ -177,6 +187,7 @@ impl Agent {
         self.settings.model = a.model.clone();
         self.settings.effort = a.effort.clone();
         self.settings.mode = a.mode.clone();
+        self.home = agent_home(a);
     }
 
     /// The description of its launch, and the first line it is written.
@@ -202,7 +213,8 @@ impl Agent {
             .as_deref()
             .filter(|h| !h.is_empty())
             .map(PathBuf::from)
-            .or_else(|| dirs::home_dir().map(|h| h.join(".codex")));
+            .or_else(|| self.home.clone());
+        let key = self.key.clone();
         let args = words::app_server_args(
             &p.fence,
             &p.mode,
@@ -210,7 +222,7 @@ impl Agent {
             p.escouade.as_ref(),
             // Only for a refused server: an entry of the user's of its name is turned off.
             || {
-                home.and_then(|h| turn::read_file(&h.join("config.toml")))
+                home.and_then(|h| escouade_acp::plugin::agent_file(&key, &h.join("config.toml")))
                     .is_some_and(|text| words::declares_escouade(&text))
             },
         );

@@ -2,7 +2,7 @@
 title: "Copilot CLI en plugin"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.5, §4.6 (INT-10.3)","docs/TODO-2.2.md, INT-10","Ticket ESC-224","plugins/copilot/README.md"]
-tickets: ["ESC-224"]
+tickets: ["ESC-224","ESC-346"]
 decisions: []
 compared: null
 ---
@@ -35,3 +35,7 @@ Coupé pour l'app ou pas chargé, le plugin n'est plus branché derrière Copilo
 ## Ce que le contrat a gagné
 
 Rien n'est propre à Copilot dans le cœur : sa ligne de la table des harness livrés est vide, ce qu'il lui faut est déclaré dans son manifeste. Tout harness peut donc dire `framing: "contentLength"`, une ligne écrite avant de fermer son entrée (`closeLine`), que son plugin ouvre lui-même la session (`opens`). `agent/rename` et `agent/compact` sont ceux d'OpenCode, et les plugins peuvent y répondre par ce qu'il faut écrire au harness. Voir *Le contrat des harness en process*.
+
+## Un module, plus un process (ESC-346)
+
+Le plugin est un module (`run.wasm`), en version `2.2.0`, et n'a plus d'entrée `escouade-plugins copilot`. Ce qui précède reste vrai pour la conversation, à deux points près : `git add` et `git commit` sont jugés par Escouade (`fs/gitProtected`, racine `agentRepo`), et une adresse dont l'hôte n'est pas en ASCII n'est permise que pour une fois. Voir *Tous les plugins en WASM*.

@@ -69,14 +69,13 @@ escouade-plugin-cli = { path = "../crates/escouade-plugin-cli" }
 escouade-plugin-kit = { path = "../crates/escouade-plugin-kit" }
 # The plugins of `escouade-plugins` (its entries): the core runs none of their code, it starts their process.
 escouade-plugin-acp = { path = "../plugins/acp" }
-escouade-plugin-cursor = { path = "../plugins/cursor" }
 # OpenCode (INT-10.2): its harness in a crate, its `opencode serve` run by the core (`Launch::shared`).
 # A module since its port (docs/PLUGINS.md §8.23): what is linked is its rules and its translation, for « Vue OpenCode » and
 # the accounts, until P8 (§8.2). It stays a member of the workspace of `plugins/`.
 escouade-plugin-opencode = { path = "../plugins/opencode" }
 escouade-plugin-mistral = { path = "../plugins/mistral" }
-escouade-plugin-gemini = { path = "../plugins/gemini" }
-# Copilot CLI (INT-10.3): its plugin, whose translation the core's « Vue Copilot » reads as a library, with its rules.
+# Copilot CLI and Codex: modules, whose translation the core's « Vue Copilot » and « Vue Codex » read as a library, with
+# their rules, until P8. They are members of the workspace of `plugins/`, not of this one.
 escouade-plugin-copilot = { path = "../plugins/copilot" }
 escouade-plugin-codex = { path = "../plugins/codex" }
 escouade-plugin-agy = { path = "../plugins/antigravity" }
@@ -181,11 +180,7 @@ members = [
     "../crates/escouade-plugin-kit",
     "../crates/escouade-acp",
     "../plugins/acp",
-    "../plugins/cursor",
     "../plugins/mistral",
-    "../plugins/gemini",
-    "../plugins/copilot",
-    "../plugins/codex",
 ]
 default-members = [
     ".",
@@ -194,11 +189,7 @@ default-members = [
     "../crates/escouade-plugin-kit",
     "../crates/escouade-acp",
     "../plugins/acp",
-    "../plugins/cursor",
     "../plugins/mistral",
-    "../plugins/gemini",
-    "../plugins/copilot",
-    "../plugins/codex",
 ]
 
 # The plugins depend on the kit by version, as the store reads them (their folder, published crates, the checksum of their

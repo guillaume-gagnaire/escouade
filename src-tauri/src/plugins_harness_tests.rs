@@ -718,3 +718,23 @@ fn a_fence_in_a_file_of_json_is_read_as_said_and_a_file_outside_the_agents_folde
     };
     assert!(check_launch("Agy", true, None, &[], false, Some(home), &outside).is_err());
 }
+
+#[test]
+fn an_agent_on_the_default_account_has_the_folder_its_harness_looks_in() {
+    let home = std::path::Path::new("/home/moi");
+    for (var, folder) in [
+        ("CODEX_HOME", ".codex"),
+        ("COPILOT_HOME", ".copilot"),
+        ("CURSOR_CONFIG_DIR", ".cursor"),
+        ("GEMINI_CLI_HOME", ".gemini"),
+    ] {
+        assert_eq!(
+            crate::plugins::harness::default_home_in(var, home),
+            Some(home.join(folder))
+        );
+    }
+    assert_eq!(
+        crate::plugins::harness::default_home_in("AUTRE", home),
+        None
+    );
+}

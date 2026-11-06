@@ -71,6 +71,8 @@ struct Call {
 
 /// The agent of an ACP harness.
 pub struct Agent {
+    /// How the core names it (`Attach::agent`): what the `fs/*` of the host take.
+    key: String,
     name: String,
     lang: String,
     version: String,
@@ -230,6 +232,7 @@ impl Agent {
     pub fn new(a: &Attach, decl: &HarnessDecl, version: &str) -> Self {
         let acp = decl.acp.clone().unwrap_or_default();
         let mut agent = Agent {
+            key: a.agent.clone(),
             name: decl.speaker.clone().unwrap_or_else(|| decl.name.clone()),
             lang: String::new(),
             version: version.into(),
@@ -1356,7 +1359,7 @@ impl Agent {
                     .unwrap_or_default()
                     .to_string()
             } else {
-                gemini::plan_of(p)
+                gemini::plan_of_agent(p, &self.key)
             };
             let rid = self.rid(&id);
             self.asked.insert(

@@ -1298,6 +1298,31 @@ async fn answer_of(
     }
 }
 
+/// The folder of the account of an agent on the default account, which has no variable of its own: where the harness
+/// looks without it, under the folder `home`. For the harnesses that read something of it (`agentHome`).
+pub(crate) fn default_home_in(var: &str, home: &Path) -> Option<PathBuf> {
+    let folder = match var {
+        "CODEX_HOME" => ".codex",
+        "COPILOT_HOME" => ".copilot",
+        "CURSOR_CONFIG_DIR" => ".cursor",
+        // Its variable names the folder that holds `.gemini`; this one is all an agent needs of the user's home.
+        "GEMINI_CLI_HOME" => ".gemini",
+        _ => return None,
+    };
+    Some(home.join(folder))
+}
+
+/// See `default_home_in`: the variable as the user has it, else under their home. Never the machine user's in the tests.
+fn default_home(var: &str) -> Option<PathBuf> {
+    if cfg!(test) {
+        return None;
+    }
+    std::env::var_os(var)
+        .filter(|v| var != "GEMINI_CLI_HOME" && !v.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| default_home_in(var, &dirs::home_dir()?))
+}
+
 impl ProcessEngineProcess {
     /// Writes `line` on its harness's input.
     fn write(&self, line: &str) {
@@ -1443,7 +1468,8 @@ impl ProcessEngineProcess {
                 .env
                 .iter()
                 .find(|(k, _)| k == self.account_var)
-                .map(|(_, v)| PathBuf::from(v)),
+                .map(|(_, v)| PathBuf::from(v))
+                .or_else(|| default_home(self.account_var)),
             cwd,
             fence: spawn.fence.clone(),
             project: spawn.project.clone(),

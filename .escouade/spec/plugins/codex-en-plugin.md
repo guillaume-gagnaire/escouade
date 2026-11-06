@@ -2,7 +2,7 @@
 title: "Codex en plugin"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4 (INT-10.4)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-225","plugins/codex/README.md"]
-tickets: ["ESC-225"]
+tickets: ["ESC-225","ESC-346"]
 decisions: []
 compared: null
 ---
@@ -31,3 +31,7 @@ Le moteur `Codex` du registre garde ce qui n'est pas la conversation : ses capac
 ## Un arrêt se dit
 
 Coupé pour l'app ou pas chargé, un agent de Codex dit au lancement « Le plugin Codex (dev.escouade.codex) est coupé ou n'est pas chargé : rallume-le dans la vue Plugins… » et garde sa session ; rallumé, il reprend. Un plugin qui plante pendant un tour est relancé comme tout plugin de harness : les demandes en attente restent répondables par leur id, et ce qui se traduisait peut être perdu (INT-9).
+
+## Un module, plus un process (ESC-346)
+
+Le plugin est un module (`run.wasm`), en version `2.2.0`, et n'a plus d'entrée `escouade-plugins codex`. Ce qui précède reste vrai pour la conversation, à deux points près : `git add` et `git commit` sont jugés par Escouade (`fs/gitProtected`, racine `agentRepo`), et `config.toml` se lit par l'hôte (racine `agentHome`). Voir *Tous les plugins en WASM*.

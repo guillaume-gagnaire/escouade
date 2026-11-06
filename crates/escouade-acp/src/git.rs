@@ -43,7 +43,22 @@ pub fn accepts(command: &str, actions: &[&str], cwd: &Path) -> bool {
     let Some(calls) = calls(command, actions) else {
         return false;
     };
-    repo_protected(cwd) && (!calls.commits() || hooks_protected(cwd))
+    guarded(cwd, calls.commits())
+}
+
+/// Whether git cannot run anything of the agent's in `cwd`: its configuration protected and, for a commit, its hooks.
+#[cfg(not(target_family = "wasm"))]
+fn guarded(cwd: &Path, commits: bool) -> bool {
+    repo_protected(cwd) && (!commits || hooks_protected(cwd))
+}
+
+/// See the native `guarded`. A module neither reads `.git` nor runs git: the host answers for the agent of `cwd`, and what
+/// it refuses is asked of the user.
+#[cfg(target_family = "wasm")]
+fn guarded(cwd: &Path, commits: bool) -> bool {
+    let params = serde_json::json!({ "path": cwd.to_string_lossy(), "commits": commits });
+    escouade_plugin_protocol::turn::host_call("fs/gitProtected", params)
+        .is_ok_and(|v| v["protected"].as_bool().unwrap_or(false))
 }
 
 /// The git calls of `command`, when it is nothing but `git add` and `git commit` and its summary

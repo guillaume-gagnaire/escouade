@@ -71,9 +71,14 @@ pub fn plan_file(title: &str) -> Option<&str> {
 
 /// The plan of the permission `params` of its `exit_plan_mode`: the text of the file it names, else its name.
 pub fn plan_of(params: &Value) -> String {
+    plan_of_agent(params, "")
+}
+
+/// `plan_of` for the agent `agent`, as the host of a module wants it (`plugin::agent_file`).
+pub fn plan_of_agent(params: &Value, agent: &str) -> String {
     let file = params["toolCall"]["title"].as_str().and_then(plan_file);
     let plan = file
-        .and_then(|f| std::fs::read_to_string(f).ok())
+        .and_then(|f| crate::plugin::agent_file(agent, std::path::Path::new(f)))
         .unwrap_or_else(|| file.unwrap_or_default().to_string());
     plan.trim().to_string()
 }

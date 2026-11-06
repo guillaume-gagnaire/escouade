@@ -1,6 +1,6 @@
 //! The parity of the modules (ESC-330, ESC-331, ESC-334, ESC-344) through the host of the app: played by `wasm::Instance`
-//! and `wasm::serve`, Codex answers as its native plugin, the `escouade-plugins` the build made beside the tests, and
-//! Linear, Trello, Jira and ClickUp as theirs did, which their port took out of it: `tests/fixtures/plugins/parity/` holds
+//! and `wasm::serve`, Linear, Trello, Jira and ClickUp answer as their native plugins did, which their port took out of
+//! `escouade-plugins` (the harnesses: `plugins_harness_parity_tests.rs`): `tests/fixtures/plugins/parity/` holds
 //! what each answered and asked its service, on the same fake, at d3c0024c. `ESCOUADE_PARITY_RECORD=1` and
 //! `ESCOUADE_NATIVE_PLUGINS=<a program of then>` write them again.
 //!
@@ -124,6 +124,7 @@ impl Native {
             });
         let mut child = Command::new(&program)
             .arg(name)
+            .env("ESCOUADE_VERSION", "2.2.0")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -165,7 +166,7 @@ impl Drop for Native {
 }
 
 /// A call and its answer, the requests it makes meanwhile served as the core serves them (`secrets/get`).
-fn call(p: &mut dyn Plugin, id: u64, method: &str, params: Value) -> Value {
+pub(crate) fn call(p: &mut dyn Plugin, id: u64, method: &str, params: Value) -> Value {
     call_with(p, id, method, params, &json!("lin_api_fake"))
 }
 
@@ -872,74 +873,6 @@ fn int0_linear_bench() {
         serde_json::to_string_pretty(&report).unwrap(),
     )
     .unwrap();
-}
-
-/// The server-to-client lines of a recording, as the harness wrote them.
-fn said(file: &str) -> Vec<String> {
-    let path = root().join("tests/fixtures/codex").join(file);
-    std::fs::read_to_string(path)
-        .expect("a recording")
-        .lines()
-        .filter_map(|l| {
-            let v: Value = serde_json::from_str(l).ok()?;
-            (v["dir"] == "s2c").then(|| v["msg"].to_string())
-        })
-        .collect()
-}
-
-/// The ids of a plugin's own requests start at a number of its own: what is compared is the rest.
-fn without_ids(v: Value) -> Value {
-    match v {
-        Value::Object(o) => o
-            .into_iter()
-            .map(|(k, v)| {
-                let kept = if k == "line" {
-                    Value::Null
-                } else {
-                    without_ids(v)
-                };
-                (k, kept)
-            })
-            .collect(),
-        Value::Array(a) => a.into_iter().map(without_ids).collect(),
-        other => other,
-    }
-}
-
-#[test]
-fn codex_translates_a_whole_turn_as_its_native_plugin() {
-    let Some(codex) = module("codex") else {
-        return;
-    };
-    let net = Net::default();
-    let mut hosted = Hosted::start(codex, Fetcher::new("dev.escouade.codex", &[], &net));
-    let mut native = Native::start("codex");
-    let attach = json!({ "agent": "a", "cwd": "C:\\wt", "model": "gpt-6-luna", "mode": "default", "lang": "fr" });
-    let mut launch = attach.clone();
-    launch["start"] = json!({ "kind": "new" });
-    for p in [&mut hosted as &mut dyn Plugin, &mut native] {
-        assert!(call(p, 1, "initialize", hello())["result"].is_object());
-        assert!(call(p, 2, "agent/attach", attach.clone())["error"].is_null());
-        assert!(call(p, 3, "engine/launch", launch.clone())["error"].is_null());
-    }
-    let (mut n, mut items) = (0, 0);
-    for file in ["full-turn.jsonl", "plan-mode.jsonl"] {
-        for (i, line) in said(file).iter().enumerate() {
-            let p = json!({ "agent": "a", "frames": [line] });
-            let id = 10 + i as u64;
-            let a = call(&mut hosted, id, "agent/frames", p.clone());
-            let b = call(&mut native, id, "agent/frames", p);
-            assert!(a["error"].is_null(), "{a}");
-            assert_eq!(
-                without_ids(a["result"].clone()),
-                without_ids(b["result"].clone()),
-                "{file}, line {i}: {line}"
-            );
-            n += 1;
-            items += a["result"]["items"].as_array().map_or(0, Vec::len);
-        }
-    }
-    assert!(n > 300 && items > 200, "{n} lines, {items} items");
 }
 
 // ---- OpenCode (ESC-349) ---------------------------------------------------------------------------------------------

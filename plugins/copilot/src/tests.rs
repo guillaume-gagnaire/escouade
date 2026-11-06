@@ -334,5 +334,27 @@ fn its_manifest_declares_copilot_with_its_framing_and_its_close() {
     assert_eq!(h["opens"], true);
     let close: Value = serde_json::from_str(h["closeLine"].as_str().unwrap()).unwrap();
     assert_eq!(close["method"], "runtime.shutdown");
-    assert_eq!(v["run"]["args"], json!(["copilot"]));
+    assert_eq!(v["run"]["wasm"], "Cargo.toml");
+}
+
+#[test]
+fn the_host_of_an_address_is_read_as_a_permission_wants_it() {
+    let host = |u: &str| crate::words::host_of(u);
+    assert_eq!(
+        host("https://Example.COM/a?b").as_deref(),
+        Some("example.com")
+    );
+    assert_eq!(
+        host("http://moi:mdp@api.exemple.fr:8080").as_deref(),
+        Some("api.exemple.fr")
+    );
+    assert_eq!(host("http://[::1]:3000/x").as_deref(), Some("[::1]"));
+    for no in [
+        "pas une adresse",
+        "https://",
+        "https://exämple.com/",
+        "1a://x",
+    ] {
+        assert_eq!(host(no), None, "{no}");
+    }
 }

@@ -1259,7 +1259,9 @@
           ]
         },
         "limits": {
-          "fileBytes": 1048576
+          "fileBytes": 1048576,
+          "memoryBytes": 134217728,
+          "turnSeconds": 5
         }
       },
       "files": {

@@ -520,6 +520,18 @@ export interface ToEscouade {
   'fs/list': { params: FsPath; result: FsListResult };
   /** The real path of a path, links followed. For a plugin in WASM, by escouade.call (run.wasm) or by a line (run.js), on permissions.files: refused for a root it does not declare, a .., a ~, or a path that, links followed, is not under a root of that agent or that its fence refuses (« Projet privé »). */
   'fs/canon': { params: FsPath; result: FsCanonResult };
+  /** Whether git cannot run anything of an agent's in its folder: its configuration protected and, when it commits, its hooks. For a harness in WASM, which neither reads .git nor runs git, by escouade.call: the answer is false when git does not answer within a second. Refused without the root agentRepo in permissions.files, and for a folder that is no agent's of this plugin. */
+  'fs/gitProtected': {
+    params: {
+      /** The agent's folder. */
+      path: string;
+      /** It commits: its hooks count too. True when left out. */
+      commits?: boolean;
+    };
+    result: {
+      protected: boolean;
+    };
+  };
   /** Runs a program of permissions.commands, for a plugin in WASM: the command and its arguments must be an entry word for word, more following only an entry that ends in *. The program is found on the PATH, never a path; no shell; 4 at once; it ends with the plugin. Its environment is an agent's, without Escouade's variables, plus env. Its output comes by proc/out, its end by proc/exit; proc/out may come before this answer. Each start goes to the journal. */
   'proc/spawn': { params: ProcSpawnParams; result: ProcSpawnResult };
   /** Writes on the input of a program; close ends that input. failed past 1 MiB it has not read. */

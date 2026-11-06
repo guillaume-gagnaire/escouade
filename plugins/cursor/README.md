@@ -1,10 +1,9 @@
 # Cursor CLI
 
-`dev.escouade.cursor-cli`, a plugin [Escouade](https://escouade.dev) gives: it is shipped with the app, signed with it,
-and updated with it. Its version is Escouade's (the `0.0.0` of its manifest is replaced by the app's when it is read).
+`dev.escouade.cursor-cli`, a plugin of [Escouade](https://escouade.dev)'s own hand: a WASM module, with a version of its own, that
+the app runs in its host.
 
-Cursor CLI comme harness, par ACP : le premier harness sorti du cœur d'Escouade (INT-10.1). Ses agents conversent comme
-avant, par un programme à part qu'Escouade lance et surveille.
+Cursor CLI comme harness, par ACP : le premier harness sorti du cœur d'Escouade (INT-10.1). Ses agents conversent comme avant, dans l'hôte des plugins d'Escouade.
 
 ## What it does
 
@@ -37,8 +36,7 @@ machine's sign-in, an account by its API key, `keyVar`), the models read for an 
 
 ## Turned off
 
-It can be turned off for the app, never removed, and a plugin of the store with the same id is refused: this one is
-the app's. Turned off or not loaded, an agent of Cursor says at its start « Le plugin Cursor CLI
+It is a plugin like any other: it can be turned off, and uninstalled. Turned off or not loaded, an agent of Cursor says at its start « Le plugin Cursor CLI
 (dev.escouade.cursor-cli) est coupé ou n'est pas chargé : rallume-le dans la vue Plugins… », and keeps its session; a
 plugin that stops while an agent runs is started again, as every plugin is.
 
@@ -51,7 +49,7 @@ plugin that stops while an agent runs is started again, as every plugin is.
 | `src/lib.rs`           | Its `run`: the ACP plugin's service, with its own harness      |
 | `README.md`            | This page                                                      |
 
-Its program is `escouade-plugins cursor` (`src-tauri/src/bin/escouade-plugins.rs` calls the crate's `run`), on the
+Its program is a module (`run.wasm`), compiled by `escouade-plugin build` from this folder and its `Cargo.lock`, on the
 service of `plugins/acp` (`serve_as`) and the client of `crates/escouade-acp`. Its tests: the
 bench of the harnesses on the fake Cursor (`src-tauri/src/engine/cursor/bench.rs`), the recorded streams of Cursor CLI
 2026.10.22 replayed by its client (`src-tauri/src/plugins_acp_tests.rs`), the tests of the core that go through it
@@ -60,9 +58,9 @@ bench of the harnesses on the fake Cursor (`src-tauri/src/engine/cursor/bench.rs
 
 ## Run it alone
 
-Against the fake Escouade of the plugins' bench, with the app's own `escouade-plugin` and `escouade-plugins` (built with
-`cargo build --bin escouade-plugin --bin escouade-plugins` in `src-tauri/`, side by side in `target/debug`):
+Against the fake Escouade of the plugins' bench, with the app's own `escouade-plugin` (`cargo build --bin escouade-plugin`
+in `src-tauri/`):
 
 ```sh
-escouade-plugin test plugins/cursor --builtin
+escouade-plugin test plugins/cursor --first-party --escouade 2.2.0
 ```

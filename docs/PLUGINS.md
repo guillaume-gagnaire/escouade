@@ -37,7 +37,7 @@ Ce document dit **ce qui a été construit**, et où. Il était l'analyse d'ESC-
 | Le journal | `src-tauri/src/plugins/journal.rs` | Démarrages, plantages, appels, décisions ; `<data>/plugin-logs/<id>.log`, secrets masqués |
 | Le store dans l'app | `src-tauri/src/plugins/store.rs`, `store_keys.rs` | Catalogue, liste de révocation, téléchargement et vérifications, sceau revérifié hors ligne |
 | Le banc | `src-tauri/src/plugins/bench/`, la CLI `escouade-plugin` (`test`, `dev`, `validate`, `build`) | La conformité d'un plugin, livrée avec l'app |
-| Le kit Rust | `crates/escouade-plugin-kit`, `crates/escouade-acp` (MIT, sur crates.io en 0.1.0, §8.16) | La boucle des plugins Rust ; le client ACP |
+| Le kit Rust | `crates/escouade-plugin-kit`, `crates/escouade-acp` (MIT, sur crates.io, §8.16) | La boucle des plugins Rust ; le client ACP et son service |
 | Le SDK | `sdk/plugin` (`@escouade-dev/plugin`, MIT), `sdk/create-escouade-plugin` | TypeScript, faux Escouade, gabarit |
 | La fenêtre | `src/components/plugins/`, `src/lib/plugins*.ts`, `src/lib/plugin-theme*.ts`, `src/lib/proposed-plugins.ts` | La vue Plugins, le store, les thèmes, les plugins proposés |
 
@@ -58,6 +58,7 @@ Le protocole de base (`schemas/plugin-protocol-1.json`, version 1, délai par d�
 | `files/read` | vers Escouade | 5 s | Un fichier de son dossier (256 Kio, texte, jamais le manifeste ni un fichier caché) |
 | `net/fetch` | vers Escouade | 10 s | Une requête https vers `permissions.network` (WASM seulement) |
 | `fs/read`, `fs/write`, `fs/stat`, `fs/list`, `fs/canon` | vers Escouade | 5 s | Les fichiers de `permissions.files` (WASM seulement, §8.4.6) |
+| `fs/gitProtected` | vers Escouade | 1 s pour git | Si git ne peut rien lancer de l'agent dans son dossier, pour un harness en WASM (`run.wasm`, §8.26) |
 | `proc/spawn`, `proc/write`, `proc/kill` | vers Escouade | 5 s | Les programmes de `permissions.commands` (WASM seulement, §8.4.7) |
 | `proc/out`, `proc/exit` | vers le plugin, notification | — | Ce qu'un programme écrit, et sa fin |
 | `log` | vers Escouade, notification | — | Une ligne de son journal |
@@ -1088,7 +1089,7 @@ Les e2e, et donc la vue Plugins, le store dans l'app, les thèmes et les sceaux 
 
 Décidé par l'utilisateur le 2026-11-04 : « je veux que tous les plugins, même les builtins, passent par le même système : on livre un plugin, il est compilé pour qu'il soit utilisable sur tous les systèmes, et il fait ce qu'il a besoin de faire », puis « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté ». Le même jour, l'état de fin : « A la fin, je veux que tous les plugins builtins soient dans /plugins/* (exemple plugins/claude), tous publiés sur le store, vérifiés et signés. »
 
-Ce chapitre est l'étude, faite avant le portage. **A1 à A8, A9, P1, P2, P4, P5, P7 et D1 sont faits** (ESC-331, §8.11 ; ESC-332, §8.12 ; ESC-334, §8.13 ; ESC-338, §8.14 ; ESC-333, §8.15 ; ESC-341, §8.16 ; ESC-335, §8.17 ; ESC-336, §8.18 ; ESC-344, §8.19 ; ESC-351, §8.22 ; ESC-349, §8.23 ; ESC-348, §8.24 ; ESC-345, §8.25 ; ESC-337, §8.20 ; ESC-342, §8.21) ; le reste du plan ne l'est pas. Le prototype, ses tests et ses mesures sont dans `prototypes/wasm-all/` (son README dit comment tout refaire). Il revoit le §5.7 (« le `run` natif, tranché ») et le §5.6 (« un `run.wasm` n'est pas ouvert ») : ces deux passages tiennent jusqu'à l'acceptation des décisions proposées par ESC-330. Sans numéro tant qu'elles ne sont pas acceptées, elles se citent par leur identifiant : `run-wasm-le-rust-des-plugins-compile-par`, `les-capacites-de-l-hote-ce-qu-un-plugin`, `la-premiere-main-dans-plugins-id-court-p`, `plus-aucun-run-command-le-store-le-refus`.
+Ce chapitre est l'étude, faite avant le portage. **A1 à A8, A9, P1, P2, P3 (Codex, Copilot CLI, Cursor, Gemini), P4, P5, P7 et D1 sont faits** (ESC-331, §8.11 ; ESC-332, §8.12 ; ESC-334, §8.13 ; ESC-338, §8.14 ; ESC-333, §8.15 ; ESC-341, §8.16 ; ESC-335, §8.17 ; ESC-336, §8.18 ; ESC-344, §8.19 ; ESC-351, §8.22 ; ESC-349, §8.23 ; ESC-348, §8.24 ; ESC-345, §8.25 ; ESC-346, §8.26 ; ESC-337, §8.20 ; ESC-342, §8.21) ; le reste du plan ne l'est pas. Le prototype, ses tests et ses mesures sont dans `prototypes/wasm-all/` (son README dit comment tout refaire). Il revoit le §5.7 (« le `run` natif, tranché ») et le §5.6 (« un `run.wasm` n'est pas ouvert ») : ces deux passages tiennent jusqu'à l'acceptation des décisions proposées par ESC-330. Sans numéro tant qu'elles ne sont pas acceptées, elles se citent par leur identifiant : `run-wasm-le-rust-des-plugins-compile-par`, `les-capacites-de-l-hote-ce-qu-un-plugin`, `la-premiere-main-dans-plugins-id-court-p`, `plus-aucun-run-command-le-store-le-refus`.
 
 **En bref.**
 
@@ -1580,7 +1581,7 @@ Les tickets du portage, dans l'ordre. **Les lettres sont des noms de travail**, 
 | --- | --- | --- |
 | **P1** (fait, §8.19) | Linear, Trello, Jira, ClickUp | le kit seul ; le plus simple |
 | **P2** (fait, §8.25) | GitHub, GitLab, Bitbucket, Gitea, Azure DevOps | `{account}`, proxy, instances auto-hébergées ; essais contre `fake-trackers` |
-| **P3** | Codex, Copilot CLI, Cursor, Gemini, ACP, Vibe, Claude Code | les machines à états ; `fs/*` pour ACP ; `real-harnesses` rejoué |
+| **P3** (Codex, Copilot CLI, Cursor, Gemini : fait, §8.26) | Codex, Copilot CLI, Cursor, Gemini, ACP, Vibe, Claude Code | les machines à états ; `fs/*` pour ACP ; `real-harnesses` rejoué |
 | **P4** (fait, §8.24) | Antigravity | l'attente du transcript réécrite (§8.4.6) |
 | **P5** (fait, §8.23) | OpenCode | SSE, `local:shared`, ses trois tâches ; le plus risqué des harness |
 | **P6** | OpenAI, Groq, Mistral, ElevenLabs, Deepgram | sortir `voice/online*`, `live.rs`, `wire.rs` du crate de l'app dans une crate commune ; WebSocket ; INT-13 rejoué |
@@ -1739,7 +1740,7 @@ Linear, Trello, Jira et ClickUp sont les premiers plugins portés, en `2.2.0`, `
 
 **La forme : un plugin porté a deux compilations** (le point ouvert du §8.16, décision proposée au ticket).
 
-- **Dans le dépôt**, contre `crates/`. `plugins/Cargo.toml` est un second workspace, qui ne tient que les plugins portés, avec le même `[patch.crates-io]` et le profil d'un module. Son `Cargo.lock` est commité. `plugins/rust-toolchain.toml` est la copie de celui de `src-tauri`, que `scripts/plugins-ci.test.ts` garde égal. `plugins/.cargo/config.toml` partage `src-tauri/target` : une compilation, le cache de la CI, et les modules là où les tests les cherchent.
+- **Dans le dépôt**, contre `crates/`. `plugins/Cargo.toml` est un second workspace, qui ne tient que les plugins portés, avec le même `[patch.crates-io]` et le profil d'un module. Son `Cargo.lock` est commité. `plugins/rust-toolchain.toml` est la copie de celui de `src-tauri`, que `scripts/plugins-ci.test.ts` garde égal. `plugins/.cargo/config.toml` partage `src-tauri/target` et range ses compilations intermédiaires dans `src-tauri/target/plugins` (`build-dir`, §8.23) : le cache de la CI, et les modules là où les tests les cherchent.
 - **Au store**, contre crates.io. Chaque plugin porté a son propre `Cargo.lock`, dans son dossier, que cargo ignore dans le workspace et que `escouade-plugin build` lit, sur sa copie du dossier seul (§8.17). `sh scripts/plugin-lock.sh <id-court>` l'écrit : il part du `Cargo.lock` de `src-tauri`, ce qui garde les versions de la liste fermée, hors de tout workspace. **Aucun ajout à `rust_native.json`.**
 - Ce que le store publiera est donc le second. Les deux modules diffèrent : même source, chemins autres.
 - Le lock fixe le kit publié. Un changement de `crates/` n'atteint un plugin qu'après une publication et un nouveau `plugin-lock.sh`. Le dépôt peut donc tester un kit que le store ne compile pas encore : c'est `ci.mjs`, qui fait les deux, qui le voit.
@@ -1947,3 +1948,61 @@ GitHub, GitLab, Bitbucket, Gitea et Azure DevOps suivent la marche à suivre du 
 Les cinq sont identiques sous Windows et sous Linux, dans deux dossiers (`sh scripts/plugin-build-linux.sh plugins/<id-court> --first-party`, `rust:1.98.0-bookworm`, Podman), `canon` `4d3e106a…`. macOS n'a pas été essayé.
 
 **Pas fait ici.** Ni étiquette, ni soumission, ni crates.io. Une release sortie avant Z2 n'aurait plus ces cinq hébergeurs (§8.19). INT-0 n'a pas été rejoué : un hébergeur fait un `fetch` et un secret par appel, comme Linear, mesuré au §8.19.
+
+### 8.26 Ce que P3 a construit (ESC-346)
+
+Codex, Copilot CLI, Cursor CLI et Gemini CLI sont des modules, en `2.2.0`, `escouade.min` `2.2.0`, `"run": { "wasm": "Cargo.toml" }`, sortis d'`escouade-plugins` et du workspace de `src-tauri`. Le cœur les lance toujours et ne lie plus que Codex et Copilot, pour leurs vues.
+
+**Ce qui a dû changer, en dehors des cinq endroits du prototype.**
+
+- **`escouade-acp` passe à `0.1.1`, à publier.** Tous les quatre en dépendent : la version change avant de pouvoir écrire leurs `Cargo.lock` (plus bas). P3b (ESC-347) a sa part dans la même publication.
+- **Le service ACP entre dans la crate** (`escouade_acp::plugin`). Cursor, Gemini et Mistral dépendaient de `plugins/acp` par un chemin, qu'un dossier seul ne compile pas. `plugins/acp` n'est plus qu'une façade, jusqu'à P3b. La version d'Escouade se lit dans `greeting()` à l'arrivée d'un agent : à la création du service, `initialize` n'est pas passé en module.
+- **`turn::read_file` ne suffit pas.** Il n'envoie pas d'agent, et l'hôte refuse un chemin d'agent sans lui. `escouade_acp::plugin::agent_file(agent, path)` l'envoie : Codex y lit `config.toml`, Gemini son plan. Le protocole ne change pas, il n'y a rien à publier de ce côté.
+- **`fs/gitProtected`, une nouvelle méthode de l'hôte.** La garde qui laisse passer `git add` et `git commit` sans carte lit `.git` et lance `git rev-parse`, ce qu'un module ne peut pas. Le prototype ne l'avait pas vu : ses flux enregistrés ne passent pas par cette garde, et le module aurait posé la question à chaque commit, sans erreur. `git::accepts` demande à l'hôte en module, par `escouade.call`, à chaque demande de permission comme avant. Elle prend le dossier d'un agent de ce plugin, demande la racine `agentRepo`, et ne rend qu'un booléen. Refusée ou trop lente (1 s, un tour en a 2), la réponse est non : la carte s'affiche. Une entrée de `proc/*` n'allait pas : c'est asynchrone, et il aurait fallu `git *` en commande déclarée (§8.4.7).
+- **Les chemins.** En module, `cfg!(windows)` est faux sous Windows. `names()`, le garde-fou de la clôture de Cursor et Gemini, serait devenu sensible à la casse sous Windows : `c:\prive` n'aurait plus couvert `C:\Prive`. En wasm, il décide d'après le chemin. Le reste de Codex et Copilot compare des chaînes, déjà insensibles aux barres et à la casse.
+- **Le dossier de compte par défaut**, que le §8.15 laissait à P3. Sans variable de compte, `AgentPlace.home` prend celui du harness : `CODEX_HOME` ou `~/.codex`, `~/.copilot`, `~/.cursor`, et `~/.gemini` plutôt que `~`, qui aurait donné tout le dossier de l'utilisateur.
+- **Copilot perd `url`**, remplacé par 20 lignes (`words::host_of`). La crate tirait `displaydoc`, `yoke-derive`, `zerofrom-derive`, `zerovec-derive`, `synstructure` et `syn` 2, hors de `rust_native.json`. Une adresse que cette fonction ne sait pas lire n'a pas d'hôte, et sa permission vaut pour une fois : c'est le seul écart possible, sur une adresse non ASCII. **Aucun ajout à `rust_native.json`.** Le module passe de 903 291 à 691 448 o.
+
+**Repris d'ESC-347** : `limits.memoryBytes` et `limits.turnSeconds` (les quatre manifestes demandent 256 Mio et 10 s, un message de 18 Mio ferait tomber un module à 64 Mio, et avec lui tous les agents du harness), et le précompilé gardé à côté des modules de `plugins-wasm/` en debug et en test.
+
+**Les modules du registre se précompilent à leur première activation**, comme ceux de l'amorce : en debug, les huit à chaque démarrage sur des données neuves faisaient passer « Nouveau projet » de quelques secondes à 12 s et 23 e2e dépassaient leurs 15 s.
+
+**Les permissions, désormais dites à l'installation.** Codex : `agentRepo` et `agentHome` en lecture. Copilot : `agentRepo`. Gemini : `agentHome`. Cursor : aucune. Avant, un process pouvait tout, sans le dire.
+
+**Deux formes de crate.** Cursor et Gemini sont des `cdylib`, comme P1. Codex et Copilot sont `["cdylib", "rlib"]` : la vue du cœur lit leur traduction jusqu'à P8. Ils sont membres du workspace de `plugins/` et restent une dépendance `path` de `src-tauri`, ce que cargo accepte : une dépendance n'a pas à être membre. `src-tauri/Cargo.toml` les garde donc, sans les `members`. `scripts/plugins-ci.test.ts` accepte les deux formes.
+
+**Les compilations de `plugins/` sont à part.** Un crate avec un `cdylib` n'a pas d'empreinte dans le nom de ses fichiers : `libescouade_plugin_copilot.rlib` était le même pour les deux workspaces, et l'app reprenait la `rlib` bâtie par `plugins/` contre un autre `serde_json` (E0308, « two versions of the same »). `plugins/.cargo/config.toml` garde `target-dir` et ajoute `build-dir = "../src-tauri/target/plugins"`, la forme de P5 (ESC-349) : les modules restent où `scripts/plugins-wasm.sh` et la CI les cherchent.
+
+**La parité.** `plugins_harness_parity_tests.rs` remplace la comparaison en direct de Codex, puisque le natif n'existe plus. `tests/fixtures/plugins/parity/<court>.jsonl` tient ce que chaque natif a répondu, enregistré sur le programme de `6dbd1223` : 8 lancements (modes, lecture seule, clôture, reprise, serveur d'Escouade), puis les fichiers de `tests/fixtures/<harness>/` joués ligne à ligne, un message envoyé là où le client de l'enregistrement parlait, une permission acceptée là où il répondait, et tous les appels du contrat à la fin. Soit 377 pas pour Codex, 999 pour Copilot, 717 pour Cursor et 163 pour Gemini, **sans écart**.
+
+- Deux enregistrements successifs du natif sont identiques.
+- Un enregistrement répond aux ids de son client, pas à ceux-ci : la relecture donne à chaque réponse l'id que le plugin a écrit pour cette méthode. Sans ça, aucune session ne s'ouvre et on compare du vide : Copilot passait de 50 pas à 999.
+- Copilot demande `auth.getStatus` et d'autres que ses enregistrements n'ont pas : `Harness::answers` y répond.
+- Trois choses ne se comparent pas : le début des ids des requêtes (`instance_id`), l'ordre de `writes` (une table de hachage), et `clientInfo.version` de Codex, celle de sa crate, seul écart réel : `2.2.0` au lieu de `1.0.0`.
+- Le plan de Gemini nomme un fichier du poste de l'enregistrement, que le natif lisait pour de vrai. Le chemin est faussé pour les deux côtés : la lecture du plan se vérifie dans l'e2e.
+- `ESCOUADE_PARITY_RECORD=1 ESCOUADE_NATIVE_PLUGINS=<programme d'avant>` les réécrit. Il faut un programme d'avant le portage : celui-ci n'a plus ces entrées.
+
+**INT-0.** Le banc de flux (`fluxbench::int0_stream_bench`) en release, sous Windows, en trois passes (5, 20 et 20 tours) : la seule dernière sur un poste calme, les deux autres avec d'autres agents qui compilaient. Le 99e centile est donné passe par passe, comparé au process mesuré à la sortie de chaque harness (§4.6). Claude Code, qui reste un process ici, sert de témoin du bruit : 2,4, 2,0 et 1,5 ms au plus vite pour 0,84 ms le jour de sa mesure, et son long tour à son rythme, à 55 et 81 ms sur la première et la dernière passe, pour 32 ms.
+
+| 99e centile | Process | Module, passes 1, 2, 3 | Débit, passes 1, 2, 3 |
+| --- | --- | --- | --- |
+| Codex, à son rythme | 31,5 ms | 31,7, 31,3, 31,6 ms | |
+| Copilot, à son rythme | 30,9 ms | 46,5, 62,0, 32,1 ms | |
+| Cursor, à son rythme | 32,2 ms | 33,0, 58,5, 54,4 ms | |
+| Codex, au plus vite | 3,7 ms | 9,7, 4,3, 10,1 ms | 8 416, 14 660, 17 841 lignes/s |
+| Copilot, au plus vite | 7,5 ms | 27,7, 15,2, 26,5 ms | 18 097, 15 795, 20 080 lignes/s |
+| Cursor, au plus vite | 7,2 ms | 6,7, 6,4, 2,6 ms | 9 576, 14 699, 23 712 lignes/s |
+| Gemini, au plus vite | 0,8 ms | 30,6, 5,9, 7,2 ms | 4 032, 5 415, 9 084 lignes/s |
+
+- **Le débit tient partout** : plus de 2 200 lignes/s, et il dépasse le process pour Codex et Cursor sur la meilleure passe.
+- **À son rythme**, ce que le seuil vise, Codex tient à chaque passe et Copilot sur la passe calme (+1,2 ms). Cursor ne tient que sur une passe sur trois (+0,8 ms) : son 99e centile porte sur 5 lignes de 471, et le témoin monte autant. **Ce n'est pas tranché : à remesurer sur un poste vide.**
+- **Au plus vite**, Copilot et Gemini restent au-dessus de 5 ms de plus, et Codex deux fois sur trois, même sur la passe calme. Leur médiane ne bouge pas : ce sont quelques lignes. Ce rythme n'arrive pas en vrai, et 32 ms au moins séparent déjà deux envois de la conversation, mais **l'écart n'est pas expliqué**.
+- Gemini n'a pas de flux à son rythme au banc.
+
+**Second passage, après la publication d'`escouade-acp` `0.1.1`.** Le chef la publie depuis `main`, une fois ESC-346 et ESC-347 fusionnés : une version publiée ne se retire pas, et les deux branches portent chacune une part de la crate. D'ici là, les quatre plugins n'ont ni `Cargo.lock` ni empreinte : `plugin-lock.sh` ne trouve pas cette version, et `escouade-plugin build` lit ce lock. `AWAITING_PUBLICATION`, la liste qu'ESC-347 pose aussi, dans `plugins/ci-lib.mjs`, les écarte de `validate` et de `build` de `ci.mjs`, sans quoi `main` serait rouge. Il les joue au banc sur le module du dépôt quand il est là (`--first-party --escouade 2.2.0 --wasm`), et un test exige un `Cargo.lock` des autres et refuse celui d'un plugin de la liste. Le second passage lance `sh scripts/plugin-lock.sh codex copilot cursor gemini`, note les empreintes Windows et Linux ici, et vide cette liste.
+
+**Les harness réels.** Cursor CLI 2026.10.22 (`real_cursor`) et Copilot CLI 1.0.98 (`real_copilot_through_its_plugin`) ont tourné, par leur module, sur les comptes du poste. **Pas rejoués** : Codex, le poste n'a que la 0.144.5, refusée (0.163 au moins) ; Gemini, pas de compte ; `real-harnesses.spec.ts` pour Copilot, qui réécrit `~/.copilot/config.json`. Aucun jeton pris, aucun fichier de connexion touché.
+
+**Le piège du `Reactor` du kit** (ESC-351) ne les touche pas : ces quatre plugins ne dépendent pas du kit, et `turn::run` traite chaque ligne jusqu'au bout, sans tâche qui attend.
+
+**Pas fait ici.** Le portage d'ACP, de Claude Code (P3b) et de Vibe (P6) : `plugins/acp` et `plugins/mistral` restent natifs. Les vues « Vue X » (P8). Ni étiquette ni soumission.

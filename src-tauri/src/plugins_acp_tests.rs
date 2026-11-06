@@ -217,7 +217,8 @@ fn what_the_manifest_declares_is_what_the_harness_is() {
 
 /// Cursor CLI as the manifest of its plugin declares it (INT-10.1): an ACP harness with its extension `cursor`.
 fn cursor_decl() -> Value {
-    let v: Value = serde_json::from_str(escouade_plugin_cursor::MANIFEST).unwrap();
+    let v: Value =
+        serde_json::from_str(include_str!("../../plugins/cursor/escouade-plugin.json")).unwrap();
     v["contributes"]["harnesses"][0].clone()
 }
 
@@ -498,7 +499,8 @@ fn the_recorded_streams_of_vibe_make_through_its_plugin_s_client_the_items_of_th
 
 /// Gemini CLI as the manifest of its plugin declares it (INT-10.7): an ACP harness with its extension `gemini`.
 pub(crate) fn gemini_decl() -> Value {
-    let v: Value = serde_json::from_str(escouade_plugin_gemini::MANIFEST).unwrap();
+    let v: Value =
+        serde_json::from_str(include_str!("../../plugins/gemini/escouade-plugin.json")).unwrap();
     v["contributes"]["harnesses"][0].clone()
 }
 

@@ -97,6 +97,10 @@ fn parts_of(path: &str) -> Option<Vec<&str>> {
 
 // ---- fs/* ------------------------------------------------------------------------------------------------------
 
+/// How long `fs/gitProtected` waits for git: well within the 2 s of a turn.
+const GIT_WITHIN: std::time::Duration =
+    std::time::Duration::from_secs(if cfg!(test) { 30 } else { 1 });
+
 /// Where an agent lives, as the core resolved it: what `fs/*` and `proc/spawn` take for the agent named by a plugin. The
 /// plugin is told its roots by `agent/attach`, and can change none of it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -214,6 +218,7 @@ impl Access {
             "fs/stat" => self.stat(params),
             "fs/list" => self.list(params),
             "fs/canon" => self.canon(params),
+            "fs/gitProtected" => self.git_protected(params),
             _ => {
                 return Err((
                     super::runtime::METHOD_NOT_FOUND,
@@ -302,6 +307,42 @@ impl Access {
             }));
         }
         Ok((folders, place.map(|p| p.fence).unwrap_or_default()))
+    }
+
+    /// Whether git cannot run anything of the agent's in its folder `path`: its configuration protected and, when it
+    /// `commits`, its hooks. What lets `git add` and `git commit` go without asking (`escouade_acp::git`): a module neither
+    /// reads `.git` nor runs git. It says two booleans of a folder the plugin was given, and asks for `agentRepo`. A git
+    /// that does not answer within a turn says no: the user is asked.
+    fn git_protected(&self, params: &Value) -> Result<Value, (i64, String)> {
+        let asked = self.asked(params)?;
+        if !self.declared.iter().any(|f| f.root == "agentRepo") {
+            return Err((REFUSED, "agentRepo is not in permissions.files".into()));
+        }
+        let same = |cwd: &Path| {
+            let cwd = cwd.to_string_lossy();
+            escouade_acp::inside(&cwd, asked.path) && escouade_acp::inside(asked.path, &cwd)
+        };
+        let cwd = self
+            .agents
+            .lock()
+            .values()
+            .map(|p| p.cwd.clone())
+            .find(|c| same(c));
+        let cwd = cwd.ok_or_else(|| {
+            (
+                REFUSED,
+                format!("{:?} is the folder of no agent of this plugin", asked.path),
+            )
+        })?;
+        let commits = params["commits"].as_bool().unwrap_or(true);
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let git = escouade_acp::git::repo_protected(&cwd)
+                && (!commits || escouade_acp::git::hooks_protected(&cwd));
+            let _ = tx.send(git);
+        });
+        let protected = rx.recv_timeout(GIT_WITHIN).unwrap_or(false);
+        Ok(json!({ "protected": protected }))
     }
 
     /// The real path of what `params` names, links followed as far as it exists: under a root of that agent, out of its
@@ -774,6 +815,47 @@ mod tests {
                 .unwrap()["text"],
             "dans le worktree"
         );
+    }
+
+    #[test]
+    fn a_harness_asks_whether_the_git_of_its_agent_is_protected() {
+        let b = Bed::new(json!([{ "root": "agentRepo", "access": "read" }]));
+        let path = b.path("wt");
+        let asked = |commits: bool| {
+            let params = json!({ "path": path, "commits": commits });
+            b.call("fs/gitProtected", params).unwrap()["protected"].clone()
+        };
+        // No repository: nothing is accepted.
+        assert_eq!(asked(false), false);
+        // Its own `.git`, which the sandbox protects.
+        let git = |args: &[&str]| {
+            let done = std::process::Command::new("git")
+                .args(args)
+                .current_dir(b.base.join("wt"))
+                .output()
+                .unwrap();
+            assert!(done.status.success(), "{done:?}");
+        };
+        git(&["init", "-q"]);
+        assert_eq!(asked(false), true);
+        assert_eq!(asked(true), true);
+        // Hooks of the worktree, which the agent writes: a commit would run them.
+        git(&["config", "core.hooksPath", "src"]);
+        assert_eq!(asked(false), true);
+        assert_eq!(asked(true), false);
+        // The folder of an agent of this plugin, in any form it is written.
+        let upper = json!({ "path": path.replace('\\', "/") + "/", "commits": false });
+        assert!(b.call("fs/gitProtected", upper).is_ok());
+        // Not any other folder.
+        let elsewhere = json!({ "path": b.path("repo") });
+        assert_eq!(b.call("fs/gitProtected", elsewhere).unwrap_err().0, REFUSED);
+    }
+
+    #[test]
+    fn git_is_not_read_for_a_plugin_that_does_not_declare_the_repository() {
+        let b = Bed::new(json!([{ "root": "agent", "access": "read" }]));
+        let params = json!({ "path": b.path("wt") });
+        assert_eq!(b.call("fs/gitProtected", params).unwrap_err().0, REFUSED);
     }
 
     #[test]

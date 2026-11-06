@@ -98,12 +98,16 @@ export interface Manifest {
   id: string;
   /** An SPDX identifier (`MIT`). */
   license?: string;
-  /** What a plugin in WASM asks for beyond the host's defaults; Escouade caps them at 120 s and 32 MiB for `net/fetch`, 4 MiB for `fs/read`. */
+  /** What a plugin in WASM asks for beyond the host's defaults; Escouade caps them at 120 s and 32 MiB for `net/fetch`, 4 MiB for `fs/read`, 256 MiB for its memory, 10 s for a turn. */
   limits?: {
     fetchBytes?: number;
     fetchSeconds?: number;
     /** How much `fs/read` gives at most: 256 KiB without it. */
     fileBytes?: number;
+    /** How much linear memory its instance may take: 64 MiB without it. */
+    memoryBytes?: number;
+    /** How long a turn of its instance may take: 2 s without it. */
+    turnSeconds?: number;
   };
   /** One text, or a text by language (`en` first, then `fr`). */
   name: string | Record<string, string>;

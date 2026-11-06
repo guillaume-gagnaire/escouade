@@ -122,7 +122,7 @@ fn its_manifest_declares_codex_with_its_session_opened_over_the_protocol() {
     assert_eq!(h["opens"], true);
     assert_eq!(h["accountVar"], "CODEX_HOME");
     assert_eq!(h["tested"]["oldest"], "0.163.0");
-    assert_eq!(m["run"]["args"][0], "codex");
+    assert_eq!(m["run"]["wasm"], "Cargo.toml");
 }
 
 #[test]

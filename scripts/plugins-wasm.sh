@@ -4,8 +4,6 @@
 # seed gives it (docs/PLUGINS.md §8.6.4, §8.7). `rust-toolchain.toml` brings the target.
 #
 # Those whose manifest says `run.wasm` are the workspace of `plugins/`, against `crates/` by its `[patch.crates-io]`.
-# Codex is still an rlib of `escouade-plugins`, in the workspace of `src-tauri`, played by plugins_wasm_parity_tests.rs:
-# `--crate-type cdylib` makes it a reactor here. It moves to the first list at its port (P3).
 #
 # This is no reproducible build, nor what the store publishes: that is `escouade-plugin build`, from the plugin's folder
 # alone, on the crates of crates.io (§8.17).
@@ -18,7 +16,7 @@ cd "$here/../src-tauri"
 target=${CARGO_TARGET_DIR:-target}
 
 ported=$(cd ../plugins && grep -l '"wasm"[[:space:]]*:' ./*/escouade-plugin.json | xargs -n 1 dirname | xargs -n 1 basename)
-wanted=${*:-$ported codex}
+wanted=${*:-$ported}
 
 crate_of() {
   sed -n 's/^name[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' "../plugins/$1/Cargo.toml" | head -n 1

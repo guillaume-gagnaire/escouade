@@ -1,9 +1,10 @@
 //! The plugin Copilot CLI (`dev.escouade.copilot-cli`, INT-10.3, docs/PLUGINS.md §4): GitHub Copilot CLI as a harness.
 //! It is no ACP harness: the core finds `copilot`, checks the launch this plugin describes and starts it, its messages
 //! framed by `Content-Length` headers (`framing` of the manifest); what Copilot writes comes here (`agent/frames`) and
-//! goes back as the items of the conversation and the messages to write to it, by the client of `client`.
+//! goes back as the items of the conversation and the messages to write to it, by the client of `client`. It is a module
+//! (`run.wasm`).
 //!
-//! `translate` and `words` are also read by the core, as a library, for what stays in it: its « Vue Copilot » reads the
+//! `translate` and `words` are also read by the core, as a library, until P8, for what stays in it: its « Vue Copilot » reads the
 //! session's log through the same translation, and an account's quota and models read by a server of their own.
 
 pub mod client;
@@ -15,7 +16,7 @@ use escouade_plugin_protocol::engine::{
     method, AgentRef, AnswerPermission, AnswerQuestion, Attach, Compact, Compacted, Frames, Items,
     LaunchParams, SendMessage, SetValue, UsageAsked, Writes,
 };
-use escouade_plugin_protocol::{serve, Refusal};
+use escouade_plugin_protocol::{turn, Refusal};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
@@ -48,21 +49,14 @@ fn writes(lines: Vec<String>) -> Result<Value, Refusal> {
 
 pub fn run() -> i32 {
     let mut plugin = Plugin::default();
-    let stdin = std::io::stdin();
-    let result = serve(
-        stdin.lock(),
-        std::io::stdout().lock(),
+    turn::run(
+        "copilot",
         json!({ "harnesses": ["copilot"] }),
-        |m, params| plugin.handle(m, params),
-    );
-    match result {
-        Ok(()) => 0,
-        Err(e) => {
-            eprintln!("escouade-plugins copilot: {e}");
-            1
-        }
-    }
+        move |m, params| plugin.handle(m, params),
+    )
 }
+
+escouade_plugin_protocol::module!(run);
 
 impl Plugin {
     fn agent(&mut self, key: &str) -> Result<&mut Agent, Refusal> {
