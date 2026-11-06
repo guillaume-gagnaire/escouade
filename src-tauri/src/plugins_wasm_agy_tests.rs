@@ -69,16 +69,37 @@ fn lines_of(stream: &str, home: &Path) -> Vec<String> {
     text.unwrap()
         .lines()
         .map(|l| l.replace("C:\\\\tmp\\\\esc269\\\\home1", &home))
-        // The streams were recorded under Windows: elsewhere what follows the home is a path by its slashes, or the plan
-        // would be written and read beside it (the CI's Linux, 2026-11-06).
-        .map(|l| {
-            if cfg!(windows) {
-                l
-            } else {
-                l.replace("\\\\", "/")
-            }
-        })
+        .map(|l| under_home(&l, &home, if cfg!(windows) { "\\\\" } else { "/" }))
         .collect()
+}
+
+/// `line` with what follows `home` by `separator`, as JSON writes it: the streams were recorded under Windows, and
+/// elsewhere the plan would be written and read beside the home (the CI's Linux, 2026-11-06). Under Windows the home is a
+/// `\\?\` path, which takes no forward slash. The folder of the work stays as it was recorded: it is only words, which
+/// the recording holds.
+fn under_home(line: &str, home: &str, separator: &str) -> String {
+    let mut out = String::new();
+    let mut rest = line;
+    while let Some(at) = rest.find(home) {
+        let (before, after) = rest.split_at(at + home.len());
+        let end = after.find('"').unwrap_or(after.len());
+        out.push_str(before);
+        out.push_str(&after[..end].replace("\\\\", separator));
+        rest = &after[end..];
+    }
+    out.push_str(rest);
+    out
+}
+
+#[test]
+fn a_stream_of_windows_reads_its_home_by_the_slashes_of_this_system_and_nothing_else() {
+    let line = r#"{"Path":"/home/x\\.gemini\\brain\\p.md","cwd":"C:\\tmp\\work"}"#;
+    assert_eq!(
+        under_home(line, "/home/x", "/"),
+        r#"{"Path":"/home/x/.gemini/brain/p.md","cwd":"C:\\tmp\\work"}"#
+    );
+    assert_eq!(under_home(line, "/home/x", "\\\\"), line);
+    assert_eq!(under_home(line, "/elsewhere", "/"), line);
 }
 
 /// The conversation of a stream, and its transcript as `agy` would have written it beside it: for each step that ends a
@@ -119,7 +140,7 @@ fn transcript_of(lines: &[String], home: &Path, stream: &str) {
         let path = s["tool_info"]["parameters"]["Path"].as_str();
         if let Some(plan) = path.filter(|p| p.contains("brain") && p.ends_with(".md")) {
             std::fs::create_dir_all(Path::new(plan).parent().unwrap()).unwrap();
-            std::fs::write(plan, "# Le plan\n").unwrap();
+            std::fs::write(plan, "# Le plan\n").unwrap_or_else(|e| panic!("{plan:?}: {e}"));
         }
     }
     let file = home.join(".gemini/antigravity-cli/brain").join(id);
