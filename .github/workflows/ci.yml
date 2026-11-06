@@ -220,7 +220,7 @@ jobs:
 
       - name: Clippy for wasm32-wasip1
         working-directory: src-tauri
-        run: cargo clippy --locked --target wasm32-wasip1 -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp -p escouade-plugin-codex -- -D warnings
+        run: cargo clippy --locked --target wasm32-wasip1 -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp -- -D warnings
 
       # The workspace of plugins/: the plugins in run.wasm, which that of src-tauri does not hold.
       - name: The modules' workspace, formatted and without warnings
