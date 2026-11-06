@@ -18,6 +18,25 @@ pub struct Member<'a> {
     pub archived: bool,
 }
 
+/// A `Member` that owns its id, read from the agents before the `projects` lock is taken.
+pub struct OwnedMember {
+    pub id: String,
+    pub created_at: i64,
+    pub waiting: bool,
+    pub archived: bool,
+}
+
+impl OwnedMember {
+    pub fn as_member(&self) -> Member<'_> {
+        Member {
+            id: &self.id,
+            created_at: self.created_at,
+            waiting: self.waiting,
+            archived: self.archived,
+        }
+    }
+}
+
 /// What the sidebar lists, top to bottom.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Shown {
@@ -99,12 +118,7 @@ pub fn place_after(p: &mut Project, agent: &str, after: &str) {
 
 /// Forgets `agent` everywhere: folders, principal, order.
 pub fn remove_agent(p: &mut Project, agent: &str) {
-    for f in &mut p.agent_folders {
-        f.agents.retain(|a| a != agent);
-        if f.principal.as_deref() == Some(agent) {
-            f.principal = None;
-        }
-    }
+    remove_agent_keep_order(p, agent);
     p.agent_order.retain(|a| a != agent);
 }
 
@@ -265,18 +279,18 @@ pub fn shown_agents(p: &Project, members: &[Member]) -> Vec<String> {
 }
 
 impl<R: Runtime> Core<R> {
-    /// The project's agents as `Member`s, read before any write of `projects`.
-    fn folder_members(&self, project_id: &str) -> Vec<(String, i64, bool, bool)> {
+    /// The project's agents, read before any write of `projects`; `as_member` for the rules.
+    pub(crate) fn folder_members(&self, project_id: &str) -> Vec<OwnedMember> {
         self.project_agents(project_id)
             .iter()
             .map(|h| {
                 let m = &h.lock().meta;
-                (
-                    m.id.clone(),
-                    m.created_at,
-                    m.status == AgentStatus::Waiting,
-                    m.archived,
-                )
+                OwnedMember {
+                    id: m.id.clone(),
+                    created_at: m.created_at,
+                    waiting: m.status == AgentStatus::Waiting,
+                    archived: m.archived,
+                }
             })
             .collect()
     }
@@ -288,15 +302,7 @@ impl<R: Runtime> Core<R> {
         f: impl FnOnce(&mut Project) -> Result<T>,
     ) -> Result<T> {
         let owned = self.folder_members(project_id);
-        let members: Vec<Member> = owned
-            .iter()
-            .map(|(id, created_at, waiting, archived)| Member {
-                id,
-                created_at: *created_at,
-                waiting: *waiting,
-                archived: *archived,
-            })
-            .collect();
+        let members: Vec<Member> = owned.iter().map(OwnedMember::as_member).collect();
         let out = {
             let mut projects = self.projects.write();
             let p = projects
@@ -428,15 +434,7 @@ impl<R: Runtime> Core<R> {
     /// The agents the sidebar shows, top to bottom (`shown_agents`).
     pub fn shown_agents_of(&self, project_id: &str) -> Vec<String> {
         let owned = self.folder_members(project_id);
-        let members: Vec<Member> = owned
-            .iter()
-            .map(|(id, created_at, waiting, archived)| Member {
-                id,
-                created_at: *created_at,
-                waiting: *waiting,
-                archived: *archived,
-            })
-            .collect();
+        let members: Vec<Member> = owned.iter().map(OwnedMember::as_member).collect();
         self.project(project_id)
             .map(|p| shown_agents(&p, &members))
             .unwrap_or_default()
