@@ -1760,6 +1760,27 @@ async fn an_opencode_agent_says_its_plugin_is_off_and_talks_again_once_it_is_on(
     wait_long(&h, "its answer", 30, answered).await;
 }
 
+/// The agent's process ends as its plugin goes off, before the watch of 250 ms has looked: it says why all the same. It
+/// stopped without a word on the CI's Linux, where its server ends first (2026-11-05).
+#[tokio::test(flavor = "multi_thread")]
+async fn an_opencode_agent_that_ends_as_its_plugin_goes_off_says_why() {
+    let h = harness("int10-opencode-off-race");
+    let (p, _) = h.project(false).await;
+    opencode_account(&h);
+    let a = new_agent(&h, &p.id).await;
+    let id = crate::plugins::builtin::OPENCODE;
+    let process = h.core.agent(&a).unwrap().lock().proc.clone();
+    let process = process.expect("the process of the agent");
+    h.core.plugins.choose(id, |c| c.enabled = false).unwrap();
+    h.core.plugin_runtime.forget(id);
+    crate::engine::EngineProcess::kill(&*process);
+    wait_long(&h, "its stop", 30, |h| {
+        !h.agent(&a).status.is_active() && !h.alive(&a)
+    })
+    .await;
+    assert!(said(&h, &a).contains(id), "{}", said(&h, &a));
+}
+
 /// The plugin crashes in the middle of a turn: `opencode serve` goes on (the core runs it), the plugin starts again, hears
 /// the session again, and the turn is stopped and followed by the next as if nothing had happened.
 #[tokio::test(flavor = "multi_thread")]
@@ -1808,10 +1829,9 @@ async fn an_opencode_agent_stops_with_its_plugin_and_says_why_its_session_kept()
     let session = h.agent(&a).session_id;
     let id = crate::plugins::builtin::OPENCODE;
     let rt = h.core.plugin_runtime.clone();
-    for _ in 0..10 {
-        if rt.status(id).stop.is_some() {
-            break;
-        }
+    // Until it gives up, not ten times: on a busy machine a restart takes seconds, and ten rounds of 400 ms saw three.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while rt.status(id).stop.is_none() && std::time::Instant::now() < deadline {
         if let Some(pid) = rt.status(id).pid {
             crash(pid);
         }

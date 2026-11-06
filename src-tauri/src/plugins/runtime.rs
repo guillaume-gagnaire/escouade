@@ -665,6 +665,45 @@ impl Runtime {
         if let Some(h) = self.hosts.lock().get(id) {
             return Ok(h.clone());
         }
+        let (folder, manifest) = self.runnable(id)?;
+        let host = Arc::new(Host {
+            id: id.to_string(),
+            folder,
+            manifest,
+            rt: self.me.clone(),
+            inner: Mutex::new(Inner {
+                phase: Phase::Idle,
+                conn: None,
+                generation: 0,
+                restarts: VecDeque::new(),
+                queue: VecDeque::new(),
+                attached: BTreeMap::new(),
+                capabilities: Value::Null,
+            }),
+            pending: Mutex::new(HashMap::new()),
+            next_id: AtomicU64::new(1),
+            journal: self.journal_of(id),
+            agents: Arc::default(),
+        });
+        Ok(self
+            .hosts
+            .lock()
+            .entry(id.to_string())
+            .or_insert(host)
+            .clone())
+    }
+
+    /// Why the plugin `id` cannot run now (switched off, not installed, not loaded, the app quitting), if it cannot;
+    /// nothing is made for it.
+    pub fn refusal(&self, id: &str) -> Option<CallError> {
+        if self.hosts.lock().contains_key(id) {
+            return None;
+        }
+        self.runnable(id).err()
+    }
+
+    /// The folder and the granted manifest of the plugin `id`, when it may run.
+    fn runnable(&self, id: &str) -> Result<(PathBuf, Manifest), CallError> {
         if self.quitting.load(Ordering::Acquire) {
             return Err(CallError::Stopped(Stop::Shutdown));
         }
@@ -693,31 +732,7 @@ impl Runtime {
             .filter(|m| m.run.is_some())
             .map(|m| super::granted(&m, &view.choices.revoked))
             .ok_or_else(|| CallError::Unavailable(format!("{id} is declarative: nothing runs")))?;
-        let host = Arc::new(Host {
-            id: id.to_string(),
-            folder: PathBuf::from(&view.folder),
-            manifest,
-            rt: self.me.clone(),
-            inner: Mutex::new(Inner {
-                phase: Phase::Idle,
-                conn: None,
-                generation: 0,
-                restarts: VecDeque::new(),
-                queue: VecDeque::new(),
-                attached: BTreeMap::new(),
-                capabilities: Value::Null,
-            }),
-            pending: Mutex::new(HashMap::new()),
-            next_id: AtomicU64::new(1),
-            journal: self.journal_of(id),
-            agents: Arc::default(),
-        });
-        Ok(self
-            .hosts
-            .lock()
-            .entry(id.to_string())
-            .or_insert(host)
-            .clone())
+        Ok((PathBuf::from(&view.folder), manifest))
     }
 
     /// Starts the plugins `word` activates (`event:ticket.column`, `account:github`), those that

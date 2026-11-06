@@ -1747,13 +1747,41 @@ impl ProcessEngineProcess {
         let name = self.name;
         let mut restarts = self.rt.status(&self.plugin).restarts;
         let mut watch = tokio::time::interval(WATCH_EVERY);
+        // Its plugin switched off or stopped: why the agent stops, whichever of its ends comes first. The watch below
+        // may see it after the agent's input was closed or its server ended (the CI's Linux, 2026-11-05: the agent
+        // stopped without a word).
+        let off = |me: &Self| {
+            let status = me.rt.status(&me.plugin);
+            let e = match status
+                .stop
+                .filter(|_| matches!(status.phase, super::runtime::PhaseName::Stopped))
+            {
+                Some(stop) => Some(CallError::Stopped(stop)),
+                None => me.rt.refusal(&me.plugin),
+            }?;
+            // The app quitting is no reason to tell: every agent stops with it.
+            if matches!(e, CallError::Stopped(Stop::Shutdown)) {
+                return None;
+            }
+            let why = stopped_line(name, &e);
+            on_frame(json!({ "items": [{ "op": "notice", "level": "error", "text": why }] }));
+            Some(why)
+        };
         let (code, said) = loop {
             tokio::select! {
                 end = &mut ended => {
                     self.left.store(true, Ordering::Release);
+                    if let Some(why) = off(&self) {
+                        break (None, why);
+                    }
                     break end.unwrap_or_default();
                 }
-                () = &mut gone => break (Some(0), String::new()),
+                () = &mut gone => {
+                    if let Some(why) = off(&self) {
+                        break (None, why);
+                    }
+                    break (Some(0), String::new());
+                }
                 _ = watch.tick() => {
                     let status = self.rt.status(&self.plugin);
                     if let Some(stop) = status.stop.filter(|_| {
