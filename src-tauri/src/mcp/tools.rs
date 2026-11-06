@@ -295,7 +295,7 @@ pub struct UpdateFolderArgs {
     )]
     pub principal: Option<String>,
     #[schemars(
-        description = "The folder's rank in the project's list, from 0, among the folders and the agents outside any folder."
+        description = "Its rank among the folders and agents the read tools list (archived ones left out), from 0; past the end, the bottom."
     )]
     pub position: Option<u32>,
 }
@@ -319,7 +319,7 @@ pub struct MoveAgentArgs {
     )]
     pub folder: Option<String>,
     #[schemars(
-        description = "Its rank in the folder, or in the project's list outside any folder, from 0. Left out, the bottom."
+        description = "Its rank among the folders and agents the read tools list in that place (archived ones left out), in the folder or in the project's list, from 0. Left out, the bottom."
     )]
     pub position: Option<u32>,
     #[schemars(

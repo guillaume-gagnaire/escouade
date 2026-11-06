@@ -5411,3 +5411,80 @@ async fn move_agent_puts_an_agent_in_and_out_of_a_folder_at_a_position() {
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }
+
+#[tokio::test]
+async fn a_position_counts_what_the_read_tools_list_archived_ones_left_out() {
+    let h = harness("mcp-folder-position");
+    let p = project(&h).await;
+    // An archived loose agent comes first in the stored list.
+    let gone = put_agent(&h, &p, "gone", 1);
+    let a = put_agent(&h, &p, "a", 2);
+    let b = put_agent(&h, &p, "b", 3);
+    let c = put_agent(&h, &p, "c", 4);
+    let x = put_agent(&h, &p, "x", 5);
+    h.core
+        .folder_create(&p.id, Some("F1"), std::slice::from_ref(&a.id), None, None)
+        .unwrap();
+    let f2 = h
+        .core
+        .folder_create(&p.id, Some("F2"), std::slice::from_ref(&b.id), None, None)
+        .unwrap();
+    // The list shows: c, x, F1, F2.
+    h.core.agent(&gone.id).unwrap().lock().meta.archived = true;
+    let cl = external(&h).await;
+    // F2 at rank 1 of what is listed: after c, before x.
+    read(
+        &cl,
+        "update_folder",
+        json!({ "project": "demo", "folder": f2.id, "position": 1 }),
+    )
+    .await;
+    assert_eq!(
+        h.core.shown_agents_of(&p.id),
+        [c.id.clone(), b.id.clone(), x.id.clone(), a.id.clone()]
+    );
+    // A position past the end: the bottom.
+    read(
+        &cl,
+        "update_folder",
+        json!({ "project": "demo", "folder": f2.id, "position": 40 }),
+    )
+    .await;
+    assert_eq!(
+        h.core.shown_agents_of(&p.id),
+        [c.id.clone(), x.id.clone(), a.id.clone(), b.id.clone()]
+    );
+    // In a folder with an archived member first: rank 1 of the listed ones.
+    let g = h
+        .core
+        .folder_create(
+            &p.id,
+            Some("G"),
+            &[gone.id.clone(), c.id.clone(), x.id.clone()],
+            None,
+            None,
+        )
+        .unwrap();
+    h.core.agent(&gone.id).unwrap().lock().meta.archived = true;
+    read(
+        &cl,
+        "move_agent",
+        json!({ "agent": a.id, "folder": g.id, "position": 1 }),
+    )
+    .await;
+    let rows = read(&cl, "list_folders", json!({ "project": "demo" })).await;
+    let members = rows
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["id"] == json!(g.id))
+        .unwrap()["agents"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m["id"].as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(members, [c.id.clone(), a.id.clone(), x.id.clone()]);
+    cl.cancel().await.unwrap();
+    h.core.mcp.stop();
+}

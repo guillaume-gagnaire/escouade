@@ -2323,6 +2323,38 @@ fn folder_answer<R: Runtime>(
     json(&row)
 }
 
+/// The stored index that puts `item` at `rank` of what the read tools list at a level (a folder's
+/// agents, or the project's list when `folder` is None): archived agents are not counted, and a
+/// rank past the end is the bottom. `item_move` counts the level once `item` is taken out.
+fn stored_index<R: Runtime>(
+    core: &Core<R>,
+    project_id: &str,
+    folder: Option<&str>,
+    item: &str,
+    rank: u32,
+) -> Result<usize, ToolError> {
+    let mut p = core.project(project_id).map_err(failure)?;
+    let owned = core.folder_members(project_id);
+    let members: Vec<_> = owned.iter().map(folders::OwnedMember::as_member).collect();
+    folders::settle(&mut p, &members);
+    let level: &[String] = match folder {
+        Some(f) => p
+            .agent_folders
+            .iter()
+            .find(|x| x.id == f)
+            .map_or(&[], |x| &x.agents),
+        None => &p.agent_order,
+    };
+    let rest: Vec<&String> = level.iter().filter(|i| *i != item).collect();
+    let listed = |i: &&String| !owned.iter().any(|m| m.archived && m.id == **i);
+    Ok(rest
+        .iter()
+        .enumerate()
+        .filter(|(_, i)| listed(i))
+        .nth(rank as usize)
+        .map_or(rest.len(), |(at, _)| at))
+}
+
 /// `create_folder`: the window's « Nouveau dossier » (a folder at the bottom of the list, holding
 /// `agents`), through the core. Answers the folder as `list_folders` does.
 pub(super) fn create_folder<R: Runtime>(
@@ -2411,7 +2443,8 @@ pub(super) fn update_folder<R: Runtime>(
         });
     }
     if let Some(position) = a.position {
-        core.item_move(&project.id, &folder.id, None, Some(position as usize))
+        let at = stored_index(core, &project.id, None, &folder.id, position)?;
+        core.item_move(&project.id, &folder.id, None, Some(at))
             .map_err(failure)?;
         changes.push(tr!("rang {position}", "rank {position}"));
     }
@@ -2466,13 +2499,12 @@ pub(super) fn move_agent<R: Runtime>(
         Some("") => None,
         Some(asked) => Some(resolve::folder(core, caller, asked, &project)?.id),
     };
-    core.item_move(
-        &project.id,
-        &found.id,
-        target.as_deref(),
-        a.position.map(|p| p as usize),
-    )
-    .map_err(failure)?;
+    let at = a
+        .position
+        .map(|p| stored_index(core, &project.id, target.as_deref(), &found.id, p))
+        .transpose()?;
+    core.item_move(&project.id, &found.id, target.as_deref(), at)
+        .map_err(failure)?;
     let project = core.project(&project.id).map_err(failure)?;
     let folder = target
         .as_deref()
