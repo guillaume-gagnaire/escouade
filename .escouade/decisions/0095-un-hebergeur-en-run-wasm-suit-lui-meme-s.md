@@ -1,9 +1,9 @@
 ---
-number: null
+number: 95
 id: "un-hebergeur-en-run-wasm-suit-lui-meme-s"
 title: "Un hébergeur en run.wasm suit lui-même ses redirections, et lit 8 Mio au plus"
 date: "2026-11-05"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-345"
 pages: ["plugins/tous-les-plugins-en-wasm","git-fichiers/hebergeurs-de-code","plugins/livres-avec-escouade"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/tous-les-plugins-en-wasm","added":12,"removed":0},{"page":"git-fichiers/hebergeurs-de-code","added":5,"removed":0},{"page":"plugins/livres-avec-escouade","added":1,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-06T08:03:57+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
