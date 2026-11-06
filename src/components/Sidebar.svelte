@@ -22,7 +22,6 @@
     listRequest,
     listStep,
     listTarget,
-    sidebarOrder,
     type ListDecision,
     type ListRequest,
   } from '../lib/sidebar';
@@ -136,7 +135,7 @@
   const otherView = $derived(!!termSelected || !!app.runCommand || app.boardOn || app.docsOn);
   const review = $derived(app.reviewCount(project.id));
   /** Who waits for an answer goes first (2.0 design). */
-  const agents = $derived(sidebarOrder(app.projectAgents));
+  const agents = $derived(app.projectAgents);
   /** The requests answered from the list, until the agent's request is gone: one click answers once. */
   let answering = $state<Record<string, string>>({});
   /** The cards that flash green a moment, their agent sent off again from the list. */

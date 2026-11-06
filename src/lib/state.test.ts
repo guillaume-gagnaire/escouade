@@ -362,6 +362,8 @@ describe('AppState', () => {
 
   it('cycles through the cards of the waiting agents across projects (Ctrl+J), the conversations open staying', async () => {
     const { emit } = await start();
+    // a1 is the one open: a waiting agent would lead the list, and be the open one by default.
+    app.ui.selectedAgent.p1 = 'a1';
     emit({ type: 'agent', agent: agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, status: 'waiting', lastActivity: 5 }) });
     emit({ type: 'agent', agent: agent({ id: 'b1', projectId: 'p2', name: 'landing', status: 'waiting', lastActivity: 9 }) });
     app.nextWaiting();
@@ -392,6 +394,8 @@ describe('AppState', () => {
 
   it('flags an agent that asks, finishes or fails out of sight until it is seen', async () => {
     const { emit } = await start();
+    // a1 is the one open: a waiting agent would lead the list, and be the open one by default.
+    app.ui.selectedAgent.p1 = 'a1';
     const focus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
     // b1 (another project) finishes, a2 (not selected) asks: both need a look.
     emit({ type: 'agent', agent: agent({ id: 'b1', projectId: 'p2', name: 'landing', status: 'running' }) });

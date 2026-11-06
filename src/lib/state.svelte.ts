@@ -13,6 +13,7 @@ import { bgRow } from './bgtasks';
 import type { DocsSpaceId } from './docs';
 import { basename, isAbsPath, relPath } from './format';
 import { setLang, t } from './i18n';
+import { shownAgents, sidebarItems, type SidebarItem } from './sidebar';
 import { dictation } from './dictation.svelte';
 import { conversation } from './conversation.svelte';
 import { mcp } from './mcp.svelte';
@@ -408,13 +409,18 @@ class AppState {
   /** Estimated cost of the turns running now (their exact cost joins `usage.todayCost` at their end). */
   liveCost = $derived(Object.values(this.agents).reduce((sum, a) => sum + (a.liveCost ?? 0), 0));
 
-  projectAgents = $derived.by(() => {
+  /** What the sidebar lists for the project on screen: its agents that are not archived, folders and order applied. */
+  projectItems = $derived.by(() => {
     const p = this.project;
-    if (!p) return [] as Agent[];
-    return Object.values(this.agents)
-      .filter((a) => a.projectId === p.id && !a.archived)
-      .sort((a, b) => a.createdAt - b.createdAt);
+    if (!p) return [] as SidebarItem[];
+    return sidebarItems(
+      p,
+      Object.values(this.agents).filter((a) => a.projectId === p.id && !a.archived),
+    );
   });
+
+  /** The agents of the project on screen, in the order the sidebar shows them. */
+  projectAgents = $derived(shownAgents(this.projectItems));
 
   archivedAgents = $derived.by(() => {
     const p = this.project;

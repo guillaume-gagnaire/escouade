@@ -2832,6 +2832,8 @@ describe('Sidebar of the 2.0 design (ESC-73)', () => {
         projects: [project()],
         agents: [agent({ status: 'running' }), agent({ id: 'a2', name: 'tests-e2e', status: 'waiting', createdAt: 2, requests: [ask] })],
       });
+      // a1 is the one open: without a choice, the first of the list is, and a waiting agent now leads it.
+      app.ui.selectedAgent.p1 = 'a1';
       // A menu left open by another test would keep the keys.
       menu.close();
       clock = vi.spyOn(performance, 'now').mockReturnValue(10_000);
