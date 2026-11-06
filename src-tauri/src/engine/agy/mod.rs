@@ -607,10 +607,13 @@ impl Engine for Agy {
     /// `agy` writes translated there. Each agent has its home, which the token of Escouade's server leaves with its process.
     fn spawn(
         &self,
-        spawn: Spawn,
+        mut spawn: Spawn,
         on_frame: super::OnFrame,
         on_exit: super::OnExit,
     ) -> Result<Process> {
+        // The user's home is the core's to know: its plugin is a module.
+        let tools = tools_env(&spawn.env);
+        spawn.env.extend(tools);
         let Some(home) = spawn
             .env
             .iter()

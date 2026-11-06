@@ -332,7 +332,8 @@ impl Access {
         Ok(real)
     }
 
-    /// `{ agent?, root?, path }` → `{ text }`, or `{ dataBase64 }` when it is not UTF-8.
+    /// `{ agent?, root?, path, tail? }` → `{ text }`, or `{ dataBase64 }` when it is not UTF-8. With `tail`, a file past the
+    /// limit gives its end and `cut` instead of a failure, from a whole character.
     fn read(&self, params: &Value) -> Result<Value, (i64, String)> {
         let real = self.real(params, false)?;
         let at = real.display();
@@ -340,19 +341,33 @@ impl Access {
         if !meta.is_file() {
             return Err(absent(&real));
         }
-        if meta.len() > self.read_bytes {
+        let cut = meta.len() > self.read_bytes;
+        let tail = params.get("tail").and_then(Value::as_bool) == Some(true);
+        if cut && !tail {
             return Err((
                 FAILED,
                 format!("{at} is over {} KiB", self.read_bytes >> 10),
             ));
         }
-        let bytes = std::fs::read(&real).map_err(|e| (FAILED, format!("{at}: {e}")))?;
-        Ok(match String::from_utf8(bytes) {
+        let failed = |e: std::io::Error| (FAILED, format!("{at}: {e}"));
+        let bytes = if cut {
+            let mut bytes = end_of(&real, self.read_bytes).map_err(failed)?;
+            let start = bytes.iter().take_while(|b| **b & 0xC0 == 0x80).count();
+            bytes.drain(..start);
+            bytes
+        } else {
+            std::fs::read(&real).map_err(failed)?
+        };
+        let mut read = match String::from_utf8(bytes) {
             Ok(text) => json!({ "text": text }),
             Err(e) => json!({
                 "dataBase64": base64::engine::general_purpose::STANDARD.encode(e.as_bytes()),
             }),
-        })
+        };
+        if cut {
+            read["cut"] = json!(true);
+        }
+        Ok(read)
     }
 
     /// `{ agent?, root?, path, text | dataBase64, append? }` → `{ path, bytes }`; the folders it needs are made.
@@ -439,6 +454,17 @@ impl Access {
     fn canon(&self, params: &Value) -> Result<Value, (i64, String)> {
         Ok(json!({ "path": plain(&self.real(params, false)?) }))
     }
+}
+
+/// The last `bytes` of the file `path`.
+fn end_of(path: &Path, bytes: u64) -> std::io::Result<Vec<u8>> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = std::fs::File::open(path)?;
+    let start = file.metadata()?.len().saturating_sub(bytes);
+    file.seek(SeekFrom::Start(start))?;
+    let mut end = Vec::new();
+    file.take(bytes).read_to_end(&mut end)?;
+    Ok(end)
 }
 
 /// The root `params` names, as the journal says it.
@@ -1013,5 +1039,28 @@ mod tests {
         std::fs::write(wt.join(".git"), format!("gitdir: {}\n", gitdir.display())).unwrap();
         assert_eq!(repo_of(&wt), Some(real));
         assert_eq!(repo_of(&repo), Some(repo.clone()));
+    }
+
+    #[test]
+    fn a_tail_gives_the_end_of_what_is_past_the_limit_from_a_whole_character() {
+        let bed = Bed::with(
+            json!([{ "root": "agent", "access": "read" }]),
+            json!({ "fileBytes": 10 }),
+        );
+        // Ten bytes back falls inside a « é ».
+        std::fs::write(bed.base.join("wt/long.log"), "1234567890éabcdefghi").unwrap();
+        let at = json!({ "agent": "a", "root": "agent", "path": "long.log" });
+        let err = bed.access.serve("fs/read", &at, &|_, _| {}).unwrap_err();
+        assert_eq!(err.0, FAILED, "without `tail`, as before");
+        let mut tail = at.clone();
+        tail["tail"] = json!(true);
+        let read = bed.access.serve("fs/read", &tail, &|_, _| {}).unwrap();
+        assert_eq!(read["cut"], true);
+        assert_eq!(read["text"], "abcdefghi");
+        // A file under the limit is whole, and says nothing.
+        std::fs::write(bed.base.join("wt/short.log"), "court").unwrap();
+        let short = json!({ "agent": "a", "root": "agent", "path": "short.log", "tail": true });
+        let read = bed.access.serve("fs/read", &short, &|_, _| {}).unwrap();
+        assert_eq!(read, json!({ "text": "court" }));
     }
 }

@@ -6,8 +6,12 @@
 //!
 //! `translate` and `words` are also read by the core, as a library, for what stays in it: its « Vue Antigravity » writes the
 //! same rules and reads its calls in the same form.
+//!
+//! It is a module (`run.wasm`): it reads the agent's home by `fs/read` (`host`), and a transcript written late on the host's
+//! timer (`client`, docs/PLUGINS.md §8.4.6).
 
 pub mod client;
+mod host;
 pub mod translate;
 pub mod words;
 
@@ -16,7 +20,7 @@ use escouade_plugin_protocol::engine::{
     method, AgentRef, AnswerPermission, AnswerQuestion, Attach, Frames, Gone, Interrupt, Item,
     Items, LaunchParams, SendMessage, SetValue,
 };
-use escouade_plugin_protocol::{serve, Refusal};
+use escouade_plugin_protocol::{turn, Refusal};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
@@ -26,6 +30,8 @@ pub const MANIFEST: &str = include_str!("../escouade-plugin.json");
 #[derive(Default)]
 struct Plugin {
     agents: HashMap<String, Client>,
+    /// The host's timer is set: one is enough for all the agents.
+    armed: bool,
 }
 
 fn invalid(e: impl std::fmt::Display) -> Refusal {
@@ -54,23 +60,15 @@ fn refused(message: String) -> Refusal {
     }
 }
 
+/// What its module runs, on its first turn.
 pub fn run() -> i32 {
     let mut plugin = Plugin::default();
-    let stdin = std::io::stdin();
-    let result = serve(
-        stdin.lock(),
-        std::io::stdout().lock(),
-        json!({ "harnesses": ["agy"] }),
-        |m, params| plugin.handle(m, params),
-    );
-    match result {
-        Ok(()) => 0,
-        Err(e) => {
-            eprintln!("escouade-plugins agy: {e}");
-            1
-        }
-    }
+    turn::run("agy", json!({ "harnesses": ["agy"] }), move |m, params| {
+        plugin.handle(m, params)
+    })
 }
+
+escouade_plugin_protocol::module!(run);
 
 impl Plugin {
     fn agent(&mut self, key: &str) -> Result<&mut Client, Refusal> {
@@ -80,8 +78,33 @@ impl Plugin {
         })
     }
 
+    /// One call, then the timer set if an agent holds what `agy` said.
     fn handle(&mut self, m: &str, params: Value) -> Result<Value, Refusal> {
+        let answer = self.answer(m, params);
+        if !self.armed && self.agents.values().any(Client::waits) {
+            self.armed = true;
+            host::timer(client::TRANSCRIPT_EVERY_MS);
+        }
+        answer
+    }
+
+    /// The timer rang: what each agent held and can now read goes to the core.
+    fn rang(&mut self) {
+        self.armed = false;
+        for (agent, client) in &mut self.agents {
+            let items = client.tick();
+            if !items.is_empty() {
+                host::push(agent, items);
+            }
+        }
+    }
+
+    fn answer(&mut self, m: &str, params: Value) -> Result<Value, Refusal> {
         match m {
+            "timer/fired" => {
+                self.rang();
+                Ok(Value::Null)
+            }
             method::ATTACH => {
                 let a: Attach = read(params)?;
                 self.agents

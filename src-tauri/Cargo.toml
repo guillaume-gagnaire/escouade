@@ -196,7 +196,6 @@ members = [
     "../plugins/gemini",
     "../plugins/copilot",
     "../plugins/codex",
-    "../plugins/antigravity",
 ]
 default-members = [
     ".",
@@ -215,7 +214,6 @@ default-members = [
     "../plugins/gemini",
     "../plugins/copilot",
     "../plugins/codex",
-    "../plugins/antigravity",
 ]
 
 # The plugins depend on the kit by version, as the store reads them (their folder, published crates, the checksum of their

@@ -284,7 +284,7 @@ A root of `permissions.files` and a relative path, or a path of the host under a
 
 | Method | More parameters | Answer |
 | --- | --- | --- |
-| `fs/read` | | `{ text }`, or `{ dataBase64 }` for what is not UTF-8 |
+| `fs/read` | `tail` | `{ text }`, or `{ dataBase64 }` for what is not UTF-8. With `tail`, a file past the limit gives its end and `cut` instead of failing |
 | `fs/write` | `text` or `dataBase64`, `append` | `{ bytes, path }` |
 | `fs/stat` | | `{ kind, bytes, modified }` |
 | `fs/list` | | `{ entries, truncated }`, each entry with `name`, `kind` and `bytes` |

@@ -16,6 +16,7 @@ import {
   type Fact,
   type FactName,
   type FsPath,
+  type FsReadParams,
   type FsWriteParams,
   type InitializeParams,
   type InitializeResult,
@@ -190,9 +191,9 @@ export class Plugin {
    * an agent, as `agent/attach` gave them. A path out of them, links followed, is refused (`RpcError` `ERRORS.refused`).
    */
   readonly fs = {
-    read: (file: FsPath) => this.call('fs/read', file),
+    read: (file: FsReadParams) => this.call('fs/read', file),
     /** Its text; `ERRORS.failed` for a file that is not UTF-8. */
-    text: async (file: FsPath) => {
+    text: async (file: FsReadParams) => {
       const r = await this.call('fs/read', file);
       if (r.text === undefined) throw new RpcError(ERRORS.failed, `${file.path} is not text`);
       return r.text;

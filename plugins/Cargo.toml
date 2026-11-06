@@ -6,11 +6,12 @@
 # A plugin joins this list when it leaves the workspace of `src-tauri`, at its port.
 [workspace]
 resolver = "2"
-members = ["clickup", "isola", "jira", "linear", "opencode", "trello"]
+members = ["antigravity", "clickup", "isola", "jira", "linear", "opencode", "trello"]
 
 [patch.crates-io]
 escouade-plugin-protocol = { path = "../crates/escouade-plugin-protocol" }
 escouade-plugin-kit = { path = "../crates/escouade-plugin-kit" }
+escouade-acp = { path = "../crates/escouade-acp" }
 
 # The profile of a module (docs/PLUGINS.md §8.5.2).
 [profile.release]

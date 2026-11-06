@@ -231,10 +231,10 @@
       }
     },
     "fs/read": {
-      "description": "A file under a root: { text }, or { dataBase64 } when it is not UTF-8. For a plugin in WASM, by escouade.call (run.wasm) or by a line (run.js), on permissions.files: refused for a root it does not declare, a .., a ~, or a path that, links followed, is not under a root of that agent or that its fence refuses (« Projet privé »). failed past 256 KiB, or limits.fileBytes (4 MiB at most).",
+      "description": "A file under a root: { text }, or { dataBase64 } when it is not UTF-8. With tail, what is past the limit below is cut from its start. For a plugin in WASM, by escouade.call (run.wasm) or by a line (run.js), on permissions.files: refused for a root it does not declare, a .., a ~, or a path that, links followed, is not under a root of that agent or that its fence refuses (« Projet privé »). failed past 256 KiB, or limits.fileBytes (4 MiB at most).",
       "direction": "toEscouade",
       "params": {
-        "$ref": "#/definitions/FsPath"
+        "$ref": "#/definitions/FsReadParams"
       },
       "result": {
         "$ref": "#/definitions/FsReadResult"
@@ -975,6 +975,29 @@
       },
       "required": ["path"]
     },
+    "FsReadParams": {
+      "type": "object",
+      "description": "As FsPath, for fs/read.",
+      "properties": {
+        "agent": {
+          "type": "string",
+          "description": "As FsPath."
+        },
+        "root": {
+          "description": "As FsPath.",
+          "enum": ["plugin", "agent", "agentRepo", "agentHome", "temp"]
+        },
+        "path": {
+          "type": "string",
+          "description": "As FsPath."
+        },
+        "tail": {
+          "type": "boolean",
+          "description": "A file past the limit gives its end, from a whole character, instead of failing: what a log that grows is read by."
+        }
+      },
+      "required": ["path"]
+    },
     "FsReadResult": {
       "type": "object",
       "properties": {
@@ -985,6 +1008,10 @@
         "dataBase64": {
           "type": "string",
           "description": "The file, when it is not."
+        },
+        "cut": {
+          "type": "boolean",
+          "description": "Its start is left out (tail): its first line may be whole or not."
         }
       }
     },

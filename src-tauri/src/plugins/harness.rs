@@ -965,6 +965,7 @@ impl Engine for ProcessEngine {
             closing: AtomicBool::new(false),
             let_go: Arc::new(AtomicBool::new(true)),
             told: Mutex::new(None),
+            pushed: Mutex::new(None),
             joins: Mutex::new(None),
             catalog: Mutex::new(None),
             first_said: Mutex::new(None),
@@ -1149,6 +1150,8 @@ pub struct ProcessEngineProcess {
     let_go: Arc<AtomicBool>,
     /// Where what its plugin says unasked goes (`agent/items`).
     told: Mutex<Option<Arc<OnFrame>>>,
+    /// The way to its `pump`, while its own program runs: what the plugin says unasked comes behind its batches.
+    pushed: Mutex<Option<mpsc::Sender<Heard>>>,
     /// How its harness's interface joins it, as `agent/open` said it.
     joins: Mutex<Option<terminal::Attach>>,
     /// The models of its account, as `agent/open` said them.
@@ -1168,9 +1171,10 @@ enum Next {
 }
 
 /// What its harness's reader gives the pump: a line, or the end of its program by itself (told to the plugin behind the
-/// lines it wrote), answered by whether another starts.
+/// lines it wrote), answered by whether another starts; and what the plugin said unasked (`agent/items`).
 enum Heard {
     Line(String),
+    Items(Vec<Value>),
     Gone {
         code: Option<i32>,
         again: oneshot::Sender<bool>,
@@ -1184,7 +1188,7 @@ enum Launched {
     Shared(proto::Launch),
 }
 
-/// The agents on a shared harness, by their key: what their plugin says unasked comes to them.
+/// The agents of a plugin, by their key: what it says unasked comes to them.
 static TOLD: Mutex<Vec<(String, std::sync::Weak<ProcessEngineProcess>)>> = Mutex::new(Vec::new());
 
 /// What a plugin said of its agent without being asked (`agent/items`).
@@ -1200,6 +1204,13 @@ fn told(params: &Value) {
     let (Some(p), Some(items)) = (p, params["items"].as_array()) else {
         return;
     };
+    // Behind the answer of the batch before it, for an agent whose program is its own (docs/PLUGINS.md §8.4.6).
+    if let Some(lines) = p.pushed.lock().as_ref() {
+        if lines.try_send(Heard::Items(items.clone())).is_err() {
+            log::warn!("{agent}: what its plugin said left aside: its queue is full");
+        }
+        return;
+    }
     let on_frame = p.told.lock().clone();
     if let Some(on_frame) = on_frame {
         p.deliver(items.clone(), &on_frame);
@@ -1610,6 +1621,17 @@ impl ProcessEngineProcess {
         self.start_program(spawn, launch, &[])
     }
 
+    /// What its plugin says of it unasked (`agent/items`) comes to it.
+    fn hear_what_it_tells(&self) {
+        TOLD.lock()
+            .push((self.key.clone(), self.me.get().cloned().unwrap_or_default()));
+        self.rt.on_notification(&self.plugin, |m, params| {
+            if m == method::ITEMS {
+                told(&params);
+            }
+        });
+    }
+
     /// Its launch failed: why.
     fn failed(&self, e: &anyhow::Error, on_exit: OnExit) {
         let why = format!("{e:#}");
@@ -1656,13 +1678,7 @@ impl ProcessEngineProcess {
         })?;
         *self.shared.lock() = Some(s.clone());
         let line = s.ready(self.name).await?;
-        TOLD.lock()
-            .push((self.key.clone(), self.me.get().cloned().unwrap_or_default()));
-        self.rt.on_notification(&self.plugin, |m, params| {
-            if m == method::ITEMS {
-                told(&params);
-            }
-        });
+        self.hear_what_it_tells();
         {
             let mut a = self.attach.lock();
             a.shared = Some(proto::SharedRef {
@@ -1901,6 +1917,8 @@ impl ProcessEngineProcess {
         let (next_tx, mut next_rx) = mpsc::unbounded_channel();
         *self.next.lock() = Some(next_tx);
         let (lines_tx, lines_rx) = mpsc::channel::<Heard>(FRAME_QUEUE);
+        *self.pushed.lock() = Some(lines_tx.clone());
+        self.hear_what_it_tells();
         let mut reader = Some(self.hook_up(&mut child, stdin_rx, lines_tx.clone()));
         let mut child = Some(child);
         let _ = self.ready.send(Some(Ok(())));
@@ -1966,6 +1984,8 @@ impl ProcessEngineProcess {
                 }
             }
         };
+        self.pushed.lock().take();
+        TOLD.lock().retain(|(k, _)| *k != self.key);
         drop(lines_tx);
         if let Some(r) = reader.take() {
             let _ = r.await;
@@ -2125,6 +2145,12 @@ impl ProcessEngineProcess {
             };
             let first = match heard {
                 Some(Heard::Line(line)) => line,
+                Some(Heard::Items(items)) => {
+                    if stopped.is_none() {
+                        self.deliver(items, on_frame);
+                    }
+                    continue;
+                }
                 Some(Heard::Gone { code, again }) => {
                     let goes_on = stopped.is_none() && self.program_gone(code, on_frame).await;
                     let _ = again.send(goes_on);

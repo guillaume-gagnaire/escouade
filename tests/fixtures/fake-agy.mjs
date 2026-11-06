@@ -117,8 +117,13 @@ save();
 const brain = path.join(agyDir, 'brain', id);
 const logs = path.join(brain, '.system_generated', 'logs');
 fs.mkdirSync(logs, { recursive: true });
-const transcript = (entry) =>
-  fs.appendFileSync(path.join(logs, 'transcript_full.jsonl'), JSON.stringify({ status: 'DONE', ...entry }) + '\n');
+// FAKE_AGY_LATE_MS: each line of the transcript written that long after the step it tells is over, as `agy` does at times.
+const late = Number(process.env.FAKE_AGY_LATE_MS || 0);
+const transcript = (entry) => {
+  const write = () => fs.appendFileSync(path.join(logs, 'transcript_full.jsonl'), JSON.stringify({ status: 'DONE', ...entry }) + '\n');
+  if (late > 0) setTimeout(write, late);
+  else write();
+};
 
 const out = (event) => process.stdout.write(JSON.stringify(event) + '\n');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

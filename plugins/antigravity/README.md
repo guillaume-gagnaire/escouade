@@ -1,10 +1,10 @@
 # Antigravity CLI
 
-`dev.escouade.antigravity-cli`, a plugin [Escouade](https://escouade.dev) gives: it is shipped with the app, signed with it,
-and updated with it. Its version is Escouade's (the `0.0.0` of its manifest is replaced by the app's when it is read).
+`dev.escouade.antigravity-cli`, a plugin of [Escouade](https://escouade.dev)'s own hand: a WASM module, with a version of its
+own, that the app runs in its host.
 
-Antigravity CLI de Google comme harness. Ses agents conversent comme avant, par un programme à part qu'Escouade lance et
-surveille.
+Antigravity CLI de Google comme harness. Ses agents conversent comme avant : `agy`, Escouade le lance et le surveille, et ce
+plugin traduit ce qu'il dit.
 
 ## What it does
 
@@ -22,7 +22,9 @@ process (INT-9):
 - what `agy` writes comes here (`agent/frames`) and goes back as the items of the conversation, in the form the ACP client reads
   (`escouade-acp`, extension `agy`): its texts, its calls under Claude Code's names with their diffs, its subagents, its
   tokens, the end of each turn. What its events leave out (a call's arguments, a write's text, its reasoning) is read from the
-  conversation's transcript;
+  conversation's transcript. When `agy` writes it after the step it tells is over, nothing waits inside a turn: what follows is
+  held in its order, the transcript is read again on a timer of the host, 600 ms at most for a batch, and what was held goes
+  out as `agent/items`;
 - `-p` asks nothing: what needs a permission is refused at once, and `ask_question` skipped. At the end of such a turn this
   plugin shows the cards, writes the rules allowed and has the turn go on with a message saying what was allowed and answered;
 - in the mode Plan, the plan it wrote in its conversation is shown on the card « Plan à approuver ».
@@ -35,8 +37,9 @@ the agent's home when the process is over.
 ## What it may do
 
 - describe the launch of `agy` and translate what it says: the core launches it, never this plugin;
-- read, in the agent's own home: the rules kept for « Toujours », `settings.json`, `mcp_config.json` and the transcript of its
-  conversation; and the plan file `agy` names, in that home;
+- read, in the agent's own home (`permissions.files`, the root `agentHome`, in reading, which the host holds): the rules kept for
+  « Toujours », `settings.json`, `mcp_config.json`, the last 4 MiB of the transcript of its conversation, and the plan file `agy`
+  names, in that home;
 - have the core write, in that home alone (`engine/launch`, `Item::File`, which the core checks): the permission rules, what
   « Toujours » allows, Escouade's server with its token. The token is never among its arguments;
 - nothing else: no network, no secret, no command, no process. The user's `~/.gemini` is never read nor written. The sign-in of
@@ -62,24 +65,27 @@ models of an account and the terminal view don't go through it.
 | ---------------------- | --------------------------------------------------------------- |
 | `escouade-plugin.json` | The manifest: the harness, its modes, its folder and key        |
 | `Cargo.toml`           | The crate `escouade-plugin-agy`                                 |
-| `src/lib.rs`           | Its `run`: the methods of the contract                          |
+| `src/lib.rs`           | Its `run`: the methods of the contract, the timer                |
 | `src/client.rs`        | The client of `agy -p`, a state machine without a process       |
 | `src/translate.rs`     | Its events as items of the conversation                         |
 | `src/words.rs`         | Its launch, rules, home, calls and questions, read by the core  |
+| `src/host.rs`          | What it asks of the host: `fs/read`, a timer, `agent/items`       |
 | `src/tests.rs`         | The client on its own                                           |
 | `README.md`            | This page                                                       |
 
-Its program is `escouade-plugins agy` (`src-tauri/src/bin/escouade-plugins.rs` calls the crate's `run`). Its tests: `src/tests.rs`,
-the bench of the harnesses on the fake `agy` (`src-tauri/src/engine/agy/bench.rs`), the recorded streams of `agy` 1.4.9
-(`src-tauri/src/agent/agy_tests.rs`, `tests/fixtures/replays/agy/`), the tests of the core that go through it
+Its program is a module (`run.wasm`), compiled by `escouade-plugin build` from this folder and its `Cargo.lock`, on the crates
+`escouade-plugin-protocol` and `escouade-acp`. Its `rlib` is for the core, whose terminal view reads `words.rs` until P8. Its
+tests: `src/tests.rs`, the bench of the harnesses on the fake `agy` (`src-tauri/src/engine/agy/bench.rs`, its transcript late
+too), the parity with the native plugin on the streams of `agy` 1.4.9 (`src-tauri/src/plugins_wasm_agy_tests.rs`), the recorded
+streams (`src-tauri/src/agent/agy_tests.rs`, `tests/fixtures/replays/agy/`), the tests of the core that go through it
 (`src-tauri/src/agy_tests.rs`, `agy_tui_tests.rs`), the e2e `tests/e2e/agy.spec.ts`, and the real runs (`real_agy`, `real_agy_writes_a_text`,
 `real-harnesses.spec.ts`, its view included).
 
 ## Run it alone
 
-Against the fake Escouade of the plugins' bench, with the app's own `escouade-plugin` and `escouade-plugins` (built with
-`cargo build --bin escouade-plugin --bin escouade-plugins` in `src-tauri/`, side by side in `target/debug`):
+Against the fake Escouade of the plugins' bench, with the app's own `escouade-plugin` (`cargo build --bin escouade-plugin` in
+`src-tauri/`):
 
 ```sh
-escouade-plugin test plugins/antigravity --builtin
+escouade-plugin test plugins/antigravity --first-party --escouade 2.2.0
 ```

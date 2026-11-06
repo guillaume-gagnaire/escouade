@@ -308,11 +308,25 @@ export interface FsPath {
   path: string;
 }
 
+/** As FsPath, for fs/read. */
+export interface FsReadParams {
+  /** As FsPath. */
+  agent?: string;
+  /** As FsPath. */
+  root?: 'plugin' | 'agent' | 'agentRepo' | 'agentHome' | 'temp';
+  /** As FsPath. */
+  path: string;
+  /** A file past the limit gives its end, from a whole character, instead of failing: what a log that grows is read by. */
+  tail?: boolean;
+}
+
 export interface FsReadResult {
   /** The file, when it is UTF-8. */
   text?: string;
   /** The file, when it is not. */
   dataBase64?: string;
+  /** Its start is left out (tail): its first line may be whole or not. */
+  cut?: boolean;
 }
 
 export interface FsWriteParams {
@@ -496,8 +510,8 @@ export interface ToEscouade {
   'timer/set': { params: TimerSetParams; result: TimerSetResult };
   /** Takes a timer back. */
   'timer/cancel': { params: TimerParams; result: void };
-  /** A file under a root: { text }, or { dataBase64 } when it is not UTF-8. For a plugin in WASM, by escouade.call (run.wasm) or by a line (run.js), on permissions.files: refused for a root it does not declare, a .., a ~, or a path that, links followed, is not under a root of that agent or that its fence refuses (« Projet privé »). failed past 256 KiB, or limits.fileBytes (4 MiB at most). */
-  'fs/read': { params: FsPath; result: FsReadResult };
+  /** A file under a root: { text }, or { dataBase64 } when it is not UTF-8. With tail, what is past the limit below is cut from its start. For a plugin in WASM, by escouade.call (run.wasm) or by a line (run.js), on permissions.files: refused for a root it does not declare, a .., a ~, or a path that, links followed, is not under a root of that agent or that its fence refuses (« Projet privé »). failed past 256 KiB, or limits.fileBytes (4 MiB at most). */
+  'fs/read': { params: FsReadParams; result: FsReadResult };
   /** Writes a file under a root in write access, the folders it needs made; each write goes to the plugin's journal. For a plugin in WASM, by escouade.call (run.wasm) or by a line (run.js), on permissions.files: refused for a root it does not declare, a .., a ~, or a path that, links followed, is not under a root of that agent or that its fence refuses (« Projet privé »). 4 MiB at most. */
   'fs/write': { params: FsWriteParams; result: FsWriteResult };
   /** What a path is. For a plugin in WASM, by escouade.call (run.wasm) or by a line (run.js), on permissions.files: refused for a root it does not declare, a .., a ~, or a path that, links followed, is not under a root of that agent or that its fence refuses (« Projet privé »). */

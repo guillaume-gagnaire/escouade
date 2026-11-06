@@ -167,11 +167,15 @@ pub fn transcript(home: &Path, id: &str) -> PathBuf {
         .join("transcript_full.jsonl")
 }
 
-pub fn read_always(home: &Path) -> Vec<String> {
-    std::fs::read_to_string(always_file(home))
-        .ok()
-        .and_then(|t| serde_json::from_str(&t).ok())
+/// What `escouade-always.json` says (`text`, its file as it was read).
+pub fn always_of(text: Option<String>) -> Vec<String> {
+    text.and_then(|t| serde_json::from_str(&t).ok())
         .unwrap_or_default()
+}
+
+/// What the core reads of it, for its « Vue Antigravity ».
+pub fn read_always(home: &Path) -> Vec<String> {
+    always_of(std::fs::read_to_string(always_file(home)).ok())
 }
 
 /// The rules a mode allows without asking: in « Demander », the writes in the agent's folder (as Cursor's are accepted by
@@ -534,29 +538,43 @@ pub fn follow_up(allowed: &[String], refused: &[String], replies: &[String]) -> 
     Some(parts.join("\n"))
 }
 
+/// Where the home of the user's tools stays (its git config, Rust's), which the commands of `agy` would no longer find
+/// in the agent's home; what `env` and the machine say already left out. A module knows neither that home nor the machine's
+/// variables: the core adds them to what its plugin's launch says (`Agy::spawn`).
+#[cfg(not(target_family = "wasm"))]
+pub fn tools_env(env: &[(String, String)]) -> Vec<(String, String)> {
+    let Some(real) = dirs::home_dir() else {
+        return Vec::new();
+    };
+    [
+        ("GIT_CONFIG_GLOBAL", ".gitconfig"),
+        ("CARGO_HOME", ".cargo"),
+        ("RUSTUP_HOME", ".rustup"),
+    ]
+    .into_iter()
+    .filter(|(var, _)| !env.iter().any(|(e, _)| e == var) && std::env::var_os(var).is_none())
+    .map(|(var, name)| (var, real.join(name)))
+    .filter(|(_, path)| path.exists())
+    .map(|(var, path)| (var.to_string(), path.to_string_lossy().into_owned()))
+    .collect()
+}
+
+/// See the native `tools_env`.
+#[cfg(target_family = "wasm")]
+pub fn tools_env(_env: &[(String, String)]) -> Vec<(String, String)> {
+    Vec::new()
+}
+
 /// The variables of `env` with `home` as the home of `agy` (`USERPROFILE`, `HOME`), the home of the user's tools kept where
-/// they are (its git config, Rust's), which its commands would no longer find, and its own update off.
+/// they are (`tools_env`), and its own update off.
 pub fn home_env(env: &[(String, String)], home: &Path) -> Vec<(String, String)> {
     let mut env: Vec<(String, String)> = env
         .iter()
         .filter(|(k, _)| !matches!(k.as_str(), HOME_VAR | "USERPROFILE" | "HOME"))
         .cloned()
         .collect();
-    let given = |env: &[(String, String)], k: &str| {
-        env.iter().any(|(e, _)| e == k) || std::env::var_os(k).is_some()
-    };
-    if let Some(real) = dirs::home_dir() {
-        for (var, name) in [
-            ("GIT_CONFIG_GLOBAL", ".gitconfig"),
-            ("CARGO_HOME", ".cargo"),
-            ("RUSTUP_HOME", ".rustup"),
-        ] {
-            let path = real.join(name);
-            if !given(&env, var) && path.exists() {
-                env.push((var.into(), path.to_string_lossy().into_owned()));
-            }
-        }
-    }
+    let tools = tools_env(&env);
+    env.extend(tools);
     if !env.iter().any(|(k, _)| k == NO_SELF_UPDATE.0) {
         env.push((NO_SELF_UPDATE.0.into(), NO_SELF_UPDATE.1.into()));
     }

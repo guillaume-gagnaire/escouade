@@ -570,16 +570,6 @@ pub struct Instance {
 }
 
 impl Instance {
-    /// Its instance, without `escouade.call` to serve.
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn start(
-        module: &Module,
-        files: &BTreeMap<String, String>,
-        limits: Limits,
-    ) -> Result<Instance, Fault> {
-        Self::start_with(module, files, limits, None)
-    }
-
     /// Its instance. A bundle gets the files of its folder (the first line), then its top level runs (`_start`); a
     /// reactor gets no line, and its `_initialize` runs if it has one. The rest is the same.
     pub fn start_with(

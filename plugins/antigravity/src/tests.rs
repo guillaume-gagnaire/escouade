@@ -317,3 +317,107 @@ fn a_fenced_call_is_never_a_card() {
     assert!(out.iter().any(|i| matches!(i, Item::Turn { .. })));
     assert_eq!(words::read_always(&dir), Vec::<String>::new());
 }
+
+fn text_done(step: u64) -> String {
+    json!({ "event": "step_update", "step_update": {
+        "step_index": step, "step_type": "agent_response", "state": "DONE", "usage": { "input_tokens": 1 },
+    } })
+    .to_string()
+}
+
+fn written(dir: &std::path::Path, line: Value) {
+    let file = words::transcript(dir, "conv-1");
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(file, format!("{line}\n")).unwrap();
+}
+
+#[test]
+fn a_transcript_late_holds_what_follows_in_its_order_until_it_is_written() {
+    let dir = home("late");
+    let (mut c, _) = started(&params(&dir));
+    c.send("lis");
+    let out = c.frames(&[
+        text_done(3),
+        step(4, "run_command", "ACTIVE", json!({}), None),
+    ]);
+    assert!(out.is_empty(), "{out:?}");
+    assert!(c.waits());
+    // A batch that comes meanwhile goes behind it.
+    assert!(c.frames(&[result()]).is_empty());
+    // The first ring may be of the turn that held it: what it answered goes out first.
+    assert!(c.tick().is_empty());
+    assert!(c.tick().is_empty(), "nothing is written yet");
+    written(
+        &dir,
+        json!({ "step_index": 3, "tool_calls": [{ "name": "run_command", "args": { "CommandLine": "echo tard" } }] }),
+    );
+    let out = c.tick();
+    assert!(!c.waits());
+    let at = |f: &dyn Fn(&Item) -> bool| out.iter().position(f).expect("an item");
+    let call = at(&|i| format!("{i:?}").contains("echo tard"));
+    let turn = at(&|i| matches!(i, Item::Turn { .. }));
+    assert!(call < turn, "{out:?}");
+}
+
+#[test]
+fn a_transcript_never_written_lets_go_after_its_patience() {
+    let dir = home("never");
+    let (mut c, _) = started(&params(&dir));
+    c.send("lis");
+    assert!(c.frames(&[text_done(3), result()]).is_empty());
+    let ticks: Vec<Vec<Item>> = (0..16).map(|_| c.tick()).collect();
+    assert!(ticks[..15].iter().all(Vec::is_empty), "{ticks:?}");
+    assert!(ticks[15].iter().any(|i| matches!(i, Item::Turn { .. })));
+    assert!(!c.waits());
+}
+
+#[test]
+fn a_write_refused_in_a_transcript_late_is_a_card_all_the_same() {
+    let dir = home("refused");
+    let (mut c, _) = started(&params(&dir));
+    c.send("écris");
+    let path = if cfg!(windows) { "C:\\wt\\a" } else { "/wt/a" };
+    let args = json!({ "Path": path, "Content": "x" });
+    let out = c.frames(&[
+        step(4, "write_file", "ACTIVE", args.clone(), None),
+        step(4, "write_file", "DONE", args, None),
+        result(),
+    ]);
+    assert!(!out.iter().any(|i| matches!(i, Item::Turn { .. })));
+    written(
+        &dir,
+        json!({ "step_index": 4, "status": "ERROR", "error": "denied permission" }),
+    );
+    c.tick();
+    let out = c.tick();
+    assert!(
+        out.iter().any(|i| matches!(i, Item::Permission { .. })),
+        "{out:?}"
+    );
+}
+
+#[test]
+fn a_turn_stopped_reads_at_once_what_was_held() {
+    let dir = home("hurry");
+    let (mut c, _) = started(&params(&dir));
+    c.send("lent");
+    assert!(c
+        .frames(&[
+            text_done(3),
+            step(4, "run_command", "ACTIVE", json!({}), None)
+        ])
+        .is_empty());
+    let out = c.interrupt(false);
+    let at = |f: &dyn Fn(&Item) -> bool| out.iter().position(f).expect("an item");
+    let call = at(&|i| !matches!(i, Item::Pause | Item::Turn { .. }));
+    assert!(call < at(&|i| matches!(i, Item::Pause)), "{out:?}");
+    assert!(!c.waits());
+}
+
+#[test]
+fn what_the_user_allowed_for_good_is_read_from_its_home() {
+    let dir = home("always");
+    std::fs::write(words::always_file(&dir), r#"["command(ls)"]"#).unwrap();
+    let (c, _) = started(&params(&dir));
+    assert!(c.settings_text().contains("command(ls)"));
+}

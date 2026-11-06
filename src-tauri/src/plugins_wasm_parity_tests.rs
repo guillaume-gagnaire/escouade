@@ -64,12 +64,18 @@ struct Hosted {
 
 impl Hosted {
     fn start(module: wasmtime::Module, fetcher: Fetcher) -> Self {
+        Self::start_with(module, fetcher, None)
+    }
+
+    /// With what `escouade.call` serves.
+    fn start_with(module: wasmtime::Module, fetcher: Fetcher, calls: Option<wasm::Calls>) -> Self {
         let (tx, rx) = unbounded_channel::<Frame>();
         let back = tx.downgrade();
         let (out, lines) = channel();
         std::thread::spawn(move || {
             let limits = wasm::Limits::default();
-            let instance = Instance::start(&module, &BTreeMap::new(), limits).expect("an instance");
+            let instance = Instance::start_with(&module, &BTreeMap::new(), limits, calls)
+                .expect("an instance");
             let fault = wasm::serve(
                 instance,
                 fetcher,
@@ -1785,3 +1791,6 @@ fn int0_opencode_stream_bench() {
     let more = wasm["p99"].as_f64().unwrap() - was["p99"].as_f64().unwrap();
     assert!(more <= 5.0, "{more} ms more at the 99th percentile");
 }
+
+#[path = "plugins_wasm_agy_tests.rs"]
+mod agy;

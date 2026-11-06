@@ -101,6 +101,48 @@ async fn the_fake_agy_passes_the_bench() {
     );
 }
 
+/// The same `agy`, each line of its transcript written after the step it tells is over: what follows is held by its plugin,
+/// a module that waits for nothing inside a turn, and comes by `agent/items` in its order (ESC-348).
+struct Late;
+
+impl Target for Late {
+    fn engine(&self) -> &'static dyn Engine {
+        OnBench.engine()
+    }
+
+    fn program(&self) -> Program {
+        OnBench.program()
+    }
+
+    fn env(&self, dir: &Path) -> Vec<(String, String)> {
+        let mut env = OnBench.env(dir);
+        env.push(("FAKE_AGY_LATE_MS".into(), "150".into()));
+        env
+    }
+
+    fn prompt(&self, scenario: Scenario) -> Option<String> {
+        OnBench.prompt(scenario)
+    }
+
+    fn model(&self) -> Option<String> {
+        OnBench.model()
+    }
+
+    fn mode(&self, scenario: Scenario) -> Option<&'static str> {
+        OnBench.mode(scenario)
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_fake_agy_passes_the_bench_with_its_transcript_late() {
+    let (rt, plugins, _) = crate::plugins_acp_tests::runtime("esc348-agy-late");
+    crate::plugins::harness::sync(&rt, &plugins);
+    let dir = bench_dir("esc348-bench-agy-late");
+    let played = run(&Late, &dir).await;
+    assert!(played.contains(&Scenario::Approval), "{played:?}");
+    assert!(played.contains(&Scenario::Edit), "{played:?}");
+}
+
 #[test]
 fn the_recorded_streams_of_agy_make_the_items_expected() {
     replay::check_all(&AGY, "agy");

@@ -1088,7 +1088,7 @@ Les e2e, et donc la vue Plugins, le store dans l'app, les thèmes et les sceaux 
 
 Décidé par l'utilisateur le 2026-11-04 : « je veux que tous les plugins, même les builtins, passent par le même système : on livre un plugin, il est compilé pour qu'il soit utilisable sur tous les systèmes, et il fait ce qu'il a besoin de faire », puis « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté ». Le même jour, l'état de fin : « A la fin, je veux que tous les plugins builtins soient dans /plugins/* (exemple plugins/claude), tous publiés sur le store, vérifiés et signés. »
 
-Ce chapitre est l'étude, faite avant le portage. **A1 à A8, A9, P1, P5, P7 et D1 sont faits** (ESC-331, §8.11 ; ESC-332, §8.12 ; ESC-334, §8.13 ; ESC-338, §8.14 ; ESC-333, §8.15 ; ESC-341, §8.16 ; ESC-335, §8.17 ; ESC-336, §8.18 ; ESC-344, §8.19 ; ESC-351, §8.22 ; ESC-349, §8.23 ; ESC-337, §8.20 ; ESC-342, §8.21) ; le reste du plan ne l'est pas. Le prototype, ses tests et ses mesures sont dans `prototypes/wasm-all/` (son README dit comment tout refaire). Il revoit le §5.7 (« le `run` natif, tranché ») et le §5.6 (« un `run.wasm` n'est pas ouvert ») : ces deux passages tiennent jusqu'à l'acceptation des décisions proposées par ESC-330. Sans numéro tant qu'elles ne sont pas acceptées, elles se citent par leur identifiant : `run-wasm-le-rust-des-plugins-compile-par`, `les-capacites-de-l-hote-ce-qu-un-plugin`, `la-premiere-main-dans-plugins-id-court-p`, `plus-aucun-run-command-le-store-le-refus`.
+Ce chapitre est l'étude, faite avant le portage. **A1 à A8, A9, P1, P4, P5, P7 et D1 sont faits** (ESC-331, §8.11 ; ESC-332, §8.12 ; ESC-334, §8.13 ; ESC-338, §8.14 ; ESC-333, §8.15 ; ESC-341, §8.16 ; ESC-335, §8.17 ; ESC-336, §8.18 ; ESC-344, §8.19 ; ESC-351, §8.22 ; ESC-349, §8.23 ; ESC-348, §8.24 ; ESC-337, §8.20 ; ESC-342, §8.21) ; le reste du plan ne l'est pas. Le prototype, ses tests et ses mesures sont dans `prototypes/wasm-all/` (son README dit comment tout refaire). Il revoit le §5.7 (« le `run` natif, tranché ») et le §5.6 (« un `run.wasm` n'est pas ouvert ») : ces deux passages tiennent jusqu'à l'acceptation des décisions proposées par ESC-330. Sans numéro tant qu'elles ne sont pas acceptées, elles se citent par leur identifiant : `run-wasm-le-rust-des-plugins-compile-par`, `les-capacites-de-l-hote-ce-qu-un-plugin`, `la-premiere-main-dans-plugins-id-court-p`, `plus-aucun-run-command-le-store-le-refus`.
 
 **En bref.**
 
@@ -1270,7 +1270,7 @@ Pour OpenCode seulement : `opencode serve` écoute sur `127.0.0.1`, sur un port 
 - **Coût** : un aller-retour dans la mémoire du module, puis la lecture elle-même ; rien de mesurable devant un disque.
 - **Surface d'attaque** : `agentHome` contient les identifiants d'un harness (`.credentials.json`, `auth.json`). Un plugin de harness a déjà ce pouvoir aujourd'hui, en mieux. Ici il est déclaré ; à la revue, ce droit se justifie.
 
-**Antigravity** garde une attente de 600 ms dans un tour (`client.rs:283`). Il faut la réécrire avec un minuteur : `frames` répond sans le transcript, puis un `agent/items` l'envoie quand il arrive. C'est le seul harness à changer de forme.
+**Antigravity** gardait une attente de 600 ms dans un tour : réécrite avec un minuteur (§8.24) : `frames` répond sans le transcript, puis un `agent/items` envoie la suite quand il arrive. C'est le seul harness à changer de forme.
 
 #### 8.4.7 Lancer un programme nommé
 
@@ -1581,7 +1581,7 @@ Les tickets du portage, dans l'ordre. **Les lettres sont des noms de travail**, 
 | **P1** (fait, §8.19) | Linear, Trello, Jira, ClickUp | le kit seul ; le plus simple |
 | **P2** | GitHub, GitLab, Bitbucket, Gitea, Azure DevOps | `{account}`, proxy, instances auto-hébergées ; essais contre `fake-trackers` |
 | **P3** | Codex, Copilot CLI, Cursor, Gemini, ACP, Vibe, Claude Code | les machines à états ; `fs/*` pour ACP ; `real-harnesses` rejoué |
-| **P4** | Antigravity | l'attente du transcript réécrite (§8.4.6) |
+| **P4** (fait, §8.24) | Antigravity | l'attente du transcript réécrite (§8.4.6) |
 | **P5** (fait, §8.23) | OpenCode | SSE, `local:shared`, ses trois tâches ; le plus risqué des harness |
 | **P6** | OpenAI, Groq, Mistral, ElevenLabs, Deepgram | sortir `voice/online*`, `live.rs`, `wire.rs` du crate de l'app dans une crate commune ; WebSocket ; INT-13 rejoué |
 | **P7** (fait, §8.22) | isola | `proc/*` |
@@ -1876,3 +1876,37 @@ Identique sous Windows, compilé deux fois, et sous Linux, dans deux dossiers (`
 **Le réacteur et l'ordre des tâches.** Celui du kit `0.1.0` sonde chaque tâche une fois par tour : une tâche qui attend ce qu'une plus récente vient de poser dort jusqu'à la ligne suivante (vu par P7). `host.rs` n'y est pas exposé : `run` refait un passage tant qu'une tâche est née ou que `stir` a été appelé, et les deux états qu'une autre tâche attend (le flux ouvert, le catalogue lu) l'appellent. Les morceaux du flux sont rangés avant le passage. `a_task_waiting_for_another_goes_on_in_the_same_turn` le prouve.
 
 **Pas fait ici.** Ni étiquette ni soumission (Z1). La vue OpenCode et les comptes restent liés à la crate (P8). Le banc de flux complet (`fluxbench`, par `agent/frames`) n'a pas été rejoué : le disque du poste était plein, et sa compilation release a dû être retirée.
+
+
+### 8.24 Ce que P4 a construit (ESC-348)
+
+Antigravity CLI est le premier harness porté de bout en bout, en `2.2.0`, `escouade.min` `2.2.0`, `"run": { "wasm": "Cargo.toml" }`, `crate-type = ["cdylib", "rlib"]`. Il sort d'`escouade-plugins` et des membres du workspace de `src-tauri`. La `rlib` reste pour le cœur, dont la « Vue Antigravity » lit `words.rs` et, en test, `translate.rs` : le chemin `../plugins/antigravity` reste dans ses dépendances jusqu'à P8.
+
+**L'attente du transcript.**
+
+- Rien n'attend dans un tour. `Client::frames` lit ce qu'il peut. Une ligne dont le transcript manque (`needs` : la fin d'un texte, ou la fin d'une écriture) est gardée dans `held`, avec tout ce qui la suit, dans l'ordre : `agent/frames` répond ce qui passait avant elle.
+- `lib.rs` pose un seul minuteur pour tout le plugin dès qu'un agent attend (`timer/set` en notification, sans `id` : quel minuteur a sonné n'importe pas, et un `serve` de machine à états ne lit pas une réponse). À `timer/fired`, chaque agent relit le transcript (`tick`), toutes les 40 ms, 15 fois par lot : les 600 ms du natif. Ce que cela laisse passer sort en `agent/items`.
+- **Plus rien n'est perdu de ce que le natif lisait** : la patience épuisée, les lignes passent sans le transcript, comme le natif.
+- Un lot qui arrive pendant l'attente se range derrière et `frames` rend vide. `interrupt` et un message hors tour lisent aussitôt ce qui est gardé (`hurry`) : il passerait sinon derrière ce qu'ils font. Un message pendant un tour va dans sa file, comme avant, et ne presse rien.
+- Une sonnerie arrivée dans le tour même qui a commencé à garder ne relit rien (`fresh`) : `turn::write` sort avant les réponses du tour, et elle ferait passer des `agent/items` devant la réponse de `agent/frames`.
+
+**Les fichiers.** Le manifeste déclare `agentHome` en lecture et `limits.fileBytes` à 4 Mio : c'est une ligne de plus dans la fenêtre d'installation (« Lit le dossier de compte de tes agents »). Chaque agent d'Antigravity a son dossier (`agent_home_var`), la racine existe donc toujours. Tout passe par `host.rs`, parce que `turn::read_file` n'envoie pas l'agent et que l'hôte refuse alors une racine d'agent : **P3 a le même trou pour Codex**, dont `read_file` rend `None`. Le module appelle `turn::host_call` avec `agent`. Aucune écriture : `Item::File` et les fichiers du lancement restent au cœur, qui les vérifie.
+
+**Ce que le cœur a gagné, tous pour un plugin de harness.**
+
+- `agent/items` n'arrivait qu'aux agents d'un process partagé. Il arrive maintenant à tout agent (`hear_what_it_tells`). Pour un programme à lui, il passe par `pump` (`Heard::Items`), derrière la réponse du lot d'avant : sinon le fil qui lit le plugin aurait pu le livrer avant elle.
+- **`fs/read` prend `tail`.** Un fichier au-delà de la limite rend sa fin et `cut`, à partir d'un caractère entier, au lieu d'échouer. Le transcript grandit sans fin, et le natif le lisait entier : sans cela, un agent aurait perdu les arguments de ses appels passés 4 Mio de conversation. Le schéma, `protocol.ts` et sa copie du site suivent. **L'écart :** le module ne cherche une étape que dans les 4 derniers Mio.
+- **Le dossier de l'utilisateur.** `home_env` gardait `GIT_CONFIG_GLOBAL`, `CARGO_HOME` et `RUSTUP_HOME`, que seul l'hôte peut connaître. `words::tools_env` en fait une fonction à part : vide en module, et `Agy::spawn` les ajoute à l'environnement. `AGY_CLI_DISABLE_AUTO_UPDATE` reste posé par `home_env`, donc par le plugin, à chaque lancement.
+
+**Une limite.** Si l'instance plante pendant l'attente, ce qu'elle gardait est perdu, y compris un `result` : `agent/frames` a déjà répondu, et le cœur ne le redonne pas. Le tour reste alors ouvert jusqu'au message suivant ou à l'arrêt. Il faut un plantage dans une fenêtre de 600 ms ; ce n'est pas traité.
+
+**L'empreinte** (compilée depuis crates.io, protocole et `escouade-acp` `0.1.0`, `escouade-plugin build`, deux fois sous Windows, deux dossiers sous Linux, `rust:1.98.0-bookworm`, Podman, `canon` `4d3e106a…`) : `4461acb22d187a4fedf4d3f6677787f65661df35371a18308b5610e346045282`, 862 118 o, la même partout. C'est celle du module que le store publiera. macOS n'a pas été essayé.
+
+**INT-0.** `ESCOUADE_BENCH_ONLY=agy npm run bench:int0 -- --flux-only`, 20 passes au plus vite sur les six flux d'`agy`, en release, sous Windows, d'autres worktrees compilant : **médiane 104 µs, 99e centile 1 058 µs, 6 231 lignes/s**, 280 lignes sans événement sur 1 380 comme avant. Le process du §4 donnait 161 µs, 1 015 µs et 4 739 lignes/s, le cœur 36 µs, 1 010 µs et 9 462 lignes/s. Le seuil (5 ms de plus au 99e centile) est tenu : +48 µs sur le cœur. Le flux enregistré n'a pas de dossier d'agent, il ne mesure donc pas la lecture du transcript, dont le coût ne compte que par ligne qui le lit.
+
+**Les preuves.**
+
+- `plugins_wasm_agy_tests.rs` : les treize flux d'`agy` 1.4.9 de `tests/fixtures/agy/`, chacun avec un transcript fabriqué à côté (raisonnement, appels, une écriture refusée, le plan), cartes répondues, joués par le module et comparés à `tests/fixtures/plugins/parity/antigravity.json`, que le natif du commit `6dbd1223` a écrit. L'environnement ne diffère que des trois variables du dossier de l'utilisateur, que le test retire.
+- Le même fichier : un transcript en retard arrive derrière, par `agent/items`, sans tenir le tour ; un transcript jamais écrit lâche après sa patience.
+- `the_fake_agy_passes_the_bench_with_its_transcript_late` : le banc des harness sur le faux `agy`, chaque ligne de transcript écrite 150 ms en retard (`FAKE_AGY_LATE_MS`), par le vrai `spawn_plugged`.
+- `plugins/antigravity/src/tests.rs` : `tick` à la main, sans minuteur.

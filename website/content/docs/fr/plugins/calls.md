@@ -284,7 +284,7 @@ Une racine de `permissions.files` et un chemin relatif, ou un chemin de l’hôt
 
 | Méthode | Paramètres en plus | Réponse |
 | --- | --- | --- |
-| `fs/read` | | `{ text }`, ou `{ dataBase64 }` pour ce qui n’est pas de l’UTF-8 |
+| `fs/read` | `tail` | `{ text }`, ou `{ dataBase64 }` pour ce qui n’est pas de l’UTF-8. Avec `tail`, un fichier au-delà de la limite rend sa fin et `cut` au lieu d’échouer |
 | `fs/write` | `text` ou `dataBase64`, `append` | `{ bytes, path }` |
 | `fs/stat` | | `{ kind, bytes, modified }` |
 | `fs/list` | | `{ entries, truncated }`, chaque entrée avec `name`, `kind` et `bytes` |

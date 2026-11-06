@@ -14,8 +14,11 @@
 //!
 //! What its events leave out (a call's arguments, a write's text, its reasoning) is read from the conversation's transcript
 //! (`brain/<id>/.system_generated/logs/transcript_full.jsonl`), written before the event that tells the step over: read
-//! here, a few hundred milliseconds at most for a batch, the rare time it is late.
+//! here. The rare time it is late, nothing waits inside a turn: what `agy` said from that step on is held, in its order, and read
+//! again on the host's timer (`tick`), a few hundred milliseconds at most for a batch. `agent/frames` answers what came
+//! before it, and what was held goes out as `agent/items` (docs/PLUGINS.md §8.4.6).
 
+use crate::host;
 use crate::translate::Translator;
 use crate::words::{self, AgyRules, Denied, Settings, Usage};
 use escouade_plugin_protocol::engine::{
@@ -24,10 +27,12 @@ use escouade_plugin_protocol::engine::{
 use serde_json::{json, Value};
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
 
-/// How long the transcript is waited for in a batch, a step told over before it is written.
-const TRANSCRIPT_WAIT: Duration = Duration::from_millis(600);
+/// How often the transcript is read again, a step told over before it is written.
+pub const TRANSCRIPT_EVERY_MS: u64 = 40;
+
+/// How many times it is read again for a batch: 600 ms.
+const TRANSCRIPT_TRIES: u32 = 15;
 
 /// A request of the client waiting for the user's answer.
 #[derive(Debug, Clone)]
@@ -51,6 +56,8 @@ struct Answers {
 
 /// One agent.
 pub struct Client {
+    /// Its key, as the host knows it (`fs/*`).
+    agent: String,
     translator: Translator,
     lang: String,
     /// The agent's own home.
@@ -90,8 +97,14 @@ pub struct Client {
     wrote_text: bool,
     asked: HashMap<String, Asked>,
     answers: Answers,
-    /// How long this batch may still wait for the transcript.
-    patience: Duration,
+    /// What its program said from the step whose transcript is late on, in its order.
+    held: VecDeque<String>,
+    /// That step's line of the transcript, once read.
+    found: Option<Value>,
+    /// How many times this batch may still read the transcript again.
+    patience: u32,
+    /// `held` began in this very turn of the module: what it answers goes out first.
+    fresh: bool,
 }
 
 fn line(msg: &Value) -> String {
@@ -111,7 +124,7 @@ impl Client {
     /// The agent `a`, given before its launch, or again to a plugin that started again (its program runs then).
     pub fn new(a: &Attach) -> Self {
         let home = a.home.as_ref().map(PathBuf::from);
-        let always = home.as_deref().map(words::read_always).unwrap_or_default();
+        let always = Self::always(&a.agent, home.as_deref());
         let tag: String = a
             .agent
             .chars()
@@ -124,6 +137,7 @@ impl Client {
             translator.open(session);
         }
         Client {
+            agent: a.agent.clone(),
             translator,
             lang: a.lang.clone(),
             home,
@@ -162,8 +176,17 @@ impl Client {
             wrote_text: false,
             asked: HashMap::new(),
             answers: Answers::default(),
-            patience: Duration::ZERO,
+            held: VecDeque::new(),
+            found: None,
+            patience: 0,
+            fresh: false,
         }
+    }
+
+    /// What the user allowed the agent `agent` for good, kept in its home.
+    fn always(agent: &str, home: Option<&Path>) -> Vec<String> {
+        let file = home.map(words::always_file);
+        words::always_of(file.and_then(|f| host::read(agent, &f)))
     }
 
     fn next(&mut self) -> u64 {
@@ -176,7 +199,7 @@ impl Client {
     fn settings_file(&self) -> Option<FileToWrite> {
         let home = self.home.as_deref()?;
         let file = words::settings_file(home);
-        let before = std::fs::read_to_string(&file).unwrap_or_default();
+        let before = host::read(&self.agent, &file).unwrap_or_default();
         let allowed: Vec<String> = self.always.iter().chain(&self.once).cloned().collect();
         let mut doc = words::settings_doc(&before, &self.rules, &self.settings.mode, &allowed);
         words::set_provider(&mut doc, self.by_key);
@@ -184,6 +207,11 @@ impl Client {
             path: file.to_string_lossy().into_owned(),
             text: serde_json::to_string_pretty(&doc).unwrap_or_default(),
         })
+    }
+
+    #[cfg(test)]
+    pub fn settings_text(&self) -> String {
+        self.settings_file().map(|f| f.text).unwrap_or_default()
     }
 
     /// Its rules written now: `agy` reads them again before each tool.
@@ -240,11 +268,7 @@ impl Client {
             effort: p.effort.clone(),
             mode: p.mode.clone(),
         };
-        self.always = self
-            .home
-            .as_deref()
-            .map(words::read_always)
-            .unwrap_or_default();
+        self.always = Self::always(&self.agent, self.home.as_deref());
         self.translator.launch(p);
         self.opened = false;
         self.up = true;
@@ -263,7 +287,7 @@ impl Client {
         let mut launch = self.program(self.resumed.as_deref());
         if let Some(home) = self.home.as_deref() {
             let file = words::mcp_file(home);
-            let before = std::fs::read_to_string(&file).unwrap_or_default();
+            let before = host::read(&self.agent, &file).unwrap_or_default();
             let grant = p
                 .escouade
                 .as_ref()
@@ -277,40 +301,109 @@ impl Client {
         launch
     }
 
-    /// The transcript of the conversation, its step `step` once written.
-    fn transcript_step(&mut self, step: u64) -> Option<Value> {
+    /// The line of the step `step` in the transcript of the conversation, once written.
+    fn transcript_step(&self, step: u64) -> Option<Value> {
         let file = words::transcript(self.home.as_deref()?, self.session.as_deref()?);
-        let started = Instant::now();
-        loop {
-            if let Ok(text) = std::fs::read_to_string(&file) {
-                let found = text
-                    .lines()
-                    .filter_map(|l| serde_json::from_str::<Value>(l).ok())
-                    .find(|v| v["step_index"].as_u64() == Some(step));
-                if found.is_some() {
-                    return found;
-                }
-            }
-            if started.elapsed() >= self.patience {
-                self.patience = Duration::ZERO;
-                return None;
-            }
-            std::thread::sleep(Duration::from_millis(40));
-            self.patience = self.patience.saturating_sub(Duration::from_millis(40));
+        host::read_end(&self.agent, &file)?
+            .lines()
+            .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+            .find(|v| v["step_index"].as_u64() == Some(step))
+    }
+
+    /// The arguments of the call of the step `s`, as `step` will take them.
+    fn args_of(&self, s: &Value, name: &str) -> Value {
+        let step = s["step_index"].as_u64().unwrap_or(0);
+        match self.args.get(&step) {
+            Some((_, a)) => a.clone(),
+            None => self
+                .calls
+                .iter()
+                .find(|(n, _)| n == name)
+                .map(|(_, a)| a.clone())
+                .unwrap_or_else(|| s["tool_info"]["parameters"].clone()),
         }
     }
 
-    /// What `agy` wrote.
-    pub fn frames(&mut self, lines: &[String]) -> Vec<Item> {
-        self.patience = TRANSCRIPT_WAIT;
-        let mut out = Vec::new();
-        for l in lines {
-            match serde_json::from_str::<Value>(l) {
-                Ok(msg) => self.read(msg, &mut out),
-                Err(e) => eprintln!("unparsable agy event ({e}), {} bytes", l.len()),
+    /// The step whose line of the transcript `msg` needs before it is read: what ends a text (its calls, its reasoning),
+    /// or a write (one refused ends `DONE` all the same, ESC-269).
+    fn needs(&self, msg: &Value) -> Option<u64> {
+        let s = &msg["step_update"];
+        if msg["event"] != "step_update"
+            || self.stale_lines
+            || s["state"] != "DONE"
+            || self.home.is_none()
+            || self.session.is_none()
+        {
+            return None;
+        }
+        let writes = |name: &str| {
+            words::rule_of(name, &self.args_of(s, name))
+                .is_some_and(|(r, _)| r.starts_with("write_file("))
+        };
+        let needed = match s["step_type"].as_str().unwrap_or_default() {
+            "agent_response" => true,
+            "tool" | "subagent" => writes(s["tool_name"].as_str().unwrap_or_default()),
+            _ => false,
+        };
+        needed.then(|| s["step_index"].as_u64().unwrap_or(0))
+    }
+
+    /// What is held, read in its order up to a line whose transcript is late, while there is patience for it.
+    fn go_on(&mut self, out: &mut Vec<Item>) {
+        while let Some(l) = self.held.front() {
+            let msg = match serde_json::from_str::<Value>(l) {
+                Ok(msg) => msg,
+                Err(e) => {
+                    eprintln!("unparsable agy event ({e}), {} bytes", l.len());
+                    self.held.pop_front();
+                    continue;
+                }
+            };
+            if let Some(step) = self.needs(&msg) {
+                self.found = self.transcript_step(step);
+                if self.found.is_none() && self.patience > 0 {
+                    return;
+                }
             }
+            self.held.pop_front();
+            self.read(msg, out);
+        }
+    }
+
+    /// What `agy` wrote: what can be read now. What is left is held, for `tick`, behind what was held already.
+    pub fn frames(&mut self, lines: &[String]) -> Vec<Item> {
+        let resting = self.held.is_empty();
+        self.held.extend(lines.iter().cloned());
+        let mut out = Vec::new();
+        if resting {
+            self.patience = TRANSCRIPT_TRIES;
+            self.go_on(&mut out);
+            self.fresh = !self.held.is_empty();
         }
         out
+    }
+
+    /// Lines are held, read again by `tick`.
+    pub fn waits(&self) -> bool {
+        !self.held.is_empty()
+    }
+
+    /// The host's timer rang: the transcript read again, and what that lets through, in its order.
+    pub fn tick(&mut self) -> Vec<Item> {
+        let mut out = Vec::new();
+        if self.held.is_empty() || std::mem::take(&mut self.fresh) {
+            return out;
+        }
+        self.patience = self.patience.saturating_sub(1);
+        self.go_on(&mut out);
+        out
+    }
+
+    /// What is held read at once: what comes next would overtake it.
+    fn hurry(&mut self, out: &mut Vec<Item>) {
+        self.patience = 0;
+        self.fresh = false;
+        self.go_on(out);
     }
 
     /// One event of its program.
@@ -378,7 +471,7 @@ impl Client {
                     return;
                 }
                 self.usage.add(&s["usage"]);
-                let written = self.transcript_step(step);
+                let written = self.found.take();
                 let wrote_text = std::mem::take(&mut self.wrote_text);
                 if let Some(t) = written {
                     for c in t["tool_calls"].as_array().into_iter().flatten() {
@@ -399,6 +492,7 @@ impl Client {
             }
             "tool" | "subagent" => {
                 let name = s["tool_name"].as_str().unwrap_or_default().to_string();
+                let written = self.found.take();
                 let args = match self.args.get(&step) {
                     Some((_, a)) => a.clone(),
                     None => {
@@ -418,10 +512,7 @@ impl Client {
                     && words::rule_of(&name, &args)
                         .is_some_and(|(r, _)| r.starts_with("write_file("))
                 {
-                    if let Some(t) = self
-                        .transcript_step(step)
-                        .filter(|t| t["status"] == "ERROR")
-                    {
+                    if let Some(t) = written.filter(|t| t["status"] == "ERROR") {
                         let e = t["error"].as_str().unwrap_or("error").to_string();
                         msg["step_update"]["state"] = json!("ERROR");
                         msg["step_update"]["tool_info"]["error"] =
@@ -500,7 +591,7 @@ impl Client {
             ));
         }
         if asks.is_empty() && planning {
-            if let Some(plan) = plan_file.and_then(|f| std::fs::read_to_string(f).ok()) {
+            if let Some(plan) = plan_file.and_then(|f| host::read(&self.agent, Path::new(&f))) {
                 let n = self.next();
                 let rid = format!("{}-plan-{n}", self.tag);
                 self.asked.insert(rid.clone(), Asked::Plan);
@@ -588,6 +679,7 @@ impl Client {
             return Vec::new();
         }
         let mut out = Vec::new();
+        self.hurry(&mut out);
         self.prompt(text.to_string(), &mut out);
         out
     }
@@ -595,8 +687,10 @@ impl Client {
     /// `agy` has no message that stops a turn: its program is stopped, the turn ended `cancelled`, and the next message
     /// starts it again on the conversation (resumed, tried in ESC-269).
     pub fn interrupt(&mut self, cancel_queued: bool) -> Vec<Item> {
+        let mut out = Vec::new();
+        self.hurry(&mut out);
         if !self.busy {
-            return Vec::new();
+            return out;
         }
         if cancel_queued {
             self.queue.clear();
@@ -609,7 +703,7 @@ impl Client {
         self.usage = Usage::default();
         self.up = false;
         self.stale_lines = true;
-        let mut out = vec![Item::Pause];
+        out.push(Item::Pause);
         self.end_turn(true, None, &mut out);
         out
     }

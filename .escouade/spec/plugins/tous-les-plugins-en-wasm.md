@@ -1,8 +1,8 @@
 ---
 title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","docs/PLUGINS.md §8.19 (ESC-344)","docs/PLUGINS.md §8.20 (ESC-337)","docs/PLUGINS.md §8.22 (ESC-351)","docs/PLUGINS.md §8.23 (ESC-349)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire"]
-tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351","ESC-349"]
+sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","docs/PLUGINS.md §8.19 (ESC-344)","docs/PLUGINS.md §8.20 (ESC-337)","docs/PLUGINS.md §8.22 (ESC-351)","docs/PLUGINS.md §8.23 (ESC-349)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire","docs/PLUGINS.md §8.24 (ESC-348)"]
+tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351","ESC-349","ESC-348"]
 decisions: [73,71,70,72,75,80,84,86,89,92,93]
 compared: null
 ---
@@ -168,3 +168,11 @@ OpenCode est en `run.wasm`, en version `2.2.0`, `escouade.min` `2.2.0`, comme le
 
 - **Sa crate reste liée au cœur** en bibliothèque (`crate-type = ["cdylib", "rlib"]`), pour la vue OpenCode et les comptes, jusqu'à P8. Elle est membre du workspace de `plugins/`, pas de celui de `src-tauri`, et n'a plus de `tokio` ni de `reqwest`, sur aucune cible.
 - **Il n'utilise pas le kit**, seulement `escouade-plugin-protocol` : le réacteur du kit ne sait pas lancer une tâche qu'aucun appel du cœur n'a commencée, ce qu'est la lecture du flux. Son module se compile donc sur la version publiée sans changer le kit. Le détail est à la page « OpenCode en plugin ».
+
+## Ce qui tourne déjà : Antigravity CLI (ESC-348)
+
+- Antigravity CLI est le premier harness en `run.wasm` (voir *Antigravity CLI en plugin*), en version `2.2.0`, `escouade.min` `2.2.0`, ses identifiants inchangés. Il n'est plus dans `escouade-plugins`. Il dit ce que disait son natif sur les treize flux enregistrés d'`agy` (`tests/fixtures/plugins/parity/antigravity.json`).
+- **Sa cible porte aussi une `rlib`** : la vue terminal du cœur lit ses mots jusqu'à P8. Le cœur le garde donc en dépendance, hors des membres de son workspace.
+- **`agent/items` atteint tout agent d'un plugin de harness**, plus seulement ceux d'un process partagé. Pour un agent dont le programme est le sien, ce qu'un plugin dit sans qu'on lui demande passe derrière la réponse du lot d'avant.
+- **`fs/read` prend `tail`** : un fichier au-delà de la limite rend sa fin et `cut`, à partir d'un caractère entier, au lieu d'échouer. Sans `tail`, rien ne change.
+- Comme Linear et les autres, son module n'est pas dans l'installeur : avant Z2, seuls un build de développement et les tests le lancent. **Une release sortie avant Z2 n'aurait pas Antigravity CLI.**
