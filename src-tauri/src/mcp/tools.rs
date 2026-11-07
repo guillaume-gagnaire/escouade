@@ -830,7 +830,7 @@ pub struct StartTicketArgs {
     )]
     pub effort: Option<String>,
     #[schemars(
-        description = "The folder the agents of this ticket go in (their sidebar folder), kept on the ticket (also when it is resumed): its id or its name in any case, made under that name if there is none. Leave it out: your own folder, made for you (named after you) if you have none. An empty string: no folder. Not for an agent of another project, nor from outside Escouade (no folder then)."
+        description = "The folder the agents of this ticket go in (their sidebar folder), kept on the ticket (also when it is resumed): its id or its name in any case, made under that name if there is none. Leave it out: your own folder, made for you (named after you) if you have none. An empty string: no folder. Left out, from another project or from outside Escouade: no automatic folder."
     )]
     pub folder: Option<String>,
 }
@@ -1091,7 +1091,7 @@ pub struct CreateAgentArgs {
     )]
     pub model: Option<String>,
     #[schemars(
-        description = "The folder the new agent goes in (its sidebar folder): its id or its name in any case, made under that name if there is none. Leave it out: your own folder, made for you (named after you) if you have none. An empty string: no folder. Not for an agent of another project, nor from outside Escouade (no folder then)."
+        description = "The folder the new agent goes in (its sidebar folder): its id or its name in any case, made under that name if there is none. Leave it out: your own folder, made for you (named after you) if you have none. An empty string: no folder. Left out, from another project or from outside Escouade: no automatic folder."
     )]
     pub folder: Option<String>,
 }
