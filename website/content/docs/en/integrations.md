@@ -20,7 +20,7 @@ Accounts are connected in Settings › Integrations, “Connected accounts” gr
 
 ### Code host or source of tickets
 
-A code host (GitHub, GitLab, Bitbucket, Gitea, Azure DevOps) serves the agents’ pull requests, CI and deployments; a source of the Kanban serves the tickets. Settings › Integrations shows them in two named parts. Connecting your GitLab as a code host puts no ticket in the Kanban: a GitLab project still has to be linked as a source (see below), which the import window offers in one click. Bitbucket and Gitea have no source yet: their row says “No tickets: PRs and CI only”.
+A [code host](code-hosts) (GitHub, GitLab, Bitbucket, Gitea, Azure DevOps) serves the agents’ pull requests, CI and deployments; a source of the Kanban serves the tickets. Settings › Integrations shows them in two named parts. Connecting your GitLab as a code host puts no ticket in the Kanban: a GitLab project still has to be linked as a source (see below), which the import window offers in one click. Bitbucket and Gitea have no source yet: their row says “No tickets: PRs and CI only”.
 
 “Disconnect” forgets the account and its secrets. Projects keep their links, unused until you connect again.
 
@@ -32,7 +32,7 @@ When the keychain refuses a token on Windows or macOS, it stays in that file and
 
 ### The services a plugin serves
 
-GitHub (the code host and GitHub Issues), GitLab (the code host; GitLab Issues is still part of the app), Bitbucket, Gitea and Forgejo, and Trello are served by plugins shipped with Escouade: nothing changes in use, the accounts and the forms are the same. An account served by another author’s plugin says so: “Served by the plugin …”. The token stays in the keychain; Escouade lends it to the plugin of that service alone, when it needs it.
+GitHub (the code host and GitHub Issues), GitLab (the code host; GitLab Issues is still part of the app), Bitbucket, Gitea and Forgejo, Azure DevOps, and Trello are served by plugins shipped with Escouade: nothing changes in use, the accounts and the forms are the same. An account served by another author’s plugin says so: “Served by the plugin …”. The token stays in the keychain; Escouade lends it to the plugin of that service alone, when it needs it.
 
 These plugins are switched off in the Plugins view, for the whole app or for one project (see [the plugins shipped with Escouade](plugins/installer#the-plugins-shipped-with-escouade)). Switched off or stopped, a plugin says so instead of going quiet:
 

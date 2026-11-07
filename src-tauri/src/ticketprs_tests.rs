@@ -311,6 +311,7 @@ async fn board_on_github(
 #[tokio::test]
 async fn a_tickets_pull_request_opens_by_the_api_and_its_merge_ends_the_ticket() {
     let h = harness("tp-merge");
+    h.core.set_telemetry(true).unwrap();
     let server = FakeServer::start().await;
     let (p, r) = board_on_github(&h, &server).await;
     server.on(
@@ -434,6 +435,15 @@ async fn a_tickets_pull_request_opens_by_the_api_and_its_merge_ends_the_ticket()
     assert!(u.done_at.is_some());
     assert!(u.pr.unwrap().error.is_none());
     assert!(!has_branch(&r, "ticket/dem-1"));
+    // The statistics say that it happened and on which host, nothing of the repository's.
+    assert_eq!(
+        crate::core_tests::sent(&h, "pr_opened"),
+        [json!({ "from": "ticket", "forge": "github" })]
+    );
+    assert_eq!(
+        crate::core_tests::sent(&h, "pr_merged"),
+        [json!({ "forge": "github" })]
+    );
     h.core.schedule_now().await;
     h.wait_ticket(&next.id, "started after the merge", |x| {
         x.column != Column::Todo
@@ -1275,6 +1285,7 @@ fn pr_opens(server: &FakeServer) {
 #[tokio::test]
 async fn with_the_autopilot_a_failed_ci_goes_back_to_its_agent_and_the_ticket_back_in_review() {
     let h = harness("tp-fix");
+    h.core.set_telemetry(true).unwrap();
     let server = FakeServer::start().await;
     let (p, r, bare) = github_project(&h, &server, false).await;
     h.set_board(&p.id, |s| s.action = "pr".into());
@@ -1359,6 +1370,14 @@ async fn with_the_autopilot_a_failed_ci_goes_back_to_its_agent_and_the_ticket_ba
     assert_eq!(h.ticket(&t.id).pr.unwrap().fixes, 2);
     // A second click meanwhile is refused.
     assert!(h.core.ticket_pr_fix_ci(&t.id).await.is_err());
+    // Counted once each: by the autopilot, by hand, and the refused click not at all.
+    assert_eq!(
+        crate::core_tests::sent(&h, "ci_fix_started"),
+        [
+            json!({ "from": "ticket", "by": "autopilot" }),
+            json!({ "from": "ticket", "by": "user" })
+        ]
+    );
     h.wait_ticket(&t.id, "the second fix over", |x| {
         x.pr.as_ref().is_some_and(|p| p.fixing.is_none())
     })

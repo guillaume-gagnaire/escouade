@@ -409,6 +409,7 @@ export const en: Catalog = {
       git: 'Git and commits',
       worktrees: 'Worktrees',
       branches: 'Branches',
+      'code-hosts': 'Code hosts',
       editor: 'The editor',
       terminals: 'Terminals',
       launch: 'Running the project',

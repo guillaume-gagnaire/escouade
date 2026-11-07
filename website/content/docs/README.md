@@ -28,7 +28,7 @@ Du texte, des listes, des tableaux.
 
 ## Images
 
-Les captures du site, prises dans la vidéo de présentation, dans la langue de la page : `![Ce que montre la capture](/images/board.jpg)` en français, `![What it shows](/images/en/board.jpg)` en anglais. Il y a `agents`, `board`, `chat`, `editor`, `git`, `integrations`, `launch`, `notifications`, `remote`, `stats` et `test` (`.jpg`). Le texte entre crochets est lu par les lecteurs d’écran : il dit ce que montre l’image.
+Les captures du site, prises dans la vidéo de présentation, dans la langue de la page : `![Ce que montre la capture](/images/board.jpg)` en français, `![What it shows](/images/en/board.jpg)` en anglais. Il y a `agents`, `board`, `board-review`, `chat`, `editor`, `environments`, `git`, `integrations`, `launch`, `notifications`, `pr-review`, `prs`, `remote`, `stats` et `test` (`.jpg`). Le texte entre crochets est lu par les lecteurs d’écran : il dit ce que montre l’image.
 
 ## Encadrés
 

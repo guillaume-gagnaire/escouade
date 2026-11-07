@@ -29,6 +29,7 @@ When the autopilot is paused, a line under the header says why and offers “Res
 | “To do” | The tickets waiting for an agent. | By priority, from top to bottom, then by age. |
 | “In progress” | The tickets an agent is working on (“Loop 2/5”), and those that are blocked. | By start time. |
 | “To review” | The tickets the agent hands back: criteria met, or the maximum number of loops reached. It is up to you to test them, then approve or send them back. | By arrival time. |
+| “In review” | The tickets whose pull request is open on the host, until its merge. It only shows when the Kanban opens PRs or a ticket is in it. | By arrival time in “To review”. |
 | “Done” | The approved tickets. | Newest first. |
 
 Each column shows its number of tickets. An empty column says what it is waiting for (“Add a ticket: an agent will pick it up as soon as a slot is free”, “Nothing to review”). Only the “To do” column has a `+` button (“New ticket”).
@@ -100,12 +101,30 @@ Every card has its key, its title and, for an imported ticket, the badge of its 
 | “To do” | The number of criteria and loops (“3 criteria · max 5 loops”), and when the ticket will start: “Picked up as soon as a slot is free”, “Waiting for a slot (2/2)”, “⏸ after DEM-3”, “Autopilot is off”, “Waiting: autopilot paused”… With the autopilot off, a “Start” button appears when a slot is free. |
 | “In progress” | “Loop 2/5”; the criteria, checked (✓) or not (○), with the agent’s note on hover; a bar of the criteria met; the last three items of the progress (“+2” for the others); the status line the agent published through the [MCP server](mcp); what it is doing (“Reading src/billing/invoices.ts”), “Setting up the worktree · …” during setup, “Question waiting for your answer”, or “Resumes at 2:30 PM” if it is waiting for its quota. At the bottom: the agent’s name with its status, and the ticket’s cost (preceded by “≈” while it is an estimate). |
 | “To review” | “What was done” in full, the criteria, “Partial goal” if the maximum number of loops was reached without every criterion, the cost and “3/3 criteria”, then the buttons for [testing and approving](testing). |
+| “In review” | The PR’s number, its state, its CI and jobs, its approvals, its open threads, and a conflict with the target (see [below](#the-in-review-column)). |
 | “Done” | What became of the ticket (“⤵ Merged into main · squash”, “⇡ PR #41 → main”, “⇡ Pushed to ticket/dem-3”, “◇ Left in the worktree”, “∅ No changes”), then “3 loops · $1.12”. A PR reopens with a click. |
 
 A blocked ticket (“In progress” or “To review”) shows its reason in a frame: “Interrupted”, “Error: …”, “Criteria report missing”, a conflict… A blocked “In progress” ticket has a “Resume” button and no longer holds a slot. The card of an agent waiting for your answer has an amber outline.
 
 > [!TIP]
 > “Notify me about › Tickets (ready to review, blocked)” in the settings decides whether a ticket that reaches “To review” or gets blocked notifies you (see [Notifications](notifications)).
+
+## The “In review” column
+
+With “Open a pull request” as the approval action (see [Board settings](settings-board)), an approved ticket waits for its merge in this column. The PR opens through the API of the repository’s [code host](code-hosts); its card says where it stands, without opening the browser.
+
+![The In review column: a ticket’s card with its PR, CI, and approvals](/images/en/board-review.jpg)
+
+A click on its CI opens its jobs in Escouade. Depending on what happens, the card offers:
+
+- **“Agent fixes it”**, when the CI fails: its agent is restored and gets the failed jobs and the end of their logs, between tags, given as information and not as instructions. The autopilot does it alone, within the ticket’s loops.
+- **“Agent addresses the feedback”**, when a reviewer requests changes or comments: never alone, even with the autopilot.
+- **“Agent updates the branch”**, when the PR conflicts with its target: never alone either.
+- **“Merge (squash)”**, for a PR approved, green, and without conflict, and **“Merge when green”** while its CI runs. Nothing merges without this gesture.
+
+Merged, here or on the host, the ticket becomes “Done” and the tickets waiting for it start. Closed without a merge, it blocks, with “Back to do” and “Finish anyway”. A host’s error never moves a ticket: the card says it, with what was read last.
+
+Tickets are read every minute with the window in front and every 5 minutes otherwise; “Refresh”, in the column’s header, reads them at once. A done and merged ticket then says which [environments](code-hosts#environments-and-deployments) it runs in.
 
 ## The ticket’s agent and its conversation
 

@@ -502,6 +502,8 @@ struct Source {
     pr: PullRequest,
     word: String,
     host: String,
+    /// The host's kind, for the usage statistics.
+    kind: String,
     root: String,
     plan: FetchPlan,
     /// The project's remote, its base's.
@@ -628,6 +630,7 @@ impl<R: Runtime> Core<R> {
             pr,
             word: word.to_string(),
             host: provider.name().to_string(),
+            kind: provider.kind(),
             root,
             plan,
             remote: name,
@@ -726,6 +729,10 @@ impl<R: Runtime> Core<R> {
             all.push(review.clone());
         }
         self.pr_review_emit(&review);
+        self.telemetry
+            .track(crate::telemetry::Event::PrReviewStarted {
+                forge: crate::telemetry::forge(&source.kind),
+            });
         let me = self.clone();
         let working = self.working_owned();
         let at = review.at;

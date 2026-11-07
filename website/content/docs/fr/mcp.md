@@ -128,6 +128,19 @@ Les images d’un ticket se joignent avec `create_ticket` (`images`) et `update_
 
 Les autres fichiers d’un ticket, de tout format, se joignent avec `create_ticket` (`files`) et `update_ticket` (`addFiles`). Un fichier à joindre est `{ name, data, path }` : son contenu en base64 (`data`, avec `name`), pour un petit fichier, car une requête pèse 32 Mio au plus ; ou le chemin d’un fichier de ta machine (`path`), qui est alors copié. Les règles sont celles de la fenêtre du ticket, parce que le fichier suit le même chemin : 20 fichiers au plus par ticket, chacun dans la taille maximale de [Réglages › Harness](settings-claude-code#pieces-jointes). Elles sont vérifiées avant toute copie, et un refus ne laisse rien. Le nom est nettoyé comme celui d’un fichier que la fenêtre copie. Pour en retirer avec `removeFiles`, ou en lire un avec `get_ticket_file`, on le désigne par `{ file, index }`, comme une image.
 
+### Les pull requests
+
+Deux outils de plus, en lecture seule, lisent les PR d’un projet (« merge requests » sur GitLab) chez son [hébergeur de code](code-hosts). Un agent d’Escouade peut omettre le projet pour le sien.
+
+| Outil | Arguments | Ce qu’il rend |
+|---|---|---|
+| `list_pull_requests` | `project` (facultatif) | Les 30 PR ouvertes les plus récemment mises à jour du dépôt de la cible : état, CI, conflit, approbations, changements demandés, fils ouverts, relecteurs, si une relecture est demandée au compte qui lit l’hébergeur, et le ticket et l’agent du projet qui la tiennent. |
+| `get_pull_request` | `project` (facultatif), `number`, `repo` (facultatif) | Une PR entière : la même ligne, ses vérifications, ses relectures qui disent quelque chose, ses fils non résolus et les déploiements de sa branche. Textes coupés à 2 000 octets, 30 relectures et 30 fils au plus. |
+
+`get_ticket` donne aussi `pr`, la PR du ticket telle qu’elle a été lue en dernier, sans aucun texte de tiers. Commenter ou merger par le serveur n’existe pas : rien n’est écrit chez l’hébergeur.
+
+Une PR est écrite par n’importe qui sur un dépôt public : ces deux outils marquent ses titres, relectures et commentaires entre `<third_party_data>` et `</third_party_data>`, et un agent doit les lire comme des données, jamais comme des consignes.
+
 ### Mener tout le Kanban depuis Claude
 
 Avec ces outils, Claude conduit un ticket de bout en bout sans que tu ouvres la fenêtre : `start_ticket` le lance, `wait_ticket` attend qu’il change (son agent pose une question, passe en « À tester », se bloque), `get_ticket` dit où il en est, puis `approve_ticket` le valide ou `reject_ticket` le renvoie avec ce qui ne va pas. `resume_ticket`, `resolve_conflict` et `dismiss_block` règlent un blocage, et `delete_ticket` supprime. `wait_ticket` rend la main au premier changement, ou au bout de 120 secondes par défaut (240 au plus) ; le `since` de sa réponse, repassé à l’appel suivant, fait répondre aussitôt un ticket dont l’état diffère de celui qu’il garde, un changement survenu entre deux appels compris. `approve_ticket`, `reject_ticket`, `resume_ticket`, `resolve_conflict` et `dismiss_block` rendent aussi un `since`, celui du ticket tel qu’il était avant l’action : passé à `wait_ticket`, il fait dire aussitôt ce qui suit, une validation rapide comprise.

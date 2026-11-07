@@ -1696,7 +1696,7 @@ impl<R: Runtime> Core<R> {
                 if self.ticket_hold(&p, &t, engine_of(&t)).is_some() {
                     continue;
                 }
-                if let Err(e) = self.ticket_pr_fix_ci(&id).await {
+                if let Err(e) = self.ticket_pr_fix_ci_by(&id, true).await {
                     log::info!("ticket {}: its CI not given to its agent: {e:#}", t.key);
                 }
             }
@@ -3519,6 +3519,10 @@ impl<R: Runtime> Core<R> {
         match self.forge_client(&remote.host).await {
             Ok((client, _)) => match client.create_pr(&remote.repo, &draft).await {
                 Ok(pr) => {
+                    self.telemetry.track(Event::PrOpened {
+                        from: "ticket",
+                        forge: crate::telemetry::forge(&kind),
+                    });
                     let tp = crate::ticketprs::ticket_pr(
                         &pr,
                         &kind,

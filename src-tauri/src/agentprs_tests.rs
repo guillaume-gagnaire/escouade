@@ -513,12 +513,17 @@ async fn an_ordinary_agent_opens_its_pull_request_and_its_card_follows_it() {
         "npm test\nFAIL src/login.test.ts\n",
         &[],
     );
+    h.core.set_telemetry(true).unwrap();
     h.core
         .agent_pr_fix(&id, 7, "", PrFix::Checks)
         .await
         .unwrap();
     h.wait("the fix sent", |h| user_said(h, &id, "La CI de la PR #7"))
         .await;
+    assert_eq!(
+        crate::core_tests::sent(&h, "ci_fix_started"),
+        [json!({ "from": "agent", "by": "user" })]
+    );
     assert!(user_said(
         &h,
         &id,

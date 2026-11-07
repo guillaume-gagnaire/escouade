@@ -2,6 +2,7 @@
 // every column, statistics over two weeks, and the turns the fake `claude` plays for the agents at work
 // ($FAKE_CLAUDE_DEMO, tests/fixtures/fake-claude.mjs). In the language of the interface; nothing of the machine's.
 
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -222,6 +223,69 @@ const TEXT = {
     remoteAnswer: 'Done: an expired token answers **401** with `token_expired`, and the client refreshes it once.',
   },
 } as const;
+
+/** The pull requests of the code hosts' screenshots, in each language: what the fake GitHub is given (`pullsOf`). */
+const HOSTS = {
+  fr: {
+    pulls: [
+      ['feat/cursor-pagination', 'Pagination de /users par curseur'],
+      ['fix/session-expiry', 'Sessions expirées : renvoyer 401 plutôt que 500'],
+      ['i18n-es', 'Traductions espagnoles'],
+      ['chore/vitest-3', 'Passer à Vitest 3'],
+      ['docs/openapi', 'Décrire l’API en OpenAPI'],
+      ['feat/invoices-csv', 'Exporter les factures en CSV'],
+    ],
+    review: {
+      summary:
+        'La pagination tient, le curseur reste opaque et la limite est bornée. Deux points avant de merger : le tri et la dernière page.',
+      comments: [
+        { line: 7, body: 'Sans tri stable sur id, deux utilisateurs créés à la même date peuvent sauter d’une page à l’autre.' },
+        { line: 11, body: 'La dernière page rend nextCursor même quand il n’y a plus rien : ajoute un test.' },
+      ],
+    },
+  },
+  en: {
+    pulls: [
+      ['feat/cursor-pagination', 'Cursor pagination for /users'],
+      ['fix/session-expiry', 'Expired sessions: return 401 rather than 500'],
+      ['i18n-es', 'Spanish translations'],
+      ['chore/vitest-3', 'Move to Vitest 3'],
+      ['docs/openapi', 'Describe the API with OpenAPI'],
+      ['feat/invoices-csv', 'Export invoices as CSV'],
+    ],
+    review: {
+      summary:
+        'The pagination holds, the cursor stays opaque and the limit is bounded. Two points before merging: the order and the last page.',
+      comments: [
+        { line: 7, body: 'Without a stable order on id, two users created at the same date can jump from one page to the other.' },
+        { line: 11, body: 'The last page returns nextCursor even when nothing is left: add a test.' },
+      ],
+    },
+  },
+} as const;
+export const hostsOf = (lang: Language) => HOSTS[lang];
+
+/** The file of the pull request the demo's agent reviews. */
+export const REVIEWED = {
+  path: 'src/db/cursor.ts',
+  text: [
+    "import { db } from './client';",
+    '',
+    'const MAX = 50;',
+    '',
+    'export async function page(cursor: string | null, limit = MAX) {',
+    '  const after = cursor ? Buffer.from(cursor, "base64url").toString() : "";',
+    '  const users = (await db.users.all()).filter((u: { id: string }) => u.id > after);',
+    '  const items = users.slice(0, Math.min(limit, MAX));',
+    '  const last = items.at(-1)?.id ?? "";',
+    '  return {',
+    '    items,',
+    '    nextCursor: Buffer.from(last).toString("base64url"),',
+    '  };',
+    '}',
+    '',
+  ].join('\n'),
+};
 
 export type DemoText = (typeof TEXT)[Language];
 export const textOf = (lang: Language): DemoText => TEXT[lang] as DemoText;
@@ -507,7 +571,8 @@ const INFRA_LOGO = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
  * Makes the demo in `root` (the test's folder, its data in `root/data`), in `lang`, the ticket to test on the ports from
  * `ports` (free ones, found by the screenshots); gives the file of the fake's turns.
  */
-export function makeDemo(root: string, lang: Language, ports: number): string {
+/** `hosts`: for the code hosts' screenshots, tickets merged at commits of demo-api and one « En revue » (its pull request `hosts`). */
+export function makeDemo(root: string, lang: Language, ports: number, hosts?: { review: number; branch: string }): string {
   const t = textOf(lang);
   const dir = (p: keyof typeof PROJECTS) => path.join(root, PROJECTS[p].name);
   makeDemoApi(dir('api'));
@@ -533,7 +598,14 @@ export function makeDemo(root: string, lang: Language, ports: number): string {
       tileLabel: true,
       createdAt: now - 20 * DAY,
       runCommands: [run('r-web', 'Front', 'web'), run('r-api', 'API', 'api'), run('r-worker', 'Worker', 'worker')],
-      board: { autopilot: false, prefix: 'DEM', nextNumber: 10, target: 'main', maxParallel: 2 },
+      board: {
+        autopilot: false,
+        prefix: 'DEM',
+        nextNumber: 10,
+        target: 'main',
+        maxParallel: hosts ? 4 : 2,
+        ...(hosts ? { action: 'pr' } : {}),
+      },
     },
     {
       ...PROJECTS.studio,
@@ -620,10 +692,49 @@ export function makeDemo(root: string, lang: Language, ports: number): string {
       engine: 'cursor',
       progress: t.progress.attempts,
     }),
-    ticket('DEM-7', 'todo'),
+    hosts
+      ? ticket(
+          'DEM-7',
+          'pr',
+          {
+            branch: hosts.branch,
+            iteration: 1,
+            loops: 1,
+            startedAt: now - 5 * 60 * MIN,
+            reviewAt: now - 3 * 60 * MIN,
+            cost: 0.94,
+            pr: {
+              number: hosts.review,
+              url: `https://github.com/acme/demo/pull/${hosts.review}`,
+              kind: 'github',
+              host: 'github.com',
+              namespace: 'acme',
+              name: 'demo',
+              target: 'main',
+              branch: hosts.branch,
+              word: 'PR',
+              state: 'open',
+            },
+          },
+          1,
+        )
+      : ticket('DEM-7', 'todo'),
     ticket('DEM-8', 'todo', { after: ['t-6'] }),
     ticket('DEM-9', 'todo'),
   ];
+
+  if (hosts) {
+    // Merged where the environments of the fake GitHub find them: DEM-3 at main's head, DEM-2 a little before.
+    const at = (ref: string) => execFileSync('git', ['rev-parse', ref], { cwd: dir('api'), encoding: 'utf8' }).trim();
+    for (const [key, ref] of [
+      ['DEM-2', 'HEAD~2'],
+      ['DEM-3', 'HEAD'],
+    ])
+      Object.assign(
+        tickets.find((x) => x.key === key)!,
+        { outcomeCommit: at(ref), outcomeUrl: 'https://github.com/acme/demo/pulls' },
+      );
+  }
 
   const recipe = {
     prepare: [{ command: 'node scripts/seed.mjs', dir: '' }],

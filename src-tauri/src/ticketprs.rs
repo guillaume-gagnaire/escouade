@@ -16,6 +16,7 @@ use crate::git;
 use crate::i18n::{self, Lang};
 use crate::model::{now_ms, BoardSettings, Column, FailedCheck, PrFix, Service, Ticket, TicketPr};
 use crate::prnews;
+use crate::telemetry::Event;
 use anyhow::{anyhow, bail, Result};
 use std::collections::BTreeMap;
 use std::sync::atomic::Ordering;
@@ -1201,6 +1202,9 @@ impl<R: tauri::Runtime> Core<R> {
     async fn ticket_pr_merged(self: &Arc<Self>, id: &str) {
         let Ok(t) = self.ticket(id) else { return };
         let Some(tp) = t.pr.clone() else { return };
+        self.telemetry.track(Event::PrMerged {
+            forge: crate::telemetry::forge(&tp.kind),
+        });
         self.facts.emit(
             crate::facts::Body::TicketMerged {
                 target: tp.target.clone(),
@@ -1292,6 +1296,15 @@ impl<R: tauri::Runtime> Core<R> {
     /// its worktree made again from its branch when it went at the validation. Refused when there
     /// is nothing to fix or a fix is under way; what fails once it began is said on the card too.
     pub async fn ticket_pr_fix_ci(self: &Arc<Self>, id: &str) -> Result<()> {
+        self.ticket_pr_fix_ci_by(id, false).await
+    }
+
+    /// The same, by the user or by the autopilot (`to_fix`).
+    pub(crate) async fn ticket_pr_fix_ci_by(
+        self: &Arc<Self>,
+        id: &str,
+        autopilot: bool,
+    ) -> Result<()> {
         let t = self.ticket(id)?;
         let Some(tp) = t.pr.clone().filter(|_| t.column == Column::Pr) else {
             bail!(tr!(
@@ -1339,7 +1352,13 @@ impl<R: tauri::Runtime> Core<R> {
             Ok(())
         })?;
         match self.fix_ci_run(id, &t, &tp, &agent_id).await {
-            Ok(()) => Ok(()),
+            Ok(()) => {
+                self.telemetry.track(Event::CiFixStarted {
+                    from: "ticket",
+                    autopilot,
+                });
+                Ok(())
+            }
             Err(e) => {
                 let why = board::first_line(&format!("{e:#}"));
                 let _ = self.edit_ticket(id, |x| {

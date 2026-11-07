@@ -506,6 +506,7 @@ A harness without code: Goose, Block’s open source agent, described over ACP. 
         }
       }
     ]
-  }
+  },
+  "store": { "categories": ["harness"] }
 }
 ```

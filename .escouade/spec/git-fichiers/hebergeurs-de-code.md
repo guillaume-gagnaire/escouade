@@ -1,9 +1,9 @@
 ---
 title: "Hébergeurs de code"
 subject: "Git & fichiers"
-sources: ["docs/SPEC.md","plugins/gitlab/README.md","tests/fixtures/forges/gitlab/README.md","docs/TODO-2.2.md (Hébergeurs de code)","plugins/gitea/README.md","tests/fixtures/forges/gitea/README.md"]
-tickets: ["ESC-54","ESC-55","ESC-56","ESC-58","ESC-70","ESC-241","ESC-212","ESC-57","ESC-67","ESC-345"]
-decisions: []
+sources: ["docs/SPEC.md","plugins/gitlab/README.md","tests/fixtures/forges/gitlab/README.md","docs/TODO-2.2.md (Hébergeurs de code)","plugins/gitea/README.md","tests/fixtures/forges/gitea/README.md","docs/TODO-1.8.md","src-tauri/src/telemetry.rs"]
+tickets: ["ESC-54","ESC-55","ESC-56","ESC-58","ESC-70","ESC-241","ESC-212","ESC-57","ESC-67","ESC-345","ESC-69"]
+decisions: ["les-hebergeurs-comptent-dans-les-statist"]
 compared: null
 ---
 
@@ -119,3 +119,20 @@ Les cinq hébergeurs ne sont plus des process `escouade-plugins <nom>` : chacun 
 - Le proxy et la vérification TLS sont ceux de l'hôte : un changement de Réglages › Réseau atteint l'appel suivant, sans relancer le plugin.
 - Un journal de CI de plus de 8 Mio se dit trop long. En process, il se lisait.
 - Sur une GitHub Enterprise Server dont le stockage des journaux est sur un autre hôte que l'instance, le journal d'un job ne se lit pas : le plugin dit le refus. Le reste marche.
+
+## Statistiques d'usage
+
+Quatre événements disent, si l'utilisateur a accepté les statistiques, que les hébergeurs servent. Rien de plus : ni dépôt, ni numéro, ni titre, ni adresse d'une instance.
+
+- `pr_opened` : Escouade ouvre une PR (une par dépôt d'un projet à plusieurs dépôts). `from` : `agent` ou `ticket` ; `forge`.
+- `pr_merged` : la PR d'un ticket est mergée, depuis Escouade ou chez l'hébergeur. `forge`. Une PR d'agent ordinaire n'est pas comptée : Escouade ne la merge pas.
+- `ci_fix_started` : une CI en échec est donnée à un agent. `from` : `agent` ou `ticket` ; `by` : `user` ou `autopilot`. Un refus n'est pas compté.
+- `pr_review_started` : une PR part en relecture chez un agent (voir *Relecture d'une PR par un agent*). `forge`. Ce qu'il en dit n'est pas envoyé.
+
+`forge` vient d'une liste fermée : `github`, `gitlab`, `bitbucket`, `gitea` (Forgejo compris), `azure`, sinon `other` pour l'hébergeur d'un plugin d'un tiers, jamais nommé.
+
+## Ce qui reste chez l'utilisateur
+
+Rien ne part vers les serveurs d'Escouade : les jetons restent sur le poste (trousseau du système, sinon `integrations.json`), et les appels vont de l'app à l'hébergeur, par le proxy des réglages réseau. La page Confidentialité du site le dit, avec ce que voient l'hébergeur et le service du harness (une relecture et les textes proposés lui donnent le diff), et elle liste chaque événement : un test du site la compare à `src-tauri/src/telemetry.rs`.
+
+Le site dit aussi ce qui a été essayé (page « Les hébergeurs de code ») : GitHub en lecture sur le vrai service ; ses écritures contre le faux GitHub des tests ; les autres d'après leur documentation, contre de faux serveurs. Une page ne promet pas plus que ce qui a tourné.

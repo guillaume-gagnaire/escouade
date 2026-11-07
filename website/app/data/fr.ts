@@ -413,6 +413,7 @@ export const fr: Catalog = {
       git: 'Git et commits',
       worktrees: 'Worktrees',
       branches: 'Branches',
+      'code-hosts': 'Hébergeurs de code',
       editor: 'L’éditeur',
       terminals: 'Les terminaux',
       launch: 'Lancer le projet',

@@ -2,6 +2,8 @@
 *
 !website
 !src-tauri/tauri.conf.json
+# The privacy page lists the events of this file, checked by its tests.
+!src-tauri/src/telemetry.rs
 !docs/TODO-*.md
 # The page of the example plugins shows their code, checked against these files by its tests.
 !plugins

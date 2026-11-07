@@ -8,6 +8,8 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- La documentation a une page sur les hébergeurs de code : ce qu'Escouade fait chez GitHub, GitLab, Bitbucket, Gitea, Forgejo et Azure DevOps, ses limites, et ce qui a vraiment été essayé. La page Confidentialité dit que tes jetons restent chez toi et que rien ne passe par un serveur d'Escouade.
+- Si tu as accepté les statistiques d'usage, elles comptent aussi les PR ouvertes et mergées, les corrections de CI et les relectures par un agent, sans nom ni adresse.
 - La vue d'ensemble a un groupe « Pull requests » : ce qui est à corriger, à merger et les relectures qu'on te demande, tous projets confondus. Chaque nouvelle d'un hébergeur (CI en échec, changements demandés, PR approuvée ou mergée, conflit, relecture demandée, déploiement) se règle à part dans Réglages › Notifications, et les agents lisent les PR par le serveur MCP.
 - Sur store.escouade.dev, les plugins d'Escouade deviennent des plugins comme les autres, avec leurs versions et leur sceau, sous la marque « Escouade » : ils y apparaissent à mesure qu'ils sont publiés.
 - Les vues terminal des harness passent aussi par leur plugin : une correction publiée au store corrige la vue, sans attendre une version d’Escouade. Plugin coupé, le terminal marche, mais la conversation dit qu’elle ne le suit plus.

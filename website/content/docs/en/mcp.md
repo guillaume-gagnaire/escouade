@@ -128,6 +128,19 @@ A ticket’s images are attached with `create_ticket` (`images`) and `update_tic
 
 A ticket’s other files, of any format, are attached with `create_ticket` (`files`) and `update_ticket` (`addFiles`). A file to attach is `{ name, data, path }`: its content in base64 (`data`, with `name`), for a small file, since a request weighs 32 MiB at most; or the path of a file on your machine (`path`), which is then copied. The rules are those of the ticket’s window, because the file takes the same way: 20 files at most per ticket, each within the largest size of [Settings › Harness](settings-claude-code#attachments). They are checked before anything is copied, and a refusal leaves nothing behind. The name is cleaned as the window cleans the name of a file it copies. To take one away with `removeFiles`, or read one with `get_ticket_file`, it is named by `{ file, index }`, as an image is.
 
+### Pull requests
+
+Two more tools, read-only, read a project’s PRs (“merge requests” on GitLab) on its [code host](code-hosts). An Escouade agent may leave the project out for its own.
+
+| Tool | Arguments | What it returns |
+|---|---|---|
+| `list_pull_requests` | `project` (optional) | The 30 most recently updated open PRs of the target’s repository: state, CI, conflict, approvals, changes requested, open threads, reviewers, whether a review is requested from the account that reads the host, and the ticket and agent of the project that hold it. |
+| `get_pull_request` | `project` (optional), `number`, `repo` (optional) | A whole PR: the same row, its checks, its reviews that say something, its unresolved threads, and the deployments of its branch. Texts cut at 2,000 bytes, 30 reviews and 30 threads at most. |
+
+`get_ticket` also gives `pr`, the ticket’s PR as it was last read, without any third-party text. Commenting or merging through the server doesn’t exist: nothing is written on the host.
+
+Anyone can write a PR on a public repository: these two tools mark its titles, reviews, and comments between `<third_party_data>` and `</third_party_data>`, and an agent must read them as data, never as instructions.
+
 ### Leading the whole Kanban from Claude
 
 With these tools, Claude takes a ticket from start to finish without you opening the window: `start_ticket` starts it, `wait_ticket` waits until it changes (its agent asks a question, moves to “To review”, gets blocked), `get_ticket` says where it stands, then `approve_ticket` approves it or `reject_ticket` sends it back with what is wrong. `resume_ticket`, `resolve_conflict`, and `dismiss_block` deal with a block, and `delete_ticket` deletes. `wait_ticket` hands back at the first change, or after 120 seconds by default (240 at most); the `since` of its answer, passed to the next call, has a ticket whose state differs from the one it holds answered at once, a change made between two calls included. `approve_ticket`, `reject_ticket`, `resume_ticket`, `resolve_conflict`, and `dismiss_block` also return a `since`, the ticket’s as it was before the action: passed to `wait_ticket`, it has what follows told at once, a quick approval included.

@@ -463,6 +463,21 @@ impl Harness {
     }
 }
 
+/// The props of the usage statistics' events of that name that wait to leave.
+pub(crate) fn sent(h: &Harness, name: &str) -> Vec<Value> {
+    h.core
+        .telemetry
+        .pending()
+        .into_iter()
+        .filter(|e| e["eventName"] == name)
+        .map(|e| {
+            let mut props = e["props"].clone();
+            props.as_object_mut().unwrap().remove("installId");
+            props
+        })
+        .collect()
+}
+
 #[tokio::test]
 async fn the_answer_about_usage_statistics_is_kept_and_followed_at_once() {
     let h = harness("telemetry-answer");

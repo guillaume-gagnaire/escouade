@@ -1303,10 +1303,10 @@ But : Escouade suit le travail des agents après le push, jusqu'à la production
 - [ ] **Avant la release**, un essai réel par hébergeur, sur les dépôts de test.
 
 ### Docs
-- [ ] SPEC (section « Hébergeurs de code »), README, CHANGELOG.
-- [ ] Site, en français et en anglais : pages de doc des intégrations et du Kanban, captures.
-- [ ] Statistiques d'usage : les nouveaux événements (PR ouverte, PR mergée, correction de CI, relecture par un agent), sans nom ni adresse. Les ajouter à la page Confidentialité du site, qui liste chaque événement.
-- [ ] Rien ne part vers les serveurs d'Escouade : les jetons restent sur le poste, et les appels vont de l'app à l'hébergeur. Le dire dans la page Confidentialité.
+- [x] SPEC (la spec d'Escouade, *Hébergeurs de code*), README, CHANGELOG (ESC-69).
+- [x] Site, en français et en anglais : page `code-hosts`, colonne « En revue » du Kanban, intégrations, captures (ESC-69).
+- [x] Statistiques d'usage : `pr_opened`, `pr_merged`, `ci_fix_started`, `pr_review_started`, sans nom ni adresse, listés sur la page Confidentialité du site (ESC-69).
+- [x] Rien ne part vers les serveurs d'Escouade : les jetons restent sur le poste, et les appels vont de l'app à l'hébergeur. Dit dans la page Confidentialité (ESC-69).
 
 ### Décisions à prendre
 - [x] **Colonne « En revue »** (décidé le 2026-10-14) : une colonne entre « À tester » et « Terminé », plutôt qu'un ticket « Terminé » avec l'état de sa PR. Elle répare au passage « Après » : aujourd'hui, un ticket part avant que le code qu'il attend soit mergé.

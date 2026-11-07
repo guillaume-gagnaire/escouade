@@ -382,6 +382,7 @@ fn published(server: &FakeServer) -> Vec<serde_json::Value> {
 #[tokio::test]
 async fn nothing_reaches_the_host_before_the_users_publication_and_only_what_they_kept() {
     let h = harness("prreview-cycle");
+    h.core.set_telemetry(true).unwrap();
     let server = FakeServer::start().await;
     let (p, r, _bare) = github_project(&h, &server, true).await;
     let sha = pushed(&r, "feat/login", "feat/login", "login.txt");
@@ -389,6 +390,10 @@ async fn nothing_reaches_the_host_before_the_users_publication_and_only_what_the
 
     let review = read_review(&h, &p, 7).await;
     assert_eq!(review.phase, ReviewPhase::Ready, "{:?}", review.error);
+    assert_eq!(
+        crate::core_tests::sent(&h, "pr_review_started"),
+        [json!({ "forge": "github" })]
+    );
     assert_eq!(review.head_sha, sha);
     // An empty folder of its own: nothing of the project under its eyes.
     assert!(

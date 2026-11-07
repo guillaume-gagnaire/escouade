@@ -20,7 +20,7 @@ Les comptes se connectent dans Réglages › Intégrations, groupe « Comptes c
 
 ### Hébergeur de code ou source de tickets
 
-Un hébergeur de code (GitHub, GitLab, Bitbucket, Gitea, Azure DevOps) sert aux pull requests, à la CI et aux déploiements des agents ; une source du Kanban sert aux tickets. Réglages › Intégrations les montre en deux parties nommées. Connecter son GitLab comme hébergeur ne met aucun ticket dans le Kanban : il faut encore lier un projet GitLab comme source (voir plus bas), ce que la fenêtre d’import propose d’un clic. Bitbucket et Gitea n’ont pas encore de source : leur ligne dit « Pas de tickets : PR et CI seulement ».
+Un [hébergeur de code](code-hosts) (GitHub, GitLab, Bitbucket, Gitea, Azure DevOps) sert aux pull requests, à la CI et aux déploiements des agents ; une source du Kanban sert aux tickets. Réglages › Intégrations les montre en deux parties nommées. Connecter son GitLab comme hébergeur ne met aucun ticket dans le Kanban : il faut encore lier un projet GitLab comme source (voir plus bas), ce que la fenêtre d’import propose d’un clic. Bitbucket et Gitea n’ont pas encore de source : leur ligne dit « Pas de tickets : PR et CI seulement ».
 
 « Déconnecter » oublie le compte et ses secrets. Les projets gardent leurs liens, inutilisés jusqu’à une nouvelle connexion.
 
@@ -32,7 +32,7 @@ Quand le trousseau refuse un jeton sous Windows ou macOS, il reste dans ce fichi
 
 ### Les services servis par un plugin
 
-GitHub (l’hébergeur et GitHub Issues), GitLab (l’hébergeur ; GitLab Issues fait encore partie de l’app), Bitbucket, Gitea et Forgejo, et Trello sont servis par des plugins livrés avec Escouade : rien ne change à l’usage, les comptes et les formulaires sont les mêmes. Un compte servi par le plugin d’un autre auteur le dit : « Servi par le plugin … ». Le jeton reste au trousseau ; Escouade le prête au seul plugin de ce service, quand il en a besoin.
+GitHub (l’hébergeur et GitHub Issues), GitLab (l’hébergeur ; GitLab Issues fait encore partie de l’app), Bitbucket, Gitea et Forgejo, Azure DevOps et Trello sont servis par des plugins livrés avec Escouade : rien ne change à l’usage, les comptes et les formulaires sont les mêmes. Un compte servi par le plugin d’un autre auteur le dit : « Servi par le plugin … ». Le jeton reste au trousseau ; Escouade le prête au seul plugin de ce service, quand il en a besoin.
 
 Ces plugins se coupent dans la vue Plugins, pour toute l’app ou pour un projet (voir [les plugins livrés avec Escouade](plugins/installer#les-plugins-livres-avec-escouade)). Coupé ou arrêté, un plugin le dit au lieu de se taire :
 

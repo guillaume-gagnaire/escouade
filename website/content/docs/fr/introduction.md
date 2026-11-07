@@ -91,7 +91,7 @@ L’interface existe en français et en anglais. Par défaut, elle suit la langu
 
 - **Démarrer** : l’[installation](installation), la [prise en main](quick-start) et un tour de [l’interface](interface).
 - **Agents et conversation** : commence par [les agents](managing-agents), puis la conversation, la vue d’ensemble, les notifications, la vue Claude Code et le remote control.
-- **Code et Git** : [Git et commits](git), puis les worktrees, les branches, l’éditeur, les terminaux et le lancement du projet.
+- **Code et Git** : [Git et commits](git), puis les worktrees, les branches, les [hébergeurs de code](code-hosts), l’éditeur, les terminaux et le lancement du projet.
 - **Kanban et automatisation** : [le Kanban](board), puis le pilote auto, les tests et la validation des tickets, les intégrations et le serveur MCP.
 - **Comptes et consommation** : les [comptes Claude](accounts), puis les quotas, le coût et les statistiques.
 - **Réglages** : chaque onglet de la fenêtre des réglages, option par option, à partir de [Application](settings-application).

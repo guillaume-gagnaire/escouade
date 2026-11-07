@@ -1,6 +1,6 @@
 # Registre des activités de traitement (RGPD, article 30)
 
-Tenu par GAGNAIRE DEVELOPPEMENT pour Escouade. À mettre à jour à chaque changement de ce qui est collecté, de l'hébergement ou des durées. Dernière mise à jour : 29 octobre 2026 (les signalements du store, ouverts à tous par une adresse e-mail, ESC-231, `docs/STORE.md`).
+Tenu par GAGNAIRE DEVELOPPEMENT pour Escouade. À mettre à jour à chaque changement de ce qui est collecté, de l'hébergement ou des durées. Dernière mise à jour : 7 novembre 2026 (quatre événements de statistiques sur les pull requests, ESC-69 ; les hébergeurs de code, qui ne sont pas un traitement d'Escouade).
 
 ## Responsable du traitement
 
@@ -13,7 +13,7 @@ GAGNAIRE DEVELOPPEMENT, SAS au capital de 1 000 €, 2 rue du Taillis, 33620 Cav
 | Finalité | Mesurer l'usage d'Escouade : utilisateurs actifs sur 30 jours, versions et systèmes en service, fonctionnalités utilisées, pour décider quoi améliorer et quand cesser de prendre en charge une ancienne version. |
 | Base légale | Consentement (RGPD art. 6.1.a ; loi Informatique et Libertés art. 82 pour l'identifiant gardé sur l'appareil). Demandé au premier lancement, retirable à tout moment dans Réglages › À propos. |
 | Personnes concernées | Les utilisateurs d'Escouade qui ont accepté. |
-| Données | Nom de l'événement (liste fermée de 23, dans `src-tauri/src/telemetry.rs`) et ses propriétés (langue de l'interface, nombre de comptes et de projets, oui/non, service d'intégration) ; date ; identifiant de session aléatoire ; identifiant d'installation aléatoire (UUID v4, `~/.escouade/telemetry-id`) ; version de l'app, système et version, langue du système, moteur web et version. Côté serveur, Aptabase déduit de l'adresse IP le pays et la région, et un identifiant quotidien haché avec un sel changé chaque jour ; l'adresse IP elle-même n'est pas gardée par Aptabase. Aucun nom, e-mail, chemin, code, contenu ni secret. |
+| Données | Nom de l'événement (liste fermée de 30, dans `src-tauri/src/telemetry.rs`) et ses propriétés (langue de l'interface, nombre de comptes et de projets, oui/non, service d'intégration, type d'hébergeur de code parmi une liste fermée, jamais l'adresse d'une instance) ; date ; identifiant de session aléatoire ; identifiant d'installation aléatoire (UUID v4, `~/.escouade/telemetry-id`) ; version de l'app, système et version, langue du système, moteur web et version. Côté serveur, Aptabase déduit de l'adresse IP le pays et la région, et un identifiant quotidien haché avec un sel changé chaque jour ; l'adresse IP elle-même n'est pas gardée par Aptabase. Aucun nom, e-mail, chemin, code, contenu ni secret ; d'une pull request, ni dépôt, ni numéro, ni titre. |
 | Destinataires | GAGNAIRE DEVELOPPEMENT seul. |
 | Sous-traitant | Scaleway SAS, 8 rue de la Ville-l'Évêque, 75008 Paris (serveur dédié, centre de données de Paris). |
 | Transferts hors UE | Aucun. |
@@ -61,6 +61,10 @@ Mis en œuvre le 29 octobre 2026 avec les comptes de store.escouade.dev (ESC-229
 | Données | Identifiant du plugin, version, événement (installation ou mise à jour), jour, nombre. Aucun identifiant d'installation ni de session. L'adresse IP de la requête est vue par le proxy (traitement 2) et, le temps de la requête, par le store : il n'en garde en mémoire, un jour au plus, qu'une empreinte HMAC-SHA256 à clé tirée au démarrage du processus (limites de débit, une même version comptée une fois par jour et par adresse), jamais écrite ni journalisée ; un redémarrage l'oublie (`store/server/utils/limits.ts`). Reçu par `POST /api/v1/installs` depuis le 2026-10-29 (ESC-233). |
 | Destinataires | Publics, agrégés par jour et par version. |
 | Durée de conservation | Sans limite (des compteurs). |
+
+## Les hébergeurs de code : pas un traitement d'Escouade
+
+Les comptes GitHub, GitLab, Bitbucket Cloud, Gitea, Forgejo et Azure DevOps que l'utilisateur connecte ne créent aucun traitement de GAGNAIRE DEVELOPPEMENT : les jetons restent sur son poste (trousseau du système, sinon `~/.escouade/integrations.json`), et les appels vont de l'app à l'hébergeur, sans passer par un serveur d'Escouade. L'hébergeur traite ces données sous ses propres conditions, celles du compte de l'utilisateur. Seuls les événements du traitement 1 (`pr_opened`, `pr_merged`, `ci_fix_started`, `pr_review_started`) en disent quelque chose, avec le consentement de l'utilisateur.
 
 ## Le site
 

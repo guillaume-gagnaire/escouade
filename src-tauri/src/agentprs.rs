@@ -16,6 +16,7 @@ use crate::forge::{
 use crate::git;
 use crate::i18n::Lang;
 use crate::model::{AgentMeta, FoundWorktree, Project};
+use crate::telemetry::Event;
 use crate::text::truncate;
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
@@ -846,6 +847,10 @@ impl<R: Runtime> Core<R> {
         };
         self.link_work_item(&t.meta, &t.provider.kind(), &mut draft);
         let pr = t.client.create_pr(&t.remote.repo, &draft).await?;
+        self.telemetry.track(Event::PrOpened {
+            from: "agent",
+            forge: crate::telemetry::forge(&t.provider.kind()),
+        });
         let word = t.provider.request_word().to_string();
         let h = self.agent(id)?;
         {
@@ -1114,6 +1119,10 @@ impl<R: Runtime> Core<R> {
             None => client.pull_request(&repo, number).await?,
         };
         let lang = self.lang().claude;
+        let event = matches!(fix, PrFix::Checks).then_some(Event::CiFixStarted {
+            from: "agent",
+            autopilot: false,
+        });
         let message = match fix {
             PrFix::Checks => {
                 let checks = client.checks(&repo, number).await?;
@@ -1152,7 +1161,11 @@ impl<R: Runtime> Core<R> {
                 reviews_message(lang, &word, &pr, &branch, &reviews, &comments)
             }
         };
-        self.send_message(id, message, Vec::new()).await
+        self.send_message(id, message, Vec::new()).await?;
+        if let Some(event) = event {
+            self.telemetry.track(event);
+        }
+        Ok(())
     }
 }
 
@@ -1367,6 +1380,10 @@ impl<R: Runtime> Core<R> {
             };
             match step.await {
                 Ok(mut pr) => {
+                    self.telemetry.track(Event::PrOpened {
+                        from: "agent",
+                        forge: crate::telemetry::forge(&t.provider.kind()),
+                    });
                     pr.repo = repo.clone();
                     opened.push(pr);
                 }

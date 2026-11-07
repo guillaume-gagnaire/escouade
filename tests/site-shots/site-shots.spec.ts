@@ -3,6 +3,7 @@
 // crops it from (website/app/data/shots.ts: WINDOW), 1920 × 960, JPEG quality 85, under the name the site reads
 // (website/app/data/site.ts: FEATURE_SHOTS).
 
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
@@ -11,7 +12,7 @@ import { en } from '../../src/lib/i18n/en';
 import { fr } from '../../src/lib/i18n/fr';
 import { startFakeTrackers } from '../fixtures/fake-trackers.mjs';
 import { FAKE_CODEX, FAKE_CURSOR, expect, test as base } from '../e2e/fixture';
-import { PROJECTS, makeDemo, textOf, trackersOf } from './demo';
+import { PROJECTS, REVIEWED, hostsOf, makeDemo, textOf, trackersOf } from './demo';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
 const SITE = path.join(ROOT, 'website', 'public', 'images');
@@ -43,8 +44,12 @@ async function twoPorts(): Promise<number> {
 
 let trackers: { url: string; close: () => Promise<void> };
 let ports = 0;
+/** The pull request of the ticket « En revue » of the code hosts' shots: the fifth the fake GitHub is given. */
+const TICKET_PR = { review: 105, branch: 'docs/openapi' };
 
-const test = base.extend<{ trackersUp: void }>({
+const test = base.extend<{ trackersUp: void; hostsDemo: boolean }>({
+  // Off: the demo of the 11 shots, no ticket « En revue » in it.
+  hostsDemo: [false, { option: true }],
   // The fake harnesses of the three the demo runs on, and the turns the fake `claude` plays.
   appEnv: async ({ language }, use) => {
     await use({
@@ -52,12 +57,13 @@ const test = base.extend<{ trackersUp: void }>({
       ESCOUADE_CURSOR: FAKE_CURSOR,
       FAKE_CLAUDE_DEMO: path.join(process.env.ESCOUADE_E2E_ROOT!, 'demo-turns.json'),
       FAKE_CLAUDE_REMOTE_MESSAGE: textOf(language).remote,
+      FAKE_CLAUDE_REVIEW: path.join(process.env.ESCOUADE_E2E_ROOT!, 'demo-review.json'),
     });
   },
-  preStart: async ({ language }, use) => {
+  preStart: async ({ language, hostsDemo }, use) => {
     await use({
       run: (root: string) => {
-        makeDemo(root, language, ports);
+        makeDemo(root, language, ports, hostsDemo ? TICKET_PR : undefined);
         return { theme: 'dark', sound: false };
       },
     });
@@ -321,4 +327,126 @@ test('the website’s screenshots', async ({ app, language }) => {
   // « stats »: the statistics of every project over two weeks.
   await page.getByRole('button', { name: L.nav.rail.stats, exact: true }).first().click();
   await shot('stats');
+});
+
+test.describe('the code hosts', () => {
+  test.use({ hostsDemo: true });
+
+  // The pictures of the pages of the code hosts (`--grep "code hosts"` alone: the 22 others stay as they are), against the fake
+  // GitHub of tests/fixtures/fake-trackers.mjs: its pull requests, an agent's review, a ticket « En revue » and the environments.
+  test('the website’s screenshots of the code hosts', async ({ app, language }) => {
+    test.setTimeout(600_000);
+    const L = language === 'fr' ? fr : en;
+    const H = hostsOf(language);
+    const { page } = app;
+    const api = path.join(app.root, PROJECTS.api.name);
+    const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
+    const post = (route: string, body: unknown) => fetch(`${trackers.url}${route}`, { method: 'POST', body: JSON.stringify(body) });
+    const out = (name: string) => path.join(OUT, language === 'fr' ? '' : language, `${name}.jpg`);
+    await page.setViewportSize({ width: WINDOW.w, height: WINDOW.h });
+    await keepInside(page);
+
+    // github.com/acme/demo, its pushes in a bare repository; the branch the agent reviews on it, from a clone: nothing moves
+    // in the project's folder.
+    const bare = path.join(app.root, 'origin.git');
+    git(app.root, 'init', '-q', '--bare', '-b', 'main', bare);
+    const url = 'https://github.com/acme/demo.git';
+    git(api, 'remote', 'add', 'origin', url);
+    git(api, 'config', `url.${bare.replace(/\\/g, '/')}.insteadOf`, url);
+    git(api, 'push', '-q', 'origin', 'main');
+    const clone = path.join(app.root, 'host-clone');
+    git(app.root, 'clone', '-q', '-b', 'main', bare, clone);
+    git(clone, 'checkout', '-qb', H.pulls[0][0]);
+    fs.writeFileSync(path.join(clone, ...REVIEWED.path.split('/')), REVIEWED.text);
+    git(clone, 'add', '.');
+    git(clone, '-c', 'user.name=Inès Haddad', '-c', 'user.email=ines@example.com', 'commit', '-qm', 'feat(users): cursor pagination');
+    git(clone, 'push', '-q', 'origin', H.pulls[0][0]);
+    fs.writeFileSync(
+      path.join(process.env.ESCOUADE_E2E_ROOT!, 'demo-review.json'),
+      JSON.stringify({ summary: H.review.summary, comments: H.review.comments.map((c) => ({ ...c, path: REVIEWED.path })) }),
+    );
+
+    // Six pull requests, in the states the list tells apart; the fifth (`TICKET_PR`) is the ticket's, approved and green.
+    const hour = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
+    const states: Record<string, unknown>[] = [
+      { author: 'ines', checks: 'SUCCESS', approvals: 1, createdAt: hour(3), reviewers: ['ada'] },
+      { author: 'ada', checks: 'FAILURE', changesRequested: true, createdAt: hour(26) },
+      { author: 'marta', headRepo: 'marta/demo', checks: 'SUCCESS', createdAt: hour(50) },
+      { author: 'leo', checks: 'PENDING', createdAt: hour(5) },
+      { author: 'ada', checks: 'SUCCESS', approvals: 2, threads: 1, createdAt: hour(4) },
+      { author: 'camille', checks: 'SUCCESS', mergeable: 'CONFLICTING', draft: true, createdAt: hour(74) },
+    ];
+    for (const [i, [head, title]] of H.pulls.entries()) {
+      const r = await fetch(`${trackers.url}/github/repos/acme/demo/pulls`, {
+        method: 'POST',
+        body: JSON.stringify({ title, body: '', head, base: 'main' }),
+      });
+      const { number } = (await r.json()) as { number: number };
+      await post(`/__github/pulls/${number}`, states[i]);
+    }
+    const head = git(api, 'rev-parse', 'HEAD');
+    const before = git(api, 'rev-parse', 'HEAD~1');
+    await post('/__github/deployments', [
+      { environment: 'production', sha: head, state: 'pending', author: 'camille' },
+      { environment: 'staging', sha: head, state: 'success', url: 'https://staging.example.com', author: 'camille' },
+      { environment: 'production', sha: before, state: 'success', url: 'https://example.com', author: 'leo' },
+    ]);
+
+    /** The window's picture, on the site's backdrop, as the other shots. */
+    const shot = async (name: string) => {
+      await page.mouse.move(WINDOW.w - 2, WINDOW.h / 2);
+      await page.evaluate(() => {
+        const style = document.getElementById('shots-style') ?? document.head.appendChild(document.createElement('style'));
+        style.id = 'shots-style';
+        style.textContent = '.toasts { display: none !important; }';
+      });
+      await page.waitForTimeout(700);
+      await compose(await page.screenshot({ animations: 'disabled', caret: 'hide' }), out(name));
+    };
+
+    // The account of github.com, connected as a user would, from its token.
+    await page.getByRole('button', { name: like(L.nav.rail.settingsLabel) }).click();
+    const settings = page.getByRole('dialog', { name: L.common.settings });
+    await settings.getByRole('tab', { name: L.settings.tabs.integrations.label }).click();
+    await settings.getByRole('button', { name: L.integrations.accounts.connectEllipsis }).nth(2).click();
+    const form = settings.getByRole('form', { name: like(L.integrations.accounts.formLabel) }).first();
+    await form.getByRole('textbox').last().fill('demo');
+    await form.getByRole('button', { name: L.integrations.accounts.connect, exact: true }).click();
+    await expect(settings.getByText(/@ada/).first()).toBeVisible();
+    await settings.getByRole('button', { name: L.common.save }).click();
+    await expect(settings).toBeHidden();
+
+    // « prs »: the view « Pull requests » of demo-api.
+    await page.locator('.side .seg').getByRole('button', { name: 'PR', exact: true }).click();
+    const list = page.locator('main.prs');
+    await expect(list.getByRole('listitem')).toHaveCount(6, { timeout: 30_000 });
+    await shot('prs');
+
+    // « pr-review »: an agent's review, one comment kept, the other still to decide.
+    const row = list.getByRole('listitem').filter({ hasText: H.pulls[0][1] });
+    await row.hover();
+    await row.getByRole('button', { name: L.prs.review.ask, exact: true }).click();
+    const view = page.locator('main.rv');
+    const first = view.getByRole('article').first();
+    await expect(first, 'the review is written').toBeVisible({ timeout: 60_000 });
+    await first.getByRole('button', { name: L.prs.review.keep, exact: true }).click();
+    await shot('pr-review');
+    await view.getByRole('button', { name: L.prs.review.back.replace('{word}', 'PR') }).click();
+
+    // « board-review »: the column « En revue » with its pull request.
+    await page
+      .locator('.side .seg')
+      .getByRole('button', { name: /^Kanban/ })
+      .click();
+    const review = page.getByRole('region', { name: L.board.columns.pr });
+    await expect(review.locator('.card')).toHaveCount(1, { timeout: 30_000 });
+    await review.getByRole('button', { name: L.prs.list.refresh }).click();
+    await expect(review.locator('.card')).toContainText('CI', { timeout: 30_000 });
+    await shot('board-review');
+
+    // « environments »: what runs where.
+    await page.getByRole('button', { name: L.envs.tabs.environments, exact: true }).click();
+    await expect(page.locator('[data-env-lane="staging"]')).toContainText('DEM-3', { timeout: 30_000 });
+    await shot('environments');
+  });
 });

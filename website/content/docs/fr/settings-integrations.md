@@ -169,7 +169,7 @@ L’import automatique n’importe un ticket qu’une fois par projet : un ticke
 
 ## Hébergeurs de code
 
-La première partie de l’onglet connecte les hébergeurs de code : GitHub, GitLab, Bitbucket Cloud, Gitea, Forgejo et Azure DevOps. Ils servent aux pull requests (merge requests sur GitLab) des agents, à la CI et aux déploiements, pas aux tickets. Un compte par instance (github.com, gitlab.com, celle de ton entreprise…) ; chaque projet trouve le sien par son remote. « Connecter un hébergeur… » demande l’hébergeur, l’adresse (vide : son instance publique) et un jeton (vide : celui de sa CLI, `gh`, `glab` ou `az`) ; un remote sans compte propose « Connecter » suivi de son hôte.
+La première partie de l’onglet connecte les [hébergeurs de code](code-hosts) : GitHub, GitLab, Bitbucket Cloud, Gitea, Forgejo et Azure DevOps. Ils servent aux pull requests (merge requests sur GitLab) des agents et des tickets, à la CI et aux déploiements, pas aux tickets eux-mêmes. Un compte par instance (github.com, gitlab.com, celle de ton entreprise…) ; chaque projet trouve le sien par son remote. « Connecter un hébergeur… » demande l’hébergeur, l’adresse (vide : son instance publique) et un jeton (vide : celui de sa CLI, `gh`, `glab` ou `az`) ; un remote sans compte propose « Connecter » suivi de son hôte.
 
 Chaque instance dit sur sa ligne si elle sert aussi de source du Kanban :
 

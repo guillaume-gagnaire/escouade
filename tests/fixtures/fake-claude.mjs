@@ -517,6 +517,12 @@ if (argv[0] === 'mcp') {
         process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result: 'Tout me semble bon.' }));
         return;
       }
+      // The website's screenshots give it its words (`$FAKE_CLAUDE_REVIEW`, tests/site-shots/demo.ts).
+      if (process.env.FAKE_CLAUDE_REVIEW) {
+        const text = '```json\n' + fs.readFileSync(process.env.FAKE_CLAUDE_REVIEW, 'utf8') + '\n```';
+        process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result: text }));
+        return;
+      }
       const path_ = input.match(/<file path="([^"]+)">/)?.[1] ?? '';
       const line = Number(input.match(/^\s*(\d+) \+ /m)?.[1] ?? 0);
       const folder = fs.readdirSync(process.cwd()).length ? 'dossier plein' : 'dossier vide';

@@ -24,6 +24,10 @@ Four switches choose the types of events that chime and show a system notificati
 > [!NOTE]
 > An agent whose ticket is “In progress” only notifies for its questions and permissions. For the rest, the [Kanban](board) does the alerting, through the “Tickets” type, when the ticket is ready to review or blocked.
 
+### Pull requests and deployments
+
+Eight more switches, all on by default, for what a [code host](code-hosts#news-from-the-code-hosts) has that’s new: “CI failed”, “Changes requested”, “PR approved”, “PR merged”, “Conflict”, “Review requested”, “Deployment to production succeeded”, and “Deployment failed”. Escouade reports them when it reads what it follows again. A type turned off says nothing more.
+
 ## Channels
 
 | Setting | Effect | Default |

@@ -102,6 +102,26 @@ pub enum Event {
     PluginInstalled {
         from_store: bool,
     },
+    /// A pull request opened by Escouade: for what ("agent" or "ticket"), on which code host
+    /// (`forge`); never its repository, its title or the host's address.
+    PrOpened {
+        from: &'static str,
+        forge: &'static str,
+    },
+    /// A ticket's pull request merged, by Escouade or on its host.
+    PrMerged {
+        forge: &'static str,
+    },
+    /// A failed CI given to an agent: an agent's ("agent") or a ticket's ("ticket"), by the user
+    /// or by the autopilot.
+    CiFixStarted {
+        from: &'static str,
+        autopilot: bool,
+    },
+    /// A pull request given to an agent to review. Nothing of what it reads or writes.
+    PrReviewStarted {
+        forge: &'static str,
+    },
 }
 
 impl Event {
@@ -133,6 +153,10 @@ impl Event {
             Event::DictationUsed { .. } => "dictation_used",
             Event::VoiceConversation { .. } => "voice_conversation",
             Event::PluginInstalled { .. } => "plugin_installed",
+            Event::PrOpened { .. } => "pr_opened",
+            Event::PrMerged { .. } => "pr_merged",
+            Event::CiFixStarted { .. } => "ci_fix_started",
+            Event::PrReviewStarted { .. } => "pr_review_started",
         }
     }
 
@@ -175,6 +199,13 @@ impl Event {
                 model,
             } => json!({ "lang": lang, "voice": voice, "engine": engine, "model": model }),
             Event::PluginInstalled { from_store } => json!({ "from_store": yes(*from_store) }),
+            Event::PrOpened { from, forge } => json!({ "from": from, "forge": forge }),
+            Event::PrMerged { forge } | Event::PrReviewStarted { forge } => {
+                json!({ "forge": forge })
+            }
+            Event::CiFixStarted { from, autopilot } => {
+                json!({ "from": from, "by": if *autopilot { "autopilot" } else { "user" } })
+            }
             Event::IntegrationConnected { service } | Event::TicketsImported { service } => {
                 json!({ "service": service })
             }
@@ -519,6 +550,19 @@ pub fn service(s: crate::model::Service) -> &'static str {
     }
 }
 
+/// A code host's kind, as the statistics say it: the five that ship with Escouade by name (Forgejo
+/// is `gitea`), another one's plugin not named, as for a source. Never an instance's address.
+pub fn forge(kind: &str) -> &'static str {
+    match kind {
+        "github" => "github",
+        "gitlab" => "gitlab",
+        "bitbucket" => "bitbucket",
+        "gitea" => "gitea",
+        "azure" => "azure",
+        _ => "other",
+    }
+}
+
 fn read_or_make_id(file: &std::path::Path) -> Option<String> {
     if let Ok(text) = std::fs::read_to_string(file) {
         if let Ok(id) = uuid::Uuid::parse_str(text.trim()) {
@@ -765,6 +809,16 @@ mod tests {
             Event::TicketsImported { service: "jira" },
             Event::AccountCreated,
             Event::RemoteControlEnabled { from: "agent" },
+            Event::PrOpened {
+                from: "ticket",
+                forge: "gitlab",
+            },
+            Event::PrMerged { forge: "github" },
+            Event::CiFixStarted {
+                from: "agent",
+                autopilot: false,
+            },
+            Event::PrReviewStarted { forge: "gitea" },
         ];
         let names: std::collections::HashSet<_> = events.iter().map(Event::name).collect();
         assert_eq!(names.len(), events.len());
@@ -797,6 +851,44 @@ mod tests {
             );
         }
         assert!(Event::MessageSent.props().is_empty());
+        assert_eq!(
+            Value::Object(
+                Event::PrOpened {
+                    from: "agent",
+                    forge: "github"
+                }
+                .props()
+            ),
+            json!({ "from": "agent", "forge": "github" })
+        );
+        assert_eq!(
+            Value::Object(Event::PrMerged { forge: "azure" }.props()),
+            json!({ "forge": "azure" })
+        );
+        assert_eq!(
+            Value::Object(
+                Event::CiFixStarted {
+                    from: "ticket",
+                    autopilot: true
+                }
+                .props()
+            ),
+            json!({ "from": "ticket", "by": "autopilot" })
+        );
+        assert_eq!(
+            Value::Object(Event::PrReviewStarted { forge: "gitea" }.props()),
+            json!({ "forge": "gitea" })
+        );
+    }
+
+    #[test]
+    fn a_code_host_is_said_by_its_kind_and_another_ones_plugin_is_not_named() {
+        for kind in ["github", "gitlab", "bitbucket", "gitea", "azure"] {
+            assert_eq!(forge(kind), kind);
+        }
+        assert_eq!(forge("dev.acme.forge"), "other");
+        assert_eq!(forge("gitlab.acme.dev"), "other");
+        assert_eq!(forge(""), "other");
     }
 
     #[test]

@@ -36,14 +36,19 @@ Chaque événement porte son nom, son heure (UTC, à la milliseconde), un identi
 | `file_saved` | Un fichier est enregistré dans l’éditeur | — |
 | `code_searched` | Une recherche dans le code | — |
 | `mcp_enabled` | « Les agents peuvent piloter Escouade » est activé | — |
-| `integration_connected` | Un service est connecté | `service` : `jira`, `trello`, `github`, `linear` ou `clickup` |
-| `tickets_imported` | Des tickets sont importés | `service` : `jira`, `trello`, `github`, `linear` ou `clickup` |
+| `integration_connected` | Un service est connecté | `service` : `jira`, `trello`, `github`, `linear`, `gitlab`, `clickup`, `azure` ou `other` (la source d’un plugin d’un tiers, jamais nommée) |
+| `tickets_imported` | Des tickets sont importés | `service` : `jira`, `trello`, `github`, `linear`, `gitlab`, `clickup`, `azure` ou `other` (la source d’un plugin d’un tiers, jamais nommée) |
 | `account_created` | Un compte Claude est ajouté | — |
 | `remote_control_enabled` | Le remote control est activé, à la main ou par un réglage | `from` : `agent` (clic droit sur un agent), `project` (réglage d’un projet) ou `global` (réglage de tous les agents) |
 | `dictation_used` | Une dictée a donné du texte | `target` : `composer` (le champ de message), `terminal` (la vue Claude Code) ou `ticket` (la description d’un ticket) ; `model` : le modèle Whisper (`tiny`, `base`, `small`…), ou le service de la dictée en ligne (`openai`, `groq`, `mistral`, `elevenlabs`, `deepgram`) ; `online_model` : en ligne, le modèle du service (`gpt-4o-mini-transcribe`…) |
 | `voice_conversation` | Une conversation vocale commence | `lang` : la langue de la conversation (`fr`, `en`) ; `voice` : la voix qui lit (`fr_FR-siwis-medium`…, ou celle du service) ; `engine` : ce qui la génère (`piper`, ou le service en ligne) ; `model` : son modèle (`piper`, ou celui du service) ; jamais ce qui est dit ni lu |
+| `plugin_installed` | Un plugin est installé ou mis à jour | `from_store` : venu du store ou non (oui ou non) ; jamais lequel |
+| `pr_opened` | Escouade ouvre une pull request | `from` : `agent` ou `ticket` ; `forge` : `github`, `gitlab`, `bitbucket`, `gitea` (Forgejo compris), `azure` ou `other` (l’hébergeur d’un plugin d’un tiers, jamais nommé) |
+| `pr_merged` | La pull request d’un ticket est mergée, depuis Escouade ou chez l’hébergeur | `forge` : `github`, `gitlab`, `bitbucket`, `gitea` (Forgejo compris), `azure` ou `other` (l’hébergeur d’un plugin d’un tiers, jamais nommé) |
+| `ci_fix_started` | Une CI en échec est donnée à un agent | `from` : `agent` ou `ticket` ; `by` : `user` ou `autopilot` |
+| `pr_review_started` | Une pull request est donnée à relire à un agent | `forge` : `github`, `gitlab`, `bitbucket`, `gitea` (Forgejo compris), `azure` ou `other` (l’hébergeur d’un plugin d’un tiers, jamais nommé) |
 
-Un événement dit qu’une fonctionnalité a servi, pas sur quoi : jamais le nom du projet, de l’agent ou de la branche, ni ce qui a été écrit.
+Un événement dit qu’une fonctionnalité a servi, pas sur quoi : jamais le nom du projet, de l’agent, de la branche ou du dépôt, ni l’adresse d’un hébergeur, ni ce qui a été écrit.
 
 ### Le système et l’installation
 
@@ -68,6 +73,7 @@ Tous les événements portent aussi :
 - Le contenu des conversations et des instructions données aux agents.
 - Les titres et les textes de tes tickets.
 - Les données Git : commits, remotes.
+- Les pull requests : leur numéro, leur titre, leur diff, leurs commentaires, et l’adresse de ton hébergeur.
 - Les jetons et les secrets.
 - Tout ce que tu tapes.
 - Ce que tu dictes : le son du micro et le texte qu’en tire Whisper restent sur ta machine. La transcription s’y fait ; seul le modèle est téléchargé, une fois, depuis Hugging Face (`huggingface.co`), par le proxy des réglages. La dictée en ligne, éteinte par défaut, est à part : voir « La dictée en ligne, si tu l’allumes », plus bas.
@@ -146,6 +152,7 @@ Escouade n’a pas de compte ni de serveur à elle pour tes projets, tes convers
 - **Claude Code**, qu’elle lance sur ta machine, envoie ses requêtes à Anthropic comme il le ferait dans un terminal. Escouade interroge aussi le service d’usage d’Anthropic pour afficher tes quotas ([les quotas](usage)).
 - **Les mises à jour** : Escouade lit le fichier `latest.json` de la dernière release sur GitHub, puis télécharge la nouvelle version ([les mises à jour](updates)).
 - **Les intégrations** que tu connectes (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards) : Escouade s’adresse à ces services avec ton jeton ([les intégrations](integrations)).
+- **Les hébergeurs de code** que tu connectes : voir [plus bas](#les-hebergeurs-de-code).
 - **La dictée en ligne**, si tu l’allumes : voir juste en dessous.
 
 ## La dictée en ligne, si tu l’allumes
@@ -176,6 +183,16 @@ Par défaut, les réponses de la conversation vocale sont lues par Piper, sur ta
 - **Où** : au seul service choisi, par le proxy des réglages réseau.
 - **Ce qu’il en fait** : il renvoie le son, joué sur ta machine. Il traite le texte selon ses propres conditions, celles de ton compte chez lui.
 - **Si le service ne répond pas** : la conversation le dit, et Piper lit la suite si une de ses voix est téléchargée ; sinon elle se met en pause. Le journal d’Escouade ne contient jamais ta clé ni le texte lu.
+
+## Les hébergeurs de code
+
+Quand tu connectes GitHub, GitLab, Bitbucket Cloud, Gitea, Forgejo ou Azure DevOps, **rien ne part vers les serveurs d’Escouade**.
+
+- **Tes jetons restent sur ta machine**, dans le trousseau du système. Sous Linux, ou quand le trousseau refuse, ils restent dans `~/.escouade/integrations.json`, lisible par toi seul. Ils ne partent que vers l’hébergeur à qui ils sont, ou ne sont demandés qu’à sa CLI (`gh`, `glab`, `az`).
+- **Les appels vont directement de l’app à l’hébergeur**, par le proxy des réglages réseau. Tes pull requests, leur CI, leurs commentaires, leurs journaux et tes déploiements ne passent par aucun serveur d’Escouade.
+- **Ce que l’app écrit chez l’hébergeur** part à ton geste, ou par un réglage que tu as allumé : ouvrir une PR, merger, publier une relecture. Une PR ouverte devient visible de qui voit le dépôt. Chaque hébergeur traite ces données selon ses propres conditions, celles de ton compte chez lui.
+- **La relecture par un agent et les textes proposés** (titre et description d’une PR) donnent le diff, les branches et les commentaires au service du harness que tu as choisi, comme tout ce que tu donnes à un agent. Pas à Escouade.
+- **Les statistiques**, si tu les as acceptées, disent seulement qu’une PR a été ouverte ou mergée, qu’une CI en échec ou une PR a été donnée à un agent, et chez quel type d’hébergeur (`pr_opened`, `pr_merged`, `ci_fix_started`, `pr_review_started`) : ni le dépôt, ni le numéro, ni le titre, ni l’adresse d’une instance.
 
 ## Le store
 
