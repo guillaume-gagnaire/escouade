@@ -150,7 +150,11 @@ async function startServer(root, config) {
 /** One call of the model in `session`, every card rejected: what became of it. */
 async function play(server, session, dir, name, args, agent) {
   let seen = server.events.length;
-  const body = { parts: [{ type: 'text', text: `TOOL ${JSON.stringify({ name, args })}` }], agent, model: { providerID: 'fake', modelID: 'm' } };
+  const body = {
+    parts: [{ type: 'text', text: `TOOL ${JSON.stringify({ name, args })}` }],
+    agent,
+    model: { providerID: 'fake', modelID: 'm' },
+  };
   await server.call('POST', `/session/${session}/prompt_async`, dir, body);
   const cards = [];
   let tool = null;
@@ -171,7 +175,10 @@ async function play(server, session, dir, name, args, agent) {
       }
     }
   }
-  const last = server.events.slice(-4).map((e) => e.type).join(', ');
+  const last = server.events
+    .slice(-4)
+    .map((e) => e.type)
+    .join(', ');
   return { got: `no end of turn (${tool?.status ?? 'no tool'}; last events: ${last})`, tool };
 }
 
@@ -219,7 +226,9 @@ try {
       : await play(server, session, wt, 'bash', { command: c.bash, description: 'a case' }, agent);
     const ok = r.got === c.want;
     wrong += ok ? 0 : 1;
-    console.log(`${ok ? 'ok   ' : 'WRONG'} ${key.padEnd(24)} ${JSON.stringify(c.edit ?? c.bash)} => ${r.got}${ok ? '' : ` (wanted ${c.want})`}`);
+    console.log(
+      `${ok ? 'ok   ' : 'WRONG'} ${key.padEnd(24)} ${JSON.stringify(c.edit ?? c.bash)} => ${r.got}${ok ? '' : ` (wanted ${c.want})`}`,
+    );
   }
   // A subagent takes the rules of the config alone.
   const session = await sessionOf('default');
