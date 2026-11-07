@@ -15,7 +15,7 @@ It is for anyone with a Google account for Antigravity, or a Gemini API key.
 - It tells Escouade how to launch `agy`, then translates what it writes. Escouade launches the program, and launches it again when it must, never the plugin.
 - It tells Escouade which permission rules to write for each agent, in the agent’s own folder, by mode. Outside Bypass, they let nothing through on their own: what `agy` refuses comes back to the plugin at the end of the turn, which accepts it, refuses it or makes a card of it.
 - It reads, in that folder of the agent’s own, the settings, the end of the conversation’s transcript and the plan, at the write path the model gave.
-- It asks Escouade whether the git of the agent’s worktree is protected, before it accepts a `git add` or a `git commit` alone in Accept edits.
+- It accepts no command alone, `git add` and `git commit` included, until the real trial of `agy` showed how it reads a rule: each acceptance becomes a “start of a text” rule for the turn’s resumption.
 - It is given the token of Escouade’s MCP server for each agent it describes, and has it written in that folder, never among the arguments.
 
 Your `~/.gemini` is never read nor written.

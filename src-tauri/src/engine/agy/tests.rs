@@ -4,7 +4,8 @@ use super::*;
 fn the_modes_of_escouade_are_its_modes_or_its_rules_and_say_there_is_no_sandbox() {
     assert_eq!(agy_mode("default"), None);
     assert_eq!(agy_mode("plan"), Some("plan"));
-    assert_eq!(agy_mode("acceptEdits"), Some("accept-edits"));
+    // As its plugin: `agy`'s accept-edits would let a write in `.git` through unseen (ESC-376).
+    assert_eq!(agy_mode("acceptEdits"), None);
     // « Tout accepter » by its rules, never `--dangerously-skip-permissions`.
     assert_eq!(agy_mode("bypassPermissions"), None);
     for mode in MODES {
@@ -84,18 +85,29 @@ fn its_launch_names_its_model_effort_mode_and_conversation_never_a_token() {
 #[test]
 fn the_rules_of_each_mode_hold_the_fence_first() {
     let rules = AgyRules {
-        cwd: "C:\\x\\repo".into(),
-        read_dirs: vec!["C:\\x\\joints".into()],
         fence: vec!["C:\\x\\privé\\".into()],
         read_only: false,
     };
+    // As its plugin (ESC-376): no rule `allow` but in « Tout accepter » without a fence nor a discussion.
+    for mode in ["default", "acceptEdits", "plan", "bypassPermissions"] {
+        assert_eq!(mode_rules(&rules, mode), Vec::<String>::new(), "{mode}");
+    }
+    let unfenced = AgyRules {
+        fence: Vec::new(),
+        ..rules.clone()
+    };
+    for mode in ["default", "acceptEdits", "plan"] {
+        assert_eq!(mode_rules(&unfenced, mode), Vec::<String>::new(), "{mode}");
+    }
+    assert!(mode_rules(&unfenced, "bypassPermissions").contains(&"command(*)".to_string()));
+    let discussion = AgyRules {
+        read_only: true,
+        ..unfenced.clone()
+    };
     assert_eq!(
-        mode_rules(&rules, "default"),
-        ["read_file(C:\\x\\joints)", "write_file(C:\\x\\repo)"]
+        mode_rules(&discussion, "bypassPermissions"),
+        Vec::<String>::new()
     );
-    assert!(mode_rules(&rules, "acceptEdits").contains(&"command(git commit)".to_string()));
-    assert!(mode_rules(&rules, "plan").len() == 1);
-    assert!(mode_rules(&rules, "bypassPermissions").contains(&"command(*)".to_string()));
     // Refused to read, refused to write (`agy`'s rule); `deny` before all.
     assert_eq!(deny_rules(&rules), ["read_file(C:\\x\\privé)"]);
     let discussion = AgyRules {
@@ -119,7 +131,8 @@ fn the_rules_of_each_mode_hold_the_fence_first() {
     let doc: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
     assert_eq!(doc["trustedWorkspaces"][0], "C:\\x");
     let allow = doc["permissions"]["allow"].as_array().unwrap();
-    assert!(allow.contains(&json!("mcp(*)")) && allow.contains(&json!("command(npm test)")));
+    // Fenced: none of the mode's, what the user allowed alone.
+    assert_eq!(allow, &[json!("command(npm test)")]);
     assert_eq!(
         doc["permissions"]["deny"],
         json!(["read_file(C:\\x\\privé)"])

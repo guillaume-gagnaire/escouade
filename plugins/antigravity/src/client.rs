@@ -573,10 +573,15 @@ impl Client {
                         "agy: a call refused by Escouade's rules (private project or discussion)"
                     );
                 }
+                // Its rule holds for the turn that goes on as « Autoriser » does: said (ESC-376).
                 words::Verdict::Allowed => {
                     if !self.once.contains(&rule) {
                         self.once.push(rule);
                     }
+                    out.push(Item::Notice {
+                        text: words::allowed_notice(&self.lang, &said),
+                        level: "info".into(),
+                    });
                     self.answers.allowed.push(said);
                 }
                 words::Verdict::Asked { always } => asks.push((
@@ -601,7 +606,13 @@ impl Client {
         }
         let allowed_already = !self.answers.allowed.is_empty();
         if asks.is_empty() && planning && !allowed_already {
-            if let Some(plan) = plan_file.and_then(|f| host::read(&self.agent, Path::new(&f))) {
+            // Read under the agent's home alone (`agentHome`), where `agy` keeps it: never a file of its repository.
+            let plan = plan_file.and_then(|f| {
+                let home = self.home.as_deref()?;
+                let rel = words::in_home(&f, &home.to_string_lossy())?;
+                host::read_home(&self.agent, home, Path::new(&rel))
+            });
+            if let Some(plan) = plan {
                 let n = self.next();
                 let rid = format!("{}-plan-{n}", self.tag);
                 self.asked.insert(rid.clone(), Asked::Plan);

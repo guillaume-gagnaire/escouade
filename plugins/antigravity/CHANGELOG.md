@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.2.2
+
+- What the plugin accepts by its rules no longer opens more than the call judged, even if `agy` reads a rule as a mere start of a text (ESC-376, the review of 2.2.1).
+- A write of the agent’s folder itself (`C:\wt`, `C:\wt\`, `C:\wt\.`, `.`, an empty path), or of a name `.git`, `.husky`, `.githooks`, `.agents` or `.gemini` starts with, is a card without “For this agent” in Ask and Accept edits.
+- A call is accepted by the rules only when it names its path already absolute and normal; a relative path, `..`, `.` or a final separator is a card.
+- No command is accepted by the rules until the real trial of `agy`: `git add` and `git commit` in Accept edits, and each command in Bypass with a private project, are cards; `agentRepo` leaves `permissions.files`.
+- A word of a command that, resolved against the agent’s folder, falls in the fence has it refused (`type ..\prive\secret.txt`).
+- A resumption that carries a write also refuses writing in the kept folders at the root of the agent’s folder and under the allowed path followed by `\..` and `/..`.
+- The card says “Always” gives its rule again each time the call comes back, and the conversation says what the rules accepted; brackets and braces never go in a rule.
+- The plan is read by the root `agentHome` alone; the `dirs` dependency is gone; `real_agy_rules` has the cases the review found missing.
+
 ## 2.2.1
 
 - Its page has its documentation, in French and in English: README.fr.md, README.en.md and five pages in docs/.

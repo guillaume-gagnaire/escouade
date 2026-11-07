@@ -31,21 +31,20 @@ pub struct Settings {
     pub mode: String,
 }
 
-/// What the rules of an agent hold beside its mode: its folder, the folders it reads, its fence, a discussion that changes
-/// nothing.
+/// What the rules of an agent hold beside its mode, in its interface: its fence, a discussion that changes nothing. Its
+/// folder and the folders it reads give no rule (ESC-376): its interface asks.
 #[derive(Debug, Clone, Default)]
 pub struct AgyRules {
-    pub cwd: String,
-    pub read_dirs: Vec<String>,
     pub fence: Vec<String>,
     pub read_only: bool,
 }
 
-/// The `--mode` of `agy` for Escouade's `mode`: « Tout accepter » is its rules', « Demander » its default.
+/// The `--mode` of `agy` for Escouade's `mode`: its plan alone, as its plugin (`plugins/antigravity`, ESC-371).
+/// « Demander », « Édits auto » and « Tout accepter » are its default mode: `agy`'s own accept-edits would let a write in
+/// `.git` or `.agents` through unseen.
 pub fn agy_mode(mode: &str) -> Option<&'static str> {
     match mode {
         "plan" => Some("plan"),
-        "acceptEdits" => Some("accept-edits"),
         _ => None,
     }
 }
@@ -110,7 +109,8 @@ pub fn mcp_file(home: &Path) -> PathBuf {
     gemini_dir(home).join("config").join("mcp_config.json")
 }
 
-/// What the user allowed this agent for good (« Toujours »), kept beside its home's `.gemini`.
+/// What the 2.2.0 kept of « Toujours », beside its home's `.gemini`: no longer read, and erased (ESC-376): what the agent
+/// could have planted there would hold.
 pub fn always_file(home: &Path) -> PathBuf {
     home.join("escouade-always.json")
 }
@@ -126,50 +126,23 @@ pub fn transcript(home: &Path, id: &str) -> PathBuf {
         .join("transcript_full.jsonl")
 }
 
-/// What `escouade-always.json` says (`text`, its file as it was read).
-pub fn always_of(text: Option<String>) -> Vec<String> {
-    text.and_then(|t| serde_json::from_str(&t).ok())
-        .unwrap_or_default()
-}
-
-/// What the core reads of it, for its « Vue Antigravity ».
-pub fn read_always(home: &Path) -> Vec<String> {
-    always_of(std::fs::read_to_string(always_file(home)).ok())
-}
-
-/// The rules a mode allows without asking: in « Demander », the writes in the agent's folder (as Cursor's are accepted by
-/// Escouade's rules); in « Accepter les modifications », `git add` and `git commit` beside its own; in « Tout accepter »,
-/// all. The folders of the files joined to its messages are read in all.
+/// The rules a mode allows without asking, as its plugin writes them (ESC-371, ESC-376): everything in « Tout accepter »
+/// when nothing is left to judge (no fence, no discussion), else none. `agy` may read a rule as a start of the text: in
+/// its interface, what no rule allows it asks the user itself.
 pub fn mode_rules(rules: &AgyRules, mode: &str) -> Vec<String> {
-    let mut allow: Vec<String> = rules
-        .read_dirs
-        .iter()
-        .map(|d| format!("read_file({d})"))
-        .collect();
-    match mode {
-        "bypassPermissions" => allow.extend(
-            [
-                "command(*)",
-                "write_file(*)",
-                "read_file(*)",
-                "mcp(*)",
-                "read_url(*)",
-                "execute_url(*)",
-            ]
-            .map(String::from),
-        ),
-        "acceptEdits" => {
-            allow.push("command(git add)".into());
-            allow.push("command(git commit)".into());
-        }
-        "plan" => {}
-        _ => {
-            if !rules.cwd.is_empty() {
-                allow.push(format!("write_file({})", rules.cwd));
-            }
-        }
+    if mode != "bypassPermissions" || !rules.fence.is_empty() || rules.read_only {
+        return Vec::new();
     }
-    allow
+    [
+        "command(*)",
+        "write_file(*)",
+        "read_file(*)",
+        "mcp(*)",
+        "read_url(*)",
+        "execute_url(*)",
+    ]
+    .map(String::from)
+    .to_vec()
 }
 
 /// The rules refused whatever the mode: the paths of a private project (refused to read refuses to write too, `agy`'s
@@ -189,13 +162,22 @@ pub fn deny_rules(rules: &AgyRules) -> Vec<String> {
     deny
 }
 
+/// The keys of the settings taken out whatever the file held, as its plugin does: their effect was never tried, and the
+/// agent can write its home (`agy`'s defaults hold).
+pub const SET_KEYS: [&str; 2] = ["toolPermission", "agentMode"];
+
 /// The settings `before` (a JSON object, else none) with their `permissions` as Escouade sets them (its mode's rules, what
-/// the user allowed, its refusals: `deny` before all, `agy`'s rule).
+/// the user allowed, its refusals: `deny` before all, `agy`'s rule), `SET_KEYS` taken out.
 pub fn settings_doc(before: &str, rules: &AgyRules, mode: &str, allowed: &[String]) -> Value {
     let mut doc: Value = serde_json::from_str(before)
         .ok()
         .filter(Value::is_object)
         .unwrap_or_else(|| json!({}));
+    if let Some(o) = doc.as_object_mut() {
+        for k in SET_KEYS {
+            o.remove(k);
+        }
+    }
     let mut allow = mode_rules(rules, mode);
     for r in allowed {
         if !allow.contains(r) {

@@ -596,15 +596,15 @@ async fn a_fenced_path_is_refused_by_its_rules_even_in_bypass_without_a_card() {
         rules.contains("\"deny\"") && rules.contains("dehors.txt"),
         "{rules}"
     );
-    // Its commands, without `command(*)` with a fence, are allowed in Bypass by its plugin (ESC-371).
+    // Its commands, without `command(*)` with a fence, ask in Bypass (ESC-376): a rule `command(npm test)` might let
+    // `npm test & type <fence>` through. Allowed, the turn goes on.
     live.send("commande");
+    live.until("its permission", |items| {
+        items.iter().any(|i| i["kind"] == "permission")
+    })
+    .await;
+    live.answer("permission", "allow");
     live.turns_done(2).await;
-    assert!(!live
-        .rt
-        .conv
-        .items()
-        .iter()
-        .any(|i| i["kind"] == "permission"));
     assert_eq!(live.texts().last().unwrap(), "Fait.");
     live.stop().await;
 }

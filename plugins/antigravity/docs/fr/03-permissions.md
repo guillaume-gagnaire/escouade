@@ -14,9 +14,9 @@ Par l’hôte d’Escouade, dans le dossier propre à l’agent (`agentHome`, en
 
 - `settings.json` et `mcp_config.json`, pour garder ce qu’`agy` y a mis lui-même (la confiance de son interface) : ses règles, `toolPermission`, `agentMode` et tout autre serveur MCP que celui d’Escouade sont remplacés, pas repris ;
 - les 4 derniers Mio du journal de la conversation : ses événements ne disent pas tout (les arguments d’un appel, le texte d’une écriture, son raisonnement) ;
-- le fichier du plan, au chemin d’écriture que le modèle a donné, dans ce dossier.
+- le fichier du plan, au chemin d’écriture que le modèle a donné, seulement s’il est dans ce dossier : il est lu par la racine `agentHome`, jamais dans le dépôt.
 
-Il demande aussi à l’hôte si le git du worktree de l’agent est protégé (`agentRepo`, en lecture : `fs/gitProtected`), avant d’accepter seul un `git add` ou un `git commit`. Il n’y lit aucun fichier.
+Il ne demande plus rien du worktree de l’agent : `agentRepo` n’est plus dans ses permissions (2.2.2), puisqu’il n’accepte plus seul ni `git add` ni `git commit`.
 
 Ton `~/.gemini` n’est jamais lu ni écrit. La connexion Google est dans le trousseau du système, que le plugin ne lit jamais.
 
@@ -31,7 +31,7 @@ Il n’écrit rien lui-même. Il décrit au cœur ce qu’il faut écrire dans l
 
 ## Ce qu’il accepte seul, et ce qui va à la carte
 
-Pendant un tour, rien ne va à la carte : `agy` fait ce que ses règles permettent et refuse le reste. `agy` lit une règle comme un début de texte (« commands that start with »), et la façon dont il les juge n’a pas été essayée : le plugin ne compte donc sur aucune règle pour garder quelque chose. Hors de Bypass, il n’en fait écrire aucune à lui, et `agy` lit sans demander (son mode `plan` ne change rien) :
+Pendant un tour, rien ne va à la carte : `agy` fait ce que ses règles permettent et refuse le reste. `agy` lit peut-être une règle comme un début de texte (« commands that start with »), et la façon dont il les juge n’a pas été essayée : le plugin juge donc lui-même chaque refus, et n’accepte d’office que ce qui tiendrait si `agy` lisait sa règle comme un simple début de texte. Hors de Bypass, il ne fait écrire aucune règle `allow` à lui, et `agy` lit sans demander (son mode `plan` ne change rien) :
 
 | Mode | Ce que les règles permettent |
 |---|---|
@@ -40,11 +40,11 @@ Pendant un tour, rien ne va à la carte : `agy` fait ce que ses règles permette
 
 À la fin d’un tour, le plugin juge chaque refus :
 
-- refusé d’office, sans carte : un appel qui nomme un chemin clôturé, par son texte ou par son chemin résolu (`..` compris) ; tout, dans une discussion ;
-- accepté sans carte : en Bypass, tout ; une lecture dans un dossier des fichiers joints ; en Demander et Édits auto, une écriture dans le dossier de l’agent (chemin résolu), sauf dans `.git` (toute casse, nom court, le fichier `.git` d’un worktree), `.husky`, `.githooks`, `.agents` et `.gemini` ; en Édits auto, une commande qui n’est que `git add` et `git commit` du worktree, lue comme le font Codex et Copilot (refusée au moindre doute : `;`, `|`, `$`, redirection, retour à la ligne, option avant la sous-commande), quand l’hôte dit son git protégé ; exactement un appel permis « Pour cet agent » ;
-- une carte pour le reste. « Pour cet agent » n’est offert ni à l’agent d’un projet privé, ni pour une écriture dans les dossiers ci-dessus.
+- refusé d’office, sans carte : un appel qui nomme un chemin clôturé, par son texte ou par son chemin résolu contre le dossier de l’agent (`..` compris), un mot de sa commande compris (`type ..\prive\secret.txt`) ; tout, dans une discussion ;
+- accepté sans carte, si le chemin qu’il nomme est déjà absolu et normal (ni relatif, ni `.`, ni `..`, ni séparateur final, ni séparateurs mêlés) : en Bypass, tout sauf une commande ; une lecture dans un dossier des fichiers joints ; en Demander et Édits auto, l’écriture d’un fichier strictement dans le dossier de l’agent, sauf dans `.git` (toute casse, nom court, le fichier `.git` d’un worktree), `.husky`, `.githooks`, `.agents` et `.gemini`, sauf le dossier lui-même (`C:\wt`, `C:\wt\`, `C:\wt\.`, `.`, une chaîne vide) et sauf un nom par lequel ces dossiers commencent (`.g`) ; exactement un appel permis « Pour cet agent » ;
+- une carte pour le reste, et pour toute commande : `git add` et `git commit` en Édits auto, chaque commande en Bypass avec un projet privé, tant que l’essai réel d’`agy` n’a pas montré comment il découpe une commande. « Pour cet agent » n’est offert ni à l’agent d’un projet privé, ni pour une écriture dans les dossiers ci-dessus ou du dossier lui-même, ni pour un chemin qui n’est pas absolu et normal.
 
-Ce qui est accepté l’est par la règle exacte de l’appel, pour la reprise du tour seulement : `agy` est relancé avant la reprise, la règle est retirée à la fin du tour, et `agy` relancé avant le message suivant. Un appel refusé à nouveau pendant la reprise qui l’autorisait n’est pas redemandé. Une commande, un chemin ou un outil avec `*`, `?`, une parenthèse ou un retour à la ligne ne devient jamais une règle : son refus tient.
+Ce qui est accepté, d’office ou sur la carte, l’est par la règle de l’appel, pour la reprise du tour seulement : `agy` la lit peut-être comme un début de texte, ce que dit la carte, et la conversation pour une acceptation d’office. Un « Pour cet agent » rejoué redonne cette règle à chaque fois. Pendant une reprise qui porte une écriture, le plugin fait aussi refuser (`deny`) l’écriture dans chaque dossier gardé à la racine du dossier de l’agent (sauf celui où tu as permis une écriture) et sous le chemin accordé suivi de `\..` et de `/..` ; l’essai réel dira si ces refus l’emportent sur la règle accordée. `agy` est relancé avant la reprise, la règle est retirée à la fin du tour, et `agy` relancé avant le message suivant. Un appel refusé à nouveau pendant la reprise qui l’autorisait n’est pas redemandé. Une commande, un chemin ou un outil avec `*`, `?`, une parenthèse, un crochet, une accolade ou un retour à la ligne ne devient jamais une règle : son refus tient.
 
 Un changement de mode, un « Stop » et un redémarrage du plugin font réécrire les règles, sans ce qui avait été accordé, et relancer `agy` avant le message suivant.
 
@@ -54,12 +54,14 @@ Les règles de l’agent refusent la lecture de chaque chemin clôturé (`read_f
 
 La clôture est dans les règles du dossier de l’agent, réécrites quand le plugin redémarre : elle tient. Une carte montrée avant ce redémarrage ne peut pas reprendre : sa réponse finit le tour.
 
-Ce que la clôture ne tient pas : une commande qui lirait ces chemins sans les nommer, un nom court ou une jonction vers eux.
+Ce que la clôture ne tient pas d’office : une commande qui lirait ces chemins sans les nommer ou par un chemin que fait le shell (`$HOME`, `%CD%`), un nom court ou une jonction vers eux. Une telle commande va à une carte, comme toute commande d’un agent clôturé.
+
+La « Vue Antigravity CLI » a les mêmes règles : aucune règle `allow` sauf en Bypass sans projet privé ni discussion, les refus de la clôture, et Édits auto y est le mode par défaut d’`agy`. Ce qu’aucune règle ne permet, son interface le demande. Le fichier `escouade-always.json` de la 2.2.0 n’est plus lu nulle part, et le cœur l’efface.
 
 ## Ce qu’il ne peut pas faire
 
 - lancer `agy` ou tout autre programme ;
 - ouvrir une connexion réseau ;
-- lire ou faire écrire hors du dossier propre à l’agent (de son worktree, il ne sait que ce que l’hôte dit de son git) ;
+- lire ou faire écrire hors du dossier propre à l’agent ;
 - lire ton `~/.gemini`, ta connexion Google ou la clé d’un compte ;
 - mettre le jeton d’Escouade dans les arguments : le cœur refuse le lancement.

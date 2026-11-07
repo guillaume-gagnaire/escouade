@@ -9,6 +9,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - OpenCode: `git commit` and `git add` are accepted at once only in their plain form, and a write to `.git`, `.opencode` or `opencode.json` always asks: these rules are all that protects it.
 - OpenCode: a private project holds better. Its rules are set before a session opens, and “Always” is no longer offered under a fence.
 - Claude Code: a discussion also refuses PowerShell commands, instead of showing them on a card.
+- Antigravity CLI: its terminal view follows its plugin’s rules. It no longer allows writes in the agent’s folder or git add and git commit at once, asks for a private project’s commands, and forgets the “Always” kept by 2.2.0.
 
 ### New
 

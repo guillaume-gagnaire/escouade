@@ -18,13 +18,14 @@
 //!   variable there), never on its command line; as for its `-p` process.
 //! - Its first screens are passed: the choice of its colours (`cache/onboarding.json`) and the trust
 //!   of the agent's folder (`trustedWorkspaces` of its settings, tried) are written in its home, with
-//!   the permission rules of the agent's mode and fence, as for its `-p` process.
+//!   the permission rules of the agent's mode and fence, those of its plugin (no rule `allow` but in « Tout accepter »
+//!   without a fence nor a discussion, ESC-376): what no rule allows, its interface asks.
 //! - The account's address is kept off its screen (`AGY_CLI_HIDE_ACCOUNT_INFO`, tried).
 
 use super::super::terminal::{bracketed, TerminalArgs, TerminalLaunch, TerminalView};
 use super::super::{mcp, Engine, Escouade};
 use super::{
-    agy_mode, gemini_dir, grant_doc, home_env, read_always, settings_doc, settings_file,
+    agy_mode, always_file, gemini_dir, grant_doc, home_env, settings_doc, settings_file,
     transcript, AgyRules, AGY, EFFORTS, KEY_VARS,
 };
 use crate::agent::{AgentRt, Effects, HookOutcome};
@@ -162,14 +163,14 @@ impl TerminalView for AgyTerminal {
         if let Some(home) = l.home {
             env.extend(home_env(&[], home));
             let rules = AgyRules {
-                cwd: l.meta.cwd.clone(),
-                read_dirs: Vec::new(),
                 fence: crate::fence::spelled(l.fence, l.program),
                 read_only: l.meta.discussion.is_some(),
             };
             let file = settings_file(home);
             let before = std::fs::read_to_string(&file).unwrap_or_default();
-            let doc = settings_doc(&before, &rules, &l.meta.mode, &read_always(home));
+            // The rules of its plugin, nothing more (ESC-376): what the 2.2.0 kept of « Toujours » is erased, never read.
+            let _ = std::fs::remove_file(always_file(home));
+            let doc = settings_doc(&before, &rules, &l.meta.mode, &[]);
             files.push((file, pretty(&trusted(doc, &l.meta.cwd))));
             let onboarding = onboarding_file(home);
             let passed = std::fs::read_to_string(&onboarding)

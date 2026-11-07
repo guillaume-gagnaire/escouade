@@ -1,6 +1,6 @@
-//! ESC-371: what Antigravity's rules let through, and what the plugin judges. `agy` judges a rule as a start of the text:
-//! no rule of Escouade's lets a call through that the plugin did not see, so each case here is a call `agy` refused and
-//! what the plugin makes of it at the end of the turn. The real `agy` is `real_agy_rules`, ignored.
+//! ESC-371 and ESC-376: what Antigravity's rules let through, and what the plugin judges. `agy` may judge a rule as a start
+//! of the text: no rule of Escouade's lets a call through that the plugin did not see first, so each case here is a call
+//! `agy` refused and what the plugin makes of it at the end of the turn (and the rule it writes for the turn going on). The real `agy` is `real_agy_rules`, ignored.
 
 use crate::client::Client;
 use crate::words::{self, AgyRules, Denied, Verdict};
@@ -255,7 +255,9 @@ fn repo(name: &str) -> PathBuf {
 }
 
 #[test]
-fn git_add_and_git_commit_alone_go_on_in_auto_edits_as_codex_and_copilot_judge_them() {
+fn git_add_and_git_commit_alone_are_a_card_in_auto_edits_until_agy_is_tried() {
+    // ESC-376 (N2): `git add .` allowed by a rule would let `git add . ; node x.js` through, if `agy` reads a rule as a
+    // start of the text.
     let wt = repo("git-alone");
     let dir = home("git-alone-home");
     let cwd = wt.to_string_lossy().into_owned();
@@ -264,24 +266,21 @@ fn git_add_and_git_commit_alone_go_on_in_auto_edits_as_codex_and_copilot_judge_t
         ..params(&dir, "acceptEdits")
     };
     let mut c = started(&p);
-    for cmd in ["git add .", "git add -A && git commit -m \"un message\""] {
+    for cmd in [
+        "git add .",
+        "git add",
+        "git add -A && git commit -m \"un message\"",
+    ] {
         let out = turn_refusing(&mut c, "run_command", command(cmd));
-        assert!(cards(&out).is_empty(), "{cmd}: {out:?}");
-        assert_eq!(allowed(&out), [format!("command({cmd})")]);
-        c.frames(&[init(), result()]);
+        assert_eq!(
+            cards(&out).iter().map(|(_, a)| *a).collect::<Vec<_>>(),
+            [true],
+            "{cmd}: {out:?}"
+        );
+        assert!(went_on(&out).is_none(), "{cmd}: {out:?}");
+        let (rid, _) = cards(&out).remove(0);
+        c.answer_permission(&answer(&rid, false, false)).unwrap();
     }
-    // In another folder: a card.
-    let elsewhere =
-        json!({ "CommandLine": "git add .", "Cwd": if WIN { "C:\\autre" } else { "/autre" } });
-    let out = turn_refusing(&mut c, "run_command", elsewhere);
-    assert_eq!(cards(&out).len(), 1, "{out:?}");
-    // In « Demander », a card too.
-    let mut c = started(&LaunchParams {
-        cwd,
-        ..params(&home("git-ask"), "default")
-    });
-    let out = turn_refusing(&mut c, "run_command", command("git add ."));
-    assert_eq!(cards(&out).len(), 1, "{out:?}");
 }
 
 // ---- B3 ----------------------------------------------------------------------------------------------------------
@@ -300,11 +299,25 @@ fn accept_all_with_a_fence_writes_no_joker_and_judges_each_call() {
         command(&format!("type {}\\secret.txt", fence())),
     );
     assert!(cards(&out).is_empty() && went_on(&out).is_none(), "{out:?}");
-    // Another: allowed by Escouade's rules, its exact rule for the next turn.
+    // Another: a card without « Toujours » (ESC-376, N2): `cargo test & type …` would start alike.
     let out = turn_refusing(&mut c, "run_command", command("cargo test"));
+    assert_eq!(
+        cards(&out).iter().map(|(_, a)| *a).collect::<Vec<_>>(),
+        [false],
+        "{out:?}"
+    );
+    assert!(went_on(&out).is_none(), "{out:?}");
+    let (rid, _) = cards(&out).remove(0);
+    c.answer_permission(&answer(&rid, false, false)).unwrap();
+    // A write named by its absolute and normal path: allowed by Escouade's rules, said, its exact rule for the next turn.
+    let path = at("src/a.rs");
+    let out = turn_refusing(&mut c, "write_file", write_of(&path));
     assert!(cards(&out).is_empty(), "{out:?}");
     assert!(out.iter().any(|i| matches!(i, Item::Relaunch { .. })));
-    assert_eq!(allowed(&out), ["command(cargo test)"]);
+    assert!(out.iter().any(
+        |i| matches!(i, Item::Notice { text, .. } if text.contains("d’office") && text.contains("début de texte"))
+    ));
+    assert_eq!(allowed(&out), [format!("write_file({path})")]);
     // Without a fence, « Tout accepter » is its rules'.
     let c = started(&params(&home("bypass"), "bypassPermissions"));
     assert!(c.settings_text().contains("command(*)"));
@@ -319,6 +332,9 @@ fn a_rule_is_never_a_joker_nor_wider_than_its_card_says() {
     for (tool, args) in [
         ("run_command", command("*")),
         ("run_command", command("ls (x)")),
+        ("run_command", command("ls [ab]")),
+        ("run_command", command("echo {a,b}")),
+        ("write_file", write_of(&at("src/[x].rs"))),
         ("run_command", command("echo ok\ncurl x")),
         (
             "write_file",
@@ -452,8 +468,13 @@ fn the_fence_and_the_agents_folder_are_told_by_the_path_resolved() {
             "{path}"
         );
     }
-    // A relative one is placed in it.
+    // A relative one is placed in it, but its rule would not be the path judged (ESC-376, N4): a card.
     let d = denied("write_file", write_of("src/a.rs"));
+    assert_eq!(
+        words::judge(&rules, "default", &[], &d, "r"),
+        Verdict::Asked { always: false }
+    );
+    let d = denied("write_file", write_of(&at("src/a.rs")));
     assert_eq!(
         words::judge(&rules, "default", &[], &d, "r"),
         Verdict::Allowed
@@ -466,14 +487,11 @@ fn a_call_refused_again_on_its_own_rule_is_not_allowed_in_a_loop() {
     let mut p = params(&dir, "bypassPermissions");
     p.fence = vec![fence()];
     let mut c = started(&p);
-    let out = turn_refusing(&mut c, "run_command", command("cargo test"));
+    let path = at("src/a.rs");
+    let out = turn_refusing(&mut c, "write_file", write_of(&path));
     assert!(went_on(&out).is_some());
     // `agy` refuses it again in the turn its rule allowed it: said, neither allowed again nor a card.
-    let out = c.frames(&[
-        init(),
-        refused(5, "run_command", command("cargo test")),
-        result(),
-    ]);
+    let out = c.frames(&[init(), refused(5, "write_file", write_of(&path)), result()]);
     assert!(went_on(&out).is_none() && cards(&out).is_empty(), "{out:?}");
     assert!(out.iter().any(|i| matches!(i, Item::Notice { .. })));
     assert!(out.iter().any(|i| matches!(i, Item::Turn { .. })));
@@ -578,6 +596,351 @@ fn read_only_is_told_only_with_the_rules_that_hold_it() {
     assert!(!c.launch(&p).read_only);
 }
 
+// ---- ESC-376: the review of 2.2.1 ---------------------------------------------------------------------------------
+
+fn rules_here() -> AgyRules {
+    AgyRules {
+        cwd: cwd(),
+        ..AgyRules::default()
+    }
+}
+
+fn denied(tool: &str, args: Value) -> Denied {
+    Denied {
+        step: 1,
+        tool: tool.into(),
+        args,
+    }
+}
+
+#[test]
+fn n1_a_write_of_the_agents_folder_itself_is_a_card_without_always() {
+    let sep = if WIN { "\\" } else { "/" };
+    let folder = cwd();
+    let itself = [
+        folder.clone(),
+        format!("{folder}{sep}"),
+        format!("{folder}{sep}."),
+        ".".to_string(),
+        String::new(),
+        // What would hold it, or a start of a name of `KEPT` (`write_file(C:\wt\.g)` read as a start of the text).
+        if WIN { "C:\\" } else { "/" }.to_string(),
+        at(".g"),
+        at(".AG"),
+        at("sous/.gem"),
+    ];
+    for mode in ["default", "acceptEdits"] {
+        for path in &itself {
+            let d = denied("write_file", write_of(path));
+            assert_eq!(
+                words::judge(&rules_here(), mode, &[], &d, "r"),
+                Verdict::Asked { always: false },
+                "{mode} {path:?}"
+            );
+        }
+        // The same through the client: a card, nothing goes on, no rule written.
+        let dir = home(&format!("n1-{mode}"));
+        let mut c = started(&params(&dir, mode));
+        for path in &itself {
+            let out = turn_refusing(&mut c, "write_file", write_of(path));
+            let found = cards(&out);
+            let unruled = out.iter().any(|i| matches!(i, Item::Notice { .. }));
+            assert!(
+                found.iter().map(|(_, a)| *a).eq([false]) || (found.is_empty() && unruled),
+                "{mode} {path:?}: {out:?}"
+            );
+            assert!(went_on(&out).is_none(), "{mode} {path:?}: {out:?}");
+            assert!(!c.settings_text().contains("write_file"));
+            if let Some((rid, _)) = found.first() {
+                c.answer_permission(&answer(rid, false, false)).unwrap();
+            }
+        }
+    }
+    // A file strictly under it is allowed.
+    let d = denied("write_file", write_of(&at("src/a.rs")));
+    assert_eq!(
+        words::judge(&rules_here(), "default", &[], &d, "r"),
+        Verdict::Allowed
+    );
+}
+
+#[test]
+fn n4_an_allowance_by_the_rules_is_made_only_of_the_absolute_normal_path_judged() {
+    let sep = if WIN { "\\" } else { "/" };
+    let other = if WIN { "/" } else { "\\" };
+    let not_normal = [
+        "src/a.rs".to_string(),
+        format!(".{sep}src{sep}a.rs"),
+        at(&format!("x{sep}..{sep}a.rs")),
+        at(&format!("src{sep}.{sep}a.rs")),
+        at(&format!("src{sep}{sep}a.rs")),
+        at("src/a.rs") + sep,
+        at("src/a.rs."),
+        at("src/a.rs") + " ",
+        format!("{}{other}src{other}a.rs", cwd()),
+    ];
+    for path in &not_normal {
+        assert!(!words::normal(path), "{path:?}");
+        for mode in ["default", "acceptEdits", "bypassPermissions"] {
+            let mut rules = rules_here();
+            if mode == "bypassPermissions" {
+                rules.fence = vec![fence()];
+            }
+            let d = denied("write_file", write_of(path));
+            assert!(
+                matches!(
+                    words::judge(&rules, mode, &[], &d, "r"),
+                    Verdict::Asked { always: false }
+                ),
+                "{mode} {path:?}"
+            );
+        }
+    }
+    assert!(words::normal(&at("src/a.rs")));
+    // A read of the files joined, by a path not normal: a card too.
+    let joined = if WIN { "C:\\joints" } else { "/joints" };
+    let rules = AgyRules {
+        read_dirs: vec![joined.into()],
+        ..rules_here()
+    };
+    let d = denied(
+        "view_file",
+        json!({ "AbsolutePath": format!("{joined}{sep}x{sep}..{sep}a.png") }),
+    );
+    assert!(matches!(
+        words::judge(&rules, "default", &[], &d, "r"),
+        Verdict::Asked { .. }
+    ));
+    let d = denied(
+        "view_file",
+        json!({ "AbsolutePath": format!("{joined}{sep}a.png") }),
+    );
+    assert_eq!(
+        words::judge(&rules, "default", &[], &d, "r"),
+        Verdict::Allowed
+    );
+    // « Toujours » is replayed only for a path normal, and offered only for one.
+    let rel = denied("write_file", write_of("../ailleurs/a.rs"));
+    let rule = "write_file(../ailleurs/a.rs)".to_string();
+    assert_eq!(
+        words::judge(
+            &rules_here(),
+            "default",
+            std::slice::from_ref(&rule),
+            &rel,
+            &rule
+        ),
+        Verdict::Asked { always: false }
+    );
+}
+
+#[test]
+fn n3_a_word_of_a_command_that_resolves_into_the_fence_is_refused() {
+    let rules = AgyRules {
+        fence: vec![fence()],
+        ..rules_here()
+    };
+    let sep = if WIN { "\\" } else { "/" };
+    for cmd in [
+        format!("type ..{sep}prive{sep}secret.txt"),
+        format!("type \"..{sep}prive{sep}secret.txt\""),
+        format!("cat '..{sep}prive{sep}secret.txt'"),
+        format!("node x.js --file=..{sep}prive{sep}secret.txt"),
+        format!("echo ok;type ..{sep}prive{sep}secret.txt"),
+        format!("type <..{sep}prive{sep}secret.txt"),
+        format!("type {}{sep}..{sep}prive{sep}secret.txt", cwd()),
+    ] {
+        for mode in ["default", "acceptEdits", "bypassPermissions"] {
+            let d = denied("run_command", command(&cmd));
+            assert_eq!(
+                words::judge(&rules, mode, &[], &d, "r"),
+                Verdict::Refused,
+                "{mode} {cmd}"
+            );
+        }
+    }
+    // In doubt (a path a shell makes): a card, never allowed.
+    for cmd in [
+        format!("type $HOME{sep}..{sep}prive{sep}secret.txt"),
+        format!("type %CD%{sep}..{sep}prive"),
+        "cargo test".to_string(),
+    ] {
+        let d = denied("run_command", command(&cmd));
+        assert_eq!(
+            words::judge(&rules, "bypassPermissions", &[], &d, "r"),
+            Verdict::Asked { always: false },
+            "{cmd}"
+        );
+    }
+}
+
+#[test]
+fn n2_no_command_is_allowed_by_a_rule_but_exactly_what_the_user_allowed_for_good() {
+    for mode in ["default", "acceptEdits", "bypassPermissions"] {
+        let mut rules = rules_here();
+        if mode == "bypassPermissions" {
+            rules.fence = vec![fence()];
+        }
+        for cmd in ["git add .", "git add", "git commit -m x", "cargo test"] {
+            let d = denied("run_command", command(cmd));
+            assert!(
+                matches!(
+                    words::judge(&rules, mode, &[], &d, "r"),
+                    Verdict::Asked { .. }
+                ),
+                "{mode} {cmd}"
+            );
+        }
+    }
+    // « Toujours », unfenced: this very call, its rule given again for the turn that goes on.
+    let rule = "command(cargo test)".to_string();
+    let d = denied("run_command", command("cargo test"));
+    assert_eq!(
+        words::judge(
+            &rules_here(),
+            "default",
+            std::slice::from_ref(&rule),
+            &d,
+            &rule
+        ),
+        Verdict::Allowed
+    );
+}
+
+#[test]
+fn n2_a_turn_going_on_with_a_write_allowed_refuses_kept_and_climbing_out_of_it() {
+    let sep = if WIN { "\\" } else { "/" };
+    let dir = home("n2-guard");
+    let mut c = started(&params(&dir, "default"));
+    // No write allowed: no refusal of the kind.
+    assert!(!c.settings_text().contains("deny\": [\n      \"write_file"));
+    let path = at("src/a.rs");
+    let out = turn_refusing(&mut c, "write_file", write_of(&path));
+    let deny = denied_rules(&out);
+    for k in words::KEPT {
+        assert!(
+            deny.contains(&format!("write_file({}{sep}{k})", cwd())),
+            "{k}: {deny:?}"
+        );
+    }
+    assert!(
+        deny.contains(&format!("write_file({path}\\..)")),
+        "{deny:?}"
+    );
+    assert!(deny.contains(&format!("write_file({path}/..)")), "{deny:?}");
+    // The turn over, they go with the write allowed.
+    let out = c.frames(&[init(), result()]);
+    assert_eq!(denied_rules(&out), Vec::<String>::new());
+    // A write the user allowed in `.git`: its own folder is not refused, the others are.
+    let config = at(".git/config");
+    let out = turn_refusing(&mut c, "write_file", write_of(&config));
+    let (rid, _) = cards(&out).remove(0);
+    let out = c.answer_permission(&answer(&rid, true, false)).unwrap();
+    let deny = denied_rules(&out);
+    assert!(
+        !deny.contains(&format!("write_file({}{sep}.git)", cwd())),
+        "{deny:?}"
+    );
+    assert!(
+        deny.contains(&format!("write_file({}{sep}.agents)", cwd())),
+        "{deny:?}"
+    );
+    assert!(
+        deny.contains(&format!("write_file({config}\\..)")),
+        "{deny:?}"
+    );
+}
+
+#[test]
+fn n5_the_card_says_what_always_gives_and_stays_short() {
+    for lang in ["fr", "en"] {
+        let note = words::once_note(lang);
+        assert!(
+            note.chars().count() <= words::ONCE_NOTE_MAX,
+            "{lang}: {}",
+            note.chars().count()
+        );
+    }
+    assert!(words::once_note("fr").contains("« Toujours » : de même, à chaque retour"));
+    assert!(words::allowed_notice("fr", "writing x").contains("d’office"));
+}
+
+#[test]
+fn the_plan_is_read_under_the_agents_home_alone() {
+    let dir = home("plan-home");
+    let mut c = started(&params(&dir, "plan"));
+    // A plan the model says it wrote in the repository: not read, the turn ends.
+    let repo = home("plan-repo").join("brain").join("x");
+    std::fs::create_dir_all(&repo).unwrap();
+    let outside = repo.join("plan.md");
+    std::fs::write(
+        &outside,
+        "# Un plan du dépôt
+",
+    )
+    .unwrap();
+    let outside = outside.to_string_lossy().into_owned();
+    let step = |path: &str| {
+        json!({ "event": "step_update", "step_update": {
+            "step_index": 2, "step_type": "tool", "tool_name": "write_file", "state": "DONE",
+            "tool_info": { "parameters": write_of(path) },
+        } })
+        .to_string()
+    };
+    // Its write waits for its transcript, which never comes: read once patience is over.
+    let drained = |c: &mut Client, lines: &[String]| {
+        let mut out = c.frames(lines);
+        for _ in 0..40 {
+            out.extend(c.tick());
+        }
+        out
+    };
+    c.send("planifie");
+    let out = drained(&mut c, &[init(), step(&outside), result()]);
+    assert!(
+        out.iter().any(|i| matches!(i, Item::Turn { .. })),
+        "{out:?}"
+    );
+    assert!(
+        !out.iter().any(|i| matches!(i, Item::Permission { .. })),
+        "{out:?}"
+    );
+    // In its home: shown to approve.
+    let file = dir
+        .join(".gemini")
+        .join("antigravity-cli")
+        .join("brain")
+        .join("conv-1")
+        .join("plan.md");
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, "# Le plan\n").unwrap();
+    c.send("planifie");
+    let out = drained(&mut c, &[init(), step(&file.to_string_lossy()), result()]);
+    assert!(
+        out.iter().any(|i| matches!(i, Item::Permission { .. })),
+        "{out:?}"
+    );
+}
+
+/// The rules `deny` of the last settings written in `out`.
+fn denied_rules(out: &[Item]) -> Vec<String> {
+    let text = out
+        .iter()
+        .rev()
+        .find_map(|i| match i {
+            Item::File { path, text } if path.ends_with("settings.json") => Some(text.clone()),
+            Item::Relaunch { launch } => launch
+                .files
+                .iter()
+                .find(|f| f.path.ends_with("settings.json"))
+                .map(|f| f.text.clone()),
+            _ => None,
+        })
+        .expect("its settings");
+    let doc: Value = serde_json::from_str(&text).unwrap();
+    serde_json::from_value(doc["permissions"]["deny"].clone()).unwrap()
+}
+
 // ---- The real `agy` ----------------------------------------------------------------------------------------------
 
 /// A case of `real_agy_rules`: what it tries, its rules `allow` and `deny`, what the model is told to call, whether `agy`
@@ -590,7 +953,8 @@ type Case = (&'static str, Vec<String>, Vec<String>, String, bool);
 /// model call one tool, and reads its stream: `allowed` when the call ran, `refused` when its step ended
 /// `permission check failed` or `denied permission`. What each case must give is the plugin's assumption; one that differs
 /// is printed, and the run fails at its end with all of them. The plugin does not depend on any of them holding: no rule
-/// of its guards anything alone (this file's other tests). Never run in ESC-371 (no `agy` on the machine).
+/// of its guards anything alone (this file's other tests): until it ran, nothing is allowed by a rule that would not hold
+/// if `agy` read it as a mere start of the text (ESC-376). Never run in ESC-371 nor ESC-376 (no `agy` on the machine).
 #[test]
 #[ignore = "real Antigravity CLI: ESCOUADE_TEST_REAL_AGY=<agy>"]
 fn real_agy_rules() {
@@ -776,6 +1140,105 @@ fn real_agy_rules() {
             format!("write_file {prive_s}{sep}g.txt"),
             false,
         ),
+        // ESC-376: what the review of 2.2.1 found missing.
+        (
+            "prefix: a line break after an allowed command",
+            vec!["command(echo hi)".into()],
+            vec![],
+            "run_command with a CommandLine of two lines: `echo hi`, a line break, then `echo PWNED`".into(),
+            false,
+        ),
+        (
+            "prefix: `&` after an allowed command",
+            vec!["command(echo hi)".into()],
+            vec![],
+            "run_command `echo hi & echo PWNED`".into(),
+            false,
+        ),
+        (
+            "prefix: PowerShell's `;` without a blank",
+            vec!["command(echo hi)".into()],
+            vec![],
+            "run_command `echo hi;echo PWNED`".into(),
+            false,
+        ),
+        (
+            "write_file of a file covers <file> backslash .. backslash .git",
+            vec![format!("write_file({wt_s}{sep}a.txt)")],
+            vec![],
+            format!("write_file {wt_s}{sep}a.txt{sep}..{sep}.git{sep}x"),
+            false,
+        ),
+        (
+            "write_file of a file covers <file>/../.git/x",
+            vec![format!("write_file({wt_s}{sep}a.txt)")],
+            vec![],
+            format!("write_file {wt_s}{sep}a.txt/../.git/x"),
+            false,
+        ),
+        (
+            "deny of <file> backslash .. wins over allow of <file>",
+            vec![format!("write_file({wt_s}{sep}a.txt)")],
+            vec![format!("write_file({wt_s}{sep}a.txt{sep}..)")],
+            format!("write_file {wt_s}{sep}a.txt{sep}..{sep}.git{sep}x"),
+            false,
+        ),
+        (
+            "deny of <file> backslash .. leaves <file> allowed",
+            vec![format!("write_file({wt_s}{sep}a.txt)")],
+            vec![format!("write_file({wt_s}{sep}a.txt{sep}..)")],
+            format!("write_file {wt_s}{sep}a.txt"),
+            true,
+        ),
+        (
+            "no rule: a write of the folder itself is refused",
+            vec![],
+            vec![],
+            format!("write_file {wt_s}"),
+            false,
+        ),
+        (
+            "deny of .git wins over allow of the folder",
+            vec![format!("write_file({wt_s})")],
+            vec![format!("write_file({wt_s}{sep}.git)")],
+            format!("write_file {wt_s}{sep}.git{sep}x"),
+            false,
+        ),
+        (
+            "deny of .git in another case (.GIT)",
+            vec![format!("write_file({wt_s})")],
+            vec![format!("write_file({wt_s}{sep}.git)")],
+            format!("write_file {wt_s}{sep}.GIT{sep}x"),
+            !cfg!(windows),
+        ),
+        (
+            "deny before allow, the allow first in the file",
+            vec![format!("write_file({wt_s}{sep}a.txt)")],
+            vec![format!("write_file({wt_s})")],
+            format!("write_file {wt_s}{sep}a.txt"),
+            false,
+        ),
+        (
+            "a `*` inside a path rule is a joker",
+            vec![format!("write_file({wt_s}{sep}*.txt)")],
+            vec![],
+            format!("write_file {wt_s}{sep}h.txt"),
+            true,
+        ),
+        (
+            "brackets in a rule are a glob",
+            vec!["command(echo [ab])".into()],
+            vec![],
+            "run_command `echo a`".into(),
+            true,
+        ),
+        (
+            "braces in a rule are a glob",
+            vec!["command(echo {hi,ho})".into()],
+            vec![],
+            "run_command `echo ho`".into(),
+            true,
+        ),
     ];
     let mut wrong = Vec::new();
     for (i, (what, allow, deny, call, expected)) in cases.iter().enumerate() {
@@ -846,4 +1309,24 @@ fn real_agy_rules() {
     }
     let _ = std::fs::remove_dir_all(&root);
     assert!(wrong.is_empty(), "agy judged otherwise: {wrong:#?}");
+}
+
+#[test]
+fn a_plan_is_placed_in_the_home_by_its_text() {
+    assert_eq!(
+        words::in_home(r"C:\h\.gemini\brain\x\plan.md", r"C:\H\").as_deref(),
+        Some(".gemini/brain/x/plan.md")
+    );
+    assert_eq!(
+        words::in_home("/h/.gemini/plan.md", "/h").as_deref(),
+        Some(".gemini/plan.md")
+    );
+    for (path, home) in [
+        (r"C:\h2\plan.md", r"C:\h"),
+        (r"C:\h\..\x\plan.md", r"C:\h"),
+        (r"C:\h", r"C:\h"),
+        ("/h/./plan.md", "/h"),
+    ] {
+        assert_eq!(words::in_home(path, home), None, "{path}");
+    }
 }

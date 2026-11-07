@@ -27,6 +27,14 @@ mod module {
             .map(str::to_string)
     }
 
+    /// The file `rel` of the agent `agent`'s home, by the root `agentHome` alone (its home is the core's to place).
+    pub fn read_home(agent: &str, _home: &Path, rel: &Path) -> Option<String> {
+        let params = json!({ "agent": agent, "root": "agentHome", "path": rel.to_string_lossy() });
+        turn::host_call("fs/read", params).ok()?["text"]
+            .as_str()
+            .map(str::to_string)
+    }
+
     /// The end of the file `path` of the agent `agent`, in whole lines: the file itself until it passes what `fs/read` gives
     /// (`limits.fileBytes`). A long conversation's transcript does: what is asked of it is its last steps.
     pub fn read_end(agent: &str, path: &Path) -> Option<String> {
@@ -62,12 +70,18 @@ mod module {
 }
 
 #[cfg(target_family = "wasm")]
-pub use module::{push, read, read_end, timer};
+pub use module::{push, read, read_end, read_home, timer};
 
 /// See the module's `read`.
 #[cfg(not(target_family = "wasm"))]
 pub fn read(_agent: &str, path: &Path) -> Option<String> {
     escouade_plugin_protocol::turn::read_file(path)
+}
+
+/// See the module's `read_home`.
+#[cfg(not(target_family = "wasm"))]
+pub fn read_home(agent: &str, home: &Path, rel: &Path) -> Option<String> {
+    read(agent, &home.join(rel))
 }
 
 /// See the module's `read_end`.

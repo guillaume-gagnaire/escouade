@@ -163,9 +163,9 @@ pub fn transcript(home: &Path, id: &str) -> PathBuf {
 }
 
 /// The rules a mode allows without asking: everything in « Tout accepter » when nothing is left to judge (no fence, no
-/// discussion), else none. `agy` judges a rule as a start of the text (« commands that start with »), so no rule of
-/// Escouade's lets a call through that the plugin did not see: what `agy` refuses comes back at the end of its turn,
-/// judged by `judge`.
+/// discussion), else none. What `agy` refuses comes back at the end of its turn, judged by `judge`; what is allowed then
+/// is a rule for the turn that goes on, which `agy` may read as a start of the text (« commands that start with »): until
+/// the real `agy` was tried (`real_agy_rules`), no command is allowed that way but by the user (ESC-376).
 pub fn mode_rules(rules: &AgyRules, mode: &str) -> Vec<String> {
     if mode != "bypassPermissions" || !rules.fence.is_empty() || rules.read_only {
         return Vec::new();
@@ -221,8 +221,55 @@ pub fn settings_doc(before: &str, rules: &AgyRules, mode: &str, allowed: &[Strin
             allow.push(r.clone());
         }
     }
-    doc["permissions"] = json!({ "allow": allow, "deny": deny_rules(rules), "ask": [] });
+    let mut deny = deny_rules(rules);
+    deny.extend(guard_rules(&rules.cwd, allowed));
+    doc["permissions"] = json!({ "allow": allow, "deny": deny, "ask": [] });
     doc
+}
+
+/// The separator `path` is spelled with.
+fn separator(path: &str) -> char {
+    if path.contains('\\') {
+        '\\'
+    } else {
+        '/'
+    }
+}
+
+/// The refusals that guard a turn going on with a write allowed (`allowed`, rules `write_file(<path>)`), whatever `agy`
+/// makes of a rule (ESC-376, until `real_agy_rules` says it): each folder of `KEPT` at the root of the agent's folder
+/// `cwd`, but one a write allowed is in, and each path allowed followed by `\..` and `/..`. Whether `deny` wins over
+/// `allow` there is the real `agy`'s to say.
+pub fn guard_rules(cwd: &str, allowed: &[String]) -> Vec<String> {
+    let writes: Vec<&str> = allowed
+        .iter()
+        .filter_map(|r| r.strip_prefix("write_file(")?.strip_suffix(')'))
+        .filter(|p| *p != "*")
+        .collect();
+    if writes.is_empty() {
+        return Vec::new();
+    }
+    let mut deny = Vec::new();
+    let root = cwd.trim_end_matches(['/', '\\']);
+    if !root.is_empty() {
+        let sep = separator(cwd);
+        for k in KEPT {
+            let folder = format!("{root}{sep}{k}");
+            if !writes.iter().any(|w| escouade_acp::inside(w, &folder)) {
+                deny.push(format!("write_file({folder})"));
+            }
+        }
+    }
+    for w in writes {
+        let w = w.trim_end_matches(['/', '\\']);
+        for climb in ["\\..", "/.."] {
+            let rule = format!("write_file({w}{climb})");
+            if !deny.contains(&rule) {
+                deny.push(rule);
+            }
+        }
+    }
+    deny
 }
 
 /// `doc`, the settings of an agent, with the provider of its models: the Gemini API by `GEMINI_API_KEY` for an account added
@@ -264,6 +311,28 @@ pub fn is_plan_file(name: &str, args: &Value) -> bool {
     let path = args["Path"].as_str().unwrap_or_default().replace('\\', "/");
     let file = path.rsplit('/').next().unwrap_or_default();
     path.contains("/brain/") && file.starts_with("plan") && file.ends_with(".md")
+}
+
+/// `path` relative to the agent's home `home`, with `/`, when it is in it and climbs nowhere: by its text, as a module
+/// places a path of Windows (its `Path` is POSIX's). None else.
+pub fn in_home(path: &str, home: &str) -> Option<String> {
+    let p = path.trim().replace('\\', "/");
+    let h = home.trim().replace('\\', "/");
+    let h = h.trim_end_matches('/');
+    if h.is_empty() || p.len() <= h.len() + 1 || !p.is_char_boundary(h.len()) {
+        return None;
+    }
+    let (start, rest) = p.split_at(h.len());
+    let rel = rest.strip_prefix('/')?;
+    let same = if cfg!(windows) || h.as_bytes().get(1) == Some(&b':') {
+        start.eq_ignore_ascii_case(h)
+    } else {
+        start == h
+    };
+    let climbs = rel
+        .split('/')
+        .any(|c| c.is_empty() || c == "." || c == "..");
+    (same && !climbs).then(|| rel.to_string())
 }
 
 /// The path a call names (`Path`, `AbsolutePath`, `TargetFile`, `DirectoryPath`).
@@ -371,9 +440,23 @@ const PATH_KEYS: [&str; 5] = [
     "SearchPath",
 ];
 
+/// The words of a command line that may name a path: split on blanks, quotes and the signs of a shell (`;`, `|`, `&`,
+/// `<`, `>`, `=`, `,`, a parenthesis, a backtick).
+fn command_words(line: &str) -> impl Iterator<Item = &str> {
+    line.split(|c: char| {
+        c.is_whitespace()
+            || matches!(
+                c,
+                '"' | '\'' | '`' | ';' | '|' | '&' | '<' | '>' | '=' | ',' | '(' | ')'
+            )
+    })
+    .filter(|w| !w.is_empty())
+}
+
 /// Whether a call of `agy` names a path of `fence`: a text that names it, or a path that is in it once resolved against
-/// the agent's folder `cwd` (`C:\wt\..\prive\x`, `..\prive\x`). A short name or a link is not followed: the rules `deny`
-/// of `agy` and the cards of the commands are what is left there.
+/// the agent's folder `cwd` (`C:\wt\..\prive\x`, `..\prive\x`), a word of its command line too (`type ..\prive\x`,
+/// ESC-376). A short name, a link or a path a shell makes (`$`, `%`, `~`) is not followed: the rules `deny` of `agy` and
+/// the cards of the commands are what is left there.
 pub fn fenced(args: &Value, fence: &[String], cwd: &str) -> bool {
     if fence.is_empty() {
         return false;
@@ -386,17 +469,68 @@ pub fn fenced(args: &Value, fence: &[String], cwd: &str) -> bool {
         || PATH_KEYS
             .iter()
             .filter_map(|k| args[*k].as_str())
+            .chain(
+                args["CommandLine"]
+                    .as_str()
+                    .into_iter()
+                    .flat_map(command_words),
+            )
             .filter_map(|p| resolved(p, cwd))
             .any(|p| fence.iter().any(|f| escouade_acp::inside(&p, f)))
 }
 
 /// Whether a text can be put in a rule of `agy` as it is: none of the signs its rules might read as their own (`*`, `?`,
-/// a parenthesis) nor a line break. `agy` has no way known to escape them.
+/// a parenthesis, a bracket, a brace: a glob's) nor a line break. `agy` has no way known to escape them.
 fn plain(text: &str) -> bool {
     !text.is_empty()
         && !text
             .chars()
-            .any(|c| matches!(c, '*' | '?' | '(' | ')') || c.is_control())
+            .any(|c| matches!(c, '*' | '?' | '(' | ')' | '[' | ']' | '{' | '}') || c.is_control())
+}
+
+/// Whether `path`, as the call spells it, is already the absolute and normal path the plugin judges: rooted, one
+/// separator, no empty part, no `.` nor `..`, no part ending in a dot or a blank (Windows drops them), no separator at its
+/// end, nothing a rule would read as its own (`plain`). A rule made of anything else is not what was judged (ESC-376).
+pub fn normal(path: &str) -> bool {
+    if !rooted(path) || !plain(path) || (path.contains('/') && path.contains('\\')) {
+        return false;
+    }
+    let mut parts = path.split(['/', '\\']);
+    // A root `/` or `\` leaves an empty first part; a drive, its `C:`.
+    let first = parts.next().unwrap_or_default();
+    let drive = first.len() == 2 && first.ends_with(':');
+    if !(first.is_empty() || drive) {
+        return false;
+    }
+    let rest: Vec<&str> = parts.collect();
+    !rest.is_empty()
+        && rest.iter().all(|p| {
+            !p.is_empty()
+                && *p != "."
+                && *p != ".."
+                && !p.ends_with(['.', ' '])
+                && !p.starts_with(' ')
+        })
+}
+
+/// Whether `path` (resolved) is strictly under the agent's folder `cwd`: in it, and not the folder itself.
+fn under(path: &str, cwd: &str) -> bool {
+    !cwd.is_empty() && escouade_acp::inside(path, cwd) && !escouade_acp::inside(cwd, path)
+}
+
+/// Whether a write of `path` (resolved) would cover more than a file of the agent's: the folder `cwd` itself or what holds
+/// it, or a last part a name of `KEPT` starts with (`.g`, `.ag`: a rule read as a start of the text would reach it).
+fn covers_kept(path: &str, cwd: &str) -> bool {
+    if !cwd.is_empty() && escouade_acp::inside(cwd, path) {
+        return true;
+    }
+    let last = path
+        .trim_end_matches(['/', '\\'])
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or_default()
+        .to_lowercase();
+    last.is_empty() || KEPT.iter().any(|k| k.starts_with(last.as_str()))
 }
 
 /// The rule of `agy` that would allow the call `tool` with `args`, the call as the model is told it, and whether the rule
@@ -475,26 +609,45 @@ pub enum Verdict {
 }
 
 /// What Escouade's rules make of the call `d` that `agy` refused (its rule `rule`), the agent in the mode `mode`, with what
-/// the user allowed it for good (`always`: exact rules, kept by the plugin):
-/// - a discussion, or a path of the fence (`fenced`): refused, never a card;
+/// the user allowed it for good (`always`: exact rules, kept by the plugin). What it allows becomes a rule of `agy` for
+/// the turn that goes on, which `agy` may read as a start of the text: until the real `agy` was tried, nothing is allowed
+/// that way that would not hold in that worst case (ESC-376).
+/// - a discussion, or a path of the fence (`fenced`, the words of a command too): refused, never a card;
+/// - exactly a call the user allowed for good: allowed;
+/// - a command: a card (`git add` and `git commit` in « Édits auto », any in « Tout accepter » with a fence);
+/// - a call naming a path that is not already the absolute and normal path judged (`normal`): a card;
 /// - « Tout accepter »: allowed (it only comes back with a fence, or what `agy` refuses whatever its rules);
-/// - a read in a folder of the files joined to the messages, or exactly a call the user allowed for good: allowed;
-/// - in « Demander » and « Édits auto », a write in the agent's folder but in `KEPT`: allowed;
-/// - in « Édits auto », a command that is nothing but `git add` and `git commit` of its worktree (`git_accepted`): allowed;
-/// - anything else a card, without « Toujours » for a fenced agent (what it covers would never be judged again) or a write
-///   in `KEPT`.
+/// - a read in a folder of the files joined to the messages: allowed;
+/// - in « Demander » and « Édits auto », a write strictly under the agent's folder, neither in `KEPT` nor covering it
+///   (`covers_kept`: the folder itself, `.g`): allowed;
+/// - anything else a card, without « Toujours » for a fenced agent (what it covers would never be judged again), a write
+///   in `KEPT` or covering it, or a path not normal (its rule would not be what was judged).
 pub fn judge(rules: &AgyRules, mode: &str, always: &[String], d: &Denied, rule: &str) -> Verdict {
     if rules.read_only || fenced(&d.args, &rules.fence, &rules.cwd) {
         return Verdict::Refused;
     }
+    let cwd = rules.cwd.as_str();
+    let fenced_agent = !rules.fence.is_empty();
+    let spelled = path_of(&d.args);
+    let exact = spelled.is_none_or(normal);
+    let path = spelled.and_then(|p| resolved(p, cwd));
+    let write = writes(&d.tool);
+    let in_kept = write
+        && path
+            .as_deref()
+            .is_none_or(|p| kept(p, cwd) || covers_kept(p, cwd));
+    let asked = Verdict::Asked {
+        always: !fenced_agent && !in_kept && exact,
+    };
+    if exact && !in_kept && !fenced_agent && always.iter().any(|r| r == rule) {
+        return Verdict::Allowed;
+    }
+    if d.tool == "run_command" || !exact {
+        return asked;
+    }
     if mode == "bypassPermissions" {
         return Verdict::Allowed;
     }
-    let cwd = rules.cwd.as_str();
-    let fenced_agent = !rules.fence.is_empty();
-    let path = path_of(&d.args).and_then(|p| resolved(p, cwd));
-    let write = writes(&d.tool);
-    let in_kept = write && path.as_deref().is_none_or(|p| kept(p, cwd));
     let read_joined = reads(&d.tool)
         && path.as_deref().is_some_and(|p| {
             rules
@@ -502,46 +655,11 @@ pub fn judge(rules: &AgyRules, mode: &str, always: &[String], d: &Denied, rule: 
                 .iter()
                 .any(|dir| escouade_acp::inside(p, dir))
         });
-    let kept_for_good = !in_kept && !fenced_agent && always.iter().any(|r| r == rule);
-    if read_joined || kept_for_good {
+    let write_here = write && !in_kept && path.as_deref().is_some_and(|p| under(p, cwd));
+    if read_joined || (matches!(mode, "default" | "acceptEdits") && write_here) {
         return Verdict::Allowed;
     }
-    let write_here = write
-        && !in_kept
-        && !cwd.is_empty()
-        && path
-            .as_deref()
-            .is_some_and(|p| escouade_acp::inside(p, cwd));
-    if matches!(mode, "default" | "acceptEdits") && write_here {
-        return Verdict::Allowed;
-    }
-    if mode == "acceptEdits" && d.tool == "run_command" && git_accepted(&d.args, cwd, fenced_agent)
-    {
-        return Verdict::Allowed;
-    }
-    Verdict::Asked {
-        always: !fenced_agent && !in_kept,
-    }
-}
-
-/// Whether the command of `args` is nothing but `git add` and `git commit` of the agent's worktree `cwd`, as Codex and
-/// Copilot accept them: `escouade_acp::git::accepts_script` reads it as PowerShell and as a POSIX shell alike (a line
-/// break, `;`, `|`, `$`, a redirection… are refused) and has the host say its git protected (`fs/gitProtected`). The folder
-/// the call names, if it names one, must be the worktree itself.
-fn git_accepted(args: &Value, cwd: &str, fenced: bool) -> bool {
-    let Some(command) = args["CommandLine"].as_str() else {
-        return false;
-    };
-    let here = ["Cwd", "cwd", "WorkingDirectory"]
-        .iter()
-        .filter_map(|k| args[*k].as_str())
-        .all(|d| {
-            resolved(d, cwd)
-                .is_some_and(|d| escouade_acp::inside(&d, cwd) && escouade_acp::inside(cwd, &d))
-        });
-    !cwd.is_empty()
-        && here
-        && escouade_acp::git::accepts_script(command, None, &[command], Path::new(cwd), fenced)
+    asked
 }
 
 /// The id of the call of step `step` in the conversation `session`, as both the translation and the permissions name it.
@@ -638,14 +756,23 @@ pub fn permission_params(session: &str, d: &Denied, always: bool) -> Value {
     json!({ "sessionId": session, "toolCall": tc, "options": options })
 }
 
-/// What the card of a permission says « Autoriser » gives: `agy` judges its rules as a start of the text, for the next
-/// turn; « Toujours » is Escouade's, for this very call. Short (`ONCE_NOTE_MAX`): with a card's reason, the list beside
+/// What the card of a permission says « Autoriser » gives: `agy` may judge its rules as a start of the text, for the next
+/// turn; « Toujours » is Escouade's, for this very call, its rule given again each time it comes back. Short (`ONCE_NOTE_MAX`): with a card's reason, the list beside
 /// the conversation still offers its choices (it takes a note of 240 characters at most, `LIST_NOTE_MAX`).
 pub fn once_note(lang: &str) -> String {
     if lang == "fr" {
-        "« Autoriser » vaut pour le tour suivant, comme début de texte : ce qui commence pareil passe aussi. « Toujours » : Escouade réautorise cet appel exact.".into()
+        "« Autoriser » vaut pour le tour suivant, comme début de texte : ce qui commence pareil passe aussi. « Toujours » : de même, à chaque retour de cet appel.".into()
     } else {
-        "“Allow” holds for the next turn, as the start of a text: what starts the same goes through too. “Always”: Escouade allows this exact call again.".into()
+        "“Allow” holds for the next turn, as the start of a text: what starts the same goes through too. “Always”: the same, each time this call comes back.".into()
+    }
+}
+
+/// Said when Escouade's rules allowed a call without a card: as « Autoriser », for the turn that goes on.
+pub fn allowed_notice(lang: &str, said: &str) -> String {
+    if lang == "fr" {
+        format!("Escouade a autorisé d’office {said} : pour le tour suivant, comme début de texte, ce qui commence pareil passe aussi.")
+    } else {
+        format!("Escouade allowed {said} by its rules: for the next turn, as the start of a text, what starts the same goes through too.")
     }
 }
 
@@ -655,9 +782,9 @@ pub const ONCE_NOTE_MAX: usize = 160;
 /// Said when a call is refused that no rule of `agy` can hold as it is (`unruled`).
 pub fn unruled_notice(lang: &str, said: &str) -> String {
     if lang == "fr" {
-        format!("Antigravity s’est vu refuser {said} : ses règles ne savent pas l’autoriser tel quel (un *, un ?, une parenthèse ou un retour à la ligne).")
+        format!("Antigravity s’est vu refuser {said} : ses règles ne savent pas l’autoriser tel quel (un *, un ?, une parenthèse, un crochet, une accolade ou un retour à la ligne).")
     } else {
-        format!("Antigravity was refused {said}: its rules cannot allow it as it is (a *, a ?, a parenthesis or a line break).")
+        format!("Antigravity was refused {said}: its rules cannot allow it as it is (a *, a ?, a parenthesis, a bracket, a brace or a line break).")
     }
 }
 
@@ -752,43 +879,15 @@ pub fn follow_up(allowed: &[String], refused: &[String], replies: &[String]) -> 
     Some(parts.join("\n"))
 }
 
-/// Where the home of the user's tools stays (its git config, Rust's), which the commands of `agy` would no longer find
-/// in the agent's home; what `env` and the machine say already left out. A module knows neither that home nor the machine's
-/// variables: the core adds them to what its plugin's launch says (`Agy::spawn`).
-#[cfg(not(target_family = "wasm"))]
-pub fn tools_env(env: &[(String, String)]) -> Vec<(String, String)> {
-    let Some(real) = dirs::home_dir() else {
-        return Vec::new();
-    };
-    [
-        ("GIT_CONFIG_GLOBAL", ".gitconfig"),
-        ("CARGO_HOME", ".cargo"),
-        ("RUSTUP_HOME", ".rustup"),
-    ]
-    .into_iter()
-    .filter(|(var, _)| !env.iter().any(|(e, _)| e == var) && std::env::var_os(var).is_none())
-    .map(|(var, name)| (var, real.join(name)))
-    .filter(|(_, path)| path.exists())
-    .map(|(var, path)| (var.to_string(), path.to_string_lossy().into_owned()))
-    .collect()
-}
-
-/// See the native `tools_env`.
-#[cfg(target_family = "wasm")]
-pub fn tools_env(_env: &[(String, String)]) -> Vec<(String, String)> {
-    Vec::new()
-}
-
-/// The variables of `env` with `home` as the home of `agy` (`USERPROFILE`, `HOME`), the home of the user's tools kept where
-/// they are (`tools_env`), and its own update off.
+/// The variables of `env` with `home` as the home of `agy` (`USERPROFILE`, `HOME`), and its own update off. Where the home
+/// of the user's tools stays (its git config, Rust's) is the core's to add (`Agy::spawn`, its `tools_env`): a module knows
+/// neither that home nor the machine's variables.
 pub fn home_env(env: &[(String, String)], home: &Path) -> Vec<(String, String)> {
     let mut env: Vec<(String, String)> = env
         .iter()
         .filter(|(k, _)| !matches!(k.as_str(), HOME_VAR | "USERPROFILE" | "HOME"))
         .cloned()
         .collect();
-    let tools = tools_env(&env);
-    env.extend(tools);
     if !env.iter().any(|(k, _)| k == NO_SELF_UPDATE.0) {
         env.push((NO_SELF_UPDATE.0.into(), NO_SELF_UPDATE.1.into()));
     }
