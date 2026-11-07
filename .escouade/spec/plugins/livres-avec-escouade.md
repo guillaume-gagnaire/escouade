@@ -3,7 +3,7 @@ title: "Les plugins livrés avec Escouade"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.3, §4.4","docs/TODO-2.2.md (INT-4, INT-8.1)","src-tauri/src/plugins/builtin.rs","docs/PLUGINS.md §4.13","plugins/github/README.fr.md","plugins/gitlab/README.fr.md","plugins/gitea/README.fr.md","plugins/azure-devops/README.fr.md","docs/PLUGINS.md §8.7, §8.13, §8.14","src-tauri/src/plugins/seed.rs","src-tauri/src/plugins/sort.rs","src-tauri/src/plugins_builtin_tests.rs","src-tauri/src/plugins_sort_tests.rs"]
 tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338","ESC-339","ESC-344","ESC-351","ESC-349","ESC-348","ESC-345","ESC-350","ESC-367","ESC-370","ESC-373"]
-decisions: [80,92,110,"l-amorce-n-installe-que-les-plugins-de-c"]
+decisions: [80,92,110,113]
 compared: null
 ---
 

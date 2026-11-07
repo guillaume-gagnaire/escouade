@@ -1,9 +1,9 @@
 ---
-number: null
+number: 113
 id: "l-amorce-n-installe-que-les-plugins-de-c"
 title: "L'amorce n'installe que les plugins de ce que l'utilisateur a configuré"
 date: "2026-11-07"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-373"
 pages: ["plugins/livres-avec-escouade"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/livres-avec-escouade","added":18,"removed":7}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-07T19:48:21+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
