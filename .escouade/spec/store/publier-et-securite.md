@@ -1,8 +1,8 @@
 ---
 title: "Publier sur le store, la sécurité des plugins et l'essai réel"
 subject: "store"
-sources: ["docs/STORE.md","website/content/docs/fr/plugins/publishing.md","website/content/docs/fr/plugins/security.md","store/server/utils/checks.ts","store/server/utils/folder.ts","store/shared/folder.ts","store/server/utils/submissions.ts","store/server/utils/builtin.ts","store/tests/unit/trial.test.ts","store/deploy/seccomp-bubblewrap.json","store/deploy/apparmor-bubblewrap"]
-tickets: ["ESC-237","ESC-313","ESC-314","ESC-323","ESC-184","ESC-336","ESC-356"]
+sources: ["docs/STORE.md","website/content/docs/fr/plugins/publishing.md","website/content/docs/fr/plugins/security.md","store/server/utils/checks.ts","store/server/utils/folder.ts","store/shared/folder.ts","store/server/utils/submissions.ts","store/server/utils/builtin.ts","store/tests/unit/trial.test.ts","store/deploy/seccomp-bubblewrap.json","store/deploy/apparmor-bubblewrap","store/server/utils/readme.ts","store/app/components/StorePlugin.vue"]
+tickets: ["ESC-237","ESC-313","ESC-314","ESC-323","ESC-184","ESC-336","ESC-356","ESC-366"]
 decisions: [21,25,43,72,86,91]
 compared: "2026-10-31T19:50:09+01:00"
 ---
@@ -76,3 +76,13 @@ Cette partie remplace, dans la section précédente, « Il reste à l'hébergeme
 - **Le réglage reste un geste de l'utilisateur sur l'hôte**, décrit dans `docs/STORE.md` §3.3 : Coolify 4.5.0 ou plus sans serveur de build, les deux fichiers posés, le profil AppArmor chargé, la ligne « Custom Docker Options ». Tant qu'il n'est pas fait, le journal du store le dit et chaque version `run.wasm` attend.
 - **Ce que cela ouvre** : tout process du conteneur, pas bubblewrap seul, peut créer un espace de noms utilisateur à ces jeux de drapeaux et y monter ce qu'AppArmor laisse. C'est une surface du noyau que Docker ferme par défaut.
 - **La preuve** : `store/scripts/image-test.mjs` essaie les deux profils, chacun seul et sans eux, et vérifie ce qui reste refusé. Joué sur une VM Ubuntu 24.04, Docker 29.9.3, AppArmor en `enforce`. Une vraie instance de Coolify n'a pas été essayée.
+
+## La documentation d'un plugin, par langue (ESC-366)
+
+- **Des pages par langue** : sous le dossier de `store.docs`, les pages de `fr/` et de `en/` ont leur langue (`docs/fr/01-installer.md`, `docs/en/01-install.md`). La page du plugin montre celles de la langue du visiteur, sinon celles de l'autre. Une page demandée par son adresse (`?tab=docs&page=…`) se montre avec celles de sa langue.
+- **Un dossier sans `fr/` ni `en/`** garde le comportement d'avant : toutes ses pages markdown, dans les deux langues, sans langue. Avec l'un des deux, les pages hors de `fr/` et `en/` ne sont pas lues. Un README n'est jamais une page.
+- **L'ordre et les titres** : l'ordre des noms de fichier, 20 pages au plus par langue (`DOC_PAGES_MAX`). Le titre d'un onglet est le premier titre de la page (pas un `#` d'un bloc de code), sinon le nom du fichier sans son préfixe d'ordre (`01-`).
+- **Les liens** : un lien vers une autre page de la documentation ou vers le README reste sur le store, dans son onglet, sans recharger la page ; vers un autre fichier du dépôt, il mène à GitHub au commit figé, comme avant. Les images en chemin relatif (`../images/x.png`) sont copiées une fois pour les deux langues.
+- **Le contrôle** : un `store.docs` qui ne mène à aucune page markdown (dossier absent, sans `.md`) est un avertissement du contrôle README, qui passe quand même. Le contrôle du manifeste refuse déjà un chemin qui sort du plugin. La page de soumission montre l'avertissement aux couleurs d'une attente.
+- **Dans l'app**, la vue Plugins ne montre ni le README ni les pages : elle renvoie à la page du store (« Lire sa documentation sur le store »). Montrer la documentation dans l'app reste un chantier à part.
+- La documentation des auteurs (`plugins/publishing`, `plugins/manifest`, fr et en) donne la forme avec un exemple d'arborescence.
