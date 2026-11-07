@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { docPath } from '~/data/docs';
 import { legalPath, privacyPath } from '~/data/privacy';
-import { DISCORD, REPO, SUPPORT } from '~/data/site';
+import { DISCORD, REPO, STORE, SUPPORT } from '~/data/site';
 
 const { lang, text } = useLang();
 </script>
@@ -13,6 +13,7 @@ const { lang, text } = useLang();
         <span class="brand"><LogoMark :size="22" /> Escouade</span>
         <nav class="links">
           <NuxtLink :to="docPath(lang)">{{ text.header.docs }}</NuxtLink>
+          <a :href="STORE[lang]">{{ text.header.plugins }}</a>
           <NuxtLink :to="privacyPath(lang)">{{ text.footer.privacy }}</NuxtLink>
           <NuxtLink :to="legalPath(lang)">{{ text.footer.legal }}</NuxtLink>
           <a :href="REPO">{{ text.footer.github }}</a>
@@ -46,9 +47,11 @@ const { lang, text } = useLang();
   font-weight: 600;
   letter-spacing: -0.01em;
 }
+/* Eight links: on a phone, they go on to a second line rather than past the screen's edge. */
 .links {
   display: flex;
-  gap: 24px;
+  flex-wrap: wrap;
+  gap: 8px 24px;
 }
 .links a {
   color: var(--muted);

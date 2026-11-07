@@ -103,7 +103,8 @@ A theme with no code: values for the window’s tokens, dark and light, and a pa
         "projectColors": ["#ffd400", "#00e0ff", "#ff5cf0", "#7cff4f", "#ff8a00", "#b48cff"]
       }
     ]
-  }
+  },
+  "store": { "docs": "docs" }
 }
 ```
 
@@ -156,7 +157,8 @@ Two declared webhooks, no program: a ticket moved to “To review”, and an age
         }
       }
     ]
-  }
+  },
+  "store": { "docs": "docs" }
 }
 ```
 
@@ -191,7 +193,8 @@ A TypeScript program, written with the [SDK](plugins/sdk). It posts in each proj
   },
   "contributes": {
     "secrets": [{ "key": "token", "title": { "fr": "Jeton du bot Slack (xoxb-…)", "en": "Slack bot token (xoxb-…)" } }]
-  }
+  },
+  "store": { "docs": "docs" }
 }
 ```
 
@@ -316,7 +319,8 @@ A TypeScript program that decides permissions before they reach you (see [Permis
   "escouade": { "api": "1", "min": "2.2.0" },
   "run": { "js": "dist/plugin.mjs" },
   "activation": ["event:request.permission"],
-  "permissions": { "decide": true }
+  "permissions": { "decide": true },
+  "store": { "docs": "docs" }
 }
 ```
 

@@ -49,7 +49,8 @@ Le plugin Discord, l’un des [plugins d’exemple](plugins/examples), en entier
         }
       }
     ]
-  }
+  },
+  "store": { "docs": "docs" }
 }
 ```
 

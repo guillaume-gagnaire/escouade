@@ -49,7 +49,8 @@ The Discord plugin, one of the [example plugins](plugins/examples), whole: a plu
         }
       }
     ]
-  }
+  },
+  "store": { "docs": "docs" }
 }
 ```
 

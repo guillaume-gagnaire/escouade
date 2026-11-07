@@ -13,6 +13,14 @@ export const SUPPORT: Record<Lang, string> = {
   fr: 'https://buy.stripe.com/8x2fZh20z7rM87067200001',
   en: 'https://buy.stripe.com/00w7sLcFdaDYaf8cvq00000',
 };
+/**
+ * The plugin store, in the page’s language: French at its root, English under /en. In the header, the footer and
+ * the roadmap.
+ */
+export const STORE: Record<Lang, string> = {
+  fr: 'https://store.escouade.dev/',
+  en: 'https://store.escouade.dev/en',
+};
 export const DOWNLOAD = `${REPO}/releases/latest`;
 /** The version the roadmap announces, whose detailed plan is `docs/TODO-<it>.md`. A test fails once it is out. */
 export const NEXT = '2.2';

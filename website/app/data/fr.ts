@@ -1,7 +1,7 @@
 // Everything the French page says. en.ts says the same, key for key.
 // The French guillemets hold non-breaking spaces ( ), so that « Importer » never splits over two lines.
 import type { Catalog } from './catalog';
-import { DOWNLOAD, SUPPORT } from './site';
+import { DOWNLOAD, STORE, SUPPORT } from './site';
 import { docPath } from './docs';
 
 export const fr: Catalog = {
@@ -22,6 +22,7 @@ export const fr: Catalog = {
     github: 'GitHub',
     discord: 'Discord',
     docs: 'Documentation',
+    plugins: 'Plugins',
     download: 'Télécharger',
     language: 'Langue',
   },
@@ -261,7 +262,8 @@ export const fr: Catalog = {
       },
       {
         title: 'Les plugins et leur place de marché',
-        text: 'Escouade s’étend par des plugins, et chaque intégration externe en devient un : hébergeurs, sources de tickets, harness. Une place de marché les rassemble, relus avant d’y entrer.',
+        text: 'Des plugins étendent Escouade : sources de tickets, hébergeurs, harness, voix, notifications, thèmes et règles d’autorisation. Ils s’installent depuis l’app et sont listés sur le store, où chaque version passe onze contrôles.',
+        link: { label: 'Voir le store', href: STORE.fr },
       },
     ],
     plan: 'Le plan détaillé',

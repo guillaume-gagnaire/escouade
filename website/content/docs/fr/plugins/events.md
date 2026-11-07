@@ -166,7 +166,8 @@ Le plugin Discord, en entier : un webhook pour un ticket passé « À tester �
         }
       }
     ]
-  }
+  },
+  "store": { "docs": "docs" }
 }
 ```
 

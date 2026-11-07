@@ -166,7 +166,8 @@ The Discord plugin, whole: one webhook for a ticket moved to “To review”, an
         }
       }
     ]
-  }
+  },
+  "store": { "docs": "docs" }
 }
 ```
 

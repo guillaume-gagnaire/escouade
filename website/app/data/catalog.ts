@@ -70,6 +70,8 @@ export interface Catalog {
     github: string;
     /** The link to the documentation, in the header and the footer. */
     docs: string;
+    /** The link to the plugin store, in the header and the footer. */
+    plugins: string;
     /** The header's short download button. */
     download: string;
     /** The language switch's name, for screen readers. */
@@ -106,7 +108,8 @@ export interface Catalog {
     lead: string;
     /** Takes `{version}`. */
     next: string;
-    items: Card[];
+    /** An item may lead somewhere: the plugins, to their store. */
+    items: Step[];
     plan: string;
     changelog: string;
   };

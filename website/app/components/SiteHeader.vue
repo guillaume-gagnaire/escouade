@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { docPath } from '~/data/docs';
 import { pathIn } from '~/data/language';
-import { DISCORD, DOWNLOAD, REPO } from '~/data/site';
+import { DISCORD, DOWNLOAD, REPO, STORE } from '~/data/site';
 
 // The home page's header leads to its sections; the documentation's (`docs`) leads back to the home page, and holds
 // the search and, on a narrow screen, the button that opens the sidebar. A page of its own (`page`) leads back to the
@@ -49,6 +49,7 @@ const menu = useDocsMenu();
       <div class="tools">
         <LangSwitch />
         <NuxtLink v-if="!docs" class="link" :to="docPath(lang)">{{ text.header.docs }}</NuxtLink>
+        <a class="link optional" :href="STORE[lang]">{{ text.header.plugins }}</a>
         <a class="link optional" :href="DISCORD">{{ text.header.discord }}</a>
         <a class="link" :class="{ optional: docs }" :href="REPO">{{ text.header.github }}</a>
         <a class="get" :class="{ optional: docs }" :href="DOWNLOAD">{{ text.header.download }}</a>

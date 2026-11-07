@@ -103,7 +103,8 @@ Un thème sans code : des valeurs pour les jetons de la fenêtre, en sombre et e
         "projectColors": ["#ffd400", "#00e0ff", "#ff5cf0", "#7cff4f", "#ff8a00", "#b48cff"]
       }
     ]
-  }
+  },
+  "store": { "docs": "docs" }
 }
 ```
 
@@ -156,7 +157,8 @@ Deux webhooks déclarés, sans programme : un ticket passé dans « À tester 
         }
       }
     ]
-  }
+  },
+  "store": { "docs": "docs" }
 }
 ```
 
@@ -191,7 +193,8 @@ Un programme en TypeScript, écrit avec le [SDK](plugins/sdk). Il poste dans le 
   },
   "contributes": {
     "secrets": [{ "key": "token", "title": { "fr": "Jeton du bot Slack (xoxb-…)", "en": "Slack bot token (xoxb-…)" } }]
-  }
+  },
+  "store": { "docs": "docs" }
 }
 ```
 
@@ -316,7 +319,8 @@ Un programme en TypeScript qui décide des autorisations avant qu’elles n’ar
   "escouade": { "api": "1", "min": "2.2.0" },
   "run": { "js": "dist/plugin.mjs" },
   "activation": ["event:request.permission"],
-  "permissions": { "decide": true }
+  "permissions": { "decide": true },
+  "store": { "docs": "docs" }
 }
 ```
 

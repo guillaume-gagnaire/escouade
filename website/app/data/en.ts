@@ -1,6 +1,6 @@
 // Everything the English page says. fr.ts says the same, key for key.
 import type { Catalog } from './catalog';
-import { DOWNLOAD, SUPPORT } from './site';
+import { DOWNLOAD, STORE, SUPPORT } from './site';
 import { docPath } from './docs';
 
 export const en: Catalog = {
@@ -21,6 +21,7 @@ export const en: Catalog = {
     github: 'GitHub',
     discord: 'Discord',
     docs: 'Docs',
+    plugins: 'Plugins',
     download: 'Download',
     language: 'Language',
   },
@@ -257,7 +258,8 @@ export const en: Catalog = {
       },
       {
         title: 'Plugins and their marketplace',
-        text: 'Escouade grows through plugins, and every external integration becomes one: code hosts, ticket sources, harnesses. A marketplace gathers them, reviewed before they get in.',
+        text: 'Plugins extend Escouade: ticket sources, code hosts, harnesses, voice, notifications, themes and permission rules. They install from the app and are listed on the store, where every version passes eleven checks.',
+        link: { label: 'Browse the store', href: STORE.en },
       },
     ],
     plan: 'The detailed plan (in French)',

@@ -72,7 +72,8 @@ Le plugin « Contraste élevé », en entier : un thème, sombre et clair, et 
         "projectColors": ["#ffd400", "#00e0ff", "#ff5cf0", "#7cff4f", "#ff8a00", "#b48cff"]
       }
     ]
-  }
+  },
+  "store": { "docs": "docs" }
 }
 ```
 

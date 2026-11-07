@@ -281,7 +281,7 @@ Compacts, francs, en gras.
 
 ### Navigation
 - **En-tête :** collant, 64px, brun nuit à 82 % et flou de 10px, filet en bas. La marque à gauche (logo 28px et « Escouade » 20px / 800), les liens à droite en sable 15px / 600 espacés de 24px, crème au survol, chacun sur une ligne. Sous 960px (cinq liens, dont « Feuille de route »), seuls la marque, la langue et GitHub restent.
-- **Pied :** filet en haut, logo 22px et nom en 700, liens sable crème au survol, mention d'indépendance en taupe 14px.
+- **Pied :** filet en haut, logo 22px et nom en 700, liens sable crème au survol (Documentation, Plugins vers le store, puis les mentions), qui passent à la ligne sur un téléphone, mention d’indépendance en taupe 14px.
 
 ### FAQ
 - Questions dépliables en 19px / 700, séparées par des filets appuyés, 20px de padding vertical, un « + » ou un « − » mono teal à droite. Réponses en sable.
