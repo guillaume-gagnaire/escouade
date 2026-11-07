@@ -1,9 +1,9 @@
 ---
-number: null
+number: 108
 id: "sur-opencode-seuls-les-git-add-et-git-co"
 title: "Sur OpenCode, seuls les git add et git commit simples passent d'office, et .git reste à la carte"
 date: "2026-11-07"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-364"
 pages: ["plugins/opencode-en-plugin","projets/projets-prives","plugins/claude-code-en-plugin"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/opencode-en-plugin","added":10,"removed":0},{"page":"projets/projets-prives","added":5,"removed":0},{"page":"plugins/claude-code-en-plugin","added":2,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-07T09:19:07+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
