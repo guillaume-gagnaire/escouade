@@ -235,7 +235,7 @@ impl Harness {
         let mut agents: Vec<AgentHandle> = self.core.agents.read().values().cloned().collect();
         agents.sort_by_key(|a| a.lock().meta.id.clone());
         for a in agents {
-            let rt = a.lock();
+            let mut rt = a.lock();
             if !rt.meta.terminal && rt.tui.is_none() && rt.tui_exit.is_none() {
                 continue;
             }
@@ -265,6 +265,16 @@ impl Harness {
                     "no interface running, last exit {:?}, {} quick exits\n",
                     rt.tui_exit, rt.tui_quick_exits
                 )),
+            }
+            // The end of its conversation: a turn lost reads there, as does what its plugin did not read.
+            let items = rt.conv.items();
+            out.push_str(&format!(
+                "its conversation ({} items), its end:\n",
+                items.len()
+            ));
+            for i in &items[items.len().saturating_sub(CONVERSATION_LINES)..] {
+                out.push_str(&clip(&i.to_string(), 300));
+                out.push('\n');
             }
         }
         for file in self.fake_logs() {
@@ -10159,6 +10169,9 @@ async fn an_accounts_status_tells_whether_it_is_signed_in_and_with_which_email()
 
 /// How many lines of a fake interface's log, and of an interface's screen, `views_report` tells.
 const FAKE_LOG_LINES: usize = 12;
+
+/// The items of a conversation a wait that timed out tells.
+const CONVERSATION_LINES: usize = 14;
 const SCREEN_LINES: usize = 25;
 
 /// The last lines of what a terminal printed, as `plain_text` reads them, the empty ones left out.
