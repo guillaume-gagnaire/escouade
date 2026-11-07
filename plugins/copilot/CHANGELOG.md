@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.1
+
+- The text of a command is read as its shell reads it, never as an argv: `git add .; node evil.js` goes to a card.
+- A write in `.git` goes to a card, whatever its case or its Windows name.
+- Its fence and read-only, given again by Escouade, survive a restart of the plugin (a change of language or network).
+- It reads `resolvedPath`, `managedApprovalRequired`, `resolvedPaths` and `possibleUrls` as Copilot CLI sends them, and offers no rule of the session to a fenced agent.
+- A commit that reads a file (`-F`, `--file`) goes to a card for a fenced agent.
+
 ## 2.2.0
 
 - Its « Vue Copilot » is read by the module (`view/translate`): the core no longer links this crate.

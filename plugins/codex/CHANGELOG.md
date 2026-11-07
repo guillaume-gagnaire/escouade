@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.1
+
+- Its fence and read-only, given again by Escouade, survive a restart of the plugin (a change of language or network).
+- A commit that reads a file (`-F`, `--file`) goes to a card for a fenced agent.
+
 ## 2.2.0
 
 - Its « Vue Codex » is read by the module (`view/translate`): the core no longer links this crate.

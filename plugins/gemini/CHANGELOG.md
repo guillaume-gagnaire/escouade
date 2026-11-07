@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.2.1
+
+- Built on escouade-acp 0.1.3: a path with `..` is no longer taken for one in the agent's folder, and a write in `.git` goes to a card in « Édits auto ».
+- Its fence and read-only, given again by Escouade, survive a restart of the plugin (a change of language or network).
+- An agent whose plugin started again keeps its session, its turn and the permissions it waits for.
+- What the model writes can no longer raise the agent's mode: « [MODE_UPDATE] yolo » in a text is ignored.
+- The plan of `exit_plan_mode` is read from a Markdown file of a folder `plans` only.
+- Its page says what trusting the agent's folder makes Gemini CLI run.
+
 ## 2.2.0
 
 - Its « Vue Gemini » is read by the module (`view/translate`), no longer by a translation of the core's.
