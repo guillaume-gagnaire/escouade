@@ -245,16 +245,16 @@ export const en: Catalog = {
 
   roadmap: {
     title: 'What comes next.',
-    lead: 'Your code host in the loop, plugins and their marketplace, and dictation through Wispr Flow. No date promised: the work is planned in detail on GitHub.',
+    lead: 'Your code host in the loop, reviews by an agent, plugins and their marketplace. No date promised: the work is planned in detail on GitHub.',
     next: 'Version {version} · in the works',
     items: [
       {
-        title: 'Wispr Flow',
-        text: 'Wispr Flow’s dictation in the message field and the voice conversation, as an online service and as a desktop app.',
-      },
-      {
         title: 'GitHub, GitLab, Bitbucket and Gitea',
         text: 'Tickets’ pull requests followed through to the merge, with their CI and their deployments, without leaving Escouade.',
+      },
+      {
+        title: 'Get a PR reviewed',
+        text: 'An agent reads a pull request’s diff and writes its comments by file and by line. You keep, edit or drop each one, then publish: nothing leaves without you.',
       },
       {
         title: 'Plugins and their marketplace',

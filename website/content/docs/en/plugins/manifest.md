@@ -13,7 +13,7 @@ The Discord plugin, one of the [example plugins](plugins/examples), whole: a plu
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.discord",
   "name": "Discord",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": {
     "fr": "Les tickets à tester et les agents qui attendent, dans un salon Discord : un webhook, sans code.",
     "en": "Tickets to test and agents waiting, in a Discord channel: a webhook, no code."

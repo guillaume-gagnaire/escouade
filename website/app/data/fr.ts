@@ -249,16 +249,16 @@ export const fr: Catalog = {
 
   roadmap: {
     title: 'Ce qui arrive ensuite.',
-    lead: 'Ton hébergeur de code dans la boucle, les plugins et leur place de marché, et la dictée par Wispr Flow. Pas de date promise : le chantier est décrit en détail sur GitHub.',
+    lead: 'Ton hébergeur de code dans la boucle, des relectures par un agent, les plugins et leur place de marché. Pas de date promise : le chantier est décrit en détail sur GitHub.',
     next: 'Version {version} · en préparation',
     items: [
       {
-        title: 'Wispr Flow',
-        text: 'La dictée de Wispr Flow dans la zone de saisie et la conversation vocale, comme service en ligne et comme app de bureau.',
-      },
-      {
         title: 'GitHub, GitLab, Bitbucket et Gitea',
         text: 'Les pull requests des tickets suivies jusqu’au merge, avec leur CI et leurs déploiements, sans quitter Escouade.',
+      },
+      {
+        title: 'Faire relire une PR',
+        text: 'Un agent lit le diff d’une pull request et rédige ses commentaires par fichier et par ligne. Tu gardes, corriges ou écartes chacun, puis tu publies : rien ne part sans toi.',
       },
       {
         title: 'Les plugins et leur place de marché',
