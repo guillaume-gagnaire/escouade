@@ -3,7 +3,7 @@ title: "Le contrat des harness en process"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.5 et §4.6","docs/PLUGINS.md §8.29 (ESC-352)","docs/TODO-2.2.md (INT-9)","crates/escouade-plugin-protocol/src/engine.rs","src-tauri/src/plugins/harness.rs","src-tauri/src/plugins/shared.rs","src-tauri/src/plugins/view.rs"]
 tickets: ["ESC-221","ESC-223","ESC-225","ESC-224","ESC-283","ESC-226","ESC-352"]
-decisions: [34,68,"les-vues-terminal-passent-par-le-module"]
+decisions: [34,68,101]
 compared: null
 ---
 

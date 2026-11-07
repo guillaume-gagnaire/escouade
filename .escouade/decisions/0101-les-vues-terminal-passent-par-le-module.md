@@ -1,9 +1,9 @@
 ---
-number: null
+number: 101
 id: "les-vues-terminal-passent-par-le-module"
 title: "Les vues terminal passent par le module de leur harness, dans une instance à part"
 date: "2026-11-06"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-352"
 pages: ["plugins/harness-en-process","plugins/tous-les-plugins-en-wasm","plugins/codex-en-plugin","plugins/copilot-cli-en-plugin","plugins/antigravity-en-plugin","plugins/claude-code-en-plugin","plugins/opencode-en-plugin"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/harness-en-process","added":9,"removed":0},{"page":"plugins/tous-les-plugins-en-wasm","added":3,"removed":0},{"page":"plugins/codex-en-plugin","added":1,"removed":1},{"page":"plugins/copilot-cli-en-plugin","added":1,"removed":1},{"page":"plugins/antigravity-en-plugin","added":1,"removed":1},{"page":"plugins/claude-code-en-plugin","added":2,"removed":2},{"page":"plugins/opencode-en-plugin","added":1,"removed":1}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-07T01:44:06+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
