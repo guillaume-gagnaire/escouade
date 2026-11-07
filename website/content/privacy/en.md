@@ -36,14 +36,19 @@ Every event carries its name, its time (UTC, to the millisecond), a session id, 
 | `file_saved` | A file is saved in the editor | — |
 | `code_searched` | A search in the code | — |
 | `mcp_enabled` | “Agents can drive Escouade” is turned on | — |
-| `integration_connected` | A service is connected | `service`: `jira`, `trello`, `github`, `linear` or `clickup` |
-| `tickets_imported` | Tickets are imported | `service`: `jira`, `trello`, `github`, `linear` or `clickup` |
+| `integration_connected` | A service is connected | `service`: `jira`, `trello`, `github`, `linear`, `gitlab`, `clickup`, `azure` or `other` (the source of a third party’s plugin, never named) |
+| `tickets_imported` | Tickets are imported | `service`: `jira`, `trello`, `github`, `linear`, `gitlab`, `clickup`, `azure` or `other` (the source of a third party’s plugin, never named) |
 | `account_created` | A Claude account is added | — |
 | `remote_control_enabled` | Remote control is turned on, by hand or by a setting | `from`: `agent` (right-click on an agent), `project` (a project’s setting) or `global` (the setting for all agents) |
 | `dictation_used` | A dictation gave text | `target`: `composer` (the message field), `terminal` (the Claude Code view) or `ticket` (a ticket’s description); `model`: the Whisper model (`tiny`, `base`, `small`…), or the service of online dictation (`openai`, `groq`, `mistral`, `elevenlabs`, `deepgram`); `online_model`: online, the service’s model (`gpt-4o-mini-transcribe`…) |
 | `voice_conversation` | A voice conversation starts | `lang`: the conversation’s language (`fr`, `en`); `voice`: the voice that reads (`fr_FR-siwis-medium`…, or the service’s); `engine`: what makes it (`piper`, or the online service); `model`: its model (`piper`, or the service’s); never what is said or read |
+| `plugin_installed` | A plugin is installed or updated | `from_store`: from the store or not (yes or no); never which one |
+| `pr_opened` | Escouade opens a pull request | `from`: `agent` or `ticket`; `forge`: `github`, `gitlab`, `bitbucket`, `gitea` (Forgejo included), `azure` or `other` (the host of a third party’s plugin, never named) |
+| `pr_merged` | A ticket’s pull request is merged, from Escouade or on the host | `forge`: `github`, `gitlab`, `bitbucket`, `gitea` (Forgejo included), `azure` or `other` (the host of a third party’s plugin, never named) |
+| `ci_fix_started` | A failed CI is given to an agent | `from`: `agent` or `ticket`; `by`: `user` or `autopilot` |
+| `pr_review_started` | A pull request is given to an agent to review | `forge`: `github`, `gitlab`, `bitbucket`, `gitea` (Forgejo included), `azure` or `other` (the host of a third party’s plugin, never named) |
 
-An event says that a feature was used, not on what: never the name of the project, the agent or the branch, nor anything that was written.
+An event says that a feature was used, not on what: never the name of the project, the agent, the branch or the repository, nor a host’s address, nor anything that was written.
 
 ### The system and the install
 
@@ -68,6 +73,7 @@ Every event also carries:
 - The content of conversations and of the instructions given to agents.
 - The titles and texts of your tickets.
 - Git data: commits, remotes.
+- Pull requests: their number, title, diff and comments, and your host’s address.
 - Tokens and secrets.
 - Anything you type.
 - What you dictate: the microphone’s sound and the text Whisper makes of it stay on your machine. The transcription happens there; only the model is downloaded, once, from Hugging Face (`huggingface.co`), through the proxy of the settings. Online dictation, off by default, is apart: see “Online dictation, if you turn it on”, below.
@@ -146,6 +152,7 @@ Escouade has no account or server of its own for your projects, conversations or
 - **Claude Code**, which it runs on your machine, sends its requests to Anthropic as it would in a terminal. Escouade also queries Anthropic’s usage service to show your quotas ([quotas](usage)).
 - **Updates**: Escouade reads the `latest.json` file of the latest release on GitHub, then downloads the new version ([updates](updates)).
 - **The integrations** you connect (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards): Escouade talks to those services with your token ([integrations](integrations)).
+- **The code hosts** you connect: see [below](#code-hosts).
 - **Online dictation**, if you turn it on: see just below.
 
 ## Online dictation, if you turn it on
@@ -176,6 +183,16 @@ By default, the voice conversation’s answers are read by Piper, on your machin
 - **Where**: to the one service chosen, through the proxy of the network settings.
 - **What it does with it**: it sends the sound back, played on your machine. It handles the text under its own terms, those of your account with it.
 - **If the service does not answer**: the conversation says so, and Piper reads on if one of its voices is downloaded; else it pauses. Escouade’s log never holds your key nor the text read.
+
+## Code hosts
+
+When you connect GitHub, GitLab, Bitbucket Cloud, Gitea, Forgejo or Azure DevOps, **nothing goes to Escouade’s servers**.
+
+- **Your tokens stay on your machine**, in the system’s keychain. On Linux, or when the keychain refuses, they stay in `~/.escouade/integrations.json`, readable by you alone. They only go to the host they belong to, or are only asked of its CLI (`gh`, `glab`, `az`).
+- **The calls go straight from the app to the host**, through the proxy of the network settings. Your pull requests, their CI, their comments, their logs and your deployments go through no Escouade server.
+- **What the app writes on the host** leaves on your gesture, or through a setting you turned on: opening a PR, merging, publishing a review. An open PR becomes visible to whoever sees the repository. Each host handles this data under its own terms, those of your account there.
+- **The review by an agent and the proposed texts** (a PR’s title and description) give the diff, the branches and the comments to the service of the harness you chose, like everything you give an agent. Not to Escouade.
+- **The statistics**, if you accepted them, only say that a PR was opened or merged, that a failed CI or a PR was given to an agent, and on which kind of host (`pr_opened`, `pr_merged`, `ci_fix_started`, `pr_review_started`): neither the repository, nor the number, nor the title, nor an instance’s address.
 
 ## The store
 

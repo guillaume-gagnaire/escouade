@@ -34,7 +34,7 @@ Rien n’est installé tout de suite : le plugin est lu, mis de côté, et la fe
 
 Escouade propose **la dernière version qu’il peut faire tourner** : une version écrite pour une Escouade plus récente est sautée, une version retirée par son auteur aussi.
 
-**Installer** télécharge la version, puis vérifie tout avant d’ouvrir la fenêtre d’installation : `version.json` contre l’empreinte du catalogue, la signature contre les clés publiques qu’Escouade embarque (le store ne peut pas fabriquer un sceau : il n’a pas la clé), l’archive et le programme de ton système contre `version.json`, le manifeste contre son empreinte. Un écart arrête tout et le dit (« L’archive reçue ne correspond pas à celle que le store a publiée ») : rien n’est installé. Le catalogue, les archives et la liste de révocation passent par **Réglages › Réseau** (proxy, certificats du système).
+**Installer** télécharge la version, puis vérifie tout avant d’ouvrir la fenêtre d’installation : `version.json` contre l’empreinte du catalogue, la signature contre les clés publiques qu’Escouade embarque (le store ne peut pas fabriquer un sceau : il n’a pas la clé), l’archive et son module contre `version.json`, le manifeste contre son empreinte. Un écart arrête tout et le dit (« L’archive reçue ne correspond pas à celle que le store a publiée ») : rien n’est installé. Le catalogue, les archives et la liste de révocation passent par **Réglages › Réseau** (proxy, certificats du système).
 
 La fenêtre d’installation dit alors « Vérifié par Escouade » et « Signature : vérifiée ici, par l’app » ; pour une version non vérifiée, une bande : « Personne n’a relu cette version. Elle vient du store, son archive est bien celle que l’auteur a publiée, mais rien ne dit ce que fait son programme », et le bouton « Installer quand même ».
 
@@ -58,14 +58,34 @@ Elle dit, avant que rien ne soit installé :
 
 | Permission | Ce que dit la fenêtre |
 | --- | --- |
-| `run` | « Lance un programme sur ton ordinateur, avec tes droits », en gras |
+| `run.command` | « Lance un programme sur ton ordinateur, avec tes droits », en gras |
+| `run.js` | « Tourne dans Escouade, isolé » : un programme en WASM, sans accès au disque hors de son dossier |
 | `permissions.decide` | « Décide des autorisations de tes agents », en rouge |
 | `permissions.commands` | « Lance des commandes », et lesquelles |
 | `permissions.events` | « Reçoit ces événements », et lesquels |
-| `permissions.network` | « Se connecte à », et l’hôte : déclaré, Escouade ne filtre pas encore le réseau d’un programme |
+| `permissions.network` | « Se connecte à », et l’hôte : appliqué à un programme `run.js` et aux webhooks, que Escouade n’envoie qu’à ces hôtes ; seulement déclaré pour un programme `run.command`, dont Escouade ne filtre pas le réseau |
 | `permissions.secrets` | « Garde un secret : », et son nom |
 
 « Installer quand même » installe le plugin ; « Annuler » efface ce qui avait été mis de côté. Un manifeste qui ne tient pas n’ouvre pas la fenêtre : la raison s’affiche en tête de la vue, champ par champ (voir [le manifeste](plugins/manifest)).
+
+## Les plugins livrés avec Escouade
+
+Certaines intégrations d’Escouade sont des plugins, livrés avec l’app, signés et mis à jour avec elle : la vue Plugins les range sous « Livrés avec Escouade », avec la même page que les autres (ce qu’ils ajoutent, leurs permissions, leur journal). Ils sont actifs partout d’office, projets privés compris, comme quand ils faisaient partie de l’app.
+
+| Plugin | Ce qu’il sert |
+| --- | --- |
+| GitHub | L’hébergeur GitHub (PR, CI, relectures, déploiements) et la source GitHub Issues, sur un seul compte. Voir [les intégrations](integrations). |
+| GitLab | L’hébergeur GitLab, gitlab.com et tes instances (merge requests, pipelines, discussions, déploiements). GitLab Issues fait encore partie de l’app, sur le même compte. |
+| Bitbucket | L’hébergeur Bitbucket Cloud. |
+| Gitea / Forgejo | L’hébergeur de Gitea, de Forgejo et de Codeberg. |
+| Trello | La source Trello du Kanban. |
+| ACP | Les [harness ACP décrits](plugins/harnesses) par un plugin, comme Goose. |
+| isola | L’environnement de lancement isola, pour les [lancements de test](testing). |
+| OpenAI, Groq, Mistral, ElevenLabs, Deepgram | Les services de voix en ligne (voir [Réglages › Voix](settings-voice)). |
+
+- **Les couper** : leur interrupteur, pour toute l’app, ou leur onglet Projets, pour un projet. Rien de ce qu’ils ont fait n’est perdu, et tes choix sont gardés pour quand tu les rallumes.
+- **Ce qui se voit** : un hébergeur coupé ou arrêté ne suit plus les PR, et la carte de l’agent comme Réglages › Intégrations le disent ; une source coupée arrête sa synchro, qui dit pourquoi ; un service de voix coupé quitte Réglages › Voix, et la dictée repasse en local ; les agents d’un harness ACP restent, marqués « Harness absent ».
+- **Pas de désinstallation**, ni de mise à jour à part : ils changent avec l’app. Un plugin d’un autre auteur ne peut pas prendre leur identifiant (`dev.escouade.*` est réservé) ; il peut servir le même service à côté d’eux, et c’est le compte qui dit lequel le sert.
 
 ## Activer pour l’app ou par projet
 
@@ -81,7 +101,7 @@ L’onglet Permissions de sa page liste ce qu’il peut faire, avec un interrupt
 
 ## Ses réglages et ses secrets
 
-L’onglet Réglages montre les champs qu’il déclare (`contributes.settings`, `contributes.secrets`). Un réglage est gardé avec la liste des plugins installés et lui est donné par `settings/get`. Un secret va au trousseau du système, sous un nom à lui (`plugin:<id>:<clé>`) : l’onglet dit seulement s’il est gardé, et « Oublier » l’efface.
+L’onglet Réglages montre les champs qu’il déclare (`contributes.settings`, `contributes.secrets`). Un réglage est gardé avec la liste des plugins installés et lui est donné par `settings/get` ; dans un projet dont le [`.escouade.yml`](escouade-yml) règle le plugin (`plugins.<id>`), la valeur du projet passe devant. Un secret va au trousseau du système, sous un nom à lui (`plugin:<id>:<clé>`) : l’onglet dit seulement s’il est gardé, et « Oublier » l’efface.
 
 ## Le journal
 

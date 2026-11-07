@@ -1,0 +1,34 @@
+[package]
+name = "escouade-wasm-all"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# The host of the prototype (ESC-330, docs/PLUGINS.md §8.9): what `src-tauri/src/plugins/wasm.rs` would become for a
+# `run.wasm` module, and the two native plugins it is measured against, on the real crates of the repository.
+[workspace]
+
+[dependencies]
+wasmtime = { version = "=50.0.1", default-features = false, features = ["cranelift", "runtime", "std", "parallel-compilation"] }
+wasmtime-wasi = { version = "=50.0.1", default-features = false, features = ["p1"] }
+serde_json = "1"
+bytes = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "time"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }
+sysinfo = { version = "0.33", default-features = false, features = ["system"] }
+escouade-plugin-linear = { path = "../../../plugins/linear" }
+escouade-plugin-codex = { path = "../../../plugins/codex" }
+
+[[bin]]
+name = "native-linear"
+path = "src/bin/native_linear.rs"
+
+[[bin]]
+name = "native-codex"
+path = "src/bin/native_codex.rs"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+strip = true

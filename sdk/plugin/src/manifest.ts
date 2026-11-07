@@ -33,6 +33,14 @@ export interface Manifest {
     }>;
     /** Harnesses. */
     harnesses?: Array<{
+      /** The id of one of `contributes.accounts`. */
+      account?: string;
+      id: string;
+      /** One text, or a text by language (`en` first, then `fr`). */
+      name?: string | Record<string, string>;
+    }>;
+    /** Launch environments: the up, ls, down and destroy of a worktree. */
+    launchEnvironments?: Array<{
       id: string;
       /** One text, or a text by language (`en` first, then `fr`). */
       name?: string | Record<string, string>;
@@ -66,6 +74,14 @@ export interface Manifest {
     }>;
     /** Webhooks, without code. */
     webhooks?: Array<Record<string, unknown>>;
+    /** Readers of workflows Escouade does not read by itself (it gives them the project's files). */
+    workflowReaders?: Array<{
+      /** The files of the project it is given, as globs from the project's folder (`.planning/**`). */
+      files: string[];
+      id: string;
+      /** One text, or a text by language (`en` first, then `fr`). */
+      name?: string | Record<string, string>;
+    }>;
   };
   /** One text, or a text by language (`en` first, then `fr`). */
   description?: string | Record<string, string>;
@@ -82,26 +98,47 @@ export interface Manifest {
   id: string;
   /** An SPDX identifier (`MIT`). */
   license?: string;
+  /** What a plugin in WASM asks for beyond the host's defaults; Escouade caps them at 120 s and 32 MiB for `net/fetch`, 4 MiB for `fs/read`, 256 MiB for its memory, 10 s for a turn. */
+  limits?: {
+    fetchBytes?: number;
+    fetchSeconds?: number;
+    /** How much `fs/read` gives at most: 256 KiB without it. */
+    fileBytes?: number;
+    /** How much linear memory its instance may take: 64 MiB without it. */
+    memoryBytes?: number;
+    /** How long a turn of its instance may take: 2 s without it. */
+    turnSeconds?: number;
+  };
   /** One text, or a text by language (`en` first, then `fr`). */
   name: string | Record<string, string>;
   /** What it asks for, shown before it is installed. */
   permissions?: {
+    /** The programs it may run (`proc/spawn`): a program's name, never a path, then its arguments, word for word. A last word `*` lets any more follow. */
     commands?: string[];
     decide?: boolean;
     events?: string[];
+    /** The folders it may read or write (`fs/*`): a root of the closed list, which the host resolves; no path of its own. `plugin` is read only. */
+    files?: Array<{
+      access: 'read' | 'write';
+      root: 'plugin' | 'agent' | 'agentRepo' | 'agentHome' | 'temp';
+    }>;
     network?: string[];
     secrets?: string[];
   };
   repository?: string;
-  /** Its program; without one, the plugin is declarative: nothing runs. */
+  /** Its program; without one, the plugin is declarative: nothing runs. A command (`command`, a process), a JS/TS bundle of its folder that Escouade runs in WASM (`js`), or the `Cargo.toml` of a Rust module that Escouade runs in WASM (`wasm`): one of the three. */
   run?: {
     args?: string[];
     /** A path in the plugin's folder: relative, without `..`. */
-    command: string;
+    command?: string;
+    /** A path in the plugin's folder: relative, without `..`. */
+    js?: string;
     /** A path in the plugin's folder: relative, without `..`. */
     linux?: string;
     /** A path in the plugin's folder: relative, without `..`. */
     macos?: string;
+    /** A path in the plugin's folder: relative, without `..`. */
+    wasm?: string;
     /** A path in the plugin's folder: relative, without `..`. */
     windows?: string;
   };

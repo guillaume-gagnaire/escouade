@@ -2,12 +2,14 @@ import { iconPath, message, RESERVED_PREFIX, validateText } from '../../../schem
 import { ICON_DECODE_MAX, imageInfo, SCREENSHOT_BYTES, SCREENSHOT_WIDTH, SCREENSHOTS_MAX } from './images';
 import { judgeLicense } from './licenses';
 import type { ArchiveProblem, ArchiveRead } from './tar';
-import { compareVersions, tagVersion, type Platform } from './versions';
+import { folderName, tagFor, tagsOf } from '../../shared/folder';
+import { compareVersions, type Platform } from './versions';
 
-// The ten checks of a submitted version (docs/STORE.md, §3.3), on the archive the store froze, read in memory:
-// nothing of the plugin runs. Each says, in French and in English, what failed, where (the field's path), why and how
+// The eleven checks of a submitted version (docs/STORE.md, §3.3), on the archive the store froze, read in memory:
+// nothing of the plugin runs on the store's own (the eleventh, `Compilation`, reads what the sandbox of compile.ts made
+// of a `run.js` bundle or of the Rust of a `run.wasm`). Each says, in French and in English, what failed, where (the field's path), why and how
 // to fix it, with the page of the documentation (§3.5). They read what the worker fetched before (the archive, the
-// license GitHub detects, the release's binaries and their attestations, the plugins already on the store); they
+// license GitHub detects, the plugins already on the store); they
 // fetch nothing themselves.
 
 export type Lang = 'fr' | 'en';
@@ -25,6 +27,7 @@ export const CHECK_KEYS = [
   'archive',
   'permissions',
   'binaries',
+  'compile',
 ] as const;
 export type CheckKey = (typeof CHECK_KEYS)[number];
 
@@ -56,6 +59,7 @@ export const CHECK_NAMES: Record<CheckKey, Text> = {
   archive: t('Archive', 'Archive'),
   permissions: t('Permissions', 'Permissions'),
   binaries: t('Binaires', 'Binaries'),
+  compile: t('Compilation', 'Compilation'),
 };
 
 /** The page that explains publishing, which every rejection points to. */
@@ -75,32 +79,65 @@ export interface FetchedBinary {
   attestation: { state: 'attested'; workflow: string } | { state: 'none' } | { state: 'mismatch'; commit?: string; repository?: string };
 }
 
+/** What compiled the module of a `run.js` plugin (`escouade-plugin build --json`): Javy's version, the SHA-256 of
+ * escouade-js and the version of escouade-plugin, whose prelude and rewriting of the imports wrapped the bundle. */
+export interface JsCompiler {
+  javy: string;
+  engine: string;
+  prelude: string;
+}
+
+/** What compiled the module of a `run.wasm` plugin (ESC-336): rustc's version, its target, the SHA-256 of `rustc-canon`'s
+ * source and that of the plugin's `Cargo.lock`. */
+export interface RustCompiler {
+  rust: string;
+  target: string;
+  canon: string;
+  lock: string;
+}
+
+export type Compiler = JsCompiler | RustCompiler;
+
+/** The two compilations of a plugin (ESC-323, ESC-336): the same module twice, two different ones, or a refusal. */
+export type Compilation =
+  | { state: 'built'; sha256: string; size: number; compiler: Compiler }
+  | { state: 'different'; first: string; second: string }
+  | { state: 'refused'; message: string };
+
+/** A `run.js` bundle: 5 MB at most, a single file of the archive. */
+export const BUNDLE_MAX = 5 * 1024 * 1024;
+
 export interface Snapshot {
   /** `owner/name` of the repository submitted. */
   repository: string;
+  /** The plugin's folder in the repository, `''` at its root (ESC-313). `archive.read` is that folder alone. */
+  path?: string;
+  /** The whole repository's archive, when the plugin is in a folder: its root's README and LICENSE stand in. */
+  root?: ArchiveRead | null;
+  /** The link the folder goes through, if any: the store does not follow it. */
+  pathLink?: string | null;
   tag: string;
   commit: string;
   archive: { size: number; read: ArchiveRead };
   /** The license GitHub detects in the commit: its SPDX id, `NOASSERTION`, or null without a license file. */
   license: string | null;
-  /** The binaries of the release attached to the tag, as the worker kept them (empty without a release). */
-  binaries: FetchedBinary[];
-  /** The release's file names, to say which one was missing. Null when the tag has no release. */
-  releaseAssets: string[] | null;
-  /** The release's files for a system that the store did not take, past their size. */
-  oversized?: string[];
   /** The screenshots whose header read but which do not decode. */
   undecodable?: string[];
   /** The icon passed its header's checks but did not decode (PLG-13). */
   iconUndecodable?: boolean;
-  /** The plugin already on the store under the manifest's id, if any: whose it is, from which repository. */
-  existing: { mine: boolean; repository: string } | null;
+  /** Whether the repository submitted is the app's (STORE_FIRST_PARTY_REPO, by its GitHub id; ESC-314): its plugins
+   * alone take the ids `dev.escouade.*`. */
+  firstParty?: boolean;
+  /** The plugin already on the store under the manifest's id, if any: whose it is, from which repository and folder. */
+  existing: { mine: boolean; repository: string; path?: string } | null;
   /** The versions of this id already taken (published, waiting, or held): a number is never used twice. */
   taken: string[];
   /** The highest version published of this id. */
   latest: string | null;
   /** The plugins of other accounts, for names too close (typosquatting). */
   others: { id: string; name: string }[];
+  /** The module of a `run.js` or `run.wasm` plugin, compiled twice by the store; absent until then, or for another plugin. */
+  compiled?: Compilation;
 }
 
 type Manifest = Record<string, unknown>;
@@ -111,6 +148,10 @@ const skip = (key: CheckKey, detail: Text): CheckResult => ({ key, status: 'skip
 const NO_MANIFEST = t('Sans manifeste lisible, ce contrôle attend.', 'Without a manifest that reads, this check waits.');
 const code = (s: string) => `\`${s}\``;
 const plural = (n: number, fr: string, en: string): Text => t(`${n} ${fr}${n > 1 ? 's' : ''}`, `${n} ${en}${n > 1 ? 's' : ''}`);
+/** Where the plugin is in its repository, as a sentence says it: at its root, or in its folder. */
+const where = (path = ''): Text =>
+  path ? t(`dans le dossier ${code(path)}`, `in the folder ${code(path)}`) : t('à la racine du dépôt', 'at the root of the repository');
+const folderOrRoot = (path = ''): Text => (path ? t(`le dossier ${code(path)}`, `the folder ${code(path)}`) : t('la racine', 'the root'));
 
 /** The manifest of the archive, parsed, or null if it is missing or no JSON object. */
 export function manifestOf(read: ArchiveRead): Manifest | null {
@@ -134,21 +175,20 @@ export function textOf(v: unknown): string {
   return '';
 }
 
-/** The program `run` gives each system, and whether the archive holds it; the others come from the release. */
-export function programs(m: Manifest | null, read: ArchiveRead): { system: System; program: string; inArchive: boolean }[] {
+/** The bundle `run.js` names (`dist/plugin.mjs`), as a path of the archive; null for a plugin of another kind. */
+export function jsOf(m: Manifest | null): string | null {
   const run = m?.run;
-  if (!run || typeof run !== 'object') return [];
-  const r = run as Record<string, unknown>;
-  return SYSTEMS.flatMap((system) => {
-    const program = typeof r[system] === 'string' ? (r[system] as string) : typeof r.command === 'string' ? (r.command as string) : null;
-    return program ? [{ system, program, inArchive: read.files.has(program.replace(/^\.\//, '')) }] : [];
-  });
+  if (!run || typeof run !== 'object') return null;
+  const js = (run as Record<string, unknown>).js;
+  return typeof js === 'string' && js ? js.replace(/^\.\//, '') : null;
 }
 
-/** The system and architecture a release's file is for, from its name (`escouade-slack-1.2.0-windows-x64.zip`). */
-export function platformOf(name: string): Platform | null {
-  const m = /(?:^|[-_.])(windows|macos|linux)[-_](x64|arm64)(?:[-_.]|$)/i.exec(name);
-  return m ? (`${m[1]!.toLowerCase()}-${m[2]!.toLowerCase()}` as Platform) : null;
+/** The `Cargo.toml` `run.wasm` names, as a path of the archive; null for a plugin of another kind. */
+export function cargoOf(m: Manifest | null): string | null {
+  const run = m?.run;
+  if (!run || typeof run !== 'object') return null;
+  const wasm = (run as Record<string, unknown>).wasm;
+  return typeof wasm === 'string' && wasm ? wasm.replace(/^\.\//, '') : null;
 }
 
 // ---- 1. The manifest ----
@@ -158,24 +198,30 @@ export function iconOf(m: Manifest | null): string | null {
   return typeof m?.icon === 'string' ? iconPath(m.icon) : null;
 }
 
-function checkManifest(read: ArchiveRead, iconUndecodable = false): CheckResult {
+function checkManifest(read: ArchiveRead, iconUndecodable = false, path = '', firstParty = false): CheckResult {
   const raw = read.files.get(MANIFEST_FILE);
   if (!raw)
     return fail('manifest', t(`${MANIFEST_FILE} manque`, `${MANIFEST_FILE} is missing`), [
       {
-        path: MANIFEST_FILE,
+        path: path ? `${path}/${MANIFEST_FILE}` : MANIFEST_FILE,
         why: t(
-          `Le store lit ${code(MANIFEST_FILE)} à la racine du dépôt, au commit de l’étiquette ; il n’y est pas.`,
-          `The store reads ${code(MANIFEST_FILE)} at the root of the repository, at the tag’s commit; it is not there.`,
+          `Le store lit ${code(MANIFEST_FILE)} ${where(path).fr}, au commit de l’étiquette ; il n’y est pas.`,
+          `The store reads ${code(MANIFEST_FILE)} ${where(path).en}, at the tag’s commit; it is not there.`,
         ),
-        fix: t(
-          'Ajoute le manifeste à la racine, commite-le, puis pousse une nouvelle étiquette.',
-          'Add the manifest at the root, commit it, then push a new tag.',
-        ),
+        fix: path
+          ? t(
+              `Ajoute le manifeste dans ${code(path)} (ou choisis le dossier qui le porte), commite-le, puis pousse une nouvelle étiquette.`,
+              `Add the manifest in ${code(path)} (or pick the folder that holds it), commit it, then push a new tag.`,
+            )
+          : t(
+              'Ajoute le manifeste à la racine, commite-le, puis pousse une nouvelle étiquette.',
+              'Add the manifest at the root, commit it, then push a new tag.',
+            ),
       },
     ]);
   // The icon's header is the library's (a PNG, square, 256 px at least, 1 MB at most); its decoding is the store's.
-  const v = validateText(raw.toString('utf8'), { file: (p: string) => read.files.get(p) ?? null });
+  // The ids dev.escouade.* hold for the app's repository alone (checkId says why to the others).
+  const v = validateText(raw.toString('utf8'), { file: (p: string) => read.files.get(p) ?? null, firstParty });
   const icon = v.ok ? iconOf(JSON.parse(raw.toString('utf8'))) : null;
   const info = icon ? imageInfo(read.files.get(icon)!) : null;
   if (info && info.width > ICON_DECODE_MAX)
@@ -224,7 +270,29 @@ function checkManifest(read: ArchiveRead, iconUndecodable = false): CheckResult 
 function checkVersion(m: Manifest | null, s: Snapshot): CheckResult {
   if (!m || typeof m.version !== 'string') return skip('version', NO_MANIFEST);
   const v = m.version;
-  const fromTag = tagVersion(s.tag);
+  const path = s.path ?? '';
+  const fromTag = tagFor(s.tag, path);
+  const advised = tagsOf(v, path)[0]!;
+  if (fromTag === null)
+    return fail(
+      'version',
+      t(`${s.tag} n’est pas une étiquette de ${folderOrRoot(path).fr}`, `${s.tag} is no tag of ${folderOrRoot(path).en}`),
+      [
+        {
+          path: 'version',
+          why: path
+            ? t(
+                `Dans un dépôt à plusieurs plugins, l’étiquette nomme son dossier : ${code(`${path}/v1.2.3`)}, ${code(`${folderName(path)}@1.2.3`)} ou ${code(`${folderName(path)}-v1.2.3`)} ; ${code(s.tag)} n’en est pas une.`,
+                `In a repository with several plugins, the tag names its folder: ${code(`${path}/v1.2.3`)}, ${code(`${folderName(path)}@1.2.3`)} or ${code(`${folderName(path)}-v1.2.3`)}; ${code(s.tag)} is none of them.`,
+              )
+            : t(
+                `La version d’un plugin à la racine est une étiquette ${code('v1.2.3')} ou ${code('1.2.3')} ; ${code(s.tag)} n’en est pas une.`,
+                `A version of a plugin at the root is a tag ${code('v1.2.3')} or ${code('1.2.3')}; ${code(s.tag)} is none.`,
+              ),
+          fix: t(`Pousse l’étiquette ${code(advised)}.`, `Push the tag ${code(advised)}.`),
+        },
+      ],
+    );
   if (v !== fromTag)
     return fail('version', t(`${v} dans le manifeste, ${s.tag} pour l’étiquette`, `${v} in the manifest, ${s.tag} for the tag`), [
       {
@@ -234,8 +302,8 @@ function checkVersion(m: Manifest | null, s: Snapshot): CheckResult {
           `The manifest says ${code(v)}, the tag ${code(s.tag)}: a version of the store is a tag, of the same number (the “v” is optional).`,
         ),
         fix: t(
-          `Mets ${code('version')} à ${code(fromTag)}, ou pousse l’étiquette ${code(`v${v}`)}.`,
-          `Set ${code('version')} to ${code(fromTag)}, or push the tag ${code(`v${v}`)}.`,
+          `Mets ${code('version')} à ${code(fromTag)}, ou pousse l’étiquette ${code(advised)}.`,
+          `Set ${code('version')} to ${code(fromTag)}, or push the tag ${code(advised)}.`,
         ),
       },
     ]);
@@ -309,7 +377,8 @@ export function closeNames(id: string, name: string, others: Snapshot['others'])
 function checkId(m: Manifest | null, s: Snapshot): CheckResult {
   if (!m || typeof m.id !== 'string') return skip('id', NO_MANIFEST);
   const id = m.id;
-  if (id.startsWith(RESERVED_PREFIX))
+  // Escouade's own hand comes from the app's repository (its plugins/<id>/, decision 21), compared by its GitHub id.
+  if (id.startsWith(RESERVED_PREFIX) && !s.firstParty)
     return fail('id', t(`${id} est réservé`, `${id} is reserved`), [
       {
         path: 'id',
@@ -334,20 +403,14 @@ function checkId(m: Manifest | null, s: Snapshot): CheckResult {
         fix: t('Choisis un autre identifiant.', 'Choose another id.'),
       },
     ]);
-  if (s.existing && s.existing.repository.toLowerCase() !== s.repository.toLowerCase())
-    return fail('id', t(`${id} vient d’un autre dépôt`, `${id} comes from another repository`), [
-      {
-        path: 'id',
-        why: t(
-          `${code(id)} est publié depuis ${s.existing.repository}, pas depuis ${s.repository}.`,
-          `${code(id)} is published from ${s.existing.repository}, not from ${s.repository}.`,
-        ),
-        fix: t(
-          'Soumets depuis le dépôt du plugin, ou prends un autre identifiant pour celui-ci.',
-          'Submit from the plugin’s repository, or take another id for this one.',
-        ),
-      },
-    ]);
+  // A plugin is (repository, folder). Its author may change it (ESC-313: a repository of theirs where the App is
+  // installed, a folder): the version passes, says so, and goes to the review; the store notes the change at its
+  // publication. The versions before keep their own version.json, and their repository.
+  const sourceOf = (repo: string, path = '') => (path ? `${repo}/${path}` : repo);
+  const moved =
+    s.existing && (s.existing.repository.toLowerCase() !== s.repository.toLowerCase() || (s.existing.path ?? '') !== (s.path ?? ''))
+      ? { from: sourceOf(s.existing.repository, s.existing.path), to: sourceOf(s.repository, s.path) }
+      : null;
   const close = closeNames(id, textOf(m.name), s.others);
   if (close.length)
     return {
@@ -371,6 +434,14 @@ function checkId(m: Manifest | null, s: Snapshot): CheckResult {
         },
       ],
     };
+  if (moved)
+    return pass(
+      'id',
+      t(
+        `${id} est à toi ; sa source change, de ${moved.from} à ${moved.to} : noté à la publication, cette version repasse en revue`,
+        `${id} is yours; its source changes, from ${moved.from} to ${moved.to}: noted at publication, this version goes to the review again`,
+      ),
+    );
   return pass('id', s.existing ? t(`${id} est à toi`, `${id} is yours`) : t(`${id} est libre`, `${id} is free`));
 }
 
@@ -378,14 +449,39 @@ function checkId(m: Manifest | null, s: Snapshot): CheckResult {
 
 /** `https://github.com/Owner/Name(.git)(/)` → `owner/name`. */
 export function repoOfUrl(url: string): string | null {
-  const m = /^https?:\/\/(?:www\.)?github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/i.exec(url.trim());
+  const m = /^https?:\/\/(?:www\.)?github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:\/tree\/.+?)?\/?$/i.exec(url.trim());
   return m ? `${m[1]}/${m[2]}`.toLowerCase() : null;
+}
+
+/**
+ * The folder a manifest's `repository` names (ESC-313): `https://github.com/o/r` names none (`null`, any folder of
+ * the repository); `https://github.com/o/r/tree/<ref>/<folder>` names `<folder>`, whatever the ref (a branch, the tag);
+ * `…/tree/<ref>` names the root (`''`). A ref with a slash is read as the longest one that leaves the plugin's folder.
+ */
+export function folderOfUrl(url: string, path: string): string | null | false {
+  const m = /^https?:\/\/(?:www\.)?github\.com\/[\w.-]+\/[\w.-]+?(?:\.git)?(?:\/tree\/(.+?))?\/?$/i.exec(url.trim());
+  if (!m) return false;
+  if (!m[1]) return null;
+  let rest: string;
+  try {
+    rest = decodeURIComponent(m[1]);
+  } catch {
+    return false;
+  }
+  if (path && rest.endsWith(`/${path}`) && rest.length > path.length + 1) return path;
+  return rest.includes('/') ? rest.slice(rest.indexOf('/') + 1) : '';
 }
 
 function checkRepository(m: Manifest | null, s: Snapshot): CheckResult {
   if (!m) return skip('repository', NO_MANIFEST);
+  const path = s.path ?? '';
   const want = `https://github.com/${s.repository}`;
-  const fix = t(`Mets ${code('repository')} à ${code(want)}.`, `Set ${code('repository')} to ${code(want)}.`);
+  const fix = path
+    ? t(
+        `Mets ${code('repository')} à ${code(want)} ou à ${code(`${want}/tree/main/${path}`)}.`,
+        `Set ${code('repository')} to ${code(want)} or to ${code(`${want}/tree/main/${path}`)}.`,
+      )
+    : t(`Mets ${code('repository')} à ${code(want)}.`, `Set ${code('repository')} to ${code(want)}.`);
   if (typeof m.repository !== 'string')
     return fail('repository', t('repository manque', 'repository is missing'), [
       {
@@ -408,9 +504,30 @@ function checkRepository(m: Manifest | null, s: Snapshot): CheckResult {
         fix,
       },
     ]);
+  const named = folderOfUrl(m.repository, path);
+  if (named !== null && named !== path)
+    return fail(
+      'repository',
+      t(`${m.repository} ne nomme pas ${folderOrRoot(path).fr}`, `${m.repository} does not name ${folderOrRoot(path).en}`),
+      [
+        {
+          path: 'repository',
+          why: t(
+            `Le manifeste nomme ${folderOrRoot(named || '').fr} du dépôt, la soumission vient ${path ? `du dossier ${code(path)}` : `de la racine`}.`,
+            `The manifest names ${folderOrRoot(named || '').en} of the repository, the submission comes from ${folderOrRoot(path).en}.`,
+          ),
+          fix,
+        },
+      ],
+    );
   return pass(
     'repository',
-    t(`repository du manifeste : github.com/${s.repository}`, `the manifest’s repository: github.com/${s.repository}`),
+    path
+      ? t(
+          `repository du manifeste : github.com/${s.repository}, dossier ${path}`,
+          `the manifest’s repository: github.com/${s.repository}, folder ${path}`,
+        )
+      : t(`repository du manifeste : github.com/${s.repository}`, `the manifest’s repository: github.com/${s.repository}`),
   );
 }
 
@@ -418,11 +535,37 @@ function checkRepository(m: Manifest | null, s: Snapshot): CheckResult {
 
 const LICENSE_FILE = /^(LICEN[CS]E|COPYING)(\.[A-Za-z0-9]+)?$/i;
 
+const licenseFiles = (read: ArchiveRead) => [...read.files.entries()].filter(([p]) => !p.includes('/') && LICENSE_FILE.test(p));
+
+/**
+ * The license file the plugin goes by and what is known of it (ESC-313): at the root, the one GitHub detects. In a
+ * folder, its own file if it has one, else the root's. GitHub detects the root's alone: the folder's own file is
+ * that license if it is the root's file again, or by its `SPDX-License-Identifier:` line; otherwise unrecognized.
+ */
+export function licenseOf(s: Snapshot): { hasFile: boolean; detected: string | null; inFolder: boolean } {
+  const own = licenseFiles(s.archive.read);
+  if (!s.path || !s.root) return { hasFile: own.length > 0, detected: s.license, inFolder: false };
+  const root = licenseFiles(s.root);
+  if (!own.length) return { hasFile: root.length > 0, detected: s.license, inFolder: false };
+  const text = own[0]![1].toString('utf8');
+  if (root.some(([, b]) => b.toString('utf8').trim() === text.trim())) return { hasFile: true, detected: s.license, inFolder: true };
+  const spdx = /SPDX-License-Identifier:\s*([A-Za-z0-9.+-]+)/.exec(text);
+  return { hasFile: true, detected: spdx ? spdx[1]! : 'NOASSERTION', inFolder: true };
+}
+
 function checkLicense(m: Manifest | null, s: Snapshot): CheckResult {
   if (!m) return skip('license', NO_MANIFEST);
-  const hasFile = [...s.archive.read.files.keys()].some((p) => !p.includes('/') && LICENSE_FILE.test(p));
-  const verdict = judgeLicense(m.license, s.license, hasFile);
-  if (verdict.ok) return pass('license', t(`${m.license}, comme le fichier LICENSE`, `${m.license}, as the LICENSE file`));
+  const { hasFile, detected, inFolder } = licenseOf(s);
+  const verdict = judgeLicense(m.license, detected, hasFile);
+  if (verdict.ok)
+    return pass(
+      'license',
+      s.path
+        ? inFolder
+          ? t(`${m.license}, comme le fichier LICENSE du dossier`, `${m.license}, as the folder’s LICENSE file`)
+          : t(`${m.license}, comme le fichier LICENSE de la racine`, `${m.license}, as the root’s LICENSE file`)
+        : t(`${m.license}, comme le fichier LICENSE`, `${m.license}, as the LICENSE file`),
+    );
   const choose = t(
     'Une licence reconnue par l’OSI ou la FSF, en identifiant SPDX : MIT, Apache-2.0, GPL-3.0-or-later, MPL-2.0…',
     'A license approved by the OSI or the FSF, as an SPDX id: MIT, Apache-2.0, GPL-3.0-or-later, MPL-2.0…',
@@ -453,10 +596,15 @@ function checkLicense(m: Manifest | null, s: Snapshot): CheckResult {
       );
     case 'no-file':
       return one(
-        t(
-          `Le manifeste dit ${m.license}, mais le dépôt n’a pas de fichier LICENSE ni COPYING à sa racine.`,
-          `The manifest says ${m.license}, but the repository has no LICENSE or COPYING file at its root.`,
-        ),
+        s.path
+          ? t(
+              `Le manifeste dit ${m.license}, mais ni le dossier ${code(s.path)} ni la racine du dépôt n’ont de fichier LICENSE ou COPYING.`,
+              `The manifest says ${m.license}, but neither the folder ${code(s.path)} nor the repository’s root has a LICENSE or COPYING file.`,
+            )
+          : t(
+              `Le manifeste dit ${m.license}, mais le dépôt n’a pas de fichier LICENSE ni COPYING à sa racine.`,
+              `The manifest says ${m.license}, but the repository has no LICENSE or COPYING file at its root.`,
+            ),
         t(`Ajoute le texte de la licence dans LICENSE${then.fr}`, `Add the license’s text in LICENSE${then.en}`),
         'LICENSE',
       );
@@ -466,10 +614,15 @@ function checkLicense(m: Manifest | null, s: Snapshot): CheckResult {
           `Le manifeste dit ${m.license}, mais GitHub ne reconnaît pas la licence du fichier LICENSE.`,
           `The manifest says ${m.license}, but GitHub does not recognize the license of the LICENSE file.`,
         ),
-        t(
-          `Mets dans LICENSE le texte exact de la licence (celui de spdx.org/licenses), sans le modifier${then.fr}`,
-          `Put in LICENSE the exact text of the license (spdx.org/licenses’s), unchanged${then.en}`,
-        ),
+        inFolder
+          ? t(
+              `Le LICENSE du dossier doit être celui de la racine, ou porter une ligne ${code(`SPDX-License-Identifier: ${String(m.license)}`)} ; sinon, retire-le : celui de la racine compte${then.fr}`,
+              `The folder’s LICENSE must be the root’s, or hold a line ${code(`SPDX-License-Identifier: ${String(m.license)}`)}; otherwise, remove it: the root’s counts${then.en}`,
+            )
+          : t(
+              `Mets dans LICENSE le texte exact de la licence (celui de spdx.org/licenses), sans le modifier${then.fr}`,
+              `Put in LICENSE the exact text of the license (spdx.org/licenses’s), unchanged${then.en}`,
+            ),
         'LICENSE',
       );
     case 'different':
@@ -490,10 +643,28 @@ function checkLicense(m: Manifest | null, s: Snapshot): CheckResult {
 
 const README = /^README(\.(fr|en))?\.md$/i;
 
-function checkReadme(read: ArchiveRead): CheckResult {
+const readmes = (read: ArchiveRead) =>
+  [...read.files.entries()].filter(([p, b]) => !p.includes('/') && README.test(p) && b.toString('utf8').trim() !== '');
+
+/** The README files the plugin's page is made of: the folder's, else the repository root's (ESC-313). */
+export function readmeSource(read: ArchiveRead, root?: ArchiveRead | null): { read: ArchiveRead; fromRoot: boolean } {
+  if (readmes(read).length || !root) return { read, fromRoot: false };
+  return readmes(root).length ? { read: root, fromRoot: true } : { read, fromRoot: false };
+}
+
+function checkReadme(read: ArchiveRead, s?: Snapshot): CheckResult {
   const found = [...read.files.entries()].filter(([p]) => !p.includes('/') && README.test(p));
   const filled = found.filter(([, b]) => b.toString('utf8').trim() !== '');
   if (filled.length) return pass('readme', t(filled.map(([p]) => p).join(' et '), filled.map(([p]) => p).join(' and ')));
+  const fromRoot = s?.path && s.root ? readmes(s.root) : [];
+  if (fromRoot.length)
+    return pass(
+      'readme',
+      t(
+        `${fromRoot.map(([p]) => p).join(' et ')} de la racine du dépôt (le dossier n’en a pas)`,
+        `${fromRoot.map(([p]) => p).join(' and ')} of the repository’s root (the folder has none)`,
+      ),
+    );
   return fail(
     'readme',
     found.length ? t(`${found[0]![0]} est vide`, `${found[0]![0]} is empty`) : t('README.md manque', 'README.md is missing'),
@@ -504,10 +675,15 @@ function checkReadme(read: ArchiveRead): CheckResult {
           'Le README est la page du plugin, sur le store et dans l’app : il est obligatoire, et non vide.',
           'The README is the plugin’s page, on the store and in the app: it is required, and not empty.',
         ),
-        fix: t(
-          'Ajoute un README.md à la racine (ou README.fr.md et README.en.md), puis pousse une nouvelle étiquette.',
-          'Add a README.md at the root (or README.fr.md and README.en.md), then push a new tag.',
-        ),
+        fix: s?.path
+          ? t(
+              `Ajoute un README.md dans ${code(s.path)} ou à la racine du dépôt (ou README.fr.md et README.en.md), puis pousse une nouvelle étiquette.`,
+              `Add a README.md in ${code(s.path)} or at the repository’s root (or README.fr.md and README.en.md), then push a new tag.`,
+            )
+          : t(
+              'Ajoute un README.md à la racine (ou README.fr.md et README.en.md), puis pousse une nouvelle étiquette.',
+              'Add a README.md at the root (or README.fr.md and README.en.md), then push a new tag.',
+            ),
       },
     ],
   );
@@ -646,6 +822,18 @@ function archiveProblem(p: ArchiveProblem): Problem {
 function checkArchive(s: Snapshot): CheckResult {
   const { read, size } = s.archive;
   const problems = read.problems.map(archiveProblem);
+  if (s.pathLink)
+    problems.push({
+      path: s.pathLink,
+      why: t(
+        `Le dossier ${code(s.path ?? '')} passe par ${code(s.pathLink)}, un lien : le store ne suit pas de lien.`,
+        `The folder ${code(s.path ?? '')} goes through ${code(s.pathLink)}, a link: the store follows no link.`,
+      ),
+      fix: t(
+        'Soumets le dossier réel du plugin, ou fais du lien un vrai dossier, puis pousse une nouvelle étiquette.',
+        'Submit the plugin’s real folder, or make the link a real folder, then push a new tag.',
+      ),
+    });
   if (read.files.has('.gitmodules'))
     problems.push({
       path: '.gitmodules',
@@ -694,6 +882,10 @@ function checkPermissions(m: Manifest | null): CheckResult {
   const runs = !!m.run;
   const webhooks = Array.isArray(c.webhooks) && c.webhooks.length > 0;
   const declared = Array.isArray(c.secrets) ? c.secrets.map((x) => (x as Record<string, unknown>)?.key).filter(Boolean) : [];
+  const accounts = Array.isArray(c.accounts) ? c.accounts.map((x) => (x as Record<string, unknown>)?.id).filter(Boolean) : [];
+  // The secret of an account it declares (`account:<id>`, or all of them, `account:*`): the app keeps it apart by plugin.
+  const ofAccount = (key: string) =>
+    key.startsWith('account:') && accounts.length > 0 && (key === 'account:*' || accounts.includes(key.slice('account:'.length)));
   const problems: Problem[] = [];
   const unused = (key: string, what: Text) =>
     list(p[key]).forEach((_, i) =>
@@ -722,6 +914,8 @@ function checkPermissions(m: Manifest | null): CheckResult {
   }
   if (!runs) unused('commands', t('Un plugin sans programme ne lance pas de commande.', 'A plugin with no program runs no command.'));
   list(p.network).forEach((host, i) => {
+    // `{account}`, the hosts the user types for its accounts; `local:shared`, the server the core starts for it.
+    if (host === '{account}' || host === 'local:shared') return;
     if (!/^(\*\.)?[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+(:\d+)?$/.test(host))
       problems.push({
         path: `permissions.network[${i}]`,
@@ -733,12 +927,12 @@ function checkPermissions(m: Manifest | null): CheckResult {
       });
   });
   list(p.secrets).forEach((key, i) => {
-    if (!declared.includes(key))
+    if (!declared.includes(key) && !ofAccount(key))
       problems.push({
         path: `permissions.secrets[${i}]`,
         why: t(
-          `${code(key)} n’est pas un secret de ${code('contributes.secrets')}.`,
-          `${code(key)} is no secret of ${code('contributes.secrets')}.`,
+          `${code(key)} n’est pas un secret de ${code('contributes.secrets')}, ni le compte d’un genre de ${code('contributes.accounts')}.`,
+          `${code(key)} is no secret of ${code('contributes.secrets')}, nor the account of a kind of ${code('contributes.accounts')}.`,
         ),
         fix: t(
           'Déclare le champ du secret dans contributes.secrets, ou retire la permission.',
@@ -748,7 +942,12 @@ function checkPermissions(m: Manifest | null): CheckResult {
   });
   if (problems.length) return fail('permissions', plural(problems.length, 'permission incohérente', 'inconsistent permission'), problems);
   const asks: Text[] = [];
-  if (runs) asks.push(t('Lance un programme', 'Runs a program'));
+  if (runs)
+    asks.push(
+      jsOf(m) || cargoOf(m)
+        ? t('Tourne dans Escouade, isolé', 'Runs inside Escouade, sandboxed')
+        : t('Lance un programme', 'Runs a program'),
+    );
   if (p.decide === true) asks.push(t('décide des autorisations', 'decides permissions'));
   if (list(p.network).length) asks.push(t(`se connecte à ${list(p.network).join(', ')}`, `connects to ${list(p.network).join(', ')}`));
   if (list(p.events).length) asks.push(t('reçoit des événements', 'gets events'));
@@ -760,70 +959,145 @@ function checkPermissions(m: Manifest | null): CheckResult {
 
 // ---- 10. The binaries ----
 
-function checkBinaries(m: Manifest | null, s: Snapshot): CheckResult {
+/** The fields of `run` that name a native program, which the store no longer takes. */
+const NATIVE = ['command', 'windows', 'macos', 'linux'];
+
+/** No plugin brings a program: it is compiled to WASM by the store, the first hand's as a third party's (decision 72). */
+function checkBinaries(m: Manifest | null): CheckResult {
   if (!m) return skip('binaries', NO_MANIFEST);
-  const progs = programs(m, s.archive.read);
-  if (!progs.length) return pass('binaries', t('aucun : le plugin ne lance pas de programme', 'none: the plugin runs no program'));
-  const problems: Problem[] = [];
-  for (const { system, program, inArchive } of progs) {
-    if (inArchive) continue;
-    if (!s.binaries.some((b) => b.platform.startsWith(`${system}-`)))
-      problems.push({
-        path: m.run && typeof (m.run as Record<string, unknown>)[system] === 'string' ? `run.${system}` : 'run.command',
-        why:
-          s.releaseAssets === null
-            ? t(
-                `${code(program)} n’est pas dans le dépôt, et l’étiquette ${s.tag} n’a pas de release où le prendre pour ${system}.`,
-                `${code(program)} is not in the repository, and the tag ${s.tag} has no release to take it from for ${system}.`,
-              )
-            : t(
-                `${code(program)} n’est pas dans le dépôt, et la release ${s.tag} n’a pas de fichier pour ${system} (${code(`…-${system}-x64.zip`)}, ${code(`…-${system}-arm64.tar.gz`)}).`,
-                `${code(program)} is not in the repository, and the release ${s.tag} has no file for ${system} (${code(`…-${system}-x64.zip`)}, ${code(`…-${system}-arm64.tar.gz`)}).`,
-              ),
-        fix: t(
-          `Attache à la release l’archive de chaque système (${code('escouade-plugin pack')}), construite par un workflow public avec ${code('actions/attest-build-provenance')}.`,
-          `Attach to the release each system’s archive (${code('escouade-plugin pack')}), built by a public workflow with ${code('actions/attest-build-provenance')}.`,
-        ),
-      });
-  }
-  for (const name of s.oversized ?? [])
-    problems.push({
-      path: name,
-      why: t(`${code(name)} pèse plus de 50 Mo.`, `${code(name)} weighs more than 50 MB.`),
-      fix: t(
-        'Allège le binaire (sans symboles de débogage, compressé), puis pousse une nouvelle étiquette.',
-        'Make the binary lighter (no debug symbols, compressed), then push a new tag.',
-      ),
-    });
-  for (const b of s.binaries)
-    if (b.attestation.state === 'mismatch')
-      problems.push({
-        path: b.name,
-        why: t(
-          `L’attestation de ${code(b.name)} le dit construit depuis ${b.attestation.repository ?? '?'}@${(b.attestation.commit ?? '?').slice(0, 7)}, pas depuis ${s.repository}@${s.commit.slice(0, 7)}.`,
-          `The attestation of ${code(b.name)} says it was built from ${b.attestation.repository ?? '?'}@${(b.attestation.commit ?? '?').slice(0, 7)}, not from ${s.repository}@${s.commit.slice(0, 7)}.`,
-        ),
-        fix: t(
-          'Reconstruis les binaires depuis le commit de l’étiquette, puis pousse une nouvelle étiquette.',
-          'Build the binaries again from the tag’s commit, then push a new tag.',
-        ),
-      });
-  if (problems.length) return fail('binaries', plural(problems.length, 'binaire en défaut', 'binary at fault'), problems);
-  if (!s.binaries.length) return pass('binaries', t('le programme est dans le dépôt', 'the program is in the repository'));
-  const platforms = s.binaries.map((b) => b.platform).join(', ');
-  const attested = s.binaries.filter((b) => b.attestation.state === 'attested');
-  if (attested.length === s.binaries.length) {
-    const workflows = [...new Set(attested.map((b) => (b.attestation as { workflow: string }).workflow))].join(', ');
+  if (jsOf(m))
     return pass(
       'binaries',
-      t(`${platforms} · attestés par le workflow ${workflows}`, `${platforms} · attested by the workflow ${workflows}`),
+      t(
+        'aucun à fournir : un plugin run.js est compilé en WASM par le store',
+        'none to bring: a run.js plugin is compiled to WASM by the store',
+      ),
     );
-  }
-  return pass(
+  if (cargoOf(m))
+    return pass(
+      'binaries',
+      t(
+        'aucun à fournir : un plugin run.wasm est compilé en WASM par le store',
+        'none to bring: a run.wasm plugin is compiled to WASM by the store',
+      ),
+    );
+  const run = (m.run ?? {}) as Record<string, unknown>;
+  const native = NATIVE.filter((field) => typeof run[field] === 'string');
+  if (!native.length) return pass('binaries', t('aucun : le plugin ne lance pas de programme', 'none: the plugin runs no program'));
+  return fail(
     'binaries',
+    plural(native.length, 'programme refusé', 'program refused'),
+    native.map((field) => ({
+      path: `run.${field}`,
+      why: t(
+        `${code(`run.${field}`)} lancerait un programme natif : le store n’en publie plus, chaque plugin tourne en WASM.`,
+        `${code(`run.${field}`)} would start a native program: the store no longer publishes one, every plugin runs in WASM.`,
+      ),
+      fix: t(
+        `Publie un bundle JS/TS par ${code('"run": { "js": "dist/plugin.mjs" }')} ou du Rust par ${code('"run": { "wasm": "Cargo.toml" }')}, le store les compile ; un programme de l’utilisateur se nomme dans ${code('permissions.commands')}.`,
+        `Publish a JS/TS bundle with ${code('"run": { "js": "dist/plugin.mjs" }')} or Rust with ${code('"run": { "wasm": "Cargo.toml" }')}, the store compiles them; a program of the user’s is named in ${code('permissions.commands')}.`,
+      ),
+    })),
+  );
+}
+
+// ---- 11. The compilation ----
+
+const short = (sha: string) => sha.slice(0, 12);
+
+function checkCompile(m: Manifest | null, s: Snapshot): CheckResult {
+  if (!m) return skip('compile', NO_MANIFEST);
+  const js = jsOf(m);
+  const cargo = cargoOf(m);
+  if (!js && !cargo)
+    return pass('compile', t('rien à compiler : ni run.js ni run.wasm', 'nothing to compile: neither run.js nor run.wasm'));
+  if (cargo && !s.archive.read.files.has(cargo))
+    return fail('compile', t(`pas de ${cargo}`, `no ${cargo}`), [
+      {
+        path: 'run.wasm',
+        why: t(`${code(cargo)} n’est pas dans l’archive ${where(s.path).fr}.`, `${code(cargo)} is not in the archive ${where(s.path).en}.`),
+        fix: t(
+          `Commite les sources du plugin, ${code('Cargo.toml')} et ${code('Cargo.lock')} compris. Puis pousse une nouvelle étiquette.`,
+          `Commit the plugin’s sources, ${code('Cargo.toml')} and ${code('Cargo.lock')} included. Then push a new tag.`,
+        ),
+      },
+    ]);
+  if (js) {
+    const bundle = s.archive.read.files.get(js);
+    if (!bundle)
+      return fail('compile', t('pas de bundle', 'no bundle'), [
+        {
+          path: 'run.js',
+          why: t(`${code(js)} n’est pas dans l’archive ${where(s.path).fr}.`, `${code(js)} is not in the archive ${where(s.path).en}.`),
+          fix: t(
+            `Commite le bundle (${code('npm run build')} du SDK) : le store ne lance jamais ${code('npm install')}. Puis pousse une nouvelle étiquette.`,
+            `Commit the bundle (the SDK’s ${code('npm run build')}): the store never runs ${code('npm install')}. Then push a new tag.`,
+          ),
+        },
+      ]);
+    if (bundle.length > BUNDLE_MAX)
+      return fail('compile', t('bundle trop lourd', 'bundle too heavy'), [
+        {
+          path: js,
+          why: t(`${code(js)} pèse plus de 5 Mo.`, `${code(js)} weighs more than 5 MB.`),
+          fix: t(
+            'Allège le bundle (minifié, sans sources), puis pousse une nouvelle étiquette.',
+            'Make the bundle lighter (minified, without sources), then push a new tag.',
+          ),
+        },
+      ]);
+  }
+  const source = (js ?? cargo)!;
+  const c = s.compiled;
+  if (!c)
+    return skip(
+      'compile',
+      cargo
+        ? t('Les sources n’ont pas été compilées.', 'The sources were not compiled.')
+        : t('Le bundle n’a pas été compilé.', 'The bundle was not compiled.'),
+    );
+  if (c.state === 'refused')
+    return fail('compile', t('ne se compile pas en WASM', 'does not compile to WASM'), [
+      {
+        path: source,
+        why: t(`${code(source)} ne se compile pas en WASM : ${c.message}`, `${code(source)} does not compile to WASM: ${c.message}`),
+        fix: cargo
+          ? t(
+              `Lance ${code('escouade-plugin build')} sur le dossier : il dit la même chose. Un plugin run.wasm commite son ${code('Cargo.lock')}, à jour, et ne dépend que de crates.io ; ce qui s’exécute à la compilation (${code('build.rs')}, macros) doit être sur la liste relue.`,
+              `Run ${code('escouade-plugin build')} on the folder: it says the same. A run.wasm plugin commits its ${code('Cargo.lock')}, up to date, and depends on crates.io alone; what runs while compiling (${code('build.rs')}, macros) must be on the reviewed list.`,
+            )
+          : t(
+              `Lance ${code('escouade-plugin build')} sur le dossier : il dit la même chose. Un plugin run.js n’importe que ${code('node:fs')} et ${code('node:readline')}.`,
+              `Run ${code('escouade-plugin build')} on the folder: it says the same. A run.js plugin imports only ${code('node:fs')} and ${code('node:readline')}.`,
+            ),
+      },
+    ]);
+  if (c.state === 'different')
+    return fail('compile', t('la compilation n’est pas reproductible', 'the compilation is not reproducible'), [
+      {
+        path: source,
+        why: cargo
+          ? t(
+              `La compilation n’est pas reproductible : deux compilations des mêmes sources ont donné deux modules (${short(c.first)}… et ${short(c.second)}…), et ce qui est publié doit être ce que la revue recompile.`,
+              `The compilation is not reproducible: two compilations of the same sources gave two modules (${short(c.first)}… and ${short(c.second)}…), and what is published must be what the review compiles again.`,
+            )
+          : t(
+              `La compilation n’est pas reproductible : deux compilations du même bundle ont donné deux modules (${short(c.first)}… et ${short(c.second)}…), et ce qui est publié doit être ce que la revue recompile.`,
+              `The compilation is not reproducible: two compilations of the same bundle gave two modules (${short(c.first)}… and ${short(c.second)}…), and what is published must be what the review compiles again.`,
+            ),
+        fix: t(
+          'Pousse une nouvelle étiquette pour réessayer ; si l’écart revient, signale-le à Escouade : c’est le compilateur du store.',
+          'Push a new tag to try again; if the difference comes back, tell Escouade: it is the store’s compiler.',
+        ),
+      },
+    ]);
+  const kb = Math.max(1, Math.round(c.size / 1024));
+  const by = 'rust' in c.compiler ? `rustc ${c.compiler.rust}` : `Javy ${c.compiler.javy}`;
+  return pass(
+    'compile',
     t(
-      `${platforms} · sans attestation de provenance pour ${s.binaries.length - attested.length} : publiable non vérifié, ne pourra pas être vérifié`,
-      `${platforms} · no provenance attestation for ${s.binaries.length - attested.length}: publishable unverified, cannot be verified`,
+      `compilé en WASM par le store, deux fois, même empreinte · ${kb} Ko · sha256 ${short(c.sha256)}… · ${by}`,
+      `compiled to WASM by the store, twice, same fingerprint · ${kb} KB · sha256 ${short(c.sha256)}… · ${by}`,
     ),
   );
 }
@@ -831,23 +1105,24 @@ function checkBinaries(m: Manifest | null, s: Snapshot): CheckResult {
 /** Whether the archive was read through: a link or a path refused leaves the rest readable, a bomb does not. */
 export const whole = (read: ArchiveRead) => !read.problems.some((p) => ['too-big', 'bomb', 'too-many', 'corrupt'].includes(p.code));
 
-/** Runs the ten checks on what the worker fetched. Nothing of the plugin runs: its files are read as bytes. */
+/** Runs the eleven checks on what the worker fetched: its files read as bytes, its bundle compiled by compile.ts. */
 export function runChecks(s: Snapshot): CheckResult[] {
   const read = s.archive.read;
   const clean = whole(read);
   const m = clean ? manifestOf(read) : null;
   const unread = t('L’archive ne se lit pas : ce contrôle attend.', 'The archive does not read: this check waits.');
   const results: Record<CheckKey, CheckResult> = {
-    manifest: clean ? checkManifest(read, s.iconUndecodable) : skip('manifest', unread),
+    manifest: clean ? checkManifest(read, s.iconUndecodable, s.path, !!s.firstParty) : skip('manifest', unread),
     version: checkVersion(m, s),
     id: checkId(m, s),
     repository: checkRepository(m, s),
     license: checkLicense(m, s),
-    readme: clean ? checkReadme(read) : skip('readme', unread),
+    readme: clean ? checkReadme(read, s) : skip('readme', unread),
     screenshots: checkScreenshots(m, read, s.undecodable),
     archive: checkArchive(s),
     permissions: checkPermissions(m),
-    binaries: checkBinaries(m, s),
+    binaries: checkBinaries(m),
+    compile: checkCompile(m, s),
   };
   return CHECK_KEYS.map((k) => results[k]);
 }

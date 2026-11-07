@@ -26,6 +26,8 @@
   import type { Project, Ticket } from '../../lib/types';
   import { cardActivity } from '../../lib/sidebar';
   import type { IconName } from '../../lib/icons';
+  import { pushedCi, redTargetHolds, targetCiOf } from '../../lib/branch-ci';
+  import CiPill from '../CiPill.svelte';
   import EngineMark from '../EngineMark.svelte';
   import Icon from '../Icon.svelte';
   import RejectForm from './RejectForm.svelte';
@@ -35,6 +37,25 @@
   import { shareTicket } from '../../lib/share-actions';
   import { docsStore } from '../../lib/docs.svelte';
   import { pageTitle } from '../../lib/planning';
+  import { prIcon, prTone } from '../../lib/prs';
+  import {
+    asPull,
+    canFixCi,
+    canFixReviews,
+    canUpdateBranch,
+    ciLine,
+    fixesSpent,
+    fixingLine,
+    mergeActions,
+    mergeHowText,
+    mergeWaitLine,
+    noLogLine,
+    prErrorLine,
+    prFacts,
+    prStateKey,
+    prStateWord,
+  } from '../../lib/ticket-prs';
+  import { cardEnvironments } from '../../lib/environments';
 
   const uid = $props.id();
 
@@ -55,6 +76,10 @@
   const issue = $derived(app.boardIssues[project.id] ?? null);
   /** Why none starts for now (a quota, a usage limit): that of the accounts the project goes to. */
   const pause = $derived(pauseOf(project));
+  /** « Pause quand la CI de la cible est rouge » (ESC-63) holds the autopilot's tickets back now. */
+  const redTarget = $derived(redTargetHolds(s, targetCiOf(project)));
+  /** The branch it pushed without a pull request (« Valider et pousser »), and its CI. */
+  const pushed = $derived(pushedCi(ticket));
   const agent = $derived(ticket.agentId ? app.agents[ticket.agentId] : undefined);
   /** Of several repositories (ESC-169): those its agent changed, while it is tested. */
   const changedRepos = $derived(ticket.column === 'review' && agent && isMulti(project) ? touchedRepos(project, agent).map(repoLabel) : []);
@@ -223,7 +248,7 @@
     if ((e.target as Element).closest('input, textarea')) return;
     if (theirs) {
       // Another one's ticket (ESC-190, choice 118): launched by hand, changed for the team, hidden here or deleted for all.
-      const run = ticket.column === 'todo' && canStart(ticket, s, busyCount, quota, issue, pause);
+      const run = ticket.column === 'todo' && canStart(ticket, s, busyCount, quota, issue, pause, redTarget);
       menu.show(e, [
         ...(run ? [{ label: t('board.card.launch'), onClick: launch }] : []),
         ...(ticket.column === 'todo' ? [{ label: t('common.edit'), onClick: onedit }] : []),
@@ -283,6 +308,14 @@
   function act(e: Event, f: () => unknown) {
     e.stopPropagation();
     f();
+  }
+
+  /** « Merger » / « Merger quand c'est vert » (ESC-62): what it did said by a toast. */
+  async function merge(whenGreen: boolean) {
+    const p = ticket.pr;
+    if (!p) return;
+    const how = await app.run(api.ticketPrMerge(ticket.id, whenGreen));
+    if (how) app.toast(mergeHowText(how, p), how === 'merged' ? 'ok' : 'info');
   }
 
   function approve() {
@@ -390,6 +423,8 @@
       <span class="sum" use:tip={used?.estimated ? estimateHint(used) : undefined}
         ><span class="sr">{t('board.card.costLabel')}{' '}</span><span>{reviewMeta(ticket, used)}</span></span
       >
+    {:else if ticket.column === 'pr' && ticket.pr}
+      <span class="sum">{t('prs.to', { base: ticket.pr.target })}</span>
     {:else if ticket.column === 'done'}
       <span class="sum">{doneMeta(ticket)}</span>
     {/if}
@@ -460,6 +495,130 @@
   {#if ticket.partial && (ticket.column === 'review' || ticket.column === 'done')}<span class="partial">{t('board.card.partial')}</span
     >{/if}
 
+  {#if ticket.column === 'pr' && ticket.pr}
+    <!-- « En revue » (ESC-59): its pull request as its host last told it; its number opens it in the browser. -->
+    {@const p = ticket.pr}
+    {@const pull = asPull(p)}
+    {@const ci = ciLine(p)}
+    {@const facts = prFacts(p)}
+    {@const down = prErrorLine(p, app.now)}
+    <div class="prline" data-ticket-pr={p.number}>
+      <button
+        class="prnum {prTone(pull)}"
+        aria-label={t('prs.chipLabel', { word: p.word, number: p.number, state: prStateWord(p) })}
+        onclick={(e) => act(e, () => app.run(openUrl(p.url)))}><Icon name={prIcon(pull)} size={12} />{p.word} #{p.number}</button
+      >
+      <span class="prstate {prStateKey(p)}">{prStateWord(p)}</span>
+      {#if ci}<button
+          class="prci {p.checks}"
+          data-ticket-ci
+          use:tip={t('board.ci.pillTitle', { branch: p.branch, state: ci })}
+          onclick={(e) => act(e, () => (app.modal = { kind: 'ci', of: { kind: 'ticketPr', id: ticket.id }, projectId: project.id }))}
+          >{ci}</button
+        >{/if}
+    </div>
+    {#if facts.length}
+      <!-- The conflict with its target is always the last, in red: what to fix first. -->
+      <span class="prfacts"
+        >{#each facts as f, i (f)}{#if i}{' · '}{/if}<span class:conflicting={p.mergeable === false && i === facts.length - 1}>{f}</span
+          >{/each}</span
+      >
+    {/if}
+    {#if down}<span class="lost" role="status" data-pr-error use:tip={{ text: down, cut: true }}>{down}</span>{/if}
+    <!-- Its CI failed (ESC-60): its agent fixes it, by itself with the autopilot (within its loops), else on « L'agent corrige ». -->
+    {@const noLog = noLogLine(p)}
+    {#if noLog}<span class="prfacts" data-pr-nolog use:tip={{ text: noLog, cut: true }}>{noLog}</span>{/if}
+    {#if p.fixing}
+      <span class="fixing" role="status" data-pr-fixing><i class="dot"></i>{fixingLine(p)}</span>
+    {:else if p.fixError}
+      <span class="lost" role="status" data-pr-fix-error use:tip={{ text: p.fixError, cut: true }}>{p.fixError}</span>
+    {/if}
+    {#if canFixCi(ticket)}
+      <div class="row">
+        <button
+          class="btn small"
+          data-pr-fix
+          use:tip={t('board.pr.fixCiTitle', { word: p.word })}
+          onclick={(e) => act(e, () => app.run(api.ticketPrFixCi(ticket.id)))}>{t('board.pr.fixCi')}</button
+        >
+        {#if fixesSpent(ticket, s.autopilot)}<span class="prfacts"
+            >{t('board.pr.loopsSpent', { count: p.fixes, max: ticket.maxLoops })}</span
+          >{/if}
+      </div>
+    {/if}
+    <!-- Its review's new comments (ESC-61): counted, and given to its agent on this click only, the autopilot's too. -->
+    {#if canFixReviews(ticket)}
+      <div class="row">
+        <span class="prfacts" data-pr-feedback={p.feedback}>{t('board.pr.feedback', { count: p.feedback })}</span>
+        <button
+          class="btn small"
+          data-pr-fix-reviews
+          use:tip={t('board.pr.fixReviewsTitle')}
+          onclick={(e) => act(e, () => app.run(api.ticketPrFixReviews(ticket.id)))}>{t('board.pr.fixReviews')}</button
+        >
+      </div>
+    {/if}
+    <!-- In conflict with its target (ESC-61): merged in (or rebased onto, by the board's settings), its conflicts to its agent. -->
+    {#if canUpdateBranch(ticket)}
+      <div class="row">
+        <button
+          class="btn small"
+          data-pr-update-branch
+          use:tip={t(`board.pr.updateBranchTitle.${s.prUpdate === 'rebase' ? 'rebase' : 'merge'}`, { target: p.target })}
+          onclick={(e) => act(e, () => app.run(api.ticketPrUpdateBranch(ticket.id)))}>{t('board.pr.updateBranch')}</button
+        >
+      </div>
+    {/if}
+    <!-- Merging from Escouade (ESC-62): never by itself, a button. « Merger » approved and green, with a strategy the
+         repository allows; « Merger quand c'est vert » while its CI runs (the host's auto-merge, else Escouade). -->
+    {@const acts = mergeActions(p, s.strategy)}
+    {@const waits = mergeWaitLine(p)}
+    {#if waits}
+      <span class="prwait" role="status" data-pr-wait>{waits}</span>
+    {/if}
+    {#if p.mergeNote}<span class="lost" role="status" data-pr-merge-note use:tip={{ text: p.mergeNote, cut: true }}>{p.mergeNote}</span
+      >{/if}
+    {#if acts.none}<span class="prfacts" data-pr-no-strategy>{t('board.pr.merge.none')}</span>{/if}
+    {#if acts.merge || acts.whenGreen || p.mergeWhenGreen || p.mergeNote}
+      <div class="row prmerge">
+        {#if acts.merge}
+          {@const strategy = t(`board.pr.merge.strategies.${acts.merge}`)}
+          <button
+            class="btn small primary"
+            data-pr-merge
+            use:tip={t('board.pr.merge.nowTitle', { word: p.word, number: p.number, target: p.target, strategy })}
+            onclick={(e) => act(e, () => merge(false))}><Icon name="merge" size={12} />{t('board.pr.merge.now', { strategy })}</button
+          >
+        {/if}
+        {#if acts.whenGreen}
+          <button
+            class="btn small"
+            data-pr-merge-green
+            use:tip={t('board.pr.merge.whenGreenTitle')}
+            onclick={(e) => act(e, () => merge(true))}>{t('board.pr.merge.whenGreen')}</button
+          >
+        {/if}
+        {#if p.mergeWhenGreen || p.mergeNote}
+          <button class="btn small" data-pr-stop-waiting onclick={(e) => act(e, () => app.run(api.ticketPrStopWaiting(ticket.id)))}
+            >{p.mergeNote ? t('common.close') : t('board.pr.merge.stopWaiting')}</button
+          >
+        {/if}
+      </div>
+    {/if}
+    {#if p.preview && !ticket.blocked}
+      <!-- Its preview (ESC-67): Vercel, Netlify, Cloudflare Pages… put it on the pull request. -->
+      {@const preview = p.preview}
+      <div class="row">
+        <button
+          class="btn small"
+          data-ticket-preview
+          use:tip={t('envs.card.previewTitle', { word: p.word, url: preview })}
+          onclick={(e) => act(e, () => app.run(openUrl(preview)))}><Icon name="ext" size={14} />{t('envs.card.preview')}</button
+        >
+      </div>
+    {/if}
+  {/if}
+
   {#if ticket.column === 'done' && outcome}
     {#if ticket.outcomeUrl}
       <button class="outcome link" onclick={(e) => act(e, () => app.run(openUrl(ticket.outcomeUrl!)))}
@@ -470,9 +629,37 @@
         >{#if outcome.icon}<Icon name={outcome.icon} size={14} />{/if}{outcome.text}</span
       >
     {/if}
+    {#if pushed}
+      <!-- Pushed without a pull request (ESC-63): its branch's CI, its jobs on a click. -->
+      <div class="cirow" data-ticket-pushed-ci><CiPill ci={pushed} of={{ kind: 'pushed', id: ticket.id }} projectId={project.id} /></div>
+    {/if}
   {/if}
 
-  {#if ticket.column !== 'done' && ticket.criteria.length}
+  {#if cardEnvironments(ticket).length}
+    <!-- Where it is deployed (ESC-67): « staging ✓ · production ⏳ » drawn with icons, each name opens its environment's address. -->
+    <div class="dep-envs" data-ticket-envs aria-label={t('envs.card.label')}>
+      {#each cardEnvironments(ticket) as e, i (e.name)}
+        {@const label = t(e.deployed ? 'envs.card.deployed' : 'envs.card.waiting', { name: e.name })}
+        {#if i}<span class="dep-sep" aria-hidden="true">{' · '}</span>{/if}
+        {#if e.url}
+          {@const url = e.url}
+          <button
+            class="dep-env"
+            class:deployed={e.deployed}
+            aria-label={label}
+            use:tip={`${label} · ${url}`}
+            onclick={(ev) => act(ev, () => app.run(openUrl(url)))}>{e.name}<Icon name={e.deployed ? 'check' : 'clock'} size={12} /></button
+          >
+        {:else}
+          <span class="dep-env" class:deployed={e.deployed} aria-label={label} use:tip={label}
+            >{e.name}<Icon name={e.deployed ? 'check' : 'clock'} size={12} /></span
+          >
+        {/if}
+      {/each}
+    </div>
+  {/if}
+
+  {#if ticket.column !== 'done' && ticket.column !== 'pr' && ticket.criteria.length}
     <ul class="crit" aria-label={t('board.card.criteriaLabel')}>
       {#each ticket.criteria as c, i (i)}
         <li class:met={c.ok} use:tip={c.note || undefined}>
@@ -524,6 +711,16 @@
         <div class="row">
           <button class="btn small" onclick={(e) => act(e, () => app.run(api.ticketResume(ticket.id)))}>{t('board.card.resume')}</button>
         </div>
+      {:else if ticket.column === 'pr' && ticket.pr?.closed}
+        <!-- Its pull request closed without a merge (ESC-59): back to do (its branch taken up), or done all the same. -->
+        <div class="row">
+          <button class="btn small" onclick={(e) => act(e, () => app.run(api.ticketPrBackToTodo(ticket.id)))}
+            >{t('board.pr.backToTodo')}</button
+          >
+          <button class="btn small" onclick={(e) => act(e, () => app.run(api.ticketFinishAnyway(ticket.id)))}
+            >{t('board.pr.finishAnyway')}</button
+          >
+        </div>
       {:else if ticket.conflict}
         <div class="row">
           <button class="btn small" onclick={(e) => act(e, () => app.run(api.ticketResolveConflict(ticket.id)))}
@@ -537,13 +734,13 @@
 
   <!-- The card's last line: why a ticket to do waits, or what the agent of one under way does and what it cost. -->
   {#if ticket.column === 'todo'}
-    {@const why = waitLabel(ticket, queueIndex, s, busyCount, issue, pause, awaited)}
+    {@const why = waitLabel(ticket, queueIndex, s, busyCount, issue, pause, awaited, redTarget)}
     <div class="act" class:theirs={theirs && !ticket.forced}>
       <Icon name={theirs && !ticket.forced ? 'team' : awaited.length && !ticket.forced ? 'link' : 'clock'} size={14} /><span
         class="grow"
         use:tip={{ text: why, cut: true }}>{why}</span
       >
-      {#if canStart(ticket, s, busyCount, quota, issue, pause)}
+      {#if canStart(ticket, s, busyCount, quota, issue, pause, redTarget)}
         <button class="btn small" onclick={(e) => act(e, launch)}><Icon name="play" size={14} />{t('board.card.launch')}</button>
       {/if}
     </div>
@@ -890,6 +1087,39 @@
   .outcome.link:hover {
     color: var(--text);
   }
+  /* The environments a done ticket is in (ESC-67): green once deployed, amber while it waits. */
+  .dep-envs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 2px;
+    min-width: 0;
+    font-size: 12px;
+  }
+  .dep-sep {
+    color: var(--muted);
+    white-space: pre;
+  }
+  .dep-env {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--wait);
+    font: inherit;
+    white-space: nowrap;
+  }
+  .dep-env.deployed {
+    color: var(--add);
+  }
+  button.dep-env {
+    cursor: pointer;
+  }
+  button.dep-env:hover {
+    text-decoration: underline;
+  }
   .crit {
     display: grid;
     gap: 5px;
@@ -964,6 +1194,107 @@
   }
   .lost {
     color: var(--wait);
+    font-size: 12px;
+  }
+  /* « En revue » (ESC-59): its pull request's number as the sidebar draws an agent's, then its state and its CI. */
+  .prline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    min-width: 0;
+    font-size: 12px;
+  }
+  .prnum {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 20px;
+    padding: 0 6px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--soft);
+    font: 11.5px var(--mono);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .prnum:hover {
+    color: var(--text);
+    box-shadow: inset 0 0 0 1px var(--line-3, var(--line-2));
+  }
+  .prnum.ok :global(.icon) {
+    color: var(--run);
+  }
+  .prnum.fail :global(.icon) {
+    color: var(--del);
+  }
+  .prnum.wait :global(.icon) {
+    color: var(--wait);
+  }
+  .prnum.merged :global(.icon) {
+    color: var(--syn-k);
+  }
+  .prnum.dim {
+    color: var(--muted);
+  }
+  .prstate {
+    color: var(--soft);
+  }
+  .prstate.approved {
+    color: var(--run);
+  }
+  .prstate.changes {
+    color: var(--wait);
+  }
+  .prstate.draft,
+  .prstate.closed {
+    color: var(--muted);
+  }
+  .prci {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    cursor: pointer;
+  }
+  .prci:hover {
+    text-decoration: underline;
+  }
+  .cirow {
+    display: flex;
+    min-width: 0;
+  }
+  .prci.success {
+    color: var(--run);
+  }
+  .prci.failure {
+    color: var(--del);
+  }
+  .prci.pending {
+    color: var(--wait);
+  }
+  .prwait {
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .prmerge {
+    margin-top: 2px;
+  }
+  .prfacts {
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .prfacts .conflicting {
+    color: var(--del);
+  }
+  .fixing {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--run);
     font-size: 12px;
   }
   /* The last line, under a hairline: a dot of the agent's state, what it does, its cost. */

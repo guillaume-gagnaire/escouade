@@ -11,8 +11,8 @@ import { addProject, expect, test } from './fixture';
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
 const ID = 'dev.test.fake';
 
-/** The fake plugin in a folder of the test's own, as an author would have it. */
-function fakePlugin(dir: string) {
+/** The fake plugin in a folder of the test's own, as an author would have it; `changes` go over its manifest. */
+function fakePlugin(dir: string, changes: Record<string, unknown> = {}) {
   fs.mkdirSync(dir, { recursive: true });
   for (const f of ['fake-plugin.mjs', 'fake-plugin.cmd', 'fake-plugin'])
     fs.copyFileSync(path.join(ROOT, 'tests', 'fixtures', f), path.join(dir, f));
@@ -28,6 +28,7 @@ function fakePlugin(dir: string) {
     activation: ['event:ticket.column'],
     permissions: { events: ['ticket.column'], network: ['hooks.example.com'], secrets: ['token'] },
     contributes: { secrets: [{ key: 'token', title: { fr: 'Jeton', en: 'Token' } }] },
+    ...changes,
   };
   fs.writeFileSync(path.join(dir, 'escouade-plugin.json'), JSON.stringify(manifest, null, 2));
 }
@@ -51,7 +52,9 @@ const projectId = (data: string) => JSON.parse(fs.readFileSync(path.join(data, '
 const installed = (data: string) => {
   const file = path.join(data, 'plugins.json');
   return fs.existsSync(file)
-    ? (JSON.parse(fs.readFileSync(file, 'utf8')).plugins as { id: string; projects?: Record<string, boolean> }[])
+    ? (JSON.parse(fs.readFileSync(file, 'utf8')).plugins as { id: string; origin: { kind: string }; projects?: Record<string, boolean> }[])
+        // Those the app gives (INT-4) are in the file too, but are not installed.
+        .filter((p) => p.origin.kind !== 'builtin')
     : [];
 };
 
@@ -121,4 +124,56 @@ test('the fake plugin is installed from a folder, switched on for a project, its
   expect(fs.existsSync(path.join(app.data, 'plugins', ID))).toBe(false);
   expect(fs.existsSync(path.join(app.data, 'plugin-logs', `${ID}.log`))).toBe(false);
   expect(fs.existsSync(path.join(src, 'escouade-plugin.json'))).toBe(true);
+});
+
+// ESC-329: through the app's own commands, a plugin that decides runs before any request as soon as it is ready and on; one that
+// does not decide waits for its first use.
+test('a plugin that decides starts at its installation and when it is switched on again, another does not', async ({ app }) => {
+  test.setTimeout(120_000);
+  const { page } = app;
+  const invoke = <T>(cmd: string, args: Record<string, unknown>) =>
+    page.evaluate(
+      ([cmd, args]) =>
+        (window as unknown as { __TAURI_INTERNALS__: { invoke(c: string, a: unknown): Promise<unknown> } }).__TAURI_INTERNALS__.invoke(
+          cmd as string,
+          args,
+        ),
+      [cmd, args] as const,
+    ) as Promise<T>;
+  const phase = (id: string) => invoke<{ status: { phase: string } }>('plugin_run', { id }).then((r) => r.status.phase);
+  const install = async (path: string) => {
+    const { token } = await invoke<{ token: string }>('plugin_inspect_folder', { path });
+    await invoke('plugin_install', { token });
+  };
+
+  const DECIDER = 'dev.test.decider';
+  const decider = path.join(app.root, 'decider');
+  fakePlugin(decider, {
+    id: DECIDER,
+    run: { command: 'fake-plugin', windows: 'fake-plugin.cmd', args: ['--decide', 'allow'] },
+    activation: [],
+    permissions: { decide: true },
+    contributes: {},
+  });
+  const other = path.join(app.root, 'other');
+  fakePlugin(other);
+
+  await install(decider);
+  await expect.poll(() => phase(DECIDER), { timeout: 30_000 }).toBe('running');
+  await install(other);
+  await expect.poll(() => phase(ID)).toBe('idle');
+
+  await invoke('plugin_set_enabled', { id: DECIDER, on: false });
+  await expect.poll(() => phase(DECIDER)).toBe('idle');
+  await invoke('plugin_set_enabled', { id: DECIDER, on: true });
+  await expect.poll(() => phase(DECIDER), { timeout: 30_000 }).toBe('running');
+
+  await invoke('plugin_set_permission', { id: DECIDER, word: 'decide', granted: false });
+  await expect.poll(() => phase(DECIDER)).toBe('idle');
+  await invoke('plugin_set_permission', { id: DECIDER, word: 'decide', granted: true });
+  await expect.poll(() => phase(DECIDER), { timeout: 30_000 }).toBe('running');
+
+  await invoke('plugin_set_enabled', { id: ID, on: false });
+  await invoke('plugin_set_enabled', { id: ID, on: true });
+  expect(await phase(ID)).toBe('idle');
 });

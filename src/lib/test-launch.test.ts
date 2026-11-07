@@ -44,6 +44,10 @@ function backend(up: (url: string) => boolean, more: Record<string, (args: any) 
   });
 }
 
+/** The pages opened, in Escouade (ESC-311) or in the system's browser. */
+const opened = (b: { calls: { cmd: string; args: Record<string, any> }[] }) =>
+  b.calls.filter((c) => c.cmd === 'open_url' || c.cmd === 'devpage_open');
+
 /** A step's process ends with `code`. */
 const exit = (id: string, code: number) => Object.assign(app.launches[id], { status: code === 0 ? 'done' : 'crashed', code, ptyId: null });
 /** A step's process, stopped on purpose, ends (killed: the backend gives a code). */
@@ -79,7 +83,7 @@ describe('▶ Tester', () => {
       expect(app.modal).toEqual({ kind: 'testLaunch', agentId: 'a7' });
       expect(flows.all.a7).toBeUndefined();
       expect(b.called('test_run_start')).toHaveLength(0);
-      expect(b.called('open_url')).toHaveLength(0);
+      expect(opened(b)).toHaveLength(0);
     });
 
     it('is approved as it was shown, and only then runs', async () => {
@@ -93,7 +97,7 @@ describe('▶ Tester', () => {
       expect(b.calls.map((c) => c.cmd).slice(0, 2)).toEqual(['test_recipe_approve', 'test_run_start']);
       expect(b.called('test_recipe_approve')[0].args).toEqual({ agentId: 'a7', recipe: RECIPE });
       expect(flows.all.a7.phase).toBe('ready');
-      expect(b.called('open_url').map((c) => c.args.url)).toEqual(['http://localhost:4111/connexion']);
+      expect(opened(b).map((c) => c.args.url)).toEqual(['http://localhost:4111/connexion']);
     });
 
     it('runs nothing when the backend refuses the approval, and says why', async () => {
@@ -148,13 +152,13 @@ describe('▶ Tester', () => {
       ['run', 1],
     ]);
     expect(flows.all.a7.lines.map((l) => l.detail)).toEqual(['terminée', 'en attente de localhost:4110…', 'en attente de localhost:4111…']);
-    expect(b.called('open_url')).toHaveLength(0);
+    expect(opened(b)).toHaveLength(0);
     up = true;
     await vi.advanceTimersByTimeAsync(600);
     await run;
     expect(flows.all.a7.phase).toBe('ready');
     expect(flows.all.a7.lines[1].detail).toMatch(/^prêt · \d+(,\d)? s$/);
-    expect(b.called('open_url').map((c) => c.args.url)).toEqual(['http://localhost:4111/connexion']);
+    expect(opened(b).map((c) => c.args.url)).toEqual(['http://localhost:4111/connexion']);
   });
 
   it('stops on a preparation that fails', async () => {
@@ -188,7 +192,7 @@ describe('▶ Tester', () => {
     await vi.advanceTimersByTimeAsync(READY_LIMIT_MS + 1000);
     await run;
     expect(flows.all.a7.lines.find((l) => l.label === 'web')?.detail).toBe('Pas de réponse de http://localhost:4111 après 3 min');
-    expect(b.called('open_url')).toHaveLength(0);
+    expect(opened(b)).toHaveLength(0);
   });
 
   it('reopens the modal and the browser when everything already runs', async () => {
@@ -201,7 +205,7 @@ describe('▶ Tester', () => {
     await testAgent(A, project());
     expect(app.modal).toEqual({ kind: 'testLaunch', agentId: 'a7' });
     expect(b.called('test_run_start')).toHaveLength(2);
-    expect(b.called('open_url')).toHaveLength(2);
+    expect(opened(b)).toHaveLength(2);
   });
 
   it('only shows a test under way again when asked twice', async () => {
@@ -600,7 +604,7 @@ describe('▶ Tester', () => {
       await vi.advanceTimersByTimeAsync(1000);
       await old;
       await fresh;
-      expect(b.called('open_url').map((c) => c.args.url)).toEqual(['http://localhost:4121/nouveau']);
+      expect(opened(b).map((c) => c.args.url)).toEqual(['http://localhost:4121/nouveau']);
       expect(oldPolls()).toBe(polled);
       expect(flows.all.a7.lines.map((l) => [l.label, l.state])).toEqual([
         ['api3', 'ready'],
@@ -621,6 +625,8 @@ describe('▶ Tester', () => {
 
     it('ends the test of an agent whose ticket goes "Terminé", with its modal, and keeps the others', async () => {
       await boot(() => true);
+      // In the system's browser: its modal stays open once the test is up (in Escouade, the page takes its place).
+      app.projects[0].pagesOpen = 'system';
       app.agents.a8 = { ...A, id: 'a8' };
       flows.prepared.a7 = JSON.stringify(RECIPE.prepare);
       flows.prepared.a8 = JSON.stringify(RECIPE.prepare);
@@ -695,7 +701,7 @@ describe('▶ Tester with isola', () => {
       expect(flows.all.a7).toBeUndefined();
       expect(b.called('test_run_start')).toHaveLength(0);
       expect(b.called('isola_services')).toHaveLength(0);
-      expect(b.called('open_url')).toHaveLength(0);
+      expect(opened(b)).toHaveLength(0);
     });
 
     it('approves the file and the address that were shown, then runs isola up', async () => {
@@ -807,7 +813,7 @@ describe('▶ Tester with isola', () => {
     await vi.advanceTimersByTimeAsync(600);
     await run;
     expect(flows.all.a7.phase).toBe('ready');
-    expect(b.called('open_url').map((c) => c.args.url)).toEqual(['http://localhost:8117']);
+    expect(opened(b).map((c) => c.args.url)).toEqual(['http://localhost:8117']);
     // Asked again, it checks again: isola up (all running: at once), then the services.
     const again = testAgent(A, project());
     await vi.advanceTimersByTimeAsync(10);
@@ -835,7 +841,7 @@ describe('▶ Tester with isola', () => {
     exit('test:a7:isola:0', 0);
     await vi.advanceTimersByTimeAsync(1000);
     await run;
-    expect(b.called('open_url').map((c) => c.args.url)).toEqual(['http://ticket-dem-1.demo.localhost:3000/connexion']);
+    expect(opened(b).map((c) => c.args.url)).toEqual(['http://ticket-dem-1.demo.localhost:3000/connexion']);
   });
 
   it('stops when isola up fails, or a service does not run', async () => {

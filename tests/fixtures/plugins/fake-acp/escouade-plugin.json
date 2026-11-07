@@ -1,0 +1,54 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.example.fake-acp",
+  "name": "Faux ACP",
+  "version": "1.0.0",
+  "description": {
+    "fr": "Un faux agent ACP décrit sans code, pour les tests du plugin ACP générique.",
+    "en": "A fake ACP agent described without code, for the tests of the generic ACP plugin."
+  },
+  "author": { "name": "Escouade" },
+  "license": "MIT",
+  "escouade": { "api": "1", "min": "2.1.0" },
+  "contributes": {
+    "harnesses": [
+      {
+        "id": "fake-acp",
+        "name": "Faux ACP",
+        "speaker": "Faux ACP",
+        "locate": { "names": ["fake-acp"] },
+        "tested": { "oldest": "1.0.0", "newest": "1.2.0" },
+        "caps": {
+          "modes": [
+            { "id": "default", "meaning": { "fr": "Ses commandes et ses écritures demandent.", "en": "Its commands and writes ask." } },
+            {
+              "id": "acceptEdits",
+              "meaning": {
+                "fr": "Ses écritures dans le dossier passent sans demander.",
+                "en": "Its writes in the folder go through without asking."
+              }
+            },
+            {
+              "id": "bypassPermissions",
+              "meaning": { "fr": "Escouade accepte tout ce qu'il demande.", "en": "Escouade accepts all it asks." }
+            }
+          ],
+          "readOnly": true
+        },
+        "models": [
+          { "id": "rapide", "label": "Rapide" },
+          { "id": "fin", "label": "Fin" }
+        ],
+        "accountVar": "FAKE_ACP_HOME",
+        "install": { "windows": "npm install -g fake-acp", "unix": "npm install -g fake-acp" },
+        "acp": {
+          "args": ["acp"],
+          "modes": { "default": "ask", "acceptEdits": "ask", "bypassPermissions": "auto" },
+          "readOnlyMode": "read",
+          "questionsInText": true,
+          "subagentTools": ["task"]
+        }
+      }
+    ]
+  }
+}

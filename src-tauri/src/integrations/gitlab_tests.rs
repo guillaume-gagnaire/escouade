@@ -1,22 +1,42 @@
 //! GitLab Issues against the fake server, its answers as the REST API v4's documentation gives
-//! them: gitlab.com and a self-hosted instance side by side.
+//! them: gitlab.com and a self-hosted instance side by side. Since INT-8.2 its client is the plugin
+//! « GitLab »'s (`plugins/gitlab/src/issues.rs`): the calls go to its process
+//! by `ProcessTicketSource`, one account per instance, as the core makes them
+//! (`HostedTicketSource`), and the plugin calls the fake server.
 
-use super::*;
+use super::source::TicketSource;
+use super::{encode, lasting, Account, ExternalRef, ExternalState, Query};
 use crate::integrations::fake::FakeServer;
-use crate::integrations::lasting;
+use crate::model::Service;
+use crate::plugins::adapters::ProcessTicketSource;
+use crate::plugins::builtin::GITLAB;
+use crate::plugins::hosted::HostedTicketSource;
+use serde_json::{json, Value};
 
-/// gitlab.com and git.acme.dev, both on the fake server (their API under `/com` and `/acme`).
-async fn gitlab() -> (FakeServer, Gitlab) {
+const S: Service = Service::GITLAB;
+
+/// gitlab.com and git.acme.dev:8443, both on the fake server (their API under `/com` and `/acme`), each
+/// served by the plugin's process with its token lent, as the core gives them.
+async fn gitlab() -> (FakeServer, HostedTicketSource) {
     let server = FakeServer::start().await;
-    let inst = |host: &str, at: &str, token: &str, user: &str| Instance {
-        host: host.into(),
-        base: format!("{}{at}/api/v4", server.url),
-        token: token.into(),
-        user: user.into(),
-        label: format!("@{user}"),
+    let rt = crate::plugins::builtin::test_runtime("gitlab-issues");
+    crate::plugins::builtin::let_reach(&rt, &[("fake.test", &server.url)]);
+    let inst = |host: &str, at: &str, token: &str, user: &str| {
+        rt.lend(GITLAB, &format!("account:{host}"), token);
+        let account = Account {
+            site: format!("https://{host}"),
+            user: user.into(),
+            label: format!("@{user}"),
+            ..Default::default()
+        };
+        (
+            host.to_string(),
+            ProcessTicketSource::new(rt.clone(), GITLAB, "gitlab", &account)
+                .with_api(&format!("{}{at}/api/v4", server.url)),
+        )
     };
-    let g = Gitlab::new(
-        reqwest::Client::new(),
+    let g = HostedTicketSource::new(
+        "GitLab",
         vec![
             inst("gitlab.com", "/com", "glpat-com", "ada"),
             inst("git.acme.dev:8443", "/acme", "glpat-acme", "ada.l"),
@@ -55,19 +75,6 @@ fn an_issue(iid: u64, title: &str) -> Value {
         "issue_type": "issue",
         "web_url": format!("https://gitlab.com/acme/back/api/-/issues/{iid}")
     })
-}
-
-#[test]
-fn the_states_and_the_filter_of_gitlab_read_in_english() {
-    use crate::i18n::Lang::En;
-    assert_eq!(
-        fixed_states(En).map(|s| s.name),
-        ["Open".to_string(), "Closed".to_string()]
-    );
-    assert_eq!(mine_filter(En).label, "Assigned to me");
-    assert_eq!(unassigned(En), "Unassigned");
-    assert_eq!(by(En, "grace"), "by @grace");
-    assert_eq!(kind_of(En, "task"), ("Task".to_string(), "task"));
 }
 
 #[tokio::test]
@@ -220,7 +227,7 @@ async fn the_issues_are_listed_with_their_labels_author_link_and_criteria() {
         ),
         ("42", "#42", "Issue", "issue")
     );
-    assert_eq!(i.service, Service::Gitlab);
+    assert_eq!(i.service, Service::GITLAB);
     assert_eq!(i.title, "Crash au paiement");
     assert_eq!(i.meta, ["bug", "backend", "@ada", "par @grace"]);
     assert_eq!(i.url, "https://gitlab.com/acme/back/api/-/issues/42");
@@ -510,15 +517,20 @@ async fn real_gitlab_issues() {
         .as_str()
         .expect("the token's user")
         .to_string();
-    let g = Gitlab::new(
-        reqwest::Client::new(),
-        vec![Instance {
-            host: host.clone(),
-            base: base.clone(),
-            token: token.clone(),
-            user: user.clone(),
-            label: format!("@{user}"),
-        }],
+    let rt = crate::plugins::builtin::test_runtime("gitlab-real");
+    rt.lend(GITLAB, &format!("account:{host}"), &token);
+    let account = Account {
+        site: url.clone(),
+        user: user.clone(),
+        label: format!("@{user}"),
+        ..Default::default()
+    };
+    let g = HostedTicketSource::new(
+        "GitLab",
+        vec![(
+            host.clone(),
+            ProcessTicketSource::new(rt, GITLAB, "gitlab", &account),
+        )],
     );
     let started = std::time::Instant::now();
     assert_eq!(g.me().await.unwrap().1, user);
@@ -620,7 +632,11 @@ async fn real_gitlab_issues() {
         started.elapsed().as_millis()
     );
     assert_eq!(now["state"], "closed");
-    assert!(label_names(&now).contains(&"escouade-doing".to_string()));
+    assert!(now["labels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|l| l == "escouade-doing"));
     assert_eq!(now["user_notes_count"], 1);
     let gone = raw(
         reqwest::Method::DELETE,

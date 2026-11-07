@@ -4,12 +4,23 @@ Un plugin **déclaratif** peut donner à Escouade d’autres couleurs : des vale
 
 ## Un thème dans le manifeste
 
+Le plugin « Contraste élevé », en entier : un thème, sombre et clair, et sa palette de projets.
+
+`plugins/high-contrast/escouade-plugin.json`
+
 ```json
 {
-  "id": "dev.exemple.high-contrast",
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.high-contrast",
   "name": { "fr": "Contraste élevé", "en": "High contrast" },
-  "version": "1.0.0",
+  "version": "1.1.0",
+  "description": {
+    "fr": "Un thème à fort contraste, clair et sombre : texte pur, bordures nettes, couleurs d'état franches.",
+    "en": "A high-contrast theme, light and dark: pure text, sharp borders, plain status colors."
+  },
+  "author": { "name": "Escouade", "url": "https://escouade.dev" },
   "license": "MIT",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/high-contrast",
   "escouade": { "api": "1", "min": "2.1.0" },
   "contributes": {
     "themes": [
@@ -19,11 +30,46 @@ Un plugin **déclaratif** peut donner à Escouade d’autres couleurs : des vale
         "dark": {
           "--frame": "#000000",
           "--panel": "color-mix(in oklch, var(--p) 4%, #050505)",
+          "--raise": "#141414",
+          "--raise-2": "#1f1f1f",
+          "--well": "#000000",
+          "--line": "#8a8a8a",
+          "--line-2": "#b0b0b0",
+          "--line-3": "#d8d8d8",
           "--text": "#ffffff",
-          "--p-ink": "#ffd400"
+          "--soft": "#f0f0f0",
+          "--muted": "#d0d0d0",
+          "--dim": "#b8b8b8",
+          "--p-ink": "#ffd400",
+          "--ring": "#ffd400",
+          "--run": "#4dff88",
+          "--wait": "#ffb000",
+          "--done": "#7ab8ff",
+          "--add": "#4dff88",
+          "--del": "#ff6b6b"
         },
-        "light": { "--frame": "#ffffff", "--text": "#000000", "--p-ink": "#0040c0" },
-        "projectColors": ["#ffd400", "#00e0ff", "#ff5cf0", "#7cff4f"]
+        "light": {
+          "--frame": "#ffffff",
+          "--panel": "#ffffff",
+          "--raise": "#f2f2f2",
+          "--raise-2": "#e6e6e6",
+          "--well": "#ffffff",
+          "--line": "#5c5c5c",
+          "--line-2": "#3d3d3d",
+          "--line-3": "#1f1f1f",
+          "--text": "#000000",
+          "--soft": "#0a0a0a",
+          "--muted": "#262626",
+          "--dim": "#3d3d3d",
+          "--p-ink": "#0040c0",
+          "--ring": "#0040c0",
+          "--run": "#006b2e",
+          "--wait": "#8a4b00",
+          "--done": "#0040c0",
+          "--add": "#006b2e",
+          "--del": "#b00020"
+        },
+        "projectColors": ["#ffd400", "#00e0ff", "#ff5cf0", "#7cff4f", "#ff8a00", "#b48cff"]
       }
     ]
   }
@@ -85,4 +131,4 @@ Jamais de `url()`, d’autre fonction (`image-set()`, `attr()`, `env()`…), de 
 
 ## Tester un thème
 
-`escouade-plugin validate` vérifie le manifeste. Pour voir le thème, installez le dossier du plugin en développement (vue Plugins › « En développement »), choisissez-le dans Réglages › Application et passez de Sombre à Clair. Le plugin d’exemple « Contraste élevé », celui du manifeste plus haut (`plugin-examples/high-contrast` dans le dépôt d’Escouade), est un point de départ : voir [Les plugins d’exemple](plugins/examples#contraste-eleve).
+`escouade-plugin validate` vérifie le manifeste. Pour voir le thème, installe le dossier du plugin en développement (vue Plugins › « En développement »), choisis-le dans Réglages › Application et passe de Sombre à Clair. Le plugin d’exemple « Contraste élevé », celui du manifeste plus haut (`plugins/high-contrast` dans le dépôt d’Escouade), est un point de départ : voir [Les plugins d’exemple](plugins/examples#contraste-eleve).

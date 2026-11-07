@@ -47,7 +47,9 @@ A conflict cancels the merge: see “On conflict” below.
 
 Shown with “Open a pull request” only. Off by default. When on, the PR opens as a draft.
 
-Escouade pushes the branch, then creates the PR with the GitHub CLI `gh` if it’s installed. Without `gh`, or if `gh` fails, it opens GitHub’s page for finishing the PR in your browser; this setting doesn’t apply then. If the repository isn’t on GitHub, the branch is only pushed.
+Escouade pushes the branch, then opens the PR through the API of the repository’s [code host](code-hosts), with the account connected for its instance. Without an account, or when the host refuses, it opens the host’s page for creating the PR in your browser, filled in; this setting doesn’t apply then. On an unknown host, the branch is only pushed.
+
+The ticket then waits for its merge in [the “In review” column](board#the-in-review-column). Two more settings come with this action: “Reply under fixed threads” (off by default: Escouade publishes nothing under the threads without it, and never resolves a thread) and “Branch update” of a PR in conflict with its target (merge by default, or rebase).
 
 ## Before and after
 

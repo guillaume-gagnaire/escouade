@@ -22,6 +22,8 @@ export interface Settings {
   attachBigText: 'path' | 'refuse';
   /** « Purger les copies après », in days: 0 = kept as long as their owner (agent, project, ticket). */
   attachKeepDays: number;
+  /** « Délai avant l’envoi pendant un tour », in seconds (0: off). */
+  midTurnDelaySecs: number;
   pwshPath: string;
   bashPath: string;
   wslDistro: string;
@@ -80,8 +82,6 @@ export interface Settings {
   remoteControlAll: boolean;
   /** « Nouveaux projets privés »: a project added is private (`Project.private`) from the start. */
   privateProjects: boolean;
-  /** « Index du code sur tous les projets » (ESC-293): the index of every project that made no choice of its own (`Project.codeIndexChoice`) is on. Changed by `set_code_index_all`, not by the settings modal's draft. Absent from the settings of the window's tests made before it. */
-  codeIndexAll?: boolean;
   /** « Thème »: Système (the system's, and its changes), Clair or Sombre; applied at once, the window with it (lib/appearance.ts). */
   theme: ThemeChoice;
   /** « Couleurs » (PLG-7): the theme of a plugin the window takes, `<plugin id>/<theme id>`; empty or absent, Escouade's (lib/plugin-theme.svelte.ts). */
@@ -160,6 +160,12 @@ export interface SpeechSettings {
 }
 
 /** A model of a service on line (ESC-132). */
+/** The Mistral account, shared by the voice and Mistral Vibe (ESC-327): its key by its end, or the Vibe account the voice goes by. */
+export interface MistralKey {
+  own: string | null;
+  borrowed: { account: string; hint: string } | null;
+}
+
 export interface OnlineModel {
   id: string;
   label: string;
@@ -393,6 +399,15 @@ export interface NotifyFor {
   errors: boolean;
   /** « Tickets (prêt à tester, bloqué) ». */
   tickets: boolean;
+  /** The news of the code hosts (ESC-68), one by one. */
+  prCiFailed: boolean;
+  prChanges: boolean;
+  prApproved: boolean;
+  prMerged: boolean;
+  prConflict: boolean;
+  prReview: boolean;
+  deployOk: boolean;
+  deployFailed: boolean;
 }
 
 /** The sync with the external ticket systems and their automatic import, for every project. */
@@ -411,7 +426,19 @@ export interface IntegrationSettings {
 }
 
 /** An external ticket system. */
-export type Service = 'jira' | 'trello' | 'github' | 'linear' | 'clickup' | 'gitlab' | 'azure';
+/** A source of tickets, by its id (`jira`, `github`…): one of the core's registry. */
+export type Service = string;
+
+/** What the core tells of a kind of source (`InitialState::sources`). */
+export interface SourceDecl {
+  id: Service;
+  name: string;
+  short: string;
+  /** The code host whose accounts serve it. */
+  host: string | null;
+  /** It has an account of its own; false when it is connected as its code host. */
+  ownAccount: boolean;
+}
 
 /** A Jira status, a Trello list, or for GitHub "open", "closed" or "label:<name>". */
 export interface ExternalState {
@@ -459,6 +486,19 @@ export interface AccountView {
   inFile?: boolean;
   /** The system keychain did not give its token at this start: no call goes out for it. */
   unread?: boolean;
+  /** The plugin that serves it, when another than Escouade's own hand. */
+  plugin?: string;
+  /** The plugins that may serve a new account of it, Escouade's first: chosen in the form when there are several. */
+  servers?: AccountServer[];
+}
+
+/** A plugin that can serve the accounts of a kind (INT-6). */
+export interface AccountServer {
+  plugin: string;
+  /** The plugin's name, as the form offers it. */
+  name: string;
+  /** Of Escouade's own hand: offered first. */
+  firstHand: boolean;
 }
 
 /** The form of « Connecter… »: the fields its service asks for. */
@@ -493,6 +533,11 @@ export interface ForgeProvider {
   /** The rights its tokens need. */
   scopes: string[];
   capabilities: ForgeCapabilities;
+  /** The plugins that may serve a new account of it, Escouade's first. */
+  servers?: AccountServer[];
+  /** The plugin the app gives that serves its accounts, once its client left the core (GitHub's), read from the
+   * plugins' registry: whether it is on, and why it stopped by itself. */
+  servedBy?: { plugin: string; name: string; on: boolean; stopped: string | null };
 }
 
 export type ForgeHealth = 'unchecked' | 'connected' | 'expired' | 'missingScopes' | 'unreachable' | 'unread';
@@ -506,8 +551,10 @@ export interface ForgeAccountView {
   label: string;
   viaCli: boolean;
   inFile: boolean;
-  /** github.com's: GitHub Issues' account too. */
+  /** It serves its plugin's ticket source too: github.com's GitHub Issues, a GitLab's GitLab Issues, an Azure DevOps organization's Azure Boards. */
   issues: boolean;
+  /** The plugin that serves it, when another than Escouade's own hand. */
+  plugin?: string;
   status: { health: ForgeHealth; missing: string[]; error: string | null };
   /** The projects whose remote is on its instance. */
   projects: string[];
@@ -535,6 +582,8 @@ export interface ForgeForm {
   url: string;
   email: string;
   token: string;
+  /** The plugin chosen to serve it; empty or left out: Escouade's own hand. */
+  plugin?: string;
 }
 
 export interface AccountForm {
@@ -542,6 +591,8 @@ export interface AccountForm {
   email: string;
   key: string;
   token: string;
+  /** The plugin chosen to serve it; empty or left out: Escouade's own hand. */
+  plugin?: string;
 }
 
 /** A Jira project, a Trello board, a GitHub repository. */
@@ -592,8 +643,14 @@ export interface IssuePage {
   total: number | null;
 }
 
-/** A harness that runs agents (« Harness » in the interface): Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode, Mistral Vibe, Antigravity CLI, Gemini CLI. */
-export type EngineId = 'claude' | 'codex' | 'copilot' | 'cursor' | 'opencode' | 'vibe' | 'agy' | 'gemini';
+/** The harnesses written into the app: Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode, Mistral Vibe, Antigravity CLI, Gemini CLI. */
+export type KnownEngineId = 'claude' | 'codex' | 'copilot' | 'cursor' | 'opencode' | 'vibe' | 'agy' | 'gemini';
+
+/**
+ * A harness that runs agents (« Harness » in the interface): an open id (INT-3), one of the app's or another the data names
+ * (a later version's, a plugin's), which the backend's registry declares or not (`engineOf`).
+ */
+export type EngineId = KnownEngineId | (string & {});
 
 /** A mode of Escouade a harness takes, and what it means there (null: what Escouade's menu says of it, Claude Code's meaning). */
 export interface ModeCap {
@@ -611,8 +668,8 @@ export interface EngineCaps {
   /** Copying an agent (« Dupliquer la conversation »), and up to where; 'none': hidden. */
   fork: 'none' | 'entry' | 'turn' | 'event' | 'message';
   resumeOtherAccount: boolean;
-  /** A message sent while a turn runs: queued, read at once, or refused. */
-  midTurn: 'queued' | 'immediate' | 'refused';
+  /** A message sent while a turn runs: queued, read at once, held until the turn ends, or refused. */
+  midTurn: 'queued' | 'immediate' | 'turnEnd' | 'refused';
   slashCommands: boolean;
   quota: 'windows' | 'credits' | 'none';
   /** The lengths of the windows of its quota, in minutes: the bars the status bar shows before their first reading. */
@@ -760,6 +817,8 @@ export interface Project {
   integrations: ProjectIntegrations;
   /** « Commit »: who writes the commits of the files panel's « Commit… » and « Commit tout… ». */
   commitMode: CommitMode;
+  /** « Ouvrir les pages des lancements » (ESC-311): where a launch's page opens once it answers. Kept on this machine. */
+  pagesOpen?: PagesOpen;
   /** « Compte préféré »: the Claude account its new agents and tickets go to (an `Account`'s id); empty is « Automatique ». */
   account: string;
   /** « Dossier des worktrees »: where its new worktrees go, from its folder or absolute; empty is `.claude/worktrees`. */
@@ -791,39 +850,12 @@ export interface Project {
   workflowsAutoRead?: boolean;
   /** « Où garder la configuration des workflows » (ESC-195): in the repository (`.escouade/workflows/`, by default) or on this machine. Absent from a project of the window’s tests made before it. */
   workflowsInRepo?: boolean;
-  /** « Index du code » (ESC-251), the project's own choice (ESC-293): absent, it follows « Index du code sur tous les projets » (`codeIndexOn`, lib/codeindex.ts). Set by `set_code_index` (Réglages › Projets, ESC-254). */
-  codeIndexChoice?: boolean;
+  /** Off: « Pas de workflow pour ce projet » (ESC-309), nothing read nor written of its workflows; `workflows.enabled` of its .escouade.yml when shared. Absent: on. */
+  workflowsEnabled?: boolean;
   /** Its agent folders; absent when it has none. */
   agentFolders?: AgentFolder[];
   /** The sidebar's order: the agents out of any folder and the folders. */
   agentOrder?: string[];
-}
-
-/** What a project's code index holds (ESC-251). */
-export interface CodeIndexStatus {
-  files: number;
-  symbols: number;
-  links: number;
-  /** Worktrees with a delta. */
-  worktrees: number;
-  /** The database's size on the disk. */
-  bytes: number;
-  /** When the project's folder was last read, in ms; 0 for never. */
-  indexedAt: number;
-}
-
-/** « Index du code » of a project, as its settings read it (ESC-254). */
-export interface CodeIndexInfo {
-  /** On: its own choice, or the app's. */
-  enabled: boolean;
-  /** It made its own choice (ESC-293); else it follows « Index du code sur tous les projets ». */
-  chosen: boolean;
-  /** Being read for « Index du code sur tous les projets », or waiting for its turn. */
-  reading: boolean;
-  waiting: boolean;
-  status: CodeIndexStatus;
-  /** Its own folders its fence leaves out (another project inside it), relative, with `/`. */
-  excluded: string[];
 }
 
 /** The vectors' model of « Recherche par le sens » (ESC-254): one for every project of this machine. */
@@ -835,18 +867,6 @@ export interface VectorsModelInfo {
   have: number;
   downloaded: boolean;
   downloading: boolean;
-}
-
-/** What the code index saved over the statistics' period, for a project (ESC-254). */
-export interface IndexSaving {
-  agentId: string;
-  projectId: string;
-  calls: number;
-  filesTokens: number;
-  answerTokens: number;
-  savedTokens: number;
-  /** At the input price of the model each agent ran on, in USD. */
-  savedCost: number;
 }
 
 /** What tells a step added by hand (ESC-195): a command typed, a subagent launched, a file written. */
@@ -930,6 +950,37 @@ export interface ProjectShared {
 /** « Rédigé par l'agent » (the agent is asked to commit) or « Direct, avec un message proposé ». */
 export type CommitMode = 'agent' | 'direct';
 
+/** Where a launch's page opens (ESC-311): the agent's view « Page », the project's « Pages » window, the system's browser. */
+export type PagesOpen = 'agent' | 'window' | 'system';
+
+/** A launch's page, as the backend keeps it (ESC-311). */
+export interface PageView {
+  agentId: string;
+  projectId: string;
+  /** « pagination-users · web ». */
+  title: string;
+  url: string;
+  /** In the project's « Pages » window. */
+  detached: boolean;
+  /** The width it is shown at: the whole room, a tablet's, a phone's. */
+  mode?: 'full' | 'tablet' | 'mobile';
+}
+
+/** What happened to a page: a load (`started`, `finished`), a link opened outside or refused, its devtools. */
+export interface PageEvent {
+  agentId: string;
+  phase: 'started' | 'finished' | 'outside' | 'refused' | 'devtools' | 'responsive';
+  url: string;
+}
+
+/** Where a page goes in the window, in its logical pixels. */
+export interface PageBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 /** What a direct commit takes: the files it commits, and the files copied into the worktrees it never does. */
 export interface CommitScope {
   files: FileChange[];
@@ -1001,7 +1052,8 @@ export interface IsolaService {
   probe: string;
 }
 
-export type Column = 'todo' | 'doing' | 'review' | 'done';
+/** `pr`: « En revue » (ESC-59), its pull request open on its host until it is merged there. */
+export type Column = 'todo' | 'doing' | 'review' | 'pr' | 'done';
 
 export interface Criterion {
   text: string;
@@ -1039,8 +1091,10 @@ export interface Ticket {
   /** The same in the language of the texts for Claude (what the comment published for the team quotes); the window shows `outcome`. */
   outcomeClaude: string | null;
   outcomeUrl: string | null;
-  /** The commit its merge made on the target; null when it was not merged (pull request, push, kept, nothing to merge) or before 1.8. */
+  /** The commit its merge made on the target, here or by its pull request (ESC-67); null when it was not merged (push, kept, nothing to merge) or before 1.8. */
   outcomeCommit: string | null;
+  /** Done and merged: the environments of its project's host, and whether it is deployed in each (ESC-67). */
+  environments?: TicketEnv[];
   forced: boolean;
   reminded: boolean;
   cost: number;
@@ -1071,7 +1125,164 @@ export interface Ticket {
   /** The pages of the spec and the decisions it implements, as « Planifier » made it (ESC-262). */
   pages?: string[];
   decisions?: DecisionRef[];
+  /** Its pull request, opened through its host's API by its validation (ESC-59), as last read. */
+  pr?: TicketPr | null;
+  /** The branch its validation pushed without a pull request (« Valider et pousser », ESC-63), and its CI as last read. */
+  pushed?: BranchCi | null;
 }
+
+/** The CI of a branch without a pull request (ESC-63, `branchci::BranchCi`): a project's target, or a ticket's pushed branch. */
+export interface BranchCi {
+  kind: string;
+  host: string;
+  namespace: string;
+  name: string;
+  branch: string;
+  checks: CheckState | null;
+  checksTotal: number;
+  checksFailed: number;
+  failed: FailedCheck[];
+  /** Red since when (ms); null while it is not red. */
+  redSince: number | null;
+  checkedAt: number | null;
+  /** Why its last reading failed, and since when (ms): the last state stays. */
+  error: string | null;
+  errorSince: number | null;
+  /** Its host runs failed jobs again. */
+  rerun: boolean;
+}
+
+/** Whose CI a window shows (`branchci::CiOf`): a project's target, a ticket's pushed branch or pull request, an agent's branch. */
+export interface CiOf {
+  kind: 'target' | 'pushed' | 'ticketPr' | 'agent';
+  id: string;
+}
+
+/** The checks of a CI, as its window shows them (`branchci::CiDetail`). */
+export interface CiDetail {
+  branch: string;
+  number?: number;
+  word: string;
+  hostName: string;
+  checks: PrCheck[];
+  can: PrDetail['can'];
+}
+
+/** The pull request of a ticket « En revue » (ESC-59), as its host last told it. */
+export interface TicketPr {
+  number: number;
+  url: string;
+  kind: string;
+  host: string;
+  namespace: string;
+  name: string;
+  target: string;
+  branch: string;
+  /** The host's word: « MR » on GitLab, « PR » elsewhere. */
+  word: string;
+  state: PrState;
+  draft: boolean;
+  checks: CheckState | null;
+  checksTotal: number;
+  checksFailed: number;
+  approvals: number;
+  changesRequested: boolean;
+  openThreads: number;
+  mergeable: boolean | null;
+  checkedAt: number | null;
+  /** Why its last reading failed (host out of reach, token expired), and since when (ms). */
+  error: string | null;
+  errorSince: number | null;
+  /** Closed without a merge: « Remettre à faire » and « Terminer quand même ». */
+  closed: boolean;
+  /** Its preview's address (Vercel, Netlify, Cloudflare Pages…), from a deployment or a check of its branch (ESC-67). */
+  preview?: string | null;
+  /** The host's auto-merge is on: it merges by itself once the checks pass (ESC-62). */
+  autoMerge?: boolean;
+  /** How the repository lets it merge, read once it is open; null before. */
+  mergeOptions?: MergeOptions | null;
+  /** « Merger quand c'est vert » without the host's auto-merge: Escouade merges it with this strategy once approved and green. */
+  mergeWhenGreen?: MergeStrategy | null;
+  /** Why Escouade's merge did not go (its CI failed, the host refused), until the next gesture. */
+  mergeNote?: string | null;
+  /** The checks that failed at its last reading (ESC-60); `log`: its host keeps its log (not a CI of another kind). */
+  failed: FailedCheck[];
+  /** Its agent fixes its CI now: since when (ms). */
+  fixing: number | null;
+  /** How many times its agent was given its CI to fix (the autopilot: while below the ticket's loops). */
+  fixes: number;
+  /** Fixed and pushed: the autopilot waits for its CI to run again. */
+  awaitingCi: boolean;
+  /** Why the last fix did not go to its end. */
+  fixError: string | null;
+  /** What its agent was last given (ESC-61): its CI, its review's comments, or its branch to bring up to its target. */
+  fixKind: TicketPrFix;
+  /** The review's comments not resolved that came since its last push of fixes, not given to its agent yet (ESC-61). */
+  feedback: number;
+}
+
+export type TicketPrFix = 'ci' | 'reviews' | 'merge' | 'rebase';
+
+export interface FailedCheck {
+  name: string;
+  url: string | null;
+  log: boolean;
+}
+
+/** An environment of the project's host, and whether a done ticket is deployed in it (ESC-67). */
+export interface TicketEnv {
+  name: string;
+  url?: string | null;
+  deployed: boolean;
+}
+
+/** A deployment in an environment (`forge::Deployment`). */
+export interface Deployment {
+  environment: string;
+  state: string;
+  url: string | null;
+  /** The commit it deployed, when the host tells it. */
+  sha?: string;
+  /** When it was made (seconds since 1970). */
+  created?: number;
+  author?: string;
+  /** Its job's address. */
+  log?: string | null;
+}
+
+/** An environment as the view « Environnements » shows it (`deploys::Environment`). */
+export interface Environment {
+  name: string;
+  url?: string | null;
+  production: boolean;
+  /** What runs there: its newest deployment that succeeded. */
+  running?: Deployment | null;
+  /** Its newest deployment, when it is not the one that runs (under way, or failed). */
+  latest?: Deployment | null;
+  failed: boolean;
+}
+
+/** The environments of a project, as last read (`deploys::ProjectEnvironments`). */
+export interface ProjectEnvironments {
+  projectId: string;
+  environments: Environment[];
+  readAt?: number | null;
+  error?: string | null;
+  /** The host has no deployments (Gitea, Forgejo, Azure DevOps). */
+  unsupported: boolean;
+  host: string;
+}
+
+export type MergeStrategy = 'merge' | 'squash' | 'rebase' | 'semiLinear';
+
+/** How a repository lets a pull request merge (ESC-62). */
+export interface MergeOptions {
+  strategies: MergeStrategy[];
+  autoMerge: boolean;
+}
+
+/** How « Merger » or « Merger quand c'est vert » went: merged now, by the host's auto-merge, or Escouade waits. */
+export type MergeHow = 'merged' | 'host' | 'escouade';
 
 /** Someone of the team, as the shared tickets' files name them (ESC-190). */
 export interface Person {
@@ -1156,6 +1367,13 @@ export interface BoardSettings {
   target: string;
   strategy: 'merge' | 'squash' | 'rebase';
   draft: boolean;
+  /** Who its pull requests ask for a review, and their labels (ESC-59). */
+  reviewers: string[];
+  labels: string[];
+  /** Once the review's fixes are pushed, « Corrigé dans abc1234 » under each thread (ESC-61): off by default; never resolved. */
+  replyThreads: boolean;
+  /** How « L'agent met à jour la branche » brings the target in (ESC-61): a merge, or a rebase pushed with --force-with-lease. */
+  prUpdate: 'merge' | 'rebase';
   testsFirst: boolean;
   testCommand: string;
   cleanup: boolean;
@@ -1166,6 +1384,8 @@ export interface BoardSettings {
   effort: string;
   mode: string;
   autopilot: boolean;
+  /** « Pause quand la CI de la cible est rouge » (ESC-63): off by default. */
+  pauseOnRedTarget?: boolean;
   prefix: string;
   nextNumber: number;
 }
@@ -1397,6 +1617,11 @@ export interface Agent {
   prs: PullRequest[];
   /** The code host's word for them: « MR » on GitLab, « PR » elsewhere; null until read. */
   prWord: string | null;
+  /** The plugin that serves its code host does not answer (switched off, stopped, crashed): why, said on its card; its
+   * pull requests read last stay. Absent when it answers. */
+  prDown?: string;
+  /** Its branch pushed without a pull request (ESC-63): its CI as last read, the pill under its card. */
+  branchCi?: BranchCi | null;
   /** The ticket's protocol, appended to Claude Code's system prompt. */
   appendPrompt: string | null;
   /** First of the 10 ports reserved for its test launches. */
@@ -1937,6 +2162,8 @@ export interface RateWindow {
  */
 export interface QuotaMeter extends RateWindow {
   minutes: number | null;
+  /** The model it is the quota of alone, as the server names it (« Fable », ESC-312); absent for a meter of every model. */
+  model?: string;
 }
 
 export interface Usage {
@@ -2323,6 +2550,10 @@ export interface WorkflowScan {
   files?: { id: string; path: string; local: boolean; inRepo: boolean; updated: string | null }[];
   /** The files that could not be read, with why. */
   unreadable?: { path: string; why: string }[];
+  /** The workflows the user removed (ESC-309): never written again by a reading; `changed` when what found one changed since (proposed again). */
+  removed?: { id: string; name: string; changed: boolean }[];
+  /** « Pas de workflow pour ce projet » (ESC-309): nothing was read. */
+  off?: boolean;
 }
 
 /** How an agent's stay in a step, or outside the workflow (`step` null), ended. */
@@ -2392,7 +2623,6 @@ export type UiEvent =
   | { type: 'agentRemoved'; id: string; projectId: string }
   | { type: 'conv'; agentId: string; ops: ConvOp[] }
   | { type: 'memory'; projectId: string }
-  | { type: 'codeIndex'; projectId: string }
   | { type: 'vectorsDownload'; done: number; total: number }
   | { type: 'git'; projectId: string; git: GitInfo }
   | { type: 'usage'; usage: Usage }
@@ -2411,12 +2641,19 @@ export type UiEvent =
   | { type: 'ticket'; ticket: Ticket }
   | { type: 'ticketRemoved'; id: string; projectId: string }
   | { type: 'project'; project: Project }
+  | { type: 'devPage'; page: PageEvent }
   | { type: 'openUrl'; url: string }
   | { type: 'focusBoard'; projectId: string }
+  | { type: 'focusPrs'; projectId: string }
   /** Why no ticket of the project's board starts (its target branch), or null once they may. */
   | { type: 'boardIssue'; projectId: string; issue: string | null }
+  | { type: 'environments'; environments: ProjectEnvironments }
+  | { type: 'prReview'; review: AgentReview }
+  | { type: 'prReviewGone'; projectId: string; number: number }
   /** Why no ticket of a project that goes to any account starts for now, or null once they may; `projects`: the same for the paused projects that prefer an account. */
   | { type: 'autopilotPause'; pause: AutopilotPause | null; projects?: Record<string, AutopilotPause> }
+  /** The CI of a project's target branch as last read (ESC-63), or null when there is none to show. */
+  | { type: 'targetCi'; projectId: string; ci: BranchCi | null }
   | { type: 'toast'; text: string }
   /** The settings changed a language: the window switches to it at once. */
   | { type: 'language'; lang: LangInfo }
@@ -2510,6 +2747,8 @@ export interface InitialState {
   engines: EngineDecl[];
   /** The harnesses whose program is found: the only ones offered (absent before 1.8: Claude Code, when found). */
   enginesFound?: EngineId[];
+  /** The kinds of ticket sources the core knows (absent before INT-1: the seven of the window). */
+  sources?: SourceDecl[];
   /** Why no ticket of a project's board starts, by project (none: they may). */
   boardIssues?: Record<string, string>;
   /** Why no ticket of a project that goes to any account starts for now (none: they may). */
@@ -2603,8 +2842,6 @@ export interface StatsView {
   accounts: string[];
   /** Every harness that ever ran a turn (ids), whichever period or harness the view is for. */
   engines: string[];
-  /** What the code index saved over the period, per project (ESC-254); absent from a view of the window's tests made before it. */
-  indexByProject?: IndexSaving[];
 }
 
 /** What a harness ran over the period. */
@@ -2699,6 +2936,15 @@ export type PrState = 'open' | 'closed' | 'merged';
 export type CheckState = 'pending' | 'success' | 'failure' | 'skipped';
 
 /** A pull request (a merge request on GitLab) as its code host tells it (`forge::PullRequest`). */
+/** A project's list of open pull requests, for the overview's group (ESC-68). */
+export interface OverviewPrs {
+  projectId: string;
+  word: string;
+  prs: PullRequest[];
+  /** The account the host was read with (its login). */
+  me: string;
+}
+
 export interface PullRequest {
   number: number;
   url: string;
@@ -2726,6 +2972,138 @@ export interface PullRequest {
    * target: on the remote the agent's branch tracks, or the repository that one was forked from.
    */
   hostRepo?: string;
+  /** Who opened it, when the host says it. */
+  author?: string;
+  /** When it was opened (Unix seconds), when the host says it. */
+  created?: number;
+  /** Whose review is asked and not given yet (logins; names on Azure DevOps), when the host says it (ESC-65). */
+  reviewers?: string[];
+}
+
+/** The open pull requests of a project (`prview::ProjectPrs`): its host's word, and whose account read them. */
+export interface ProjectPrs {
+  word: string;
+  prs: PullRequest[];
+  /** The login of the account they were read with; empty when it does not say. */
+  me?: string;
+}
+
+/** What the user decided of a comment of a review (`prreview::NoteChoice`). */
+export type NoteChoice = 'open' | 'kept' | 'dropped';
+
+/** What a published review says (`forge::ReviewState`). */
+export type ReviewVerdict = 'approved' | 'changesRequested' | 'commented';
+
+/** A line of the diff above a comment (`prreview::DiffLine`). */
+export interface ReviewDiffLine {
+  kind: '+' | '-' | ' ' | '@';
+  /** Its number in the new version; none for a line removed. */
+  line?: number;
+  text: string;
+}
+
+/** A comment of a review, on a file and a line (`prreview::ReviewNote`). */
+export interface ReviewNote {
+  id: number;
+  path: string;
+  line: number;
+  body: string;
+  /** What the agent wrote. */
+  proposed: string;
+  choice: NoteChoice;
+  excerpt: ReviewDiffLine[];
+  /** Its line is not in the diff: it goes in the review's text. */
+  outside: boolean;
+}
+
+/** The review of a pull request written by an agent (`prreview::PrReview`, ESC-66). */
+export interface AgentReview {
+  projectId: string;
+  number: number;
+  word: string;
+  host: string;
+  author: string;
+  title: string;
+  head: string;
+  base: string;
+  url: string;
+  headSha: string;
+  phase: 'reading' | 'ready' | 'publishing' | 'failed' | 'published';
+  error?: string;
+  summary: string;
+  notes: ReviewNote[];
+  leftOut: string[];
+  by: string;
+  at: number;
+  publishedAt?: number;
+}
+
+/** A check or a status of a pull request's last commit (`forge::Check`). */
+export interface PrCheck {
+  name: string;
+  state: CheckState;
+  url: string | null;
+  /** What its log is asked by, when the host keeps it. */
+  job: string | null;
+  /** Unix seconds, when the host says them: a pending one that started is running. */
+  started: number | null;
+  finished: number | null;
+  /** Stopped before its end (a failure to the rest of the app). */
+  cancelled: boolean;
+}
+
+export interface PrReview {
+  author: string;
+  state: 'approved' | 'changesRequested' | 'commented';
+  body: string;
+}
+
+/** A comment of a pull request, on one of its lines or not. */
+export interface PrComment {
+  id: string;
+  author: string;
+  body: string;
+  path: string | null;
+  line: number | null;
+  resolved: boolean;
+}
+
+export interface PrDeployment {
+  environment: string;
+  state: string;
+  url: string | null;
+}
+
+/** The « PR et CI » tab's read of the agent's pull request (`prview::PrDetail`). */
+export interface PrDetail {
+  checks: PrCheck[];
+  reviews: PrReview[];
+  comments: PrComment[];
+  deployments: PrDeployment[];
+  can: { checks: boolean; jobLogs: boolean; rerun: boolean; reviews: boolean; deployments: boolean };
+  rateLimit?: { limit: number; remaining: number; reset: number };
+}
+
+/** Why the host's answer is missing (`prview::Failure`). */
+export interface PrFailure {
+  kind: 'refused' | 'rateLimit' | 'unreachable' | 'other' | 'unavailable';
+  message: string;
+  /** When the host's limit starts over (Unix seconds). */
+  reset?: number;
+  /** Réglages › Intégrations settles it. */
+  settings?: boolean;
+}
+
+/** What a read of the tab gave: the data, else why it is missing. */
+export interface PrRead<T> {
+  data?: T;
+  failure?: PrFailure;
+}
+
+/** Why an agent has no « Ouvrir une PR… » (`prview::NoPr`). */
+export interface NoPr {
+  reason: string;
+  settings: boolean;
 }
 
 /** « Ouvrir une PR »: what the model proposes, which the user reads and edits (`agentprs::PrProposal`). */

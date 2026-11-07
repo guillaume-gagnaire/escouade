@@ -1,5 +1,5 @@
 //! Tests of the conformance bench of the plugins (PLG-3, ESC-175): it passes on the fake plugin
-//! (tests/fixtures/fake-plugin.mjs) and on PLG-10's examples (plugin-examples/, ESC-182, their
+//! (tests/fixtures/fake-plugin.mjs) and on Escouade's own plugins (plugins/<id>/, ESC-182 and ESC-314, their
 //! programs as their folders hold them: `dist/` built and committed), and fails, with the right reason, on a plugin that ignores
 //! `initialize`, answers past its delay, takes a version it does not speak, asks for another's
 //! secret or writes its own out, or does not end at `shutdown`. `escouade-plugin` runs the same.
@@ -15,7 +15,7 @@ fn root() -> PathBuf {
 }
 
 fn example(name: &str) -> PathBuf {
-    root().join("plugin-examples").join(name)
+    root().join("plugins").join(name)
 }
 
 /// The fake plugin in a folder of the test's own, its program started with `args`; it asks for
@@ -67,6 +67,17 @@ async fn bench(folder: &Path) -> Report {
     run(folder, &options()).await
 }
 
+/// The bench of a plugin of Escouade's own hand (its id `dev.escouade.*`, ESC-314).
+async fn bench_own(folder: &Path) -> Report {
+    let o = Options {
+        hand: crate::plugins::manifest::Hand::First,
+        // The run.js plugins of the repository need the release that serves WASM.
+        app_version: crate::plugins::wasm::SERVED_SINCE.into(),
+        ..options()
+    };
+    run(folder, &o).await
+}
+
 fn verdict(r: &Report, s: Scenario) -> Verdict {
     r.outcome(s).verdict
 }
@@ -77,7 +88,7 @@ fn said(r: &Report, s: Scenario) -> String {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_fake_plugin_passes_every_scenario() {
-    let r = bench(&fake("pass", &[])).await;
+    let r = bench(&fake_points("pass", &[])).await;
     for o in &r.outcomes {
         assert_eq!(o.verdict, Verdict::Pass, "{}", r.render(Lang::En));
     }
@@ -87,13 +98,17 @@ async fn the_fake_plugin_passes_every_scenario() {
     assert!(said(&r, Scenario::Decision).contains("\"ask\""));
     assert!(said(&r, Scenario::Secret).contains("token"));
     assert!(said(&r, Scenario::Version).contains("its own (1)"));
-    // initialize twice (the crash), the decision, the unknown method, shutdown.
+    // initialize twice (the crash), the decision, the source and the host, the unknown method, shutdown.
     let methods: Vec<&str> = r.timings.iter().map(|t| t.method.as_str()).collect();
     assert_eq!(
         methods,
         [
             "initialize",
             "permissions/decide",
+            "account/me",
+            "tickets/containers",
+            "account/me",
+            "forge/pullRequestsOfBranch",
             "bench/unknown",
             "initialize",
             "shutdown"
@@ -103,23 +118,30 @@ async fn the_fake_plugin_passes_every_scenario() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_examples_pass_and_what_does_not_concern_them_is_not_played() {
-    let slack = bench(&example("slack")).await;
+    // slack and team-rules are run.js plugins since 2.0.0 (ESC-326): played in WASM.
+    if !crate::plugins_wasm_tests::ready() {
+        return;
+    }
+    let slack = bench_own(&example("slack")).await;
     assert!(slack.passed(), "{}", slack.render(Lang::En));
     assert_eq!(verdict(&slack, Scenario::Fact), Verdict::Pass);
     assert!(said(&slack, Scenario::Secret).contains("token"));
     assert_eq!(verdict(&slack, Scenario::Decision), Verdict::Skip);
 
-    let rules = bench(&example("team-rules")).await;
+    let rules = bench_own(&example("team-rules")).await;
     assert!(rules.passed(), "{}", rules.render(Lang::En));
     assert!(said(&rules, Scenario::Decision).contains("\"allow\""));
     assert_eq!(verdict(&rules, Scenario::Fact), Verdict::Skip);
     assert_eq!(verdict(&rules, Scenario::Secret), Verdict::Skip);
 
-    let discord = bench(&example("discord-webhook")).await;
+    let discord = bench_own(&example("discord")).await;
     assert!(discord.passed(), "{}", discord.render(Lang::En));
     assert_eq!(verdict(&discord, Scenario::Manifest), Verdict::Pass);
 
-    let theme = bench(&example("high-contrast")).await;
+    let theme = bench_own(&example("high-contrast")).await;
+    // Without --first-party, its id is anyone's to refuse.
+    let anyone = bench(&example("high-contrast")).await;
+    assert_eq!(verdict(&anyone, Scenario::Manifest), Verdict::Fail);
     assert!(theme.passed(), "{}", theme.render(Lang::En));
     assert_eq!(verdict(&theme, Scenario::Manifest), Verdict::Pass);
     for s in &Scenario::ALL[1..] {
@@ -263,7 +285,7 @@ async fn the_report_says_what_is_missing_in_both_languages() {
     assert!(fr.contains("✗ Fermeture"), "{fr}");
     assert!(fr.contains("Ce qui manque : répondre à `shutdown`"), "{fr}");
     assert!(fr.contains("✓ Initialisation"), "{fr}");
-    assert!(fr.contains("8 réussis, 1 échoués, 0 sans objet"), "{fr}");
+    assert!(fr.contains("8 réussis, 1 échoués, 2 sans objet"), "{fr}");
     let m = r.measure.as_ref().expect("measured");
     assert_eq!(m.calls, 50);
     assert!(m.median_us > 0 && m.p99_us >= m.median_us);
@@ -280,10 +302,22 @@ fn the_command_tests_and_validates_a_folder() {
     let path = |p: PathBuf| p.to_string_lossy().into_owned();
     let args = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
     let theme = path(example("high-contrast"));
-    assert_eq!(cli::main(args(&["validate", &theme, "--lang", "en"])), 0);
-    assert_eq!(cli::main(args(&["test", &theme, "--lang", "en"])), 0);
-    let rules = path(example("team-rules"));
-    assert_eq!(cli::main(args(&["test", &rules, "--json"])), 0);
+    let own = "--first-party";
+    assert_eq!(
+        cli::main(args(&["validate", &theme, "--lang", "en", own])),
+        0
+    );
+    assert_eq!(cli::main(args(&["validate", &theme, "--lang", "en"])), 1);
+    assert_eq!(cli::main(args(&["test", &theme, "--lang", "en", own])), 0);
+    // team-rules is a run.js plugin since 2.0.0 (ESC-326): its bench plays it in WASM.
+    if crate::plugins_wasm_tests::ready() {
+        let rules = path(example("team-rules"));
+        let since = crate::plugins::wasm::SERVED_SINCE;
+        assert_eq!(
+            cli::main(args(&["test", &rules, "--json", own, "--escouade", since])),
+            0
+        );
+    }
 
     let broken = fake("cli", &["--ignore-shutdown"]);
     assert_eq!(cli::main(args(&["test", &path(broken.clone())])), 1);
@@ -327,4 +361,122 @@ fn validate_reads_the_icon_of_the_folder() {
     assert_eq!(cli::main(vec!["validate".into(), bad]), 1);
     let good = path(with_icon("icon-good", 256));
     assert_eq!(cli::main(vec!["validate".into(), good]), 0);
+}
+
+/// The fake plugin declaring a source and a host (INT-5).
+fn fake_points(name: &str, args: &[&str]) -> PathBuf {
+    let dir = fake(name, args);
+    let path = dir.join("escouade-plugin.json");
+    let mut m: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    m["contributes"] = json!({
+        "ticketSources": [{ "id": "fake", "name": "Fake" }],
+        "forges": [{ "id": "fake" }]
+    });
+    std::fs::write(&path, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    dir
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_source_and_host_scenarios_play_the_calls_of_the_adapters() {
+    let r = bench(&fake_points("points", &[])).await;
+    assert!(r.passed(), "{}", r.render(Lang::En));
+    assert_eq!(verdict(&r, Scenario::Tickets), Verdict::Pass);
+    assert_eq!(verdict(&r, Scenario::Forge), Verdict::Pass);
+    assert!(said(&r, Scenario::Tickets).contains("tickets/containers: ok"));
+
+    // Not declared: not played.
+    let r = bench(&fake("nopoints", &[])).await;
+    assert_eq!(verdict(&r, Scenario::Tickets), Verdict::Skip);
+    assert_eq!(verdict(&r, Scenario::Forge), Verdict::Skip);
+
+    // An error that is no code of the contract fails, and says which.
+    let r = bench(&fake_points("untyped", &["--untyped"])).await;
+    assert_eq!(verdict(&r, Scenario::Tickets), Verdict::Fail);
+    assert!(said(&r, Scenario::Tickets).contains("not typed"));
+    assert!(r
+        .outcome(Scenario::Forge)
+        .missing
+        .as_deref()
+        .unwrap()
+        .contains("-32401"));
+}
+
+/// ESC-326: `validate --escouade <version>` judges a plugin for another version of Escouade than the build's: the
+/// run.js plugins of the repository need the one that serves WASM, which `--version` says.
+#[test]
+fn validate_judges_a_plugin_for_the_version_of_escouade_it_is_given() {
+    #[cfg(windows)]
+    crate::paths::trim_test_path();
+    let slack = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../plugins/slack")
+        .to_string_lossy()
+        .into_owned();
+    let validate = |v: &str| {
+        cli::main(vec![
+            "validate".into(),
+            slack.clone(),
+            "--first-party".into(),
+            "--escouade".into(),
+            v.into(),
+        ])
+    };
+    assert_eq!(validate("2.1.2"), 1, "the 2.1 does not serve WASM");
+    assert_eq!(validate(crate::plugins::wasm::SERVED_SINCE), 0);
+}
+
+/// ESC-343: `test --escouade <version>` plays the plugin as that version: its range and what `initialize` shows go by
+/// it, and the report names it. Without the option, the tool's own version, which refuses a range from a version to come.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_bench_plays_a_plugin_as_the_version_it_is_given() {
+    let dir = fake("as-a-version", &[]);
+    let path = dir.join("escouade-plugin.json");
+    let mut manifest: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    manifest["escouade"]["min"] = json!("2.2.0");
+    std::fs::write(&path, manifest.to_string()).unwrap();
+
+    let refused = run(&dir, &options()).await;
+    assert_eq!(verdict(&refused, Scenario::Manifest), Verdict::Fail);
+    assert!(said(&refused, Scenario::Manifest).contains("2.2.0"));
+    assert_eq!(refused.escouade, "2.1.1");
+
+    let o = Options {
+        app_version: "2.2.0".into(),
+        ..options()
+    };
+    let played = run(&dir, &o).await;
+    assert_eq!(verdict(&played, Scenario::Manifest), Verdict::Pass);
+    assert!(played.passed(), "{}", played.render(Lang::En));
+    assert_eq!(played.escouade, "2.2.0");
+
+    let m = crate::plugins::manifest::read(
+        &std::fs::read_to_string(&path).unwrap(),
+        crate::plugins::manifest::Hand::Third,
+    )
+    .manifest
+    .ok()
+    .unwrap();
+    let hello = crate::plugins::bench::fake::Session::hello(&m, &o.app_version, 1);
+    assert_eq!(hello["escouade"]["version"], "2.2.0");
+}
+
+/// ESC-343: `dev` plays the same way (standard input ends at once: `shutdown`, then the end). A range from far ahead
+/// is refused as this tool, and taken with `--escouade`.
+#[test]
+fn the_fake_escouade_plays_a_plugin_as_the_version_it_is_given() {
+    let dir = fake("dev-as-a-version", &[]);
+    let path = dir.join("escouade-plugin.json");
+    let mut manifest: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    manifest["escouade"]["min"] = json!("99.0.0");
+    std::fs::write(&path, manifest.to_string()).unwrap();
+    let folder = dir.to_string_lossy().into_owned();
+    let dev = |more: &[&str]| {
+        let mut a: Vec<String> = vec!["dev".into(), folder.clone()];
+        a.extend(more.iter().map(|s| s.to_string()));
+        cli::main(a)
+    };
+    assert_eq!(dev(&[]), 1);
+    assert_eq!(dev(&["--escouade", "99.0.0"]), 0);
 }

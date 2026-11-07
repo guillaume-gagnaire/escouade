@@ -2,13 +2,14 @@
   import { onMount } from 'svelte';
   import { t } from '../../lib/i18n';
   import { openUrl } from '@tauri-apps/plugin-opener';
-  import { categoriesOf, type PluginView } from '../../lib/plugins';
+  import { categoriesOf, shippedWithApp } from '../../lib/plugins';
   import { plugins } from '../../lib/plugins-view.svelte';
   import Icon from '../Icon.svelte';
   import InstallModal from './InstallModal.svelte';
   import PluginPage from './PluginPage.svelte';
   import PluginRows from './PluginRows.svelte';
   import PluginTile from './PluginTile.svelte';
+  import SeedOffers from './SeedOffers.svelte';
   import StoreHome from './StoreHome.svelte';
   import StorePluginPage from './StorePluginPage.svelte';
   import { app } from '../../lib/state.svelte';
@@ -22,9 +23,9 @@
   });
 
   const page = $derived(plugins.page);
-  const builtin = (p: PluginView) => p.id.startsWith('dev.escouade.');
-  const added = $derived(plugins.list.filter((p) => !builtin(p)));
-  const shipped = $derived(plugins.list.filter(builtin));
+  // By their origin, never their id: a dev.escouade.* of the store is one added (ESC-314).
+  const added = $derived(plugins.list.filter((p) => !shippedWithApp(p)));
+  const shipped = $derived(plugins.list.filter(shippedWithApp));
   const current = $derived(page.kind === 'plugin' ? plugins.byId(page.id) : null);
   const listing = $derived(page.kind === 'storePlugin' ? plugins.catalogPlugin(page.id) : null);
   /** The versions Escouade withdrew, in a red band at the head of the installed ones (choices 180 and 218). */
@@ -156,7 +157,7 @@
               <button class="btn" onclick={() => plugins.openPlugin(w.id)}>{t('plugins.page.uninstall')}</button>
             </div>
           {/each}
-          {#if !plugins.list.length && plugins.loaded}
+          {#if !added.length && plugins.loaded}
             <div class="soon">
               <Icon name="puzzle" size={20} />
               <div>
@@ -164,14 +165,15 @@
                 <p>{t('plugins.installed.emptyHint')}</p>
               </div>
             </div>
-          {:else}
-            {#if added.length}<PluginRows rows={added} group={t('plugins.installed.added')} />{/if}
-            {#if shipped.length}<PluginRows
-                rows={shipped}
-                group={t('plugins.installed.builtin')}
-                note={t('plugins.installed.builtinNote')}
-              />{/if}
+          {:else if added.length}
+            <PluginRows rows={added} group={t('plugins.installed.added')} />
           {/if}
+          {#if shipped.length}<PluginRows
+              rows={shipped}
+              group={t('plugins.installed.builtin')}
+              note={t('plugins.installed.builtinNote')}
+            />{/if}
+          <SeedOffers />
           <p class="hint list">
             {list?.serial
               ? t('plugins.installed.revocations', {

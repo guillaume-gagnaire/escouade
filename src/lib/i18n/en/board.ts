@@ -2,15 +2,107 @@ import { defineZone } from '../types';
 
 // The Kanban: its columns, tickets and criteria.
 export default defineZone('board', {
-  columns: { todo: 'To do', doing: 'In progress', review: 'To review', done: 'Done' },
+  columns: { todo: 'To do', doing: 'In progress', review: 'To review', pr: 'In review', done: 'Done' },
   empty: {
     todo: 'Add a ticket: an agent will pick it up as soon as a slot is free.',
     doing: 'No agents looping',
     review: 'Nothing to review',
+    pr: 'No pull requests in review',
     done: 'No finished tickets',
   },
 
-  column: { newTicket: 'New ticket' },
+  column: {
+    newTicket: 'New ticket',
+    refresh: 'Refresh',
+    refreshHint: 'Read the pull requests in review on their host now',
+  },
+
+  pr: {
+    state: { draft: 'draft', open: 'open', approved: 'approved', changes: 'changes requested', closed: 'closed' },
+    ci: {
+      success: { one: 'CI passed · {count} job', other: 'CI passed · {count} jobs' },
+      failure: '{failed}/{count} jobs failed',
+      pending: { one: 'CI running · {count} job', other: 'CI running · {count} jobs' },
+      skipped: 'CI skipped',
+    },
+    error: '{error} · since {since}',
+    /** Merging from Escouade (ESC-62): « Merge » approved and green, « Merge when green » while its CI runs. */
+    merge: {
+      now: 'Merge ({strategy})',
+      nowTitle: '{word} #{number} approved and green: merge into {target} with {strategy}',
+      whenGreen: 'Merge when green',
+      whenGreenTitle: 'Through the host’s auto-merge when the repository allows it, else Escouade merges at the end of the CI',
+      hostOn: '{host} auto-merge on: merged as soon as the CI is green',
+      escouadeWaits: 'Escouade merges it ({strategy}) once approved and green, while it runs',
+      escouadeTold: 'No auto-merge on {host} for this repository: Escouade waits for the end of the CI and merges itself, while it runs',
+      stopWaiting: 'Stop waiting',
+      merged: '{word} #{number} merged',
+      none: 'The repository allows none of Escouade’s ways to merge',
+      strategies: { merge: 'merge commit', squash: 'squash', rebase: 'rebase', semiLinear: 'semi-linear' },
+    },
+    finishAnyway: 'Finish anyway',
+    backToTodo: 'Back to do',
+    fixCi: 'Agent fixes it',
+    fixCiTitle: 'Send its agent the failed jobs and the end of their logs; it pushes, the {word} updates',
+    noLog: { one: '{names}: third-party CI, no log', other: '{names}: third-party CI, no logs' },
+    loopsSpent: 'Loops spent ({count}/{max}): the autopilot no longer sends it back',
+    fixingKind: {
+      ci: 'The agent is fixing the CI…',
+      reviews: 'The agent is addressing the feedback…',
+      merge: 'The agent is updating the branch…',
+      rebase: 'The agent is rebasing the branch onto {target}…',
+    },
+    feedback: { one: '1 review comment', other: '{count} review comments' },
+    fixReviews: 'Agent addresses the feedback',
+    fixReviewsTitle:
+      'Give its agent the unresolved comments that came since the last push (file, line, diff excerpt, author, text); it pushes its fixes',
+    updateBranch: 'Agent updates the branch',
+    updateBranchTitle: {
+      merge: 'Merge {target} into the branch; its conflicts go to its agent, then Escouade pushes',
+      rebase: 'Rebase the branch onto {target}; its conflicts go to its agent, then Escouade pushes (--force-with-lease)',
+    },
+  },
+
+  ci: {
+    pill: {
+      failure: '{branch} ✗ for {since}',
+      success: '{branch} ✓',
+      pending: '{branch} · CI running',
+      none: '{branch} · no CI',
+    },
+    pillTitle: 'CI of {branch}: {state}. Click to see the jobs, their logs and re-run them',
+    state: {
+      failure: { one: '{failed}/{count} job failed', other: '{failed}/{count} jobs failed' },
+      success: { one: '{count} job passed', other: '{count} jobs passed' },
+      pending: { one: '{count} job running', other: '{count} jobs running' },
+      none: 'no job',
+    },
+    error: '{error} · since {since}',
+    paused: 'Autopilot paused: the CI of {branch} has been red for {since}',
+    pausedShow: 'See the jobs',
+    title: 'CI of {branch}',
+    titlePr: 'CI of {word} #{number}',
+    loading: 'Reading the jobs…',
+    empty: 'No job on the last commit of {branch}.',
+    refresh: 'Refresh',
+    rerun: 'Re-run failed jobs',
+    rerunHint: 'Re-runs on {host} the failed jobs of the last commit. Nothing starts without this click.',
+    rerunning: 'Re-running…',
+    rerunDone: { one: '{count} run started again.', other: '{count} runs started again.' },
+    rerunNone: 'No job to re-run: {host} only re-runs its own jobs.',
+    noRerun: '{host} doesn’t re-run jobs from Escouade: re-run them on its site.',
+    log: 'Log',
+    logOf: 'Log of {name}',
+    logHint: 'Read only · the end of the log',
+    logLoading: 'Reading the log…',
+    logEmpty: 'Empty log.',
+    noLog: 'Third-party CI: a status and an address, no log',
+    onHost: 'Open on {host}',
+    send: 'Send to an agent',
+    sendHint: 'Give this job and the end of its log to an agent of the project, as a message',
+    sendNone: 'No active agent in this project: create one to send it this log.',
+    sent: 'Log of {name} sent to {agent}.',
+  },
 
   header: {
     sub: {

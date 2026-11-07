@@ -97,7 +97,7 @@ pub(crate) struct Side {
 
 /// The harness a folder of sessions is of.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum HomeKind {
+pub enum HomeKind {
     /// A configuration folder of Claude Code (`~/.claude`, an account's `CLAUDE_CONFIG_DIR`).
     Claude,
     /// `CODEX_HOME`.
@@ -507,18 +507,17 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
 /// The folders where the harnesses keep their sessions, of every account and of the user's own
 /// (`~/.claude`, `~/.codex`…), and Claude Code's `.claude.json` of each.
 fn homes(settings: &crate::model::Settings) -> (Vec<Home>, Vec<PathBuf>) {
-    use crate::model::EngineId;
-    let principals =
-        [EngineId::Claude, EngineId::Codex, EngineId::Copilot].map(crate::accounts::principal_of);
+    let principals: Vec<_> = crate::engine::registry::all()
+        .into_iter()
+        .filter(|e| e.principal_sessions())
+        .map(|e| crate::accounts::principal_of(e.id()))
+        .collect();
     let mut homes = Vec::new();
     let mut files = Vec::new();
     for a in settings.accounts.iter().chain(principals.iter()) {
-        let kind = match a.engine {
-            EngineId::Codex => HomeKind::Codex,
-            EngineId::Copilot => HomeKind::Copilot,
-            // Its sessions are in its data folder, not its configuration's (below).
-            EngineId::Opencode => continue,
-            _ => HomeKind::Claude,
+        // OpenCode's are in its data folder, not its configuration's (below).
+        let Some(kind) = crate::engine::by_id(a.engine).session_home() else {
+            continue;
         };
         homes.push(Home {
             kind,
@@ -546,22 +545,6 @@ fn opencode_data() -> PathBuf {
         Some(v) => PathBuf::from(v).join("opencode"),
         None => crate::accounts::app_env().1.join(".local/share/opencode"),
     }
-}
-
-/// Whether `text` (a path, a command) names `path` or a path under it, whatever its separators
-/// and, under Windows, its case. A guard: a longer name that starts alike counts too.
-pub(crate) fn names(text: &str, path: &str) -> bool {
-    let norm = |s: &str| {
-        let s = s.replace('\\', "/");
-        let s = s.trim_end_matches('/').to_string();
-        if cfg!(windows) {
-            s.to_lowercase()
-        } else {
-            s
-        }
-    };
-    let p = norm(path);
-    !p.is_empty() && norm(text).contains(&p)
 }
 
 /// The paths of `fence` as `program` names them (its Linux ones for a harness of WSL).

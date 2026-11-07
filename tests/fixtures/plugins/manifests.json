@@ -83,6 +83,71 @@
       "ignored": []
     },
     {
+      "name": "a workflow reader lists the files of the project it is given (ESC-200)",
+      "manifest": {
+        "id": "dev.exemple.lecteur",
+        "name": "Lecteur",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2"
+        },
+        "run": {
+          "command": "bin/lecteur"
+        },
+        "contributes": {
+          "workflowReaders": [
+            {
+              "id": "bmad",
+              "name": "BMAD",
+              "files": ["_bmad/**", "docs/*.md"]
+            }
+          ]
+        }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "a workflow reader without files, with a wrong list or a path out of the project",
+      "manifest": {
+        "id": "dev.exemple.lecteur",
+        "name": "Lecteur",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2"
+        },
+        "run": {
+          "command": "bin/lecteur"
+        },
+        "contributes": {
+          "workflowReaders": [
+            {
+              "id": "a"
+            },
+            {
+              "id": "b",
+              "files": "x"
+            },
+            {
+              "id": "c",
+              "files": ["", "../x", "/abs", 3]
+            }
+          ]
+        }
+      },
+      "errors": [
+        "contributes.workflowReaders[0].files required",
+        "contributes.workflowReaders[1].files type",
+        "contributes.workflowReaders[2].files[0] empty",
+        "contributes.workflowReaders[2].files[1] path",
+        "contributes.workflowReaders[2].files[2] path",
+        "contributes.workflowReaders[2].files[3] type"
+      ],
+      "ignored": []
+    },
+    {
       "name": "a first-hand plugin with several points (docs/PLUGINS.md §4.4), from the app",
       "builtin": true,
       "manifest": {
@@ -150,6 +215,42 @@
         }
       },
       "errors": ["id reserved", "run.command reserved"],
+      "ignored": []
+    },
+    {
+      "name": "a plugin of Escouade's own hand from plugins/<id>/ of its repository (ESC-314): its id, not the app's programs",
+      "firstParty": true,
+      "manifest": {
+        "id": "dev.escouade.slack",
+        "name": "Slack",
+        "version": "1.1.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.1.0"
+        },
+        "run": {
+          "command": "{escouade}/escouade-plugins"
+        }
+      },
+      "errors": ["run.command reserved"],
+      "ignored": []
+    },
+    {
+      "name": "the same with its own program: it holds",
+      "firstParty": true,
+      "manifest": {
+        "id": "dev.escouade.slack",
+        "name": "Slack",
+        "version": "1.1.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.1.0"
+        },
+        "run": {
+          "command": "slack"
+        }
+      },
+      "errors": [],
       "ignored": []
     },
     {
@@ -726,6 +827,581 @@
         }
       },
       "errors": ["contributes.webhooks[0].url network"],
+      "ignored": []
+    },
+    {
+      "name": "a JS/TS bundle that Escouade runs in WASM (ESC-320)",
+      "manifest": {
+        "id": "dev.exemple.slack",
+        "name": "Slack",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "dist/plugin.mjs"
+        },
+        "permissions": {
+          "network": ["slack.com"]
+        }
+      },
+      "files": {
+        "dist/plugin.mjs": {
+          "text": "createPlugin().start();\n"
+        }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "a JS/TS bundle, read without its folder",
+      "manifest": {
+        "id": "dev.exemple.slack",
+        "name": "Slack",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "./dist/plugin.mjs"
+        },
+        "permissions": {
+          "network": ["slack.com"]
+        }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "a command and a bundle: one or the other",
+      "manifest": {
+        "id": "dev.exemple.slack",
+        "name": "Slack",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "command": "bin/slack",
+          "js": "dist/plugin.mjs",
+          "windows": "bin/slack.exe"
+        },
+        "permissions": {
+          "network": ["slack.com"]
+        }
+      },
+      "files": {
+        "dist/plugin.mjs": {
+          "text": "createPlugin().start();\n"
+        }
+      },
+      "errors": ["run.js exclusive"],
+      "ignored": []
+    },
+    {
+      "name": "a Rust module: its Cargo.toml",
+      "manifest": {
+        "id": "dev.exemple.linear",
+        "name": "Linear",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "wasm": "Cargo.toml"
+        },
+        "permissions": {
+          "network": ["linear.app"]
+        }
+      },
+      "files": {
+        "Cargo.toml": {
+          "text": "[package]\nname = \"linear\"\n"
+        },
+        "dist/plugin.mjs": {
+          "text": "createPlugin().start();\n"
+        }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "a Rust module in a folder of the plugin",
+      "manifest": {
+        "id": "dev.exemple.linear",
+        "name": "Linear",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "wasm": "module/Cargo.toml"
+        },
+        "permissions": {
+          "network": ["linear.app"]
+        }
+      },
+      "files": {
+        "module/Cargo.toml": {
+          "text": "[package]\n"
+        }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "a module and a command: one of the three",
+      "manifest": {
+        "id": "dev.exemple.linear",
+        "name": "Linear",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "wasm": "Cargo.toml",
+          "command": "bin/linear"
+        },
+        "permissions": {
+          "network": ["linear.app"]
+        }
+      },
+      "files": {
+        "Cargo.toml": {
+          "text": "[package]\nname = \"linear\"\n"
+        },
+        "dist/plugin.mjs": {
+          "text": "createPlugin().start();\n"
+        }
+      },
+      "errors": ["run.wasm exclusive"],
+      "ignored": []
+    },
+    {
+      "name": "a module and a bundle: one of the three",
+      "manifest": {
+        "id": "dev.exemple.linear",
+        "name": "Linear",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "wasm": "Cargo.toml",
+          "js": "dist/plugin.mjs"
+        },
+        "permissions": {
+          "network": ["linear.app"]
+        }
+      },
+      "files": {
+        "Cargo.toml": {
+          "text": "[package]\nname = \"linear\"\n"
+        },
+        "dist/plugin.mjs": {
+          "text": "createPlugin().start();\n"
+        }
+      },
+      "errors": ["run.wasm exclusive"],
+      "ignored": []
+    },
+    {
+      "name": "a module names no binary",
+      "manifest": {
+        "id": "dev.exemple.linear",
+        "name": "Linear",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "wasm": "plugin.wasm"
+        },
+        "permissions": {
+          "network": ["linear.app"]
+        }
+      },
+      "files": {
+        "plugin.wasm": {
+          "text": "x"
+        }
+      },
+      "errors": ["run.wasm cargo"],
+      "ignored": []
+    },
+    {
+      "name": "a Cargo.toml that is not in the folder",
+      "manifest": {
+        "id": "dev.exemple.linear",
+        "name": "Linear",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "wasm": "Cargo.toml"
+        },
+        "permissions": {
+          "network": ["linear.app"]
+        }
+      },
+      "files": {},
+      "errors": ["run.wasm file"],
+      "ignored": []
+    },
+    {
+      "name": "a Cargo.toml out of the folder",
+      "manifest": {
+        "id": "dev.exemple.linear",
+        "name": "Linear",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "wasm": "../other/Cargo.toml"
+        },
+        "permissions": {
+          "network": ["linear.app"]
+        }
+      },
+      "files": {
+        "Cargo.toml": {
+          "text": "[package]\nname = \"linear\"\n"
+        },
+        "dist/plugin.mjs": {
+          "text": "createPlugin().start();\n"
+        }
+      },
+      "errors": ["run.wasm path"],
+      "ignored": []
+    },
+    {
+      "name": "a bundle out of the folder, or not a file of it",
+      "manifest": {
+        "id": "dev.exemple.slack",
+        "name": "Slack",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "../other/plugin.mjs"
+        },
+        "permissions": {
+          "network": ["slack.com"]
+        }
+      },
+      "files": {},
+      "errors": ["run.js path"],
+      "ignored": []
+    },
+    {
+      "name": "a bundle that is not in the folder",
+      "manifest": {
+        "id": "dev.exemple.slack",
+        "name": "Slack",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "dist/plugin.mjs",
+          "args": ["x", ""]
+        },
+        "permissions": {
+          "network": ["slack.com"]
+        }
+      },
+      "files": {},
+      "errors": ["run.js file", "run.args[1] empty"],
+      "ignored": []
+    },
+    {
+      "name": "a bundle that is no text",
+      "manifest": {
+        "id": "dev.exemple.slack",
+        "name": "Slack",
+        "version": "2.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": 3
+        },
+        "permissions": {
+          "network": ["slack.com"]
+        }
+      },
+      "errors": ["run.js type"],
+      "ignored": []
+    },
+    {
+      "name": "the limits of net/fetch, and the words of the network that are no host",
+      "manifest": {
+        "id": "dev.exemple.net",
+        "name": "Net",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "dist/plugin.mjs"
+        },
+        "permissions": {
+          "network": ["{account}", "local:shared", "api.exemple.dev"]
+        },
+        "limits": {
+          "fetchSeconds": 120,
+          "fetchBytes": 33554432,
+          "other": 1
+        }
+      },
+      "files": {
+        "dist/plugin.mjs": {
+          "text": "export {}"
+        }
+      },
+      "errors": [],
+      "ignored": ["limits.other"]
+    },
+    {
+      "name": "limits that are no positive integers",
+      "manifest": {
+        "id": "dev.exemple.net",
+        "name": "Net",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "dist/plugin.mjs"
+        },
+        "limits": {
+          "fetchSeconds": 0,
+          "fetchBytes": "1"
+        }
+      },
+      "files": {
+        "dist/plugin.mjs": {
+          "text": "export {}"
+        }
+      },
+      "errors": ["limits.fetchSeconds type", "limits.fetchBytes type"],
+      "ignored": []
+    },
+    {
+      "name": "limits that are no object",
+      "manifest": {
+        "id": "dev.exemple.net",
+        "name": "Net",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "dist/plugin.mjs"
+        },
+        "limits": 3
+      },
+      "files": {
+        "dist/plugin.mjs": {
+          "text": "export {}"
+        }
+      },
+      "errors": ["limits type"],
+      "ignored": []
+    },
+    {
+      "name": "folders and commands it declares",
+      "manifest": {
+        "id": "dev.exemple.outil",
+        "name": "Outil",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "dist/plugin.mjs"
+        },
+        "permissions": {
+          "commands": ["isola ls --json", "isola logs *"],
+          "files": [
+            {
+              "root": "agent",
+              "access": "write"
+            },
+            {
+              "root": "agentHome",
+              "access": "read"
+            },
+            {
+              "root": "plugin",
+              "access": "read"
+            }
+          ]
+        },
+        "limits": {
+          "fileBytes": 1048576,
+          "memoryBytes": 134217728,
+          "turnSeconds": 5
+        }
+      },
+      "files": {
+        "dist/plugin.mjs": {
+          "text": "x\n"
+        }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "a root of no list, an access of none",
+      "manifest": {
+        "id": "dev.exemple.outil",
+        "name": "Outil",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "dist/plugin.mjs"
+        },
+        "permissions": {
+          "files": [
+            {
+              "root": "home",
+              "access": "read"
+            },
+            {
+              "root": "agent",
+              "access": "all"
+            },
+            {
+              "root": "temp"
+            }
+          ]
+        }
+      },
+      "files": {
+        "dist/plugin.mjs": {
+          "text": "x\n"
+        }
+      },
+      "errors": ["permissions.files[0].root enum", "permissions.files[1].access enum", "permissions.files[2].access required"],
+      "ignored": []
+    },
+    {
+      "name": "its own folder is not written, a root is named once",
+      "manifest": {
+        "id": "dev.exemple.outil",
+        "name": "Outil",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "dist/plugin.mjs"
+        },
+        "permissions": {
+          "files": [
+            {
+              "root": "plugin",
+              "access": "write"
+            },
+            {
+              "root": "agent",
+              "access": "read"
+            },
+            {
+              "root": "agent",
+              "access": "write"
+            }
+          ]
+        }
+      },
+      "files": {
+        "dist/plugin.mjs": {
+          "text": "x\n"
+        }
+      },
+      "errors": ["permissions.files[0].access readOnly", "permissions.files[2].root duplicate"],
+      "ignored": []
+    },
+    {
+      "name": "a command is a name, never a path, and a star ends it",
+      "manifest": {
+        "id": "dev.exemple.outil",
+        "name": "Outil",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "dist/plugin.mjs"
+        },
+        "permissions": {
+          "commands": ["/usr/bin/isola ls", "C:\toolsisola.exe", "~/isola", "*", "isola * down"]
+        }
+      },
+      "files": {
+        "dist/plugin.mjs": {
+          "text": "x\n"
+        }
+      },
+      "errors": [
+        "permissions.commands[0] command",
+        "permissions.commands[1] command",
+        "permissions.commands[2] command",
+        "permissions.commands[3] command",
+        "permissions.commands[4] command"
+      ],
+      "ignored": []
+    },
+    {
+      "name": "a limit is a number of bytes",
+      "manifest": {
+        "id": "dev.exemple.outil",
+        "name": "Outil",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "dist/plugin.mjs"
+        },
+        "permissions": {},
+        "limits": {
+          "fileBytes": 0
+        }
+      },
+      "files": {
+        "dist/plugin.mjs": {
+          "text": "x\n"
+        }
+      },
+      "errors": ["limits.fileBytes type"],
       "ignored": []
     }
   ],

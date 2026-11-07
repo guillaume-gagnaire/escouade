@@ -1,0 +1,622 @@
+[
+  {
+    "at": "initialize",
+    "can": true
+  },
+  {
+    "answer": {
+      "jsonrpc": "2.0",
+      "result": {
+        "baseUrl": "https://api.mistral.ai",
+        "defaultModel": "voxtral-mini-latest",
+        "id": "mistral",
+        "label": "Mistral",
+        "liveModel": "voxtral-mini-transcribe-realtime-2602",
+        "maxChars": 4000,
+        "offersLive": true
+      }
+    },
+    "at": "describe"
+  },
+  {
+    "answer": {
+      "jsonrpc": "2.0",
+      "result": {
+        "defaultSpeak": "voxtral-mini-tts-2603",
+        "defaultTranscribe": "voxtral-mini-latest",
+        "defaultVoices": {
+          "voxtral-mini-tts-2603|en": "en_paul_neutral",
+          "voxtral-mini-tts-2603|fr": "fr_marie_neutral"
+        },
+        "error": null,
+        "listed": false,
+        "listedAt": 0,
+        "service": "mistral",
+        "speak": [
+          {
+            "id": "voxtral-mini-tts-2603",
+            "label": "Voxtral Mini TTS",
+            "langs": [],
+            "note": ""
+          }
+        ],
+        "speed": null,
+        "transcribe": [
+          {
+            "id": "voxtral-mini-latest",
+            "label": "Voxtral Mini",
+            "langs": [],
+            "note": ""
+          }
+        ],
+        "voiceExample": "fr_marie_neutral",
+        "voices": null,
+        "voicesByModel": false,
+        "voicesUrl": "https://console.mistral.ai/build/audio/text-to-speech"
+      }
+    },
+    "at": "catalog"
+  },
+  {
+    "answer": {
+      "jsonrpc": "2.0",
+      "result": {
+        "text": "Bonjour le monde"
+      }
+    },
+    "asked": [
+      {
+        "body": "a93070a35847ef77:24290",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "dictation"
+  },
+  {
+    "answer": {
+      "jsonrpc": "2.0",
+      "result": {
+        "text": "Bonjour le monde"
+      }
+    },
+    "asked": [
+      {
+        "body": "755c262626e6144e:24230",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "any language"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32102,
+        "message": ""
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "a93070a35847ef77:24290",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "key refused"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32102,
+        "message": ""
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "a93070a35847ef77:24290",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "key forbidden"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32105,
+        "message": "trop de requêtes"
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "a93070a35847ef77:24290",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "quota"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32104,
+        "message": "500|en panne"
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "a93070a35847ef77:24290",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "failure"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32104,
+        "message": "400|mauvaise clé ***"
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "a93070a35847ef77:24290",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "the key said"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32104,
+        "message": "200|<html>"
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "a93070a35847ef77:24290",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "no json"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32104,
+        "message": "200|réponse sans texte"
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "a93070a35847ef77:24290",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "no text"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32103,
+        "message": "(network)"
+      },
+      "jsonrpc": "2.0"
+    },
+    "at": "cut"
+  },
+  {
+    "answer": {
+      "jsonrpc": "2.0",
+      "result": {
+        "firstMs": "(a time)"
+      }
+    },
+    "asked": [
+      {
+        "body": "{\"input\":\"Bonjour, ça va ?\",\"model\":\"voxtral-mini-tts-2603\",\"response_format\":\"pcm\",\"stream\":true,\"voice_id\":\"en_paul_neutral\"}",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "application/json"
+        },
+        "line": "POST /v1/audio/speech HTTP/1.1"
+      }
+    ],
+    "at": "speak: read",
+    "heard": {
+      "pcm": "f30ac07f37332b95:4800",
+      "rates": [24000]
+    }
+  },
+  {
+    "answer": {
+      "jsonrpc": "2.0",
+      "result": {
+        "firstMs": "(a time)"
+      }
+    },
+    "asked": [
+      {
+        "body": "{\"input\":\"Bonjour, ça va ?\",\"model\":\"voxtral-mini-tts-2603\",\"response_format\":\"pcm\",\"stream\":true,\"voice_id\":\"en_paul_neutral\"}",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "application/json"
+        },
+        "line": "POST /v1/audio/speech HTTP/1.1"
+      }
+    ],
+    "at": "speak: read faster",
+    "heard": {
+      "pcm": "f30ac07f37332b95:4800",
+      "rates": [24000]
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32106,
+        "message": "422|voix inconnue"
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "{\"input\":\"Bonjour, ça va ?\",\"model\":\"voxtral-mini-tts-2603\",\"response_format\":\"pcm\",\"stream\":true,\"voice_id\":\"en_paul_neutral\"}",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "application/json"
+        },
+        "line": "POST /v1/audio/speech HTTP/1.1"
+      }
+    ],
+    "at": "speak: voice refused",
+    "heard": {
+      "pcm": "cbf29ce484222325:0",
+      "rates": []
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32102,
+        "message": ""
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "{\"input\":\"Bonjour, ça va ?\",\"model\":\"voxtral-mini-tts-2603\",\"response_format\":\"pcm\",\"stream\":true,\"voice_id\":\"en_paul_neutral\"}",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "application/json"
+        },
+        "line": "POST /v1/audio/speech HTTP/1.1"
+      }
+    ],
+    "at": "speak: key refused",
+    "heard": {
+      "pcm": "cbf29ce484222325:0",
+      "rates": []
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32105,
+        "message": "trop"
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "{\"input\":\"Bonjour, ça va ?\",\"model\":\"voxtral-mini-tts-2603\",\"response_format\":\"pcm\",\"stream\":true,\"voice_id\":\"en_paul_neutral\"}",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "application/json"
+        },
+        "line": "POST /v1/audio/speech HTTP/1.1"
+      }
+    ],
+    "at": "speak: quota",
+    "heard": {
+      "pcm": "cbf29ce484222325:0",
+      "rates": []
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32106,
+        "message": "200|réponse sans son"
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "{\"input\":\"Bonjour, ça va ?\",\"model\":\"voxtral-mini-tts-2603\",\"response_format\":\"pcm\",\"stream\":true,\"voice_id\":\"en_paul_neutral\"}",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "application/json"
+        },
+        "line": "POST /v1/audio/speech HTTP/1.1"
+      }
+    ],
+    "at": "speak: no sound",
+    "heard": {
+      "pcm": "cbf29ce484222325:0",
+      "rates": []
+    }
+  },
+  {
+    "answer": {
+      "jsonrpc": "2.0",
+      "result": {
+        "at": "(a time)",
+        "speak": [
+          {
+            "id": "voxtral-mini-tts-2603",
+            "label": "Voxtral Mini TTS",
+            "langs": [],
+            "note": ""
+          }
+        ],
+        "transcribe": [
+          {
+            "id": "voxtral-mini-latest",
+            "label": "Voxtral Mini",
+            "langs": [],
+            "note": ""
+          }
+        ],
+        "voices": [
+          {
+            "id": "fr_marie_neutral",
+            "langs": ["fr"],
+            "model": "",
+            "name": "Marie",
+            "note": "female",
+            "own": false
+          },
+          {
+            "id": "own",
+            "langs": ["fr"],
+            "model": "",
+            "name": "Mine",
+            "note": "",
+            "own": true
+          }
+        ]
+      }
+    },
+    "asked": [
+      {
+        "body": "",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef"
+        },
+        "line": "GET /v1/models HTTP/1.1"
+      },
+      {
+        "body": "",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef"
+        },
+        "line": "GET /v1/audio/voices?limit=100 HTTP/1.1"
+      }
+    ],
+    "at": "list",
+    "catalog": {
+      "jsonrpc": "2.0",
+      "result": {
+        "defaultSpeak": "voxtral-mini-tts-2603",
+        "defaultTranscribe": "voxtral-mini-latest",
+        "defaultVoices": {
+          "voxtral-mini-tts-2603|en": "en_paul_neutral",
+          "voxtral-mini-tts-2603|fr": "fr_marie_neutral"
+        },
+        "error": null,
+        "listed": false,
+        "listedAt": 0,
+        "service": "mistral",
+        "speak": [
+          {
+            "id": "voxtral-mini-tts-2603",
+            "label": "Voxtral Mini TTS",
+            "langs": [],
+            "note": ""
+          }
+        ],
+        "speed": null,
+        "transcribe": [
+          {
+            "id": "voxtral-mini-latest",
+            "label": "Voxtral Mini",
+            "langs": [],
+            "note": ""
+          }
+        ],
+        "voiceExample": "fr_marie_neutral",
+        "voices": null,
+        "voicesByModel": false,
+        "voicesUrl": "https://console.mistral.ai/build/audio/text-to-speech"
+      }
+    }
+  },
+  {
+    "answer": {
+      "jsonrpc": "2.0",
+      "result": {
+        "text": "bonjour tout le monde"
+      }
+    },
+    "at": "live: speaks",
+    "partials": ["bonjour"],
+    "streams": [
+      {
+        "audio": "c341a8f7e8a2c847:9600",
+        "commits": 2,
+        "ended": true,
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef"
+        },
+        "line": "GET /v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602 HTTP/1.1",
+        "texts": [
+          "{\"session\":{\"audio_format\":{\"encoding\":\"pcm_s16le\",\"sample_rate\":16000}},\"type\":\"session.update\"}",
+          "{\"audio\":\"…\",\"type\":\"input_audio.append\"}",
+          "{\"audio\":\"…\",\"type\":\"input_audio.append\"}",
+          "{\"audio\":\"…\",\"type\":\"input_audio.append\"}",
+          "{\"type\":\"input_audio.flush\"}",
+          "{\"type\":\"input_audio.end\"}"
+        ]
+      }
+    ]
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32102,
+        "message": ""
+      },
+      "jsonrpc": "2.0"
+    },
+    "at": "live: refused",
+    "partials": [],
+    "streams": ["GET /v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602 HTTP/1.1"]
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32105,
+        "message": "invalid key"
+      },
+      "jsonrpc": "2.0"
+    },
+    "at": "live: quota",
+    "partials": [],
+    "streams": ["GET /v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602 HTTP/1.1"]
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32104,
+        "message": "500|invalid key"
+      },
+      "jsonrpc": "2.0"
+    },
+    "at": "live: failure",
+    "partials": [],
+    "streams": ["GET /v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602 HTTP/1.1"]
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32104,
+        "message": "500|boom"
+      },
+      "jsonrpc": "2.0"
+    },
+    "at": "live: fails",
+    "partials": [],
+    "streams": ["GET /v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602 HTTP/1.1"]
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32103,
+        "message": "(network)"
+      },
+      "jsonrpc": "2.0"
+    },
+    "at": "live: closes",
+    "partials": [],
+    "streams": ["GET /v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602 HTTP/1.1"]
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32103,
+        "message": "(network)"
+      },
+      "jsonrpc": "2.0"
+    },
+    "at": "live: closes at its end",
+    "partials": ["bonjour"],
+    "streams": ["GET /v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602 HTTP/1.1"]
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32103,
+        "message": "(network)"
+      },
+      "jsonrpc": "2.0"
+    },
+    "at": "live: mute",
+    "partials": ["bonjour"],
+    "streams": [
+      {
+        "audio": "c341a8f7e8a2c847:9600",
+        "commits": 2,
+        "ended": true,
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef"
+        },
+        "line": "GET /v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602 HTTP/1.1",
+        "texts": [
+          "{\"session\":{\"audio_format\":{\"encoding\":\"pcm_s16le\",\"sample_rate\":16000}},\"type\":\"session.update\"}",
+          "{\"audio\":\"…\",\"type\":\"input_audio.append\"}",
+          "{\"audio\":\"…\",\"type\":\"input_audio.append\"}",
+          "{\"audio\":\"…\",\"type\":\"input_audio.append\"}",
+          "{\"type\":\"input_audio.flush\"}",
+          "{\"type\":\"input_audio.end\"}"
+        ]
+      }
+    ]
+  }
+]

@@ -121,8 +121,8 @@
       "type": ["string", "null"]
     },
     "status": {
-      "description": "Its column: todo, in-progress, review or done.",
-      "enum": ["todo", "in-progress", "review", "done"],
+      "description": "Its column: todo, in-progress, review, in-review or done.",
+      "enum": ["todo", "in-progress", "review", "in-review", "done"],
       "type": "string"
     },
     "taken_by": {

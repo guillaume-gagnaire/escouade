@@ -24,11 +24,21 @@ Un projet à plusieurs dépôts a le workflow de chaque dépôt. La lecture se r
 Ce qu’Escouade comprend d’un workflow tiré de la config du dépôt (ses portes, ses étapes, leurs sous-agents, ses retours, ses fichiers d’état) et tes corrections sont gardés dans le dépôt, un fichier par workflow dans `.escouade/workflows/`, à côté des [tickets partagés](shared-board). Escouade écrit ces fichiers et les tient à jour, mais ne les commite jamais : commite-les avec ton travail, et toute l’équipe qui utilise Escouade voit les mêmes workflows et les mêmes corrections. Un workflow est du dépôt quand sa porte d’entrée l’est, même si une étape appelle une skill de tes propres dossiers (elle est nommée telle quelle).
 
 - Les fichiers ne gardent rien d’une machine : ni date, ni chemin absolu, ni l’état du travail (« phase 3 sur 6 » est relu sur place). Une relecture sans changement ne les touche pas.
-- Le dossier fait foi : un coéquipier dont la machine ne lit pas un workflow le voit et le suit quand même. Une relecture ajoute un workflow nouveau et met à jour celui qui a changé, sans jamais supprimer un fichier ; on écarte un workflow par « Ce n’est pas un workflow » (son fichier le garde marqué) ou on supprime son fichier par « Retirer du dépôt ».
+- Le dossier fait foi : un coéquipier dont la machine ne lit pas un workflow le voit et le suit quand même. Une relecture ajoute un workflow nouveau et met à jour celui qui a changé, sans jamais supprimer un fichier ni recréer celui que tu as supprimé (voir [supprimer un workflow](#supprimer-un-workflow-ou-n-en-avoir-aucun)).
 - Les fichiers sont relus quand ils changent (un `git pull`, une autre branche) ; un fichier illisible est signalé avec son chemin et sa raison.
 - Les workflows de tes propres dossiers (`~/.claude`, `~/.codex`, GSD ou Superpowers installés là) sont lus, montrés et suivis de la même façon, mais leur fichier reste sur ta machine, dans `~/.escouade/projects/<id>/workflows/`, jamais dans le dépôt. « Sur cette machine », dans Réglages › Projets › Workflow, y garde aussi ceux du dépôt.
 - L’historique des agents dans les workflows reste sur ta machine, dans le dossier de données d’Escouade.
 - Le format est décrit par un schéma JSON : `https://escouade.dev/schemas/escouade-workflow.schema.json`.
+
+## Supprimer un workflow, ou n’en avoir aucun
+
+- **Supprimer ce workflow**, sous ses étapes dans Réglages › Projets › Workflow, supprime son fichier tout de suite. Effacer son fichier à la main fait la même chose : à la relecture suivante, Escouade voit qu’il manque. Dans les deux cas, le workflow sort d’Escouade et la relecture ne le recrée plus, ni au redémarrage.
+- Ta machine s’en souvient pour ce projet, dans `~/.escouade/projects/<id>/`. La liste « Supprimés » les montre, chacun avec « Rétablir », qui le relit et réécrit son fichier.
+- Si ce qui l’a fait trouver change (une commande ou une skill modifiée), il est proposé à nouveau, sans être écrit : « Reprendre » le rétablit, « Laisser supprimé » le garde écarté tel qu’il est maintenant.
+- Un fichier qui revient (un `git pull`, une autre branche) rend le workflow au projet.
+- « Ce n’est pas un workflow » reste l’autre façon de l’écarter : son fichier est gardé, marqué, pour que toute l’équipe l’écarte aussi.
+
+« Pas de workflow pour ce projet », dans l’assistant « Nouveau projet » (étape Kanban) ou en haut de Réglages › Projets › Workflow, coupe tout. Escouade ne lit plus les workflows du projet, n’écrit aucun fichier et n’y suit aucun agent. Ce qui est déjà dans `.escouade/workflows/` reste tel quel. L’onglet Workflow le dit, avec où le défaire : « Lire les workflows », puis « Enregistrer ». Dans un projet partagé, c’est la clé `workflows.enabled: false` de son [`.escouade.yml`](escouade-yml).
 
 ## Où en est chaque agent
 

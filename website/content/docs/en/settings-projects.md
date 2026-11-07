@@ -6,6 +6,10 @@ The “Projects” tab sets one project at a time: its name, color and tile, its
 
 The tab acts on the project chosen in the “Project” row, under the header of the [settings window](settings-application): one button per open project. What you change on a project stays in the draft when you switch to another, and everything is saved together with “Save”.
 
+## Proposed plugins
+
+When the project’s `.escouade.yml` proposes plugins (`plugins.recommended`) not installed on your machine, a band at the head of the tab names them, each with what it asks for. “See in the store” opens its page in the view Plugins, from where you install it after reading its permissions: the band installs and switches on nothing. “Not for this project” silences it on this machine. In a private project, it reminds you that an installed plugin is on in it only once switched on for it. See [.escouade.yml](escouade-yml#plugins).
+
 ## Identity
 
 | Setting | Effect | Default |
@@ -16,7 +20,7 @@ The tab acts on the project chosen in the “Project” row, under the header of
 | “Tile letters” | What the project’s tile says in the projects’ rail: one to three letters or digits (“API”, “v2”), or a single emoji. The rest of what you type (spaces, signs, a fourth letter) isn’t written. The tile is shown beside the field, as the rail will draw it. | Empty: the initials of the name (`demo-api` → “DA”, `infra` → “In”), shown as a hint in the field |
 | “Logo” | An image in place of the letters: “Choose an image…” takes it (PNG, JPEG, WebP, SVG or ICO, 1 MB at most), “Remove” goes back to the letters. It takes the tile’s shape, whole, on the project’s color where it is transparent; the agents waiting, those at work, a private project’s lock and the alert stay drawn over it. | None |
 | “Label under the tile” | A label under the project’s tile, in the projects’ rail, on one line and cut with “…” when too long (its whole name stays in the tooltip). The switch turns it on; the field gives a text shorter than the name, 12 characters at most. Widened past 160 px, the rail shows this text (or the name) on the right of every tile, on or not. | Off; empty, the text is the project’s name |
-| “Preferred account” | The account new agents and tickets of the project start on. Only visible with several accounts. Choices: “Automatic” (the first active account under the pause threshold, in the order of the accounts) or one of the active accounts that serve this project. | “Automatic” |
+| “Preferred account” | The account new agents and tickets of the project start on. Only visible with several accounts. Choices: “Automatic” (the first “good” active account, in the order of the accounts: 5 hours under the threshold, week on pace) or one of the active accounts that serve this project. | “Automatic” |
 
 The logo is recognized by its content, whatever its extension. An image that is too heavy, unreadable or of another format is refused with a message that says why, for example: “big.png” weighs 3 MB: a logo weighs 1 MB at most., and the tile stays as it was. Escouade keeps a copy of it in its data folder, under the project: moving or deleting the original file changes nothing. An SVG is shown as an image: nothing it holds runs. The letters and the logo stay on this machine, like the name and the color: they don’t go into `.escouade.yml`. A project closed then reopened finds them again; closed with its history erased (or its history erased later), it erases its copy of the logo. The same fields are in the “New project” assistant, under the name and the color.
 
@@ -65,9 +69,11 @@ Escouade reads the project’s workflow in your harnesses’ files: their comman
 - **Read by the rules at 10:12**: when it was read, and the files read, folder by folder. **Read again** reads them again.
 - **Refine with an agent**: a short agent will read again what the rules found. The button comes in a next version.
 - **Read again when files change**: when the window comes back to the front, if a file read changed. Off, only “Read again” reads again.
+- **Project workflows**: “Read the workflows” (by default) or “No workflow for this project”, which stops their reading and writing while it is chosen; the section says so, with how to undo it. Shared by the `workflows.enabled` key of `.escouade.yml`. See [having none](workflows#deleting-a-workflow-or-having-none).
 - **Found**: the project’s workflows (their number of steps, entries and subagents), the board’s loop of tickets, and the commands alone, which are no workflows. A click chooses the one whose steps you correct.
 - **Steps**: rename a step, merge it with the next, remove it, move it (drag its number, or Alt+↑ and Alt+↓ in its name), add the one the reading missed with what tells it (a command, a subagent, a file written). A guessed step, dotted, waits for “Keep” or “Remove”. “This is not a workflow” sets it apart, “Restore” brings it back. Your corrections go before a new reading; one that matches nothing any more is said.
 - **Where to keep the workflows’ configuration**: “In the repository” (by default) or “On this machine”, for the workflows of the repository’s configuration. Each workflow says where it is kept: “in the repository” or “on this machine (outside the repository)”; those of your own folders (`~/.claude`, GSD…) always stay on this machine. See [where it is kept](workflows#where-it-is-kept).
+- **Delete this workflow**: its file is deleted at once, and reading again does not make it again (a file erased by hand neither). **Deleted** lists them, with “Restore”; one whose source changed is proposed again (“Take back” or “Keep deleted”).
 - **Updated by the reading**: a reading found the workflow changed and updated its file (the tooltip says what changed); your corrections stay.
 - **From the repository**: a workflow this machine does not read itself, from a teammate’s file; it is shown and followed all the same. “Remove from the repository” deletes its file.
 - A file that can’t be read is said under the reading, with its path and the reason.
@@ -156,6 +162,8 @@ Nothing is saved before “Save”. A message says how many commands are suggest
 
 Launch commands start the project’s servers, watchers, and services. Each one runs in its own terminal, read-only, started from the Launch section of the sidebar. That section’s gear (“Launch commands…”) opens this tab on this group. When the section is empty, its “Configure” and “✦ Suggest commands” links open it too, the second one also starting the fill-in. See [launch](launch) and [terminals](terminals).
 
+“Open the launches’ pages” says where the page of a ready test opens (see [The launch page](browser)): “In the agent” (default), “In a separate window” or “In the system browser”. This choice stays on your machine.
+
 With no command, the group says “No commands yet.”. Each command has four fields.
 
 | Field | Effect |
@@ -189,7 +197,7 @@ Closing is refused while an approval of one of the project’s tickets is runnin
 
 | Setting | Effect | Default |
 | --- | --- | --- |
-| “Code index on every project” | Turns on the [code index](code-index#on-every-project) of every project that has not made its own choice: they are read one by one, in the background. Turning it off erases their index, after a confirmation that says how many projects lose it. Saved at once, without **Save**. | Off |
+| “Search by meaning” | Downloads the vectors’ model, one for every project of this machine: the [shared memory](shared-memory) and the [docs](docs-space) are then searched by meaning besides the words. Its progress shows, **Cancel** keeps what came (**Resume** goes on), **Delete** removes it. Nothing leaves the machine. | Not downloaded |
 
 ## New projects
 
@@ -227,10 +235,6 @@ The “Start from a blank project” switch (“The history stays in Settings �
 
 > [!NOTE]
 > A project closed before this version has already lost its history: there is nothing to get back for it.
-
-## Code index
-
-The “Code index” group turns the project’s [code index](code-index) on (**Index this project**): it says what the index saves, that everything stays on the machine, and what it holds. Until the project makes its own choice, it follows **Code index on every project** (see below) and says so; a choice made here is kept, and **Follow the app’s setting** goes back to it. For a private project, it says what stays out of the index. **Search by meaning** downloads the vectors’ model, with its progress and **Cancel**.
 
 ## Shared memory
 

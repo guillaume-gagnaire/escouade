@@ -3,7 +3,16 @@ import type { Tree } from '../types';
 // Jira, Trello, GitHub, Linear, ClickUp, GitLab and Azure Boards: the integrations tab and the import of tickets.
 export default {
   // What each service calls the place its tickets are in (the project, the board, the repository).
-  container: { jira: 'Projet', trello: 'Tableau', github: 'Dépôt', linear: 'Équipe', clickup: 'Liste', gitlab: 'Projet', azure: 'Projet' },
+  container: {
+    jira: 'Projet',
+    trello: 'Tableau',
+    github: 'Dépôt',
+    linear: 'Équipe',
+    clickup: 'Liste',
+    gitlab: 'Projet',
+    azure: 'Projet',
+    other: 'Conteneur',
+  },
   // The search field of the import, by service.
   searchHint: {
     jira: 'Rechercher par clé ou par texte…',
@@ -13,6 +22,7 @@ export default {
     clickup: 'Rechercher par id (#86abx3, ABC-12) ou par titre…',
     gitlab: 'Rechercher une issue (#12) ou par texte…',
     azure: 'Rechercher un élément de travail (#12) ou par titre…',
+    other: 'Rechercher un ticket…',
   },
   // The toast after an import: « 3 tickets importés depuis Jira et Trello ».
   imported: { one: '{count} ticket importé depuis {from}', other: '{count} tickets importés depuis {from}' },
@@ -37,6 +47,8 @@ export default {
     notConnected: 'Non connecté',
     keychainUnavailable: 'Trousseau du système indisponible : le jeton reste dans ~/.escouade/integrations.json.',
     keychainUnreadable: 'Trousseau du système illisible : relance Escouade ou reconnecte le compte.',
+    servedBy: 'Servi par',
+    servedByPlugin: 'Servi par le plugin {plugin}',
     disconnect: 'Déconnecter',
     connectEllipsis: 'Connecter…',
     connect: 'Connecter',
@@ -78,6 +90,9 @@ export default {
     viaCli: 'Jeton de {cli}',
     issues: 'Sert aussi à {source}',
     noTickets: 'Pas de tickets : PR et CI seulement',
+    /** The plugin the app gives that serves the account (GitHub's, INT-8.1), switched off or stopped by itself. */
+    pluginOff: 'Le plugin {plugin} est coupé (Réglages › Plugins) : ce compte ne sert plus rien, ses PR ne sont plus suivies',
+    pluginStopped: 'Le plugin {plugin} s’est arrêté ({why}) : ses PR ne sont plus suivies jusqu’à sa relance',
     projects: { one: 'Projet : {list}', other: 'Projets : {list}' },
     noAccount: { one: 'Aucun compte, pour le projet {list}', other: 'Aucun compte, pour les projets {list}' },
     connectHost: 'Connecter {host}',
@@ -110,6 +125,7 @@ export default {
       clickup: 'Liste ClickUp',
       gitlab: 'Projet GitLab Issues',
       azure: 'Projet Azure Boards',
+      other: 'Conteneur de la source',
     },
   },
 

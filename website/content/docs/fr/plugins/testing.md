@@ -4,7 +4,7 @@ Escouade donne aux auteurs de plugins une commande, `escouade-plugin`, qui fait 
 
 ## La commande
 
-`escouade-plugin` est livrée avec Escouade, à côté de son programme : `%LOCALAPPDATA%\Escouade\escouade-plugin.exe` sous Windows, `Escouade.app/Contents/MacOS/escouade-plugin` sous macOS, `/usr/bin/escouade-plugin` avec le paquet `.deb`. Elle n’a besoin que de ce qu’il faut au programme du plugin pour démarrer (Node pour un plugin en JavaScript).
+`escouade-plugin` est livrée avec Escouade, à côté de son programme : `%LOCALAPPDATA%\Escouade\escouade-plugin.exe` sous Windows, `Escouade.app/Contents/MacOS/escouade-plugin` sous macOS, `/usr/bin/escouade-plugin` avec le paquet `.deb`. Pour un plugin `run.js` ou `run.wasm`, elle n’a besoin ni de Node ni de Rust : elle compile son module comme le store et le joue en WASM, dans l’hôte de l’app. Pour un plugin lancé par une commande, il lui faut ce qu’il faut à ce programme pour démarrer.
 
 ```sh
 escouade-plugin validate mon-plugin   # le manifeste, champ par champ
@@ -14,9 +14,15 @@ escouade-plugin dev mon-plugin        # le faux Escouade
 
 `--lang fr` ou `--lang en` choisit la langue de ses messages ; sans lui, c’est celle du système.
 
+`--escouade <version>` joue le plugin comme cette version d’Escouade, avec `validate`, `test` et `dev` : la plage `escouade` du manifeste se contrôle contre elle, et c’est elle que le plugin voit dans `initialize`. Sans lui, c’est la version de la commande. Il sert à écrire pour une version à venir :
+
+```sh
+escouade-plugin test mon-plugin --escouade 2.2.0
+```
+
 ## Le banc de conformité
 
-`escouade-plugin test <dossier>` lit le manifeste, lance le programme de `run` comme Escouade le lance (dans son dossier, avec ses trois variables, avec tout ce qu’il démarre), et joue neuf scénarios. Chacun dit ce qui s’est passé ; un scénario qui échoue dit aussi **ce qui manque**.
+`escouade-plugin test <dossier>` lit le manifeste, lance le programme de `run` comme Escouade le lance (dans son dossier, avec ses trois variables, avec tout ce qu’il démarre), et joue jusqu’à onze scénarios. Chacun dit ce qui s’est passé ; un scénario qui échoue dit aussi **ce qui manque**.
 
 | Scénario | Ce que le banc fait | Ce qu’il attend |
 | --- | --- | --- |
@@ -29,8 +35,10 @@ escouade-plugin dev mon-plugin        # le faux Escouade
 | Un secret | Sert `secrets/get` pendant tout le banc, avec une valeur de test. | Seulement les clés de `permissions.secrets`, et jamais leur valeur écrite sur la sortie d’erreur ou dans un `log`. |
 | Plantage | Tue le plugin et tout ce qu’il a lancé au milieu d’un appel, puis le relance. | Un nouveau process qui s’initialise comme le premier. |
 | Fermeture | Envoie `shutdown`. | Une réponse en moins d’une seconde, puis la fin du process. |
+| Source de tickets | Seulement si `contributes.ticketSources` est déclaré : `account/me` et `tickets/containers`. | Une réponse dans le délai, ou une erreur que le contrat nomme : `-(32000 + statut HTTP)` (`-32401` : jeton refusé), `-32010` (un refus durable), `-32601` (un appel qu’il ne sert pas). |
+| Hébergeur | Seulement si `contributes.forges` est déclaré : `account/me` et `forge/pullRequestsOfBranch`. | La même. |
 
-Un scénario qui ne concerne pas le plugin n’est pas joué et le dit : pas de fait sans `permissions.events`, pas de décision sans `permissions.decide`, et rien d’un programme pour un plugin déclaratif, dont seul le manifeste est lu.
+Un scénario qui ne concerne pas le plugin n’est pas joué et le dit : pas de fait sans `permissions.events`, pas de décision sans `permissions.decide`, pas de source ni d’hébergeur sans `contributes.ticketSources` ou `contributes.forges`, et rien d’un programme pour un plugin déclaratif, dont seul le manifeste est lu.
 
 ```text
 Banc de conformité : dev.exemple.slow-rules 1.0.0
@@ -96,6 +104,47 @@ slack/slack.cmd (pid 30112)
 ← null  (0 ms)
 ```
 
+## Un plugin en Rust
+
+Trois niveaux, du plus rapide au plus vrai :
+
+```sh
+cargo test                                 # le plugin, en natif, sur ta machine
+cargo check --target wasm32-wasip1         # il compile en module (rustup target add wasm32-wasip1)
+escouade-plugin test mon-plugin            # le banc, sur le module
+```
+
+- **`cargo test`** tourne en natif, avec tokio et reqwest : la même source que le module, sans son hôte. `serve_on` du kit joue le plugin sur des lignes en mémoire, les mêmes qu’envoie Escouade. Il lui faut un compilateur C, pour `ring`. Les tests du modèle :
+`sdk/create-escouade-plugin/templates/rust/src/tests.rs` (extrait)
+
+```rust
+/// What the plugin writes for `messages`, one message a line.
+fn play(messages: &[Value]) -> Vec<Value> {
+    let input: String = messages.iter().map(|m| format!("{m}\n")).collect();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        let (output, written) = tokio::io::duplex(64 * 1024);
+        serve_on(Arc::new(Template), input.as_bytes(), output)
+            .await
+            .unwrap();
+        let mut lines = BufReader::new(written).lines();
+        let mut read = Vec::new();
+        while let Some(line) = lines.next_line().await.unwrap() {
+            read.push(serde_json::from_str(&line).unwrap());
+        }
+        read
+    })
+}
+```
+
+- **`wasm32-wasip1`** est la cible du module. `cargo check --target wasm32-wasip1` dit vite ce qui n’y compile pas : `tokio`, `std::process`, une dépendance qui suppose un système. Ce n’est pas le module publié : celui-là sort de `escouade-plugin build`.
+- **Le banc et le faux Escouade** compilent le module comme le store, puis le jouent dans l’hôte de l’app. Une erreur du store se voit donc ici : pas de `Cargo.lock`, un crate hors de la liste. La chaîne d’outils, rustc 1.98.0 et `wasm32-wasip1`, est téléchargée au premier besoin dans `~/.escouade/tools` (650 Mo, une minute) et vérifiée à chaque usage, sans rustup. `ESCOUADE_RUST_TOOLCHAIN` en nomme une autre.
+
+`--wasm <module>` joue un module donné au lieu de compiler ; `--offline` refuse tout appel réseau, comme la revue ; `--account <adresse>` donne une adresse à `{account}`. Le banc sert `fs/*` et `proc/*` autour d’un agent à lui, et `secrets/get`. Il ne sert pas `settings/get`, qui répond `-32601` : un plugin doit y survivre.
+
 ## En CI
 
 Le banc tient dans une étape : installe Escouade (ou seulement `escouade-plugin`, à côté de l’app), puis
@@ -105,4 +154,4 @@ escouade-plugin validate .
 escouade-plugin test .
 ```
 
-Les tests d’Escouade jouent ce banc sur son faux plugin et sur ses plugins d’exemple. Le [SDK en TypeScript](plugins/sdk) (`@escouade-dev/plugin`) installe la même commande dans les `node_modules` d’un plugin, et sa CI joue ce banc sur les deux gabarits de `npm create escouade-plugin`.
+Les tests d’Escouade jouent ce banc sur son faux plugin et sur ses propres plugins (`plugins/` de son dépôt), avec `--first-party` : leurs identifiants `dev.escouade.*` sont réservés, le banc les refuse à tout autre plugin. Le [SDK en TypeScript](plugins/sdk) (`@escouade-dev/plugin`) installe la même commande dans les `node_modules` d’un plugin, et sa CI joue ce banc sur les gabarits de `npm create escouade-plugin`.

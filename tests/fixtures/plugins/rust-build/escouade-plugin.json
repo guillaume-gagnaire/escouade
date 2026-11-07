@@ -1,0 +1,14 @@
+{
+  "id": "dev.test.rust-build",
+  "name": "Rust build",
+  "version": "1.0.0",
+  "description": {
+    "en": "A plugin in Rust that `escouade-plugin build` compiles the same on every system (ESC-335).",
+    "fr": "Un plugin en Rust qu'`escouade-plugin build` compile à l'identique sur tous les systèmes (ESC-335)."
+  },
+  "license": "MIT",
+  "escouade": { "api": "1", "min": "2.2.0" },
+  "run": { "wasm": "Cargo.toml" },
+  "activation": ["event:ticket.column"],
+  "permissions": { "events": ["ticket.column"] }
+}

@@ -115,6 +115,19 @@
       {#each MODES as m (m.value)}<option value={m.value}>{m.label}</option>{/each}
     </select>
   </Row>
+  <!-- « Pas de workflow pour ce projet » (ESC-309): nothing of its workflows read nor written. -->
+  <Row label={t('workflowSettings.enabled')} desc={t('workflowSettings.enabledDesc')}>
+    <div class="segmented" role="radiogroup" aria-label={t('workflowSettings.enabled')}>
+      {#each [true, false] as on (on)}
+        <button
+          role="radio"
+          aria-checked={form.config.workflowsEnabled === on}
+          class:on={form.config.workflowsEnabled === on}
+          onclick={() => (form.config.workflowsEnabled = on)}>{t(on ? 'workflowSettings.on' : 'workflowSettings.off')}</button
+        >
+      {/each}
+    </div>
+  </Row>
 </div>
 
 <style>

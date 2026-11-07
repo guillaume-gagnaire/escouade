@@ -5,10 +5,10 @@
 //! it (the stream, a replayed message, the transcript of the terminal view), its text a string or
 //! text blocks. `src/lib/localcmd.ts` reads them the same way in conversations saved before.
 
-use super::strip_ansi;
+use super::words::strip_ansi;
 
 #[derive(Debug, PartialEq)]
-pub(crate) enum Part {
+pub enum Part {
     /// The command as it was typed: `/model opus`, `! ls`.
     Typed(String),
     /// What it printed, its lines kept, without its ANSI codes.
@@ -19,7 +19,7 @@ pub(crate) enum Part {
 
 /// What `text` tells of a local command: `None` when it is no local command's, else its parts,
 /// none for what is not shown (the caveat, an output with nothing in it).
-pub(crate) fn parse(text: &str) -> Option<Vec<Part>> {
+pub fn parse(text: &str) -> Option<Vec<Part>> {
     if text.trim_start().starts_with("<local-command-caveat>") {
         return Some(Vec::new());
     }

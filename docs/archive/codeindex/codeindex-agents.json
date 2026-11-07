@@ -1,0 +1,228 @@
+{
+  "commit": "303fb5f2",
+  "model": "claude-haiku-5-5",
+  "effort": "medium",
+  "passes": 2,
+  "timeoutS": 600,
+  "answerRule": "Tu n’as pas de terminal : cherche et lis le code avec les outils que tu as, sans rien modifier. Réponds court, puis termine par une ligne « RÉPONSE : <chemin du fichier> — <nom de la fonction ou du symbole> ».",
+  "changeRule": "Fais ce changement dans le code, le plus petit possible ; tu n’as pas de terminal, ne lance rien. Termine par une ligne « FAIT : <chemin du fichier> — <nom de la fonction ou du symbole> ».",
+  "tokensaveRule": "## Prefer tokensave MCP tools\n\nBefore reading source files or scanning a codebase, use the tokensave MCP tools: `tokensave_context` for exploration, `tokensave_search` for a known symbol, plus `tokensave_callers`, `tokensave_callees`, `tokensave_impact`, `tokensave_node`, `tokensave_files`, and `tokensave_affected`. A tool that is not in your tool list is listed by calling `tokensave_more` with its area: `navigate` for `tokensave_node`, `git` for `tokensave_affected` and the branch tools.\n\nTo read a file's contents, use `tokensave_read`: it reads any path, indexed or not, and slices with `mode: \"lines\"` or maps a file's symbols with `mode: \"map\"` instead of pulling in the whole body. Use the harness's own file-read tool for a file you are about to edit.\n\n### Searching code\n\nSearch code with `tokensave_search`. By default it returns where a name is defined, ranked, with its kind and signature. With `literal: true` it finds exact text. For who calls or implements a name, search the text that construct takes in the file's language, in every form the language allows. Grep when you need a regex, or for the files a literal search reports as `unscanned`.\n\n### Check freshness before relying on the graph\n\nCall the `tokensave_status` MCP tool (not the `tokensave status` CLI, which indexes a folder that has no index) to see when the index was last synced. Run `tokensave sync` or `tokensave branch add` only when the user has asked for an index update or the task already involves modifying this repository; otherwise disclose the staleness and fall back to read-only source inspection.\n\n### Cross-project and cross-branch queries\n\nPass an absolute `graph_root` to query a different initialized project, adding `graph_branch` to select one of that project's tracked branches. `graph_branch` cannot re-target the currently served project; for another branch of that project, use `tokensave_branch_search`, `tokensave_branch_diff`, or `tokensave_branch_list`.\n\n### Scoping\n\nFor non-code tasks or searching outside an indexed project, use normal filesystem and shell tools instead of tokensave MCP tools.\n\n### SQL fallback\n\nIf the graph tools cannot answer a question, find the active database in `.tokensave/branch-meta.json` (`db_file`) (or `.tokensave/tokensave.db` if branch-meta.json is absent) before querying it directly with SQL. Beta builds use `.tokensave/beta/branch-meta.json` and `.tokensave/beta/tokensave.db` instead; never use the stable index for a beta session (tables: `nodes`, `edges`, `files`).\n\n### Tool gaps\n\nIf a tokensave tool could answer a question natively but does not, suggest the user file an issue at https://github.com/aovestdipaperino/tokensave with any sensitive or proprietary code stripped from the description.\n",
+  "tokensaveRuleFrom": "tokensave 580936b, src/agents/rules.rs, CANONICAL_RULES_MARKDOWN (MIT © 2025 Enzo Lombardi): what `tokensave install` writes in the rules of Claude Code",
+  "tasks": [
+    {
+      "id": "q-modeles-harness",
+      "from": "sonde tache-modeles-harness",
+      "prompt": "Dans ce dépôt (l’app Escouade), où est la fonction qui liste les modèles d’un harness ?",
+      "answer": [["list_models", "read_account_models", "engine/mod.rs"]],
+      "good": "RÉPONSE : src-tauri/src/engine/mod.rs — list_models",
+      "bad": "RÉPONSE : src-tauri/src/model.rs — ModelDecl"
+    },
+    {
+      "id": "q-compte-limite",
+      "from": "sonde tache-compte-limite (ESC-148)",
+      "prompt": "Dans ce dépôt (l’app Escouade), où l’agent d’un ticket passe-t-il sur un autre compte quand il atteint la limite d’usage ?",
+      "answer": [["switch_on_limit", "account_to_switch_to"]],
+      "good": "RÉPONSE : src-tauri/src/tickets.rs — switch_on_limit",
+      "bad": "RÉPONSE : src-tauri/src/switching.rs — switch_if_over"
+    },
+    {
+      "id": "q-mcp-codex",
+      "from": "sonde tache-mcp-codex (ESC-50)",
+      "prompt": "Dans ce dépôt (l’app Escouade), où la déclaration du serveur MCP d’Escouade est-elle écrite dans la config de Codex ?",
+      "answer": [["userconfig"], ["add(", "::add", "fn add", "table", "user_config"]],
+      "good": "RÉPONSE : src-tauri/src/engine/userconfig.rs — UserConfig::add",
+      "bad": "RÉPONSE : src-tauri/src/engine/codex/mod.rs — user_input"
+    },
+    {
+      "id": "q-branche-premier-message",
+      "from": "sonde tache-branche-premier-message (ESC-156)",
+      "prompt": "Dans ce dépôt (l’app Escouade), où le nom de branche du worktree d’un agent est-il choisi au premier message ?",
+      "answer": [["auto_name", "wait_setup", "worktree_pending"]],
+      "good": "RÉPONSE : src-tauri/src/core.rs — auto_name",
+      "bad": "RÉPONSE : src-tauri/src/git.rs — worktree_add"
+    },
+    {
+      "id": "q-reprise-limite",
+      "from": "sonde tache-reprise-limite",
+      "prompt": "Dans ce dépôt (l’app Escouade), où la reprise automatique d’un agent après la limite d’usage est-elle planifiée ?",
+      "answer": [["plan_resume"]],
+      "good": "RÉPONSE : src-tauri/src/core.rs — plan_resume",
+      "bad": "RÉPONSE : src-tauri/src/core.rs — set_resume"
+    },
+    {
+      "id": "q-zoom-borne",
+      "from": "sonde tache-zoom-borne",
+      "prompt": "Dans ce dépôt (l’app Escouade), où le zoom de l’interface est-il borné ?",
+      "answer": [["fit_zoom", "fitzoom", "zoom_levels", "normalize_display"]],
+      "good": "RÉPONSE : src-tauri/src/model.rs — fit_zoom",
+      "bad": "RÉPONSE : src-tauri/src/model.rs — FONT_SIZE_RANGE"
+    },
+    {
+      "id": "q-lance-processus",
+      "from": "sonde tache-lance-processus",
+      "prompt": "Dans ce dépôt (l’app Escouade), qui lance le processus d’un agent ?",
+      "answer": [["start_process", "claude/process.rs", "claude/mod.rs"]],
+      "good": "RÉPONSE : src-tauri/src/core.rs — start_process",
+      "bad": "RÉPONSE : src-tauri/src/core.rs — create_agent"
+    },
+    {
+      "id": "q-ticket-termine",
+      "from": "sonde tache-ticket-termine",
+      "prompt": "Dans ce dépôt (l’app Escouade), où un ticket validé passe-t-il dans la colonne Terminé ?",
+      "answer": [["tickets.rs"], ["validate", "approve_run", "column::done"]],
+      "good": "RÉPONSE : src-tauri/src/tickets.rs — validate",
+      "bad": "RÉPONSE : src-tauri/src/tickets.rs — move_ticket"
+    },
+    {
+      "id": "q-langue-defaut",
+      "from": "sonde tache-langue-defaut",
+      "prompt": "Dans ce dépôt (l’app Escouade), où la langue de l’interface est-elle choisie par défaut d’après celle du système ?",
+      "answer": [["i18n.rs"], ["fn system", "system()", "::system", "of_locale"]],
+      "good": "RÉPONSE : src-tauri/src/i18n.rs — system (of_locale)",
+      "bad": "RÉPONSE : src-tauri/src/i18n.rs — resolve_with"
+    },
+    {
+      "id": "q-permission-plugin",
+      "from": "sonde tache-permission-plugin",
+      "prompt": "Dans ce dépôt (l’app Escouade), où retirer une permission à un plugin le relance-t-il sans elle ?",
+      "answer": [["plugin_set_permission"]],
+      "good": "RÉPONSE : src-tauri/src/commands.rs — plugin_set_permission",
+      "bad": "RÉPONSE : src-tauri/src/plugins/runtime.rs — restart"
+    },
+    {
+      "id": "q-store-controles",
+      "from": "sonde tache-store-controles (ESC-230)",
+      "prompt": "Dans ce dépôt (l’app Escouade et son store), où le store vérifie-t-il l’archive d’un plugin soumis ?",
+      "answer": [["runchecks", "checkversion", "utils/checks.ts"]],
+      "good": "RÉPONSE : store/server/utils/checks.ts — runChecks",
+      "bad": "RÉPONSE : store/server/utils/submissions.ts — createSubmission",
+      "widened": "checkArchive de checks.ts, que runChecks appelle, est juste (relu le 2026-10-30)"
+    },
+    {
+      "id": "q-sauvegarde-etat",
+      "from": "sonde tache-sauvegarde-etat",
+      "prompt": "Dans ce dépôt (l’app Escouade), où l’état de l’app est-il écrit sur le disque en différé ?",
+      "answer": [["save_now", "save_state", "dirty"]],
+      "good": "RÉPONSE : src-tauri/src/core.rs — save_now (la boucle de start sur dirty)",
+      "bad": "RÉPONSE : src-tauri/src/core.rs — load_state"
+    },
+    {
+      "id": "q-worktree-cree",
+      "from": "sonde tache-worktree-cree",
+      "prompt": "Dans ce dépôt (l’app Escouade), où le worktree d’un agent est-il créé avec git ?",
+      "answer": [["worktree_add"]],
+      "good": "RÉPONSE : src-tauri/src/git.rs — worktree_add",
+      "bad": "RÉPONSE : src-tauri/src/core.rs — create_agent_on_new_branch"
+    },
+    {
+      "id": "q-quota-compte",
+      "from": "sonde tache-quota-compte (ESC-30)",
+      "prompt": "Dans ce dépôt (l’app Escouade), où le quota d’un compte est-il relu ?",
+      "answer": [["read_quota", "refresh_usage"]],
+      "good": "RÉPONSE : src-tauri/src/core.rs — read_quota_apart",
+      "bad": "RÉPONSE : src-tauri/src/core.rs — usage_of",
+      "widened": "refresh_usage relit le quota de chaque compte (relu le 2026-10-30)"
+    },
+    {
+      "id": "q-cree-agent",
+      "from": "sonde tache-cree-agent",
+      "prompt": "Dans ce dépôt (l’app Escouade), où un nouvel agent est-il créé ?",
+      "answer": [["create_agent"]],
+      "good": "RÉPONSE : src-tauri/src/core.rs — create_agent",
+      "bad": "RÉPONSE : src-tauri/src/core.rs — start_process"
+    },
+    {
+      "id": "c-zoom-225",
+      "from": "sonde tache-zoom-borne, en changement",
+      "prompt": "Dans ce dépôt (l’app Escouade), ajoute un pas de 225 % au « Zoom de l’interface », après 200 %, côté backend Rust.",
+      "change": {
+        "file": "src-tauri/src/model.rs",
+        "scope": "pub const ZOOM_LEVELS",
+        "added": [["225"], ["[u32; 9]"]]
+      },
+      "goodEdit": {
+        "from": "pub const ZOOM_LEVELS: [u32; 8] = [80, 90, 100, 110, 125, 150, 175, 200];",
+        "to": "pub const ZOOM_LEVELS: [u32; 9] = [80, 90, 100, 110, 125, 150, 175, 200, 225];"
+      },
+      "badEdit": {
+        "from": "pub const ZOOM_LEVELS: [u32; 8] = [80, 90, 100, 110, 125, 150, 175, 200];",
+        "to": "pub const ZOOM_LEVELS: [u32; 8] = [80, 90, 100, 110, 125, 150, 175, 225];"
+      }
+    },
+    {
+      "id": "c-sauvegarde-250",
+      "from": "sonde tache-sauvegarde-etat, en changement",
+      "prompt": "Dans ce dépôt (l’app Escouade), l’état de l’app est écrit sur le disque en différé, par une boucle qui regarde régulièrement s’il a changé : fais-la regarder toutes les 250 ms au lieu de 400 ms.",
+      "change": {
+        "file": "src-tauri/src/core.rs",
+        "scope": "pub fn start(self: &Arc<Self>, git_rx",
+        "added": [["from_millis(250)"]],
+        "gone": ["from_millis(400)"]
+      },
+      "goodEdit": {
+        "from": "tokio::time::sleep(Duration::from_millis(400)).await;\n                if c.dirty.swap",
+        "to": "tokio::time::sleep(Duration::from_millis(250)).await;\n                if c.dirty.swap"
+      },
+      "badEdit": {
+        "from": "tokio::time::sleep(Duration::from_millis(400)).await;\n                if c.dirty.swap",
+        "to": "tokio::time::sleep(Duration::from_millis(2500)).await;\n                if c.dirty.swap"
+      }
+    },
+    {
+      "id": "c-marge-reprise",
+      "from": "sonde tache-reprise-limite, en changement",
+      "prompt": "Dans ce dépôt (l’app Escouade), après la limite d’usage, la reprise automatique d’un agent attend une marge après la remise à zéro du compteur : passe cette marge à une minute.",
+      "change": {
+        "file": "src-tauri/src/core.rs",
+        "scope": "const RESUME_MARGIN_MS",
+        "added": [["60_000", "60000", "60 * 1000", "60 * 1_000", "1000 * 60", "1_000 * 60"]],
+        "gone": ["30_000"]
+      },
+      "goodEdit": {
+        "from": "pub(crate) const RESUME_MARGIN_MS: i64 = 30_000;",
+        "to": "pub(crate) const RESUME_MARGIN_MS: i64 = 60_000;"
+      },
+      "badEdit": {
+        "from": "pub(crate) const RESUME_MARGIN_MS: i64 = 30_000;",
+        "to": "pub(crate) const RESUME_MARGIN_MS: i64 = 6_000;"
+      }
+    },
+    {
+      "id": "c-locale-fra",
+      "from": "sonde tache-langue-defaut, en changement",
+      "prompt": "Dans ce dépôt (l’app Escouade), la langue d’une locale du système : une étiquette dont la langue est « fra » (ISO 639-2, comme fra-FR) doit aussi donner le français.",
+      "change": {
+        "file": "src-tauri/src/i18n.rs",
+        "scope": "pub fn of_locale(",
+        "added": [["\"fra\""]]
+      },
+      "goodEdit": {
+        "from": "if language.eq_ignore_ascii_case(\"fr\") {",
+        "to": "if language.eq_ignore_ascii_case(\"fr\") || language.eq_ignore_ascii_case(\"fra\") {"
+      },
+      "badEdit": {
+        "from": "pub fn resolve_with(",
+        "to": "// \"fra\" too\npub fn resolve_with("
+      }
+    },
+    {
+      "id": "c-ansi-noir",
+      "from": "ESC-80 (thème des terminaux)",
+      "prompt": "Dans ce dépôt (l’app Escouade), le noir ANSI des terminaux doit prendre la couleur du token --code-dim au lieu de --ansi-k.",
+      "change": {
+        "file": "src/lib/terminals.ts",
+        "scope": "export const ANSI_TOKENS",
+        "added": [["black: '--code-dim'", "black: \"--code-dim\""]],
+        "gone": ["black: '--ansi-k'"]
+      },
+      "goodEdit": {
+        "from": "  black: '--ansi-k',",
+        "to": "  black: '--code-dim',"
+      },
+      "badEdit": {
+        "from": "  white: '--ansi-w',",
+        "to": "  white: '--code-dim',"
+      }
+    }
+  ]
+}

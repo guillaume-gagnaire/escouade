@@ -472,7 +472,7 @@ fn fake_service() -> FakeService {
 
 fn online_voice(url: &str, voice: &str) -> OnlineVoice {
     OnlineVoice {
-        spec: Spec { base: url.into(), ..Spec::new(Provider::OpenAi, KEY.into(), reqwest::Client::new()) },
+        spec: Spec { base: url.into(), ..Spec::new(Provider::OpenAi, KEY.into()) },
         choice: SpeakChoice { model: "gpt-4o-mini-tts".into(), voice: voice.into(), lang: "fr".into(), rate: 1.0 },
         default_voice: "marin".into(),
     }
@@ -705,7 +705,7 @@ fn the_voice_on_line_chosen_during_the_conversation_reads_the_next_passage() {
 
 /// « Transcription : En ligne » (ESC-134): the service of the dictation, at `base`.
 fn heard_on_line(base: &str) -> ConvChoice {
-    let mut spec = Spec::new(Provider::Groq, "gsk-test-key".into(), reqwest::Client::new());
+    let mut spec = Spec::new(Provider::Groq, "gsk-test-key".into());
     spec.base = base.into();
     ConvChoice { transcription: Some(spec), ..conv_choice() }
 }
@@ -818,7 +818,7 @@ fn real_elevenlabs_conversation_sentence() {
     let (samples, rate) = super::source::read_wav(&path).unwrap();
     let samples = super::audio::resample(&samples, rate, 16_000);
     let secs = samples.len() as f32 / 16_000.0;
-    let spec = Spec::new(Provider::ElevenLabs, key, reqwest::Client::new());
+    let spec = Spec::new(Provider::ElevenLabs, key);
     let session = listening(h.voice.conversation_start(ConvChoice { transcription: Some(spec), ..conv_choice() }).unwrap());
     // Played on a thread of its own, the room quiet after it; the events watched every 5 ms meanwhile.
     let script = h.script.clone();
@@ -1115,7 +1115,7 @@ fn real_elevenlabs_conversation_live() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/voice/testdata/question-fr.wav");
     let (samples, rate) = super::source::read_wav(&path).unwrap();
     let samples = super::audio::resample(&samples, rate, 16_000);
-    let spec = Spec::new(Provider::ElevenLabs, key, reqwest::Client::new()).with_live(Some("scribe_v2_realtime".into()));
+    let spec = Spec::new(Provider::ElevenLabs, key).with_live(Some("scribe_v2_realtime".into()));
     let session = listening(h.voice.conversation_start(ConvChoice { transcription: Some(spec), ..conv_choice() }).unwrap());
     let script = h.script.clone();
     let quiet = vec![0.001f32; 320];
@@ -1184,7 +1184,7 @@ fn real_elevenlabs_live_and_by_request_hear_the_whole_sentence() {
         let c = conv_harness(&format!("conv-real-137-{name}-{live}"), "never this");
         let h = &c.h;
         put_voice(&h.voice, "fr_FR-siwis-medium");
-        let spec = Spec::new(Provider::ElevenLabs, key.clone(), reqwest::Client::new())
+        let spec = Spec::new(Provider::ElevenLabs, key.clone())
             .with_live(live.then(|| "scribe_v2_realtime".to_string()));
         let choice = ConvChoice { transcription: Some(spec), silence_ms: 1200, ..conv_choice() };
         let session = listening(h.voice.conversation_start(choice).unwrap());

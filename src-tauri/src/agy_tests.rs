@@ -31,7 +31,7 @@ fn machine_account(h: &Harness) {
         s.accounts.push(Account {
             id: "principal-agy".into(),
             name: "Principal".into(),
-            engine: EngineId::Agy,
+            engine: EngineId::AGY,
             claude_path: program,
             active: true,
             ..Default::default()
@@ -43,7 +43,7 @@ fn machine_account(h: &Harness) {
 async fn key_account(h: &Harness, name: &str, key: Option<&str>) -> String {
     let made = h
         .core
-        .create_account(EngineId::Agy, name, &[], crate::accounts::ShareMode::Link)
+        .create_account(EngineId::AGY, name, &[], crate::accounts::ShareMode::Link)
         .unwrap();
     let program = crate::engine::fake_agy();
     h.set_settings(|s| {
@@ -62,7 +62,7 @@ async fn agent_on(h: &Harness, project: &str, account: &str) -> String {
         .create_agent_with(
             project,
             AgentOptions {
-                engine: Some(EngineId::Agy),
+                engine: Some(EngineId::AGY),
                 mode: Some("default".into()),
                 account: Some(account.into()),
                 ..Default::default()
@@ -159,16 +159,16 @@ async fn the_machines_antigravity_account_is_added_by_hand_and_its_defaults_hold
     let (p, _) = h.project(false).await;
     assert!(!crate::accounts::has_any(
         &h.core.settings.read(),
-        EngineId::Agy
+        EngineId::AGY
     ));
     let program = crate::engine::fake_agy();
-    let machine = h.core.machine_account(EngineId::Agy).await;
+    let machine = h.core.machine_account(EngineId::AGY).await;
     assert!(!machine.added && machine.signs_in && machine.signs_in_later);
-    let made = h.core.add_machine_account(EngineId::Agy).unwrap();
+    let made = h.core.add_machine_account(EngineId::AGY).unwrap();
     assert_eq!(made.id, "principal-agy");
-    assert!(h.core.machine_account(EngineId::Agy).await.added);
+    assert!(h.core.machine_account(EngineId::AGY).await.added);
     // Its sign-in: `agy` itself, its interface (no argument), never a key of the app's.
-    assert!(crate::accounts::store(EngineId::Agy).login.is_empty());
+    assert!(crate::accounts::store(EngineId::AGY).login.is_empty());
     let env = crate::accounts::launch_env_with(&made, &|v| v == "GEMINI_API_KEY");
     assert!(
         env.contains(&("GEMINI_API_KEY".into(), String::new())),
@@ -186,7 +186,7 @@ async fn the_machines_antigravity_account_is_added_by_hand_and_its_defaults_hold
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Agy),
+                engine: Some(EngineId::AGY),
                 ..Default::default()
             },
         )
@@ -207,7 +207,7 @@ async fn the_machines_antigravity_account_is_added_by_hand_and_its_defaults_hold
     h.core.remove_claude_account("principal-agy").unwrap();
     assert!(!crate::accounts::has_any(
         &h.core.settings.read(),
-        EngineId::Agy
+        EngineId::AGY
     ));
     h.core.stop_for_good();
 }
@@ -321,6 +321,7 @@ async fn the_texts_written_go_to_agy_p_without_a_tool() {
     .unwrap();
     assert_eq!(name, "corriger-la-agy");
     let said = std::fs::read_to_string(&log).unwrap();
+    assert!(said.contains(r#""autoUpdate":"1""#), "{said}");
     let launch: Value = said
         .lines()
         .filter_map(|l| serde_json::from_str::<Value>(l).ok())
@@ -362,6 +363,110 @@ async fn the_texts_written_go_to_agy_p_without_a_tool() {
     assert!(refused.is_err());
 }
 
+/// INT-10.8: Antigravity's conversation goes through its plugin (`dev.escouade.antigravity-cli`). Switched off, an agent's start
+/// says so, and the agent keeps its session; on again, it talks as before.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_antigravity_agent_says_its_plugin_is_off_and_talks_again_once_it_is_on() {
+    let h = harness("int10-agy-off");
+    let (p, _) = h.project(false).await;
+    machine_account(&h);
+    let a = agent_on(&h, &p.id, "principal-agy").await;
+    let id = crate::plugins::builtin::ANTIGRAVITY;
+    h.core.plugins.choose(id, |c| c.enabled = false).unwrap();
+    h.core.plugin_runtime.forget(id);
+    h.core.sync_harnesses();
+    assert!(crate::plugins::harness::plugged(id).is_none());
+    let sent = h.core.send_message(&a, "bonjour".into(), vec![]).await;
+    let said = |h: &Harness| {
+        let items = Value::Array(h.items(&a)).to_string();
+        let err = sent
+            .as_ref()
+            .err()
+            .map(|e| e.to_string())
+            .unwrap_or_default();
+        format!("{err} {items}")
+    };
+    h.wait("the plugin said off", |h| said(h).contains(id))
+        .await;
+    assert!(said(&h).contains("coupé"), "{}", said(&h));
+    h.core.plugins.choose(id, |c| c.enabled = true).unwrap();
+    h.core.sync_harnesses();
+    assert!(crate::plugins::harness::plugged(id).is_some());
+    let answered = |h: &Harness| {
+        !h.agent(&a).status.is_active()
+            && h.items(&a)
+                .iter()
+                .any(|i| i["kind"] == "turn" && i["isError"] != true)
+    };
+    if !answered(&h) {
+        h.core
+            .send_message(&a, "bonjour".into(), vec![])
+            .await
+            .unwrap();
+    }
+    h.wait("its answer", answered).await;
+    h.core.stop_for_good();
+}
+
+/// ESC-283: `agy` has a background updater, and one cut half-way leaves no `agy`: each of its programs goes with its update
+/// off, the one a stopped turn starts again as the first (its text and its view: their tests).
+#[tokio::test(flavor = "multi_thread")]
+async fn every_program_of_an_agent_goes_with_its_update_off() {
+    let h = harness("esc283-no-update");
+    let dir = crate::paths::test_dir("esc283-no-update-log");
+    std::fs::create_dir_all(&dir).unwrap();
+    let log = dir.join("fake-agy.jsonl");
+    std::env::set_var("FAKE_AGY_LOG", &log);
+    let (p, _) = h.project(false).await;
+    machine_account(&h);
+    let a = agent_on(&h, &p.id, "principal-agy").await;
+    h.core
+        .send_message(&a, "lent".into(), vec![])
+        .await
+        .unwrap();
+    h.wait("its turn under way", |h| h.agent(&a).status.is_active())
+        .await;
+    h.core.interrupt(&a).await.unwrap();
+    h.wait("its turn stopped", |h| !h.agent(&a).status.is_active())
+        .await;
+    h.turn(&a, "bonjour").await;
+    let said = std::fs::read_to_string(&log).unwrap();
+    let launches: Vec<Value> = said
+        .lines()
+        .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+        .filter(|l| l["launch"]["argv"].is_array())
+        .collect();
+    let programs = launches
+        .iter()
+        .filter(|l| l["launch"]["argv"].to_string().contains("stream-json"))
+        .count();
+    assert!(programs >= 2, "{said}");
+    for l in &launches {
+        assert_eq!(l["launch"]["autoUpdate"], "1", "{l}");
+    }
+    h.core.stop_for_good();
+}
+
+/// INT-10.8: its registry and its plugin say the same thing of it.
+#[test]
+fn its_manifest_says_what_its_engine_says() {
+    use crate::engine::Engine;
+    let text = crate::plugins::builtin::manifest_text(crate::plugins::builtin::ANTIGRAVITY, "")
+        .expect("its manifest");
+    let m: Value = serde_json::from_str(&text).unwrap();
+    let h = &m["contributes"]["harnesses"][0];
+    let e = &crate::engine::AGY;
+    assert_eq!(h["id"], e.id().as_str());
+    assert_eq!(h["name"], e.name());
+    assert_eq!(h["speaker"], e.speaker());
+    assert_eq!(h["updateCommand"], e.update_command());
+    assert_eq!(h["tested"]["oldest"], e.tested().oldest);
+    assert_eq!(h["accountVar"], crate::engine::agy::HOME_VAR);
+    assert_eq!(h["keyVar"], crate::engine::agy::KEY_VARS[0]);
+    let modes: Vec<&str> = e.caps().modes.iter().map(|m| m.id).collect();
+    assert_eq!(h["caps"]["modes"], serde_json::json!(modes));
+}
+
 /// Real run (ESC-271), by hand: a text written by the real Antigravity CLI (`ESCOUADE_TEST_REAL_AGY`,
 /// `%LOCALAPPDATA%\agy\bin\agy.exe`), on the machine's Google sign-in, every tool refused:
 /// `cargo test --lib real_agy_writes -- --ignored --nocapture`. One short question (Gemini Flash
@@ -395,4 +500,19 @@ async fn real_agy_writes_a_text() {
     .unwrap();
     println!("answer in {:?}: {answer}", started.elapsed());
     assert!(!answer.trim().is_empty() && answer.len() < 200, "{answer}");
+}
+
+/// A text given (ESC-66): the model of a reading; `one_shot` refuses every tool whatever the weight.
+#[test]
+fn a_text_given_has_the_model_of_a_reading() {
+    use crate::engine::{agy, Engine, Weight};
+    assert_eq!(
+        agy::text_model(Weight::Given),
+        agy::text_model(Weight::Reading)
+    );
+    assert_ne!(
+        agy::text_model(Weight::Given),
+        agy::text_model(Weight::Light)
+    );
+    assert!(crate::engine::AGY.answers_without_tools());
 }

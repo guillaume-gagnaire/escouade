@@ -1,4 +1,5 @@
 use super::*;
+use escouade_acp::view::{tui_tool, typed_text};
 
 /// The transcript of a real interface's turn, stopped by Ctrl+C (ESC-24).
 const TUI: &str = include_str!("../../../tests/fixtures/cursor/transcript-tui.jsonl");
@@ -9,7 +10,7 @@ fn agent() -> AgentRt {
     let dir = std::env::temp_dir().join(format!("escouade-cursor-tui-{}", new_id()));
     let meta = AgentMeta {
         id: "a1".into(),
-        engine: EngineId::Cursor,
+        engine: EngineId::CURSOR,
         cwd: "C:\\Users\\user\\AppData\\Local\\Temp\\esc24\\wt-agent1".into(),
         session_id: Some("6753be15-7845-4e8d-abf9-3c3ed0985561".into()),
         ..Default::default()

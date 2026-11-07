@@ -123,13 +123,29 @@ fn the_version_delays_and_errors_are_those_of_the_schema() {
     assert_eq!(errors["invalidParams"]["code"], json!(INVALID_PARAMS));
     assert_eq!(errors["notYours"]["code"], json!(NOT_YOURS));
     assert_eq!(errors["keychain"]["code"], json!(KEYCHAIN));
+    // net/fetch and files/read (ESC-321): the same refusal, the same failure, and the file not there.
+    use crate::plugins::{files, wasm};
+    assert_eq!(errors["refused"]["code"], json!(wasm::REFUSED));
+    assert_eq!(errors["refused"]["code"], json!(files::REFUSED));
+    assert_eq!(errors["failed"]["code"], json!(wasm::FAILED));
+    assert_eq!(errors["failed"]["code"], json!(files::FAILED));
+    assert_eq!(errors["notFound"]["code"], json!(files::NOT_FOUND));
+    let methods = &s["x-methods"];
+    assert_eq!(methods["net/fetch"]["timeoutMs"], json!(10_000));
+    assert_eq!(methods["files/read"]["timeoutMs"], json!(5_000));
+    for m in ["net/fetch", "files/read"] {
+        assert_eq!(methods[m]["direction"], "toEscouade", "{m}");
+        for e in methods[m]["errors"].as_array().unwrap() {
+            assert!(errors.get(e.as_str().unwrap()).is_some(), "{m}: {e}");
+        }
+    }
 }
 
 #[test]
 fn what_the_core_sends_holds_the_schema() {
     let m = manifest::read(
         r#"{"id":"dev.test.schema","name":"Schéma","version":"1.0.0","escouade":{"api":"1","min":"2.1.0"}}"#,
-        false,
+        manifest::Hand::Third,
     )
     .manifest
     .unwrap();

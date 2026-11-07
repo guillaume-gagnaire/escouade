@@ -1,402 +1,112 @@
-//! Claude Code's frames (stream-json, docs/PROTOCOL.md) translated into the agent's conversation:
-//! the engine `Claude` hands them here (`Engine::translate`). The transcript of the Claude Code
-//! view goes through the same handlers (`transcript`, `sidechain`).
+//! Claude Code in the agent's conversation. Since INT-10.5 its agents' frames are translated by its plugin
+//! (`dev.escouade.claude-code`, `plugins/claude/src/translate.rs`) and applied as items
+//! (`AgentRt::apply_items`, through `Engine::translate`), the transcript of its terminal view too
+//! (`plugins/claude/src/view.rs`). What is here is the agent's own: its plan told of the calls, a message that comes back, a
+//! file sent to the user.
 
 use super::*;
+use escouade_plugin_protocol::engine::ModelTurn;
 
 impl AgentRt {
-    /// One frame of its `claude` process.
+    /// One frame of Claude Code, in a test: its items applied at once, the next frame reads what they made.
+    #[cfg(test)]
     pub(crate) fn claude_frame(&mut self, f: &Value, fx: &mut Effects) {
-        match f["type"].as_str().unwrap_or("") {
-            "system" => self.on_system(f, fx),
-            "stream_event" => self.on_stream(f, fx),
-            "assistant" => self.on_assistant(f, fx),
-            "user" => self.on_user(f, fx),
-            "result" => self.on_result(f, fx),
-            "control_request" => self.on_control_request(f, fx),
-            "control_cancel_request" => self.on_cancel(f, fx),
-            "rate_limit_event" => {
-                let info = &f["rate_limit_info"];
-                if info["status"] == "rejected" {
-                    self.limit_resets_at = info["resetsAt"].as_i64().map(|s| s * 1000);
-                }
-                fx.rate = Some(parse_rate_event(info));
-                fx.overage = Some(info["isUsingOverage"].as_bool().unwrap_or(false));
-            }
-            _ => {}
-        }
+        self.view_frame(f, fx);
     }
 
-    pub(super) fn on_system(&mut self, f: &Value, fx: &mut Effects) {
-        let subtype = f["subtype"].as_str().unwrap_or("");
-        // The tasks of the plan (the rows of events below are about the same frames).
-        if matches!(
-            subtype,
-            "task_started"
-                | "task_updated"
-                | "task_notification"
-                | "task_progress"
-                | "background_tasks_changed"
-        ) {
-            self.plan_apply(fx, |plan| plan.on_system(f, now_ms()));
-        }
-        match subtype {
-            "init" => {
-                if let Some(sid) = f["session_id"].as_str() {
-                    if self.meta.session_id.as_deref() != Some(sid) {
-                        // Another conversation: what the plan was about is not in its context.
-                        self.reset_plan(fx);
-                        if self.saw_init {
-                            self.notice(
-                                "info",
-                                tr!(
-                                    "Nouvelle conversation Claude (contexte vidé)",
-                                    "New Claude conversation (context cleared)"
-                                ),
-                                fx,
-                            );
-                        }
-                        self.meta.session_id = Some(sid.to_string());
-                        // None of the entries of the session it leaves is one of this one's.
-                        self.meta.last_entry = None;
-                        fx.save = true;
-                    }
-                    // A copy has a session of its own from its first turn on: its next starts
-                    // resume that one, never the original's again.
-                    let forked = self.meta.fork_of.take().is_some();
-                    self.meta.fork_at = None;
-                    if forked {
-                        fx.save = true;
-                    }
+    /// A conversation its harness says it runs (its `init`): another than the agent's starts anew.
+    pub(super) fn on_conversation(&mut self, session: String, notice: String, fx: &mut Effects) {
+        if !session.is_empty() {
+            if self.meta.session_id.as_deref() != Some(session.as_str()) {
+                // Another conversation: what the plan was about is not in its context.
+                self.reset_plan(fx);
+                if self.saw_init {
+                    self.notice("info", notice, fx);
                 }
-                self.saw_init = true;
-            }
-            "status" => {
-                if let Some(mode) = f["permissionMode"].as_str() {
-                    if self.meta.set_mode(mode) {
-                        fx.agent_changed = true;
-                        fx.save = true;
-                    }
-                }
-            }
-            "compact_boundary" => {
-                // Its session's chain starts again at the boundary: the entries before it are no
-                // longer in it (a copy forking at one would be refused), and the next one to come
-                // is where a copy forks it.
-                self.set_last_entry(None, fx);
-                self.notice("info", tr!("Contexte compacté", "Context compacted"), fx);
-            }
-            "task_started" => {
-                if let (Some(id), false) = (f["task_id"].as_str(), f["is_backgrounded"] == true) {
-                    self.foreground_tasks.insert(id.to_string());
-                }
-            }
-            // A task ended. Idle, Claude Code only tells this before starting a turn by itself;
-            // mid-turn, it also replays the notification to Claude (not shown again).
-            "task_notification" => {
-                let Some(id) = f["task_id"].as_str() else {
-                    return;
-                };
-                self.keep_report(f, fx);
-                if self.foreground_tasks.remove(id) {
-                    return;
-                }
-                let field = |k: &str| f[k].as_str().unwrap_or_default();
-                // Written as Claude Code writes it for Claude, read the same way.
-                let text = format!(
-                    "<task-notification>\n<task-id>{id}</task-id>\n<tool-use-id>{}</tool-use-id>\n<status>{}</status>\n<summary>{}</summary>\n</task-notification>",
-                    field("tool_use_id"),
-                    field("status"),
-                    field("summary")
-                );
-                let item_id = f["uuid"]
-                    .as_str()
-                    .map(str::to_string)
-                    .unwrap_or_else(new_id);
-                self.append(
-                    json!({ "kind": "event", "id": item_id, "source": "task", "text": text, "ts": now_ms() }),
-                    fx,
-                );
-                *self.announced_tasks.entry(id.to_string()).or_default() += 1;
+                self.meta.session_id = Some(session);
+                // None of the entries of the session it leaves is one of this one's.
+                self.meta.last_entry = None;
                 fx.save = true;
             }
-            "bridge_state" => {
-                self.remote_state = f["state"].as_str().map(str::to_string);
-                fx.agent_changed = true;
+            // A copy has a session of its own from its first turn on: its next starts resume that one, never the
+            // original's again.
+            let forked = self.meta.fork_of.take().is_some();
+            self.meta.fork_at = None;
+            if forked {
+                fx.save = true;
             }
-            "local_command_output" => {
-                let text = f["content"].as_str().unwrap_or("");
-                let parts = localcmd::parse(text).unwrap_or_else(|| {
-                    let plain = strip_tags(text);
-                    let plain = (!plain.is_empty()).then_some(localcmd::Part::Output(plain));
-                    plain.into_iter().collect()
-                });
-                self.local_output(f["uuid"].as_str(), &parts, fx);
+        }
+        self.saw_init = true;
+    }
+
+    /// A message of the model begins.
+    pub(super) fn on_message(
+        &mut self,
+        id: String,
+        model: String,
+        usage: Value,
+        main: bool,
+        fx: &mut Effects,
+    ) {
+        self.live
+            .insert(id, (model.clone(), Usage::from_api(&usage)));
+        fx.agent_changed = true;
+        if main {
+            if !model.is_empty() {
+                self.main_model = model;
             }
-            _ => {}
+            self.context_tokens = [
+                &usage["input_tokens"],
+                &usage["cache_read_input_tokens"],
+                &usage["cache_creation_input_tokens"],
+            ]
+            .iter()
+            .filter_map(|v| v.as_u64())
+            .sum();
+        }
+        // A turn started without a user message from us (queued message, background task).
+        if !self.meta.status.is_active() {
+            self.set_status(AgentStatus::Running, fx);
         }
     }
 
-    pub(super) fn on_stream(&mut self, f: &Value, fx: &mut Effects) {
-        let ev = &f["event"];
-        let parent = f["parent_tool_use_id"].as_str().map(str::to_string);
-        let pkey = parent.clone().unwrap_or_default();
-        match ev["type"].as_str().unwrap_or("") {
-            "message_start" => {
-                let Some(mid) = ev["message"]["id"].as_str() else {
-                    return;
-                };
-                self.current_msg.insert(pkey, mid.to_string());
-                self.blocks.entry(mid.to_string()).or_default();
-                let model = ev["message"]["model"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .to_string();
-                self.live.insert(
-                    mid.to_string(),
-                    (model, Usage::from_api(&ev["message"]["usage"])),
-                );
-                fx.agent_changed = true;
-                if parent.is_none() {
-                    if let Some(m) = ev["message"]["model"].as_str() {
-                        self.main_model = m.to_string();
-                    }
-                    let u = &ev["message"]["usage"];
-                    self.context_tokens = [
-                        &u["input_tokens"],
-                        &u["cache_read_input_tokens"],
-                        &u["cache_creation_input_tokens"],
-                    ]
-                    .iter()
-                    .filter_map(|v| v.as_u64())
-                    .sum();
-                    fx.agent_changed = true;
-                }
-                // A turn started without a user message from us (queued message, background task).
-                if !self.meta.status.is_active() {
-                    self.set_status(AgentStatus::Running, fx);
-                }
-            }
-            "content_block_start" => {
-                let Some(mid) = self.current_msg.get(&pkey).cloned() else {
-                    return;
-                };
-                let index = ev["index"].as_u64().unwrap_or(0);
-                let cb = &ev["content_block"];
-                let (kind, item) = match cb["type"].as_str().unwrap_or("") {
-                    "text" => (
-                        "text",
-                        json!({ "kind": "text", "id": format!("{mid}:{index}"), "text": "", "parent": parent, "streaming": true }),
-                    ),
-                    "thinking" => (
-                        "thinking",
-                        json!({ "kind": "thinking", "id": format!("{mid}:{index}"), "text": "", "parent": parent, "streaming": true }),
-                    ),
-                    "tool_use" | "server_tool_use" => (
-                        "tool",
-                        json!({
-                            "kind": "tool", "id": cb["id"], "name": cb["name"], "input": {}, "status": "running",
-                            "parent": parent, "ts": now_ms(),
-                        }),
-                    ),
-                    _ => return,
-                };
-                if parent.is_none() {
-                    let activity = block_activity(i18n::ui(), kind).or_else(|| {
-                        tool_activity(
-                            cb["name"].as_str().unwrap_or_default(),
-                            &Value::Null,
-                            &self.meta.cwd,
-                        )
-                    });
-                    self.set_activity(activity, fx);
-                }
-                let item_id = item["id"].as_str().unwrap_or_default().to_string();
-                self.append(item, fx);
-                self.blocks.entry(mid).or_default().push(Block {
-                    index,
-                    item_id,
-                    kind,
-                    finalized: false,
-                });
-            }
-            "content_block_delta" => {
-                let Some(mid) = self.current_msg.get(&pkey) else {
-                    return;
-                };
-                let index = ev["index"].as_u64().unwrap_or(0);
-                let Some(block) = self
-                    .blocks
-                    .get(mid)
-                    .and_then(|b| b.iter().find(|b| b.index == index))
-                else {
-                    return;
-                };
-                let d = &ev["delta"];
-                let text = match d["type"].as_str().unwrap_or("") {
-                    "text_delta" => d["text"].as_str(),
-                    "thinking_delta" => d["thinking"].as_str(),
-                    _ => None,
-                };
-                if let Some(text) = text.filter(|t| !t.is_empty()) {
-                    let id = block.item_id.clone();
-                    self.push(
-                        ConvOp::Delta {
-                            id,
-                            text: text.to_string(),
-                        },
-                        fx,
-                    );
-                }
-            }
-            // The message's final output token count (message_start only announces its input).
-            "message_delta" => {
-                let entry = self
-                    .current_msg
-                    .get(&pkey)
-                    .and_then(|mid| self.live.get_mut(mid));
-                if let (Some((_, u)), Some(out)) = (entry, ev["usage"]["output_tokens"].as_u64()) {
-                    u.output = out;
-                    fx.agent_changed = true;
-                }
-            }
-            _ => {}
+    /// A tool's whole call: the plan told of it, its row made or told its input.
+    pub(super) fn on_call(
+        &mut self,
+        id: String,
+        name: String,
+        input: Value,
+        parent: Option<String>,
+        fx: &mut Effects,
+    ) {
+        if parent.is_none() {
+            // What was said before a tool was a step on the way, not the final reply.
+            self.final_text.clear();
+            let activity = tool_activity(&name, &input, &self.meta.cwd);
+            self.set_activity(activity, fx);
         }
-    }
-
-    pub(super) fn on_assistant(&mut self, f: &Value, fx: &mut Effects) {
-        let msg = &f["message"];
-        let mid = msg["id"].as_str().unwrap_or("").to_string();
-        let parent = f["parent_tool_use_id"].as_str().map(str::to_string);
-        if let Some(err) = f["error"].as_str() {
-            if err == "rate_limit" && parent.is_none() {
-                self.rate_limited = true;
-            }
-            let text = msg["content"][0]["text"]
-                .as_str()
-                .unwrap_or(err)
-                .to_string();
-            // Its turn says it, and is taken up by itself (`signin`): no error in red before.
-            if parent.is_none() && crate::signin::lost(&text) {
-                return;
-            }
-            self.notice("error", text, fx);
-            return;
+        let block = json!({ "id": id, "name": name, "input": input });
+        self.plan_tool_use(parent.as_deref(), &block, fx);
+        // Files sent to the user (ESC-171): those of a call read again (the transcript of the Claude Code view) are kept
+        // as they were delivered.
+        let sending = name == crate::sentfiles::TOOL;
+        let delivered = sending
+            .then(|| self.conv.get(&id))
+            .flatten()
+            .and_then(|v| v.get("sent").cloned());
+        if self.conv.contains(&id) {
+            self.patch(&id, json!({ "input": item_input(&name, &input) }), fx);
+        } else {
+            let item = json!({
+                "kind": "tool", "id": id, "name": name, "input": item_input(&name, &input),
+                "status": "running", "parent": parent, "ts": now_ms(),
+            });
+            self.append(item, fx);
         }
-        // A subagent's message tells the model it runs on, which its call may not name.
-        if let (Some(p), Some(model)) = (parent.as_deref(), msg["model"].as_str()) {
-            self.child_model(p, model, fx);
-        }
-        // An entry of its session's main chain (not a subagent's, nor one Claude Code makes up):
-        // where a copy made afterwards forks the session.
-        if parent.is_none() && f["is_meta"] != true {
-            if let Some(uuid) = f["uuid"].as_str() {
-                self.set_last_entry(Some(uuid.to_string()), fx);
-            }
-        }
-        let Some(content) = msg["content"].as_array() else {
-            return;
-        };
-        for block in content {
-            let kind = match block["type"].as_str().unwrap_or("") {
-                "text" => "text",
-                "thinking" | "redacted_thinking" => "thinking",
-                "tool_use" | "server_tool_use" => "tool",
-                _ => continue,
-            };
-            if parent.is_none() {
-                match kind {
-                    "text" => {
-                        let text = block["text"].as_str().unwrap_or_default();
-                        if !text.trim().is_empty() {
-                            if !self.turn_text.is_empty() {
-                                self.turn_text.push_str("\n\n");
-                            }
-                            self.turn_text.push_str(text);
-                            self.final_text = text.to_string();
-                        }
-                    }
-                    "tool" => {
-                        // What was said before a tool was a step on the way, not the final reply.
-                        self.final_text.clear();
-                        let activity = tool_activity(
-                            block["name"].as_str().unwrap_or_default(),
-                            &block["input"],
-                            &self.meta.cwd,
-                        );
-                        self.set_activity(activity, fx);
-                    }
-                    _ => {}
-                }
-            }
-            if kind == "tool" {
-                self.plan_tool_use(parent.as_deref(), block, fx);
-            }
-            // Files sent to the user (ESC-171): those of a call read again (the transcript of the
-            // Claude Code view) are kept as they were delivered.
-            let sending = kind == "tool" && block["name"] == crate::sentfiles::TOOL;
-            let delivered = sending
-                .then(|| block["id"].as_str())
-                .flatten()
-                .and_then(|id| self.conv.get(id))
-                .and_then(|v| v.get("sent").cloned());
-            let streamed = self
-                .blocks
-                .get_mut(&mid)
-                .and_then(|v| v.iter_mut().find(|b| !b.finalized && b.kind == kind))
-                .map(|b| {
-                    b.finalized = true;
-                    b.item_id.clone()
-                });
-            match (kind, streamed) {
-                ("text", Some(id)) => {
-                    let patch = final_text(block["text"].as_str().unwrap_or_default());
-                    self.patch(&id, patch, fx)
-                }
-                ("thinking", Some(id)) => {
-                    let text = block["thinking"].as_str().unwrap_or("");
-                    self.patch(&id, json!({ "text": text, "streaming": false }), fx)
-                }
-                ("tool", Some(id)) => {
-                    let name = block["name"].as_str().unwrap_or_default();
-                    let input = item_input(name, &block["input"]);
-                    self.patch(&id, json!({ "input": input }), fx)
-                }
-                (_, None) => {
-                    let n = self.blocks.get(&mid).map_or(0, Vec::len);
-                    let item = match kind {
-                        "text" => {
-                            let mut item = final_text(block["text"].as_str().unwrap_or_default());
-                            item["kind"] = json!("text");
-                            item["id"] = json!(format!("{mid}:a{n}"));
-                            item["parent"] = json!(parent);
-                            item
-                        }
-                        "thinking" => {
-                            json!({ "kind": "thinking", "id": format!("{mid}:a{n}"), "text": block["thinking"].as_str().unwrap_or(""), "parent": parent, "streaming": false })
-                        }
-                        _ => json!({
-                            "kind": "tool", "id": block["id"], "name": block["name"],
-                            "input": item_input(block["name"].as_str().unwrap_or_default(), &block["input"]),
-                            "status": "running", "parent": parent, "ts": now_ms(),
-                        }),
-                    };
-                    let item_id = item["id"].as_str().unwrap_or_default().to_string();
-                    self.append(item, fx);
-                    self.blocks.entry(mid.clone()).or_default().push(Block {
-                        index: u64::MAX,
-                        item_id,
-                        kind,
-                        finalized: true,
-                    });
-                }
-                _ => {}
-            }
-            if sending {
-                match (delivered, block["id"].as_str()) {
-                    (Some(sent), Some(id)) => self.patch(id, json!({ "sent": sent }), fx),
-                    _ => self.on_sent_files(parent.as_deref(), block, fx),
-                }
+        if sending {
+            match delivered {
+                Some(sent) => self.patch(&id, json!({ "sent": sent }), fx),
+                None => self.on_sent_files(parent.as_deref(), &block, fx),
             }
         }
     }
@@ -512,28 +222,26 @@ impl AgentRt {
         true
     }
 
-    /// A user message re-emitted by Claude Code (`--replay-user-messages`): the echo of one sent
-    /// from the app (same uuid, already listed), or one sent from claude.ai (Remote Control).
-    pub(super) fn on_replay(&mut self, f: &Value, fx: &mut Effects) {
-        let id = f["uuid"]
-            .as_str()
-            .map(str::to_string)
-            .unwrap_or_else(new_id);
+    /// A user message re-emitted by its harness (`--replay-user-messages`): the echo of one sent from the app (same uuid,
+    /// already listed), or one sent from claude.ai (Remote Control).
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn on_replay(
+        &mut self,
+        id: Option<String>,
+        text: String,
+        kind: Option<String>,
+        from: Option<String>,
+        synthetic: bool,
+        images: u32,
+        files: Vec<String>,
+        fx: &mut Effects,
+    ) {
+        let id = id.unwrap_or_else(new_id);
         if self.conv.contains(&id) {
             return;
         }
-        let content = &f["message"]["content"];
-        let blocks = content.as_array().map(Vec::as_slice).unwrap_or_default();
-        let text = match content.as_str() {
-            Some(s) => s.to_string(),
-            None => blocks
-                .iter()
-                .filter_map(|b| b["text"].as_str())
-                .collect::<Vec<_>>()
-                .join("\n"),
-        };
-        let human =
-            f["origin"]["kind"].as_str().is_none_or(|k| k == "human") && f["isSynthetic"] != true;
+        let kind = kind.as_deref();
+        let human = kind.is_none_or(|k| k == "human") && !synthetic;
         let parts = localcmd::parse(&text);
         // The wake-up of a loop (`ScheduleWakeup`) runs its prompt again, as a message of no
         // origin (a human's, `<command-name>/loop</command-name>…` for `/loop`): a wake-up, not a
@@ -572,8 +280,7 @@ impl AgentRt {
         // Only a human's message is the user's (no origin, or "human", as Claude Code tells). The
         // rest Claude Code passes on to Claude by itself (a subagent's report, a background task
         // that ended, an MCP channel, a meta message): an event.
-        let kind = f["origin"]["kind"].as_str();
-        if kind.is_some_and(|k| k != "human") || f["isSynthetic"] == true {
+        if kind.is_some_and(|k| k != "human") || synthetic {
             if text.trim().is_empty() {
                 return;
             }
@@ -588,7 +295,7 @@ impl AgentRt {
                 }
             }
             if kind == Some("peer") {
-                self.keep_handback(&text, f["origin"]["from"].as_str(), fx);
+                self.keep_handback(&text, from.as_deref(), fx);
             }
             let source = match kind {
                 Some("task-notification") => "task",
@@ -597,79 +304,17 @@ impl AgentRt {
                 None => "synthetic",
             };
             let mut item = json!({ "kind": "event", "id": id, "source": source, "text": text, "ts": now_ms() });
-            if let Some(from) = f["origin"]["from"].as_str() {
+            if let Some(from) = from {
                 item["from"] = from.into();
             }
             self.append(item, fx);
             fx.save = true;
             return;
         }
-        let images = blocks.iter().filter(|b| b["type"] == "image").count() as u32;
-        let files: Vec<String> = blocks
-            .iter()
-            .filter(|b| b["type"] == "document")
-            .map(|b| b["title"].as_str().unwrap_or("document").to_string())
-            .collect();
         if text.trim().is_empty() && images == 0 && files.is_empty() {
             return;
         }
         self.push_user_from(&id, &text, images, &files, Some("remote"), fx);
-    }
-
-    pub(super) fn on_user(&mut self, f: &Value, fx: &mut Effects) {
-        if f["isReplay"] == true {
-            return self.on_replay(f, fx);
-        }
-        let content = &f["message"]["content"];
-        if let Some(text) = content.as_str() {
-            if let Some(parts) = localcmd::parse(text) {
-                self.local_output(f["uuid"].as_str(), &parts, fx);
-            }
-            return;
-        }
-        let Some(blocks) = content.as_array() else {
-            return;
-        };
-        if !blocks.iter().any(|b| b["type"] == "tool_result") {
-            let text: Vec<&str> = blocks.iter().filter_map(|b| b["text"].as_str()).collect();
-            if let Some(parts) = localcmd::parse(&text.join("\n")) {
-                self.local_output(f["uuid"].as_str(), &parts, fx);
-            }
-            return;
-        }
-        // A tool's result in its main chain is an entry of its session too: the last one of a turn
-        // stopped (or failed) before any reply, which a copy must not lose.
-        if f["parent_tool_use_id"].is_null() && blocks.iter().any(|b| b["type"] == "tool_result") {
-            if let Some(uuid) = f["uuid"].as_str() {
-                self.set_last_entry(Some(uuid.to_string()), fx);
-            }
-        }
-        let tur = &f["tool_use_result"];
-        for b in blocks.iter().filter(|b| b["type"] == "tool_result") {
-            let Some(id) = b["tool_use_id"].as_str() else {
-                continue;
-            };
-            let is_error = b["is_error"].as_bool().unwrap_or(false);
-            if self.plan_calls.remove(id) {
-                fx.plan_files = true;
-            }
-            if self.plan_removals.remove(id) && !is_error {
-                self.plan_apply(fx, PlanState::finish_files);
-            }
-            let text = tool_result_text(&b["content"]);
-            self.plan_apply(fx, |plan| {
-                plan.on_tool_result(id, is_error, &text, tur, now_ms())
-            });
-            let result = tool_result(text, is_error, tur);
-            if let Some(path) = result["filePath"].as_str() {
-                self.touch(path, fx);
-            }
-            self.patch(
-                id,
-                json!({ "status": if is_error { "error" } else { "ok" }, "result": result }),
-                fx,
-            );
-        }
     }
 
     /// The wake-up of a loop is due: its time has come (it fires once the process is idle, so
@@ -737,13 +382,26 @@ impl AgentRt {
         }
     }
 
-    pub(super) fn on_result(&mut self, f: &Value, fx: &mut Effects) {
+    /// The end of a turn its harness counted (`Item::Result`).
+    pub(super) fn on_result(&mut self, r: TurnResult, fx: &mut Effects) {
+        let TurnResult {
+            id,
+            failed: is_error,
+            error,
+            failure,
+            reply: said,
+            limited,
+            resets,
+            sign_in,
+            duration,
+            window,
+            cost,
+            tokens,
+            models,
+        } = r;
         let interrupted = std::mem::take(&mut self.interrupted);
-        let resets = self.limit_resets_at.take();
-        let limited = std::mem::take(&mut self.rate_limited);
         // The exact figures below replace the running estimate.
         self.live.clear();
-        let is_error = f["is_error"].as_bool().unwrap_or(false) || f["subtype"] != "success";
         if limited && is_error && !interrupted {
             fx.limited = Some(resets);
         } else if self.meta.resume_at.take().is_some() {
@@ -751,113 +409,35 @@ impl AgentRt {
             fx.save = true;
             fx.agent_changed = true;
         }
-        let (mut tokens, mut cost) = (0u64, 0f64);
-        if let Some(models) = f["modelUsage"].as_object() {
-            // The conversation's latest model, else the one that read the most (subagents may use
-            // others; the figures are cumulative, so an earlier model may still read more).
-            let m = &self.main_model;
-            let current = models
-                .iter()
-                .find(|(k, _)| {
-                    !m.is_empty() && (k.starts_with(m.as_str()) || m.starts_with(k.as_str()))
-                })
-                .map(|(_, u)| u);
-            let main = current.or_else(|| {
-                models.values().max_by_key(|u| {
-                    [
-                        "inputTokens",
-                        "cacheReadInputTokens",
-                        "cacheCreationInputTokens",
-                    ]
-                    .iter()
-                    .filter_map(|k| u[*k].as_u64())
-                    .sum::<u64>()
-                })
+        if let Some(window) = window {
+            self.context_window = window;
+        }
+        for m in models {
+            fx.turns.push(TurnRow {
+                engine: self.meta.engine,
+                model: m.model,
+                input: m.input,
+                cache: m.cache,
+                output: m.output,
+                cost: m.cost,
             });
-            if let Some(window) = main.and_then(|u| u["contextWindow"].as_u64()) {
-                self.context_window = window;
-            }
-            for (model, u) in models {
-                let cur = Counters {
-                    input: u["inputTokens"].as_u64().unwrap_or(0),
-                    output: u["outputTokens"].as_u64().unwrap_or(0),
-                    cache: u["cacheReadInputTokens"].as_u64().unwrap_or(0)
-                        + u["cacheCreationInputTokens"].as_u64().unwrap_or(0),
-                    cost: u["costUSD"].as_f64().unwrap_or(0.0),
-                };
-                let prev = self.last_usage.get(model).cloned().unwrap_or_default();
-                let delta = if cur.cost + 1e-12 < prev.cost || cur.output < prev.output {
-                    cur.clone()
-                } else {
-                    Counters {
-                        input: cur.input.saturating_sub(prev.input),
-                        output: cur.output.saturating_sub(prev.output),
-                        cache: cur.cache.saturating_sub(prev.cache),
-                        cost: (cur.cost - prev.cost).max(0.0),
-                    }
-                };
-                self.last_usage.insert(model.clone(), cur);
-                let total = delta.input + delta.output + delta.cache;
-                if total == 0 && delta.cost == 0.0 {
-                    continue;
-                }
-                tokens += total;
-                cost += delta.cost;
-                let name = u["canonicalModel"].as_str().unwrap_or(model).to_string();
-                fx.turns.push(TurnRow {
-                    engine: self.meta.engine,
-                    model: name,
-                    input: delta.input,
-                    cache: delta.cache,
-                    output: delta.output,
-                    cost: delta.cost,
-                });
-            }
         }
         self.meta.tokens += tokens;
         self.meta.cost += cost;
-        let error = if is_error && !interrupted {
-            f["result"].as_str().map(str::to_string).or_else(|| {
-                f["errors"].as_array().map(|e| {
-                    e.iter()
-                        .filter_map(|x| x.as_str())
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                })
-            })
-        } else {
-            None
-        };
+        let error = error.filter(|_| is_error && !interrupted);
         let failed = is_error && !interrupted;
         // A sign-in that could not be refreshed: the core looks at the account's (ESC-162).
-        let sign_in = failed && !limited && error.as_deref().is_some_and(crate::signin::lost);
+        let sign_in = failed && !limited && sign_in;
         if sign_in {
             fx.sign_in_lost = true;
         } else {
             self.sign_in_retries = 0;
         }
-        // Always with words: the frame's, else the kind of result it is, else a generic one.
-        let failure = failed.then(|| {
-            error
-                .clone()
-                .filter(|e| !e.trim().is_empty())
-                .or_else(|| {
-                    f["subtype"]
-                        .as_str()
-                        .filter(|s| !s.is_empty() && *s != "success")
-                        .map(str::to_string)
-                })
-                .unwrap_or_else(|| {
-                    tr!(
-                        "Claude Code a signalé une erreur",
-                        "Claude Code reported an error"
-                    )
-                })
-        });
-        // The final reply: the text that no tool followed, else what Claude Code makes of it.
+        let failure = failed.then_some(failure);
+        // The final reply: the text that no tool followed, else what its harness makes of it.
         let reply = match std::mem::take(&mut self.final_text) {
             text if !text.trim().is_empty() => text,
-            _ => f["result"].as_str().unwrap_or_default().to_string(),
+            _ => said.clone(),
         };
         let end = if interrupted {
             TurnEnd::Interrupted
@@ -869,11 +449,7 @@ impl AgentRt {
             TurnEnd::Error(reason)
         } else {
             let text = std::mem::take(&mut self.turn_text);
-            TurnEnd::Finished(if text.trim().is_empty() {
-                f["result"].as_str().unwrap_or_default().to_string()
-            } else {
-                text
-            })
+            TurnEnd::Finished(if text.trim().is_empty() { said } else { text })
         };
         self.forget_turn();
         self.close_open_items(fx);
@@ -883,17 +459,16 @@ impl AgentRt {
         fx.plan_files = true;
         // Stopped by the usage limit: the card offers to go on, on another account.
         let at_limit = limited && is_error && !interrupted;
-        // The turn that follows a resume on another account ended. Failing, it is the resume's
-        // failure, and the agent keeps the account it can go back to; otherwise (done, at the limit
-        // there too, interrupted) it came from nowhere any more.
+        // The turn that follows a resume on another account ended. Failing, it is the resume's failure, and the agent keeps
+        // the account it can go back to; otherwise (done, at the limit there too, interrupted) it came from nowhere any more.
         if !matches!(end, TurnEnd::Error(_)) && self.meta.moved_from.take().is_some() {
             self.meta.moved_resume_at = None;
             fx.save = true;
             fx.agent_changed = true;
         }
         let item = json!({
-            "kind": "turn", "id": f["uuid"].as_str().map(str::to_string).unwrap_or_else(new_id), "ts": now_ms(),
-            "durationMs": f["duration_ms"], "cost": cost, "tokens": tokens,
+            "kind": "turn", "id": id.unwrap_or_else(new_id), "ts": now_ms(),
+            "durationMs": duration, "cost": cost, "tokens": tokens,
             "isError": is_error && !interrupted, "interrupted": interrupted, "error": error,
             "limited": at_limit, "signIn": sign_in, "engine": self.meta.engine,
         });
@@ -931,123 +506,119 @@ impl AgentRt {
         fx.turn_end = Some(end);
     }
 
-    pub(super) fn on_control_request(&mut self, f: &Value, fx: &mut Effects) {
-        let Some(rid) = f["request_id"].as_str() else {
-            return;
-        };
-        let req = &f["request"];
-        match req["subtype"].as_str().unwrap_or("") {
-            "can_use_tool" => {
-                let tool = req["tool_name"].as_str().unwrap_or("").to_string();
-                let input = req["input"].clone();
-                let tool_use_id = req["tool_use_id"].as_str().unwrap_or("").to_string();
-                // The reading of a file the user joined by its own path (the file itself, nothing
-                // else, never a change): allowed on the spot, no card and nobody waited for. The
-                // user chose that file; `--add-dir` cannot give a folder that was not known at the
-                // start. Any other request, or one the process no longer takes, goes on below.
-                if attachfiles::granted(&self.meta.granted_files, &tool, &input) {
-                    let allowed = PermissionAnswer::Allow {
-                        call: tool_use_id.clone(),
-                        input: input.clone(),
-                        resume: None,
-                    };
-                    if self
-                        .proc
-                        .as_ref()
-                        .is_some_and(|p| p.answer_permission(rid, allowed).is_ok())
-                    {
-                        log::info!(
-                            "agent {}: a file joined by its path is read without a question",
-                            self.meta.id
-                        );
-                        return;
-                    }
-                }
-                let suggestions = req["permission_suggestions"].clone();
-                let body = if tool == "AskUserQuestion" {
-                    notify::question_body(crate::engine::of(&self.meta).speaker(), &input)
-                } else {
-                    notify::permission_body(&tool, &input, &self.meta.cwd)
-                };
-                let item = if tool == "AskUserQuestion" {
-                    json!({
-                        "kind": "question", "id": rid, "toolUseId": tool_use_id,
-                        "questions": input["questions"], "answers": null, "ts": now_ms(),
-                    })
-                } else {
-                    let can_always = suggestions.as_array().is_some_and(|a| !a.is_empty())
-                        && !req["suppress_always_allow_rule"].as_bool().unwrap_or(false);
-                    json!({
-                        "kind": "permission", "id": rid, "toolUseId": tool_use_id, "toolName": tool,
-                        "title": req["title"], "description": req["description"],
-                        "input": trim_strings(&input),
-                        "reason": req["decision_reason"].as_str().map(strip_ansi),
-                        "canAlways": can_always, "defaultNo": req["default_to_no"].as_bool().unwrap_or(false),
-                        "decision": null, "ts": now_ms(),
-                    })
-                };
-                let mut item = item;
-                if let Some(sub) = self.subagent_of(req) {
-                    // Shown in the agent's conversation still (no `parent`), and in its subagent's.
-                    item["sub"] = sub.into();
-                }
-                let view = pending_view(rid, &tool, req, &input, &self.meta.cwd).always_as(&item);
-                self.append(item, fx);
-                self.add_pending(
-                    PendingReq {
-                        item_id: rid.to_string(),
-                        tool_use_id,
-                        input,
-                        suggestions,
-                        view,
-                        since: now_ms(),
-                    },
-                    fx,
+    /// Its harness asks leave for a call, or asks the user (`Item::Ask`).
+    pub(super) fn on_ask(&mut self, a: Asking, fx: &mut Effects) {
+        let Asking {
+            request: rid,
+            call: tool_use_id,
+            tool,
+            input,
+            title,
+            description,
+            reason,
+            suggestions,
+            no_always,
+            default_no,
+            task,
+        } = a;
+        // The reading of a file the user joined by its own path (the file itself, nothing else, never a change): allowed on
+        // the spot, no card and nobody waited for. The user chose that file; `--add-dir` cannot give a folder that was not
+        // known at the start. Any other request, or one the process no longer takes, goes on below.
+        if attachfiles::granted(&self.meta.granted_files, &tool, &input) {
+            let allowed = PermissionAnswer::Allow {
+                call: tool_use_id.clone(),
+                input: input.clone(),
+                resume: None,
+            };
+            if self
+                .proc
+                .as_ref()
+                .is_some_and(|p| p.answer_permission(&rid, allowed).is_ok())
+            {
+                log::info!(
+                    "agent {}: a file joined by its path is read without a question",
+                    self.meta.id
                 );
-                self.set_status(AgentStatus::Waiting, fx);
-                fx.notify = Some(AgentAlert::new(NotifyKind::Question, body));
-                fx.agent_changed = true;
-            }
-            "elicitation" => {
-                if let Some(p) = &self.proc {
-                    let _ = p.reply(rid, Ok(json!({ "action": "decline" })));
-                }
-            }
-            other => {
-                if let Some(p) = &self.proc {
-                    let _ = p.reply(rid, Err(format!("unsupported request: {other}")));
-                }
+                return;
             }
         }
-    }
-
-    pub(super) fn on_cancel(&mut self, f: &Value, fx: &mut Effects) {
-        let Some(rid) = f["request_id"].as_str() else {
-            return;
+        let body = if tool == "AskUserQuestion" {
+            notify::question_body(crate::engine::of(&self.meta).speaker(), &input)
+        } else {
+            notify::permission_body(&tool, &input, &self.meta.cwd)
         };
-        if let Some(p) = self.take_pending(rid) {
-            self.patch(&p.item_id, json!({ "cancelled": true }), fx);
-            if self.pending.is_empty() && self.meta.status == AgentStatus::Waiting {
-                self.set_status(AgentStatus::Running, fx);
-            }
-            fx.agent_changed = true;
+        let item = if tool == "AskUserQuestion" {
+            json!({
+                "kind": "question", "id": rid, "toolUseId": tool_use_id,
+                "questions": input["questions"], "answers": null, "ts": now_ms(),
+            })
+        } else {
+            let can_always = suggestions.as_array().is_some_and(|a| !a.is_empty()) && !no_always;
+            json!({
+                "kind": "permission", "id": rid, "toolUseId": tool_use_id, "toolName": tool,
+                "title": title, "description": description,
+                "input": trim_strings(&input),
+                "reason": reason.as_deref().map(strip_ansi),
+                "canAlways": can_always, "defaultNo": default_no,
+                "decision": null, "ts": now_ms(),
+            })
+        };
+        let mut item = item;
+        let asker = json!({ "agent_id": task, "tool_use_id": tool_use_id });
+        if let Some(sub) = self.subagent_of(&asker) {
+            // Shown in the agent's conversation still (no `parent`), and in its subagent's.
+            item["sub"] = sub.into();
         }
+        let req = json!({
+            "description": description, "decision_reason": reason, "default_to_no": default_no,
+        });
+        let view = pending_view(&rid, &tool, &req, &input, &self.meta.cwd).always_as(&item);
+        self.append(item, fx);
+        self.add_pending(
+            PendingReq {
+                item_id: rid,
+                tool_use_id,
+                input,
+                suggestions,
+                view,
+                since: now_ms(),
+            },
+            fx,
+        );
+        self.set_status(AgentStatus::Waiting, fx);
+        fx.notify = Some(AgentAlert::new(NotifyKind::Question, body));
+        fx.agent_changed = true;
     }
 }
 
-fn parse_rate_event(info: &Value) -> Vec<crate::model::QuotaMeter> {
-    let w = &info["unifiedWindows"];
-    let parse = |k: &str| {
-        w.get(k).filter(|v| v.is_object()).map(|v| RateWindow {
-            pct: v["utilization"].as_f64().unwrap_or(0.0) * 100.0,
-            resets_at: v["resetsAt"].as_i64().map(|s| s * 1000),
-        })
-    };
-    crate::model::claude_meters(parse("five_hour"), parse("seven_day"))
+/// `Item::Result`, as `on_result` reads it.
+pub(super) struct TurnResult {
+    pub id: Option<String>,
+    pub failed: bool,
+    pub error: Option<String>,
+    pub failure: String,
+    pub reply: String,
+    pub limited: bool,
+    pub resets: Option<i64>,
+    pub sign_in: bool,
+    pub duration: Value,
+    pub window: Option<u64>,
+    pub cost: f64,
+    pub tokens: u64,
+    pub models: Vec<ModelTurn>,
 }
 
-/// A text of the agent once written whole (its passage to be read aloud is kept apart by
-/// `AgentRt::push`, for every harness).
-fn final_text(text: &str) -> Value {
-    json!({ "text": text, "streaming": false })
+/// `Item::Ask`, as `on_ask` reads it.
+pub(super) struct Asking {
+    pub request: String,
+    pub call: String,
+    pub tool: String,
+    pub input: Value,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub reason: Option<String>,
+    pub suggestions: Value,
+    pub no_always: bool,
+    pub default_no: bool,
+    pub task: Option<String>,
 }

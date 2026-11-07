@@ -1,7 +1,8 @@
 // @escouade-dev/plugin/testing: a fake Escouade in memory, for a plugin's unit tests (ESC-181, PLG-9).
 //
 // It speaks the protocol to the plugin as the app does (the same lines, the same subjects as the conformance
-// bench), without a process: `initialize`, facts, decisions, calls, `shutdown`; it serves `secrets/get` and keeps
+// bench), without a process: `initialize`, facts, decisions, calls, `shutdown`; it serves `secrets/get`, `settings/get` and
+// `files/read` (its `files`), and keeps
 // what the plugin logged. The bench itself (`escouade-plugin test`) plays the program as Escouade starts it.
 import {
   ERRORS,
@@ -22,6 +23,27 @@ export interface FakeOptions {
   allowed?: string[];
   /** The version of Escouade it says it is. */
   version?: string;
+  /** Its settings as the user set them (`settings/get`). */
+  settings?: Record<string, string | number | boolean>;
+  /** By project id, the settings its `.escouade.yml` gives the plugin: over the user's for `settings/get` of that project. */
+  projectSettings?: Record<string, Record<string, string | number | boolean>>;
+  /** The files of its folder (`files/read`, `p.file`), by their path in it: `rules.json`, `data/words.txt`. */
+  files?: Record<string, string>;
+  /** What `fs/*` and `proc/*` answer, by method: the app's rules are held by the bench (`escouade-plugin test`), not here. */
+  host?: Record<string, (params: any) => unknown>;
+}
+
+/**
+ * Why Escouade refuses `files/read` of `path`, as the app judges it: a path that leaves the folder (absolute, `..`,
+ * a drive), a hidden part (`.env`, `.git`), the manifest; null when it may be read.
+ */
+export function refusedPath(path: string): string | null {
+  const parts = path.split(/[\\/]/);
+  if (!path || /^[\\/]/.test(path) || /[\0:]/.test(path) || parts.some((p) => !p || p.startsWith('.'))) {
+    return `${JSON.stringify(path)} is not a file of the plugin's folder`;
+  }
+  if (parts.length === 1 && parts[0] === 'escouade-plugin.json') return `${JSON.stringify(path)}: the manifest is not read by its plugin`;
+  return null;
 }
 
 /** The project, the ticket and the agent of the bench's facts and decisions. */
@@ -141,6 +163,32 @@ export class FakeEscouade {
   }
 
   private serve(id: unknown, method: string, params: any) {
+    if (method === 'settings/get') {
+      const project = typeof params?.project === 'string' ? params.project : null;
+      const own = project ? (this.options.projectSettings?.[project] ?? {}) : {};
+      return { jsonrpc: '2.0', id, result: { ...(this.options.settings ?? {}), ...own } };
+    }
+    if (method === 'files/read') {
+      const path = typeof params?.path === 'string' ? params.path : null;
+      if (path === null) return { jsonrpc: '2.0', id, error: { code: ERRORS.invalidParams, message: 'files/read takes a path' } };
+      const refused = refusedPath(path);
+      if (refused) return { jsonrpc: '2.0', id, error: { code: ERRORS.refused, message: refused } };
+      const files = this.options.files ?? {};
+      const key = path.replace(/\\/g, '/');
+      if (!Object.prototype.hasOwnProperty.call(files, key)) {
+        return { jsonrpc: '2.0', id, error: { code: ERRORS.notFound, message: `no file ${JSON.stringify(path)} in the plugin's folder` } };
+      }
+      return { jsonrpc: '2.0', id, result: files[key] };
+    }
+    const served = this.options.host?.[method];
+    if (served) {
+      try {
+        return { jsonrpc: '2.0', id, result: served(params) ?? null };
+      } catch (e) {
+        const code = e instanceof RpcError ? e.code : ERRORS.internal;
+        return { jsonrpc: '2.0', id, error: { code, message: e instanceof Error ? e.message : String(e) } };
+      }
+    }
     if (method !== 'secrets/get') {
       return { jsonrpc: '2.0', id, error: { code: ERRORS.methodNotFound, message: `unknown method ${method}` } };
     }

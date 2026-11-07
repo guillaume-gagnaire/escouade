@@ -1,0 +1,21 @@
+[package]
+name = "escouade-plugin-copilot"
+version = "2.2.0"
+description = "Le plugin Copilot CLI livré avec Escouade : GitHub Copilot CLI comme harness, par le protocole de son SDK"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+
+# A module, compiled by `escouade-plugin build` (docs/PLUGINS.md §8.5). It is no ACP harness: it holds the client of
+# Copilot's server (`copilot --server --stdio`) and the translation of its events, both without a process nor a runtime
+# of their own.
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+escouade-acp = "0.1.1"
+escouade-plugin-protocol = "0.1.1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

@@ -33,7 +33,7 @@ fn copilot_account(h: &Harness, repo: &Path, trusted: bool) -> PathBuf {
     s.accounts.push(Account {
         id: "cp".into(),
         name: "Copilot".into(),
-        engine: EngineId::Copilot,
+        engine: EngineId::COPILOT,
         config_dir: home.to_string_lossy().into(),
         claude_path: fake_copilot(),
         ..Default::default()
@@ -51,7 +51,7 @@ async fn new_copilot_agent(h: &Harness, trusted: bool) -> (String, PathBuf) {
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Copilot),
+                engine: Some(EngineId::COPILOT),
                 account: Some("cp".into()),
                 model: Some("gpt-6-luna".into()),
                 ..Default::default()
@@ -294,7 +294,7 @@ async fn on_a_free_account_copilots_view_opens_on_auto_without_a_word_about_its_
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Copilot),
+                engine: Some(EngineId::COPILOT),
                 account: Some("cp".into()),
                 model: Some("gpt-6-luna".into()),
                 effort: Some("high".into()),
@@ -650,7 +650,7 @@ async fn real_copilot_view() {
     s.accounts.push(Account {
         id: "cp".into(),
         name: "Copilot".into(),
-        engine: EngineId::Copilot,
+        engine: EngineId::COPILOT,
         config_dir: home.to_string_lossy().into(),
         claude_path: program,
         ..Default::default()
@@ -661,7 +661,7 @@ async fn real_copilot_view() {
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Copilot),
+                engine: Some(EngineId::COPILOT),
                 account: Some("cp".into()),
                 model: Some("gpt-6-luna".into()),
                 mode: Some("default".into()),
@@ -859,9 +859,9 @@ async fn real_copilot_view_on_a_free_account() {
     .unwrap();
     let mut s = h.core.settings.read().clone();
     s.accounts.push(Account {
-        id: crate::accounts::principal_id(EngineId::Copilot),
+        id: crate::accounts::principal_id(EngineId::COPILOT),
         name: "Principal".into(),
-        engine: EngineId::Copilot,
+        engine: EngineId::COPILOT,
         claude_path: program,
         ..Default::default()
     });
@@ -871,8 +871,8 @@ async fn real_copilot_view_on_a_free_account() {
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Copilot),
-                account: Some(crate::accounts::principal_id(EngineId::Copilot)),
+                engine: Some(EngineId::COPILOT),
+                account: Some(crate::accounts::principal_id(EngineId::COPILOT)),
                 model: Some("gpt-6-luna".into()),
                 effort: Some("medium".into()),
                 mode: Some("default".into()),
@@ -994,15 +994,15 @@ async fn an_agent_handed_over_from_the_claude_code_view_goes_on_in_the_copilot_v
     crate::core_tests::second_account(&h);
     let home = copilot_account(&h, &repo, true);
     let mut s = h.core.settings.read().clone();
-    s.engine_order = vec![EngineId::Copilot];
+    s.engine_order = vec![EngineId::COPILOT];
     s.handover_models
-        .insert(EngineId::Copilot, "gpt-6-luna".into());
+        .insert(EngineId::COPILOT, "gpt-6-luna".into());
     h.core.save_settings(s).unwrap();
     let id = crate::core_tests::agent_on(&h, &p, "pro").await.id;
     h.core.set_agent_view(&id, true).await.unwrap();
 
     h.core
-        .continue_on_engine(&id, EngineId::Copilot)
+        .continue_on_engine(&id, EngineId::COPILOT)
         .await
         .unwrap();
     assert!(!h.agent(&id).terminal);
@@ -1015,7 +1015,7 @@ async fn an_agent_handed_over_from_the_claude_code_view_goes_on_in_the_copilot_v
     .await;
     h.wait("the Copilot view", |h| h.agent(&id).terminal).await;
     let m = h.agent(&id);
-    assert_eq!(m.engine, EngineId::Copilot);
+    assert_eq!(m.engine, EngineId::COPILOT);
     let session = m.session_id.expect("its new session");
     open_copilot(&h, &id, "fake-copilot-tui").await;
     let argv = argv_of(&last_launch(&home));

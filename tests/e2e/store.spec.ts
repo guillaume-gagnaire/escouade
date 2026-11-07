@@ -85,7 +85,12 @@ test('the store in the app: searched here, a seal checked here, an unverified ve
   // An unverified version: the band, « Installer quand même ».
   await openStore(page);
   await page.getByRole('searchbox', { name: 'Chercher dans le store' }).fill('slack');
-  await work.locator('.rowp').first().getByRole('button', { name: 'Installer' }).click();
+  // Escouade's own Slack (dev.escouade.slack, ESC-314) is not signed yet: refused, nothing installed.
+  await work.locator('.rowp', { hasText: 'guillaume-gagnaire' }).getByRole('button', { name: 'Installer' }).click();
+  await expect(work.locator('.err')).toContainText("que le store n'a pas encore signé");
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  // A third party's Slack, unverified: the band, « Installer quand même ».
+  await work.locator('.rowp', { hasText: 'escouade-dev' }).getByRole('button', { name: 'Installer' }).click();
   await expect(page.getByRole('dialog')).toContainText('Personne n’a relu cette version.');
   await install(page, 'Installer quand même');
   await expect(page.locator('.phead')).toContainText('Non vérifié');

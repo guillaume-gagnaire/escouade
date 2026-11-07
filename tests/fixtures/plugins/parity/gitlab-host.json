@@ -1,0 +1,1123 @@
+[
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/personal_access_tokens/self"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/user"
+      }
+    ],
+    "error": null,
+    "method": "account/me",
+    "result": {
+      "label": "@ada",
+      "scopes": ["api"],
+      "user": "ada"
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/65275361"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests/3101"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests/3101/approvals"
+      }
+    ],
+    "error": null,
+    "method": "forge/pullRequest",
+    "result": {
+      "value": {
+        "approvals": 2,
+        "author": "frank",
+        "autoMerge": false,
+        "base": "main",
+        "changesRequested": false,
+        "checks": "success",
+        "created": 1791633973,
+        "draft": false,
+        "fork": true,
+        "head": "cancel-auto-merge",
+        "headRepo": "gitlab-community/gitlab-org/api/client-go",
+        "mergeCommit": "28c27c7623621ab535bceabe0b599aba3838fe3d",
+        "mergeable": null,
+        "number": 3101,
+        "openThreads": 0,
+        "reviewers": ["alice", "bob"],
+        "state": "merged",
+        "title": "feat(merge_requests): add CancelAutoMerge",
+        "url": "https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3101"
+      }
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests/3101"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests/3101/approvals"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests?source_branch=feature&order_by=created_at&sort=desc&per_page=10"
+      }
+    ],
+    "error": null,
+    "method": "forge/pullRequestsOfBranch",
+    "result": {
+      "value": [
+        {
+          "approvals": 2,
+          "author": "frank",
+          "autoMerge": false,
+          "base": "main",
+          "changesRequested": false,
+          "checks": "success",
+          "created": 1791633973,
+          "draft": false,
+          "fork": true,
+          "head": "cancel-auto-merge",
+          "headRepo": "gitlab-community/gitlab-org/api/client-go",
+          "mergeCommit": "28c27c7623621ab535bceabe0b599aba3838fe3d",
+          "mergeable": null,
+          "number": 3101,
+          "openThreads": 0,
+          "reviewers": ["alice", "bob"],
+          "state": "merged",
+          "title": "feat(merge_requests): add CancelAutoMerge",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3101"
+        }
+      ]
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go"
+      }
+    ],
+    "error": null,
+    "method": "forge/parent",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests?state=opened&order_by=updated_at&sort=desc&per_page=30"
+      }
+    ],
+    "error": null,
+    "method": "forge/openPullRequests",
+    "result": {
+      "value": [
+        {
+          "approvals": 0,
+          "author": "frank",
+          "autoMerge": false,
+          "base": "main",
+          "changesRequested": false,
+          "checks": null,
+          "created": 1791633973,
+          "draft": false,
+          "fork": true,
+          "head": "cancel-auto-merge",
+          "mergeCommit": "28c27c7623621ab535bceabe0b599aba3838fe3d",
+          "mergeable": null,
+          "number": 3101,
+          "openThreads": 0,
+          "reviewers": ["alice", "bob"],
+          "state": "merged",
+          "title": "feat(merge_requests): add CancelAutoMerge",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3101"
+        }
+      ]
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests/3101"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests/3101/approvals"
+      }
+    ],
+    "error": null,
+    "method": "forge/pullRequests",
+    "result": {
+      "value": [
+        {
+          "approvals": 2,
+          "author": "frank",
+          "autoMerge": false,
+          "base": "main",
+          "changesRequested": false,
+          "checks": "success",
+          "created": 1791633973,
+          "draft": false,
+          "fork": true,
+          "head": "cancel-auto-merge",
+          "headRepo": "gitlab-community/gitlab-org/api/client-go",
+          "mergeCommit": "28c27c7623621ab535bceabe0b599aba3838fe3d",
+          "mergeable": null,
+          "number": 3101,
+          "openThreads": 0,
+          "reviewers": ["alice", "bob"],
+          "state": "merged",
+          "title": "feat(merge_requests): add CancelAutoMerge",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3101"
+        }
+      ]
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go"
+      }
+    ],
+    "error": null,
+    "method": "forge/mergeOptions",
+    "result": {
+      "value": {
+        "autoMerge": true,
+        "strategies": ["merge", "squash"]
+      }
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/65271576/pipelines/3004244757/jobs?per_page=100"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests/3101"
+      }
+    ],
+    "error": null,
+    "method": "forge/checks",
+    "result": {
+      "value": [
+        {
+          "cancelled": false,
+          "finished": 1793283716,
+          "job": "17577084459",
+          "name": "tests:integration",
+          "started": 1793282917,
+          "state": "success",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084459"
+        },
+        {
+          "cancelled": false,
+          "finished": 1793283306,
+          "job": "17577084458",
+          "name": "tests:unit: [1.27]",
+          "started": 1793283156,
+          "state": "success",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084458"
+        },
+        {
+          "cancelled": false,
+          "finished": 1793283344,
+          "job": "17577084457",
+          "name": "tests:unit: [1.26]",
+          "started": 1793283156,
+          "state": "success",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084457"
+        },
+        {
+          "cancelled": false,
+          "finished": 1793283178,
+          "job": "17577084456",
+          "name": "dependency-scanning",
+          "started": 1793283156,
+          "state": "success",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084456"
+        },
+        {
+          "cancelled": false,
+          "finished": 1793282966,
+          "job": "17577084455",
+          "name": "semgrep-sast",
+          "started": 1793282917,
+          "state": "success",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084455"
+        },
+        {
+          "cancelled": false,
+          "finished": 1793283451,
+          "job": "17577084454",
+          "name": "gitlab-advanced-sast",
+          "started": 1793283156,
+          "state": "success",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084454"
+        },
+        {
+          "cancelled": false,
+          "finished": 1793283154,
+          "job": "17577084453",
+          "name": "verify-generated-code",
+          "started": 1793282917,
+          "state": "success",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084453"
+        },
+        {
+          "cancelled": false,
+          "finished": 1793282959,
+          "job": "17577084452",
+          "name": "buf-lint",
+          "started": 1793282917,
+          "state": "success",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084452"
+        },
+        {
+          "cancelled": false,
+          "finished": 1793283005,
+          "job": "17577084451",
+          "name": "golangci-lint",
+          "started": 1793282917,
+          "state": "success",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084451"
+        },
+        {
+          "cancelled": false,
+          "finished": 1793282918,
+          "job": "17577084450",
+          "name": "autolabels 🏷️",
+          "started": 1793282917,
+          "state": "success",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084450"
+        },
+        {
+          "cancelled": false,
+          "finished": 1793282918,
+          "job": "17577084449",
+          "name": "danger-review",
+          "started": 1793282917,
+          "state": "success",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084449"
+        },
+        {
+          "cancelled": false,
+          "finished": 1793282942,
+          "job": "17577084448",
+          "name": "dependency-scanning-profile-0",
+          "started": 1793282917,
+          "state": "success",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084448"
+        }
+      ]
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/jobs/42/trace"
+      }
+    ],
+    "error": null,
+    "method": "forge/jobLog",
+    "result": {
+      "value": "2026-10-29T14:08:39.080968Z 00O \u001b[0KRunning with gitlab-runner 19.6.0~pre.2364.gcc7d9535 (cc7d9535)\u001b[0;m\n2026-10-29T14:08:39.081000Z 00O \u001b[0K  on k8s.private.runners-manager.gitlab.com/gitlab.com/gitlab-org KVJMJq9V9, system ID: r_j4vCJfDhibbP\u001b[0;m\n2026-10-29T14:08:39.081003Z 00O \u001b[0K  UUID: 019f42aa-de46-7dfa-8900-c61558fa7954\u001b[0;m\n2026-10-29T14:08:39.081011Z 00O \u001b[0K  feature flags: FF_NETWORK_PER_BUILD:true, FF_USE_GIT_PROACTIVE_AUTH:true, FF_HASH_CACHE_KEYS:true, FF_USE_JOB_ROUTER:true, FF_MACHINE_OPTIONS_EXPAND_ENV:true, FF_DOCKER_MACHINE_JSON_OUTPUT:true\u001b[0;m\n2026-10-29T14:08:39.081037Z 00O \u001b[0K\u001b[36;1mResolving secrets\u001b[0;m\u001b[0;m\n2026-10-29T14:08:39.081198Z 00O section_start:1793282919:prepare_executor\r\u001b[0K\n2026-10-29T14:08:39.081201Z 00O+\u001b[0K\u001b[36;1mPreparing the \"docker+machine\" executor\u001b[0;m\u001b[0;m\n2026-10-29T14:08:39.155739Z 00O \u001b[0KUsing Docker executor with image golang:1.27-bookworm ...\u001b[0;m\n2026-10-29T14:08:39.187791Z 00O \u001b[0KUsing helper image:  us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535  (overridden, default would be  registry.gitlab.com/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v19.6.0 )\u001b[0;m\n2026-10-29T14:08:39.187802Z 00O \u001b[0KUsing effective pull policy of [always] for container us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535\u001b[0;m\n2026-10-29T14:08:39.188546Z 00O \u001b[0KPulling docker image us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535 ...\u001b[0;m\n2026-10-29T14:08:39.265532Z 00O \u001b[0KUsing docker image sha256:e516a5247b58c0dc65b851e6182e8e82adb95c17e9e1c7296766587e65d20e20 for us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535 with digest us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper@sha256:594cc89134ef76aa73685eba2879d66e742c61917fb7fb0921f3f939e61d4e2d ...\u001b[0;m\n2026-10-29T14:08:40.657079Z 00O \u001b[0KStarting service docker:29.9.2-dind...\u001b[0;m\n2026-10-29T14:08:40.657087Z 00O \u001b[0KUsing effective pull policy of [always] for container docker:29.9.2-dind\u001b[0;m\n2026-10-29T14:08:40.657571Z 00O \u001b[0KPulling docker image docker:29.9.2-dind ...\u001b[0;m\n2026-10-29T14:08:45.001188Z 00O \u001b[0KUsing docker image sha256:9a5d43f7d02971b15763b4b88d0e44cfaa858ec8a04b2fd84057b03c6f0e0f96 for docker:29.9.2-dind with digest docker@sha256:9e79b879b177fbd72c34376a3dd3d91747da5db49e1f560f76aea59561471977 ...\u001b[0;m\n2026-10-29T14:08:47.360596Z 00O \u001b[0KWaiting for services to be up and running (timeout 30 seconds)...\u001b[0;m\n2026-10-29T14:08:47.360628Z 00O \u001b[0KUsing helper image:  us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535  (overridden, default would be  registry.gitlab.com/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v19.6.0 )\u001b[0;m\n2026-10-29T14:08:47.360646Z 00O \u001b[0KUsing effective pull policy of [always] for container us-east1-docker.pkg.dev/"
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/65271576/pipelines/3004244757/jobs?per_page=100"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests/3101"
+      }
+    ],
+    "error": null,
+    "method": "forge/rerunFailed",
+    "result": {
+      "value": 0
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/65271576/pipelines/3004244757/jobs?per_page=100"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/pipelines?ref=feature&per_page=1"
+      }
+    ],
+    "error": null,
+    "method": "forge/branchChecks",
+    "result": {
+      "value": [
+        {
+          "cancelled": false,
+          "finished": 1793283716,
+          "job": "17577084459",
+          "name": "tests:integration",
+          "started": 1793282917,
+          "state": "success",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084459"
+        },
+        {
+          "cancelled": false,
+          "finished": 1793283306,
+          "job": "17577084458",
+          "name": "tests:unit: [1.27]",
+          "started": 1793283156,
+          "state": "success",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084458"
+        },
+        {
+          "cancelled": false,
+          "finished": 1793283344,
+          "job": "17577084457",
+          "name": "tests:unit: [1.26]",
+          "started": 1793283156,
+          "state": "success",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084457"
+        },
+        {
+          "cancelled": false,
+          "finished": 1793283178,
+          "job": "17577084456",
+          "name": "dependency-scanning",
+          "started": 1793283156,
+          "state": "success",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084456"
+        },
+        {
+          "cancelled": false,
+          "finished": 1793282966,
+          "job": "17577084455",
+          "name": "semgrep-sast",
+          "started": 1793282917,
+          "state": "success",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084455"
+        },
+        {
+          "cancelled": false,
+          "finished": 1793283451,
+          "job": "17577084454",
+          "name": "gitlab-advanced-sast",
+          "started": 1793283156,
+          "state": "success",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084454"
+        },
+        {
+          "cancelled": false,
+          "finished": 1793283154,
+          "job": "17577084453",
+          "name": "verify-generated-code",
+          "started": 1793282917,
+          "state": "success",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084453"
+        },
+        {
+          "cancelled": false,
+          "finished": 1793282959,
+          "job": "17577084452",
+          "name": "buf-lint",
+          "started": 1793282917,
+          "state": "success",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084452"
+        },
+        {
+          "cancelled": false,
+          "finished": 1793283005,
+          "job": "17577084451",
+          "name": "golangci-lint",
+          "started": 1793282917,
+          "state": "success",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084451"
+        },
+        {
+          "cancelled": false,
+          "finished": 1793282918,
+          "job": "17577084450",
+          "name": "autolabels 🏷️",
+          "started": 1793282917,
+          "state": "success",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084450"
+        },
+        {
+          "cancelled": false,
+          "finished": 1793282918,
+          "job": "17577084449",
+          "name": "danger-review",
+          "started": 1793282917,
+          "state": "success",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084449"
+        },
+        {
+          "cancelled": false,
+          "finished": 1793282942,
+          "job": "17577084448",
+          "name": "dependency-scanning-profile-0",
+          "started": 1793282917,
+          "state": "success",
+          "url": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084448"
+        }
+      ]
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/65271576/pipelines/3004244757/jobs?per_page=100"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/pipelines?ref=feature&per_page=1"
+      }
+    ],
+    "error": null,
+    "method": "forge/rerunFailedOfBranch",
+    "result": {
+      "value": 0
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests/3101/approvals"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests/3101/reviewers"
+      }
+    ],
+    "error": null,
+    "method": "forge/reviews",
+    "result": {
+      "value": [
+        {
+          "author": "alice",
+          "body": "",
+          "state": "approved"
+        },
+        {
+          "author": "bob",
+          "body": "",
+          "state": "approved"
+        }
+      ]
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests/3101/discussions?per_page=100"
+      }
+    ],
+    "error": null,
+    "method": "forge/comments",
+    "result": {
+      "value": [
+        {
+          "author": "alice",
+          "body": "`CancelAutoMerge` should say in its doc comment what GitLab answers when nothing was set.",
+          "created": 1791796442,
+          "id": "6a9c1750b37d513a43987b574953fceb50b03ce7:2829102301",
+          "line": 1412,
+          "path": "merge_requests.go",
+          "resolved": true
+        },
+        {
+          "author": "frank",
+          "body": "Done, thanks.",
+          "created": 1791805251,
+          "id": "6a9c1750b37d513a43987b574953fceb50b03ce7:2829455120",
+          "line": 1412,
+          "path": "merge_requests.go",
+          "resolved": true
+        },
+        {
+          "author": "bob",
+          "body": "Could the test also cover a 405 when the pipeline already finished?",
+          "created": 1791878553,
+          "id": "87805b7c09016a7058e91bdbe7b29d1f284a39e6:2831008764",
+          "line": 880,
+          "path": "merge_requests_test.go",
+          "resolved": false
+        },
+        {
+          "author": "bob",
+          "body": "Thanks for the contribution! This is in the next release.",
+          "created": 1793283850,
+          "id": "f3c1e2d4b5a69788a7b6c5d4e3f2a1b0c9d8e7f6:2833190045",
+          "line": null,
+          "path": null,
+          "resolved": false
+        }
+      ]
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"body\":\"Fait.\\n\\n— Escouade\"}",
+        "headers": [
+          ["accept", "*/*"],
+          ["content-type", "application/json"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "POST",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests/3101/notes"
+      }
+    ],
+    "error": null,
+    "method": "forge/comment",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests/3101"
+      },
+      {
+        "body": "{\"body\":\"Bien vu\"}",
+        "headers": [
+          ["accept", "*/*"],
+          ["content-type", "application/json"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "POST",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests/3101/notes"
+      },
+      {
+        "body": "{\"body\":\"Ici\",\"position\":{\"base_sha\":\"ea8d5daf0c65b923f6efd885e0adb9e41187353b\",\"head_sha\":\"24c5c32eb4f7dae8f76fb33a02204ab46509d63c\",\"new_line\":3,\"new_path\":\"src/main.rs\",\"old_path\":\"src/main.rs\",\"position_type\":\"text\",\"start_sha\":\"ea8d5daf0c65b923f6efd885e0adb9e41187353b\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["content-type", "application/json"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "POST",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests/3101/discussions"
+      },
+      {
+        "body": "{}",
+        "headers": [
+          ["accept", "*/*"],
+          ["content-type", "application/json"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "POST",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests/3101/approve"
+      }
+    ],
+    "error": null,
+    "method": "forge/review",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"body\":\"Oui\"}",
+        "headers": [
+          ["accept", "*/*"],
+          ["content-type", "application/json"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "POST",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests/3101/discussions/6a9c17/notes"
+      }
+    ],
+    "error": null,
+    "method": "forge/reply",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"resolved\":true}",
+        "headers": [
+          ["accept", "*/*"],
+          ["content-type", "application/json"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "PUT",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests/3101/discussions/6a9c17"
+      }
+    ],
+    "error": null,
+    "method": "forge/resolve",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/deployments?order_by=updated_at&sort=desc&per_page=50"
+      }
+    ],
+    "error": null,
+    "method": "forge/deployments",
+    "result": {
+      "value": []
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/deployments?order_by=updated_at&sort=desc&per_page=50"
+      }
+    ],
+    "error": null,
+    "method": "forge/environments",
+    "result": {
+      "value": [
+        {
+          "author": "frank",
+          "created": 1793283602,
+          "environment": "docs-preview",
+          "log": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084480",
+          "sha": "24c5c32eb4f7dae8f76fb33a02204ab46509d63c",
+          "state": "in_progress",
+          "url": null
+        },
+        {
+          "author": "frank",
+          "created": 1793283002,
+          "environment": "review/cancel-auto-merge",
+          "log": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577084470",
+          "sha": "24c5c32eb4f7dae8f76fb33a02204ab46509d63c",
+          "state": "success",
+          "url": "https://cancel-auto-merge.review.example.dev"
+        },
+        {
+          "author": "bob",
+          "created": 1793282702,
+          "environment": "production",
+          "log": "https://gitlab.com/gitlab-org/api/client-go/-/jobs/17577089999",
+          "sha": "07637978489e826011c6100aeee62a003f8513da",
+          "state": "success",
+          "url": "https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go"
+        }
+      ]
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/users?username=bob"
+      },
+      {
+        "body": "{\"description\":\"Son texte\\n\\nCloses #9\",\"labels\":\"bug\",\"source_branch\":\"feature\",\"target_branch\":\"main\",\"title\":\"Une PR\"}",
+        "headers": [
+          ["accept", "*/*"],
+          ["content-type", "application/json"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "POST",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests"
+      }
+    ],
+    "error": null,
+    "method": "forge/createPr",
+    "result": {
+      "value": {
+        "approvals": 0,
+        "author": "frank",
+        "autoMerge": false,
+        "base": "main",
+        "changesRequested": false,
+        "checks": "success",
+        "created": 1791633973,
+        "draft": false,
+        "fork": true,
+        "head": "cancel-auto-merge",
+        "mergeCommit": "28c27c7623621ab535bceabe0b599aba3838fe3d",
+        "mergeable": null,
+        "number": 3101,
+        "openThreads": 0,
+        "reviewers": ["alice", "bob"],
+        "state": "merged",
+        "title": "feat(merge_requests): add CancelAutoMerge",
+        "url": "https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3101"
+      }
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"squash\":true}",
+        "headers": [
+          ["accept", "*/*"],
+          ["content-type", "application/json"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "PUT",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests/3101/merge"
+      }
+    ],
+    "error": null,
+    "method": "forge/merge",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"auto_merge\":true,\"merge_when_pipeline_succeeds\":true,\"squash\":true}",
+        "headers": [
+          ["accept", "*/*"],
+          ["content-type", "application/json"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "PUT",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests/3101/merge"
+      }
+    ],
+    "error": null,
+    "method": "forge/autoMerge",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [],
+    "error": {
+      "code": -32601,
+      "message": "no method forge/nothing"
+    },
+    "method": "forge/nothing",
+    "result": null
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/moved"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests/3101"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests/3101/approvals"
+      }
+    ],
+    "error": null,
+    "method": "forge/pullRequest",
+    "result": {
+      "value": {
+        "approvals": 2,
+        "author": "frank",
+        "autoMerge": false,
+        "base": "main",
+        "changesRequested": false,
+        "checks": "success",
+        "created": 1791633973,
+        "draft": false,
+        "fork": true,
+        "head": "cancel-auto-merge",
+        "headRepo": "gitlab-community/gitlab-org/api/client-go",
+        "mergeCommit": "28c27c7623621ab535bceabe0b599aba3838fe3d",
+        "mergeable": null,
+        "number": 3101,
+        "openThreads": 0,
+        "reviewers": ["alice", "bob"],
+        "state": "merged",
+        "title": "feat(merge_requests): add CancelAutoMerge",
+        "url": "https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3101"
+      }
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"body\":\"Déplacé\"}",
+        "headers": [
+          ["accept", "*/*"],
+          ["content-type", "application/json"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "POST",
+        "target": "/moved-comment"
+      },
+      {
+        "body": "{\"body\":\"Déplacé\"}",
+        "headers": [
+          ["accept", "*/*"],
+          ["content-type", "application/json"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "POST",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests/3101/notes"
+      }
+    ],
+    "error": null,
+    "method": "forge/comment",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/projects/gitlab-org%2Fapi%2Fclient-go/merge_requests/3101"
+      }
+    ],
+    "error": {
+      "code": -32000,
+      "message": "GitLab : MR !3101 introuvable"
+    },
+    "method": "forge/pullRequest",
+    "result": null
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/user"
+      }
+    ],
+    "error": {
+      "code": -32401,
+      "message": "GitLab refuse ces identifiants (401) — Bad credentials"
+    },
+    "method": "account/me",
+    "result": null
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/user"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "*/*"],
+          ["private-token", "tok_1"]
+        ],
+        "method": "GET",
+        "target": "/user"
+      }
+    ],
+    "error": {
+      "code": -32429,
+      "message": "GitLab limite les requêtes (429) : réessaie dans un moment"
+    },
+    "method": "account/me",
+    "result": null
+  }
+]

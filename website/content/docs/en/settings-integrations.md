@@ -169,7 +169,7 @@ The automatic import brings a ticket in only once per project: a ticket already 
 
 ## Code hosts
 
-The first part of the tab connects the code hosts: GitHub, GitLab, Bitbucket Cloud, Gitea, Forgejo and Azure DevOps. They serve the agents’ pull requests (merge requests on GitLab), CI and deployments, not the tickets. One account per instance (github.com, gitlab.com, your company’s…); each project finds its own through its remote. “Connect a code host…” asks for the code host, the address (empty: its public instance) and a token (empty: the one from its CLI, `gh`, `glab` or `az`); a remote without an account offers “Connect” followed by its host.
+The first part of the tab connects the [code hosts](code-hosts): GitHub, GitLab, Bitbucket Cloud, Gitea, Forgejo, and Azure DevOps. They serve the pull requests (merge requests on GitLab) of agents and tickets, the CI, and the deployments, not the tickets themselves. One account per instance (github.com, gitlab.com, your company’s…); each project finds its own by its remote. “Connect a code host…” asks for the host, the address (empty: its public instance), and a token (empty: the one from its CLI, `gh`, `glab`, or `az`); a remote without an account offers “Connect” followed by its host.
 
 Each instance says on its row whether it also serves as a source of the Kanban:
 

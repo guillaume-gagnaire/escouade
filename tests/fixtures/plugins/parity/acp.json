@@ -1,0 +1,7680 @@
+{
+  "calls": [
+    [
+      {
+        "error": null,
+        "method": "initialize",
+        "result": {
+          "capabilities": {
+            "harnesses": ["acp"]
+          },
+          "protocolVersion": 1,
+          "writes": null
+        }
+      }
+    ],
+    [
+      {
+        "error": null,
+        "method": "agent/attach",
+        "result": {
+          "writes": null
+        }
+      },
+      {
+        "error": null,
+        "method": "engine/launch",
+        "result": {
+          "args": ["acp"],
+          "env": [],
+          "fenceApplied": false,
+          "fenceByClient": false,
+          "files": [],
+          "readOnly": false,
+          "removeEnv": [],
+          "trust": [],
+          "writes": [
+            "{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"initialize\",\"params\":{\"clientCapabilities\":{\"_meta\":{},\"fs\":{\"readTextFile\":false,\"writeTextFile\":false},\"terminal\":false},\"clientInfo\":{\"name\":\"escouade\",\"version\":\"2.2.0\"},\"protocolVersion\":1}}"
+          ]
+        }
+      }
+    ],
+    [
+      {
+        "error": null,
+        "method": "agent/sendMessage",
+        "result": {
+          "writes": [
+            "{\"id\":5,\"jsonrpc\":\"2.0\",\"method\":\"session/prompt\",\"params\":{\"prompt\":[{\"text\":\"<instructions>\\n<escouade>\\nYou have no tool to ask the user a question here. When you need the user to choose or answer before going on, end your turn with one block, and nothing after it:\\n<escouade_question>{\\\"questions\\\": [{\\\"question\\\": \\\"…\\\", \\\"options\\\": [\\\"…\\\", \\\"…\\\"], \\\"multiSelect\\\": false}]}</escouade_question>\\nEscouade shows it to the user and sends the answers as the next message.\\n</escouade>\\n</instructions>\",\"type\":\"text\"},{\"text\":\"bonjour\",\"type\":\"text\"}],\"sessionId\":\"6753be15-7845-4e8d-abf9-3c3ed0985561\"}}"
+          ]
+        }
+      },
+      {
+        "error": null,
+        "method": "agent/setModel",
+        "result": {
+          "writes": [
+            "{\"id\":6,\"jsonrpc\":\"2.0\",\"method\":\"session/set_config_option\",\"params\":{\"configId\":\"model\",\"sessionId\":\"6753be15-7845-4e8d-abf9-3c3ed0985561\",\"value\":\"sonnet\"}}"
+          ]
+        }
+      },
+      {
+        "error": null,
+        "method": "agent/setMode",
+        "result": {
+          "writes": [
+            "{\"id\":7,\"jsonrpc\":\"2.0\",\"method\":\"session/set_mode\",\"params\":{\"modeId\":\"smart_approve\",\"sessionId\":\"6753be15-7845-4e8d-abf9-3c3ed0985561\"}}"
+          ]
+        }
+      },
+      {
+        "error": null,
+        "method": "agent/setEffort",
+        "result": {
+          "writes": []
+        }
+      },
+      {
+        "error": null,
+        "method": "agent/interrupt",
+        "result": {
+          "writes": [
+            "{\"id\":1,\"jsonrpc\":\"2.0\",\"result\":{\"outcome\":{\"outcome\":\"cancelled\"}}}",
+            "{\"id\":4,\"jsonrpc\":\"2.0\",\"result\":{\"outcome\":{\"outcome\":\"cancelled\"}}}",
+            "{\"id\":6,\"jsonrpc\":\"2.0\",\"result\":{\"outcome\":{\"outcome\":\"cancelled\"}}}",
+            "{\"jsonrpc\":\"2.0\",\"method\":\"session/cancel\",\"params\":{\"sessionId\":\"6753be15-7845-4e8d-abf9-3c3ed0985561\"}}"
+          ]
+        }
+      },
+      {
+        "error": null,
+        "method": "agent/readUsage",
+        "result": {
+          "usage": null,
+          "writes": null
+        }
+      },
+      {
+        "error": {
+          "code": -32010,
+          "message": "Goose no longer waits for this answer"
+        },
+        "method": "agent/answerPermission",
+        "result": {
+          "writes": null
+        }
+      },
+      {
+        "error": {
+          "code": -32601,
+          "message": "no method agent/nothing"
+        },
+        "method": "agent/nothing",
+        "result": {
+          "writes": null
+        }
+      },
+      {
+        "error": null,
+        "method": "agent/detach",
+        "result": {
+          "writes": null
+        }
+      }
+    ],
+    [
+      {
+        "error": null,
+        "method": "agent/attach",
+        "result": {
+          "writes": null
+        }
+      },
+      {
+        "error": null,
+        "method": "engine/launch",
+        "result": {
+          "args": ["acp"],
+          "env": [],
+          "fenceApplied": false,
+          "fenceByClient": false,
+          "files": [],
+          "readOnly": false,
+          "removeEnv": ["MSYSTEM", "EXEPATH"],
+          "trust": [],
+          "writes": [
+            "{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"initialize\",\"params\":{\"clientCapabilities\":{\"_meta\":{\"subagents\":true},\"fs\":{\"readTextFile\":false,\"writeTextFile\":false},\"terminal\":false},\"clientInfo\":{\"name\":\"escouade\",\"version\":\"2.2.0\"},\"protocolVersion\":1}}"
+          ]
+        }
+      }
+    ],
+    [
+      {
+        "error": null,
+        "method": "agent/sendMessage",
+        "result": {
+          "writes": [
+            "{\"id\":5,\"jsonrpc\":\"2.0\",\"method\":\"session/prompt\",\"params\":{\"prompt\":[{\"text\":\"bonjour\",\"type\":\"text\"}],\"sessionId\":\"6753be15-7845-4e8d-abf9-3c3ed0985561\"}}"
+          ]
+        }
+      },
+      {
+        "error": null,
+        "method": "agent/setModel",
+        "result": {
+          "writes": [
+            "{\"id\":6,\"jsonrpc\":\"2.0\",\"method\":\"session/set_config_option\",\"params\":{\"configId\":\"model\",\"sessionId\":\"6753be15-7845-4e8d-abf9-3c3ed0985561\",\"value\":\"sonnet\"}}"
+          ]
+        }
+      },
+      {
+        "error": null,
+        "method": "agent/setMode",
+        "result": {
+          "writes": [
+            "{\"id\":7,\"jsonrpc\":\"2.0\",\"method\":\"session/set_mode\",\"params\":{\"modeId\":\"agent\",\"sessionId\":\"6753be15-7845-4e8d-abf9-3c3ed0985561\"}}"
+          ]
+        }
+      },
+      {
+        "error": null,
+        "method": "agent/setEffort",
+        "result": {
+          "writes": []
+        }
+      },
+      {
+        "error": null,
+        "method": "agent/interrupt",
+        "result": {
+          "writes": [
+            "{\"id\":1,\"jsonrpc\":\"2.0\",\"result\":{\"outcome\":{\"outcome\":\"cancelled\"}}}",
+            "{\"id\":4,\"jsonrpc\":\"2.0\",\"result\":{\"outcome\":{\"outcome\":\"cancelled\"}}}",
+            "{\"id\":6,\"jsonrpc\":\"2.0\",\"result\":{\"outcome\":{\"outcome\":\"cancelled\"}}}",
+            "{\"jsonrpc\":\"2.0\",\"method\":\"session/cancel\",\"params\":{\"sessionId\":\"6753be15-7845-4e8d-abf9-3c3ed0985561\"}}"
+          ]
+        }
+      },
+      {
+        "error": null,
+        "method": "agent/readUsage",
+        "result": {
+          "usage": null,
+          "writes": null
+        }
+      },
+      {
+        "error": {
+          "code": -32010,
+          "message": "Cursor no longer waits for this answer"
+        },
+        "method": "agent/answerPermission",
+        "result": {
+          "writes": null
+        }
+      },
+      {
+        "error": {
+          "code": -32601,
+          "message": "no method agent/nothing"
+        },
+        "method": "agent/nothing",
+        "result": {
+          "writes": null
+        }
+      },
+      {
+        "error": null,
+        "method": "agent/detach",
+        "result": {
+          "writes": null
+        }
+      }
+    ],
+    [
+      {
+        "error": null,
+        "method": "agent/attach",
+        "result": {
+          "writes": null
+        }
+      },
+      {
+        "error": null,
+        "method": "engine/launch",
+        "result": {
+          "args": [],
+          "env": [
+            {
+              "name": "VIBE_ENABLE_TELEMETRY",
+              "value": "false"
+            }
+          ],
+          "fenceApplied": false,
+          "fenceByClient": false,
+          "files": [],
+          "readOnly": false,
+          "removeEnv": [],
+          "trust": [],
+          "writes": [
+            "{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"initialize\",\"params\":{\"clientCapabilities\":{\"_meta\":{},\"elicitation\":{\"form\":{}},\"fs\":{\"readTextFile\":false,\"writeTextFile\":false},\"terminal\":false},\"clientInfo\":{\"name\":\"escouade\",\"version\":\"2.2.0\"},\"protocolVersion\":1}}"
+          ]
+        }
+      }
+    ],
+    [
+      {
+        "error": null,
+        "method": "agent/sendMessage",
+        "result": {
+          "writes": [
+            "{\"id\":4,\"jsonrpc\":\"2.0\",\"method\":\"session/prompt\",\"params\":{\"prompt\":[{\"text\":\"bonjour\",\"type\":\"text\"}],\"sessionId\":\"766f2eab-2518-03d7-aefa-2c573986c7fc\"}}"
+          ]
+        }
+      },
+      {
+        "error": null,
+        "method": "agent/setModel",
+        "result": {
+          "writes": []
+        }
+      },
+      {
+        "error": null,
+        "method": "agent/setMode",
+        "result": {
+          "writes": [
+            "{\"id\":5,\"jsonrpc\":\"2.0\",\"method\":\"session/set_mode\",\"params\":{\"modeId\":\"accept-edits\",\"sessionId\":\"766f2eab-2518-03d7-aefa-2c573986c7fc\"}}"
+          ]
+        }
+      },
+      {
+        "error": null,
+        "method": "agent/setEffort",
+        "result": {
+          "writes": [
+            "{\"id\":6,\"jsonrpc\":\"2.0\",\"method\":\"session/set_config_option\",\"params\":{\"configId\":\"thinking\",\"sessionId\":\"766f2eab-2518-03d7-aefa-2c573986c7fc\",\"value\":\"off\"}}"
+          ]
+        }
+      },
+      {
+        "error": null,
+        "method": "agent/interrupt",
+        "result": {
+          "writes": [
+            "{\"id\":0,\"jsonrpc\":\"2.0\",\"result\":{\"outcome\":{\"outcome\":\"cancelled\"}}}",
+            "{\"id\":0,\"jsonrpc\":\"2.0\",\"result\":{\"outcome\":{\"outcome\":\"cancelled\"}}}",
+            "{\"id\":1,\"jsonrpc\":\"2.0\",\"result\":{\"outcome\":{\"outcome\":\"cancelled\"}}}",
+            "{\"id\":10,\"jsonrpc\":\"2.0\",\"result\":{\"outcome\":{\"outcome\":\"cancelled\"}}}",
+            "{\"id\":11,\"jsonrpc\":\"2.0\",\"result\":{\"outcome\":{\"outcome\":\"cancelled\"}}}",
+            "{\"id\":12,\"jsonrpc\":\"2.0\",\"result\":{\"outcome\":{\"outcome\":\"cancelled\"}}}",
+            "{\"id\":13,\"jsonrpc\":\"2.0\",\"result\":{\"outcome\":{\"outcome\":\"cancelled\"}}}",
+            "{\"id\":2,\"jsonrpc\":\"2.0\",\"result\":{\"outcome\":{\"outcome\":\"cancelled\"}}}",
+            "{\"id\":3,\"jsonrpc\":\"2.0\",\"result\":{\"outcome\":{\"outcome\":\"cancelled\"}}}",
+            "{\"id\":4,\"jsonrpc\":\"2.0\",\"result\":{\"outcome\":{\"outcome\":\"cancelled\"}}}",
+            "{\"id\":5,\"jsonrpc\":\"2.0\",\"result\":{\"outcome\":{\"outcome\":\"cancelled\"}}}",
+            "{\"id\":6,\"jsonrpc\":\"2.0\",\"result\":{\"outcome\":{\"outcome\":\"cancelled\"}}}",
+            "{\"id\":7,\"jsonrpc\":\"2.0\",\"result\":{\"outcome\":{\"outcome\":\"cancelled\"}}}",
+            "{\"id\":8,\"jsonrpc\":\"2.0\",\"result\":{\"outcome\":{\"outcome\":\"cancelled\"}}}",
+            "{\"id\":9,\"jsonrpc\":\"2.0\",\"result\":{\"outcome\":{\"outcome\":\"cancelled\"}}}",
+            "{\"jsonrpc\":\"2.0\",\"method\":\"session/cancel\",\"params\":{\"sessionId\":\"766f2eab-2518-03d7-aefa-2c573986c7fc\"}}"
+          ]
+        }
+      },
+      {
+        "error": null,
+        "method": "agent/readUsage",
+        "result": {
+          "usage": null,
+          "writes": null
+        }
+      },
+      {
+        "error": {
+          "code": -32010,
+          "message": "Vibe no longer waits for this answer"
+        },
+        "method": "agent/answerPermission",
+        "result": {
+          "writes": null
+        }
+      },
+      {
+        "error": {
+          "code": -32601,
+          "message": "no method agent/nothing"
+        },
+        "method": "agent/nothing",
+        "result": {
+          "writes": null
+        }
+      },
+      {
+        "error": null,
+        "method": "agent/detach",
+        "result": {
+          "writes": null
+        }
+      }
+    ],
+    [
+      {
+        "error": null,
+        "method": "agent/attach",
+        "result": {
+          "writes": null
+        }
+      },
+      {
+        "error": null,
+        "method": "engine/launch",
+        "result": {
+          "args": ["--acp"],
+          "env": [
+            {
+              "name": "GEMINI_CLI_TRUST_WORKSPACE",
+              "value": "true"
+            }
+          ],
+          "fenceApplied": false,
+          "fenceByClient": false,
+          "files": [],
+          "readOnly": false,
+          "removeEnv": [],
+          "trust": [],
+          "writes": [
+            "{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"initialize\",\"params\":{\"clientCapabilities\":{\"fs\":{\"readTextFile\":false,\"writeTextFile\":false},\"terminal\":false},\"clientInfo\":{\"name\":\"escouade\",\"version\":\"2.2.0\"},\"protocolVersion\":1}}"
+          ]
+        }
+      }
+    ],
+    [
+      {
+        "error": null,
+        "method": "agent/sendMessage",
+        "result": {
+          "writes": []
+        }
+      },
+      {
+        "error": null,
+        "method": "agent/setModel",
+        "result": {
+          "writes": []
+        }
+      },
+      {
+        "error": null,
+        "method": "agent/setMode",
+        "result": {
+          "writes": []
+        }
+      },
+      {
+        "error": null,
+        "method": "agent/setEffort",
+        "result": {
+          "writes": []
+        }
+      },
+      {
+        "error": null,
+        "method": "agent/interrupt",
+        "result": {
+          "writes": []
+        }
+      },
+      {
+        "error": null,
+        "method": "agent/readUsage",
+        "result": {
+          "usage": null,
+          "writes": null
+        }
+      },
+      {
+        "error": {
+          "code": -32010,
+          "message": "Gemini no longer waits for this answer"
+        },
+        "method": "agent/answerPermission",
+        "result": {
+          "writes": null
+        }
+      },
+      {
+        "error": {
+          "code": -32601,
+          "message": "no method agent/nothing"
+        },
+        "method": "agent/nothing",
+        "result": {
+          "writes": null
+        }
+      },
+      {
+        "error": null,
+        "method": "agent/detach",
+        "result": {
+          "writes": null
+        }
+      }
+    ]
+  ],
+  "streams": {
+    "cursor/full-turn.json": [
+      {
+        "digest": "0cf92b44727249ae",
+        "kinds": ["write", "write"]
+      },
+      {
+        "digest": "b3be114a7198f687",
+        "kinds": ["session", "write"]
+      },
+      {
+        "digest": "45cf6130ec0c611d",
+        "kinds": ["start"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "fcdc498f9b83005e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "76fe3a11028054e9",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "3a59f52f11ca76aa",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "a83d8adb20ec5ef7",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0fc2e7fe6954a9bf",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "4e7299647be01347",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "62806aec0ba823d9",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "df0fe0100c521a80",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "975ea680b8020dee",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "25f2c76600bf4b5a",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "4d98583fd457d5c4",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "776cd3cb9795d990",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0969ac7589c5d215",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "d5db6cd31574f2cb",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "70a079327ff51725",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "d435e2eb939612bb",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "727900ec384d9b77",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "21e33b11105f7b3d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "37e971a8bb0179c9",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "caff61434d94e42e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "9a5896900f971829",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c1715a172eeb59a8",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ae5b1311dd7faab8",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "727900ec384d9b77",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "6fe1f51dabaeab43",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "325c7b40502c87f6",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "6742c38c7f085719",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "65a8c3ea9efdc09a",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "33dddd748c50878f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "6ffef2bdea079e5c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "3b1f9d707f23ca2e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "7c5734ce75ddf7cd",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c42187931c5f49a4",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "54a711e95bbf5227",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b8a1544a83cca36d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "727900ec384d9b77",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "21e33b11105f7b3d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "45b82706abd7af19",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ec4655ea03dd8e52",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b9404efd99db542c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "4ac54ec74cb8c292",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "04cf35fdab95c734",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ae5b1311dd7faab8",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b8aa2ebd76f562fe",
+        "kinds": ["thinking", "delta"]
+      },
+      {
+        "digest": "207b20667c6ba469",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "1b2d86f325f3d17c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "fcfe3bbc78003421",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "96cdf550686302de",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b97fec3ce562133f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "72c21bf203563480",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "5ec9d2aa4662c88d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "a98491c2d0ed241d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e436dd0fe194b7e5",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "6225b132d21fe099",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ed5bd67868c7e1f5",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "6225b132d21fe099",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ab3fe478cee6828e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "6225b132d21fe099",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "52634c9938e31417",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "1120e22915f39b1f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "72c5672a337a2bf5",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "20f3b6877a797556",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "f1be6a2bd6eb15be",
+        "kinds": ["write", "todos"]
+      },
+      {
+        "digest": "07e6c2ae6e6b894b",
+        "kinds": ["text", "tool"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "d90720c7774ee2b3",
+        "kinds": ["permission"]
+      },
+      {
+        "digest": "b372d4eb768d8f12",
+        "kinds": ["toolDone"]
+      },
+      {
+        "digest": "d528f96f8ca1615c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ceae04ad23ec6941",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "19afe8d89ab412f2",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "6745127714bc372d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "af587ef822978cf6",
+        "kinds": ["thinking", "delta"]
+      },
+      {
+        "digest": "0ca8f4c9e75b0272",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "2ee05f9dc2c33af2",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "7efd9393575fec12",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "a9805dd58145302a",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "d0b0d8afd52ff702",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "684f823ce49c1a65",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "8a8745d102b14f0f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e6171ccd10937823",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "8b03189049ccdf4e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "4128103c947cdaee",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "89e5f9871aba8829",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "6b2182596e18bff7",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "86aa98309e9c3c7b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "32404b1543c97ece",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "8db37ab757c4ddfe",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c664f7f01e137fbc",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "2ee05f9dc2c33af2",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "6bc7ad1ef3dba507",
+        "kinds": ["text", "tool"]
+      },
+      {
+        "digest": "c1cd1f38aa2ac457",
+        "kinds": ["toolInput"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "48e4197b4bd39df4",
+        "kinds": ["write", "todos"]
+      },
+      {
+        "digest": "69b616344cc7a56e",
+        "kinds": ["toolDone"]
+      },
+      {
+        "digest": "f257b093f93ca20d",
+        "kinds": ["tool"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "fde060fa2e7c286e",
+        "kinds": ["subagent"]
+      },
+      {
+        "digest": "2bc5f51c14493c71",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "3aff29d803c658fe",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b10b67c74a134a76",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "9877cb371ce0658d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "6de70ae4eeee7e92",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "5504b1555846e2a7",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b78d39edf8b11d41",
+        "kinds": ["thinking", "delta"]
+      },
+      {
+        "digest": "d830b2d6f4e68c08",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "51d8b1c81b86ea88",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "f4c09984de3203b0",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "37c43fe33fdbf943",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "928d2d22d9bd1d67",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "7ece3174e6abb656",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "21453964b7a4f090",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "118f8a0ca1971b74",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "928d2d22d9bd1d67",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "36af927b1bec8c8b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "31c1c18a67d4da92",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "3518de70b543f0aa",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "32ba5d0869650a4a",
+        "kinds": ["text", "tool"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "ff323d87d6804bbe",
+        "kinds": ["toolDone"]
+      },
+      {
+        "digest": "9e25d4bc0536424b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "146409ac62ad00a9",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "650d7ff360e8077d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "46dcb22f714e81a4",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "bedb0b92ca8a50d3",
+        "kinds": ["thinking", "delta"]
+      },
+      {
+        "digest": "fcfccb1f24eed8ca",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "bdeec293ac20140d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "9d91edefbdc4691c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "1279124b2ee0e882",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "393e65ee7a4bad70",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "1d653ced2341c34e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "fcfccb1f24eed8ca",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e5cd1c7e29850be7",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "bb29de34406be982",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "1d8603a474e30a03",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "d4baeb6f9833d99d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e1a090fc736ce345",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "2f9203e31ae355c3",
+        "kinds": ["text", "toolDone"]
+      },
+      {
+        "digest": "bf7bfaeae8f66178",
+        "kinds": ["write"]
+      },
+      {
+        "digest": "0dcbf84c59143df7",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "1a545a7fff528cec",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "afef11d320aac51c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "02153e202140e37e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "d3afea3fa0232c27",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "aaedcf07f88367c3",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "fd804e50bc9ad3b4",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "18057b98ebf5aaf1",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0a6f685bd90e6f48",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "f4a7708dfa7e3f64",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "75a6b0d7d914f5ee",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "214c698d83bb6057",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e6c0bbb5fcec1036",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "4adef59d147bf2e3",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "369a17f5790626fd",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "bdb3e1bf3443ba32",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "83402e4f4b67dc91",
+        "kinds": ["thinking", "delta"]
+      },
+      {
+        "digest": "65382b0cf75955d2",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ece4e140e91b2abb",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "182a07d66b3c3f45",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "49db037ada3f9e39",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "68117ff372f7a4e6",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "23fdbc7c92417fba",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "1995fa202b9c2db5",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "f3ebc9956388f83f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "d594a02d6c83e58b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "bccfc4e81a238310",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ae77249ac1895eda",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "887f13e810c283f2",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "2b0050bfcc282c22",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ed22c135bbf206ff",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "687fa458519e867d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "5b73b3b0683468c1",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e9de4685aa8325a4",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "6abc07b4f90ab5e5",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ce3e184d96c70ee5",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "45c9a17609f8470f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "59efbf61a0cc0592",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c23d65d8daea8fe9",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "dd22a330b06257ac",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "8ae5947ed11dec0f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ff4867ea47ca0f02",
+        "kinds": ["text", "tool"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "ca5dba3ea51afc5e",
+        "kinds": ["permission"]
+      },
+      {
+        "digest": "bb68f8c3ab72f829",
+        "kinds": ["toolDone"]
+      },
+      {
+        "digest": "2de4a62cba90c87d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0976662d73fd6b88",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "624946b96c633455",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "733b49aa5f2adb32",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "eb2b88da264f078c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ddd595a033338a54",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "a43156954b2a619b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "29c8e6206fdd0b1e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "10cfd46f47e9d293",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "993c4d3ee312938d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "26a307968cd82748",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "6cf7417e21e09aa2",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "05849bdcc3f0b15a",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "fa1b36d59d23ca21",
+        "kinds": ["write", "todos"]
+      },
+      {
+        "digest": "17ff1043fce26edd",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "df65c6d1c76c6371",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "07b1fe6644fab576",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e1c5cfb18b79d5a4",
+        "kinds": ["thinking", "delta"]
+      },
+      {
+        "digest": "d599c849644a6cd5",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "673b790a59792742",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "30c21ec5da254c8e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0e68220dc5d26835",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "aab6cfc5d530964e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "804e16268c6fb233",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0ab82865b46d976f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c3fa566a744b2e82",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "dcceb9d56a27d3c3",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b401c0cdeaf766c5",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e6598bd64b28e488",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "11e45b2415722501",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "428f9bc116f21cb3",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "658bb63a022e433d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "4497bc9af0a08cfe",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c3d9f520b9d3ddea",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0a9be6ccbbfe3d15",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "4b4b994085b3361d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "564f847a83f924e2",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "77b1f6cb16783d5b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "6eccec46502171e4",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0dcf84ee4e27d869",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "587ead979cc9c292",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "8e073d3336e6cecb",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "a7ade03dc9377e4f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "9fa0ebf753920233",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e2a0ccc5962483e1",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "889ac440adb83d7d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "726a4a0e662fb3df",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "9fa0ebf753920233",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "a26ab54e4da6062a",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "867b10b46ec9999e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "bf8324418cb38cea",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0a99374a936d1754",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "f8b569f55bb65171",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "726a4a0e662fb3df",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "16224fc001cbe51c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0e75389dfcbe6482",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "77b1f6cb16783d5b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "6eccec46502171e4",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "52981d8c7af2cd69",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ace1285ea41f0ecd",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c17465db42dded67",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "10edc722d8feabf1",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "2f453f134b1b1559",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "25e3bcad0aeb2367",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "a09fc690b5937ee9",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "f75a0b86ffb15e72",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0a612b76964802d0",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e62e795eb84081e2",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ab110f34f1b4ba6f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "bc7ce5cf71c4e784",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ad9cf50bcc75d813",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "16275cc1ad027a2c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "08c40ce80a395baf",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0d74245c8ee5a50c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "9603030df6577336",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "b9c6120d97e8e62e",
+        "kinds": ["text", "delta"]
+      },
+      {
+        "digest": "a6a86184fb6c819f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "4f0663f22f34327d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b7938f3342f8c458",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0bba343d9747a431",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "4dc9172297202fac",
+        "kinds": ["thinking", "tool"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "03a506bb11f22ddb",
+        "kinds": ["permission"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      }
+    ],
+    "cursor/load-modes-model.json": [
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "faf46c7abd64309c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "10ae76caba6090d0",
+        "kinds": ["thinking", "delta"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "63c6e8693bd18160",
+        "kinds": ["text", "tool"]
+      },
+      {
+        "digest": "0c0747ccdc5ac103",
+        "kinds": ["toolDone"]
+      },
+      {
+        "digest": "1af6f00ceff1341f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "59de1aa59234a0c7",
+        "kinds": ["thinking", "delta"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "bef5892dc4ed2990",
+        "kinds": ["text", "tool"]
+      },
+      {
+        "digest": "c0b888b109dbac9c",
+        "kinds": ["toolDone"]
+      },
+      {
+        "digest": "3ca14f4dffde2e7e",
+        "kinds": ["tool"]
+      },
+      {
+        "digest": "3ec9a15e56d1dbfe",
+        "kinds": ["toolDone"]
+      },
+      {
+        "digest": "3fd240a9b67d9ccc",
+        "kinds": ["subagent"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "d83dc1dc4ea135d7",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "079742ca1379a614",
+        "kinds": ["thinking", "delta"]
+      },
+      {
+        "digest": "823b3ce4dd72ca5a",
+        "kinds": ["text", "tool"]
+      },
+      {
+        "digest": "5b2a3a8667195887",
+        "kinds": ["toolDone"]
+      },
+      {
+        "digest": "9dbd48821ced0817",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "41360a01eee7686b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b9fffbeea0dbff74",
+        "kinds": ["thinking", "delta"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "7b2d84a920c4afb8",
+        "kinds": ["text", "delta"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "30465c6e727a9d76",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b5c462764e191c95",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "d4d201c88888859f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "87eca5393d94f9cd",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "7f018e43b48278a3",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "8288882f98edd3f4",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0143a4e0ea8be195",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "6ff3ddc6fdea5216",
+        "kinds": ["thinking", "delta"]
+      },
+      {
+        "digest": "84e31dc7c8446863",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "31d57ac539a4d60f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "9a2b832143b5ba17",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "dce8f2a6d0f9db71",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "5238a381d0edbea2",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "eac9c8d87a6e7a5b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "2c44932617e9a4e7",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c0d8ac8ed61c2207",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "79af371247dd6dee",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b2ffe7d33ce9eac7",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "67234e244b2355cd",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "388ea31afeffae8f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "f4825270e6dc1909",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "6c0ae1502b387a4b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "d35b89d40a53b94e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "2c44932617e9a4e7",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "f1fc4e4b84bbe091",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e3bc3f2891757d42",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "611a3dd4fb374aab",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "772bf65620745b55",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b48c349287761f7e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e9a5e08f596f8435",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "61e6862d7286dad2",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "12733cda20bdeeb2",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ba0c83839cf81064",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "fdb44834f393f072",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "f411b13776aa9680",
+        "kinds": ["mode"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "885b27c33bb4323a",
+        "kinds": ["text", "delta"]
+      },
+      {
+        "digest": "0708f31b7ca106e3",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e84daab9b97cf023",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "684fffdbd059bc4d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0d5a134894470995",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "83203148f411aed8",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "9aa3db3d1fc25c6a",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "a50b1021069f390d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c543a834ec6b510d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "19c7dc44c4016dd1",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "4d4af332b37edfa1",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "dee561a95199999b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b0acb9cc4dff22dc",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "067d787754c04e70",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "7f28191cf54978ed",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "55093dc60d493bbe",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "d7bba8575e2606d4",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "87aa8e247f7e41b2",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "15b89fd2365b291d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "79ba5694651a595d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "9d284ba32ce0791b",
+        "kinds": ["thinking", "delta"]
+      },
+      {
+        "digest": "36d10453a4615487",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "1bbd40c30054e4b1",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "1295f6f01617fd47",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "172f5855c316d6b2",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "f954bdb154435dac",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "1a2914c6a6c7b01e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "053fab4e27bdc483",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "9c195de69c91ef4c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "5d8a0d38d97bdb46",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "edb6d6699706495c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "2562c9a66e167308",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0dbdac874b7e1e4a",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "90aff2fedaf8894b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "4b75cdd9fc2d0f0a",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "2d8ad5c706bef90c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "d6c0390f67faab24",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "86726ef5fddd104c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "8a951a441ab8a6ca",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "a7a6d879d6237069",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0544c45863248e4f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c36387b5556ac68b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "1295f6f01617fd47",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "2f06d6e042f07f88",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e6673deb4d03eaae",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ca8d8eb11b6455fd",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b265a8154ded6535",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "4f780c041e90bb61",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "f688a64a17060008",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "1597cedfebff9bcd",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "061f7c69de13a60a",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "76f941fd32f43d1d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e63dc99797d6c8c0",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b23fabd01fd29ff2",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "50c0a87d23129499",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ea2540c9f4f24064",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "fa27ec95e711ef77",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ad0ae27b194bc12a",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e2aef66946006527",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "5525ee6bd75e9909",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c8a818218627eaf4",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "cd6ae63e18668802",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b6326277b251e236",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "6ad150adac421fc4",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "a10ea0859904890f",
+        "kinds": ["mode"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "0995d0122a4373b0",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      }
+    ],
+    "gemini/load-replay.json": [
+      {
+        "digest": "1650167371d502bb",
+        "kinds": ["write"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "b5bbd55aa2cdc019",
+        "kinds": ["notice", "turn"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      }
+    ],
+    "gemini/mcp-tool.json": [
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "75e0cf8bfffd03d9",
+        "kinds": ["tool", "permission"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      }
+    ],
+    "gemini/permission-shell.json": [
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "6d29089bf3583374",
+        "kinds": ["tool", "permission"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      }
+    ],
+    "gemini/permission-write.json": [
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "9da6f77d56777e1b",
+        "kinds": ["tool", "toolInput", "permission"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      }
+    ],
+    "gemini/policy-fence-deny.json": [
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      }
+    ],
+    "gemini/rate-limit.json": [
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      }
+    ],
+    "gemini/simple-turn.json": [
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      }
+    ],
+    "gemini/subagent-yolo.json": [
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      }
+    ],
+    "gemini/thoughts.json": [
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      }
+    ],
+    "goose/full-turn.json": [
+      {
+        "digest": "1650167371d502bb",
+        "kinds": ["write"]
+      },
+      {
+        "digest": "39b7b32cf8716db0",
+        "kinds": ["session", "write", "write"]
+      },
+      {
+        "digest": "45cf6130ec0c611d",
+        "kinds": ["start"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "b662aa1764b99500",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "7bd54780ace3f88c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "a6584ed838fcd707",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b8a85b6310944cbb",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "d0e8f49b4aa4e427",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "eca8a9ba4a8d89d8",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "67bf4ed7b9e96dee",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "9e9c2d719c272ae7",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "7ccc1bc2083f4079",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "5a4d803f1d7c05b1",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "bfb73dd11e04afa7",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "43721b3c29948e4d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c630ce3c77b9b8d0",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "8e2c051e569780a8",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "3d4282d6eb3acbcd",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "9e6d4d67c3cb37d2",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "a057223f0ad30464",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "6debaab87c9db7a2",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0a07f07088880935",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "888839390f21dc10",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "bf519b000f925bb9",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "47c9ae235ca46882",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b2f5b98c5bd8f319",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "a057223f0ad30464",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "767f8077352c96a9",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "2935a78e638a7b76",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "a685cb87f2872a57",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "35f3f60e6f4bf113",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "fcb93fad0abd957f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "4a38ca9fdece4ade",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "742b3eee5cd5fc28",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "831c67217edc049d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "1256f327cc4f7d59",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "f623fb55a0f1695f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "480f8698ea735d24",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "a057223f0ad30464",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "6debaab87c9db7a2",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "5843d7baf3785f85",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "17f1076e5ab14eec",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b3b11c25b412f5e9",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "dbbdd27fce19ff30",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "3328f0ea8fe7993d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b2f5b98c5bd8f319",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "068c231a021f7582",
+        "kinds": ["thinking", "delta"]
+      },
+      {
+        "digest": "32d0aff24d54ee57",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "d9b46c3e69c08619",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "525237f98710795d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "50dfd45cb67ab764",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "9bef3058ae36b80d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "2b75e1814b1e24cd",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "dd12108b527667bb",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "5ce05ae9011a98e8",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0818c0c6c7669d8e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "fa761c44f327b1e6",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "df416390e5690390",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "fa761c44f327b1e6",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "8b4df485ad339050",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "fa761c44f327b1e6",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c6aa5662f8c8604e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c78396ddb9f0dcf4",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c8ff55490cf3aa33",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "f17aa179c23abc03",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "326b01d3a990a2d2",
+        "kinds": ["text", "tool"]
+      },
+      {
+        "digest": "8c45a1f1e73908b1",
+        "kinds": ["toolInput"]
+      },
+      {
+        "digest": "82de624b2360f61b",
+        "kinds": ["toolInput"]
+      },
+      {
+        "digest": "ec0dfcc589aa3aeb",
+        "kinds": ["toolInput"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "ad9082ce3f6c86e5",
+        "kinds": ["toolDone"]
+      },
+      {
+        "digest": "ee3506cefb9fa548",
+        "kinds": ["write"]
+      },
+      {
+        "digest": "ffacd250e42cb2bb",
+        "kinds": ["tool"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "6aca30bfff2c196a",
+        "kinds": ["permission"]
+      },
+      {
+        "digest": "b372d4eb768d8f12",
+        "kinds": ["toolDone"]
+      },
+      {
+        "digest": "2477a99f3b89ef29",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "f2a3b4552c2b6081",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "dc26fce5d068c61e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "719257b8d940a7a9",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ecb5617cfff6510f",
+        "kinds": ["thinking", "delta"]
+      },
+      {
+        "digest": "a3d06940c27a3e4f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "36149574e8c93dab",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "5a183e26c94663e4",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "f5128e7399c301a2",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "34460217048c1b2d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "29a9f877de1eab4f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "10afe7db2400cf43",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "67937c62430825e9",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "7ec7e2fdc1dd8151",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ded8aab1c6806944",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e293984174235576",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "4bd5e913d7f5ccb0",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "1734e02ebdb85196",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "15a60b8fbb3a110f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "f9c14c59fd56e993",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "41240a40eb70dd06",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "36149574e8c93dab",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "90b77c9532974ca0",
+        "kinds": ["text", "tool"]
+      },
+      {
+        "digest": "c1cd1f38aa2ac457",
+        "kinds": ["toolInput"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "1bbeb64f8bde14eb",
+        "kinds": ["tool"]
+      },
+      {
+        "digest": "0a53e9d13add9395",
+        "kinds": ["toolInput"]
+      },
+      {
+        "digest": "02dd3c870b1f20f6",
+        "kinds": ["toolInput"]
+      },
+      {
+        "digest": "025d87661dc24891",
+        "kinds": ["toolInput"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "cf3b6c8346ee22a3",
+        "kinds": ["toolDone"]
+      },
+      {
+        "digest": "641996f04229d814",
+        "kinds": ["write"]
+      },
+      {
+        "digest": "0e58668461781915",
+        "kinds": ["toolDone"]
+      },
+      {
+        "digest": "75849d1c7fcf50b8",
+        "kinds": ["tool"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "2f853ca81c2c2bf4",
+        "kinds": ["toolDone"]
+      },
+      {
+        "digest": "76eea0d61c7da622",
+        "kinds": ["write"]
+      },
+      {
+        "digest": "159714d56f7fdbf3",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "de387abbfa5a5e72",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "bd6aeea651120f8a",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "688cd22d850472a2",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "5e32d77d6e02bdca",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ccb2d234b4cb13f8",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "8dbfd061a29e68e8",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b8bb078845da19e6",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "9834ca843316f939",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "6f8db3fb0e1744a6",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e8244950a1a676cc",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "1a6c5a3119064f5e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c969b8ef67ed61c8",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e3be9f941e9b4dc0",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "24374aa04fbbede7",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "fa750f36b6071ef6",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "606d3211dc11d859",
+        "kinds": ["thinking", "delta"]
+      },
+      {
+        "digest": "0eb550d58cf4f6c4",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c922f136065063b1",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0c65202cc4297c78",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ec3ffc3f06fe5025",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "a704acf5ef36604c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "f9db05eddf89e4f0",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e7bd9d00d1da529c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "d70f3106ff2213ac",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e2b217f45482ff57",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ff09406dfb815726",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "11517609c6774214",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e9d00380af598259",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "8f0ac9f00f21ccfe",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ed21d6179694ba06",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0f5ccf0197433f44",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "dbbf6106727799da",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "8e880d2a2876efd8",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c03707fe03f25a7e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "f140a4e9e725a5e5",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "9abf79e32bcd67ac",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "1d93957bcfe11520",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "13fde832614816b1",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "3f7bb85b4186f43b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "287e6748b6ffebc7",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "2dbf1524770a10e9",
+        "kinds": ["text", "tool"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "acd0ceb08885d5cc",
+        "kinds": ["permission"]
+      },
+      {
+        "digest": "bb68f8c3ab72f829",
+        "kinds": ["toolDone"]
+      },
+      {
+        "digest": "6fe9d384f1a06d33",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e2308b0d55763ce4",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "976f73a7ab5af7aa",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "4674a8153113d2bf",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ce2ef36d755bc86e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "bbb3959f1bf3cf54",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "d3128b90c25f157c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "13b88e5229eb89b1",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "9e258dc2e1796907",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "24575f0f7065635a",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "d2e9eb5c840b0659",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "7a144310d12bf29f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "211002e8b24e7525",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "8fe8a94278dc53d4",
+        "kinds": ["thinking", "tool"]
+      },
+      {
+        "digest": "5ad8e4ed9af4da65",
+        "kinds": ["toolInput"]
+      },
+      {
+        "digest": "165c2c2d71f69442",
+        "kinds": ["toolInput"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "e82c72c6b4bd7cc2",
+        "kinds": ["toolDone"]
+      },
+      {
+        "digest": "17abfe90eea2d788",
+        "kinds": ["write"]
+      },
+      {
+        "digest": "f67b37d79e27b3c1",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "a322f13862eea9ce",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "73898babd68e84e4",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "833104bd2df649ba",
+        "kinds": ["thinking", "delta"]
+      },
+      {
+        "digest": "4bc97fd579e2309b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e05fa219ab9398c6",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "390ae47951ea68a3",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "452d86220284e903",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "62f2f4912a3a5fa8",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b3b0044bd0932600",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "46e5f4857be1c2c7",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "2dc82a69fa58ddb9",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "f02aea2c922fc8fc",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "21f41fb52ad9a9a6",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "dbd13e4d7a493f33",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "9f650ecee62bdd08",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "8b2237c62d767aec",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "dd0110a0039ef47c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0e7a9866b99f4cd2",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "d46f00ab8b60ad9b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "7c53f8f7d4ecb3e1",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "af40b38edd0ab91b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "05ca3f122650d66a",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "01ed06e2683aa73b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b00937aa519f0c54",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "56d41de9f32602d3",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "bba3bed2d2826daa",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "02c175da51595e28",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ac37765278b01f70",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "8cbe10901df52810",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "5651b179f7122df7",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "7969bf59a0bbfb15",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "79d17ece7c2221d8",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "8cbe10901df52810",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b30638f139a4f7fd",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "6186b0e2ec03d291",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "69f8292b2e933e3b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "702c7e95c4f66af1",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "2ce06f6b229a664f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "79d17ece7c2221d8",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "458166e2f6fbedf2",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "d9304640b7e4e360",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "01ed06e2683aa73b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b00937aa519f0c54",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "512356a59cd71d8e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b32c223ceae46c15",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e08850ffcb2f6f55",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "78738fdc72d926e5",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "cd8bb5aa399cb78b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "400e6599a232706c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "3c1ea7e1295bc1e6",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "4bf83b12dc14fe72",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "d4f5c53a8cd7a108",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "5b7ca72291799c23",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "716a2b4addf8d22f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "a45f0be5cc280b38",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b1a65ae204c3a730",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "47f299a11f7156bd",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ea8d1839980c8ac3",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "8e02ca37f3660569",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "fc1cec10ec79eedd",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "837ff3e301cd0c45",
+        "kinds": ["text", "delta"]
+      },
+      {
+        "digest": "b844f2d3ffcf0094",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "f4d914dc52376116",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b474b7d91dd12118",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "72e2a02b7de9b893",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "12bbe5f0322ea53e",
+        "kinds": ["thinking", "tool"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "2eafa4984812dbc6",
+        "kinds": ["permission"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      }
+    ],
+    "goose/load-modes-model.json": [
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "fbd8b1cfd66777b9",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "5d164ef63aff49c6",
+        "kinds": ["thinking", "delta"]
+      },
+      {
+        "digest": "6aeb8fdd47cb83af",
+        "kinds": ["text", "tool"]
+      },
+      {
+        "digest": "2d1e9a34472d8b08",
+        "kinds": ["toolDone"]
+      },
+      {
+        "digest": "0f9f29a12b347f23",
+        "kinds": ["tool"]
+      },
+      {
+        "digest": "0c0747ccdc5ac103",
+        "kinds": ["toolDone"]
+      },
+      {
+        "digest": "36a626c0374cb8fb",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "eb96dfa134fc2ee8",
+        "kinds": ["thinking", "delta"]
+      },
+      {
+        "digest": "ac03a9862cac2397",
+        "kinds": ["text", "tool"]
+      },
+      {
+        "digest": "6aca585341567600",
+        "kinds": ["toolDone"]
+      },
+      {
+        "digest": "7372f7c9d0dd3095",
+        "kinds": ["tool"]
+      },
+      {
+        "digest": "83eff39815d7e3de",
+        "kinds": ["toolDone"]
+      },
+      {
+        "digest": "478cff3f1be63826",
+        "kinds": ["tool"]
+      },
+      {
+        "digest": "3ec9a15e56d1dbfe",
+        "kinds": ["toolDone"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "d57815347b7ab4f9",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "561e5d81514ec8e4",
+        "kinds": ["thinking", "delta"]
+      },
+      {
+        "digest": "13c80e12de74d65f",
+        "kinds": ["text", "tool"]
+      },
+      {
+        "digest": "5b2a3a8667195887",
+        "kinds": ["toolDone"]
+      },
+      {
+        "digest": "782ea2bff891925c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "3b0dd036168ed684",
+        "kinds": ["thinking", "tool"]
+      },
+      {
+        "digest": "d555027bf9a11c45",
+        "kinds": ["toolDone"]
+      },
+      {
+        "digest": "2070dd9bcd88bd40",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "5d89f6b0a9eb8e5f",
+        "kinds": ["thinking", "delta"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "e68941b967cb7a51",
+        "kinds": ["text", "delta"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "32164aa3b706e967",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "08685ebb2d02c950",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "18b5612957219c39",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "1ec42552bb64bf3c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c9ea6379a37ffaa7",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "8a51c36c2535e08b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "3c72fa953965e550",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "36b1c438950bebef",
+        "kinds": ["thinking", "delta"]
+      },
+      {
+        "digest": "0938dcee9b383207",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "9f9771d55c8ea88e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0e2ebff7509b72fb",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b273eaa9782aa2d6",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "a343e852a3ee536b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "3da5a07697d09090",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "3104c91c1a5a3538",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "1befdbf9e2e1b3e3",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c081544bda3e9058",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "78d296fd6aed78a8",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "2a3cb4e35551b976",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "1494b3be81ca5449",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "60ddb937d9e55ca1",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "771a5b476046a974",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "eb8f4fc3a3b8415b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "3104c91c1a5a3538",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "6e42d63bd7bb6271",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c420fa98b8345afb",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "bbdde24d2fd7013b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "db28a53bb50987e6",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "91edd9bbffd90c0f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "bdd562e74323ec7c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "7b7a911a9e963ab8",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "a999ea9538bbc4c3",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "55f99a77243e8482",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "08cf0ea5105246bd",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "53e151a0201da70d",
+        "kinds": ["text", "delta"]
+      },
+      {
+        "digest": "9e769420d60a0891",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "d6d1ddc2df3eeb9f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "293b974b3ed9517e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "7173025914fca6af",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ec2aa61b8a8d99a2",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b462e4f6cce55a5d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "47a7e918c7506e11",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ec240383c3b41b6e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0aa8787c0d25cb52",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "bbb24e5739314ebc",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "afc8ab8e34bf3de4",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "408e206589c78b8e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "52d3430799346083",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "eab6551ddabed4c3",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "f84ebf41247b891d",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "d8575fd4b40dc61e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "fd193de497505bab",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b9b43801f21f7279",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "9a227104e74511a6",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "849dead59eee973a",
+        "kinds": ["thinking", "delta"]
+      },
+      {
+        "digest": "e40af3a8b148051b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "a0b25a657717e52f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "3304e5d1486723ba",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "b22d39ec3c1ff246",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c3ff0bbc6d8fd3ed",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "32874963aaf4aadd",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ccb330fc49c4cf92",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "868627e8515f741e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "1e4129d61c912af3",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "43a9fbf7053f92db",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "bed1f4ad23eadf39",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "a0daa4dbf25796c3",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e1776248e965bfb4",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "8c5ceacb6e0ec192",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "199d7d9bfa099eb5",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "3eca7b537694cb86",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "7c74c6d08bfca963",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c8f8de0ec48d1d3f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "92168b56ca4979d2",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ddb203bd2153b22f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "481857a52fd4fed7",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "3304e5d1486723ba",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "fcbdd00a9b43eb08",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "7b43340868d37a73",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ba33531228557928",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "0d24567e320b9cc4",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e1a8624b2ebd9a9b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "f3a1bceb1195a8f2",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "f9f91b4f262a4790",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "81c6dea92674aeb7",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "ba6dc552980e5d2c",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "248d472e67ecb8d7",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "bf544fe546221483",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "7f3d3fd528fa4d46",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "a1903028fc620aa8",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "1666a76662087bc3",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "67397ba902372594",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "09f759d103ffaa33",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "460a6a499ea3966b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c77dd36d4c4412b7",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c8e2115381c19afb",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "936a5331f229ec32",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "5345e601461176f1",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "1324397c18fcedc7",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      }
+    ],
+    "mistral/cancel-config-options.json": [
+      {
+        "digest": "1650167371d502bb",
+        "kinds": ["write"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "d4749b9e3951e760",
+        "kinds": ["session", "write"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "2e09df59f6c61258",
+        "kinds": ["start", "delta"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "adcdbe51101fa9a9",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "2aac68bf7d6fde1e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c86ba67a35c2c78e",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "1897ea1a593ba166",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "fdcfad6f41f74d7f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "dd28ea8230bf5bce",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "81d95b958a8bc7bb",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "f8524f9945556c29",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "4b67562cec9c58ff",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "7786ba2d8a09d201",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "f50bd38a2906cb8a",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "396051d86dd2ae5b",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "919b2ef19f0120ec",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "e077e76a6e8b88d1",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "a63d26d805b1052f",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "c61cb94f7b576cfe",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "f80cf715f288f9a6",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "6f82b85a2a1e48f5",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "2231a88f85e6ba46",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "610c9a65c0944d60",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "85a31b18a40f72ec",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "4c9617af683b2751",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "115e486bb6d1b2d8",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "9f6d304842dc6672",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "2b4108c07b079983",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "9371293521230327",
+        "kinds": ["delta"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      }
+    ],
+    "mistral/error-invalid-key.json": [
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      }
+    ],
+    "mistral/full-turn.json": [
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "d34818bf3d5578f0",
+        "kinds": ["text", "tool", "permission"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      }
+    ],
+    "mistral/load-fork-reject.json": [
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "3701eed8904f5b2d",
+        "kinds": ["tool", "permission"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "4a92dcd367aba490",
+        "kinds": ["tool", "permission"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "6a0c0d5a28385759",
+        "kinds": ["tool", "permission"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "00cbd1f09361842a",
+        "kinds": ["tool", "permission"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "fa650a1fdd0d26d6",
+        "kinds": ["tool", "permission"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "7825dcf020c513c3",
+        "kinds": ["tool", "permission"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "ea7c58c51085e8e3",
+        "kinds": ["tool", "permission"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "6892fe4ef5092fa4",
+        "kinds": ["tool", "permission"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "704abe225cc04404",
+        "kinds": ["tool", "permission"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "9fb3eb747ed220a5",
+        "kinds": ["tool", "permission"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "e8c5da4499cbc04e",
+        "kinds": ["tool", "permission"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "42e6065a0386ad0e",
+        "kinds": ["tool", "permission"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "103e5e488e266761",
+        "kinds": ["tool", "permission"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "6798c3fc8a6975c9",
+        "kinds": ["tool", "permission"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      }
+    ],
+    "mistral/question-elicitation.json": [
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "2353e528687f5cb5",
+        "kinds": ["question"]
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      }
+    ],
+    "mistral/todo-subagent.json": [
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      },
+      {
+        "digest": "eef46741adfc3a9f",
+        "kinds": []
+      }
+    ]
+  }
+}

@@ -2,10 +2,10 @@
 // token: their tags (v0.3.0 annotated, to unwrap), the archives of their commits (by a redirect, as codeload),
 // the license GitHub detects, the releases, their files and their attestations. They hold the test plugins of
 // tests/fake/plugins.mjs, by their name: `*-private` is private, `*-trap` is booby-trapped (a license that is not
-// its file's, a symbolic link), `*-bin` runs a program built for each system, attested but for Linux; the others
-// are valid.
+// its file's, a symbolic link), `*-bin` runs a program built for each system, attested but for Linux, `*-js` is a
+// run.js plugin (its bundle committed, ESC-323), `*-node` runs `node` (refused to a third party); the others are valid.
 import { randomBytes } from 'node:crypto';
-import { attestation, pluginFiles, sha256, tarball } from './plugins.mjs';
+import { attestation, monorepoFiles, pluginFiles, sha256, tarball, treeOf } from './plugins.mjs';
 
 const code = new Map(); // full_name -> { id, private, tags: { name: { sha, annotated } }, commits: { sha: { gz, license } }, releases: { tag: [asset] } }
 const attestations = new Map(); // sha256 -> [attestation]
@@ -16,20 +16,33 @@ let nextAsset = 1;
 export function pushTag(fullName, tag, { extra = {}, manifest = {} } = {}) {
   const repo = code.get(fullName);
   const name = fullName.split('/')[1];
+  if (name.endsWith('-mono') || name.endsWith('-app')) return pushMono(fullName, tag);
   const version = tag.replace(/^v/, '');
   const sha = sha256(`${fullName}@${tag}@${Date.now()}@${Math.random()}`).slice(0, 40);
   const trap = name.endsWith('-trap');
   const bin = name.endsWith('-bin');
+  const js = name.endsWith('-js');
+  const wasm = name.endsWith('-wasm');
+  const node = name.endsWith('-node');
   const files = pluginFiles(fullName, {
     manifest: {
       version,
       name: { en: name, fr: name },
       ...(bin ? { run: { command: 'bin/plugin', windows: 'bin/plugin.exe' } } : {}),
+      ...(js ? { run: { js: 'dist/plugin.mjs' } } : {}),
+      ...(wasm ? { run: { wasm: 'Cargo.toml' } } : {}),
+      ...(node ? { run: { command: 'node' } } : {}),
       ...manifest,
     },
-    files: { ...(trap ? { 'docs/key': { symlink: '/home/me/.ssh/id_ed25519' } } : {}), ...extra },
+    files: {
+      ...(trap ? { 'docs/key': { symlink: '/home/me/.ssh/id_ed25519' } } : {}),
+      ...(js ? { 'dist/plugin.mjs': `console.log(${JSON.stringify(fullName)});\n` } : {}),
+      ...(wasm ? { 'Cargo.toml': `[package]\nname = "x"\n# ${fullName}\n`, 'Cargo.lock': 'version = 4\n', 'src/lib.rs': '' } : {}),
+      ...extra,
+    },
   });
   repo.commits[sha] = {
+    files,
     gz: tarball(files, { commit: sha, top: `${fullName.replace('/', '-')}-${sha.slice(0, 7)}` }),
     license: trap ? 'Apache-2.0' : 'MIT',
   };
@@ -43,10 +56,45 @@ export function pushTag(fullName, tag, { extra = {}, manifest = {} } = {}) {
   return sha;
 }
 
-/** A repository the App was installed on: two tags, v0.2.4 and v0.3.0. */
+/**
+ * A tag of a `*-mono` repository (ESC-313): two plugins, `plugins/ntfy` and `plugins/slack`, and the traps of
+ * `monorepoFiles`; the tag gives its plugin's version (`plugins/ntfy/v0.4.0`, `slack@0.3.0`).
+ */
+function pushMono(fullName, tag) {
+  const repo = code.get(fullName);
+  const app = fullName.endsWith('-app');
+  repo.versions ??= app ? { ntfy: '1.0.0', slack: '1.0.0' } : { ntfy: '0.3.0', slack: '0.2.0' };
+  const m = /^(?:plugins\/(ntfy-moved|ntfy|slack)\/v|(ntfy|slack)@|(ntfy|slack)-v)(.+)$/.exec(tag);
+  const which = m && (m[1] ?? m[2] ?? m[3]);
+  if (m) repo.versions[which === 'ntfy-moved' ? 'moved' : which] = m[4];
+  const sha = sha256(`${fullName}@${tag}@${Date.now()}@${Math.random()}`).slice(0, 40);
+  const files = monorepoFiles(fullName, repo.versions, { firstParty: app });
+  repo.commits[sha] = {
+    gz: tarball(files, { commit: sha, top: `${fullName.replace('/', '-')}-${sha.slice(0, 7)}` }),
+    files,
+    license: 'MIT',
+  };
+  repo.tags[tag] = { sha, annotated: false };
+  return sha;
+}
+
+/** A repository the App was installed on: two tags, v0.2.4 and v0.3.0 (`*-mono`: one of each plugin). */
 export function seedRepo(r) {
   if (code.has(r.full_name)) return;
   code.set(r.full_name, { id: r.id, private: r.private, tags: {}, commits: {}, releases: {} });
+  if (r.full_name.endsWith('-app')) {
+    // The app's repository (ESC-317, as STORE_FIRST_PARTY_REPO names it in the e2e): its first-party plugins in
+    // plugins/<name>/, their tags plugins/<name>/v1.0.0; v2.1.0 is the app's own release, no plugin's.
+    const sha = pushMono(r.full_name, 'plugins/ntfy/v1.0.0');
+    code.get(r.full_name).tags['plugins/slack/v1.0.0'] = { sha, annotated: false };
+    code.get(r.full_name).tags['v2.1.0'] = { sha, annotated: false };
+    return;
+  }
+  if (r.full_name.endsWith('-mono')) {
+    const sha = pushMono(r.full_name, 'plugins/ntfy/v0.3.0');
+    code.get(r.full_name).tags['slack@0.2.0'] = { sha, annotated: false };
+    return;
+  }
   pushTag(r.full_name, 'v0.2.4');
   pushTag(r.full_name, 'v0.3.0');
 }
@@ -106,6 +154,22 @@ export function serveRepos(req, res, { path, q, port, installations, json, redir
   }
   m = rest.match(/^\/git\/tags\/tag-([0-9a-f]+)$/);
   if (m) return (json(res, 200, { object: { type: 'commit', sha: m[1] }, tagger: { date: '2026-10-25T09:00:00Z' } }), true);
+  m = rest.match(/^\/git\/trees\/([0-9a-f]+)$/);
+  if (m && repo.commits[m[1]]) {
+    const { entries } = treeOf(repo.commits[m[1]].files);
+    return (json(res, 200, { sha: m[1], tree: entries, truncated: false }), true);
+  }
+  m = rest.match(/^\/git\/blobs\/([0-9a-f]+)$/);
+  if (m) {
+    for (const c of Object.values(repo.commits)) {
+      const b = treeOf(c.files).blobs.get(m[1]);
+      if (b) {
+        res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': b.length });
+        return (res.end(b), true);
+      }
+    }
+    return (json(res, 404, { message: 'Not Found' }), true);
+  }
   m = rest.match(/^\/tarball\/([0-9a-f]+)$/);
   if (m && repo.commits[m[1]]) return (redirect(res, `/_codeload/${encodeURIComponent(fullName)}/${m[1]}`), true);
   if (rest === '/license') {

@@ -37,10 +37,37 @@ const EVENTS = [
   'tickets_imported',
   'account_created',
   'remote_control_enabled',
+  'dictation_used',
+  'voice_conversation',
+  'plugin_installed',
+  'pr_opened',
+  'pr_merged',
+  'ci_fix_started',
+  'pr_review_started',
 ];
 /** The values some props take, written on the page as `value`. */
-const VALUES = ['user', 'autopilot', 'fetch', 'pull', 'push', 'jira', 'trello', 'github', 'linear', 'agent', 'project', 'global'];
-const PROPS = ['worktree', 'by', 'op', 'service', 'from'];
+const VALUES = [
+  'user',
+  'autopilot',
+  'fetch',
+  'pull',
+  'push',
+  'jira',
+  'trello',
+  'github',
+  'linear',
+  'gitlab',
+  'clickup',
+  'azure',
+  'bitbucket',
+  'gitea',
+  'other',
+  'agent',
+  'ticket',
+  'project',
+  'global',
+];
+const PROPS = ['worktree', 'by', 'op', 'service', 'from', 'from_store', 'forge'];
 
 const source = (lang: Lang) => readFileSync(new URL(`../${privacySource(lang)}`, import.meta.url), 'utf8');
 const render = (lang: Lang) => renderDoc(source(lang), { lang, link: (p) => p, callouts: CATALOGS[lang].docs.callouts });
@@ -86,6 +113,39 @@ describe('the privacy page’s Markdown', () => {
       for (const p of PROPS) expect(text, `${lang}: ${p}`).toContain(`\`${p}\``);
       for (const v of VALUES) expect(text, `${lang}: ${v}`).toContain(`\`${v}\``);
     }
+  });
+
+  it('lists exactly the events of the app’s code', () => {
+    const code = readFileSync(new URL('../../src-tauri/src/telemetry.rs', import.meta.url), 'utf8');
+    const names = [...code.matchAll(/Event::\w+(?: \{ \.\. \})? => "(\w+)",/g)].map((m) => m[1]);
+    expect(names.length).toBeGreaterThan(20);
+    expect([...names].sort()).toEqual([...EVENTS].sort());
+    for (const lang of LANGS) {
+      const listed = [...source(lang).matchAll(/^\| `(\w+)` \|/gm)].map((m) => m[1]);
+      expect([...listed].sort(), lang).toEqual([...names].sort());
+    }
+  });
+
+  it('says that nothing of the code hosts goes to Escouade, and where the tokens and the calls go', () => {
+    for (const [lang, facts] of [
+      [
+        'fr',
+        [
+          '**rien ne part vers les serveurs d’Escouade**',
+          '**Tes jetons restent sur ta machine**',
+          '**Les appels vont directement de l’app à l’hébergeur**',
+        ],
+      ],
+      [
+        'en',
+        [
+          '**nothing goes to Escouade’s servers**',
+          '**Your tokens stay on your machine**',
+          '**The calls go straight from the app to the host**',
+        ],
+      ],
+    ] as const)
+      for (const fact of facts) expect(source(lang), lang).toContain(fact);
   });
 
   it('names the file that holds the install id, the server and the source code', () => {

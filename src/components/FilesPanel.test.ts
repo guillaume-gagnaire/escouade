@@ -54,6 +54,36 @@ describe('FilesPanel', () => {
     expect(backend.called('git_files').length).toBe(before);
   });
 
+  it('keeps the empty text in the DOM while a second, empty read is pending (no blink)', async () => {
+    let calls = 0;
+    fakeBackend({ git_files: () => (++calls === 1 ? [] : new Promise((r) => setTimeout(() => r([]), 400))) });
+    render(FilesPanel, { project: project(), agent: app.agents.a1 });
+    expect(await screen.findByText('Aucun fichier modifié par cet agent.')).toBeInTheDocument();
+    app.gitTick++;
+    await new Promise((r) => setTimeout(r, 250)); // the second read is in flight
+    expect(calls).toBe(2);
+    expect(screen.getByText('Aucun fichier modifié par cet agent.')).toBeInTheDocument();
+  });
+
+  it('keeps the list in the DOM while a second read is pending, in both scopes', async () => {
+    let calls = 0;
+    fakeBackend({
+      git_files: () =>
+        ++calls % 2 === 1 ? [change('src/auth.ts', 'a1')] : new Promise((r) => setTimeout(() => r([change('src/auth.ts', 'a1')]), 400)),
+    });
+    render(FilesPanel, { project: project(), agent: app.agents.a1 });
+    const el = await screen.findByText('auth.ts');
+    app.gitTick++;
+    await new Promise((r) => setTimeout(r, 250));
+    expect(screen.getByText('auth.ts')).toBe(el);
+    await userEvent.click(screen.getByRole('button', { name: 'Tout le projet' }));
+    await screen.findByText('auth.ts');
+    await new Promise((r) => setTimeout(r, 600));
+    app.gitTick++;
+    await new Promise((r) => setTimeout(r, 250));
+    expect(screen.getByText('auth.ts')).toBeInTheDocument();
+  });
+
   it('ignores a slow response superseded by a newer one', async () => {
     let calls = 0;
     fakeBackend({

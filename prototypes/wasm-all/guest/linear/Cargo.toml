@@ -1,0 +1,18 @@
+[package]
+name = "linear"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# plugins/linear as a module: its one source file, unchanged but for the export of the turn
+# (`node prepare.mjs`).
+[lib]
+path = "generated/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+escouade-plugin-kit = { path = "../kit" }
+escouade-turn = { path = "../escouade-turn" }
+reqwest = { path = "../reqwest" }
+serde_json = "1"
+anyhow = "1"

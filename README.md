@@ -42,7 +42,8 @@ Ce qui change d'une version à l'autre est dans le [journal des versions](CHANGE
 
 ### Livrer
 
-- **Livrer** : un ticket validé passe d'abord les tests du Kanban s'ils sont réglés, puis il est commité et part comme le règle le projet : merge dans la branche cible (merge commit, squash ou rebase), push et pull request (par `gh`, avec la description, l'avancement et les critères ; sinon la page GitHub de la pull request s'ouvre pré-remplie), push de la branche, ou branche gardée. Un conflit de fusion se confie à l'agent, le worktree est supprimé une fois validé si tu le règles, et les fichiers que git ignore (`.env*`) ne sont jamais commités, poussés ni mergés.
+- **Livrer** : un ticket validé passe d'abord les tests du Kanban s'ils sont réglés, puis il est commité et part comme le règle le projet : merge dans la branche cible (merge commit, squash ou rebase), pull request (avec la description, l'avancement et les critères), push de la branche, ou branche gardée. Un conflit de fusion se confie à l'agent, le worktree est supprimé une fois validé si tu le règles, et les fichiers que git ignore (`.env*`) ne sont jamais commités, poussés ni mergés.
+- **Hébergeurs de code** : GitHub, GitLab, Bitbucket Cloud, Gitea, Forgejo et Azure DevOps, livrés en plugins. Escouade ouvre les PR (« MR » sur GitLab) des agents et des tickets, les suit dans la colonne « En revue » jusqu'au merge, donne à un agent la CI en échec ou les retours à corriger, liste les PR du projet, fait relire un diff par un agent (rien ne se publie sans toi), et dit dans quels environnements tourne un ticket mergé. GitHub est essayé en lecture sur le vrai service ; le reste a tourné contre de faux serveurs, d'après la documentation de chacun. Tes jetons restent sur ta machine, et les appels vont de l'app à l'hébergeur : voir [les hébergeurs de code](https://escouade.dev/docs/code-hosts/).
 
 ### Piloter
 
@@ -266,6 +267,6 @@ Escouade est gratuite et open source. Si elle t'est utile, tu peux offrir un caf
 
 ## Licence
 
-GPL-3.0 ou ultérieure (`GPL-3.0-or-later`), voir [LICENSE](LICENSE).
+GPL-3.0 ou ultérieure (`GPL-3.0-or-later`), voir [LICENSE](LICENSE). Le SDK des plugins (`sdk/plugin`) et les crates du kit Rust (`crates/escouade-plugin-protocol`, `crates/escouade-plugin-kit`, `crates/escouade-acp`) sont sous licence MIT, pour que chaque auteur de plugin choisisse la sienne.
 
 Escouade est un logiciel libre : tu peux le redistribuer et le modifier selon les termes de la licence publique générale GNU, publiée par la Free Software Foundation, version 3 ou (à ton choix) toute version ultérieure. Il est distribué dans l'espoir qu'il sera utile, mais sans aucune garantie. Les versions jusqu'à la 1.7.7 comprise ont été publiées sous licence MIT.

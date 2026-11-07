@@ -212,7 +212,9 @@ async fn the_reading_tools_say_they_only_read_and_what_they_take() {
             t.name
         );
         assert_eq!(v["annotations"]["readOnlyHint"], true, "{}: {v}", t.name);
-        assert_eq!(v["annotations"]["openWorldHint"], false, "{}: {v}", t.name);
+        // The pull requests are read from the code host, and only they.
+        let host = matches!(&*t.name, "list_pull_requests" | "get_pull_request");
+        assert_eq!(v["annotations"]["openWorldHint"], host, "{}: {v}", t.name);
     }
     let schema = |name: &str| {
         let t = tools.iter().find(|t| t.name == name).unwrap();
@@ -300,7 +302,7 @@ async fn the_projects_are_listed_with_their_branch_agents_and_tickets_by_column(
             "branch": "main",
             // The archived one left out.
             "agents": 1,
-            "tickets": { "todo": 2, "doing": 1, "review": 0, "done": 1 },
+            "tickets": { "todo": 2, "doing": 1, "review": 0, "inReview": 0, "done": 1 },
             "remoteControl": false,
             "remoteControlAll": false,
             // Its harness, and what the tools take for it (ESC-248): no model told yet.
@@ -319,7 +321,7 @@ async fn the_projects_are_listed_with_their_branch_agents_and_tickets_by_column(
         (
             &json!(other.id),
             &json!(0),
-            &json!({ "todo": 0, "doing": 0, "review": 0, "done": 0 })
+            &json!({ "todo": 0, "doing": 0, "review": 0, "inReview": 0, "done": 0 })
         )
     );
     // The call is in the activity log.
@@ -658,7 +660,7 @@ async fn a_ticket_is_read_whole_by_its_key_in_any_case_or_its_id() {
             after: vec![first.id.clone()],
             progress: vec!["Fichier écrit".into()],
             external: Some(ExternalRef {
-                service: Service::Jira,
+                service: Service::JIRA,
                 id: "10042".into(),
                 key: "ATL-12".into(),
                 container: "ATL".into(),
@@ -701,6 +703,7 @@ async fn a_ticket_is_read_whole_by_its_key_in_any_case_or_its_id() {
         "conflict": false,
         "step": null,
         "outcome": null,
+        "pr": null,
     });
     assert_eq!(
         read(&c, "get_ticket", json!({ "ticket": "dem-2" })).await,
@@ -1283,6 +1286,28 @@ async fn the_usage_gives_each_account_its_windows_and_the_autopilots_pause() {
     h.core.update_usage(|_| {});
     let usage = read(&c, "get_usage", json!({})).await;
     assert_eq!(currents(&usage), (json!(false), json!(true)));
+    // Pro on a Max plan without a 5-hour window (ESC-312): its meters in the server's order, Fable's
+    // week with its scope, and no 5-hour window left of the reading before.
+    let body = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../tests/fixtures/claude-usage/max-no-five-hour.json"),
+    )
+    .unwrap();
+    h.core.record_usage(
+        "pro",
+        crate::usage::reading_of(&serde_json::from_str(&body).unwrap()),
+    );
+    let usage = read(&c, "get_usage", json!({})).await;
+    let pro = &usage["accounts"][1];
+    assert_eq!(
+        pro["meters"],
+        json!([
+            { "minutes": 10080, "pct": 47.0, "resetsAt": 1_793_829_600_147i64 },
+            { "minutes": 10080, "pct": 0.0, "resetsAt": 1_793_829_600_000i64, "model": "Fable" },
+        ])
+    );
+    assert_eq!(pro["fiveHour"], Value::Null);
+    assert_eq!(pro["sevenDay"]["pct"], 47.0);
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }

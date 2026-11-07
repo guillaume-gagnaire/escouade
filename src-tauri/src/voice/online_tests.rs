@@ -3,6 +3,8 @@
 
 use super::*;
 use parking_lot::Mutex;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// A request as the fake server got it.
@@ -170,10 +172,30 @@ fn no_catalog() -> crate::voice::online_catalog::CatalogStore {
 
 pub(crate) const KEY: &str = "sk-test-0123456789abcdef";
 
+/// The dictation, as its plugin serves it.
+async fn transcribe(
+    s: &Spec,
+    samples: &[f32],
+    language: &str,
+    cancel: &Arc<AtomicBool>,
+) -> std::result::Result<String, OnlineError> {
+    let (s, samples, language, cancel) = (
+        s.clone(),
+        samples.to_vec(),
+        language.to_string(),
+        cancel.clone(),
+    );
+    tokio::task::spawn_blocking(move || {
+        crate::voice::service::of(s.provider).transcribe(&s, &samples, &language, &cancel)
+    })
+    .await
+    .unwrap()
+}
+
 fn spec(p: Provider, base: &str) -> Spec {
     Spec {
         base: base.into(),
-        ..Spec::new(p, KEY.into(), reqwest::Client::new())
+        ..Spec::new(p, KEY.into())
     }
 }
 
@@ -185,7 +207,13 @@ fn second() -> Vec<f32> {
 }
 
 async fn run(p: Provider, base: &str, language: &str) -> std::result::Result<String, OnlineError> {
-    transcribe(&spec(p, base), &second(), language, &AtomicBool::new(false)).await
+    transcribe(
+        &spec(p, base),
+        &second(),
+        language,
+        &Arc::new(AtomicBool::new(false)),
+    )
+    .await
 }
 
 fn assert_wav(body: &[u8]) {
@@ -228,17 +256,17 @@ async fn openai_like(p: Provider, path: &str) {
     assert_eq!(got.lock()[1].field("language"), None);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn openai_transcribes_the_sound() {
     openai_like(Provider::OpenAi, "").await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn groq_transcribes_the_sound_as_openai_does() {
     openai_like(Provider::Groq, "/openai").await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn mistral_transcribes_the_sound_with_voxtral() {
     openai_like(Provider::Mistral, "").await;
     let (url, got) = serve(200, r#"{"model":"voxtral-mini-2507","text":"Bonjour","language":"fr","segments":[],"usage":{}}"#).await;
@@ -246,7 +274,7 @@ async fn mistral_transcribes_the_sound_with_voxtral() {
     assert_eq!(got.lock()[0].field("response_format"), None);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn elevenlabs_transcribes_the_sound_with_scribe() {
     let (url, got) = serve(
         200,
@@ -268,7 +296,7 @@ async fn elevenlabs_transcribes_the_sound_with_scribe() {
     assert_eq!(got.lock()[1].field("language_code"), None);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn deepgram_transcribes_the_raw_sound() {
     let (url, got) = serve(
         200,
@@ -301,18 +329,18 @@ fn refusal(p: Provider) -> (u16, String) {
         Provider::Groq => (401, r#"{"error":{"message":"Invalid API Key","type":"invalid_request_error","code":"invalid_api_key"}}"#.into()),
         Provider::Mistral => (401, r#"{"message":"Unauthorized","request_id":"x"}"#.into()),
         Provider::ElevenLabs => (401, r#"{"detail":{"status":"invalid_api_key","message":"Invalid API key"}}"#.into()),
-        Provider::Deepgram => (401, r#"{"err_code":"INVALID_AUTH","err_msg":"Invalid credentials.","request_id":"x"}"#.into()),
+        _ => (401, r#"{"err_code":"INVALID_AUTH","err_msg":"Invalid credentials.","request_id":"x"}"#.into()),
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_key_refused_says_so_for_every_service() {
     for p in PROVIDERS {
         let (status, body) = refusal(p);
         let (url, _) = serve(status, &body).await;
         let e = run(p, &url, "fr").await.unwrap_err();
         assert_eq!(e, OnlineError::KeyRefused(p), "{p:?}");
-        let m = e.message(crate::i18n::Lang::Fr);
+        let m = e.message(crate::i18n::kit(crate::i18n::Lang::Fr));
         assert!(m.contains(p.label()) && m.contains("refuse la clé"), "{m}");
         assert!(!m.contains(KEY));
     }
@@ -323,7 +351,7 @@ async fn a_key_refused_says_so_for_every_service() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn the_network_cut_says_so_for_every_service() {
     for p in PROVIDERS {
         let e = run(p, &nowhere(), "fr").await.unwrap_err();
@@ -331,7 +359,7 @@ async fn the_network_cut_says_so_for_every_service() {
             panic!("{p:?}: {e:?}");
         };
         assert_eq!(*q, p);
-        let m = e.message(crate::i18n::Lang::En);
+        let m = e.message(crate::i18n::kit(crate::i18n::Lang::En));
         assert!(
             m.starts_with(&format!("{} does not answer", p.label())),
             "{m}"
@@ -340,7 +368,7 @@ async fn the_network_cut_says_so_for_every_service() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn another_error_tells_what_the_service_said_without_the_key() {
     let body = format!(r#"{{"error":{{"message":"Audio too short for {KEY}"}}}}"#);
     let (url, _) = serve(400, &body).await;
@@ -356,33 +384,7 @@ async fn another_error_tells_what_the_service_said_without_the_key() {
     ));
 }
 
-#[tokio::test]
-async fn the_request_goes_through_the_proxy_of_the_settings() {
-    // The fake server stands for the proxy: asked for the service's full address, it answers.
-    let (proxy, got) = serve(200, r#"{"text":"ok"}"#).await;
-    let settings = crate::model::Settings {
-        proxy_url: proxy,
-        ..Default::default()
-    };
-    let s = Spec {
-        base: "http://api.openai.example.invalid".into(),
-        ..Spec::new(
-            Provider::OpenAi,
-            KEY.into(),
-            super::super::models::client(&settings).unwrap(),
-        )
-    };
-    let text = transcribe(&s, &second(), "fr", &AtomicBool::new(false))
-        .await
-        .unwrap();
-    assert_eq!(text, "ok");
-    assert_eq!(
-        got.lock()[0].line,
-        "POST http://api.openai.example.invalid/v1/audio/transcriptions HTTP/1.1"
-    );
-}
-
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_cancel_gives_up_the_request() {
     // A server that never answers.
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -407,7 +409,7 @@ async fn a_cancel_gives_up_the_request() {
     assert!(started.elapsed() < Duration::from_secs(5));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn the_transcriber_blocks_on_a_thread_of_its_own() {
     let (url, _) = serve(200, r#"{"text":"Bonjour"}"#).await;
     let t = Online(spec(Provider::Groq, &url));
@@ -448,7 +450,10 @@ fn the_key_never_shows_in_the_spec_debug_nor_a_redacted_text() {
     let s = spec(Provider::OpenAi, "http://x");
     assert!(!format!("{s:?}").contains(KEY));
     assert_eq!(redact(&format!("bad {KEY}!"), KEY), "bad ***!");
-    assert_eq!(Provider::find("deepgram"), Some(Provider::Deepgram));
+    assert_eq!(
+        crate::voice::online::find("deepgram"),
+        Some(Provider::Deepgram)
+    );
     assert_eq!(Provider::ElevenLabs.entry(), "dictation-elevenlabs");
 }
 
@@ -471,26 +476,14 @@ fn the_key_is_kept_in_the_keychain_and_only_there() {
     let spec = spec_of(&settings, &store, &no_catalog()).unwrap().unwrap();
     assert_eq!((spec.provider, spec.key.as_str()), (Provider::Mistral, KEY));
     assert_eq!(spec.base, "https://api.mistral.ai");
-    // « Transcription en temps réel », on by default (ESC-136): its model of its own, and the network settings.
+    // « Transcription en temps réel », on by default (ESC-136): its model of its own.
     assert_eq!(
         spec.live.as_deref(),
         Some("voxtral-mini-transcribe-realtime-2602")
     );
-    assert_eq!(spec.net, Net::of(&settings));
-    settings.proxy_url = " http://proxy.corp:8080 ".into();
-    settings.no_proxy = "localhost".into();
-    settings.insecure_tls = true;
     settings.voice.online_live.insert("mistral".into(), false);
     let spec = spec_of(&settings, &store, &no_catalog()).unwrap().unwrap();
     assert_eq!(spec.live, None, "unticked: each sentence whole");
-    assert_eq!(
-        spec.net,
-        Net {
-            proxy: "http://proxy.corp:8080".into(),
-            no_proxy: "localhost".into(),
-            insecure: true
-        }
-    );
     // Groq offers none: never streamed.
     save_key(&store, "groq", KEY).unwrap();
     settings.voice.online_service = "groq".into();
@@ -538,16 +531,16 @@ fn a_keychain_that_refuses_the_key_leaves_it_unsaved_and_says_so_without_it() {
 /// The real ElevenLabs (Scribe), with the user's key given to this process only
 /// (`ELEVENLABS_API_KEY`), on a few seconds of French: run by hand, never in CI, never with the
 /// key written anywhere. `ESC110_WAV`: the sound to send.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore]
 async fn real_elevenlabs() {
     let key = std::env::var("ELEVENLABS_API_KEY").expect("ELEVENLABS_API_KEY");
     let wav = std::env::var("ESC110_WAV").expect("ESC110_WAV");
     let (samples, rate) = crate::voice::source::read_wav(Path::new(&wav)).unwrap();
     let samples = crate::voice::audio::resample(&samples, rate, 16_000);
-    let s = Spec::new(Provider::ElevenLabs, key, reqwest::Client::new());
+    let s = Spec::new(Provider::ElevenLabs, key);
     let started = std::time::Instant::now();
-    let text = transcribe(&s, &samples, "fr", &AtomicBool::new(false)).await;
+    let text = transcribe(&s, &samples, "fr", &Arc::new(AtomicBool::new(false))).await;
     println!(
         "{:.1} s of sound, answered in {} ms: {:?}",
         samples.len() as f32 / 16_000.0,
@@ -556,12 +549,8 @@ async fn real_elevenlabs() {
     );
     assert!(!text.unwrap().is_empty());
     // A wrong key: refused.
-    let s = Spec::new(
-        Provider::ElevenLabs,
-        "not-a-key-0000".into(),
-        reqwest::Client::new(),
-    );
-    let e = transcribe(&s, &samples, "fr", &AtomicBool::new(false)).await;
+    let s = Spec::new(Provider::ElevenLabs, "not-a-key-0000".into());
+    let e = transcribe(&s, &samples, "fr", &Arc::new(AtomicBool::new(false))).await;
     println!("wrong key: {e:?}");
     assert_eq!(
         e.unwrap_err(),

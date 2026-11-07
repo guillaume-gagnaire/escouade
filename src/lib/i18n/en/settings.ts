@@ -117,6 +117,7 @@ export default defineZone('settings', {
     },
     states: {
       absent: 'Not found',
+      missing: '{id} (harness missing)',
       ready: 'Ready',
       notConnected: 'No account',
       tooOld: 'Too old',
@@ -150,6 +151,12 @@ export default defineZone('settings', {
     idleStop: 'Stop idle agent processes after',
     idleStopHint: 'minutes, 0 = never',
     idleStopLabel: 'Stop idle agent processes after (minutes)',
+    midTurnDelay: 'Delay before sending during a turn',
+    midTurnDelayDesc:
+      'A message sent while an agent works waits this long: you can edit or cancel it until then. Cursor and OpenCode keep it until the end of the turn, whatever this setting.',
+    midTurnDelayOff: 'Off',
+    /** `{s}`: seconds. */
+    midTurnDelaySecs: '{s} s',
     terminalView: 'New agents’ view',
     terminalViewDesc:
       'Escouade: Escouade’s conversation. Harness terminal: the harness’s own interface (Claude Code’s…), in a terminal. Each agent switches views from its header; ticket agents, and those of a harness with no terminal view, stay in Escouade’s view.',
@@ -210,6 +217,17 @@ export default defineZone('settings', {
     done: 'Finished tasks',
     errors: 'Errors',
     tickets: 'Tickets (ready to review, blocked)',
+    hosts: 'Pull requests and deployments',
+    hostsNote:
+      'Escouade tells these when it reads again what it follows: the PRs of the tickets in review, those of the agent shown, the project’s while their view or the overview is open. A type turned off says nothing more.',
+    prCiFailed: 'CI failed',
+    prChanges: 'Changes requested',
+    prApproved: 'PR approved',
+    prMerged: 'PR merged',
+    prConflict: 'Conflict',
+    prReview: 'Review requested',
+    deployOk: 'Deployment to production succeeded',
+    deployFailed: 'Deployment failed',
     channels: 'Channels',
     system: '{os} notifications when the app is not in the foreground',
     systemLabel: 'System notifications',
@@ -373,6 +391,14 @@ export default defineZone('settings', {
     copyDesc: 'Only files git ignores, never committed. One pattern per line: .env* at the root, **/.env* everywhere.',
     commit: 'Commit',
     commitDesc: 'Direct: Escouade suggests a message, you review it, and you commit yourself.',
+    pagesOpen: 'Open the launches’ pages',
+    pagesOpenDesc:
+      'When “▶ Test” is ready, the page opens by itself. In the agent, it runs apart: neither Escouade’s commands nor your cookies.',
+    pagesOpens: {
+      agent: 'In the agent',
+      window: 'In a separate window',
+      system: 'In the system browser',
+    },
     commitModes: {
       agent: 'Written by the agent',
       direct: 'Direct, with a suggested message',

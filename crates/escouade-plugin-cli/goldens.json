@@ -1,0 +1,19 @@
+{
+  "engine": "fede6ced36c3edc8fd37a05ca0aa9dd5eb54f89ce9921d3b7423f72e61da74cf",
+  "prelude": "85b7eb1e96c2bbe836907d041baf61234f872cb9542a95034469e94329da6871",
+  "plugins": {
+    "team-rules": {
+      "bundle": "bfdc1f9e18ecddcf381b31ea56c53293ec68859486c077f129d25fae2d16c394",
+      "module": "37c4418fe9b09c1973db7c2abe4edecd40f35255590dde7de008c7cf8d679959"
+    },
+    "slack": {
+      "bundle": "95f4fa023f30f03c3a34ff21b78eb5d31a02725104b8cab35d23bb89b8ba6f84",
+      "module": "262cca50b7bfcb70866166c07d055f2ad22a988e1cee78fbc55a1cab0b941f00"
+    }
+  },
+  "rust": {
+    "canon": "4d3e106abad9ae5683b33129dca6a943b3785c2c31e3fee4b92f4f98f692db11",
+    "lock": "550da6b035c7ff5382bf06bbaea806db1d037320ee061b2357ec7f2a617a293f",
+    "module": "538b34fd334aada1a2f2a1c86fdd15b232c7d8cc31706bf7e7ddf079068e4bfc"
+  }
+}

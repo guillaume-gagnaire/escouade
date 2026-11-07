@@ -1,0 +1,4 @@
+Running tests
+FAIL src/login.test.ts
+  ✕ rejects a wrong password (12 ms)
+Tests: 1 failed, 8 passed

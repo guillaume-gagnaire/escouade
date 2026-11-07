@@ -1,0 +1,35 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.acp",
+  "name": "ACP",
+  "version": "2.2.0",
+  "description": {
+    "fr": "Les harness qui parlent ACP (Agent Client Protocol), décrits par un plugin sans code : Escouade les lance, leur parle et montre leur conversation.",
+    "en": "The harnesses that speak ACP (Agent Client Protocol), described by a plugin without code: Escouade launches them, speaks to them and shows their conversation."
+  },
+  "author": {
+    "name": "Escouade",
+    "url": "https://escouade.dev"
+  },
+  "license": "GPL-3.0-or-later",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/acp",
+  "escouade": {
+    "api": "1",
+    "min": "2.2.0"
+  },
+  "run": {
+    "wasm": "Cargo.toml"
+  },
+  "permissions": {
+    "files": [
+      { "root": "agent", "access": "write" },
+      { "root": "agentRepo", "access": "read" }
+    ]
+  },
+  "limits": {
+    "fileBytes": 4194304,
+    "memoryBytes": 268435456,
+    "turnSeconds": 10
+  },
+  "store": { "categories": ["harness"] }
+}

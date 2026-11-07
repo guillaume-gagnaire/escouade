@@ -49,6 +49,19 @@ describe('AccountsPanel', () => {
     expect(screen.getAllByText('en cours')).toHaveLength(1);
   });
 
+  it('says how old a reading is once what it shows may no longer be true', () => {
+    const at = { pro: app.now - 2 * 3_600_000, team: app.now - 5 * 60_000 } as Record<string, number>;
+    app.usage = {
+      ...app.usage,
+      accounts: app.usage.accounts.map((a) => ({ ...a, updatedAt: at[a.id] ?? a.updatedAt })),
+    };
+    render(AccountsPanel, { onclose: () => {} });
+    expect(group('Pro')).toHaveTextContent('Dernière lecture il y a 2 h : ce compte a pu consommer depuis.');
+    // Read a moment ago, or not yet in this run: nothing to say.
+    expect(group('Équipe')).not.toHaveTextContent('Dernière lecture');
+    expect(group('Principal')).not.toHaveTextContent('Dernière lecture');
+  });
+
   it('gives the two windows of an account with their bar, the percentage written and the time left', () => {
     render(AccountsPanel, { onclose: () => {} });
     const pro = group('Pro');

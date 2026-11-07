@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { agent, CLAUDE_ENGINE, fakeBackend, project, SETTINGS } from '../test/ipc';
 import type { DraftAttachment } from './attachments';
-import { SAVE_DELAY, forgetDraft, getDraft, setDraft } from './drafts';
+import { SAVE_DELAY, forgetDraft, getDraft, giveBack, setDraft } from './drafts';
 import { readPref } from './prefs';
 import { app } from './state.svelte';
 import type { InitialState, UiEvent } from './types';
@@ -85,6 +85,19 @@ describe('drafts', () => {
     setDraft('a1', { text: '', files: [] });
     vi.advanceTimersByTime(SAVE_DELAY * 2);
     expect(kept('a1')).toBeNull();
+  });
+
+  it('gives a message back before what was typed since, its files first, and tells the composer', () => {
+    const other: DraftAttachment = { ...file, name: 'plan.md' };
+    setDraft('a1', { text: 'b', files: [other] });
+    giveBack('a1', 'a', [file]);
+    expect(getDraft('a1')).toEqual({ text: 'a\n\nb', files: [file, other] });
+    const seen = app.draftReturned.a1;
+    giveBack('a2', 'a', []);
+    expect(getDraft('a2')).toEqual({ text: 'a', files: [] });
+    giveBack('a1', '', [file]);
+    expect(getDraft('a1').text).toBe('a\n\nb');
+    expect(app.draftReturned).toMatchObject({ a1: seen + 1, a2: expect.any(Number) });
   });
 
   it('are kept apart for each agent', () => {

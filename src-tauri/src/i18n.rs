@@ -20,41 +20,10 @@
 //! the language is global: a test of an English text passes its language (`tr_in!`, or a
 //! function that takes a `Lang`), never `set`.
 
-use serde::{Deserialize, Serialize};
+#[allow(unused_imports)] // `of_locale`: the tests'.
+pub use escouade_plugin_cli::i18n::{of_locale, Lang};
+use serde::Serialize;
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::OnceLock;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Lang {
-    Fr,
-    En,
-}
-
-impl Lang {
-    const fn code(self) -> u8 {
-        match self {
-            Lang::Fr => 0,
-            Lang::En => 1,
-        }
-    }
-
-    const fn of_code(code: u8) -> Self {
-        match code {
-            1 => Lang::En,
-            _ => Lang::Fr,
-        }
-    }
-
-    /// The language a setting names ("fr", "en"), if it names one.
-    fn named(value: &str) -> Option<Self> {
-        match value {
-            "fr" => Some(Lang::Fr),
-            "en" => Some(Lang::En),
-            _ => None,
-        }
-    }
-}
 
 /// The languages as the window is told them: the interface's, the system's (the option
 /// « Système (…) » names it) and that of the texts Claude writes.
@@ -89,19 +58,7 @@ pub fn system() -> Lang {
     if cfg!(test) {
         return Lang::Fr;
     }
-    static SYSTEM: OnceLock<Lang> = OnceLock::new();
-    *SYSTEM.get_or_init(|| of_locale(sys_locale::get_locale().as_deref().unwrap_or_default()))
-}
-
-/// The language of a locale tag (`fr-FR`, `fr_CA`, `en-US`, POSIX `fr_FR.UTF-8`): French when
-/// its language subtag is, English otherwise.
-pub fn of_locale(tag: &str) -> Lang {
-    let language = tag.split(['-', '_', '.', '@']).next().unwrap_or_default();
-    if language.eq_ignore_ascii_case("fr") {
-        Lang::Fr
-    } else {
-        Lang::En
-    }
+    escouade_plugin_cli::i18n::system()
 }
 
 /// The languages the settings stand for, the system's being `system`: « Langue de l'interface »
@@ -136,6 +93,16 @@ pub fn set(info: LangInfo) {
     }
     UI.store(info.ui.code(), Ordering::Relaxed);
     CLAUDE.store(info.claude.code(), Ordering::Relaxed);
+    // What the kit of the plugins writes in the core (an error of a code host, `Unsupported`).
+    escouade_plugin_kit::i18n::set_ui(kit(info.ui));
+}
+
+/// `lang` as the kit of the plugins names it.
+pub fn kit(lang: Lang) -> escouade_plugin_kit::i18n::Lang {
+    match lang {
+        Lang::Fr => escouade_plugin_kit::i18n::Lang::Fr,
+        Lang::En => escouade_plugin_kit::i18n::Lang::En,
+    }
 }
 
 /// Writes from now on in the languages the settings stand for, and returns them.
@@ -143,22 +110,6 @@ pub fn configure(language: &str, claude_language: &str) -> LangInfo {
     let info = resolve(language, claude_language);
     set(info);
     info
-}
-
-/// A text in `lang`: `tr_in!(lang, "français", "English", args…)`.
-macro_rules! tr_in {
-    ($lang:expr, $fr:literal, $en:literal $(,)?) => {
-        match $lang {
-            $crate::i18n::Lang::Fr => format!($fr),
-            $crate::i18n::Lang::En => format!($en),
-        }
-    };
-    ($lang:expr, $fr:literal, $en:literal, $($args:tt)+) => {
-        match $lang {
-            $crate::i18n::Lang::Fr => format!($fr, $($args)+),
-            $crate::i18n::Lang::En => format!($en, $($args)+),
-        }
-    };
 }
 
 /// Whether `count` takes the singular form (CLDR's « one ») in `lang`, as the window's

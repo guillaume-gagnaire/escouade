@@ -17,6 +17,7 @@ import type {
   AccountUsage,
   Agent,
   BoardSettings,
+  BranchCi,
   BranchInfo,
   EngineDecl,
   GitInfo,
@@ -26,6 +27,7 @@ import type {
   RateWindow,
   Settings,
   Ticket,
+  TicketPr,
   Usage,
 } from '../lib/types';
 import claudeEngine from '../../tests/fixtures/engines/claude.json';
@@ -39,7 +41,20 @@ export interface Call {
 }
 
 /** What a command answers when a test gives it no handler: nothing (null), except the lists the window reads on its own. */
-const ANSWERS: Record<string, unknown> = { closed_projects: [], memory_list: [], claude_memory_offer: [] };
+const ANSWERS: Record<string, unknown> = {
+  closed_projects: [],
+  memory_list: [],
+  claude_memory_offer: [],
+  target_cis: {},
+  overview_prs: [],
+};
+
+/** What the backend answers by default from the arguments of a call. */
+const DEFAULTS: Record<string, (args: any) => unknown> = {
+  // A launch's page (ESC-311): opened where it was asked.
+  devpage_open: (a) => ({ agentId: a.agentId, projectId: 'p1', title: a.title, url: a.url, detached: a.detached }),
+  devpage_detach: (a) => ({ agentId: a.agentId, projectId: 'p1', title: '', url: '', detached: a.detached }),
+};
 
 export function fakeBackend(handlers: Record<string, (args: any) => unknown> = {}) {
   const calls: Call[] = [];
@@ -47,7 +62,7 @@ export function fakeBackend(handlers: Record<string, (args: any) => unknown> = {
   mockIPC(
     (cmd, args) => {
       calls.push({ cmd, args: (args ?? {}) as Record<string, any> });
-      const h = handlers[cmd];
+      const h = handlers[cmd] ?? DEFAULTS[cmd];
       return h ? h(args) : (ANSWERS[cmd] ?? null);
     },
     { shouldMockEvents: true },
@@ -62,13 +77,28 @@ export const SETTINGS: Settings = {
   claudePath: '',
   sound: true,
   osNotifications: true,
-  notifyFor: { questions: true, done: true, errors: true, tickets: true },
+  notifyFor: {
+    questions: true,
+    done: true,
+    errors: true,
+    tickets: true,
+    prCiFailed: true,
+    prChanges: true,
+    prApproved: true,
+    prMerged: true,
+    prConflict: true,
+    prReview: true,
+    deployOk: true,
+    deployFailed: true,
+  },
   idleStopMinutes: 30,
   attachMaxMb: 0,
   attachWarnMb: 200,
   attachOrigin: true,
   attachBigText: 'path',
   attachKeepDays: 0,
+  // The tests opt in to the delay: a message sent during a turn goes at once, as before.
+  midTurnDelaySecs: 0,
   pwshPath: '',
   bashPath: '',
   wslDistro: '',
@@ -254,6 +284,10 @@ export function board(over: Partial<BoardSettings> = {}): BoardSettings {
     target: '',
     strategy: 'squash',
     draft: false,
+    reviewers: [],
+    replyThreads: false,
+    prUpdate: 'merge',
+    labels: [],
     testsFirst: false,
     testCommand: '',
     cleanup: true,
@@ -297,6 +331,7 @@ export function ticket(over: Partial<Ticket> = {}): Ticket {
     outcomeClaude: null,
     outcomeUrl: null,
     outcomeCommit: null,
+    environments: [],
     forced: false,
     reminded: false,
     cost: 0,
@@ -362,12 +397,15 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.attention = {};
   app.tickets = Object.fromEntries((over.tickets ?? []).map((t) => [t.id, t]));
   app.board = {};
+  app.prReviews = {};
+  app.prReviewOpen = {};
   app.docs = {};
   app.docsSpace = {};
   app.docsPage = {};
   app.docsEdit = null;
   app.docsShare = {};
   app.boardIssues = {};
+  app.targetCi = {};
   app.setupOutput = {};
   app.relaunched = {};
   app.autopilotPause = null;
@@ -401,6 +439,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.filesScope = 'agent';
   app.panelTab = 'files';
   app.composerPut = null;
+  app.draftReturned = {};
   workflows.reset();
   app.diffSplit = false;
   app.modal = null;
@@ -474,7 +513,7 @@ export const CURSOR_ENGINE: EngineDecl = {
   ...BARE_ENGINE,
   id: 'cursor',
   name: 'Cursor CLI',
-  caps: { ...BARE_ENGINE.caps, usagePage: 'https://cursor.com/dashboard?tab=usage', accountsByKey: true },
+  caps: { ...BARE_ENGINE.caps, midTurn: 'turnEnd', usagePage: 'https://cursor.com/dashboard?tab=usage', accountsByKey: true },
 };
 
 /** Mistral Vibe as the tests see it (ESC-267): no quota, its cost told, its usage on Mistral's console, its accounts by API key. */
@@ -538,7 +577,7 @@ export function usageOf(id: string, over: Partial<AccountUsage> & ClaudeWindows 
     connected: true,
     reason: null,
     todayCost: 0,
-    updatedAt: 1,
+    updatedAt: 0,
     ...rest,
   };
 }
@@ -565,3 +604,60 @@ export function usageWith(
   }
   return { todayCost, accounts: list, current: { ...(typeof current === 'object' ? current : {}), claude: id } };
 }
+
+/** The pull request of a ticket « En revue » (ESC-59). */
+export const ticketPr = (over: Partial<TicketPr> = {}): TicketPr => ({
+  number: 12,
+  url: 'https://github.com/acme/demo/pull/12',
+  kind: 'github',
+  host: 'github.com',
+  namespace: 'acme',
+  name: 'demo',
+  target: 'main',
+  branch: 'ticket/dem-1',
+  word: 'PR',
+  state: 'open',
+  draft: false,
+  checks: null,
+  checksTotal: 0,
+  checksFailed: 0,
+  approvals: 0,
+  changesRequested: false,
+  openThreads: 0,
+  mergeable: null,
+  checkedAt: 1,
+  error: null,
+  errorSince: null,
+  closed: false,
+  autoMerge: false,
+  mergeOptions: null,
+  mergeWhenGreen: null,
+  mergeNote: null,
+  failed: [],
+  fixing: null,
+  fixes: 0,
+  awaitingCi: false,
+  fixError: null,
+  fixKind: 'ci',
+  feedback: 0,
+  ...over,
+});
+
+/** The CI of a branch without a pull request (ESC-63): a project's target, red for 2 h and a half. */
+export const branchCi = (over: Partial<BranchCi> = {}): BranchCi => ({
+  kind: 'github',
+  host: 'github.com',
+  namespace: 'acme',
+  name: 'demo',
+  branch: 'main',
+  checks: 'failure',
+  checksTotal: 3,
+  checksFailed: 1,
+  failed: [{ name: 'test', url: 'https://github.com/acme/demo/runs/7', log: true }],
+  redSince: Date.now() - 2.5 * 3600_000,
+  checkedAt: Date.now(),
+  error: null,
+  errorSince: null,
+  rerun: true,
+  ...over,
+});

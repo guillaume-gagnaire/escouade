@@ -1,18 +1,19 @@
 //! External ticket systems (Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues, Azure Boards): their accounts, the tickets a project
 //! imports from them, and the sync of their states with the Kanban's columns.
 
-pub mod azure;
-pub mod clickup;
+#[cfg(test)]
+mod azure_tests;
 #[cfg(test)]
 pub(crate) mod fake;
-pub mod github;
-pub mod gitlab;
+#[cfg(test)]
+mod github_tests;
+#[cfg(test)]
+mod gitlab_tests;
 pub mod jira;
-pub mod linear;
 pub mod secrets;
+pub mod source;
 pub mod sync;
 pub mod text;
-pub mod trello;
 
 use crate::model::*;
 use anyhow::{anyhow, bail, Result};
@@ -42,6 +43,11 @@ pub struct Accounts {
     /// token of its own again. Their names only, never a secret.
     #[serde(deserialize_with = "known_services")]
     pub to_forget: Vec<Service>,
+    /// `plugins::accounts::VAULT` once the secrets are also under the plugins' names
+    /// (`plugin:<id>:account:<account>`, INT-6); 0 (left out) while they are under the former
+    /// ones only. A version from before ignores it, and finds its entries as they were.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub vault: u32,
     /// The file keeps a copy of the secrets the keychain holds (`secrets::file_keeps_copy`).
     /// Known while the app runs, never saved.
     #[serde(skip)]
@@ -51,42 +57,42 @@ pub struct Accounts {
 impl Accounts {
     pub fn get(&self, s: Service) -> Option<&Account> {
         match s {
-            Service::Jira => self.jira.as_ref(),
-            Service::Trello => self.trello.as_ref(),
-            Service::Github => self.github.as_ref(),
-            Service::Linear => self.linear.as_ref(),
-            Service::Clickup => self.clickup.as_ref(),
+            Service::JIRA => self.jira.as_ref(),
+            Service::TRELLO => self.trello.as_ref(),
+            Service::GITHUB => self.github.as_ref(),
+            Service::LINEAR => self.linear.as_ref(),
+            Service::CLICKUP => self.clickup.as_ref(),
             // The GitLab and Azure DevOps code hosts' accounts (`hosted_accounts`).
-            Service::Gitlab | Service::Azure => None,
+            _ => None,
         }
     }
 
     pub fn get_mut(&mut self, s: Service) -> Option<&mut Account> {
         match s {
-            Service::Jira => self.jira.as_mut(),
-            Service::Trello => self.trello.as_mut(),
-            Service::Github => self.github.as_mut(),
-            Service::Linear => self.linear.as_mut(),
-            Service::Clickup => self.clickup.as_mut(),
-            Service::Gitlab | Service::Azure => None,
+            Service::JIRA => self.jira.as_mut(),
+            Service::TRELLO => self.trello.as_mut(),
+            Service::GITHUB => self.github.as_mut(),
+            Service::LINEAR => self.linear.as_mut(),
+            Service::CLICKUP => self.clickup.as_mut(),
+            _ => None,
         }
     }
 
     pub fn set(&mut self, s: Service, a: Option<Account>) {
         match s {
-            Service::Jira => self.jira = a,
-            Service::Trello => self.trello = a,
-            Service::Github => self.github = a,
-            Service::Linear => self.linear = a,
-            Service::Clickup => self.clickup = a,
+            Service::JIRA => self.jira = a,
+            Service::TRELLO => self.trello = a,
+            Service::GITHUB => self.github = a,
+            Service::LINEAR => self.linear = a,
+            Service::CLICKUP => self.clickup = a,
             // Connected and disconnected as a code host.
-            Service::Gitlab | Service::Azure => {}
+            _ => {}
         }
     }
 
     /// The GitLab code host's accounts, one per instance: GitLab Issues' too.
     pub fn gitlab_accounts(&self) -> Vec<&crate::forge::accounts::ForgeAccount> {
-        self.hosted_accounts(Service::Gitlab)
+        self.hosted_accounts(Service::GITLAB)
     }
 
     /// The code host's accounts a source has as its own (GitLab Issues: GitLab's; Azure Boards:
@@ -108,11 +114,12 @@ impl Accounts {
 
     /// What the window knows of them.
     pub fn views(&self) -> Vec<AccountView> {
-        Service::ALL
+        source::registry()
+            .services()
             .iter()
-            .map(|&service| match service {
-                Service::Gitlab | Service::Azure => self.hosted_view(service),
-                _ => AccountView {
+            .map(|&service| match hosted_kind(service) {
+                Some(_) => self.hosted_view(service),
+                None => AccountView {
                     service,
                     connected: self.get(service).is_some(),
                     label: self
@@ -121,6 +128,11 @@ impl Accounts {
                         .unwrap_or_default(),
                     in_file: self.get(service).is_some_and(|a| a.in_file),
                     unread: self.get(service).is_some_and(|a| a.unread),
+                    plugin: self
+                        .get(service)
+                        .map(|a| a.plugin.clone())
+                        .unwrap_or_default(),
+                    servers: Vec::new(),
                 },
             })
             .collect()
@@ -149,17 +161,20 @@ impl Accounts {
             label,
             in_file: list.iter().any(|a| a.in_file),
             unread: !list.is_empty() && list.iter().all(|a| a.unread),
+            plugin: String::new(),
+            servers: Vec::new(),
         }
     }
 }
 
+fn is_zero(n: &u32) -> bool {
+    *n == 0
+}
+
 /// The code host whose accounts are a source's own: GitLab Issues', Azure Boards'.
 pub fn hosted_kind(s: Service) -> Option<&'static str> {
-    match s {
-        Service::Gitlab => Some("gitlab"),
-        Service::Azure => Some("azure"),
-        _ => None,
-    }
+    let kind = source::registry().get(s)?;
+    kind.host().filter(|_| !kind.own_account())
 }
 
 /// The services of the list this version knows: one a later version added (the app rolled back)
@@ -168,7 +183,8 @@ fn known_services<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<Service>
     let names: Vec<Value> = Vec::deserialize(d)?;
     Ok(names
         .into_iter()
-        .filter_map(|n| serde_json::from_value(n).ok())
+        .filter_map(|n| serde_json::from_value::<Service>(n).ok())
+        .filter(|s| source::registry().get(*s).is_some())
         .collect())
 }
 
@@ -190,6 +206,10 @@ pub struct Account {
     /// Who it is for the service (Jira account id, Trello member id, GitHub login): what "mine"
     /// filters on.
     pub user: String,
+    /// The plugin that serves it, chosen when it was added (`plugins::accounts`); empty for
+    /// Escouade's own hand.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub plugin: String,
     /// The system's keychain refused its key and token: they stay in `integrations.json` (they
     /// move at the next start that it takes them). Known while the app runs, never saved.
     #[serde(skip)]
@@ -216,6 +236,13 @@ pub struct AccountView {
     pub in_file: bool,
     /// The system's keychain did not give its token at this start (`Account::unread`).
     pub unread: bool,
+    /// The plugin that serves it, when another than Escouade's own hand (`Account::plugin`).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub plugin: String,
+    /// The plugins that may serve a new account of it, Escouade's first: the form offers the
+    /// choice when there are several (`Core::integration_accounts`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub servers: Vec<crate::plugins::accounts::Server>,
 }
 
 /// Where an account's tickets live: a Jira project, a Trello board, a GitHub repository, a Linear
@@ -235,7 +262,7 @@ pub struct Container {
 }
 
 /// The states of a container, and those each column gives by default.
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StatesView {
     pub states: Vec<ExternalState>,
@@ -243,7 +270,7 @@ pub struct StatesView {
 }
 
 /// A filter of the import modal, shown as a chip.
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IssueFilter {
     pub id: String,
@@ -251,7 +278,7 @@ pub struct IssueFilter {
 }
 
 /// What the import asks of a source.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Query {
     /// Typed in the search field.
     pub text: String,
@@ -293,7 +320,7 @@ pub struct ExternalIssue {
 }
 
 /// A page of a source's tickets for the import modal, and the chips that filter them.
-#[derive(Debug, Clone, Serialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, PartialEq, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IssuePage {
     pub issues: Vec<ExternalIssue>,
@@ -332,183 +359,28 @@ impl Bases {
             clickup: var("ESCOUADE_CLICKUP_API", "https://api.clickup.com/api/v2"),
         }
     }
-}
 
-/// What talks to one service for one account.
-pub enum Client {
-    Jira(jira::Jira),
-    Trello(trello::Trello),
-    Github(github::Github),
-    Linear(linear::Linear),
-    Clickup(clickup::Clickup),
-    Gitlab(gitlab::Gitlab),
-    Azure(azure::Boards),
-}
-
-impl Client {
-    /// For GitHub, `account.token` must be the token itself (the CLI's already asked for).
-    pub fn new(service: Service, account: &Account, http: reqwest::Client, bases: &Bases) -> Self {
-        match service {
-            Service::Jira => Client::Jira(jira::Jira::new(http, account)),
-            Service::Trello => Client::Trello(trello::Trello::new(http, account, &bases.trello)),
-            Service::Github => Client::Github(github::Github::new(http, account, &bases.github)),
-            Service::Linear => Client::Linear(linear::Linear::new(http, account, &bases.linear)),
-            Service::Clickup => {
-                Client::Clickup(clickup::Clickup::new(http, account, &bases.clickup))
-            }
-            // One instance: the account's site, token and user (`Core::gitlab_client` gives
-            // every one).
-            Service::Gitlab => Client::Gitlab(gitlab::Gitlab::new(
-                http,
-                vec![gitlab::Instance {
-                    host: crate::forge::host_of(&account.site),
-                    base: format!("{}/api/v4", account.site.trim_end_matches('/')),
-                    token: account.token.trim().to_string(),
-                    user: account.user.clone(),
-                    label: account.label.clone(),
-                }],
-            )),
-            // One organization: the account's address and token (`Core::azure_client` gives
-            // every one).
-            Service::Azure => {
-                let url = account.site.trim_end_matches('/').to_string();
-                Client::Azure(azure::Boards::new(vec![azure::Instance {
-                    org: url.rsplit('/').next().unwrap_or("").to_string(),
-                    client: crate::forge::azure_api::Azure::new(
-                        http,
-                        url.clone(),
-                        crate::forge::azure::api_override(&url),
-                        account.token.clone(),
-                    ),
-                    token_page: format!("{url}/_usersSettings/tokens"),
-                }]))
-            }
-        }
-    }
-
-    /// The account's label and user, once its credentials are accepted.
-    pub async fn me(&self) -> Result<(String, String)> {
-        match self {
-            Client::Jira(c) => c.me().await,
-            Client::Trello(c) => c.me().await,
-            Client::Github(c) => c.me().await,
-            Client::Linear(c) => c.me().await,
-            Client::Clickup(c) => c.me().await,
-            Client::Gitlab(c) => c.me().await,
-            Client::Azure(c) => c.me().await,
-        }
-    }
-
-    pub async fn containers(&self) -> Result<Vec<Container>> {
-        match self {
-            Client::Jira(c) => c.containers().await,
-            Client::Trello(c) => c.containers().await,
-            Client::Github(c) => c.containers().await,
-            Client::Linear(c) => c.containers().await,
-            Client::Clickup(c) => c.containers().await,
-            Client::Gitlab(c) => c.containers().await,
-            Client::Azure(c) => c.containers().await,
-        }
-    }
-
-    pub async fn states(&self, container: &str) -> Result<Vec<ExternalState>> {
-        match self {
-            Client::Jira(c) => c.states(container).await,
-            Client::Trello(c) => c.states(container).await,
-            Client::Github(c) => c.states(container).await,
-            Client::Linear(c) => c.states(container).await,
-            Client::Clickup(c) => c.states(container).await,
-            Client::Gitlab(c) => c.states(container).await,
-            Client::Azure(c) => c.states(container).await,
-        }
-    }
-
-    /// The states of a container, and those each column gives by default: guessed by their
-    /// names, and for ClickUp by their types too.
-    pub async fn states_view(&self, container: &str) -> Result<StatesView> {
-        if let Client::Clickup(c) = self {
-            return c.states_view(container).await;
-        }
-        if let Client::Azure(c) = self {
-            return c.states_view(container).await;
-        }
-        let states = self.states(container).await?;
-        Ok(StatesView {
-            defaults: text::default_states(&states),
-            states,
-        })
-    }
-
-    pub async fn issues(&self, container: &str, q: &Query) -> Result<IssuePage> {
-        match self {
-            Client::Jira(c) => c.issues(container, q).await,
-            Client::Trello(c) => c.issues(container, q).await,
-            Client::Github(c) => c.issues(container, q).await,
-            Client::Linear(c) => c.issues(container, q).await,
-            Client::Clickup(c) => c.issues(container, q).await,
-            Client::Gitlab(c) => c.issues(container, q).await,
-            Client::Azure(c) => c.issues(container, q).await,
-        }
-    }
-
-    /// Gives the external ticket `state`; `mapped`: every state the link gives a column (GitHub
-    /// and GitLab take the labels of the others off).
-    pub async fn set_state(
-        &self,
-        r: &ExternalRef,
-        state: &ExternalState,
-        mapped: &[ExternalState],
-    ) -> Result<()> {
-        match self {
-            Client::Jira(c) => c.set_state(r, state).await,
-            Client::Trello(c) => c.set_state(r, state).await,
-            Client::Github(c) => c.set_state(r, state, mapped).await,
-            Client::Linear(c) => c.set_state(r, state).await,
-            Client::Clickup(c) => c.set_state(r, state).await,
-            Client::Gitlab(c) => c.set_state(r, state, mapped).await,
-            Client::Azure(c) => c.set_state(r, state).await,
-        }
-    }
-
-    pub async fn comment(&self, r: &ExternalRef, text: &str) -> Result<()> {
-        match self {
-            Client::Jira(c) => c.comment(r, text).await,
-            Client::Trello(c) => c.comment(r, text).await,
-            Client::Github(c) => c.comment(r, text).await,
-            Client::Linear(c) => c.comment(r, text).await,
-            Client::Clickup(c) => c.comment(r, text).await,
-            Client::Gitlab(c) => c.comment(r, text).await,
-            Client::Azure(c) => c.comment(r, text).await,
-        }
+    /// The fake services among the bases of the plugins in WASM, by the host they stand in for: what `net/fetch` lets
+    /// them reach in a build of development and the tests.
+    #[cfg(any(debug_assertions, test))]
+    pub fn faked(&self) -> std::collections::HashMap<String, String> {
+        let azure = crate::forge::azure::api_override("https://dev.azure.com").unwrap_or_default();
+        [
+            ("api.trello.com", &self.trello),
+            ("api.linear.app", &self.linear),
+            ("api.clickup.com", &self.clickup),
+            ("api.github.com", &self.github),
+            ("dev.azure.com", &azure),
+        ]
+        .into_iter()
+        .filter(|(host, base)| !base.is_empty() && !base.contains(host))
+        .map(|(host, base)| (host.to_string(), base.clone()))
+        .collect()
     }
 }
 
-/// Sends a request to `service` and reads its JSON answer (null when empty); an error says, in
-/// French, what went wrong and what the service said.
-pub(crate) async fn call(service: Service, rb: reqwest::RequestBuilder) -> Result<Value> {
-    Ok(send(service, rb).await?.0)
-}
-
-/// `call`, and whether the answer's `Link` header points to a next page (GitHub's lists).
-pub(crate) async fn call_page(
-    service: Service,
-    rb: reqwest::RequestBuilder,
-) -> Result<(Value, bool)> {
-    let (v, headers) = send(service, rb).await?;
-    let next = headers
-        .get_all(reqwest::header::LINK)
-        .iter()
-        .filter_map(|h| h.to_str().ok())
-        .flat_map(|h| h.split(','))
-        .any(|link| link.contains("rel=\"next\""));
-    Ok((v, next))
-}
-
-async fn send(service: Service, rb: reqwest::RequestBuilder) -> Result<(Value, HeaderMap)> {
-    send_named(service.label(), rb).await
-}
-
-/// `send` for a service known by its name only (a code host).
+/// Sends a request to a service known by its name only (a code host) and reads its JSON answer (null when empty); an
+/// error says what went wrong and what the service said.
 pub(crate) async fn send_named(
     name: &str,
     rb: reqwest::RequestBuilder,
@@ -542,34 +414,9 @@ pub(crate) async fn send_named(
     Ok((v, headers))
 }
 
-/// A service's answer other than a success: its status, and what `http_error` says of it (the
-/// error's text).
-#[derive(Debug)]
-pub struct HttpError {
-    pub status: u16,
-    pub message: String,
-}
-
-impl std::fmt::Display for HttpError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.message)
-    }
-}
-
-impl std::error::Error for HttpError {}
-
-/// A refusal that asking again would not change (Jira: no transition leads from where the issue
-/// is to the state).
-#[derive(Debug)]
-pub struct Refused(pub String);
-
-impl std::fmt::Display for Refused {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-impl std::error::Error for Refused {}
+// A service's answer other than a success, and a refusal that asking again would not change: the same types as the
+// plugins' (`escouade_plugin_kit::errors`), so that a source or a host in a plugin fails as one in the core.
+pub use escouade_plugin_kit::errors::{HttpError, Refused};
 
 /// The failure stays however often the call is made again: a request refused as it is (400, 422),
 /// a ticket gone (404, 410), no transition to the state. Tried again later, it would only hold
@@ -582,6 +429,7 @@ pub(crate) fn lasting(e: &anyhow::Error) -> bool {
 }
 
 /// An HTTP error of `service`, and what its body says.
+#[cfg(test)]
 pub fn http_error(service: Service, status: u16, body: &str) -> String {
     http_error_in(crate::i18n::ui(), service.label(), status, body)
 }
@@ -592,62 +440,11 @@ pub(crate) fn http_error_in(
     status: u16,
     body: &str,
 ) -> String {
-    let tail = said(body).map(|m| format!(" — {m}")).unwrap_or_default();
-    match status {
-        401 => tr_in!(
-            lang,
-            "{name} refuse ces identifiants (401){tail}",
-            "{name} refuses these credentials (401){tail}"
-        ),
-        403 => tr_in!(
-            lang,
-            "{name} refuse l'accès (403){tail}",
-            "{name} denies access (403){tail}"
-        ),
-        404 => tr_in!(
-            lang,
-            "{name} : introuvable (404){tail}",
-            "{name}: not found (404){tail}"
-        ),
-        429 => tr_in!(
-            lang,
-            "{name} limite les requêtes (429) : réessaie dans un moment",
-            "{name} limits the requests (429): try again in a moment"
-        ),
-        _ => tr_in!(
-            lang,
-            "{name} : erreur {status}{tail}",
-            "{name}: error {status}{tail}"
-        ),
-    }
+    escouade_plugin_kit::errors::http_error_in(crate::i18n::kit(lang), name, status, body)
 }
 
-/// The message of an error's body: Jira's `errorMessages` or `errors`, the first of GraphQL's
-/// `errors` (Linear), GitHub's `message`, ClickUp's `err`, or Trello's text.
-fn said(body: &str) -> Option<String> {
-    let body = body.trim();
-    let msg = match serde_json::from_str::<Value>(body) {
-        Ok(Value::String(s)) => s,
-        Ok(v) => v["errorMessages"][0]
-            .as_str()
-            .map(str::to_string)
-            .or_else(|| {
-                v["errors"]
-                    .as_object()
-                    .and_then(|o| o.values().find_map(|e| e.as_str().map(str::to_string)))
-            })
-            .or_else(|| v["errors"][0]["message"].as_str().map(str::to_string))
-            .or_else(|| v["message"].as_str().map(str::to_string))
-            .or_else(|| v["error"].as_str().map(str::to_string))
-            .or_else(|| v["err"].as_str().map(str::to_string))?,
-        Err(_) if body.starts_with('<') => return None,
-        Err(_) => body.lines().next()?.to_string(),
-    };
-    let msg = msg.trim();
-    (!msg.is_empty()).then(|| crate::board::first_line(msg))
-}
-
-/// A path segment or a query value, percent-encoded.
+/// A path segment or a query value, percent-encoded (the tests' fake servers; the clients are the plugins').
+#[cfg(test)]
 pub(crate) fn encode(s: &str) -> String {
     crate::board::encode(s, false)
 }
@@ -676,6 +473,11 @@ pub fn checked_links(mut p: ProjectIntegrations) -> ProjectIntegrations {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A request to `service`, its JSON answer read.
+    async fn call(service: Service, rb: reqwest::RequestBuilder) -> Result<Value> {
+        Ok(send_named(service.label(), rb).await?.0)
+    }
 
     #[test]
     fn a_service_refusing_says_so_in_english() {
@@ -714,15 +516,15 @@ mod tests {
             (503, false),
         ] {
             server.on("GET", "/x", status, Value::Null);
-            let e = call(Service::Github, http.get(format!("{}/x", server.url)))
+            let e = call(Service::GITHUB, http.get(format!("{}/x", server.url)))
                 .await
                 .unwrap_err();
             assert_eq!(lasting(&e), lasts, "{status}");
             // It still reads as before.
-            assert_eq!(e.to_string(), http_error(Service::Github, status, ""));
+            assert_eq!(e.to_string(), http_error(Service::GITHUB, status, ""));
         }
         // Not reached: it may be, later.
-        let e = call(Service::Github, http.get("http://"))
+        let e = call(Service::GITHUB, http.get("http://"))
             .await
             .unwrap_err();
         assert!(e.to_string().starts_with("GitHub injoignable"), "{e}");
@@ -734,12 +536,12 @@ mod tests {
     #[test]
     fn an_http_error_says_what_the_service_said() {
         assert_eq!(
-            http_error(Service::Jira, 401, ""),
+            http_error(Service::JIRA, 401, ""),
             "Jira refuse ces identifiants (401)"
         );
         assert_eq!(
             http_error(
-                Service::Jira,
+                Service::JIRA,
                 400,
                 r#"{"errorMessages":["Le champ 'sprint' n'existe pas."],"errors":{}}"#
             ),
@@ -747,7 +549,7 @@ mod tests {
         );
         assert_eq!(
             http_error(
-                Service::Jira,
+                Service::JIRA,
                 400,
                 r#"{"errorMessages":[],"errors":{"jql":"JQL invalide"}}"#
             ),
@@ -755,21 +557,21 @@ mod tests {
         );
         assert_eq!(
             http_error(
-                Service::Github,
+                Service::GITHUB,
                 403,
                 r#"{"message":"Resource not accessible by personal access token"}"#
             ),
             "GitHub refuse l'accès (403) — Resource not accessible by personal access token"
         );
         assert_eq!(
-            http_error(Service::Trello, 404, "model not found\n"),
+            http_error(Service::TRELLO, 404, "model not found\n"),
             "Trello : introuvable (404) — model not found"
         );
         assert_eq!(
-            http_error(Service::Github, 502, "<html>Bad gateway</html>"),
+            http_error(Service::GITHUB, 502, "<html>Bad gateway</html>"),
             "GitHub : erreur 502"
         );
-        assert!(http_error(Service::Trello, 429, "").contains("réessaie"));
+        assert!(http_error(Service::TRELLO, 429, "").contains("réessaie"));
     }
 
     #[test]
@@ -787,11 +589,11 @@ mod tests {
         };
         let p = checked_links(ProjectIntegrations {
             links: vec![
-                link(Service::Jira, "ATL"),
-                link(Service::Trello, " "),
-                link(Service::Jira, "MOB"),
-                link(Service::Trello, "b1"),
-                link(Service::Github, "acme/api"),
+                link(Service::JIRA, "ATL"),
+                link(Service::TRELLO, " "),
+                link(Service::JIRA, "MOB"),
+                link(Service::TRELLO, "b1"),
+                link(Service::GITHUB, "acme/api"),
             ],
             comments: vec![Column::Done, Column::Review, Column::Done],
             ..Default::default()
@@ -805,7 +607,7 @@ mod tests {
     fn the_window_sees_who_is_connected_and_never_a_secret() {
         let mut a = Accounts::default();
         a.set(
-            Service::Trello,
+            Service::TRELLO,
             Some(Account {
                 key: "k".into(),
                 token: "secret".into(),

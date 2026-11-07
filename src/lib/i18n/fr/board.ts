@@ -3,15 +3,124 @@ import type { Tree } from '../types';
 // The Kanban: its columns, tickets and criteria.
 export default {
   // The four columns (glossary): their names and what one says while it holds nothing.
-  columns: { todo: 'À faire', doing: 'En cours', review: 'À tester', done: 'Terminé' },
+  columns: { todo: 'À faire', doing: 'En cours', review: 'À tester', pr: 'En revue', done: 'Terminé' },
   empty: {
     todo: "Ajoute un ticket : un agent le prendra dès qu'une place se libère.",
     doing: 'Aucun agent en boucle',
     review: 'Rien à tester',
+    pr: 'Aucune PR en revue',
     done: 'Aucun ticket terminé',
   },
 
-  column: { newTicket: 'Nouveau ticket' },
+  column: {
+    newTicket: 'Nouveau ticket',
+    /** The column « En revue » (ESC-59): its pull requests are read now rather than at the next minute. */
+    refresh: 'Rafraîchir',
+    refreshHint: 'Relire maintenant les PR en revue sur leur hébergeur',
+  },
+
+  /** A card « En revue » (ESC-59): its pull request as its host last told it. `{word}`: « PR », « MR » on GitLab. */
+  pr: {
+    /** Its state, in a word. */
+    state: { draft: 'brouillon', open: 'ouverte', approved: 'approuvée', changes: 'changements demandés', closed: 'fermée' },
+    /** Its CI, with how many jobs it has. */
+    ci: {
+      success: { one: 'CI verte · {count} job', other: 'CI verte · {count} jobs' },
+      failure: '{failed}/{count} jobs en échec',
+      pending: { one: 'CI en cours · {count} job', other: 'CI en cours · {count} jobs' },
+      skipped: 'CI ignorée',
+    },
+    /** The host could not be read: said, the ticket stays where it is. */
+    error: '{error} · depuis {since}',
+    /** Merging from Escouade (ESC-62): « Merger » approved and green, « Merger quand c'est vert » while its CI runs. */
+    merge: {
+      now: 'Merger ({strategy})',
+      nowTitle: '{word} #{number} approuvée et verte : merger dans {target} en {strategy}',
+      whenGreen: 'Merger quand c’est vert',
+      whenGreenTitle: 'Par l’auto-merge de l’hébergeur quand le dépôt l’autorise, sinon Escouade merge à la fin de la CI',
+      hostOn: 'Auto-merge de {host} activé : mergée dès que la CI est verte',
+      escouadeWaits: 'Escouade la merge ({strategy}) dès qu’elle est approuvée et verte, tant qu’elle tourne',
+      escouadeTold: 'Pas d’auto-merge sur {host} pour ce dépôt : Escouade attend la fin de la CI et merge elle-même, tant qu’elle tourne',
+      stopWaiting: 'Ne plus attendre',
+      merged: '{word} #{number} mergée',
+      none: 'Le dépôt n’autorise aucune des façons de merger d’Escouade',
+      strategies: { merge: 'merge commit', squash: 'squash', rebase: 'rebase', semiLinear: 'semi-linéaire' },
+    },
+    finishAnyway: 'Terminer quand même',
+    backToTodo: 'Remettre à faire',
+    /** Its CI failed (ESC-60): its agent gets the failed jobs and the end of their logs. */
+    fixCi: "L'agent corrige",
+    fixCiTitle: 'Renvoyer à son agent les jobs en échec et la fin de leurs journaux ; il pousse, la {word} se met à jour',
+    /** A CI of another kind gives a status and an address alone. */
+    noLog: { one: '{names} : CI tierce, sans journal', other: '{names} : CI tierces, sans journal' },
+    loopsSpent: 'Boucles épuisées ({count}/{max}) : le pilote auto ne la renvoie plus',
+    /** What its agent does on its pull request (ESC-60, ESC-61). */
+    fixingKind: {
+      ci: "L'agent corrige la CI…",
+      reviews: "L'agent corrige les retours…",
+      merge: "L'agent met à jour la branche…",
+      rebase: "L'agent rebase la branche sur {target}…",
+    },
+    /** New review comments (ESC-61): never given to its agent without a click. */
+    feedback: { one: '1 retour de relecture', other: '{count} retours de relecture' },
+    fixReviews: "L'agent corrige les retours",
+    fixReviewsTitle:
+      'Donner à son agent les commentaires non résolus arrivés depuis le dernier push (fichier, ligne, extrait du diff, auteur, texte) ; il pousse ses corrections',
+    /** In conflict with its target (ESC-61). */
+    updateBranch: "L'agent met à jour la branche",
+    updateBranchTitle: {
+      merge: 'Merger {target} dans la branche ; ses conflits vont à son agent, puis Escouade pousse',
+      rebase: 'Rebaser la branche sur {target} ; ses conflits vont à son agent, puis Escouade pousse (--force-with-lease)',
+    },
+  },
+
+  /** The CI of a branch without a pull request (ESC-63): a project's target in its board's header, a ticket's pushed branch on its card. */
+  ci: {
+    /** The pill: `{branch}` and, red, since when. */
+    pill: {
+      failure: '{branch} ✗ depuis {since}',
+      success: '{branch} ✓',
+      pending: '{branch} · CI en cours',
+      none: '{branch} · aucune CI',
+    },
+    pillTitle: 'CI de {branch} : {state}. Cliquer pour voir les jobs, leurs journaux et les relancer',
+    /** Its state in words, in the pill's tooltip. */
+    state: {
+      failure: { one: '{failed}/{count} job en échec', other: '{failed}/{count} jobs en échec' },
+      success: { one: '{count} job réussi', other: '{count} jobs réussis' },
+      pending: { one: '{count} job en cours', other: '{count} jobs en cours' },
+      none: 'aucun job',
+    },
+    /** A reading that failed: the last state stays. */
+    error: '{error} · depuis {since}',
+    /** « Pause quand la CI de la cible est rouge »: the band under the board's header. */
+    paused: 'Pilote auto en pause : la CI de {branch} est rouge depuis {since}',
+    pausedShow: 'Voir les jobs',
+    /** The window of a CI's jobs. */
+    title: 'CI de {branch}',
+    titlePr: 'CI de la {word} #{number}',
+    loading: 'Lecture des jobs…',
+    empty: 'Aucun job sur le dernier commit de {branch}.',
+    refresh: 'Rafraîchir',
+    rerun: 'Relancer les jobs en échec',
+    rerunHint: 'Relance sur {host} les jobs en échec du dernier commit. Rien ne part sans ce clic.',
+    rerunning: 'Relance…',
+    rerunDone: { one: '{count} exécution relancée.', other: '{count} exécutions relancées.' },
+    rerunNone: 'Aucun job à relancer : {host} ne relance que ses propres jobs.',
+    noRerun: '{host} ne relance pas les jobs depuis Escouade : relance-les sur son site.',
+    /** A job's log, in reading only, like a terminal. */
+    log: 'Journal',
+    logOf: 'Journal de {name}',
+    logHint: 'Lecture seule · la fin du journal',
+    logLoading: 'Lecture du journal…',
+    logEmpty: 'Journal vide.',
+    noLog: 'CI tierce : un statut et une adresse, pas de journal',
+    onHost: 'Ouvrir sur {host}',
+    send: 'Envoyer à un agent',
+    sendHint: 'Donner ce job et la fin de son journal à un agent du projet, en message',
+    sendNone: 'Aucun agent actif dans ce projet : crée-en un pour lui envoyer ce journal.',
+    sent: 'Journal de {name} envoyé à {agent}.',
+  },
 
   // The header of the board.
   header: {

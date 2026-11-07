@@ -1,0 +1,63 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.antigravity-cli",
+  "name": "Antigravity CLI",
+  "version": "2.2.0",
+  "description": {
+    "fr": "Antigravity CLI de Google comme harness : la conversation, sa vue terminal, ses règles de permission et ses comptes.",
+    "en": "Google's Antigravity CLI as a harness: the conversation, its terminal view, its permission rules and its accounts."
+  },
+  "author": {
+    "name": "Escouade",
+    "url": "https://escouade.dev"
+  },
+  "license": "GPL-3.0-or-later",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/antigravity",
+  "escouade": {
+    "api": "1",
+    "min": "2.2.0"
+  },
+  "run": {
+    "wasm": "Cargo.toml"
+  },
+  "permissions": {
+    "files": [{ "root": "agentHome", "access": "read" }]
+  },
+  "limits": {
+    "fileBytes": 4194304
+  },
+  "contributes": {
+    "harnesses": [
+      {
+        "id": "agy",
+        "name": "Antigravity CLI",
+        "speaker": "Antigravity",
+        "locate": { "names": ["agy"] },
+        "versionArgs": ["--version"],
+        "tested": { "oldest": "1.4.9", "newest": "1.4.9" },
+        "caps": {
+          "modes": ["default", "plan", "acceptEdits", "bypassPermissions"],
+          "effort": true,
+          "terminalView": true,
+          "readOnly": true,
+          "accountsByKey": true
+        },
+        "models": [{ "id": "gemini-3.8-flash", "label": "Gemini 3.8 Flash", "effort": true }],
+        "efforts": ["low", "medium", "high"],
+        "accountVar": "ESCOUADE_AGY_HOME",
+        "keyVar": "GEMINI_API_KEY",
+        "closeGraceMs": 3000,
+        "opens": true,
+        "relaunches": true,
+        "stderrLeavesOut": ["@"],
+        "install": {
+          "windows": "irm https://antigravity.google/cli/install.ps1 | iex",
+          "unix": "curl -fsSL https://antigravity.google/cli/install.sh | bash"
+        },
+        "updateCommand": "agy update",
+        "writer": "Gemini 3.8 Flash"
+      }
+    ]
+  },
+  "store": { "categories": ["harness"] }
+}

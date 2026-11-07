@@ -1,0 +1,168 @@
+diff --git a/src-tauri/src/accounts.rs b/src-tauri/src/accounts.rs
+index e965e31d..5e7ae74a 100644
+--- a/src-tauri/src/accounts.rs
++++ b/src-tauri/src/accounts.rs
+@@ -225,7 +225,7 @@ pub fn normalize(settings: &mut Settings) {
+     let written: Vec<EngineId> = engine::registry::all().iter().map(|e| e.id()).collect();
+     taken.extend(written.iter().map(|e| principal_id(*e)));
+     for a in accounts.iter_mut().filter(|a| a.id.is_empty()) {
+-        let base = match crate::core::slugify(&a.name) {
++        let base = match crate::core::slug_within(&a.name, 40) {
+             s if s.is_empty() => "account".to_string(),
+             s => s,
+         };
+@@ -1256,7 +1256,7 @@ pub fn create_of(
+             "“{n}” isn’t shared between accounts."
+         ));
+     }
+-    let base = match crate::core::slugify(name) {
++    let base = match crate::core::slug_within(name, 40) {
+         s if s.is_empty() => "account".to_string(),
+         s => s,
+     };
+diff --git a/src-tauri/src/board.rs b/src-tauri/src/board.rs
+index ecff417c..a385428a 100644
+--- a/src-tauri/src/board.rs
++++ b/src-tauri/src/board.rs
+@@ -3,7 +3,7 @@
+ //! sent to the agents.
+ 
+ use crate::accounts::PRINCIPAL;
+-use crate::core::{slugify, RESUME_MARGIN_MS};
++use crate::core::{slug_within, RESUME_MARGIN_MS};
+ use crate::i18n::{self, Lang};
+ use crate::model::*;
+ use crate::text::truncate;
+@@ -52,7 +52,7 @@ pub enum TurnEnd {
+ 
+ /// The first three letters of the project's name, upper case (accents folded); TIC without any.
+ pub fn key_prefix(project_name: &str) -> String {
+-    let letters: String = slugify(project_name)
++    let letters: String = slug_within(project_name, 40)
+         .chars()
+         .filter(|c| c.is_ascii_alphabetic())
+         .take(3)
+@@ -66,7 +66,7 @@ pub fn key_prefix(project_name: &str) -> String {
+ 
+ /// The name of a ticket's agent: `atl-42-limiter-les-tentatives`.
+ pub fn agent_name(key: &str, title: &str) -> String {
+-    slugify(&format!("{key} {title}"))
++    slug_within(&format!("{key} {title}"), 40)
+ }
+ 
+ /// The branch of a ticket: `<prefix><key>`, `ticket/atl-42` with the project's « Préfixe des
+@@ -89,7 +89,7 @@ pub fn shown_key(t: &Ticket) -> &str {
+ /// ticket of Escouade's own, or when nothing is left of the slug.
+ fn external_slug(t: &Ticket) -> Option<String> {
+     let e = t.external.as_ref()?;
+-    let slug = slugify(&format!("{} {}", e.key, t.title));
++    let slug = slug_within(&format!("{} {}", e.key, t.title), 40);
+     (!slug.is_empty()).then_some(slug)
+ }
+ 
+diff --git a/src-tauri/src/core.rs b/src-tauri/src/core.rs
+index 27f58d83..185b7be8 100644
+--- a/src-tauri/src/core.rs
++++ b/src-tauri/src/core.rs
+@@ -1173,14 +1173,9 @@ fn handed_back(items: &[Value]) -> Option<String> {
+         .map(str::to_string)
+ }
+ 
+-/// Kebab-case ASCII slug from free text (accents folded), of at most 40 characters.
+-pub fn slugify(s: &str) -> String {
+-    slug_within(s, 40)
+-}
+-
+ /// Kebab-case ASCII slug from free text (accents folded), of at most `max` characters: whole
+ /// words while they fit, the first one cut when it alone is longer.
+-fn slug_within(s: &str, max: usize) -> String {
++pub fn slug_within(s: &str, max: usize) -> String {
+     let folded: String = s
+         .trim()
+         .to_lowercase()
+@@ -1232,7 +1227,7 @@ pub(crate) fn copy_name(lang: i18n::Lang, original: &str, taken: &[String]) -> S
+ /// English), the original's part shortened so that the marker always fits in a slug's 40
+ /// characters; `prefix` is the project's « Préfixe des branches des agents ».
+ fn copy_branch(prefix: &str, original: &str, copy: &str) -> String {
+-    let marker = slugify(copy.strip_prefix(original).unwrap_or(copy));
++    let marker = slug_within(copy.strip_prefix(original).unwrap_or(copy), 40);
+     let base = slug_within(original, 40usize.saturating_sub(marker.len() + 1));
+     let slug = if base.is_empty() {
+         marker
+@@ -1405,7 +1400,7 @@ pub(crate) fn name_from_answer(raw: &str) -> Option<String> {
+     if words > 4 {
+         return None;
+     }
+-    let slug = slugify(line);
++    let slug = slug_within(line, 40);
+     (!slug.is_empty()).then_some(slug)
+ }
+ 
+@@ -6541,7 +6536,7 @@ impl<R: Runtime> Core<R> {
+         let made = match self.project(&project_id) {
+             Ok(project) => {
+                 let name = h.lock().meta.name.clone();
+-                let slug = match slugify(&name) {
++                let slug = match slug_within(&name, 40) {
+                     s if s.is_empty() => "agent".to_string(),
+                     s => s,
+                 };
+@@ -7323,7 +7318,7 @@ impl<R: Runtime> Core<R> {
+             return Err(agent_not_found());
+         }
+         let (renamed, kept) = match self
+-            .rename_agent_branch(&h, &project_id, &slugify(name))
++            .rename_agent_branch(&h, &project_id, &slug_within(name, 40))
+             .await
+         {
+             Ok(branch) => (branch, None),
+@@ -10584,14 +10579,14 @@ mod tests {
+ 
+     #[test]
+     fn slugs() {
+-        assert_eq!(slugify("Migration JWT rotation"), "migration-jwt-rotation");
++        assert_eq!(slug_within("Migration JWT rotation", 40), "migration-jwt-rotation");
+         assert_eq!(
+-            slugify("  réparer l'écran d'accueil! "),
++            slug_within("  réparer l'écran d'accueil! ", 40),
+             "reparer-l-ecran-d-accueil"
+         );
+-        assert!(slugify(&"mot ".repeat(30)).len() <= 40);
++        assert!(slug_within(&"mot ".repeat(30), 40).len() <= 40);
+         // A first word longer than a slug is cut, not dropped.
+-        assert_eq!(slugify(&"b".repeat(50)), "b".repeat(40));
++        assert_eq!(slug_within(&"b".repeat(50), 40), "b".repeat(40));
+     }
+ 
+     #[test]
+diff --git a/src-tauri/src/integrations/text.rs b/src-tauri/src/integrations/text.rs
+index b845a35a..d01d29f5 100644
+--- a/src-tauri/src/integrations/text.rs
++++ b/src-tauri/src/integrations/text.rs
+@@ -2,7 +2,7 @@
+ //! description lists, the states that look like the board's columns, and the comments the sync
+ //! writes.
+ 
+-use crate::core::slugify;
++use crate::core::slug_within;
+ use crate::i18n::Lang;
+ use crate::model::{Column, ExternalState, Ticket};
+ use serde_json::{json, Value};
+@@ -435,7 +435,7 @@ pub fn names_criteria(line: &str) -> bool {
+         .trim_start_matches('#')
+         .trim_matches(|c: char| matches!(c, '*' | '_' | ':' | ' '))
+         .replace('’', "'");
+-    let slug = slugify(&name);
++    let slug = slug_within(&name, 40);
+     [
+         "criteres-d-accept",
+         "critere-d-accept",
+@@ -477,7 +477,7 @@ const TO_TEST: &[&str] = &[
+ fn looks_like<'a>(states: &'a [ExternalState], patterns: &[&str]) -> Option<&'a ExternalState> {
+     patterns.iter().find_map(|p| {
+         states.iter().find(|s| {
+-            let slug = slugify(&s.name);
++            let slug = slug_within(&s.name, 40);
+             slug == *p
+                 || slug.starts_with(&format!("{p}-"))
+                 || slug.ends_with(&format!("-{p}"))

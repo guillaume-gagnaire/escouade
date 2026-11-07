@@ -182,7 +182,7 @@ Le merge ne supprime ni le worktree ni la branche de l’agent. Pour les ranger,
 
 ## Ouvrir une pull request
 
-Plutôt que de merger toi-même, tu peux proposer le travail d’un agent en pull request, sur GitHub pour l’instant (GitLab, Bitbucket et Gitea viendront). Il faut que le projet ait son dépôt distant chez l’hébergeur et un compte connecté dans [Réglages › Intégrations](settings-integrations) ; sinon, rien ne le propose.
+Plutôt que de merger toi-même, tu peux proposer le travail d’un agent en pull request, chez tout [hébergeur de code](code-hosts) : GitHub, GitLab, Bitbucket Cloud, Gitea, Forgejo ou Azure DevOps. Il faut que le projet ait son dépôt distant chez l’hébergeur et un compte connecté dans [Réglages › Intégrations](settings-integrations) ; sinon, rien ne le propose.
 
 « Ouvrir une PR » est dans l’en-tête de la conversation, dans le menu d’un clic droit sur la carte de l’agent, et dans le menu de sa branche du [sélecteur de branches](branches). La fenêtre propose un titre et une description, rédigés par le modèle des textes rédigés d’après les commits et le diff de la branche : relis-les, corrige-les, choisis la branche cible et le brouillon si tu veux. Rien ne part avant « Pousser et ouvrir », qui pousse la branche puis ouvre la PR. Les fichiers non commités du worktree n’y sont pas, et la fenêtre le dit.
 

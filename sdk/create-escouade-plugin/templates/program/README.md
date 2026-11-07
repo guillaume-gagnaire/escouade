@@ -3,8 +3,7 @@
 A plugin of [Escouade](https://escouade.dev), in TypeScript with [`@escouade-dev/plugin`](https://escouade.dev/en/docs/plugins/sdk).
 
 - `src/plugin.ts`: what it does (a fact received, a permission decided);
-- `src/main.ts`: the program Escouade starts, bundled into `dist/plugin.mjs` by `npm run build`;
-- `plugin` and `plugin.cmd`: what `run` in `escouade-plugin.json` starts, on macOS and Linux, and on Windows.
+- `src/main.ts`: the program, bundled into `dist/plugin.mjs` by `npm run build`: `run.js` in `escouade-plugin.json`, which Escouade runs inside the app, in WASM, without Node.
 
 ```sh
 npm install
@@ -17,4 +16,4 @@ npm run archive     # the .tar.gz and its SHA-256, in packs/
 
 `npm run bench` and `npm run dev` use the `escouade-plugin` that ships with Escouade: install the app, or give its path in `ESCOUADE_PLUGIN_BIN`.
 
-To try it in Escouade, load this folder in Settings › Plugins (developer mode). Before you tag a version, run `npm run build` and commit `dist/`: Escouade runs the plugin as the repository holds it, without `npm install`. For people without Node, build one executable per system: https://escouade.dev/en/docs/plugins/sdk#one-executable
+To try it in Escouade, load this folder in Settings › Plugins (developer mode). Before you tag a version, run `npm run build` and commit `dist/`: Escouade runs the plugin as the repository holds it, without `npm install`, and the people who use it need no Node. Inside Escouade it reaches only the hosts of `permissions.network` (`fetch`), and reads only the files of its folder (`p.file()`).

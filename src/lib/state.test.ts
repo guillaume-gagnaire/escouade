@@ -1241,6 +1241,27 @@ describe('board', () => {
     expect(app.projects.map((p) => p.id)).toEqual(['p1', 'p2']);
   });
 
+  it('shows the « Pull requests » view in place of the agents until another view or an agent is picked (ESC-65)', async () => {
+    await start();
+    app.openPrs('p1');
+    expect(app.prsOn).toBe(true);
+    expect(app.agentShown).toBeNull();
+    app.selectAgent('a2');
+    expect(app.prsOn).toBe(false);
+    app.openPrs('p1');
+    app.openBoard('p1');
+    expect(app.prsOn).toBe(false);
+    app.openPrs('p1');
+    app.openDocs('p1');
+    expect(app.prsOn).toBe(false);
+    app.openPrs('p1');
+    app.selectTerm('t1');
+    expect(app.prsOn).toBe(false);
+    app.openPrs('p1');
+    app.closePrs();
+    expect(app.prsOn).toBe(false);
+  });
+
   it('shows the board in place of the agents until an agent, a terminal, a launch or the editor is picked', async () => {
     await start();
     app.openBoard('p1');
@@ -1385,6 +1406,13 @@ describe('board', () => {
     await vi.waitFor(() => expect(backend.called('open_url')).toHaveLength(1));
     expect(backend.called('open_url')[0].args.url).toBe('https://github.com/acme/demo/compare/main...ticket/dem-1');
     expect(app.toasts).toEqual([]);
+  });
+
+  it('opens the pull requests of the project a review was asked in (ESC-68)', async () => {
+    const { emit } = await start();
+    emit({ type: 'focusPrs', projectId: 'p2' });
+    expect(app.ui.activeProject).toBe('p2');
+    expect(app.prsOn).toBe(true);
   });
 
   it('shows the board of the project of a notification even when another view is up', async () => {

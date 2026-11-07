@@ -11,8 +11,8 @@ import { nativeBin } from './native.mjs';
 // The escouade-plugin of the SDK (ESC-181, PLG-9): validate and pack in Node, test and dev handed to the app's own.
 
 const CLI = path.join(__dirname, 'escouade-plugin.mjs');
-// PLG-10's examples (ESC-182).
-const EXAMPLES = path.join(__dirname, '..', '..', '..', 'plugin-examples');
+// The plugins of Escouade's own hand (PLG-10's examples, ESC-182; plugins/<id>/ since ESC-314).
+const EXAMPLES = path.join(__dirname, '..', '..', '..', 'plugins');
 
 function cli(args: string[], env: Record<string, string> = {}) {
   const r = spawnSync(process.execPath, [CLI, ...args, '--lang', 'en'], { encoding: 'utf8', env: { ...process.env, ...env } });
@@ -47,9 +47,23 @@ function entries(file: string) {
   return out;
 }
 
+/** The manifest of Slack as a plugin launched by a script (what it was before 2.0.0, ESC-326): `slack` and `slack.cmd`. */
+function processManifest(): Record<string, unknown> {
+  const m = JSON.parse(fs.readFileSync(path.join(EXAMPLES, 'slack', 'escouade-plugin.json'), 'utf8'));
+  m.run = { command: 'slack', windows: 'slack.cmd' };
+  return m;
+}
+
 describe('escouade-plugin of the SDK', () => {
   it('validates a manifest, and says each field that is wrong', () => {
-    expect(cli(['validate', path.join(EXAMPLES, 'slack')])).toMatchObject({ code: 0, out: expect.stringContaining('the manifest holds') });
+    expect(cli(['validate', path.join(EXAMPLES, 'slack'), '--first-party'])).toMatchObject({
+      code: 0,
+      out: expect.stringContaining('the manifest holds'),
+    });
+    // Its id dev.escouade.slack is Escouade's own hand: reserved to anyone else (ESC-314).
+    const anyone = cli(['validate', path.join(EXAMPLES, 'slack')]);
+    expect(anyone.code).toBe(1);
+    expect(anyone.err).toContain("is kept for Escouade's own plugins");
     const dir = tmp();
     fs.writeFileSync(path.join(dir, 'escouade-plugin.json'), JSON.stringify({ id: 'Nope', version: 'x', run: { command: 'gone' } }));
     const bad = cli(['validate', dir]);
@@ -60,34 +74,55 @@ describe('escouade-plugin of the SDK', () => {
 
   it('refuses a run program missing from the folder', () => {
     const dir = tmp();
-    fs.copyFileSync(path.join(EXAMPLES, 'slack', 'escouade-plugin.json'), path.join(dir, 'escouade-plugin.json'));
-    const r = cli(['validate', dir]);
+    fs.writeFileSync(path.join(dir, 'escouade-plugin.json'), JSON.stringify(processManifest()));
+    const r = cli(['validate', dir, '--first-party']);
     expect(r.code).toBe(1);
     expect(r.err).toContain('slack is not in the folder');
+    // A run.js plugin's bundle too (ESC-322).
+    const m = JSON.parse(fs.readFileSync(path.join(dir, 'escouade-plugin.json'), 'utf8'));
+    m.run = { js: 'dist/plugin.mjs' };
+    fs.writeFileSync(path.join(dir, 'escouade-plugin.json'), JSON.stringify(m));
+    const js = cli(['validate', dir, '--first-party']);
+    expect(js.code).toBe(1);
+    expect(js.err).toContain('dist/plugin.mjs is not in the folder');
+  });
+
+  it('hands build to the app’s escouade-plugin (ESC-322)', () => {
+    const dir = tmp();
+    fs.writeFileSync(path.join(dir, 'build'), 'console.log(JSON.stringify(process.argv.slice(2)))');
+    const folder = path.join(EXAMPLES, 'team-rules');
+    const r = spawnSync(process.execPath, [CLI, 'build', folder, '--json'], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: { ...process.env, ESCOUADE_PLUGIN_BIN: process.execPath, LANG: 'en_US.UTF-8' },
+    });
+    expect(r.status, r.stderr).toBe(0);
+    expect(JSON.parse(r.stdout)).toEqual([folder, '--json', '--lang', 'en']);
   });
 
   it('packs the same bytes twice, programs executable, without node_modules, .git or packs', () => {
     const dir = tmp();
-    // What the Slack example runs, without its sources (and whatever npm left in it here).
-    for (const f of ['escouade-plugin.json', 'channels.json', 'slack', 'slack.cmd', 'dist/plugin.mjs']) {
+    // A plugin launched by scripts (the Slack example as it was in 1.x), without sources (and whatever npm left in it).
+    for (const f of ['channels.json', 'dist/plugin.mjs']) {
       fs.cpSync(path.join(EXAMPLES, 'slack', f), path.join(dir, f));
     }
-    fs.mkdirSync(path.join(dir, 'node_modules', 'x'), { recursive: true });
-    fs.writeFileSync(path.join(dir, 'node_modules', 'x', 'i.js'), '');
+    fs.writeFileSync(path.join(dir, 'escouade-plugin.json'), JSON.stringify(processManifest(), null, 2));
+    fs.writeFileSync(path.join(dir, 'slack'), '#!/bin/sh\nexec node "$(dirname "$0")/dist/plugin.mjs" "$@"\n');
+    fs.writeFileSync(path.join(dir, 'slack.cmd'), '@echo off\r\nnode "%~dp0dist\\plugin.mjs" %*\r\n');
     fs.mkdirSync(path.join(dir, '.git'));
     fs.writeFileSync(path.join(dir, '.git', 'HEAD'), '');
     fs.mkdirSync(path.join(dir, 'docs', 'a'.repeat(60), 'b'.repeat(60)), { recursive: true });
     fs.writeFileSync(path.join(dir, 'docs', 'a'.repeat(60), 'b'.repeat(60), 'long.md'), '# long');
-    const first = cli(['pack', dir, '--target', 'linux-x64']);
+    const first = cli(['pack', dir, '--target', 'linux-x64', '--first-party']);
     expect(first.code, first.err).toBe(0);
     const { version } = JSON.parse(fs.readFileSync(path.join(dir, 'escouade-plugin.json'), 'utf8'));
-    const name = `dev.exemple.slack-${version}-linux-x64.tar.gz`;
+    const name = `dev.escouade.slack-${version}-linux-x64.tar.gz`;
     const file = path.join(dir, 'packs', name);
     const bytes = fs.readFileSync(file);
     const sha = createHash('sha256').update(bytes).digest('hex');
     expect(first.out).toContain(`sha256 ${sha}`);
     expect(fs.readFileSync(`${file}.sha256`, 'utf8')).toBe(`${sha}  ${name}\n`);
-    expect(cli(['pack', dir, '--target', 'linux-x64']).code).toBe(0);
+    expect(cli(['pack', dir, '--target', 'linux-x64', '--first-party']).code).toBe(0);
     expect(fs.readFileSync(file).equals(bytes)).toBe(true);
     const list = entries(file);
     expect(list.map((e) => e.name)).toEqual([
@@ -104,7 +139,7 @@ describe('escouade-plugin of the SDK', () => {
   });
 
   it('refuses a target that is not a system and an architecture', () => {
-    expect(cli(['pack', path.join(EXAMPLES, 'slack'), '--target', 'amiga', '--out', tmp()]).code).toBe(2);
+    expect(cli(['pack', path.join(EXAMPLES, 'slack'), '--target', 'amiga', '--out', tmp(), '--first-party']).code).toBe(2);
   });
 
   it('hands test and dev to the app’s escouade-plugin, or says where to get it', () => {

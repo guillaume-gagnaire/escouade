@@ -75,6 +75,8 @@ pub struct Limits {
     pub initialize: Duration,
     /// How long it has to answer `shutdown` before its job ends.
     pub shutdown: Duration,
+    /// What the instance of a `run.js` plugin may take (its memory, its turns).
+    pub wasm: super::wasm::Limits,
 }
 
 impl Default for Limits {
@@ -87,6 +89,7 @@ impl Default for Limits {
             queue: 256,
             initialize: Duration::from_secs(10),
             shutdown: Duration::from_secs(1),
+            wasm: super::wasm::Limits::default(),
         }
     }
 }
@@ -97,7 +100,15 @@ pub fn timeout_of(method: &str) -> Duration {
         "initialize" => 10_000,
         "shutdown" => 1_000,
         m if m.starts_with("permissions/") => 500,
-        m if m.starts_with("tickets/") || m.starts_with("forge/") || m == "engine/oneShot" => {
+        // isola's own limit (60 s) comes first, with its message.
+        m if m.starts_with("launch/") => 65_000,
+        m if m.starts_with("tickets/")
+            || m.starts_with("forge/")
+            || m.starts_with("workflow/")
+            || m.starts_with("voice/")
+            || m == "account/me"
+            || m == "engine/oneShot" =>
+        {
             60_000
         }
         _ => 5_000,
@@ -229,6 +240,21 @@ pub(crate) fn program_path(folder: &Path, run: &manifest::Run, escouade_dir: &Pa
     }
 }
 
+/// Whether the program of `run` for this system is one of the app's (`{escouade}/…`).
+fn app_program(run: &manifest::Run) -> bool {
+    let sys = if cfg!(windows) {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else {
+        "linux"
+    };
+    run.by_system
+        .get(sys)
+        .unwrap_or(&run.command)
+        .starts_with(manifest::ESCOUADE_DIR)
+}
+
 /// Whether `word` is one of `patterns`: the same, or one a `prefix*` takes in.
 pub(crate) fn matches(pattern: &str, word: &str) -> bool {
     match pattern.strip_suffix('*') {
@@ -270,7 +296,7 @@ fn null() -> Box<RawValue> {
 type Answer = Result<Box<RawValue>, CallError>;
 
 /// A line for a plugin's input, and who waits for it to be written.
-type Frame = (Vec<u8>, Option<oneshot::Sender<()>>);
+type Frame = super::wasm::Frame;
 
 /// A message the plugin sent: an answer, a request or a notification.
 #[derive(Deserialize)]
@@ -376,6 +402,8 @@ struct Host {
     pending: Mutex<HashMap<u64, oneshot::Sender<Answer>>>,
     next_id: AtomicU64,
     journal: Arc<Journal>,
+    /// The agents it was given, for `fs/*` and `proc/*`.
+    agents: super::files::Agents,
 }
 
 /// The plugins' processes of the app.
@@ -383,6 +411,8 @@ pub struct Runtime {
     plugins: Arc<Plugins>,
     secrets: Arc<dyn SecretStore>,
     logs: PathBuf,
+    /// The temporary folders of the plugins, one each.
+    temps: PathBuf,
     app_version: String,
     /// The folder of the app's programs (`{escouade}` of a plugin of its own).
     escouade_dir: PathBuf,
@@ -391,10 +421,212 @@ pub struct Runtime {
     /// Every plugin's journal, a declarative one's too (its webhooks, its commands).
     journals: Mutex<HashMap<String, Arc<Journal>>>,
     quitting: AtomicBool,
+    /// Where the projects are (the core): what `settings/get` reads of a project's file.
+    place: parking_lot::RwLock<Option<Weak<dyn super::events::Place>>>,
+    /// What each account has left of its calls, as its plugin's last answer said it (INT-6): by
+    /// `accounts::budget_key`, shared by all the points of the plugin that serves the account.
+    budgets: Mutex<HashMap<String, crate::forge::RateLimit>>,
+    /// Who listens to the notifications a plugin sends beyond `log` (`on_notification`): the voice services' text and
+    /// sound while they work (INT-13).
+    listeners: Mutex<HashMap<String, Listener>>,
+    /// The modules of the `run.js` plugins, in the app's cache (ESC-320).
+    modules: Arc<super::wasm::Modules>,
+    /// What the tests change of `net/fetch`'s network.
+    net: parking_lot::RwLock<super::wasm::Net>,
+    /// The secrets the core lends a plugin the app gives, by plugin and key (`account:github.com`): the token of an
+    /// saved account of the first hand as the core holds it, the user's or its CLI's (`gh auth token`), read before
+    /// the keychain. Never another plugin's.
+    lent: Mutex<HashMap<(String, String), String>>,
+    /// What the tries of a connection under way lend, the latest last (`Trial`).
+    tried: Mutex<Vec<Tried>>,
+    /// The number of the next `Trial`.
+    trials: AtomicU64,
+    /// What a plugin the app gives is told when it starts (`ESCOUADE_LANG`, the network of Réglages › Réseau).
+    builtin_env: parking_lot::RwLock<Vec<(String, String)>>,
+    /// What a program of a plugin gets as an agent does (`set_agent_env`).
+    agent_env: parking_lot::RwLock<Vec<(String, String)>>,
     me: Weak<Self>,
 }
 
+/// What a try of a connection lends a plugin.
+struct Tried {
+    trial: u64,
+    plugin: String,
+    key: String,
+    secret: String,
+    host: String,
+}
+
+/// The try of a connection, whose account is not saved yet: the secret and the host it lends end with it, won, lost or
+/// dropped half way. Each try has its own, so two tries at once, or an account that runs on the same secret, keep theirs.
+pub struct Trial {
+    rt: Weak<Runtime>,
+    number: u64,
+}
+
+impl Trial {
+    /// Lends the plugin `plugin` the secret `key` and the host the user typed (`{account}` reaches it, empty for none).
+    pub fn lend(&self, plugin: &str, key: &str, secret: &str, host: &str) {
+        if let Some(rt) = self.rt.upgrade() {
+            rt.tried.lock().push(Tried {
+                trial: self.number,
+                plugin: plugin.to_string(),
+                key: key.to_string(),
+                secret: secret.trim().to_string(),
+                host: host.to_string(),
+            });
+        }
+    }
+
+    /// Won: its account is saved, and its secrets go on lent for it.
+    pub fn keep(self) {
+        if let Some(rt) = self.rt.upgrade() {
+            for t in rt.tried.lock().iter().filter(|t| t.trial == self.number) {
+                rt.lend(&t.plugin, &t.key, &t.secret);
+            }
+        }
+    }
+}
+
+impl Drop for Trial {
+    fn drop(&mut self) {
+        if let Some(rt) = self.rt.upgrade() {
+            rt.tried.lock().retain(|t| t.trial != self.number);
+        }
+    }
+}
+
+/// What listens to a plugin's notifications.
+type Listener = Arc<dyn Fn(&str, Value) + Send + Sync>;
+
 impl Runtime {
+    /// Listens to the notifications of the plugin `id` (but `log`), in place of the one before. The listener runs on
+    /// the thread that reads the plugin's output, in the order the plugin wrote: it must not wait.
+    pub fn on_notification(&self, id: &str, f: impl Fn(&str, Value) + Send + Sync + 'static) {
+        self.listeners.lock().insert(id.to_string(), Arc::new(f));
+    }
+
+    /// What the account `key` (`accounts::budget_key`) has left of its calls, as last said.
+    pub fn budget(&self, key: &str) -> Option<crate::forge::RateLimit> {
+        self.budgets.lock().get(key).copied()
+    }
+
+    /// The account `key` has `left` of its calls: whichever of its plugin's points was answered.
+    pub fn spend(&self, key: &str, left: crate::forge::RateLimit) {
+        self.budgets.lock().insert(key.to_string(), left);
+    }
+
+    /// Lends the plugin of the app `id` its secret `key` (`account:<host>`) for a saved account: what `secrets/get`
+    /// gives it first, until the account goes (`take_back`). An empty one takes the loan back.
+    pub fn lend(&self, id: &str, key: &str, secret: &str) {
+        let at = (id.to_string(), key.to_string());
+        if secret.trim().is_empty() {
+            self.lent.lock().remove(&at);
+        } else {
+            self.lent.lock().insert(at, secret.trim().to_string());
+        }
+    }
+
+    /// The account of the secret `key` went: no plugin keeps it. What a try under way lends ends with that try.
+    pub fn take_back(&self, key: &str) {
+        self.lent.lock().retain(|(_, k), _| k != key);
+    }
+
+    /// The try of a connection: what it lends ends with it.
+    pub fn trial(&self) -> Trial {
+        Trial {
+            rt: self.me.clone(),
+            number: self.trials.fetch_add(1, Ordering::Relaxed),
+        }
+    }
+
+    /// The hosts the tries under way lend the plugin `id`: a saved account's needs no loan (`accounts::hosts_of`).
+    pub fn lent_hosts(&self, id: &str) -> Vec<String> {
+        let mut hosts: Vec<String> = self
+            .tried
+            .lock()
+            .iter()
+            .filter(|t| t.plugin == id && !t.host.is_empty())
+            .map(|t| t.host.clone())
+            .collect();
+        hosts.sort();
+        hosts.dedup();
+        hosts
+    }
+
+    /// The secret `key` lent to the plugin `id`: the latest try's while one lends it, else the saved account's.
+    pub fn lent_secret(&self, id: &str, key: &str) -> Option<String> {
+        let tried = self.tried.lock();
+        let trying = tried
+            .iter()
+            .rev()
+            .find(|t| t.plugin == id && t.key == key && !t.secret.is_empty());
+        if let Some(t) = trying {
+            return Some(t.secret.clone());
+        }
+        drop(tried);
+        let at = (id.to_string(), key.to_string());
+        self.lent.lock().get(&at).cloned()
+    }
+
+    /// The network its plugins get.
+    #[cfg(test)]
+    pub fn net(&self) -> super::wasm::Net {
+        self.net.read().clone()
+    }
+
+    /// What a plugin the app gives is told when it starts: the interface's language and the network's settings. A
+    /// change applies to its next process: the core stops the running ones (`forget`).
+    /// What a program of a plugin gets as an agent does (`proc/spawn`): the network of Réglages.
+    pub fn set_agent_env(&self, env: Vec<(String, String)>) {
+        *self.agent_env.write() = env;
+    }
+
+    pub fn set_builtin_env(&self, env: Vec<(String, String)>) {
+        *self.builtin_env.write() = env;
+    }
+
+    pub fn builtin_env(&self) -> Vec<(String, String)> {
+        self.builtin_env.read().clone()
+    }
+
+    /// The language `initialize` says: the one the plugins the app gives are told, or the backend's. A module has no
+    /// environment, and a plugin of a third party gets none of `builtin_env` (docs/PLUGINS.md §8.4.8).
+    fn lang(&self) -> String {
+        let env = self.builtin_env.read();
+        let said = env.iter().find(|(k, _)| k == "ESCOUADE_LANG");
+        said.map_or_else(
+            || crate::i18n::kit(crate::i18n::ui()).code().to_string(),
+            |(_, code)| code.clone(),
+        )
+    }
+
+    /// The core, once made: the projects whose settings a plugin may ask for.
+    pub fn place_with(&self, p: Weak<dyn super::events::Place>) {
+        *self.place.write() = Some(p);
+    }
+
+    /// The settings of the plugin `id` (`settings/get`): the user's, and in the project `project`
+    /// those its `.escouade.yml` gives it (PLG-14), only where the plugin is on (a private project
+    /// gives nothing to a plugin not turned on for it).
+    pub fn settings_of(&self, id: &str, project: Option<&str>) -> Value {
+        let Some(choices) = self.plugins.choices(id) else {
+            return json!({});
+        };
+        let from_file = project.and_then(|p| {
+            let place = self.place.read().as_ref().and_then(Weak::upgrade)?;
+            let (private, file) = place.project_plugin(p, id)?;
+            super::active_in(&choices, p, private).then_some(file)
+        });
+        let manifest = self.plugins.get(id, Lang::En).and_then(|v| v.manifest);
+        match (from_file, manifest) {
+            (Some(file), Some(m)) => {
+                Value::Object(super::project_settings(&m, &choices.settings, &file))
+            }
+            _ => Value::Object(choices.settings),
+        }
+    }
+
     pub fn new(
         plugins: Arc<Plugins>,
         secrets: Arc<dyn SecretStore>,
@@ -402,31 +634,120 @@ impl Runtime {
         app_version: &str,
         limits: Limits,
     ) -> Arc<Self> {
-        let escouade_dir = std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(Path::to_path_buf))
-            .unwrap_or_default();
+        let escouade_dir = plugins.app_dir().to_path_buf();
         let rt = Arc::new_cyclic(|me| Self {
             plugins: plugins.clone(),
             secrets,
             logs: data.plugin_logs_dir(),
+            temps: data.plugin_temp_dir(),
             app_version: app_version.to_string(),
             escouade_dir,
             limits,
             hosts: Mutex::new(HashMap::new()),
             journals: Mutex::new(HashMap::new()),
+            budgets: Mutex::new(HashMap::new()),
+            listeners: Mutex::new(HashMap::new()),
             quitting: AtomicBool::new(false),
+            place: parking_lot::RwLock::new(None),
+            modules: Arc::new(super::wasm::Modules::new(data, app_version)),
+            net: parking_lot::RwLock::new(super::wasm::Net::default()),
+            lent: Mutex::new(HashMap::new()),
+            tried: Mutex::new(Vec::new()),
+            trials: AtomicU64::new(0),
+            builtin_env: parking_lot::RwLock::new(Vec::new()),
+            agent_env: parking_lot::RwLock::new(Vec::new()),
             me: me.clone(),
         });
         // A folder in development read again: its process stops, and the next one is given the
-        // manifest of now (its permissions of secrets included).
+        // manifest of now (its permissions of secrets included), at once if it decides.
         let weak = Arc::downgrade(&rt);
         plugins.on_reload(move |id| {
             if let Some(rt) = weak.upgrade() {
                 rt.forget(id);
+                super::decide::warm_one(&rt.plugins, &rt, id);
             }
         });
         rt
+    }
+
+    /// The modules of the plugins in WASM.
+    pub fn modules(&self) -> &Arc<super::wasm::Modules> {
+        &self.modules
+    }
+
+    /// Réglages › Réseau, for the plugins in WASM: their next call follows it.
+    pub fn set_network(&self, network: super::socket::Net) {
+        *self.net.read().network.write() = network;
+    }
+
+    /// Who tells the hosts the user typed for the accounts of a plugin (`{account}`).
+    pub fn set_accounts(&self, accounts: super::wasm::HostsOf) {
+        self.net.write().accounts = Some(accounts);
+    }
+
+    /// The fake services of a build of development or a test (`Bases::faked`), for the instances to come.
+    #[cfg(any(debug_assertions, test))]
+    pub fn set_routes(&self, routes: std::collections::HashMap<String, String>) {
+        self.net.write().routes = routes;
+    }
+
+    /// The tests' network for `net/fetch` (a fake service, the resolver's answer), for the instances to come.
+    #[cfg(test)]
+    pub fn set_net(&self, net: super::wasm::Net) {
+        *self.net.write() = net;
+    }
+
+    /// Makes the module of the plugin in WASM `id` ready in the cache, on a thread of its own (its
+    /// installation, an update of the app): none for a plugin of another kind.
+    pub fn prepare(
+        &self,
+        id: &str,
+    ) -> Option<std::thread::JoinHandle<Result<super::wasm::Made, String>>> {
+        let view = self.plugins.get(id, Lang::En)?;
+        let run = view.manifest?.run.filter(|r| r.in_wasm().is_some())?;
+        let folder = PathBuf::from(&view.folder);
+        let modules = self.modules.clone();
+        let journal = self.journal_of(id);
+        let id = id.to_string();
+        std::thread::Builder::new()
+            .name(format!("plugin {id}: its module"))
+            .spawn(move || {
+                let made = modules.of(&folder, &run).map(|(_, made)| made);
+                match &made {
+                    Ok(super::wasm::Made::Cache) => {}
+                    Ok(m) => journal.push(Kind::Message, format!("ready: {}", m.describe())),
+                    Err(e) => {
+                        log::warn!("plugin {id}: its module: {e}");
+                        journal.push(Kind::Refused, format!("its module: {e}"));
+                    }
+                }
+                made
+            })
+            .ok()
+    }
+
+    /// Makes ready the modules of every plugin in WASM installed, those of another version of the app taken
+    /// out of the cache: at the start of the app, once its version may have changed.
+    pub fn prepare_all(&self) {
+        self.modules.prune();
+        for v in self.plugins.list(Lang::En) {
+            let in_wasm = v
+                .manifest
+                .as_ref()
+                .and_then(|m| m.run.as_ref())
+                .is_some_and(|r| r.in_wasm().is_some());
+            // A plugin of the seed is precompiled at its first activation: a start does not pay for those that do not serve.
+            // Those of the registry in a module are the seed to come (a harness's is first used by its first agent).
+            let seeded = matches!(
+                v.origin,
+                super::Origin::Store { seed: true, .. } | super::Origin::Builtin
+            );
+            if v.state == Loaded::Ready && in_wasm && !seeded {
+                if let Some(h) = self.prepare(&v.id) {
+                    let _ = h.join();
+                }
+            }
+        }
     }
 
     /// The plugin `id`'s host, made at its first use: only a plugin that loaded, with a program.
@@ -434,13 +755,58 @@ impl Runtime {
         if let Some(h) = self.hosts.lock().get(id) {
             return Ok(h.clone());
         }
+        let (folder, manifest) = self.runnable(id)?;
+        let host = Arc::new(Host {
+            id: id.to_string(),
+            folder,
+            manifest,
+            rt: self.me.clone(),
+            inner: Mutex::new(Inner {
+                phase: Phase::Idle,
+                conn: None,
+                generation: 0,
+                restarts: VecDeque::new(),
+                queue: VecDeque::new(),
+                attached: BTreeMap::new(),
+                capabilities: Value::Null,
+            }),
+            pending: Mutex::new(HashMap::new()),
+            next_id: AtomicU64::new(1),
+            journal: self.journal_of(id),
+            agents: Arc::default(),
+        });
+        Ok(self
+            .hosts
+            .lock()
+            .entry(id.to_string())
+            .or_insert(host)
+            .clone())
+    }
+
+    /// Why the plugin `id` cannot run now (switched off, not installed, not loaded, the app quitting), if it cannot;
+    /// nothing is made for it.
+    pub fn refusal(&self, id: &str) -> Option<CallError> {
+        if self.hosts.lock().contains_key(id) {
+            return None;
+        }
+        self.runnable(id).err()
+    }
+
+    /// The folder and the granted manifest of the plugin `id`, when it may run.
+    fn runnable(&self, id: &str) -> Result<(PathBuf, Manifest), CallError> {
         if self.quitting.load(Ordering::Acquire) {
             return Err(CallError::Stopped(Stop::Shutdown));
         }
-        let view = self
-            .plugins
-            .get(id, Lang::En)
-            .ok_or_else(|| CallError::Unavailable(format!("{id} is not installed")))?;
+        let view = self.plugins.get(id, Lang::En).ok_or_else(|| {
+            CallError::Unavailable(if self.plugins.uninstalled(id) {
+                tr!(
+                    "il n’est plus installé : la vue Plugins propose de l’installer.",
+                    "it is no longer installed: the Plugins view offers to install it."
+                )
+            } else {
+                format!("{id} is not installed")
+            })
+        })?;
         match &view.state {
             Loaded::Ready => {}
             Loaded::Disabled { reason } | Loaded::Invalid { reason, .. } => {
@@ -456,30 +822,7 @@ impl Runtime {
             .filter(|m| m.run.is_some())
             .map(|m| super::granted(&m, &view.choices.revoked))
             .ok_or_else(|| CallError::Unavailable(format!("{id} is declarative: nothing runs")))?;
-        let host = Arc::new(Host {
-            id: id.to_string(),
-            folder: PathBuf::from(&view.folder),
-            manifest,
-            rt: self.me.clone(),
-            inner: Mutex::new(Inner {
-                phase: Phase::Idle,
-                conn: None,
-                generation: 0,
-                restarts: VecDeque::new(),
-                queue: VecDeque::new(),
-                attached: BTreeMap::new(),
-                capabilities: Value::Null,
-            }),
-            pending: Mutex::new(HashMap::new()),
-            next_id: AtomicU64::new(1),
-            journal: self.journal_of(id),
-        });
-        Ok(self
-            .hosts
-            .lock()
-            .entry(id.to_string())
-            .or_insert(host)
-            .clone())
+        Ok((PathBuf::from(&view.folder), manifest))
     }
 
     /// Starts the plugins `word` activates (`event:ticket.column`, `account:github`), those that
@@ -488,7 +831,9 @@ impl Runtime {
         let mut started = Vec::new();
         for v in self.plugins.list(Lang::En) {
             let Some(m) = &v.manifest else { continue };
+            // Off for the app: nothing of it runs.
             if v.state != Loaded::Ready
+                || !v.choices.enabled
                 || m.run.is_none()
                 || !m.activation.iter().any(|a| matches(a, word))
             {
@@ -501,6 +846,46 @@ impl Runtime {
             }
         }
         started
+    }
+
+    /// An instance of the module of the plugin `id`, for its views (`plugins/view.rs`): greeted, and asking nothing of the
+    /// machine.
+    pub fn view_instance(&self, id: &str) -> Result<super::wasm::Instance, String> {
+        let (folder, manifest) = self.runnable(id).map_err(|e| e.to_string())?;
+        let run = manifest.run.as_ref().ok_or("no program")?;
+        if run.in_wasm().is_none() {
+            return Err(format!("{id} is no module"));
+        }
+        let (module, _) = self.modules.of(&folder, run)?;
+        let limits = self.limits.wasm.asked(manifest.limits);
+        let files = super::wasm::files_of(&folder);
+        let mut instance = super::wasm::Instance::start_with(&module, &files, limits, None)
+            .map_err(|f| f.to_string())?;
+        let hello = json!({
+            "jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {
+                "protocolVersion": PROTOCOL,
+                "escouade": { "version": self.app_version },
+                "plugin": { "id": id, "version": manifest.version },
+                "lang": self.lang(),
+                "capabilities": {},
+            },
+        });
+        instance.push(format!("{hello}\n").as_bytes());
+        instance.turn(limits.turn).map_err(|f| f.to_string())?;
+        Ok(instance)
+    }
+
+    /// A crash of the instance of the plugin `id`, which has no process to kill: as a fault of its module.
+    #[cfg(test)]
+    pub fn crash_instance(&self, id: &str) {
+        let Some(h) = self.hosts.lock().get(id).cloned() else {
+            return;
+        };
+        let conn = h.inner.lock().conn.clone();
+        if let Some(c) = conn {
+            c.kill();
+            h.exited(&c, None, vec!["a crash of the tests".to_string()]);
+        }
     }
 
     /// Where the plugin `id`'s process stands; idle for one that never started.
@@ -529,6 +914,13 @@ impl Runtime {
             pid: inner.conn.as_ref().and_then(|c| c.pid),
             capabilities: inner.capabilities.clone(),
         }
+    }
+
+    /// What the plugin `id`'s process uses now (its job's memory and CPU), when it runs.
+    pub fn usage(&self, id: &str) -> Option<JobUsage> {
+        let h = self.hosts.lock().get(id).cloned()?;
+        let conn = h.inner.lock().conn.clone()?;
+        conn.usage()
     }
 
     /// The plugin `id`'s journal, the oldest entry first: what its process wrote since Escouade
@@ -727,11 +1119,80 @@ impl Runtime {
         self.call(id, method, params).await
     }
 
+    /// `attach`, within `within` (a first call that starts the process).
+    pub async fn attach_within(
+        &self,
+        id: &str,
+        key: &str,
+        method: &str,
+        params: Value,
+        within: Duration,
+    ) -> Result<Value, CallError> {
+        let host = self.host(id)?;
+        host.inner
+            .lock()
+            .attached
+            .insert(key.to_string(), (method.to_string(), raw(&params)));
+        self.call_within(id, method, params, within).await
+    }
+
     /// Forgets what `key` attached.
     pub fn detach(&self, id: &str, key: &str) {
         if let Some(h) = self.hosts.lock().get(id) {
             h.inner.lock().attached.remove(key);
+            h.agents.lock().remove(key);
         }
+    }
+
+    /// How many places the plugin `id` was given and still holds.
+    #[cfg(test)]
+    pub fn lent_places(&self, id: &str) -> usize {
+        self.hosts
+            .lock()
+            .get(id)
+            .map_or(0, |h| h.agents.lock().len())
+    }
+
+    /// Where the agent `key` of the plugin `id` lives, as the core resolved it: its `fs/*` and `proc/*` are judged on it.
+    /// The roots it declares, what `agent/attach` tells it.
+    pub fn place_agent(
+        &self,
+        id: &str,
+        key: &str,
+        place: super::files::AgentPlace,
+    ) -> Result<BTreeMap<String, String>, CallError> {
+        let host = self.host(id)?;
+        let roots = host.access(self).roots_of(&place);
+        host.agents.lock().insert(key.to_string(), place);
+        Ok(roots)
+    }
+
+    /// Whether the plugin `id` reaches the project `project`, by its `choices`: a private project only when it is turned
+    /// on there. A project that is not known any more (one being closed) is not private.
+    pub fn reaches(&self, id: &str, project: &str, choices: &super::Choices) -> bool {
+        let place = self.place.read().as_ref().and_then(Weak::upgrade);
+        let private = place
+            .and_then(|p| p.project_plugin(project, id))
+            .is_some_and(|(private, _)| private);
+        super::active_in(choices, project, private)
+    }
+
+    /// The folder of the project `project` for the plugin `id`: a private project refuses a plugin not turned on for it.
+    fn project_folder(&self, id: &str, project: &str) -> Result<PathBuf, String> {
+        let place = self.place.read().as_ref().and_then(Weak::upgrade);
+        let place = place.ok_or("Escouade is closing")?;
+        let unknown = || format!("no project {project}");
+        let (private, _) = place.project_plugin(project, id).ok_or_else(unknown)?;
+        let choices = self.plugins.choices(id).ok_or("no such plugin")?;
+        if !super::active_in(&choices, project, private) {
+            return Err(format!(
+                "the project {project} is private, and this plugin is not turned on for it"
+            ));
+        }
+        place
+            .project_path(project)
+            .map(PathBuf::from)
+            .ok_or_else(unknown)
     }
 
     /// Stops the plugin `id`'s process; it does not start again until `restart`.
@@ -949,30 +1410,78 @@ impl Host {
             inner.generation
         };
         let run = self.manifest.run.as_ref().expect("a host has a program");
-        let program = rt.program_of(&self.folder, run);
-        let conn = match self.spawn(&rt, &program, generation) {
-            Ok(Some(c)) => c,
-            // Stopped meanwhile.
-            Ok(None) => return,
-            Err(e) => {
-                self.stop_with(Stop::Refused {
-                    reason: format!("cannot start {}: {e}", program.display()),
-                });
-                return;
+        let conn = if run.in_wasm().is_some() {
+            // In WASM (ESC-320, ESC-331): its module from the cache, or made now, off the runtime's threads.
+            let js = run.js.as_deref().unwrap_or(super::wasm::MODULE_FILE);
+            let (modules, folder, program) = (rt.modules.clone(), self.folder.clone(), run.clone());
+            let prepared = tokio::task::spawn_blocking(move || modules.of(&folder, &program))
+                .await
+                .unwrap_or_else(|e| Err(e.to_string()));
+            let (module, made) = match prepared {
+                Ok(m) => m,
+                Err(e) => {
+                    self.stop_with(Stop::Refused {
+                        reason: format!("cannot make the module of {js}: {e}"),
+                    });
+                    return;
+                }
+            };
+            let conn = match self.spawn_wasm(&rt, module, generation) {
+                Ok(Some(c)) => c,
+                Ok(None) => return,
+                Err(e) => {
+                    self.stop_with(Stop::Refused {
+                        reason: format!("cannot start {js} in WASM: {e}"),
+                    });
+                    return;
+                }
+            };
+            self.journal.push(
+                Kind::Start,
+                format!(
+                    "started {} in WASM, isolated: {}",
+                    self.folder.join(js).display(),
+                    made.describe()
+                ),
+            );
+            conn
+        } else {
+            let program = rt.program_of(&self.folder, run);
+            // The app starts no program of its own but its own: that of a plugin it gives is checked before it runs (INT-4).
+            if app_program(run) {
+                if let Err(reason) = super::builtin::check_program(&program, &rt.escouade_dir) {
+                    self.stop_with(Stop::Refused {
+                        reason: format!("not the app's own program: {reason}"),
+                    });
+                    return;
+                }
             }
+            let conn = match self.spawn(&rt, &program, generation) {
+                Ok(Some(c)) => c,
+                // Stopped meanwhile.
+                Ok(None) => return,
+                Err(e) => {
+                    self.stop_with(Stop::Refused {
+                        reason: format!("cannot start {}: {e}", program.display()),
+                    });
+                    return;
+                }
+            };
+            self.journal.push(
+                Kind::Start,
+                format!(
+                    "started {} (pid {})",
+                    program.display(),
+                    conn.pid.map(|p| p.to_string()).unwrap_or_default()
+                ),
+            );
+            conn
         };
-        self.journal.push(
-            Kind::Start,
-            format!(
-                "started {} (pid {})",
-                program.display(),
-                conn.pid.map(|p| p.to_string()).unwrap_or_default()
-            ),
-        );
         let hello = json!({
             "protocolVersion": PROTOCOL,
             "escouade": { "version": rt.app_version },
             "plugin": { "id": self.id, "version": self.manifest.version },
+            "lang": rt.lang(),
             "capabilities": { "batch": true, "secrets": true, "settings": true, "log": true, "attach": true },
         });
         let answer = match self
@@ -1070,6 +1579,13 @@ impl Host {
             .env("ESCOUADE_PLUGIN_ID", &self.id)
             .env("ESCOUADE_PLUGIN_API", PROTOCOL.to_string())
             .env("ESCOUADE_VERSION", &rt.app_version)
+            .envs(
+                rt.builtin_env
+                    .read()
+                    .iter()
+                    .filter(|_| super::builtin::is_builtin(&self.id))
+                    .cloned(),
+            )
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -1202,6 +1718,116 @@ impl Host {
         Ok(Some(conn))
     }
 
+    /// Its instance in WASM (`run.js`, `run.wasm`), on a thread of its own, which reads what comes for it and sends
+    /// `net/fetch` on its way; none when it was stopped meanwhile. A fault of the instance ends it as a crash ends a
+    /// process: `exited` makes another while its budget of restarts lasts.
+    fn spawn_wasm(
+        self: &Arc<Self>,
+        rt: &Runtime,
+        module: wasmtime::Module,
+        generation: u64,
+    ) -> std::io::Result<Option<Arc<Conn>>> {
+        let (tx, rx) = mpsc::unbounded_channel::<Frame>();
+        let back = tx.downgrade();
+        let capabilities = self.capabilities(rt, back.clone());
+        let conn = Arc::new(Conn {
+            generation,
+            pid: None,
+            tx: Mutex::new(Some(tx)),
+            job: None,
+            kill_tx: Mutex::new(None),
+            exited: AtomicBool::new(false),
+        });
+        {
+            let mut inner = self.inner.lock();
+            if inner.generation != generation
+                || !matches!(inner.phase, Phase::Starting | Phase::Restarting)
+            {
+                return Ok(None);
+            }
+            inner.conn = Some(conn.clone());
+        }
+        let files = super::wasm::files_of(&self.folder);
+        let mut net = rt.net.read().clone();
+        if net.shared.is_none() {
+            // As `harness.rs` keys them: the processes of this runtime.
+            let owner = rt as *const Runtime as usize;
+            net.shared = Some(Arc::new(move |plugin| {
+                super::shared::ports_of(owner, plugin)
+            }));
+        }
+        let fetcher = super::wasm::Fetcher::new(&self.id, &self.manifest.permissions.network, &net)
+            .limited(self.manifest.limits);
+        let limits = rt.limits.wasm.asked(self.manifest.limits);
+        let (host, c) = (self.clone(), conn.clone());
+        std::thread::Builder::new()
+            .name(format!("plugin {}", self.id))
+            .spawn(move || {
+                let calls = Some(capabilities.calls());
+                let fault = match super::wasm::Instance::start_with(&module, &files, limits, calls)
+                {
+                    Err(f) => Some(f),
+                    Ok(instance) => {
+                        let (h1, c1) = (host.clone(), c.clone());
+                        let (h2, h3, h4) = (host.clone(), host.clone(), host.clone());
+                        let wiring = super::wasm::Wiring {
+                            rx,
+                            back,
+                            line: Box::new(move |l| h1.incoming(&c1, l)),
+                            stderr: Box::new(move |l| h2.journal.push(Kind::Stderr, l)),
+                            refused: Arc::new(move |l| h3.journal.push(Kind::Refused, l)),
+                            said: Arc::new(move |l| h4.journal.push(Kind::Message, l)),
+                            capabilities: Some(capabilities.clone()),
+                        };
+                        super::wasm::serve(instance, fetcher, wiring)
+                    }
+                };
+                c.exited.store(true, Ordering::Release);
+                // Its programs end with it.
+                capabilities.end();
+                // Its input closed: it was stopped, and that was dealt with.
+                if let Some(f) = fault {
+                    host.exited(&c, None, vec![f.to_string()]);
+                }
+            })?;
+        Ok(Some(conn))
+    }
+
+    /// What it may reach of its folders (`permissions.files`).
+    fn access(&self, rt: &Runtime) -> super::files::Access {
+        super::files::Access::new(
+            &self.manifest,
+            &self.folder,
+            rt.temps.join(&self.id),
+            self.agents.clone(),
+        )
+    }
+
+    /// What an instance reaches of the machine.
+    fn capabilities(
+        self: &Arc<Self>,
+        rt: &Runtime,
+        back: mpsc::WeakUnboundedSender<Frame>,
+    ) -> Arc<super::wasm::Capabilities> {
+        let journal = self.journal.clone();
+        let told: super::procs::Told = Arc::new(move |kind, line| journal.push(kind, line));
+        let (me, id) = (self.rt.clone(), self.id.clone());
+        let procs = super::procs::Procs::new(super::procs::ProcsOf {
+            commands: self.manifest.permissions.commands.clone(),
+            temp: rt.temps.join(&self.id),
+            agents: self.agents.clone(),
+            projects: Arc::new(move |project| {
+                me.upgrade()
+                    .ok_or_else(|| "Escouade is closing".to_string())?
+                    .project_folder(&id, project)
+            }),
+            agent_env: rt.agent_env.read().clone(),
+            back,
+            told: told.clone(),
+        });
+        super::wasm::Capabilities::new(self.access(rt), procs, told)
+    }
+
     fn is_current(&self, conn: &Conn) -> bool {
         self.inner
             .lock()
@@ -1279,13 +1905,30 @@ impl Host {
                 Some(key) => self.secret(key).map(|s| json!(s)),
                 None => Err((INVALID_PARAMS, "secrets/get takes a key".into())),
             },
-            // The values of its settings, as the user set them (Réglages of its page).
-            "settings/get" => Ok(self
-                .rt
-                .upgrade()
-                .and_then(|rt| rt.plugins.choices(&self.id))
-                .map(|c| Value::Object(c.settings))
-                .unwrap_or_else(|| json!({}))),
+            // The values of its settings, as the user set them (Réglages of its page), with those
+            // of the project's .escouade.yml when it names a project (PLG-14).
+            "settings/get" => match params.get("project") {
+                None | Some(Value::Null) | Some(Value::String(_)) => Ok(self
+                    .rt
+                    .upgrade()
+                    .map(|rt| {
+                        rt.settings_of(&self.id, params.get("project").and_then(Value::as_str))
+                    })
+                    .unwrap_or_else(|| json!({}))),
+                Some(_) => Err((
+                    INVALID_PARAMS,
+                    "settings/get takes a project's id, or none".into(),
+                )),
+            },
+            // A file of its own folder (`p.file`), for a process as for an instance in WASM (ESC-321).
+            "files/read" => {
+                super::files::read(&self.folder, &params).inspect_err(|(code, message)| {
+                    if *code == super::files::REFUSED {
+                        self.journal
+                            .push(Kind::Refused, format!("files/read: {message}"));
+                    }
+                })
+            }
             _ => {
                 self.journal.push(
                     Kind::Refused,
@@ -1328,6 +1971,12 @@ impl Host {
         let Some(rt) = self.rt.upgrade() else {
             return Err((KEYCHAIN, "Escouade is closing".into()));
         };
+        if let Some(s) = rt.lent_secret(&self.id, key) {
+            self.journal.mask(&s);
+            self.journal
+                .push(Kind::Message, format!("was given its secret {key:?}"));
+            return Ok(Some(s));
+        }
         match rt.secrets.get(&secret_name(&self.id, key)) {
             Ok(Some(s)) => {
                 self.journal.mask(&s);
@@ -1364,9 +2013,30 @@ impl Host {
                 self.journal
                     .push(Kind::Message, format!("[{level}] {message}"));
             }
-            _ => self
-                .journal
-                .push(Kind::Message, format!("a notification {method}")),
+            // What an account has left, said before a refusal (which carries none): kept as an answer's
+            // `rateLimit` is (INT-8.1).
+            "account/budget" => {
+                let account = params.get("account").and_then(Value::as_str);
+                let left = params
+                    .get("rateLimit")
+                    .cloned()
+                    .and_then(|r| serde_json::from_value::<crate::forge::RateLimit>(r).ok());
+                if let (Some(account), Some(left), Some(rt)) = (account, left, self.rt.upgrade()) {
+                    rt.spend(&super::accounts::budget_key(&self.id, account), left);
+                }
+            }
+            _ => {
+                let listener = self
+                    .rt
+                    .upgrade()
+                    .and_then(|rt| rt.listeners.lock().get(&self.id).cloned());
+                match listener {
+                    Some(f) => f(method, params),
+                    None => self
+                        .journal
+                        .push(Kind::Message, format!("a notification {method}")),
+                }
+            }
         }
     }
 
@@ -1448,6 +2118,7 @@ impl Host {
 
     /// Stops its process for `stop`: what waits fails, and it does not start again by itself.
     fn stop_with(&self, stop: Stop) {
+        super::view::forget(&self.id);
         let conn = {
             let mut inner = self.inner.lock();
             if matches!(inner.phase, Phase::Stopped(_)) && inner.conn.is_none() {

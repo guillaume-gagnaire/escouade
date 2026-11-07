@@ -4,6 +4,14 @@ import type { Tree } from '../types';
 // or by itself, and the steps as the user corrects them, in the repository (.escouade/workflows/) or on this machine.
 export default {
   title: 'Workflow',
+  enabled: 'Workflows du projet',
+  enabledDesc:
+    'Escouade lit les skills, commandes et sous-agents du projet pour suivre ses agents dans leurs étapes. Sans workflow, elle n’en lit ni n’en écrit aucun.',
+  on: 'Lire les workflows',
+  off: 'Pas de workflow pour ce projet',
+  offNote:
+    'Pas de workflow pour ce projet : Escouade ne lit ni n’écrit ses workflows et n’y suit aucun agent ; {dir} reste tel quel. Pour le défaire, choisis « Lire les workflows » et enregistre.',
+  onNote: 'Enregistre pour lire à nouveau les workflows du projet.',
   readAt: 'Lu par les règles à {time}',
   readOn: 'Lu par les règles le {date}',
   reading: 'Lecture des fichiers…',
@@ -80,6 +88,16 @@ export default {
   upTo: { one: '{text}, jusqu’à {count} tour', other: '{text}, jusqu’à {count} tours' },
   add: 'Ajouter une étape',
   dismiss: 'Ce n’est pas un workflow',
+  delete: 'Supprimer ce workflow',
+  deleteTip: 'Son fichier est supprimé tout de suite, et la relecture ne le recrée pas. « Rétablir », sous « Supprimés », le défait.',
+  removedDone: '{name} supprimé : la relecture ne le recréera pas. « Rétablir » sous « Supprimés » pour le défaire.',
+  restoredDone: '{name} rétabli : relu et écrit à nouveau.',
+  removedTitle: 'Supprimés',
+  removedDesc: 'Supprimés ici ou leur fichier effacé à la main : la relecture ne les recrée pas',
+  removedKept: 'supprimé, ne sera pas recréé',
+  removedChanged: 'supprimé, mais ce qui l’a fait trouver a changé : le reprendre ?',
+  keepRemoved: 'Laisser supprimé',
+  takeBack: 'Reprendre',
   where: 'Où garder la configuration des workflows',
   whereDesc:
     'Les workflows tirés de la config du dépôt (.claude/, .agents/, .github/…) : dans le dépôt, un fichier par workflow dans {dir}, l’équipe voit les mêmes et leurs corrections. Escouade les écrit et les tient à jour, mais ne les commite jamais : commite-les avec ton travail. Ceux de tes propres dossiers (~/.claude) restent toujours sur cette machine.',

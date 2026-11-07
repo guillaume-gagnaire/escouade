@@ -1,0 +1,26 @@
+[package]
+name = "escouade-plugin-opencode"
+version = "2.2.1"
+description = "Le plugin OpenCode d'Escouade : OpenCode comme harness, par son serveur HTTP"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+
+# A module, compiled by `escouade-plugin build` (docs/PLUGINS.md §8.5). The core runs `opencode serve` for the agents of an
+# account; this crate is its client, and translates its events.
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+escouade-plugin-kit = "0.1.1"
+escouade-plugin-protocol = "0.1.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+parking_lot = "0.12"
+base64 = "0.22"
+
+# In a module, WASI's random numbers.
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+getrandom = "0.4"

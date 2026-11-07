@@ -3,12 +3,28 @@
 
 use super::super::online::tests::{serve, serve_with, Got, Reply, KEY};
 use super::*;
+use crate::voice::online::{OnlineError, Spec};
+use escouade_voice::catalog::{default_speak_model, ModelOption};
 use std::sync::Arc;
+
+/// What the plugin of the service lists.
+async fn fetch(spec: &Spec) -> Result<Listed, OnlineError> {
+    crate::voice::service::of(spec.provider).list(spec).await
+}
 
 fn spec(p: Provider, base: &str) -> Spec {
     Spec {
         base: base.into(),
-        ..Spec::new(p, KEY.into(), reqwest::Client::new())
+        ..Spec::new(p, KEY.into())
+    }
+}
+
+fn opt(id: &str, label: &str, note: String) -> ModelOption {
+    ModelOption {
+        id: id.into(),
+        label: label.into(),
+        note,
+        langs: Vec::new(),
     }
 }
 
@@ -27,7 +43,7 @@ async fn routes(list: Vec<(&'static str, String)>) -> (String, Arc<parking_lot::
     .await
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn openai_lists_what_transcribes_and_what_speaks_and_no_voice() {
     let (url, got) = serve(
         200,
@@ -61,7 +77,7 @@ async fn openai_lists_what_transcribes_and_what_speaks_and_no_voice() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn groq_lists_whisper_and_orpheus_in_english_only() {
     let (url, got) = serve(
         200,
@@ -89,7 +105,7 @@ async fn groq_lists_whisper_and_orpheus_in_english_only() {
     assert_eq!(c.speed, None);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn elevenlabs_lists_its_models_and_the_voices_of_the_account_page_by_page() {
     let models = r#"[
         {"model_id":"eleven_multilingual_v2","name":"Eleven Multilingual v2","can_do_text_to_speech":true,"languages":[{"language_id":"en","name":"English"},{"language_id":"fr","name":"French"}]},
@@ -153,7 +169,7 @@ async fn elevenlabs_lists_its_models_and_the_voices_of_the_account_page_by_page(
     assert_eq!(c.speed, Some([0.7, 1.2]));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_key_that_may_not_read_the_voices_leaves_the_field_free() {
     let (url, _) = serve_with(Arc::new(|g: &Got| {
         if g.line.starts_with("GET /v1/models") {
@@ -171,7 +187,7 @@ async fn a_key_that_may_not_read_the_voices_leaves_the_field_free() {
         .is_none());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn mistral_lists_voxtral_and_its_voices_presets_and_the_user_s() {
     let models = r#"{"object":"list","data":[{"id":"mistral-large-latest"},{"id":"voxtral-mini-latest"},{"id":"voxtral-mini-2507"},
         {"id":"voxtral-small-latest"},{"id":"voxtral-mini-transcribe-realtime-2602"},{"id":"voxtral-mini-tts-2603"}]}"#;
@@ -209,7 +225,7 @@ async fn mistral_lists_voxtral_and_its_voices_presets_and_the_user_s() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn deepgram_lists_its_architectures_and_each_voice_with_its_model_and_languages() {
     let body = r#"{
         "stt":[{"name":"general","canonical_name":"nova-3-general","architecture":"nova-3","languages":["en","fr"],"batch":true,"streaming":true},
@@ -251,7 +267,7 @@ async fn deepgram_lists_its_architectures_and_each_voice_with_its_model_and_lang
     assert_eq!(c.default_voices.get("aura|fr"), None);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_refused_key_lists_nothing_and_says_so() {
     let (url, _) = serve(401, r#"{"error":{"message":"Invalid API Key"}}"#).await;
     assert_eq!(
@@ -312,16 +328,16 @@ fn the_model_chosen_is_kept_while_offered_else_its_default_said() {
     assert!(s.get(Provider::OpenAi).is_some());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn the_dictation_sends_the_model_chosen_for_its_service() {
     let (url, got) = serve(200, r#"{"text":"ok"}"#).await;
     let s = spec(Provider::Groq, &url).with_model("whisper-large-v3");
-    super::super::online::transcribe(
-        &s,
-        &[0.1; 1600],
-        "fr",
-        &std::sync::atomic::AtomicBool::new(false),
-    )
+    tokio::task::spawn_blocking(move || {
+        let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        crate::voice::service::of(s.provider)
+            .transcribe(&s, &[0.1; 1600], "fr", &cancel)
+            .unwrap()
+    })
     .await
     .unwrap();
     assert_eq!(

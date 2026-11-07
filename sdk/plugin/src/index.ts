@@ -1,9 +1,12 @@
 // @escouade-dev/plugin: write a plugin of Escouade in TypeScript (ESC-181, PLG-9).
 //
-// A plugin with a program speaks JSON-RPC 2.0 to Escouade on its standard input and output, one message per
-// line (https://escouade.dev/en/docs/plugins/api). `createPlugin()` gives a client that speaks it: it answers
+// A plugin with a program speaks JSON-RPC 2.0 to Escouade, one message per line
+// (https://escouade.dev/en/docs/plugins/api): on its standard input and output when Node runs it (`run.command`), or
+// through Escouade's WASM host when it runs inside the app (`run.js`, ESC-321); `start()` finds which, the plugin's
+// code is the same. `createPlugin()` gives a client that speaks it: it answers
 // `initialize` and `shutdown`, serves batches, routes each fact to its handlers (`onEvent`), each permission to
-// decide to its rule (`decidePermission`), and asks Escouade for secrets (`secret`) and journal lines (`log`).
+// decide to its rule (`decidePermission`), and asks Escouade for secrets (`secret`), journal lines (`log`), its folders
+// (`fs`) and its programs (`runProgram`).
 import { createInterface } from 'node:readline';
 import {
   ERRORS,
@@ -12,13 +15,20 @@ import {
   type DecideParams,
   type Fact,
   type FactName,
+  type FsPath,
+  type FsReadParams,
+  type FsWriteParams,
   type InitializeParams,
   type InitializeResult,
   type LogParams,
+  type ProcExitParams,
+  type ProcOutParams,
+  type ProcSpawnParams,
   type ToEscouade,
 } from './protocol.js';
 
 export * from './protocol.js';
+export * from './net.js';
 export type { Manifest } from './manifest.js';
 
 /** An error to answer a call with: its code goes to Escouade as it is (`ERRORS`). */
@@ -31,6 +41,41 @@ export class RpcError extends Error {
     super(message);
     this.name = 'RpcError';
   }
+}
+
+/** Escouade's WASM host, as its prelude gives it (src-tauri/src/plugins/wasm_prelude.js). */
+interface WasmHost {
+  listen(cb: (line: string) => void): void;
+  write(line: string): void;
+  trace(line: string): void;
+  end(): void;
+}
+
+/** A program it runs (`p.runProgram`). */
+export interface Program {
+  proc: number;
+  /** How it ended: its code, or `null` when it was killed. */
+  exited: Promise<number | null>;
+  /** Writes on its input, and ends that input with `close`. */
+  write(data: string, close?: boolean): Promise<void>;
+  close(): Promise<void>;
+  /** Ends it, and what it started. */
+  kill(): Promise<void>;
+}
+
+interface ProgramState {
+  onOut?: (data: string, stream: ProcOutParams['stream']) => void;
+  onExit?: (code: number | null) => void;
+  early?: (ProcOutParams | ProcExitParams)[];
+}
+
+/** The WASM host of Escouade, when the plugin runs inside the app (`run.js`); none under Node. */
+export function wasmHost(): WasmHost | undefined {
+  const g = globalThis as { Javy?: unknown; __esc?: Partial<WasmHost> };
+  const h = g.__esc;
+  return typeof g.Javy === 'object' && g.Javy !== null && typeof h?.listen === 'function' && typeof h.write === 'function'
+    ? (h as WasmHost)
+    : undefined;
 }
 
 /** Where the plugin's lines go, and where its traces go: the process's own, or a test's. */
@@ -52,7 +97,10 @@ export type Handler = (params: unknown, plugin: Plugin) => unknown;
 export interface PluginOptions {
   /** The capabilities it answers `initialize` with, beside `batch`. */
   capabilities?: Record<string, unknown>;
-  /** How long its `onShutdown` handlers have, in milliseconds (Escouade waits 1 s for the answer). */
+  /**
+   * How long its `onShutdown` handlers have, in milliseconds (Escouade waits 1 s for the answer). In WASM, where there
+   * is no timer, Escouade's own second bounds them.
+   */
   shutdownMs?: number;
 }
 
@@ -77,6 +125,7 @@ export class Plugin {
   private readonly starting: Array<(params: InitializeParams) => void | Promise<void>> = [];
   private readonly waiting = new Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
   private readonly busy = new Set<Promise<unknown>>();
+  private readonly programs = new Map<number, ProgramState>();
   private next = 1;
   private conn?: Connection;
 
@@ -120,6 +169,81 @@ export class Plugin {
     return this.call('secrets/get', { key });
   }
 
+  /**
+   * Its settings (`contributes.settings`) as the user set them; with `project` (the `project.id` of a fact), those the
+   * project's `.escouade.yml` gives it (`plugins.<id>`) over them, where it is on.
+   */
+  settings(project?: string): Promise<Record<string, string | number | boolean>> {
+    return this.call('settings/get', project ? { project } : {});
+  }
+
+  /**
+   * A file of the plugin's own folder, as text: `rules.json`, `data/words.txt` (`files/read`, 256 KiB at most). A path
+   * that leaves the folder (`..`, absolute, a link out of it), a hidden one (`.env`) or the manifest is refused
+   * (`RpcError` `ERRORS.refused`); a missing file is `ERRORS.notFound`. The same under Node and in WASM.
+   */
+  file(path: string): Promise<string> {
+    return this.call('files/read', { path });
+  }
+
+  /**
+   * Its folders, for a plugin in WASM (`permissions.files`): a root and a path in it, or a path of the host under a root of
+   * an agent, as `agent/attach` gave them. A path out of them, links followed, is refused (`RpcError` `ERRORS.refused`).
+   */
+  readonly fs = {
+    read: (file: FsReadParams) => this.call('fs/read', file),
+    /** Its text; `ERRORS.failed` for a file that is not UTF-8. */
+    text: async (file: FsReadParams) => {
+      const r = await this.call('fs/read', file);
+      if (r.text === undefined) throw new RpcError(ERRORS.failed, `${file.path} is not text`);
+      return r.text;
+    },
+    write: (file: FsWriteParams) => this.call('fs/write', file),
+    stat: (file: FsPath) => this.call('fs/stat', file),
+    list: (folder: FsPath) => this.call('fs/list', folder),
+    canon: (file: FsPath) => this.call('fs/canon', file),
+  };
+
+  /**
+   * Runs a program of `permissions.commands`, for a plugin in WASM. The command and its arguments must be an entry, word for
+   * word; never a shell. What it writes comes to `onOut`; `exited` says how it ended.
+   */
+  async runProgram(params: ProcSpawnParams, onOut?: (data: string, stream: ProcOutParams['stream']) => void): Promise<Program> {
+    const { proc } = await this.call('proc/spawn', params);
+    return this.programOf(proc, onOut);
+  }
+
+  private programOf(proc: number, onOut?: (data: string, stream: ProcOutParams['stream']) => void): Program {
+    const heard = this.programs.get(proc);
+    const program: Program = {
+      proc,
+      exited: new Promise((resolve) => {
+        this.programs.set(proc, { onOut, onExit: resolve });
+      }),
+      write: (data, close) => this.call('proc/write', { proc, data, close }).then(() => undefined),
+      close: () => this.call('proc/write', { proc, close: true }).then(() => undefined),
+      kill: () => this.call('proc/kill', { proc }).then(() => undefined),
+    };
+    // What came before the answer to `proc/spawn`.
+    for (const m of heard?.early ?? []) this.heard(m);
+    return program;
+  }
+
+  /** `proc/out` or `proc/exit`; kept for a program whose answer is still to come. */
+  private heard(m: ProcOutParams | ProcExitParams): void {
+    const p = this.programs.get(m.proc);
+    if (!p?.onExit) {
+      const early = p ?? { early: [] };
+      early.early = [...(early.early ?? []), m];
+      this.programs.set(m.proc, early);
+    } else if ('data' in m) {
+      p.onOut?.(m.data, m.stream);
+    } else {
+      this.programs.delete(m.proc);
+      p.onExit(m.code);
+    }
+  }
+
   /** A line of its journal, in Réglages › Plugins. */
   readonly log = {
     debug: (message: string) => this.notify('log', { level: 'debug', message }),
@@ -147,8 +271,17 @@ export class Plugin {
     this.send({ jsonrpc: '2.0', method, params });
   }
 
-  /** Speaks the protocol on the process's standard input and output; ends the process after `shutdown`. */
+  /**
+   * Speaks the protocol to Escouade: inside the app (`run.js`), through its WASM host, never resolved; under Node, on the
+   * process's standard input and output, resolved when its input closes, the process ended after `shutdown`.
+   */
   start(): Promise<void> {
+    const host = wasmHost();
+    if (host) {
+      this.listen({ write: (line) => host.write(line), trace: (text) => host.trace(text), end: () => host.end() });
+      host.listen((line) => void this.receive(line));
+      return new Promise(() => {});
+    }
     const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
     this.listen({
       write: (line) => process.stdout.write(line + '\n'),
@@ -248,7 +381,12 @@ export class Plugin {
       }
       case 'shutdown': {
         const all = Promise.allSettled(this.closing.map((h) => h()));
-        await Promise.race([all, new Promise((r) => setTimeout(r, this.options.shutdownMs ?? 800).unref?.())]);
+        // A bound of its own where there is a timer; Escouade's delay of shutdown bounds them anyway.
+        const bound =
+          typeof setTimeout === 'function'
+            ? [new Promise((r) => (setTimeout(r, this.options.shutdownMs ?? 800) as { unref?: () => void }).unref?.())]
+            : [];
+        await Promise.race([all, ...bound]);
         return null;
       }
       case 'events/fact': {
@@ -262,6 +400,9 @@ export class Plugin {
         if (!this.decide) return { decision: 'ask' } satisfies Decision;
         return this.decide(params as DecideParams, this);
       }
+      case 'proc/out':
+      case 'proc/exit':
+        return this.heard(params as ProcOutParams | ProcExitParams);
       default: {
         const h = this.handlers.get(method);
         if (!h) throw new RpcError(ERRORS.methodNotFound, `unknown method ${method}`);

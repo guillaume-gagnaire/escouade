@@ -1,0 +1,153 @@
+[
+  {
+    "answer": {
+      "result": []
+    },
+    "branch": "feat",
+    "lang": "en",
+    "method": "launch/ls",
+    "ran": ["ls --json"]
+  },
+  {
+    "answer": {
+      "result": [
+        {
+          "name": "web",
+          "probe": "http://127.0.0.1:9",
+          "status": "running",
+          "url": "http://feat.demo.localhost:3000"
+        }
+      ]
+    },
+    "branch": "feat",
+    "lang": "en",
+    "method": "launch/ls",
+    "ran": ["ls --json"]
+  },
+  {
+    "answer": {
+      "result": []
+    },
+    "branch": "another",
+    "lang": "fr",
+    "method": "launch/ls",
+    "ran": ["ls --json"]
+  },
+  {
+    "answer": {
+      "code": -32010,
+      "message": "réponse d'isola illisible : expected value at line 1 column 1"
+    },
+    "branch": "feat",
+    "lang": "fr",
+    "method": "launch/ls",
+    "ran": ["ls --json"]
+  },
+  {
+    "answer": {
+      "code": -32010,
+      "message": "isola’s answer can’t be read: expected value at line 1 column 1"
+    },
+    "branch": "feat",
+    "lang": "en",
+    "method": "launch/ls",
+    "ran": ["ls --json"]
+  },
+  {
+    "answer": {
+      "result": null
+    },
+    "branch": "",
+    "lang": "en",
+    "method": "launch/down",
+    "ran": ["down"]
+  },
+  {
+    "answer": {
+      "result": []
+    },
+    "branch": "feat",
+    "lang": "en",
+    "method": "launch/ls",
+    "ran": ["ls --json"]
+  },
+  {
+    "answer": {
+      "result": null
+    },
+    "branch": "",
+    "lang": "fr",
+    "method": "launch/destroy",
+    "ran": ["destroy"]
+  },
+  {
+    "answer": {
+      "code": -32010,
+      "message": "isola ls --json failed: Error: the fake isola fails"
+    },
+    "branch": "feat",
+    "lang": "en",
+    "method": "launch/ls",
+    "ran": ["ls --json"]
+  },
+  {
+    "answer": {
+      "code": -32010,
+      "message": "isola ls --json a échoué : Error: the fake isola fails"
+    },
+    "branch": "feat",
+    "lang": "fr",
+    "method": "launch/ls",
+    "ran": ["ls --json"]
+  },
+  {
+    "answer": {
+      "code": -32010,
+      "message": "isola down failed: Error: the fake isola fails"
+    },
+    "branch": "",
+    "lang": "en",
+    "method": "launch/down",
+    "ran": ["down"]
+  },
+  {
+    "answer": {
+      "code": -32010,
+      "message": "isola down a échoué : Error: the fake isola fails"
+    },
+    "branch": "",
+    "lang": "fr",
+    "method": "launch/down",
+    "ran": ["down"]
+  },
+  {
+    "answer": {
+      "code": -32010,
+      "message": "isola destroy failed: Error: the fake isola fails"
+    },
+    "branch": "",
+    "lang": "en",
+    "method": "launch/destroy",
+    "ran": ["destroy"]
+  },
+  {
+    "answer": {
+      "code": -32010,
+      "message": "isola destroy a échoué : Error: the fake isola fails"
+    },
+    "branch": "",
+    "lang": "fr",
+    "method": "launch/destroy",
+    "ran": ["destroy"]
+  },
+  {
+    "answer": {
+      "code": -32601,
+      "message": "no method launch/up"
+    },
+    "branch": "",
+    "lang": "en",
+    "method": "launch/up",
+    "ran": []
+  }
+]

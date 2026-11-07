@@ -1,9 +1,12 @@
 //! GitHub's client against a fake server fed with answers recorded from github.com (a merged pull
 //! request of a public repository, `tests/fixtures/forges/github/`, see `record.mjs`), and with
 //! small made-up ones for what the recording does not hold (a failing job, a refusal).
+//!
+//! Since INT-8.1 the client is the plugin « GitHub »'s (`plugins/github`): an
+//! account's calls go to its module by `ProcessForge`, as the core
+//! makes them, and the plugin calls the fake server. What only the client itself shows (its pace,
+//! the answers it keeps) is read on it directly.
 
-use super::github::GithubProvider;
-use super::github_api::{graphql_url, Github, Pace, CACHE_MAX};
 use super::*;
 use crate::integrations::fake::FakeServer;
 use serde_json::json;
@@ -40,6 +43,15 @@ fn repo() -> RepoRef {
     RepoRef {
         namespace: "cli".into(),
         name: "cli".into(),
+    }
+}
+
+/// GitHub's accounts as the core serves them: by the plugin « GitHub », in its process.
+struct GithubProvider;
+
+impl GithubProvider {
+    fn client(&self, _http: reqwest::Client, creds: &Credentials) -> Box<dyn Forge> {
+        crate::plugins::builtin::served_forge(crate::plugins::builtin::GITHUB, "github", creds)
     }
 }
 
@@ -456,23 +468,49 @@ async fn a_jobs_log_is_read_as_the_text_it_is() {
     assert!(format!("{e:#}").contains("404"), "{e:#}");
 }
 
+/// What `limits.fetchBytes` of its manifest lets through (8 MiB) fits the memory of a module; beyond it, it says so.
+#[tokio::test]
+async fn a_long_log_is_read_whole_and_a_longer_one_is_refused() {
+    let server = FakeServer::start().await;
+    let path = "/repos/cli/cli/actions/jobs/1/logs";
+    let log = "2026-11-05T10:00:00Z une ligne du journal, \"citée\"
+"
+    .repeat(158_000);
+    assert!(log.len() > 7 << 20 && log.len() < 8 << 20);
+    server.on_text("GET", path, 200, &log, &[]);
+    let c = client(&server);
+    assert_eq!(c.job_log(&repo(), "1").await.unwrap(), log);
+    server.on_text("GET", path, 200, &"x".repeat(9 << 20), &[]);
+    let e = c.job_log(&repo(), "1").await.unwrap_err();
+    assert!(format!("{e:#}").contains("an answer over"), "{e:#}");
+}
+
 #[tokio::test]
 async fn a_jobs_log_redirected_to_another_host_is_read_without_the_token() {
     let api = FakeServer::start().await;
-    // Where GitHub keeps the text: another host, which must not get the token.
+    // Where GitHub keeps the text: another host, which must not get the token, and that its manifest names.
     let storage = FakeServer::start().await;
     storage.on_text("GET", "/logs/119211823435.txt", 200, JOB_LOG, &[]);
+    let blob = "productionresultssa0.blob.core.windows.net";
     api.on_with(
         "GET",
         "/repos/cli/cli/actions/jobs/119211823435/logs",
         302,
         Value::Null,
-        &[(
-            "Location",
-            &format!("{}/logs/119211823435.txt", storage.url),
-        )],
+        &[("Location", &format!("https://{blob}/logs/119211823435.txt"))],
     );
-    let log = client(&api).job_log(&repo(), "119211823435").await.unwrap();
+    let client = crate::plugins::builtin::served_forge_on(
+        crate::plugins::builtin::GITHUB,
+        "github",
+        &Credentials {
+            url: "https://github.com".into(),
+            token: "ghp_test".into(),
+            api: Some(api.url.clone()),
+            ..Default::default()
+        },
+        &[(blob, &storage.url)],
+    );
+    let log = client.job_log(&repo(), "119211823435").await.unwrap();
     assert_eq!(log, JOB_LOG, "the text the redirection leads to");
     let asked = api.requests();
     assert_eq!(asked.len(), 1);
@@ -941,7 +979,8 @@ async fn the_kept_answers_are_bounded_and_the_oldest_leaves_first() {
     let github = client(&server);
     let repo = repo();
     // One address more than the cache keeps, each answered with a tag of its own.
-    let newest = CACHE_MAX as u64 + 1;
+    // What the client keeps (`pulls::CACHE_MAX`).
+    let newest = 501;
     for n in 1..=newest {
         server.on_with(
             "GET",
@@ -1053,197 +1092,6 @@ fn now_secs() -> u64 {
 }
 
 #[tokio::test]
-async fn the_client_slows_down_near_the_limit_and_says_how_much_is_left() {
-    let server = FakeServer::start().await;
-    let reset = (now_secs() + 3).to_string();
-    server.on_with(
-        "GET",
-        "/user",
-        200,
-        json!({"login": "ada"}),
-        &[
-            ("x-ratelimit-limit", "5000"),
-            ("x-ratelimit-remaining", "2"),
-            ("x-ratelimit-reset", &reset),
-            ("x-ratelimit-resource", "core"),
-        ],
-    );
-    let github =
-        Github::new(reqwest::Client::new(), server.url.clone(), "t".into()).with_pace(Pace {
-            slow_below: 0.1,
-            max_wait: Duration::from_millis(300),
-        });
-    assert!(github.rate_limit().is_none());
-    github.me().await.unwrap();
-    assert_eq!(
-        github.waited(),
-        Duration::ZERO,
-        "the first call knows nothing yet"
-    );
-    assert_eq!(
-        github.rate_limit().map(|l| (l.limit, l.remaining)),
-        Some((5000, 2))
-    );
-
-    let before = std::time::Instant::now();
-    github.me().await.unwrap();
-    assert!(
-        before.elapsed() >= Duration::from_millis(250),
-        "slowed down: {:?}",
-        before.elapsed()
-    );
-    assert!(github.waited() >= Duration::from_millis(250));
-}
-
-#[tokio::test]
-async fn far_from_the_limit_the_client_does_not_wait() {
-    let server = FakeServer::start().await;
-    let reset = (now_secs() + 3600).to_string();
-    server.on_with(
-        "GET",
-        "/user",
-        200,
-        json!({"login": "ada"}),
-        &[
-            ("x-ratelimit-limit", "5000"),
-            ("x-ratelimit-remaining", "4900"),
-            ("x-ratelimit-reset", &reset),
-        ],
-    );
-    let github = Github::new(reqwest::Client::new(), server.url.clone(), "t".into());
-    for _ in 0..3 {
-        github.me().await.unwrap();
-    }
-    assert_eq!(github.waited(), Duration::ZERO);
-}
-
-#[tokio::test]
-async fn a_secondary_limit_is_waited_out_then_asked_once_more() {
-    let server = FakeServer::start().await;
-    // Answers every call, and GitHub refuses the first one for its secondary limit.
-    server.on("GET", "/user", 200, json!({"login": "ada"}));
-    server.on_once(
-        "GET",
-        "/user",
-        429,
-        json!({"message": "You have exceeded a secondary rate limit."}),
-        &[("retry-after", "30")],
-    );
-    let github =
-        Github::new(reqwest::Client::new(), server.url.clone(), "t".into()).with_pace(Pace {
-            slow_below: 0.1,
-            max_wait: Duration::from_millis(300),
-        });
-    let before = std::time::Instant::now();
-    assert_eq!(github.me().await.unwrap().user, "ada");
-    let elapsed = before.elapsed();
-    // Thirty seconds asked, at most `max_wait` waited.
-    assert!(elapsed >= Duration::from_millis(250), "waited: {elapsed:?}");
-    assert!(elapsed < Duration::from_secs(10), "waited: {elapsed:?}");
-    assert!(github.waited() >= Duration::from_millis(250));
-    assert_eq!(requests_to(&server, "/user"), 2, "asked once more, no more");
-}
-
-#[tokio::test]
-async fn a_secondary_limit_that_holds_is_said_after_one_more_try() {
-    let server = FakeServer::start().await;
-    // No `retry-after` here: GitHub's message is what names the secondary limit.
-    server.on(
-        "GET",
-        "/user",
-        403,
-        json!({"message": "You have exceeded a secondary rate limit. Please wait a few minutes."}),
-    );
-    let github =
-        Github::new(reqwest::Client::new(), server.url.clone(), "t".into()).with_pace(Pace {
-            slow_below: 0.1,
-            max_wait: Duration::from_millis(100),
-        });
-    let e = github.me().await.expect_err("refused");
-    assert!(format!("{e:#}").contains("403"), "{e:#}");
-    assert_eq!(
-        requests_to(&server, "/user"),
-        2,
-        "one retry, then it is said"
-    );
-}
-
-#[tokio::test]
-async fn another_refusal_is_not_asked_again() {
-    let server = FakeServer::start().await;
-    server.on(
-        "GET",
-        "/user",
-        403,
-        json!({"message": "Resource not accessible by integration"}),
-    );
-    let github = Github::new(reqwest::Client::new(), server.url.clone(), "t".into());
-    assert!(github.me().await.is_err());
-    assert_eq!(requests_to(&server, "/user"), 1);
-    assert_eq!(github.waited(), Duration::ZERO);
-}
-
-#[tokio::test]
-async fn graphql_and_rest_have_their_own_limits() {
-    let server = FakeServer::start().await;
-    let reset = (now_secs() + 3600).to_string();
-    // REST nearly spent, GraphQL fresh: a GraphQL call must not wait for REST's window.
-    server.on_with(
-        "GET",
-        "/user",
-        200,
-        json!({"login": "ada"}),
-        &[
-            ("x-ratelimit-limit", "5000"),
-            ("x-ratelimit-remaining", "1"),
-            ("x-ratelimit-reset", &reset),
-            ("x-ratelimit-resource", "core"),
-        ],
-    );
-    server.on_with(
-        "POST",
-        "/graphql#Pulls",
-        200,
-        fixture("graphql-pulls"),
-        &[
-            ("x-ratelimit-limit", "5000"),
-            ("x-ratelimit-remaining", "4990"),
-            ("x-ratelimit-reset", &reset),
-            ("x-ratelimit-resource", "graphql"),
-        ],
-    );
-    let github =
-        Github::new(reqwest::Client::new(), server.url.clone(), "t".into()).with_pace(Pace {
-            slow_below: 0.1,
-            max_wait: Duration::from_millis(200),
-        });
-    github.me().await.unwrap();
-    github.pull_requests(&repo(), &[14768]).await.unwrap();
-    github.pull_requests(&repo(), &[14768]).await.unwrap();
-    assert_eq!(github.waited(), Duration::ZERO);
-    // The most spent of them is what it reports.
-    assert_eq!(github.rate_limit().map(|l| l.remaining), Some(1));
-}
-
-// ---- Instances ----
-
-#[test]
-fn graphql_sits_beside_rest_on_every_kind_of_instance() {
-    assert_eq!(
-        graphql_url("https://api.github.com"),
-        "https://api.github.com/graphql"
-    );
-    assert_eq!(
-        graphql_url("https://api.acme.ghe.com"),
-        "https://api.acme.ghe.com/graphql"
-    );
-    assert_eq!(
-        graphql_url("https://git.acme.dev/api/v3"),
-        "https://git.acme.dev/api/graphql"
-    );
-}
-
-#[tokio::test]
 async fn an_enterprise_server_is_reached_under_its_api_v3_and_api_graphql() {
     let server = FakeServer::start().await;
     server.on("GET", "/api/v3/user", 200, json!({"login": "ada"}));
@@ -1304,10 +1152,15 @@ async fn real_github_reads() {
         .output()
         .unwrap();
     let token = String::from_utf8(token.stdout).unwrap();
-    let github = Github::new(
+    // github.com's account, served by the plugin as the core serves it.
+    let github = GithubProvider.client(
         reqwest::Client::new(),
-        "https://api.github.com".into(),
-        token,
+        &Credentials {
+            url: "https://github.com".into(),
+            token,
+            api: Some("https://api.github.com".into()),
+            ..Default::default()
+        },
     );
     let repo = repo();
     let me = github.me().await.unwrap();
@@ -1347,4 +1200,166 @@ async fn real_github_reads() {
     // Asked twice: the second read is conditional, a 304 for GitHub.
     github.checks(&repo, 14768).await.unwrap();
     println!("rate limit: {:?}", github.rate_limit());
+}
+
+#[tokio::test]
+async fn the_environments_are_read_down_to_their_newest_success() {
+    let server = FakeServer::start().await;
+    let dep = |id: u64, env: &str, sha: &str| {
+        json!({
+            "id": id, "environment": env, "sha": sha, "ref": "main",
+            "created_at": "2026-10-30T10:00:00Z", "creator": {"login": "ada"}
+        })
+    };
+    let mut preview = dep(5, "Preview", "eeee");
+    preview["transient_environment"] = json!(true);
+    server.on(
+        "GET",
+        "/repos/o/r/deployments?per_page=30",
+        200,
+        json!([
+            preview,
+            dep(4, "production", "dddd"),
+            dep(3, "staging", "cccc"),
+            dep(2, "production", "bbbb"),
+            dep(1, "production", "aaaa"),
+        ]),
+    );
+    let status = |state: &str, env_url: &str| {
+        json!([{
+            "state": state, "environment_url": env_url,
+            "log_url": "https://github.com/o/r/actions/runs/1/job/2"
+        }])
+    };
+    server.on(
+        "GET",
+        "/repos/o/r/deployments/4/statuses",
+        200,
+        status("failure", ""),
+    );
+    server.on(
+        "GET",
+        "/repos/o/r/deployments/3/statuses",
+        200,
+        status("success", "https://staging.example.com"),
+    );
+    server.on(
+        "GET",
+        "/repos/o/r/deployments/2/statuses",
+        200,
+        status("success", "https://example.com"),
+    );
+    let repo = RepoRef {
+        namespace: "o".into(),
+        name: "r".into(),
+    };
+    let d = client(&server).environments(&repo).await.unwrap();
+    assert_eq!(
+        d.iter()
+            .map(|d| (d.environment.as_str(), d.state.as_str(), d.sha.as_str()))
+            .collect::<Vec<_>>(),
+        [
+            ("production", "failure", "dddd"),
+            ("staging", "success", "cccc"),
+            ("production", "success", "bbbb"),
+        ],
+        "a preview left out, and nothing read past production's newest success"
+    );
+    assert_eq!(d[1].url.as_deref(), Some("https://staging.example.com"));
+    assert_eq!(d[0].url, None);
+    assert_eq!(
+        d[0].log.as_deref(),
+        Some("https://github.com/o/r/actions/runs/1/job/2")
+    );
+    assert_eq!(d[0].author, "ada");
+    assert!(d[0].created > 0);
+    assert!(server
+        .requests()
+        .iter()
+        .all(|r| !r.path().starts_with("/repos/o/r/deployments/1/")));
+}
+
+/// A branch's checks (the target's, one pushed without a pull request, ESC-63): those of its last
+/// commit, read by its name; its failed jobs run again once per run.
+#[tokio::test]
+async fn a_branchs_checks_are_read_by_its_name_and_its_failed_jobs_run_again() {
+    let server = FakeServer::start().await;
+    let base = "/repos/o/r/commits/feat%2Fx";
+    server.on(
+        "GET",
+        &format!("{base}/check-runs"),
+        200,
+        json!({ "total_count": 2, "check_runs": [
+            { "id": 7, "name": "test", "status": "completed", "conclusion": "failure",
+              "app": { "slug": "github-actions" } },
+            { "id": 8, "name": "lint", "status": "completed", "conclusion": "success",
+              "app": { "slug": "github-actions" } },
+        ] }),
+    );
+    server.on(
+        "GET",
+        &format!("{base}/status"),
+        200,
+        json!({ "statuses": [
+            { "context": "ci/jenkins", "state": "failure", "target_url": "https://ci.example.com/1" },
+        ] }),
+    );
+    let repo = RepoRef {
+        namespace: "o".into(),
+        name: "r".into(),
+    };
+    let checks = client(&server)
+        .branch_checks(&repo, "feat/x")
+        .await
+        .unwrap();
+    assert_eq!(
+        checks
+            .iter()
+            .map(|c| (c.name.as_str(), c.state, c.job.as_deref()))
+            .collect::<Vec<_>>(),
+        [
+            ("test", CheckState::Failure, Some("7")),
+            ("lint", CheckState::Success, Some("8")),
+            ("ci/jenkins", CheckState::Failure, None),
+        ]
+    );
+    server.on(
+        "GET",
+        "/repos/o/r/actions/jobs/7",
+        200,
+        json!({ "id": 7, "run_id": 70 }),
+    );
+    server.on(
+        "POST",
+        "/repos/o/r/actions/runs/70/rerun-failed-jobs",
+        201,
+        json!({}),
+    );
+    assert_eq!(
+        client(&server)
+            .rerun_failed_of_branch(&repo, "feat/x")
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(server.writes().len(), 1);
+}
+
+/// How a pull request may merge (ESC-62): the repository's merge methods and « Allow auto-merge »;
+/// not told (no right to push), the three.
+#[tokio::test]
+async fn the_repositorys_settings_say_how_a_pull_request_may_merge() {
+    let server = FakeServer::start().await;
+    server.on(
+        "GET",
+        "/repos/cli/cli",
+        200,
+        json!({ "allow_merge_commit": false, "allow_squash_merge": true, "allow_rebase_merge": true, "allow_auto_merge": true }),
+    );
+    let o = client(&server).merge_options(&repo(), 7).await.unwrap();
+    assert_eq!(
+        o.strategies,
+        vec![MergeStrategy::Squash, MergeStrategy::Rebase]
+    );
+    assert!(o.auto_merge);
 }

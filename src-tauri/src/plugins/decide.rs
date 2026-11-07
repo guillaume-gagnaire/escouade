@@ -10,14 +10,14 @@
 
 use super::journal::Kind;
 use super::runtime::{timeout_of, CallError, PhaseName, Runtime};
-use super::{granted, Plugins, State};
+use super::{granted, PluginView, Plugins, State};
 use crate::i18n::Lang;
 use serde_json::{json, Value};
 use std::time::{Duration, Instant};
 
 pub const METHOD: &str = "permissions/decide";
 /// How long a plugin whose process does not run yet has to start and answer: once, after which
-/// it runs (and `warm` starts them with the app).
+/// it runs (`warm` starts them with the app, `warm_one` as soon as one is ready and on).
 const COLD: Duration = Duration::from_secs(3);
 
 /// A permission an agent just asked for, as its card in the conversation has it.
@@ -56,38 +56,45 @@ pub fn kind_of(tool: &str) -> &'static str {
     }
 }
 
-/// The plugins that decide in the project `project` (its privacy `private`): loaded, with a
-/// program, `permissions.decide` not taken back, on for it. Their ids and names, in the order of
-/// the list.
+/// Whether `v` decides permissions at all: loaded, on, with a program, `permissions.decide` not
+/// taken back.
+fn decides(v: &PluginView) -> bool {
+    v.state == State::Ready
+        && v.choices.enabled
+        && v.manifest
+            .as_ref()
+            .is_some_and(|m| m.run.is_some() && granted(m, &v.choices.revoked).permissions.decide)
+}
+
+/// The plugins that decide (`decides`) in the project `project` (its privacy `private`): those on
+/// for it. Their ids and names, in the order of the list.
 pub fn deciders(plugins: &Plugins, project: &str, private: bool) -> Vec<(String, String)> {
     plugins
         .list(crate::i18n::ui())
         .into_iter()
-        .filter(|v| {
-            v.state == State::Ready
-                && v.manifest.as_ref().is_some_and(|m| {
-                    m.run.is_some() && granted(m, &v.choices.revoked).permissions.decide
-                })
-                && plugins.reaches(&v.id, Some(project), private)
-        })
+        .filter(|v| decides(v) && plugins.reaches(&v.id, Some(project), private))
         .map(|v| (v.id, v.name))
         .collect()
 }
 
-/// Starts the plugins that decide (with the app, a plugin turned on): their first decision is
-/// not spent starting them.
+/// Starts the plugins that decide, with the app: their first decision is not spent starting them.
 pub fn warm(plugins: &Plugins, runtime: &Runtime) {
-    for v in plugins.list(Lang::En) {
-        let decides = v.state == State::Ready
-            && v.choices.enabled
-            && v.manifest.as_ref().is_some_and(|m| {
-                m.run.is_some() && granted(m, &v.choices.revoked).permissions.decide
-            });
-        if decides {
-            if let Err(e) = runtime.start(&v.id) {
-                log::debug!("plugin {}: not started: {e}", v.id);
-            }
-        }
+    for v in plugins.list(Lang::En).iter().filter(|v| decides(v)) {
+        start(runtime, &v.id);
+    }
+}
+
+/// Starts the plugin `id` if it decides, once it became ready and on (installed, updated, switched
+/// on, its permission given again, its folder in development read again): as `warm` for that one.
+pub fn warm_one(plugins: &Plugins, runtime: &Runtime, id: &str) {
+    if plugins.get(id, Lang::En).is_some_and(|v| decides(&v)) {
+        start(runtime, id);
+    }
+}
+
+fn start(runtime: &Runtime, id: &str) {
+    if let Err(e) = runtime.start(id) {
+        log::debug!("plugin {id}: not started: {e}");
     }
 }
 

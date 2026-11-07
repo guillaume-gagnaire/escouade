@@ -624,7 +624,7 @@ async fn the_only_project_an_account_is_reserved_to_closed_leaves_it_serving_no_
         .unwrap();
     reserve(&h, "principal", &[&p.id]);
     let serves_q =
-        || crate::accounts::serves_any(&h.core.settings.read(), EngineId::Claude, Some(&q.id));
+        || crate::accounts::serves_any(&h.core.settings.read(), EngineId::CLAUDE, Some(&q.id));
     assert!(!serves_q());
 
     close(&h, &p.id).await;

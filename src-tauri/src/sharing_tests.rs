@@ -526,7 +526,7 @@ fn keys_after_and_imports_of_the_same_outside_ticket() {
     shared_by(&mut hers[1], &alice(), "q4w7c2na");
     hers[1].after = vec![hers[0].id.clone()];
     hers[1].external = Some(ExternalRef {
-        service: Service::Jira,
+        service: Service::JIRA,
         key: "ACME-41".into(),
         url: "https://acme/ACME-41".into(),
         ..Default::default()
@@ -540,7 +540,7 @@ fn keys_after_and_imports_of_the_same_outside_ticket() {
     mine.created_at = 2;
     let mut imported = ticket("DEM-9", "ACME-41 importé");
     imported.external = Some(ExternalRef {
-        service: Service::Jira,
+        service: Service::JIRA,
         key: "ACME-41".into(),
         ..Default::default()
     });

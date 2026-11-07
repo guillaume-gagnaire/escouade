@@ -2,7 +2,7 @@
 title: "Dictée"
 subject: "Voix"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-16","ESC-96","ESC-110","ESC-132","ESC-134","ESC-135","ESC-136"]
+tickets: ["ESC-16","ESC-96","ESC-110","ESC-132","ESC-134","ESC-135","ESC-136","ESC-350"]
 decisions: []
 compared: null
 ---
@@ -108,3 +108,14 @@ Réglages › Voix (voir *Réglages*) :
 - Groq n'a pas de transcription en direct.
 - Une transcription en ligne qui échoue n'est jamais refaite par Whisper.
 - Whisper demande un processeur x86-64 avec AVX2 (2013 et après) ou Apple Silicon. Il calcule avec Metal sous macOS, sur le processeur ailleurs.
+
+## Les services en ligne sont des plugins
+
+Chacun des cinq services est un plugin en WASM (`dev.escouade.<service>`), qui ne démarre qu'à son premier appel : ce qui précède reste vrai, à quatre précisions près, qui priment sur les sections d'au-dessus.
+
+- **Le délai d'une requête** est de 120 s au total, au lieu de 15 s pour se connecter et 60 s de lecture. Une dictée de 10 minutes, la plus longue, passe.
+- **`Échap` pendant une requête** rend la main tout de suite et rien n'est écrit, mais la requête va à son terme chez le service : sa réponse se perd. Une lecture de la conversation, elle, est coupée.
+- **Le texte d'une erreur réseau** (`<raison>`) vient de l'hôte des plugins.
+- **Un plugin qui ne démarre pas** se dit au premier appel, avec le même message que le réseau (« <service> ne répond pas : … »), et son journal dit pourquoi. Il n'y a pas de repli : le cœur n'a plus de code pour ces services. Tant qu'il n'a pas de plugin, un service reste visible dans Réglages › Voix et sa clé s'y enregistre. Coupé ou désinstallé, il n'y est plus.
+
+Un plugin a 4 flux en direct à la fois au plus : au-delà, le son part entier par requête, comme pour tout flux qui ne s'ouvre pas.

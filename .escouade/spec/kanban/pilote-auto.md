@@ -2,14 +2,15 @@
 title: "Pilote auto"
 subject: "Kanban"
 sources: ["docs/SPEC.md","src-tauri/src/mcp/act_tests.rs","website/content/docs/fr/autopilot.md"]
-tickets: []
-decisions: []
-compared: null
+tickets: ["ESC-312","ESC-63"]
+decisions: [20,24]
+compared: "2026-10-31T17:27:51+01:00"
+gaps: [{"text":"La page dit que les cartes « À faire » en attente d'un autre ticket affichent « ⏸ après … » et que ce texte passe avant « En attente : pilote auto en pause ». Le code affiche « Après {keys} » (en anglais « After {keys} »), sans le symbole ⏸.","code":["src/lib/i18n/fr/boardSettings.ts","src/lib/board.ts"]}]
 ---
 
 ## Ce que c'est
 
-Le pilote auto lance seul les tickets « À faire », dans l'ordre, tant qu'il reste des places. Il se met en pause quand un quota approche de sa fin ou qu'une limite d'usage est atteinte, pour ne pas lancer des tickets voués à s'arrêter. La pause au quota ne retient que lui : un ticket lancé à la main part quand même.
+Le pilote auto lance seul les tickets « À faire », dans l'ordre, tant qu'il reste des places. Il se met en pause quand un quota approche de sa fin ou qu'une limite d'usage est atteinte, pour ne pas lancer des tickets voués à s'arrêter, et, si le Kanban le demande, tant que la CI de la branche cible est rouge. Ces pauses ne retiennent que lui : un ticket lancé à la main part quand même (sauf à une limite d'usage atteinte).
 
 ## Comportement
 
@@ -22,7 +23,7 @@ Le pilote auto lance seul les tickets « À faire », dans l'ordre, tant qu'il r
 
 ### Ce qui retient un ticket lancé à la main
 
-- Un ticket lancé à la main, par « Lancer » ou par `start_ticket` d'un agent, part même pendant une pause au quota.
+- Un ticket lancé à la main, par « Lancer » ou par `start_ticket` d'un agent, part même pendant une pause au quota ou sur une cible rouge.
 - Seule une limite d'usage atteinte le retient, à la main comme par le pilote auto :
   - une fenêtre de quota épuisée (100 %) ;
   - un agent qui attend la fin de sa limite d'usage ;
@@ -35,24 +36,35 @@ Le pilote auto lance seul les tickets « À faire », dans l'ordre, tant qu'il r
 - Elle ne retient que le pilote auto : un ticket lancé à la main part quand même, tant que la fenêtre n'est pas épuisée.
 - Les agents déjà au travail continuent.
 - Avec plusieurs comptes, la pause se calcule compte par compte (voir *Comptes*).
+- Le plafond est celui de l'utilisateur, jugé en pourcentage fenêtre par fenêtre : il ne suit pas le rythme que le choix du compte juge (une semaine à 95 % qui se remet à zéro dans 3 h est un bon choix, mais sous un plafond de 90 % elle retient quand même le compte). Voir *Comptes*, « Pause du pilote auto, compte par compte ».
+- La fenêtre propre à un modèle (« Fable 7 j ») ne retient que les tickets de ce modèle, rapproché par sa famille (voir *Comptes*, décision 24) : au seuil, un ticket Fable part sur un autre compte ou attend, un ticket Opus ou Sonnet part. Elle ne met pas tout le pilote auto en pause, et la ligne de pause n'en parle pas. Un agent arrêté par la limite d'un modèle ne retient lui aussi que les tickets de ce modèle.
 
 ### La pause à la limite d'usage
 
-L'agent d'un ticket arrêté par la limite sans reprise prévue (reprise automatique coupée ou annulée, clé d'API, heure inconnue) bloque son ticket. Le pilote auto se met alors en pause 30 min avant que la place libérée serve, au lieu de lancer le ticket suivant sur la même limite. Cette pause retient aussi les tickets lancés à la main.
+L'agent d'un ticket arrêté par la limite sans reprise prévue (reprise automatique coupée ou annulée, clé d'API, heure inconnue) bloque son ticket. Le pilote auto se met alors en pause 30 min avant que la place libérée serve, au lieu de lancer le ticket suivant sur la même limite. Cette pause retient aussi les tickets lancés à la main. La limite d'un modèle seul (la semaine de Fable) ne la déclenche pas : la fenêtre de ce modèle retient déjà ses tickets.
+
+### La pause sur une cible rouge
+
+- « Pause quand la CI de la cible est rouge », éteint par défaut. Allumé, le pilote auto ne démarre aucun ticket « À faire » du projet tant que la CI de sa branche cible est en échec, d'après la dernière lecture (voir *CI de la cible et des branches poussées*).
+- Un ticket lancé à la main part quand même, et « Lancer » reste sur les cartes. Les agents au travail continuent, et la correction de la CI d'un ticket « En revue » aussi.
+- Elle se lève dès qu'une lecture voit la cible verte ou en cours, ou que ses jobs en échec sont relancés.
 
 ### Ce que montre la pause
 
 - Une ligne sous l'en-tête du Kanban : « Pilote auto en pause : quota hebdo à 96 % (reprise à 14:00) », « … quota de 5 h à 100 % (reprise à 14:00) » ou « … limite d'usage atteinte (reprise vers 14:30) », avec le jour quand ce n'est pas aujourd'hui. Les places libres ne s'affichent pas pendant ce temps.
-- Les cartes « À faire » disent « En attente : pilote auto en pause ». « En attente de la branche cible » et « ⏸ après … » passent avant.
+- Sur une cible rouge : « Pilote auto en pause : la CI de main est rouge depuis 2 h », avec « Voir les jobs ».
+- Les cartes « À faire » disent « En attente : pilote auto en pause », ou « En attente : CI de la cible rouge ». « En attente de la branche cible » et « Après … » passent avant.
 - « Reprendre maintenant » lève la pause de limite, et chaque fenêtre au-delà du seuil jusqu'à la fin qu'elle avait. Une fenêtre suivante, ou qui repasse le seuil, retient de nouveau. Un agent qui attend sa propre reprise retient toujours.
-- La pause, fenêtres lues et levées comprises, est gardée avec l'état de l'app et tient après un redémarrage.
+- La pause, fenêtres lues et levées comprises, est gardée avec l'état de l'app et tient après un redémarrage. La pause sur une cible rouge, non : elle attend la première lecture de la CI après le démarrage.
 
 ## Réglages
 
 - « Pilote auto », dans l'en-tête du Kanban.
 - Le nombre de places, dans les réglages du Kanban : de 1 à 6, 2 par défaut.
 - « Pause au-delà du quota » (Réglages › Kanban, pour tous les projets) : 80, 90, 95 ou 100 %, 100 % par défaut. Une autre valeur écrite à la main vaut 100 %.
+- « Pause quand la CI de la cible est rouge » (Réglages › Kanban, par projet) : éteint par défaut.
 
 ## Limites
 
 - Une fenêtre de quota dont la fin n'est pas connue ne met jamais en pause.
+- Un ticket « À faire » d'un modèle retenu par sa fenêtre propre dit « En attente : pilote auto en pause » seulement quand tout le pilote auto l'est : sinon sa carte ne dit pas encore pourquoi il attend.

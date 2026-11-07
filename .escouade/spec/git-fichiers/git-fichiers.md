@@ -2,9 +2,9 @@
 title: "Git & fichiers"
 subject: "Git & fichiers"
 sources: ["docs/SPEC.md","src/lib/i18n/fr/git.ts","src-tauri/src/core.rs"]
-tickets: ["ESC-204","ESC-160"]
+tickets: ["ESC-204","ESC-160","ESC-305","ESC-315"]
 decisions: []
-compared: null
+compared: "2026-10-31T16:24:52+01:00"
 order: 22
 ---
 
@@ -17,6 +17,8 @@ Le panneau Git montre ce que les agents ont changé : les fichiers non commités
 ### Le panneau
 
 - Il se ferme par son × au bout des onglets (« Fermer le panneau »). À côté de la disposition classique, il se ferme ; `Ctrl+Maj+B` ou « Fichiers » de l'en-tête le rouvrent. Côte à côte, il ramène à la disposition classique sans panneau, retenue comme la disposition ; `Ctrl+Maj+L` ou le sélecteur de disposition le rouvrent. L'infobulle dit le raccourci et comment le rouvrir.
+- Quatre onglets : « Non commités », « Historique », « Workflow » (voir *Workflow*) et « PR et CI » (voir *Pull requests*). Sous 420 px de large, les onglets se resserrent, le compte de « Workflow » s'efface (choix 132) et « PR et CI » quitte la bande pour le × (choix 189) : les mots de la CI sur la carte de l'agent l'ouvrent alors.
+- Dans un projet sans agent, le panneau s'ouvre aussi (« PR et CI du projet », `Ctrl+Maj+B`) : les fichiers du projet, son historique, et ses PR ouvertes.
 - **« Non commités »** : portée « Cet agent » ou « Tout le projet ». Un fichier est attribué à un agent par son worktree ou, sans worktree, par ses outils d'édition (`Edit`, `Write`). Un clic ouvre le diff ; le bouton `</>` ou le clic droit ouvrent le fichier dans l'éditeur. La liste dessine les 500 premiers fichiers, puis « … et N autres fichiers » ; le compte de l'onglet, « Voir le diff » et les commits les prennent tous.
 - **« Historique »** : le graphe des 300 derniers commits de tout le dépôt (branches locales et distantes, tags ; les branches des agents étiquetées de leur nom). La branche de l'agent (son worktree, sinon la branche courante) est mise en avant, le reste atténué. Un clic sur un commit ouvre son diff (contre le premier parent pour un merge). Le graphe se redessine à chaque commit, merge ou branche ; son menu contextuel agit sur les branches (voir *Branches*).
 - Les compteurs git se rafraîchissent quand les fichiers changent (après un court délai), jamais par une lecture à intervalle fixe.
@@ -59,7 +61,8 @@ Le panneau Git montre ce que les agents ont changé : les fichiers non commités
 
 - Chaque nouvel agent qui reçoit un worktree part de la « Branche de départ des nouveaux worktrees » du projet, qu'il soit créé tout de suite ou au premier message : « Nouvel agent » dans un projet à un worktree par agent, « Nouvel agent dans un worktree », la branche nouvelle de « Nouvel agent sur une branche… », l'outil MCP `create_agent` avec un worktree. Cette branche est aussi sa base : « Merger… », « Intégrer <base> », le diff et sa PR, ouverte vers elle.
 - Aucun fetch à la création : l'état distant est celui du dernier fetch. Si la branche suivie (`origin/<branche>`) est en avance et que la locale n'est qu'en retard, la locale avance d'abord en fast-forward, sans toucher à aucun dossier. Sinon l'agent part de la locale telle qu'elle est, et sa conversation l'avertit : la branche est extraite dans un dossier (« origin/main a 2 commits que « main » n’a pas, mais elle n’a pas pu avancer (« main » est extraite dans <dossier>) : l’agent part de la « main » locale, sans eux. ») ou a des commits non poussés (« « main » a des commits non poussés et origin/main 2 commits qu’elle n’a pas : … »).
-- Une branche distante seule (`origin/x`, sans locale qui la suive) : la locale `x` qui la suit est créée, sans fetch, et l'agent part d'elle, qui devient sa base (« Merger… », « Intégrer » et la PR ont besoin d'une base locale).
+- Une branche distante (`origin/x`) se prend par la locale qui la suit : d'abord celle du même nom (`x`) quand elle suit `origin/x`, avancée comme ci-dessus ; sinon une autre locale qui la suit et n'est la branche d'aucun agent ni d'aucun worktree lié (ni `escouade/…`, ni une branche tenue par un worktree : git donne l'amont `origin/x` à une branche créée depuis une base distante) ; sinon la locale `x` est créée, qui la suit, sans fetch. L'agent part d'elle, qui devient sa base (« Merger… », « Intégrer » et la PR ont besoin d'une base locale). Même règle pour « Nouvel agent sur une branche… », « Lancer un agent sur cette branche », le changement de branche d'un agent et la colonne « suivie par » du sélecteur.
+- Une branche d'agent ou de ticket créée depuis une base distante ne suit rien (`--no-track`) : son amont est celui que lui donne son push. Les branches d'agents existantes qui suivent déjà leur base gardent leur amont (Escouade ne touche à aucune branche) : elles ne sont simplement plus choisies à la place de la locale du même nom.
 - Une branche cible absente en local : l'agent part de la branche du dossier (« La branche cible « x » n’existe pas : l’agent part de la branche du dossier du projet. »). De même pour une branche nommée disparue, ni locale ni distante (« La branche de départ « x » n’existe plus : l’agent part de la branche du dossier du projet. »).
 - Jamais un agent parti du distant avec une base locale en retard : un agent sans commit n'aurait rien à merger.
 - Sans effet sur les agents sans worktree, les copies, les agents sur une branche existante et les tickets, qui partent de la branche cible (voir *Agent d'un ticket*).

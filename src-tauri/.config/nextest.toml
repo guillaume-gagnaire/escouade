@@ -25,10 +25,17 @@ slow-timeout = { period = "60s", terminate-after = 3 }
 # (scripts/nextest-annotations.mjs).
 failure-output = "immediate-final"
 # The archive the Windows CI builds once and runs on two runners (ci.yml) carries the fake `codex`
-# of the Codex view's tests too (examples/fake_codex.rs), which they start from beside them.
+# of the Codex view's tests too (examples/fake_codex.rs), which they start from beside them, and the modules of the
+# plugins (scripts/plugins-wasm.sh), which they play in the app's host.
 archive.include = [
   { path = "debug/examples", relative-to = "target", depth = 1, on-missing = "warn" },
+  { path = "plugins-wasm", relative-to = "target", depth = 2, on-missing = "warn" },
 ]
+
+# The compilations of a `run.wasm` plugin, and the first download of its toolchain, which the others wait for.
+[[profile.ci.overrides]]
+filter = "test(/^plugins_rust_build_tests::/)"
+slow-timeout = { period = "60s", terminate-after = 8 }
 
 [profile.ci.junit]
 path = "junit.xml"

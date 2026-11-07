@@ -8,28 +8,61 @@
 
 use super::{Engine, Located, Program};
 use crate::i18n::{self, Lang};
-use parking_lot::Mutex;
+use crate::model::EngineId;
+use parking_lot::{Mutex, RwLock};
 use serde::Serialize;
-use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
-/// Every harness written, in the order the interface lists them. A harness gets its line with its
-/// adapter (docs/TODO-1.8.md, chapter 1).
+/// The harnesses written into the app, in the order the interface lists them: what the registry
+/// starts from (INT-3). A harness gets its line with its adapter (docs/TODO-1.8.md, chapter 1).
+pub const BUILT_IN: [&dyn Engine; 8] = [
+    &super::CLAUDE,
+    &super::CODEX,
+    &super::COPILOT,
+    &super::OPENCODE,
+    &super::CURSOR,
+    &super::VIBE,
+    &super::AGY,
+    &super::GEMINI,
+];
+
+/// The harnesses there are past the built-in ones, added by `register` (the plugins of a
+/// harness, INT-9).
+static ADDED: RwLock<Vec<&'static dyn Engine>> = RwLock::new(Vec::new());
+
+/// Every harness there is, in the order the interface lists them: the built-in ones, then the
+/// ones added.
 pub fn all() -> Vec<&'static dyn Engine> {
-    vec![
-        &super::CLAUDE,
-        &super::CODEX,
-        &super::COPILOT,
-        &super::OPENCODE,
-        &super::CURSOR,
-        &super::VIBE,
-        &super::AGY,
-        &super::GEMINI,
-    ]
+    let mut out = BUILT_IN.to_vec();
+    out.extend(ADDED.read().iter().copied());
+    out
 }
 
-/// A mode of Escouade a harness takes (`auto`, `default`, `plan`, `acceptEdits`,
+/// Adds `engine` to the registry, after the others; one added before under the same id gives it
+/// its place. A built-in one keeps its own.
+pub fn register(engine: &'static dyn Engine) {
+    let mut added = ADDED.write();
+    added.retain(|e| e.id() != engine.id());
+    added.push(engine);
+}
+
+/// Takes the harness `id` added before out of the registry: its agents are « harness absent » until it comes back
+/// (a plugin uninstalled or turned off). A built-in one stays.
+pub fn unregister(id: EngineId) {
+    ADDED.write().retain(|e| e.id() != id);
+}
+
+/// The harness of the registry that bears `id`, if any.
+pub fn find(id: EngineId) -> Option<&'static dyn Engine> {
+    BUILT_IN
+        .iter()
+        .copied()
+        .find(|e| e.id() == id)
+        .or_else(|| ADDED.read().iter().copied().find(|e| e.id() == id))
+}
+
+// A mode of Escouade a harness takes (`auto`, `default`, `plan`, `acceptEdits`,
 /// `bypassPermissions`), and what it means there.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -64,10 +97,13 @@ pub enum ForkPoint {
 #[allow(dead_code)]
 #[serde(rename_all = "camelCase")]
 pub enum MidTurn {
-    /// It waits for the end of the turn (Claude Code).
+    /// Its harness queues it and reads it at the running turn's next step (Claude Code).
     Queued,
     /// The running turn reads it at once (Codex: `turn/steer`).
     Immediate,
+    /// It waits in Escouade's process for the end of the turn, then starts the next one (Cursor,
+    /// OpenCode).
+    TurnEnd,
     /// It cannot be sent until the turn ends.
     Refused,
 }
@@ -224,48 +260,7 @@ pub struct ToldModel {
     pub from_config: bool,
 }
 
-/// A version number (`2.1.301`), compared number by number (a missing one counts as 0).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Version(Vec<u64>);
-
-impl Version {
-    /// The first version number of `text` (`2.1.301 (Claude Code)`, `codex-cli 0.163.0`).
-    pub fn find(text: &str) -> Option<Version> {
-        text.split(|c: char| !(c.is_ascii_digit() || c == '.'))
-            .map(|w| w.trim_matches('.'))
-            .find(|w| w.contains('.') && w.split('.').all(|n| !n.is_empty()))
-            .and_then(|w| w.split('.').map(|n| n.parse().ok()).collect::<Option<_>>())
-            .map(Version)
-    }
-
-    pub fn parse(text: &str) -> Version {
-        Version::find(text).unwrap_or(Version(Vec::new()))
-    }
-}
-
-impl std::fmt::Display for Version {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let parts: Vec<String> = self.0.iter().map(u64::to_string).collect();
-        f.write_str(&parts.join("."))
-    }
-}
-
-impl PartialOrd for Version {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for Version {
-    fn cmp(&self, other: &Self) -> Ordering {
-        let n = self.0.len().max(other.0.len());
-        let at = |v: &Version, i: usize| v.0.get(i).copied().unwrap_or(0);
-        (0..n)
-            .map(|i| at(self, i).cmp(&at(other, i)))
-            .find(|o| o.is_ne())
-            .unwrap_or(Ordering::Equal)
-    }
-}
+pub use escouade_plugin_cli::manifest::Version;
 
 /// Where a version stands against the tested range.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

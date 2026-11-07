@@ -335,6 +335,65 @@ test.describe('a Mistral Vibe account added by its API key', () => {
     await shots(page, 'accounts');
   });
 
+  // ESC-327: one Mistral account for the plugin. On the sandbox's keychain, never the user's; it outlives a run, so
+  // the voice's key leaves it: a key left there would serve the other tests' accounts.
+  test('shares the Mistral account with the voice, each side going by the other’s key', async ({ app }) => {
+    const { page } = app;
+    await addProject(page, app.repo);
+    await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+    const settings = page.getByRole('dialog', { name: 'Réglages' });
+    await settings.getByRole('tab', { name: 'Comptes' }).click();
+    await settings.getByRole('button', { name: 'Ajouter un compte Mistral Vibe…' }).click();
+    let modal = page.getByRole('dialog', { name: 'Ajouter un compte Mistral Vibe' });
+    await modal.getByRole('textbox', { name: 'Nom' }).fill('Équipe');
+    await modal.getByLabel('Clé d’API').fill('cle-mistral-e2e-0000wxyz');
+    await modal.getByRole('button', { name: 'Ajouter le compte' }).click();
+    const list = settings.getByRole('list', { name: 'Comptes Mistral Vibe' });
+    await expect(list.getByRole('listitem', { name: 'Équipe' })).toContainText('Connecté · clé …wxyz');
+    // The voice has no key: it goes by the Vibe account's, and says so.
+    await settings.getByRole('tab', { name: 'Voix' }).click();
+    const showKey = async () => {
+      await settings.getByRole('group', { name: 'Transcrite par' }).getByRole('button', { name: 'En ligne' }).click();
+      await settings.getByRole('combobox', { name: 'Service' }).selectOption('mistral');
+    };
+    await showKey();
+    const row = settings.locator('[data-online-key=mistral]');
+    const erase = row.getByRole('button', { name: 'Effacer la clé' });
+    // Left by a run that failed.
+    await expect(row.getByText(/Celle du compte Vibe|Enregistrée dans le trousseau/)).toBeVisible();
+    if (await erase.isVisible()) await erase.click();
+    await expect(row).toContainText('Celle du compte Vibe « Équipe » · clé …wxyz');
+    await expect(row.getByRole('button', { name: 'Effacer la clé' })).toHaveCount(0);
+    // Its own key: the Mistral account, which a new Vibe account goes by without a key of its own.
+    await row.getByRole('button', { name: 'Donner une autre clé' }).click();
+    await row.getByLabel('Clé de Mistral').fill('cle-voix-e2e-00001234');
+    await row.getByRole('button', { name: 'Enregistrer la clé' }).click();
+    await expect(row).toContainText('Enregistrée dans le trousseau');
+    await settings.getByRole('tab', { name: 'Comptes' }).click();
+    await settings.getByRole('button', { name: 'Ajouter un compte Mistral Vibe…' }).click();
+    modal = page.getByRole('dialog', { name: 'Ajouter un compte Mistral Vibe' });
+    await modal.getByRole('textbox', { name: 'Nom' }).fill('Partagé');
+    await expect(modal.getByLabel('Clé d’API')).toHaveAttribute('placeholder', 'Vide : la clé Mistral de Réglages › Voix (clé …1234)');
+    await modal.getByRole('button', { name: 'Ajouter le compte' }).click();
+    const shared = list.getByRole('listitem', { name: 'Partagé' });
+    await expect(shared).toContainText('Connecté · clé …1234');
+    // The other accounts off: the agent runs as the Mistral account's key.
+    for (const name of ['Principal', 'Équipe']) {
+      await list.getByRole('listitem', { name }).getByRole('switch', { name: 'Actif' }).click();
+    }
+    await page.keyboard.press('Escape');
+    await newVibeAgent(page);
+    await send(page, 'compte');
+    await expect(page.getByText('Compte : clé …1234')).toBeVisible();
+    expect(agentLaunch(app).apiKey).toBe('cle-voix-e2e-00001234');
+    expect(fs.readFileSync(path.join(app.data, 'settings.json'), 'utf8')).not.toContain('cle-voix');
+    await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+    await settings.getByRole('tab', { name: 'Voix' }).click();
+    await showKey();
+    await erase.click();
+    await expect(erase).toHaveCount(0);
+  });
+
   test('ends a turn stopped by Mistral’s rate limit on a card that says it, its resume planned', async ({ app }) => {
     const { page } = app;
     await addProject(page, app.repo);

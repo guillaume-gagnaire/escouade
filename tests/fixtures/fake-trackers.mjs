@@ -107,10 +107,19 @@ function seed() {
       ],
       // The pull requests opened by the app (ESC-64), from #101: open, their CI running, until POST
       // /__github/pulls/<n> sets what a test wants of them ({ checks: 'FAILURE', changesRequested: true, … }), the
-      // repository it is in (`repo`, acme/demo by default) and the one of its branch (`headRepo`: a fork's, ESC-238).
+      // repository it is in (`repo`, acme/demo by default) and the one of its branch (`headRepo`: a fork's, ESC-238);
+      // `thirdParty`: a failed status of another CI (ci/jenkins), which keeps no log (ESC-60).
       pulls: [],
+      // The settings of acme/demo (ESC-62): its merge methods and « Allow auto-merge », set by POST /__github/repo.
+      repo: { allow_merge_commit: true, allow_squash_merge: true, allow_rebase_merge: true, allow_auto_merge: false },
       // The forks and the repository each was forked from (`repository.parent`).
       forks: { 'ada/demo': 'acme/demo', 'bob/demo': 'acme/demo' },
+      // The deployments of the repository's environments (ESC-67), newest first, set by POST /__github/deployments:
+      // { environment, sha, state, url, log }; their ids from 1001.
+      deployments: [],
+      // The CI of the branches without a pull request (ESC-63), by name: none until POST /__github/branches/<name>
+      // sets it ({ checks: 'FAILURE' | 'SUCCESS' | 'PENDING', thirdParty }); its job `test` (91) keeps a coloured log.
+      branches: {},
     },
     // Azure DevOps (ESC-241): the pull requests opened by the app on acme/demo/demo, from #101, until POST
     // /__azure/pulls/<n> sets what a test wants of them ({ checks: 'FAILURE', changesRequested: true, … }).
@@ -692,12 +701,85 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
       assignee: i.assignee ? { login: i.assignee } : null,
     });
     // ---------- GitHub's pull requests (ESC-64) ----------
+    // The deployments of the environments a test wants (ESC-67), newest first.
+    if (p === '/__github/deployments') {
+      g.deployments = (json() ?? []).map((d, i) => ({ id: 1001 + i, ...d }));
+      return send(200, g.deployments);
+    }
+    // ---------- The CI of a branch without a pull request (ESC-63) ----------
+    m = p.match(/^\/__github\/branches\/(.+)$/);
+    if (m) {
+      g.branches[decodeURIComponent(m[1])] = json() ?? {};
+      return send(200, g.branches[decodeURIComponent(m[1])]);
+    }
+    m = p.match(/^\/github\/repos\/acme\/demo\/commits\/(.+)\/(check-runs|status)$/);
+    if (m && !/^sha\d+$/.test(m[1])) {
+      const b = g.branches[decodeURIComponent(m[1])];
+      const failed = b?.checks === 'FAILURE';
+      if (m[2] === 'status')
+        return send(200, {
+          statuses:
+            failed && b?.thirdParty ? [{ context: 'ci/jenkins', state: 'failure', target_url: 'https://jenkins.example.com/job/9' }] : [],
+        });
+      if (!b) return send(200, { total_count: 0, check_runs: [] });
+      const running = b.checks === 'PENDING';
+      const at = (h) => new Date(Date.now() - h * 3600_000).toISOString();
+      return send(200, {
+        check_runs: [
+          {
+            id: 91,
+            name: 'test',
+            status: running ? 'in_progress' : 'completed',
+            conclusion: running ? null : failed ? 'failure' : 'success',
+            started_at: at(2.6),
+            completed_at: running ? null : at(2.5),
+            html_url: 'https://github.com/acme/demo/actions/runs/9/job/91',
+            app: { slug: 'github-actions' },
+          },
+          {
+            id: 92,
+            name: 'lint',
+            status: 'completed',
+            conclusion: 'success',
+            started_at: at(2.6),
+            completed_at: at(2.59),
+            html_url: 'https://github.com/acme/demo/actions/runs/9/job/92',
+            app: { slug: 'github-actions' },
+          },
+        ],
+      });
+    }
+    if (p === '/github/repos/acme/demo/actions/jobs/91/logs')
+      return send.text(
+        200,
+        '##[group]Run npm test\nnpm test\n\x1b[31mFAIL\x1b[0m src/main.test.ts\n##[error]Process completed with exit code 1.\n',
+      );
+    if (p === '/github/repos/acme/demo/actions/jobs/91') return send(200, { id: 91, run_id: 9 });
+    if (p === '/github/repos/acme/demo/actions/runs/9/rerun-failed-jobs' && method === 'POST') {
+      for (const b of Object.values(g.branches)) if (b.checks === 'FAILURE') b.checks = 'PENDING';
+      return send(201, {});
+    }
     m = p.match(/^\/__github\/pulls\/(\d+)$/);
     if (m) {
       const pull = g.pulls.find((x) => x.number === Number(m[1]));
       if (!pull) return send(404, { message: 'Not Found' });
       Object.assign(pull, json() ?? {});
       return send(200, pull);
+    }
+    if (p === '/__github/repo') {
+      Object.assign(g.repo, json() ?? {});
+      return send(200, g.repo);
+    }
+    if (p === '/github/repos/acme/demo' && method === 'GET') return send(200, { full_name: 'acme/demo', ...g.repo });
+    // « Merger » (ESC-62): merged when its CI is green, refused else, as a required check would.
+    m = p.match(/^\/github\/repos\/acme\/demo\/pulls\/(\d+)\/merge$/);
+    if (m && method === 'PUT') {
+      const pull = g.pulls.find((x) => x.number === Number(m[1]));
+      if (!pull) return send(404, { message: 'Not Found' });
+      if (pull.checks !== 'SUCCESS') return send(405, { message: 'Required status check "test" is expected.' });
+      pull.state = 'MERGED';
+      pull.mergedWith = json()?.merge_method;
+      return send(200, { merged: true, message: 'Pull Request successfully merged' });
     }
     const node = (x) => ({
       number: x.number,
@@ -707,13 +789,25 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
       isDraft: x.draft,
       headRefName: x.head,
       baseRefName: x.base,
-      mergeable: 'MERGEABLE',
+      mergeable: x.mergeable ?? 'MERGEABLE',
       isCrossRepository: (x.headRepo ?? x.repo ?? 'acme/demo') !== (x.repo ?? 'acme/demo'),
       headRepository: { nameWithOwner: x.headRepo ?? x.repo ?? 'acme/demo' },
-      autoMergeRequest: null,
-      latestOpinionatedReviews: { nodes: x.changesRequested ? [{ state: 'CHANGES_REQUESTED' }] : [] },
-      reviewThreads: { nodes: x.changesRequested ? [{ isResolved: false }] : [] },
+      autoMergeRequest: x.autoMerge ? { enabledAt: '2026-11-02T10:00:00Z' } : null,
+      author: { login: x.author ?? 'ada' },
+      createdAt: x.createdAt ?? new Date(Date.now() - 2 * 3600_000).toISOString(),
+      // `approvals` APPROVED reviews beside a CHANGES_REQUESTED one (`approved`: one, without changes asked); `threads` open threads (one with changes asked, by default);
+      // `reviewers` the logins whose review is asked (ESC-65).
+      latestOpinionatedReviews: {
+        nodes: [
+          ...(x.changesRequested ? [{ state: 'CHANGES_REQUESTED' }] : []),
+          ...Array.from({ length: x.approvals ?? (x.approved && !x.changesRequested ? 1 : 0) }, () => ({ state: 'APPROVED' })),
+        ],
+      },
+      reviewThreads: { nodes: Array.from({ length: x.threads ?? (x.changesRequested ? 1 : 0) }, () => ({ isResolved: false })) },
+      reviewRequests: { nodes: (x.reviewers ?? []).map((login) => ({ requestedReviewer: { login } })) },
       commits: { nodes: [{ commit: { statusCheckRollup: { state: x.checks } } }] },
+      // Merged: the commit its merge made (ESC-67), as a test sets it.
+      mergeCommit: x.state === 'MERGED' && x.mergeCommit ? { oid: x.mergeCommit } : null,
     });
     if (p === '/github/graphql') {
       const q = json() ?? {};
@@ -730,6 +824,48 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
             },
           },
         });
+      // Pull requests by their numbers (the tickets « En revue », ESC-59): one alias each, `p<n>: pullRequest(number: n)`.
+      if (q.operationName === 'Pulls') {
+        const repository = {};
+        for (const [, n] of (q.query ?? '').matchAll(/p(\d+): pullRequest\(number:/g)) {
+          const x = g.pulls.find((y) => y.number === Number(n));
+          repository[`p${n}`] = x ? node(x) : null;
+        }
+        return send(200, { data: { repository } });
+      }
+      // The project's open pull requests (ESC-305), the most recent first.
+      if (q.operationName === 'OpenPulls')
+        return send(200, {
+          data: {
+            repository: {
+              pullRequests: {
+                nodes: g.pulls
+                  .filter((x) => x.state === 'OPEN' && (x.repo ?? 'acme/demo') === `${q.variables.owner}/${q.variables.name}`)
+                  .reverse()
+                  .map(node),
+              },
+            },
+          },
+        });
+      // « Merger quand c'est vert » (ESC-62): GitHub's auto-merge, refused when the repository does not allow it.
+      if (q.operationName === 'PullRequestId') {
+        const x = g.pulls.find((y) => y.number === q.variables.number);
+        return send(200, { data: { repository: { pullRequest: x ? { id: `PR_${x.number}` } : null } } });
+      }
+      if (q.operationName === 'EnableAutoMerge') {
+        const x = g.pulls.find((y) => `PR_${y.number}` === q.variables.id);
+        if (!x || !g.repo.allow_auto_merge)
+          return send(200, {
+            data: { enablePullRequestAutoMerge: null },
+            errors: [{ message: 'Pull request Auto merge is not allowed for this repository' }],
+          });
+        x.autoMerge = q.variables.method;
+        return send(200, {
+          data: {
+            enablePullRequestAutoMerge: { pullRequest: { number: x.number, autoMergeRequest: { enabledAt: '2026-11-02T10:00:00Z' } } },
+          },
+        });
+      }
       if (q.operationName === 'RepoParent') {
         const parent = g.forks[`${q.variables.owner}/${q.variables.name}`];
         const [owner, name] = parent ? parent.split('/') : [];
@@ -741,7 +877,18 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
           isResolved: false,
           path: 'src/app.ts',
           line: 1,
-          comments: { nodes: [{ databaseId: 1, author: { login: 'bob' }, body: 'Ce nom est peu clair.' }] },
+          // Written after the pull request opened, on the lines of its diff (ESC-61).
+          comments: {
+            nodes: [
+              {
+                databaseId: 1,
+                author: { login: 'bob' },
+                body: 'Ce nom est peu clair.',
+                createdAt: new Date().toISOString(),
+                diffHunk: '@@ -0,0 +1 @@\n+export const login = () => {};',
+              },
+            ],
+          },
         };
         return send(200, { data: { repository: { pullRequest: { reviewThreads: { nodes: x?.changesRequested ? [thread] : [] } } } } });
       }
@@ -775,6 +922,7 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
     if (m) {
       const pull = g.pulls.find((x) => x.number === Number(m[1]));
       if (!pull) return send(404, { message: 'Not Found' });
+      if (m[2] && method === 'POST') return send(200, { id: 1 });
       if (m[2])
         return send(200, pull.changesRequested ? [{ user: { login: 'bob' }, state: 'CHANGES_REQUESTED', body: 'Ajoute un test.' }] : []);
       return send(200, { number: pull.number, head: { sha: `sha${pull.number}`, ref: pull.head } });
@@ -782,16 +930,37 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
     m = p.match(/^\/github\/repos\/acme\/demo\/commits\/sha(\d+)\/(check-runs|status)$/);
     if (m) {
       const pull = g.pulls.find((x) => x.number === Number(m[1]));
-      if (m[2] === 'status') return send(200, { statuses: [] });
       const failed = pull?.checks === 'FAILURE';
+      if (m[2] === 'status')
+        return send(200, {
+          statuses:
+            failed && pull?.thirdParty
+              ? [{ context: 'ci/jenkins', state: 'failure', target_url: 'https://jenkins.example.com/job/7' }]
+              : [],
+        });
+      const running = pull?.checks === 'PENDING';
+      // When they ran (ESC-305): `test` 2 min 30 s, `lint` 12 s.
+      const at = (s) => new Date(Date.parse('2026-10-30T10:00:00Z') + s * 1000).toISOString();
       return send(200, {
         check_runs: [
           {
             id: 77,
             name: 'test',
-            status: 'completed',
-            conclusion: failed ? 'failure' : 'success',
+            status: running ? 'in_progress' : 'completed',
+            conclusion: running ? null : failed ? 'failure' : 'success',
+            started_at: at(0),
+            completed_at: running ? null : at(150),
             html_url: 'https://github.com/acme/demo/actions/runs/7/job/77',
+            app: { slug: 'github-actions' },
+          },
+          {
+            id: 78,
+            name: 'lint',
+            status: 'completed',
+            conclusion: 'success',
+            started_at: at(0),
+            completed_at: at(12),
+            html_url: 'https://github.com/acme/demo/actions/runs/7/job/78',
             app: { slug: 'github-actions' },
           },
         ],
@@ -799,6 +968,35 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
     }
     if (p === '/github/repos/acme/demo/actions/jobs/77/logs')
       return send.text(200, 'npm test\nFAIL src/app.test.ts\n  expected 2, got 1\n');
+    // « Relancer les échecs » (ESC-305): the run of the failed job, run again.
+    m = p.match(/^\/github\/repos\/acme\/demo\/actions\/jobs\/(\d+)$/);
+    if (m) return send(200, { id: Number(m[1]), run_id: 7 });
+    if (p === '/github/repos/acme/demo/actions/runs/7/rerun-failed-jobs' && method === 'POST') return send(201, {});
+    // The deployments of a branch (ESC-305): a preview of each pull request's.
+    if (p === '/github/repos/acme/demo/deployments') {
+      const ref = url.searchParams.get('ref');
+      // Without a branch, those of the environments (ESC-67), whatever their branch.
+      if (!ref)
+        return send(
+          200,
+          g.deployments.map((d) => ({
+            id: d.id,
+            environment: d.environment,
+            sha: d.sha,
+            ref: 'main',
+            created_at: d.createdAt ?? new Date(Date.now() - 3600_000).toISOString(),
+            creator: { login: d.author ?? 'ada' },
+          })),
+        );
+      const pull = g.pulls.find((x) => x.head === ref);
+      return send(200, pull ? [{ id: pull.number, environment: 'Preview', transient_environment: true }] : []);
+    }
+    m = p.match(/^\/github\/repos\/acme\/demo\/deployments\/(\d+)\/statuses$/);
+    if (m && g.deployments.some((d) => d.id === Number(m[1]))) {
+      const d = g.deployments.find((x) => x.id === Number(m[1]));
+      return send(200, [{ state: d.state ?? 'success', environment_url: d.url ?? '', log_url: d.log ?? '' }]);
+    }
+    if (m) return send(200, [{ state: 'success', environment_url: `https://demo-pr-${m[1]}.vercel.app` }]);
     m = p.match(/^\/github\/repos\/acme\/demo\/issues\/(\d+)\/comments$/);
     if (m && method === 'GET' && g.pulls.some((x) => x.number === Number(m[1]))) return send(200, []);
 

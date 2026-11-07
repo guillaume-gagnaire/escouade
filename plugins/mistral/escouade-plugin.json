@@ -1,0 +1,83 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.mistral",
+  "name": "Mistral",
+  "version": "2.2.0",
+  "description": {
+    "fr": "Mistral dans Escouade : le service de voix (dictée, direct, voix de l'agent) et Mistral Vibe comme harness, par ACP, sur un compte Mistral partagé ; ta clé reste dans le trousseau, le plugin ne la garde pas.",
+    "en": "Mistral in Escouade: the voice service (dictation, live, the agent's voice) and Mistral Vibe as a harness, over ACP, on one shared Mistral account; your key stays in the keychain, the plugin keeps nothing."
+  },
+  "author": {
+    "name": "Escouade",
+    "url": "https://escouade.dev"
+  },
+  "license": "GPL-3.0-or-later",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/mistral",
+  "escouade": {
+    "api": "1",
+    "min": "2.2.0"
+  },
+  "run": { "wasm": "Cargo.toml" },
+  "limits": { "fetchSeconds": 120, "fetchBytes": 33554432, "memoryBytes": 268435456, "turnSeconds": 10 },
+  "activation": ["voice:mistral"],
+  "permissions": {
+    "network": ["api.mistral.ai"]
+  },
+  "contributes": {
+    "accounts": [
+      {
+        "id": "mistral",
+        "name": "Mistral",
+        "defaultHost": "api.mistral.ai",
+        "connect": ["token"],
+        "fields": [
+          {
+            "key": "token",
+            "secret": true,
+            "missing": { "fr": "Indique la clé d'API.", "en": "Give the API key." }
+          }
+        ],
+        "tokenPage": "https://console.mistral.ai/api-keys",
+        "voice": ["mistral"]
+      }
+    ],
+    "harnesses": [
+      {
+        "id": "vibe",
+        "name": "Mistral Vibe",
+        "account": "mistral",
+        "speaker": "Vibe",
+        "writer": "Mistral Vibe",
+        "locate": { "names": ["vibe-acp"] },
+        "versionArgs": ["--version"],
+        "tested": { "oldest": "3.0.3", "newest": "3.0.3" },
+        "caps": {
+          "modes": ["default", "plan", "acceptEdits", "bypassPermissions"],
+          "effort": true,
+          "images": true,
+          "terminalView": true,
+          "accountsByKey": true
+        },
+        "models": [{ "id": "mistral-medium-3.5", "label": "Mistral Medium 3.5", "effort": true }],
+        "efforts": ["low", "high"],
+        "accountVar": "VIBE_HOME",
+        "keyVar": "MISTRAL_API_KEY",
+        "closeGraceMs": 2000,
+        "install": {
+          "windows": "uv tool install mistral-vibe",
+          "unix": "uv tool install mistral-vibe"
+        },
+        "updateCommand": "uv tool upgrade mistral-vibe",
+        "acp": {
+          "args": [],
+          "env": { "VIBE_ENABLE_TELEMETRY": "false" },
+          "fs": false,
+          "fenceOnPermissions": true,
+          "modes": { "default": "ask", "plan": "ask", "acceptEdits": "accept-edits", "bypassPermissions": "auto-approve" },
+          "modelOption": "model",
+          "extensions": ["vibe"]
+        }
+      }
+    ]
+  }
+}

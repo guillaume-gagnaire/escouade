@@ -2,8 +2,8 @@
 title: "Validation"
 subject: "Kanban"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-143","ESC-259","ESC-263"]
-decisions: []
+tickets: ["ESC-143","ESC-259","ESC-263","ESC-59","ESC-61"]
+decisions: [58]
 compared: null
 ---
 
@@ -32,17 +32,22 @@ En cas de conflit, selon le réglage : me demander (« L'agent résout » / « A
 
 ### La pull request d'un ticket
 
-- La branche du ticket est poussée. Quand le dépôt distant est sur GitHub et que `gh` est installé, `gh pr create` ouvre la PR, avec pour corps la description, l'avancement et les critères en cases à cocher ; en brouillon selon le réglage.
-- Sans `gh`, ou s'il échoue, la page de comparaison de GitHub s'ouvre dans le navigateur, titre et corps remplis, à finaliser.
-- Sur Azure Repos, avec un compte Azure DevOps, la PR est ouverte par l'API d'Azure ; celle d'un ticket venu d'Azure Boards est liée à son élément de travail (voir *Intégrations*).
-- Chez un autre hébergeur : le push seul.
-- Ensuite, la PR se suit comme celle de tout agent (voir *Pull requests*).
+- La branche du ticket est poussée, puis sa PR s'ouvre par l'API de l'hébergeur de son dépôt distant (GitHub, GitLab, Bitbucket Cloud, Gitea / Forgejo, Azure DevOps), avec le compte connecté pour son instance (voir *Hébergeurs de code*). `gh` n'est plus nécessaire : il reste une source de jeton du compte GitHub.
+- Le mot de l'hébergeur : « MR » (merge request) sur GitLab, « PR » ailleurs, sur la carte, l'issue et les messages.
+- Titre : le message de commit. Corps : la description, l'avancement et les critères en cases à cocher.
+- En brouillon selon le réglage : le champ `draft` de GitHub et de Bitbucket, « Draft: » devant le titre sur GitLab, « WIP: » sur Gitea, `isDraft` sur Azure.
+- Les relecteurs et les étiquettes par défaut du Kanban lui sont donnés (Bitbucket n'a pas d'étiquettes ; un relecteur que l'hébergeur refuse n'empêche pas la PR).
+- Lien vers l'issue d'origine : un ticket importé d'une issue GitHub ou GitLab du même dépôt fait finir le corps par « Closes #n » ; un ticket venu d'Azure Boards est lié à son élément de travail (« Fixes AB#n » sur GitHub) ; la clé Jira ou Linear est dans le titre.
+- Ouverte, le ticket passe « En revue » et la suit jusqu'au merge (voir *En revue*).
+- Sans compte pour l'hébergeur, ou quand il refuse, la page de création de l'hébergeur s'ouvre dans le navigateur, remplie : `/compare/` de GitHub et de Gitea (titre et corps), `merge_requests/new` de GitLab (titre et description), `pull-requests/new` de Bitbucket, `pullrequestcreate` d'Azure Repos. L'issue dit « ⇡ <branche> poussée · PR à finaliser » et le ticket passe « Terminé ».
+- Chez un hébergeur inconnu : le push seul (« PR à ouvrir sur ton hébergeur »).
+- D'un projet à plusieurs dépôts, une PR par dépôt changé ; le ticket passe « Terminé » (voir *Projet à plusieurs dépôts*).
 
 ### Après la validation
 
 - Avec une branche fixe des docs, la spec et les décisions que son agent a écrites y sont versées maintenant, jamais avant. Après un merge qui a modifié quelque chose, les pages qu'il touche sont comparées au code en arrière-plan (voir *Spec tenue à jour*).
-- Une fois le ticket validé (merge, PR, push ou aucune modification), son worktree est supprimé après les commandes de démontage du projet, selon le réglage (ci-dessous).
-- Sa branche part avec lui après un merge, ou quand il n'y avait aucune modification. Poussée ou proposée en PR, elle reste. Une branche reprise, qui existait avant le ticket, est celle de l'utilisateur : elle n'est jamais supprimée, quel que soit le réglage et quoi que devienne le ticket.
+- Une fois le ticket validé (merge, PR, push ou aucune modification), son worktree est supprimé après les commandes de démontage du projet, selon le réglage (ci-dessous). Une PR ouverte ne le garde pas : il sera recréé depuis la branche quand l'agent devra corriger.
+- Sa branche part avec lui après un merge, ou quand il n'y avait aucune modification. Poussée ou proposée en PR, elle reste ; mergée ensuite sur l'hébergeur, elle part (voir *En revue*). Une branche reprise, qui existait avant le ticket, est celle de l'utilisateur : elle n'est jamais supprimée, quel que soit le réglage et quoi que devienne le ticket.
 - Si le worktree ne peut être supprimé, l'issue finit par « · worktree gardé ».
 - L'agent est archivé. Avec « Valider », qui laisse la branche en l'état, il ne l'est que quand son worktree est supprimé.
 
@@ -65,4 +70,6 @@ En cas de conflit, selon le réglage : me demander (« L'agent résout » / « A
 
 ## Réglages
 
-Dans l'onglet « Kanban » du projet : l'action après validation (« ⚙ Après validation : … » dans l'en-tête), la façon de merger (merge commit, squash ou rebase), la PR en brouillon, la conduite en cas de conflit, la commande de tests, et « Supprimer le worktree d'un ticket terminé ou supprimé » (allumé par défaut).
+Dans l'onglet « Kanban » du projet : l'action après validation (« ⚙ Après validation : … » dans l'en-tête), la façon de merger (merge commit, squash ou rebase), la PR en brouillon, ses relecteurs et ses étiquettes par défaut (noms séparés par des virgules), la conduite en cas de conflit, la commande de tests, et « Supprimer le worktree d'un ticket terminé ou supprimé » (allumé par défaut).
+
+Avec « Valider + PR », deux réglages de plus pour la suite de la revue (voir *En revue*) : « Répondre sous les fils corrigés » (éteint par défaut : rien ne se publie sous les fils sans lui, et aucun fil n'est jamais résolu par Escouade), et « Mise à jour de la branche » d'une PR en conflit avec sa cible (Merge par défaut, ou Rebase poussé avec `--force-with-lease`).

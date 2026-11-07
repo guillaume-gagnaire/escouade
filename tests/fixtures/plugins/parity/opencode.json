@@ -1,0 +1,4356 @@
+[
+  {
+    "answer": {
+      "error": null,
+      "result": {
+        "attach": {
+          "args": ["attach", "http://127.0.0.1:{port}", "--session", "id0", "--dir", "{wt}"],
+          "env": [
+            {
+              "name": "OPENCODE_SERVER_PASSWORD",
+              "value": "pw"
+            }
+          ],
+          "fenceApplied": false,
+          "fenceByClient": false,
+          "files": [],
+          "readOnly": false,
+          "removeEnv": [],
+          "trust": [],
+          "writes": []
+        },
+        "catalog": [
+          {
+            "default": false,
+            "defaultEffort": null,
+            "efforts": ["low", "medium", "high"],
+            "id": "ollama/gpt-oss:20b-32k",
+            "images": false,
+            "label": "gpt-oss 20b (32k)",
+            "provider": "Ollama (local)"
+          },
+          {
+            "default": true,
+            "defaultEffort": null,
+            "efforts": [],
+            "id": "ollama/qwen3-coder:30b-32k",
+            "images": false,
+            "label": "Qwen3 Coder 30b (32k)",
+            "provider": "Ollama (local)"
+          },
+          {
+            "default": false,
+            "defaultEffort": null,
+            "efforts": [],
+            "id": "lmstudio/devstral-small",
+            "images": true,
+            "label": "Devstral Small",
+            "provider": "LM Studio (local)"
+          }
+        ]
+      }
+    },
+    "asked": [
+      {
+        "body": null,
+        "directory": "{wt}",
+        "method": "GET",
+        "path": "/config"
+      },
+      {
+        "body": null,
+        "directory": "{wt}",
+        "method": "GET",
+        "path": "/config/providers"
+      },
+      {
+        "body": null,
+        "directory": "{wt}",
+        "method": "GET",
+        "path": "/mcp"
+      },
+      {
+        "body": {
+          "permission": [
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -A *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -u *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add --all *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add --update *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add * -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *\t*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *\"-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *'-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add */-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add */\n*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *>*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *<*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *$*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *`*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *{*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *^*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *%*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -m *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -am *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit * -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *\t*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *\"-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *'-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit */-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit */\n*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *>*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *<*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *$*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *`*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *{*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *^*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *%*",
+              "permission": "bash"
+            },
+            {
+              "action": "allow",
+              "pattern": "*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".git",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".git/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.git",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.git/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".opencode",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".opencode/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.opencode",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.opencode/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.json",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.json/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.json",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.json/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.jsonc",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.jsonc/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.jsonc",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.jsonc/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".husky",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".husky/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.husky",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.husky/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".githooks",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".githooks/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.githooks",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.githooks/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "git*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "git*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/git*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/git*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "openco*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "openco*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/openco*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/openco*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*:*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "webfetch"
+            },
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "websearch"
+            },
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "external_directory"
+            }
+          ],
+          "title": "Escouade"
+        },
+        "directory": "{wt}",
+        "method": "POST",
+        "path": "/session"
+      }
+    ],
+    "items": [
+      {
+        "op": "session",
+        "session": "id0"
+      },
+      {
+        "op": "context",
+        "window": 32768
+      }
+    ],
+    "step": "open"
+  },
+  {
+    "answer": {
+      "error": null,
+      "result": {
+        "writes": []
+      }
+    },
+    "asked": [
+      {
+        "body": {
+          "agent": "build",
+          "model": {
+            "modelID": "qwen3-coder:30b-32k",
+            "providerID": "ollama"
+          },
+          "parts": [
+            {
+              "text": "bonjour",
+              "type": "text"
+            }
+          ]
+        },
+        "directory": "{wt}",
+        "method": "POST",
+        "path": "/session/id0/prompt_async"
+      }
+    ],
+    "items": [
+      {
+        "id": "id1",
+        "op": "delta",
+        "parent": null,
+        "text": "",
+        "thinking": false
+      },
+      {
+        "id": "id1",
+        "op": "delta",
+        "parent": null,
+        "text": "Bonjour, ",
+        "thinking": false
+      },
+      {
+        "id": "id1",
+        "op": "delta",
+        "parent": null,
+        "text": "tu ",
+        "thinking": false
+      },
+      {
+        "id": "id1",
+        "op": "delta",
+        "parent": null,
+        "text": "as ",
+        "thinking": false
+      },
+      {
+        "id": "id1",
+        "op": "delta",
+        "parent": null,
+        "text": "dit ",
+        "thinking": false
+      },
+      {
+        "id": "id1",
+        "op": "delta",
+        "parent": null,
+        "text": ": ",
+        "thinking": false
+      },
+      {
+        "id": "id1",
+        "op": "delta",
+        "parent": null,
+        "text": "bonjour",
+        "thinking": false
+      },
+      {
+        "id": "id1",
+        "op": "text",
+        "parent": null,
+        "text": "Bonjour, tu as dit : bonjour"
+      },
+      {
+        "op": "context",
+        "tokens": 120,
+        "window": 32768
+      },
+      {
+        "entry": "id2",
+        "error": null,
+        "interrupted": false,
+        "op": "turn",
+        "usage": {
+          "cache": 20,
+          "cost": 0.0,
+          "input": 100,
+          "output": 10
+        }
+      }
+    ],
+    "step": "bonjour"
+  },
+  {
+    "answer": {
+      "error": null,
+      "result": {
+        "writes": []
+      }
+    },
+    "asked": [
+      {
+        "body": {
+          "agent": "build",
+          "model": {
+            "modelID": "qwen3-coder:30b-32k",
+            "providerID": "ollama"
+          },
+          "parts": [
+            {
+              "text": "raisonnement",
+              "type": "text"
+            }
+          ]
+        },
+        "directory": "{wt}",
+        "method": "POST",
+        "path": "/session/id0/prompt_async"
+      }
+    ],
+    "items": [
+      {
+        "id": "id3",
+        "op": "delta",
+        "parent": null,
+        "text": "",
+        "thinking": true
+      },
+      {
+        "id": "id3",
+        "op": "delta",
+        "parent": null,
+        "text": "Je ",
+        "thinking": true
+      },
+      {
+        "id": "id3",
+        "op": "delta",
+        "parent": null,
+        "text": "réfléchis ",
+        "thinking": true
+      },
+      {
+        "id": "id3",
+        "op": "delta",
+        "parent": null,
+        "text": "à ",
+        "thinking": true
+      },
+      {
+        "id": "id3",
+        "op": "delta",
+        "parent": null,
+        "text": "la ",
+        "thinking": true
+      },
+      {
+        "id": "id3",
+        "op": "delta",
+        "parent": null,
+        "text": "question ",
+        "thinking": true
+      },
+      {
+        "id": "id3",
+        "op": "delta",
+        "parent": null,
+        "text": "avant ",
+        "thinking": true
+      },
+      {
+        "id": "id3",
+        "op": "delta",
+        "parent": null,
+        "text": "de ",
+        "thinking": true
+      },
+      {
+        "id": "id3",
+        "op": "delta",
+        "parent": null,
+        "text": "répondre.",
+        "thinking": true
+      },
+      {
+        "id": "id3",
+        "op": "thinking",
+        "parent": null,
+        "text": "Je réfléchis à la question avant de répondre."
+      },
+      {
+        "id": "id4",
+        "op": "delta",
+        "parent": null,
+        "text": "",
+        "thinking": false
+      },
+      {
+        "id": "id4",
+        "op": "delta",
+        "parent": null,
+        "text": "Voici ",
+        "thinking": false
+      },
+      {
+        "id": "id4",
+        "op": "delta",
+        "parent": null,
+        "text": "ma ",
+        "thinking": false
+      },
+      {
+        "id": "id4",
+        "op": "delta",
+        "parent": null,
+        "text": "réponse ",
+        "thinking": false
+      },
+      {
+        "id": "id4",
+        "op": "delta",
+        "parent": null,
+        "text": "réfléchie.",
+        "thinking": false
+      },
+      {
+        "id": "id4",
+        "op": "text",
+        "parent": null,
+        "text": "Voici ma réponse réfléchie."
+      },
+      {
+        "op": "context",
+        "tokens": 120,
+        "window": 32768
+      },
+      {
+        "entry": "id5",
+        "error": null,
+        "interrupted": false,
+        "op": "turn",
+        "usage": {
+          "cache": 20,
+          "cost": 0.0,
+          "input": 100,
+          "output": 10
+        }
+      }
+    ],
+    "step": "raisonnement"
+  },
+  {
+    "answer": {
+      "error": null,
+      "result": {
+        "writes": []
+      }
+    },
+    "asked": [
+      {
+        "body": {
+          "agent": "build",
+          "model": {
+            "modelID": "qwen3-coder:30b-32k",
+            "providerID": "ollama"
+          },
+          "parts": [
+            {
+              "text": "étapes",
+              "type": "text"
+            }
+          ]
+        },
+        "directory": "{wt}",
+        "method": "POST",
+        "path": "/session/id0/prompt_async"
+      }
+    ],
+    "items": [
+      {
+        "id": "id6",
+        "input": {
+          "todos": [
+            {
+              "activeForm": "Lire le code",
+              "content": "Lire le code",
+              "status": "in_progress"
+            },
+            {
+              "activeForm": "Écrire le correctif",
+              "content": "Écrire le correctif",
+              "status": "pending"
+            },
+            {
+              "activeForm": "Lancer les tests",
+              "content": "Lancer les tests",
+              "status": "pending"
+            }
+          ]
+        },
+        "name": "TodoWrite",
+        "op": "tool",
+        "parent": null,
+        "unplanned": true
+      },
+      {
+        "op": "todos",
+        "todos": [
+          {
+            "activeForm": "Lire le code",
+            "content": "Lire le code",
+            "status": "in_progress"
+          },
+          {
+            "activeForm": "Écrire le correctif",
+            "content": "Écrire le correctif",
+            "status": "pending"
+          },
+          {
+            "activeForm": "Lancer les tests",
+            "content": "Lancer les tests",
+            "status": "pending"
+          }
+        ]
+      },
+      {
+        "error": false,
+        "id": "id6",
+        "op": "toolDone",
+        "output": "[\n  {\n    \"content\": \"Lire le code\",\n    \"status\": \"in_progress\",\n    \"priority\": \"high\"\n  },\n  {\n    \"content\": \"Écrire le correctif\",\n    \"status\": \"pending\",\n    \"priority\": \"high\"\n  },\n  {\n    \"content\": \"Lancer les tests\",\n    \"status\": \"pending\",\n    \"priority\": \"high\"\n  }\n]",
+        "result": null
+      },
+      {
+        "id": "id7",
+        "input": {
+          "todos": [
+            {
+              "activeForm": "Lire le code",
+              "content": "Lire le code",
+              "status": "completed"
+            },
+            {
+              "activeForm": "Écrire le correctif",
+              "content": "Écrire le correctif",
+              "status": "in_progress"
+            },
+            {
+              "activeForm": "Lancer les tests",
+              "content": "Lancer les tests",
+              "status": "pending"
+            }
+          ]
+        },
+        "name": "TodoWrite",
+        "op": "tool",
+        "parent": null,
+        "unplanned": true
+      },
+      {
+        "op": "todos",
+        "todos": [
+          {
+            "activeForm": "Lire le code",
+            "content": "Lire le code",
+            "status": "completed"
+          },
+          {
+            "activeForm": "Écrire le correctif",
+            "content": "Écrire le correctif",
+            "status": "in_progress"
+          },
+          {
+            "activeForm": "Lancer les tests",
+            "content": "Lancer les tests",
+            "status": "pending"
+          }
+        ]
+      },
+      {
+        "error": false,
+        "id": "id7",
+        "op": "toolDone",
+        "output": "[\n  {\n    \"content\": \"Lire le code\",\n    \"status\": \"completed\",\n    \"priority\": \"high\"\n  },\n  {\n    \"content\": \"Écrire le correctif\",\n    \"status\": \"in_progress\",\n    \"priority\": \"high\"\n  },\n  {\n    \"content\": \"Lancer les tests\",\n    \"status\": \"pending\",\n    \"priority\": \"high\"\n  }\n]",
+        "result": null
+      },
+      {
+        "id": "id8",
+        "input": {
+          "todos": [
+            {
+              "activeForm": "Lire le code",
+              "content": "Lire le code",
+              "status": "completed"
+            },
+            {
+              "activeForm": "Écrire le correctif",
+              "content": "Écrire le correctif",
+              "status": "completed"
+            },
+            {
+              "activeForm": "Lancer les tests",
+              "content": "Lancer les tests",
+              "status": "in_progress"
+            }
+          ]
+        },
+        "name": "TodoWrite",
+        "op": "tool",
+        "parent": null,
+        "unplanned": true
+      },
+      {
+        "op": "todos",
+        "todos": [
+          {
+            "activeForm": "Lire le code",
+            "content": "Lire le code",
+            "status": "completed"
+          },
+          {
+            "activeForm": "Écrire le correctif",
+            "content": "Écrire le correctif",
+            "status": "completed"
+          },
+          {
+            "activeForm": "Lancer les tests",
+            "content": "Lancer les tests",
+            "status": "in_progress"
+          }
+        ]
+      },
+      {
+        "error": false,
+        "id": "id8",
+        "op": "toolDone",
+        "output": "[\n  {\n    \"content\": \"Lire le code\",\n    \"status\": \"completed\",\n    \"priority\": \"high\"\n  },\n  {\n    \"content\": \"Écrire le correctif\",\n    \"status\": \"completed\",\n    \"priority\": \"high\"\n  },\n  {\n    \"content\": \"Lancer les tests\",\n    \"status\": \"in_progress\",\n    \"priority\": \"high\"\n  }\n]",
+        "result": null
+      },
+      {
+        "id": "id9",
+        "input": {
+          "todos": [
+            {
+              "activeForm": "Lire le code",
+              "content": "Lire le code",
+              "status": "completed"
+            },
+            {
+              "activeForm": "Écrire le correctif",
+              "content": "Écrire le correctif",
+              "status": "completed"
+            },
+            {
+              "activeForm": "Lancer les tests",
+              "content": "Lancer les tests",
+              "status": "completed"
+            }
+          ]
+        },
+        "name": "TodoWrite",
+        "op": "tool",
+        "parent": null,
+        "unplanned": true
+      },
+      {
+        "op": "todos",
+        "todos": [
+          {
+            "activeForm": "Lire le code",
+            "content": "Lire le code",
+            "status": "completed"
+          },
+          {
+            "activeForm": "Écrire le correctif",
+            "content": "Écrire le correctif",
+            "status": "completed"
+          },
+          {
+            "activeForm": "Lancer les tests",
+            "content": "Lancer les tests",
+            "status": "completed"
+          }
+        ]
+      },
+      {
+        "error": false,
+        "id": "id9",
+        "op": "toolDone",
+        "output": "[\n  {\n    \"content\": \"Lire le code\",\n    \"status\": \"completed\",\n    \"priority\": \"high\"\n  },\n  {\n    \"content\": \"Écrire le correctif\",\n    \"status\": \"completed\",\n    \"priority\": \"high\"\n  },\n  {\n    \"content\": \"Lancer les tests\",\n    \"status\": \"completed\",\n    \"priority\": \"high\"\n  }\n]",
+        "result": null
+      },
+      {
+        "id": "id10",
+        "op": "delta",
+        "parent": null,
+        "text": "",
+        "thinking": false
+      },
+      {
+        "id": "id10",
+        "op": "delta",
+        "parent": null,
+        "text": "Les ",
+        "thinking": false
+      },
+      {
+        "id": "id10",
+        "op": "delta",
+        "parent": null,
+        "text": "trois ",
+        "thinking": false
+      },
+      {
+        "id": "id10",
+        "op": "delta",
+        "parent": null,
+        "text": "étapes ",
+        "thinking": false
+      },
+      {
+        "id": "id10",
+        "op": "delta",
+        "parent": null,
+        "text": "sont ",
+        "thinking": false
+      },
+      {
+        "id": "id10",
+        "op": "delta",
+        "parent": null,
+        "text": "faites.",
+        "thinking": false
+      },
+      {
+        "id": "id10",
+        "op": "text",
+        "parent": null,
+        "text": "Les trois étapes sont faites."
+      },
+      {
+        "op": "context",
+        "tokens": 120,
+        "window": 32768
+      },
+      {
+        "entry": "id11",
+        "error": null,
+        "interrupted": false,
+        "op": "turn",
+        "usage": {
+          "cache": 20,
+          "cost": 0.0,
+          "input": 100,
+          "output": 10
+        }
+      }
+    ],
+    "step": "étapes"
+  },
+  {
+    "answer": {
+      "error": null,
+      "result": {
+        "writes": []
+      }
+    },
+    "asked": [
+      {
+        "body": {
+          "agent": "build",
+          "model": {
+            "modelID": "qwen3-coder:30b-32k",
+            "providerID": "ollama"
+          },
+          "parts": [
+            {
+              "text": "sous-agent",
+              "type": "text"
+            }
+          ]
+        },
+        "directory": "{wt}",
+        "method": "POST",
+        "path": "/session/id0/prompt_async"
+      }
+    ],
+    "items": [
+      {
+        "id": "id12",
+        "input": {
+          "description": "Explorer le dépôt",
+          "prompt": "Liste les fichiers",
+          "subagent_type": "explore"
+        },
+        "name": "Task",
+        "op": "tool",
+        "parent": null
+      },
+      {
+        "id": "id13",
+        "input": {
+          "pattern": "**/*"
+        },
+        "name": "Glob",
+        "op": "tool",
+        "parent": "id12"
+      },
+      {
+        "error": false,
+        "id": "id13",
+        "op": "toolDone",
+        "output": "README.md",
+        "result": null
+      },
+      {
+        "id": "id14",
+        "op": "text",
+        "parent": "id12",
+        "text": "Un seul fichier : README.md."
+      },
+      {
+        "error": false,
+        "id": "id12",
+        "op": "toolDone",
+        "output": "Un seul fichier : README.md.",
+        "result": {
+          "totalTokens": 60,
+          "totalToolUseCount": 1
+        }
+      },
+      {
+        "id": "id15",
+        "op": "delta",
+        "parent": null,
+        "text": "",
+        "thinking": false
+      },
+      {
+        "id": "id15",
+        "op": "delta",
+        "parent": null,
+        "text": "Le ",
+        "thinking": false
+      },
+      {
+        "id": "id15",
+        "op": "delta",
+        "parent": null,
+        "text": "sous-agent ",
+        "thinking": false
+      },
+      {
+        "id": "id15",
+        "op": "delta",
+        "parent": null,
+        "text": "a ",
+        "thinking": false
+      },
+      {
+        "id": "id15",
+        "op": "delta",
+        "parent": null,
+        "text": "fini.",
+        "thinking": false
+      },
+      {
+        "id": "id15",
+        "op": "text",
+        "parent": null,
+        "text": "Le sous-agent a fini."
+      },
+      {
+        "op": "context",
+        "tokens": 120,
+        "window": 32768
+      },
+      {
+        "entry": "id16",
+        "error": null,
+        "interrupted": false,
+        "op": "turn",
+        "usage": {
+          "cache": 20,
+          "cost": 0.0,
+          "input": 150,
+          "output": 20
+        }
+      }
+    ],
+    "step": "sous-agent"
+  },
+  {
+    "answer": {
+      "error": null,
+      "result": {
+        "writes": []
+      }
+    },
+    "asked": [
+      {
+        "body": {
+          "agent": "build",
+          "model": {
+            "modelID": "qwen3-coder:30b-32k",
+            "providerID": "ollama"
+          },
+          "parts": [
+            {
+              "text": "deux appels",
+              "type": "text"
+            }
+          ]
+        },
+        "directory": "{wt}",
+        "method": "POST",
+        "path": "/session/id0/prompt_async"
+      }
+    ],
+    "items": [
+      {
+        "id": "id17",
+        "input": {
+          "file_path": "{wt}/README.md"
+        },
+        "name": "Read",
+        "op": "tool",
+        "parent": null
+      },
+      {
+        "error": false,
+        "id": "id17",
+        "op": "toolDone",
+        "output": "<file>\n00001| Fake\n</file>",
+        "result": null
+      },
+      {
+        "op": "context",
+        "tokens": 1000,
+        "window": 32768
+      },
+      {
+        "id": "id18",
+        "op": "delta",
+        "parent": null,
+        "text": "",
+        "thinking": false
+      },
+      {
+        "id": "id18",
+        "op": "delta",
+        "parent": null,
+        "text": "Le ",
+        "thinking": false
+      },
+      {
+        "id": "id18",
+        "op": "delta",
+        "parent": null,
+        "text": "fichier ",
+        "thinking": false
+      },
+      {
+        "id": "id18",
+        "op": "delta",
+        "parent": null,
+        "text": "est ",
+        "thinking": false
+      },
+      {
+        "id": "id18",
+        "op": "delta",
+        "parent": null,
+        "text": "lu.",
+        "thinking": false
+      },
+      {
+        "id": "id18",
+        "op": "text",
+        "parent": null,
+        "text": "Le fichier est lu."
+      },
+      {
+        "op": "context",
+        "tokens": 120,
+        "window": 32768
+      },
+      {
+        "entry": "id19",
+        "error": null,
+        "interrupted": false,
+        "op": "turn",
+        "usage": {
+          "cache": 20,
+          "cost": 0.0,
+          "input": 1100,
+          "output": 60
+        }
+      }
+    ],
+    "step": "deux appels"
+  },
+  {
+    "answer": {
+      "error": null,
+      "result": {
+        "writes": []
+      }
+    },
+    "asked": [
+      {
+        "body": {
+          "agent": "build",
+          "model": {
+            "modelID": "qwen3-coder:30b-32k",
+            "providerID": "ollama"
+          },
+          "parts": [
+            {
+              "text": "fichier",
+              "type": "text"
+            }
+          ]
+        },
+        "directory": "{wt}",
+        "method": "POST",
+        "path": "/session/id0/prompt_async"
+      }
+    ],
+    "items": [
+      {
+        "id": "id20",
+        "input": {
+          "file_path": "{wt}/src/app.ts",
+          "new_string": "const a = 2;",
+          "old_string": "const a = 1;"
+        },
+        "name": "Edit",
+        "op": "tool",
+        "parent": null
+      },
+      {
+        "op": "touched",
+        "path": "{wt}/src/app.ts"
+      },
+      {
+        "error": false,
+        "id": "id20",
+        "op": "toolDone",
+        "output": "Edit applied successfully.",
+        "result": {
+          "filePath": "{wt}/src/app.ts",
+          "structuredPatch": [
+            {
+              "lines": ["-const a = 1;", "+const a = 2;"],
+              "newStart": 1,
+              "oldStart": 1
+            }
+          ]
+        }
+      },
+      {
+        "op": "touched",
+        "path": "{wt}/src/app.ts"
+      },
+      {
+        "id": "id21",
+        "op": "delta",
+        "parent": null,
+        "text": "",
+        "thinking": false
+      },
+      {
+        "id": "id21",
+        "op": "delta",
+        "parent": null,
+        "text": "Le ",
+        "thinking": false
+      },
+      {
+        "id": "id21",
+        "op": "delta",
+        "parent": null,
+        "text": "fichier ",
+        "thinking": false
+      },
+      {
+        "id": "id21",
+        "op": "delta",
+        "parent": null,
+        "text": "est ",
+        "thinking": false
+      },
+      {
+        "id": "id21",
+        "op": "delta",
+        "parent": null,
+        "text": "modifié.",
+        "thinking": false
+      },
+      {
+        "id": "id21",
+        "op": "text",
+        "parent": null,
+        "text": "Le fichier est modifié."
+      },
+      {
+        "op": "context",
+        "tokens": 120,
+        "window": 32768
+      },
+      {
+        "entry": "id22",
+        "error": null,
+        "interrupted": false,
+        "op": "turn",
+        "usage": {
+          "cache": 20,
+          "cost": 0.0,
+          "input": 100,
+          "output": 10
+        }
+      }
+    ],
+    "step": "fichier"
+  },
+  {
+    "answer": {
+      "error": null,
+      "result": null
+    },
+    "asked": [
+      {
+        "body": {
+          "reply": "once"
+        },
+        "directory": "{wt}",
+        "method": "POST",
+        "path": "/permission/id23/reply"
+      },
+      {
+        "body": {
+          "agent": "build",
+          "model": {
+            "modelID": "qwen3-coder:30b-32k",
+            "providerID": "ollama"
+          },
+          "parts": [
+            {
+              "text": "commande",
+              "type": "text"
+            }
+          ]
+        },
+        "directory": "{wt}",
+        "method": "POST",
+        "path": "/session/id0/prompt_async"
+      }
+    ],
+    "items": [
+      {
+        "id": "id24",
+        "input": {
+          "command": "rm -rf build",
+          "description": "Supprime build"
+        },
+        "name": "Bash",
+        "op": "tool",
+        "parent": null
+      },
+      {
+        "alwaysByHarness": true,
+        "call": "id24",
+        "canAlways": true,
+        "description": "« Toujours autoriser » retiendra : rm *",
+        "diff": null,
+        "input": {
+          "command": "rm -rf build"
+        },
+        "op": "permission",
+        "parent": null,
+        "reason": null,
+        "request": "id23",
+        "tool": "Bash"
+      },
+      {
+        "decision": "allow",
+        "op": "answered",
+        "request": "id23"
+      },
+      {
+        "error": false,
+        "id": "id24",
+        "op": "toolDone",
+        "output": "build supprimé",
+        "result": null
+      },
+      {
+        "id": "id25",
+        "op": "delta",
+        "parent": null,
+        "text": "",
+        "thinking": false
+      },
+      {
+        "id": "id25",
+        "op": "delta",
+        "parent": null,
+        "text": "La ",
+        "thinking": false
+      },
+      {
+        "id": "id25",
+        "op": "delta",
+        "parent": null,
+        "text": "commande ",
+        "thinking": false
+      },
+      {
+        "id": "id25",
+        "op": "delta",
+        "parent": null,
+        "text": "est ",
+        "thinking": false
+      },
+      {
+        "id": "id25",
+        "op": "delta",
+        "parent": null,
+        "text": "passée.",
+        "thinking": false
+      },
+      {
+        "id": "id25",
+        "op": "text",
+        "parent": null,
+        "text": "La commande est passée."
+      },
+      {
+        "op": "context",
+        "tokens": 120,
+        "window": 32768
+      },
+      {
+        "entry": "id26",
+        "error": null,
+        "interrupted": false,
+        "op": "turn",
+        "usage": {
+          "cache": 20,
+          "cost": 0.0,
+          "input": 100,
+          "output": 10
+        }
+      }
+    ],
+    "step": "commande"
+  },
+  {
+    "answer": {
+      "error": null,
+      "result": null
+    },
+    "asked": [
+      {
+        "body": {
+          "message": "pas ça",
+          "reply": "reject"
+        },
+        "directory": "{wt}",
+        "method": "POST",
+        "path": "/permission/id27/reply"
+      },
+      {
+        "body": {
+          "agent": "build",
+          "model": {
+            "modelID": "qwen3-coder:30b-32k",
+            "providerID": "ollama"
+          },
+          "parts": [
+            {
+              "text": "commande",
+              "type": "text"
+            }
+          ]
+        },
+        "directory": "{wt}",
+        "method": "POST",
+        "path": "/session/id0/prompt_async"
+      }
+    ],
+    "items": [
+      {
+        "id": "id28",
+        "input": {
+          "command": "rm -rf build",
+          "description": "Supprime build"
+        },
+        "name": "Bash",
+        "op": "tool",
+        "parent": null
+      },
+      {
+        "alwaysByHarness": true,
+        "call": "id28",
+        "canAlways": true,
+        "description": "« Toujours autoriser » retiendra : rm *",
+        "diff": null,
+        "input": {
+          "command": "rm -rf build"
+        },
+        "op": "permission",
+        "parent": null,
+        "reason": null,
+        "request": "id27",
+        "tool": "Bash"
+      },
+      {
+        "decision": "deny",
+        "op": "answered",
+        "request": "id27"
+      },
+      {
+        "error": true,
+        "id": "id28",
+        "op": "toolDone",
+        "output": "The user rejected permission to use this specific tool call with the following feedback: pas ça",
+        "result": null
+      },
+      {
+        "id": "id29",
+        "op": "delta",
+        "parent": null,
+        "text": "",
+        "thinking": false
+      },
+      {
+        "id": "id29",
+        "op": "delta",
+        "parent": null,
+        "text": "Je ",
+        "thinking": false
+      },
+      {
+        "id": "id29",
+        "op": "delta",
+        "parent": null,
+        "text": "ne ",
+        "thinking": false
+      },
+      {
+        "id": "id29",
+        "op": "delta",
+        "parent": null,
+        "text": "lance ",
+        "thinking": false
+      },
+      {
+        "id": "id29",
+        "op": "delta",
+        "parent": null,
+        "text": "pas ",
+        "thinking": false
+      },
+      {
+        "id": "id29",
+        "op": "delta",
+        "parent": null,
+        "text": "la ",
+        "thinking": false
+      },
+      {
+        "id": "id29",
+        "op": "delta",
+        "parent": null,
+        "text": "commande ",
+        "thinking": false
+      },
+      {
+        "id": "id29",
+        "op": "delta",
+        "parent": null,
+        "text": ": ",
+        "thinking": false
+      },
+      {
+        "id": "id29",
+        "op": "delta",
+        "parent": null,
+        "text": "pas ",
+        "thinking": false
+      },
+      {
+        "id": "id29",
+        "op": "delta",
+        "parent": null,
+        "text": "ça",
+        "thinking": false
+      },
+      {
+        "id": "id29",
+        "op": "text",
+        "parent": null,
+        "text": "Je ne lance pas la commande : pas ça"
+      },
+      {
+        "op": "context",
+        "tokens": 120,
+        "window": 32768
+      },
+      {
+        "entry": "id30",
+        "error": null,
+        "interrupted": false,
+        "op": "turn",
+        "usage": {
+          "cache": 20,
+          "cost": 0.0,
+          "input": 100,
+          "output": 10
+        }
+      }
+    ],
+    "step": "commande refusée"
+  },
+  {
+    "answer": {
+      "error": null,
+      "result": null
+    },
+    "asked": [
+      {
+        "body": {
+          "answers": [["Python"]]
+        },
+        "directory": "{wt}",
+        "method": "POST",
+        "path": "/question/id31/reply"
+      },
+      {
+        "body": {
+          "agent": "build",
+          "model": {
+            "modelID": "qwen3-coder:30b-32k",
+            "providerID": "ollama"
+          },
+          "parts": [
+            {
+              "text": "question",
+              "type": "text"
+            }
+          ]
+        },
+        "directory": "{wt}",
+        "method": "POST",
+        "path": "/session/id0/prompt_async"
+      }
+    ],
+    "items": [
+      {
+        "call": "id32",
+        "op": "question",
+        "questions": [
+          {
+            "header": "Langage",
+            "multiSelect": false,
+            "options": [
+              {
+                "description": "Simple et lisible",
+                "label": "Python"
+              },
+              {
+                "description": "Rapide et sûr",
+                "label": "Rust"
+              }
+            ],
+            "question": "Quel langage préfères-tu ?"
+          }
+        ],
+        "request": "id31"
+      },
+      {
+        "answers": [["Python"]],
+        "op": "answered",
+        "request": "id31"
+      },
+      {
+        "id": "id33",
+        "op": "delta",
+        "parent": null,
+        "text": "",
+        "thinking": false
+      },
+      {
+        "id": "id33",
+        "op": "delta",
+        "parent": null,
+        "text": "Tu ",
+        "thinking": false
+      },
+      {
+        "id": "id33",
+        "op": "delta",
+        "parent": null,
+        "text": "as ",
+        "thinking": false
+      },
+      {
+        "id": "id33",
+        "op": "delta",
+        "parent": null,
+        "text": "choisi ",
+        "thinking": false
+      },
+      {
+        "id": "id33",
+        "op": "delta",
+        "parent": null,
+        "text": ": ",
+        "thinking": false
+      },
+      {
+        "id": "id33",
+        "op": "delta",
+        "parent": null,
+        "text": "Python",
+        "thinking": false
+      },
+      {
+        "id": "id33",
+        "op": "text",
+        "parent": null,
+        "text": "Tu as choisi : Python"
+      },
+      {
+        "op": "context",
+        "tokens": 120,
+        "window": 32768
+      },
+      {
+        "entry": "id34",
+        "error": null,
+        "interrupted": false,
+        "op": "turn",
+        "usage": {
+          "cache": 20,
+          "cost": 0.0,
+          "input": 100,
+          "output": 10
+        }
+      }
+    ],
+    "step": "question"
+  },
+  {
+    "answer": {
+      "error": null,
+      "result": null
+    },
+    "asked": [
+      {
+        "body": null,
+        "directory": "{wt}",
+        "method": "POST",
+        "path": "/session/id0/abort"
+      },
+      {
+        "body": {
+          "agent": "build",
+          "model": {
+            "modelID": "qwen3-coder:30b-32k",
+            "providerID": "ollama"
+          },
+          "parts": [
+            {
+              "text": "gardé pour après",
+              "type": "text"
+            }
+          ]
+        },
+        "directory": "{wt}",
+        "method": "POST",
+        "path": "/session/id0/prompt_async"
+      },
+      {
+        "body": {
+          "agent": "build",
+          "model": {
+            "modelID": "qwen3-coder:30b-32k",
+            "providerID": "ollama"
+          },
+          "parts": [
+            {
+              "text": "lent",
+              "type": "text"
+            }
+          ]
+        },
+        "directory": "{wt}",
+        "method": "POST",
+        "path": "/session/id0/prompt_async"
+      }
+    ],
+    "items": [
+      {
+        "id": "id35",
+        "op": "delta",
+        "parent": null,
+        "text": "",
+        "thinking": false
+      },
+      {
+        "id": "id35",
+        "op": "delta",
+        "parent": null,
+        "text": "Je ",
+        "thinking": false
+      },
+      {
+        "id": "id35",
+        "op": "delta",
+        "parent": null,
+        "text": "commence ",
+        "thinking": false
+      },
+      {
+        "id": "id35",
+        "op": "delta",
+        "parent": null,
+        "text": "une ",
+        "thinking": false
+      },
+      {
+        "id": "id35",
+        "op": "delta",
+        "parent": null,
+        "text": "commande ",
+        "thinking": false
+      },
+      {
+        "id": "id35",
+        "op": "delta",
+        "parent": null,
+        "text": "longue.",
+        "thinking": false
+      },
+      {
+        "id": "id35",
+        "op": "text",
+        "parent": null,
+        "text": "Je commence une commande longue."
+      },
+      {
+        "id": "id36",
+        "input": {
+          "command": "sleep 30",
+          "description": "Attend"
+        },
+        "name": "Bash",
+        "op": "tool",
+        "parent": null
+      },
+      {
+        "alwaysByHarness": true,
+        "call": "id36",
+        "canAlways": true,
+        "description": "« Toujours autoriser » retiendra : sleep *",
+        "diff": null,
+        "input": {
+          "command": "sleep 30"
+        },
+        "op": "permission",
+        "parent": null,
+        "reason": null,
+        "request": "id37",
+        "tool": "Bash"
+      },
+      {
+        "op": "context",
+        "tokens": 120,
+        "window": 32768
+      },
+      {
+        "entry": "id38",
+        "error": null,
+        "interrupted": true,
+        "op": "turn",
+        "usage": {
+          "cache": 20,
+          "cost": 0.0,
+          "input": 100,
+          "output": 10
+        }
+      },
+      {
+        "id": "id39",
+        "op": "delta",
+        "parent": null,
+        "text": "",
+        "thinking": false
+      },
+      {
+        "id": "id39",
+        "op": "delta",
+        "parent": null,
+        "text": "Bonjour, ",
+        "thinking": false
+      },
+      {
+        "id": "id39",
+        "op": "delta",
+        "parent": null,
+        "text": "tu ",
+        "thinking": false
+      },
+      {
+        "id": "id39",
+        "op": "delta",
+        "parent": null,
+        "text": "as ",
+        "thinking": false
+      },
+      {
+        "id": "id39",
+        "op": "delta",
+        "parent": null,
+        "text": "dit ",
+        "thinking": false
+      },
+      {
+        "id": "id39",
+        "op": "delta",
+        "parent": null,
+        "text": ": ",
+        "thinking": false
+      },
+      {
+        "id": "id39",
+        "op": "delta",
+        "parent": null,
+        "text": "gardé ",
+        "thinking": false
+      },
+      {
+        "id": "id39",
+        "op": "delta",
+        "parent": null,
+        "text": "pour ",
+        "thinking": false
+      },
+      {
+        "id": "id39",
+        "op": "delta",
+        "parent": null,
+        "text": "après",
+        "thinking": false
+      },
+      {
+        "id": "id39",
+        "op": "text",
+        "parent": null,
+        "text": "Bonjour, tu as dit : gardé pour après"
+      },
+      {
+        "op": "context",
+        "tokens": 120,
+        "window": 32768
+      },
+      {
+        "entry": "id40",
+        "error": null,
+        "interrupted": true,
+        "op": "turn",
+        "usage": {
+          "cache": 20,
+          "cost": 0.0,
+          "input": 100,
+          "output": 10
+        }
+      }
+    ],
+    "step": "interruption"
+  },
+  {
+    "answer": {
+      "error": null,
+      "result": null
+    },
+    "asked": [
+      {
+        "body": {
+          "permission": [
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -A *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -u *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add --all *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add --update *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add * -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *\t*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *\"-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *'-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add */-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add */\n*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *>*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *<*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *$*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *`*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *{*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *^*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *%*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -m *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -am *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit * -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *\t*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *\"-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *'-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit */-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit */\n*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *>*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *<*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *$*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *`*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *{*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *^*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *%*",
+              "permission": "bash"
+            },
+            {
+              "action": "allow",
+              "pattern": "*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".git",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".git/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.git",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.git/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".opencode",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".opencode/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.opencode",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.opencode/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.json",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.json/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.json",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.json/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.jsonc",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.jsonc/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.jsonc",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.jsonc/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".husky",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".husky/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.husky",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.husky/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".githooks",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".githooks/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.githooks",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.githooks/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "git*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "git*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/git*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/git*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "openco*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "openco*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/openco*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/openco*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*:*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "webfetch"
+            },
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "websearch"
+            },
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "external_directory"
+            }
+          ]
+        },
+        "directory": "{wt}",
+        "method": "PATCH",
+        "path": "/session/id0"
+      },
+      {
+        "body": {
+          "permission": [
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -A *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -u *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add --all *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add --update *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add * -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *\t*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *\"-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *'-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add */-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add */\n*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *>*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *<*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *$*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *`*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *{*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *^*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *%*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -m *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -am *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit * -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *\t*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *\"-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *'-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit */-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit */\n*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *>*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *<*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *$*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *`*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *{*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *^*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *%*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".git",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".git/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.git",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.git/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".opencode",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".opencode/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.opencode",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.opencode/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.json",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.json/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.json",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.json/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.jsonc",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.jsonc/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.jsonc",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.jsonc/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".husky",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".husky/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.husky",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.husky/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".githooks",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".githooks/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.githooks",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.githooks/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "git*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "git*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/git*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/git*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "openco*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "openco*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/openco*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/openco*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*:*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "webfetch"
+            },
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "websearch"
+            },
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "external_directory"
+            }
+          ]
+        },
+        "directory": "{wt}",
+        "method": "PATCH",
+        "path": "/session/id0"
+      },
+      {
+        "body": {
+          "agent": "build",
+          "model": {
+            "modelID": "qwen3-coder:30b-32k",
+            "providerID": "ollama"
+          },
+          "parts": [
+            {
+              "text": "Mets le plan en œuvre.",
+              "type": "text"
+            }
+          ]
+        },
+        "directory": "{wt}",
+        "method": "POST",
+        "path": "/session/id0/prompt_async"
+      },
+      {
+        "body": {
+          "agent": "plan",
+          "model": {
+            "modelID": "qwen3-coder:30b-32k",
+            "providerID": "ollama"
+          },
+          "parts": [
+            {
+              "text": "propose un plan",
+              "type": "text"
+            }
+          ]
+        },
+        "directory": "{wt}",
+        "method": "POST",
+        "path": "/session/id0/prompt_async"
+      }
+    ],
+    "items": [
+      {
+        "id": "id41",
+        "op": "delta",
+        "parent": null,
+        "text": "",
+        "thinking": false
+      },
+      {
+        "id": "id41",
+        "op": "delta",
+        "parent": null,
+        "text": "Voici ",
+        "thinking": false
+      },
+      {
+        "id": "id41",
+        "op": "delta",
+        "parent": null,
+        "text": "mon ",
+        "thinking": false
+      },
+      {
+        "id": "id41",
+        "op": "delta",
+        "parent": null,
+        "text": "plan ",
+        "thinking": false
+      },
+      {
+        "id": "id41",
+        "op": "delta",
+        "parent": null,
+        "text": ":\n\n",
+        "thinking": false
+      },
+      {
+        "id": "id41",
+        "op": "delta",
+        "parent": null,
+        "text": "1. ",
+        "thinking": false
+      },
+      {
+        "id": "id41",
+        "op": "delta",
+        "parent": null,
+        "text": "Lire ",
+        "thinking": false
+      },
+      {
+        "id": "id41",
+        "op": "delta",
+        "parent": null,
+        "text": "le ",
+        "thinking": false
+      },
+      {
+        "id": "id41",
+        "op": "delta",
+        "parent": null,
+        "text": "code\n",
+        "thinking": false
+      },
+      {
+        "id": "id41",
+        "op": "delta",
+        "parent": null,
+        "text": "2. ",
+        "thinking": false
+      },
+      {
+        "id": "id41",
+        "op": "delta",
+        "parent": null,
+        "text": "Écrire ",
+        "thinking": false
+      },
+      {
+        "id": "id41",
+        "op": "delta",
+        "parent": null,
+        "text": "le ",
+        "thinking": false
+      },
+      {
+        "id": "id41",
+        "op": "delta",
+        "parent": null,
+        "text": "correctif\n",
+        "thinking": false
+      },
+      {
+        "id": "id41",
+        "op": "delta",
+        "parent": null,
+        "text": "3. ",
+        "thinking": false
+      },
+      {
+        "id": "id41",
+        "op": "delta",
+        "parent": null,
+        "text": "Lancer ",
+        "thinking": false
+      },
+      {
+        "id": "id41",
+        "op": "delta",
+        "parent": null,
+        "text": "les ",
+        "thinking": false
+      },
+      {
+        "id": "id41",
+        "op": "delta",
+        "parent": null,
+        "text": "tests",
+        "thinking": false
+      },
+      {
+        "id": "id41",
+        "op": "text",
+        "parent": null,
+        "text": "Voici mon plan :\n\n1. Lire le code\n2. Écrire le correctif\n3. Lancer les tests"
+      },
+      {
+        "op": "context",
+        "tokens": 120,
+        "window": 32768
+      },
+      {
+        "alwaysByHarness": true,
+        "call": "plan:id42",
+        "canAlways": true,
+        "description": null,
+        "diff": null,
+        "endsStream": true,
+        "input": {
+          "plan": "Voici mon plan :\n\n1. Lire le code\n2. Écrire le correctif\n3. Lancer les tests"
+        },
+        "op": "permission",
+        "parent": null,
+        "reason": null,
+        "request": "plan:id42",
+        "tool": "ExitPlanMode"
+      },
+      {
+        "mode": "default",
+        "op": "mode"
+      },
+      {
+        "id": "id43",
+        "op": "delta",
+        "parent": null,
+        "text": "",
+        "thinking": false
+      },
+      {
+        "id": "id43",
+        "op": "delta",
+        "parent": null,
+        "text": "C'est ",
+        "thinking": false
+      },
+      {
+        "id": "id43",
+        "op": "delta",
+        "parent": null,
+        "text": "fait.",
+        "thinking": false
+      },
+      {
+        "id": "id43",
+        "op": "text",
+        "parent": null,
+        "text": "C'est fait."
+      },
+      {
+        "op": "context",
+        "tokens": 120,
+        "window": 32768
+      },
+      {
+        "entry": "id44",
+        "error": null,
+        "interrupted": false,
+        "op": "turn",
+        "usage": {
+          "cache": 40,
+          "cost": 0.0,
+          "input": 200,
+          "output": 20
+        }
+      }
+    ],
+    "step": "plan"
+  },
+  {
+    "answer": {
+      "error": null,
+      "result": {
+        "over": false
+      }
+    },
+    "asked": [
+      {
+        "body": {
+          "modelID": "qwen3-coder:30b-32k",
+          "providerID": "ollama"
+        },
+        "directory": "{wt}",
+        "method": "POST",
+        "path": "/session/id0/summarize"
+      }
+    ],
+    "items": [
+      {
+        "level": "info",
+        "op": "notice",
+        "text": "Compaction du contexte…"
+      },
+      {
+        "id": "id45",
+        "op": "text",
+        "parent": null,
+        "text": "Résumé de la conversation (summarize)."
+      },
+      {
+        "op": "context",
+        "tokens": 40,
+        "window": 32768
+      },
+      {
+        "level": "info",
+        "op": "notice",
+        "text": "Contexte compacté"
+      },
+      {
+        "entry": "id46",
+        "error": null,
+        "interrupted": false,
+        "op": "turn",
+        "usage": {
+          "cache": 0,
+          "cost": 0.0,
+          "input": 900,
+          "output": 40
+        }
+      }
+    ],
+    "step": "compaction"
+  },
+  {
+    "answer": {
+      "error": null,
+      "result": {}
+    },
+    "asked": [
+      {
+        "body": {
+          "title": "Nouveau titre"
+        },
+        "directory": "{wt}",
+        "method": "PATCH",
+        "path": "/session/id0"
+      }
+    ],
+    "items": [],
+    "step": "renommage"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32000,
+        "message": "GET /nothing/here: 404 Not Found not found: /nothing/here"
+      },
+      "result": null
+    },
+    "asked": [
+      {
+        "body": null,
+        "directory": "{wt}",
+        "method": "GET",
+        "path": "/nothing/here"
+      }
+    ],
+    "items": [],
+    "step": "contrôle refusé"
+  },
+  {
+    "answer": {
+      "error": null,
+      "result": {
+        "writes": []
+      }
+    },
+    "asked": [
+      {
+        "body": {
+          "agent": "build",
+          "model": {
+            "modelID": "qwen3-coder:30b-32k",
+            "providerID": "ollama"
+          },
+          "parts": [
+            {
+              "text": "bonjour après la coupure",
+              "type": "text"
+            }
+          ]
+        },
+        "directory": "{wt}",
+        "method": "POST",
+        "path": "/session/id0/prompt_async"
+      }
+    ],
+    "items": [
+      {
+        "id": "id47",
+        "op": "delta",
+        "parent": null,
+        "text": "",
+        "thinking": false
+      },
+      {
+        "id": "id47",
+        "op": "delta",
+        "parent": null,
+        "text": "Bonjour, ",
+        "thinking": false
+      },
+      {
+        "id": "id47",
+        "op": "delta",
+        "parent": null,
+        "text": "tu ",
+        "thinking": false
+      },
+      {
+        "id": "id47",
+        "op": "delta",
+        "parent": null,
+        "text": "as ",
+        "thinking": false
+      },
+      {
+        "id": "id47",
+        "op": "delta",
+        "parent": null,
+        "text": "dit ",
+        "thinking": false
+      },
+      {
+        "id": "id47",
+        "op": "delta",
+        "parent": null,
+        "text": ": ",
+        "thinking": false
+      },
+      {
+        "id": "id47",
+        "op": "delta",
+        "parent": null,
+        "text": "bonjour ",
+        "thinking": false
+      },
+      {
+        "id": "id47",
+        "op": "delta",
+        "parent": null,
+        "text": "après ",
+        "thinking": false
+      },
+      {
+        "id": "id47",
+        "op": "delta",
+        "parent": null,
+        "text": "la ",
+        "thinking": false
+      },
+      {
+        "id": "id47",
+        "op": "delta",
+        "parent": null,
+        "text": "coupure",
+        "thinking": false
+      },
+      {
+        "id": "id47",
+        "op": "text",
+        "parent": null,
+        "text": "Bonjour, tu as dit : bonjour après la coupure"
+      },
+      {
+        "op": "context",
+        "tokens": 120,
+        "window": 32768
+      },
+      {
+        "entry": "id48",
+        "error": null,
+        "interrupted": false,
+        "op": "turn",
+        "usage": {
+          "cache": 20,
+          "cost": 0.0,
+          "input": 100,
+          "output": 10
+        }
+      }
+    ],
+    "step": "coupure entre deux tours"
+  },
+  {
+    "answer": {
+      "error": null,
+      "result": null
+    },
+    "asked": [
+      {
+        "body": null,
+        "directory": "{wt}",
+        "method": "POST",
+        "path": "/session/id0/abort"
+      },
+      {
+        "body": {
+          "agent": "build",
+          "model": {
+            "modelID": "qwen3-coder:30b-32k",
+            "providerID": "ollama"
+          },
+          "parts": [
+            {
+              "text": "lent",
+              "type": "text"
+            }
+          ]
+        },
+        "directory": "{wt}",
+        "method": "POST",
+        "path": "/session/id0/prompt_async"
+      }
+    ],
+    "items": [
+      {
+        "id": "id49",
+        "op": "delta",
+        "parent": null,
+        "text": "",
+        "thinking": false
+      },
+      {
+        "id": "id49",
+        "op": "delta",
+        "parent": null,
+        "text": "Je ",
+        "thinking": false
+      },
+      {
+        "id": "id49",
+        "op": "delta",
+        "parent": null,
+        "text": "commence ",
+        "thinking": false
+      },
+      {
+        "id": "id49",
+        "op": "delta",
+        "parent": null,
+        "text": "une ",
+        "thinking": false
+      },
+      {
+        "id": "id49",
+        "op": "delta",
+        "parent": null,
+        "text": "commande ",
+        "thinking": false
+      },
+      {
+        "id": "id49",
+        "op": "delta",
+        "parent": null,
+        "text": "longue.",
+        "thinking": false
+      },
+      {
+        "id": "id49",
+        "op": "text",
+        "parent": null,
+        "text": "Je commence une commande longue."
+      },
+      {
+        "id": "id50",
+        "input": {
+          "command": "sleep 30",
+          "description": "Attend"
+        },
+        "name": "Bash",
+        "op": "tool",
+        "parent": null
+      },
+      {
+        "alwaysByHarness": true,
+        "call": "id50",
+        "canAlways": true,
+        "description": "« Toujours autoriser » retiendra : sleep *",
+        "diff": null,
+        "input": {
+          "command": "sleep 30"
+        },
+        "op": "permission",
+        "parent": null,
+        "reason": null,
+        "request": "id51",
+        "tool": "Bash"
+      },
+      {
+        "op": "context",
+        "tokens": 120,
+        "window": 32768
+      },
+      {
+        "entry": "id52",
+        "error": null,
+        "interrupted": true,
+        "op": "turn",
+        "usage": {
+          "cache": 20,
+          "cost": 0.0,
+          "input": 100,
+          "output": 10
+        }
+      }
+    ],
+    "step": "coupure dans un tour"
+  },
+  {
+    "answer": {
+      "error": null,
+      "result": {
+        "attach": {
+          "args": ["attach", "http://127.0.0.1:{port}", "--session", "id53", "--dir", "{wt}"],
+          "env": [
+            {
+              "name": "OPENCODE_SERVER_PASSWORD",
+              "value": "pw"
+            }
+          ],
+          "fenceApplied": false,
+          "fenceByClient": false,
+          "files": [],
+          "readOnly": false,
+          "removeEnv": [],
+          "trust": [],
+          "writes": []
+        },
+        "catalog": [
+          {
+            "default": false,
+            "defaultEffort": null,
+            "efforts": ["low", "medium", "high"],
+            "id": "ollama/gpt-oss:20b-32k",
+            "images": false,
+            "label": "gpt-oss 20b (32k)",
+            "provider": "Ollama (local)"
+          },
+          {
+            "default": true,
+            "defaultEffort": null,
+            "efforts": [],
+            "id": "ollama/qwen3-coder:30b-32k",
+            "images": false,
+            "label": "Qwen3 Coder 30b (32k)",
+            "provider": "Ollama (local)"
+          },
+          {
+            "default": false,
+            "defaultEffort": null,
+            "efforts": [],
+            "id": "lmstudio/devstral-small",
+            "images": true,
+            "label": "Devstral Small",
+            "provider": "LM Studio (local)"
+          }
+        ]
+      }
+    },
+    "asked": [
+      {
+        "body": null,
+        "directory": "{wt}",
+        "method": "GET",
+        "path": "/config"
+      },
+      {
+        "body": null,
+        "directory": "{wt}",
+        "method": "GET",
+        "path": "/config/providers"
+      },
+      {
+        "body": null,
+        "directory": "{wt}",
+        "method": "GET",
+        "path": "/mcp"
+      },
+      {
+        "body": {},
+        "directory": "{wt}",
+        "method": "POST",
+        "path": "/session/id0/fork"
+      },
+      {
+        "body": null,
+        "directory": "{wt}",
+        "method": "GET",
+        "path": "/session/id0/message"
+      },
+      {
+        "body": {
+          "permission": [
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -A *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -u *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add --all *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add --update *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add * -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *\t*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *\"-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *'-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add */-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add */\n*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *>*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *<*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *$*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *`*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *{*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *^*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *%*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -m *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -am *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit * -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *\t*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *\"-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *'-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit */-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit */\n*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *>*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *<*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *$*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *`*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *{*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *^*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *%*",
+              "permission": "bash"
+            },
+            {
+              "action": "allow",
+              "pattern": "*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".git",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".git/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.git",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.git/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".opencode",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".opencode/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.opencode",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.opencode/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.json",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.json/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.json",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.json/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.jsonc",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.jsonc/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.jsonc",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.jsonc/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".husky",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".husky/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.husky",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.husky/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".githooks",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".githooks/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.githooks",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.githooks/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "git*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "git*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/git*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/git*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "openco*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "openco*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/openco*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/openco*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*:*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "webfetch"
+            },
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "websearch"
+            },
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "external_directory"
+            }
+          ]
+        },
+        "directory": "{wt}",
+        "method": "PATCH",
+        "path": "/session/id53"
+      }
+    ],
+    "items": [
+      {
+        "op": "session",
+        "session": "id53"
+      },
+      {
+        "op": "context",
+        "window": 32768
+      }
+    ],
+    "step": "copie"
+  },
+  {
+    "answer": {
+      "error": null,
+      "result": {
+        "attach": {
+          "args": ["attach", "http://127.0.0.1:{port}", "--session", "id0", "--dir", "{wt}"],
+          "env": [
+            {
+              "name": "OPENCODE_SERVER_PASSWORD",
+              "value": "pw"
+            }
+          ],
+          "fenceApplied": false,
+          "fenceByClient": false,
+          "files": [],
+          "readOnly": false,
+          "removeEnv": [],
+          "trust": [],
+          "writes": []
+        },
+        "catalog": [
+          {
+            "default": false,
+            "defaultEffort": null,
+            "efforts": ["low", "medium", "high"],
+            "id": "ollama/gpt-oss:20b-32k",
+            "images": false,
+            "label": "gpt-oss 20b (32k)",
+            "provider": "Ollama (local)"
+          },
+          {
+            "default": true,
+            "defaultEffort": null,
+            "efforts": [],
+            "id": "ollama/qwen3-coder:30b-32k",
+            "images": false,
+            "label": "Qwen3 Coder 30b (32k)",
+            "provider": "Ollama (local)"
+          },
+          {
+            "default": false,
+            "defaultEffort": null,
+            "efforts": [],
+            "id": "lmstudio/devstral-small",
+            "images": true,
+            "label": "Devstral Small",
+            "provider": "LM Studio (local)"
+          }
+        ]
+      }
+    },
+    "asked": [
+      {
+        "body": null,
+        "directory": "{wt}",
+        "method": "GET",
+        "path": "/mcp"
+      },
+      {
+        "body": null,
+        "directory": "{wt}",
+        "method": "GET",
+        "path": "/session/id0"
+      },
+      {
+        "body": {
+          "permission": [
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -A *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -u *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add --all *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add --update *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add * -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *\t*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *\"-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *'-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add */-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add */\n*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *>*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *<*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *$*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *`*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *{*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *^*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *%*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -m *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -am *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit * -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *\t*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *\"-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *'-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit */-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit */\n*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *>*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *<*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *$*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *`*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *{*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *^*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *%*",
+              "permission": "bash"
+            },
+            {
+              "action": "allow",
+              "pattern": "*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".git",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".git/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.git",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.git/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".opencode",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".opencode/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.opencode",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.opencode/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.json",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.json/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.json",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.json/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.jsonc",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.jsonc/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.jsonc",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.jsonc/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".husky",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".husky/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.husky",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.husky/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".githooks",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".githooks/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.githooks",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.githooks/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "git*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "git*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/git*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/git*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "openco*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "openco*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/openco*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/openco*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*:*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "webfetch"
+            },
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "websearch"
+            },
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "external_directory"
+            }
+          ]
+        },
+        "directory": "{wt}",
+        "method": "PATCH",
+        "path": "/session/id0"
+      }
+    ],
+    "items": [
+      {
+        "op": "session",
+        "session": "id0"
+      },
+      {
+        "op": "context",
+        "window": 32768
+      }
+    ],
+    "step": "reprise"
+  },
+  {
+    "answer": {
+      "error": null,
+      "result": {}
+    },
+    "asked": [
+      {
+        "body": null,
+        "directory": "{wt}",
+        "method": "POST",
+        "path": "/instance/dispose"
+      }
+    ],
+    "items": [],
+    "step": "lâché"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32602,
+        "message": "no agent a4: it was not attached"
+      },
+      "result": null
+    },
+    "asked": [],
+    "items": [],
+    "step": "agent inconnu"
+  }
+]

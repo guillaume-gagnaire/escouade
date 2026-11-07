@@ -34,7 +34,7 @@ const READING_TOOLS: &str = "view,glob,grep";
 pub(crate) fn args(weight: Weight, model: &str, session: &str, logs: &Path) -> Vec<String> {
     let effort = match weight {
         Weight::Light => "low",
-        Weight::Reading => "medium",
+        Weight::Reading | Weight::Given => "medium",
     };
     let mut a: Vec<String> = [
         "--output-format",
@@ -54,7 +54,7 @@ pub(crate) fn args(weight: Weight, model: &str, session: &str, logs: &Path) -> V
         a.extend(["--reasoning-effort".to_string(), effort.to_string()]);
     }
     match weight {
-        Weight::Light => a.push(format!("--available-tools={NO_TOOL}")),
+        Weight::Light | Weight::Given => a.push(format!("--available-tools={NO_TOOL}")),
         Weight::Reading => {
             a.push(format!("--available-tools={READING_TOOLS}"));
             a.push(format!("--allow-tool={READING_TOOLS}"));
@@ -188,6 +188,15 @@ mod tests {
         // `auto` takes no effort.
         let auto = args(Weight::Light, "auto", "s3", logs);
         assert!(!auto.iter().any(|x| x == "--reasoning-effort"));
+    }
+
+    #[test]
+    fn a_text_given_has_the_effort_of_a_reading_and_no_tool() {
+        let given = args(Weight::Given, MODEL, "s4", Path::new("C:/tmp/logs"));
+        assert!(given.contains(&"medium".to_string()));
+        assert!(given.contains(&"--available-tools=escouade-aucun-outil".to_string()));
+        assert!(!given.iter().any(|x| x.contains("--allow-tool")));
+        assert!(!given.iter().any(|x| x.contains("view")));
     }
 
     #[test]

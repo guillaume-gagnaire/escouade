@@ -160,6 +160,8 @@ export const plugins = pgTable(
     accountId: integer('account_id').references(() => accounts.id, { onDelete: 'set null' }),
     repoId: bigint('repo_id', { mode: 'number' }).notNull(),
     repoFullName: text('repo_full_name').notNull(),
+    /** Its folder in the repository, '' at the root (ESC-313): a plugin is (repository, folder), set at its first publication. */
+    path: text('path').notNull().default(''),
     installationId: bigint('installation_id', { mode: 'number' }),
     categories: jsonb('categories').$type<string[]>().notNull().default([]),
     keywords: jsonb('keywords').$type<string[]>().notNull().default([]),
@@ -175,6 +177,12 @@ export const plugins = pgTable(
     transferredFrom: text('transferred_from'),
     frozenUntil: at('frozen_until'),
     repoMovedAt: at('repo_moved_at'),
+    /**
+     * Its source changed by its author (ESC-313): another repository or folder of theirs, from its next version on
+     * (which goes to the review); `sourceFrom` names the one before (`owner/name` or `owner/name/folder`).
+     */
+    sourceChangedAt: at('source_changed_at'),
+    sourceFrom: text('source_from'),
   },
   (t) => [index('plugins_account').on(t.accountId), index('plugins_repo').on(t.repoId)],
 );
@@ -199,6 +207,8 @@ export const versions = pgTable(
     installationId: bigint('installation_id', { mode: 'number' }).notNull(),
     repoId: bigint('repo_id', { mode: 'number' }).notNull(),
     repoFullName: text('repo_full_name').notNull(),
+    /** The folder of the repository it was read from, '' at the root (ESC-313). */
+    path: text('path').notNull().default(''),
     tag: text('tag').notNull(),
     commit: text('commit').notNull(),
     tagDate: at('tag_date'),
@@ -357,4 +367,81 @@ export const discordQuota = pgTable(
     skipped: jsonb('skipped').$type<string[]>().notNull().default([]),
   },
   (t) => [primaryKey({ columns: [t.channel, t.login, t.day] })],
+);
+
+// ---- The store's MCP server and its OAuth (ESC-317, docs/STORE.md §2.5) ----
+
+/**
+ * A client of the MCP server, registered by itself (RFC 7591): public (no secret, PKCE instead), its name as it gave it
+ * (shown on the consent page as the client's own words), the addresses it may be sent back to.
+ */
+export const oauthClients = pgTable('oauth_clients', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  uri: text('uri'),
+  redirectUris: jsonb('redirect_uris').$type<string[]>().notNull(),
+  createdAt: at('created_at').notNull().defaultNow(),
+});
+
+/**
+ * An authorization asked by a client (`/oauth/authorize`), the time of the sign-in and the consent: ten minutes. The
+ * hash of its id only (the consent page's address holds it); its PKCE challenge (S256), the scopes and the resource.
+ */
+export const oauthRequests = pgTable('oauth_requests', {
+  id: text('id').primaryKey(),
+  clientId: text('client_id')
+    .notNull()
+    .references(() => oauthClients.id, { onDelete: 'cascade' }),
+  redirectUri: text('redirect_uri').notNull(),
+  state: text('state'),
+  codeChallenge: text('code_challenge').notNull(),
+  scopes: jsonb('scopes').$type<string[]>().notNull(),
+  resource: text('resource').notNull(),
+  createdAt: at('created_at').notNull().defaultNow(),
+  expiresAt: at('expires_at').notNull(),
+});
+
+/**
+ * What an author let a client do (« Applications connectées »): one row per consent, its scopes, the resource its
+ * tokens are good for, its last use; revoked by the author, or gone with the account.
+ */
+export const oauthGrants = pgTable(
+  'oauth_grants',
+  {
+    id: serial('id').primaryKey(),
+    accountId: integer('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    clientId: text('client_id')
+      .notNull()
+      .references(() => oauthClients.id, { onDelete: 'cascade' }),
+    scopes: jsonb('scopes').$type<string[]>().notNull(),
+    resource: text('resource').notNull(),
+    createdAt: at('created_at').notNull().defaultNow(),
+    usedAt: at('used_at'),
+    revokedAt: at('revoked_at'),
+  },
+  (t) => [index('oauth_grants_account').on(t.accountId)],
+);
+
+/**
+ * The codes and tokens of a grant, by the hash of each (never the token): an authorization code (10 minutes, once, with
+ * its PKCE challenge and its address), an access token (1 hour), a refresh token (30 days, swapped at each use: one used
+ * twice revokes its grant).
+ */
+export const oauthTokens = pgTable(
+  'oauth_tokens',
+  {
+    id: text('id').primaryKey(),
+    grantId: integer('grant_id')
+      .notNull()
+      .references(() => oauthGrants.id, { onDelete: 'cascade' }),
+    kind: text('kind').$type<'code' | 'access' | 'refresh'>().notNull(),
+    codeChallenge: text('code_challenge'),
+    redirectUri: text('redirect_uri'),
+    createdAt: at('created_at').notNull().defaultNow(),
+    expiresAt: at('expires_at').notNull(),
+    usedAt: at('used_at'),
+  },
+  (t) => [index('oauth_tokens_grant').on(t.grantId)],
 );

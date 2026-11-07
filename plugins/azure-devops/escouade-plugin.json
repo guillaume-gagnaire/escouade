@@ -1,0 +1,39 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.azure-devops",
+  "name": "Azure DevOps",
+  "version": "2.2.1",
+  "description": {
+    "fr": "Azure Boards dans le Kanban, et les PR d'Azure Repos, leurs stratégies, leurs pipelines, leurs relectures et leur merge, sur le compte de ton organisation.",
+    "en": "Azure Boards in the Kanban, and Azure Repos pull requests, their policies, pipelines, reviews and merging, on your organization's account."
+  },
+  "author": { "name": "Escouade", "url": "https://escouade.dev" },
+  "license": "GPL-3.0-or-later",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/azure-devops",
+  "categories": ["ticket-sources", "forges"],
+  "escouade": { "api": "1", "min": "2.2.0" },
+  "run": { "wasm": "Cargo.toml" },
+  "activation": ["account:azure"],
+  "permissions": {
+    "network": ["dev.azure.com", "*.dev.azure.com", "*.visualstudio.com", "{account}"],
+    "secrets": ["account:*"]
+  },
+  "limits": { "fetchSeconds": 15, "fetchBytes": 8388608 },
+  "contributes": {
+    "accounts": [
+      {
+        "id": "azure",
+        "name": "Azure DevOps",
+        "defaultHost": "dev.azure.com",
+        "selfHosted": true,
+        "connect": ["token", { "cli": "az", "login": "az login" }],
+        "fields": [{ "key": "url" }, { "key": "token", "secret": true }],
+        "scopes": ["vso.code_write", "vso.build_execute", "vso.work_write"],
+        "tokenPage": "https://dev.azure.com/_usersSettings/tokens"
+      }
+    ],
+    "ticketSources": [{ "id": "azure", "name": "Azure Boards", "account": "azure" }],
+    "forges": [{ "id": "azure", "name": "Azure DevOps", "account": "azure" }]
+  },
+  "store": { "categories": ["ticket-sources", "forges"] }
+}

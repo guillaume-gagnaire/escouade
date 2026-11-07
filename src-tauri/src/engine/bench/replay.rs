@@ -38,7 +38,7 @@ use std::path::{Path, PathBuf};
 const TIMES: [&str; 3] = ["ts", "startedAt", "endedAt"];
 
 /// `v` without the times of the replay (`TIMES`), at any depth.
-fn strip_times(v: &mut Value) {
+pub(crate) fn strip_times(v: &mut Value) {
     match v {
         Value::Object(o) => {
             for k in TIMES {
@@ -77,9 +77,18 @@ pub(crate) struct Replayed {
     pub agent: Value,
 }
 
-/// The frames of `flux`, one a line, through the translation of `engine`, for an agent that is
-/// `agent` (over a new agent's defaults) before the first.
-pub(crate) fn replay(engine: &dyn Engine, flux: &str, agent: &Value, conv: &Path) -> Replayed {
+/// A translation of a frame, for a harness whose translation is its plugin's: its items applied to the agent.
+pub(crate) type Translation<'a> = Box<dyn FnMut(&mut AgentRt, &Value, &mut Effects) + 'a>;
+
+/// The frames of `flux`, one a line, through `translate` (`engine`'s), for an agent that is `agent` (over a new agent's
+/// defaults) before the first.
+fn replay_through(
+    engine: &dyn Engine,
+    flux: &str,
+    agent: &Value,
+    conv: &Path,
+    mut translate: Translation<'_>,
+) -> Replayed {
     let mut meta = serde_json::to_value(AgentMeta {
         id: crate::model::new_id(),
         ..Default::default()
@@ -99,18 +108,18 @@ pub(crate) fn replay(engine: &dyn Engine, flux: &str, agent: &Value, conv: &Path
     {
         let frame: Value = serde_json::from_str(line)
             .unwrap_or_else(|e| panic!("line {} of the flux is no JSON: {e}", n + 1));
-        engine.translate(&mut rt, &frame, &mut Effects::default());
+        translate(&mut rt, &frame, &mut Effects::default());
     }
     // A harness that tells no duration of its turns has them timed by Escouade, from the start of
     // the turn (made up at each replay as the times are): there must be one, and it is not kept.
     let timed = matches!(
         engine.id(),
-        crate::model::EngineId::Copilot
-            | crate::model::EngineId::Opencode
-            | crate::model::EngineId::Cursor
-            | crate::model::EngineId::Vibe
-            | crate::model::EngineId::Agy
-            | crate::model::EngineId::Gemini
+        crate::model::EngineId::COPILOT
+            | crate::model::EngineId::OPENCODE
+            | crate::model::EngineId::CURSOR
+            | crate::model::EngineId::VIBE
+            | crate::model::EngineId::AGY
+            | crate::model::EngineId::GEMINI
     );
     let items = rt
         .conv
@@ -140,7 +149,7 @@ pub(crate) fn replay(engine: &dyn Engine, flux: &str, agent: &Value, conv: &Path
 
 /// Replays the case `case` through `engine` and compares what it made with what it expects (or
 /// writes it again, `ESCOUADE_BLESS`). Panics on the first difference, saying where.
-pub(crate) fn check(engine: &dyn Engine, case: &Path) {
+fn check_through(engine: &dyn Engine, case: &Path, translate: Translation<'_>) {
     let name = case.display();
     let mut c: Value =
         serde_json::from_slice(&std::fs::read(case).unwrap_or_else(|e| panic!("{name}: {e}")))
@@ -157,7 +166,7 @@ pub(crate) fn check(engine: &dyn Engine, case: &Path) {
         engine.id().as_str(),
         case.file_stem().unwrap().to_string_lossy()
     ));
-    let made = replay(engine, &flux, &c["agent"], &conv);
+    let made = replay_through(engine, &flux, &c["agent"], &conv, translate);
     if std::env::var_os("ESCOUADE_BLESS").is_some() {
         c["items"] = Value::Array(made.items);
         let keys: Vec<String> = match c["agentAfter"].as_object() {
@@ -237,6 +246,17 @@ pub(crate) fn within(want: &Value, got: &Value, at: &str) -> Result<(), String> 
 
 /// Every case of the folder of `engine` (`cases_of`), checked; panics when there is none.
 pub(crate) fn check_all(engine: &dyn Engine, folder: &str) {
+    check_all_through(engine, folder, || {
+        Box::new(|rt, frame, fx| engine.translate(rt, frame, fx))
+    });
+}
+
+/// `check_all`, each case through the translation `each` makes for it: the harnesses that left the core.
+pub(crate) fn check_all_through<'a>(
+    engine: &dyn Engine,
+    folder: &str,
+    each: impl Fn() -> Translation<'a>,
+) {
     let dir = cases_of(folder);
     let mut cases: Vec<PathBuf> = std::fs::read_dir(&dir)
         .unwrap_or_else(|e| panic!("{}: {e}", dir.display()))
@@ -246,7 +266,7 @@ pub(crate) fn check_all(engine: &dyn Engine, folder: &str) {
     cases.sort();
     assert!(!cases.is_empty(), "no case in {}", dir.display());
     for case in cases {
-        check(engine, &case);
+        check_through(engine, &case, each());
     }
 }
 

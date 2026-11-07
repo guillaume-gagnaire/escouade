@@ -1,10 +1,10 @@
 <script lang="ts">
   import { openUrl } from '../lib/opener';
   import { onMount } from 'svelte';
-  import { accountName, metersShown, projectedDayCost, projectionLevel, projectionMode, quotaGroups } from '../lib/accounts';
+  import { accountName, metersShown, projectedDayCost, projectionLevel, projectionMode, quotaGroups, meterKey } from '../lib/accounts';
   import { capsOf, showsCost, usagePage, usageSite } from '../lib/engines';
   import { trapFocus } from '../lib/focus';
-  import { fUsd } from '../lib/format';
+  import { fAgo, fUsd } from '../lib/format';
   import { t } from '../lib/i18n';
   import { estimatedBy, estimateHint, fSpentUsd } from '../lib/spend';
   import { app } from '../lib/state.svelte';
@@ -20,6 +20,8 @@
 
   /** The width of the panel. */
   const WIDTH = 440;
+  /** A quota is read every five minutes: past three readings missed, what it shows may no longer be true. */
+  const STALE_MS = 15 * 60_000;
 
   const groups = $derived(quotaGroups(app.now));
   /** Some cost is estimated (Codex): the panel says how. */
@@ -99,6 +101,7 @@
           <span class="name"
             >{accountName(r.account)}{#if r.current}<span class="tag cur">{t('accounts.panel.current')}</span>{/if}{#if r.over}<span
                 class="tag over">{t('accounts.panel.over')}</span
+              >{:else if r.behind}<span class="tag over">{t(r.nearLimit ? 'accounts.panel.nearLimit' : 'accounts.panel.behind')}</span
               >{/if}</span
           >
           <!-- A harness that tells no cost (Cursor CLI) has none of the day to show. -->
@@ -146,10 +149,13 @@
           {:else if !u || u.connected || u.meters.length}
             <!-- An account that is not signed in and was never read has no meters to show. -->
             <div class="windows">
-              {#each meters as m (m.minutes ?? 'credits')}
-                <QuotaMeter minutes={m.minutes} usage={m.usage} now={app.now} detail />
+              {#each meters as m (meterKey(m))}
+                <QuotaMeter minutes={m.minutes} model={m.model} usage={m.usage} now={app.now} detail />
               {/each}
             </div>
+            {#if meters.length && u?.updatedAt && app.now - u.updatedAt > STALE_MS}
+              <div class="why">{t('accounts.panel.readAgo', { ago: fAgo(u.updatedAt / 1000, app.now) })}</div>
+            {/if}
           {/if}
           {#if u?.overage}
             <p class="bill"><Icon name="info" size={14} /><span>{overage(r.account.id, accountName(r.account), g.engine)}</span></p>

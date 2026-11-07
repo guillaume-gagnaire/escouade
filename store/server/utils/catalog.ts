@@ -5,7 +5,7 @@ import type { Db } from './db';
 import { parseRevocations, revoked, type RevocationList } from './revocation-list';
 import { lastRevocations } from './revocations';
 import { signatureIndex, verifiedBy } from './signatures';
-import { compareVersions, sha256, type Binary } from './versions';
+import { compareVersions, sha256, wasmOf, type Binary } from './versions';
 import { iconSrc, type Icon } from '../../shared/tile';
 
 // The catalogue the app downloads whole (docs/STORE.md, §1.2 and §5.1): every published plugin with its published
@@ -24,6 +24,7 @@ export const filePaths = (id: string, version: string) => {
     signature: `${base}/version.json.minisig`,
     archive: `${base}/archive.tar.gz`,
     binary: (p: string) => `${base}/binaries/${p}`,
+    wasm: `${base}/plugin.wasm`,
   };
 };
 
@@ -55,6 +56,8 @@ export interface CatalogVersion {
     version_json: string;
     archive: string;
     binaries: Record<string, string>;
+    /** The module the store compiled of a `run.js` plugin (ESC-323), named with its SHA-256 by `version.json`. */
+    wasm?: string;
     icon?: Record<'256' | '64', string>;
     /** The `.minisig` of `version.json`, when verified. */
     signature?: string;
@@ -67,6 +70,8 @@ export interface CatalogPlugin {
   description: unknown;
   author: string | null;
   repository: string;
+  /** Its folder in the repository (ESC-313); absent at the root. */
+  path?: string;
   license: string | null;
   categories: string[];
   keywords: string[];
@@ -148,6 +153,7 @@ export async function buildCatalog(db: Db, now = new Date()): Promise<Catalog> {
             .sort()
             .map((p) => [p, paths.binary(p)]),
         ),
+        ...(wasmOf(v.versionJson) ? { wasm: paths.wasm } : {}),
         ...(v.icon ? { icon: { '256': iconSrc(v.icon, '256'), '64': iconSrc(v.icon, '64') } } : {}),
         ...(sig ? { signature: paths.signature } : {}),
       },
@@ -164,6 +170,7 @@ export async function buildCatalog(db: Db, now = new Date()): Promise<Catalog> {
         description: null,
         author: login ?? null,
         repository: `https://github.com/${plugin.repoFullName}`,
+        ...(plugin.path ? { path: plugin.path } : {}),
         license: null,
         categories: plugin.categories,
         keywords: plugin.keywords,

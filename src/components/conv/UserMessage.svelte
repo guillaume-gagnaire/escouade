@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import { t } from '../../lib/i18n';
   import { engineName, speakerOf } from '../../lib/engines';
   import type { EngineId, UserItem } from '../../lib/types';
@@ -7,8 +8,13 @@
   import EngineMark from '../EngineMark.svelte';
   import Icon from '../Icon.svelte';
 
-  // `engine`: its agent's harness, which the note names.
-  let { item, waiting = false, engine = null }: { item: UserItem; waiting?: boolean; engine?: EngineId | null } = $props();
+  // `engine`: its agent's harness, which the note names; `extra`: more notes (a held message's).
+  let {
+    item,
+    waiting = false,
+    engine = null,
+    extra,
+  }: { item: UserItem; waiting?: boolean; engine?: EngineId | null; extra?: Snippet } = $props();
   // Said in a voice conversation: shown without the instruction Escouade added for the agent (ESC-97).
   const shown = $derived(withoutInstruction(item.text));
   const files = $derived(item.files ?? []);
@@ -47,7 +53,7 @@
         </div>
       {/if}
     </div>
-    {#if shown.spoken || waiting || item.queued || item.origin === 'remote'}
+    {#if shown.spoken || waiting || item.queued || item.origin === 'remote' || extra}
       <div class="meta">
         {#if shown.spoken}<span class="note aloud" data-said-aloud><Icon name="wave" size={14} />{t('conv.user.saidAloud')}</span>{/if}
         <!-- Sent while the worktree is prepared: the backend takes it once that is over. -->
@@ -56,6 +62,7 @@
         {#if item.queued}<span class="note" use:tip={t('conv.user.queuedHint', { engine: speakerOf(engine) })}>{t('conv.user.queued')}</span
           >{/if}
         {#if item.origin === 'remote'}<span class="note" use:tip={t('conv.user.remoteHint')}>{t('conv.user.remote')}</span>{/if}
+        {@render extra?.()}
       </div>
     {/if}
   </div>

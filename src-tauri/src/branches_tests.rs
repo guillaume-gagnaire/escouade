@@ -2248,3 +2248,48 @@ async fn an_agent_can_start_from_another_branch_than_its_projects() {
         WorktreeBase::Branch("release".into())
     );
 }
+
+// ---------- ESC-315: origin/x takes the local x, never an agent's branch that tracks it ----------
+
+#[tokio::test]
+async fn origin_x_as_the_start_is_the_local_x_not_an_agents_branch_that_tracks_origin_x() {
+    let h = harness("esc315-agent-tracks");
+    let (p, r) = h.project(true).await;
+    remote(&h, &r);
+    // An agent's branch tracking origin/main, as git made it from a remote base, with a commit of
+    // its own, sorting before main.
+    git(
+        &r,
+        &["branch", "-q", "--track", "escouade/old", "origin/main"],
+    );
+    git(&r, &["switch", "-q", "escouade/old"]);
+    commit_file(&r, "old.txt", "old\n");
+    git(&r, &["switch", "-qc", "work", "main"]);
+    // origin/main moves on (fetched, main not pulled).
+    git(&r, &["switch", "-q", "main"]);
+    commit_change(&r, "const a = 2;\n", "on origin");
+    git(&r, &["push", "-q", "origin", "main"]);
+    let ahead = git(&r, &["rev-parse", "main"]);
+    git(&r, &["reset", "-q", "--hard", "main~1"]);
+    git(&r, &["switch", "-q", "work"]);
+    set_base(&h, &p.id, WorktreeBase::Branch("origin/main".into()));
+
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let wt = a.meta.worktree.clone().unwrap();
+    assert_eq!(wt.base_branch, "main");
+    assert_eq!(git(&r, &["rev-parse", "main"]), ahead);
+    assert_eq!(git(Path::new(&wt.path), &["rev-parse", "HEAD"]), ahead);
+    assert!(!Path::new(&wt.path).join("old.txt").exists());
+    assert!(warnings(&h, &a.meta.id).is_empty());
+    // The agent's own branch pushes where its push sends it, never to origin/main.
+    let up = std::process::Command::new("git")
+        .current_dir(Path::new(&wt.path))
+        .args(["rev-parse", "--abbrev-ref", "@{upstream}"])
+        .output()
+        .unwrap();
+    assert!(
+        !up.status.success(),
+        "{:?}",
+        String::from_utf8_lossy(&up.stdout)
+    );
+}

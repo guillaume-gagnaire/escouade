@@ -94,10 +94,10 @@ describe('AccountsTab', () => {
     // Settings saved before it had none: the limit, as before.
     expect(within(at).getByRole('button', { name: 'À la limite' })).toHaveAttribute('aria-pressed', 'true');
     expect(
-      screen.getByText(/^Quand la fenêtre de 5 h ou la fenêtre hebdomadaire de son compte atteint ce seuil, un agent passe/),
+      screen.getByText(/^Un agent passe sur un autre compte de son harness à la fin de son tour quand une fenêtre courte \(5 h\)/),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/« Reprendre sur un autre compte… », ci-dessous, décide\. « Pause au-delà du quota » \(Kanban\)/),
+      screen.getByText(/« Reprendre sur un autre compte… », ci-dessous, décide\)\. « Pause au-delà du quota » \(Kanban\)/),
     ).toBeInTheDocument();
     await userEvent.click(within(at).getByRole('button', { name: '95 %' }));
     expect(within(at).getByRole('button', { name: '95 %' })).toHaveAttribute('aria-pressed', 'true');
@@ -146,7 +146,7 @@ describe('AccountsTab', () => {
     expect(within(row('Pro')).getByRole('button', { name: 'Supprimer' })).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Les nouveaux agents partent sur le premier compte actif de leur harness sous les seuils « Pause au-delà du quota » et « Changer de compte à », dans cet ordre.',
+        'Les nouveaux agents partent sur le premier compte actif de leur harness dont la 5 h est sous les seuils « Pause au-delà du quota » et « Changer de compte à » et dont la semaine tient son rythme, dans cet ordre.',
       ),
     ).toBeInTheDocument();
     // Saved at once: nothing left for « Enregistrer ».
@@ -543,6 +543,42 @@ describe('AccountsTab', () => {
       await waitFor(() => expect(within(row('Pro')).queryByRole('checkbox', { name: 'ancien (fermé)' })).not.toBeInTheDocument());
     });
 
+    it('lights the square of a chip as its box is ticked, open or closed project, and puts it out when unticked', async () => {
+      app.settings.accounts = [PRINCIPAL, { ...PRO, projects: ['p1', 'c1'] }];
+      backend({
+        closed_projects: () => [closed('c1', 'ancien')],
+        account_update: (a: { account: Account }) => [PRINCIPAL, a.account],
+      });
+      render(SettingsModal, { tab: 'accounts' });
+      const dot = (box: HTMLElement) => box.closest('label')!.querySelector('i')!;
+      const old = await within(row('Pro')).findByRole('checkbox', { name: 'ancien (fermé)' });
+      const open = within(row('Pro')).getByRole('checkbox', { name: 'demo' });
+      expect(dot(open)).toHaveClass('lit');
+      expect(dot(old)).toHaveClass('lit');
+      expect(dot(open)).toHaveAttribute('aria-hidden', 'true');
+      expect(dot(old)).toHaveAttribute('aria-hidden', 'true');
+      await userEvent.click(open);
+      await waitFor(() => expect(dot(open)).not.toHaveClass('lit'));
+      expect(dot(old)).toHaveClass('lit');
+      await userEvent.click(open);
+      await waitFor(() => expect(dot(open)).toHaveClass('lit'));
+      await userEvent.click(old);
+      await waitFor(() => expect(within(row('Pro')).queryByRole('checkbox', { name: 'ancien (fermé)' })).not.toBeInTheDocument());
+    });
+
+    it('lights every square while nothing is reserved (all the projects), then only those of the projects reserved', async () => {
+      app.projects = [project({ id: 'p1', name: 'demo' }), project({ id: 'p2', name: 'autre' })];
+      app.settings.accounts = [PRINCIPAL, PRO];
+      backend({ account_update: (a: { account: Account }) => [PRINCIPAL, a.account] });
+      render(SettingsModal, { tab: 'accounts' });
+      const dot = (name: string) => within(row('Pro')).getByRole('checkbox', { name }).closest('label')!.querySelector('i')!;
+      expect(dot('demo')).toHaveClass('lit');
+      expect(dot('autre')).toHaveClass('lit');
+      await userEvent.click(within(row('Pro')).getByRole('checkbox', { name: 'demo' }));
+      await waitFor(() => expect(dot('autre')).not.toHaveClass('lit'));
+      expect(dot('demo')).toHaveClass('lit');
+    });
+
     it('shows the list of an account reserved to a closed project alone, though no project is open', async () => {
       app.projects = [];
       app.settings.accounts = [PRINCIPAL, { ...PRO, projects: ['c1'] }];
@@ -616,7 +652,7 @@ describe('AccountsTab', () => {
     expect(screen.getByRole('button', { name: 'Add a Claude Code account…' })).toBeInTheDocument();
     expect(
       screen.getByText(
-        'New agents start on the first active account of their harness under the “Pause above quota” and “Switch accounts at” thresholds, in this order.',
+        'New agents start on the first active account of their harness whose 5 hours is under the “Pause above quota” and “Switch accounts at” thresholds and whose week keeps its pace, in this order.',
       ),
     ).toBeInTheDocument();
     expect(within(row('Main')).getByText('This machine’s account')).toBeInTheDocument();

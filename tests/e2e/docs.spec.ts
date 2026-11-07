@@ -78,9 +78,9 @@ test('the Docs tab imports the spec found, shows its subjects, a page and its ga
 
   await addProject(page, app.repo, { firstAgent: false });
 
-  // Agents · Kanban · Docs; the three spaces under it.
+  // Agents · Kanban · PR (ESC-65) · Docs; the three spaces under Docs.
   const tabs = page.getByRole('group', { name: 'Vue du projet' });
-  await expect(tabs.getByRole('button')).toHaveCount(3);
+  await expect(tabs.getByRole('button')).toHaveCount(4);
   await tabs.getByRole('button', { name: 'Docs' }).click();
   const spaces = page.getByRole('region', { name: 'Espaces des docs' });
   for (const s of ['Spécification', 'Décisions', 'Documents'])

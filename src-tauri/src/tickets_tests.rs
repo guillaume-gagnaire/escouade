@@ -207,7 +207,7 @@ impl Harness {
     }
 
     /// No scheduling pass is queued or running.
-    async fn wait_board_idle(&self) {
+    pub(crate) async fn wait_board_idle(&self) {
         self.wait("no scheduling pass queued", |h| {
             h.core.passes_queued.load(Ordering::SeqCst) == 0
         })
@@ -384,7 +384,7 @@ fn fail_checkouts(repo: &Path) {
 fn no_claude() -> String {
     format!(
         "Erreur : {}",
-        crate::engine::missing_line(EngineId::Claude, crate::i18n::Lang::Fr)
+        crate::engine::missing_line(EngineId::CLAUDE, crate::i18n::Lang::Fr)
     )
 }
 
@@ -1941,6 +1941,7 @@ async fn a_tickets_notifications_follow_the_tickets_choice_alone() {
         done: false,
         errors: false,
         tickets: true,
+        ..NotifyFor::default()
     };
     h.core.notify_ticket(&t.id, true);
     assert_eq!(h.alerts(), ["demo | DEM-1 prêt à tester"]);
@@ -4705,22 +4706,48 @@ async fn without_gh_a_github_pull_request_is_finished_in_the_browser() {
     assert!(!wt.exists() && has_branch(&r, "ticket/dem-1"));
 }
 
+/// A board on github.com/acme/demo with the GitHub account connected on a fake server that opens
+/// pull request #12 (ESC-59: no `gh` any more).
+async fn github_board(
+    h: &Harness,
+    server: &crate::integrations::fake::FakeServer,
+) -> (Project, PathBuf) {
+    let (p, r, _) = crate::agentprs_tests::github_project(h, server, false).await;
+    h.set_board(&p.id, |s| s.action = "pr".into());
+    server.on(
+        "POST",
+        "/repos/acme/demo/pulls",
+        201,
+        json!({
+            "number": 12, "html_url": "https://github.com/acme/demo/pull/12", "title": "t",
+            "state": "open", "draft": false, "head": {"ref": "ticket/dem-1"}, "base": {"ref": "main"},
+        }),
+    );
+    (p, r)
+}
+
+/// What the board asked GitHub to open.
+fn pull_asked(server: &crate::integrations::fake::FakeServer) -> Value {
+    server
+        .writes()
+        .into_iter()
+        .find(|w| w.path() == "/repos/acme/demo/pulls")
+        .expect("the pull request asked of GitHub")
+        .json()
+}
+
 #[tokio::test]
-async fn with_gh_a_pull_request_is_opened_with_the_criteria() {
-    let h = harness("tk-pr-gh");
-    let (p, r) = h.project(false).await;
-    github_remote(&h, &r);
-    *h.core.gh.write() = Some(fake_gh());
-    h.set_board(&p.id, |s| {
-        s.action = "pr".into();
-        s.draft = true;
-    });
-    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+async fn a_pull_request_is_opened_by_the_api_with_the_criteria() {
+    let h = harness("tk-pr-api");
+    let server = crate::integrations::fake::FakeServer::start().await;
+    let (p, _) = github_board(&h, &server).await;
+    h.set_board(&p.id, |s| s.draft = true);
+    let (t, _) = reviewed(&h, &p.id, "Fichier [ok]").await;
     h.core.ticket_approve(&t.id).await.unwrap();
     let t = h.ticket(&t.id);
     assert_eq!(
-        t.outcome.as_deref(),
-        Some("⇡ PR #12 → main"),
+        (t.column, t.outcome.as_deref()),
+        (Column::Pr, Some("⇡ PR #12 → main")),
         "{:?}",
         t.blocked
     );
@@ -4728,34 +4755,11 @@ async fn with_gh_a_pull_request_is_opened_with_the_criteria() {
         t.outcome_url.as_deref(),
         Some("https://github.com/acme/demo/pull/12")
     );
-    let call = gh_calls(&wt).pop().expect("gh called in the worktree");
-    let argv: Vec<&str> = call["argv"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|a| a.as_str().unwrap())
-        .collect();
+    let sent = pull_asked(&server);
+    assert_eq!(sent["title"], "feat: travail du faux claude [DEM-1]");
+    assert_eq!(sent["draft"], true);
     assert_eq!(
-        argv,
-        [
-            "pr",
-            "create",
-            "--repo",
-            "acme/demo",
-            "--base",
-            "main",
-            "--head",
-            "ticket/dem-1",
-            "--title",
-            "feat: travail du faux claude [DEM-1]",
-            "--body-file",
-            "-",
-            "--draft"
-        ]
-    );
-    // The description through the standard input: what was done, then the criteria.
-    assert_eq!(
-        call["body"],
+        sent["body"],
         "Ce qui a été fait :\n- Fichier dem-1.txt écrit\n- Boucle 1 faite\n\nCritères :\n- [x] Implémentation conforme au ticket\n- [x] Tests verts"
     );
     // The page is not opened as well.
@@ -4764,13 +4768,11 @@ async fn with_gh_a_pull_request_is_opened_with_the_criteria() {
 
 #[tokio::test]
 async fn a_pull_request_and_its_commit_are_written_in_the_language_of_the_texts_for_claude() {
-    let h = harness("tk-pr-gh-en");
-    let (p, r) = h.project(false).await;
-    github_remote(&h, &r);
-    *h.core.gh.write() = Some(fake_gh());
+    let h = harness("tk-pr-api-en");
+    let server = crate::integrations::fake::FakeServer::start().await;
+    let (p, _) = github_board(&h, &server).await;
     h.set_settings(|s| s.claude_language = "en".into());
-    h.set_board(&p.id, |s| s.action = "pr".into());
-    let (t, wt) = reviewed(&h, &p.id, "File [ok]").await;
+    let (t, _) = reviewed(&h, &p.id, "File [ok]").await;
     h.core.ticket_approve(&t.id).await.unwrap();
     let done = h.ticket(&t.id);
     assert_eq!(
@@ -4779,43 +4781,15 @@ async fn a_pull_request_and_its_commit_are_written_in_the_language_of_the_texts_
         "{:?}",
         done.blocked
     );
-    let call = gh_calls(&wt).pop().expect("gh called in the worktree");
-    let argv: Vec<&str> = call["argv"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|a| a.as_str().unwrap())
-        .collect();
+    let sent = pull_asked(&server);
     // The title is the commit message Haiku wrote when it was asked in English (the fake says it).
-    let title = argv.iter().position(|a| *a == "--title").unwrap() + 1;
-    assert_eq!(argv[title], "feat: work of the fake claude (en) [DEM-1]");
-    // The description: what was done, then the criteria, under English headings.
-    let body = call["body"].as_str().unwrap();
+    assert_eq!(sent["title"], "feat: work of the fake claude (en) [DEM-1]");
+    let body = sent["body"].as_str().unwrap();
     assert!(
         body.starts_with("What was done:\n- ") && body.contains("\n\nCriteria:\n- [x] "),
         "{body}"
     );
     assert!(!body.contains("Ce qui a été fait") && !body.contains("Critères"));
-}
-
-#[tokio::test]
-async fn a_gh_installed_while_the_app_runs_opens_the_pull_request() {
-    let h = harness("tk-pr-gh-later");
-    let (p, r) = h.project(false).await;
-    github_remote(&h, &r);
-    // Not there when the app started; on the PATH by the time of the validation.
-    *h.core.gh.write() = None;
-    *h.core.gh_on_path.write() = Some(fake_gh());
-    h.set_board(&p.id, |s| s.action = "pr".into());
-    let (t, _) = reviewed(&h, &p.id, "Fichier [ok]").await;
-    h.core.ticket_approve(&t.id).await.unwrap();
-    assert_eq!(
-        h.ticket(&t.id).outcome.as_deref(),
-        Some("⇡ PR #12 → main"),
-        "{:?}",
-        h.ticket(&t.id).blocked
-    );
-    assert_eq!(h.core.gh.read().clone(), Some(fake_gh()));
 }
 
 #[tokio::test]
@@ -4842,7 +4816,7 @@ async fn an_imported_ticket_gets_an_agent_and_a_branch_named_after_its_source_ke
         h.core
             .edit_ticket(id, |x| {
                 x.external = Some(ExternalRef {
-                    service: Service::Jira,
+                    service: Service::JIRA,
                     id: "PROJ-123".into(),
                     key: "PROJ-123".into(),
                     ..Default::default()
@@ -4899,7 +4873,7 @@ fn from_azure_boards(h: &Harness, id: &str) {
     h.core
         .edit_ticket(id, |x| {
             x.external = Some(ExternalRef {
-                service: Service::Azure,
+                service: Service::AZURE,
                 id: "42".into(),
                 key: "#42".into(),
                 container: "acme/Web Shop".into(),
@@ -4913,16 +4887,13 @@ fn from_azure_boards(h: &Harness, id: &str) {
 #[tokio::test]
 async fn a_github_pull_request_names_the_azure_boards_work_item_it_fixes() {
     let h = harness("tk-pr-gh-ab");
-    let (p, r) = h.project(false).await;
-    github_remote(&h, &r);
-    *h.core.gh.write() = Some(fake_gh());
-    h.set_board(&p.id, |s| s.action = "pr".into());
-    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    let server = crate::integrations::fake::FakeServer::start().await;
+    let (p, _) = github_board(&h, &server).await;
+    let (t, _) = reviewed(&h, &p.id, "Fichier [ok]").await;
     from_azure_boards(&h, &t.id);
     h.core.ticket_approve(&t.id).await.unwrap();
     assert_eq!(h.ticket(&t.id).outcome.as_deref(), Some("⇡ PR #12 → main"));
-    let call = gh_calls(&wt).pop().expect("gh called in the worktree");
-    let body = call["body"].as_str().unwrap();
+    let body = pull_asked(&server)["body"].as_str().unwrap().to_string();
     assert!(body.ends_with("- [x] Tests verts\n\nFixes AB#42"), "{body}");
 }
 
@@ -5014,7 +4985,8 @@ async fn an_azure_repos_pull_request_is_opened_with_its_work_item() {
     assert!(gh_calls(&wt).is_empty());
     assert_eq!(git(&bare, &["show", "ticket/dem-1:dem-1.txt"]), "Boucle 1");
 
-    // Refused: pushed only, as on another host.
+    assert_eq!(done.column, Column::Pr);
+    // Refused: its page opens, to finish it there.
     server.on(
         "POST",
         &at,
@@ -5025,7 +4997,7 @@ async fn an_azure_repos_pull_request_is_opened_with_its_work_item() {
     h.core.ticket_approve(&u.id).await.unwrap();
     assert_eq!(
         h.ticket(&u.id).outcome.as_deref(),
-        Some("⇡ ticket/dem-2 poussée · PR à ouvrir sur ton hébergeur")
+        Some("⇡ ticket/dem-2 poussée · PR à finaliser")
     );
 }
 
@@ -6521,6 +6493,58 @@ async fn the_first_account_passing_the_threshold_sends_the_next_ticket_to_the_se
 }
 
 #[tokio::test]
+async fn a_ticket_follows_the_pace_of_the_week_not_its_percentage() {
+    // PR #20: a week that would not last to its reset goes behind the others even far under the
+    // pause threshold; one that starts again soon on pace is not wasted, past the threshold.
+    let h = harness("tk-account-pace");
+    let (p, _) = h.project(false).await;
+    let pro = second_account(&h);
+    h.core
+        .reorder_claude_accounts(&["pro".to_string(), "principal".to_string()])
+        .unwrap();
+    std::fs::create_dir_all(&pro.config_dir).unwrap();
+    let week = |pct: f64, minutes: i64| {
+        Some(RateWindow {
+            pct,
+            resets_at: Some(now_ms() + minutes * 60_000),
+        })
+    };
+    // Pro, the first: 60 % of its week at its second day, 210 % at the reset. Principal: 20 %.
+    h.record_usage("pro", Reading::claude((None, week(60.0, 5 * 24 * 60))))
+        .await;
+    h.record_usage(
+        "principal",
+        Reading::claude((None, week(20.0, 5 * 24 * 60))),
+    )
+    .await;
+    let a = h
+        .core
+        .ticket_create(&p.id, draft("Un [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_ticket(&a.id, "to test", |t| t.column == Column::Review)
+        .await;
+    assert_eq!(account_of_ticket(&h, &a.id).await, "principal");
+    // Told: it is the pace that moved the new agents, under any threshold.
+    assert_eq!(
+        toasts(&h),
+        ["Le compte Pro finirait à 210 % de sa fenêtre hebdomadaire au rythme actuel : les nouveaux agents partent sur Principal."]
+    );
+    // Pro's week now at 88 %, starting again in 3 h: on pace, the first account again.
+    h.record_usage("pro", Reading::claude((None, week(88.0, 180))))
+        .await;
+    let b = h
+        .core
+        .ticket_create(&p.id, draft("Deux [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_ticket(&b.id, "to test", |t| t.column == Column::Review)
+        .await;
+    assert_eq!(account_of_ticket(&h, &b.id).await, "pro");
+    assert!(h.pauses().is_empty(), "{:?}", h.pauses());
+}
+
+#[tokio::test]
 async fn with_every_account_past_the_threshold_the_autopilot_pauses_and_names_them() {
     let h = harness("tk-accounts-paused");
     let (p, _) = h.project(false).await;
@@ -6584,7 +6608,7 @@ async fn a_ticket_waits_for_the_accounts_of_its_own_harness_alone() {
     let work = Account {
         id: "work".into(),
         name: "Work".into(),
-        engine: EngineId::Codex,
+        engine: EngineId::CODEX,
         config_dir: h.dir.join("codex-work").to_string_lossy().into(),
         claude_path: crate::engine::fake_codex(),
         ..Default::default()
@@ -6609,7 +6633,7 @@ async fn a_ticket_waits_for_the_accounts_of_its_own_harness_alone() {
     // … while the one of Codex starts on Codex's account: never on Principal, whose quota is
     // spent, nor the other way round.
     let codex = TicketDraft {
-        engine: Some(Some(EngineId::Codex)),
+        engine: Some(Some(EngineId::CODEX)),
         ..draft("Sur Codex [ok]", &[], 5)
     };
     let b = h.core.ticket_create(&p.id, codex).await.unwrap();
@@ -6618,12 +6642,12 @@ async fn a_ticket_waits_for_the_accounts_of_its_own_harness_alone() {
     assert_eq!(account_of_ticket(&h, &b.id).await, "work");
     h.wait_board_idle().await;
     assert_eq!(h.ticket(&a.id).column, Column::Todo);
-    assert!(h.core.project_hold(&p.id, EngineId::Claude).is_some());
-    assert!(h.core.project_hold(&p.id, EngineId::Codex).is_none());
+    assert!(h.core.project_hold(&p.id, EngineId::CLAUDE).is_some());
+    assert!(h.core.project_hold(&p.id, EngineId::CODEX).is_none());
     // The status bar has the current account of each harness.
     let current = h.core.usage.lock().current.clone();
     assert_eq!(
-        current.get(&EngineId::Codex).map(String::as_str),
+        current.get(&EngineId::CODEX).map(String::as_str),
         Some("work")
     );
 }
@@ -6993,7 +7017,7 @@ async fn a_private_projects_new_agents_stay_on_its_own_account_past_the_threshol
     used_for_an_hour(&h, "pro", 100.0).await;
     // Past the threshold, Pro would hand its new agents to Équipe: P's stay on Pro.
     assert_eq!(
-        h.core.account_for_new(&p.id, EngineId::Claude).unwrap(),
+        h.core.account_for_new(&p.id, EngineId::CLAUDE).unwrap(),
         "pro"
     );
     // Allowed, or not private, they go to Équipe as any project's do.
@@ -7001,7 +7025,7 @@ async fn a_private_projects_new_agents_stay_on_its_own_account_past_the_threshol
     project.shared_on_limit = true;
     h.core.update_project(project).unwrap();
     assert_eq!(
-        h.core.account_for_new(&p.id, EngineId::Claude).unwrap(),
+        h.core.account_for_new(&p.id, EngineId::CLAUDE).unwrap(),
         "equipe"
     );
 }
@@ -8829,19 +8853,19 @@ fn a_ticket_agents_mode_is_one_its_own_harness_takes() {
         .2
     };
     assert_eq!(
-        crate::accounts::defaults(None, EngineId::Claude).mode,
+        crate::accounts::defaults(None, EngineId::CLAUDE).mode,
         "auto"
     );
-    assert_eq!(on(EngineId::Claude, "sonnet"), "auto");
-    assert_eq!(on(EngineId::Claude, "haiku"), "auto");
-    assert_eq!(on(EngineId::Claude, "claude-haiku-4-5"), "default");
+    assert_eq!(on(EngineId::CLAUDE, "sonnet"), "auto");
+    assert_eq!(on(EngineId::CLAUDE, "haiku"), "auto");
+    assert_eq!(on(EngineId::CLAUDE, "claude-haiku-4-5"), "default");
     // OpenCode has no mode « Auto »: « Demander », the closest that allows no more.
-    assert_eq!(on(EngineId::Opencode, "sonnet"), "default");
-    assert_eq!(on(EngineId::Opencode, ""), "default");
+    assert_eq!(on(EngineId::OPENCODE, "sonnet"), "default");
+    assert_eq!(on(EngineId::OPENCODE, ""), "default");
     // Codex and Copilot take it, whatever model of Claude Code the Kanban names.
-    assert_eq!(on(EngineId::Codex, "claude-haiku-4-5"), "auto");
-    assert_eq!(on(EngineId::Codex, "haiku"), "auto");
-    assert_eq!(on(EngineId::Copilot, "haiku"), "auto");
+    assert_eq!(on(EngineId::CODEX, "claude-haiku-4-5"), "auto");
+    assert_eq!(on(EngineId::CODEX, "haiku"), "auto");
+    assert_eq!(on(EngineId::COPILOT, "haiku"), "auto");
 }
 
 // ---------- worktrees of tickets that are over (ESC-143) ----------
@@ -9443,4 +9467,170 @@ async fn a_ticket_agent_goes_with_the_model_and_the_effort_of_its_form_over_the_
         (after("--model"), after("--effort")),
         ("opus".to_string(), "max".to_string())
     );
+}
+
+// ---------- A model's own quota (ESC-312) ----------
+
+/// The real answer of Claude Code 2.1.314 with Fable's week at 97 % (`fable-over`), its resets in a
+/// day from now: the fixture's dates would be past one day.
+fn fable_over_now() -> Value {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../tests/fixtures/claude-usage/fable-over.json");
+    let mut v: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let day = chrono::DateTime::from_timestamp_millis(now_ms() + 24 * 3_600_000)
+        .unwrap()
+        .to_rfc3339();
+    for row in v["limits"].as_array_mut().unwrap() {
+        row["resets_at"] = day.clone().into();
+    }
+    v
+}
+
+/// A ticket of `model`.
+fn draft_of(title: &str, model: &str) -> TicketDraft {
+    TicketDraft {
+        model: Some(model.into()),
+        ..draft(title, &[], 5)
+    }
+}
+
+/// Pro the only active account, its `claude` telling `usage` as its quota (`fake-usage.json`), read
+/// so before any ticket starts.
+async fn pro_alone_telling(h: &Harness, usage: &Value) -> Account {
+    let pro = second_account(h);
+    h.core
+        .reorder_claude_accounts(&["pro".to_string(), "principal".to_string()])
+        .unwrap();
+    std::fs::create_dir_all(&pro.config_dir).unwrap();
+    std::fs::write(
+        Path::new(&pro.config_dir).join("fake-usage.json"),
+        usage.to_string(),
+    )
+    .unwrap();
+    h.set_settings(|s| {
+        s.quota_pause = 95;
+        for a in &mut s.accounts {
+            a.active = a.id == "pro";
+        }
+    });
+    h.record_usage("pro", crate::usage::reading_of(usage)).await;
+    pro
+}
+
+#[tokio::test]
+async fn fable_past_the_threshold_holds_the_fable_ticket_back_and_the_opus_one_starts() {
+    let h = harness("tk312-fable-opus");
+    let (p, _) = h.project(false).await;
+    pro_alone_telling(&h, &fable_over_now()).await;
+    h.set_board(&p.id, |s| s.max_parallel = 2);
+    let fable = h
+        .core
+        .ticket_create(&p.id, draft_of("Sur Fable [ok]", "fable"))
+        .await
+        .unwrap();
+    let opus = h
+        .core
+        .ticket_create(&p.id, draft_of("Sur Opus [ok]", "opus"))
+        .await
+        .unwrap();
+    // Opus goes on, on the account whose week of every model is at 47 %.
+    h.wait_ticket(&opus.id, "to test", |t| t.column == Column::Review)
+        .await;
+    assert_eq!(h.agent_of(&opus.id).account, "pro");
+    // Its agent read the account's quota again: Fable's week still there, still past the threshold.
+    h.wait_board_idle().await;
+    let meters = h.core.usage.lock().account("pro").unwrap().meters.clone();
+    assert!(
+        meters
+            .iter()
+            .any(|m| m.model.as_deref() == Some("Fable") && m.pct == 97.0),
+        "{meters:?}"
+    );
+    assert_eq!(h.ticket(&fable.id).column, Column::Todo);
+    // Not every ticket is held: no pause of the autopilot is shown.
+    assert_eq!(h.core.autopilot_pause(), None);
+    // By its id, the default model of the account, or « default » resolved: Fable all the same.
+    let by_id = h
+        .core
+        .ticket_create(&p.id, draft_of("Sur Fable aussi [ok]", "claude-fable-5-1"))
+        .await
+        .unwrap();
+    h.wait_board_idle().await;
+    assert_eq!(h.ticket(&by_id.id).column, Column::Todo);
+    // Principal on again, without a Fable quota spent: the Fable tickets go there.
+    h.set_settings(|s| {
+        for a in &mut s.accounts {
+            a.active = true;
+        }
+    });
+    h.core.schedule();
+    assert_eq!(account_of_ticket(&h, &fable.id).await, "principal");
+}
+
+#[tokio::test]
+async fn a_limit_of_fables_week_pauses_no_account_and_waits_for_fables_tickets_alone() {
+    let h = harness("tk312-fable-limit");
+    let (p, _) = h.project(false).await;
+    // Under every threshold: the limit comes from the turn alone.
+    let mut usage = fable_over_now();
+    for row in usage["limits"].as_array_mut().unwrap() {
+        row["percent"] = 10.into();
+    }
+    pro_alone_telling(&h, &usage).await;
+    h.set_settings(|s| s.switch_on_limit = false);
+    let fable = h
+        .core
+        .ticket_create(&p.id, draft_of("Sur Fable [ok]", "fable"))
+        .await
+        .unwrap();
+    let agent = {
+        h.wait("the Fable ticket's agent", |h| {
+            h.ticket(&fable.id).agent_id.is_some()
+        })
+        .await;
+        h.ticket(&fable.id).agent_id.unwrap()
+    };
+    h.wait_ticket(&fable.id, "to test", |t| t.column == Column::Review)
+        .await;
+    // Claude Code tells its agent it met Fable's own week, as 2.1.314 types it.
+    let resets = now_ms() / 1000 + 3600;
+    let h2 = h.core.agent(&agent).unwrap();
+    let mut fx = crate::agent::Effects::default();
+    h2.lock().handle_frame(
+        &json!({"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":resets,
+                "rateLimitType":"seven_day_overage_included",
+                "unifiedWindows":{"seven_day_overage_included":{"utilization":1.0,"resetsAt":resets}}}}),
+        &mut fx,
+    );
+    let (pid, name) = {
+        let rt = h2.lock();
+        (rt.meta.project_id.clone(), rt.meta.name.clone())
+    };
+    h.core.apply(&agent, &pid, &name, fx, None);
+    h.core.plan_resume(&agent, Some(resets * 1000));
+    // Fable's week of Pro is told full, under its name.
+    let meters = h.core.usage.lock().account("pro").unwrap().meters.clone();
+    assert!(
+        meters
+            .iter()
+            .any(|m| m.model.as_deref() == Some("Fable") && m.pct == 100.0),
+        "{meters:?}"
+    );
+    // Its wait holds the Fable tickets alone: an Opus one starts, a Fable one waits.
+    assert!(h.core.quota_paused().is_empty());
+    let opus = h
+        .core
+        .ticket_create(&p.id, draft_of("Sur Opus [ok]", "opus"))
+        .await
+        .unwrap();
+    let other = h
+        .core
+        .ticket_create(&p.id, draft_of("Sur Fable encore [ok]", "fable"))
+        .await
+        .unwrap();
+    h.wait_ticket(&opus.id, "to test", |t| t.column == Column::Review)
+        .await;
+    h.wait_board_idle().await;
+    assert_eq!(h.ticket(&other.id).column, Column::Todo);
+    assert_eq!(h.core.autopilot_pause(), None);
 }

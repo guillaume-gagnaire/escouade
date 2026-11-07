@@ -68,6 +68,10 @@ export default defineZone('voice', {
     key: '{service} key',
     keyDesc:
       'One key per service, the same for dictation and for the conversation’s voice: saved once, it serves both. Kept in the system keychain, never in Escouade’s files nor in its log.',
+    keyMistralDesc:
+      'The Mistral account, shared by the voice and Mistral Vibe: one key for the dictation and the conversation’s voice, and for the Vibe accounts without a key of their own. Kept in the system’s keychain, never in Escouade’s files nor in its log.',
+    keyBorrowed: 'The one of the Vibe account “{account}” · {hint}',
+    keyGiveOther: 'Give another key',
     keyPlaceholder: 'Paste your API key',
     keySave: 'Save the key',
     keySaved: 'Saved in the keychain',

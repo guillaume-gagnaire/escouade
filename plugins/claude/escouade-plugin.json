@@ -1,0 +1,63 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.claude-code",
+  "name": "Claude Code",
+  "version": "2.2.1",
+  "description": {
+    "fr": "Claude Code comme harness : la conversation, sa vue terminal, les permissions, le plan, le quota et le coût par compte.",
+    "en": "Claude Code as a harness: the conversation, its terminal view, permissions, the plan, the quota and the cost per account."
+  },
+  "author": {
+    "name": "Escouade",
+    "url": "https://escouade.dev"
+  },
+  "license": "GPL-3.0-or-later",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/claude",
+  "escouade": {
+    "api": "1",
+    "min": "2.2.0"
+  },
+  "run": {
+    "wasm": "Cargo.toml"
+  },
+  "limits": {
+    "memoryBytes": 268435456,
+    "turnSeconds": 10
+  },
+  "contributes": {
+    "harnesses": [
+      {
+        "id": "claude",
+        "name": "Claude Code",
+        "speaker": "Claude",
+        "locate": { "names": ["claude"] },
+        "versionArgs": ["--version"],
+        "tested": { "oldest": "2.1.283", "newest": "2.1.301" },
+        "caps": {
+          "modes": ["auto", "default", "plan", "acceptEdits", "bypassPermissions"],
+          "effort": true,
+          "images": true,
+          "pdf": true,
+          "slashCommands": true,
+          "terminalView": true,
+          "readOnly": true
+        },
+        "models": [
+          { "id": "fable", "label": "Fable", "effort": true },
+          { "id": "opus", "label": "Opus", "effort": true },
+          { "id": "sonnet", "label": "Sonnet", "effort": true },
+          { "id": "haiku", "label": "Haiku" }
+        ],
+        "efforts": ["low", "medium", "high", "xhigh", "max"],
+        "accountVar": "CLAUDE_CONFIG_DIR",
+        "opens": true,
+        "install": {
+          "windows": "irm https://claude.ai/install.ps1 | iex",
+          "unix": "curl -fsSL https://claude.ai/install.sh | bash"
+        },
+        "updateCommand": "claude update"
+      }
+    ]
+  },
+  "store": { "categories": ["harness"] }
+}

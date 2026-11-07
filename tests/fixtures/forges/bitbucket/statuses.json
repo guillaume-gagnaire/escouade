@@ -1,0 +1,47 @@
+{
+  "pagelen": 100,
+  "page": 1,
+  "size": 4,
+  "values": [
+    {
+      "type": "build",
+      "key": "{pipe-uuid-7}",
+      "name": "Pipeline #7",
+      "state": "FAILED",
+      "description": "Failed in step Test",
+      "url": "https://bitbucket.org/acme/demo/pipelines/results/7",
+      "created_on": "2026-10-21T14:00:00.000000+00:00",
+      "updated_on": "2026-10-21T14:06:00.000000+00:00"
+    },
+    {
+      "type": "build",
+      "key": "lint",
+      "name": "Lint",
+      "state": "SUCCESSFUL",
+      "description": "",
+      "url": "https://ci.example.com/lint/55",
+      "created_on": "2026-10-21T14:00:00.000000+00:00",
+      "updated_on": "2026-10-21T14:01:00.000000+00:00"
+    },
+    {
+      "type": "build",
+      "key": "e2e",
+      "name": "E2E",
+      "state": "INPROGRESS",
+      "description": "",
+      "url": "https://ci.example.com/e2e/9",
+      "created_on": "2026-10-21T14:02:00.000000+00:00",
+      "updated_on": "2026-10-21T14:02:00.000000+00:00"
+    },
+    {
+      "type": "build",
+      "key": "lint",
+      "name": "Lint",
+      "state": "FAILED",
+      "description": "older",
+      "url": "https://ci.example.com/lint/54",
+      "created_on": "2026-10-21T13:00:00.000000+00:00",
+      "updated_on": "2026-10-21T13:01:00.000000+00:00"
+    }
+  ]
+}

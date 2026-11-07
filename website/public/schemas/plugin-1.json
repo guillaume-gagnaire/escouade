@@ -134,6 +134,47 @@
           "description": "Harnesses.",
           "items": {
             "properties": {
+              "account": {
+                "description": "The id of one of `contributes.accounts`.",
+                "type": "string"
+              },
+              "id": {
+                "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$",
+                "type": "string"
+              },
+              "name": {
+                "description": "One text, or a text by language (`en` first, then `fr`).",
+                "oneOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "anyOf": [
+                      {
+                        "required": ["en"]
+                      },
+                      {
+                        "required": ["fr"]
+                      }
+                    ],
+                    "type": "object"
+                  }
+                ]
+              }
+            },
+            "required": ["id"],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "launchEnvironments": {
+          "description": "Launch environments: the up, ls, down and destroy of a worktree.",
+          "items": {
+            "properties": {
               "id": {
                 "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$",
                 "type": "string"
@@ -317,6 +358,51 @@
             "type": "object"
           },
           "type": "array"
+        },
+        "workflowReaders": {
+          "description": "Readers of workflows Escouade does not read by itself (it gives them the project's files).",
+          "items": {
+            "properties": {
+              "files": {
+                "description": "The files of the project it is given, as globs from the project's folder (`.planning/**`).",
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "id": {
+                "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$",
+                "type": "string"
+              },
+              "name": {
+                "description": "One text, or a text by language (`en` first, then `fr`).",
+                "oneOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "anyOf": [
+                      {
+                        "required": ["en"]
+                      },
+                      {
+                        "required": ["fr"]
+                      }
+                    ],
+                    "type": "object"
+                  }
+                ]
+              }
+            },
+            "required": ["id", "files"],
+            "type": "object"
+          },
+          "type": "array"
         }
       },
       "type": "object"
@@ -381,6 +467,38 @@
       "minLength": 1,
       "type": "string"
     },
+    "limits": {
+      "description": "What a plugin in WASM asks for beyond the host's defaults; Escouade caps them at 120 s and 32 MiB for `net/fetch`, 4 MiB for `fs/read`, 256 MiB for its memory, 10 s for a turn.",
+      "properties": {
+        "fetchBytes": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "fetchSeconds": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "fileBytes": {
+          "description": "How much `fs/read` gives at most: 256 KiB without it.",
+          "maximum": 4194304,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "memoryBytes": {
+          "description": "How much linear memory its instance may take: 64 MiB without it.",
+          "maximum": 268435456,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "turnSeconds": {
+          "description": "How long a turn of its instance may take: 2 s without it.",
+          "maximum": 10,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
     "name": {
       "description": "One text, or a text by language (`en` first, then `fr`).",
       "oneOf": [
@@ -408,6 +526,7 @@
       "description": "What it asks for, shown before it is installed.",
       "properties": {
         "commands": {
+          "description": "The programs it may run (`proc/spawn`): a program's name, never a path, then its arguments, word for word. A last word `*` lets any more follow.",
           "items": {
             "minLength": 1,
             "type": "string"
@@ -421,6 +540,22 @@
           "items": {
             "minLength": 1,
             "type": "string"
+          },
+          "type": "array"
+        },
+        "files": {
+          "description": "The folders it may read or write (`fs/*`): a root of the closed list, which the host resolves; no path of its own. `plugin` is read only.",
+          "items": {
+            "properties": {
+              "access": {
+                "enum": ["read", "write"]
+              },
+              "root": {
+                "enum": ["plugin", "agent", "agentRepo", "agentHome", "temp"]
+              }
+            },
+            "required": ["root", "access"],
+            "type": "object"
           },
           "type": "array"
         },
@@ -446,7 +581,7 @@
       "type": "string"
     },
     "run": {
-      "description": "Its program; without one, the plugin is declarative: nothing runs.",
+      "description": "Its program; without one, the plugin is declarative: nothing runs. A command (`command`, a process), a JS/TS bundle of its folder that Escouade runs in WASM (`js`), or the `Cargo.toml` of a Rust module that Escouade runs in WASM (`wasm`): one of the three.",
       "properties": {
         "args": {
           "items": {
@@ -456,6 +591,12 @@
           "type": "array"
         },
         "command": {
+          "description": "A path in the plugin's folder: relative, without `..`.",
+          "minLength": 1,
+          "pattern": "^(?![/\\\\]|[A-Za-z]:)(?!(.*[/\\\\])?\\.\\.([/\\\\]|$)).*$",
+          "type": "string"
+        },
+        "js": {
           "description": "A path in the plugin's folder: relative, without `..`.",
           "minLength": 1,
           "pattern": "^(?![/\\\\]|[A-Za-z]:)(?!(.*[/\\\\])?\\.\\.([/\\\\]|$)).*$",
@@ -473,6 +614,12 @@
           "pattern": "^(?![/\\\\]|[A-Za-z]:)(?!(.*[/\\\\])?\\.\\.([/\\\\]|$)).*$",
           "type": "string"
         },
+        "wasm": {
+          "description": "A path in the plugin's folder: relative, without `..`.",
+          "minLength": 1,
+          "pattern": "^(?![/\\\\]|[A-Za-z]:)(?!(.*[/\\\\])?\\.\\.([/\\\\]|$)).*$",
+          "type": "string"
+        },
         "windows": {
           "description": "A path in the plugin's folder: relative, without `..`.",
           "minLength": 1,
@@ -480,7 +627,6 @@
           "type": "string"
         }
       },
-      "required": ["command"],
       "type": "object"
     },
     "store": {

@@ -1,0 +1,114 @@
+diff --git a/src-tauri/src/core.rs b/src-tauri/src/core.rs
+index 27f58d83..7c76895f 100644
+--- a/src-tauri/src/core.rs
++++ b/src-tauri/src/core.rs
+@@ -9322,8 +9322,12 @@ impl<R: Runtime> Core<R> {
+             listed.into_iter().partition(|f| copied.contains(&f.path));
+         let left_out = left_out.into_iter().map(|f| f.path).collect();
+         Ok(DirectScope {
++            scope: CommitScope {
++                files,
++                left_out,
++                commit_root: root.clone(),
++            },
+             root,
+-            scope: CommitScope { files, left_out },
+             unread,
+         })
+     }
+diff --git a/src-tauri/src/model.rs b/src-tauri/src/model.rs
+index 75d51152..9de007b5 100644
+--- a/src-tauri/src/model.rs
++++ b/src-tauri/src/model.rs
+@@ -917,6 +917,8 @@ pub enum CommitMode {
+ pub struct CommitScope {
+     pub files: Vec<FileChange>,
+     pub left_out: Vec<String>,
++    /// The folder the commit is made in: the project's, or the agent's worktree.
++    pub commit_root: String,
+ }
+ 
+ /// An external ticket system.
+diff --git a/src-tauri/src/repos.rs b/src-tauri/src/repos.rs
+index 0712fa1f..51214360 100644
+--- a/src-tauri/src/repos.rs
++++ b/src-tauri/src/repos.rs
+@@ -626,6 +626,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
+         let mut scope = crate::model::CommitScope {
+             files: Vec::new(),
+             left_out: Vec::new(),
++            commit_root: project.path.clone(),
+         };
+         let mut unread = HashSet::new();
+         for c in checkouts {
+diff --git a/src/components/modals/CommitModal.svelte b/src/components/modals/CommitModal.svelte
+index 14212368..97ad13c3 100644
+--- a/src/components/modals/CommitModal.svelte
++++ b/src/components/modals/CommitModal.svelte
+@@ -124,6 +124,7 @@
+ 
+ <Modal title={t('git.commit.title')} width={600} onclose={close}>
+   <p class="scope">{t('git.commit.scope', { owner })}</p>
++  {#if scope}<p class="scope">{t('git.commit.root', { folder: scope.commitRoot })}</p>{/if}
+   {#if failure}
+     <p class="error" role="alert">{failure}</p>
+   {:else if scope}
+diff --git a/src/components/modals/CommitModal.test.ts b/src/components/modals/CommitModal.test.ts
+index 8c081d9f..59fff82e 100644
+--- a/src/components/modals/CommitModal.test.ts
++++ b/src/components/modals/CommitModal.test.ts
+@@ -15,7 +15,7 @@ const change = (path: string, status: FileChange['status'] = 'M'): FileChange =>
+   agentId: 'a1',
+   inWorktree: false,
+ });
+-const SCOPE: CommitScope = { files: [change('src/auth.ts'), change('src/new.ts', 'A')], leftOut: [] };
++const SCOPE: CommitScope = { files: [change('src/auth.ts'), change('src/new.ts', 'A')], leftOut: [], commitRoot: 'C:/p/repo' };
+ const PATHS = ['src/auth.ts', 'src/new.ts'];
+ 
+ const field = () => screen.getByRole('textbox', { name: 'Message' });
+@@ -56,7 +56,7 @@ describe('CommitModal', () => {
+   });
+ 
+   it('lists 500 files at most, and counts the others in the singular or the plural', async () => {
+-    const many = (n: number): CommitScope => ({ files: Array.from({ length: n }, (_, i) => change(`src/f${i}.ts`)), leftOut: [] });
++    const many = (n: number): CommitScope => ({ files: Array.from({ length: n }, (_, i) => change(`src/f${i}.ts`)), leftOut: [], commitRoot: 'C:/p/repo' });
+     fakeBackend({ commit_preview: () => many(501), commit_propose: () => 'feat: tout' });
+     const { unmount } = render(CommitModal, { projectId: 'p1', agentId: 'a1' });
+     expect(await screen.findByText('… et 1 autre fichier')).toBeInTheDocument();
+diff --git a/src/lib/i18n/en/git.ts b/src/lib/i18n/en/git.ts
+index bdb051e1..00bf8ad6 100644
+--- a/src/lib/i18n/en/git.ts
++++ b/src/lib/i18n/en/git.ts
+@@ -44,6 +44,7 @@ export default defineZone('git', {
+   commit: {
+     title: 'Commit',
+     scope: 'Changes in {owner}',
++    root: 'In {folder}',
+     filesLabel: 'Files in the commit',
+     noneForAgent: 'No files to commit for this agent.',
+     noneForProject: 'No changes in the project folder: commit an agent’s worktree from “This agent”.',
+diff --git a/src/lib/i18n/fr/git.ts b/src/lib/i18n/fr/git.ts
+index 0451f8af..cb99f912 100644
+--- a/src/lib/i18n/fr/git.ts
++++ b/src/lib/i18n/fr/git.ts
+@@ -50,6 +50,7 @@ export default {
+   commit: {
+     title: 'Commit',
+     scope: 'Modifications de {owner}',
++    root: 'Dans {folder}',
+     filesLabel: 'Fichiers du commit',
+     noneForAgent: 'Aucun fichier à commiter pour cet agent.',
+     noneForProject: 'Aucune modification dans le dossier du projet : le worktree d’un agent se commite depuis « Cet agent ».',
+diff --git a/src/lib/types.ts b/src/lib/types.ts
+index f5abe3c4..cb96e7e4 100644
+--- a/src/lib/types.ts
++++ b/src/lib/types.ts
+@@ -919,6 +919,8 @@ export type CommitMode = 'agent' | 'direct';
+ export interface CommitScope {
+   files: FileChange[];
+   leftOut: string[];
++  /** The folder the commit is made in: the project's, or the agent's worktree. */
++  commitRoot: string;
+ }
+ 
+ export interface RunCommand {

@@ -19,7 +19,7 @@ test.describe.configure({ mode: 'serial' });
 
 let seeded: Awaited<ReturnType<typeof seedCatalog>>;
 test.beforeAll(async () => {
-  seeded = await seedCatalog();
+  seeded = await seedCatalog({ own: true });
 });
 
 /** What the eye compares between the store and the preview, by selector: sizes, weights, colors. */
@@ -109,15 +109,6 @@ for (const scheme of ['dark', 'light'] as const)
         for (const p of ['size', 'weight', 'color', 'bg', 'border', 'radius'] as const)
           if (!(k === 'tile' && p !== 'size' && p !== 'radius' && p !== 'weight')) expect(store[k]![p], `${k} ${p}`).toBe(preview[k]![p]);
       }
-      if (name === 'home') {
-        // The preview's row of the verified holds signed plugins; the store's, until STORE-8 signs any, Escouade's
-        // own: « Livré avec Escouade » in the seal's colors and size.
-        const own = await measure(page, { t: '.row .own' });
-        await page.goto(`${PREVIEW}${scheme === 'light' ? '?theme=light' : ''}#home`);
-        const seal = await measure(page, { t: '.row .seal' });
-        for (const p of ['size', 'weight', 'color', 'bg', 'border', 'radius', 'height'] as const)
-          expect(own.t![p], `seal ${p}`).toBe(seal.t![p]);
-      }
     });
 
 for (const [w, h] of SIZES)
@@ -143,8 +134,9 @@ test('the home page lists the categories, Escouade’s own among the verified, a
   await expect(page.locator('.cats .chip').first()).toContainText('Harness');
   await expect(page.locator('.cats')).toContainText('Sources du Kanban');
   await expect(page.locator('.cats')).toContainText('Hébergeurs de code');
-  // The verified first (signed by the review, STORE-8: a base kept between runs has some), then Escouade's own.
-  await expect(page.locator('.rows .row').first()).toContainText(/Vérifié par Escouade|Livré avec Escouade/);
+  // The verified first: signed by the review, Escouade's own as anyone's.
+  await expect(page.locator('.rows .row').first()).toContainText('Vérifié par Escouade');
+  await expect(page.locator('.rows')).toContainText('GitHub');
   // The new ones, newest first: the seeded plugins are dated a few minutes back, so a plugin another test publishes
   // meanwhile comes before them; the page is compared with what the store says is the newest.
   const fresh = ((await (await page.request.get('/api/catalog/home')).json()) as { fresh: { name: { fr: string } }[] }).fresh;
@@ -298,12 +290,15 @@ test('an author’s page lists their plugins; Escouade’s own have theirs, with
   for (const src of await page.locator('img').evaluateAll((all) => all.map((i) => i.getAttribute('src'))))
     expect(src).toMatch(/^\/files\/[0-9a-f]{64}\.png$/);
   await page.goto('/plugins/dev.escouade.github');
-  await expect(page.locator('.plug-head')).toContainText('Livré avec Escouade');
-  await expect(page.locator('.aside')).toContainText('Lance un programme d’Escouade');
+  // A line of the store like any, its version and its seal, under the mark « Escouade » rather than its account.
+  await expect(page.locator('.plug-head .line a.me')).toHaveText('Escouade');
+  await expect(page.locator('.plug-head')).toContainText('Vérifié par Escouade');
+  await expect(page.locator('.plug-head')).toContainText('v2.2.0');
+  await expect(page.locator('.aside')).toContainText('api.github.com');
   await expect(page.getByRole('link', { name: 'Ouvrir dans Escouade' })).toHaveAttribute('href', 'escouade://plugin/dev.escouade.github');
   await page.locator('.plug-head .line a.me').click();
   await expect(page).toHaveURL(/\/authors\/escouade$/);
-  await expect(page.locator('.rows .row').first()).toContainText('Livré avec Escouade');
+  await expect(page.locator('.rows .row', { hasText: 'Jira' })).toContainText('Escouade');
   expect((await page.goto('/plugins/dev.nobody.nothing'))?.status()).toBe(404);
   expect((await page.goto('/en/authors/nobody-at-all-here'))?.status()).toBe(404);
 });
@@ -378,6 +373,8 @@ for (const scheme of ['dark', 'light'] as const)
     await page.goto('/plugins/dev.escouade.claude-code');
     await expect(page.locator('.plug-head .tile.glyph.harness')).toBeVisible();
     await page.goto('/authors/escouade');
-    await expect(page.locator('.rows .row .tile.brand, .rows .row .tile.glyph')).toHaveCount(17);
-    expect(await page.locator('.rows .row img').count()).toBe(0);
+    // Their tiles on their rows too: a brand's or a glyph's, drawn, never an image.
+    await expect(page.locator('.rows .row', { hasText: 'GitHub' }).locator('.tile.brand')).toBeVisible();
+    await expect(page.locator('.rows .row', { hasText: 'Jira' }).locator('.tile.glyph')).toBeVisible();
+    await expect(page.locator('.rows .row', { hasText: 'Claude Code' }).locator('.tile.glyph')).toBeVisible();
   });

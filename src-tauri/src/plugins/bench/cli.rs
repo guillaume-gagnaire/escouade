@@ -1,84 +1,27 @@
-//! `escouade-plugin`, the command of the plugins' authors (PLG-3, ESC-175): `test` plays the
-//! conformance bench on a folder, `validate` reads its manifest, `dev` starts it under the fake
-//! Escouade and sends it what is typed (facts, decisions, calls), showing what comes back.
+//! `escouade-plugin`, the command of the plugins' authors (PLG-3, ESC-175): what runs a plugin, on the app's host.
+//! `test` plays the conformance bench on a folder, `dev` starts it under the fake Escouade and sends it what is typed
+//! (facts, decisions, calls), showing what comes back. The rest of the command (`validate`, `build`, `--version`) needs
+//! no host and lives in `escouade_plugin_cli::cli` (ESC-328), which the store's image builds alone.
 
 use super::fake::{Reply, Seen, Session};
-use super::{decision_request, fact, run, Options};
-use crate::i18n::Lang;
-use crate::plugins::manifest::{self, Manifest};
-use crate::plugins::runtime::{program_path, timeout_of, PROTOCOL};
+use super::{decision_request, fact, program_of, run, Options, Program};
+
+use crate::plugins::manifest::Manifest;
+use crate::plugins::runtime::{timeout_of, PROTOCOL};
+use escouade_plugin_cli::cli::{self, read_manifest, usage, Call};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-fn usage(lang: Lang) -> String {
-    tr_in!(
-        lang,
-        "escouade-plugin : tester un plugin d'Escouade sans l'app.
-
-  escouade-plugin test <dossier> [--json] [--measure [n]]
-      Joue le banc de conformité : initialisation, version refusée, délais, un fait reçu,
-      une décision, un secret, plantage, fermeture. Code de sortie 1 si un scénario échoue.
-  escouade-plugin validate <dossier>
-      Lit le manifeste (escouade-plugin.json) et dit ce qui ne va pas, champ par champ.
-  escouade-plugin dev <dossier> [--secret <clé>=<valeur>]...
-      Le faux Escouade : lance le plugin, puis envoie ce que tu tapes :
-        fact <nom> [json]       un fait (events/fact), ex. fact ticket.column
-        decide [json]           une demande d'autorisation (permissions/decide)
-        call <méthode> [json]   un appel, et sa réponse
-        notify <méthode> [json] une notification
-        restart                 tue le plugin et le relance
-        quit                    shutdown, puis la fin
-
-Options : --lang fr|en
-",
-        "escouade-plugin: test an Escouade plugin without the app.
-
-  escouade-plugin test <folder> [--json] [--measure [n]]
-      Plays the conformance bench: initialization, version refused, delays, a fact received,
-      a decision, a secret, crash, shutdown. Exit code 1 when a scenario fails.
-  escouade-plugin validate <folder>
-      Reads the manifest (escouade-plugin.json) and says what is wrong, field by field.
-  escouade-plugin dev <folder> [--secret <key>=<value>]...
-      The fake Escouade: starts the plugin, then sends what you type:
-        fact <name> [json]       a fact (events/fact), e.g. fact ticket.column
-        decide [json]            a permission request (permissions/decide)
-        call <method> [json]     a call, and its answer
-        notify <method> [json]   a notification
-        restart                  kills the plugin and starts it again
-        quit                     shutdown, then the end
-
-Options: --lang fr|en
-"
-    )
-}
-
 /// Runs the command of `args` (without the program's name); gives its exit code.
 pub fn main(args: Vec<String>) -> i32 {
-    let mut lang = crate::i18n::system();
-    if let Some(i) = args.iter().position(|a| a == "--lang") {
-        if let Some(l) = args.get(i + 1) {
-            lang = crate::i18n::of_locale(l);
-        }
-    }
-    let Some(command) = args.first().map(String::as_str) else {
-        eprint!("{}", usage(lang));
-        return 2;
-    };
-    if matches!(command, "-h" | "--help" | "help") {
-        print!("{}", usage(lang));
-        return 0;
-    }
-    let Some(folder) = args
-        .get(1)
-        .filter(|a| !a.starts_with("--"))
-        .map(PathBuf::from)
-    else {
-        eprint!("{}", usage(lang));
-        return 2;
-    };
+    cli::main(args, Some(&host))
+}
+
+/// `test` and `dev`.
+fn host(call: &Call) -> i32 {
     let rt = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -89,96 +32,57 @@ pub fn main(args: Vec<String>) -> i32 {
             return 2;
         }
     };
-    let flag = |name: &str| args.iter().any(|a| a == name);
-    match command {
-        "test" => {
-            let measure = args
-                .iter()
-                .position(|a| a == "--measure")
-                .map(|i| args.get(i + 1).and_then(|n| n.parse().ok()).unwrap_or(1000));
-            let options = Options {
-                lang,
-                builtin: flag("--builtin"),
-                measure: measure.unwrap_or(0),
-                ..Options::default()
-            };
-            let report = rt.block_on(run(&folder, &options));
-            if flag("--json") {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&report).unwrap_or_default()
-                );
-            } else {
-                print!("{}", report.render(lang));
-            }
-            i32::from(!report.passed())
-        }
-        "validate" => validate(&folder, lang, flag("--builtin")),
-        "dev" => {
-            let mut secrets = HashMap::new();
-            for (i, a) in args.iter().enumerate() {
-                if a == "--secret" {
-                    if let Some((k, v)) = args.get(i + 1).and_then(|kv| kv.split_once('=')) {
-                        secrets.insert(k.to_string(), v.to_string());
-                    }
-                }
-            }
-            rt.block_on(dev(&folder, lang, secrets, flag("--builtin")))
-        }
-        _ => {
-            eprint!("{}", usage(lang));
-            2
-        }
-    }
-}
-
-/// The manifest of `folder`, or what is wrong with it, said on the standard error.
-fn read_manifest(folder: &Path, lang: Lang, builtin: bool) -> Option<Manifest> {
-    let path = folder.join(manifest::FILE);
-    let text = match std::fs::read_to_string(&path) {
-        Ok(t) => t,
-        Err(e) => {
-            eprintln!("{}: {e}", path.display());
-            return None;
-        }
-    };
-    let read = manifest::read_in(&text, builtin, folder);
-    for f in &read.ignored {
-        eprintln!(
-            "{}",
-            tr_in!(lang, "champ ignoré : {f}", "ignored field: {f}")
-        );
-    }
-    match read.manifest {
-        Ok(m) => Some(m),
-        Err(problems) => {
-            for p in problems {
-                eprintln!("✗ {}", p.message(lang));
-            }
-            None
-        }
-    }
-}
-
-fn validate(folder: &Path, lang: Lang, builtin: bool) -> i32 {
-    let Some(m) = read_manifest(folder, lang, builtin) else {
-        return 1;
-    };
-    if let Some(why) = m.refusal(env!("CARGO_PKG_VERSION"), lang) {
-        eprintln!("✗ {why}");
-        return 1;
-    }
-    println!(
-        "{}",
-        tr_in!(
+    let (folder, lang, hand) = (call.folder, call.lang, call.hand);
+    if call.command == "test" {
+        let measure = call.args.iter().position(|a| a == "--measure").map(|i| {
+            call.args
+                .get(i + 1)
+                .and_then(|n| n.parse().ok())
+                .unwrap_or(1000)
+        });
+        let options = Options {
             lang,
-            "✓ {} {} : le manifeste est valide",
-            "✓ {} {}: the manifest holds",
-            m.id,
-            m.version
-        )
-    );
-    0
+            hand,
+            app_version: call.app_version.to_string(),
+            measure: measure.unwrap_or(0),
+            module: call.value("--wasm").map(PathBuf::from),
+            offline: call.flag("--offline"),
+            accounts: call
+                .args
+                .iter()
+                .enumerate()
+                .filter(|(_, a)| *a == "--account")
+                .filter_map(|(i, _)| call.args.get(i + 1))
+                .map(|url| crate::forge::host_of(url))
+                .collect(),
+            ..Options::default()
+        };
+        let report = rt.block_on(run(folder, &options));
+        if call.flag("--json") {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&report).unwrap_or_default()
+            );
+        } else {
+            print!("{}", report.render(lang));
+        }
+        return i32::from(!report.passed());
+    }
+    let mut secrets = HashMap::new();
+    for (i, a) in call.args.iter().enumerate() {
+        if a == "--secret" {
+            if let Some((k, v)) = call.args.get(i + 1).and_then(|kv| kv.split_once('=')) {
+                secrets.insert(k.to_string(), v.to_string());
+            }
+        }
+    }
+    let o = Options {
+        lang,
+        hand,
+        app_version: call.app_version.to_string(),
+        ..Options::default()
+    };
+    rt.block_on(dev(folder, &o, secrets))
 }
 
 /// `[json]` after a command's words: an object, or nothing.
@@ -232,46 +136,45 @@ fn show_seen(s: &Seen) -> String {
 async fn begin(
     folder: &Path,
     m: &Manifest,
-    program: &Path,
+    program: &Program,
+    o: &Options,
     secrets: &HashMap<String, String>,
 ) -> Option<Session> {
-    let s = match Session::start(
-        folder,
-        m,
-        program,
-        env!("CARGO_PKG_VERSION"),
-        secrets.clone(),
-        None,
-    ) {
+    let s = match program.start(folder, m, o, secrets.clone(), None) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("{}: {e}", program.display());
+            eprintln!("{}: {e}", program.path().display());
             return None;
         }
     };
-    println!(
-        "{} (pid {})",
-        program.display(),
-        s.pid.map(|p| p.to_string()).unwrap_or_default()
-    );
+    match s.pid {
+        Some(pid) => println!("{} (pid {pid})", program.path().display()),
+        None => println!("{} (WASM)", program.path().display()),
+    }
     let mut seen = s.watch();
     tokio::spawn(async move {
         while let Some(x) = seen.recv().await {
             println!("{}", show_seen(&x));
         }
     });
-    let hello = Session::hello(m, env!("CARGO_PKG_VERSION"), PROTOCOL);
+    let hello = Session::hello(m, &o.app_version, PROTOCOL);
     println!("→ initialize");
     let reply = s.call("initialize", &hello, timeout_of("initialize")).await;
     println!("{}", show(&reply));
     Some(s)
 }
 
-async fn dev(folder: &Path, lang: Lang, secrets: HashMap<String, String>, builtin: bool) -> i32 {
-    let Some(m) = read_manifest(folder, lang, builtin) else {
+async fn dev(folder: &Path, o: &Options, secrets: HashMap<String, String>) -> i32 {
+    let lang = o.lang;
+    let Some(m) = read_manifest(folder, lang, o.hand) else {
         return 1;
     };
-    let Some(run) = m.run.as_ref() else {
+    // As Escouade would: not a plugin of another version's range (`--escouade` plays another).
+    if let Some(why) = m.refusal(&o.app_version, lang) {
+        eprintln!("✗ {why}");
+        return 1;
+    }
+    if m.run.is_none() {
         eprintln!(
             "{}",
             tr_in!(
@@ -281,10 +184,18 @@ async fn dev(folder: &Path, lang: Lang, secrets: HashMap<String, String>, builti
             )
         );
         return 1;
+    }
+    let program = match program_of(folder, &m, o) {
+        Ok(p) => p,
+        Err((said, missing)) => {
+            eprintln!("✗ {said}");
+            if !missing.is_empty() {
+                eprintln!("  {missing}");
+            }
+            return 1;
+        }
     };
-    let escouade_dir = Options::default().escouade_dir;
-    let program = program_path(folder, run, &escouade_dir);
-    let Some(mut s) = begin(folder, &m, &program, &secrets).await else {
+    let Some(mut s) = begin(folder, &m, &program, o, &secrets).await else {
         return 1;
     };
     // What is typed, read off the runtime's threads.
@@ -311,7 +222,7 @@ async fn dev(folder: &Path, lang: Lang, secrets: HashMap<String, String>, builti
             "restart" => {
                 s.kill();
                 s.wait_end(Duration::from_secs(5)).await;
-                match begin(folder, &m, &program, &secrets).await {
+                match begin(folder, &m, &program, o, &secrets).await {
                     Some(n) => s = n,
                     None => return 1,
                 }

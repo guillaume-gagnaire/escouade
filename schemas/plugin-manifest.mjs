@@ -1,6 +1,6 @@
 // The checks of a plugin's manifest, escouade-plugin.json (docs/PLUGINS.md §3.1, ESC-173), as a library without
 // dependencies: what the store runs on a submitted plugin (STORE-3, docs/STORE.md §3.3), reading it, never running it.
-// The same rules as the app's reader (src-tauri/src/plugins/manifest.rs): both go through the cases of
+// The same rules as the app's reader (crates/escouade-plugin-cli/src/manifest.rs): both go through the cases of
 // tests/fixtures/plugins/manifests.json. The schema for the editors' completion is plugin-1.json, beside this file.
 //
 //   import { validate, message } from '../schemas/plugin-manifest.mjs';
@@ -22,7 +22,7 @@ export const ICON_MIN = 256;
 export const ICON_BYTES = 1024 * 1024;
 
 const SETTING_TYPES = ['string', 'number', 'boolean', 'select'];
-const POINTS_WITH_ID = ['accounts', 'ticketSources', 'forges', 'harnesses'];
+const POINTS_WITH_ID = ['accounts', 'ticketSources', 'forges', 'harnesses', 'workflowReaders', 'launchEnvironments'];
 const OPEN_POINTS = ['themes', 'webhooks', 'commands', 'menus', 'statusBar', 'badges', 'projectTemplates'];
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -71,7 +71,10 @@ const beyond = (v, max) => compare(numbers(v).slice(0, max.split('.').length), n
 
 /**
  * Checks a manifest's value, field by field. `options.builtin`: a plugin the app itself gives, which may take the ids
- * and the programs of Escouade's own (never true for a submitted plugin). `options.file`: the bytes of a file of the
+ * and the programs of Escouade's own (never true for a submitted plugin). `options.firstParty`: a plugin of Escouade's own
+ * hand that is not given by the app (`plugins/<id>/` of its repository, ESC-314), which may take the ids `dev.escouade.*`
+ * and nothing else of the app's; the store grants it to its repository alone, the app to a version signed by the store
+ * and to a folder in development. `options.file`: the bytes of a file of the
  * plugin's folder by its path (null when it is none), to read the icon's; without it, its file is not looked at.
  * @returns {{ ok: boolean, errors: { path: string, code: string, expected?: string }[], ignored: string[] }}
  */
@@ -90,6 +93,18 @@ export function writtenHost(url) {
   return host ? host.replace(/\.+$/, '').toLowerCase() : null;
 }
 
+/** The folders a plugin may name (docs/PLUGINS.md §8.4.6): a closed list the host resolves. */
+export const FILE_ROOTS = ['plugin', 'agent', 'agentRepo', 'agentHome', 'temp'];
+export const FILE_ACCESS = ['read', 'write'];
+
+/** Whether a line of `permissions.commands` holds: a program's name first, never a path, and a `*` only as its last word. */
+export function commandHolds(command) {
+  const words = command.split(/\s+/).filter(Boolean);
+  if (!words.length) return false;
+  const first = words[0];
+  return !/[/\\:*~]/.test(first) && !first.startsWith('.') && !words.slice(1, -1).includes('*');
+}
+
 /**
  * Whether `permissions.network` covers `host`, without regard to case: a host written alone covers itself; `*.exemple.dev`
  * covers its subdomains at any depth, not `exemple.dev` itself (as a TLS certificate's); nothing else covers anything.
@@ -106,6 +121,7 @@ export function hostCovered(host, network) {
 
 export function validate(manifest, options = {}) {
   const builtin = !!options.builtin;
+  const firstParty = builtin || !!options.firstParty;
   const errors = [];
   const ignored = [];
   const problem = (path, code, expected) => errors.push(expected ? { path, code, expected } : { path, code });
@@ -145,6 +161,31 @@ export function validate(manifest, options = {}) {
     if (s.startsWith(ESCOUADE_DIR)) return builtin ? undefined : problem(path, 'reserved');
     if (!isInnerPath(s)) problem(path, 'path');
   };
+  const files = (v) => {
+    const path = 'permissions.files';
+    if (!Array.isArray(v)) return problem(path, 'type', 'array');
+    const seen = new Set();
+    v.forEach((item, i) => {
+      const at = `${path}[${i}]`;
+      const o = object(item, at);
+      if (!o) return;
+      ignoreOthers(o, at, ['root', 'access']);
+      const pick = (key, among) => {
+        const p = join(at, key);
+        if (!(key in o)) return problem(p, 'required');
+        const s = string(o[key], p);
+        if (s === null) return undefined;
+        if (!among.includes(s)) return problem(p, 'enum', among.join(', '));
+        return s;
+      };
+      const root = pick('root', FILE_ROOTS);
+      const access = pick('access', FILE_ACCESS);
+      if (!root || !access) return;
+      if (root === 'plugin' && access === 'write') problem(join(at, 'access'), 'readOnly');
+      else if (seen.has(root)) problem(join(at, 'root'), 'duplicate');
+      else seen.add(root);
+    });
+  };
   const required = (o, key, path, then) => (key in o ? then(o[key], path) : problem(path, 'required'));
 
   const o = object(manifest, '');
@@ -162,6 +203,7 @@ export function validate(manifest, options = {}) {
     'run',
     'activation',
     'permissions',
+    'limits',
     'contributes',
     'store',
     'icon',
@@ -171,7 +213,7 @@ export function validate(manifest, options = {}) {
     const s = string(v, p);
     if (s === null) return;
     if (!isId(s)) problem(p, 'id');
-    else if (s.startsWith(RESERVED_PREFIX) && !builtin) problem(p, 'reserved');
+    else if (s.startsWith(RESERVED_PREFIX) && !firstParty) problem(p, 'reserved');
   });
   required(o, 'name', 'name', text);
   required(o, 'version', 'version', (v, p) => {
@@ -213,8 +255,21 @@ export function validate(manifest, options = {}) {
   if ('run' in o) {
     const r = object(o.run, 'run');
     if (r) {
-      ignoreOthers(r, 'run', ['command', 'args', 'windows', 'macos', 'linux']);
-      required(r, 'command', 'run.command', program);
+      ignoreOthers(r, 'run', ['command', 'js', 'wasm', 'args', 'windows', 'macos', 'linux']);
+      // A JS/TS bundle of the folder (ESC-320) or the Rust of a module (ESC-331), run by Escouade in WASM: one of the three.
+      const inWasm = (key, cargo) => {
+        const at = `run.${key}`;
+        const s = string(r[key], at);
+        if (s === null) return;
+        if (!isInnerPath(s)) problem(at, 'path');
+        else if (cargo && iconPath(s).split('/').pop() !== 'Cargo.toml') problem(at, 'cargo');
+        else if (options.file && !options.file(iconPath(s))) problem(at, 'file');
+      };
+      if ('wasm' in r && ('js' in r || 'command' in r)) problem('run.wasm', 'exclusive');
+      else if ('js' in r && 'command' in r) problem('run.js', 'exclusive');
+      else if ('js' in r) inWasm('js', false);
+      else if ('wasm' in r) inWasm('wasm', true);
+      else required(r, 'command', 'run.command', program);
       if ('args' in r) words(r.args, 'run.args');
       for (const sys of ['windows', 'macos', 'linux']) if (sys in r) program(r[sys], `run.${sys}`);
     }
@@ -224,10 +279,24 @@ export function validate(manifest, options = {}) {
   if ('permissions' in o) {
     const p = object(o.permissions, 'permissions');
     if (p) {
-      ignoreOthers(p, 'permissions', ['events', 'network', 'secrets', 'commands', 'decide']);
+      ignoreOthers(p, 'permissions', ['events', 'network', 'secrets', 'commands', 'files', 'decide']);
       for (const key of ['events', 'network', 'secrets', 'commands']) if (key in p) words(p[key], `permissions.${key}`);
+      if (Array.isArray(p.commands))
+        p.commands.forEach((c, i) => {
+          if (typeof c === 'string' && c.trim() && !commandHolds(c)) problem(`permissions.commands[${i}]`, 'command');
+        });
+      if ('files' in p) files(p.files);
       if (Array.isArray(p.network)) network = p.network.filter((w) => typeof w === 'string');
       if ('decide' in p && typeof p.decide !== 'boolean') problem('permissions.decide', 'type', 'boolean');
+    }
+  }
+  if ('limits' in o) {
+    const l = object(o.limits, 'limits');
+    if (l) {
+      const known = ['fetchSeconds', 'fetchBytes', 'fileBytes', 'memoryBytes', 'turnSeconds'];
+      ignoreOthers(l, 'limits', known);
+      for (const key of known)
+        if (key in l && !(Number.isSafeInteger(l[key]) && l[key] > 0)) problem(`limits.${key}`, 'type', 'positive integer');
     }
   }
   if ('contributes' in o) {
@@ -289,6 +358,25 @@ export function validate(manifest, options = {}) {
         if (point === 'accounts') {
           accounts = ids;
           continue;
+        }
+        // A workflow reader says which files of the project it is given.
+        if (point === 'workflowReaders') {
+          for (const [at, it] of list) {
+            const p = join(at, 'files');
+            if (!('files' in it)) {
+              problem(p, 'required');
+              continue;
+            }
+            if (!Array.isArray(it.files)) {
+              problem(p, 'type', 'array');
+              continue;
+            }
+            it.files.forEach((f, i) => {
+              const fp = `${p}[${i}]`;
+              const s = filled(f, fp);
+              if (s !== null && !isInnerPath(s)) problem(fp, 'path');
+            });
+          }
         }
         for (const [at, it] of list) {
           if (!('account' in it)) continue;
@@ -385,6 +473,11 @@ const WHAT = {
     png: () => "n'est pas un PNG (ni SVG, ni JPEG : un PNG carré de 256 px au moins).",
     heavy: () => 'pèse plus de 1 Mo.',
     network: () => "va vers un hôte que `permissions.network` ne déclare pas : l'utilisateur ne le verrait pas.",
+    exclusive: () =>
+      'ne va pas avec `run.command`, `run.js` ou `run.wasm` : un programme est une commande, un bundle JS/TS ou un module Rust, un seul des trois.',
+    cargo: () => 'doit nommer le `Cargo.toml` du plugin, jamais un binaire.',
+    command: () => "doit commencer par le nom d'un programme, jamais un chemin, et `*` n'y vient qu'en dernier mot.",
+    readOnly: () => 'ne peut pas être en écriture : le dossier du plugin ne change pas.',
     square: () => "n'est pas carrée (un PNG carré de 256 px au moins, 512 conseillé).",
     small: () => 'fait moins de 256 px de côté (512 conseillé).',
   },
@@ -407,6 +500,11 @@ const WHAT = {
     png: () => 'is no PNG (no SVG nor JPEG: a square PNG of 256 px at least).',
     heavy: () => 'weighs over 1 MB.',
     network: () => 'goes to a host `permissions.network` does not declare: the user would not see it.',
+    exclusive: () =>
+      'does not go with `run.command`, `run.js` or `run.wasm`: a program is a command, a JS/TS bundle or a Rust module, one of the three.',
+    cargo: () => "must name the plugin's `Cargo.toml`, never a binary.",
+    command: () => "must start with a program's name, never a path, and `*` comes only as its last word.",
+    readOnly: () => "cannot be written: the plugin's folder does not change.",
     square: () => 'is not square (a square PNG of 256 px at least, 512 advised).',
     small: () => 'is under 256 px a side (512 advised).',
   },

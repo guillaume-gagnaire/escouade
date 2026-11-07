@@ -1,20 +1,21 @@
 # La sécurité des plugins
 
-Un plugin du store passe par trois gardes : les dix contrôles du store à la soumission, la revue « Vérifié par Escouade » faite à la main, et les vérifications de l’app à chaque installation. Cette page dit ce que chacune tient, ce que la revue refuse, et ce que le sceau ne promet pas.
+Un plugin du store passe par trois gardes : les onze contrôles du store à la soumission, la revue « Vérifié par Escouade » faite à la main, et les vérifications de l’app à chaque installation. Cette page dit ce que chacune tient, ce que la revue refuse, et ce que le sceau ne promet pas.
 
 ## Ce que l’app vérifie
 
-À l’installation et à chaque mise à jour, Escouade télécharge `version.json`, l’archive et le programme de ton système, puis vérifie :
+À l’installation et à chaque mise à jour, Escouade télécharge `version.json`, l’archive et son module WASM, puis vérifie :
 
-- **les empreintes** : `version.json` contre le catalogue, l’archive, le programme et le manifeste contre `version.json` (SHA-256). Un octet changé, sur le store, en route ou dans un cache, arrête l’installation ;
+- **les empreintes** : `version.json` contre le catalogue, l’archive, le module et le manifeste contre `version.json` (SHA-256). Un octet changé, sur le store, en route ou dans un cache, arrête l’installation ;
 - **la signature**, pour une version vérifiée : `version.json` signé par minisign avec la clé d’Escouade, et le commentaire de la signature qui nomme cet identifiant et ce numéro. Les clés publiques sont dans l’app ; la clé secrète vit sur un poste, chiffrée, jamais sur le serveur du store, jamais dans la CI ni dans un dépôt. Le store ne peut donc pas fabriquer un sceau ;
-- **l’archive** lue en mémoire, sans lien symbolique ni chemin qui sorte du dossier du plugin.
+- **l’archive** lue en mémoire, sans lien symbolique ni chemin qui sorte du dossier du plugin ;
+- **le dossier** que `version.json` nomme pour un plugin rangé dans un sous-dossier de son dépôt : un chemin relatif simple, sans `..`, ni chemin absolu, ni antislash ; sinon rien n’est installé. Le store, lui, refuse à la soumission un dossier qui passe par un lien symbolique.
 
 Le sceau d’un plugin installé est revérifié sur ta machine, sans le store. Puis la fenêtre d’installation montre ses permissions en mots, avant que rien ne tourne ([installer un plugin](plugins/installer)).
 
 ## Ce que le sceau couvre
 
-« Vérifié par Escouade » vaut pour **une version** : son code au commit publié, son archive et ses binaires attestés, désignés par l’empreinte de son `version.json`. Une nouvelle version est « non vérifiée » jusqu’à sa propre revue, même si la précédente l’était : c’est dans une mise à jour qu’un plugin honnête peut changer de mains. **N’installer que des versions vérifiées**, dans la vue Plugins, refuse toute version sans sceau.
+« Vérifié par Escouade » vaut pour **une version** : son code au commit publié, son archive et son module, recompilé par la revue, désignés par l’empreinte de son `version.json`. Une nouvelle version est « non vérifiée » jusqu’à sa propre revue, même si la précédente l’était : c’est dans une mise à jour qu’un plugin honnête peut changer de mains. **N’installer que des versions vérifiées**, dans la vue Plugins, refuse toute version sans sceau.
 
 Le sceau dit qu’une personne a lu ce code au regard de ce qu’il déclare, et que le banc l’a fait tourner sans réseau. Il ne promet pas l’absence de bogue, ni la qualité du service tiers que le plugin joint.
 
@@ -24,7 +25,7 @@ La revue lit chaque version avec un script qui lui prépare des pistes, fichier 
 
 **Refusé d’office**, sans lire plus loin :
 
-- une archive ou un binaire dont l’empreinte n’est pas celle de `version.json` ;
+- une archive ou un module dont l’empreinte n’est pas celle de `version.json` ;
 - une version qui n’est plus celle que le store a figée.
 
 **Pas de sceau tant que ce n’est pas corrigé** :
@@ -37,7 +38,9 @@ La revue lit chaque version avec un script qui lui prépare des pistes, fichier 
 - du code illisible : minifié sans sa source, du texte caché en base64, des blobs binaires ;
 - des dépendances non épinglées, un script `postinstall`, une dépendance tirée d’un dépôt git ;
 - des consignes ajoutées aux agents qui les détournent de leur tâche (une injection de prompt) ;
-- un binaire sans attestation de provenance qui le lie au commit relu ;
+- un module que la recompilation ne redonne pas, à l’octet près ;
+- une dépendance Rust qu’on ne peut pas justifier : ce que `Cargo.lock` ajoute est du code qui tourne ; du code `unsafe`, un `extern` ou un `#[link]` sans raison ;
+- `agentHome`, ou une entrée en `*` de `permissions.commands`, sans une raison relue ;
 - une étiquette déplacée depuis la soumission, une entrée d’archive refusée (lien, `..`, chemin absolu) ;
 - un banc de conformité qui échoue, ou qui tente le réseau ou une écriture que le bac à sable refuse.
 

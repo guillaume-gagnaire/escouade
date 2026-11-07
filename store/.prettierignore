@@ -7,3 +7,5 @@ playwright-report
 package-lock.json
 server/db/migrations/meta
 *.md
+# moby's own text, kept as it is: tests/unit/deploy-profiles.test.ts compares it to moby's.
+deploy/seccomp-bubblewrap.json

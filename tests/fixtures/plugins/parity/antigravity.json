@@ -1,0 +1,2481 @@
+{
+  "01-simple-turn": [
+    {
+      "method": "initialize",
+      "result": {
+        "capabilities": {
+          "harnesses": ["agy"]
+        },
+        "protocolVersion": 1
+      }
+    },
+    {
+      "method": "agent/attach",
+      "result": {}
+    },
+    {
+      "method": "engine/launch",
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "session",
+            "session": "9f9031e6-987b-430c-a020-a22779883a82"
+          },
+          {
+            "models": null,
+            "op": "ready"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/sendMessage",
+      "result": "{\"items\":[{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"<instructions>/n<escouade>/nWhen you ask the user something with ask_question, end your turn right after it, without commenting on the answer you get: Escouade shows your questions to the user and sends the answers as the next message./n</escouade>/n</instructions>/n/nva/\"}}\",\"op\":\"write\"}]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "9f9031e6-987b-430c-a020-a22779883a82"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "9f9031e6-987b-430c-a020-a22779883a82"
+          },
+          {
+            "id": "acp-text-a-1",
+            "op": "delta",
+            "parent": null,
+            "text": "pong",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-1",
+            "op": "text",
+            "parent": null,
+            "text": "pong"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "error": null,
+            "interrupted": false,
+            "op": "turn",
+            "usage": {
+              "cache": 0,
+              "cost": 0.0,
+              "input": 6734,
+              "output": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/interrupt",
+      "result": {
+        "items": []
+      }
+    }
+  ],
+  "02-stream-input-two-turns": [
+    {
+      "method": "initialize",
+      "result": {
+        "capabilities": {
+          "harnesses": ["agy"]
+        },
+        "protocolVersion": 1
+      }
+    },
+    {
+      "method": "agent/attach",
+      "result": {}
+    },
+    {
+      "method": "engine/launch",
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "session",
+            "session": "fd832028-2fe4-4dec-bf5a-225159217672"
+          },
+          {
+            "models": null,
+            "op": "ready"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/sendMessage",
+      "result": "{\"items\":[{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"<instructions>/n<escouade>/nWhen you ask the user something with ask_question, end your turn right after it, without commenting on the answer you get: Escouade shows your questions to the user and sends the answers as the next message./n</escouade>/n</instructions>/n/nva/\"}}\",\"op\":\"write\"}]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "fd832028-2fe4-4dec-bf5a-225159217672"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "fd832028-2fe4-4dec-bf5a-225159217672"
+          },
+          {
+            "id": "acp-text-a-1",
+            "op": "delta",
+            "parent": null,
+            "text": "ok",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-1",
+            "op": "text",
+            "parent": null,
+            "text": "ok"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "error": null,
+            "interrupted": false,
+            "op": "turn",
+            "usage": {
+              "cache": 0,
+              "cost": 0.0,
+              "input": 6752,
+              "output": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "fd832028-2fe4-4dec-bf5a-225159217672"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-2",
+            "op": "delta",
+            "parent": null,
+            "text": "pamplemousse",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-2",
+            "op": "text",
+            "parent": null,
+            "text": "pamplemousse"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "error": null,
+            "interrupted": false,
+            "op": "turn",
+            "usage": {
+              "cache": 0,
+              "cost": 0.0,
+              "input": 6833,
+              "output": 4
+            }
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/interrupt",
+      "result": {
+        "items": []
+      }
+    }
+  ],
+  "03-permission-denied-print": [
+    {
+      "method": "initialize",
+      "result": {
+        "capabilities": {
+          "harnesses": ["agy"]
+        },
+        "protocolVersion": 1
+      }
+    },
+    {
+      "method": "agent/attach",
+      "result": {}
+    },
+    {
+      "method": "engine/launch",
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "session",
+            "session": "14dc9b9f-e4d1-4ac7-b333-d0d0f067b0d0"
+          },
+          {
+            "models": null,
+            "op": "ready"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/sendMessage",
+      "result": "{\"items\":[{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"<instructions>/n<escouade>/nWhen you ask the user something with ask_question, end your turn right after it, without commenting on the answer you get: Escouade shows your questions to the user and sends the answers as the next message./n</escouade>/n</instructions>/n/nva/\"}}\",\"op\":\"write\"}]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "14dc9b9f-e4d1-4ac7-b333-d0d0f067b0d0"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "14dc9b9f-e4d1-4ac7-b333-d0d0f067b0d0"
+          },
+          {
+            "id": "acp-text-a-1",
+            "op": "delta",
+            "parent": null,
+            "text": "pensée 1",
+            "thinking": true
+          },
+          {
+            "id": "acp-text-a-1",
+            "op": "thinking",
+            "parent": null,
+            "text": "pensée 1"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "agy-14dc9b9f-2",
+            "input": {
+              "command": "echo hi"
+            },
+            "name": "Bash",
+            "op": "tool",
+            "parent": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": "{\"items\":[{\"error\":true,\"id\":\"agy-14dc9b9f-2\",\"op\":\"toolDone\",\"output\":\"permission check failed for unsandboxed /\"echo hi/\": user denied permission to run command:/necho hi/nDo not attempt to circumvent this denial by rephrasing the command, using alternative tools/scripts (e.g. python, sh, curl), or accessing the same target resource. Proceed without performing this action.\",\"result\":{\"stderr\":\"permission check failed for unsandboxed /\"echo hi/\": user denied permission to run command:/necho hi/nDo not attempt to circumvent this denial by rephrasing the command, using alternative tools/scripts (e.g. python, sh, curl), or accessing the same target resource. Proceed without performing this action.\",\"stdout\":\"\"}}]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "call": "agy-14dc9b9f-2",
+            "canAlways": true,
+            "description": null,
+            "diff": null,
+            "input": null,
+            "op": "permission",
+            "parent": null,
+            "reason": null,
+            "request": "acp-a-2-agy-a-2",
+            "tool": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/answerPermission",
+      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/escouade-always.json\",\"text\":\"[/\"command(echo hi)/\"]\"},{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\",/n      /\"command(echo hi)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"launch\":{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\",\"--conversation\",\"14dc9b9f-e4d1-4ac7-b333-d0d0f067b0d0\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\",/n      /\"command(echo hi)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]},\"op\":\"relaunch\"},{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"The user allowed the command `echo hi`: do it again now, then go on./\"}}\",\"op\":\"write\"}]}"
+    },
+    {
+      "method": "agent/interrupt",
+      "result": {
+        "items": [
+          {
+            "op": "pause"
+          },
+          {
+            "error": null,
+            "interrupted": true,
+            "op": "turn",
+            "usage": {
+              "cache": 0,
+              "cost": 0.0,
+              "input": 6761,
+              "output": 35
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "04-write-denied-print": [
+    {
+      "method": "initialize",
+      "result": {
+        "capabilities": {
+          "harnesses": ["agy"]
+        },
+        "protocolVersion": 1
+      }
+    },
+    {
+      "method": "agent/attach",
+      "result": {}
+    },
+    {
+      "method": "engine/launch",
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "session",
+            "session": "aff64732-9ebb-46d8-a582-ba4e2274793a"
+          },
+          {
+            "models": null,
+            "op": "ready"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/sendMessage",
+      "result": "{\"items\":[{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"<instructions>/n<escouade>/nWhen you ask the user something with ask_question, end your turn right after it, without commenting on the answer you get: Escouade shows your questions to the user and sends the answers as the next message./n</escouade>/n</instructions>/n/nva/\"}}\",\"op\":\"write\"}]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "aff64732-9ebb-46d8-a582-ba4e2274793a"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "aff64732-9ebb-46d8-a582-ba4e2274793a"
+          },
+          {
+            "id": "acp-text-a-1",
+            "op": "delta",
+            "parent": null,
+            "text": "pensée 1",
+            "thinking": true
+          },
+          {
+            "id": "acp-text-a-1",
+            "op": "thinking",
+            "parent": null,
+            "text": "pensée 1"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "agy-aff64732-2",
+            "input": {
+              "file_path": "C:/tmp/esc269/work/a.txt"
+            },
+            "name": "Read",
+            "op": "tool",
+            "parent": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "error": false,
+            "id": "agy-aff64732-2",
+            "op": "toolDone",
+            "output": "1 lines, 6 bytes",
+            "result": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-2",
+            "op": "delta",
+            "parent": null,
+            "text": "pensée 3",
+            "thinking": true
+          },
+          {
+            "id": "acp-text-a-2",
+            "op": "thinking",
+            "parent": null,
+            "text": "pensée 3"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "agy-aff64732-4",
+            "input": {
+              "file_path": "C:/tmp/esc269/work/b.txt"
+            },
+            "name": "Edit",
+            "op": "tool",
+            "parent": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "error": false,
+            "id": "agy-aff64732-4",
+            "op": "toolDone",
+            "output": "",
+            "result": {
+              "filePath": "C:/tmp/esc269/work/b.txt",
+              "structuredPatch": []
+            }
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "error": null,
+            "interrupted": false,
+            "op": "turn",
+            "usage": {
+              "cache": 0,
+              "cost": 0.0,
+              "input": 13869,
+              "output": 547
+            }
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/interrupt",
+      "result": {
+        "items": []
+      }
+    }
+  ],
+  "05-tools-allowed-by-rules": [
+    {
+      "method": "initialize",
+      "result": {
+        "capabilities": {
+          "harnesses": ["agy"]
+        },
+        "protocolVersion": 1
+      }
+    },
+    {
+      "method": "agent/attach",
+      "result": {}
+    },
+    {
+      "method": "engine/launch",
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "session",
+            "session": "8851eea7-291e-43fe-8bb4-aa5337407bc4"
+          },
+          {
+            "models": null,
+            "op": "ready"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/sendMessage",
+      "result": "{\"items\":[{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"<instructions>/n<escouade>/nWhen you ask the user something with ask_question, end your turn right after it, without commenting on the answer you get: Escouade shows your questions to the user and sends the answers as the next message./n</escouade>/n</instructions>/n/nva/\"}}\",\"op\":\"write\"}]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "8851eea7-291e-43fe-8bb4-aa5337407bc4"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "8851eea7-291e-43fe-8bb4-aa5337407bc4"
+          },
+          {
+            "id": "acp-text-a-1",
+            "op": "delta",
+            "parent": null,
+            "text": "pensée 1",
+            "thinking": true
+          },
+          {
+            "id": "acp-text-a-1",
+            "op": "thinking",
+            "parent": null,
+            "text": "pensée 1"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "agy-8851eea7-2",
+            "input": {
+              "file_path": "C:/tmp/esc269/work/b.txt"
+            },
+            "name": "Edit",
+            "op": "tool",
+            "parent": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "error": true,
+            "id": "agy-8851eea7-2",
+            "op": "toolDone",
+            "output": "denied permission",
+            "result": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "agy-8851eea7-3",
+            "input": {
+              "command": "echo hi"
+            },
+            "name": "Bash",
+            "op": "tool",
+            "parent": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "error": false,
+            "id": "agy-8851eea7-3",
+            "op": "toolDone",
+            "output": "hi",
+            "result": {
+              "stderr": "",
+              "stdout": "hi"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-2",
+            "op": "delta",
+            "parent": null,
+            "text": "terminé.",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-2",
+            "op": "text",
+            "parent": null,
+            "text": "terminé."
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "call": "agy-8851eea7-2",
+            "canAlways": true,
+            "description": "Hors du dossier de l’agent",
+            "diff": null,
+            "input": null,
+            "op": "permission",
+            "parent": null,
+            "reason": null,
+            "request": "acp-a-3-agy-a-2",
+            "tool": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/answerPermission",
+      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/escouade-always.json\",\"text\":\"[/\"write_file(C://tmp//esc269//work//b.txt)/\"]\"},{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\",/n      /\"write_file(C://tmp//esc269//work//b.txt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"launch\":{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\",\"--conversation\",\"8851eea7-291e-43fe-8bb4-aa5337407bc4\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\",/n      /\"write_file(C://tmp//esc269//work//b.txt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]},\"op\":\"relaunch\"},{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"The user allowed writing C://tmp//esc269//work//b.txt: do it again now, then go on./\"}}\",\"op\":\"write\"}]}"
+    },
+    {
+      "method": "agent/interrupt",
+      "result": {
+        "items": [
+          {
+            "op": "pause"
+          },
+          {
+            "error": null,
+            "interrupted": true,
+            "op": "turn",
+            "usage": {
+              "cache": 0,
+              "cost": 0.0,
+              "input": 13895,
+              "output": 1180
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "06-hook-allow-not-enough": [
+    {
+      "method": "initialize",
+      "result": {
+        "capabilities": {
+          "harnesses": ["agy"]
+        },
+        "protocolVersion": 1
+      }
+    },
+    {
+      "method": "agent/attach",
+      "result": {}
+    },
+    {
+      "method": "engine/launch",
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "session",
+            "session": "19cb8157-4136-4723-b980-b8f0ac719d91"
+          },
+          {
+            "models": null,
+            "op": "ready"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/sendMessage",
+      "result": "{\"items\":[{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"<instructions>/n<escouade>/nWhen you ask the user something with ask_question, end your turn right after it, without commenting on the answer you get: Escouade shows your questions to the user and sends the answers as the next message./n</escouade>/n</instructions>/n/nva/\"}}\",\"op\":\"write\"}]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "19cb8157-4136-4723-b980-b8f0ac719d91"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "19cb8157-4136-4723-b980-b8f0ac719d91"
+          },
+          {
+            "id": "acp-text-a-1",
+            "op": "delta",
+            "parent": null,
+            "text": "pensée 1",
+            "thinking": true
+          },
+          {
+            "id": "acp-text-a-1",
+            "op": "thinking",
+            "parent": null,
+            "text": "pensée 1"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "agy-19cb8157-2",
+            "input": {
+              "command": "echo hi2"
+            },
+            "name": "Bash",
+            "op": "tool",
+            "parent": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": "{\"items\":[{\"error\":true,\"id\":\"agy-19cb8157-2\",\"op\":\"toolDone\",\"output\":\"permission check failed for unsandboxed /\"echo hi2/\": user denied permission to run command:/necho hi2/nDo not attempt to circumvent this denial by rephrasing the command, using alternative tools/scripts (e.g. python, sh, curl), or accessing the same target resource. Proceed without performing this action.\",\"result\":{\"stderr\":\"permission check failed for unsandboxed /\"echo hi2/\": user denied permission to run command:/necho hi2/nDo not attempt to circumvent this denial by rephrasing the command, using alternative tools/scripts (e.g. python, sh, curl), or accessing the same target resource. Proceed without performing this action.\",\"stdout\":\"\"}}]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "call": "agy-19cb8157-2",
+            "canAlways": true,
+            "description": null,
+            "diff": null,
+            "input": null,
+            "op": "permission",
+            "parent": null,
+            "reason": null,
+            "request": "acp-a-2-agy-a-2",
+            "tool": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/answerPermission",
+      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/escouade-always.json\",\"text\":\"[/\"command(echo hi2)/\"]\"},{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\",/n      /\"command(echo hi2)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"launch\":{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\",\"--conversation\",\"19cb8157-4136-4723-b980-b8f0ac719d91\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\",/n      /\"command(echo hi2)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]},\"op\":\"relaunch\"},{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"The user allowed the command `echo hi2`: do it again now, then go on./\"}}\",\"op\":\"write\"}]}"
+    },
+    {
+      "method": "agent/interrupt",
+      "result": {
+        "items": [
+          {
+            "op": "pause"
+          },
+          {
+            "error": null,
+            "interrupted": true,
+            "op": "turn",
+            "usage": {
+              "cache": 0,
+              "cost": 0.0,
+              "input": 6762,
+              "output": 38
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "07-mcp-denied-print": [
+    {
+      "method": "initialize",
+      "result": {
+        "capabilities": {
+          "harnesses": ["agy"]
+        },
+        "protocolVersion": 1
+      }
+    },
+    {
+      "method": "agent/attach",
+      "result": {}
+    },
+    {
+      "method": "engine/launch",
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "session",
+            "session": "5fc995ba-af39-452b-acda-bf955f6c1508"
+          },
+          {
+            "models": null,
+            "op": "ready"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/sendMessage",
+      "result": "{\"items\":[{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"<instructions>/n<escouade>/nWhen you ask the user something with ask_question, end your turn right after it, without commenting on the answer you get: Escouade shows your questions to the user and sends the answers as the next message./n</escouade>/n</instructions>/n/nva/\"}}\",\"op\":\"write\"}]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "5fc995ba-af39-452b-acda-bf955f6c1508"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "5fc995ba-af39-452b-acda-bf955f6c1508"
+          },
+          {
+            "id": "acp-text-a-1",
+            "op": "delta",
+            "parent": null,
+            "text": "pensée 1",
+            "thinking": true
+          },
+          {
+            "id": "acp-text-a-1",
+            "op": "thinking",
+            "parent": null,
+            "text": "pensée 1"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "agy-5fc995ba-2",
+            "input": {
+              "file_path": "<home>/.gemini/antigravity-cli/mcp/esc/esc_ping.json"
+            },
+            "name": "Read",
+            "op": "tool",
+            "parent": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "error": false,
+            "id": "agy-5fc995ba-2",
+            "op": "toolDone",
+            "output": "1 lines, 120 bytes",
+            "result": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-2",
+            "op": "delta",
+            "parent": null,
+            "text": "pensée 3",
+            "thinking": true
+          },
+          {
+            "id": "acp-text-a-2",
+            "op": "thinking",
+            "parent": null,
+            "text": "pensée 3"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "agy-5fc995ba-4",
+            "input": {},
+            "name": "mcp__esc__esc_ping",
+            "op": "tool",
+            "parent": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "error": false,
+            "id": "agy-5fc995ba-4",
+            "op": "toolDone",
+            "output": "",
+            "result": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "error": null,
+            "interrupted": false,
+            "op": "turn",
+            "usage": {
+              "cache": 0,
+              "cost": 0.0,
+              "input": 14553,
+              "output": 78
+            }
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/interrupt",
+      "result": {
+        "items": []
+      }
+    }
+  ],
+  "08-mcp-allowed-project-config": [
+    {
+      "method": "initialize",
+      "result": {
+        "capabilities": {
+          "harnesses": ["agy"]
+        },
+        "protocolVersion": 1
+      }
+    },
+    {
+      "method": "agent/attach",
+      "result": {}
+    },
+    {
+      "method": "engine/launch",
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "session",
+            "session": "0ec1e99d-dd76-4621-95a2-65fe7618e597"
+          },
+          {
+            "models": null,
+            "op": "ready"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/sendMessage",
+      "result": "{\"items\":[{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"<instructions>/n<escouade>/nWhen you ask the user something with ask_question, end your turn right after it, without commenting on the answer you get: Escouade shows your questions to the user and sends the answers as the next message./n</escouade>/n</instructions>/n/nva/\"}}\",\"op\":\"write\"}]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "0ec1e99d-dd76-4621-95a2-65fe7618e597"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "0ec1e99d-dd76-4621-95a2-65fe7618e597"
+          },
+          {
+            "id": "acp-text-a-1",
+            "op": "delta",
+            "parent": null,
+            "text": "pensée 1",
+            "thinking": true
+          },
+          {
+            "id": "acp-text-a-1",
+            "op": "thinking",
+            "parent": null,
+            "text": "pensée 1"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "agy-0ec1e99d-2",
+            "input": {
+              "file_path": "<home>/.gemini/antigravity-cli/mcp/proj/esc_ping.json"
+            },
+            "name": "Read",
+            "op": "tool",
+            "parent": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "error": false,
+            "id": "agy-0ec1e99d-2",
+            "op": "toolDone",
+            "output": "1 lines, 120 bytes",
+            "result": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-2",
+            "op": "delta",
+            "parent": null,
+            "text": "pensée 3",
+            "thinking": true
+          },
+          {
+            "id": "acp-text-a-2",
+            "op": "thinking",
+            "parent": null,
+            "text": "pensée 3"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "agy-0ec1e99d-4",
+            "input": {},
+            "name": "mcp__proj__esc_ping",
+            "op": "tool",
+            "parent": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "error": false,
+            "id": "agy-0ec1e99d-4",
+            "op": "toolDone",
+            "output": "pong-from-mcp",
+            "result": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-3",
+            "op": "delta",
+            "parent": null,
+            "text": "La réponse",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-3",
+            "op": "delta",
+            "parent": null,
+            "text": " renvoyée par l'outil MCP `esc_ping` du serveur `proj` est :/n/n> pong-from-mcp",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-3",
+            "op": "text",
+            "parent": null,
+            "text": "La réponse renvoyée par l'outil MCP `esc_ping` du serveur `proj` est :/n/n> pong-from-mcp"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "error": null,
+            "interrupted": false,
+            "op": "turn",
+            "usage": {
+              "cache": 0,
+              "cost": 0.0,
+              "input": 22077,
+              "output": 108
+            }
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/interrupt",
+      "result": {
+        "items": []
+      }
+    }
+  ],
+  "09-ask-question-skipped-print": [
+    {
+      "method": "initialize",
+      "result": {
+        "capabilities": {
+          "harnesses": ["agy"]
+        },
+        "protocolVersion": 1
+      }
+    },
+    {
+      "method": "agent/attach",
+      "result": {}
+    },
+    {
+      "method": "engine/launch",
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "session",
+            "session": "d8cbd916-2b08-4c20-85ed-fd0b0f3748a6"
+          },
+          {
+            "models": null,
+            "op": "ready"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/sendMessage",
+      "result": "{\"items\":[{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"<instructions>/n<escouade>/nWhen you ask the user something with ask_question, end your turn right after it, without commenting on the answer you get: Escouade shows your questions to the user and sends the answers as the next message./n</escouade>/n</instructions>/n/nva/\"}}\",\"op\":\"write\"}]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "d8cbd916-2b08-4c20-85ed-fd0b0f3748a6"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "d8cbd916-2b08-4c20-85ed-fd0b0f3748a6"
+          },
+          {
+            "id": "acp-text-a-1",
+            "op": "delta",
+            "parent": null,
+            "text": "pensée 1",
+            "thinking": true
+          },
+          {
+            "id": "acp-text-a-1",
+            "op": "thinking",
+            "parent": null,
+            "text": "pensée 1"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": []
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-2",
+            "op": "delta",
+            "parent": null,
+            "text": "Vous avez choisi de passer la question (ou n'ave",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-2",
+            "op": "delta",
+            "parent": null,
+            "text": "z pas sélectionné de r",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-2",
+            "op": "delta",
+            "parent": null,
+            "text": "éponse).",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-2",
+            "op": "text",
+            "parent": null,
+            "text": "Vous avez choisi de passer la question (ou n'avez pas sélectionné de réponse)."
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "error": null,
+            "interrupted": false,
+            "op": "turn",
+            "usage": {
+              "cache": 0,
+              "cost": 0.0,
+              "input": 14793,
+              "output": 623
+            }
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/interrupt",
+      "result": {
+        "items": []
+      }
+    }
+  ],
+  "10-accept-edits-write": [
+    {
+      "method": "initialize",
+      "result": {
+        "capabilities": {
+          "harnesses": ["agy"]
+        },
+        "protocolVersion": 1
+      }
+    },
+    {
+      "method": "agent/attach",
+      "result": {}
+    },
+    {
+      "method": "engine/launch",
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "session",
+            "session": "5c0e9a48-35ad-4a9a-9187-7df6d4733141"
+          },
+          {
+            "models": null,
+            "op": "ready"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/sendMessage",
+      "result": "{\"items\":[{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"<instructions>/n<escouade>/nWhen you ask the user something with ask_question, end your turn right after it, without commenting on the answer you get: Escouade shows your questions to the user and sends the answers as the next message./n</escouade>/n</instructions>/n/nva/\"}}\",\"op\":\"write\"}]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "5c0e9a48-35ad-4a9a-9187-7df6d4733141"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "5c0e9a48-35ad-4a9a-9187-7df6d4733141"
+          },
+          {
+            "id": "acp-text-a-1",
+            "op": "delta",
+            "parent": null,
+            "text": "pensée 1",
+            "thinking": true
+          },
+          {
+            "id": "acp-text-a-1",
+            "op": "thinking",
+            "parent": null,
+            "text": "pensée 1"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "agy-5c0e9a48-2",
+            "input": {
+              "file_path": "C:/tmp/esc269/work/c.txt"
+            },
+            "name": "Edit",
+            "op": "tool",
+            "parent": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "error": false,
+            "id": "agy-5c0e9a48-2",
+            "op": "toolDone",
+            "output": "",
+            "result": {
+              "filePath": "C:/tmp/esc269/work/c.txt",
+              "structuredPatch": []
+            }
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-2",
+            "op": "delta",
+            "parent": null,
+            "text": "fini/n",
+            "thinking": false
+          },
+          {
+            "id": "acp-text-a-2",
+            "op": "text",
+            "parent": null,
+            "text": "fini/n"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "error": null,
+            "interrupted": false,
+            "op": "turn",
+            "usage": {
+              "cache": 0,
+              "cost": 0.0,
+              "input": 14511,
+              "output": 36
+            }
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/interrupt",
+      "result": {
+        "items": []
+      }
+    }
+  ],
+  "11-plan-mode-artifact": [
+    {
+      "method": "initialize",
+      "result": {
+        "capabilities": {
+          "harnesses": ["agy"]
+        },
+        "protocolVersion": 1
+      }
+    },
+    {
+      "method": "agent/attach",
+      "result": {}
+    },
+    {
+      "method": "engine/launch",
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\",\"--mode\",\"plan\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "session",
+            "session": "fb7ae382-cc7b-4e20-96f2-042fc23ad3db"
+          },
+          {
+            "models": null,
+            "op": "ready"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/sendMessage",
+      "result": "{\"items\":[{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"<instructions>/n<escouade>/nWhen you ask the user something with ask_question, end your turn right after it, without commenting on the answer you get: Escouade shows your questions to the user and sends the answers as the next message./n</escouade>/n</instructions>/n/nva/\"}}\",\"op\":\"write\"}]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "fb7ae382-cc7b-4e20-96f2-042fc23ad3db"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "fb7ae382-cc7b-4e20-96f2-042fc23ad3db"
+          },
+          {
+            "id": "acp-text-a-1",
+            "op": "delta",
+            "parent": null,
+            "text": "pensée 1",
+            "thinking": true
+          },
+          {
+            "id": "acp-text-a-1",
+            "op": "thinking",
+            "parent": null,
+            "text": "pensée 1"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "agy-fb7ae382-2",
+            "input": {
+              "file_path": "<home>/.gemini/antigravity-cli/brain/fb7ae382-cc7b-4e20-96f2-042fc23ad3db/plan_creation_c_txt.md"
+            },
+            "name": "Edit",
+            "op": "tool",
+            "parent": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "error": false,
+            "id": "agy-fb7ae382-2",
+            "op": "toolDone",
+            "output": "",
+            "result": {
+              "filePath": "<home>/.gemini/antigravity-cli/brain/fb7ae382-cc7b-4e20-96f2-042fc23ad3db/plan_creation_c_txt.md",
+              "structuredPatch": []
+            }
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-2",
+            "op": "delta",
+            "parent": null,
+            "text": "J'",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-2",
+            "op": "delta",
+            "parent": null,
+            "text": "ai rédigé le plan d'implémentation dans l'art",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-2",
+            "op": "delta",
+            "parent": null,
+            "text": "efact [plan_creation_",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-2",
+            "op": "delta",
+            "parent": null,
+            "text": "c_txt.md](file:///C:/tmp/esc269/home1/.gemini/an",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-2",
+            "op": "delta",
+            "parent": null,
+            "text": "t",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-2",
+            "op": "delta",
+            "parent": null,
+            "text": "igravity-cli/brain/fb7ae382-cc7b-4e20-9",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-2",
+            "op": "delta",
+            "parent": null,
+            "text": "6f2-042fc23ad3db/plan_creation_c_txt.md)./n/nVeuillez le valider ou me donner vos retours p",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-2",
+            "op": "delta",
+            "parent": null,
+            "text": "our que je procède à la création du fichier./n",
+            "thinking": false
+          },
+          {
+            "id": "acp-text-a-2",
+            "op": "text",
+            "parent": null,
+            "text": "J'ai rédigé le plan d'implémentation dans l'artefact [plan_creation_c_txt.md](file:///C:/tmp/esc269/home1/.gemini/antigravity-cli/brain/fb7ae382-cc7b-4e20-96f2-042fc23ad3db/plan_creation_c_txt.md)./n/nVeuillez le valider ou me donner vos retours pour que je procède à la création du fichier./n"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "call": "acp-a-3-agy-a-plan-1",
+            "canAlways": true,
+            "description": null,
+            "diff": null,
+            "input": {
+              "plan": "# Le plan"
+            },
+            "op": "permission",
+            "parent": null,
+            "reason": null,
+            "request": "acp-a-3-agy-a-plan-1",
+            "tool": "ExitPlanMode"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/answerPermission",
+      "result": "{\"items\":[{\"mode\":\"acceptEdits\",\"op\":\"mode\"},{\"launch\":{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\",\"--mode\",\"accept-edits\",\"--conversation\",\"fb7ae382-cc7b-4e20-96f2-042fc23ad3db\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"command(git add)/\",/n      /\"command(git commit)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]},\"op\":\"relaunch\"},{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"The plan is approved: carry it out now./\"}}\",\"op\":\"write\"}]}"
+    },
+    {
+      "method": "agent/interrupt",
+      "result": {
+        "items": [
+          {
+            "op": "pause"
+          },
+          {
+            "error": null,
+            "interrupted": true,
+            "op": "turn",
+            "usage": {
+              "cache": 0,
+              "cost": 0.0,
+              "input": 16402,
+              "output": 448
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "12-subagent-tasks": [
+    {
+      "method": "initialize",
+      "result": {
+        "capabilities": {
+          "harnesses": ["agy"]
+        },
+        "protocolVersion": 1
+      }
+    },
+    {
+      "method": "agent/attach",
+      "result": {}
+    },
+    {
+      "method": "engine/launch",
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "session",
+            "session": "16518e72-394f-4f97-a38e-40a61121438a"
+          },
+          {
+            "models": null,
+            "op": "ready"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/sendMessage",
+      "result": "{\"items\":[{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"<instructions>/n<escouade>/nWhen you ask the user something with ask_question, end your turn right after it, without commenting on the answer you get: Escouade shows your questions to the user and sends the answers as the next message./n</escouade>/n</instructions>/n/nva/\"}}\",\"op\":\"write\"}]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "16518e72-394f-4f97-a38e-40a61121438a"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "16518e72-394f-4f97-a38e-40a61121438a"
+          },
+          {
+            "id": "acp-text-a-1",
+            "op": "delta",
+            "parent": null,
+            "text": "pensée 1",
+            "thinking": true
+          },
+          {
+            "id": "acp-text-a-1",
+            "op": "thinking",
+            "parent": null,
+            "text": "pensée 1"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "agy-16518e72-2",
+            "input": {
+              "Action": "list"
+            },
+            "name": "manage_task",
+            "op": "tool",
+            "parent": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "error": false,
+            "id": "agy-16518e72-2",
+            "op": "toolDone",
+            "output": "No background tasks are currently running.",
+            "result": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-2",
+            "op": "delta",
+            "parent": null,
+            "text": "pensée 3",
+            "thinking": true
+          },
+          {
+            "id": "acp-text-a-2",
+            "op": "thinking",
+            "parent": null,
+            "text": "pensée 3"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "agy-16518e72-4",
+            "input": {
+              "description": "Greeting Assistant",
+              "subagent_type": "self"
+            },
+            "name": "Task",
+            "op": "tool",
+            "parent": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "error": false,
+            "id": "agy-16518e72-4",
+            "op": "toolDone",
+            "output": "Réponds simplement 'bonjour'.",
+            "result": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-3",
+            "op": "delta",
+            "parent": null,
+            "text": "pensée 5",
+            "thinking": true
+          },
+          {
+            "id": "acp-text-a-3",
+            "op": "thinking",
+            "parent": null,
+            "text": "pensée 5"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "agy-16518e72-6",
+            "input": {
+              "Action": "list"
+            },
+            "name": "manage_subagents",
+            "op": "tool",
+            "parent": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": "{\"items\":[{\"error\":false,\"id\":\"agy-16518e72-6\",\"op\":\"toolDone\",\"output\":\"You have 1 active subagent(s):/n[{/\"role/\":/\"Greeting Assistant/\",/\"type/\":/\"self/\",/\"conversationId/\":/\"fa07999e-9c1d-49e5-ac9e-9010c3f5e388/\",/\"transcript/\":/\"file:///C:/tmp/esc269/home1/.gemini/antigravity-cli/brain/fa07999e-9c1d-49e5-ac9e-9010c3f5e388/.system_generated/logs/transcript.jsonl/\",/\"state/\":/\"running/\",/\"lastStepTime/\":/\"2026-10-28T18:28:59Z/\"}]\",\"result\":null}]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-4",
+            "op": "delta",
+            "parent": null,
+            "text": "Le sous-agent a été lancé pour répondre « bonjour ». En attente de son retour",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-4",
+            "op": "delta",
+            "parent": null,
+            "text": ".",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-4",
+            "op": "text",
+            "parent": null,
+            "text": "Le sous-agent a été lancé pour répondre « bonjour ». En attente de son retour."
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": []
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-5",
+            "op": "delta",
+            "parent": null,
+            "text": "Le sous-agent a répon",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-5",
+            "op": "delta",
+            "parent": null,
+            "text": "du : « bonjour »./n/nNote : L'outil `manage_task",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-5",
+            "op": "delta",
+            "parent": null,
+            "text": "` permet uni",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-5",
+            "op": "delta",
+            "parent": null,
+            "text": "quement de lister, inspe",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-5",
+            "op": "delta",
+            "parent": null,
+            "text": "cter ou",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-5",
+            "op": "delta",
+            "parent": null,
+            "text": " gérer l'exécution des processus en arrière-plan (`list`,",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-5",
+            "op": "delta",
+            "parent": null,
+            "text": " `status`, `",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-5",
+            "op": "delta",
+            "parent": null,
+            "text": "kill`, `send_input`) et non de gérer une todo list arbitrai",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-5",
+            "op": "delta",
+            "parent": null,
+            "text": "re. La vérification des tâches a été effectuée et le sous-agent a bien complé",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-5",
+            "op": "delta",
+            "parent": null,
+            "text": "té sa demande./n/nfini.",
+            "thinking": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "acp-text-a-5",
+            "op": "text",
+            "parent": null,
+            "text": "Le sous-agent a répondu : « bonjour »./n/nNote : L'outil `manage_task` permet uniquement de lister, inspecter ou gérer l'exécution des processus en arrière-plan (`list`, `status`, `kill`, `send_input`) et non de gérer une todo list arbitraire. La vérification des tâches a été effectuée et le sous-agent a bien complété sa demande./n/nfini."
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "error": null,
+            "interrupted": false,
+            "op": "turn",
+            "usage": {
+              "cache": 0,
+              "cost": 0.0,
+              "input": 41193,
+              "output": 2024
+            }
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/interrupt",
+      "result": {
+        "items": []
+      }
+    }
+  ],
+  "13-rule-hot-reload-two-turns": [
+    {
+      "method": "initialize",
+      "result": {
+        "capabilities": {
+          "harnesses": ["agy"]
+        },
+        "protocolVersion": 1
+      }
+    },
+    {
+      "method": "agent/attach",
+      "result": {}
+    },
+    {
+      "method": "engine/launch",
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "session",
+            "session": "01f902d3-93de-4e28-aefb-c37184b99f66"
+          },
+          {
+            "models": null,
+            "op": "ready"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/sendMessage",
+      "result": "{\"items\":[{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"<instructions>/n<escouade>/nWhen you ask the user something with ask_question, end your turn right after it, without commenting on the answer you get: Escouade shows your questions to the user and sends the answers as the next message./n</escouade>/n</instructions>/n/nva/\"}}\",\"op\":\"write\"}]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "01f902d3-93de-4e28-aefb-c37184b99f66"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "op": "start",
+            "session": "01f902d3-93de-4e28-aefb-c37184b99f66"
+          },
+          {
+            "id": "acp-text-a-1",
+            "op": "delta",
+            "parent": null,
+            "text": "pensée 1",
+            "thinking": true
+          },
+          {
+            "id": "acp-text-a-1",
+            "op": "thinking",
+            "parent": null,
+            "text": "pensée 1"
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "id": "agy-01f902d3-2",
+            "input": {
+              "command": "echo hi6"
+            },
+            "name": "Bash",
+            "op": "tool",
+            "parent": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": "{\"items\":[{\"error\":true,\"id\":\"agy-01f902d3-2\",\"op\":\"toolDone\",\"output\":\"permission check failed for unsandboxed /\"echo hi6/\": user denied permission to run command:/necho hi6/nDo not attempt to circumvent this denial by rephrasing the command, using alternative tools/scripts (e.g. python, sh, curl), or accessing the same target resource. Proceed without performing this action.\",\"result\":{\"stderr\":\"permission check failed for unsandboxed /\"echo hi6/\": user denied permission to run command:/necho hi6/nDo not attempt to circumvent this denial by rephrasing the command, using alternative tools/scripts (e.g. python, sh, curl), or accessing the same target resource. Proceed without performing this action.\",\"stdout\":\"\"}}]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": [
+          {
+            "call": "agy-01f902d3-2",
+            "canAlways": true,
+            "description": null,
+            "diff": null,
+            "input": null,
+            "op": "permission",
+            "parent": null,
+            "reason": null,
+            "request": "acp-a-2-agy-a-2",
+            "tool": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "agent/answerPermission",
+      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/escouade-always.json\",\"text\":\"[/\"command(echo hi6)/\"]\"},{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\",/n      /\"command(echo hi6)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"launch\":{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\",\"--conversation\",\"01f902d3-93de-4e28-aefb-c37184b99f66\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\",/n      /\"command(echo hi6)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]},\"op\":\"relaunch\"},{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"The user allowed the command `echo hi6`: do it again now, then go on./\"}}\",\"op\":\"write\"}]}"
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": []
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": []
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": []
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": []
+      }
+    },
+    {
+      "method": "agent/frames",
+      "result": {
+        "items": []
+      }
+    },
+    {
+      "method": "agent/interrupt",
+      "result": {
+        "items": [
+          {
+            "op": "pause"
+          },
+          {
+            "error": null,
+            "interrupted": true,
+            "op": "turn",
+            "usage": {
+              "cache": 0,
+              "cost": 0.0,
+              "input": 7190,
+              "output": 37
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

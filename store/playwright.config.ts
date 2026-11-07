@@ -3,6 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 import {
   e2eKey,
   E2E_ADMIN_ID,
+  E2E_FIRST_PARTY_REPO,
   E2E_APP as app,
   FAKE_GITHUB as fakeGithub,
   FAKE_GITHUB_PORT as githubPort,
@@ -51,6 +52,13 @@ export default defineConfig({
         // The review queue (STORE-8): its administrator, and the public key of a key made for the run.
         STORE_ADMINS: String(E2E_ADMIN_ID),
         STORE_KEYS_DIR: e2eKey().keys,
+        // The app's repository on the fake GitHub (ESC-317): its plugins/<name>/ are first-party, dev.escouade.*.
+        STORE_FIRST_PARTY_REPO: E2E_FIRST_PARTY_REPO,
+        // The compiler of the run.js plugins (ESC-323): the fake escouade-plugin, run by Node.
+        STORE_ESCOUADE_PLUGIN: 'tests/fake/fake-escouade-plugin.mjs',
+        // No bubblewrap around it (ESC-336): outside production alone, and the fake runs nothing of a plugin.
+        STORE_COMPILE_ISOLATION: 'none',
+        NODE_ENV: 'test',
       },
       stdout: 'pipe',
     },

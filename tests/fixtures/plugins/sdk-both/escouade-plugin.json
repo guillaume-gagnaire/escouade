@@ -1,0 +1,21 @@
+{
+  "id": "dev.test.sdk-both",
+  "name": "SDK on both transports",
+  "version": "1.0.0",
+  "description": {
+    "en": "A plugin written for the SDK, played by Node and in WASM (ESC-321).",
+    "fr": "Un plugin écrit pour le SDK, joué par Node et en WASM (ESC-321)."
+  },
+  "license": "MIT",
+  "escouade": { "api": "1", "min": "2.1.0" },
+  "run": { "js": "dist/plugin.mjs" },
+  "activation": ["event:ticket.column"],
+  "permissions": {
+    "events": ["ticket.column"],
+    "decide": true,
+    "secrets": ["token"],
+    "network": ["hooks.example.dev"],
+    "commands": ["git --version"],
+    "files": [{ "root": "agent", "access": "write" }]
+  }
+}

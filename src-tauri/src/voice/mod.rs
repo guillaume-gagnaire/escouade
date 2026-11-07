@@ -16,6 +16,14 @@ pub mod models;
 pub mod online;
 pub mod online_catalog;
 pub mod online_speech;
+#[cfg(test)]
+mod parity_tests;
+#[cfg(test)]
+mod plugged;
+pub mod plugin_host;
+#[cfg(test)]
+mod plugin_tests;
+pub mod service;
 pub mod source;
 pub mod speech;
 pub mod spoken;
@@ -98,7 +106,7 @@ impl VoiceError {
                 "No sound system answers. Start PulseAudio or PipeWire (or check ALSA), then try again."
             ),
             VoiceError::AlreadyListening => tr_in!(lang, "Une dictée est déjà en cours.", "A dictation is already under way."),
-            VoiceError::Online(e) => e.message(lang),
+            VoiceError::Online(e) => e.message(crate::i18n::kit(lang)),
             VoiceError::Other(e) => tr_in!(lang, "La dictée a échoué : {e}", "Dictation failed: {e}"),
         }
     }
@@ -215,7 +223,7 @@ pub struct Choice {
 /// The service of « En ligne », when the settings choose it (ESC-110); none: Whisper, on the machine.
 pub fn online_provider(settings: &crate::model::VoiceSettings) -> Option<online::Provider> {
     (settings.transcription == "online")
-        .then(|| online::Provider::find(&settings.online_service))
+        .then(|| online::find(&settings.online_service))
         .flatten()
 }
 
@@ -487,7 +495,7 @@ impl Voice {
         {
             let kept = samples.lock();
             let emit = self.emit.clone();
-            let opened = live::LiveStream::open(
+            let opened = service::of(spec.provider).open_live(
                 spec,
                 &choice.language,
                 rate,
@@ -849,7 +857,7 @@ impl Voice {
             .map_err(|e| online::OnlineError::Network(p, e.to_string()))?;
         let never = AtomicBool::new(false);
         self.play_preview(volume, |push| {
-            for sentence in online_speech::sentences(text, online_speech::max_chars(p)) {
+            for sentence in online_speech::sentences(text, service::of(p).max_chars()) {
                 let mut failed = None;
                 b.speak(spec, choice, &sentence, &never, &mut |audio| {
                     if failed.is_none() {

@@ -14,6 +14,7 @@ The header gives the count: “2 projects · 7 agents · 3 running”. Below, th
 
 1. **“Waiting for your answer”**: the agents with the “Question” status, from all projects, the one that has waited longest first, with its project’s name.
 2. **One group per project**, in the order of the projects rail, with its color; the agents are in the order of the sidebar.
+3. **“Pull requests”** (“Merge requests” when they all come from GitLab), when a PR waits for you, across all projects: “To fix”, “To merge”, and “Reviews requested”. A click opens its agent, otherwise its ticket’s Kanban, otherwise its project’s “Pull requests” view (see [code hosts](code-hosts#news-from-the-code-hosts)).
 
 An agent appears only once, and archived agents aren’t listed. Each line has six columns:
 

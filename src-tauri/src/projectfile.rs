@@ -50,6 +50,8 @@ pub enum Kind {
     Dir,
     /// The start of a branch name.
     Prefix,
+    /// Plugins' ids in the store (`dev.exemple.slack`; a single one stands for a list of one).
+    PluginIds,
 }
 
 /// A setting of the file.
@@ -60,6 +62,9 @@ pub struct Key {
     pub kind: Kind,
     /// A command something runs: inactive until the user trusts it.
     pub command: bool,
+    /// The file's alone (`plugins.*`): no field of the project holds it, so it is read, never
+    /// applied to the project nor exported from it.
+    pub file_only: bool,
     /// What the schema says of it.
     #[cfg_attr(not(test), allow(dead_code))]
     pub about: &'static str,
@@ -70,6 +75,7 @@ const fn key(path: &'static str, kind: Kind, about: &'static str) -> Key {
         path,
         kind,
         command: false,
+        file_only: false,
         about,
     }
 }
@@ -79,8 +85,39 @@ const fn command(path: &'static str, kind: Kind, about: &'static str) -> Key {
         path,
         kind,
         command: true,
+        file_only: false,
         about,
     }
+}
+
+const fn file_key(path: &'static str, kind: Kind, about: &'static str) -> Key {
+    Key {
+        path,
+        kind,
+        command: false,
+        file_only: true,
+        about,
+    }
+}
+
+/// The plugins' group (PLG-14): `plugins.recommended`, and each plugin's settings under its id.
+pub const PLUGINS: &str = "plugins";
+/// The plugins the project proposes.
+pub const RECOMMENDED: &str = "plugins.recommended";
+
+/// Whether `path` is the file's alone (`plugins.*`): no field of the project holds it.
+pub fn file_only(path: &str) -> bool {
+    path.split('.').next() == Some(PLUGINS)
+}
+
+/// The settings the file gives the plugin `id` (`plugins.<id>`), as read; none when it gives none.
+pub fn plugin_settings<'a>(
+    values: &'a BTreeMap<String, Value>,
+    id: &str,
+) -> Option<&'a Map<String, Value>> {
+    values
+        .get(&format!("{PLUGINS}.{id}"))
+        .and_then(Value::as_object)
 }
 
 pub const ENGINES: &[&str] = &["claude", "codex", "copilot", "opencode"];
@@ -94,6 +131,13 @@ const BYPASS: &str = "bypassPermissions";
 /// « Projet privé »: the file may turn it on, never off.
 pub const PRIVATE: &str = "private";
 const MODE: &str = "board.mode";
+/// « Pas de workflow pour ce projet » (ESC-309) when false.
+pub const WORKFLOWS: &str = "workflows.enabled";
+
+/// The keys of a setting Escouade no longer has (the index of the code's symbols, retired by
+/// ESC-310): a file that still sets one is read all the same, the key left out with no warning,
+/// said once in the log.
+pub const RETIRED: &[&str] = &["code_index", "codeIndex"];
 
 /// Every setting of version 1, in the order the file is written.
 pub const KEYS: &[Key] = &[
@@ -217,6 +261,16 @@ pub const KEYS: &[Key] = &[
         MODE,
         Kind::Enum(MODES),
         "The permission mode of the tickets' agents (empty: the account's). Never bypassPermissions: that one is set on each machine.",
+    ),
+    key(
+        WORKFLOWS,
+        Kind::Bool,
+        "The project has workflows (true when absent). false: « Pas de workflow pour ce projet », Escouade neither reads nor writes its workflows (.escouade/workflows/ left as it is) and follows its agents in none.",
+    ),
+    file_key(
+        RECOMMENDED,
+        Kind::PluginIds,
+        "The plugins the project proposes, by their id in the store (store.escouade.dev). Escouade names those not installed in Settings › Project, each with its page in the store: it never installs nor turns on anything by itself. A plugin's own settings go under plugins.<id>, never a secret.",
     ),
 ];
 
@@ -434,6 +488,13 @@ fn read_v1(t: &Node, values: &mut BTreeMap<String, Value>, warnings: &mut Vec<Wa
             take(k, node, values, warnings);
             continue;
         }
+        if RETIRED.contains(&name.as_str()) {
+            static TOLD: std::sync::Once = std::sync::Once::new();
+            TOLD.call_once(|| {
+                log::info!("{FILE}: {name} is the key of a setting retired in ESC-310, ignored")
+            });
+            continue;
+        }
         if !top.contains(&name.as_str()) {
             warnings.push(unknown(name, *line, &top));
             continue;
@@ -459,6 +520,9 @@ fn read_v1(t: &Node, values: &mut BTreeMap<String, Value>, warnings: &mut Vec<Wa
             match key_of(&path) {
                 Some(k) => take(k, node, values, warnings),
                 None if path == FROM_TARGET => legacy = Some(node),
+                None if name == PLUGINS && crate::plugins::manifest::is_id(sub) => {
+                    take_settings(&path, node, values, warnings)
+                }
                 None => warnings.push(unknown(&path, *line, &names)),
             }
         }
@@ -502,6 +566,66 @@ fn take(k: &Key, node: &Node, values: &mut BTreeMap<String, Value>, warnings: &m
                 ),
             ))
         }
+    }
+}
+
+/// A plugin's settings (`plugins.<id>`): simple values by key (a text, a number, true or false);
+/// one of another form is told and left out. Held to the plugin's own settings once it is
+/// installed (`plugins::project_settings`).
+fn take_settings(
+    path: &str,
+    node: &Node,
+    values: &mut BTreeMap<String, Value>,
+    warnings: &mut Vec<Warning>,
+) {
+    let entries = match &node.v {
+        N::Map(entries) => entries,
+        N::Scalar { null: true, .. } => return,
+        _ => {
+            warnings.push(warn(
+                Some(node.line),
+                tr!(
+                    "« {path} » doit regrouper les réglages du plugin : ignoré",
+                    "“{path}” must hold the plugin's settings: ignored"
+                ),
+            ));
+            return;
+        }
+    };
+    let mut out = Map::new();
+    for (k, line, n) in entries {
+        let v = match &n.v {
+            N::Scalar { null: true, .. } => continue,
+            N::Scalar {
+                text, quoted: true, ..
+            } => json!(text),
+            N::Scalar { text, .. } => {
+                let t = text.trim();
+                if t.eq_ignore_ascii_case("true") || t.eq_ignore_ascii_case("false") {
+                    json!(t.eq_ignore_ascii_case("true"))
+                } else if let Ok(i) = t.parse::<i64>() {
+                    json!(i)
+                } else if let Some(f) = t.parse::<f64>().ok().filter(|f| f.is_finite()) {
+                    json!(f)
+                } else {
+                    json!(t)
+                }
+            }
+            _ => {
+                warnings.push(warn(
+                    Some(*line),
+                    tr!(
+                        "valeur invalide pour {path}.{k} : un texte, un nombre, true ou false est attendu (ignorée)",
+                        "invalid value for {path}.{k}: a text, a number, true or false is expected (ignored)"
+                    ),
+                ));
+                continue;
+            }
+        };
+        out.insert(k.clone(), v);
+    }
+    if !out.is_empty() {
+        values.insert(path.to_string(), Value::Object(out));
     }
 }
 
@@ -721,6 +845,38 @@ fn value_of(k: &Key, node: &Node, warnings: &mut Vec<Warning>) -> Result<Value, 
             )),
         },
         Kind::Steps | Kind::Launch => items(k, node, warnings),
+        Kind::PluginIds => {
+            let list: Vec<&Node> = match &node.v {
+                N::Seq(items) => items.iter().collect(),
+                N::Scalar { null: true, .. } => Vec::new(),
+                N::Scalar { .. } => vec![node],
+                _ => {
+                    return Err((
+                        node.line,
+                        tr!("une liste est attendue", "a list is expected"),
+                    ))
+                }
+            };
+            let mut ids: Vec<String> = Vec::new();
+            for item in list {
+                let id = text_of(item).unwrap_or_default();
+                if crate::plugins::manifest::is_id(&id) {
+                    if !ids.contains(&id) {
+                        ids.push(id);
+                    }
+                    continue;
+                }
+                let path = k.path;
+                warnings.push(warn(
+                    Some(item.line),
+                    tr!(
+                        "valeur invalide pour {path} : « {id} » n'est pas l'identifiant d'un plugin, comme dev.exemple.slack (cette entrée est ignorée)",
+                        "invalid value for {path}: “{id}” is not a plugin's id, such as dev.exemple.slack (this item is ignored)"
+                    ),
+                ));
+            }
+            Ok(json!(ids))
+        }
         Kind::Dir => rel_dir(node).map(Value::String),
         Kind::Prefix => {
             let p = text_of(node)?;
@@ -791,6 +947,7 @@ pub fn get(p: &Project, key: &str) -> Value {
         "board.model" => json!(b.model),
         "board.effort" => json!(b.effort),
         MODE => json!(b.mode),
+        WORKFLOWS => json!(p.workflows_enabled),
         _ => Value::Null,
     }
 }
@@ -849,7 +1006,7 @@ pub fn set(p: &mut Project, key: &str, v: &Value) {
         "agents.engine" => {
             p.engine = serde_json::from_value::<EngineId>(v.clone())
                 .ok()
-                .filter(|e| *e != EngineId::Claude)
+                .filter(|e| *e != EngineId::CLAUDE)
         }
         PRIVATE => p.private = flag,
         "worktrees.per_agent" => p.worktree_per_agent = flag,
@@ -883,6 +1040,7 @@ pub fn set(p: &mut Project, key: &str, v: &Value) {
         "board.model" => b.model = str_of(v),
         "board.effort" => b.effort = str_of(v),
         MODE => b.mode = str_of(v),
+        WORKFLOWS => p.workflows_enabled = flag,
         _ => {}
     }
 }
@@ -952,7 +1110,8 @@ pub fn apply(p: &mut Project, read: &Read) -> Applied {
     let mut warnings = read.warnings.clone();
     let mut commands = BTreeMap::new();
     for (k, v) in &read.values {
-        if p.shared.local.contains(k) {
+        // The plugins' keys stay the file's: the window and the plugins read them there.
+        if p.shared.local.contains(k) || file_only(k) {
             continue;
         }
         if key_of(k).is_some_and(|k| k.command) {
@@ -1135,7 +1294,7 @@ fn put_list(m: &Mapping, name: &str, list: Sequence) {
 fn set_value(m: &Mapping, name: &str, k: &Key, v: &Value) {
     match k.kind {
         Kind::Bool => m.set(name, v.as_bool().unwrap_or_default()),
-        Kind::List => {
+        Kind::List | Kind::PluginIds => {
             let s = Sequence::new();
             for item in v.as_array().into_iter().flatten() {
                 push_text(&s, &scalar_yaml(item));
@@ -1182,6 +1341,10 @@ pub fn write(existing: Option<&str>, values: &[(&str, Value)]) -> Result<String>
     if !root.contains_key("version") {
         root.insert_at_index(0, "version", VERSION as i64);
     }
+    // A setting Escouade no longer has is not written again.
+    for name in RETIRED {
+        root.remove(name);
+    }
     for (path, v) in values {
         let Some(k) = key_of(path) else { continue };
         match path.split_once('.') {
@@ -1224,6 +1387,7 @@ fn writable(k: &str, v: &Value) -> bool {
 /// `writable`).
 pub fn export_values(p: &Project) -> Vec<(&'static str, Value)> {
     KEYS.iter()
+        .filter(|k| !k.file_only)
         .map(|k| (k.path, get(p, k.path)))
         .filter(|(k, v)| writable(k, v))
         .collect()
@@ -1270,10 +1434,20 @@ fn schema_of(k: &Key) -> Value {
             json!({ "oneOf": [{ "type": "array", "items": step }, step] })
         }
         Kind::Launch => json!({ "oneOf": [{ "type": "array", "items": item(true) }, item(true)] }),
+        Kind::PluginIds => {
+            let id = json!({ "type": "string", "pattern": PLUGIN_ID_PATTERN });
+            json!({ "oneOf": [{ "type": "array", "items": id, "uniqueItems": true }, id] })
+        }
     };
     s["description"] = json!(k.about);
     s
 }
+
+/// A plugin's id (`plugins::manifest::is_id`): a reversed domain name in lower case, of two words
+/// at least.
+#[cfg_attr(not(test), allow(dead_code))]
+const PLUGIN_ID_PATTERN: &str =
+    "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$";
 
 /// The JSON schema of the file (`schemas/escouade.schema.json`), made from `KEYS`.
 #[cfg_attr(not(test), allow(dead_code))]
@@ -1302,10 +1476,22 @@ pub fn schema() -> Value {
                         json!({ "type": "boolean", "deprecated": true, "description": format!("Replaced by {BASE}: true reads as target, false as head.") }),
                     );
                 }
-                props.insert(
-                    g.into(),
-                    json!({ "type": "object", "properties": inner, "additionalProperties": false }),
-                );
+                let mut group =
+                    json!({ "type": "object", "properties": inner, "additionalProperties": false });
+                // Each plugin's settings, under its id: simple values, never a secret.
+                if g == PLUGINS {
+                    let mut by_id = Map::new();
+                    by_id.insert(
+                        PLUGIN_ID_PATTERN.into(),
+                        json!({
+                            "type": "object",
+                            "description": "The settings of the plugin of this id, by the keys of its contributes.settings: applied to it in this project once it is installed and on. Never a secret: those go to the system's keychain.",
+                            "additionalProperties": { "type": ["string", "number", "boolean"] },
+                        }),
+                    );
+                    group["patternProperties"] = Value::Object(by_id);
+                }
+                props.insert(g.into(), group);
             }
         }
     }
@@ -1414,6 +1600,24 @@ impl<R: Runtime> Core<R> {
                 toast(format!("{name} · {}{at}", e.text));
             }
         } else if opened && file.is_some() {
+            // The plugins it proposes that this machine lacks (PLG-14): named in Settings › Project.
+            let proposed = file
+                .and_then(|f| f.values.get(RECOMMENDED))
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .filter(|id| self.plugins.get(id, crate::i18n::Lang::En).is_none())
+                .count();
+            if proposed > 0 {
+                toast(tr_n!(
+                    proposed,
+                    "{name} propose {proposed} plugin : Réglages › Projets.",
+                    "{name} propose {proposed} plugins : Réglages › Projets.",
+                    "{name} proposes {proposed} plugin: Settings › Projects.",
+                    "{name} proposes {proposed} plugins: Settings › Projects."
+                ));
+            }
             toast(if pending.is_some() {
                 tr!(
                     "{name} : réglages lus dans {FILE}. Ses commandes attendent ton accord (Réglages › Projets).",
@@ -1457,6 +1661,10 @@ impl<R: Runtime> Core<R> {
         }
         if !applied.changed.is_empty() {
             self.schedule();
+        }
+        // « Pas de workflow pour ce projet » set or undone by the file (ESC-309): followed at once.
+        if before.workflows_enabled != after.workflows_enabled {
+            self.workflow_fixes_changed(&after.id);
         }
         Some(after)
     }

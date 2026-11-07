@@ -1,0 +1,27 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.groq",
+  "name": "Groq",
+  "version": "2.2.1",
+  "description": {
+    "fr": "Le service de voix Groq (dictée, voix de l'agent) : ta clé reste dans le trousseau, le plugin ne la garde pas.",
+    "en": "The Groq voice service (dictation, the agent's voice): your key stays in the keychain, the plugin keeps nothing."
+  },
+  "author": {
+    "name": "Escouade",
+    "url": "https://escouade.dev"
+  },
+  "license": "GPL-3.0-or-later",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/groq",
+  "escouade": {
+    "api": "1",
+    "min": "2.2.0"
+  },
+  "run": { "wasm": "Cargo.toml" },
+  "limits": { "fetchSeconds": 120, "fetchBytes": 33554432, "memoryBytes": 268435456, "turnSeconds": 10 },
+  "activation": ["voice:groq"],
+  "permissions": {
+    "network": ["api.groq.com"]
+  },
+  "store": { "categories": ["tools"] }
+}

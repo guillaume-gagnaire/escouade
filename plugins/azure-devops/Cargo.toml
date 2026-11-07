@@ -1,0 +1,21 @@
+[package]
+name = "escouade-plugin-azure-devops"
+version = "2.2.1"
+description = "Le plugin Azure DevOps d'Escouade : les PR, la CI (stratégies et Azure Pipelines), les relectures et le merge d'Azure Repos, et les éléments de travail d'Azure Boards"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+
+# A module, compiled by `escouade-plugin build` (docs/PLUGINS.md §8.5).
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+escouade-plugin-kit = "0.1.1"
+serde_json = "1"
+anyhow = "1"
+parking_lot = "0.12"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt", "net", "io-util", "time"] }

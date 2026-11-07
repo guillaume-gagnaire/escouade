@@ -3,6 +3,7 @@ import { PgBoss } from 'pg-boss';
 import { serviceState } from '../db/schema';
 import { purge } from './accounts';
 import { purgeDeleted } from './author';
+import { purgeOAuth } from './oauth';
 import { service } from './service';
 import type { Db } from './db';
 import { checkVersion, onTag, rereadTags, type Deps } from './submissions';
@@ -21,6 +22,8 @@ export const BEAT = 'store.beat';
 export const PURGE = 'store.purge';
 /** The checks of a version submitted (`{ id }`), one at a time per worker: each holds an archive in memory. */
 export const CHECK = 'store.check';
+/** Two compilations of a `run.wasm`, 7 minutes each at most (compile.ts): past pg-boss's 15 minutes, a check would start again. */
+const CHECK_POLICY = { expireInSeconds: 30 * 60 } as const;
 /** A tag the App's webhooks saw (`{ repoId, fullName, installationId, tag }`). */
 export const TAG = 'store.tag';
 /** Once a week, the tags of the published versions read again: a tag moved without a webhook is caught. */
@@ -66,7 +69,10 @@ export async function startQueue(
   await boss.send(BEAT);
   await boss.createQueue(PURGE);
   await boss.work(PURGE, async () => {
-    console.info('[store] purged:', JSON.stringify({ ...(await purge(db)), deleted: await purgeDeleted(db, service.archives) }));
+    console.info(
+      '[store] purged:',
+      JSON.stringify({ ...(await purge(db)), deleted: await purgeDeleted(db, service.archives), oauth: await purgeOAuth(db) }),
+    );
   });
   await boss.schedule(PURGE, '40 4 * * *');
   if (discord) {
@@ -88,7 +94,8 @@ export async function startQueue(
   }
   if (!deps) return boss;
 
-  await boss.createQueue(CHECK);
+  await boss.createQueue(CHECK, CHECK_POLICY);
+  await boss.updateQueue(CHECK, CHECK_POLICY);
   await boss.work<{ id: number }>(CHECK, { batchSize: 1 }, async ([job]) => {
     if (job) await checkVersion(db, deps, job.data.id);
   });

@@ -222,6 +222,7 @@ impl<R: Runtime> Core<R> {
             let done = if s.action == "pr" {
                 self.open_pr(t, s, &st.one, &st.target, Some(message.clone()))
                     .await?
+                    .0
             } else {
                 git::push_branch(&st.one.path, &st.one.branch).await?;
                 Outcome::of(lang, |l| board::pushed_outcome(l, &st.one.branch))

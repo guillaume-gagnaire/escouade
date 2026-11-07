@@ -25,6 +25,7 @@
     stateWord,
   } from '../lib/prs';
   import { conversationOf, type ReadingPlace } from '../lib/conversations.svelte';
+  import { heldOf } from '../lib/outbox.svelte';
   import { accountsOf } from '../lib/accounts';
   import { bgCount } from '../lib/bgtasks';
   import { splitEscouade } from '../lib/escouade';
@@ -41,6 +42,8 @@
   import { canPrepare, canTest, prepareLaunch, testAgent } from '../lib/test-launch.svelte';
   import type { Agent, ConvItem, Project } from '../lib/types';
   import AgentTerminal from './AgentTerminal.svelte';
+  import DevPage from './DevPage.svelte';
+  import { devpages, showPage } from '../lib/devpage.svelte';
   import Composer from './Composer.svelte';
   import PlanBanner from './PlanBanner.svelte';
   import CriteriaReport from './conv/CriteriaReport.svelte';
@@ -57,6 +60,7 @@
   import Handover from './conv/Handover.svelte';
   import NoAccount from './conv/NoAccount.svelte';
   import UserMessage from './conv/UserMessage.svelte';
+  import HeldMessage from './conv/HeldMessage.svelte';
   import EngineMark from './EngineMark.svelte';
   import Icon from './Icon.svelte';
   import { tip } from '../lib/tip';
@@ -526,6 +530,9 @@
   const working = $derived(atWork || inBackground);
   /** Shown in its harness's own interface, which takes its process's place or joins it (OpenCode). */
   const harnessView = $derived(inHarnessView(agent));
+  /** Its launch's page is open in Escouade (ESC-311), and its view shows it. */
+  const hasPage = $derived(!!devpages.pages[agent.id]);
+  const pageView = $derived(hasPage && !!devpages.shown[agent.id]);
   /** What is said of the wait: a turn ends by itself; what goes on in the background needs to be stopped first. */
   const waits = $derived(atWork ? t('conv.escouadeNext.busy') : inBackground ? t('conv.escouadeNext.busyBackground') : '');
 
@@ -731,22 +738,36 @@
       {/if}
       <!-- « Escouade | <harness> »: never for a ticket's agent, which its board drives over the stream. The view shown is
            named, the other one an icon. -->
-      {#if canSwitchView(agent)}
+      {#if canSwitchView(agent) || hasPage}
         <div class="vseg" role="group" aria-label={t('conv.header.view')}>
           <button
-            aria-pressed={!harnessView}
+            aria-pressed={!harnessView && !pageView}
             aria-label={t('conv.header.toRich')}
             use:tip={harnessView ? t('conv.header.toRichHint') : undefined}
-            onclick={() => harnessView && switchView(agent)}
-            ><Icon name="agents" size={14} /><span class="lbl">{t('conv.header.rich')}</span></button
+            onclick={() => {
+              showPage(agent.id, false);
+              if (harnessView) switchView(agent);
+            }}><Icon name="agents" size={14} /><span class="lbl">{t('conv.header.rich')}</span></button
           >
-          <button
-            aria-pressed={harnessView}
-            aria-label={t('conv.header.toTerminal', { engine: engineName(agent.engine) })}
-            use:tip={harnessView ? undefined : t('conv.header.toTerminalHint', { engine: engineName(agent.engine) })}
-            onclick={() => !harnessView && switchView(agent)}
-            ><Icon name="term" size={14} /><span class="lbl">{engineName(agent.engine)}</span></button
-          >
+          {#if canSwitchView(agent)}
+            <button
+              aria-pressed={harnessView && !pageView}
+              aria-label={t('conv.header.toTerminal', { engine: engineName(agent.engine) })}
+              use:tip={harnessView ? undefined : t('conv.header.toTerminalHint', { engine: engineName(agent.engine) })}
+              onclick={() => {
+                showPage(agent.id, false);
+                if (!harnessView) switchView(agent);
+              }}><Icon name="term" size={14} /><span class="lbl">{engineName(agent.engine)}</span></button
+            >
+          {/if}
+          {#if hasPage}
+            <button
+              aria-pressed={pageView}
+              aria-label={t('devpage.viewHint')}
+              use:tip={pageView ? undefined : t('devpage.viewHint')}
+              onclick={() => showPage(agent.id, true)}><Icon name="page" size={14} /><span class="lbl">{t('devpage.view')}</span></button
+            >
+          {/if}
         </div>
       {/if}
       <!-- The agent's menu, the one of its card's right click (the sidebar draws it). -->
@@ -775,9 +796,11 @@
   </header>
 
   <!-- Where the agent is in its plan, when it follows one: it takes the room it needs, never the messages' last 160 px. -->
-  <PlanBanner {agent} />
+  {#if !pageView}<PlanBanner {agent} />{/if}
 
-  {#if harnessView && !agent.archived}
+  {#if pageView}
+    <DevPage {agent} />
+  {:else if harnessView && !agent.archived}
     {@render nextStart()}
     <AgentTerminal {agent} />
   {:else}
@@ -799,7 +822,7 @@
             {t('conv.loadError', { error: conv.error })}
             <button class="btn" onclick={() => conv.load()}>{t('common.retry')}</button>
           </div>
-        {:else if conv.loaded && top.length === 0 && !conv.waiting.length}
+        {:else if conv.loaded && top.length === 0 && !conv.waiting.length && !heldOf(agent.id).length}
           <div class="empty">
             <span class="t">{t('conv.empty.title')}</span>
             <span class="s"
@@ -911,6 +934,9 @@
         {/each}
         {#each conv.waiting as item (item.id)}
           <UserMessage {item} waiting engine={agent.engine} />
+        {/each}
+        {#each heldOf(agent.id) as held (held.id)}
+          <HeldMessage {held} engine={agent.engine} />
         {/each}
         {#if noAccount}
           <NoAccount {agent} engine={noAccount.engine} text={noAccount.text} />

@@ -86,6 +86,7 @@ pub struct InitialState {
     engines: Vec<crate::engine::registry::EngineDecl>,
     /// The harnesses whose program is found: the only ones the interface offers.
     engines_found: Vec<crate::model::EngineId>,
+    sources: Vec<crate::integrations::source::SourceDecl>,
     /// Why no ticket of a project's board starts, by project.
     board_issues: HashMap<String, String>,
     /// Why no ticket of a project that goes to any account starts for now (a quota, a usage
@@ -121,6 +122,7 @@ pub fn subscribe(
     // A page that loads again has no dictation under way: the one of the page before stops.
     voice.cancel();
     core.reset_unsaved();
+    core.held.lock().clear();
     // One lock at a time, each guard ending with its statement: in a struct literal the guards
     // would live together (the lock order is projects before tickets, see `Core`).
     let settings = core.settings.read().clone();
@@ -167,6 +169,7 @@ pub fn subscribe(
         account_models,
         engines: crate::engine::registry::declared(),
         engines_found: core.engines_found(),
+        sources: crate::integrations::source::declared(),
         board_issues,
         autopilot_pause,
         project_pauses,
@@ -210,6 +213,8 @@ pub fn save_settings(
 ) -> Res<Vec<ShellInfo>> {
     let remote_was_on = core.settings.read().remote_control_all;
     core.save_window_settings(settings.clone()).map_err(err)?;
+    // An account saved (a code host's among them): the CI of the targets read at once (ESC-63).
+    core.wake_ticket_prs();
     // A conversation under way takes the voice, its language, pace and volume (ESC-115).
     voice.conversation_tune(&conv_choice(&core.settings.read(), &*core.secrets, &voice.catalog).0);
     if settings.remote_control_all && !remote_was_on {
@@ -236,12 +241,21 @@ pub async fn engines(core: CoreState<'_>) -> Res<Vec<crate::engine::registry::En
     Ok(engines)
 }
 
+/// The harnesses the registry has now, as the window got them at its start (`InitialState::engines`): those the
+/// plugins describe change with them (PLG-6).
+#[tauri::command(async)]
+pub fn engines_declared(core: CoreState) -> Vec<crate::engine::registry::EngineDecl> {
+    core.sync_harnesses();
+    crate::engine::registry::declared()
+}
+
 /// The harnesses found now, the PATH of today read first (ESC-186): the window back in front, the
 /// menu « Harness » opened. A harness found since gets Escouade's server, and its accounts' models
 /// are read.
 #[tauri::command(async)]
 pub fn engines_found_now(core: CoreState) -> Vec<crate::model::EngineId> {
     let before = core.engines_found();
+    core.sync_harnesses();
     crate::syspath::refresh();
     let now = core.engines_found();
     if now != before {
@@ -378,6 +392,22 @@ pub async fn plugin_inspect_store(
     core.plugins.inspect_store(fetched, lang)
 }
 
+/// What installing the seed's version of the plugin `id` would do (ESC-338): read from the installer, every fingerprint and
+/// the signature checked, set aside until `plugin_install` or `plugin_discard`. No network.
+#[tauri::command(async)]
+pub fn plugin_inspect_seed(
+    core: CoreState,
+    id: String,
+) -> Result<crate::plugins::Preview, crate::plugins::Refusal> {
+    core.plugins.inspect_seed(&id, crate::i18n::ui())
+}
+
+/// What the app's seed holds that is not installed: what the user uninstalled, what it refused to install.
+#[tauri::command(async)]
+pub fn plugin_seed_offers(core: CoreState) -> Vec<crate::plugins::seed::Offer> {
+    core.plugins.seed_offers(crate::i18n::ui())
+}
+
 /// What installing the plugin of a git repository at a tag would do: cloned and set aside.
 #[tauri::command(async)]
 pub async fn plugin_inspect_git(
@@ -415,8 +445,9 @@ pub fn plugin_install(
     token: String,
 ) -> Result<crate::plugins::PluginView, crate::plugins::Refusal> {
     let staged = core.plugins.staged(&token);
-    let view = core.plugins.install(&token, crate::i18n::ui())?;
-    core.plugin_runtime.forget(&view.id);
+    let view = core.install_plugin(&token, crate::i18n::ui())?;
+    // A run.js plugin's module compiled and precompiled now, in the cache, off this thread (ESC-320).
+    core.plugin_runtime.prepare(&view.id);
     let from_store = matches!(view.origin, crate::plugins::Origin::Store { .. });
     core.telemetry
         .track(crate::telemetry::Event::PluginInstalled { from_store });
@@ -490,7 +521,8 @@ pub fn plugin_set_enabled(
     core.plugins
         .choose(&id, |c| c.enabled = on)
         .map_err(|e| e.to_string())?;
-    core.plugin_runtime.forget(&id);
+    core.plugin_changed(&id);
+    core.sync_voice_plugins();
     plugin_view(&core, &id)
 }
 
@@ -535,7 +567,7 @@ pub fn plugin_set_permission(
             }
         })
         .map_err(|e| e.to_string())?;
-    core.plugin_runtime.forget(&id);
+    core.plugin_changed(&id);
     plugin_view(&core, &id)
 }
 
@@ -706,7 +738,7 @@ pub fn claude_found(core: CoreState) -> ClaudeFound {
 /// of it may share (those it has).
 #[tauri::command(async)]
 pub fn account_shareable(core: CoreState, engine: Option<EngineId>) -> Vec<String> {
-    core.shareable(engine.unwrap_or(EngineId::Claude))
+    core.shareable(engine.unwrap_or(EngineId::CLAUDE))
 }
 
 /// « Créer et se connecter »: a new account of `engine` (Claude Code by default), its folder made
@@ -720,7 +752,7 @@ pub fn account_create(
     mode: ShareMode,
     engine: Option<EngineId>,
 ) -> Res<ClaudeAccount> {
-    let engine = engine.unwrap_or(EngineId::Claude);
+    let engine = engine.unwrap_or(EngineId::CLAUDE);
     let r = core
         .create_account(engine, &name, &share, mode)
         .map_err(err);
@@ -1123,6 +1155,20 @@ pub async fn remove_workflow_file(
     core.remove_workflow_file(&id, &workflow).await.map_err(err)
 }
 
+/// « Supprimer » a workflow (`removed`: its file goes, never written again), « Laisser supprimé »
+/// one proposed again, or « Rétablir » it (ESC-309).
+#[tauri::command]
+pub async fn set_workflow_removed(
+    core: CoreState<'_>,
+    id: String,
+    workflow: String,
+    removed: bool,
+) -> Res<crate::workflow::Scan> {
+    core.set_workflow_removed(&id, &workflow, removed)
+        .await
+        .map_err(err)
+}
+
 /// « Oublier » a repository gone from the project's folder (ESC-169).
 #[tauri::command(async)]
 pub fn forget_repo(core: CoreState, id: String, repo: String) -> Res<Project> {
@@ -1133,20 +1179,6 @@ pub fn forget_repo(core: CoreState, id: String, repo: String) -> Res<Project> {
 #[tauri::command(async)]
 pub fn set_project_logo(core: CoreState, id: String, path: Option<String>) -> Res<Project> {
     core.set_project_logo(&id, path.as_deref()).map_err(err)
-}
-
-/// « Index du code » of a project (ESC-251): whether it is on, and what the index holds.
-#[tauri::command(async)]
-pub fn get_code_index(core: CoreState, id: String) -> Res<crate::codeindex::CodeIndexInfo> {
-    core.code_index_info(&id).map_err(err)
-}
-
-/// What the code index saved the agents (ESC-253), per agent and per project: the tokens of the files
-/// its answers draw on, against the answers'. `project` narrows it to one project.
-#[tauri::command(async)]
-pub fn get_index_savings(core: CoreState, project: Option<String>) -> serde_json::Value {
-    let by = |agent| core.stats.index_savings(agent, project.as_deref());
-    serde_json::json!({ "byAgent": by(true), "byProject": by(false) })
 }
 
 /// « Recherche par le sens » (ESC-254): the vectors' model, whether it is downloaded.
@@ -1171,25 +1203,6 @@ pub fn vectors_model_cancel(core: CoreState) {
 #[tauri::command(async)]
 pub fn vectors_model_delete(core: CoreState) -> Res<crate::vectors::wiring::VectorsModelInfo> {
     core.vectors_model_delete().map_err(err)
-}
-
-/// Turns « Index du code » on (the project is read at once) or off (its database is erased) for
-/// the project; null follows « Index du code sur tous les projets » again (ESC-293).
-#[tauri::command]
-pub async fn set_code_index(
-    core: CoreState<'_>,
-    id: String,
-    enabled: Option<bool>,
-) -> Res<crate::codeindex::CodeIndexInfo> {
-    core.set_code_index(&id, enabled).await.map_err(err)
-}
-
-/// « Index du code sur tous les projets » turned on (the projects that follow it read one after
-/// the other, in the background) or off (their index erased), saved at once (ESC-293): how many
-/// projects follow it.
-#[tauri::command]
-pub async fn set_code_index_all(core: CoreState<'_>, enabled: bool) -> Res<usize> {
-    core.set_code_index_all(enabled).await.map_err(err)
 }
 
 /// The project's logo for its tile, as a `data:` URL; null when it has none.
@@ -1784,6 +1797,10 @@ pub async fn git_push(
         .git_sync_in(&project_id, repo.as_deref(), SyncOp::Push)
         .await
         .map_err(err);
+    // A push of Escouade: the pull requests of the tickets « En revue » are read at once (ESC-59).
+    if r.is_ok() {
+        core.wake_ticket_prs();
+    }
     counted(&core, Event::GitSync { op: "push" }, r)
 }
 
@@ -1932,6 +1949,86 @@ pub async fn create_agent_on_branch(
     Ok(agent)
 }
 
+/// The reviews written by an agent of a project (ESC-66).
+#[tauri::command]
+pub fn pr_reviews(core: CoreState<'_>, project_id: String) -> Vec<crate::prreview::PrReview> {
+    core.pr_reviews_of(&project_id)
+}
+
+/// « Faire relire par un agent » (ESC-66): the review starts; nothing leaves for the host.
+#[tauri::command]
+pub async fn pr_review_start(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+) -> Res<crate::prreview::PrReview> {
+    core.pr_review_start(&project_id, number).await.map_err(err)
+}
+
+/// A comment of a review kept, edited or dropped.
+#[tauri::command]
+pub fn pr_review_note(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+    id: u32,
+    choice: crate::prreview::NoteChoice,
+    body: Option<String>,
+) -> Res<crate::prreview::PrReview> {
+    core.pr_review_note(&project_id, number, id, choice, body)
+        .map_err(err)
+}
+
+/// The text of a review, edited.
+#[tauri::command]
+pub fn pr_review_summary(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+    summary: String,
+) -> Res<crate::prreview::PrReview> {
+    core.pr_review_summary(&project_id, number, summary)
+        .map_err(err)
+}
+
+/// « Publier la relecture »: the only way a review reaches the host, on the user's click.
+#[tauri::command]
+pub async fn pr_review_publish(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+    verdict: crate::forge::ReviewState,
+    accept_moved: bool,
+) -> Res<crate::prreview::Published> {
+    core.pr_review_publish(&project_id, number, verdict, accept_moved)
+        .await
+        .map_err(err)
+}
+
+/// A review dropped.
+#[tauri::command]
+pub fn pr_review_discard(core: CoreState<'_>, project_id: String, number: u64) {
+    core.pr_review_discard(&project_id, number);
+}
+
+/// « Lancer un agent sur cette PR » (ESC-65): an agent in a worktree on the branch of the project's
+/// open pull request `number`, a fork's too.
+#[tauri::command]
+pub async fn create_agent_on_pr(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+) -> Res<AgentView> {
+    let agent = core
+        .create_agent_on_pr(&project_id, number)
+        .await
+        .map_err(branch_err)?;
+    core.telemetry.track(Event::AgentCreated {
+        worktree: agent.meta.worktree.is_some(),
+    });
+    Ok(agent)
+}
+
 /// « Intégrer <base> » on an agent with a worktree: its base branch goes into its branch.
 #[tauri::command]
 pub async fn integrate_base(core: CoreState<'_>, id: String) -> Res<crate::core::Integration> {
@@ -1993,6 +2090,88 @@ pub async fn agent_pr_fix(
     core.agent_pr_fix(&id, number, host_repo.as_deref().unwrap_or(""), fix)
         .await
         .map_err(err)
+}
+
+/// The « PR et CI » tab (ESC-305): the checks, reviews, comments and deployments of the agent's
+/// pull request `number`, or why the host did not give them.
+#[tauri::command]
+pub async fn agent_pr_detail(
+    core: CoreState<'_>,
+    id: String,
+    number: u64,
+    host_repo: Option<String>,
+) -> Res<crate::prview::Read<crate::prview::PrDetail>> {
+    Ok(core
+        .agent_pr_detail(&id, number, host_repo.as_deref().unwrap_or(""))
+        .await)
+}
+
+/// The end of the log of a check's job of the agent's pull request `number`.
+#[tauri::command]
+pub async fn agent_pr_log(
+    core: CoreState<'_>,
+    id: String,
+    number: u64,
+    job: String,
+    host_repo: Option<String>,
+) -> Res<crate::prview::Read<String>> {
+    Ok(core
+        .agent_pr_log(&id, number, host_repo.as_deref().unwrap_or(""), &job)
+        .await)
+}
+
+/// « Relancer les échecs » on the agent's pull request `number`: how many runs started.
+#[tauri::command]
+pub async fn agent_pr_rerun(
+    core: CoreState<'_>,
+    id: String,
+    number: u64,
+    host_repo: Option<String>,
+) -> Res<usize> {
+    core.agent_pr_rerun(&id, number, host_repo.as_deref().unwrap_or(""))
+        .await
+        .map_err(err)
+}
+
+/// Why the agent has no « Ouvrir une PR… »; none when it can open one.
+#[tauri::command]
+pub async fn agent_no_pr(core: CoreState<'_>, id: String) -> Res<Option<crate::prview::NoPr>> {
+    core.agent_no_pr(&id).await.map_err(err)
+}
+
+/// The open pull requests of the project, or why they could not be read.
+#[tauri::command]
+pub async fn project_prs(
+    core: CoreState<'_>,
+    project_id: String,
+) -> Res<crate::prview::Read<crate::prview::ProjectPrs>> {
+    Ok(core.project_prs(&project_id).await)
+}
+
+/// The open pull requests of every project, as recently read, for the overview (ESC-68).
+#[tauri::command]
+pub async fn overview_prs(core: CoreState<'_>) -> Res<Vec<crate::prview::OverviewPrs>> {
+    Ok(core.overview_prs().await)
+}
+
+/// The environments of the project's host as last read (ESC-67): the view « Environnements »
+/// opens on them, and its project is followed while it is open.
+#[tauri::command]
+pub fn project_environments(
+    core: CoreState<'_>,
+    project_id: String,
+) -> Option<crate::deploys::ProjectEnvironments> {
+    core.project_environments(&project_id)
+}
+
+/// « Rafraîchir » of the view « Environnements »: read now.
+#[tauri::command]
+pub async fn project_environments_read(
+    core: CoreState<'_>,
+    project_id: String,
+) -> Res<crate::deploys::ProjectEnvironments> {
+    core.project_environments(&project_id);
+    Ok(core.project_environments_read(&project_id).await)
 }
 
 /// The statistics of a period, of every account or (`account`) of one.
@@ -2545,6 +2724,12 @@ pub fn set_unsaved(core: CoreState, count: usize) {
         .store(count, std::sync::atomic::Ordering::Release);
 }
 
+/// The agents the window holds a message for (`outbox.svelte.ts`).
+#[tauri::command]
+pub fn set_held(core: CoreState, agents: Vec<String>) {
+    *core.held.lock() = agents.into_iter().collect();
+}
+
 /// Turns Remote Control on or off for the agent. True when, in the Claude Code view, the change
 /// waits for the interface's next start: it runs, and was started with the other state.
 #[tauri::command]
@@ -2666,6 +2851,117 @@ pub async fn ticket_resolve_conflict(core: CoreState<'_>, id: String) -> Res<()>
 #[tauri::command(async)]
 pub fn ticket_dismiss(core: CoreState, id: String) -> Res<()> {
     core.ticket_dismiss(&id).map_err(err)
+}
+
+/// « Rafraîchir » of the column « En revue » (ESC-59): its pull requests are read now.
+#[tauri::command]
+pub async fn ticket_prs_refresh(core: CoreState<'_>, project_id: String) -> Res<usize> {
+    core.ticket_prs_refresh(Some(&project_id))
+        .await
+        .map_err(err)
+}
+
+/// The CI of each project's target branch as last read (ESC-63): what the headers start with.
+#[tauri::command(async)]
+pub fn target_cis(
+    core: CoreState,
+) -> std::collections::BTreeMap<String, crate::branchci::BranchCi> {
+    core.target_cis()
+}
+
+/// « Rafraîchir » of a CI's pill (ESC-63): the project's target and the branches its tickets
+/// pushed are read now.
+#[tauri::command]
+pub async fn ci_refresh(core: CoreState<'_>, project_id: String) -> Res<()> {
+    core.branch_cis_refresh(Some(&project_id), true).await;
+    Ok(())
+}
+
+/// The checks of a target, of a pushed branch, of a ticket's pull request or of an agent's branch.
+#[tauri::command]
+pub async fn ci_detail(
+    core: CoreState<'_>,
+    of: crate::branchci::CiOf,
+) -> Res<crate::prview::Read<crate::branchci::CiDetail>> {
+    Ok(core.ci_detail(&of).await)
+}
+
+/// The end of a job's log, in reading only.
+#[tauri::command]
+pub async fn ci_job_log(
+    core: CoreState<'_>,
+    of: crate::branchci::CiOf,
+    job: String,
+) -> Res<crate::prview::Read<String>> {
+    Ok(core.ci_job_log(&of, &job).await)
+}
+
+/// « Relancer les jobs en échec », on the user's click: how many runs started.
+#[tauri::command]
+pub async fn ci_rerun(core: CoreState<'_>, of: crate::branchci::CiOf) -> Res<usize> {
+    core.ci_rerun(&of).await.map_err(err)
+}
+
+/// « Envoyer à un agent »: a failed job and the end of its log go to an agent of the project.
+#[tauri::command]
+pub async fn ci_log_to_agent(
+    core: CoreState<'_>,
+    of: crate::branchci::CiOf,
+    job: Option<String>,
+    check: String,
+    url: Option<String>,
+    agent_id: String,
+) -> Res<()> {
+    core.ci_log_to_agent(&of, job.as_deref(), &check, url.as_deref(), &agent_id)
+        .await
+        .map_err(err)
+}
+
+/// « Merger » / « Merger quand c'est vert » on a ticket « En revue » (ESC-62).
+#[tauri::command]
+pub async fn ticket_pr_merge(
+    core: CoreState<'_>,
+    id: String,
+    when_green: bool,
+) -> Res<crate::ticketprs::MergeHow> {
+    core.ticket_pr_merge(&id, when_green).await.map_err(err)
+}
+
+#[tauri::command(async)]
+pub fn ticket_pr_stop_waiting(core: CoreState, id: String) -> Res<()> {
+    core.ticket_pr_stop_waiting(&id).map_err(err)
+}
+
+/// « Terminer quand même »: a ticket whose pull request was closed without a merge is done.
+#[tauri::command(async)]
+pub fn ticket_finish_anyway(core: CoreState, id: String) -> Res<()> {
+    core.ticket_finish_anyway(&id).map_err(err)
+}
+
+/// « Remettre à faire »: a ticket whose pull request was closed without a merge goes back to do.
+#[tauri::command]
+pub async fn ticket_pr_back_to_todo(core: CoreState<'_>, id: String) -> Res<()> {
+    core.ticket_pr_back_to_todo(&id).await.map_err(err)
+}
+
+/// « L'agent corrige » on a ticket « En revue » whose CI failed (ESC-60): its agent gets the
+/// failed jobs and the end of their logs, its worktree made again from its branch.
+#[tauri::command]
+pub async fn ticket_pr_fix_ci(core: CoreState<'_>, id: String) -> Res<()> {
+    core.ticket_pr_fix_ci(&id).await.map_err(err)
+}
+
+/// « L'agent corrige les retours » on a ticket « En revue » (ESC-61): its agent gets the review's
+/// comments not resolved that came since its last push of fixes. On a click only.
+#[tauri::command]
+pub async fn ticket_pr_fix_reviews(core: CoreState<'_>, id: String) -> Res<()> {
+    core.ticket_pr_fix_reviews(&id).await.map_err(err)
+}
+
+/// « L'agent met à jour la branche » on a ticket « En revue » in conflict with its target (ESC-61).
+#[tauri::command]
+pub async fn ticket_pr_update_branch(core: CoreState<'_>, id: String) -> Res<()> {
+    core.ticket_pr_update_branch(&id).await.map_err(err)
 }
 
 #[tauri::command(async)]
@@ -2900,7 +3196,12 @@ pub async fn forge_connect(
     core: CoreState<'_>,
     form: crate::forge::connect::ForgeForm,
 ) -> Res<crate::forge::connect::ForgesView> {
-    core.forge_connect(form).await.map_err(err)
+    let r = core.forge_connect(form).await.map_err(err);
+    // An account there: the CI of the targets and the pull requests read at once (ESC-63).
+    if r.is_ok() {
+        core.wake_ticket_prs();
+    }
+    r
 }
 
 #[tauri::command]
@@ -2933,6 +3234,10 @@ pub async fn integration_connect(
         .integration_connect(service, account)
         .await
         .map_err(err);
+    // github.com's account is its code host's too: the CI of the targets read at once (ESC-63).
+    if r.is_ok() && service == Service::GITHUB {
+        core.wake_ticket_prs();
+    }
     let service = telemetry::service(service);
     counted(&core, Event::IntegrationConnected { service }, r)
 }
@@ -3169,7 +3474,15 @@ pub async fn voice_stop(
 /// Réglages › Voix: the services of « En ligne » whose key is in the keychain (never the keys).
 #[tauri::command(async)]
 pub fn voice_online_keys(core: CoreState) -> Vec<String> {
-    crate::voice::online::keys(&*core.secrets)
+    let settings = core.settings.read().clone();
+    crate::voice::online::usable_keys(&settings, &*core.secrets)
+}
+
+/// Réglages › Voix and the accounts of Mistral Vibe: the Mistral account's key by its end, or the Vibe account the voice
+/// goes by (ESC-327).
+#[tauri::command(async)]
+pub fn voice_mistral_key(core: CoreState) -> crate::voice::online::MistralKey {
+    crate::voice::online::mistral_state(&core.settings.read())
 }
 
 /// Keeps the key of `service` in the system's keychain, read back to check; never in a file: a
@@ -3194,12 +3507,12 @@ pub async fn voice_online_catalog(
     service: String,
     refresh: bool,
 ) -> Res<crate::voice::online_catalog::ServiceCatalog> {
-    use crate::voice::online_catalog::{catalog, fetch};
-    let p = crate::voice::online::Provider::find(&service)
+    let svc = crate::voice::service::find(&service)
         .ok_or_else(|| format!("unknown service {service}"))?;
+    let p = crate::voice::online::Provider::of(&svc.id());
     let kept = voice.catalog.get(p);
     if !refresh && kept.is_some() {
-        return Ok(catalog(p, kept.as_ref(), None));
+        return Ok(svc.catalog(kept.as_ref(), None));
     }
     let settings = core.settings.read().clone();
     let spec = match crate::voice::online::keyed(p, &settings, &*core.secrets) {
@@ -3207,17 +3520,17 @@ pub async fn voice_online_catalog(
         // No key: the documentation's, said only when asked.
         Err(e) => {
             let error = refresh.then(|| voice_err(e));
-            return Ok(catalog(p, kept.as_ref(), error));
+            return Ok(svc.catalog(kept.as_ref(), error));
         }
     };
-    match fetch(&spec).await {
+    match svc.list(&spec).await {
         Ok(listed) => {
             if let Err(e) = voice.catalog.put(p, &listed) {
                 log::warn!("voice: the catalog of {} not kept: {e:#}", p.label());
             }
-            Ok(catalog(p, Some(&listed), None))
+            Ok(svc.catalog(Some(&listed), None))
         }
-        Err(e) => Ok(catalog(p, kept.as_ref(), Some(e.message(i18n::ui())))),
+        Err(e) => Ok(svc.catalog(kept.as_ref(), Some(e.message(i18n::kit(i18n::ui()))))),
     }
 }
 
@@ -3432,8 +3745,8 @@ pub fn speech_preview_online(
     lang: String,
 ) -> Res<()> {
     let settings = core.settings.read().clone();
-    let p = crate::voice::online::Provider::find(&service)
-        .ok_or_else(|| format!("unknown service {service}"))?;
+    let p =
+        crate::voice::online::find(&service).ok_or_else(|| format!("unknown service {service}"))?;
     let spec = crate::voice::online::keyed(p, &settings, &*core.secrets)
         .map_err(voice_err)?
         .with_model(&model);
@@ -3455,7 +3768,7 @@ pub fn speech_preview_online(
             preview_text(lang),
             settings.voice.speech.volume.clamp(0.0, 1.0),
         )
-        .map_err(|e| e.message(i18n::ui()))
+        .map_err(|e| e.message(i18n::kit(i18n::ui())))
 }
 
 fn preview_text(lang: &str) -> &'static str {
@@ -3977,4 +4290,157 @@ pub fn discussion_drop(
 #[tauri::command]
 pub fn deep_links_take(inbox: State<'_, crate::deeplink::Inbox>) -> Vec<crate::deeplink::DeepLink> {
     inbox.take()
+}
+
+// ---------- The launches' pages (ESC-311) ----------
+
+/// Whether an address is Escouade's own (`navigation::destination`), never loaded in a page.
+fn own_of(app: &tauri::AppHandle) -> crate::devpage::Own {
+    use tauri::Manager;
+    let dev = app
+        .try_state::<crate::navigation::Home>()
+        .and_then(|h| h.dev.clone());
+    Arc::new(move |u: &tauri::Url| {
+        crate::navigation::destination(u, dev.as_ref()) == crate::navigation::Destination::App
+    })
+}
+
+/// What happens to the pages, to the window.
+fn tell_of(core: &Arc<Core>) -> crate::devpage::Tell {
+    let hub = Arc::downgrade(core);
+    Arc::new(move |page| {
+        if let Some(core) = hub.upgrade() {
+            core.hub.emit(UiEvent::DevPage { page });
+        }
+    })
+}
+
+/// Opens the page of agent `agent_id`'s launch at `url` (or loads it in the page already open):
+/// in the agent's view at `bounds`, or in its project's « Pages » window (`detached`).
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub fn devpage_open(
+    app: tauri::AppHandle,
+    core: CoreState,
+    pages: State<Arc<crate::devpage::Pages>>,
+    agent_id: String,
+    title: String,
+    url: String,
+    detached: bool,
+    bounds: Option<crate::devpage::Bounds>,
+) -> Res<crate::devpage::PageView> {
+    let project_id = core
+        .agent(&agent_id)
+        .map_err(err)?
+        .lock()
+        .meta
+        .project_id
+        .clone();
+    let own = own_of(&app);
+    crate::devpage::open(
+        &app,
+        &pages,
+        crate::devpage::Open {
+            agent_id: &agent_id,
+            project_id: &project_id,
+            title: &title,
+            url: &url,
+            detached,
+            bounds,
+            data_root: core.data.root(),
+            visible: bounds.is_some(),
+        },
+        own,
+        tell_of(&core),
+    )?;
+    pages.get(&agent_id).ok_or_else(|| "no page".into())
+}
+
+/// The page of agent `agent_id` in its view: placed at `bounds`, or hidden (none).
+#[tauri::command]
+pub fn devpage_place(
+    app: tauri::AppHandle,
+    pages: State<Arc<crate::devpage::Pages>>,
+    agent_id: String,
+    bounds: Option<crate::devpage::Bounds>,
+) -> Res<()> {
+    crate::devpage::place(&app, &pages, &agent_id, bounds)
+}
+
+/// Back, forward, reload, or `to` (an address typed in its bar).
+#[tauri::command]
+pub fn devpage_go(
+    app: tauri::AppHandle,
+    agent_id: String,
+    action: String,
+    to: Option<String>,
+) -> Res<()> {
+    crate::devpage::go(&app, &agent_id, &action, to.as_deref())
+}
+
+/// The devtools of the page of agent `agent_id`.
+#[tauri::command]
+pub fn devpage_devtools(app: tauri::AppHandle, agent_id: String) -> Res<()> {
+    crate::devpage::devtools(&app, &agent_id)
+}
+
+/// Moves the page to its project's « Pages » window, or back to the agent's view.
+#[tauri::command]
+pub fn devpage_detach(
+    app: tauri::AppHandle,
+    pages: State<Arc<crate::devpage::Pages>>,
+    agent_id: String,
+    detached: bool,
+) -> Res<crate::devpage::PageView> {
+    crate::devpage::detach(&app, &pages, &agent_id, detached)
+}
+
+/// Shows the page of agent `agent_id` at a width: `full`, `tablet` or `mobile`.
+#[tauri::command]
+pub fn devpage_mode(
+    app: tauri::AppHandle,
+    pages: State<Arc<crate::devpage::Pages>>,
+    agent_id: String,
+    mode: crate::devpage::PageMode,
+) -> Res<()> {
+    crate::devpage::set_mode(&app, &pages, &agent_id, mode)
+}
+
+/// The « Pages » window shows the page of agent `agent_id` (its tab clicked).
+#[tauri::command]
+pub fn devpage_show(
+    app: tauri::AppHandle,
+    pages: State<Arc<crate::devpage::Pages>>,
+    agent_id: String,
+) -> Res<()> {
+    let page = pages.get(&agent_id).ok_or("no page for this agent")?;
+    crate::devpage::show_in_window(&app, &pages, &page.project_id, &agent_id)
+}
+
+/// Closes the page of agent `agent_id`.
+#[tauri::command]
+pub fn devpage_close(
+    app: tauri::AppHandle,
+    pages: State<Arc<crate::devpage::Pages>>,
+    agent_id: String,
+) -> Res<()> {
+    crate::devpage::close(&app, &pages, &agent_id)
+}
+
+/// The pages open: all of them, or those of project `project_id` (a « Pages » window's bar).
+#[tauri::command]
+pub fn devpage_list(
+    pages: State<Arc<crate::devpage::Pages>>,
+    project_id: Option<String>,
+) -> crate::devpage::PagesOf {
+    match project_id {
+        Some(p) => crate::devpage::PagesOf {
+            pages: pages.of_project(&p),
+            shown: pages.shown_in_window(&p),
+        },
+        None => crate::devpage::PagesOf {
+            pages: pages.all(),
+            shown: None,
+        },
+    }
 }

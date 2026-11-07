@@ -31,6 +31,7 @@
       ...(v.run ? ['run'] : []),
       ...(x.decide ? ['decide'] : []),
       ...(x.commands ?? []).map((w) => `commands:${w}`),
+      ...(x.files ?? []).map((f) => `files:${f.root}:${f.access}`),
       ...(x.events ?? []).map((w) => `events:${w}`),
       ...(x.network ?? []).map((w) => `network:${w}`),
       ...(x.secrets ?? []).map((w) => `secrets:${w}`),

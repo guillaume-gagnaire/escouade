@@ -176,7 +176,7 @@ fn the_board_still_reads_github_com_repositories() {
 #[test]
 fn each_host_says_its_word_and_what_it_can_do() {
     let r = Registry::standard();
-    let kinds: Vec<&str> = r.all().iter().map(|p| p.kind()).collect();
+    let kinds: Vec<String> = r.all().iter().map(|p| p.kind()).collect();
     assert_eq!(kinds, ["github", "gitlab", "bitbucket", "gitea", "azure"]);
     assert_eq!(r.get("azure").unwrap().request_word(), "PR");
     assert_eq!(r.get("gitlab").unwrap().request_word(), "MR");
@@ -446,8 +446,8 @@ struct FakeClient {
 }
 
 impl Provider for FakeHost {
-    fn kind(&self) -> &'static str {
-        "fake"
+    fn kind(&self) -> String {
+        "fake".into()
     }
     fn name(&self) -> &'static str {
         "Fake"
@@ -468,8 +468,8 @@ impl Provider for FakeHost {
     fn own_host(&self, host: &str) -> Option<String> {
         (host == "fake.dev").then(|| host.to_string())
     }
-    fn scopes(&self) -> &'static [&'static str] {
-        &["read", "write"]
+    fn scopes(&self) -> Vec<String> {
+        ["read", "write"].map(String::from).to_vec()
     }
     fn token_page(&self, url: &str) -> String {
         format!("{url}/tokens")
@@ -515,6 +515,7 @@ impl Forge for FakeClient {
                 state: CheckState::Success,
                 url: None,
                 job: None,
+                ..Default::default()
             }])
         })
     }
@@ -635,7 +636,7 @@ async fn github_com_is_one_account_for_issues_and_pull_requests() {
     assert_eq!(labels, ["@ada", "@ada-corp"]);
     // Disconnected from Issues: gone as a code host too.
     h.core
-        .integration_disconnect(crate::model::Service::Github)
+        .integration_disconnect(crate::model::Service::GITHUB)
         .unwrap();
     let view = h.core.forges_view().await;
     assert_eq!(view.accounts.len(), 1);
@@ -665,4 +666,194 @@ async fn github_com_is_one_account_for_issues_and_pull_requests() {
         .await
         .unwrap_err();
     assert_eq!(e.to_string(), "Indique l'e-mail.");
+}
+
+#[test]
+fn a_registry_is_built_from_a_list_of_hosts() {
+    let r = Registry::from_providers(vec![Arc::new(FakeHost { api: String::new() })]);
+    assert_eq!(r.all().len(), 1);
+    assert_eq!(r.get("fake").unwrap().scopes(), ["read", "write"]);
+    assert!(r.get("github").is_none());
+    // The list's order is the registry's: the standard hosts, then one more.
+    let all = Registry::from_providers(Registry::standard().all().to_vec())
+        .with(Arc::new(FakeHost { api: String::new() }));
+    let kinds: Vec<String> = all.all().iter().map(|p| p.kind()).collect();
+    assert_eq!(kinds.last().map(String::as_str), Some("fake"));
+    assert_eq!(kinds.len(), 6);
+}
+
+#[test]
+fn a_cli_says_where_its_token_is_without_code() {
+    let gh = CliRead::Stdout;
+    assert_eq!(gh.token(" ghp_x\n", ""), Some("ghp_x".into()));
+    assert_eq!(gh.token("  \n", "boom"), None);
+    let az = CliRead::StdoutWord;
+    assert_eq!(az.token("a.b.c\r\n", ""), Some("a.b.c".into()));
+    assert_eq!(az.token("two words", ""), None);
+    let after = CliRead::After("Token:".into());
+    assert_eq!(
+        after.token("", "x\n  ✓ Token: glpat-1\n"),
+        Some("glpat-1".into())
+    );
+    assert_eq!(after.token("Token: ****", ""), None);
+}
+
+#[test]
+fn a_probe_says_what_tells_its_host_without_code() {
+    let p = Probe {
+        path: "/api/v4/version".into(),
+        statuses: vec![401],
+        key_status: 200,
+        key: "version".into(),
+    };
+    assert!(p.matches(401, &Value::Null));
+    assert!(p.matches(200, &serde_json::json!({"version": "1.0"})));
+    assert!(!p.matches(200, &serde_json::json!({"version": 1})));
+    assert!(!p.matches(404, &serde_json::json!({"version": "1"})));
+    let only_key = Probe {
+        path: "/v".into(),
+        key_status: 200,
+        key: "version".into(),
+        ..Default::default()
+    };
+    assert!(!only_key.matches(401, &Value::Null));
+}
+
+/// The plugin « Bitbucket » switched off (INT-8.3), as GitHub's is on the card of an agent
+/// (`agentprs_tests`): the view of the code hosts reads it from the registry, and a call to its
+/// process says the plugin is down instead of failing anywhere else.
+#[tokio::test]
+async fn the_bitbucket_plugin_switched_off_is_said_by_the_view_and_by_its_calls() {
+    use crate::plugins::builtin::BITBUCKET;
+    let h = harness("forge-bitbucket-off");
+    let served = |view: &super::connect::ForgesView| {
+        view.providers
+            .iter()
+            .find(|p| p.kind == "bitbucket")
+            .and_then(|p| p.served_by.as_ref().map(|s| s.on))
+    };
+    assert_eq!(served(&h.core.forges_view().await), Some(true));
+
+    h.core
+        .plugins
+        .choose(BITBUCKET, |c| c.enabled = false)
+        .unwrap();
+    h.core.plugin_runtime.forget(BITBUCKET);
+    assert_eq!(served(&h.core.forges_view().await), Some(false));
+    let creds = Credentials {
+        url: "https://bitbucket.org".into(),
+        email: "ada@atlas.dev".into(),
+        token: "ATATT_test".into(),
+        api: None,
+    };
+    let client = crate::plugins::adapters::ProcessForge::new(
+        h.core.plugin_runtime.clone(),
+        BITBUCKET,
+        "bitbucket",
+        &creds,
+    );
+    let e = client.me().await.unwrap_err();
+    assert!(crate::plugins::adapters::is_down(&e), "{e:#}");
+
+    h.core
+        .plugins
+        .choose(BITBUCKET, |c| c.enabled = true)
+        .unwrap();
+    assert_eq!(served(&h.core.forges_view().await), Some(true));
+}
+
+/// The plugin « Gitea et Forgejo » switched off (INT-8.4), like Bitbucket's: the view of the code
+/// hosts reads it from the registry, and a call to its process says the plugin is down.
+#[tokio::test]
+async fn the_gitea_plugin_switched_off_is_said_by_the_view_and_by_its_calls() {
+    use crate::plugins::builtin::GITEA;
+    let h = harness("forge-gitea-off");
+    let served = |view: &super::connect::ForgesView| {
+        view.providers
+            .iter()
+            .find(|p| p.kind == "gitea")
+            .and_then(|p| p.served_by.as_ref().map(|s| s.on))
+    };
+    assert_eq!(served(&h.core.forges_view().await), Some(true));
+
+    h.core.plugins.choose(GITEA, |c| c.enabled = false).unwrap();
+    h.core.plugin_runtime.forget(GITEA);
+    assert_eq!(served(&h.core.forges_view().await), Some(false));
+    let creds = Credentials {
+        url: "https://git.acme.dev".into(),
+        email: String::new(),
+        token: "gitea_test".into(),
+        api: None,
+    };
+    let client = crate::plugins::adapters::ProcessForge::new(
+        h.core.plugin_runtime.clone(),
+        GITEA,
+        "gitea",
+        &creds,
+    );
+    let e = client.me().await.unwrap_err();
+    assert!(crate::plugins::adapters::is_down(&e), "{e:#}");
+
+    h.core.plugins.choose(GITEA, |c| c.enabled = true).unwrap();
+    assert_eq!(served(&h.core.forges_view().await), Some(true));
+}
+
+/// The plugin « GitLab » switched off (INT-8.2): the view of the code hosts reads it from the registry, and its two
+/// uses say the plugin is down — a call of the code host, and a call of GitLab Issues on the same account.
+#[tokio::test]
+async fn the_gitlab_plugin_switched_off_is_said_by_the_view_and_by_its_two_uses() {
+    use crate::integrations::source::TicketSource;
+    use crate::plugins::builtin::GITLAB;
+    let h = harness("forge-gitlab-off");
+    let served = |view: &super::connect::ForgesView| {
+        view.providers
+            .iter()
+            .find(|p| p.kind == "gitlab")
+            .and_then(|p| p.served_by.as_ref().map(|s| s.on))
+    };
+    assert_eq!(served(&h.core.forges_view().await), Some(true));
+
+    h.core
+        .plugins
+        .choose(GITLAB, |c| c.enabled = false)
+        .unwrap();
+    h.core.plugin_runtime.forget(GITLAB);
+    assert_eq!(served(&h.core.forges_view().await), Some(false));
+    let creds = Credentials {
+        url: "https://gitlab.com".into(),
+        email: String::new(),
+        token: "glpat-test".into(),
+        api: None,
+    };
+    let client = crate::plugins::adapters::ProcessForge::new(
+        h.core.plugin_runtime.clone(),
+        GITLAB,
+        "gitlab",
+        &creds,
+    );
+    let e = client.me().await.unwrap_err();
+    assert!(crate::plugins::adapters::is_down(&e), "{e:#}");
+
+    let account = crate::integrations::Account {
+        site: "https://gitlab.com".into(),
+        user: "ada".into(),
+        ..Default::default()
+    };
+    let issues = crate::plugins::hosted::HostedTicketSource::new(
+        "GitLab",
+        vec![(
+            "gitlab.com".into(),
+            crate::plugins::adapters::ProcessTicketSource::new(
+                h.core.plugin_runtime.clone(),
+                GITLAB,
+                "gitlab",
+                &account,
+            ),
+        )],
+    );
+    let e = issues.me().await.unwrap_err();
+    assert!(crate::plugins::adapters::is_down(&e), "{e:#}");
+
+    h.core.plugins.choose(GITLAB, |c| c.enabled = true).unwrap();
+    assert_eq!(served(&h.core.forges_view().await), Some(true));
 }

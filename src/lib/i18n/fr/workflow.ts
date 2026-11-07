@@ -75,6 +75,11 @@ export default {
   analyze: 'Analyser avec un agent…',
   tickets: 'La boucle des tickets du Kanban s’affiche ici, comme le workflow « Tickets », dès que {project} a un ticket.',
   reading: 'Lecture des workflows…',
+  // « Pas de workflow pour ce projet » (ESC-309).
+  offTitle: 'Pas de workflow pour ce projet',
+  offBody:
+    'Escouade ne lit ni n’écrit les workflows de {project} et n’y suit aucun agent. Pour le défaire : Réglages › Projets › Workflow, « Lire les workflows ».',
+  offUndo: 'Ouvrir les réglages du workflow',
   // Where the card, the conversation and the Kanban meet it (ESC-197, choices 145 and 159).
   ticketsName: 'Tickets',
   ticketsDoor: 'pilote auto',

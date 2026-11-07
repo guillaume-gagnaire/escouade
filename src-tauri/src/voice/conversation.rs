@@ -431,7 +431,7 @@ impl Voice {
         let sentences = match &reader.online {
             Some(o) => super::online_speech::sentences(
                 text,
-                super::online_speech::max_chars(o.spec.provider),
+                super::service::of(o.spec.provider).max_chars(),
             ),
             None => engine.sentences(text),
         };
@@ -511,7 +511,7 @@ impl Voice {
                         {
                             let voice = o.choice.voice.clone();
                             let default = o.default_voice.clone();
-                            let why = e.message(crate::i18n::ui());
+                            let why = e.message(crate::i18n::kit(crate::i18n::ui()));
                             let message = tr!(
                                 "{why} La voix « {voice} » n’est pas celle de {p} : sa voix par défaut, « {default} », la remplace.",
                                 "{why} The voice “{voice}” is not one of {p}: its default voice, “{default}”, stands in."
@@ -683,7 +683,7 @@ impl Feed {
 
 /// What the conversation says when the service on line fails: why, and who reads now.
 fn fallback_message(e: &OnlineError) -> String {
-    let why = e.message(crate::i18n::ui());
+    let why = e.message(crate::i18n::kit(crate::i18n::ui()));
     tr!(
         "{why} La conversation continue avec la voix locale (Piper).",
         "{why} The conversation goes on with the local voice (Piper)."
@@ -692,7 +692,7 @@ fn fallback_message(e: &OnlineError) -> String {
 
 /// What it says when the service fails with no voice of Piper's to stand in: it pauses.
 fn pause_message(e: &OnlineError) -> String {
-    let why = e.message(crate::i18n::ui());
+    let why = e.message(crate::i18n::kit(crate::i18n::ui()));
     tr!(
         "{why} La conversation est en pause : corrige-le, ou télécharge une voix locale dans Réglages › Voix, puis reprends.",
         "{why} The conversation is paused: fix it, or download a local voice in Settings › Voice, then resume."
@@ -744,7 +744,7 @@ impl Ears {
         let spec = self.live(s)?;
         let language = s.reader.lock().language.clone();
         let (session, emit) = (s.id, emit.clone());
-        let stream = LiveStream::open(
+        let stream = super::service::of(spec.provider).open_live(
             &spec,
             &language,
             rate,

@@ -367,9 +367,9 @@ impl VibeProcess {
                     params["toolCall"] = call;
                 }
                 // « Projet privé »: refused at once, never a card the user could accept.
-                if crate::engine::cursor::fenced(&params, &self.fence) {
+                if escouade_acp::fenced(&params, &self.fence) {
                     log::info!("vibe: a permission naming a path of another project refused (private project)");
-                    let option = crate::engine::cursor::option_of(&params, "reject_once");
+                    let option = escouade_acp::option_of(&params, "reject_once");
                     self.answer_vibe(
                         &msg["id"],
                         json!({ "outcome": { "outcome": "selected", "optionId": option } }),
@@ -385,7 +385,7 @@ impl VibeProcess {
                     )
                 {
                     log::info!("vibe: a write refused in the mode Plan");
-                    let option = crate::engine::cursor::option_of(&params, "reject_once");
+                    let option = escouade_acp::option_of(&params, "reject_once");
                     self.answer_vibe(
                         &msg["id"],
                         json!({ "outcome": { "outcome": "selected", "optionId": option } }),
@@ -468,7 +468,7 @@ impl VibeProcess {
             (s.instructions.take(), s.settings.mode == "plan")
         };
         let heads = [
-            instructions.map(|i| crate::engine::cursor::preamble(&i)),
+            instructions.map(|i| escouade_acp::preamble(&i)),
             planning.then(|| super::PLAN_MODE.to_string()),
         ];
         if let Some(list) = blocks.as_array_mut() {
@@ -578,7 +578,11 @@ impl VibeProcess {
     }
 
     fn mcp_servers(&self) -> Value {
-        crate::engine::cursor::mcp_servers(self.escouade.as_ref())
+        escouade_acp::mcp_servers(
+            self.escouade
+                .as_ref()
+                .map(|(u, t)| (u.as_str(), t.as_str())),
+        )
     }
 
     /// Opens the agent's session as `start` says: its id, how it was opened (`new`, `resume`,
@@ -969,7 +973,7 @@ impl EngineProcess for VibeProcess {
         let option = if permanent {
             PERMANENT.to_string()
         } else {
-            crate::engine::cursor::option_of(&asked.params, kind)
+            escouade_acp::option_of(&asked.params, kind)
         };
         self.answer(
             request_id,

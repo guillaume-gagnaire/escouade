@@ -13,10 +13,11 @@ use crate::accounts;
 use crate::agent::{AgentRt, Waiting};
 use crate::core::Core;
 use crate::folders;
+use crate::forge::{CheckState, PrState, PullRequest};
 use crate::git;
 use crate::model::{
     AgentMeta, AgentStatus, Column, Criterion, EngineId, PauseReason, PendingView, Project,
-    QuotaMeter, RateWindow, RemoteSource, Service, Ticket, FIVE_HOURS, MAX_PENDING_FIELD,
+    QuotaMeter, RateWindow, RemoteSource, Service, Ticket, TicketPr, FIVE_HOURS, MAX_PENDING_FIELD,
     MAX_PENDING_ITEMS, WEEK,
 };
 use crate::plan::PlanState;
@@ -173,6 +174,9 @@ struct ColumnCounts {
     todo: usize,
     doing: usize,
     review: usize,
+    /// « En revue » (ESC-59).
+    #[serde(rename = "inReview")]
+    in_review: usize,
     done: usize,
 }
 
@@ -182,6 +186,7 @@ impl ColumnCounts {
             Column::Todo => self.todo += 1,
             Column::Doing => self.doing += 1,
             Column::Review => self.review += 1,
+            Column::Pr => self.in_review += 1,
             Column::Done => self.done += 1,
         }
     }
@@ -572,7 +577,7 @@ fn kanban_order(list: &mut [&Ticket]) {
         a.column.cmp(&b.column).then_with(|| match a.column {
             Column::Todo => (a.rank, a.created_at).cmp(&(b.rank, b.created_at)),
             Column::Doing => a.started_at.unwrap_or(0).cmp(&b.started_at.unwrap_or(0)),
-            Column::Review => a.review_at.unwrap_or(0).cmp(&b.review_at.unwrap_or(0)),
+            Column::Review | Column::Pr => a.review_at.unwrap_or(0).cmp(&b.review_at.unwrap_or(0)),
             Column::Done => b.done_at.unwrap_or(0).cmp(&a.done_at.unwrap_or(0)),
         })
     });
@@ -628,6 +633,9 @@ pub(crate) struct TicketView {
     #[serde(skip_serializing_if = "Option::is_none")]
     account_lost: Option<String>,
     external: Option<External>,
+    /// Its pull request as last read: the one its validation opened, else the first of its agent.
+    /// No title nor comment here, none of a third party's words: `get_pull_request` gives them.
+    pr: Option<TicketPrView>,
     /// Its agent: None before it starts, and still named once the ticket is done (archived).
     agent: Option<TicketAgent>,
     /// Its agent's branch, else the existing one it takes up; None before its agent starts. Kept
@@ -648,6 +656,76 @@ pub(crate) struct TicketView {
     step: Option<String>,
     /// What its approval did, once it is done.
     outcome: Option<Outcome>,
+}
+
+/// A ticket's pull request, as `get_ticket` sums it up (ESC-68).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TicketPrView {
+    number: u64,
+    url: String,
+    /// The host's word: « MR » on GitLab, « PR » elsewhere.
+    word: String,
+    state: PrState,
+    draft: bool,
+    branch: String,
+    target: String,
+    /// The repository it is in, when it is not the project's target.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    repo: String,
+    checks: Option<CheckState>,
+    checks_failed: u32,
+    approvals: u32,
+    changes_requested: bool,
+    open_threads: u32,
+    conflict: Option<bool>,
+    /// When it was last read (ms); none for one read when its agent was shown.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    checked_at: Option<i64>,
+}
+
+impl From<&TicketPr> for TicketPrView {
+    fn from(p: &TicketPr) -> Self {
+        Self {
+            number: p.number,
+            url: p.url.clone(),
+            word: p.word.clone(),
+            state: p.state,
+            draft: p.draft,
+            branch: p.branch.clone(),
+            target: p.target.clone(),
+            repo: String::new(),
+            checks: p.checks,
+            checks_failed: p.checks_failed,
+            approvals: p.approvals,
+            changes_requested: p.changes_requested,
+            open_threads: p.open_threads,
+            conflict: p.mergeable.map(|m| !m),
+            checked_at: p.checked_at,
+        }
+    }
+}
+
+impl TicketPrView {
+    fn of_agent(p: &PullRequest, word: Option<&str>) -> Self {
+        Self {
+            number: p.number,
+            url: p.url.clone(),
+            word: word.unwrap_or("PR").to_string(),
+            state: p.state,
+            draft: p.draft,
+            branch: p.head.clone(),
+            target: p.base.clone(),
+            repo: p.host_repo.clone(),
+            checks: p.checks,
+            checks_failed: 0,
+            approvals: p.approvals,
+            changes_requested: p.changes_requested,
+            open_threads: p.open_threads,
+            conflict: p.mergeable.map(|m| !m),
+            checked_at: None,
+        }
+    }
 }
 
 /// A ticket's agent, as `get_ticket` sums it up.
@@ -698,6 +776,7 @@ pub(crate) fn ticket_view<R: Runtime>(core: &Core<R>, t: &Ticket) -> TicketView 
         .map(|(id, key)| (id.as_str(), key.as_str()))
         .collect();
     let mut worktree = None;
+    let mut agent_pr = None;
     let agent = t.agent_id.as_ref().map(|id| {
         let Ok(h) = core.agent(id) else {
             return TicketAgent {
@@ -709,6 +788,11 @@ pub(crate) fn ticket_view<R: Runtime>(core: &Core<R>, t: &Ticket) -> TicketView 
         };
         let rt = h.lock();
         worktree = rt.meta.worktree.clone();
+        agent_pr = rt
+            .meta
+            .prs
+            .first()
+            .map(|p| TicketPrView::of_agent(p, rt.meta.pr_word.as_deref()));
         TicketAgent {
             id: id.clone(),
             name: Some(rt.meta.name.clone()),
@@ -746,6 +830,7 @@ pub(crate) fn ticket_view<R: Runtime>(core: &Core<R>, t: &Ticket) -> TicketView 
             url: e.url.clone(),
             error: e.error.clone(),
         }),
+        pr: t.pr.as_ref().map(TicketPrView::from).or(agent_pr),
         agent,
         branch: worktree
             .as_ref()
@@ -905,10 +990,11 @@ struct AccountUsage {
     engine: EngineId,
     /// New agents of its harness go to it now.
     current: bool,
-    /// Its quota's meters as last read (`QuotaMeter`): windows by their length, the month's
-    /// credits; none for a harness without a quota.
+    /// Its quota's meters as last read (`QuotaMeter`): windows by their length, a model's own with
+    /// its scope (`model`, ESC-312), the month's credits; none for a harness without a quota.
     meters: Vec<QuotaMeter>,
-    /// Claude Code's two windows, as before 1.8.
+    /// Claude Code's two windows of every model, as before 1.8: `five_hour` none for a plan
+    /// without one.
     five_hour: Option<RateWindow>,
     seven_day: Option<RateWindow>,
 }
@@ -927,8 +1013,8 @@ struct Pause {
 pub(super) fn usage<R: Runtime>(core: &Core<R>) -> Result<String, ToolError> {
     let list = core.settings.read().accounts.clone();
     // Each account's windows as last read, and the account new agents go to as the status bar
-    // and the autopilot have it (`UsageSnapshot::settle`: the first active one under the
-    // threshold, else the first active one).
+    // and the autopilot have it (`UsageSnapshot::settle`: the first good one, `pace`, else the
+    // first whose only fault is its pace, else the first active one).
     let usage = core.usage.lock().clone();
     let rows = list
         .into_iter()

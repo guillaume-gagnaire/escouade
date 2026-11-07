@@ -56,7 +56,7 @@ Les agents des tickets restent dans la vue d’Escouade. Si l’un d’eux deman
 
 ### Sur quel compte il part
 
-Un ticket part sur le « Compte préféré » du projet s’il est actif. Sinon, sur le premier compte actif, dans l’ordre de Réglages › Comptes, qui est sous le seuil de « Pause au-delà du quota », sans pause due à la limite d’usage et sans agent qui attende sa remise à zéro. Un compte « Réservé aux projets » ne sert que ces projets. L’agent reste ensuite sur son compte, sauf reprise sur un autre compte après la limite d’usage (voir plus bas). Voir [Les comptes Claude](accounts).
+Un ticket part sur le « Compte préféré » du projet s’il est actif. Sinon, sur le premier compte actif, dans l’ordre de Réglages › Comptes, qui est « bon » (voir [Les comptes Claude](accounts#le-choix-automatique)) et sous le seuil de « Pause au-delà du quota », sans pause due à la limite d’usage et sans agent qui attende sa remise à zéro. Un compte « Réservé aux projets » ne sert que ces projets. L’agent reste ensuite sur son compte, sauf reprise sur un autre compte après la limite d’usage (voir plus bas). Voir [Les comptes Claude](accounts).
 
 ## La boucle
 

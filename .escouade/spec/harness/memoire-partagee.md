@@ -2,9 +2,9 @@
 title: "Mémoire partagée"
 subject: "Harness"
 sources: ["website/content/docs/fr/shared-memory.md","docs/FACTORY.md","src-tauri/src/memory.rs","src-tauri/src/mcp/memory.rs","src-tauri/src/core.rs","src/lib/i18n/fr/memory.ts"]
-tickets: ["ESC-255"]
+tickets: ["ESC-255","ESC-310"]
 decisions: []
-compared: null
+compared: "2026-10-31T16:10:35+01:00"
 ---
 
 ## Ce que c'est
@@ -30,7 +30,7 @@ Le carnet de travail des agents d'un projet : les façons de faire qui marchent 
 
 - Chaque nouvel agent d'Escouade, quel que soit son harness, est prié de la consulter au départ et d'y noter ce qu'il apprend de la façon de travailler dans le projet. Un agent qui change de harness la retrouve telle quelle.
 - Quatre outils du serveur MCP, les mêmes pour tous les harness (voir *Serveur MCP*) :
-  - `search_memory` : par les mots (nom, description, texte ; casse et accents ignorés), et aussi par le sens quand le modèle des vecteurs est téléchargé (voir *Index du code*). Les souvenirs trouvés, le meilleur d'abord, avec le début de leur texte ; 10 par défaut, 50 au plus ;
+  - `search_memory` : par les mots (nom, description, texte ; casse et accents ignorés), et aussi par le sens quand le modèle des vecteurs est téléchargé (voir *Recherche par le sens*). Les souvenirs trouvés, le meilleur d'abord, avec le début de leur texte ; 10 par défaut, 50 au plus ;
   - `read_memory` : un souvenir entier ;
   - `write_memory` : note un souvenir, ou remplace celui du même nom ;
   - `forget_memory` : oublie un souvenir qui s'avère faux.

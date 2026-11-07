@@ -1198,36 +1198,39 @@ But : Escouade suit le travail des agents après le push, jusqu'à la production
 - [ ] **À essayer en vrai** (décidé le 2026-10-16) : GitLab (jeton personnel et `glab`, sonde `/api/v4/version`), Bitbucket Cloud (jeton d'API Atlassian) et Gitea / Forgejo (sonde `/api/v1/version`) ont été écrits d'après leur documentation et testés sur de faux serveurs seulement ; GitHub Enterprise Server et GHE.com aussi.
 
 ### Les PR des tickets
-- [ ] **Ouvrir la PR par l'API** des quatre hébergeurs : `gh` n'est plus nécessaire, il reste une source de jeton.
+- [x] **Ouvrir la PR par l'API** des quatre hébergeurs : `gh` n'est plus nécessaire, il reste une source de jeton. Fait par ESC-59 (`ticketprs.rs`), contre les faux serveurs ; reste l'essai réel sur GitHub (compte de l'utilisateur, sans PR sur un dépôt réel sans sa validation), puis GitLab, Bitbucket Cloud et Gitea/Forgejo en vrai plus tard. Une PR d'un projet à plusieurs dépôts ne passe pas encore « En revue ».
   - Brouillon : le champ `draft` de GitHub, de Gitea et de Bitbucket (à vérifier) ; chez GitLab, le titre préfixé `Draft:`.
   - Lien vers l'issue d'origine : `Closes #12` pour GitHub, GitLab et Gitea ; la clé Jira ou Linear dans le titre, comme aujourd'hui.
   - Relecteurs et étiquettes par défaut dans les réglages du Kanban.
   - Sans compte : comme aujourd'hui, mais avec la page de création de chaque hébergeur, remplie (`/compare/` de GitHub et de Gitea, `merge_requests/new?merge_request[source_branch]=…` de GitLab, `pull-requests/new?source=…` de Bitbucket).
-- [ ] **Colonne « En revue »**, entre « À tester » et « Terminé » (décidé le 2026-10-14) : le ticket y passe à l'ouverture de sa PR et y reste jusqu'au merge. Elle n'apparaît que si le Kanban ouvre des PR ou qu'un ticket y est.
-- [ ] **Carte en revue** : numéro et lien, état (brouillon, ouverte, approuvée, changements demandés), CI (✓, ✗ ou ⏳, et le nombre de jobs), approbations (« 1/2 »), fils de discussion ouverts, conflit avec la cible.
-- [ ] **Mergée sur l'hébergeur** :
+- [x] **Colonne « En revue »**, entre « À tester » et « Terminé » (décidé le 2026-10-14) : le ticket y passe à l'ouverture de sa PR et y reste jusqu'au merge. Elle n'apparaît que si le Kanban ouvre des PR ou qu'un ticket y est.
+- [x] **Carte en revue** : numéro et lien, état (brouillon, ouverte, approuvée, changements demandés), CI (✓, ✗ ou ⏳, et le nombre de jobs), approbations (« 1/2 »), fils de discussion ouverts, conflit avec la cible.
+- [x] **Mergée sur l'hébergeur** :
   - le ticket passe « Terminé » (« ⤵ PR #12 mergée dans main ») ;
   - l'issue externe suit et reçoit son commentaire (`sync.rs`) ;
   - la branche locale part si le réglage le dit, et un fetch met la base à jour ;
   - les tickets qui l'attendent partent alors, sur une cible qui a son code.
-- [ ] **Fermée sans merge** : le ticket est bloqué (« PR #12 fermée sans merge »), avec « Remettre à faire » et « Terminer quand même ».
-- [ ] **CI en échec** : « L'agent corrige ».
-  - Le ticket repart chez son agent, restauré depuis sa branche si son worktree n'est plus là.
-  - L'agent reçoit le nom des jobs en échec et la fin de leurs journaux (80 lignes par job, comme les tests).
-  - Il pousse, la PR se met à jour, et le ticket revient « En revue ».
-  - Avec le pilote auto, ça part seul, dans la limite des boucles du ticket (décidé le 2026-10-14). Sans lui, un bouton sur la carte.
-- [ ] **Changements demandés** : « L'agent traite les retours ».
+- [x] **Fermée sans merge** : le ticket est bloqué (« PR #12 fermée sans merge »), avec « Remettre à faire » et « Terminer quand même ».
+- [x] **CI en échec** (ESC-60, `ticketprs.rs`) : « L'agent corrige ».
+  - Le ticket reste « En revue » ; son agent, archivé à la validation, est restauré et son worktree recréé depuis sa branche (une branche supprimée du projet est reprise du dépôt distant).
+  - L'agent reçoit le nom des jobs en échec et la fin de leurs journaux (`agentprs::checks_message`, comme pour les agents ordinaires) ; une CI tierce sans journal : la carte le dit, son nom et son adresse seuls partent.
+  - À la fin de son tour, Escouade pousse (l'agent a pu le faire), la PR est relue, le ticket revient « En revue » et l'agent est archivé de nouveau. Rien de commité, des changements non commités, un push refusé, un tour interrompu : la carte le dit, l'agent reste restauré.
+  - Avec le pilote auto, ça part seul quand une place est libre, dans la limite des boucles du ticket (décidé le 2026-10-14), et jamais deux fois pour le même échec (il attend que la CI tourne de nouveau). Sans lui, le bouton sur la carte.
+  - Reste : essai réel sur GitHub (ESC-53, ESC-70) ; GitLab, Bitbucket Cloud et Gitea/Forgejo d'après leurs faux serveurs, à essayer en vrai plus tard. Un ticket dont l'agent a été supprimé ne peut pas faire corriger sa CI.
+- [x] **Changements demandés** : « L'agent traite les retours ». Fait par ESC-61 (`ticketprs.rs`, contre les faux serveurs) ; reste l'essai réel sur GitHub (ESC-53, ESC-70), puis GitLab, Bitbucket Cloud, Gitea/Forgejo et Azure DevOps en vrai plus tard (leur date de commentaire, et l'extrait du diff que seuls GitHub et Gitea donnent : ailleurs, Escouade lit les lignes du fichier dans la branche).
   - Escouade le propose dès que des retours arrivent (décidé le 2026-10-14) : une notification, et sur la carte, le nombre de retours avec « L'agent corrige les retours ». L'agent ne part qu'après ce clic, même avec le pilote auto.
   - Il reçoit les commentaires non résolus arrivés depuis le dernier push : fichier, ligne, extrait du diff, auteur, texte.
   - Il pousse ses corrections.
   - Répondre sous chaque fil (« Corrigé dans abc1234 ») est un réglage, désactivé par défaut. Escouade ne résout jamais un fil seule.
-- [ ] **Conflit avec la cible** : « L'agent met à jour la branche », par un merge de la cible dans la branche, avec le traitement des conflits d'aujourd'hui (`on_conflict`). Le rebase, et son push forcé (`--force-with-lease`), seulement en réglage.
-- [ ] **Merger depuis Escouade** : « Merger » quand la PR est approuvée et verte, avec la stratégie du Kanban (parmi celles que le dépôt autorise). « Merger quand c'est vert » passe par l'auto-merge de l'hébergeur :
+  - « Depuis le dernier push » : depuis le push des dernières corrections de retours (l'ouverture de la PR pour les premières), et jamais un commentaire déjà donné ; un push de correction de CI ou de mise à jour de la branche n'efface pas les retours en attente.
+- [x] **Conflit avec la cible** (ESC-61) : « L'agent met à jour la branche », par un merge de la cible dans la branche, avec le traitement des conflits d'aujourd'hui (`on_conflict`). Le rebase, et son push forcé (`--force-with-lease`), seulement en réglage. Sans conflit, Escouade pousse tout de suite ; avec, « Annuler » du Kanban défait et nomme les fichiers, sinon l'agent résout. Reste à essayer en vrai : un rebase poussé sur une PR GitHub réelle (la PR suit-elle le push forcé, ses fils restent-ils accrochés).
+- [x] **Merger depuis Escouade** (ESC-62, 2026-11-02) : « Merger » quand la PR est approuvée et verte, avec la stratégie du Kanban (parmi celles que le dépôt autorise, lues par `Forge::merge_options`). « Merger quand c'est vert » passe par l'auto-merge de l'hébergeur :
   - GitHub : `enablePullRequestAutoMerge` (GraphQL), si le dépôt l'autorise ;
   - GitLab : `merge_when_pipeline_succeeds` (ou `auto_merge`, selon la version) ;
   - Gitea : `merge_when_checks_succeed`, seulement sur une branche protégée ;
   - Bitbucket : aucun appel d'API connu. Son API merge tout de suite (demandes ouvertes BCLOUD-22055 et BCLOUD-22062). Escouade attend la CI puis merge elle-même tant qu'elle tourne, et le dit.
-- [ ] **Pilote auto** : un ticket en revue ne compte dans les agents en parallèle que quand son agent travaille.
+  - Reste à essayer en vrai (ESC-53, ESC-70, avec l'utilisateur) : sur GitHub, « Merger » et « Merger quand c'est vert » sur un dépôt jetable, avec et sans « Allow auto-merge », et les méthodes de merge lues sans droit de pousser ; sur GitLab, `squash_option` et `auto_merge` / `merge_when_pipeline_succeeds` selon la version ; sur Gitea / Forgejo, `merge_when_checks_succeed` sur une branche protégée ; sur Bitbucket Cloud, `merge_strategies` de la branche cible et l'attente d'Escouade ; sur Azure DevOps, l'auto-complete. Tout a été fait contre les faux serveurs des tests.
+- [x] **Pilote auto** : un ticket en revue ne compte dans les agents en parallèle que quand son agent travaille.
 
 ### Les PR hors tickets
 - [x] **Agent ordinaire** (ESC-64, `agentprs.rs`) : « Ouvrir une PR » sur sa branche (en-tête de la conversation, clic droit sur sa carte, sélecteur de branches).
@@ -1236,35 +1239,41 @@ But : Escouade suit le travail des agents après le push, jusqu'à la production
   - « L'agent corrige » (checks en échec et fin de leurs journaux) et « L'agent corrige les retours » (demandes de changement, fils non résolus) s'y font en un clic, jamais seuls ; l'agent est prié de ne rien publier sous les fils.
   - Un hébergeur sans client encore (`Capabilities::pull_requests` à faux : GitLab, Bitbucket, Gitea) : rien ne s'affiche, ni numéros ni « Ouvrir une PR » (de même sans remote ou sans compte : `AgentMeta::pr_word`).
   - Reste : essai réel sur GitHub (compte de l'utilisateur) ; GitLab, Bitbucket Cloud et Gitea/Forgejo avec leurs clients (ESC-56 à 58), à essayer en vrai plus tard.
-- [ ] **Vue « Pull requests » du projet**, à côté du Kanban : les PR ouvertes du dépôt (les miennes, celles où on me demande une relecture, toutes), avec CI, relectures, conflit et âge. Actions :
+- [x] **Vue « Pull requests » du projet** (ESC-65, `pragent.rs`, `PrsView`, direction A de `design/esc-65/`), à côté du Kanban : les PR ouvertes du dépôt (les miennes, celles où on me demande une relecture, toutes), avec CI, relectures, conflit et âge. Actions :
   - ouvrir dans le navigateur ;
   - « Lancer un agent sur cette PR » : un worktree sur sa branche, comme « Reprendre une branche existante… ». Une PR venue d'un fork se récupère par `refs/pull/<n>/head` (GitHub, Gitea) ou `refs/merge-requests/<n>/head` (GitLab) ; pour Bitbucket, à voir ;
   - « Faire relire par un agent » (ci-dessous).
-- [ ] **Relecture par un agent** : un agent lit le diff d'une PR et rédige une relecture, avec des commentaires par fichier et par ligne.
-  - L'utilisateur les garde, les corrige ou les écarte un par un dans Escouade, puis publie : review de GitHub et de Gitea, discussions de GitLab, commentaires de ligne de Bitbucket.
+  - Fait : liste dense, filtres « Les miennes » (le login du compte), « Relecture demandée » (relectures demandées et pas encore rendues : `reviewers` de chaque plugin), « Toutes » ; lancement par `Provider::pull_fetch` (`refs/pull/<n>/head` GitHub et Gitea, `refs/merge-requests/<n>/head` GitLab, second parent de `refs/pull/<n>/merge` Azure DevOps, la branche du fork lui-même sur Bitbucket Cloud) dans `pr-<n>` / `mr-<n>`.
+  - Reste : essai réel sur GitHub (compte de l'utilisateur) ; GitLab, Bitbucket Cloud, Gitea/Forgejo et Azure DevOps d'après leur documentation, à essayer en vrai plus tard. La carte d'un agent sur une PR de fork ne montre pas cette PR (sa branche `pr-<n>` n'est pas celle du fork).
+- [x] **Relecture par un agent** : un agent lit le diff d'une PR et rédige une relecture, avec des commentaires par fichier et par ligne. *Fait (ESC-66) : `prreview.rs`, vue `PrReviewView.svelte`, page *Relecture d'une PR par un agent* de la spec.*
+  - L'utilisateur les garde, les corrige ou les écarte un par un dans Escouade, puis publie : review de GitHub et de Gitea, discussions de GitLab, commentaires de ligne de Bitbucket, fils d'Azure DevOps.
   - Rien ne part sans lui.
+  - [ ] **À essayer en vrai** (avec l'utilisateur ; essayé sur le faux GitHub seulement) : une vraie relecture publiée sur GitHub, puis sur GitLab, Bitbucket Cloud, Gitea / Forgejo et Azure DevOps ; un échec au milieu d'une publication sur ces derniers, qui posent leurs commentaires un par un (certains ont pu partir).
 
 ### La CI
-- [ ] **La branche cible** : une pastille dans l'en-tête du projet (« main ✗ depuis 2 h »). Réglage du pilote auto « Pause quand la CI de la cible est rouge », désactivé par défaut.
-- [ ] **Les branches poussées sans PR** (« Valider et pousser », agents) : la même pastille sur la carte.
+- [x] **La branche cible** : une pastille dans l'en-tête du projet (« main ✗ depuis 2 h »). Réglage du pilote auto « Pause quand la CI de la cible est rouge », désactivé par défaut. *Fait (ESC-63) : pastille dans l'en-tête du Kanban, lue dans la boucle des PR des tickets (`branchci.rs`), `forge/branchChecks` servi par les 5 plugins.*
+- [x] **Les branches poussées sans PR** (« Valider et pousser », agents) : la même pastille sur la carte. *Fait (ESC-63) : carte « Terminé » du ticket, et sous la carte d'un agent sans PR dont la branche suit le dépôt distant.*
 - [ ] **Les sources** : checks et statuts de GitHub, pipelines de GitLab, statuts de commit de Bitbucket, statuts combinés de Gitea. Une CI tierce (Jenkins, CircleCI, Buildkite…) ne donne qu'un statut et une adresse, pas de journal : la carte le dit.
-- [ ] **Le journal d'un job**, en lecture seule dans Escouade comme un terminal, avec « Envoyer à un agent ».
-- [ ] **« Relancer les jobs en échec »**, quand l'hébergeur le permet : GitHub Actions et GitLab ; Bitbucket Pipelines et Gitea Actions, à vérifier.
+- [x] **Le journal d'un job**, en lecture seule dans Escouade comme un terminal, avec « Envoyer à un agent ». *Fait (ESC-63) : fenêtre « CI de … » (CiModal), couleurs ANSI, menu des agents du projet.*
+- [x] **« Relancer les jobs en échec »**, quand l'hébergeur le permet : GitHub Actions et GitLab ; Bitbucket Pipelines et Gitea Actions, à vérifier. *Fait (ESC-63) pour une PR et pour une branche (`forge/rerunFailedOfBranch`) : GitHub, GitLab, Gitea (selon la version), Azure Pipelines ; Bitbucket répond `Unsupported` et la fenêtre le dit.*
+  - [ ] **À essayer en vrai** (ESC-53, ESC-70, avec l'utilisateur ; aucun essai n'a écrit sur un vrai dépôt) : la pastille de la cible et d'une branche poussée sur chaque hébergeur ; la relance d'une branche sur GitHub Actions, GitLab, Gitea / Forgejo et Azure Pipelines ; la relance de Bitbucket Pipelines (`POST …/pipelines/` avec la cible du run ?) ; une branche au nom avec `/` dans `commits/{ref}` de GitHub ; `refs?filter=heads/…` et `commits/{sha}/statuses?latestOnly=true` d'Azure ; `pipelines?ref=` de GitLab sur un projet aux pipelines de MR.
 
 ### Les déploiements
-- [ ] **Après le merge**, Escouade suit les déploiements par environnement : déploiements et statuts de GitHub, environnements de GitLab, déploiements de Bitbucket Pipelines. Gitea n'a pas d'API de déploiements connue : seulement la CI de la cible.
-- [ ] **Un ticket est dans un environnement** dès qu'un déploiement réussi y porte un commit qui contient son merge (`git merge-base --is-ancestor` après un fetch, sans appel d'API de plus). Sa carte « Terminé » le dit (« staging ✓ · production ⏳ »), avec l'adresse de l'environnement.
-- [ ] **Vue « Environnements »** du projet : ce qui tourne où (commit, date, auteur), les tickets livrés dans chacun, et ceux mergés qui attendent la production (« 3 tickets pas encore en production »).
-- [ ] **Aperçus** : Vercel, Netlify, Cloudflare Pages… posent sur la PR un déploiement ou un statut avec une adresse. « Ouvrir l'aperçu » sur la carte en revue, à côté de « ▶ Tester ».
-- [ ] **Échec d'un déploiement** : une notification et une pastille sur l'environnement, avec le lien du job.
+- [x] **Après le merge**, Escouade suit les déploiements par environnement : déploiements et statuts de GitHub, environnements de GitLab, déploiements de Bitbucket Pipelines. Gitea n'a pas d'API de déploiements connue : seulement la CI de la cible.
+- [x] **Un ticket est dans un environnement** dès qu'un déploiement réussi y porte un commit qui contient son merge (`git merge-base --is-ancestor` après un fetch, sans appel d'API de plus). Sa carte « Terminé » le dit (« staging ✓ · production ⏳ »), avec l'adresse de l'environnement.
+- [x] **Vue « Environnements »** du projet : ce qui tourne où (commit, date, auteur), les tickets livrés dans chacun, et ceux mergés qui attendent la production (« 3 tickets pas encore en production »).
+- [x] **Aperçus** : Vercel, Netlify, Cloudflare Pages… posent sur la PR un déploiement ou un statut avec une adresse. « Ouvrir l'aperçu » sur la carte en revue, à côté de « ▶ Tester ».
+- [x] **Échec d'un déploiement** : une notification et une pastille sur l'environnement, avec le lien du job.
+- [ ] **Les déploiements, à essayer en vrai** (fait le 2026-11-02 par ESC-67 contre les faux serveurs seulement, sans rien écrire sur un vrai dépôt) : sur GitHub avec le compte de l'utilisateur (ESC-53, ESC-70), un dépôt avec un environnement staging et production déployés par Actions, un aperçu Vercel ou Netlify sur une PR, un déploiement qui échoue ; vérifier `mergeCommit` d'une PR squashée, `transient_environment` des aperçus de Vercel, `environment_url` posé sur le statut de succès. GitLab (`/deployments` du projet, `external_url`, review apps `review/*`) et Bitbucket Cloud (ordre des `/deployments`, dates `state.started_on`, `merge_commit.hash` court) d'après leur documentation, à essayer plus tard. La CI de la cible chez Gitea et Forgejo n'a pas encore de vue.
 
 ### Notifications, vue d'ensemble, serveur MCP
-- [ ] **Notifications**, réglables une à une comme les autres : CI en échec, changements demandés, PR approuvée, PR mergée, conflit, relecture demandée à l'utilisateur, déploiement en production réussi ou en échec.
-- [ ] **Vue d'ensemble** : un groupe « Pull requests » (à merger, à corriger, relectures demandées).
-- [ ] **Serveur MCP** : `list_pull_requests` et `get_pull_request` (état, CI, relectures, fils ouverts, déploiements), et la PR du ticket dans `get_ticket`. L'agent d'un ticket peut y relire les retours lui-même. Commenter ou merger par le MCP : pas en 1.8.
+- [x] **Notifications** (ESC-68, 2026-11-07), réglables une à une comme les autres : CI en échec, changements demandés, PR approuvée, PR mergée, conflit, relecture demandée à l'utilisateur, déploiement en production réussi ou en échec. Aucune lecture de plus : elles naissent de l'écart entre deux lectures déjà faites. Une PR de ticket se suit donc en arrière-plan ; celle d'un agent ordinaire seulement quand il est affiché, et une relecture demandée seulement quand la liste du projet est lue (vue « Pull requests », vue d'ensemble ouverte).
+- [x] **Vue d'ensemble** (ESC-68) : un groupe « Pull requests » (à corriger, à merger, relectures demandées).
+- [x] **Serveur MCP** (ESC-68) : `list_pull_requests` et `get_pull_request` (état, CI, relectures, fils ouverts, déploiements), et la PR du ticket dans `get_ticket`. L'agent d'un ticket peut y relire les retours lui-même. Le texte de l'hébergeur est marqué comme donnée d'un tiers. Commenter ou merger par le MCP : pas en 1.8.
+- [ ] **Ces trois-là, à essayer en vrai** (fait le 2026-11-07 contre le faux GitHub seulement) : sur GitHub avec le compte de l'utilisateur (ESC-53, ESC-70) ; GitLab, Bitbucket Cloud, Gitea/Forgejo et Azure DevOps d'après leur documentation, à essayer plus tard.
 
 ### Rafraîchissement et limites des API
-- [ ] **Pas de webhook** : l'app n'a pas d'adresse publique. Escouade interroge les hébergeurs, et seulement sur ce qu'elle suit : les PR des tickets en revue et des agents, la CI de la cible, les déploiements récents.
+- [x] **Pas de webhook** : l'app n'a pas d'adresse publique. Escouade interroge les hébergeurs, et seulement sur ce qu'elle suit : les PR des tickets en revue et des agents, la CI de la cible, les déploiements récents.
   - Toutes les minutes quand la fenêtre est au premier plan, toutes les 5 minutes sinon ;
   - tout de suite après un push d'Escouade et quand la fenêtre revient ;
   - un bouton « Rafraîchir ».
@@ -1272,7 +1281,7 @@ But : Escouade suit le travail des agents après le push, jusqu'à la production
   - GitHub : toutes les PR suivies d'un dépôt en une requête GraphQL, ou des requêtes REST conditionnelles (`If-None-Match` : une réponse 304 ne compte pas dans la limite) ;
   - relever les limites de chaque hébergeur dans les essais (Bitbucket Cloud aurait la plus basse, à vérifier) ;
   - ralentir à l'approche de la limite (`X-RateLimit-*`).
-- [ ] **Hébergeur injoignable ou jeton expiré** : la carte le dit (« GitLab injoignable depuis 10 min »). Une erreur ne déplace jamais un ticket.
+- [x] **Hébergeur injoignable ou jeton expiré** : la carte le dit (« GitLab injoignable depuis 10 min »). Une erreur ne déplace jamais un ticket.
 
 ### À vérifier d'abord (essais jetables, sur de vrais dépôts)
 - [ ] **Un parcours enregistré par hébergeur**, rejoué dans les tests (`tests/fixtures/forges/`) : créer une PR ; lire son état, ses checks, ses relectures et ses commentaires de ligne ; merger ; auto-merge ; lire le journal d'un job. Routes des journaux : `/actions/jobs/{id}/logs` chez GitHub, `/jobs/:id/trace` chez GitLab, journal d'une étape de Bitbucket Pipelines, Actions de Gitea (routes à relever, versions récentes seulement).
@@ -1294,10 +1303,10 @@ But : Escouade suit le travail des agents après le push, jusqu'à la production
 - [ ] **Avant la release**, un essai réel par hébergeur, sur les dépôts de test.
 
 ### Docs
-- [ ] SPEC (section « Hébergeurs de code »), README, CHANGELOG.
-- [ ] Site, en français et en anglais : pages de doc des intégrations et du Kanban, captures.
-- [ ] Statistiques d'usage : les nouveaux événements (PR ouverte, PR mergée, correction de CI, relecture par un agent), sans nom ni adresse. Les ajouter à la page Confidentialité du site, qui liste chaque événement.
-- [ ] Rien ne part vers les serveurs d'Escouade : les jetons restent sur le poste, et les appels vont de l'app à l'hébergeur. Le dire dans la page Confidentialité.
+- [x] SPEC (la spec d'Escouade, *Hébergeurs de code*), README, CHANGELOG (ESC-69).
+- [x] Site, en français et en anglais : page `code-hosts`, colonne « En revue » du Kanban, intégrations, captures (ESC-69).
+- [x] Statistiques d'usage : `pr_opened`, `pr_merged`, `ci_fix_started`, `pr_review_started`, sans nom ni adresse, listés sur la page Confidentialité du site (ESC-69).
+- [x] Rien ne part vers les serveurs d'Escouade : les jetons restent sur le poste, et les appels vont de l'app à l'hébergeur. Dit dans la page Confidentialité (ESC-69).
 
 ### Décisions à prendre
 - [x] **Colonne « En revue »** (décidé le 2026-10-14) : une colonne entre « À tester » et « Terminé », plutôt qu'un ticket « Terminé » avec l'état de sa PR. Elle répare au passage « Après » : aujourd'hui, un ticket part avant que le code qu'il attend soit mergé.

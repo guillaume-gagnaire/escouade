@@ -1,0 +1,12 @@
+# Changelog
+
+## 2.2.1
+
+- A next page outside the API is not followed: the token stays on it.
+
+## 2.2.0
+
+- A WASM module (`run.wasm`), run in Escouade's host: no process of its own any more. It answers as it did. It has its own version, is
+  published on the store and can be uninstalled. It may reach the instances its accounts name (`{account}`), as it did as a process.
+- Moved to `plugins/gitlab/` of Escouade's repository (it was `plugins/builtin/dev.escouade.gitlab/`), with its own LICENSE
+  (GPL-3.0-or-later) and this file. Its id does not change.

@@ -16,7 +16,7 @@ import { menu } from '../../lib/menu.svelte';
 import { estimateHint } from '../../lib/spend';
 import { app } from '../../lib/state.svelte';
 import type { LaunchState, Project, TestRecipe, Ticket } from '../../lib/types';
-import { agent, BARE_ENGINE, board, CLAUDE_ENGINE, fakeBackend, project, resetApp, ticket } from '../../test/ipc';
+import { agent, BARE_ENGINE, board, CLAUDE_ENGINE, fakeBackend, project, resetApp, ticket, ticketPr } from '../../test/ipc';
 import TicketCard from './TicketCard.svelte';
 
 const doing = (over: Partial<Ticket> = {}) =>
@@ -1135,5 +1135,211 @@ describe('TicketCard with an account of its own', () => {
     fakeBackend();
     show(ticket({ accountLost: 'Le compte Pro n’existe plus : repassé en « Auto ».' }));
     expect(screen.getByRole('status')).toHaveTextContent('Le compte Pro n’existe plus : repassé en « Auto ».');
+  });
+
+  it('shows a ticket « En revue » with its pull request, its state, its CI, its approvals and its conflict (ESC-59)', async () => {
+    fakeBackend();
+    const pr = ticketPr({ approvals: 1, checks: 'failure', checksTotal: 3, checksFailed: 1, openThreads: 2, mergeable: false });
+    const { container } = show(ticket({ column: 'pr', agentId: 'a1', pr, outcome: '⇡ PR #12 → main' }));
+    const line = container.querySelector('[data-ticket-pr="12"]')!;
+    expect(line).toHaveTextContent('PR #12');
+    expect(line).toHaveTextContent('approuvée');
+    expect(line).toHaveTextContent('1/3 jobs en échec');
+    expect(container.querySelector('.prfacts')).toHaveTextContent('1 approbation · 2 fils ouverts · conflit avec main');
+    expect(container.querySelector('.prfacts .conflicting')).toHaveTextContent('conflit avec main');
+    // Its criteria are behind it now: the card stays short.
+    expect(screen.queryByRole('list', { name: 'Critères' })).toBeNull();
+    // Its number opens it in the browser, not the ticket.
+    await userEvent.click(screen.getByRole('button', { name: /Ouvrir la PR #12 dans le navigateur/ }));
+    expect(app.modal).toBeNull();
+  });
+
+  it('says on the card that its host cannot be read, the ticket staying in review', () => {
+    fakeBackend();
+    app.now = 1_000_000_000;
+    const pr = ticketPr({ error: 'GitLab injoignable : délai dépassé', errorSince: app.now - 3 * 60_000, word: 'MR' });
+    const { container } = show(ticket({ column: 'pr', pr }));
+    expect(container.querySelector('[data-pr-error]')).toHaveTextContent('GitLab injoignable : délai dépassé · depuis 3 min');
+    expect(container.querySelector('[data-ticket-pr]')).toHaveTextContent('MR #12');
+  });
+
+  it('offers « Remettre à faire » and « Terminer quand même » once its pull request was closed without a merge', async () => {
+    const backend = fakeBackend();
+    const pr = ticketPr({ state: 'closed', closed: true });
+    show(ticket({ column: 'pr', pr, blocked: 'PR #12 fermée sans merge' }));
+    expect(screen.getByText('PR #12 fermée sans merge')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Terminer quand même' }));
+    expect(backend.called('ticket_finish_anyway')).toEqual([{ cmd: 'ticket_finish_anyway', args: { id: 't1' } }]);
+    await userEvent.click(screen.getByRole('button', { name: 'Remettre à faire' }));
+    expect(backend.called('ticket_pr_back_to_todo')).toEqual([{ cmd: 'ticket_pr_back_to_todo', args: { id: 't1' } }]);
+  });
+
+  it('opens the preview of its pull request from a card « En revue » (ESC-67)', async () => {
+    const backend = fakeBackend();
+    const pr = ticketPr({ preview: 'https://demo-git-fix.example.vercel.app' });
+    show(ticket({ column: 'pr', pr }));
+    await userEvent.click(screen.getByRole('button', { name: 'Ouvrir l’aperçu' }));
+    expect(backend.called('open_url')[0].args.url).toBe('https://demo-git-fix.example.vercel.app');
+    expect(app.modal).toBeNull();
+  });
+
+  it('has no preview to open while its pull request has none', () => {
+    fakeBackend();
+    show(ticket({ column: 'pr', pr: ticketPr() }));
+    expect(screen.queryByRole('button', { name: 'Ouvrir l’aperçu' })).toBeNull();
+  });
+
+  it('says in which environments a done ticket is deployed, each opening its address (ESC-67)', async () => {
+    const backend = fakeBackend();
+    const deployed = ticket({
+      column: 'done',
+      outcome: '⤵ Mergé dans main',
+      outcomeCommit: 'abc1234',
+      environments: [
+        { name: 'staging', url: 'https://staging.example.com', deployed: true },
+        { name: 'production', url: 'https://example.com', deployed: false },
+      ],
+    });
+    const { container, unmount } = show(deployed);
+    expect(container.querySelector('[data-ticket-envs]')).toHaveTextContent('staging · production');
+    // Deployed: a check, in green; not yet: a clock, in amber.
+    expect(container.querySelector('.dep-env.deployed [data-icon="check"]')).not.toBeNull();
+    expect(container.querySelector('.dep-env:not(.deployed) [data-icon="clock"]')).not.toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'production : pas encore déployé' }));
+    expect(backend.called('open_url')[0].args.url).toBe('https://example.com');
+    unmount();
+    setLang('en');
+    show(deployed);
+    expect(screen.getByRole('button', { name: 'staging: deployed' })).toBeInTheDocument();
+    setLang('fr');
+  });
+
+  it('names no environment while none is known', () => {
+    fakeBackend();
+    const { container } = show(ticket({ column: 'done', outcome: '⤵ Mergé dans main' }));
+    expect(container.querySelector('[data-ticket-envs]')).toBeNull();
+  });
+
+  it('offers « Merger » only approved and green, with a strategy the repository allows, and says what merged (ESC-62)', async () => {
+    const backend = fakeBackend({ ticket_pr_merge: () => 'merged' });
+    const green = {
+      approvals: 1,
+      checks: 'success' as const,
+      mergeable: true,
+      mergeOptions: { strategies: ['merge' as const, 'rebase' as const], autoMerge: false },
+    };
+    // Approved but red, or green but not approved: no « Merger ».
+    show(ticket({ column: 'pr', pr: ticketPr({ ...green, checks: 'failure' }) }));
+    expect(screen.queryByRole('button', { name: /^Merger/ })).toBeNull();
+    cleanup();
+    show(ticket({ column: 'pr', pr: ticketPr({ ...green, approvals: 0 }) }));
+    expect(screen.queryByRole('button', { name: /^Merger/ })).toBeNull();
+    cleanup();
+    // The Kanban's squash is not allowed: the first strategy the repository allows.
+    show(ticket({ column: 'pr', pr: ticketPr(green) }));
+    await userEvent.click(screen.getByRole('button', { name: 'Merger (merge commit)' }));
+    expect(backend.called('ticket_pr_merge')).toEqual([{ cmd: 'ticket_pr_merge', args: { id: 't1', whenGreen: false } }]);
+    expect(app.toasts.at(-1)?.text).toBe('PR #12 mergée');
+    expect(screen.queryByRole('button', { name: 'Merger quand c’est vert' })).toBeNull();
+    cleanup();
+    // It allows none: said, no button.
+    const { container } = show(ticket({ column: 'pr', pr: ticketPr({ ...green, mergeOptions: { strategies: [], autoMerge: false } }) }));
+    expect(screen.queryByRole('button', { name: /^Merger/ })).toBeNull();
+    expect(container.querySelector('[data-pr-no-strategy]')).toHaveTextContent('aucune des façons de merger');
+  });
+
+  it('offers « Merger quand c’est vert » while the CI runs: the host’s auto-merge, else Escouade, said (ESC-62)', async () => {
+    const backend = fakeBackend({ ticket_pr_merge: () => 'escouade' });
+    const running = { approvals: 1, checks: 'pending' as const, mergeOptions: { strategies: ['squash' as const], autoMerge: false } };
+    show(ticket({ column: 'pr', pr: ticketPr({ ...running, kind: 'bitbucket', host: 'bitbucket.org' }) }));
+    expect(screen.queryByRole('button', { name: /^Merger \(/ })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Merger quand c’est vert' }));
+    expect(backend.called('ticket_pr_merge')).toEqual([{ cmd: 'ticket_pr_merge', args: { id: 't1', whenGreen: true } }]);
+    expect(app.toasts.at(-1)?.text).toContain('Pas d’auto-merge sur Bitbucket');
+    cleanup();
+    // Escouade waits: said, with « Ne plus attendre ».
+    const { container } = show(ticket({ column: 'pr', pr: ticketPr({ ...running, mergeWhenGreen: 'squash' }) }));
+    expect(container.querySelector('[data-pr-wait]')).toHaveTextContent('Escouade la merge (squash) dès qu’elle est approuvée et verte');
+    expect(screen.queryByRole('button', { name: 'Merger quand c’est vert' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Ne plus attendre' }));
+    expect(backend.called('ticket_pr_stop_waiting')).toEqual([{ cmd: 'ticket_pr_stop_waiting', args: { id: 't1' } }]);
+    cleanup();
+    // The host's auto-merge on.
+    const c2 = show(ticket({ column: 'pr', pr: ticketPr({ ...running, autoMerge: true }) })).container;
+    expect(c2.querySelector('[data-pr-wait]')).toHaveTextContent('Auto-merge de GitHub activé');
+    cleanup();
+    // A merge that did not go is said.
+    const c3 = show(ticket({ column: 'pr', pr: ticketPr({ ...running, mergeNote: 'Merge refusé : checks requis' }) })).container;
+    expect(c3.querySelector('[data-pr-merge-note]')).toHaveTextContent('Merge refusé : checks requis');
+  });
+
+  it('offers « L’agent corrige » on a failed CI, says a CI without log, and shows its agent at work (ESC-60)', async () => {
+    const backend = fakeBackend();
+    const failed = [
+      { name: 'test', url: 'https://github.com/acme/demo/runs/55', log: true },
+      { name: 'ci/jenkins', url: 'https://jenkins.example.com/7', log: false },
+    ];
+    const pr = ticketPr({ checks: 'failure', checksTotal: 2, checksFailed: 2, failed });
+    const { container, unmount } = show(ticket({ column: 'pr', agentId: 'a1', pr }));
+    expect(container.querySelector('[data-pr-nolog]')).toHaveTextContent('ci/jenkins : CI tierce, sans journal');
+    await userEvent.click(screen.getByRole('button', { name: "L'agent corrige" }));
+    expect(backend.called('ticket_pr_fix_ci')).toEqual([{ cmd: 'ticket_pr_fix_ci', args: { id: 't1' } }]);
+    unmount();
+    // Under way: no button, its agent fixes it.
+    const at = show(ticket({ column: 'pr', agentId: 'a1', pr: { ...pr, fixing: 1, fixes: 1 } }));
+    expect(at.container.querySelector('[data-pr-fixing]')).toHaveTextContent("L'agent corrige la CI…");
+    expect(screen.queryByRole('button', { name: "L'agent corrige" })).toBeNull();
+    at.unmount();
+    // Green, or without an agent: nothing to offer.
+    show(ticket({ column: 'pr', agentId: 'a1', pr: ticketPr({ checks: 'success' }) }));
+    show(ticket({ column: 'pr', pr }));
+    expect(screen.queryByRole('button', { name: "L'agent corrige" })).toBeNull();
+  });
+
+  it('counts the new review comments and gives them to its agent on a click (ESC-61)', async () => {
+    const backend = fakeBackend();
+    const pr = ticketPr({ changesRequested: true, openThreads: 2, feedback: 2 });
+    const { container, unmount } = show(ticket({ column: 'pr', agentId: 'a1', pr }), project({ board: board({ autopilot: true }) }));
+    expect(container.querySelector('[data-pr-feedback]')).toHaveTextContent('2 retours de relecture');
+    // The autopilot gives it nothing by itself: the button waits.
+    expect(backend.called('ticket_pr_fix_reviews')).toEqual([]);
+    await userEvent.click(screen.getByRole('button', { name: "L'agent corrige les retours" }));
+    expect(backend.called('ticket_pr_fix_reviews')).toEqual([{ cmd: 'ticket_pr_fix_reviews', args: { id: 't1' } }]);
+    unmount();
+    const at = show(ticket({ column: 'pr', agentId: 'a1', pr: { ...pr, feedback: 0, fixing: 1, fixKind: 'reviews' } }));
+    expect(at.container.querySelector('[data-pr-fixing]')).toHaveTextContent("L'agent corrige les retours…");
+    expect(screen.queryByRole('button', { name: "L'agent corrige les retours" })).toBeNull();
+    at.unmount();
+    // Every comment given already: nothing to offer.
+    show(ticket({ column: 'pr', agentId: 'a1', pr: { ...pr, feedback: 0 } }));
+    expect(screen.queryByRole('button', { name: "L'agent corrige les retours" })).toBeNull();
+  });
+
+  it('offers « L’agent met à jour la branche » on a conflict with its target, by a merge or a rebase (ESC-61)', async () => {
+    const backend = fakeBackend();
+    const pr = ticketPr({ mergeable: false });
+    const { unmount } = show(ticket({ column: 'pr', agentId: 'a1', pr }));
+    const button = screen.getByRole('button', { name: "L'agent met à jour la branche" });
+    await userEvent.click(button);
+    expect(backend.called('ticket_pr_update_branch')).toEqual([{ cmd: 'ticket_pr_update_branch', args: { id: 't1' } }]);
+    unmount();
+    const at = show(
+      ticket({ column: 'pr', agentId: 'a1', pr: { ...pr, fixing: 1, fixKind: 'rebase' } }),
+      project({ board: board({ prUpdate: 'rebase' }) }),
+    );
+    expect(at.container.querySelector('[data-pr-fixing]')).toHaveTextContent("L'agent rebase la branche sur main…");
+    expect(screen.queryByRole('button', { name: "L'agent met à jour la branche" })).toBeNull();
+    at.unmount();
+    show(ticket({ column: 'pr', agentId: 'a1', pr: ticketPr({ mergeable: true }) }));
+    expect(screen.queryByRole('button', { name: "L'agent met à jour la branche" })).toBeNull();
+  });
+
+  it('says why the last fix did not go, and that the autopilot spent its loops (ESC-60)', () => {
+    fakeBackend();
+    const pr = ticketPr({ checks: 'failure', fixes: 3, awaitingCi: true, fixError: "L'agent n'a rien commité : la CI reste en échec" });
+    const { container } = show(ticket({ column: 'pr', agentId: 'a1', maxLoops: 3, pr }), project({ board: board({ autopilot: true }) }));
+    expect(container.querySelector('[data-pr-fix-error]')).toHaveTextContent("L'agent n'a rien commité");
+    expect(container).toHaveTextContent('Boucles épuisées (3/3) : le pilote auto ne la renvoie plus');
+    expect(screen.getByRole('button', { name: "L'agent corrige" })).toBeInTheDocument();
   });
 });

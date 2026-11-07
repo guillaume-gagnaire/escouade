@@ -1,0 +1,4067 @@
+{
+  "agy-command": {
+    "agent": {
+      "cost": 0.0,
+      "entry": null,
+      "mode": "",
+      "plan": false,
+      "prompts": 2,
+      "session": "434725b7-c90f-46a3-8a2b-d41956239965",
+      "status": "Done",
+      "tokens": 0
+    },
+    "conv": [
+      {
+        "id": "id-0",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Lance la commande echo hi8 avec run_command, puis reponds ok.",
+        "ts": true
+      },
+      {
+        "id": "agy-434725b7-2",
+        "input": {
+          "command": "echo hi8"
+        },
+        "kind": "tool",
+        "name": "Bash",
+        "parent": null,
+        "result": {
+          "isError": false,
+          "text": "hi8"
+        },
+        "status": "ok",
+        "ts": true
+      },
+      {
+        "id": "id-1",
+        "kind": "text",
+        "parent": null,
+        "streaming": false,
+        "text": "ok"
+      },
+      {
+        "cost": 0.0,
+        "durationMs": true,
+        "engine": "agy",
+        "error": null,
+        "id": "id-2",
+        "interrupted": false,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "tokens": 0,
+        "ts": true
+      },
+      {
+        "id": "id-3",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Quelle commande as-tu lancee ? Reponds en trois mots.",
+        "ts": true
+      },
+      {
+        "id": "id-4",
+        "kind": "text",
+        "parent": null,
+        "streaming": false,
+        "text": "echo hi8"
+      },
+      {
+        "cost": 0.0,
+        "durationMs": true,
+        "engine": "agy",
+        "error": null,
+        "id": "id-5",
+        "interrupted": false,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "tokens": 0,
+        "ts": true
+      }
+    ],
+    "end": null,
+    "steps": [
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": "ok",
+        "end": "Finished(\"ok\")",
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": "echo hi8",
+        "end": "Finished(\"echo hi8\")",
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      }
+    ]
+  },
+  "agy-question": {
+    "agent": {
+      "cost": 0.0,
+      "entry": null,
+      "mode": "",
+      "plan": false,
+      "prompts": 2,
+      "session": "434725b7-c90f-46a3-8a2b-d41956239965",
+      "status": "Done",
+      "tokens": 0
+    },
+    "conv": [
+      {
+        "id": "id-0",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Utilise l outil ask_question pour me demander : bleu ou rouge ? Puis dis ma reponse.",
+        "ts": true
+      },
+      {
+        "id": "agy-434725b7-2",
+        "input": {
+          "questions": [
+            {
+              "is_multi_select": false,
+              "options": ["(Recommended) Bleu", "Rouge"],
+              "question": "Bleu ou rouge ?"
+            }
+          ]
+        },
+        "kind": "tool",
+        "name": "ask_question",
+        "parent": null,
+        "result": {
+          "isError": false,
+          "text": "Created At: 2026-10-28T23:54:15+01:00\nCompleted At: 2026-10-28T23:54:27+01:00\nA1: (Recommended) Bleu"
+        },
+        "status": "ok",
+        "ts": true
+      },
+      {
+        "id": "id-1",
+        "kind": "text",
+        "parent": null,
+        "streaming": false,
+        "text": "Ta réponse est : **Bleu** (l'option recommandée)."
+      },
+      {
+        "cost": 0.0,
+        "durationMs": true,
+        "engine": "agy",
+        "error": null,
+        "id": "id-2",
+        "interrupted": false,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "tokens": 0,
+        "ts": true
+      },
+      {
+        "id": "id-3",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Ecris un poeme de 40 vers sur la mer.",
+        "ts": true
+      },
+      {
+        "id": "id-4",
+        "kind": "text",
+        "parent": null,
+        "streaming": false,
+        "text": "Vaste miroir d’azur où s’effacent les cieux,  \nTu"
+      },
+      {
+        "cost": 0.0,
+        "durationMs": true,
+        "engine": "agy",
+        "error": null,
+        "id": "id-5",
+        "interrupted": false,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "tokens": 0,
+        "ts": true
+      }
+    ],
+    "end": null,
+    "steps": [
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": "C:/tmp/esc272/h1/.gemini/antigravity-cli/brain/434725b7-c90f-46a3-8a2b-d41956239965/.system_generated/logs/transcript_full.jsonl"
+        },
+        "prompts": 0,
+        "rate": null,
+        "status": "Idle",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 0,
+        "rate": null,
+        "status": "Idle",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": true,
+          "transcript": null
+        },
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": "Bleu ou rouge ?",
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": "Ta réponse est : Bleu (l'option recommandée).",
+        "end": "Finished(\"Ta réponse est : **Bleu** (l'option recommandée).\")",
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": "Vaste miroir d’azur où s’effacent les cieux,",
+        "end": "Finished(\"Vaste miroir d’azur où s’effacent les cieux,  \\nTu\")",
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      }
+    ]
+  },
+  "agy-write": {
+    "agent": {
+      "cost": 0.0,
+      "entry": null,
+      "mode": "",
+      "plan": false,
+      "prompts": 1,
+      "session": "434725b7-c90f-46a3-8a2b-d41956239965",
+      "status": "Done",
+      "tokens": 0
+    },
+    "conv": [
+      {
+        "id": "id-0",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Cree le fichier vue.txt qui contient la seule ligne : vu du terminal",
+        "ts": true
+      },
+      {
+        "id": "agy-434725b7-2",
+        "input": {
+          "file_path": "C:\\tmp\\esc272\\w1\\vue.txt"
+        },
+        "kind": "tool",
+        "name": "Write",
+        "parent": null,
+        "result": {
+          "add": 1,
+          "del": 0,
+          "filePath": "C:\\tmp\\esc272\\w1\\vue.txt",
+          "isError": false,
+          "patch": [
+            {
+              "lines": ["+vu du terminal"],
+              "newStart": 1,
+              "oldStart": 0
+            }
+          ],
+          "text": "Created At: 2026-10-29T00:11:38+01:00\nCompleted At: 2026-10-29T00:11:49+01:00\nCreated file."
+        },
+        "status": "ok",
+        "ts": true
+      },
+      {
+        "id": "id-1",
+        "kind": "text",
+        "parent": null,
+        "streaming": false,
+        "text": "Le fichier [vue.txt](file:///C:/tmp/esc272/w1/vue.txt) a bien été créé avec le contenu :\n\n```text\nvu du terminal\n```"
+      },
+      {
+        "cost": 0.0,
+        "durationMs": true,
+        "engine": "agy",
+        "error": null,
+        "id": "id-2",
+        "interrupted": false,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "tokens": 0,
+        "ts": true
+      }
+    ],
+    "end": null,
+    "steps": [
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": "Le fichier vue.txt a bien été créé avec le contenu :",
+        "end": "Finished(\"Le fichier [vue.txt](file:///C:/tmp/esc272/w1/vue.txt) a bien été créé avec le contenu :\\n\\n```text\\nvu du terminal\\n```\")",
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      }
+    ]
+  },
+  "claude": {
+    "agent": {
+      "cost": 0.024614,
+      "entry": "071f5369-9cf2-4ba8-bd1c-980ff9447e2f",
+      "mode": "default",
+      "plan": false,
+      "prompts": 3,
+      "session": "55555555-2222-3333-4444-555555555555",
+      "status": "Done",
+      "tokens": 120604
+    },
+    "conv": [
+      {
+        "id": "id-0",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Run the shell command `echo hi > b.txt` with the Bash tool, then reply with the single word done.",
+        "ts": true
+      },
+      {
+        "id": "toolu_017srtVpkSXD1PBwykVwrtjk",
+        "input": {
+          "command": "echo hi > b.txt",
+          "description": "Write \"hi\" into b.txt in the working directory"
+        },
+        "kind": "tool",
+        "name": "Bash",
+        "parent": null,
+        "result": {
+          "isError": false,
+          "text": ""
+        },
+        "status": "ok",
+        "ts": true
+      },
+      {
+        "id": "msg_011CfxFf6adD6Y6hzHQf7uaw:a0",
+        "kind": "text",
+        "parent": null,
+        "streaming": false,
+        "text": "done"
+      },
+      {
+        "cost": 0.016192,
+        "durationMs": true,
+        "engine": "claude",
+        "error": null,
+        "id": "id-1",
+        "interrupted": false,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "signIn": false,
+        "tokens": 59998,
+        "ts": true
+      },
+      {
+        "id": "id-2",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Now say hello in French, nothing else.",
+        "ts": true
+      },
+      {
+        "id": "msg_011CfxFgFC5iP5Q3EQkvDDoX:a0",
+        "kind": "text",
+        "parent": null,
+        "streaming": false,
+        "text": "Bonjour"
+      },
+      {
+        "cost": 0.003124,
+        "durationMs": true,
+        "engine": "claude",
+        "error": null,
+        "id": "id-3",
+        "interrupted": false,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "signIn": false,
+        "tokens": 30067,
+        "ts": true
+      },
+      {
+        "id": "id-4",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Count slowly from 1 to 200, one number per line.",
+        "ts": true
+      },
+      {
+        "id": "id-5",
+        "kind": "thinking",
+        "parent": null,
+        "streaming": false,
+        "text": ""
+      },
+      {
+        "id": "msg_011CfxFhQAMP4aNQrAavb17F:a1",
+        "kind": "text",
+        "parent": null,
+        "streaming": false,
+        "text": "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80\n81\n82\n83\n84\n85\n86\n87\n88\n89\n90\n91\n92\n93\n94\n95\n96\n97\n98\n99\n100\n101\n102\n103\n104\n105\n106\n107\n108\n109\n110\n111\n112\n113\n114\n115\n116\n117\n118\n119\n120\n121\n122\n123\n124\n125\n126\n127\n128\n129\n130\n131\n132\n133\n134\n135\n136\n137\n138\n139\n140\n141\n142\n143\n144\n145\n146\n147\n148\n149\n150\n151\n152\n153\n154\n155\n156\n157\n158\n159\n160\n161\n162\n163\n164\n165\n166\n167\n168\n169\n170\n171\n172\n173\n174\n175\n176\n177\n178\n179\n180\n181\n182\n183\n184\n185\n186\n187\n188\n189\n190\n191\n192\n193\n194\n195\n196\n197\n198\n199\n200"
+      },
+      {
+        "cost": 0.005297,
+        "durationMs": true,
+        "engine": "claude",
+        "error": null,
+        "id": "id-6",
+        "interrupted": false,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "signIn": false,
+        "tokens": 30539,
+        "ts": true
+      },
+      {
+        "cost": 0.0,
+        "durationMs": false,
+        "engine": "claude",
+        "error": null,
+        "id": "id-7",
+        "interrupted": true,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "signIn": false,
+        "tokens": 0,
+        "ts": true
+      }
+    ],
+    "end": "Interrupted",
+    "steps": [
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Idle",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Idle",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": "done",
+        "end": "Finished(\"done\")",
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Done",
+        "turns": [["claude-haiku-5-5", 4, 59900, 94, 0.016192]]
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": "Bonjour",
+        "end": "Finished(\"Bonjour\")",
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Done",
+        "turns": [["claude-haiku-5-5", 2, 30058, 7, 0.003124]]
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 3,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 3,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 3,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 3,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": "1",
+        "end": "Finished(\"1\\n2\\n3\\n4\\n5\\n6\\n7\\n8\\n9\\n10\\n11\\n12\\n13\\n14\\n15\\n16\\n17\\n18\\n19\\n20\\n21\\n22\\n23\\n24\\n25\\n26\\n27\\n28\\n29\\n30\\n31\\n32\\n33\\n34\\n35\\n36\\n37\\n38\\n39\\n40\\n41\\n42\\n43\\n44\\n45\\n46\\n47\\n48\\n49\\n50\\n51\\n52\\n53\\n54\\n55\\n56\\n57\\n58\\n59\\n60\\n61\\n62\\n63\\n64\\n65\\n66\\n67\\n68\\n69\\n70\\n71\\n72\\n73\\n74\\n75\\n76\\n77\\n78\\n79\\n80\\n81\\n82\\n83\\n84\\n85\\n86\\n87\\n88\\n89\\n90\\n91\\n92\\n93\\n94\\n95\\n96\\n97\\n98\\n99\\n100\\n101\\n102\\n103\\n104\\n105\\n106\\n107\\n108\\n109\\n110\\n111\\n112\\n113\\n114\\n115\\n116\\n117\\n118\\n119\\n120\\n121\\n122\\n123\\n124\\n125\\n126\\n127\\n128\\n129\\n130\\n131\\n132\\n133\\n134\\n135\\n136\\n137\\n138\\n139\\n140\\n141\\n142\\n143\\n144\\n145\\n146\\n147\\n148\\n149\\n150\\n151\\n152\\n153\\n154\\n155\\n156\\n157\\n158\\n159\\n160\\n161\\n162\\n163\\n164\\n165\\n166\\n167\\n168\\n169\\n170\\n171\\n172\\n173\\n174\\n175\\n176\\n177\\n178\\n179\\n180\\n181\\n182\\n183\\n184\\n185\\n186\\n187\\n188\\n189\\n190\\n191\\n192\\n193\\n194\\n195\\n196\\n197\\n198\\n199\\n200\")",
+        "out": null,
+        "prompts": 3,
+        "rate": null,
+        "status": "Done",
+        "turns": [["claude-haiku-5-5", 2, 30109, 428, 0.005297]]
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 3,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 3,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 3,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 3,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 3,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 3,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": "Autoriser Bash : echo hi > b.txt ?",
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 3,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 3,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 3,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": true,
+          "transcript": null
+        },
+        "prompts": 3,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 3,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": true,
+          "transcript": null
+        },
+        "prompts": 3,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 3,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": true,
+          "transcript": null
+        },
+        "prompts": 3,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 3,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      }
+    ]
+  },
+  "claude-background": {
+    "agent": {
+      "cost": 0.05996,
+      "entry": "85642288-371c-401e-b544-3ca619a7dcab",
+      "mode": "",
+      "plan": true,
+      "prompts": 1,
+      "session": "55555555-2222-3333-4444-555555555555",
+      "status": "Done",
+      "tokens": 163332
+    },
+    "conv": [
+      {
+        "id": "id-0",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Use the Bash tool exactly once with run_in_background true, description 'Wait until PR 148 checks finish', command: for i in $(seq 1 15); do ping -n 2 127.0.0.1 > /dev/null; done; echo checks-done . Then reply 'lancé' and end your turn without waiting.",
+        "ts": true
+      },
+      {
+        "id": "toolu_01XCVbiemc4osAnefn5cgpPz",
+        "input": {
+          "command": "for i in $(seq 1 15); do ping -n 2 127.0.0.1 > /dev/null; done; echo checks-done",
+          "description": "Wait until PR 148 checks finish",
+          "run_in_background": true
+        },
+        "kind": "tool",
+        "name": "Bash",
+        "parent": null,
+        "result": {
+          "isError": false,
+          "text": ""
+        },
+        "status": "ok",
+        "ts": true
+      },
+      {
+        "id": "msg_011CgGmT2Cg61xrUSjH916HV:a0",
+        "kind": "text",
+        "parent": null,
+        "streaming": false,
+        "text": "lancé"
+      },
+      {
+        "cost": 0.052449,
+        "durationMs": true,
+        "engine": "claude",
+        "error": null,
+        "id": "id-1",
+        "interrupted": false,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "signIn": false,
+        "tokens": 108385,
+        "ts": true
+      },
+      {
+        "id": "id-2",
+        "kind": "event",
+        "source": "task",
+        "text": "<task-notification>\n<task-id>btzyapwqx</task-id>\n<tool-use-id>toolu_01XCVbiemc4osAnefn5cgpPz</tool-use-id>\n<output-file>C:\\Users\\u\\AppData\\Local\\Temp\\claude\\C--Users-u-AppData-Local-Temp-esc138-f\\afebdeff-01a0-4ff4-943e-a475d12817ea\\tasks\\btzyapwqx.output</output-file>\n<status>completed</status>\n<summary>Background command \"Wait until PR 148 checks finish\" completed (exit code 0)</summary>\n</task-notification>",
+        "ts": true
+      },
+      {
+        "id": "msg_011CgGmUBck6aasLnzDzpMDR:a0",
+        "kind": "text",
+        "parent": null,
+        "streaming": false,
+        "text": "La commande de fond est terminée (code 0). Elle n'a fait qu'attendre environ 30 secondes puis afficher `checks-done`. Elle ne vérifie donc pas les checks de la PR 148. Si tu veux vraiment attendre leur fin, il faut interroger GitHub avec `gh pr checks 148`."
+      },
+      {
+        "cost": 0.007511,
+        "durationMs": true,
+        "engine": "claude",
+        "error": null,
+        "id": "id-3",
+        "interrupted": false,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "signIn": false,
+        "tokens": 54947,
+        "ts": true
+      }
+    ],
+    "end": null,
+    "steps": [
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": "lancé",
+        "end": "Finished(\"lancé\")",
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Done",
+        "turns": [["claude-haiku-5-5", 4, 108097, 284, 0.052449]]
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": "La commande de fond est terminée (code 0). Elle n'a fait qu'attendre environ 30 secondes puis afficher checks-done. Ell…",
+        "end": "Finished(\"La commande de fond est terminée (code 0). Elle n'a fait qu'attendre environ 30 secondes puis afficher `checks-done`. Elle ne vérifie donc pas les checks de la PR 148. Si tu veux vraiment attendre leur fin, il faut interroger GitHub avec `gh pr checks 148`.\")",
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Done",
+        "turns": [["claude-haiku-5-5", 4, 54682, 261, 0.007511]]
+      }
+    ]
+  },
+  "codex": {
+    "agent": {
+      "cost": 0.0,
+      "entry": "01a1466d-3bab-7c92-8da1-2d1ac5df9bcb",
+      "mode": "",
+      "plan": false,
+      "prompts": 2,
+      "session": "01a1466d-084c-71a3-acb9-dadb322d905f",
+      "status": "Done",
+      "tokens": 33652
+    },
+    "conv": [
+      {
+        "id": "id-0",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Réponds seulement : A",
+        "ts": true
+      },
+      {
+        "id": "msg_03ff3d0db999d892016ad28a8536cc81918a774abc028d871f",
+        "kind": "text",
+        "parent": null,
+        "streaming": false,
+        "text": "A"
+      },
+      {
+        "cost": 0.0,
+        "durationMs": true,
+        "engine": "codex",
+        "error": null,
+        "id": "id-1",
+        "interrupted": false,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "tokens": 16882,
+        "ts": true
+      },
+      {
+        "id": "id-2",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Lance la commande `Start-Sleep -Seconds 60` puis réponds B.",
+        "ts": true
+      },
+      {
+        "id": "msg_03ff3d0db999d892016ad28a90803c8191a5d0a8369ab7c911",
+        "kind": "text",
+        "parent": null,
+        "streaming": false,
+        "text": "Je lance la commande demandée, puis je répondrai B."
+      },
+      {
+        "cost": 0.0,
+        "durationMs": true,
+        "engine": "codex",
+        "error": null,
+        "id": "id-3",
+        "interrupted": true,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "tokens": 16770,
+        "ts": true
+      }
+    ],
+    "end": null,
+    "steps": [
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Idle",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": 1,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": "A",
+        "end": "Finished(\"A\")",
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Done",
+        "turns": [["gpt-6-luna", 5613, 11264, 5, 0.0]]
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": 1,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": "Interrupted",
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Done",
+        "turns": [["gpt-6-luna", 5697, 11008, 65, 0.0]]
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      }
+    ]
+  },
+  "codex-hooks": {
+    "agent": {
+      "cost": 0.0,
+      "entry": "01a1466d-3bab-7c92-8da1-2d1ac5df9bcb",
+      "mode": "",
+      "plan": false,
+      "prompts": 2,
+      "session": "01a14665-43f3-7312-8d1f-f22f147f2d24",
+      "status": "Done",
+      "tokens": 33652
+    },
+    "conv": [
+      {
+        "id": "id-0",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Réponds seulement : A",
+        "ts": true
+      },
+      {
+        "cost": 0.0,
+        "durationMs": true,
+        "engine": "codex",
+        "error": null,
+        "id": "id-1",
+        "interrupted": false,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "tokens": 16882,
+        "ts": true
+      },
+      {
+        "id": "id-2",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Lance la commande `Start-Sleep -Seconds 60` puis réponds B.",
+        "ts": true
+      },
+      {
+        "cost": 0.0,
+        "durationMs": true,
+        "engine": "codex",
+        "error": null,
+        "id": "id-3",
+        "interrupted": true,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "tokens": 16770,
+        "ts": true
+      }
+    ],
+    "end": null,
+    "steps": [
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 0,
+        "rate": null,
+        "status": "Idle",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": "Autoriser Bash : node -e \"console.log(42)\" ?",
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 0,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": true,
+          "transcript": null
+        },
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": 1,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": "Tâche terminée",
+        "end": "Finished(\"\")",
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Done",
+        "turns": [["gpt-6-luna", 5613, 11264, 5, 0.0]]
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": 1,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": "Interrupted",
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Done",
+        "turns": [["gpt-6-luna", 5697, 11008, 65, 0.0]]
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      }
+    ]
+  },
+  "copilot": {
+    "agent": {
+      "cost": 0.002357,
+      "entry": "773036eb-577c-4a3b-9ddc-f9327ea70b5d",
+      "mode": "",
+      "plan": false,
+      "prompts": 2,
+      "session": "0a108c31-29e9-484a-8014-52a9fd3eaa88",
+      "status": "Done",
+      "tokens": 27642
+    },
+    "conv": [
+      {
+        "id": "id-0",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Dis bonjour en deux mots, sans outil.",
+        "ts": true
+      },
+      {
+        "id": "id-1",
+        "kind": "text",
+        "parent": null,
+        "streaming": false,
+        "text": "Bonjour !"
+      },
+      {
+        "id": "id-2",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Lance exactement `Start-Sleep -Seconds 60; echo fini` avec powershell.",
+        "ts": true
+      },
+      {
+        "id": "call_rqAje3EXu7crHC02TQLV7m3u",
+        "input": {
+          "command": "Start-Sleep -Seconds 60; echo fini",
+          "description": "Wait 60 seconds and print fini"
+        },
+        "kind": "tool",
+        "name": "Bash",
+        "parent": null,
+        "status": "interrupted",
+        "ts": true
+      },
+      {
+        "cost": 0.002357,
+        "durationMs": true,
+        "engine": "copilot",
+        "error": null,
+        "id": "id-3",
+        "interrupted": true,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "tokens": 27642,
+        "ts": true
+      }
+    ],
+    "end": null,
+    "steps": [
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Idle",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Idle",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Idle",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Idle",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Idle",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": "Interrupted",
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Done",
+        "turns": [["gpt-6-luna", 477, 27116, 49, 0.002357]]
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      }
+    ]
+  },
+  "copilot-hooks": {
+    "agent": {
+      "cost": 0.002357,
+      "entry": "773036eb-577c-4a3b-9ddc-f9327ea70b5d",
+      "mode": "",
+      "plan": false,
+      "prompts": 2,
+      "session": "0a108c31-29e9-484a-8014-52a9fd3eaa88",
+      "status": "Done",
+      "tokens": 27642
+    },
+    "conv": [
+      {
+        "id": "id-0",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Dis bonjour en deux mots, sans outil.",
+        "ts": true
+      },
+      {
+        "id": "id-1",
+        "kind": "text",
+        "parent": null,
+        "streaming": false,
+        "text": "Bonjour !"
+      },
+      {
+        "id": "id-2",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Lance exactement `Start-Sleep -Seconds 60; echo fini` avec powershell.",
+        "ts": true
+      },
+      {
+        "id": "call_rqAje3EXu7crHC02TQLV7m3u",
+        "input": {
+          "command": "Start-Sleep -Seconds 60; echo fini",
+          "description": "Wait 60 seconds and print fini"
+        },
+        "kind": "tool",
+        "name": "Bash",
+        "parent": null,
+        "status": "interrupted",
+        "ts": true
+      },
+      {
+        "cost": 0.002357,
+        "durationMs": true,
+        "engine": "copilot",
+        "error": null,
+        "id": "id-3",
+        "interrupted": true,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "tokens": 27642,
+        "ts": true
+      }
+    ],
+    "end": null,
+    "steps": [
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 0,
+        "rate": null,
+        "status": "Idle",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 0,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": "Autoriser Bash : Start-Sleep -Seconds 60; echo fini ?",
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 0,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 0,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 0,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": "Interrupted",
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Done",
+        "turns": [["gpt-6-luna", 477, 27116, 49, 0.002357]]
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 2,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      }
+    ]
+  },
+  "cursor-print": {
+    "agent": {
+      "cost": 0.0,
+      "entry": null,
+      "mode": "",
+      "plan": false,
+      "prompts": 1,
+      "session": "6753be15-7845-4e8d-abf9-3c3ed0985561",
+      "status": "Done",
+      "tokens": 0
+    },
+    "conv": [
+      {
+        "id": "id-0",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Donne en trois mots le titre du README.",
+        "ts": true
+      },
+      {
+        "id": "id-1",
+        "kind": "text",
+        "parent": null,
+        "streaming": false,
+        "text": "Je lis le README pour en extraire le titre."
+      },
+      {
+        "id": "id-2",
+        "input": {
+          "pattern": "**/README*"
+        },
+        "kind": "tool",
+        "name": "Glob",
+        "parent": null,
+        "status": "ok",
+        "ts": true
+      },
+      {
+        "id": "id-3",
+        "input": {
+          "file_path": "C:\\Users\\user\\.claude\\plugins\\cache\\claude-plugins-official\\superpowers\\7.0.0\\skills\\using-superpowers\\SKILL.md"
+        },
+        "kind": "tool",
+        "name": "Read",
+        "parent": null,
+        "status": "ok",
+        "ts": true
+      },
+      {
+        "id": "id-4",
+        "input": {
+          "file_path": "C:\\Users\\user\\AppData\\Local\\Temp\\esc24\\wt-agent1\\README.md"
+        },
+        "kind": "tool",
+        "name": "Read",
+        "parent": null,
+        "status": "ok",
+        "ts": true
+      },
+      {
+        "id": "id-5",
+        "kind": "text",
+        "parent": null,
+        "streaming": false,
+        "text": "Essai\n\nBANANE"
+      },
+      {
+        "cost": 0.0,
+        "durationMs": true,
+        "engine": "cursor",
+        "error": null,
+        "id": "id-6",
+        "interrupted": false,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "tokens": 0,
+        "ts": true
+      }
+    ],
+    "end": null,
+    "steps": [
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": "Essai",
+        "end": "Finished(\"Je lis le README pour en extraire le titre.\\n\\nEssai\\n\\nBANANE\")",
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      }
+    ]
+  },
+  "cursor-subagent": {
+    "agent": {
+      "cost": 0.0,
+      "entry": null,
+      "mode": "",
+      "plan": false,
+      "prompts": 1,
+      "session": "6753be15-7845-4e8d-abf9-3c3ed0985561",
+      "status": "Done",
+      "tokens": 0
+    },
+    "conv": [
+      {
+        "id": "id-0",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Lis le fichier README.md à la racine du workspace C:\\Users\\user\\AppData\\Local\\Temp\\esc24\\wt-agent1 et résume-le en UNE seule phrase en français. Renvoie uniquement cette phrase.",
+        "ts": true
+      },
+      {
+        "id": "id-1",
+        "kind": "text",
+        "parent": null,
+        "streaming": false,
+        "text": "Lecture du README.md pour en faire un résumé en une phrase."
+      },
+      {
+        "id": "id-2",
+        "input": {
+          "file_path": "C:\\Users\\user\\AppData\\Local\\Temp\\esc24\\wt-agent1\\README.md"
+        },
+        "kind": "tool",
+        "name": "Read",
+        "parent": null,
+        "status": "ok",
+        "ts": true
+      },
+      {
+        "id": "id-3",
+        "kind": "text",
+        "parent": null,
+        "streaming": false,
+        "text": "Ce dépôt d’essai est un dépôt jetable.\nBANANE"
+      },
+      {
+        "cost": 0.0,
+        "durationMs": true,
+        "engine": "cursor",
+        "error": null,
+        "id": "id-4",
+        "interrupted": false,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "tokens": 0,
+        "ts": true
+      }
+    ],
+    "end": null,
+    "steps": [
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": "Ce dépôt d’essai est un dépôt jetable.",
+        "end": "Finished(\"Lecture du README.md pour en faire un résumé en une phrase.\\n\\nCe dépôt d’essai est un dépôt jetable.\\nBANANE\")",
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      }
+    ]
+  },
+  "cursor-tui": {
+    "agent": {
+      "cost": 0.0,
+      "entry": null,
+      "mode": "",
+      "plan": false,
+      "prompts": 1,
+      "session": "6753be15-7845-4e8d-abf9-3c3ed0985561",
+      "status": "Done",
+      "tokens": 0
+    },
+    "conv": [
+      {
+        "id": "id-0",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Réponds seulement : OK VUE",
+        "ts": true
+      },
+      {
+        "id": "id-1",
+        "kind": "text",
+        "parent": null,
+        "streaming": false,
+        "text": "OK VUE\nBANANE"
+      },
+      {
+        "id": "id-2",
+        "kind": "text",
+        "parent": null,
+        "streaming": false,
+        "text": "OK CURSOR\nBANANE"
+      },
+      {
+        "cost": 0.0,
+        "durationMs": true,
+        "engine": "cursor",
+        "error": null,
+        "id": "id-3",
+        "interrupted": true,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "tokens": 0,
+        "ts": true
+      }
+    ],
+    "end": null,
+    "steps": [
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": "Interrupted",
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      }
+    ]
+  },
+  "gemini": {
+    "agent": {
+      "cost": 0.0,
+      "entry": null,
+      "mode": "",
+      "plan": false,
+      "prompts": 3,
+      "session": "s-gemini",
+      "status": "Done",
+      "tokens": 0
+    },
+    "conv": [
+      {
+        "id": "id-0",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Va",
+        "ts": true
+      },
+      {
+        "id": "id-1",
+        "input": {
+          "command": "ls"
+        },
+        "kind": "tool",
+        "name": "Bash",
+        "parent": null,
+        "result": {
+          "isError": false,
+          "text": "a.txt"
+        },
+        "status": "ok",
+        "ts": true
+      },
+      {
+        "id": "id-2",
+        "input": {
+          "file_path": "C:\\w\\a.txt"
+        },
+        "kind": "tool",
+        "name": "Edit",
+        "parent": null,
+        "result": {
+          "isError": true,
+          "text": "denied"
+        },
+        "status": "error",
+        "ts": true
+      },
+      {
+        "id": "id-3",
+        "kind": "text",
+        "parent": null,
+        "streaming": false,
+        "text": "Fini."
+      },
+      {
+        "cost": 0.0,
+        "durationMs": true,
+        "engine": "gemini",
+        "error": null,
+        "id": "id-4",
+        "interrupted": false,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "tokens": 0,
+        "ts": true
+      },
+      {
+        "id": "id-5",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Encore",
+        "ts": true
+      },
+      {
+        "cost": 0.0,
+        "durationMs": true,
+        "engine": "gemini",
+        "error": null,
+        "id": "id-6",
+        "interrupted": true,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "tokens": 0,
+        "ts": true
+      },
+      {
+        "id": "id-7",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Une autre",
+        "ts": true
+      },
+      {
+        "cost": 0.0,
+        "durationMs": true,
+        "engine": "gemini",
+        "error": null,
+        "id": "id-8",
+        "interrupted": false,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "tokens": 0,
+        "ts": true
+      }
+    ],
+    "end": null,
+    "steps": [
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 0,
+        "rate": null,
+        "status": "Idle",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": "ls ?",
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 1,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": "Fini.",
+        "end": "Finished(\"Fini.\")",
+        "out": {
+          "stopped": true,
+          "transcript": null
+        },
+        "prompts": 1,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 2,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": "Interrupted",
+        "out": {
+          "stopped": false,
+          "transcript": null
+        },
+        "prompts": 3,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": "Tâche terminée",
+        "end": "Finished(\"\")",
+        "out": {
+          "stopped": true,
+          "transcript": null
+        },
+        "prompts": 3,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      }
+    ]
+  },
+  "vibe-interrupted": {
+    "agent": {
+      "cost": 0.0,
+      "entry": null,
+      "mode": "",
+      "plan": false,
+      "prompts": 1,
+      "session": "9a9345e7-3db5-2873-705d-f50226790eba",
+      "status": "Done",
+      "tokens": 0
+    },
+    "conv": [
+      {
+        "id": "rs-18e2c8b98591870c",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Count slowly from 1 to 300 in English words, one per line.",
+        "ts": true
+      },
+      {
+        "cost": 0.0,
+        "durationMs": true,
+        "engine": "vibe",
+        "error": null,
+        "id": "id-0",
+        "interrupted": true,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "tokens": 0,
+        "ts": true
+      }
+    ],
+    "end": null,
+    "steps": [
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": "Interrupted",
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      }
+    ]
+  },
+  "vibe-permission": {
+    "agent": {
+      "cost": 0.0,
+      "entry": null,
+      "mode": "",
+      "plan": false,
+      "prompts": 1,
+      "session": "9a9345e7-3db5-2873-705d-f50226790eba",
+      "status": "Done",
+      "tokens": 0
+    },
+    "conv": [
+      {
+        "id": "rs-18e2c8b2765cc668",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Run the shell command: node --version",
+        "ts": true
+      },
+      {
+        "id": "effect-c2d1329d-7703-5840-9696-71a30c168647",
+        "input": {
+          "command": "node --version"
+        },
+        "kind": "tool",
+        "name": "Bash",
+        "parent": null,
+        "status": "ok",
+        "ts": true
+      },
+      {
+        "id": "id-0",
+        "kind": "text",
+        "parent": null,
+        "streaming": false,
+        "text": "v24.14.0"
+      },
+      {
+        "cost": 0.0,
+        "durationMs": true,
+        "engine": "vibe",
+        "error": null,
+        "id": "id-1",
+        "interrupted": false,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "tokens": 0,
+        "ts": true
+      }
+    ],
+    "end": null,
+    "steps": [
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": "Autoriser Bash : node --version ?",
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Waiting",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": "v24.14.0",
+        "end": "Finished(\"v24.14.0\")",
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      }
+    ]
+  },
+  "vibe-tool": {
+    "agent": {
+      "cost": 0.0,
+      "entry": null,
+      "mode": "",
+      "plan": false,
+      "prompts": 1,
+      "session": "9a9345e7-3db5-2873-705d-f50226790eba",
+      "status": "Done",
+      "tokens": 0
+    },
+    "conv": [
+      {
+        "id": "rs-18e2c8aee53ed598",
+        "images": 0,
+        "kind": "user",
+        "origin": "terminal",
+        "queued": false,
+        "text": "Use your bash tool to run: echo kiwi. Then reply with the single word: done",
+        "ts": true
+      },
+      {
+        "id": "effect-70382730-fc7e-5030-9f2a-2f1f5732bb18",
+        "input": {
+          "command": "echo kiwi"
+        },
+        "kind": "tool",
+        "name": "Bash",
+        "parent": null,
+        "status": "ok",
+        "ts": true
+      },
+      {
+        "id": "id-0",
+        "kind": "text",
+        "parent": null,
+        "streaming": false,
+        "text": "done"
+      },
+      {
+        "cost": 0.0,
+        "durationMs": true,
+        "engine": "vibe",
+        "error": null,
+        "id": "id-1",
+        "interrupted": false,
+        "isError": false,
+        "kind": "turn",
+        "limited": false,
+        "tokens": 0,
+        "ts": true
+      }
+    ],
+    "end": null,
+    "steps": [
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": null,
+        "end": null,
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Running",
+        "turns": []
+      },
+      {
+        "alert": "done",
+        "end": "Finished(\"done\")",
+        "out": null,
+        "prompts": 1,
+        "rate": null,
+        "status": "Done",
+        "turns": []
+      }
+    ]
+  }
+}

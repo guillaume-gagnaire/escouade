@@ -12,10 +12,10 @@ async fn the_agents_say_the_harness_they_run_on() {
     // One saved before 1.8 (Claude Code, the default), and one on each other harness.
     let mut agents = vec![(put_agent(&h, &p, "claude", 1), "claude")];
     for (at, (engine, id)) in [
-        (EngineId::Codex, "codex"),
-        (EngineId::Copilot, "copilot"),
-        (EngineId::Cursor, "cursor"),
-        (EngineId::Opencode, "opencode"),
+        (EngineId::CODEX, "codex"),
+        (EngineId::COPILOT, "copilot"),
+        (EngineId::CURSOR, "cursor"),
+        (EngineId::OPENCODE, "opencode"),
     ]
     .into_iter()
     .enumerate()

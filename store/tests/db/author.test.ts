@@ -221,7 +221,7 @@ describe.skipIf(!url)('the author’s space', () => {
     await plugin('dev.lea.slack');
     const one = await version('dev.lea.slack', '1.0.0');
     const two = await version('dev.lea.slack', '2.0.0');
-    const listed = async () => (await catalog(db)).filter((e) => !e.builtin).map((e) => [e.id, e.version]);
+    const listed = async () => (await catalog(db)).map((e) => [e.id, e.version]);
     expect(await listed()).toEqual([['dev.lea.slack', '2.0.0']]);
 
     await yankVersion(db, lea, two.id, null, T0);

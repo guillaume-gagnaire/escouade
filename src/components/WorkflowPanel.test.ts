@@ -54,9 +54,7 @@ describe('the Workflow tab', () => {
     backend(scanOf(gsd()), gsdTracks());
     render(SidePanel, { project: project(), agent: app.agents.a1, docked: true });
     const tabs = await screen.findAllByRole('tab');
-    await waitFor(() =>
-      expect(tabs.map((t) => t.textContent?.trim())).toEqual(['Non commités 0', 'Historique', 'Workflow 3', 'PR et CI dans la 2.1']),
-    );
+    await waitFor(() => expect(tabs.map((t) => t.textContent?.trim())).toEqual(['Non commités 0', 'Historique', 'Workflow 3', 'PR et CI']));
   });
 
   it('draws the rail: the steps, their doors, subagents, files and ways back, the agents on them', async () => {
@@ -297,6 +295,18 @@ describe('the Workflow tab', () => {
     expect(screen.getByText('GSD').parentElement).toHaveTextContent('jamais lancé ici');
     expect(screen.getByRole('tab', { name: 'Workflow' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Analyser avec un agent…' }));
+    expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p1' });
+  });
+
+  it('says « Pas de workflow pour ce projet » and where it is undone (ESC-309)', async () => {
+    app.tickets = {};
+    await open({ ...scanOf(), off: true }, []);
+    expect(await screen.findByRole('heading', { name: 'Pas de workflow pour ce projet' })).toBeInTheDocument();
+    expect(screen.getByTestId('workflow-off')).toHaveTextContent(
+      'Escouade ne lit ni n’écrit les workflows de demo-api et n’y suit aucun agent. Pour le défaire : Réglages › Projets › Workflow, « Lire les workflows ».',
+    );
+    expect(screen.queryByRole('button', { name: 'Analyser avec un agent…' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Ouvrir les réglages du workflow' }));
     expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p1' });
   });
 

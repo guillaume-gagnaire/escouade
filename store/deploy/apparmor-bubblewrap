@@ -1,0 +1,81 @@
+# The AppArmor profile of the store's container on Coolify (ESC-356, docs/STORE.md §3.3).
+#
+# Docker's docker-default, the one of github.com/moby/profiles/apparmor v0.2.2 (Docker 29.9.3), rule for rule, less its
+# `deny mount,`, plus what bubblewrap mounts for a `run.wasm`, and nothing else: a deny always wins in AppArmor, so that
+# line could not stay. Load it on the host (a container cannot):
+#
+#   sudo cp store/deploy/apparmor-bubblewrap /etc/apparmor.d/escouade-store-bubblewrap
+#   sudo apparmor_parser -r /etc/apparmor.d/escouade-store-bubblewrap
+
+abi <abi/3.0>,
+include <tunables/global>
+
+profile escouade-store-bubblewrap flags=(attach_disconnected,mediate_deleted) {
+  network,
+  # Disallow AF_ALG (Linux kernel crypto API); see https://copy.fail/
+  deny network alg,
+  # Disallow AF_VSOCK to prevent host/guest communication.
+  deny network vsock,
+  capability,
+  file,
+  umount,
+  # Host (privileged) processes may send signals to container processes.
+  signal (receive) peer=unconfined,
+  # runc may send signals to container processes (for "docker stop").
+  signal (receive) peer=runc,
+  # crun may send signals to container processes (for "docker stop" when used with crun OCI runtime).
+  signal (receive) peer=crun,
+  # Container processes may send signals amongst themselves.
+  signal (send,receive) peer=escouade-store-bubblewrap,
+
+  deny @{PROC}/* w,   # deny write for all files directly in /proc (not in a subdir)
+  # deny write to files not in /proc/<number>/** or /proc/sys/**
+  deny @{PROC}/{[^1-9/],[^1-9/][^0-9/],[^1-9s/][^0-9y/][^0-9s/],[^1-9/][^0-9/][^0-9/][^0-9/]*}/** w,
+  deny @{PROC}/sys/[^k]** w,  # deny /proc/sys except /proc/sys/k* (effectively /proc/sys/kernel)
+  deny @{PROC}/sys/kernel/{?,??,[^s][^h][^m]**} w,  # deny everything except shm* in /proc/sys/kernel/
+  deny @{PROC}/sysrq-trigger rwklx,
+  deny @{PROC}/kcore rwklx,
+
+  deny /sys/[^f]*/** wklx,
+  deny /sys/f[^s]*/** wklx,
+  deny /sys/fs/[^c]*/** wklx,
+  deny /sys/fs/c[^g]*/** wklx,
+  deny /sys/fs/cg[^r]*/** wklx,
+  deny /sys/firmware/** rwklx,
+  deny /sys/devices/virtual/powercap/** rwklx,
+  deny /sys/kernel/security/** rwklx,
+
+  # allow processes within the container to trace each other,
+  # provided all other LSM and yama setting allow it.
+  ptrace (trace,tracedby,read,readby) peer=escouade-store-bubblewrap,
+
+  # What bubblewrap does for a `run.wasm`, in the order it does it (bwrapArgs in store/server/utils/compile.ts): the audit
+  # log of one run, read on Ubuntu 24.04. No other filesystem than tmpfs and devpts, no other source than these.
+  # Its new mount namespace, cut from the container's.
+  mount options=(rw, silent, rslave) -> /,
+  # The tmpfs that holds the sandbox's root, in its /tmp, then the first pivot.
+  mount fstype=tmpfs options=(rw, nosuid, nodev) tmpfs -> /tmp/,
+  mount options=(rw, rbind) /tmp/newroot/ -> /tmp/newroot/,
+  pivot_root oldroot=/tmp/oldroot/ /tmp/,
+  # /usr, /opt and, for `cargo fetch`, the certificates: the image's sandbox tree, never /app or /data.
+  mount options=(rw, rbind) /oldroot/opt/sandbox/{usr,opt,etc/ssl}/ -> /newroot/{usr,opt,etc/ssl}/,
+  # --dev /dev and --tmpfs /tmp.
+  mount fstype=tmpfs options=(rw, nosuid, nodev) tmpfs -> /newroot/{dev,tmp}/,
+  mount options=(rw, rbind) /oldroot/dev/{null,zero,full,random,urandom,tty} -> /newroot/dev/{null,zero,full,random,urandom,tty},
+  mount fstype=devpts options=(rw, nosuid, noexec) devpts -> /newroot/dev/pts/,
+  # The compilation's folder alone (and /tmp itself, for the test bubblewrap passes at the store's start).
+  mount options=(rw, rbind) /oldroot/tmp/{,escouade-compile-*/} -> /newroot/work/,
+  # What `cargo fetch` resolves names with.
+  mount options=(rw, rbind) /oldroot/etc/{resolv.conf,hosts} -> /newroot/etc/{resolv.conf,hosts},
+  # Each of these binds read-only, or without suid and devices: bubblewrap keeps the flags the source had. `remount`, not
+  # `mount options in`, which would let any filesystem through: without an fstype, a `mount` rule matches them all.
+  remount options in (rw, ro, bind, silent, nosuid, nodev, noexec, relatime, noatime, nodiratime) /newroot/**,
+  # AppArmor 3.0 (Debian 12) leaves `bind` out of that rule: « failed flags match ». The same calls by their exact flags,
+  # the sources read-only, then the folder of a compilation. Not `options in`, which lets `--mqueue` through there too.
+  mount options=(ro, nosuid, nodev, remount, bind, silent, relatime) -> /newroot/**,
+  mount options=(ro, nosuid, nodev, remount, bind, silent, noatime) -> /newroot/**,
+  mount options=(rw, nosuid, nodev, remount, bind, silent, relatime) -> /newroot/**,
+  # The old root let go, and the second pivot.
+  mount options=(rw, silent, rprivate) -> /oldroot/,
+  pivot_root oldroot=/newroot/ /newroot/,
+}

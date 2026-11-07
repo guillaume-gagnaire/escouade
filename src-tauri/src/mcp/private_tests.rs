@@ -114,36 +114,6 @@ fn naming_calls() -> Vec<(&'static str, Names, Value)> {
             Names::Project,
             json!({ "project": "{}", "query": "texte" }),
         ),
-        (
-            "index_search",
-            Names::Project,
-            json!({ "project": "{}", "query": "texte" }),
-        ),
-        (
-            "index_context",
-            Names::Project,
-            json!({ "project": "{}", "task": "texte" }),
-        ),
-        (
-            "index_body",
-            Names::Project,
-            json!({ "project": "{}", "symbol": "texte" }),
-        ),
-        (
-            "index_callers",
-            Names::Project,
-            json!({ "project": "{}", "name": "texte" }),
-        ),
-        (
-            "index_callees",
-            Names::Project,
-            json!({ "project": "{}", "name": "texte" }),
-        ),
-        (
-            "index_impact",
-            Names::Project,
-            json!({ "project": "{}", "target": "texte" }),
-        ),
         ("list_decisions", Names::Project, json!({ "project": "{}" })),
         (
             "read_decision",
@@ -222,6 +192,16 @@ fn naming_calls() -> Vec<(&'static str, Names, Value)> {
             json!({ "project": "{}", "maxParallel": 2 }),
         ),
         ("get_ticket", Names::Ticket, json!({ "ticket": "{}" })),
+        (
+            "list_pull_requests",
+            Names::Project,
+            json!({ "project": "{}" }),
+        ),
+        (
+            "get_pull_request",
+            Names::Project,
+            json!({ "project": "{}", "number": 1 }),
+        ),
         (
             "get_ticket_image",
             Names::Ticket,

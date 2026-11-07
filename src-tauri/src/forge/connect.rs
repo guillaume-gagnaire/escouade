@@ -7,6 +7,7 @@ use crate::core::Core;
 use crate::integrations::{jira, Account};
 use crate::model::Service;
 use crate::model::UiEvent;
+use crate::plugins::runtime::Trial;
 use anyhow::bail;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -43,18 +44,30 @@ pub struct Status {
     pub error: Option<String>,
 }
 
-/// Asks the host who the token is: its state, and who it is when it answered.
+/// Asks the host who the token is: its state, and who it is when it answered. A host whose client
+/// left the core (`Provider::plugin`) is asked through its plugin, as the core does (the tests').
+#[cfg(test)]
 pub async fn check(
     provider: &dyn Provider,
     http: reqwest::Client,
     creds: &Credentials,
 ) -> (Status, Option<Identity>) {
-    match provider.client(http, creds).me().await {
+    let client = match provider.plugin() {
+        Some(plugin) => crate::plugins::builtin::served_forge(plugin, &provider.kind(), creds),
+        None => provider.client(http, creds),
+    };
+    check_client(&*client, &provider.scopes()).await
+}
+
+/// `check`, with the client of the account (a plugin's, `plugins::adapters::ProcessForge`) and
+/// the rights its tokens need.
+pub async fn check_client(client: &dyn Forge, scopes: &[String]) -> (Status, Option<Identity>) {
+    match client.me().await {
         Ok(id) => {
             let missing = id
                 .scopes
                 .as_deref()
-                .map(|s| missing_scopes(provider.scopes(), s))
+                .map(|s| missing_scopes(scopes, s))
                 .unwrap_or_default();
             let health = if missing.is_empty() {
                 Health::Connected
@@ -103,7 +116,7 @@ pub async fn guess(registry: &Registry, http: &reqwest::Client, url: &str) -> Op
         };
         let status = resp.status().as_u16();
         let body: Value = resp.json().await.unwrap_or(Value::Null);
-        if (probe.matches)(status, &body) {
+        if probe.matches(status, &body) {
             return Some(p.kind().to_string());
         }
     }
@@ -119,6 +132,9 @@ pub struct ForgeForm {
     pub url: String,
     pub email: String,
     pub token: String,
+    /// The plugin chosen to serve it, when several do (`ProviderView::servers`); empty for
+    /// Escouade's own hand.
+    pub plugin: String,
 }
 
 /// A code host as the window offers it.
@@ -138,6 +154,26 @@ pub struct ProviderView {
     pub address_hint: Option<String>,
     pub scopes: Vec<String>,
     pub capabilities: Capabilities,
+    /// The plugins that may serve a new account of it, Escouade's first: the form offers the
+    /// choice when there are several.
+    pub servers: Vec<crate::plugins::accounts::Server>,
+    /// The plugin the app gives that serves its accounts, once its client left the core (GitHub's,
+    /// INT-8.1), read from the plugins' registry: whether it is on, and why it stopped.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub served_by: Option<ServedBy>,
+}
+
+/// A plugin the app gives, as the view of the code hosts shows it.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ServedBy {
+    pub plugin: String,
+    pub name: String,
+    /// Switched on for the app (Réglages › Plugins).
+    pub on: bool,
+    /// It stopped by itself (crashes, memory, a start refused), in words; none while it runs or
+    /// waits for its first call.
+    pub stopped: Option<String>,
 }
 
 /// An account as the window knows it: never its token.
@@ -151,8 +187,12 @@ pub struct ForgeAccountView {
     pub label: String,
     pub via_cli: bool,
     pub in_file: bool,
-    /// github.com's: GitHub Issues' account too.
+    /// It serves its plugin's ticket source too (github.com's GitHub Issues, a GitLab's GitLab
+    /// Issues, an Azure DevOps organization's Azure Boards): `plugins::accounts::points`.
     pub issues: bool,
+    /// The plugin that serves it, when another than Escouade's own hand.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub plugin: String,
     pub status: Status,
     /// The projects whose remote is on its instance.
     pub projects: Vec<String>,
@@ -219,7 +259,7 @@ impl<R: Runtime> Core<R> {
         let Some(cli) = provider.cli(host) else {
             bail!(tr!("{name} : donne un jeton.", "{name}: give a token."));
         };
-        let (program, login) = (cli.program, cli.login);
+        let (program, login) = (cli.program.as_str(), cli.login.as_str());
         let none = || {
             anyhow!(tr!(
                 "{name} : donne un jeton, ou connecte la CLI {program} à {host} ({login})",
@@ -251,7 +291,8 @@ impl<R: Runtime> Core<R> {
             String::from_utf8_lossy(&out.stdout),
             String::from_utf8_lossy(&out.stderr),
         );
-        let token = (cli.parse)(&stdout, &stderr)
+        let token = cli
+            .parse(&stdout, &stderr)
             .filter(|_| out.status.success())
             .ok_or_else(none)?;
         self.forge_cli_tokens
@@ -272,7 +313,17 @@ impl<R: Runtime> Core<R> {
             // Where GitHub Issues reaches it.
             creds.api = Some(self.bases.read().github.clone());
         }
+        if a.kind == "azure" {
+            // Where dev.azure.com's API is when a fake one stands in (`ESCOUADE_AZURE_DEVOPS_API`).
+            creds.api = creds.api.or_else(|| azure::api_override(&creds.url));
+        }
         Ok(creds)
+    }
+
+    /// The login of the account of `host`'s instance; empty without one.
+    pub fn forge_login(&self, host: &str) -> String {
+        let list = accounts::all(&self.accounts.read());
+        accounts::for_host(&list, host).map_or_else(String::new, |a| a.user.clone())
     }
 
     /// A client of the account of `host`'s instance.
@@ -291,8 +342,73 @@ impl<R: Runtime> Core<R> {
             ));
         }
         let creds = self.credentials(&a).await?;
-        let client = self.provider(&a.kind)?.client(self.http()?, &creds);
+        let client = self.client_of(&a.kind, &a.plugin, &creds, None)?;
         Ok((client, a))
+    }
+
+    /// The client of an account of the code host `kind`: its plugin's (`ProcessForge`) when
+    /// another than Escouade's own hand serves it (`plugin`), else the core's.
+    /// A host whose client left the core (`Provider::plugin`: GitHub's) is its plugin's too, the
+    /// account's token lent to it as the core holds it (the user's, or its CLI's): for as long as the account lasts,
+    /// or for the `trial` of an account not saved yet, with its host.
+    fn client_of(
+        &self,
+        kind: &str,
+        plugin: &str,
+        creds: &Credentials,
+        trial: Option<&Trial>,
+    ) -> Result<Box<dyn Forge>> {
+        let provider = self.provider(kind)?;
+        let first_hand = provider.plugin().filter(|_| plugin.is_empty());
+        if let Some(own) = first_hand {
+            let host = host_of(&creds.url);
+            match trial {
+                Some(t) => t.lend(own, &format!("account:{host}"), &creds.token, &host),
+                None => self.lend_account(own, &host, &creds.token),
+            }
+            #[cfg(any(debug_assertions, test))]
+            self.plugin_runtime.set_routes(self.bases.read().faked());
+        }
+        if let Some(plugin) = first_hand.or((!plugin.is_empty()).then_some(plugin)) {
+            return Ok(Box::new(crate::plugins::adapters::ProcessForge::new(
+                self.plugin_runtime.clone(),
+                plugin,
+                kind,
+                creds,
+            )));
+        }
+        Ok(provider.client(self.http()?, creds))
+    }
+
+    /// Lends `own` the token of the account of `host`, unless it went while its token was read: under the lock its
+    /// removal takes, so that no loan comes after `take_back`.
+    pub(crate) fn lend_account(&self, own: &str, host: &str, token: &str) {
+        let all = self.accounts.read();
+        if accounts::all(&all).iter().any(|a| a.host() == host) {
+            self.plugin_runtime
+                .lend(own, &format!("account:{host}"), token);
+        }
+    }
+
+    /// The plugin the app gives `id`, as the code hosts' view shows it.
+    fn served_by(&self, id: &str) -> ServedBy {
+        use crate::plugins::runtime::Stop;
+        let v = self.plugins.get(id, crate::i18n::ui());
+        let on = v
+            .as_ref()
+            .is_some_and(|v| v.choices.enabled && v.state == crate::plugins::State::Ready);
+        let stopped = self
+            .plugin_runtime
+            .status(id)
+            .stop
+            .filter(|s| !matches!(s, Stop::Asked | Stop::Shutdown))
+            .map(|s| s.describe(Duration::from_secs(300)));
+        ServedBy {
+            plugin: id.to_string(),
+            name: v.map_or_else(|| id.to_string(), |v| v.name),
+            on,
+            stopped,
+        }
     }
 
     /// What a project's remote names (the remote of its target branch, else origin, else the
@@ -312,20 +428,23 @@ impl<R: Runtime> Core<R> {
     /// Réglages › Intégrations › Hébergeurs de code, with the state each account was last found in.
     pub async fn forges_view(&self) -> ForgesView {
         let registry = self.forges.read().clone();
+        let kinds = crate::plugins::accounts::kinds_of(&self.plugins);
         let providers = registry
             .all()
             .iter()
             .map(|p| ProviderView {
-                kind: p.kind().into(),
+                servers: crate::plugins::accounts::servers(&kinds, &p.kind()),
+                kind: p.kind(),
                 name: p.name().into(),
                 request_word: p.request_word().into(),
                 default_host: p.default_host().map(str::to_string),
                 needs_email: p.needs_email(),
-                cli: p.cli("").map(|c| c.program.to_string()),
-                cli_login: p.cli("").map(|c| c.login.to_string()),
+                cli: p.cli("").map(|c| c.program),
+                cli_login: p.cli("").map(|c| c.login),
                 address_hint: p.address_hint().map(str::to_string),
-                scopes: p.scopes().iter().map(|s| s.to_string()).collect(),
+                scopes: p.scopes(),
                 capabilities: p.capabilities(),
+                served_by: p.plugin().map(|id| self.served_by(id)),
             })
             .collect();
         let list = accounts::all(&self.accounts.read());
@@ -345,6 +464,7 @@ impl<R: Runtime> Core<R> {
             }
         }
         let health = self.forge_health.lock().clone();
+        let shared = crate::plugins::accounts::shared(&self.accounts.read(), &kinds);
         let accounts = list
             .iter()
             .map(|a| {
@@ -362,8 +482,13 @@ impl<R: Runtime> Core<R> {
                     label: a.label.clone(),
                     via_cli: a.via_cli,
                     in_file: a.in_file,
-                    // GitLab Issues takes every GitLab account, Azure Boards every Azure DevOps one.
-                    issues: host == GITHUB_COM || a.kind == "gitlab" || a.kind == "azure",
+                    // One connection, every use: GitLab Issues takes every GitLab account, Azure
+                    // Boards every Azure DevOps one, GitHub Issues github.com's.
+                    issues: shared
+                        .iter()
+                        .find(|s| s.account == host && s.kind == a.kind)
+                        .is_some_and(|s| s.points.iter().any(|p| p.starts_with("ticketSources:"))),
+                    plugin: a.plugin.clone(),
                     status,
                     projects: by_host.remove(&host).map(|(_, _, p)| p).unwrap_or_default(),
                     host,
@@ -402,7 +527,8 @@ impl<R: Runtime> Core<R> {
         let asked = async {
             let p = self.provider(&a.kind)?;
             let creds = self.credentials(a).await?;
-            Ok::<_, anyhow::Error>(check(&*p, self.http()?, &creds).await.0)
+            let client = self.client_of(&a.kind, &a.plugin, &creds, None)?;
+            Ok::<_, anyhow::Error>(check_client(&*client, &p.scopes()).await.0)
         };
         asked.await.unwrap_or_else(|e| Status {
             health: Health::Unreachable,
@@ -457,13 +583,21 @@ impl<R: Runtime> Core<R> {
         }
         let host = host_of(&url);
         let token = form.token.trim().to_string();
+        // The plugin that serves it: Escouade's own hand, unless another one is chosen.
+        let plugin = crate::plugins::accounts::chosen(
+            &crate::plugins::accounts::kinds_of(&self.plugins),
+            &provider.kind(),
+            &form.plugin,
+        )
+        .map_err(|e| anyhow!(e))?;
         if provider.kind() == "github" && host == GITHUB_COM {
             // One connection, two uses: Issues' account.
             let form = Account {
                 token,
+                plugin,
                 ..Default::default()
             };
-            self.integration_connect(Service::Github, form).await?;
+            self.integration_connect(Service::GITHUB, form).await?;
             self.forge_health.lock().remove(GITHUB_COM);
             return Ok(self.forge_check_one(GITHUB_COM).await);
         }
@@ -477,23 +611,33 @@ impl<R: Runtime> Core<R> {
             url: url.clone(),
             email: email.clone(),
             token: used,
-            api: None,
-        };
-        let (status, id) = check(&*provider, self.http()?, &creds).await;
-        let Some(id) = id else {
-            bail!(status.error.unwrap_or_default());
+            // Where dev.azure.com's API is when a fake one stands in (`ESCOUADE_AZURE_DEVOPS_API`).
+            api: azure::api_override(&url),
         };
         let mut account = ForgeAccount {
-            kind: provider.kind().into(),
+            kind: provider.kind(),
             url,
             email,
             token,
-            label: id.label,
-            user: id.user,
             via_cli,
-            in_file: false,
-            unread: false,
+            plugin,
+            ..ForgeAccount::default()
         };
+        // A plugin takes the token from the keychain itself (`secrets/get`): it is there first.
+        if !account.plugin.is_empty() {
+            accounts::place(&*self.secrets, &mut account);
+        }
+        let trial = self.plugin_runtime.trial();
+        let client = self.client_of(&account.kind, &account.plugin, &creds, Some(&trial))?;
+        let (status, id) = check_client(&*client, &provider.scopes()).await;
+        let Some(id) = id else {
+            if !account.plugin.is_empty() {
+                accounts::forget_of(&*self.secrets, &host, &account.kind, &account.plugin);
+            }
+            bail!(status.error.unwrap_or_default());
+        };
+        account.label = id.label;
+        account.user = id.user;
         let left = !accounts::place(&*self.secrets, &mut account);
         {
             let mut all = self.accounts.write();
@@ -503,6 +647,8 @@ impl<R: Runtime> Core<R> {
             }
             all.forges.retain(|a| a.host() != host);
             all.forges.push(account);
+            self.plugin_runtime.take_back(&format!("account:{host}"));
+            trial.keep();
         }
         crate::integrations::secrets::save_accounts(&self.data, &self.accounts.read())?;
         self.forge_health.lock().insert(host, status);
@@ -525,17 +671,23 @@ impl<R: Runtime> Core<R> {
         self.forge_health.lock().remove(&host);
         self.forge_cli_tokens.lock().remove(&host);
         if host == GITHUB_COM {
-            self.integration_disconnect(Service::Github)?;
+            self.integration_disconnect(Service::GITHUB)?;
             return Ok(self.forges_view().await);
         }
-        let had = self
+        let (had, kind, plugin) = self
             .accounts
             .read()
             .forges
             .iter()
             .find(|a| a.host() == host)
-            .map(|a| !a.via_cli && !a.in_file);
-        let forgotten = accounts::forget(&*self.secrets, &host);
+            .map_or((None, String::new(), String::new()), |a| {
+                (
+                    Some(!a.via_cli && !a.in_file),
+                    a.kind.clone(),
+                    a.plugin.clone(),
+                )
+            });
+        let forgotten = accounts::forget_of(&*self.secrets, &host, &kind, &plugin);
         if !forgotten && had == Some(true) {
             self.hub.emit(UiEvent::Toast {
                 text: tr!(
@@ -550,6 +702,7 @@ impl<R: Runtime> Core<R> {
                 all.forget_forges.push(host.clone());
             }
             all.forges.retain(|a| a.host() != host);
+            self.plugin_runtime.take_back(&format!("account:{host}"));
         }
         crate::integrations::secrets::save_accounts(&self.data, &self.accounts.read())?;
         Ok(self.forges_view().await)
@@ -592,6 +745,12 @@ fn insecure() -> String {
 
 /// The address of the remote of `target`'s upstream, else of origin, else of the only remote.
 async fn project_remote_url(path: &str, target: &str) -> Option<String> {
+    let remote = project_remote_name(path, target).await?;
+    crate::git::remote_url(path, &remote).await
+}
+
+/// The name of the git remote the project's target syncs with (the one its code host is read on).
+pub(crate) async fn project_remote_name(path: &str, target: &str) -> Option<String> {
     let remotes = crate::git::remotes(path).await;
     let upstream = if target.is_empty() {
         None
@@ -608,6 +767,5 @@ async fn project_remote_url(path: &str, target: &str) -> Option<String> {
         .ok()
         .filter(|u| !u.is_empty())
     };
-    let remote = crate::git::sync_remote(&remotes, upstream.as_deref())?;
-    crate::git::remote_url(path, remote).await
+    crate::git::sync_remote(&remotes, upstream.as_deref()).map(str::to_string)
 }

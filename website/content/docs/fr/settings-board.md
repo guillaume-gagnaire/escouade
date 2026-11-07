@@ -47,7 +47,9 @@ Un conflit annule le merge : voir « En cas de conflit » plus bas.
 
 Affiché avec « Ouvrir une pull request » seulement. Désactivé par défaut. Activé, la PR est ouverte en brouillon.
 
-Escouade pousse la branche, puis crée la PR avec la CLI GitHub `gh` si elle est installée. Sans `gh`, ou si `gh` échoue, elle ouvre dans ton navigateur la page de GitHub qui permet de finir la PR ; ce réglage ne s’applique alors pas. Si le dépôt n’est pas sur GitHub, la branche est seulement poussée.
+Escouade pousse la branche, puis ouvre la PR par l’API de l’[hébergeur de code](code-hosts) du dépôt, avec le compte connecté pour son instance. Sans compte, ou quand l’hébergeur refuse, elle ouvre dans ton navigateur sa page de création de PR, remplie ; ce réglage ne s’applique alors pas. Chez un hébergeur inconnu, la branche est seulement poussée.
+
+Le ticket attend ensuite son merge dans [la colonne « En revue »](board#la-colonne-en-revue). Deux réglages de plus accompagnent cette action : « Répondre sous les fils corrigés » (éteint par défaut : Escouade ne publie rien sous les fils sans lui, et ne résout jamais un fil) et « Mise à jour de la branche » d’une PR en conflit avec sa cible (merge par défaut, ou rebase).
 
 ## Avant et après
 

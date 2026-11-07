@@ -92,12 +92,12 @@ fn an_azure_boards_work_item_is_linked_on_azure_repos_and_named_on_github() {
     let mut t = crate::model::Ticket::default();
     assert_eq!(work_item_of(&t), None);
     t.external = Some(crate::model::ExternalRef {
-        service: crate::model::Service::Gitlab,
+        service: crate::model::Service::GITLAB,
         id: "42".into(),
         ..Default::default()
     });
     assert_eq!(work_item_of(&t), None);
-    t.external.as_mut().unwrap().service = crate::model::Service::Azure;
+    t.external.as_mut().unwrap().service = crate::model::Service::AZURE;
     assert_eq!(work_item_of(&t), Some(42));
 }
 
@@ -239,11 +239,13 @@ fn the_reviews_requests_and_the_open_comments_go_to_the_agent() {
             author: "ada".into(),
             state: ReviewState::ChangesRequested,
             body: "Renomme la fonction.".into(),
+            created: 0,
         },
         Review {
             author: "bob".into(),
             state: ReviewState::Approved,
             body: String::new(),
+            created: 0,
         },
     ];
     let comment = |id: &str, path: Option<&str>, line: Option<u32>, resolved: bool| ReviewComment {
@@ -253,6 +255,8 @@ fn the_reviews_requests_and_the_open_comments_go_to_the_agent() {
         path: path.map(str::to_string),
         line,
         resolved,
+        created: 0,
+        excerpt: None,
     };
     let comments = vec![
         comment("1", Some("src/app.ts"), Some(4), false),
@@ -302,7 +306,7 @@ fn the_reviews_requests_and_the_open_comments_go_to_the_agent() {
 
 /// A project on github.com/acme/demo whose pushes go to a local bare repository, github.com's
 /// account connected on the fake server, and an ordinary agent with a commit in its worktree.
-async fn github_agent(h: &Harness, server: &FakeServer) -> (String, PathBuf, String) {
+pub(crate) async fn github_agent(h: &Harness, server: &FakeServer) -> (String, PathBuf, String) {
     let (p, _, bare) = github_project(h, server, true).await;
     let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
     let wt = h.agent(&id).worktree.expect("a worktree");
@@ -315,7 +319,7 @@ async fn github_agent(h: &Harness, server: &FakeServer) -> (String, PathBuf, Str
 
 /// A project on github.com/acme/demo whose pushes go to a local bare repository, github.com's
 /// account connected on the fake server: the project, its folder and the bare repository.
-async fn github_project(
+pub(crate) async fn github_project(
     h: &Harness,
     server: &FakeServer,
     worktrees: bool,
@@ -509,12 +513,17 @@ async fn an_ordinary_agent_opens_its_pull_request_and_its_card_follows_it() {
         "npm test\nFAIL src/login.test.ts\n",
         &[],
     );
+    h.core.set_telemetry(true).unwrap();
     h.core
         .agent_pr_fix(&id, 7, "", PrFix::Checks)
         .await
         .unwrap();
     h.wait("the fix sent", |h| user_said(h, &id, "La CI de la PR #7"))
         .await;
+    assert_eq!(
+        crate::core_tests::sent(&h, "ci_fix_started"),
+        [json!({ "from": "agent", "by": "user" })]
+    );
     assert!(user_said(
         &h,
         &id,
@@ -636,8 +645,25 @@ async fn nothing_to_correct_and_nothing_to_propose_are_said() {
     );
 }
 
+/// Every code host has its client now (GitHub, GitLab, Bitbucket Cloud, Gitea and Forgejo, Azure DevOps): without an
+/// account, none offers « Ouvrir une PR » and each says why when asked.
 #[tokio::test]
-async fn a_host_without_a_client_yet_shows_nothing_and_says_so_when_asked() {
+async fn a_host_without_an_account_shows_nothing_and_says_so_when_asked() {
+    let h = harness("agent-pr-gitea");
+    let (p, r) = h.project(true).await;
+    git(
+        &r,
+        &["remote", "add", "origin", "git@codeberg.org:acme/demo.git"],
+    );
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    // A word left from before (an account since disconnected…) is taken back: no « Ouvrir une PR ».
+    h.core.agent(&id).unwrap().lock().meta.pr_word = Some("PR".into());
+    h.core.agent_prs_refresh(&id, true).await.unwrap();
+    assert!(h.agent(&id).prs.is_empty());
+    assert_eq!(h.agent(&id).pr_word, None);
+    let e = h.core.agent_pr_propose(&id).await.unwrap_err();
+    assert_eq!(e.to_string(), "Aucun compte connecté pour codeberg.org");
+    // GitLab (ESC-56) the same, in its word: no « Ouvrir une MR ».
     let h = harness("agent-pr-gitlab");
     let (p, r) = h.project(true).await;
     git(
@@ -645,16 +671,11 @@ async fn a_host_without_a_client_yet_shows_nothing_and_says_so_when_asked() {
         &["remote", "add", "origin", "git@gitlab.com:acme/demo.git"],
     );
     let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
-    // A word left from before (an account since disconnected…) is taken back: no « Ouvrir une PR ».
     h.core.agent(&id).unwrap().lock().meta.pr_word = Some("MR".into());
     h.core.agent_prs_refresh(&id, true).await.unwrap();
-    assert!(h.agent(&id).prs.is_empty());
     assert_eq!(h.agent(&id).pr_word, None);
     let e = h.core.agent_pr_propose(&id).await.unwrap_err();
-    assert_eq!(
-        e.to_string(),
-        "Escouade n'ouvre pas encore de MR sur GitLab."
-    );
+    assert_eq!(e.to_string(), "Aucun compte connecté pour gitlab.com");
     // No remote, then a github.com remote without an account: no word either.
     let h = harness("agent-pr-noremote");
     let (p, r) = h.project(true).await;
@@ -1030,4 +1051,53 @@ async fn an_agents_pull_request_goes_to_the_branch_its_worktree_started_from() {
             (wt.branch.as_str(), base)
         );
     }
+}
+
+/// The plugin « GitHub » switched off (INT-8.1): the card says its code host is stopped, the pull
+/// requests read last stay; on again, the next read takes the word back.
+#[tokio::test]
+async fn a_code_host_whose_plugin_is_off_says_so_on_the_card_and_keeps_its_pull_requests() {
+    use crate::plugins::builtin::GITHUB;
+    let h = harness("prs-plugin-off");
+    let server = FakeServer::start().await;
+    let (id, _, branch) = github_agent(&h, &server).await;
+    server.on(
+        "POST",
+        "/graphql#PullsOfBranch",
+        200,
+        json!({ "data": { "repository": { "pullRequests": { "nodes": [node(7, &branch, "SUCCESS", false)] } } } }),
+    );
+    h.core.agent_prs_refresh(&id, true).await.unwrap();
+    assert_eq!(h.agent(&id).prs.len(), 1);
+    assert_eq!(h.agent(&id).pr_down, None);
+
+    h.core
+        .plugins
+        .choose(GITHUB, |c| c.enabled = false)
+        .unwrap();
+    h.core.plugin_runtime.forget(GITHUB);
+    let e = h.core.agent_prs_refresh(&id, true).await.unwrap_err();
+    assert!(crate::plugins::adapters::is_down(&e), "{e:#}");
+    let a = h.agent(&id);
+    assert!(
+        a.pr_down.as_deref().is_some_and(|d| d.contains(GITHUB)),
+        "{:?}",
+        a.pr_down
+    );
+    assert_eq!(
+        a.prs.iter().map(|p| p.number).collect::<Vec<_>>(),
+        [7],
+        "what was read last stays"
+    );
+    // The view of the code hosts reads it from the registry.
+    let view = h.core.forges_view().await;
+    let github = view.providers.iter().find(|p| p.kind == "github").unwrap();
+    assert_eq!(github.served_by.as_ref().map(|s| s.on), Some(false));
+
+    h.core.plugins.choose(GITHUB, |c| c.enabled = true).unwrap();
+    h.core.agent_prs_refresh(&id, true).await.unwrap();
+    assert_eq!(h.agent(&id).pr_down, None);
+    let view = h.core.forges_view().await;
+    let github = view.providers.iter().find(|p| p.kind == "github").unwrap();
+    assert_eq!(github.served_by.as_ref().map(|s| s.on), Some(true));
 }

@@ -15,13 +15,13 @@
   import { projectPalette } from '../../lib/plugin-theme.svelte';
   import { cleanLabel, cleanLetters, initials, tileText } from '../../lib/project-rail';
   import TileFace from '../TileFace.svelte';
-  import type { Account, CommitMode, LeftoverReport, Project, WorktreeStep } from '../../lib/types';
+  import type { Account, CommitMode, LeftoverReport, PagesOpen, Project, WorktreeStep } from '../../lib/types';
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
   import Row from './Row.svelte';
   import SharedMark from './SharedMark.svelte';
   import SharedSection from './SharedSection.svelte';
-  import CodeIndexSection from './CodeIndexSection.svelte';
+  import ProposedPlugins from './ProposedPlugins.svelte';
   import MemorySection from './MemorySection.svelte';
   import StepList from './StepList.svelte';
   import Switch from './Switch.svelte';
@@ -112,6 +112,11 @@
   /** Who writes the commits of the files panel's « Commit… » and « Commit tout… ». */
   const COMMIT_MODES = $derived<{ value: CommitMode; label: string }[]>(
     (['agent', 'direct'] as const).map((value) => ({ value, label: t(`settings.project.commitModes.${value}`) })),
+  );
+
+  /** « Ouvrir les pages des lancements » (ESC-311). */
+  const PAGES_OPEN = $derived<{ value: PagesOpen; label: string }[]>(
+    (['agent', 'window', 'system'] as const).map((value) => ({ value, label: t(`settings.project.pagesOpens.${value}`) })),
   );
 
   /** What keeps a private project's files from the other projects' agents, harness by harness (ESC-140). */
@@ -240,6 +245,9 @@
     {/each}
   </ul>
 {/snippet}
+
+<!-- The plugins its .escouade.yml proposes and this machine lacks (PLG-14): read from the project as the backend has it. -->
+<ProposedPlugins project={live} />
 
 <Group title={t('settings.project.identity')}>
   <Row label={t('settings.project.nameLabel')}>
@@ -569,6 +577,9 @@
 
 <Group title={t('settings.project.launch')} anchor="launch" note={t('settings.project.launchNote')}>
   <SharedMark keys="launch" />
+  <Row label={t('settings.project.pagesOpen')} desc={t('settings.project.pagesOpenDesc')} wide>
+    <Chips label={t('settings.project.pagesOpen')} options={PAGES_OPEN} bind:value={draft.pagesOpen} />
+  </Row>
   <!-- The launch commands on a grid (2.0 design): name, command, folder, shell. -->
   <div class="cmds">
     {#if draft.runCommands.length}
@@ -645,7 +656,6 @@
 <!-- Its .escouade.yml after what it sets (2.0 design, #sg-yml): its commands that wait are also said on the Kanban. -->
 <SharedSection {project} />
 
-<CodeIndexSection {project} />
 <MemorySection {project} />
 
 <!-- The shared Kanban (ESC-190, choice 113): the name in this project, its shared tickets, « Partager chaque nouveau ticket ». -->

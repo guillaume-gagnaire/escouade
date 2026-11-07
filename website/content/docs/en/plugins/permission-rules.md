@@ -59,20 +59,23 @@ Escouade calls `permissions/decide` (see [The protocol](plugins/api)):
 
 A JSON-RPC error, an answer past 500 ms or an answer that is none of the three count as `ask`. A plugin that crashes during a decision is restarted as usual; the request goes to the user.
 
-Read your rules **before** the first request (at start), not during one: 500 ms is short. Escouade starts the plugins that decide when it starts; a plugin not started yet has, once, three seconds to start and answer.
+Read your rules **before** the first request (at start), not during one: 500 ms is short. Escouade starts the plugins that decide when it starts, and as soon as one is installed, updated or switched back on; a plugin not started yet has, once, three seconds to start and answer.
 
 ## An example
 
-“Team rules” denies what `deny` forbids, allows what `allow` permits, and leaves the rest:
+“Team rules” denies what `deny` forbids, allows what `allow` permits, and leaves the rest to the user. Its manifest asks only for `"permissions": { "decide": true }`; its rules are in a file of its folder:
+
+`plugins/team-rules/rules.json`
 
 ```json
 {
-  "id": "dev.exemple.team-rules",
-  "name": { "fr": "Règles de l'équipe", "en": "Team rules" },
-  "version": "1.0.0",
-  "escouade": { "api": "1", "min": "2.1.0" },
-  "run": { "command": "team-rules", "windows": "team-rules.cmd" },
-  "permissions": { "decide": true }
+  "deny": [
+    "rm -rf",
+    "git reset --hard",
+    { "command": "git push --force", "message": "No force push in this team: push a new commit instead." },
+    { "command": "git push -f", "message": "No force push in this team: push a new commit instead." }
+  ],
+  "allow": ["npm test", "npm run lint", "cargo test", "cargo nextest", "git status", "git diff", "git log"]
 }
 ```
 

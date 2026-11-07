@@ -6,8 +6,8 @@
 //! the page and the agents' `read_spec_page` show it.
 //!
 //! - **After each ticket validated** (and merged): the pages it touches, those it wrote and those
-//!   linked to the code it changed: by the index (the symbols of its files) when the project has
-//!   it on, by the files' paths and names otherwise, and those that name its ticket.
+//!   linked to the code it changed (the files' paths and names, the names they declare:
+//!   `codesearch`), and those that name its ticket.
 //! - **On demand**: a page, or the whole spec (« Comparer au code »).
 //!
 //! « Mettre la spec à jour » on a gap opens a discussion with the spec writer (ESC-261,
@@ -37,7 +37,7 @@ pub const MAX_PAGES: usize = 40;
 pub const MAX_TOUCHED: usize = 12;
 /// What of a page's text the agent is given.
 const MAX_BODY: usize = 30_000;
-/// The files the index brings closer to a page, named to the agent.
+/// The files whose text names the page's words of code (`codesearch`), named to the agent.
 const MAX_HINTS: usize = 10;
 
 /// The pages being compared, by project, for the window (`UiEvent::DocsCompared`).
@@ -113,8 +113,8 @@ pub fn prompt(lang: Lang, page: &Page, hints: &[String]) -> String {
     } else {
         tr_in!(
             lang,
-            "Compare cette page au code (les fichiers de <code-hints> sont ceux que l'index du code rapproche d'elle).",
-            "Compare this page to the code (the files in <code-hints> are those the code index links to it)."
+            "Compare cette page au code (les fichiers de <code-hints> sont ceux qui contiennent les mots de code qu'elle cite).",
+            "Compare this page to the code (the files in <code-hints> are those that hold the words of code it names)."
         )
     });
     p
@@ -204,7 +204,7 @@ fn has_word(text: &str, word: &str) -> bool {
 
 /// The pages ticket `key` touches, in order: those it wrote (`written`), those that name it, then
 /// those that name one of the files it changed (`changed`, its path or, a name not too common, its
-/// file name) or one of their symbols (`symbols`, by the index). At most `MAX_TOUCHED`.
+/// file name) or one of the names they declare (`symbols`, `codesearch`). At most `MAX_TOUCHED`.
 pub fn touched(
     pages: &[Page],
     key: &str,
@@ -430,67 +430,25 @@ impl<R: Runtime> Core<R> {
         Ok(n)
     }
 
-    /// The files the index links to a page (none when the project has it off).
-    async fn docs_hints(self: &Arc<Self>, project: &Project, page: &Page) -> Vec<String> {
-        if !self.code_index_on(project) {
-            return Vec::new();
-        }
-        let Ok(reader) = self.code_index(&project.id, None).await else {
-            return Vec::new();
-        };
-        let task = format!("{} {}", page.title, cut(&page.body, 400));
-        let Ok(a) = reader.task_context(&task, MAX_HINTS) else {
-            return Vec::new();
-        };
-        let mut out: Vec<String> = Vec::new();
-        for p in a
-            .result
-            .entry_points
-            .iter()
-            .map(|h| &h.path)
-            .chain(a.result.snippets.iter().map(|s| &s.path))
-        {
-            if !out.contains(p) && out.len() < MAX_HINTS {
-                out.push(p.clone());
-            }
-        }
-        out
-    }
-
-    /// The symbols of the files `changed`, by the index (none when the project has it off).
-    async fn docs_symbols_of(
+    /// The files of the project whose text names the page's words of code (`codesearch`), none the
+    /// fence keeps out.
+    pub(crate) async fn docs_hints(
         self: &Arc<Self>,
         project: &Project,
-        changed: &[String],
+        page: &Page,
     ) -> Vec<String> {
-        if !self.code_index_on(project) {
-            return Vec::new();
-        }
-        let Ok(reader) = self.code_index(&project.id, None).await else {
-            return Vec::new();
-        };
-        let mut out: Vec<String> = Vec::new();
-        for f in changed
-            .iter()
-            .filter(|f| !f.starts_with(".escouade/"))
-            .take(30)
-        {
-            let wanted = crate::codeindex::Wanted::Name {
-                name: f,
-                path: None,
-                max_matches: crate::codeindex::MAX_MATCHES_DEFAULT,
-            };
-            let Ok(a) = reader.impact(wanted, 1, 40) else {
-                continue;
-            };
-            let targets = a.result.matches.iter().flat_map(|m| m.targets.iter());
-            for t in targets.filter(|t| t.kind != "heading") {
-                if !out.contains(&t.name) {
-                    out.push(t.name.clone());
-                }
-            }
-        }
-        out
+        let folder = Self::docs_code_folder(project);
+        let fence = self.project_fence(&project.id);
+        let terms = crate::codesearch::terms(&format!("{}\n{}", page.title, page.body));
+        crate::codesearch::related_files(&folder, &terms, |p| fence.covers(p), MAX_HINTS).await
+    }
+
+    /// The names the files `changed` declare (`codesearch`), none the fence keeps out.
+    pub(crate) fn docs_symbols_of(&self, project: &Project, changed: &[String]) -> Vec<String> {
+        let folder = Self::docs_code_folder(project);
+        let fence = self.project_fence(&project.id);
+        let changed: Vec<String> = changed.iter().take(30).cloned().collect();
+        crate::codesearch::names_of_files(&folder, &changed, |p| fence.covers(p), 400)
     }
 
     /// Ticket `key` validated: the pages it touches compared to the code, in the background.
@@ -516,7 +474,7 @@ impl<R: Runtime> Core<R> {
                 Some(p) => p.pages.clone(),
                 None => pages_of(&changed),
             };
-            let symbols = me.docs_symbols_of(&project, &changed).await;
+            let symbols = me.docs_symbols_of(&project, &changed);
             let paths = touched(&pages, &key, &changed, &symbols, &written);
             if paths.is_empty() {
                 return;

@@ -2,9 +2,10 @@
 //! Manager, macOS' Keychain. `integrations.json` keeps the rest of the accounts, and the secrets
 //! the keychain refuses stay there, readable by their owner only.
 
-use super::{Account, Accounts, VIA_GH};
+use super::{source, Account, Accounts, VIA_GH};
 use crate::model::Service;
 use crate::paths::{self, DataDir};
+use crate::plugins::accounts;
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -153,6 +154,11 @@ impl MemoryStore {
         self.entries.lock().get(name).cloned()
     }
 
+    /// Everything it holds, by name.
+    pub fn all(&self) -> std::collections::BTreeMap<String, String> {
+        self.entries.lock().clone()
+    }
+
     fn reached(&self) -> Result<()> {
         if self.refuse.load(std::sync::atomic::Ordering::SeqCst) {
             bail!("keychain out of reach");
@@ -214,7 +220,7 @@ pub(crate) fn place(store: &dyn SecretStore, service: Service, a: &mut Account) 
     if secrets.is_empty() {
         return forget(store, service);
     }
-    if let Err(e) = keep(store, service, &secrets) {
+    if let Err(e) = keep(store, service, a, &secrets) {
         log::warn!(
             "{}: secrets left in integrations.json, the system keychain refused them: {e:#}",
             service.label()
@@ -224,22 +230,45 @@ pub(crate) fn place(store: &dyn SecretStore, service: Service, a: &mut Account) 
     true
 }
 
-/// Puts `secrets` into the service's entry, then reads them back: Ok once the store gives them as
-/// they were given.
-fn keep(store: &dyn SecretStore, service: Service, secrets: &Secrets) -> Result<()> {
-    let name = entry(service);
+/// Puts `secrets` under the account's plugin's name (`plugins::accounts`), and under the
+/// service's former entry when Escouade's own hand serves it (a version from before reads it),
+/// then reads them back: Ok once the store gives them as they were given.
+fn keep(store: &dyn SecretStore, service: Service, a: &Account, secrets: &Secrets) -> Result<()> {
     let text = serde_json::to_string(secrets)?;
-    store.set(&name, &text)?;
-    if store.get(&name)?.as_deref() != Some(text.as_str()) {
-        bail!("it does not give them back as they were given");
+    keep_secret(store, &accounts::source_vault_name(service, a), &text)?;
+    if accounts::is_first_hand(&a.plugin) {
+        keep_secret(store, &entry(service), &text)?;
     }
     Ok(())
 }
 
-/// The service's secrets leave the store (its account goes, or has none now); false when they
-/// could not (logged).
+/// The account's secrets under the service's former entry only (`plugins::accounts::revert`).
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn keep_legacy(store: &dyn SecretStore, service: Service, a: &Account) -> Result<()> {
+    let text = serde_json::to_string(&Secrets::of(a))?;
+    keep_secret(store, &entry(service), &text)
+}
+
+/// The service's secrets leave the store (its account goes, or has none now), under every name
+/// they may have: the former one, the name of Escouade's own hand, and `plugin`'s (the plugin
+/// that served the account, when known); false when they could not (logged).
 pub(crate) fn forget(store: &dyn SecretStore, service: Service) -> bool {
-    if let Err(e) = store.delete(&entry(service)) {
+    forget_of(store, service, "")
+}
+
+/// `forget`, for an account `plugin` served (empty: Escouade's own hand).
+pub(crate) fn forget_of(store: &dyn SecretStore, service: Service, plugin: &str) -> bool {
+    let own = Account::default();
+    let other = Account {
+        plugin: plugin.to_string(),
+        ..Account::default()
+    };
+    let names = [
+        entry(service),
+        accounts::source_vault_name(service, &own),
+        accounts::source_vault_name(service, &other),
+    ];
+    if let Err(e) = names.iter().try_for_each(|n| store.delete(n)) {
         log::warn!(
             "{}: the system keychain did not forget its secrets: {e:#}",
             service.label()
@@ -247,6 +276,30 @@ pub(crate) fn forget(store: &dyn SecretStore, service: Service) -> bool {
         return false;
     }
     true
+}
+
+/// What an account's entry holds. Served by Escouade's own hand: under its former name while it
+/// is kept (`former`; a version from before may have changed it since), copied under the plugin's
+/// name (`name`) when that one holds something else (the migration of INT-6, and its way back
+/// after a version from before). Served by another plugin: under that plugin's name alone.
+pub(crate) fn read_entry(
+    store: &dyn SecretStore,
+    former: Option<&str>,
+    name: &str,
+    what: &str,
+) -> Result<Option<String>> {
+    let Some(former) = former else {
+        return store.get(name);
+    };
+    let found = store.get(former)?.filter(|s| !s.is_empty());
+    if let Some(s) = &found {
+        if store.get(name).ok().flatten().as_deref() != Some(s.as_str()) {
+            if let Err(e) = keep_secret(store, name, s) {
+                log::warn!("{what}: the system keychain did not take its new name: {e:#}");
+            }
+        }
+    }
+    Ok(found)
 }
 
 /// A development build on the user's own data folder (not sandboxed) leaves the file a copy of
@@ -258,14 +311,16 @@ pub(crate) fn file_keeps_copy() -> bool {
 
 /// A GitHub account that uses the CLI's token: it has none of its own.
 pub(crate) fn through_gh(service: Service, a: &Account) -> bool {
-    service == Service::Github && a.label.ends_with(VIA_GH)
+    service == Service::GITHUB && a.label.ends_with(VIA_GH)
 }
 
 /// The account's secrets, from the store. Missing (out of reach, refused, the entry gone or
 /// unreadable), the account says so (`Account::unread`): a call without them would be refused,
 /// or for GitHub go out with the CLI's token, as whoever it is logged in as.
 fn fill(store: &dyn SecretStore, service: Service, a: &mut Account) {
-    match store.get(&entry(service)) {
+    let former = accounts::is_first_hand(&a.plugin).then(|| entry(service));
+    let name = accounts::source_vault_name(service, a);
+    match read_entry(store, former.as_deref(), &name, service.label()) {
         Ok(Some(text)) => match serde_json::from_str::<Secrets>(&text) {
             Ok(s) => {
                 a.key = s.key;
@@ -323,7 +378,7 @@ pub(crate) fn load_accounts(data: &DataDir, store: &dyn SecretStore, file_copy: 
     }
     let forgot = accounts.to_forget != pending;
     let mut moved = false;
-    for service in Service::ALL {
+    for service in source::registry().services() {
         match accounts.get_mut(service) {
             None => {}
             Some(a) if !Secrets::of(a).is_empty() => {
@@ -336,6 +391,9 @@ pub(crate) fn load_accounts(data: &DataDir, store: &dyn SecretStore, file_copy: 
         }
     }
     let forges = crate::forge::accounts::load(store, &mut accounts);
+    // The secrets are under the plugins' names now too (`fill`, `place`): the file says so at its
+    // next write (never written for that alone: a file left as it is stays so).
+    accounts.vault = accounts::VAULT;
     // Written again once secrets or entries to forget left it, and while secrets stay: readable
     // by its owner only.
     let kept = accounts.views().iter().any(|v| v.in_file);
@@ -351,7 +409,7 @@ pub(crate) fn load_accounts(data: &DataDir, store: &dyn SecretStore, file_copy: 
 /// file keeps a copy of them).
 pub(crate) fn save_accounts(data: &DataDir, accounts: &Accounts) -> Result<()> {
     let mut saved = accounts.clone();
-    for service in Service::ALL {
+    for service in source::registry().services() {
         if let Some(a) = saved
             .get_mut(service)
             .filter(|a| !a.in_file && !accounts.file_copy)
@@ -500,7 +558,11 @@ mod tests {
         assert_eq!(keychain_service(false), "dev.gagnaire.escouade");
         assert_eq!(keychain_service(true), "dev.gagnaire.escouade.sandbox");
         assert_eq!(
-            Service::ALL.map(entry),
+            source::registry()
+                .services()
+                .into_iter()
+                .map(entry)
+                .collect::<Vec<_>>(),
             [
                 "jira",
                 "trello",
@@ -752,9 +814,9 @@ mod tests {
         std::fs::write(d.integrations_file(), r#"{ "toForget": ["jira"] }"#).unwrap();
         store.refuse.store(true, Ordering::SeqCst);
         let a = load_accounts(&d, &store, false);
-        assert_eq!(a.to_forget, [Service::Jira]);
+        assert_eq!(a.to_forget, [Service::JIRA]);
         let saved: Accounts = serde_json::from_str(&file(&d)).unwrap();
-        assert_eq!(saved.to_forget, [Service::Jira]);
+        assert_eq!(saved.to_forget, [Service::JIRA]);
         store.refuse.store(false, Ordering::SeqCst);
         assert!(load_accounts(&d, &store, false).to_forget.is_empty());
         assert_eq!(store.entry("jira"), None);
@@ -801,7 +863,7 @@ mod tests {
             [false, false, false, false, false, false, false]
         );
         // Saved again (an account connected): they stay.
-        a.set(Service::Github, None);
+        a.set(Service::GITHUB, None);
         save_accounts(&d, &a).unwrap();
         let text = file(&d);
         for s in SECRETS {

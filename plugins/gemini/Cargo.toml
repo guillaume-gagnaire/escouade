@@ -1,0 +1,17 @@
+[package]
+name = "escouade-plugin-gemini"
+version = "2.2.0"
+description = "Le plugin Gemini CLI livré avec Escouade : Gemini CLI comme harness, par ACP"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+
+# A module, compiled by `escouade-plugin build` (docs/PLUGINS.md §8.5), on the ACP client of `escouade-acp` (PLG-6) with its
+# extension `gemini`, served as the generic ACP plugin serves the harnesses a manifest describes.
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+escouade-acp = "0.1.2"
+escouade-plugin-protocol = "0.1.1"

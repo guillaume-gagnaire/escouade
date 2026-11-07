@@ -10,9 +10,9 @@ use crate::engine::{self, Process};
 use crate::git;
 use crate::i18n::{self, Lang};
 use crate::integrations;
-use crate::isola;
 use crate::leftovers;
 use crate::model::*;
+use crate::pace::Standing;
 use crate::switching::NoOther;
 use crate::telemetry::Event;
 use crate::testlaunch;
@@ -22,7 +22,6 @@ use anyhow::{anyhow, bail, Result};
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
@@ -1257,6 +1256,13 @@ impl<R: Runtime> Core<R> {
     /// The accounts an agent of the app waits for the quota of (usage limit), each with when its
     /// first one resumes: no ticket starts on them meanwhile, but on another account one may.
     pub(crate) fn quota_paused(&self) -> BTreeMap<String, i64> {
+        self.quota_paused_for(None)
+    }
+
+    /// `quota_paused` as a ticket or an agent whose model is of the family `family` sees it: an
+    /// agent stopped by a model's own quota (`AgentMeta::limit_model`, ESC-312) holds that model's
+    /// alone, never one of an unknown model (None).
+    pub(crate) fn quota_paused_for(&self, family: Option<&str>) -> BTreeMap<String, i64> {
         let settings = self.settings.read().clone();
         let mut waiting = BTreeMap::new();
         for h in self.agents.read().values() {
@@ -1264,12 +1270,53 @@ impl<R: Runtime> Core<R> {
             let Some(at) = rt.meta.resume_at.filter(|_| !rt.meta.archived) else {
                 continue;
             };
+            if let Some(model) = &rt.meta.limit_model {
+                if family.is_none() || model_family(model).as_deref() != family {
+                    continue;
+                }
+            }
             let first = waiting
                 .entry(accounts::get(&settings, &rt.meta.account).id)
                 .or_insert(at);
             *first = (*first).min(at);
         }
         waiting
+    }
+
+    /// The family (`model::model_family`) of `model` on the account `account`: by the model its
+    /// `claude` told it resolves to (`default`, an alias), else by its name. None for an empty one.
+    pub(crate) fn family_on(&self, account: Option<&str>, model: &str) -> Option<String> {
+        let resolved = account.and_then(|a| {
+            let told = self.account_models.read();
+            let models = &told.get(a)?.models;
+            crate::engine::claude_told_model(models, model)
+                .map(|t| t.resolved_model.clone())
+                .filter(|r| !r.is_empty())
+        });
+        model_family(resolved.as_deref().unwrap_or(model))
+    }
+
+    /// The family of the model a ticket's agent would run (its own, else the one new agents of its
+    /// project go with): what the quota of one model holds back (ESC-312).
+    pub(crate) fn ticket_family(&self, t: &Ticket, engine: EngineId) -> Option<String> {
+        let model = if t.model.trim().is_empty() {
+            self.new_agent_defaults(&t.project_id, engine).model
+        } else {
+            t.model.clone()
+        };
+        let account = (!t.account.is_empty()).then_some(t.account.as_str());
+        self.family_on(account, &model)
+    }
+
+    /// The family of the model the agent runs: the one its conversation last went by, else its own.
+    pub(crate) fn agent_family(&self, agent_id: &str) -> Option<String> {
+        let (account, model) = {
+            let h = self.agent(agent_id).ok()?;
+            let rt = h.lock();
+            (rt.meta.account.clone(), rt.model_in_use())
+        };
+        let account = accounts::get(&self.settings.read(), &account).id;
+        self.family_on(Some(&account), &model)
     }
 
     /// The time the autopilot's pauses go by: the real one (ahead by `clock_ahead` in tests).
@@ -1303,7 +1350,8 @@ impl<R: Runtime> Core<R> {
     fn pause_for(&self, settings: &Settings, preferred: Option<&str>) -> Option<AutopilotPause> {
         let threshold = board::quota_threshold(settings.quota_pause);
         let accounts = accounts::candidates(settings, preferred);
-        let usage = self.usage.lock().accounts.clone();
+        // The pause of every ticket: a model's own quota (ESC-312) holds that model's alone.
+        let usage = accounts::seen_by(&self.usage.lock().accounts, None);
         let hold = self.hold.lock().clone();
         let waiting = self.quota_paused();
         board::autopilot_pause(
@@ -1342,6 +1390,16 @@ impl<R: Runtime> Core<R> {
     /// it, in the order of the accounts: never one of another harness. Refused when no active
     /// account of the harness serves the project (all reserved to others, Principal too).
     pub(crate) fn account_for_new(&self, project_id: &str, engine: EngineId) -> Result<String> {
+        self.account_for_new_as(project_id, engine, None)
+    }
+
+    /// `account_for_new` for an agent whose model is of the family `family` (ESC-312).
+    pub(crate) fn account_for_new_as(
+        &self,
+        project_id: &str,
+        engine: EngineId,
+        family: Option<&str>,
+    ) -> Result<String> {
         let all = self.settings.read().clone();
         let project = self.project(project_id).ok();
         // No account of the harness at all (ESC-128): one is to be added first.
@@ -1355,7 +1413,7 @@ impl<R: Runtime> Core<R> {
         let settings = self.project_accounts(&all, engine, project_id);
         let preferred =
             project.and_then(|p| accounts::preferred(&settings, &p.account).map(str::to_string));
-        self.pick_account(&settings, preferred.as_deref())
+        self.pick_account_for(&settings, preferred.as_deref(), family)
             .ok_or_else(|| accounts::no_account_of(engine))
     }
 
@@ -1373,28 +1431,46 @@ impl<R: Runtime> Core<R> {
         accounts::defaults(account.as_ref(), engine)
     }
 
-    /// `accounts::pick` as the board has it: a usable account is under the threshold, holds
-    /// nothing back (a pause after a usage limit) and has no agent waiting for its quota. When
-    /// none is, one that holds nothing back although over the threshold ("Reprendre
-    /// maintenant"), else the first active one. None without an active account.
+    /// `accounts::pick` as the board has it: a good account (`pace`: a short window under the
+    /// threshold, a long one on pace or under it), holds nothing back (a pause after a usage
+    /// limit) and has no agent waiting for its quota; failing that, the first whose only fault is
+    /// its pace. When none is, one that holds nothing back although out ("Reprendre maintenant"),
+    /// else the first active one. None without an active account.
     pub(crate) fn pick_account(
         &self,
         settings: &Settings,
         preferred: Option<&str>,
     ) -> Option<String> {
+        self.pick_account_for(settings, preferred, None)
+    }
+
+    /// `pick_account` for a model of the family `family`: a model's own quota (ESC-312) counts
+    /// for that model alone.
+    pub(crate) fn pick_account_for(
+        &self,
+        settings: &Settings,
+        preferred: Option<&str>,
+        family: Option<&str>,
+    ) -> Option<String> {
         let threshold = board::quota_threshold(settings.quota_pause);
+        // The quotas as `pace::judge` judges them for the model; what holds the tickets back beside
+        // the choice, as that model sees them (ESC-312).
         let usage = self.usage.lock().accounts.clone();
+        let seen = accounts::seen_by(&usage, family);
         let hold = self.hold.lock().clone();
-        let waiting = self.quota_paused();
+        let waiting = self.quota_paused_for(family);
         let now = self.pause_now();
         let held = |id: &str| {
             waiting.contains_key(id)
-                || board::account_pause(&usage, id, threshold, &hold, now).is_some()
+                || board::account_pause(&seen, id, threshold, &hold, now).is_some()
         };
         // Under « Changer de compte à » too, when it is the lower (ESC-148).
         let pick = board::pick_threshold(settings);
-        let usable = |id: &str| !held(id) && !accounts::over_threshold(&usage, id, pick, now);
-        let id = accounts::pick_where(settings, preferred, usable)?;
+        let rank = |id: &str| match held(id) {
+            true => Standing::Out,
+            false => accounts::standing(&usage, id, pick, now, family),
+        };
+        let id = accounts::pick_ranked(settings, preferred, rank)?;
         if !held(&id) {
             return Some(id);
         }
@@ -1408,8 +1484,15 @@ impl<R: Runtime> Core<R> {
     /// to waits for its quota (an agent waiting for its reset, a window over the threshold, a usage
     /// limit with no resume).
     /// Launched by hand (`by_hand`), by a usage limit alone (`project_limit`).
-    fn held(&self, project_id: &str, engine: EngineId, by_hand: bool) -> bool {
-        self.project_hold_as(project_id, engine, by_hand).is_some()
+    fn held(
+        &self,
+        project_id: &str,
+        engine: EngineId,
+        by_hand: bool,
+        family: Option<&str>,
+    ) -> bool {
+        self.project_hold_as(project_id, engine, by_hand, family)
+            .is_some()
     }
 
     /// What holds back the tickets, and the new agents, of the project on `engine`, if anything
@@ -1418,7 +1501,7 @@ impl<R: Runtime> Core<R> {
     /// quota is never held but by a usage limit. The tools that act refuse by it.
     #[cfg(test)]
     pub(crate) fn project_hold(&self, project_id: &str, engine: EngineId) -> Option<board::Held> {
-        self.project_hold_as(project_id, engine, false)
+        self.project_hold_as(project_id, engine, false, None)
     }
 
     /// What holds back a ticket or a new agent of the project asked for by hand, by a tool of
@@ -1426,14 +1509,16 @@ impl<R: Runtime> Core<R> {
     /// agent waiting for its reset, a pause after a limit). « Pause au-delà du quota » and the
     /// day's budget hold back the autopilot, never a hand (the user, 2026-10-28).
     pub(crate) fn project_limit(&self, project_id: &str, engine: EngineId) -> Option<board::Held> {
-        self.project_hold_as(project_id, engine, true)
+        self.project_hold_as(project_id, engine, true, None)
     }
 
+    /// A model's own quota (ESC-312) holds the tickets of a model of its family (`family`) alone.
     fn project_hold_as(
         &self,
         project_id: &str,
         engine: EngineId,
         by_hand: bool,
+        family: Option<&str>,
     ) -> Option<board::Held> {
         let settings = accounts::for_project(&self.settings.read(), engine, Some(project_id));
         let preferred = self
@@ -1442,9 +1527,12 @@ impl<R: Runtime> Core<R> {
             .and_then(|p| accounts::preferred(&settings, &p.account).map(str::to_string));
         let threshold = hold_threshold(settings.quota_pause, by_hand);
         let accounts = accounts::candidates(&settings, preferred.as_deref());
-        let usage = hold_usage(&self.usage.lock().accounts, by_hand);
+        let usage = hold_usage(
+            &accounts::seen_by(&self.usage.lock().accounts, family),
+            by_hand,
+        );
         let hold = self.hold.lock().clone();
-        let waiting = self.quota_paused();
+        let waiting = self.quota_paused_for(family);
         board::project_hold(
             &usage,
             &accounts,
@@ -1458,20 +1546,28 @@ impl<R: Runtime> Core<R> {
     /// What holds back what spends the account's quota when asked for by hand (`project_limit`),
     /// a message to one of its agents included: a usage limit alone.
     pub(crate) fn account_limit(&self, account: &str) -> Option<board::Held> {
-        self.account_hold_as(account, true)
+        self.account_hold_as(account, true, None)
     }
 
     /// What holds back anything that spends the account's quota, if anything does
     /// (`board::account_hold`): for the autopilot (`by_hand` false), « Pause au-delà du quota »
     /// and the day's budget too. An account the settings do not know is Principal, as for
     /// `quota_paused`.
-    fn account_hold_as(&self, account: &str, by_hand: bool) -> Option<board::Held> {
+    fn account_hold_as(
+        &self,
+        account: &str,
+        by_hand: bool,
+        family: Option<&str>,
+    ) -> Option<board::Held> {
         let settings = self.settings.read().clone();
         let id = accounts::get(&settings, account).id;
         let threshold = hold_threshold(settings.quota_pause, by_hand);
-        let usage = hold_usage(&self.usage.lock().accounts, by_hand);
+        let usage = hold_usage(
+            &accounts::seen_by(&self.usage.lock().accounts, family),
+            by_hand,
+        );
         let hold = self.hold.lock().clone();
-        let waiting = self.quota_paused();
+        let waiting = self.quota_paused_for(family);
         board::account_hold(&usage, &id, threshold, &hold, &waiting, self.pause_now())
     }
 
@@ -1505,6 +1601,12 @@ impl<R: Runtime> Core<R> {
     /// A ticket met the usage limit with no resume planned, on the account: the next one would
     /// meet it too, so none starts on it for a while (`board::LIMIT_PAUSE_MS`), or until
     /// "Reprendre maintenant".
+    /// The agent's last usage limit was a model's own quota (`AgentMeta::limit_model`, ESC-312).
+    fn limited_by_model(&self, agent_id: &str) -> bool {
+        self.agent(agent_id)
+            .is_ok_and(|h| h.lock().meta.limit_model.is_some())
+    }
+
     pub(crate) fn pause_after_limit(&self, account: &str) {
         self.hold_until(account, self.pause_now() + board::LIMIT_PAUSE_MS);
     }
@@ -1535,9 +1637,13 @@ impl<R: Runtime> Core<R> {
         let _pass = self.board_lock.lock().await;
         // The window is told of the pause whatever else holds the tickets back.
         self.refresh_pause();
-        let projects = self.projects.read().clone();
+        let projects: Vec<String> = self.projects.read().iter().map(|p| p.id.clone()).collect();
         let mut missing = false;
-        for p in projects {
+        for project_id in projects {
+            // As it is now: the starts of the projects before it took seconds.
+            let Ok(p) = self.project(&project_id) else {
+                continue;
+            };
             // Without Claude Code (the one of the account it would go to) no agent can work:
             // rather than make every ticket's worktree and agent only to block it, none starts
             // until it is found (saving the settings looks again).
@@ -1582,18 +1688,37 @@ impl<R: Runtime> Core<R> {
                     self.refuse_start(&p, &t.id, StartRefusal::Held(held));
                 }
             }
+            // A ticket « En revue » whose CI failed goes back to its agent first (ESC-60): it holds
+            // a place while its agent fixes it, as one « En cours ».
+            let fixes = crate::ticketprs::to_fix(&self.tickets.read(), &p.id, &p.board);
+            for id in fixes {
+                let Ok(t) = self.ticket(&id) else { continue };
+                if self.ticket_hold(&p, &t, engine_of(&t)).is_some() {
+                    continue;
+                }
+                if let Err(e) = self.ticket_pr_fix_ci_by(&id, true).await {
+                    log::info!("ticket {}: its CI not given to its agent: {e:#}", t.key);
+                }
+            }
             let ids = {
                 let tickets = self.tickets.read().clone();
-                let mut held: HashMap<(EngineId, bool), bool> = HashMap::new();
+                let mut held: HashMap<(EngineId, bool, Option<String>), bool> = HashMap::new();
+                // « Pause quand la CI de la cible est rouge » (ESC-63): the autopilot's alone.
+                let red = self.red_target_holds(&p);
                 board::to_start(&tickets, &p.id, &p.board, |t| {
+                    if red && !t.forced {
+                        return true;
+                    }
                     let e = engine_of(t);
                     // One set on an account waits for that account alone (ESC-153).
                     if !t.account.is_empty() {
                         return self.ticket_held(&p, t, e);
                     }
+                    // A model's own quota holds that model's tickets alone (ESC-312).
+                    let family = self.ticket_family(t, e);
                     *held
-                        .entry((e, t.forced))
-                        .or_insert_with(|| self.held(&p.id, e, t.forced))
+                        .entry((e, t.forced, family.clone()))
+                        .or_insert_with(|| self.held(&p.id, e, t.forced, family.as_deref()))
                 })
             };
             // A board that told why nothing starts is looked at again even with nothing to start:
@@ -1641,12 +1766,23 @@ impl<R: Runtime> Core<R> {
                     }
                     continue;
                 }
+                // The board said stop while this pass started the ones before it.
+                if !t.forced && self.autopilot_stopped(&p.id) {
+                    continue;
+                }
                 self.start_ticket(&p, &id).await;
             }
         }
         if !missing {
             self.claude_missing.store(false, Ordering::Release);
         }
+    }
+
+    /// The autopilot of the project starts nothing now: turned off, or held by the target's CI
+    /// (a ticket launched by hand starts all the same).
+    fn autopilot_stopped(&self, project_id: &str) -> bool {
+        self.project(project_id)
+            .map_or(true, |p| !p.board.autopilot || self.red_target_holds(&p))
     }
 
     /// Why the project's board starts nothing, as the window is told (only when it changes):
@@ -1818,7 +1954,8 @@ impl<R: Runtime> Core<R> {
                 Some(why) => self.back_to_auto(&t.id, &t.account, &why),
             }
         }
-        self.account_for_new(&project.id, engine)
+        let family = self.ticket_family(t, engine);
+        self.account_for_new_as(&project.id, engine, family.as_deref())
     }
 
     /// Why the ticket set on the account `id` may no longer go to it: gone, switched off, signed
@@ -1916,9 +2053,11 @@ impl<R: Runtime> Core<R> {
 
     /// What holds the ticket back (`ticket_held`), if anything does.
     fn ticket_hold(&self, project: &Project, t: &Ticket, engine: EngineId) -> Option<board::Held> {
+        let family = self.ticket_family(t, engine);
+        let family = family.as_deref();
         match self.pinned(project, t, engine) {
-            Some(id) => self.account_hold_as(&id, t.forced),
-            None => self.project_hold_as(&project.id, engine, t.forced),
+            Some(id) => self.account_hold_as(&id, t.forced, family),
+            None => self.project_hold_as(&project.id, engine, t.forced, family),
         }
     }
 
@@ -1994,8 +2133,7 @@ impl<R: Runtime> Core<R> {
     }
 
     /// The instructions added to a ticket's agent: its protocol, within the room its harness gives
-    /// it, then the code index's rule when the project has turned the index on (the room is kept
-    /// for it first, so the criteria give way before the rule does).
+    /// it.
     pub(crate) fn ticket_instructions(
         &self,
         project: &Project,
@@ -2006,25 +2144,16 @@ impl<R: Runtime> Core<R> {
         follow: Option<&str>,
     ) -> String {
         let engine = crate::engine::by_id(t.engine.unwrap_or(project.engine()));
-        let rule = self
-            .code_index_on(project)
-            .then(|| crate::codeindex::hint::rule(lang));
         let room = engine.instructions_room().map(|r| crate::engine::Room {
             max: r
                 .max
-                .saturating_sub(rule.as_deref().map_or(0, |x| (r.weigh)(&format!(" {x}"))))
                 // The shared memory's line, added after it (`core::with_memory`).
                 .saturating_sub((r.weigh)(&crate::memory::instruction(lang)) + 1)
                 // And the spec in Escouade's (ESC-278), added before it.
                 .saturating_sub(follow.map_or(0, |f| (r.weigh)(f) + 1)),
             weigh: r.weigh,
         });
-        let mut p = board::protocol_prompt_for(lang, t, ports, isola, room);
-        if let Some(rule) = rule {
-            p.push(' ');
-            p.push_str(&rule);
-        }
-        p
+        board::protocol_prompt_for(lang, t, ports, isola, room)
     }
 
     /// The ticket's agent: its worktree on `<prefix><key>` (`ticket/<key>`) from the target branch, its block of
@@ -2061,7 +2190,7 @@ impl<R: Runtime> Core<R> {
         };
         // As its worktree will be: the branch it is on has isola's configuration.
         let from = taken_up.as_deref().unwrap_or(&target);
-        let isola = isola::cli().is_some() && isola::configured_on(&project.path, from).await;
+        let isola = self.launch.on_rev(&project.path, from, &project.id).await;
         // Reserved at once: no other start or launch preparation gets this block meanwhile.
         let ports = if isola { None } else { self.reserve_ports() };
         let follow = self.docs_follow(project, lang).await;
@@ -2076,7 +2205,7 @@ impl<R: Runtime> Core<R> {
                     mode: Some(mode),
                     name: Some(board::ticket_agent_name(t)),
                     worktree: new_branch,
-                    // Within the room its harness gives it, the code index's rule included, and what
+                    // Within the room its harness gives it, and what
                     // it is told of the shared memory after it (`core::with_memory`).
                     append_prompt: Some(self.ticket_instructions(
                         project,
@@ -2193,11 +2322,18 @@ impl<R: Runtime> Core<R> {
         // autopilot pauses first, so that no pass starts one in the place this frees.
         let end = match end {
             TurnEnd::Limited if !resumes => {
-                self.pause_after_limit(&self.account_of(agent_id));
+                // A model's own quota (ESC-312) holds that model's tickets by its meter alone.
+                if !self.limited_by_model(agent_id) {
+                    self.pause_after_limit(&self.account_of(agent_id));
+                }
                 TurnEnd::Error(quota_lost(i18n::ui()))
             }
             end => end,
         };
+        // Its agent fixed the CI of its pull request (ESC-60): the ticket stays « En revue ».
+        if self.ci_fix_turn_ended(&ticket_id, agent_id, &end).await {
+            return;
+        }
         let lang = self.lang().claude;
         let mut reported = None;
         let Ok(next) = self.edit_ticket(&ticket_id, |t| {
@@ -2297,12 +2433,13 @@ impl<R: Runtime> Core<R> {
         self.other_account(agent_id, threshold).ok()
     }
 
-    /// The account an agent goes on on by itself, leaving its own: the one `accounts::pick` gives
-    /// (the project's preferred account, else the first active one) when it is another than the
-    /// agent's, usable (signed in, under `threshold`, no pause after a usage limit, no agent of it
-    /// waiting for its reset), on the same side of WSL. A project that prefers the agent's account
-    /// keeps it there. Why there is none otherwise: `NoOther::Private` when only the accounts a
-    /// confined private project shares are left (ESC-141).
+    /// The account an agent goes on on by itself, leaving its own: the one `accounts::pick_ranked`
+    /// gives (the project's preferred account, else the first of the best active ones) when it is
+    /// another than the agent's, usable (signed in, one an agent would not leave at `threshold`:
+    /// `pace`, no pause after a usage limit, no agent of it waiting for its reset), on the same side
+    /// of WSL. A project that prefers the agent's account keeps it there. Why there is none
+    /// otherwise: `NoOther::Private` when only the accounts a confined private project shares are
+    /// left (ESC-141).
     pub(crate) fn other_account(
         &self,
         agent_id: &str,
@@ -2336,9 +2473,12 @@ impl<R: Runtime> Core<R> {
             .project(&project)
             .ok()
             .and_then(|p| accounts::preferred(&settings, &p.account).map(str::to_string));
+        // A model's own quota (ESC-312) counts for the agent's model alone.
+        let family = self.agent_family(agent_id);
         let usage = self.usage.lock().accounts.clone();
+        let seen = accounts::seen_by(&usage, family.as_deref());
         let hold = self.hold.lock().clone();
-        let waiting = self.quota_paused();
+        let waiting = self.quota_paused_for(family.as_deref());
         let now = self.pause_now();
         // A session does not go between Claude Code on Windows and in WSL (`move_session`).
         let in_wsl = |id: &str| {
@@ -2346,18 +2486,24 @@ impl<R: Runtime> Core<R> {
                 .is_some_and(|p| p.wsl().is_some())
         };
         let side = in_wsl(&current);
-        let usable = |id: &str| {
-            id != current
+        // The verdict on the account's quota, when it may take the agent at all: arriving on one
+        // it would leave at once (the same test) would send it back and forth.
+        let rank = |id: &str| {
+            let verdict = accounts::verdict(&usage, id, threshold, now, family.as_deref());
+            let usable = id != current
                 && in_wsl(id) == side
                 // Not signed in: its first turn would only fail (an account not read yet is).
                 && usage.iter().find(|u| u.id == id).is_none_or(|u| u.connected)
                 && !waiting.contains_key(id)
-                && board::account_pause(&usage, id, threshold, &hold, now).is_none()
-                && !accounts::over_threshold(&usage, id, threshold, now)
+                && board::account_pause(&seen, id, threshold, &hold, now).is_none()
+                && !verdict.leave;
+            usable.then_some(verdict.standing)
         };
-        let target = accounts::pick_where(&settings, preferred.as_deref(), usable)
-            .filter(|t| usable(t))
-            .ok_or(NoOther::Nobody)?;
+        let target = accounts::pick_ranked(&settings, preferred.as_deref(), |id| {
+            rank(id).unwrap_or(Standing::Out)
+        })
+        .filter(|t| rank(t).is_some())
+        .ok_or(NoOther::Nobody)?;
         // A private project goes on its own to none of the accounts it shares (ESC-141): its agent
         // stays, unless « Comptes partagés à la limite » allows it.
         let project = self.project(&project).ok();
@@ -2420,8 +2566,11 @@ impl<R: Runtime> Core<R> {
         let Some(id) = self.doing_ticket_of(agent_id) else {
             return;
         };
-        // Before its place is free: no pass starts the next ticket, which would meet the limit.
-        self.pause_after_limit(&self.account_of(agent_id));
+        // Before its place is free: no pass starts the next ticket, which would meet the limit (a
+        // model's own, ESC-312, holds that model's tickets by its meter alone).
+        if !self.limited_by_model(agent_id) {
+            self.pause_after_limit(&self.account_of(agent_id));
+        }
         let blocked = self.edit_ticket(&id, |t| {
             let waiting = t.column == Column::Doing
                 && t.blocked.is_none()
@@ -2476,7 +2625,7 @@ impl<R: Runtime> Core<R> {
     // ---------- recovery and manual management ----------
 
     /// The agent, unless it is gone or archived.
-    fn live_agent(&self, id: &str) -> Option<AgentMeta> {
+    pub(crate) fn live_agent(&self, id: &str) -> Option<AgentMeta> {
         let meta = self.agent(id).ok()?.lock().meta.clone();
         (!meta.archived).then_some(meta)
     }
@@ -2516,6 +2665,23 @@ impl<R: Runtime> Core<R> {
                 (board::Recovery::Again, _) => self.start_over(&ticket_id, agent_id.as_deref()),
                 _ => {}
             }
+        }
+        // A fix of a pull request's CI cut by the app's stop (ESC-60): the card says so, and
+        // « L'agent corrige » gives it again.
+        let fixes: Vec<String> = self
+            .tickets
+            .read()
+            .iter()
+            .filter(|t| crate::ticketprs::fixing(t))
+            .map(|t| t.id.clone())
+            .collect();
+        for id in fixes {
+            let _ = self.edit_ticket(&id, |t| {
+                if crate::ticketprs::fixing(t) {
+                    crate::ticketprs::fix_failed(t, board::interrupted(i18n::ui()));
+                }
+                Ok(())
+            });
         }
         self.schedule();
     }
@@ -2886,6 +3052,8 @@ impl<R: Runtime> Core<R> {
         // The files copied from the project into the worktree (`.env`…), the list the copy took:
         // never committed, merged or pushed. Git ignores them, so only an agent that forced one in
         // could; checked all the same.
+        let mut pr: Option<TicketPr> = None;
+        let mut pushed: Option<crate::branchci::BranchCi> = None;
         let (outcome, nothing) = if wt.is_multi() {
             // Of several repositories (ESC-169): each one's, checked first, all or nothing.
             match self.validate_repos(t, &s, &project, &wt, &agent_id).await? {
@@ -2961,7 +3129,8 @@ impl<R: Runtime> Core<R> {
                 }
                 "pr" => {
                     self.set_step(&t.id, "Push…");
-                    let o = self.open_pr(t, &s, &wt, &target, message).await?;
+                    let (o, opened) = self.open_pr(t, &s, &wt, &target, message).await?;
+                    pr = opened;
                     if let Some(url) = &o.url {
                         self.facts.emit(
                             crate::facts::Body::PrOpened {
@@ -2975,13 +3144,19 @@ impl<R: Runtime> Core<R> {
                 }
                 "push" => {
                     self.set_step(&t.id, "Push…");
-                    git::push_branch(&wt.path, &wt.branch).await?;
+                    let to = git::push_branch(&wt.path, &wt.branch).await?;
+                    // Its CI followed on its card (ESC-63), on a host Escouade reads.
+                    pushed = self.pushed_ci(&wt.path, &to, &wt.branch).await;
                     board::Outcome::of(lang, |l| board::pushed_outcome(l, &wt.branch))
                 }
                 _ => board::Outcome::of(lang, board::kept_outcome),
             };
             (outcome, nothing)
         };
+        // Opened through its host's API: the ticket waits « En revue » for its merge there
+        // (ESC-59), and its pull request is read at once.
+        let in_review = pr.is_some();
+        let has_pushed = pushed.is_some();
         // What every agent of the ticket cost, archived ones included (a ticket sent back and taken
         // over has several), as « À tester » and the statistics add it up; at least its own.
         let own = self
@@ -3004,7 +3179,7 @@ impl<R: Runtime> Core<R> {
             if !validating(x, &agent_id) {
                 bail!(Refusal::Changed);
             }
-            x.column = Column::Done;
+            x.column = if in_review { Column::Pr } else { Column::Done };
             x.step = None;
             x.blocked = None;
             x.conflict = false;
@@ -3012,10 +3187,15 @@ impl<R: Runtime> Core<R> {
             x.outcome_claude = Some(outcome.claude);
             x.outcome_url = outcome.url;
             x.outcome_commit = outcome.commit;
-            x.done_at = Some(now_ms());
+            x.done_at = (!in_review).then(now_ms);
+            x.pr = pr;
+            x.pushed = pushed;
             x.cost = cost;
             Ok(())
         })?;
+        if in_review || has_pushed {
+            self.wake_ticket_prs();
+        }
         if let Some(merged) = merged {
             self.facts.emit(merged, crate::facts::About::ticket(&t.id));
         }
@@ -3241,7 +3421,7 @@ impl<R: Runtime> Core<R> {
     /// Windows a live process keeps the folder. The project's teardown then runs in it (`ports`:
     /// those its agent held). The removal is tried again for a few seconds; when it still fails,
     /// the ticket's outcome says the worktree is kept.
-    async fn remove_worktree_of(
+    pub(crate) async fn remove_worktree_of(
         &self,
         t: &Ticket,
         project: &Project,
@@ -3294,8 +3474,11 @@ impl<R: Runtime> Core<R> {
         found
     }
 
-    /// Pushes the ticket's branch, then opens its PR with `gh` on GitHub; without `gh` (or when it
-    /// fails), GitHub's page to finish it opens in the browser; another host: pushed only.
+    /// Pushes the ticket's branch, then opens its PR through the API of its code host (its plugin,
+    /// with the account of its instance), as a draft when the board says so, with the board's
+    /// reviewers and labels and the issue it closes (ESC-59): the ticket keeps it, and waits « En
+    /// revue » for its merge. Without an account (or when the host refuses), the host's page to
+    /// open it opens in the browser, filled in; a host Escouade does not know: pushed only.
     pub(crate) async fn open_pr(
         self: &Arc<Self>,
         t: &Ticket,
@@ -3303,109 +3486,114 @@ impl<R: Runtime> Core<R> {
         wt: &Worktree,
         target: &str,
         message: Option<String>,
-    ) -> Result<board::Outcome> {
-        let remote = git::push_branch(&wt.path, &wt.branch).await?;
+    ) -> Result<(board::Outcome, Option<TicketPr>)> {
+        let pushed_to = git::push_branch(&wt.path, &wt.branch).await?;
         let title = match message {
             Some(m) => m,
             None => self.commit_message(t, s, &wt.path, target).await,
         };
         let lang = self.lang().claude;
-        let mut body = board::pr_body(lang, t);
-        let item = crate::agentprs::work_item_of(t);
-        let github = git::remote_url(&wt.path, &remote)
-            .await
-            .as_deref()
-            .and_then(board::github_repo);
-        let Some((owner, repo)) = github else {
-            if let Some(outcome) = self
-                .open_azure_pr(t, s, wt, target, &title, &body, item)
-                .await
-            {
-                return Ok(outcome);
-            }
-            return Ok(board::Outcome::of(lang, |l| {
-                board::pushed_elsewhere_outcome(l, &wt.branch)
-            }));
+        let elsewhere =
+            || board::Outcome::of(lang, |l| board::pushed_elsewhere_outcome(l, &wt.branch));
+        let Some(remote) = self.remote_named(&wt.path, &pushed_to).await else {
+            return Ok((elsewhere(), None));
         };
+        let Some(kind) = remote.kind.clone() else {
+            return Ok((elsewhere(), None));
+        };
+        let word = self
+            .forges
+            .read()
+            .get(&kind)
+            .map_or("PR", |p| p.request_word())
+            .to_string();
         let mut draft = crate::forge::PullRequestDraft {
-            body,
-            ..Default::default()
-        };
-        crate::agentprs::link_work_item(item, "github", &mut draft);
-        body = draft.body;
-        if let Some(gh) = self.gh_cli() {
-            let pr = PullRequest {
-                repo: &format!("{owner}/{repo}"),
-                base: target,
-                head: &wt.branch,
-                title: &title,
-                body: &body,
-                draft: s.draft,
-            };
-            match gh_pr_create(&gh, &wt.path, &pr).await {
-                Ok(out) => {
-                    if let Some((n, url)) = board::pr_number(&out) {
-                        let outcome = board::Outcome::of(lang, |_| board::pr_outcome(n, target));
-                        return Ok(outcome.with_url(url));
-                    }
-                    log::warn!("ticket {}: no pull request in gh's answer: {out}", t.key);
-                }
-                Err(e) => log::warn!("ticket {}: gh pr create failed: {e:#}", t.key),
-            }
-        }
-        let url = board::compare_url(&owner, &repo, target, &wt.branch, &title, &body);
-        self.hub.emit(UiEvent::OpenUrl { url: url.clone() });
-        let outcome = board::Outcome::of(lang, |l| board::pushed_for_pr_outcome(l, &wt.branch));
-        Ok(outcome.with_url(url))
-    }
-
-    /// The ticket's PR on Azure Repos, opened with the Azure DevOps account (`open_pr` asks it of
-    /// a remote not on GitHub), its Azure Boards work item linked (`workItemRefs`). None on
-    /// another host, without an account, or when Azure refuses: the branch is pushed only.
-    #[allow(clippy::too_many_arguments)]
-    async fn open_azure_pr(
-        &self,
-        t: &Ticket,
-        s: &BoardSettings,
-        wt: &Worktree,
-        target: &str,
-        title: &str,
-        body: &str,
-        item: Option<u64>,
-    ) -> Option<board::Outcome> {
-        let remote = self.remote_of(&wt.path, target).await?;
-        if remote.kind.as_deref() != Some("azure") {
-            return None;
-        }
-        let (client, account) = match self.forge_client(&remote.host).await {
-            Ok(c) => c,
-            Err(e) => {
-                log::warn!("ticket {}: no Azure DevOps client: {e:#}", t.key);
-                return None;
-            }
-        };
-        let mut draft = crate::forge::PullRequestDraft {
-            title: title.to_string(),
-            body: body.to_string(),
+            title,
+            body: board::pr_body(lang, t),
             head: wt.branch.clone(),
             base: target.to_string(),
             draft: s.draft,
-            ..Default::default()
+            reviewers: s.reviewers.clone(),
+            labels: s.labels.clone(),
+            closes: crate::ticketprs::closes_issue(t, &kind, &remote.repo),
         };
-        crate::agentprs::link_work_item(item, &account.kind, &mut draft);
-        match client.create_pr(&remote.repo, &draft).await {
-            Ok(pr) => {
-                let n = pr.number as u32;
-                Some(
-                    board::Outcome::of(self.lang().claude, |_| board::pr_outcome(n, target))
-                        .with_url(pr.url),
-                )
-            }
-            Err(e) => {
-                log::warn!("ticket {}: Azure DevOps pull request failed: {e:#}", t.key);
-                None
-            }
+        crate::agentprs::link_work_item(crate::agentprs::work_item_of(t), &kind, &mut draft);
+        match self.forge_client(&remote.host).await {
+            Ok((client, _)) => match client.create_pr(&remote.repo, &draft).await {
+                Ok(pr) => {
+                    self.telemetry.track(Event::PrOpened {
+                        from: "ticket",
+                        forge: crate::telemetry::forge(&kind),
+                    });
+                    let tp = crate::ticketprs::ticket_pr(
+                        &pr,
+                        &kind,
+                        &remote.host,
+                        &remote.repo,
+                        &word,
+                        target,
+                        &wt.branch,
+                        now_ms(),
+                    );
+                    let outcome = board::Outcome::of(lang, |_| {
+                        crate::ticketprs::opened_outcome(&word, pr.number, target)
+                    })
+                    .with_url(pr.url.clone());
+                    return Ok((outcome, Some(tp)));
+                }
+                Err(e) => log::warn!("ticket {}: {word} not opened by the API: {e:#}", t.key),
+            },
+            Err(e) => log::info!("ticket {}: no account to open its {word}: {e:#}", t.key),
         }
+        let page = crate::ticketprs::creation_page(
+            &kind,
+            &remote.url,
+            &remote.repo,
+            target,
+            &wt.branch,
+            &draft.title,
+            &draft.body,
+        );
+        let Some(url) = page else {
+            return Ok((elsewhere(), None));
+        };
+        self.hub.emit(UiEvent::OpenUrl { url: url.clone() });
+        let outcome =
+            board::Outcome::of(lang, |l| board::pushed_for_pr_outcome(l, &word, &wt.branch));
+        Ok((outcome.with_url(url), None))
+    }
+
+    /// The CI to follow of a branch pushed to the remote `to` (ESC-63): on a host Escouade knows
+    /// and reads the checks of, else none.
+    async fn pushed_ci(
+        &self,
+        path: &str,
+        to: &str,
+        branch: &str,
+    ) -> Option<crate::branchci::BranchCi> {
+        let remote = self.remote_named(path, to).await?;
+        let kind = remote.kind.clone()?;
+        let caps = self.forges.read().get(&kind)?.capabilities();
+        if !caps.checks {
+            return None;
+        }
+        Some(crate::branchci::BranchCi {
+            kind,
+            host: remote.host,
+            namespace: remote.repo.namespace,
+            name: remote.repo.name,
+            branch: branch.to_string(),
+            rerun: caps.rerun,
+            ..Default::default()
+        })
+    }
+
+    /// What the remote `name` of the repository at `path` names: its code host and repository.
+    async fn remote_named(&self, path: &str, name: &str) -> Option<crate::forge::Remote> {
+        let url = git::remote_url(path, name).await?;
+        let list = crate::forge::accounts::all(&self.accounts.read());
+        let registry = self.forges.read().clone();
+        registry.analyze(&url, |host| crate::forge::accounts::kind_for(&list, host))
     }
 
     /// A merge stopped on conflicts (undone): blocked with "L'agent résout" / "Annuler" ("ask"),
@@ -3616,18 +3804,19 @@ impl<R: Runtime> Core<R> {
     /// Only for an agent with a worktree, and not archived (it would hold a block for nothing).
     pub async fn agent_prepare_launch(self: &Arc<Self>, id: &str) -> Result<()> {
         let h = self.agent(id)?;
-        let (worktree, archived, base) = {
+        let (worktree, archived, base, project_id) = {
             let rt = h.lock();
             (
                 rt.meta.worktree.clone(),
                 rt.meta.archived,
                 rt.meta.port_base,
+                rt.meta.project_id.clone(),
             )
         };
         let Some(worktree) = worktree else {
             bail!(Refusal::NoWorktree);
         };
-        if isola::manages(&worktree.path) {
+        if self.launch.manages(&worktree.path, &project_id) {
             bail!(tr!(
                 "isola lance ce worktree : « ▶ Tester » suffit, sans recette.",
                 "isola runs this worktree: “▶ Test” is enough, without a recipe."
@@ -3762,8 +3951,8 @@ impl<R: Runtime> Core<R> {
     /// The `.isola.toml` of the agent's worktree as isola will read it, to show before it runs.
     pub fn isola_config(&self, agent_id: &str) -> Result<String> {
         let meta = self.agent(agent_id)?.lock().meta.clone();
-        let wt = isola_worktree(&meta)?;
-        isola::read_config(&wt.path)
+        let (wt, env) = self.isola_worktree(&meta)?;
+        env.read_config(&wt.path)
     }
 
     /// The user read `config` (the worktree's `.isola.toml`) and `open` (the address the agent gave) in
@@ -3772,8 +3961,8 @@ impl<R: Runtime> Core<R> {
     pub fn approve_isola(&self, agent_id: &str, config: String, open: String) -> Result<()> {
         let h = self.agent(agent_id)?;
         let meta = h.lock().meta.clone();
-        let wt = isola_worktree(&meta)?;
-        if isola::read_config(&wt.path)? != config {
+        let (wt, env) = self.isola_worktree(&meta)?;
+        if env.read_config(&wt.path)? != config {
             bail!(Refusal::IsolaConfigChanged);
         }
         {
@@ -3802,11 +3991,11 @@ impl<R: Runtime> Core<R> {
             bail!(why);
         }
         if kind == "isola" {
-            let wt = isola_worktree(&meta)?;
-            testlaunch::check_isola_approved(&meta, &isola::read_config(&wt.path)?)?;
+            let (wt, env) = self.isola_worktree(&meta)?;
+            testlaunch::check_isola_approved(&meta, &env.read_config(&wt.path)?)?;
             return Ok(testlaunch::RunSpec {
                 name: "isola up".into(),
-                command: isola::UP.into(),
+                command: env.up_command(),
                 cwd: wt.path,
                 env: Vec::new(),
             });
@@ -3816,27 +4005,40 @@ impl<R: Runtime> Core<R> {
 
     /// The services isola runs for the agent's worktree (`isola ls --json`), when it may launch
     /// them now.
-    pub async fn isola_services(&self, agent_id: &str) -> Result<Vec<isola::Service>> {
-        let wt = self.isola_launch(agent_id)?;
-        isola::services(&wt.path, &wt.branch).await
+    pub async fn isola_services(&self, agent_id: &str) -> Result<Vec<crate::isola::Service>> {
+        let (wt, env) = self.isola_launch(agent_id)?;
+        env.services(&wt.path, &wt.branch).await
     }
 
     /// Stops the services isola runs for the agent's worktree (`isola down`).
     pub async fn isola_down(&self, agent_id: &str) -> Result<()> {
         let meta = self.agent(agent_id)?.lock().meta.clone();
-        let wt = isola_worktree(&meta)?;
-        isola::run(&wt.path, &["down"], isola::LIMIT)
-            .await
-            .map(|_| ())
+        let (wt, env) = self.isola_worktree(&meta)?;
+        env.down(&wt.path).await
+    }
+
+    /// The agent's worktree, when a launch environment (isola) runs its services, and that environment.
+    fn isola_worktree(&self, meta: &AgentMeta) -> Result<(Worktree, crate::launchenv::Env)> {
+        let wt = meta
+            .worktree
+            .clone()
+            .ok_or_else(|| anyhow!(Refusal::NoWorktree))?;
+        let Some(env) = self.launch.for_dir(&wt.path, &meta.project_id) else {
+            bail!(tr!(
+                "isola ne lance pas ce worktree (isola introuvable, ou pas de .isola.toml).",
+                "isola doesn’t run this worktree (isola not found, or no .isola.toml)."
+            ));
+        };
+        Ok((wt, env))
     }
 
     /// The agent's worktree, whose services isola runs, when it may launch them now.
-    fn isola_launch(&self, agent_id: &str) -> Result<Worktree> {
+    fn isola_launch(&self, agent_id: &str) -> Result<(Worktree, crate::launchenv::Env)> {
         let meta = self.agent(agent_id)?.lock().meta.clone();
         if let Some(why) = self.launch_refusal(&meta) {
             bail!(why);
         }
-        isola_worktree(&meta)
+        self.isola_worktree(&meta)
     }
 
     /// The terminal `term_id` is one of the agent's test launches, kept to be stopped with them.
@@ -3917,100 +4119,19 @@ impl<R: Runtime> Core<R> {
                 self.about_agent(agent_id),
             );
         }
-        let dir = self
-            .agent(agent_id)
-            .ok()
-            .and_then(|h| h.lock().meta.worktree.as_ref().map(|w| w.path.clone()));
-        if let Some(dir) = dir.filter(|d| isola::manages(d)) {
-            isola::down_later(dir);
+        let dir = self.agent(agent_id).ok().and_then(|h| {
+            let rt = h.lock();
+            rt.meta
+                .worktree
+                .as_ref()
+                .map(|w| (w.path.clone(), rt.meta.project_id.clone()))
+        });
+        if let Some((dir, project)) = dir {
+            if let Some(env) = self.launch.for_dir(&dir, &project) {
+                env.down_later(dir);
+            }
         }
     }
-}
-
-/// The agent's worktree, when isola runs its services.
-fn isola_worktree(meta: &AgentMeta) -> Result<Worktree> {
-    let wt = meta
-        .worktree
-        .clone()
-        .ok_or_else(|| anyhow!(Refusal::NoWorktree))?;
-    if !isola::manages(&wt.path) {
-        bail!(tr!(
-            "isola ne lance pas ce worktree (isola introuvable, ou pas de .isola.toml).",
-            "isola doesn’t run this worktree (isola not found, or no .isola.toml)."
-        ));
-    }
-    Ok(wt)
-}
-
-/// How long `gh pr create` may take.
-const GH_LIMIT: Duration = Duration::from_secs(120);
-
-/// A pull request to open on GitHub.
-struct PullRequest<'a> {
-    /// `owner/repo`, the repository the branch was pushed to.
-    repo: &'a str,
-    base: &'a str,
-    head: &'a str,
-    title: &'a str,
-    body: &'a str,
-    draft: bool,
-}
-
-/// `gh pr create` in `cwd`, on the repository the branch was pushed to (whatever `gh repo
-/// set-default` says), its description through the standard input (an argument with line breaks
-/// cannot go through a `.cmd`): what it printed.
-async fn gh_pr_create(gh: &Path, cwd: &str, pr: &PullRequest<'_>) -> Result<String> {
-    use tokio::io::AsyncWriteExt;
-    let mut cmd = tokio::process::Command::new(gh);
-    cmd.args([
-        "pr",
-        "create",
-        "--repo",
-        pr.repo,
-        "--base",
-        pr.base,
-        "--head",
-        pr.head,
-        "--title",
-        pr.title,
-        "--body-file",
-        "-",
-    ]);
-    if pr.draft {
-        cmd.arg("--draft");
-    }
-    cmd.current_dir(cwd)
-        .env("GH_PROMPT_DISABLED", "1")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true);
-    #[cfg(windows)]
-    cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
-    crate::job::isolate(&mut cmd);
-    let mut child = cmd.spawn()?;
-    // Dropped when this returns: whatever it left running (a `.cmd`'s node…) ends with it.
-    let _job = crate::job::Job::for_child(&child);
-    let created = async move {
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(pr.body.as_bytes()).await?;
-            // Dropped here: the description ends.
-        }
-        anyhow::Ok(child.wait_with_output().await?)
-    };
-    let out = tokio::time::timeout(GH_LIMIT, created)
-        .await
-        .map_err(|_| {
-            anyhow!(tr!(
-                "gh pr create toujours pas terminé après {s} s",
-                "gh pr create still not done after {s} s",
-                s = GH_LIMIT.as_secs()
-            ))
-        })??;
-    if !out.status.success() {
-        bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
-    }
-    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
 /// Of the files copied from the project, those the branch checked out in `cwd` has not

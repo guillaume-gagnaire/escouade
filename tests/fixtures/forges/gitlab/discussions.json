@@ -1,0 +1,144 @@
+[
+  {
+    "id": "6a9c1750b37d513a43987b574953fceb50b03ce7",
+    "individual_note": false,
+    "notes": [
+      {
+        "id": 2829102301,
+        "type": "DiffNote",
+        "body": "`CancelAutoMerge` should say in its doc comment what GitLab answers when nothing was set.",
+        "author": {
+          "id": 3714742,
+          "username": "alice",
+          "name": "Alice"
+        },
+        "created_at": "2026-10-12T09:14:02.120Z",
+        "system": false,
+        "noteable_id": 546252446,
+        "noteable_type": "MergeRequest",
+        "noteable_iid": 3101,
+        "resolvable": true,
+        "resolved": true,
+        "resolved_by": {
+          "id": 30770856,
+          "username": "frank",
+          "name": "Frank"
+        },
+        "position": {
+          "base_sha": "b3a4f1c2d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4",
+          "start_sha": "b3a4f1c2d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4",
+          "head_sha": "24c5c32eb4f7dae8f76fb33a02204ab46509d63c",
+          "old_path": "merge_requests.go",
+          "new_path": "merge_requests.go",
+          "position_type": "text",
+          "old_line": null,
+          "new_line": 1412
+        }
+      },
+      {
+        "id": 2829455120,
+        "type": "DiffNote",
+        "body": "Done, thanks.",
+        "author": {
+          "id": 30770856,
+          "username": "frank",
+          "name": "Frank"
+        },
+        "created_at": "2026-10-12T11:40:51.008Z",
+        "system": false,
+        "noteable_id": 546252446,
+        "noteable_type": "MergeRequest",
+        "noteable_iid": 3101,
+        "resolvable": true,
+        "resolved": true,
+        "position": {
+          "base_sha": "b3a4f1c2d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4",
+          "start_sha": "b3a4f1c2d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4",
+          "head_sha": "24c5c32eb4f7dae8f76fb33a02204ab46509d63c",
+          "old_path": "merge_requests.go",
+          "new_path": "merge_requests.go",
+          "position_type": "text",
+          "old_line": null,
+          "new_line": 1412
+        }
+      }
+    ]
+  },
+  {
+    "id": "87805b7c09016a7058e91bdbe7b29d1f284a39e6",
+    "individual_note": false,
+    "notes": [
+      {
+        "id": 2831008764,
+        "type": "DiffNote",
+        "body": "Could the test also cover a 405 when the pipeline already finished?",
+        "author": {
+          "id": 8095268,
+          "username": "bob",
+          "name": "Bob"
+        },
+        "created_at": "2026-10-13T08:02:33.410Z",
+        "system": false,
+        "noteable_id": 546252446,
+        "noteable_type": "MergeRequest",
+        "noteable_iid": 3101,
+        "resolvable": true,
+        "resolved": false,
+        "position": {
+          "base_sha": "b3a4f1c2d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4",
+          "start_sha": "b3a4f1c2d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4",
+          "head_sha": "24c5c32eb4f7dae8f76fb33a02204ab46509d63c",
+          "old_path": "merge_requests_test.go",
+          "new_path": "merge_requests_test.go",
+          "position_type": "text",
+          "old_line": 880,
+          "new_line": null
+        }
+      }
+    ]
+  },
+  {
+    "id": "f3c1e2d4b5a69788a7b6c5d4e3f2a1b0c9d8e7f6",
+    "individual_note": true,
+    "notes": [
+      {
+        "id": 2833190045,
+        "type": null,
+        "body": "Thanks for the contribution! This is in the next release.",
+        "author": {
+          "id": 8095268,
+          "username": "bob",
+          "name": "Bob"
+        },
+        "created_at": "2026-10-29T14:24:10.771Z",
+        "system": false,
+        "noteable_id": 546252446,
+        "noteable_type": "MergeRequest",
+        "noteable_iid": 3101,
+        "resolvable": false
+      }
+    ]
+  },
+  {
+    "id": "0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c",
+    "individual_note": true,
+    "notes": [
+      {
+        "id": 2833190311,
+        "type": null,
+        "body": "approved this merge request",
+        "author": {
+          "id": 3714742,
+          "username": "alice",
+          "name": "Alice"
+        },
+        "created_at": "2026-10-28T16:02:44.115Z",
+        "system": true,
+        "noteable_id": 546252446,
+        "noteable_type": "MergeRequest",
+        "noteable_iid": 3101,
+        "resolvable": false
+      }
+    ]
+  }
+]

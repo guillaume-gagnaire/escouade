@@ -20,7 +20,7 @@ Accounts are connected in Settings › Integrations, “Connected accounts” gr
 
 ### Code host or source of tickets
 
-A code host (GitHub, GitLab, Bitbucket, Gitea, Azure DevOps) serves the agents’ pull requests, CI and deployments; a source of the Kanban serves the tickets. Settings › Integrations shows them in two named parts. Connecting your GitLab as a code host puts no ticket in the Kanban: a GitLab project still has to be linked as a source (see below), which the import window offers in one click. Bitbucket and Gitea have no source yet: their row says “No tickets: PRs and CI only”.
+A [code host](code-hosts) (GitHub, GitLab, Bitbucket, Gitea, Azure DevOps) serves the agents’ pull requests, CI and deployments; a source of the Kanban serves the tickets. Settings › Integrations shows them in two named parts. Connecting your GitLab as a code host puts no ticket in the Kanban: a GitLab project still has to be linked as a source (see below), which the import window offers in one click. Bitbucket and Gitea have no source yet: their row says “No tickets: PRs and CI only”.
 
 “Disconnect” forgets the account and its secrets. Projects keep their links, unused until you connect again.
 
@@ -29,6 +29,17 @@ A code host (GitHub, GitLab, Bitbucket, Gitea, Azure DevOps) serves the agents�
 Tokens stay on your machine, apart from your settings, and are only used for calls to these services. Escouade stores them in the system keychain: Credential Manager on Windows, Keychain on macOS. On Linux, which has no supported keychain, they stay in `~/.escouade/integrations.json`, readable by you alone.
 
 When the keychain refuses a token on Windows or macOS, it stays in that file and the tab says so: “System keychain unavailable: the token stays in ~/.escouade/integrations.json.” If the keychain exists but cannot be read, the tab says “System keychain unreadable: restart Escouade or reconnect the account.” and no call goes out without the tokens. For GitHub through `gh`, Escouade keeps no token.
+
+### The services a plugin serves
+
+GitHub (the code host and GitHub Issues), GitLab (the code host; GitLab Issues is still part of the app), Bitbucket, Gitea and Forgejo, Azure DevOps, and Trello are served by plugins shipped with Escouade: nothing changes in use, the accounts and the forms are the same. An account served by another author’s plugin says so: “Served by the plugin …”. The token stays in the keychain; Escouade lends it to the plugin of that service alone, when it needs it.
+
+These plugins are switched off in the Plugins view, for the whole app or for one project (see [the plugins shipped with Escouade](plugins/installer#the-plugins-shipped-with-escouade)). Switched off or stopped, a plugin says so instead of going quiet:
+
+- **a code host**: the agent’s card shows “Code host stopped: PRs no longer followed” and keeps the PRs read last; Settings › Integrations says under the account “The plugin GitHub is switched off (Settings › Plugins): this account serves nothing, its PRs are no longer followed”, or that it stopped and why;
+- **a source**: the sync stops, and its failure says “The plugin dev.escouade.trello is not answering: …”; the imported tickets stay.
+
+Switched back on, the plugin picks up where it stopped: the first read that works clears the message.
 
 ## Linking a project to a source
 

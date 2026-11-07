@@ -11,7 +11,10 @@
   let { service }: { service: { id: string; label: string } } = $props();
   let draft = $state('');
   let replacing = $state(false);
-  const has = $derived(onlineVoice.keys.includes(service.id));
+  // Mistral's may be a Mistral Vibe account's (ESC-327): the voice goes by it, it is not this row's to erase.
+  const borrowed = $derived(service.id === 'mistral' ? onlineVoice.mistral.borrowed : null);
+  const has = $derived(onlineVoice.keys.includes(service.id) && !borrowed);
+  const desc = $derived(service.id === 'mistral' ? t('voice.settings.keyMistralDesc') : t('voice.settings.keyDesc'));
 
   // Another service: its own key.
   $effect(() => {
@@ -46,10 +49,15 @@
 
 <Row
   label={t('voice.settings.key', { service: service.label })}
-  desc={has ? t('voice.settings.keyDesc') : `${t('voice.settings.keyMissing')} ${t('voice.settings.keyDesc')}`}
+  desc={has || borrowed ? desc : `${t('voice.settings.keyMissing')} ${desc}`}
 >
   <div class="keys" data-online-key={service.id}>
-    {#if has && !replacing}
+    {#if borrowed && !replacing}
+      <span class="ok"
+        ><Icon name="check" size={14} />{t('voice.settings.keyBorrowed', { account: borrowed.account, hint: borrowed.hint })}</span
+      >
+      <button class="btn" onclick={() => (replacing = true)}>{t('voice.settings.keyGiveOther')}</button>
+    {:else if has && !replacing}
       <span class="ok"><Icon name="check" size={14} />{t('voice.settings.keySaved')}</span>
       <button class="btn" onclick={() => (replacing = true)}>{t('voice.settings.keyReplace')}</button>
       <button class="btn" onclick={remove}>{t('voice.settings.keyDelete')}</button>

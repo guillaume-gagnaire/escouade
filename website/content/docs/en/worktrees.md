@@ -182,7 +182,7 @@ The merge removes neither the agent’s worktree nor its branch. To tidy them up
 
 ## Opening a pull request
 
-Rather than merging yourself, you can offer an agent’s work as a pull request, on GitHub for now (GitLab, Bitbucket and Gitea will follow). The project needs its remote on the code host and an account connected in [Settings › Integrations](settings-integrations); otherwise nothing offers it.
+Rather than merging yourself, you can offer an agent’s work as a pull request, on any [code host](code-hosts): GitHub, GitLab, Bitbucket Cloud, Gitea, Forgejo, or Azure DevOps. The project needs its remote at the host and an account connected in [Settings › Integrations](settings-integrations); otherwise nothing offers it.
 
 “Open a PR” is in the conversation’s header, in the menu of a right click on the agent’s card, and in the menu of its branch in the [branch picker](branches). The window proposes a title and a description, written by the model for written texts from the branch’s commits and diff: read them, edit them, pick the target branch and a draft if you want. Nothing goes out before “Push and open”, which pushes the branch then opens the pull request. The worktree’s uncommitted files are not in it, and the window says so.
 

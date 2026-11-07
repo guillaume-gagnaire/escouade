@@ -1,0 +1,79 @@
+{
+  "id": 546252446,
+  "iid": 3101,
+  "project_id": 65271576,
+  "title": "feat(merge_requests): add CancelAutoMerge",
+  "description": "With `CancelMergeWhenPipelineSucceeds`, Go callers cannot tell if anything was cancelled. GitLab answers that endpoint with a small status object instead of the merge request. It also returns 201 when the merge request was not set to auto-merge. So the method returns an empty `MergeRequest` and no error in both cases.\n\nGitLab 19.5 adds a new endpoint for this (gitlab-org/gitlab!255702), and I adde",
+  "state": "merged",
+  "created_at": "2026-10-10T12:06:13.882Z",
+  "updated_at": "2026-10-29T14:39:32.622Z",
+  "merge_status": "can_be_merged",
+  "approved": true,
+  "approvals_required": 1,
+  "approvals_left": 0,
+  "require_password_to_approve": false,
+  "approved_by": [
+    {
+      "user": {
+        "id": 3714742,
+        "username": "alice",
+        "public_email": "",
+        "name": "Alice",
+        "state": "active",
+        "locked": false,
+        "web_url": "https://gitlab.com/alice"
+      },
+      "approved_at": "2026-10-21T08:39:52.522Z"
+    },
+    {
+      "user": {
+        "id": 8095268,
+        "username": "bob",
+        "public_email": "",
+        "name": "Bob",
+        "state": "active",
+        "locked": false,
+        "web_url": "https://gitlab.com/bob"
+      },
+      "approved_at": "2026-10-29T14:06:45.031Z"
+    }
+  ],
+  "suggested_approvers": [
+    {
+      "id": 12689435,
+      "username": "carol",
+      "public_email": "carol@example.com",
+      "name": "Carol",
+      "state": "active",
+      "locked": false,
+      "web_url": "https://gitlab.com/carol"
+    },
+    {
+      "id": 18657743,
+      "username": "dave",
+      "public_email": "",
+      "name": "Dave",
+      "state": "active",
+      "locked": false,
+      "web_url": "https://gitlab.com/dave"
+    },
+    {
+      "id": 19535662,
+      "username": "erin",
+      "public_email": "erin@example.com",
+      "name": "Erin",
+      "state": "active",
+      "locked": false,
+      "web_url": "https://gitlab.com/erin"
+    }
+  ],
+  "approvers": [],
+  "approver_groups": [],
+  "user_has_approved": false,
+  "user_can_approve": false,
+  "approval_rules_left": [],
+  "has_approval_rules": true,
+  "merge_request_approvers_available": true,
+  "multiple_approval_rules_available": true,
+  "invalid_approvers_rules": []
+}

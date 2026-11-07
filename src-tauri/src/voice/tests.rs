@@ -209,16 +209,23 @@ fn the_level_is_told_while_it_listens_and_no_more_after() {
     put_model(&h.voice.store, "base");
     let id = session(h.voice.start(&choice("base", "fr")).unwrap());
     h.script.push(&voice_tone(16_000, 0.1));
-    std::thread::sleep(Duration::from_millis(160));
-    let levels: Vec<(f32, u64)> = h
-        .events
-        .lock()
-        .iter()
-        .filter_map(|e| match e {
-            VoiceEvent::Level { session, level, ms } if *session == id => Some((*level, *ms)),
-            _ => None,
-        })
-        .collect();
+    // Waited for, not slept for: on a busy machine (the CI's macOS, 2026-11-02) the first level came after 160 ms.
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    let levels: Vec<(f32, u64)> = loop {
+        std::thread::sleep(Duration::from_millis(40));
+        let levels: Vec<(f32, u64)> = h
+            .events
+            .lock()
+            .iter()
+            .filter_map(|e| match e {
+                VoiceEvent::Level { session, level, ms } if *session == id => Some((*level, *ms)),
+                _ => None,
+            })
+            .collect();
+        if levels.len() >= 2 || std::time::Instant::now() > deadline {
+            break levels;
+        }
+    };
     assert!(!levels.is_empty());
     assert!(levels[0].0 > 0.3, "{levels:?}");
     // The time grows; the level falls back once nothing comes.
@@ -453,7 +460,7 @@ fn info_for(body: &[u8]) -> ModelInfo {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_model_downloads_with_its_progress_and_is_kept_once_its_checksum_is_right() {
     let body: Vec<u8> = (0..700_000u32).map(|i| (i % 251) as u8).collect();
     let (url, asked) = serve(body.clone(), 200).await;
@@ -481,7 +488,7 @@ async fn a_model_downloads_with_its_progress_and_is_kept_once_its_checksum_is_ri
     assert!(!dir.join("models").join("ggml-tiny.bin.part").exists());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_download_whose_checksum_is_wrong_is_not_kept() {
     let body = vec![7u8; 10_000];
     let (url, _) = serve(body.clone(), 200).await;
@@ -508,7 +515,7 @@ async fn a_download_whose_checksum_is_wrong_is_not_kept() {
     assert!(std::fs::read_dir(&store.dir).unwrap().next().is_none());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_download_cut_short_or_refused_is_not_kept() {
     let body = vec![1u8; 5_000];
     let (url, _) = serve(body.clone(), 200).await;
@@ -546,7 +553,7 @@ async fn a_download_cut_short_or_refused_is_not_kept() {
     assert!(!store.path("tiny").exists());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_download_called_off_leaves_nothing() {
     let body = vec![3u8; 3_000_000];
     let (url, _) = serve(body.clone(), 200).await;
@@ -568,7 +575,7 @@ async fn a_download_called_off_leaves_nothing() {
     assert!(std::fs::read_dir(&store.dir).unwrap().next().is_none());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn the_download_goes_through_the_proxy_of_the_settings() {
     // The fake server stands for the proxy: asked for the full address, it answers the model.
     let body = vec![9u8; 20_000];
@@ -598,7 +605,7 @@ async fn the_download_goes_through_the_proxy_of_the_settings() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn the_service_tells_the_progress_and_deletes_a_model() {
     let h = harness("service-dl", "", 16_000);
     // "tiny" of the catalog would be 77 MB: the service is checked on what it refuses and
@@ -701,11 +708,7 @@ fn called_off_while_the_microphone_opens_it_never_listens() {
 include!("conv_tests.rs");
 
 fn online_choice(base: &str) -> Choice {
-    let mut spec = online::Spec::new(
-        online::Provider::Groq,
-        "gsk-test-key".into(),
-        reqwest::Client::new(),
-    );
+    let mut spec = online::Spec::new(online::Provider::Groq, "gsk-test-key".into());
     spec.base = base.into();
     Choice {
         online: Some(spec),
@@ -725,7 +728,7 @@ fn on_line_no_model_is_needed_and_the_fake_transcriber_stands_for_the_service() 
     assert!(!h.voice.store.dir.exists());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn on_line_the_text_comes_from_the_service_and_its_failure_is_told_as_such() {
     let (url, asked) = online::tests::serve(200, r#"{"text":"Depuis le service"}"#).await;
     let h = harness("online-real", "never this", 16_000);

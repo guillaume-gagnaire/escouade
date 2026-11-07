@@ -10,6 +10,7 @@ export default defineZone('integrations', {
     clickup: 'List',
     gitlab: 'Project',
     azure: 'Project',
+    other: 'Container',
   },
   searchHint: {
     jira: 'Search by key or text…',
@@ -19,6 +20,7 @@ export default defineZone('integrations', {
     clickup: 'Search by id (#86abx3, ABC-12) or title…',
     gitlab: 'Search for an issue (#12) or by text…',
     azure: 'Search for a work item (#12) or by title…',
+    other: 'Search for a ticket…',
   },
   imported: { one: '{count} ticket imported from {from}', other: '{count} tickets imported from {from}' },
 
@@ -40,6 +42,8 @@ export default defineZone('integrations', {
     notConnected: 'Not connected',
     keychainUnavailable: 'System keychain unavailable: the token stays in ~/.escouade/integrations.json.',
     keychainUnreadable: 'System keychain unreadable: restart Escouade or reconnect the account.',
+    servedBy: 'Served by',
+    servedByPlugin: 'Served by the plugin {plugin}',
     disconnect: 'Disconnect',
     connectEllipsis: 'Connect…',
     connect: 'Connect',
@@ -78,6 +82,8 @@ export default defineZone('integrations', {
     viaCli: '{cli} token',
     issues: 'Also used for {source}',
     noTickets: 'No tickets: PRs and CI only',
+    pluginOff: 'The plugin {plugin} is switched off (Settings › Plugins): this account serves nothing, its PRs are no longer followed',
+    pluginStopped: 'The plugin {plugin} stopped ({why}): its PRs are no longer followed until it starts again',
     projects: { one: 'Project: {list}', other: 'Projects: {list}' },
     noAccount: { one: 'No account, for the project {list}', other: 'No account, for the projects {list}' },
     connectHost: 'Connect {host}',
@@ -108,6 +114,7 @@ export default defineZone('integrations', {
       clickup: 'ClickUp list',
       gitlab: 'GitLab Issues project',
       azure: 'Azure Boards project',
+      other: 'Source container',
     },
   },
 

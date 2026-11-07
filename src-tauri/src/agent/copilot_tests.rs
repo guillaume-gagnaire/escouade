@@ -8,7 +8,7 @@ fn agent(cwd: &str, mode: &str) -> AgentRt {
     let meta = AgentMeta {
         id: new_id(),
         cwd: cwd.into(),
-        engine: EngineId::Copilot,
+        engine: EngineId::COPILOT,
         model: "gpt-6-luna".into(),
         mode: mode.into(),
         ..Default::default()
@@ -287,38 +287,6 @@ fn a_permission_is_offered_for_the_session_on_the_list_too() {
 }
 
 #[test]
-fn safe_requests_go_without_a_card_only_when_a_process_answers_them() {
-    let mut rt = agent(WT, "acceptEdits");
-    let read = json!({ "kind": "read", "path": format!("{WT}\\calc.js") });
-    let outside = json!({ "kind": "read", "path": "C:\\Windows\\win.ini" });
-    let write = json!({ "kind": "write", "fileName": format!("{WT}\\a.txt") });
-    assert!(rt.cp_safe(&read));
-    assert!(!rt.cp_safe(&outside));
-    assert!(rt.cp_safe(&write));
-    rt.meta.mode = "plan".into();
-    assert!(!rt.cp_safe(&write), "nothing written in the mode Plan");
-    assert!(rt.cp_safe(&read));
-    rt.meta.mode = "default".into();
-    assert!(rt.cp_safe(&write));
-    let npm = json!({ "kind": "shell", "fullCommandText": "npm test", "commands": [{ "identifier": "npm test" }] });
-    assert!(!rt.cp_safe(&npm));
-    // A discussion of the Docs tab (ESC-261): its reads alone, in any mode.
-    rt.meta.discussion = Some(Default::default());
-    let commit = json!({ "kind": "shell", "fullCommandText": "git commit -m x", "commands": [{ "identifier": "git commit" }] });
-    for mode in ["default", "acceptEdits", "auto"] {
-        rt.meta.mode = mode.into();
-        assert!(!rt.cp_safe(&write), "{mode}");
-        assert!(!rt.cp_safe(&commit), "{mode}");
-        assert!(rt.cp_safe(&read), "{mode}");
-    }
-    assert!(inside(
-        "c:/users/user/appdata/local/temp/esc23/wt-agent1/x",
-        WT
-    ));
-    assert!(!inside(&format!("{WT}-autre\\x"), WT));
-}
-
-#[test]
 fn a_subagents_events_go_under_its_task_and_the_tasks_into_the_plan() {
     let mut rt = agent("C:/p", "default");
     start(&mut rt);
@@ -436,41 +404,6 @@ fn an_account_of_the_github_cli_is_told() {
 }
 
 #[test]
-fn the_tools_take_claude_codes_names() {
-    let cwd = "C:\\p";
-    let (n, i) = tool_of("powershell", &json!({ "command": "ls" }), None, cwd);
-    assert_eq!((n.as_str(), i["command"].as_str()), ("Bash", Some("ls")));
-    let (n, i) = tool_of("view", &json!({ "path": "a.js" }), None, cwd);
-    assert_eq!(
-        (n.as_str(), i["file_path"].as_str()),
-        ("Read", Some("C:\\p\\a.js"))
-    );
-    let (n, _) = tool_of("rg", &json!({ "pattern": "x" }), None, cwd);
-    assert_eq!(n, "Grep");
-    let (n, i) = tool_of(
-        "apply_patch",
-        &json!("*** Begin Patch\n*** Add File: b.txt\n+x\n*** End Patch\n"),
-        None,
-        cwd,
-    );
-    assert_eq!(
-        (n.as_str(), i["file_path"].as_str()),
-        ("Write", Some("C:\\p\\b.txt"))
-    );
-    let (n, _) = tool_of("essai-ping", &json!({}), Some("essai"), cwd);
-    assert_eq!(n, "mcp__essai__ping");
-    let (n, _) = tool_of(
-        "github-mcp-server/get_file_contents",
-        &json!({}),
-        Some("github-mcp-server"),
-        cwd,
-    );
-    assert_eq!(n, "mcp__github-mcp-server__get_file_contents");
-    let (n, _) = tool_of("sql", &json!({}), None, cwd);
-    assert_eq!(n, "sql");
-}
-
-#[test]
 fn a_message_refused_ends_its_turn_in_error() {
     let mut rt = agent("C:/p", "default");
     start(&mut rt);
@@ -497,14 +430,18 @@ fn each_call_tells_the_months_credits_and_its_cost_comes_from_its_nano_aiu() {
     assert_eq!(last.len(), 1);
     assert_eq!(last[0].minutes, None, "the month's credits");
     assert!(last[0].pct > 0.0 && last[0].pct < 5.0, "{:?}", last[0]);
-    assert_eq!(
-        last[0].resets_at,
-        Some(
-            chrono::DateTime::parse_from_rfc3339("2026-11-01T00:00:00Z")
-                .unwrap()
-                .timestamp_millis()
-        )
-    );
+    // The run was recorded in October: the date it tells is kept while it is ahead, else the
+    // first of the month after now takes its place (`engine::copilot::credits`).
+    let told = chrono::DateTime::parse_from_rfc3339("2026-11-01T00:00:00Z")
+        .unwrap()
+        .timestamp_millis();
+    let now = chrono::Utc::now().timestamp_millis();
+    let expected = if told > now + 60_000 {
+        told
+    } else {
+        crate::engine::copilot::next_month(now)
+    };
+    assert_eq!(last[0].resets_at, Some(expected));
     // The cost of its turns: its nano-AIU, a credit (10⁹) for a cent.
     let rows: Vec<_> = fxs.iter().flat_map(|f| f.turns.clone()).collect();
     assert!(!rows.is_empty());
@@ -517,7 +454,7 @@ fn each_call_tells_the_months_credits_and_its_cost_comes_from_its_nano_aiu() {
         .sum();
     let cost: f64 = rows.iter().map(|r| r.cost).sum();
     assert!((cost - nano as f64 / 1e11).abs() < 1e-9, "{cost} {nano}");
-    assert!(rows.iter().all(|r| r.engine == EngineId::Copilot));
+    assert!(rows.iter().all(|r| r.engine == EngineId::COPILOT));
     assert!((rt.meta.cost - cost).abs() < 1e-9);
 }
 
@@ -558,7 +495,9 @@ fn credits_spent_stop_the_turn_until_they_are_given_again() {
     start(&mut rt);
     let mut fx = Effects::default();
     rt.push_user("u1", "x", 0, &[], &mut fx);
-    let reset = "2026-11-01T00:00:00Z";
+    // A reset ahead of any run of this test: one already past would be replaced by the first
+    // of next month (`engine::copilot::credits`).
+    let reset = "2099-11-01T00:00:00Z";
     let fxs = feed(
         &mut rt,
         &[

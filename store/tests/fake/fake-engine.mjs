@@ -2,11 +2,62 @@
 // it writes the arguments it got to FAKE_ENGINE_LOG and answers as `docker run … escouade-plugin test /plugin --json`
 // would, by FAKE_ENGINE_MODE: `pass`, `refused` (the sandbox refused a connection and a write), `garbage` (no JSON),
 // `hang` (never ends: the time limit). It runs nothing of the plugin.
-import { appendFileSync } from 'node:fs';
+//
+// The steps of a third party's `run.wasm` (scripts/plugin-review/container.ts) stand on tests/fake/fake-escouade-plugin.mjs,
+// its volumes being folders under FAKE_ENGINE_VOLUMES: it fails when `build` or `read` is given a network, when `build`
+// can write to the tools.
+import { spawnSync } from 'node:child_process';
+import { appendFileSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const args = process.argv.slice(2);
 if (process.env.FAKE_ENGINE_LOG) appendFileSync(process.env.FAKE_ENGINE_LOG, `${JSON.stringify(args)}\n`);
-if (args[0] === 'kill') process.exit(0);
+if (args[0] === 'kill' || args[0] === 'volume') process.exit(0);
+
+const volumes = process.env.FAKE_ENGINE_VOLUMES ?? join(tmpdir(), 'fake-engine-volumes');
+const mounted = (at) => {
+  const v = args.find((a, i) => args[i - 1] === '--volume' && (a.includes(`:${at}:`) || a.endsWith(`:${at}`)));
+  return v?.slice(0, v.lastIndexOf(`:${at}`));
+};
+const toolsIn = () => join(volumes, mounted('/tools'));
+const cli = (words, env) => {
+  const r = spawnSync(process.execPath, [fileURLToPath(new URL('./fake-escouade-plugin.mjs', import.meta.url)), ...words], {
+    encoding: 'utf8',
+    env: { PATH: process.env.PATH, ESCOUADE_DATA_DIR: toolsIn(), ...env },
+  });
+  process.stdout.write(r.stdout);
+  process.stderr.write(r.stderr);
+  process.exit(r.status);
+};
+if (args.includes('chown')) process.exit(0);
+if (args.includes('fetch')) cli(['fetch', mounted('/plugin'), ...args.slice(args.indexOf('fetch') + 2)]);
+if (args.includes('--out')) {
+  if (!args.includes('--network=none') || !args.some((a) => a.endsWith(':/tools:ro'))) {
+    console.error('build was given a network, or the tools to write to');
+    process.exit(1);
+  }
+  const out = join(volumes, mounted('/work'), 'out');
+  mkdirSync(out, { recursive: true });
+  const words = args.slice(args.indexOf('build'));
+  words[words.indexOf('/plugin')] = mounted('/plugin');
+  words[words.indexOf('--out') + 1] = out;
+  cli(words, { CARGO_NET_OFFLINE: 'true' });
+}
+if (args.some((a) => a.includes('cat /work/out'))) {
+  if (!args.includes('--network=none')) process.exit(1);
+  const out = join(volumes, mounted('/work'), 'out');
+  process.stdout.write(
+    readFileSync(
+      join(
+        out,
+        readdirSync(out).find((n) => n.endsWith('.wasm')),
+      ),
+    ),
+  );
+  process.exit(0);
+}
 const mode = process.env.FAKE_ENGINE_MODE ?? 'pass';
 const outcomes = (verdict) => [
   { scenario: 'manifest', verdict: 'pass', said: 'le manifeste tient' },

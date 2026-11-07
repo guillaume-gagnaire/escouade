@@ -1,0 +1,100 @@
+diff --git a/src/components/plugins/InstallModal.svelte b/src/components/plugins/InstallModal.svelte
+index 96c6b1b6..596715f8 100644
+--- a/src/components/plugins/InstallModal.svelte
++++ b/src/components/plugins/InstallModal.svelte
+@@ -95,7 +95,7 @@
+           <h3>
+             {p.name}
+             {#if p.verified}<Seal version={p.version} long />{:else}<span class="ptag"
+-                >{dev ? t('plugins.tag.dev') : t('plugins.tag.unverified')}</span
++                >{dev ? t('plugins.tag.dev') : t('plugins.tag.unreviewed')}</span
+               >{/if}
+           </h3>
+           <div class="ln">
+diff --git a/src/components/plugins/PluginPage.svelte b/src/components/plugins/PluginPage.svelte
+index bdabb8b4..fa897940 100644
+--- a/src/components/plugins/PluginPage.svelte
++++ b/src/components/plugins/PluginPage.svelte
+@@ -71,7 +71,7 @@
+           {#if plugin.verified}
+             <Seal version={plugin.version} long />
+           {:else}
+-            <span class="ptag">{dev ? t('plugins.tag.dev') : t('plugins.tag.unverified')}</span>
++            <span class="ptag">{dev ? t('plugins.tag.dev') : t('plugins.tag.unreviewed')}</span>
+             {#if plugin.version}<span class="ptag mono">{t('plugins.version', { version: plugin.version })}</span>{/if}
+           {/if}
+           {#if state}<span class="ptag" class:bad={plugin.state.kind !== 'ready'}>{state}</span>{/if}
+diff --git a/src/components/plugins/PluginRows.svelte b/src/components/plugins/PluginRows.svelte
+index 75a930ce..ba1ba417 100644
+--- a/src/components/plugins/PluginRows.svelte
++++ b/src/components/plugins/PluginRows.svelte
+@@ -47,7 +47,7 @@
+         {:else}
+           {#if p.version}<span class="tag mono">{t('plugins.version', { version: p.version })}</span>{/if}
+           {#if p.origin.kind === 'dev'}<span class="tag">{t('plugins.tag.dev')}</span>{:else}<span class="tag"
+-              >{t('plugins.tag.unverified')}</span
++              >{t('plugins.tag.unreviewed')}</span
+             >{/if}
+         {/if}
+         {#if p.withdrawn?.action === 'disable'}<span class="tag r">{t('plugins.state.disabled')}</span>{/if}
+diff --git a/src/components/plugins/StorePluginPage.svelte b/src/components/plugins/StorePluginPage.svelte
+index 4352cc41..2099164f 100644
+--- a/src/components/plugins/StorePluginPage.svelte
++++ b/src/components/plugins/StorePluginPage.svelte
+@@ -52,7 +52,7 @@
+       <div class="who">
+         <h2>
+           {name}
+-          {#if best && sealed(best)}<Seal version={best.version} long />{:else}<span class="ptag">{t('plugins.tag.unverified')}</span>{/if}
++          {#if best && sealed(best)}<Seal version={best.version} long />{:else}<span class="ptag">{t('plugins.tag.unreviewed')}</span>{/if}
+         </h2>
+         <div class="meta">
+           {#if p.author}<span class="soft">{p.author}</span>{/if}
+@@ -112,7 +112,7 @@
+                   · {t('plugins.store.yanked')}{/if}{#if v.version === best?.version}
+                   · {t('plugins.store.forThis')}{/if}</span
+               >
+-              {#if sealed(v)}<Seal version={v.version} bare />{:else}<span class="ptag">{t('plugins.tag.unverified')}</span>{/if}
++              {#if sealed(v)}<Seal version={v.version} bare />{:else}<span class="ptag">{t('plugins.tag.unreviewed')}</span>{/if}
+             </div>
+           {/each}
+         </div>
+diff --git a/src/components/plugins/StoreRow.svelte b/src/components/plugins/StoreRow.svelte
+index 69179c3b..cbf93e76 100644
+--- a/src/components/plugins/StoreRow.svelte
++++ b/src/components/plugins/StoreRow.svelte
+@@ -25,7 +25,7 @@
+   <div class="mid">
+     <div class="l1">
+       <button class="nm" onclick={() => plugins.openStorePlugin(p.id)}><b>{name}</b></button>
+-      {#if best && sealed(best)}<Seal version={best.version} />{:else if best}<span class="tag">{t('plugins.tag.unverified')}</span>{/if}
++      {#if best && sealed(best)}<Seal version={best.version} />{:else if best}<span class="tag">{t('plugins.tag.unreviewed')}</span>{/if}
+       <span class="by">{[p.author, count(p.installs, lang)].filter(Boolean).join(' · ')}</span>
+     </div>
+     <div class="d">{textOf(p.description, lang)}</div>
+diff --git a/src/lib/i18n/en/plugins.ts b/src/lib/i18n/en/plugins.ts
+index 0d172067..fd2b220e 100644
+--- a/src/lib/i18n/en/plugins.ts
++++ b/src/lib/i18n/en/plugins.ts
+@@ -158,7 +158,7 @@ export default defineZone('plugins', {
+   },
+ 
+   tag: {
+-    unverified: 'Not verified',
++    unreviewed: 'Not verified',
+     dev: 'In development',
+     update: 'v{version} available',
+     updateUnverified: 'v{version} · not verified',
+diff --git a/src/lib/i18n/fr/plugins.ts b/src/lib/i18n/fr/plugins.ts
+index e58c5255..7b2a4720 100644
+--- a/src/lib/i18n/fr/plugins.ts
++++ b/src/lib/i18n/fr/plugins.ts
+@@ -157,7 +157,7 @@ export default {
+   },
+ 
+   tag: {
+-    unverified: 'Non vérifié',
++    unreviewed: 'Non vérifié',
+     dev: 'En développement',
+     update: 'v{version} disponible',
+     updateUnverified: 'v{version} · non vérifiée',

@@ -1,15 +1,16 @@
 //! Azure DevOps against a fake server fed with answers shaped after Microsoft's documentation
 //! (`tests/fixtures/forges/azure/`): its remotes in every form, its account (a PAT in Basic, `az`'s
 //! token in Bearer), each call of its pull requests' client, and its refusals.
+//!
+//! Since INT-8.5 the client is the plugin « Azure DevOps »'s (`plugins/azure-devops`): an account's
+//! calls go to its module by `ProcessForge`, as the core makes them, and the plugin
+//! calls the fake server; the tests that set the client's pace use it in process.
 
 use super::azure::{AzureProvider, CLOUD};
-use super::azure_api::{allowed_by, Azure};
-use super::github_api::Pace;
 use super::*;
 use crate::integrations::fake::FakeServer;
 use base64::Engine;
 use serde_json::json;
-use std::time::Duration;
 
 fn fixture(name: &str) -> Value {
     let text = match name {
@@ -44,21 +45,23 @@ fn repo() -> RepoRef {
     }
 }
 
+/// The client of an account, served by the plugin the app gives for Azure DevOps, its token lent as the core lends it.
+fn served(creds: &Credentials) -> Box<dyn Forge> {
+    crate::plugins::builtin::served_forge(crate::plugins::builtin::AZURE_DEVOPS, "azure", creds)
+}
+
 /// The client of the organization acme on dev.azure.com, its API being the fake server.
 fn client(server: &FakeServer) -> Box<dyn Forge> {
     client_with(server, "pat-secret")
 }
 
 fn client_with(server: &FakeServer, token: &str) -> Box<dyn Forge> {
-    AzureProvider.client(
-        reqwest::Client::new(),
-        &Credentials {
-            url: "https://dev.azure.com/acme".into(),
-            token: token.into(),
-            api: Some(server.url.clone()),
-            ..Default::default()
-        },
-    )
+    served(&Credentials {
+        url: "https://dev.azure.com/acme".into(),
+        token: token.into(),
+        api: Some(server.url.clone()),
+        ..Default::default()
+    })
 }
 
 /// The pull request 22 and what is read with it: its threads and its checks.
@@ -200,10 +203,10 @@ fn the_account_is_an_organizations_and_its_token_page_and_cli_are_azures() {
         .windows(2)
         .any(|w| w == ["--resource", "499b84ac-1321-427f-aa17-267ca6975798"]));
     assert_eq!(
-        (az.parse)("eyJ0.eyJ1.c2ln\r\n", ""),
+        az.parse("eyJ0.eyJ1.c2ln\r\n", ""),
         Some("eyJ0.eyJ1.c2ln".into())
     );
-    assert_eq!((az.parse)("", "ERROR: Please run 'az login'"), None);
+    assert_eq!(az.parse("", "ERROR: Please run 'az login'"), None);
     // A Server knows no Entra ID token.
     assert!(p.cli("tfs.acme.dev").is_none());
     let caps = p.capabilities();
@@ -272,15 +275,12 @@ async fn an_account_without_an_organization_reads_the_profile() {
         200,
         json!({"displayName": "Ada Lovelace", "publicAlias": "6f7e", "emailAddress": "ada@acme.dev", "id": "6f7e"}),
     );
-    let forge = AzureProvider.client(
-        reqwest::Client::new(),
-        &Credentials {
-            url: "https://dev.azure.com".into(),
-            token: "pat".into(),
-            api: Some(server.url.clone()),
-            ..Default::default()
-        },
-    );
+    let forge = served(&Credentials {
+        url: "https://dev.azure.com".into(),
+        token: "pat".into(),
+        api: Some(server.url.clone()),
+        ..Default::default()
+    });
     assert_eq!(forge.me().await.unwrap().label, "ada@acme.dev");
     assert_eq!(
         server.requests()[0].query("api-version").as_deref(),
@@ -346,62 +346,6 @@ async fn a_denied_or_missing_resource_says_what_azure_said() {
 }
 
 #[tokio::test]
-async fn a_limit_is_waited_out_then_asked_once_more() {
-    let server = FakeServer::start().await;
-    server.on(
-        "GET",
-        "/acme/_apis/connectionData",
-        200,
-        fixture("connection-data"),
-    );
-    server.on_once(
-        "GET",
-        "/acme/_apis/connectionData",
-        429,
-        json!({"message": "Request was blocked due to exceeding usage of resource."}),
-        &[("retry-after", "30")],
-    );
-    let azure = Azure::new(
-        reqwest::Client::new(),
-        "https://dev.azure.com/acme".into(),
-        Some(server.url.clone()),
-        "pat".into(),
-    )
-    .with_pace(Pace {
-        slow_below: 0.1,
-        max_wait: Duration::from_millis(300),
-    });
-    let before = std::time::Instant::now();
-    assert_eq!(azure.me().await.unwrap().user, "ada@acme.dev");
-    let elapsed = before.elapsed();
-    assert!(elapsed >= Duration::from_millis(250), "waited: {elapsed:?}");
-    assert!(azure.waited() >= Duration::from_millis(250));
-    assert_eq!(requests_to(&server, "/acme/_apis/connectionData"), 2);
-
-    // A limit that holds is said after that one more try.
-    let server = FakeServer::start().await;
-    server.on_with(
-        "GET",
-        "/acme/_apis/connectionData",
-        503,
-        json!({"message": "Service unavailable"}),
-        &[("retry-after", "1")],
-    );
-    let azure = Azure::new(
-        reqwest::Client::new(),
-        "https://dev.azure.com/acme".into(),
-        Some(server.url.clone()),
-        "pat".into(),
-    )
-    .with_pace(Pace {
-        slow_below: 0.1,
-        max_wait: Duration::from_millis(50),
-    });
-    assert!(format!("{:#}", azure.me().await.unwrap_err()).contains("503"));
-    assert_eq!(requests_to(&server, "/acme/_apis/connectionData"), 2);
-}
-
-#[tokio::test]
 async fn the_limits_headers_are_kept() {
     let server = FakeServer::start().await;
     server.on_with(
@@ -450,6 +394,8 @@ async fn a_pull_request_is_read_with_its_votes_threads_and_checks() {
     assert!(pr.changes_requested);
     // One thread on a line still active (another fixed, one deleted, one not on a line).
     assert_eq!(pr.open_threads, 1);
+    // Every person asked has voted; a team is never one whose review is asked (ESC-65).
+    assert!(pr.reviewers.is_empty());
     assert!(!pr.auto_merge);
     assert!(!pr.fork);
     assert_eq!(pr.checks, Some(CheckState::Failure));
@@ -739,22 +685,6 @@ async fn without_a_merge_policy_every_strategy_is_asked() {
     assert_eq!(
         server.writes()[0].json()["completionOptions"]["mergeStrategy"],
         "rebase"
-    );
-}
-
-#[test]
-fn a_merge_policy_says_its_strategies_its_former_setting_too() {
-    assert_eq!(
-        allowed_by(&json!({"allowNoFastForward": true, "allowSquash": true})),
-        [MergeStrategy::Merge, MergeStrategy::Squash]
-    );
-    assert_eq!(
-        allowed_by(&json!({"useSquashMerge": true})),
-        [MergeStrategy::Squash]
-    );
-    assert_eq!(
-        allowed_by(&json!({"useSquashMerge": false})),
-        [MergeStrategy::Merge]
     );
 }
 
@@ -1081,14 +1011,11 @@ async fn a_server_is_reached_under_its_collection() {
         200,
         json!({"value": []}),
     );
-    let forge = AzureProvider.client(
-        reqwest::Client::new(),
-        &Credentials {
-            url: format!("{}/tfs/DefaultCollection", server.url),
-            token: "pat".into(),
-            ..Default::default()
-        },
-    );
+    let forge = served(&Credentials {
+        url: format!("{}/tfs/DefaultCollection", server.url),
+        token: "pat".into(),
+        ..Default::default()
+    });
     assert_eq!(forge.me().await.unwrap().label, "ada@acme.dev");
     let repo = RepoRef {
         namespace: "DefaultCollection/Demo Project".into(),
@@ -1120,119 +1047,92 @@ fn an_entra_id_token_is_asked_again_before_it_ends() {
     assert!(!expires_soon("pat-52-characters", 1_000));
 }
 
-// ---- A real organization ----
-
-/// Reads and writes on a real Azure DevOps project with a PAT of the user's (Code read and
-/// write, Build read and execute), on a test repository whose branch `ESCOUADE_TEST_AZURE_BRANCH`
-/// is pushed and has no pull request yet:
-///
-/// ```text
-/// ESCOUADE_TEST_AZURE_URL=https://dev.azure.com/<org> ESCOUADE_TEST_AZURE_REPO=<org>/<projet>/<dépôt>
-/// ESCOUADE_TEST_AZURE_PAT=<jeton> ESCOUADE_TEST_AZURE_BRANCH=<branche> [ESCOUADE_TEST_AZURE_BASE=main]
-/// cargo test --lib real_azure_devops -- --ignored --nocapture
-/// ```
-///
-/// It opens a draft pull request, reads it back (with its checks and threads), comments, answers
-/// and resolves, publishes a review without a vote, reads a failed build's log when there is one,
-/// then abandons the pull request. Nothing else is touched; without its variables it does nothing.
+/// A branch's checks (ESC-63): the last status of each context of its last commit, and the
+/// newest build of each pipeline that built it in this repository; failed builds retried.
 #[tokio::test]
-#[ignore = "talks to a real Azure DevOps organization"]
-async fn real_azure_devops() {
-    let (Ok(url), Ok(full), Ok(token), Ok(branch)) = (
-        std::env::var("ESCOUADE_TEST_AZURE_URL"),
-        std::env::var("ESCOUADE_TEST_AZURE_REPO"),
-        std::env::var("ESCOUADE_TEST_AZURE_PAT"),
-        std::env::var("ESCOUADE_TEST_AZURE_BRANCH"),
-    ) else {
-        return;
-    };
-    let base = std::env::var("ESCOUADE_TEST_AZURE_BASE").unwrap_or_else(|_| "main".into());
-    let segments: Vec<&str> = full.split('/').collect();
-    let [org, project, name] = segments[..] else {
-        panic!("ESCOUADE_TEST_AZURE_REPO: <org>/<projet>/<dépôt>");
-    };
-    let repo = RepoRef {
-        namespace: format!("{org}/{project}"),
-        name: name.into(),
-    };
-    let forge = AzureProvider.client(
-        reqwest::Client::new(),
-        &Credentials {
-            url: AzureProvider.instance(instance_url(&url)),
-            token,
-            ..Default::default()
-        },
+async fn a_branchs_checks_are_its_commits_statuses_and_its_builds() {
+    let server = FakeServer::start().await;
+    server.on(
+        "GET",
+        &format!("{REPO}/refs"),
+        200,
+        json!({ "value": [
+            { "name": "refs/heads/main-old", "objectId": "0000" },
+            { "name": "refs/heads/main", "objectId": "abc123" },
+        ] }),
     );
-    let me = forge.me().await.unwrap();
-    println!("me: {me:?}");
-    let pr = forge
-        .create_pr(
-            &repo,
-            &PullRequestDraft {
-                title: "Essai d'Escouade (ESC-241)".into(),
-                body: "Ouverte et abandonnée par `real_azure_devops`.".into(),
-                head: branch.clone(),
-                base,
-                draft: true,
-                ..Default::default()
-            },
-        )
+    server.on(
+        "GET",
+        &format!("{REPO}/commits/abc123/statuses"),
+        200,
+        fixture("statuses"),
+    );
+    server.on(
+        "GET",
+        &format!("{PROJECT}/build/builds"),
+        200,
+        json!({ "value": [
+            { "id": 61, "status": "completed", "result": "failed", "sourceVersion": "abc123",
+              "definition": { "id": 7, "name": "CI" }, "repository": { "name": "demo" } },
+            { "id": 60, "status": "completed", "result": "succeeded", "sourceVersion": "abc123",
+              "definition": { "id": 7, "name": "CI" }, "repository": { "name": "demo" } },
+            { "id": 62, "status": "completed", "result": "failed", "sourceVersion": "abc123",
+              "definition": { "id": 8, "name": "Other" }, "repository": { "name": "other" } },
+            { "id": 59, "status": "completed", "result": "failed", "sourceVersion": "0ld",
+              "definition": { "id": 9, "name": "Old" }, "repository": { "name": "demo" } },
+        ] }),
+    );
+    let checks = client(&server)
+        .branch_checks(&repo(), "main")
         .await
         .unwrap();
-    println!("opened: {pr:?}");
-    assert!(pr.draft);
-    let read = forge.pull_request(&repo, pr.number).await.unwrap();
-    println!("read: {read:#?}");
-    let of_branch = forge.pull_requests_of_branch(&repo, &branch).await.unwrap();
-    assert_eq!(of_branch[0].number, pr.number);
-    let checks = forge.checks(&repo, pr.number).await.unwrap();
-    println!("checks: {checks:#?}");
-    if let Some(job) = checks
-        .iter()
-        .find(|c| c.state == CheckState::Failure)
-        .and_then(|c| c.job.clone())
-    {
-        let log = forge.job_log(&repo, &job).await.unwrap();
-        println!("log: {}", &log[..log.len().min(400)]);
-    }
-    forge
-        .comment(&repo, pr.number, "Commentaire d'essai.")
-        .await
+    let ci: Vec<_> = checks.iter().filter(|c| c.job.is_some()).collect();
+    assert_eq!(ci.len(), 1, "{checks:?}");
+    assert_eq!(
+        (ci[0].name.as_str(), ci[0].state, ci[0].job.as_deref()),
+        ("CI", CheckState::Failure, Some("61"))
+    );
+    let sonar = checks.iter().find(|c| c.name == "quality/sonar").unwrap();
+    assert_eq!(sonar.state, CheckState::Success, "its last status");
+    let asked = server
+        .requests()
+        .into_iter()
+        .find(|r| r.path().ends_with("/build/builds"))
         .unwrap();
-    forge
-        .review(
-            &repo,
-            pr.number,
-            &ReviewDraft {
-                state: ReviewState::Commented,
-                body: "Relecture d'essai.".into(),
-                lines: vec![],
-            },
-        )
-        .await
-        .unwrap();
-    let comments = forge.comments(&repo, pr.number).await.unwrap();
-    println!("comments: {comments:#?}");
-    if let Some(c) = comments.first() {
-        forge
-            .reply(&repo, pr.number, &c.id, "Réponse d'essai.")
+    assert_eq!(
+        asked.query("branchName").as_deref(),
+        Some("refs/heads/main")
+    );
+    server.on(
+        "PATCH",
+        &format!("{PROJECT}/build/builds/61"),
+        200,
+        json!({ "id": 61 }),
+    );
+    assert_eq!(
+        client(&server)
+            .rerun_failed_of_branch(&repo(), "main")
             .await
-            .unwrap();
-        forge.resolve(&repo, pr.number, &c.id).await.unwrap();
-    }
-    println!(
-        "reviews: {:?}",
-        forge.reviews(&repo, pr.number).await.unwrap()
+            .unwrap(),
+        1
     );
-    println!("rate limit: {:?}", forge.rate_limit());
-    // Abandoned: the test leaves nothing open.
-    let azure = Azure::new(
-        reqwest::Client::new(),
-        AzureProvider.instance(instance_url(&url)),
-        None,
-        std::env::var("ESCOUADE_TEST_AZURE_PAT").unwrap(),
+}
+
+/// How a pull request may merge (ESC-62): its branch's merge policy, and auto-complete.
+#[tokio::test]
+async fn the_branchs_policy_says_how_a_pull_request_may_merge() {
+    let server = FakeServer::start().await;
+    server.on("GET", PR, 200, fixture("pull-request"));
+    server.on(
+        "GET",
+        &format!("{PROJECT}/git/policy/configurations"),
+        200,
+        fixture("policy-configurations"),
     );
-    azure.abandon(&repo, pr.number).await.unwrap();
-    let after = forge.pull_request(&repo, pr.number).await.unwrap();
-    assert_eq!(after.state, PrState::Closed);
+    let o = client(&server).merge_options(&repo(), 22).await.unwrap();
+    assert_eq!(
+        o.strategies,
+        vec![MergeStrategy::Squash, MergeStrategy::SemiLinear]
+    );
+    assert!(o.auto_merge);
 }

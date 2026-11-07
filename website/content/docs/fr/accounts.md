@@ -140,14 +140,17 @@ Sous la liste, une ligne ambre apparaît quand un projet n’a plus aucun compte
 Un nouvel agent, ou un ticket que le pilote auto prend, part sur :
 
 1. le « Compte préféré » du projet, s’il en a un, que ce compte est actif et qu’il sert ce projet ;
-2. sinon le premier compte actif de la liste, dans l’ordre, qui sert le projet et dont les quotas ne sont pas au seuil de « Pause au-delà du quota » (un compte qui vient de buter sur sa limite d’usage est aussi écarté) ;
-3. si aucun compte n’est sous le seuil, le premier compte actif. Le [pilote auto](autopilot) se met alors en pause.
+2. sinon le premier compte « bon » de la liste, dans l’ordre, qui sert le projet (un compte qui vient de buter sur sa limite d’usage est aussi écarté) ;
+3. si aucun compte n’est bon, d’abord le premier dont seul le rythme est mauvais, sinon le premier compte actif. Le [pilote auto](autopilot) se met alors en pause.
 
-L’ordre de la liste décide donc : mets en tête le compte que tu veux user en premier.
+L’ordre de la liste décide donc : mets en tête le compte que tu veux user en premier. Le choix ne classe jamais les comptes par pourcentage ; il dit seulement ce qu’est un compte « bon », fenêtre par fenêtre :
 
-Le seuil se règle dans Réglages › Kanban, groupe « Pilote auto » : 80, 90, 95 ou 100 % (100 % par défaut), pour tous les projets. Il est détaillé dans [les réglages du Kanban](settings-board).
+- une **fenêtre courte** (la 5 h) est une pause courte : au seuil, le compte est écarté jusqu’à sa remise à zéro, puis il redevient un candidat comme les autres, sans laisser de trace sur la semaine ;
+- une **fenêtre longue** (la semaine, les 30 jours de l’offre gratuite de Codex, les crédits du mois de Copilot CLI) se juge au rythme, avec la projection à la remise à zéro que montre la barre d’état : à 100 % elle est écartée jusqu’à sa remise à zéro ; projetée à 100 % ou moins, elle reste bonne, même au-dessus du seuil (une semaine à 88 % qui se remet à zéro dans 3 h ne se gaspille pas) ; projetée au-delà de 100 %, le compte passe derrière les autres, même sous le seuil ; à 95 % ou plus, il passe aussi derrière les autres, quel que soit son rythme ; sans projection (première journée de la fenêtre), le seuil décide.
 
-Quand le compte qui recevait les nouveaux agents passe le seuil et qu’un autre est disponible, une notification le dit : « Le compte Principal a atteint 91 % : les nouveaux agents partent sur Pro. »
+Le seuil se règle dans Réglages › Kanban, groupe « Pilote auto » : 80, 90, 95 ou 100 % (100 % par défaut), pour tous les projets. Il est détaillé dans [les réglages du Kanban](settings-board). Ce plafond reste le tien : le pilote auto se met en pause à ce pourcentage, sans regarder le rythme, et avec un plafond sous 100 % un compte jugé bon peut donc être retenu par le pilote auto, qui passe alors au suivant.
+
+Quand le compte qui recevait les nouveaux agents est écarté et qu’un autre est disponible, une notification le dit : « Le compte Principal a atteint 91 % : les nouveaux agents partent sur Pro. », ou, quand seul son rythme le met derrière, « Le compte Principal finirait à 140 % de sa fenêtre hebdomadaire au rythme actuel : les nouveaux agents partent sur Pro. »
 
 ### Le compte préféré d’un projet
 
@@ -162,7 +165,7 @@ Un compte préféré qui est devenu inactif, qui est réservé à d’autres pro
 
 Avec plusieurs comptes, le champ de saisie d’un agent (voir [le chat](chat)) a un menu « Compte » à côté du modèle. Tant que tu n’as rien écrit à l’agent, il propose :
 
-- « Automatique (Pro) » : le compte que le choix automatique prendrait maintenant (« Celui du projet, sinon le premier compte sous les seuils de pause et de changement de compte. ») ;
+- « Automatique (Pro) » : le compte que le choix automatique prendrait maintenant (« Celui du projet, sinon le premier compte dont la 5 h est sous les seuils de pause et de changement de compte et dont la semaine tient son rythme. ») ;
 - chaque compte actif qui sert le projet.
 
 Choisir un compte change celui de l’agent avant qu’il ne démarre.
@@ -219,7 +222,7 @@ Ce qu’un nouveau compte partage avec Principal à sa création (réglages, ins
 
 ## Changer de compte avant la limite
 
-Le réglage « Changer de compte à » (Réglages › Comptes, groupe « Quotas ») fait passer un agent sur un autre compte quand le sien approche de la limite : à 80 %, 90 % ou 95 % de sa fenêtre de 5 h ou de sa fenêtre hebdomadaire, la première atteinte. Par défaut, il est « À la limite » : rien ne bouge avant, comme avant ce réglage.
+Le réglage « Changer de compte à » (Réglages › Comptes, groupe « Quotas ») fait passer un agent sur un autre compte quand le sien approche de la limite : quand sa fenêtre de 5 h atteint 80 %, 90 % ou 95 %, ou quand sa fenêtre hebdomadaire atteint ce seuil sans tenir jusqu’à sa remise à zéro au rythme actuel (une semaine à 88 % qui se remet à zéro dans 3 h ne bouge pas). Par défaut, il est « À la limite » : un agent déjà lancé ne bouge pas avant 100 %. Ce réglage ne change pas le choix des nouveaux agents : ils suivent toujours la règle ci-dessus, « À la limite » compris.
 
 Au seuil, l’agent ne s’arrête jamais en plein travail :
 
@@ -227,11 +230,11 @@ Au seuil, l’agent ne s’arrête jamais en plein travail :
 - s’il attend ta réponse (une question, une permission) ou si une tâche tourne en arrière-plan dans son process (une commande, une surveillance, un sous-agent), il reste tant qu’elles sont là, et passe à la première fin de tour sans elles ;
 - les agents ordinaires comme ceux des tickets passent ; les nouveaux agents partent directement sur l’autre compte.
 
-Le compte d’arrivée est le compte préféré du projet, sinon le premier de la liste, à condition qu’il serve le projet, soit connecté et reste lui-même sous le seuil. Un projet privé qui n’a pas allumé « Comptes partagés à la limite » ne passe que sur un compte réservé à lui seul. Seul Claude Code déplace un agent déjà lancé : un agent Codex, Copilot CLI ou OpenCode reste sur son compte, ses nouveaux agents suivent le seuil.
+Le compte d’arrivée est le compte préféré du projet, sinon le premier de la liste, à condition qu’il serve le projet, soit connecté et que l’agent ne le quitte pas aussitôt (ni 5 h au seuil, ni semaine au seuil à mauvais rythme). Un projet privé qui n’a pas allumé « Comptes partagés à la limite » ne passe que sur un compte réservé à lui seul. Seul Claude Code déplace un agent déjà lancé : un agent Codex, Copilot CLI ou OpenCode reste sur son compte, ses nouveaux agents suivent le seuil.
 
-La conversation le dit (« L’agent passe sur le compte Pro : Principal est à 96 % de sa fenêtre de 5 h. »), une notification aussi, et le menu « Compte » de l’agent montre le nouveau compte une fois son process relancé dessus.
+La conversation le dit (« L’agent passe sur le compte Pro : Principal est à 96 % de sa fenêtre de 5 h. », et pour une semaine, « … est à 96 % de sa fenêtre hebdomadaire (au rythme actuel, 168 % à sa remise à zéro). »), une notification aussi, et le menu « Compte » de l’agent montre le nouveau compte une fois son process relancé dessus.
 
-Sans compte utilisable, l’agent reste où il est et sa conversation dit pourquoi, une fois : « Principal est à 96 % de sa fenêtre de 5 h, mais aucun autre compte Claude Code ne peut prendre l’agent (sous le seuil, connecté, servant ce projet) : il y reste. » Si ce compte continue en usage supplémentaire, elle ajoute : « Ce compte est en usage supplémentaire, facturé à part. »
+Sans compte utilisable, l’agent reste où il est et sa conversation dit pourquoi, une fois : « Principal est à 96 % de sa fenêtre de 5 h, mais aucun autre compte Claude Code ne peut prendre l’agent (sous le seuil ou à bon rythme, connecté, servant ce projet) : il y reste. » Si ce compte continue en usage supplémentaire, elle ajoute : « Ce compte est en usage supplémentaire, facturé à part. »
 
 Pas de va-et-vient : un agent passé sur un compte ne le quitte que quand celui-ci atteint le seuil à son tour, et le premier ne redevient un choix qu’à sa remise à zéro.
 

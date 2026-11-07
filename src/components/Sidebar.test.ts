@@ -1,12 +1,26 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { getDraft } from '../lib/drafts';
 import { buffers } from '../lib/editor/buffers.svelte';
+import { heldOf, hold } from '../lib/outbox.svelte';
 import { setLang } from '../lib/i18n';
 import { menu } from '../lib/menu.svelte';
 import { app } from '../lib/state.svelte';
 import { openTerminal } from '../lib/terminals';
-import { agent, BARE_ENGINE, branchInfo, CLAUDE_ENGINE, fakeBackend, gitInfo, project, pullRequest, resetApp, ticket } from '../test/ipc';
+import {
+  agent,
+  BARE_ENGINE,
+  branchCi,
+  branchInfo,
+  CLAUDE_ENGINE,
+  fakeBackend,
+  gitInfo,
+  project,
+  pullRequest,
+  resetApp,
+  ticket,
+} from '../test/ipc';
 import ContextMenu from './ContextMenu.svelte';
 import Sidebar from './Sidebar.svelte';
 import { getByTip } from '../test/tip';
@@ -736,6 +750,18 @@ describe('Sidebar remote control', () => {
       click('Archiver');
       await new Promise((r) => setTimeout(r));
       expect(order(backend, 'archive_agent')).toEqual(['term_kill', 'archive_agent']);
+    });
+
+    it('gives the messages held for it back to its draft, before archiving it', async () => {
+      const backend = fakeBackend();
+      render(Sidebar, { project: project() });
+      hold('a1', 'Pas perdu', [], 'turnEnd');
+      await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+      click('Archiver');
+      expect(heldOf('a1')).toEqual([]);
+      expect(getDraft('a1').text).toBe('Pas perdu');
+      await new Promise((r) => setTimeout(r));
+      expect(backend.called('archive_agent')).toHaveLength(1);
     });
 
     it('stops them before deleting their agent', async () => {
@@ -1526,6 +1552,25 @@ describe('Sidebar editor entries', () => {
     app.openBoard('p1');
     await userEvent.click(screen.getByRole('button', { name: /refacto-auth/ }));
     expect(app.boardOn).toBe(false);
+  });
+
+  it('opens the project’s « Pull requests » beside the Kanban, in the host’s word (ESC-65)', async () => {
+    resetApp({ projects: [project()], agents: [agent()] });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const tab = screen.getByRole('button', { name: 'PR' });
+    await userEvent.click(tab);
+    expect(app.prsOn).toBe(true);
+    expect(tab).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^Kanban/ })).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(screen.getByRole('button', { name: /^Kanban/ }));
+    expect(app.prsOn).toBe(false);
+    app.openPrs('p1');
+    await userEvent.click(screen.getByRole('button', { name: /refacto-auth/ }));
+    expect(app.prsOn).toBe(false);
+    // GitLab's word, once read.
+    app.prWords.p1 = 'MR';
+    expect(await screen.findByRole('button', { name: 'MR' })).toBeInTheDocument();
   });
 });
 
@@ -2765,6 +2810,14 @@ describe('Sidebar — an agent’s pull requests (ESC-64)', () => {
       'PR #12 · Connexion par jeton\nouverte · CI en échec · changements demandés · 2 fils ouverts',
     );
     expect(tipped).toBe(group.getByRole('button', { name: /PR #12/ }));
+    // « #12 → main » with its CI in words (ESC-305); a closed one's CI no more.
+    const rows = screen.getByRole('group', { name: 'Pull requests de refacto-auth' }).querySelectorAll('.pr');
+    expect(rows[0]).toHaveTextContent('#12 → main CI en échec');
+    expect(rows[2]).toHaveTextContent('#5 → main');
+    expect(rows[2]).not.toHaveTextContent('CI');
+    // Its CI opens the side panel's « PR et CI » on it.
+    await userEvent.click(group.getByRole('button', { name: 'CI en échec' }));
+    expect([app.panelTab, app.filesOpen]).toEqual(['hosts', true]);
     // Only the open one has something to correct; nothing was sent by itself.
     expect(group.getAllByRole('button', { name: 'L’agent corrige' })).toHaveLength(1);
     expect(group.getAllByRole('button', { name: 'L’agent corrige les retours' })).toHaveLength(1);
@@ -2803,6 +2856,40 @@ describe('Sidebar — an agent’s pull requests (ESC-64)', () => {
     // A branch, but no code host that opens pull requests (no remote, GitLab for now, no account).
     await fireEvent.contextMenu(screen.getByRole('button', { name: /sans-hebergeur/ }));
     expect(menu.open!.items.map((i) => i.label)).not.toContain('Ouvrir une PR…');
+  });
+
+  it('says under the card that its code host’s plugin is stopped, and keeps the pull requests read last (INT-8.1)', async () => {
+    resetApp({
+      projects: [project()],
+      agents: [
+        agent({
+          worktree: WT,
+          prs: [pullRequest({ number: 12 })],
+          prWord: 'PR',
+          prDown: 'Le plugin dev.escouade.github ne répond pas : dev.escouade.github is switched off',
+        }),
+      ],
+    });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const down = document.querySelector('[data-pr-down]')!;
+    expect(down).toHaveTextContent('Hébergeur arrêté : PR plus suivies');
+    expect(down).toHaveAttribute('data-pr-down');
+    expect(within(screen.getByRole('group', { name: 'Pull requests de refacto-auth' })).getByText(/#12/)).toBeInTheDocument();
+  });
+
+  it('shows under the card the CI of its branch pushed without a pull request, its jobs on a click (ESC-63)', async () => {
+    resetApp({
+      projects: [project()],
+      agents: [agent({ worktree: WT, prWord: 'PR', branchCi: branchCi({ branch: WT.branch }) })],
+    });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const group = within(screen.getByRole('group', { name: 'Pull requests de refacto-auth' }));
+    const pill = group.getByRole('button', { name: new RegExp(`^CI de ${WT.branch}`) });
+    expect(pill).toHaveTextContent(`${WT.branch} ✗ depuis 2 h`);
+    await userEvent.click(pill);
+    expect(app.modal).toEqual({ kind: 'ci', of: { kind: 'agent', id: 'a1' }, projectId: 'p1' });
   });
 
   it('says it in English', async () => {

@@ -1,0 +1,287 @@
+[
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/user"
+      }
+    ],
+    "error": null,
+    "method": "account/me",
+    "result": {
+      "label": "@ada",
+      "user": "ada"
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member"
+      }
+    ],
+    "error": null,
+    "method": "tickets/containers",
+    "result": [
+      {
+        "id": "acme/api",
+        "name": "acme/api"
+      }
+    ]
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/acme/api/labels?per_page=100"
+      }
+    ],
+    "error": null,
+    "method": "tickets/states",
+    "result": [
+      {
+        "id": "open",
+        "name": "Ouverte"
+      },
+      {
+        "id": "closed",
+        "name": "Fermée"
+      },
+      {
+        "id": "label:bug",
+        "name": "bug"
+      },
+      {
+        "id": "label:todo",
+        "name": "todo"
+      }
+    ]
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/acme/api/issues?state=open&per_page=100"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/acme/api/labels?per_page=100"
+      }
+    ],
+    "error": null,
+    "method": "tickets/issues",
+    "result": {
+      "filters": [
+        {
+          "id": "mine",
+          "label": "Assignées à moi"
+        },
+        {
+          "id": "label:bug",
+          "label": "bug"
+        },
+        {
+          "id": "label:todo",
+          "label": "todo"
+        }
+      ],
+      "issues": [
+        {
+          "container": "acme/api",
+          "criteria": ["Un critère"],
+          "description": "- [ ] Un critère",
+          "id": "1",
+          "imported": false,
+          "key": "#1",
+          "kind": "Issue",
+          "kindCode": "issue",
+          "meta": ["bug", "Non assignée"],
+          "service": "github",
+          "title": "Issue 1",
+          "url": "https://github.com/acme/api/issues/1"
+        },
+        {
+          "container": "acme/api",
+          "criteria": ["Un critère"],
+          "description": "- [ ] Un critère",
+          "id": "2",
+          "imported": false,
+          "key": "#2",
+          "kind": "Issue",
+          "kindCode": "issue",
+          "meta": ["bug", "Non assignée"],
+          "service": "github",
+          "title": "Issue 2",
+          "url": "https://github.com/acme/api/issues/2"
+        }
+      ],
+      "next": "2",
+      "total": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/acme/api/labels?per_page=100"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/search/issues?per_page=50&q=repo%3Aacme%2Fapi%20is%3Aissue%20is%3Aopen%20label%3A%22bug%22%20token"
+      }
+    ],
+    "error": null,
+    "method": "tickets/issues",
+    "result": {
+      "filters": [
+        {
+          "id": "mine",
+          "label": "Assignées à moi"
+        },
+        {
+          "id": "label:bug",
+          "label": "bug"
+        },
+        {
+          "id": "label:todo",
+          "label": "todo"
+        }
+      ],
+      "issues": [
+        {
+          "container": "acme/api",
+          "criteria": ["Un critère"],
+          "description": "- [ ] Un critère",
+          "id": "3",
+          "imported": false,
+          "key": "#3",
+          "kind": "Issue",
+          "kindCode": "issue",
+          "meta": ["bug", "Non assignée"],
+          "service": "github",
+          "title": "Issue 3",
+          "url": "https://github.com/acme/api/issues/3"
+        }
+      ],
+      "next": null,
+      "total": 1
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/acme/api/issues/42"
+      },
+      {
+        "body": "{\"state\":\"closed\",\"state_reason\":\"completed\"}",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "PATCH",
+        "target": "/repos/acme/api/issues/42"
+      }
+    ],
+    "error": null,
+    "method": "tickets/setState",
+    "result": null
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/acme/api/issues/42"
+      }
+    ],
+    "error": null,
+    "method": "tickets/setState",
+    "result": null
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"body\":\"Fait, voir la PR.\"}",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "POST",
+        "target": "/repos/acme/api/issues/42/comments"
+      }
+    ],
+    "error": {
+      "code": -32401,
+      "message": "GitHub refuse ces identifiants (401) — Bad credentials"
+    },
+    "method": "tickets/comment",
+    "result": null
+  },
+  {
+    "asked": [],
+    "error": {
+      "code": -32601,
+      "message": "no method tickets/nothing"
+    },
+    "method": "tickets/nothing",
+    "result": null
+  }
+]

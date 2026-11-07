@@ -1,0 +1,137 @@
+diff --git a/src-tauri/src/accounts.rs b/src-tauri/src/accounts.rs
+index e965e31d..c19cc379 100644
+--- a/src-tauri/src/accounts.rs
++++ b/src-tauri/src/accounts.rs
+@@ -620,18 +620,24 @@ pub fn switch_notice(
+ /// that no test ever reads or writes the user's own Claude Code (tests may run inside a Claude
+ /// Code session, with its CLAUDE_CONFIG_DIR). A real run by hand (`tui_tests::real_claude_view`)
+ /// gives the machine user's home in `ESCOUADE_TEST_REAL_HOME`.
+-pub(crate) fn app_env() -> (Option<String>, PathBuf) {
++pub(crate) fn app_env() -> AppEnv {
+     if cfg!(test) {
+         let home = std::env::var_os("ESCOUADE_TEST_REAL_HOME").map(PathBuf::from);
+-        return (
+-            None,
+-            home.unwrap_or_else(|| std::env::temp_dir().join("escouade-tests-no-home")),
+-        );
++        return AppEnv {
++            config_dir: None,
++            home: home.unwrap_or_else(|| std::env::temp_dir().join("escouade-tests-no-home")),
++        };
++    }
++    AppEnv {
++        config_dir: std::env::var(CONFIG_DIR_VAR).ok(),
++        home: dirs::home_dir().unwrap_or_default(),
+     }
+-    (
+-        std::env::var(CONFIG_DIR_VAR).ok(),
+-        dirs::home_dir().unwrap_or_default(),
+-    )
++}
++
++/// What `app_env` gives: the app's `CLAUDE_CONFIG_DIR` and the home folder.
++pub(crate) struct AppEnv {
++    pub config_dir: Option<String>,
++    pub home: PathBuf,
+ }
+ 
+ /// The app's `CLAUDE_CONFIG_DIR` and the home folder as the account's Claude Code goes by them
+@@ -643,7 +649,10 @@ pub(crate) fn claude_home(account: &Account, settings: &Settings) -> (Option<Str
+         .and_then(engine::Program::wsl)
+     {
+         Some(wsl) => (None, wsl.windows_path(&wsl.home)),
+-        None => app_env(),
++        None => {
++            let env = app_env();
++            (env.config_dir, env.home)
++        }
+     }
+ }
+ 
+@@ -654,7 +663,7 @@ pub(crate) fn claude_home(account: &Account, settings: &Settings) -> (Option<Str
+ pub fn config_dir(account: &Account, settings: &Settings) -> PathBuf {
+     if account.engine != EngineId::Claude {
+         let store = store(account.engine);
+-        let (_, home) = app_env();
++        let home = app_env().home;
+         // Never the machine user's in the tests (as `app_env`).
+         let env = (!cfg!(test))
+             .then(|| std::env::var(store.var).ok())
+@@ -2727,7 +2736,7 @@ impl<R: Runtime> Core<R> {
+             },
+         };
+         // Run from the home folder, as the user would.
+-        let (_, home) = app_env();
++        let home = app_env().home;
+         let mut env = [settings.claude_env(), launch_env(&account)].concat();
+         // Gemini CLI (ESC-275): its interface straight to the Google sign-in (its settings in the
+         // account's folder), the home folder trusted.
+diff --git a/src-tauri/src/engine/cursor/terminal.rs b/src-tauri/src/engine/cursor/terminal.rs
+index 5eccd147..204ceeec 100644
+--- a/src-tauri/src/engine/cursor/terminal.rs
++++ b/src-tauri/src/engine/cursor/terminal.rs
+@@ -52,7 +52,7 @@ pub(crate) fn projects_dir() -> PathBuf {
+     match std::env::var_os(PROJECTS_VAR).filter(|v| !v.is_empty()) {
+         Some(dir) => PathBuf::from(dir),
+         None => crate::accounts::app_env()
+-            .1
++            .home
+             .join(".cursor")
+             .join("projects"),
+     }
+diff --git a/src-tauri/src/fence.rs b/src-tauri/src/fence.rs
+index a7928ff5..90a5b6ea 100644
+--- a/src-tauri/src/fence.rs
++++ b/src-tauri/src/fence.rs
+@@ -544,7 +544,7 @@ fn opencode_data() -> PathBuf {
+         .filter(|v| !v.is_empty());
+     match xdg {
+         Some(v) => PathBuf::from(v).join("opencode"),
+-        None => crate::accounts::app_env().1.join(".local/share/opencode"),
++        None => crate::accounts::app_env().home.join(".local/share/opencode"),
+     }
+ }
+ 
+diff --git a/src-tauri/src/mcp/install.rs b/src-tauri/src/mcp/install.rs
+index bb974c15..0c2fdde2 100644
+--- a/src-tauri/src/mcp/install.rs
++++ b/src-tauri/src/mcp/install.rs
+@@ -298,7 +298,8 @@ impl<R: Runtime> Core<R> {
+         if cfg!(test) {
+             return (None, self.data.root().join("claude-home"));
+         }
+-        accounts::app_env()
++        let env = accounts::app_env();
++        (env.config_dir, env.home)
+     }
+ 
+     /// Whether the harness `engine` is installed: its program found for one of its active accounts
+diff --git a/src-tauri/src/selfupdate.rs b/src-tauri/src/selfupdate.rs
+index ad33a447..d53e7f63 100644
+--- a/src-tauri/src/selfupdate.rs
++++ b/src-tauri/src/selfupdate.rs
+@@ -332,7 +332,7 @@ pub async fn run_once(settings: &Settings, data: &Path) {
+ /// `claude update` by `program`, apart (`spawn_apart`), waited for: what it said.
+ async fn update(program: &Program, settings: &Settings, data: &Path) -> Status {
+     // From the home folder, as the user would (the tests' is none: the temporary folder).
+-    let (_, home) = accounts::app_env();
++    let home = accounts::app_env().home;
+     let home = if home.is_dir() {
+         home
+     } else {
+diff --git a/src-tauri/src/workflow.rs b/src-tauri/src/workflow.rs
+index 7a68037f..7c053064 100644
+--- a/src-tauri/src/workflow.rs
++++ b/src-tauri/src/workflow.rs
+@@ -359,7 +359,10 @@ impl Roots {
+     /// The machine user's: `~/.claude` (or the app's `CLAUDE_CONFIG_DIR`) and `~/.codex`. In the
+     /// tests, folders that do not exist (`accounts::app_env`).
+     pub fn of_user() -> Self {
+-        let (env, home) = crate::accounts::app_env();
++        let crate::accounts::AppEnv {
++            config_dir: env,
++            home,
++        } = crate::accounts::app_env();
+         let claude = env
+             .filter(|v| !v.is_empty())
+             .map(PathBuf::from)

@@ -2,7 +2,7 @@
 title: "Intégrations"
 subject: "Kanban"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-165","ESC-201","ESC-242"]
+tickets: ["ESC-213","ESC-214","ESC-215","ESC-216","ESC-344"]
 decisions: []
 compared: null
 ---
@@ -146,3 +146,45 @@ Dans Réglages › Intégrations › « Sources du Kanban » :
 - GitLab Issues : un groupe n'est pas une source, seulement un projet.
 - Azure Boards : ni zone ni itération ; une itération courante demanderait une équipe.
 - ClickUp : une clé personnelle seulement. L'OAuth de ClickUp (une app enregistrée, un jeton par espace de travail autorisé) n'est pas fait ; il servirait à une équipe qui ne veut pas de clés personnelles.
+
+## Les comptes servis par un plugin (ESC-212)
+
+- Chaque compte est d'un genre déclaré par le plugin qui le sert, et sert tous ses points ; le secret est aussi au trousseau sous `plugin:<id>:account:<compte>`, les anciennes entrées tenues à côté (voir *Les comptes partagés par plugin*).
+- Quand plusieurs plugins servent le même genre, le formulaire « Connecter… » demande « Servi par » ; le compte connecté dit « Servi par le plugin <id> ».
+
+## Trello, plugin de première main (ESC-213, INT-7.1)
+
+- Trello n'est plus dans le cœur : c'est le plugin `dev.escouade.trello`, livré avec Escouade et signé avec elle (dossier `plugins/trello/`), un process `escouade-plugins trello`. Le Kanban, l'import, la correspondance des statuts et la synchronisation se comportent comme avant ; le compte, les projets liés et le trousseau (ancien nom tenu à côté) sont inchangés.
+- Il se voit dans la vue Plugins, sous « Livrés avec Escouade », et se coupe pour l'app ou pour un projet. Arrêté ou coupé, la synchro le dit (« Le plugin dev.escouade.trello ne répond pas : … ») et recommence plus tard ; rien n'est perdu.
+- « Connecter » vérifie la clé et le jeton par le plugin, à qui Escouade les prête le temps de l'appel (même quand le trousseau du système les refuse) ; ils vont ensuite au trousseau comme avant. Les textes « Indique le jeton. » et « Indique la clé d'API. » sont ceux du manifeste du plugin.
+- Le plugin reçoit de l'app l'adresse de l'API (`ESCOUADE_TRELLO_API`), la langue, le proxy et la vérification TLS des réglages.
+- Linear, Jira et ClickUp suivent le même modèle (une crate `plugins/<id-court>/` sur le kit `escouade-plugin-kit`).
+
+## Linear, plugin de première main (ESC-214, INT-7.2)
+
+- Linear n'est plus dans le cœur : c'est le plugin `dev.escouade.linear`, livré avec Escouade et signé avec elle (dossier `plugins/linear/`), un process `escouade-plugins linear`, sur le même modèle que Trello. Le Kanban, l'import (équipes, statuts du workflow, « Mes issues », étiquettes, recherche par numéro ou titre), le changement de statut et le commentaire se comportent comme avant ; le compte, les projets liés et le trousseau sont inchangés.
+- Il se voit dans la vue Plugins, sous « Livrés avec Escouade », et se coupe pour l'app ou pour un projet. Arrêté ou coupé, la synchro le dit (« Le plugin dev.escouade.linear ne répond pas : … ») et recommence plus tard.
+- « Connecter » vérifie la clé personnelle par le plugin, à qui Escouade la prête le temps de l'appel. Le texte « Indique le jeton. » est celui du manifeste du plugin.
+- Le plugin reçoit de l'app l'adresse de l'API (`ESCOUADE_LINEAR_API`), la langue, le proxy et la vérification TLS des réglages.
+- Jira et ClickUp suivent le même modèle.
+
+## Jira, plugin de première main (ESC-215, INT-7.3)
+
+- Jira n'est plus dans le cœur : c'est le plugin `dev.escouade.jira`, livré avec Escouade et signé avec elle (dossier `plugins/jira/`), un process `escouade-plugins jira`, sur le même modèle que Trello et Linear. Le Kanban, l'import (projets, statuts, « Assignés à moi », sprint actif, « À faire », étiquettes, recherche par clé ou texte), la transition vers le statut de la colonne et le commentaire se comportent comme avant ; le compte (site, e-mail, jeton), les projets liés et le trousseau sont inchangés.
+- Il se voit dans la vue Plugins, sous « Livrés avec Escouade », et se coupe pour l'app ou pour un projet. Arrêté ou coupé, la synchro le dit (« Le plugin dev.escouade.jira ne répond pas : … ») et recommence plus tard.
+- « Connecter » vérifie le compte par le plugin, à qui Escouade prête le jeton le temps de l'appel ; le site (https, sauf cette machine) et l'e-mail lui sont dits, jamais le jeton. Les textes « Indique l'adresse du site. », « Indique l'e-mail. » et « Indique le jeton. » sont ceux du manifeste du plugin.
+- Le plugin reçoit de l'app la langue, le proxy et la vérification TLS des réglages (changés, le plugin repart avec).
+
+## ClickUp, plugin de première main (ESC-216, INT-7.4)
+
+- ClickUp n'est plus dans le cœur : c'est le plugin `dev.escouade.clickup`, livré avec Escouade et signé avec elle (dossier `plugins/clickup/`), un process `escouade-plugins clickup`, sur le même modèle que Trello, Linear et Jira. Le Kanban, l'import (listes par espace et dossier, « Mes tâches », puces de statut, étiquette, recherche par titre, par id `#86abx3` ou par id personnalisé), le statut de la liste et le commentaire se comportent comme avant ; le jeton, les listes liées et le trousseau sont inchangés.
+- ClickUp garde sa vue propre des états : les statuts de chaque liste, et ceux que chaque colonne prend par défaut d'après leurs noms, puis leurs types.
+- Il se voit dans la vue Plugins, sous « Livrés avec Escouade », et se coupe pour l'app ou pour un projet. Arrêté ou coupé, la synchro le dit (« Le plugin dev.escouade.clickup ne répond pas : … ») et réessaie plus tard ; rien n'est perdu.
+- « Connecter » vérifie le jeton par le plugin, à qui Escouade le prête le temps de l'appel. Le texte « Indique le jeton. » est celui du manifeste du plugin.
+- Le plugin reçoit de l'app l'adresse de l'API (`ESCOUADE_CLICKUP_API`), la langue, le proxy et la vérification TLS des réglages.
+
+## Linear, Trello, Jira et ClickUp en WASM (ESC-344)
+
+- Ces quatre plugins ne sont plus des process `escouade-plugins <nom>` : chacun est un module WASM, dans l'hôte de l'app (voir *Tous les plugins en WASM*). Ce que les sections ci-dessus disent de leur process ne vaut plus ; le reste, Kanban, import, synchro, comptes et trousseau, ne change pas.
+- Ils ne reçoivent plus le proxy et la vérification TLS au lancement : c'est l'hôte qui les suit, et un changement atteint l'appel suivant, sans relancer le plugin.
+- Jira déclare `{account}`, pour joindre le site du compte.

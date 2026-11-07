@@ -213,7 +213,7 @@ for (const scheme of ['dark', 'light'] as const)
     const fresh = await seedCatalog();
     await signIn(page, E2E_ADMIN_LOGIN);
     await row(page, `Slack ${fresh.run}`, '1.2.0').locator('a.pl').click();
-    await expect(page.locator('aside.detail .perm').first()).toBeVisible();
+    await expect(page.locator('aside.detail .perm.strong')).toBeVisible();
     const store = await measure(page);
     for (const k of Object.keys(SELS)) {
       expect(store[k], `${k} is on the page`).not.toBeNull();

@@ -541,13 +541,13 @@ async fn a_change_of_account_and_of_harness_are_facts() {
     s.accounts.push(Account {
         id: "relais".into(),
         name: "Relais".into(),
-        engine: EngineId::Bench,
+        engine: EngineId::BENCH,
         config_dir: h.dir.join("relais").to_string_lossy().into(),
         ..Default::default()
     });
     h.core.save_settings(s).unwrap();
     h.core
-        .continue_on_engine(&id, EngineId::Bench)
+        .continue_on_engine(&id, EngineId::BENCH)
         .await
         .unwrap();
     let facts = l.heard(&h, &["agent.handover"]).await;
@@ -870,25 +870,25 @@ async fn content(bodies: &mut tokio::sync::mpsc::UnboundedReceiver<String>) -> S
         .to_string()
 }
 
-/// The Discord example of PLG-10 (plugin-examples/discord-webhook, ESC-182), its manifest as the
+/// Escouade's own Discord plugin (plugins/discord, ESC-182 and ESC-314), its manifest as the
 /// repository holds it but for its host: the fake server stands for discord.com.
 #[tokio::test(flavor = "multi_thread")]
 async fn the_discord_example_posts_the_tickets_to_test_and_the_agents_waiting() {
     let h = harness("facts-discord-example");
     let (url, mut bodies) = fake_server().await;
     let (p, _) = h.project(false).await;
-    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../plugin-examples/discord-webhook");
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../plugins/discord");
     let mut manifest: Value =
         serde_json::from_slice(&std::fs::read(src.join("escouade-plugin.json")).unwrap()).unwrap();
     assert_eq!(manifest["permissions"]["network"], json!(["discord.com"]));
     manifest["permissions"]["network"] = json!(["127.0.0.1"]);
-    let dir = h.dir.join("discord-webhook");
+    let dir = h.dir.join("discord");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("escouade-plugin.json"), manifest.to_string()).unwrap();
     h.core.plugins.load_dev(&dir, Lang::En).unwrap();
     h.core
         .secrets
-        .set(&secret_name("dev.exemple.discord", "webhook"), &url)
+        .set(&secret_name("dev.escouade.discord", "webhook"), &url)
         .unwrap();
     // A ticket moved to review; its other moves and its agent at work say nothing.
     let (t, _) = reviewed(&h, &p.id, "Le panier [ok]").await;
@@ -1202,4 +1202,88 @@ async fn a_tickets_docs_poured_on_the_docs_branch_are_a_fact() {
     let filed = of(&facts, "docs.filed")[0];
     assert_eq!(filed["data"], json!({ "pages": 1 }));
     assert_eq!(filed["ticket"]["key"], t.key.as_str());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_agents_way_through_its_workflow_is_told_as_facts() {
+    let h = harness("facts-workflow");
+    let l = listen(&h);
+    let (p, dir) = h.project(false).await;
+    let cmds = dir.join(".claude/commands");
+    std::fs::create_dir_all(&cmds).unwrap();
+    std::fs::write(cmds.join("one.md"), "Do one, then /two.\n").unwrap();
+    std::fs::write(
+        cmds.join("two.md"),
+        "Do two. Back to /one when red, up to 3 times.\n",
+    )
+    .unwrap();
+    h.core.refresh_workflows(&p.id, true).await.unwrap();
+    let id = agent_on(&h, &p, "principal").await.id;
+    let say = |text: &str| {
+        let ops = vec![ConvOp::Append {
+            item: json!({"kind": "user", "id": format!("u{text}"), "text": text}),
+        }];
+        h.core.track_workflow(&id, &p.id, &ops, 0.0, None);
+    };
+    say("/one");
+    h.core.track_workflow(
+        &id,
+        &p.id,
+        &[],
+        0.5,
+        Some(&crate::board::TurnEnd::Finished("red: x".into())),
+    );
+    say("/two");
+    say("/one");
+    // The workflow is edited: its next reading says which one changed.
+    std::fs::write(cmds.join("two.md"), "Do two differently, then /three.\n").unwrap();
+    h.core.refresh_workflows(&p.id, true).await.unwrap();
+    let facts = l
+        .heard(
+            &h,
+            &[
+                "workflow.step_entered",
+                "workflow.step_left",
+                "workflow.looped_back",
+                "workflow.changed",
+            ],
+        )
+        .await;
+    let entered = of(&facts, "workflow.step_entered");
+    assert_eq!(entered.len(), 3);
+    assert_eq!(entered[0]["data"]["step"], "one");
+    assert_eq!(entered[0]["data"]["door"], "/one");
+    assert_eq!(entered[0]["agent"]["id"], id.as_str());
+    let left = of(&facts, "workflow.step_left");
+    assert_eq!(left[0]["data"]["step"], "one");
+    assert_eq!(left[0]["data"]["outcome"], "done");
+    assert!((left[0]["data"]["cost"].as_f64().unwrap() - 0.5).abs() < 1e-9);
+    assert!(left[0]["data"]["durationMs"].is_u64());
+    let back = of(&facts, "workflow.looped_back")[0];
+    assert_eq!(back["data"]["from"], "two");
+    assert_eq!(back["data"]["to"], "one");
+    let changed = of(&facts, "workflow.changed")[0];
+    assert!(!changed["data"]["workflows"].as_array().unwrap().is_empty());
+    assert_eq!(changed["project"]["id"], p.id.as_str());
+    // « workflow.left »: an agent that does something else after a door.
+    let ops = vec![ConvOp::Append {
+        item: json!({"kind": "user", "id": "u-else", "text": "fais autre chose"}),
+    }];
+    h.core.track_workflow(&id, &p.id, &ops, 0.0, None);
+    let ops = vec![ConvOp::Append {
+        item: json!({"kind": "tool", "id": "c-bash", "name": "Bash", "input": {"command": "ls"}, "parent": null}),
+    }];
+    h.core.track_workflow(&id, &p.id, &ops, 0.0, None);
+    h.core.track_workflow(
+        &id,
+        &p.id,
+        &[],
+        0.0,
+        Some(&crate::board::TurnEnd::Finished("fait".into())),
+    );
+    let facts = l.heard(&h, &["workflow.left"]).await;
+    assert_eq!(
+        of(&facts, "workflow.left")[0]["data"]["doing"],
+        "fais autre chose"
+    );
 }

@@ -56,7 +56,7 @@ Ticket agents stay in Escouade’s view. If one of them asks for a permission or
 
 ### Which account it starts on
 
-A ticket starts on the project’s “Preferred account” if it is active. Otherwise, on the first active account, in the order of Settings › Accounts, that is under the “Pause above quota” threshold, has no pause due to the usage limit, and has no agent waiting for its reset. A “Reserved to projects” account only serves those projects. The agent then stays on its account, unless it resumes on another account after the usage limit (see below). See [Claude accounts](accounts).
+A ticket starts on the project’s “Preferred account” if it is active. Otherwise, on the first active account, in the order of Settings › Accounts, that is “good” (see [Claude accounts](accounts#the-automatic-choice)) and under the “Pause above quota” threshold, has no pause due to the usage limit, and has no agent waiting for its reset. A “Reserved to projects” account only serves those projects. The agent then stays on its account, unless it resumes on another account after the usage limit (see below). See [Claude accounts](accounts).
 
 ## The loop
 

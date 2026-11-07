@@ -1,0 +1,155 @@
+diff --git a/src-tauri/src/accounts.rs b/src-tauri/src/accounts.rs
+index e965e31d..647afa62 100644
+--- a/src-tauri/src/accounts.rs
++++ b/src-tauri/src/accounts.rs
+@@ -2254,7 +2254,7 @@ impl<R: Runtime> Core<R> {
+             (rt.meta.project_id.clone(), rt.meta.engine)
+         };
+         let target = match account.trim() {
+-            "" => self.account_for_new(&project, engine)?,
++            "" => self.account_for_new(&project, engine, None)?,
+             wanted => {
+                 let found = settings.accounts.iter().find(|a| a.id == wanted);
+                 // An account of another harness is not one this agent can run on.
+diff --git a/src-tauri/src/core.rs b/src-tauri/src/core.rs
+index 27f58d83..2892c890 100644
+--- a/src-tauri/src/core.rs
++++ b/src-tauri/src/core.rs
+@@ -3857,7 +3857,7 @@ impl<R: Runtime> Core<R> {
+         if let Some(a) = accounts::find(&settings, &own).filter(|a| a.engine == engine) {
+             return Ok(a.clone());
+         }
+-        let next = self.account_for_new(&project, engine)?;
++        let next = self.account_for_new(&project, engine, None)?;
+         log::warn!("agent {id}: account {own:?} unknown, {next:?} instead");
+         h.lock().meta.account = next.clone();
+         self.request_save();
+@@ -5943,7 +5943,7 @@ impl<R: Runtime> Core<R> {
+             .and_then(|id| accounts::find(&settings, id))
+         {
+             Some(a) if a.engine == meta.engine => a.id.clone(),
+-            _ => self.account_for_new(project_id, meta.engine)?,
++            _ => self.account_for_new(project_id, meta.engine, None)?,
+         };
+         // Its model, effort and mode: those asked for, else its account's (ESC-128).
+         let defaults = accounts::defaults(accounts::find(&settings, &meta.account), engine);
+@@ -7097,7 +7097,7 @@ impl<R: Runtime> Core<R> {
+             .filter(|id| accounts::get(&settings, id).engine == engine);
+         let id = match (of_agent, project) {
+             (Some(id), _) => id,
+-            (None, Some(project)) => self.account_for_new(project, engine)?,
++            (None, Some(project)) => self.account_for_new(project, engine, None)?,
+             (None, None) if !accounts::serves_any(&settings, engine, None) => {
+                 return Err(accounts::no_account_outside_projects(engine))
+             }
+diff --git a/src-tauri/src/mcp/act.rs b/src-tauri/src/mcp/act.rs
+index 1e3742eb..4724c818 100644
+--- a/src-tauri/src/mcp/act.rs
++++ b/src-tauri/src/mcp/act.rs
+@@ -1470,7 +1470,7 @@ fn carrier<R: Runtime>(
+     // No account named, or of another harness: the one a new agent of the harness would go to.
+     let account = named
+         .filter(|id| accounts::find(&core.settings.read(), id).is_some_and(|a| a.engine == engine))
+-        .or_else(|| core.account_for_new(&project.id, engine).ok());
++        .or_else(|| core.account_for_new(&project.id, engine, None).ok());
+     Carrier { engine, account }
+ }
+ 
+diff --git a/src-tauri/src/switching_tests.rs b/src-tauri/src/switching_tests.rs
+index a8278067..6ae3517f 100644
+--- a/src-tauri/src/switching_tests.rs
++++ b/src-tauri/src/switching_tests.rs
+@@ -347,13 +347,13 @@ async fn new_agents_go_to_another_account_past_the_threshold() {
+     pro_and_team(&h);
+     read_as(&h, "pro", 96.0);
+     assert_eq!(
+-        h.core.account_for_new(&p.id, EngineId::Claude).unwrap(),
++        h.core.account_for_new(&p.id, EngineId::Claude, None).unwrap(),
+         "equipe"
+     );
+     // At the limit, as before: Pro takes them until « Pause au-delà du quota ».
+     h.set_settings(|s| s.switch_at = 100);
+     assert_eq!(
+-        h.core.account_for_new(&p.id, EngineId::Claude).unwrap(),
++        h.core.account_for_new(&p.id, EngineId::Claude, None).unwrap(),
+         "pro"
+     );
+ }
+diff --git a/src-tauri/src/tickets.rs b/src-tauri/src/tickets.rs
+index 2eca172e..566e9c0d 100644
+--- a/src-tauri/src/tickets.rs
++++ b/src-tauri/src/tickets.rs
+@@ -1340,8 +1340,14 @@ impl<R: Runtime> Core<R> {
+     /// The account a new agent of the project on `engine` goes to (a ticket's or not): the one
+     /// the project prefers when it is an active one of that harness, else the first usable one of
+     /// it, in the order of the accounts: never one of another harness. Refused when no active
+-    /// account of the harness serves the project (all reserved to others, Principal too).
+-    pub(crate) fn account_for_new(&self, project_id: &str, engine: EngineId) -> Result<String> {
++    /// account of the harness serves the project (all reserved to others, Principal too). Never
++    /// `skip`, an account the agent may not go to (the one it leaves).
++    pub(crate) fn account_for_new(
++        &self,
++        project_id: &str,
++        engine: EngineId,
++        skip: Option<&str>,
++    ) -> Result<String> {
+         let all = self.settings.read().clone();
+         let project = self.project(project_id).ok();
+         // No account of the harness at all (ESC-128): one is to be added first.
+@@ -1356,6 +1362,7 @@ impl<R: Runtime> Core<R> {
+         let preferred =
+             project.and_then(|p| accounts::preferred(&settings, &p.account).map(str::to_string));
+         self.pick_account(&settings, preferred.as_deref())
++            .filter(|id| Some(id.as_str()) != skip)
+             .ok_or_else(|| accounts::no_account_of(engine))
+     }
+ 
+@@ -1367,7 +1374,7 @@ impl<R: Runtime> Core<R> {
+         engine: EngineId,
+     ) -> accounts::Defaults {
+         let account = self
+-            .account_for_new(project_id, engine)
++            .account_for_new(project_id, engine, None)
+             .ok()
+             .map(|id| accounts::get(&self.settings.read(), &id));
+         accounts::defaults(account.as_ref(), engine)
+@@ -1544,7 +1551,7 @@ impl<R: Runtime> Core<R> {
+             let settings = self.settings.read().clone();
+             // No account serves the project (all reserved to others): none starts, as the window
+             // is told below; saving the accounts looks again.
+-            let account = self.account_for_new(&p.id, p.engine()).ok();
++            let account = self.account_for_new(&p.id, p.engine(), None).ok();
+             if let Some(id) = &account {
+                 let account = accounts::get(&settings, id);
+                 if accounts::program(&account, &settings).is_none() {
+@@ -1818,7 +1825,7 @@ impl<R: Runtime> Core<R> {
+                 Some(why) => self.back_to_auto(&t.id, &t.account, &why),
+             }
+         }
+-        self.account_for_new(&project.id, engine)
++        self.account_for_new(&project.id, engine, None)
+     }
+ 
+     /// Why the ticket set on the account `id` may no longer go to it: gone, switched off, signed
+diff --git a/src-tauri/src/tickets_tests.rs b/src-tauri/src/tickets_tests.rs
+index 4c3579d1..4b550d46 100644
+--- a/src-tauri/src/tickets_tests.rs
++++ b/src-tauri/src/tickets_tests.rs
+@@ -6993,7 +6993,7 @@ async fn a_private_projects_new_agents_stay_on_its_own_account_past_the_threshol
+     used_for_an_hour(&h, "pro", 100.0).await;
+     // Past the threshold, Pro would hand its new agents to Équipe: P's stay on Pro.
+     assert_eq!(
+-        h.core.account_for_new(&p.id, EngineId::Claude).unwrap(),
++        h.core.account_for_new(&p.id, EngineId::Claude, None).unwrap(),
+         "pro"
+     );
+     // Allowed, or not private, they go to Équipe as any project's do.
+@@ -7001,7 +7001,7 @@ async fn a_private_projects_new_agents_stay_on_its_own_account_past_the_threshol
+     project.shared_on_limit = true;
+     h.core.update_project(project).unwrap();
+     assert_eq!(
+-        h.core.account_for_new(&p.id, EngineId::Claude).unwrap(),
++        h.core.account_for_new(&p.id, EngineId::Claude, None).unwrap(),
+         "equipe"
+     );
+ }

@@ -1,11 +1,14 @@
 //! Gemini CLI's translation, on the streams of the study of Gemini CLI 0.66.0
 //! (tests/fixtures/gemini/) and on its fake (tests/fixtures/fake-gemini.mjs): the turn, its
 //! permissions, its question, its plan, its modes, its cancel, its resume, the fence (ESC-274).
+//! Since INT-10.7 it is its plugin's (`dev.escouade.gemini-cli`): the streams go through its client,
+//! the fake is driven through its process.
 
-use super::*;
+use crate::agent::*;
 use crate::engine::gemini::{bench, GEMINI};
 use crate::engine::{Engine, Spawn, Start};
 use crate::model::{AgentMeta, EngineId};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
@@ -14,7 +17,7 @@ fn rt(cwd: &str) -> AgentRt {
     AgentRt::new(
         AgentMeta {
             id: new_id(),
-            engine: EngineId::Gemini,
+            engine: EngineId::GEMINI,
             cwd: cwd.into(),
             mode: "default".into(),
             ..Default::default()
@@ -23,13 +26,16 @@ fn rt(cwd: &str) -> AgentRt {
     )
 }
 
-/// The stream `file` as it was recorded, through the translation.
+/// The stream `file` as it was recorded, through the translation (its plugin's client).
 fn replayed(file: &str, cwd: &str) -> AgentRt {
-    let mut rt = rt(cwd);
-    for line in bench::stream(file) {
-        rt.gemini_frame(&line, &mut Effects::default());
-    }
-    rt
+    let rt = rt(cwd);
+    let dir = crate::paths::test_dir(&format!("int10-gemini-{}", new_id()));
+    crate::plugins_acp_tests::replayed_through_the_client(
+        &crate::plugins_acp_tests::gemini_decl(),
+        rt.meta.clone(),
+        &bench::stream(file),
+        &dir,
+    )
 }
 
 const ESSAI: &str = "C:\\tmp\\esc273\\proj2";
@@ -151,6 +157,8 @@ enum Heard {
 /// An agent of Gemini on the fake, in `dir`, its frames translated as the core does.
 struct Live {
     rt: AgentRt,
+    /// The plugins the app gives, in a runtime of its own: Gemini's conversation goes through its plugin (INT-10.7).
+    plugins: Arc<crate::plugins::runtime::Runtime>,
     heard: mpsc::UnboundedReceiver<Heard>,
     log: std::path::PathBuf,
     home: std::path::PathBuf,
@@ -175,6 +183,9 @@ impl Live {
         escouade: crate::engine::Escouade,
         more: Vec<(String, String)>,
     ) -> Live {
+        let (plugins, installed, _) =
+            crate::plugins_acp_tests::runtime(&format!("int10-gemini-{}", new_id()));
+        crate::plugins::harness::sync(&plugins, &installed);
         let home = dir.join("gemini-home");
         let log = dir.join("fake-gemini.jsonl");
         let mut env = vec![
@@ -206,10 +217,34 @@ impl Live {
         proc.initialize().await.unwrap();
         let mut live = Live {
             rt,
+            plugins,
             heard,
             log,
             home,
         };
+        // Its session open (new or resumed), as the core's own client had it at the end of `initialize`: its plugin says
+        // it (`session`).
+        let started = std::time::Instant::now();
+        loop {
+            assert!(
+                started.elapsed() < Duration::from_secs(60),
+                "no session: {}",
+                live.launched()
+            );
+            match tokio::time::timeout(Duration::from_millis(200), live.heard.recv()).await {
+                Ok(Some(Heard::Frame(f))) => {
+                    GEMINI.translate(&mut live.rt, &f, &mut Effects::default());
+                    let opened = f["items"]
+                        .as_array()
+                        .is_some_and(|i| i.iter().any(|i| i["op"] == "session"));
+                    if opened {
+                        break;
+                    }
+                }
+                Ok(Some(Heard::Exit)) | Ok(None) => panic!("the fake left: {}", live.launched()),
+                Err(_) => {}
+            }
+        }
         live.drain().await;
         live
     }
@@ -279,6 +314,7 @@ impl Live {
         let proc = self.rt.proc.clone().unwrap();
         proc.kill();
         proc.wait_gone(Duration::from_secs(5)).await;
+        self.plugins.shutdown();
     }
 }
 
@@ -287,7 +323,7 @@ fn meta(dir: &std::path::Path, mode: &str) -> AgentMeta {
     std::fs::create_dir_all(&cwd).unwrap();
     AgentMeta {
         id: new_id(),
-        engine: EngineId::Gemini,
+        engine: EngineId::GEMINI,
         cwd: cwd.to_string_lossy().into_owned(),
         model: "gemini-3.8-flash".into(),
         mode: mode.into(),
@@ -295,7 +331,7 @@ fn meta(dir: &std::path::Path, mode: &str) -> AgentMeta {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn a_turn_on_the_fake_has_its_model_mode_home_and_server_without_its_token_in_the_arguments()
 {
     let dir = crate::paths::test_dir("esc274-gemini-live-turn");
@@ -337,7 +373,7 @@ async fn a_turn_on_the_fake_has_its_model_mode_home_and_server_without_its_token
     live.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn a_permission_refused_cuts_the_turn_and_always_holds_for_the_session() {
     let dir = crate::paths::test_dir("esc274-gemini-live-perm");
     let mut live = Live::start(&dir, meta(&dir, "default"), Default::default()).await;
@@ -403,7 +439,7 @@ async fn a_permission_refused_cuts_the_turn_and_always_holds_for_the_session() {
     live.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn a_question_block_is_a_card_whose_answers_go_on_in_the_same_turn() {
     let dir = crate::paths::test_dir("esc274-gemini-live-question");
     let mut live = Live::start(&dir, meta(&dir, "default"), Default::default()).await;
@@ -452,7 +488,7 @@ async fn a_question_block_is_a_card_whose_answers_go_on_in_the_same_turn() {
     live.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn in_its_mode_plan_the_plan_is_read_from_its_file_and_always_carries_it_out_accepting_edits()
 {
     let dir = crate::paths::test_dir("esc274-gemini-live-plan");
@@ -493,7 +529,7 @@ async fn in_its_mode_plan_the_plan_is_read_from_its_file_and_always_carries_it_o
     live.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn a_session_is_resumed_by_a_new_process_its_replay_left_out_and_a_copy_starts_anew() {
     let dir = crate::paths::test_dir("esc274-gemini-live-resume");
     let m = meta(&dir, "default");
@@ -541,7 +577,7 @@ async fn a_session_is_resumed_by_a_new_process_its_replay_left_out_and_a_copy_st
     forked.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn an_interrupted_turn_ends_cancelled_and_the_next_one_goes() {
     let dir = crate::paths::test_dir("esc274-gemini-live-cancel");
     let mut live = Live::start(&dir, meta(&dir, "default"), Default::default()).await;
@@ -565,7 +601,7 @@ async fn an_interrupted_turn_ends_cancelled_and_the_next_one_goes() {
 }
 
 /// « Projet privé »: a file of the fence refused by its rules, in yolo too, never read.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn a_fenced_file_is_refused_by_its_rules_even_in_yolo() {
     let dir = crate::paths::test_dir("esc274-gemini-live-fence");
     let m = meta(&dir, "bypassPermissions");
@@ -632,7 +668,7 @@ fn stamps(
 /// The files of the user's `~/.gemini` (shared with Antigravity CLI, whose own are left out) are
 /// compared by their size and time before and after, never read. Never run in this ticket (no
 /// account).
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[ignore = "real Gemini CLI: ESCOUADE_TEST_REAL_GEMINI=<gemini>"]
 async fn real_gemini() {
     let program = std::env::var("ESCOUADE_TEST_REAL_GEMINI").expect("ESCOUADE_TEST_REAL_GEMINI");

@@ -23,7 +23,11 @@ export interface ManifestError {
     | 'heavy'
     | 'square'
     | 'small'
-    | 'network';
+    | 'network'
+    | 'exclusive'
+    | 'cargo'
+    | 'command'
+    | 'readOnly';
   /** The type, or the values, the field takes, for `type` and `enum`. */
   expected?: string;
 }
@@ -32,6 +36,9 @@ export interface ManifestError {
 export function writtenHost(url: string): string | null;
 /** Whether `permissions.network` covers `host`: itself, or `*.domain` for its subdomains (not the domain itself). */
 export function hostCovered(host: string, network: string[]): boolean;
+export const FILE_ROOTS: string[];
+export const FILE_ACCESS: string[];
+export function commandHolds(command: string): boolean;
 
 export interface Validation {
   ok: boolean;
@@ -43,6 +50,8 @@ export interface Validation {
 export interface ValidateOptions {
   /** A plugin the app itself gives, which may take the ids and the programs of Escouade's own. */
   builtin?: boolean;
+  /** A plugin of Escouade's own hand not given by the app (`plugins/<id>/`, ESC-314): the ids `dev.escouade.*`, nothing more. */
+  firstParty?: boolean;
   /** The bytes of a file of the plugin's folder by its path, null when it is none: to read its `icon`. */
   file?: (path: string) => Uint8Array | null | undefined;
 }

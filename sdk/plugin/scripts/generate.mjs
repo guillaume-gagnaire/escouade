@@ -109,7 +109,7 @@ export function protocolTs(schema, source = 'schemas/plugin-protocol-1.json') {
     }
     out += '}\n\n';
   }
-  out += `/** The delay of each of Escouade's calls, in milliseconds; past it, its default answer applies. */\nexport const TIMEOUTS_MS = {\n`;
+  out += `/** The delay of each call that has one, in milliseconds: past it, Escouade gives up a call to the plugin (its default answer applies), and answers a call of the plugin at the latest. */\nexport const TIMEOUTS_MS = {\n`;
   for (const [m, d] of methods) if (d.timeoutMs) out += `  ${key(m)}: ${d.timeoutMs},\n`;
   out += `} as const;\n\n/** The delay of the other calls, in milliseconds. */\nexport const DEFAULT_TIMEOUT_MS = ${schema['x-defaultTimeoutMs']};\n\n`;
   out += `/** The error codes of the protocol. */\nexport const ERRORS = {\n`;

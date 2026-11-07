@@ -6,9 +6,9 @@ The “Accounts” tab lists the accounts agents start on, a group per harness, 
 
 An account is a harness run with its own configuration folder (for Claude Code, its `CLAUDE_CONFIG_DIR`), so with its own sign-in, sessions, and quota. Each account belongs to a single harness, and the tab groups them by harness: “Claude Code accounts”, then those of the other harnesses when they have some. No account exists to begin with: only the ones you add count. A harness installed without an account has its group, with “No account” and “Add a Codex account…”. A harness’s machine account, its “Main”, is your usual install: once added, it runs as it always did, with no folder of its own, and it is removed like the others, without signing the machine out. How accounts and their quotas work is explained in [accounts](accounts) and in [usage](usage).
 
-The note under the first group’s title sums it up: “New agents start on the first active account of their harness under the “Pause above quota” and “Switch accounts at” thresholds, in this order.” In detail:
+The note under the first group’s title sums it up: “New agents start on the first active account of their harness whose 5 hours is under the “Pause above quota” and “Switch accounts at” thresholds and whose week keeps its pace, in this order.” In detail:
 
-- A new agent starts on an account of its harness, never on another harness’s: the first active account of the group that has no quota window (5-hour or weekly for Claude Code) at the pause threshold or at “Switch accounts at” (the lower of the two counts).
+- A new agent starts on an account of its harness, never on another harness’s: the first active account of the group that is “good”: no short window (the 5-hour one) has reached the pause threshold or “Switch accounts at” (the lower of the two counts), and no long window (the week, the 30 days, the month’s credits) is at its limit or would end past 100% at its current pace. A week above the threshold that keeps its pace stays good.
 - If every active account has reached the threshold, it starts on the first active account, and [autopilot](autopilot) pauses.
 - A project’s “Preferred account”, in the [“Projects”](settings-projects) tab, goes first as long as it is active.
 - An account “Reserved to projects” only receives the agents and tickets of those projects.
@@ -85,9 +85,9 @@ In the “Quotas” group, at the bottom of the tab, “Switch accounts at” mo
 
 | Setting | Effect | Default |
 |---|---|---|
-| “Switch accounts at” | When the 5-hour or weekly window of an agent’s account reaches this threshold, the agent goes on on another account of its harness at the end of its turn, and new agents go there. Choices: 80%, 90%, 95%, or “At the limit”. | At the limit |
+| “Switch accounts at” | An agent goes on on another account of its harness at the end of its turn when a short window (5 hours) of its account reaches this threshold, or a long one (week, 30 days, month’s credits) reaches it without lasting to its reset at the current pace. New agents and tickets go to the first account in the order whose 5 hours is not full and whose week keeps its pace, even on “At the limit”. Choices: 80%, 90%, 95%, or “At the limit”. | At the limit |
 
-“At the limit” is how it worked before: nothing moves before the limit, then “Resume a ticket’s agent stopped by the usage limit on another account” ([“Harness”](settings-claude-code) tab) decides. The two settings work together: the threshold acts at the end of a turn, the resume at the limit on a turn the limit stopped halfway. The details are in [the accounts](accounts#switch-accounts-before-the-limit).
+On “At the limit”, an agent already running doesn’t move before the limit (new agents follow the rule of the choice), then “Resume a ticket’s agent stopped by the usage limit on another account” ([“Harness”](settings-claude-code) tab) decides. The two settings work together: the threshold acts at the end of a turn, the resume at the limit on a turn the limit stopped halfway. The details are in [the accounts](accounts#switch-accounts-before-the-limit).
 
 ## The pause threshold
 
@@ -97,7 +97,7 @@ The threshold is set in the [“Kanban”](settings-board) tab, not here, but it
 |---|---|---|
 | “Pause above quota” (for all projects) | The autopilot starts no ticket while the 5-hour window or the weekly window is at or above this threshold; a ticket launched by hand still starts. Choices: 80%, 90%, 95%, or 100%. | 100% |
 
-An account with a window past the threshold is set aside in favor of the next one of its harness, and the quota panel marks it “past the pause or switch threshold” (it counts “Switch accounts at” too). Autopilot pauses harness by harness: a ticket waits for one of its harness’s accounts to go back under the threshold, while those of another harness start. A harness without a quota never pauses it.
+An account with a short window past the threshold (or a long one at its limit) is set aside in favor of the next one of its harness, and the quota panel marks it “past the pause or switch threshold” (it counts “Switch accounts at” too); an account that only its pace puts behind is marked “pace too fast for its window”. The pause threshold itself stays a percentage, window by window. Autopilot pauses harness by harness: a ticket waits for one of its harness’s accounts to go back under the threshold, while those of another harness start. A harness without a quota never pauses it.
 
 ## Resuming on another account
 

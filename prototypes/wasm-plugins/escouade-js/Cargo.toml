@@ -1,0 +1,20 @@
+# Escouade's Javy plugin (ESC-319 prototype): QuickJS with what Escouade's plugins need, and an export that runs a
+# turn of the plugin without evaluating its module again. Built for wasm32-wasip1, then `javy init-plugin`.
+[package]
+name = "escouade-js"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+javy-plugin-api = "=7.1.0"
+
+[profile.release]
+lto = true
+opt-level = 3
+strip = false
+
+[workspace]

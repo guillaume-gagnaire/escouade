@@ -1,25 +1,52 @@
 //! Azure Boards against the fake server, its answers as the REST API 7.1's documentation gives
-//! them: two organizations of dev.azure.com, and the processes Agile, Scrum and Basic.
+//! them: two organizations, and the processes Agile, Scrum and Basic.
+//!
+//! Since INT-8.5 the client is the plugin « Azure DevOps »'s (`plugins/azure-devops`): each
+//! organization's account is a `ProcessTicketSource` to its module, as the core
+//! makes them, and `ByOrganization` sends a call to the organization its container names; the real trial uses the
+//! plugin's client in process.
 
 use super::*;
 use crate::integrations::fake::FakeServer;
 use crate::integrations::lasting;
+use crate::integrations::source::TicketSource;
+use crate::plugins::adapters::{ByOrganization, ProcessTicketSource};
+use crate::plugins::builtin::{test_runtime, AZURE_DEVOPS};
+use serde_json::{json, Value};
 
-/// The organizations acme and globex, both on the fake server (dev.azure.com's API under
-/// `/azure`, as `ESCOUADE_AZURE_DEVOPS_API` puts it).
-async fn boards() -> (FakeServer, Boards) {
+const S: Service = Service::AZURE;
+
+/// The organizations acme (on dev.azure.com) and globex (a Server's collection), both on the fake server (dev.azure.com's
+/// API under `/azure`, as `ESCOUADE_AZURE_DEVOPS_API` puts it), each with the token lent as the core lends it.
+async fn boards() -> (FakeServer, ByOrganization) {
     let server = FakeServer::start().await;
-    let inst = |org: &str, token: &str| Instance {
-        org: org.into(),
-        client: Azure::new(
-            reqwest::Client::new(),
-            format!("https://dev.azure.com/{org}"),
-            Some(format!("{}/azure", server.url)),
-            token.into(),
-        ),
-        token_page: format!("https://dev.azure.com/{org}/_usersSettings/tokens"),
+    let rt = test_runtime("azure-boards");
+    crate::plugins::builtin::let_reach(&rt, &[("fake.test", &server.url)]);
+    let source = |site: &str, token: &str| -> Box<dyn TicketSource> {
+        rt.lend(
+            AZURE_DEVOPS,
+            &format!("account:{}", crate::forge::host_of(site)),
+            token,
+        );
+        let account = Account {
+            site: site.into(),
+            ..Account::default()
+        };
+        Box::new(
+            ProcessTicketSource::new(rt.clone(), AZURE_DEVOPS, "azure", &account)
+                .with_api(&format!("{}/azure", server.url)),
+        )
     };
-    let b = Boards::new(vec![inst("acme", "pat-acme"), inst("globex", "pat-globex")]);
+    let b = ByOrganization::new(vec![
+        (
+            "acme".into(),
+            source("https://dev.azure.com/acme", "pat-acme"),
+        ),
+        (
+            "globex".into(),
+            source("https://tfs.example.com/tfs/globex", "pat-globex"),
+        ),
+    ]);
     (server, b)
 }
 
@@ -300,7 +327,7 @@ async fn the_import_queries_with_wiql_and_reads_a_page_at_a_time() {
     );
     // Its Acceptance Criteria field, not its description's.
     assert_eq!(one.criteria, ["Plus de crash", "Un test e2e"]);
-    assert_eq!(one.service, Service::Azure);
+    assert_eq!(one.service, Service::AZURE);
     assert_eq!(one.container, C);
     let chips: Vec<&str> = page.filters.iter().map(|f| f.id.as_str()).collect();
     assert_eq!(
@@ -496,7 +523,7 @@ async fn a_state_is_pushed_in_json_patch_and_a_comment_in_markdown() {
         json!({ "id": 42, "fields": { "System.State": "New", "System.WorkItemType": "User Story" } }),
     );
     server.on("PATCH", &at, 200, json!({ "id": 42, "rev": 4 }));
-    b.set_state(&r("42"), &named("Active")).await.unwrap();
+    b.set_state(&r("42"), &named("Active"), &[]).await.unwrap();
     let w = server.writes();
     assert_eq!(w.len(), 1);
     assert_eq!(w[0].method, "PATCH");
@@ -517,7 +544,7 @@ async fn a_state_is_pushed_in_json_patch_and_a_comment_in_markdown() {
     );
 
     // Already in it: nothing written.
-    b.set_state(&r("42"), &named("New")).await.unwrap();
+    b.set_state(&r("42"), &named("New"), &[]).await.unwrap();
     assert_eq!(server.writes().len(), 1);
 
     server.on(
@@ -549,13 +576,10 @@ async fn a_state_its_type_lacks_is_its_first_of_the_same_category() {
     );
     server.on("PATCH", &at, 200, json!({ "id": 5 }));
     // « Committed » is a backlog item's: a task's in progress is « In Progress ».
-    b.set_state(&r("5"), &named("Committed")).await.unwrap();
+    b.set_state(&r("5"), &named("Committed"), &[])
+        .await
+        .unwrap();
     assert_eq!(server.writes()[0].json()[0]["value"], json!("In Progress"));
-    // A state no type has goes as it is: Azure says why it refuses it.
-    assert_eq!(
-        target_state(&[], "Task", "Whatever"),
-        "Whatever".to_string()
-    );
 }
 
 #[tokio::test]
@@ -596,12 +620,6 @@ async fn a_token_without_the_work_items_right_is_told_where_to_make_another() {
     );
     let e = b.states(C).await.unwrap_err();
     assert!(e.to_string().contains("Work Items"), "{e}");
-
-    // In English.
-    assert_eq!(
-        no_right(Lang::En, "Azure DevOps denies access (403)", "https://x/tokens"),
-        "Azure DevOps denies access (403). The Azure DevOps token needs the Work Items right (read and write): make one on https://x/tokens, then replace it in Settings › Integrations › Code hosts."
-    );
 }
 
 #[tokio::test]
@@ -621,7 +639,10 @@ async fn azure_refusing_a_state_or_a_work_item_gone_is_lasting() {
         400,
         json!({ "message": "TF401320: Rule Error for field State. Error code: Required, InvalidEmpty." }),
     );
-    let e = b.set_state(&r("42"), &named("Resolved")).await.unwrap_err();
+    let e = b
+        .set_state(&r("42"), &named("Resolved"), &[])
+        .await
+        .unwrap_err();
     assert!(lasting(&e));
     assert!(e.to_string().contains("TF401320"), "{e}");
     server.on(
@@ -650,142 +671,4 @@ async fn the_account_is_named_by_azure() {
         b.me().await.unwrap(),
         ("Ada Lovelace".to_string(), "u-ada".to_string())
     );
-}
-
-/// Against the user's own Azure DevOps, never in the suites: `cargo test real_azure_boards --
-/// --ignored --nocapture` with `ESCOUADE_TEST_AZURE_URL` (the organization's address,
-/// `https://dev.azure.com/<org>`), `ESCOUADE_TEST_AZURE_PAT` (a token with the Work Items right,
-/// read and write) and `ESCOUADE_TEST_AZURE_PROJECT` (a project of it, where a Task is made, moved,
-/// commented on, then put in the recycle bin).
-#[tokio::test]
-#[ignore]
-async fn real_azure_boards() {
-    let var = |k: &str| std::env::var(k).unwrap_or_else(|_| panic!("{k} is needed"));
-    let url = var("ESCOUADE_TEST_AZURE_URL")
-        .trim_end_matches('/')
-        .to_string();
-    let project = var("ESCOUADE_TEST_AZURE_PROJECT");
-    let org = url.rsplit('/').next().unwrap().to_string();
-    let b = Boards::new(vec![Instance {
-        org: org.clone(),
-        client: Azure::new(
-            reqwest::Client::new(),
-            url.clone(),
-            None,
-            var("ESCOUADE_TEST_AZURE_PAT"),
-        ),
-        token_page: format!("{url}/_usersSettings/tokens"),
-    }]);
-    let container = format!("{org}/{project}");
-    println!("me: {:?}", b.me().await.unwrap());
-    let projects = b.containers().await.unwrap();
-    println!("{} projects", projects.len());
-    assert!(projects.iter().any(|c| c.id == container), "{projects:?}");
-    let view = b.states_view(&container).await.unwrap();
-    println!("states: {:?}\ndefaults: {:?}", view.states, view.defaults);
-    assert!(!view.states.is_empty());
-
-    // A task of its own, to move and comment on.
-    let inst = &b.instances[0];
-    let patch = json!([
-        { "op": "add", "path": "/fields/System.Title", "value": "Escouade : essai réel d'Azure Boards (à supprimer)" },
-        { "op": "add", "path": "/fields/System.Description", "value": "<div>Fait par real_azure_boards.</div>" },
-        { "op": "add", "path": "/fields/System.Tags", "value": "escouade-essai" }
-    ]);
-    let (made, _) = b
-        .call(
-            inst,
-            Method::POST,
-            v(
-                format!(
-                    "{}/wit/workitems/$Task",
-                    Boards::project_api(inst, &project)
-                ),
-                VERSION,
-            ),
-            Some((&patch, "application/json-patch+json")),
-        )
-        .await
-        .unwrap();
-    let id = made["id"].as_u64().unwrap().to_string();
-    println!("made #{id}");
-    let outcome = async {
-        let page = b
-            .issues(
-                &container,
-                &Query {
-                    text: format!("#{id}"),
-                    ..Default::default()
-                },
-            )
-            .await?;
-        println!(
-            "found: {:?}",
-            page.issues.first().map(|i| (&i.key, &i.meta))
-        );
-        anyhow::ensure!(
-            page.issues.len() == 1,
-            "the task is not found by its number"
-        );
-        let page = b
-            .issues(
-                &container,
-                &Query {
-                    label: Some("escouade-essai".into()),
-                    ..Default::default()
-                },
-            )
-            .await?;
-        anyhow::ensure!(
-            page.issues.iter().any(|i| i.id == id),
-            "not found by its tag"
-        );
-        let doing = view
-            .defaults
-            .get(&Column::Doing)
-            .cloned()
-            .ok_or_else(|| anyhow!("no state in progress"))?;
-        b.set_state(&r_of(&container, &id), &doing).await?;
-        b.comment(
-            &r_of(&container, &id),
-            "**Escouade** : essai réel, commentaire en markdown.",
-        )
-        .await?;
-        let item = b
-            .get(
-                inst,
-                v(
-                    format!("{}/wit/workitems/{id}", Boards::project_api(inst, &project)),
-                    VERSION,
-                ),
-            )
-            .await?;
-        println!("state now: {}", item["fields"]["System.State"]);
-        Ok::<_, anyhow::Error>(())
-    }
-    .await;
-    // To the recycle bin, whatever happened.
-    let gone = b
-        .call(
-            inst,
-            Method::DELETE,
-            v(
-                format!("{}/wit/workitems/{id}", Boards::project_api(inst, &project)),
-                VERSION,
-            ),
-            None,
-        )
-        .await;
-    println!("deleted: {}", gone.is_ok());
-    outcome.unwrap();
-}
-
-fn r_of(container: &str, id: &str) -> ExternalRef {
-    ExternalRef {
-        service: S,
-        id: id.into(),
-        key: format!("#{id}"),
-        container: container.into(),
-        ..Default::default()
-    }
 }

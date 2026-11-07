@@ -1,6 +1,8 @@
 # The protocol
 
-A plugin with a program talks to Escouade in JSON-RPC 2.0, on its standard input and output. This page describes that transport: when the program starts, the handshake, the delays, the restarts, the memory, the secrets and the journal.
+A plugin with a program talks to Escouade in JSON-RPC 2.0: inside the app, in WASM, if it is in JS, TypeScript or Rust; on its standard input and output if it is a process. This page describes the messages and the process.
+
+A `run.js` or `run.wasm` plugin speaks the same protocol: [what changes in WASM](#a-program-in-wasm) comes below, and [the calls](plugins/calls) give an example in TS and in Rust for each method.
 
 ## When the program starts
 
@@ -32,7 +34,8 @@ Escouade’s first message is `initialize`. It gives the version of the protocol
   "params": {
     "protocolVersion": 1,
     "escouade": { "version": "2.1.1" },
-    "plugin": { "id": "dev.exemple.slack", "version": "1.2.0" },
+    "plugin": { "id": "dev.escouade.slack", "version": "1.1.0" },
+    "lang": "en",
     "capabilities": { "batch": true, "secrets": true, "settings": true, "log": true, "attach": true }
   }
 }
@@ -44,6 +47,7 @@ The plugin answers the version it speaks and its own capabilities:
 {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"capabilities":{"batch":true}}}
 ```
 
+- `lang` is the language of the interface (`fr`, `en`), for what the plugin writes for the user.
 - Another version, or an answer without a version, stops the plugin, with the reason: “it speaks version 2 of the protocol; this Escouade speaks version 1”.
 - Without an answer within 10 seconds, the plugin is stopped too.
 - Nothing else is sent to it before its answer: what comes meanwhile waits in a queue.
@@ -57,7 +61,7 @@ Every call of Escouade has a delay. Past it, Escouade stops waiting: **its defau
 | `initialize` | 10 s |
 | `shutdown` | 1 s |
 | `permissions/…` (a decision an agent waits for) | 500 ms |
-| `tickets/…`, `forge/…`, `engine/oneShot` (an import, a call to a service) | 60 s |
+| `tickets/…`, `forge/…`, `workflow/…`, `engine/oneShot` (an import, a call to a service) | 60 s |
 | The others | 5 s |
 
 Every delay that runs out is noted in the journal: “test/do: no answer within 300 ms”.
@@ -67,10 +71,13 @@ Every delay that runs out is noted in the journal: “test/do: no answer within 
 | Method | Parameters | Answer |
 | --- | --- | --- |
 | `secrets/get` | `{ "key": "webhook" }` | The secret, or `null` if none is kept under that key. |
-| `settings/get` | `{}` | Its settings, as the user chose them in the Settings tab of its page: an object by key of `contributes.settings`, without those left to their default. |
+| `settings/get` | `{}`, or `{ "project": "<id>" }` | Its settings, as the user chose them in the Settings tab of its page: an object by key of `contributes.settings`, without those left to their default. With a project (the `project.id` of a fact), those its [`.escouade.yml`](escouade-yml) gives it under `plugins.<id>` go first, if it is on in that project: only the keys it declares, with a value of their type, never a secret. |
 | `log` (notification) | `{ "level": "info", "message": "…" }` | None: the line goes to the plugin’s journal. |
+| `files/read` | `{ "path": "data/words.txt" }` | `"…"`, the text of a file of its folder, as UTF-8 text, 256 KB at most, on both transports. Refused (`-32003`, kept in the journal): an absolute path, with `..` or a drive, a link that leads out of the folder, a hidden name (`.env`, `.git`), the manifest. `-32005` for a missing file, `-32004` for a file too big or that is not text. |
+| `net/fetch` | `{ "url": "https://…", "method": "POST", "headers": {}, "body": "…" }` | `{ "status": 200, "headers": {}, "body": "…" }`, for a plugin in WASM only: see [the network](#the-network-through-escouade). |
+| `net/stream`, `ws/*`, `timer/*`, `fs/*`, `proc/*` | See [the calls](plugins/calls). | For a plugin in WASM only; a process gets `-32601`. |
 
-Any other method answers the error `-32601` and notes it in the journal. Escouade’s own errors: `-32001` for a secret that is not the plugin’s, `-32002` for a keychain out of reach, `-32602` for parameters that do not hold.
+Any other method answers the error `-32601` and notes it in the journal. Escouade’s own errors: `-32001` for a secret that is not the plugin’s, `-32002` for a keychain out of reach, `-32003` for what the plugin may not reach (a host, a file), `-32004` for a request that fails on the way, `-32005` for a missing file, `-32602` for parameters that do not hold.
 
 ## The secrets
 
@@ -108,6 +115,43 @@ Each plugin has its journal, in `~/.escouade/plugin-logs/<id>.log`; past 1 MB, i
 The last 500 lines are read in the Journal tab of its page, in the view Plugins ([installing a plugin](plugins/installer#the-journal)).
 
 Its methods, their parameters, their answers and their delays are described by a schema, [`plugin-protocol-1.json`](/schemas/plugin-protocol-1.json), where the types of the [TypeScript SDK](plugins/sdk) come from. To check that a plugin keeps to this protocol without starting the app, play [the conformance bench](plugins/testing): `escouade-plugin test <folder>`.
+
+## A program in WASM
+
+A plugin whose manifest says `"run": { "js": "dist/plugin.mjs" }` or `"run": { "wasm": "Cargo.toml" }` starts no process: Escouade runs its module **inside the app, in WASM**, with no Node on the machine. One instance per plugin, on a thread of its own, which keeps its state from one call to the next like a process. The protocol is the same: the same messages, carried by the module’s standard input and output, the same handshake, the same delays, the same journal and the same restarts; [the SDK](plugins/sdk) and [the Rust kit](plugins/rust) speak it for you.
+
+The module is compiled once: by the store for a plugin of the store (the app downloads it and checks its fingerprint against `version.json`), by the app for a `run.js` plugin installed from a folder or a git repository. A `run.wasm` plugin outside the store comes with its `plugin.wasm`, beside the manifest. The app precompiles it at install, keeps it in its cache and precompiles it again after an update of Escouade. It needs Escouade 2.2.0 or later.
+
+### The network, through Escouade
+
+A plugin in WASM opens no connection: everything goes through Escouade, by `net/fetch`, `net/stream` and `ws/open`, which only a plugin in WASM gets (a process has its own network, and these methods answer it `-32601`). `fetch` in JS and the kit’s client in Rust lead there. Escouade sends the request:
+
+- **over https only**, to a host of `permissions.network` or one of its subdomains (`slack.com` covers `api.slack.com`); never to an IP address written in the URL, which `permissions.network` does not name;
+- **following no redirect**: the plugin gets the 3xx answer, which the kit’s client follows in Rust;
+- **within 10 s, for an answer of 1 MiB at most**, unless `limits` asks for more;
+- **never to an address of the machine or of the local network**, even for a declared host: loopback, private, link-local, unspecified, multicast or broadcast, in IPv4 as in IPv6. Escouade judges the addresses the connection itself uses, once the name is resolved, not a separate lookup the DNS could contradict;
+- **through the proxy of Settings › Network**, if there is one: only the name is judged then, and the journal says so.
+
+`{account}`, the host of an account the user typed, and `local:shared`, a harness’s local server, open http and the local network for these hosts alone: see [the host’s capabilities](plugins/capabilities#the-network).
+
+A refused call answers `-32003` and the journal keeps it (“slack.com resolves to 127.0.0.1, an address of this machine or of the local network”, “example.org is not in permissions.network of …”); a call that fails on the way (no answer in time, an answer too large, a host out of reach) answers `-32004`. The plugin sees a `fetch` that rejects.
+
+### The files of its folder
+
+- **The JSON files at its root** (`rules.json`, `channels.json`) are given to it at its start: 256 KB each, 1 MB in all, never its manifest. `readFileSync` of `node:fs` reads them, as under Node (`readFileSync(new URL('../rules.json', import.meta.url), 'utf8')`).
+- **The others** are read by `files/read` (the SDK’s `p.file()`), as UTF-8 text, 256 KB at most, a subfolder included (`data/words.txt`).
+- **The rest** goes through `fs/*`, under the roots of `permissions.files`: see [the files](plugins/capabilities#the-files-files).
+
+### The limits
+
+- **64 MB of memory, 2 s per turn of work**, 500 ms while it holds a decision.
+- **An endless loop, a growing memory or an uncaught exception** end the instance, and the journal says why (“a turn ran past 2000 ms: Escouade stopped its instance”, “its instance crashed: …”); a new one is made, as after a process crashes, with the same three restarts in five minutes, then the plugin is stopped.
+- **Timers**: `setTimeout` and `clearTimeout` exist in JS, `sleep` and `timeout` in the kit, 10 ms at least, 64 at once.
+- **A bundle made with SDK 0.2** does not run in WASM: the plugin stops and its journal says to rebuild it with `@escouade-dev/plugin` 0.3 or later.
+
+### What a plugin in WASM cannot do
+
+Nothing it does not declare: no network, no file outside its folder, no program. It does not read the environment and loads no native or remote module. A bundle that imports anything other than `node:fs` and `node:readline`, or that has `export`s, is not compiled, and the plugin stops with the reason. Its secrets and settings are its own only, as for a process. That is why the install window says “Runs inside Escouade, isolated”, then each [capability](plugins/capabilities) it asks for, not “Runs a program on your computer, with your rights”.
 
 ## What the user changes
 

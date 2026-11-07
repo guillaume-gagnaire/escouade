@@ -63,14 +63,14 @@ async function copyRepo() {
       <div class="who">
         <h1>{{ e.name[lang] }} <TrustMark :trust="e.trust" :version="e.version" large /></h1>
         <div class="line">
-          <NuxtLink v-if="e.builtin" class="me" :to="to.author(e)!"><LogoMark :size="22" />Escouade</NuxtLink>
+          <NuxtLink v-if="e.own" class="me" :to="to.author(e)!"><LogoMark :size="22" />Escouade</NuxtLink>
           <NuxtLink v-else-if="e.author" class="me" :to="to.author(e)!"
             ><AuthorAvatar :login="e.author.login" :github-id="e.author.githubId" />{{ e.author.login }}</NuxtLink
           >
           <span v-else>{{ words.deleted }}</span>
           <NuxtLink v-for="c in e.categories" :key="c" :to="to.search({ cat: c })">{{ words.categories[c] }}</NuxtLink>
           <span v-if="e.version" class="mono">v{{ e.version }}</span>
-          <span v-if="!e.builtin" class="num">{{ words.installs(e.installs) }}</span>
+          <span class="num">{{ words.installs(e.installs) }}</span>
           <span v-if="page.latest?.license">{{ page.latest.license }}</span>
         </div>
         <p class="desc">{{ e.description[lang] }}</p>
@@ -93,6 +93,10 @@ async function copyRepo() {
       {{ words.plugin.transferred(page.status.transferredFrom, words.date(page.status.transferredAt)) }}
     </p>
 
+    <p v-if="page.status?.sourceChangedAt && page.status.sourceFrom" class="band">
+      {{ words.plugin.sourceChanged(page.status.sourceFrom, words.date(page.status.sourceChangedAt)) }}
+    </p>
+
     <nav v-if="!page.builtin" class="tabs">
       <NuxtLink :class="{ on: tab === 'readme' }" :to="tabLink('readme')">{{ words.plugin.tabs.readme }}</NuxtLink>
       <NuxtLink :class="{ on: tab === 'docs' }" :to="tabLink('docs')"
@@ -109,6 +113,9 @@ async function copyRepo() {
           <p>{{ words.plugin.builtinNote }}</p>
           <p>
             <a class="arrow" :href="page.builtin.docs[lang]">{{ words.plugin.builtinDocs }}</a>
+          </p>
+          <p v-if="page.builtin.source">
+            <a class="arrow" :href="page.builtin.source" rel="noopener noreferrer">{{ words.plugin.builtinSource }}</a>
           </p>
         </div>
       </article>
@@ -198,11 +205,26 @@ async function copyRepo() {
                 ><a class="v" :href="repoUrl!" rel="nofollow noopener noreferrer">github.com/{{ page.latest.repository }}</a></span
               >
             </li>
+            <li v-if="page.latest.path">
+              <span class="dot"><StoreIcon name="box" /></span
+              ><span
+                ><span class="k">{{ words.plugin.folder }}</span
+                ><a
+                  class="v folder"
+                  :href="`${repoUrl}/tree/${encodeURIComponent(page.latest.tag)}/${page.latest.path}`"
+                  rel="nofollow noopener noreferrer"
+                  >{{ page.latest.path }}</a
+                ></span
+              >
+            </li>
             <li>
               <span class="dot"><StoreIcon name="tag" /></span
               ><span
                 ><span class="k">{{ words.plugin.tag }}</span
-                ><a class="v" :href="`${repoUrl}/tree/${page.latest.commit}`" rel="nofollow noopener noreferrer"
+                ><a
+                  class="v"
+                  :href="`${repoUrl}/tree/${page.latest.commit}${page.latest.path ? `/${page.latest.path}` : ''}`"
+                  rel="nofollow noopener noreferrer"
                   >{{ page.latest.tag }} → {{ short(page.latest.commit) }}</a
                 ></span
               >

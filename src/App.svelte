@@ -16,6 +16,7 @@
   import { createWarmer } from './lib/warm';
   import { offerClaudeMemory } from './lib/memory';
   import Board from './components/board/Board.svelte';
+  import PrsView from './components/prs/PrsView.svelte';
   import DocsView from './components/docs/DocsView.svelte';
   import TicketForm from './components/board/TicketForm.svelte';
   import MergedBranchesModal from './components/branches/MergedBranchesModal.svelte';
@@ -35,6 +36,7 @@
   import AccountModal from './components/modals/AccountModal.svelte';
   import CommitModal from './components/modals/CommitModal.svelte';
   import PrModal from './components/modals/PrModal.svelte';
+  import CiModal from './components/modals/CiModal.svelte';
   import ConfirmModal from './components/modals/ConfirmModal.svelte';
   import MergeReposModal from './components/modals/MergeReposModal.svelte';
   import CommitReposModal from './components/modals/CommitReposModal.svelte';
@@ -193,6 +195,10 @@
           {#key project.id}
             <Board {project} />
           {/key}
+        {:else if app.prsOn}
+          {#key project.id}
+            <PrsView {project} />
+          {/key}
         {:else if app.docsOn}
           {#key project.id}
             <DocsView {project} />
@@ -229,7 +235,18 @@
           <div class="noagent">
             <span>{t('shell.app.noAgent')}</span>
             <button class="btn primary" onclick={() => app.newAgent()}><Icon name="plus" size={14} />{t('shell.app.newAgent')}</button>
+            <!-- The project's open pull requests (ESC-305), in the side panel's « PR et CI » tab without an agent. -->
+            <button
+              class="btn ghost"
+              onclick={() => {
+                app.panelTab = 'hosts';
+                app.filesOpen = true;
+              }}><Icon name="pr" size={14} />{t('shell.app.projectPrs')}</button
+            >
           </div>
+          {#if app.split || app.filesOpen}
+            <SidePanel {project} agent={null} />
+          {/if}
         {/if}
       </div>
     {:else}
@@ -295,6 +312,8 @@
   <CommitModal projectId={app.modal.projectId} agentId={app.modal.agentId} resume={app.modal.resume} />
 {:else if app.modal?.kind === 'pullRequest'}
   <PrModal agentId={app.modal.agentId} />
+{:else if app.modal?.kind === 'ci'}
+  <CiModal of={app.modal.of} projectId={app.modal.projectId} />
 {:else if app.modal?.kind === 'mergeRepos'}
   <MergeReposModal agentId={app.modal.agentId} />
 {:else if app.modal?.kind === 'newBranch'}

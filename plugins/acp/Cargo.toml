@@ -1,0 +1,16 @@
+[package]
+name = "escouade-plugin-acp"
+version = "2.2.0"
+description = "Le plugin ACP livré avec Escouade : les harness qui parlent ACP, décrits par un plugin sans code"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+
+# A module, compiled by `escouade-plugin build` (docs/PLUGINS.md §8.5), on the ACP client of `crates/escouade-acp` (PLG-6).
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+escouade-acp = "0.1.1"
+escouade-plugin-protocol = "0.1.0"

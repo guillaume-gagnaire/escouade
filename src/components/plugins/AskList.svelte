@@ -22,11 +22,10 @@
 <ul class="asks">
   {#each asks as a (a.word)}
     {@const off = revoked?.includes(a.word) ?? false}
-    <li class:strong={a.strong} class:red={a.red} class:off>
+    <li class:strong={a.strong} class:red={a.red} class:orange={a.orange} class:off>
       <Icon name={a.icon} size={14} />
       <span class="txt"
-        >{a.text}{#if a.detail}<small class="mono">{a.detail}</small>{/if}{#if a.word.startsWith('network:')}<small
-            >{t('plugins.perms.networkNote')}</small
+        >{a.text}{#if a.detail}<small class="mono">{a.detail}</small>{/if}{#if a.note}<small>{a.note}</small
           >{/if}{#if onToggle && a.word === 'run'}<small>{t('plugins.perms.runNote')}</small>{/if}</span
       >
       {#if grown.includes(a.word)}<span class="new">{t('plugins.install.grownMark')}</span>{/if}
@@ -71,6 +70,10 @@
   li.red .txt,
   li.red :global(.icon) {
     color: var(--del);
+  }
+  li.orange .txt,
+  li.orange :global(.icon) {
+    color: var(--warn-ink);
   }
   li.off .txt {
     color: var(--muted);

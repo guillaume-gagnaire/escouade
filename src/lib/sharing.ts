@@ -47,7 +47,7 @@ export function myName(settings: Settings, project?: Project | null): string {
 
 /** Its agent here holds it: its column is its own, whatever its file says. */
 export function heldHere(ticket: Ticket): boolean {
-  return !!ticket.agentId && (ticket.column === 'doing' || ticket.column === 'review');
+  return !!ticket.agentId && (ticket.column === 'doing' || ticket.column === 'review' || ticket.column === 'pr');
 }
 
 /**
@@ -68,6 +68,8 @@ export function theirsLine(ticket: Ticket): string | null {
       return t('share.card.takenBy', { name: by });
     case 'review':
       return t('share.card.reviewAt', { name: by });
+    case 'pr':
+      return t('share.card.prAt', { name: by });
     case 'done':
       return t('share.card.doneBy', { name: by });
   }

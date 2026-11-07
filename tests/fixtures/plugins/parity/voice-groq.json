@@ -1,0 +1,495 @@
+[
+  {
+    "at": "initialize",
+    "can": true
+  },
+  {
+    "answer": {
+      "jsonrpc": "2.0",
+      "result": {
+        "baseUrl": "https://api.groq.com/openai",
+        "defaultModel": "whisper-large-v3-turbo",
+        "id": "groq",
+        "label": "Groq",
+        "liveModel": null,
+        "maxChars": 200,
+        "offersLive": false
+      }
+    },
+    "at": "describe"
+  },
+  {
+    "answer": {
+      "jsonrpc": "2.0",
+      "result": {
+        "defaultSpeak": "canopylabs/orpheus-v1-english",
+        "defaultTranscribe": "whisper-large-v3-turbo",
+        "defaultVoices": {
+          "canopylabs/orpheus-v1-english|en": "hannah"
+        },
+        "error": null,
+        "listed": false,
+        "listedAt": 0,
+        "service": "groq",
+        "speak": [
+          {
+            "id": "canopylabs/orpheus-v1-english",
+            "label": "Orpheus English",
+            "langs": ["en"],
+            "note": "anglais seulement"
+          }
+        ],
+        "speed": null,
+        "transcribe": [
+          {
+            "id": "whisper-large-v3-turbo",
+            "label": "Whisper Large v3 Turbo",
+            "langs": [],
+            "note": "rapide"
+          },
+          {
+            "id": "whisper-large-v3",
+            "label": "Whisper Large v3",
+            "langs": [],
+            "note": "plus précis"
+          }
+        ],
+        "voiceExample": "hannah, troy, austin, diana…",
+        "voices": null,
+        "voicesByModel": false,
+        "voicesUrl": "https://console.groq.com/docs/text-to-speech/orpheus"
+      }
+    },
+    "at": "catalog"
+  },
+  {
+    "answer": {
+      "jsonrpc": "2.0",
+      "result": {
+        "text": "Bonjour le monde"
+      }
+    },
+    "asked": [
+      {
+        "body": "a57e2ae40e554434:24362",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "dictation"
+  },
+  {
+    "answer": {
+      "jsonrpc": "2.0",
+      "result": {
+        "text": "Bonjour le monde"
+      }
+    },
+    "asked": [
+      {
+        "body": "2f1717916c7eb4e9:24302",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "any language"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32102,
+        "message": ""
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "a57e2ae40e554434:24362",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "key refused"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32102,
+        "message": ""
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "a57e2ae40e554434:24362",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "key forbidden"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32105,
+        "message": "trop de requêtes"
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "a57e2ae40e554434:24362",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "quota"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32104,
+        "message": "500|en panne"
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "a57e2ae40e554434:24362",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "failure"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32104,
+        "message": "400|mauvaise clé ***"
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "a57e2ae40e554434:24362",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "the key said"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32104,
+        "message": "200|<html>"
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "a57e2ae40e554434:24362",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "no json"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32104,
+        "message": "200|réponse sans texte"
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "a57e2ae40e554434:24362",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "multipart/form-data; boundary=escouade-BOUNDARY"
+        },
+        "line": "POST /v1/audio/transcriptions HTTP/1.1"
+      }
+    ],
+    "at": "no text"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32103,
+        "message": "(network)"
+      },
+      "jsonrpc": "2.0"
+    },
+    "at": "cut"
+  },
+  {
+    "answer": {
+      "jsonrpc": "2.0",
+      "result": {
+        "firstMs": "(a time)"
+      }
+    },
+    "asked": [
+      {
+        "body": "{\"input\":\"Bonjour, ça va ?\",\"model\":\"canopylabs/orpheus-v1-english\",\"response_format\":\"wav\",\"voice\":\"hannah\"}",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "application/json"
+        },
+        "line": "POST /v1/audio/speech HTTP/1.1"
+      }
+    ],
+    "at": "speak: read",
+    "heard": {
+      "pcm": "f6782947a600d0a0:9600",
+      "rates": [24000]
+    }
+  },
+  {
+    "answer": {
+      "jsonrpc": "2.0",
+      "result": {
+        "firstMs": "(a time)"
+      }
+    },
+    "asked": [
+      {
+        "body": "{\"input\":\"Bonjour, ça va ?\",\"model\":\"canopylabs/orpheus-v1-english\",\"response_format\":\"wav\",\"voice\":\"hannah\"}",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "application/json"
+        },
+        "line": "POST /v1/audio/speech HTTP/1.1"
+      }
+    ],
+    "at": "speak: read faster",
+    "heard": {
+      "pcm": "f6782947a600d0a0:9600",
+      "rates": [24000]
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32106,
+        "message": "422|voix inconnue"
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "{\"input\":\"Bonjour, ça va ?\",\"model\":\"canopylabs/orpheus-v1-english\",\"response_format\":\"wav\",\"voice\":\"hannah\"}",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "application/json"
+        },
+        "line": "POST /v1/audio/speech HTTP/1.1"
+      }
+    ],
+    "at": "speak: voice refused",
+    "heard": {
+      "pcm": "cbf29ce484222325:0",
+      "rates": []
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32102,
+        "message": ""
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "{\"input\":\"Bonjour, ça va ?\",\"model\":\"canopylabs/orpheus-v1-english\",\"response_format\":\"wav\",\"voice\":\"hannah\"}",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "application/json"
+        },
+        "line": "POST /v1/audio/speech HTTP/1.1"
+      }
+    ],
+    "at": "speak: key refused",
+    "heard": {
+      "pcm": "cbf29ce484222325:0",
+      "rates": []
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32105,
+        "message": "trop"
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "{\"input\":\"Bonjour, ça va ?\",\"model\":\"canopylabs/orpheus-v1-english\",\"response_format\":\"wav\",\"voice\":\"hannah\"}",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "application/json"
+        },
+        "line": "POST /v1/audio/speech HTTP/1.1"
+      }
+    ],
+    "at": "speak: quota",
+    "heard": {
+      "pcm": "cbf29ce484222325:0",
+      "rates": []
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32106,
+        "message": "200|not a WAV file"
+      },
+      "jsonrpc": "2.0"
+    },
+    "asked": [
+      {
+        "body": "{\"input\":\"Bonjour, ça va ?\",\"model\":\"canopylabs/orpheus-v1-english\",\"response_format\":\"wav\",\"voice\":\"hannah\"}",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef",
+          "content-type": "application/json"
+        },
+        "line": "POST /v1/audio/speech HTTP/1.1"
+      }
+    ],
+    "at": "speak: no sound",
+    "heard": {
+      "pcm": "cbf29ce484222325:0",
+      "rates": []
+    }
+  },
+  {
+    "answer": {
+      "jsonrpc": "2.0",
+      "result": {
+        "at": "(a time)",
+        "speak": [
+          {
+            "id": "canopylabs/orpheus-v1-english",
+            "label": "Orpheus English",
+            "langs": ["en"],
+            "note": "anglais seulement"
+          },
+          {
+            "id": "gpt-4o-mini-tts",
+            "label": "gpt-4o-mini-tts",
+            "langs": [],
+            "note": ""
+          },
+          {
+            "id": "tts-1",
+            "label": "tts-1",
+            "langs": [],
+            "note": ""
+          },
+          {
+            "id": "voxtral-mini-tts-2603",
+            "label": "voxtral-mini-tts-2603",
+            "langs": [],
+            "note": ""
+          }
+        ],
+        "transcribe": [
+          {
+            "id": "whisper-large-v3",
+            "label": "Whisper Large v3",
+            "langs": [],
+            "note": "plus précis"
+          },
+          {
+            "id": "whisper-1",
+            "label": "whisper-1",
+            "langs": [],
+            "note": ""
+          }
+        ],
+        "voices": null
+      }
+    },
+    "asked": [
+      {
+        "body": "",
+        "headers": {
+          "authorization": "Bearer sk-test-0123456789abcdef"
+        },
+        "line": "GET /v1/models HTTP/1.1"
+      }
+    ],
+    "at": "list",
+    "catalog": {
+      "jsonrpc": "2.0",
+      "result": {
+        "defaultSpeak": "canopylabs/orpheus-v1-english",
+        "defaultTranscribe": "whisper-large-v3-turbo",
+        "defaultVoices": {
+          "canopylabs/orpheus-v1-english|en": "hannah"
+        },
+        "error": null,
+        "listed": false,
+        "listedAt": 0,
+        "service": "groq",
+        "speak": [
+          {
+            "id": "canopylabs/orpheus-v1-english",
+            "label": "Orpheus English",
+            "langs": ["en"],
+            "note": "anglais seulement"
+          }
+        ],
+        "speed": null,
+        "transcribe": [
+          {
+            "id": "whisper-large-v3-turbo",
+            "label": "Whisper Large v3 Turbo",
+            "langs": [],
+            "note": "rapide"
+          },
+          {
+            "id": "whisper-large-v3",
+            "label": "Whisper Large v3",
+            "langs": [],
+            "note": "plus précis"
+          }
+        ],
+        "voiceExample": "hannah, troy, austin, diana…",
+        "voices": null,
+        "voicesByModel": false,
+        "voicesUrl": "https://console.groq.com/docs/text-to-speech/orpheus"
+      }
+    }
+  }
+]

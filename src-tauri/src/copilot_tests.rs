@@ -36,6 +36,150 @@ async fn wait_long(h: &Harness, id: &str, what: &str, secs: u64, pred: impl Fn(&
     panic!("no {what}: {:#}", Value::Array(h.items(id)));
 }
 
+/// INT-10.3: Copilot's conversation goes through its plugin (`dev.escouade.copilot-cli`). Switched off, an agent's start
+/// says so, and the agent keeps its session; on again, it talks as before.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_copilot_agent_says_its_plugin_is_off_and_talks_again_once_it_is_on() {
+    let h = harness("int10-copilot-off");
+    let (p, _) = h.project(false).await;
+    h.set_settings(|s| {
+        s.accounts.push(Account {
+            id: "principal-copilot".into(),
+            name: "Principal".into(),
+            engine: EngineId::COPILOT,
+            claude_path: crate::engine::fake_copilot(),
+            active: true,
+            ..Default::default()
+        });
+    });
+    let a = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                engine: Some(EngineId::COPILOT),
+                model: Some("gpt-6-luna".into()),
+                mode: Some("default".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    let id = crate::plugins::builtin::COPILOT;
+    h.core.plugins.choose(id, |c| c.enabled = false).unwrap();
+    h.core.plugin_runtime.forget(id);
+    h.core.sync_harnesses();
+    assert!(crate::plugins::harness::plugged(id).is_none());
+    let sent = h.core.send_message(&a, "bonjour".into(), vec![]).await;
+    let said = |h: &Harness| {
+        let items = Value::Array(h.items(&a)).to_string();
+        let err = sent
+            .as_ref()
+            .err()
+            .map(|e| e.to_string())
+            .unwrap_or_default();
+        format!("{err} {items}")
+    };
+    wait_long(&h, &a, "the plugin said off", 30, |h| said(h).contains(id)).await;
+    assert!(said(&h).contains("coupé"), "{}", said(&h));
+    h.core.plugins.choose(id, |c| c.enabled = true).unwrap();
+    h.core.sync_harnesses();
+    assert!(crate::plugins::harness::plugged(id).is_some());
+    let ended = |h: &Harness| !texts(h, &a).is_empty() && !h.agent(&a).status.is_active();
+    if !ended(&h) {
+        h.core
+            .send_message(&a, "bonjour".into(), vec![])
+            .await
+            .unwrap();
+    }
+    wait_long(&h, &a, "its answer", 30, ended).await;
+    h.core.stop_for_good();
+}
+
+/// Real run (INT-10.3), by hand: the real Copilot CLI (`ESCOUADE_REAL_COPILOT`) through its plugin, on the account already
+/// signed in on the machine, without a token nor a folder of its own: `cargo test --lib real_copilot_through_its_plugin --
+/// --ignored --nocapture`. Its credits are counted: three short turns on its cheapest model. A reply, a command allowed
+/// on its card, then its process stopped and its session resumed.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore]
+async fn real_copilot_through_its_plugin() {
+    let real = std::env::var("ESCOUADE_REAL_COPILOT")
+        .expect("ESCOUADE_REAL_COPILOT: the path of the real copilot");
+    let h = harness("int10-copilot-real");
+    let (p, _) = h.project(false).await;
+    h.set_settings(|s| {
+        s.mcp_enabled = false;
+        s.accounts.push(Account {
+            id: "principal-copilot".into(),
+            name: "Principal".into(),
+            engine: EngineId::COPILOT,
+            claude_path: real.clone(),
+            active: true,
+            ..Default::default()
+        });
+    });
+    let id = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                engine: Some(EngineId::COPILOT),
+                model: Some("gpt-5-mini".into()),
+                mode: Some("default".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    let turns = |h: &Harness| h.items(&id).iter().filter(|i| i["kind"] == "turn").count();
+    let send = |text: &str| {
+        let (c, id, text) = (h.core.clone(), id.clone(), text.to_string());
+        async move { c.send_message(&id, text, vec![]).await.unwrap() }
+    };
+    let ended = |h: &Harness, n: usize| turns(h) >= n && !h.agent(&id).status.is_active();
+
+    send("Réponds seulement : A").await;
+    wait_long(&h, &id, "the first reply", 120, |h| ended(h, 1)).await;
+    assert!(texts(&h, &id).iter().any(|t| t.contains('A')));
+    let session = h.agent(&id).session_id.clone().expect("its session");
+
+    send("Avec l'outil powershell, lance exactement `git status --short`, puis dis en une phrase ce qu'il a affiché.").await;
+    wait_long(&h, &id, "the permission", 120, |h| {
+        waiting(h, &id, "permission").is_some() || ended(h, 2)
+    })
+    .await;
+    if let Some(card) = waiting(&h, &id, "permission") {
+        println!("PERMISSION {}", card["toolName"]);
+        assert_eq!(card["toolName"], "Bash");
+        h.core
+            .answer_permission(&id, card["id"].as_str().unwrap(), "allow", None)
+            .unwrap();
+    }
+    wait_long(&h, &id, "the command's turn", 120, |h| ended(h, 2)).await;
+
+    // Stopped, then resumed: the same session, which runtime.shutdown saved.
+    h.core.restart_process(&id).await.unwrap();
+    send("Réponds seulement : B").await;
+    wait_long(&h, &id, "the reply once resumed", 120, |h| ended(h, 3)).await;
+    assert_eq!(h.agent(&id).session_id.as_deref(), Some(session.as_str()));
+    let items = h.items(&id);
+    for i in &items {
+        match i["kind"].as_str() {
+            Some("text") => println!("TEXT {}", i["text"]),
+            Some("tool") => println!("TOOL {} {}", i["name"], i["status"]),
+            Some("turn") => println!("TURN cost {} tokens {}", i["cost"], i["tokens"]),
+            Some("notice") => println!("NOTICE {}", i["text"]),
+            _ => {}
+        }
+    }
+    assert!(!Value::Array(items).to_string().contains("ghp_"));
+    h.core.stop_for_good();
+}
+
 /// Real run (ESC-39), by hand: the real Copilot CLI 1.0.98 (`ESCOUADE_REAL_COPILOT`, its
 /// `copilot.exe`), a `COPILOT_HOME` of its own and a token in the environment of this process
 /// alone (`GH_TOKEN`, never printed): `cargo test --lib real_copilot -- --ignored --nocapture`.
@@ -57,7 +201,7 @@ async fn real_copilot() {
         s.accounts.push(Account {
             id: "principal-copilot".into(),
             name: "Principal".into(),
-            engine: EngineId::Copilot,
+            engine: EngineId::COPILOT,
             config_dir: String::new(),
             claude_path: real.clone(),
             active: true,
@@ -71,7 +215,7 @@ async fn real_copilot() {
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Copilot),
+                engine: Some(EngineId::COPILOT),
                 model: Some("gpt-6-luna".into()),
                 mode: Some("default".into()),
                 ..Default::default()
@@ -209,7 +353,7 @@ fn copilot_accounts(h: &Harness, fake: Value) -> PathBuf {
             s.accounts.push(Account {
                 id: id.into(),
                 name: id.into(),
-                engine: EngineId::Copilot,
+                engine: EngineId::COPILOT,
                 config_dir: dir,
                 claude_path: crate::engine::fake_copilot(),
                 active,
@@ -260,7 +404,7 @@ async fn copilot_agent(h: &Harness, p: &Project) -> String {
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Copilot),
+                engine: Some(EngineId::COPILOT),
                 account: Some("work".into()),
                 model: Some("gpt-6-luna".into()),
                 ..Default::default()
@@ -297,7 +441,7 @@ fn a_new_copilot_account_shares_its_mcp_servers_instructions_agents_and_skills_a
     std::fs::write(principal.join("settings.json"), "{}").unwrap();
     std::fs::create_dir_all(principal.join("session-state")).unwrap();
     assert_eq!(
-        shareable_of(EngineId::Copilot, &principal),
+        shareable_of(EngineId::COPILOT, &principal),
         [
             "mcp-config.json",
             "copilot-instructions.md",
@@ -306,11 +450,11 @@ fn a_new_copilot_account_shares_its_mcp_servers_instructions_agents_and_skills_a
         ]
     );
     let mut s = Settings::default();
-    s.accounts.push(principal_of(EngineId::Copilot));
+    s.accounts.push(principal_of(EngineId::COPILOT));
     let root = dir.join("data").join("copilot");
     for refused in ["config.json", "settings.json", "session-state"] {
         let e = create_of(
-            EngineId::Copilot,
+            EngineId::COPILOT,
             &s,
             &root,
             &principal,
@@ -324,9 +468,9 @@ fn a_new_copilot_account_shares_its_mcp_servers_instructions_agents_and_skills_a
             "{refused}: {e}"
         );
     }
-    let share = shareable_of(EngineId::Copilot, &principal);
+    let share = shareable_of(EngineId::COPILOT, &principal);
     let made = create_of(
-        EngineId::Copilot,
+        EngineId::COPILOT,
         &s,
         &root,
         &principal,
@@ -351,7 +495,7 @@ fn a_new_copilot_account_shares_its_mcp_servers_instructions_agents_and_skills_a
         launch_env(&made),
         [("COPILOT_HOME".to_string(), made.config_dir.clone())]
     );
-    assert!(launch_env(&principal_of(EngineId::Copilot)).is_empty());
+    assert!(launch_env(&principal_of(EngineId::COPILOT)).is_empty());
 }
 
 #[test]
@@ -383,12 +527,12 @@ async fn a_copilot_account_is_added_then_signed_in_by_copilot_login_in_a_termina
     let h = harness("esc40-copilot-login");
     let work = h
         .core
-        .create_account(EngineId::Copilot, "Travail", &[], ShareMode::Link)
+        .create_account(EngineId::COPILOT, "Travail", &[], ShareMode::Link)
         .unwrap();
     let dir = PathBuf::from(&work.config_dir);
     assert_eq!(
         dir,
-        std::path::absolute(h.core.data.accounts_of(EngineId::Copilot).join("travail")).unwrap()
+        std::path::absolute(h.core.data.accounts_of(EngineId::COPILOT).join("travail")).unwrap()
     );
     let ids: Vec<String> = h
         .core
@@ -434,9 +578,13 @@ async fn a_copilot_account_is_added_then_signed_in_by_copilot_login_in_a_termina
         );
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
-    // `copilot login`, in the account's folder: its user, never a token.
-    let launch = noted(&dir, "launches.jsonl").pop().unwrap();
-    assert_eq!(argv(&launch), ["login"]);
+    // `copilot login`, in the account's folder: its user, never a token. Once it is signed in, the
+    // app reads the account's models (`--server`), which may be noted after it: not the last one.
+    let launches = noted(&dir, "launches.jsonl");
+    assert!(
+        launches.iter().any(|l| argv(l) == ["login"]),
+        "no `copilot login` among {launches:?}"
+    );
     let status = h.core.claude_account_status("travail").await.unwrap();
     assert!(status.connected);
     assert_eq!(status.email.as_deref(), Some("@copilot-user"));
@@ -585,7 +733,7 @@ async fn the_texts_written_by_copilot_go_through_copilot_p_without_tools_on_the_
     let h = harness("esc40-writer");
     let (p, _) = h.project(false).await;
     let work = copilot_accounts(&h, json!({}));
-    h.set_settings(|s| s.writer_engine = Some(EngineId::Copilot));
+    h.set_settings(|s| s.writer_engine = Some(EngineId::COPILOT));
     let id = copilot_agent(&h, &p).await;
     let answer = h
         .core
@@ -646,7 +794,7 @@ async fn an_agent_on_auto_goes_without_an_effort_which_copilot_refuses_with_it()
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Copilot),
+                engine: Some(EngineId::COPILOT),
                 account: Some("work".into()),
                 model: Some("sonnet".into()),
                 effort: Some("medium".into()),
@@ -675,8 +823,8 @@ async fn an_agent_on_auto_goes_without_an_effort_which_copilot_refuses_with_it()
         h.items(&id)
     );
     // On another model, its effort goes with it again.
-    assert!(!crate::engine::by_id(EngineId::Copilot).supports_effort("auto"));
-    assert!(crate::engine::by_id(EngineId::Copilot).supports_effort("gpt-6-luna"));
+    assert!(!crate::engine::by_id(EngineId::COPILOT).supports_effort("auto"));
+    assert!(crate::engine::by_id(EngineId::COPILOT).supports_effort("gpt-6-luna"));
     h.core.stop_for_good();
 }
 
@@ -713,7 +861,7 @@ async fn a_copilot_agent_gets_its_worktree_at_its_first_message_under_the_name_c
     let h = harness("esc156-copilot");
     let (p, _) = h.project_as_new(true).await;
     let work = copilot_accounts(&h, json!({}));
-    h.set_settings(|s| s.writer_engine = Some(EngineId::Copilot));
+    h.set_settings(|s| s.writer_engine = Some(EngineId::COPILOT));
     let id = copilot_agent(&h, &p).await;
     assert!(h.agent(&id).worktree_pending);
     h.turn(&id, "Ajoute un bouton").await;

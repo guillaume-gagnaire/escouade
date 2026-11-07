@@ -1,0 +1,17 @@
+[package]
+name = "escouade-plugin-linear"
+version = "2.2.1"
+description = "Le plugin Linear d'Escouade : les issues d'une équipe dans le Kanban, ses statuts comme colonnes"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+
+# A module, compiled by `escouade-plugin build` (docs/PLUGINS.md §8.5).
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+escouade-plugin-kit = "0.1.1"
+serde_json = "1"
+anyhow = "1"

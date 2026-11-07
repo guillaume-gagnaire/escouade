@@ -182,14 +182,9 @@ pub struct TrackView {
 }
 
 pub fn support_of(engine: EngineId, view: bool) -> Support {
-    let (partial, missing): (bool, &[&str]) = match (engine, view) {
-        (EngineId::Codex, _) => (true, &["subagents"]),
-        (EngineId::Cursor, false) => (true, &["cost"]),
-        (EngineId::Cursor, true) => (true, &["subagents", "cost", "timing"]),
-        _ => (false, &[]),
-    };
+    let missing = crate::engine::by_id(engine).track_missing(view);
     Support {
-        partial,
+        partial: !missing.is_empty(),
         missing: missing.iter().map(|m| m.to_string()).collect(),
     }
 }
@@ -847,6 +842,104 @@ impl AgentTrack {
     }
 }
 
+// ---------- told to the plugins (ESC-200) ----------
+
+/// Where a track stood before a batch of facts: the number of the last passage and the one in
+/// course, so that what the batch did can be said afterwards.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Mark {
+    last: u32,
+    open: Option<u32>,
+}
+
+impl AgentTrack {
+    pub fn mark(&self) -> Mark {
+        Mark {
+            last: self.next_n,
+            open: self
+                .passages
+                .last()
+                .filter(|p| p.ended.is_none())
+                .map(|p| p.n),
+        }
+    }
+
+    /// What the passages say since `since`, as facts for the plugins, in the order they happened:
+    /// the step left (and the way back, with its reason), the step entered, the workflow left.
+    pub fn facts_since(&self, since: Mark) -> Vec<crate::facts::Body> {
+        use crate::facts::Body;
+        let mut out = Vec::new();
+        for p in &self.passages {
+            let fresh = p.n > since.last;
+            if !fresh && Some(p.n) != since.open {
+                continue;
+            }
+            match &p.step {
+                Some(step) => {
+                    if fresh {
+                        out.push(Body::WorkflowStepEntered {
+                            workflow: p.workflow.clone(),
+                            step: step.clone(),
+                            door: p.door.clone(),
+                            pass: p.pass,
+                        });
+                    }
+                    if p.ended.is_some() {
+                        let outcome = serde_json::to_value(p.outcome)
+                            .ok()
+                            .and_then(|v| v.as_str().map(str::to_string))
+                            .unwrap_or_default();
+                        out.push(Body::WorkflowStepLeft {
+                            workflow: p.workflow.clone(),
+                            step: step.clone(),
+                            duration_ms: p.ms,
+                            cost: p.cost,
+                            outcome,
+                        });
+                        if let (Outcome::Back, Some(to)) = (p.outcome, &p.back_to) {
+                            out.push(Body::WorkflowLoopedBack {
+                                workflow: p.workflow.clone(),
+                                from: step.clone(),
+                                to: to.clone(),
+                                reason: p.reason.clone().filter(|r| !r.is_empty()),
+                            });
+                        }
+                    }
+                }
+                None => {
+                    if fresh {
+                        out.push(Body::WorkflowLeft {
+                            workflow: p.workflow.clone(),
+                            doing: p.doing.clone(),
+                        });
+                    }
+                }
+            }
+        }
+        out
+    }
+}
+
+/// The ids of the workflows that a new reading changed, made appear or took away (by their
+/// version, `version_of`), sorted.
+pub fn changed_workflows(old: &Scan, new: &Scan) -> Vec<String> {
+    let versions = |s: &Scan| -> HashMap<String, String> {
+        s.workflows
+            .iter()
+            .map(|w| (w.id.clone(), version_of(w)))
+            .collect()
+    };
+    let (a, b) = (versions(old), versions(new));
+    let mut ids: Vec<String> = b
+        .iter()
+        .filter(|(id, v)| a.get(*id) != Some(*v))
+        .map(|(id, _)| id.clone())
+        .chain(a.keys().filter(|id| !b.contains_key(*id)).cloned())
+        .collect();
+    ids.sort();
+    ids
+}
+
 // ---------- kept with the agent, told to the window ----------
 
 /// What is held in memory: the last reading of each project's workflows, and the tracks of its
@@ -902,6 +995,10 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
         let Ok(p) = self.project(project_id) else {
             return;
         };
+        // « Pas de workflow pour ce projet » (ESC-309): nothing read.
+        if !p.workflows_enabled {
+            return;
+        }
         let scan = crate::workflow::read(
             std::path::Path::new(&p.path),
             &p.repos,
@@ -917,12 +1014,18 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
         // Into the files of the workflows (ESC-195), as `refresh_workflows` puts them: what is followed.
         let places = crate::workflowfiles::places(&p, &self.data);
         let folder = crate::workflowfiles::load_all(&places);
+        // Those the user removed are not written again (ESC-309).
+        let file = crate::workflowfiles::removals_file(&self.data, project_id);
+        let before = crate::workflowfiles::Removals::load(&file);
+        let mut removals = before.clone();
         crate::workflowfiles::merge_reading_all(
             &places,
             &folder,
             &scan.workflows,
             std::path::Path::new(&p.path).is_dir(),
+            &mut removals,
         );
+        removals.save(&file, &before);
     }
 
     /// The tracks of the project's agents, read from their file the first time.
@@ -994,7 +1097,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
             .filter(|(n, _)| *n > 0);
         let at = crate::model::now_ms();
         let finished = end.is_some();
-        let (mut changed, list) = {
+        let (mut changed, list, said) = {
             let mut st = self.wf_tracks.lock();
             self.load_tracks(&mut st, project_id);
             let mut facts = {
@@ -1028,6 +1131,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
                 })
                 .expect("loaded");
             track.support = support_of(engine, view);
+            let mark = track.mark();
             let mut changed = false;
             if let Some((n, max)) = ticket_loop {
                 changed |= track.apply(&scan, &repo, &Fact::TicketLoop { n, max }, at);
@@ -1046,13 +1150,17 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
             } else {
                 None
             };
+            let said = track.facts_since(mark);
             let followed = track.workflow.is_some();
             if !followed {
                 // An agent that met no door has no track to keep.
                 st.tracks.get_mut(project_id).map(|m| m.remove(id));
             }
-            (changed, list)
+            (changed, list, said)
         };
+        for body in said {
+            self.facts.emit(body, self.about_agent(id));
+        }
         if let Some(path) = list {
             if let Some(p) = crate::workflow::list_progress(
                 std::path::Path::new(&root),
@@ -1092,11 +1200,32 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
     /// The reading of a project's workflows was made: kept for the tracking, and when it changed,
     /// every agent that follows one is told whether its step is now behind it (choice 154).
     pub(crate) fn workflow_read(&self, project_id: &str, scan: &Scan, changed: bool) {
+        let old = self.wf_tracks.lock().scans.get(project_id).cloned();
+        self.workflow_read_after(project_id, scan, changed, old);
+    }
+
+    fn workflow_read_after(
+        &self,
+        project_id: &str,
+        scan: &Scan,
+        changed: bool,
+        old: Option<std::sync::Arc<Scan>>,
+    ) {
         let scan = self.corrected_scan(project_id, scan);
+        let ids = old
+            .filter(|_| changed)
+            .map(|o| changed_workflows(&o, &scan))
+            .unwrap_or_default();
         self.wf_tracks
             .lock()
             .scans
             .insert(project_id.to_string(), std::sync::Arc::new(scan));
+        if !ids.is_empty() {
+            self.facts.emit(
+                crate::facts::Body::WorkflowChanged { workflows: ids },
+                crate::facts::About::project(project_id),
+            );
+        }
         if changed {
             for v in self.workflow_tracks(project_id) {
                 if v.track.workflow.is_some() {
@@ -1126,9 +1255,9 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
     /// `.escouade.yml`): the tracking takes them at once, its agents told as for a new reading.
     /// The history kept is not rewritten: its passages keep the names of their steps.
     pub(crate) fn workflow_fixes_changed(&self, project_id: &str) {
-        self.wf_tracks.lock().scans.remove(project_id);
+        let old = self.wf_tracks.lock().scans.remove(project_id);
         let scan = self.stored_scan(project_id);
-        self.workflow_read(project_id, &scan, true);
+        self.workflow_read_after(project_id, &scan, true, old);
     }
 
     /// An agent is deleted: its history goes with it.

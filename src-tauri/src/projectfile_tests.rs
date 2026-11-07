@@ -56,6 +56,10 @@ board:
   model: opus
   effort: high
   mode: plan
+workflows:
+  enabled: false
+plugins:
+  recommended: [dev.exemple.slack]
 ";
 
 fn read(text: &str) -> pf::Read {
@@ -114,6 +118,124 @@ fn every_key_of_version_1_is_read() {
     assert_eq!(v("board.model"), json!("opus"));
     assert_eq!(v("board.effort"), json!("high"));
     assert_eq!(v("board.mode"), json!("plan"));
+    assert_eq!(v("plugins.recommended"), json!(["dev.exemple.slack"]));
+    assert_eq!(v("workflows.enabled"), json!(false));
+}
+
+/// « Pas de workflow pour ce projet » (ESC-309): a key of the file, true when absent.
+#[test]
+fn no_workflow_for_the_project_is_a_key_of_the_file() {
+    let k = pf::key_of("workflows.enabled").unwrap();
+    assert_eq!(k.kind, pf::Kind::Bool);
+    assert!(!k.command && !k.file_only);
+    let mut p = project();
+    assert!(p.workflows_enabled);
+    assert_eq!(pf::get(&p, "workflows.enabled"), json!(true));
+    pf::set(&mut p, "workflows.enabled", &json!(false));
+    assert!(!p.workflows_enabled);
+    assert_eq!(pf::get(&p, "workflows.enabled"), json!(false));
+    let schema = pf::schema();
+    let key = &schema["properties"]["workflows"]["properties"]["enabled"];
+    assert_eq!(key["type"], "boolean");
+}
+
+/// The plugins a project proposes and their settings (PLG-14): read and kept in the file's values,
+/// never applied to the project nor exported from it; what cannot be read told with its line.
+#[test]
+fn the_plugins_a_project_proposes_and_their_settings_are_read() {
+    let text = "\
+version: 1
+plugins:
+  recommended:
+    - dev.exemple.slack
+    - Slack
+    - dev.exemple.team-rules
+    - dev.exemple.slack
+  dev.exemple.slack:
+    channel: '#equipe'
+    max: 3
+    ratio: 0.5
+    mentions: true
+    quoted: 'true'
+    nested: [a, b]
+    empty: ~
+  dev.exemple.team-rules: oui
+  notanid:
+    x: 1
+";
+    let r = read(text);
+    assert_eq!(
+        r.values["plugins.recommended"],
+        json!(["dev.exemple.slack", "dev.exemple.team-rules"])
+    );
+    assert_eq!(
+        r.values["plugins.dev.exemple.slack"],
+        json!({ "channel": "#equipe", "max": 3, "ratio": 0.5, "mentions": true, "quoted": "true" })
+    );
+    assert_eq!(
+        pf::plugin_settings(&r.values, "dev.exemple.slack").unwrap()["max"],
+        json!(3)
+    );
+    assert!(pf::plugin_settings(&r.values, "dev.exemple.team-rules").is_none());
+    // « Slack », the list in a setting, the group that is no group, the key that is no id.
+    assert_eq!(
+        lines(&r.warnings),
+        vec![Some(5), Some(14), Some(16), Some(17)],
+        "{:?}",
+        r.warnings
+    );
+    assert!(r.warnings[0].text.contains("Slack"));
+    assert!(r.warnings[3].text.contains("plugins.notanid"));
+    // A single id is a list of one.
+    assert_eq!(
+        read("plugins:\n  recommended: dev.exemple.slack\n").values["plugins.recommended"],
+        json!(["dev.exemple.slack"])
+    );
+
+    // Applied: the project has no field of them; the file keeps them for the window and the plugins.
+    let mut p = project();
+    let before = serde_json::to_value(&p).unwrap();
+    let applied = pf::apply(&mut p, &r);
+    assert!(applied.changed.is_empty());
+    let file = p.shared.file.clone().unwrap();
+    assert!(file.keys.contains(&"plugins.recommended".to_string()));
+    assert_eq!(
+        file.values["plugins.recommended"],
+        r.values["plugins.recommended"]
+    );
+    let mut after = serde_json::to_value(&p).unwrap();
+    after["shared"] = before["shared"].clone();
+    assert_eq!(after, before);
+    assert!(pf::keep_local(&p.clone(), &mut p).is_empty());
+
+    // Never exported from the project; kept as they are when the file is written over.
+    let k = pf::key_of("plugins.recommended").unwrap();
+    assert!(k.file_only && !k.command);
+    assert!(!pf::export_values(&p)
+        .iter()
+        .any(|(k, _)| k.starts_with("plugins")));
+    let written = pf::write(Some(text), &[("board.draft_pr", json!(true))]).unwrap();
+    assert!(written.contains("  dev.exemple.slack:\n    channel: '#equipe'\n"));
+    assert_eq!(
+        read(&written).values["plugins.recommended"],
+        r.values["plugins.recommended"]
+    );
+
+    // The schema says both.
+    let s = pf::schema();
+    let plugins = &s["properties"]["plugins"];
+    assert!(plugins["properties"]["recommended"].is_object());
+    let by_id = plugins["patternProperties"].as_object().unwrap();
+    assert_eq!(by_id.len(), 1);
+    let (pattern, settings) = by_id.iter().next().unwrap();
+    assert!(pattern.starts_with('^') && pattern.ends_with('$'));
+    assert_eq!(
+        settings["additionalProperties"]["type"],
+        json!(["string", "number", "boolean"])
+    );
+    for no in ["recommended", "Dev.x", "dev.", "-a.b", "a.b-", "dev..x"] {
+        assert!(!crate::plugins::manifest::is_id(no), "{no}");
+    }
 }
 
 /// « Branche de départ des nouveaux worktrees » (ESC-160): `head`, `target` or a branch's name, read
@@ -409,7 +531,7 @@ fn applied_settings_change_the_project_commands_wait_for_trust() {
     let a = pf::apply(&mut p, &r);
     // Every setting without effect on the machine applies.
     assert!(p.worktree_per_agent);
-    assert_eq!(p.engine, Some(EngineId::Codex));
+    assert_eq!(p.engine, Some(EngineId::CODEX));
     assert_eq!(p.worktree_dir, "../app-worktrees");
     assert_eq!(p.worktree_copy, [".env*", "config/local.json"]);
     assert_eq!(p.agent_branch_prefix, "agent/");
@@ -573,7 +695,8 @@ fn exported_then_read_again_the_settings_are_the_same() {
     assert!(r.warnings.is_empty(), "{:?}\n{text}", r.warnings);
     let mut back = project();
     pf::apply(&mut back, &r);
-    for k in pf::KEYS {
+    // The file's own keys (`plugins.*`) are no project's: not exported.
+    for k in pf::KEYS.iter().filter(|k| !k.file_only) {
         // Applied as they were, the commands apart (they wait for trust).
         assert!(
             k.command || pf::get(&back, k.path) == pf::get(&p, k.path),
@@ -1092,6 +1215,59 @@ async fn the_file_changed_is_read_again_its_new_commands_asked_again() {
     assert_eq!(p.board.strategy, "squash");
 }
 
+/// ESC-309: `workflows.enabled: false` in the file of a project shared, read as it opens or pulled:
+/// nothing read nor written of its workflows.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_shared_file_without_workflows_stops_their_reading_and_writing() {
+    let h = harness("pf-no-workflows");
+    let (p, r) = shared_project(
+        &h,
+        "version: 1
+workflows:
+  enabled: false
+",
+    )
+    .await;
+    let cmds = r.join(".claude/commands");
+    std::fs::create_dir_all(&cmds).unwrap();
+    std::fs::write(
+        cmds.join("one.md"),
+        "Do one, then /two.
+",
+    )
+    .unwrap();
+    std::fs::write(
+        cmds.join("two.md"),
+        "Do two.
+",
+    )
+    .unwrap();
+    assert!(!h.core.project(&p.id).unwrap().workflows_enabled);
+    let scan = h.core.refresh_workflows(&p.id, true).await.unwrap();
+    assert!(scan.off && scan.workflows.is_empty());
+    assert!(!r.join(".escouade/workflows").exists());
+    // A pull takes it out: read and written again.
+    std::fs::write(
+        r.join(pf::FILE),
+        "version: 1
+",
+    )
+    .unwrap();
+    std::fs::write(
+        r.join(pf::FILE),
+        "version: 1
+workflows:
+  enabled: true
+",
+    )
+    .unwrap();
+    h.core.read_shared(&p.id, false).unwrap();
+    let scan = h.core.refresh_workflows(&p.id, false).await.unwrap();
+    assert!(!scan.off);
+    assert_eq!(scan.workflows.len(), 1);
+    assert!(r.join(".escouade/workflows").is_dir());
+}
+
 #[tokio::test]
 async fn a_setting_set_in_the_window_goes_before_the_file_until_written_into_it() {
     let h = harness("pf-local");
@@ -1221,7 +1397,13 @@ async fn exported_the_project_s_settings_make_its_file_its_commands_trusted() {
     // Its own commands: nothing to approve, nothing kept apart.
     let file = p.shared.file.unwrap();
     assert!(file.pending.is_none());
-    assert_eq!(file.keys.len(), pf::KEYS.len() - 1, "no target branch yet");
+    // No target branch yet, and none of the file's own keys (`plugins.*`).
+    let own = pf::KEYS.iter().filter(|k| k.file_only).count();
+    assert_eq!(
+        file.keys.len(),
+        pf::KEYS.len() - 1 - own,
+        "no target branch yet"
+    );
     assert!(p.shared.local.is_empty());
     assert_eq!(p.run_commands[0].id, "r");
 }
@@ -1283,4 +1465,69 @@ fn the_forms_the_documentation_gives_are_read_as_it_says() {
         read("launch:\n  name: web\n  command: npm run dev\n").values["launch"],
         json!([{ "name": "web", "command": "npm run dev", "shell": "", "cwd": "" }])
     );
+}
+
+/// A project added with a file that proposes plugins (PLG-14): said at its opening, nothing
+/// installed; the settings it gives a plugin are the core's answer to the plugins' runtime.
+#[tokio::test]
+async fn a_project_that_proposes_plugins_says_so_at_its_opening_and_installs_nothing() {
+    use crate::plugins::events::Place;
+    let h = harness("pf-plugins");
+    let (p, _r) = shared_project(
+        &h,
+        "version: 1\nplugins:\n  recommended: [dev.exemple.slack, dev.exemple.team-rules]\n  dev.exemple.slack:\n    channel: '#equipe'\n",
+    )
+    .await;
+    let said = toasts(&h);
+    assert!(
+        said.iter()
+            .any(|t| t.contains("demo") && t.contains("2 plugins")),
+        "{said:?}"
+    );
+    // Nothing installed: only the plugins the app gives (isola, INT-14) are there.
+    assert!(h
+        .core
+        .plugins
+        .list(crate::i18n::Lang::En)
+        .iter()
+        .all(|v| v.origin == crate::plugins::Origin::Builtin));
+    let (private, settings) = h.core.project_plugin(&p.id, "dev.exemple.slack").unwrap();
+    assert!(!private);
+    assert_eq!(Value::Object(settings), json!({ "channel": "#equipe" }));
+    let (_, none) = h
+        .core
+        .project_plugin(&p.id, "dev.exemple.team-rules")
+        .unwrap();
+    assert!(none.is_empty());
+    assert!(h.core.project_plugin("gone", "dev.exemple.slack").is_none());
+}
+
+/// The index of the code's symbols is gone (ESC-310): a file that still sets it is read all the
+/// same, the key left out without a warning, and no file written sets it.
+#[test]
+fn a_file_with_the_key_of_the_retired_index_is_read_without_a_warning() {
+    for text in [
+        "version: 1\ncode_index: true\nworktrees:\n  dir: wt\n",
+        "version: 1\ncodeIndex:\n  enabled: true\nworktrees:\n  dir: wt\n",
+    ] {
+        let r = read(text);
+        assert_eq!(r.values["worktrees.dir"], json!("wt"));
+        assert_eq!(r.values.len(), 1);
+        assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    }
+    assert!(pf::KEYS
+        .iter()
+        .all(|k| !pf::RETIRED.iter().any(|r| k.path.starts_with(r))));
+    let schema = pf::schema().to_string();
+    assert!(!schema.contains("code_index") && !schema.contains("codeIndex"));
+}
+
+#[test]
+fn writing_the_file_again_takes_the_key_of_the_retired_index_away() {
+    let existing = "version: 1\n# ours\ncode_index: true\nworktrees:\n  dir: wt\n";
+    let out = pf::write(Some(existing), &[("worktrees.per_agent", json!(true))]).unwrap();
+    assert!(!out.contains("code_index"), "{out}");
+    assert!(out.contains("# ours") && out.contains("dir: wt") && out.contains("per_agent: true"));
+    let all = pf::export_values(&project());
+    assert!(all.iter().all(|(k, _)| !k.contains("index")));
 }

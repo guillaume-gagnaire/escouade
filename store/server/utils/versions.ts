@@ -1,14 +1,18 @@
 import { createHash } from 'node:crypto';
+import { parseTag } from '../../shared/folder';
 
 // A version of a plugin on the store (docs/STORE.md, §3.4): one tag, one commit, one archive kept as it came, its
-// binaries; and `version.json`, the small canonical file that names them all with their SHA-256. Its own SHA-256 is
+// binaries, the module the store compiled of a `run.js` bundle; and `version.json`, the small canonical file that names them all with their SHA-256. Its own SHA-256 is
 // the version's fingerprint: what the app checks and what the review signs (§4.5), so that a signature covers the
 // identity, the number, the code and the binaries together.
 
 export const sha256 = (b: Buffer | string) => createHash('sha256').update(b).digest('hex');
 
-/** The version a tag names: `v1.2.0` and `1.2.0` both name 1.2.0. */
-export const tagVersion = (tag: string) => tag.replace(/^v(?=\d)/, '');
+/**
+ * The version a tag names: `v1.2.0` and `1.2.0` both name 1.2.0, and so do a folder's `plugins/x/v1.2.0`, `x@1.2.0`
+ * and `x-v1.2.0` (ESC-313); for sorting the tags newest first.
+ */
+export const tagVersion = (tag: string) => parseTag(tag)?.version ?? tag.replace(/^v(?=\d)/, '');
 
 const SEMVER = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/;
 
@@ -64,6 +68,11 @@ export interface VersionFile {
   id: string;
   version: string;
   repository: string;
+  /**
+   * The plugin's folder in the repository, '' at its root (ESC-313): its archive holds that folder alone. Absent from
+   * the files written before it, which read as the root.
+   */
+  path: string;
   tag: string;
   commit: string;
   archive: { sha256: string; size: number };
@@ -73,6 +82,24 @@ export interface VersionFile {
   escouade: { api: string; min: string; max?: string };
   /** Its icon re-encoded by the store (PLG-13), the SHA-256 of its PNG at 256 and at 64 px; absent without one. */
   icon?: { '256': string; '64': string };
+  /**
+   * The module of a `run.js` or `run.wasm` plugin, compiled by the store twice to the same bytes (ESC-323, ESC-336), kept
+   * under its SHA-256 like the archive, and what compiled it: Javy's version, escouade-js's SHA-256 and escouade-plugin's
+   * version (its prelude), or rustc's version, its target, the SHA-256 of `rustc-canon` and of `Cargo.lock`. Absent for a
+   * plugin of another kind. The fingerprint of the version covers it: what is signed runs.
+   */
+  wasm?: { sha256: string; size: number; compiler: Compiler };
+}
+
+/** The module a `version.json` names (a `run.js` or `run.wasm` plugin's), or null. */
+export function wasmOf(json: string | null | undefined): VersionFile['wasm'] | null {
+  if (!json) return null;
+  try {
+    const w = (JSON.parse(json) as { wasm?: VersionFile['wasm'] }).wasm;
+    return w && /^[0-9a-f]{64}$/.test(w.sha256) ? w : null;
+  } catch {
+    return null;
+  }
 }
 
 /** `version.json` as the store serves it, and its SHA-256: the version's fingerprint. */

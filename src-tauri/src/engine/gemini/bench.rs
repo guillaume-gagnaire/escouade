@@ -1,9 +1,10 @@
 //! Gemini CLI on the bench, through the fake `gemini --acp` (tests/fixtures/fake-gemini.mjs), whose
-//! message picks the scenario; and the streams of the study of Gemini CLI 0.66.0
-//! (tests/fixtures/gemini/), replayed from tests/fixtures/replays/gemini/.
+//! message picks the scenario, its conversation through its plugin (INT-10.7). The streams of the
+//! study of Gemini CLI 0.66.0 (tests/fixtures/gemini/) are replayed by the plugin's client against
+//! tests/fixtures/replays/gemini/ (`plugins_acp_tests`).
 
 use super::GEMINI;
-use crate::engine::bench::{bench_dir, replay, run, Scenario, Target};
+use crate::engine::bench::{bench_dir, run, Scenario, Target};
 use crate::engine::{Engine, Program};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -92,8 +93,12 @@ impl Target for OnBench {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn the_fake_gemini_passes_the_bench() {
+    // Its conversation goes through its plugin (INT-10.7): the plugins the app gives, in a runtime of their own.
+    let (rt, plugins, _) = crate::plugins_acp_tests::runtime("int10-gemini-bench");
+    crate::plugins::harness::sync(&rt, &plugins);
+    assert!(super::plugged().is_some(), "the plugin Gemini CLI is on");
     let dir = bench_dir("esc274-bench-gemini");
     let played = run(&OnBench, &dir).await;
     // No copy nor quota in ACP: neither asked of it.
@@ -111,9 +116,5 @@ async fn the_fake_gemini_passes_the_bench() {
             Scenario::Resume,
         ]
     );
-}
-
-#[test]
-fn the_recorded_streams_of_gemini_make_the_items_expected() {
-    replay::check_all(&GEMINI, "gemini");
+    rt.shutdown();
 }

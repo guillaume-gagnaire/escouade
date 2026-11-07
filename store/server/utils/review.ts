@@ -18,6 +18,7 @@ import { acceptRevocations, lastRevocations } from './revocations';
 import { checkVersionSignature } from './signature';
 import { signatureIndex, verifiedBy } from './signatures';
 import { readArchive } from './tar';
+import type { Bearer } from './oauth';
 import { randomToken, tokenHash } from './tokens';
 import { compareVersions, type Binary } from './versions';
 import { hueOf, markOf, type Icon } from '../../shared/tile';
@@ -108,6 +109,25 @@ export async function tokenAdmin(db: Db, env: Env, header: string | undefined | 
   return row.account;
 }
 
+/**
+ * What `npm run plugins:publish` is on `/mcp` (ESC-353, docs/PLUGINS.md §8.6.2): the administrator of an administration
+ * token, for a command that cannot go through a browser's consent, on the three tools it calls and no other: nothing that
+ * takes back, unlists or moves. The same functions, limits and journal as any client; what it submits and publishes are
+ * the account's own repositories' versions, unverified, and the app takes none of the first hand unsigned.
+ */
+export async function adminBearer(db: Db, env: Env, header: string | undefined | null, now = new Date()): Promise<Bearer | null> {
+  const account = await tokenAdmin(db, env, header, now);
+  if (!account) return null;
+  return {
+    account,
+    grantId: 0,
+    client: { id: 'plugins-publish', name: 'npm run plugins:publish' },
+    scopes: ['author'],
+    tools: ['submit_version', 'get_version', 'publish_version'],
+    expiresAt: new Date(now.getTime() + 60_000),
+  };
+}
+
 // ---- The queue ----
 
 export interface Grown {
@@ -143,6 +163,8 @@ export interface QueueVersion {
   message: string | null;
   reviewedAt: string | null;
   command: string;
+  /** Where it was read from (ESC-313): its repository, its folder, and the source before it when it changed. */
+  source: { repository: string; path: string; changedFrom: string | null };
 }
 
 export interface QueueReport {
@@ -168,6 +190,8 @@ export interface QueueHeld {
   mark: string;
   hue: number;
   repository: string;
+  /** Its folder in the repository, '' at the root (ESC-313). */
+  path: string;
   author: string | null;
   why: Text;
   createdAt: string;
@@ -293,6 +317,16 @@ export async function reviewQueue(db: Db, dir: string, keys: readonly PublicKey[
       state: verifiedOf(r) ? 'verified' : r.v.reviewState === 'changes' || r.v.reviewState === 'refused' ? r.v.reviewState : null,
       message: r.v.reviewMessage,
       reviewedAt: r.v.reviewedAt?.toISOString() ?? null,
+      source: {
+        repository: r.v.repoFullName,
+        path: r.v.path,
+        changedFrom:
+          previous && (previous.v.repoId !== r.v.repoId || previous.v.path !== r.v.path)
+            ? previous.v.path
+              ? `${previous.v.repoFullName}/${previous.v.path}`
+              : previous.v.repoFullName
+            : null,
+      },
       command: `npm run plugin-review -- ${r.plugin.id}@${r.v.version}${baseRow && previous && baseRow !== previous ? ` --since ${baseRow.v.version}` : ''}`,
     };
   };
@@ -345,6 +379,7 @@ export async function reviewQueue(db: Db, dir: string, keys: readonly PublicKey[
       mark: markOf(name.en || v.pluginId || '?'),
       hue: hueOf(v.pluginId ?? ''),
       repository: v.repoFullName,
+      path: v.path,
       author: login,
       why: hold?.detail ?? { fr: 'Revue manuelle', en: 'Manual review' },
       createdAt: v.createdAt.toISOString(),

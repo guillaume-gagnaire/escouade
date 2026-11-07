@@ -1,0 +1,9 @@
+{
+  "pagelen": 100,
+  "page": 1,
+  "size": 2,
+  "values": [
+    { "type": "deployment_environment", "uuid": "{env-test}", "name": "Test", "environment_type": { "name": "Test" } },
+    { "type": "deployment_environment", "uuid": "{env-prod}", "name": "Production", "environment_type": { "name": "Production" } }
+  ]
+}

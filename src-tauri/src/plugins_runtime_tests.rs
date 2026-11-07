@@ -18,22 +18,22 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-const ID: &str = "dev.test.fake";
+pub(crate) const ID: &str = "dev.test.fake";
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
 }
 
-struct Fake {
-    rt: Arc<Runtime>,
-    store: Arc<MemoryStore>,
+pub(crate) struct Fake {
+    pub(crate) rt: Arc<Runtime>,
+    pub(crate) store: Arc<MemoryStore>,
     data: DataDir,
     plugins: Arc<Plugins>,
 }
 
 /// The fake plugin installed in development from a folder of the test's own, its program started
 /// with `args`.
-fn fake(name: &str, args: &[&str], limits: Limits) -> Fake {
+pub(crate) fn fake(name: &str, args: &[&str], limits: Limits) -> Fake {
     // Else cmd.exe may no longer find node (see `trim_test_path`).
     #[cfg(windows)]
     crate::paths::trim_test_path();
@@ -53,7 +53,14 @@ fn fake(name: &str, args: &[&str], limits: Limits) -> Fake {
         "escouade": { "api": "1", "min": "2.1.0" },
         "run": { "command": "fake-plugin", "windows": "fake-plugin.cmd", "args": args },
         "activation": ["event:ticket.column"],
-        "permissions": { "secrets": ["token", "account:*"] }
+        "permissions": { "secrets": ["token", "account:*"] },
+        "contributes": {
+            "settings": [
+                { "key": "channel", "title": "Salon", "type": "string" },
+                { "key": "mentions", "title": "Mentions", "type": "boolean" }
+            ],
+            "secrets": [{ "key": "token", "title": "Jeton" }]
+        }
     });
     std::fs::write(
         src.join("escouade-plugin.json"),
@@ -74,7 +81,7 @@ fn fake(name: &str, args: &[&str], limits: Limits) -> Fake {
 }
 
 /// Limits for a test: its memory read often, room for a slow machine to start node.
-fn quick() -> Limits {
+pub(crate) fn quick() -> Limits {
     Limits {
         sample: Duration::from_millis(100),
         initialize: Duration::from_secs(20),
@@ -83,7 +90,7 @@ fn quick() -> Limits {
     }
 }
 
-async fn until(what: &str, f: impl Fn() -> bool) {
+pub(crate) async fn until(what: &str, f: impl Fn() -> bool) {
     let started = Instant::now();
     while !f() {
         assert!(
@@ -167,6 +174,20 @@ async fn it_starts_at_its_first_activation_only_in_a_job_that_takes_its_tree() {
         f.rt.call("dev.test.absent", "echo", json!({})).await,
         Err(CallError::Unavailable(_))
     ));
+}
+
+/// What a module cannot read from an environment (docs/PLUGINS.md §8.4.8): the language, for every plugin.
+#[tokio::test(flavor = "multi_thread")]
+async fn initialize_says_the_language_and_the_version() {
+    let f = fake("greeting", &[], quick());
+    f.rt.set_builtin_env(vec![("ESCOUADE_LANG".into(), "en".into())]);
+    let state = f.rt.call(ID, "test/state", json!({})).await.unwrap();
+    assert_eq!(state["greeting"]["lang"], "en", "{state}");
+    assert_eq!(state["greeting"]["escouade"]["version"], "2.1.1", "{state}");
+
+    let f = fake("greeting-default", &[], quick());
+    let state = f.rt.call(ID, "test/state", json!({})).await.unwrap();
+    assert_eq!(state["greeting"]["lang"], "fr", "the backend's: {state}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -681,6 +702,8 @@ async fn an_event_that_changed_nothing_leaves_its_process_running() {
 fn a_relative_folder_gives_an_absolute_program() {
     let run = crate::plugins::manifest::Run {
         command: "slack".into(),
+        js: None,
+        wasm: None,
         args: vec![],
         by_system: Default::default(),
     };
@@ -694,4 +717,74 @@ fn a_relative_folder_gives_an_absolute_program() {
     };
     let p = crate::plugins::runtime::program_path(Path::new("slack"), &app, Path::new("app"));
     assert_eq!(p, here.join("app").join("escouade-plugins"));
+}
+
+/// The projects of a test: one open to every plugin, one private; each with the settings its
+/// `.escouade.yml` gives the fake plugin.
+struct Projects;
+
+impl crate::plugins::events::Place for Projects {
+    fn shell(&self) -> Option<crate::pty::ShellInfo> {
+        None
+    }
+
+    fn project_path(&self, _: &str) -> Option<String> {
+        None
+    }
+
+    fn project_plugin(&self, id: &str, _: &str) -> Option<(bool, serde_json::Map<String, Value>)> {
+        let (private, file) = match id {
+            "open" => (
+                false,
+                json!({ "channel": "#equipe", "mentions": true, "token": "fuite", "other": 1 }),
+            ),
+            "hidden" => (true, json!({ "channel": "#prive" })),
+            _ => return None,
+        };
+        Some((private, file.as_object().unwrap().clone()))
+    }
+}
+
+/// `settings/get` of a project (PLG-14): the settings its `.escouade.yml` gives the plugin over the
+/// user's, those it declares alone (never a secret); a private project's only once the plugin is
+/// on for it, and none of a project it is off in.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_project_s_file_gives_its_settings_to_the_plugin_on_in_it() {
+    let f = fake("project-settings", &[], quick());
+    let projects: Arc<dyn crate::plugins::events::Place> = Arc::new(Projects);
+    f.rt.place_with(Arc::downgrade(&projects));
+    f.plugins
+        .choose(ID, |c| {
+            c.settings.insert("channel".into(), json!("#escouade"));
+        })
+        .unwrap();
+    let of = |project: &str| {
+        let params = if project.is_empty() {
+            behave("settings")
+        } else {
+            json!({ "behave": "settings", "project": project })
+        };
+        f.rt.call(ID, "test/do", params)
+    };
+    let mine = json!({ "result": { "channel": "#escouade" } });
+    assert_eq!(of("").await.unwrap(), mine);
+    assert_eq!(
+        of("open").await.unwrap(),
+        json!({ "result": { "channel": "#equipe", "mentions": true } })
+    );
+    // Private: nothing of it reaches a plugin not turned on for it.
+    assert_eq!(of("hidden").await.unwrap(), mine);
+    assert_eq!(of("gone").await.unwrap(), mine);
+    f.plugins
+        .choose(ID, |c| {
+            c.projects.insert("hidden".into(), true);
+            c.projects.insert("open".into(), false);
+        })
+        .unwrap();
+    assert_eq!(
+        of("hidden").await.unwrap(),
+        json!({ "result": { "channel": "#prive" } })
+    );
+    assert_eq!(of("open").await.unwrap(), mine);
+    f.rt.shutdown();
 }

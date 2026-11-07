@@ -54,7 +54,11 @@ Les modèles sont ceux que le Claude Code de chaque compte liste dans son `/mode
 
 Le coût d’un tour est celui que donne Claude Code. Le quota, ce sont la fenêtre de 5 heures et la fenêtre hebdomadaire de ton compte, dans la barre d’état. La [vue Claude Code](claude-code-view) fait tourner l’agent dans l’interface de Claude Code elle-même. Il est seul à avoir le [remote control](remote-control), les tâches de fond et la lecture des PDF.
 
+Claude Code est un plugin livré avec Escouade (`dev.escouade.claude-code`) : ses agents conversent par un programme à part qu’Escouade lance et surveille. Il se voit dans la vue Plugins, sous « Livrés avec Escouade » ; coupé, un agent de Claude Code dit au lancement qu’il faut le rallumer, et garde sa session.
+
 ## Codex
+
+Codex est un plugin livré avec Escouade (`dev.escouade.codex`) : ses agents conversent par un programme à part qu’Escouade lance et surveille. Il se voit dans la vue Plugins, sous « Livrés avec Escouade » ; coupé, un agent de Codex dit au lancement qu’il faut le rallumer, et garde sa session.
 
 ### Installation et compte
 
@@ -84,6 +88,8 @@ Il ne lit pas les PDF (le bouton les refuse en le disant) et ne propose dans Esc
 
 ## OpenCode
 
+OpenCode est un plugin livré avec Escouade (`dev.escouade.opencode`) : ses agents conversent par un programme à part qu’Escouade lance et surveille, sur le serveur de leur compte. Il se voit dans la vue Plugins, sous « Livrés avec Escouade ». S’il plante, le serveur et le tour continuent et la conversation le dit ; coupé, un agent d’OpenCode dit qu’il faut le rallumer, et garde sa session.
+
 ### Installation et compte
 
 `npm install -g opencode-ai` installe OpenCode 1, le seul que pilote Escouade : OpenCode 2 (`@opencode/cli`) est reconnu et dit « Non pris en charge ». Connecte un fournisseur avec `opencode auth login` (« Se connecter… » dans Réglages › Harness le lance) ; les modèles locaux d’Ollama marchent aussi. OpenCode a un seul compte dans Escouade, sa config habituelle. Un seul `opencode serve` sert tous les agents OpenCode, protégé par un mot de passe tiré au hasard qui ne quitte pas Escouade ; chaque agent y est une session.
@@ -112,6 +118,8 @@ Le coût d’un tour est celui qu’OpenCode donne, au prix du fournisseur : 0 a
 Pas de mode « Auto » (OpenCode n’a pas de relecteur), pas de bac à sable, un seul compte, pas de PDF joints, pas d’autre commande `/` que `/compact` dans Escouade, pas de remote control ni de tâches de fond.
 
 ## Copilot CLI
+
+Copilot CLI est un plugin livré avec Escouade (`dev.escouade.copilot-cli`) : ses agents conversent par un programme à part qu’Escouade lance et surveille. Il se voit dans la vue Plugins, sous « Livrés avec Escouade » ; coupé, un agent de Copilot dit au lancement qu’il faut le rallumer, et garde sa session.
 
 ### Installation et compte
 
@@ -143,6 +151,8 @@ Pas de « Toujours autoriser », pas de mode `assisted` (expérimental), pas d
 
 ## Cursor CLI
 
+Cursor CLI est un plugin livré avec Escouade (`dev.escouade.cursor-cli`) : ses agents conversent par un programme à part qu’Escouade lance et surveille. Il se voit dans la vue Plugins, sous « Livrés avec Escouade » ; coupé, un agent de Cursor dit au lancement qu’il faut le rallumer, et garde sa session.
+
 ### Installation et compte
 
 Installe Cursor CLI avec son script (`irm 'https://cursor.com/install?win32=true' | iex` sous Windows, `curl https://cursor.com/install -fsS | bash` sous macOS et Linux), puis connecte-le avec `agent login`. Escouade le trouve dans `%LOCALAPPDATA%\cursor-agent` sous Windows, même absent du `PATH`, et lance sa dernière version installée. Chaque agent a son `agent acp` et son propre dossier de configuration, retiré avec lui : ses règles, son modèle et ses sessions y sont gardés, jamais dans ta config de Cursor. La connexion de la machine (`agent login`) est « le compte de la machine ». Un autre compte Cursor s’ajoute par sa clé d’API (cursor.com, Settings › API Keys) dans Réglages › Comptes : elle est gardée dans le trousseau du système et donnée à ses agents par `CURSOR_API_KEY`, jamais dans un fichier ni sur une ligne de commande ; « Changer la clé… » la redonne.
@@ -170,11 +180,13 @@ Cursor ne dit ni les tokens ni le coût d’un tour quand Escouade le pilote : l
 
 ## Mistral Vibe
 
+Mistral Vibe est servi par le plugin « Mistral », livré avec Escouade (`dev.escouade.mistral`), qui porte aussi sa voix : ses agents conversent par un programme à part qu’Escouade lance et surveille. Il se voit dans la vue Plugins, sous « Livrés avec Escouade » ; coupé, la voix Mistral s’en va aussi, et un agent de Vibe dit au lancement qu’il faut le rallumer, et garde sa session.
+
 ### Installation et compte
 
 Installe Mistral Vibe avec `uv tool install mistral-vibe`, puis donne-lui ta clé d’API Mistral avec `vibe --setup` : elle est gardée dans le trousseau du système, et Escouade ne la lit jamais. Escouade trouve son `vibe-acp` dans le `PATH`, ou dans `~/.local/bin` où `uv` le pose. Chaque agent a son `vibe-acp` et son propre dossier `VIBE_HOME`, retiré avec lui : ses règles, ses sessions et la confiance de son dossier y sont gardées, jamais dans ton `~/.vibe`. Ses mises à jour et sa télémétrie y sont coupées.
 
-La clé de `vibe --setup` est « le compte de la machine ». Un autre compte Mistral s’ajoute par sa clé d’API (console.mistral.ai, API Keys) dans Réglages › Comptes : elle est gardée dans le trousseau du système et donnée à ses agents par `MISTRAL_API_KEY`, jamais dans un fichier ni sur une ligne de commande ; « Changer la clé… » la redonne. Un compte sans clé ne démarre rien. « Reprendre sur <compte> » garde la session de l’agent : seule la clé change.
+La clé de `vibe --setup` est « le compte de la machine ». Un autre compte Mistral s’ajoute par sa clé d’API (console.mistral.ai, API Keys) dans Réglages › Comptes, ou par la clé Mistral de Réglages › Voix, en laissant le champ vide : la voix et Vibe partagent le compte Mistral. La clé est gardée dans le trousseau du système et donnée à ses agents par `MISTRAL_API_KEY`, jamais dans un fichier ni sur une ligne de commande ; « Changer la clé… » la redonne. Un compte sans clé ne démarre rien. « Reprendre sur <compte> » garde la session de l’agent : seule la clé change.
 
 ### Modèles et modes
 
@@ -198,6 +210,8 @@ Pour un projet privé, les chemins des autres projets sont refusés à ses outil
 Vibe donne le coût et les tokens de chaque tour : la conversation, la carte de l’agent, la barre d’état et les statistiques les montrent, comme pour OpenCode. Il ne dit pas de quota (une clé d’API Mistral est facturée à l’usage) : le coût du jour et un « Budget par jour ($) » en tiennent lieu, et « Usage sur admin.mistral.ai », dans Réglages › Comptes et dans le panneau des quotas, ouvre la console de Mistral. Sa limite de débit (« Rate limit exceeded », après cinq minutes de réessais de Vibe) arrête le tour sur une carte ambre ; l’agent reprend seul une minute plus tard, ou, pour un agent de ticket, continue sur un autre compte Vibe si « Reprendre sur un autre compte un agent de ticket arrêté par la limite » est allumé. Les textes rédigés, quand « Modèle des textes rédigés » est « Mistral Vibe », passent par `vibe -p`, sans aucun outil, en un tour et 0,05 $ au plus. Pas de mode Auto, de PDF joints, de commandes `/` dans Escouade (`/compact` part comme un message), ni de remote control ni de tâches de fond. Il reçoit le serveur MCP d’Escouade par sa session ; l’interrupteur ne le déclare pas encore dans la config de Vibe. La « Vue Mistral Vibe » fait tourner l’agent dans l’interface de Vibe, sur la même session (voir [la vue terminal](claude-code-view#avec-mistral-vibe)).
 
 ## Antigravity CLI
+
+Antigravity CLI est un plugin livré avec Escouade (`dev.escouade.antigravity-cli`) : ses agents conversent par un programme à part qu’Escouade lance et surveille. Il se voit dans la vue Plugins, sous « Livrés avec Escouade » ; coupé, un agent d’Antigravity CLI dit au lancement qu’il faut le rallumer, et garde sa conversation.
 
 ### Installation et compte
 
@@ -229,6 +243,8 @@ Pour un projet privé, la lecture des chemins des autres projets lui est refusé
 Antigravity donne les tokens de chaque tour (sur sa carte, dans les statistiques), pas leur coût ni son quota : son `/usage` (par groupe de modèles, hebdomadaire) n’est que dans son interface ; « Usage sur antigravity.google », dans Réglages › Comptes et le panneau des quotas, ouvre la page de ses forfaits. Quand son quota est épuisé, le tour finit « limité » sur une carte qui le dit ; l’agent réessaie seul à la remise à zéro qu’Antigravity annonce, sinon une heure plus tard (une minute si c’est la capacité du modèle qui manque), ou passe sur un autre compte selon « Changer de compte à » et « Continuer sur le harness suivant ». Pas de mode Auto, d’images ni de PDF joints, de « Dupliquer la conversation », de commandes `/` dans Escouade, ni de remote control ni de tâches de fond. Il reçoit le serveur MCP d’Escouade par la config de son dossier ; l’interrupteur ne le déclare pas encore dans la tienne. La « Vue Antigravity CLI » fait tourner l’agent dans l’interface d’Antigravity, sur la même conversation (voir [la vue terminal](claude-code-view#avec-antigravity-cli)).
 
 ## Gemini CLI
+
+Gemini CLI est un plugin livré avec Escouade (`dev.escouade.gemini-cli`) : ses agents conversent par un programme à part qu’Escouade lance et surveille. Il se voit dans la vue Plugins, sous « Livrés avec Escouade » ; coupé, un agent de Gemini dit au lancement qu’il faut le rallumer, et garde sa session.
 
 > [!WARNING]
 > Gemini CLI n’a pas encore été essayé avec un vrai compte : son adaptateur suit sa documentation et ce que son programme fait contre un faux serveur. Les points à voir en vrai : la taille de ses réponses en direct, ses questions, ses quotas et leurs messages, sa connexion Google donnée à chaque agent, sa vue terminal et ses hooks.
@@ -262,6 +278,10 @@ Pour un projet privé, ses outils de fichiers et ses commandes qui nomment les c
 ### Coût, quota et ce que Gemini ne fait pas
 
 Gemini donne les tokens de chaque tour, pas leur coût ni son quota : son usage se lit par `/stats` dans son interface, et « Usage sur aistudio.google.com », dans Réglages › Comptes et le panneau des quotas, ouvre la page d’usage des clés d’API. Sa limite arrête le tour « limité » sur une carte qui le dit ; l’agent reprend seul quand Gemini le dit (« Please retry in 30s »), sinon une minute plus tard, ou une heure plus tard pour son quota du jour, ou passe sur un autre compte selon « Changer de compte à » et « Continuer sur le harness suivant ». Les textes qu’il rédige (nom d’un agent, message de commit…) passent par `gemini -p`, tous ses outils refusés. La « Vue Gemini CLI » fait tourner l’agent dans l’interface de Gemini, sur la même session (voir [la vue terminal](claude-code-view#avec-gemini-cli)). Pas de mode Auto, de PDF joints, de « Dupliquer la conversation », de commandes `/` dans Escouade (`/compact` : son `/compress`, dans son interface), ni de remote control ni de tâches de fond. Il reçoit le serveur MCP d’Escouade par sa session ; l’interrupteur ne le déclare pas encore dans ta config.
+
+## D’autres harness, par un plugin
+
+Un agent qui parle ACP (Goose, par exemple) se décrit dans le manifeste d’un plugin, sans code : voir [un harness ACP décrit](plugins/harnesses). Le plugin ACP, livré avec Escouade (`dev.escouade.acp`), le lance et lui parle ; il se coupe dans la vue Plugins, et les agents de ces harness restent alors, marqués « harness absent », avec leurs conversations. Les harness de cette page, eux, font encore partie de l’app.
 
 ## Le serveur MCP
 

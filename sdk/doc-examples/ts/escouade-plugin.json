@@ -1,0 +1,27 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.example.doc-examples",
+  "name": "Examples of the documentation",
+  "version": "0.1.0",
+  "license": "MIT",
+  "escouade": { "api": "1", "min": "2.2.0" },
+  "run": { "js": "dist/plugin.mjs" },
+  "activation": ["event:ticket.column"],
+  "permissions": {
+    "events": ["ticket.column"],
+    "network": ["api.example.dev", "{account}"],
+    "secrets": ["token"],
+    "files": [
+      { "root": "plugin", "access": "read" },
+      { "root": "temp", "access": "write" },
+      { "root": "agent", "access": "write" },
+      { "root": "agentHome", "access": "read" }
+    ],
+    "commands": ["git status --short", "git log *"]
+  },
+  "limits": { "fetchSeconds": 60, "fetchBytes": 8388608, "fileBytes": 1048576 },
+  "contributes": {
+    "secrets": [{ "key": "token", "title": { "fr": "Clé de l'API", "en": "API key" } }],
+    "settings": [{ "key": "channel", "type": "string", "title": { "fr": "Salon", "en": "Channel" } }]
+  }
+}

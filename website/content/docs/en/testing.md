@@ -54,9 +54,9 @@ The window lists the steps, each with its state (✓ ready, … running, ✕ fai
 1. The setup steps run one after the other. They only run once per recipe: as long as it does not change and Escouade stays open, a new test skips them. A failing step ends the test (“Setup failed (code 1)”).
 2. Each process starts in its own terminal, read-only. They show up in the “Launch” section of the sidebar, with their logs (see [Launch commands](launch)).
 3. For each process that has an address, Escouade waits for it to answer (any HTTP answer counts, even a 404), for 3 minutes at most: “waiting for localhost:4101…”, then “ready · 2.4 s” or “No response from http://localhost:4101 after 3 min”.
-4. The browser opens on the address to open, or else on the first process’s address (“Opened in the browser: …”).
+4. The page opens on the address to open, or else on the first process’s address: in the agent’s “Page” view by default, in the project’s “Pages” window or in the system browser, as Settings › Projects › Launch says (see [The launch page](browser)).
 
-Once the test is ready, the window offers “Reopen” (the browser), “View logs”, “Stop all”, and “Close”. A failed line has its “View log”. A process that stops while the test is ready ends the test (“web stopped”).
+Once the test is ready, the window offers “Reopen” (the page), “View logs”, “Stop all”, and “Close”. A failed line has its “View log”. A process that stops while the test is ready ends the test (“web stopped”).
 
 While the servers run, the ticket’s card shows “■ Stop”, which stops them, and “Open”, which reopens the address. The servers also stop on their own when the ticket is approved, when its agent is archived or deleted, and when the project is closed.
 
@@ -65,6 +65,8 @@ While the servers run, the ticket’s card shows “■ Stop”, which stops the
 When [isola](https://github.com/cyucelen/isola) is installed and the worktree has a `.isola.toml`, isola runs the worktree’s services on its own ports and addresses. The agent then gets no block of ports, and it has no recipe to write: it only gives the address that shows the feature.
 
 “▶ Test” then shows the `.isola.toml` under “isola configuration (.isola.toml)” (isola runs the commands in this file in your shell, outside Claude Code’s permission mode, and the agent may have written or edited it) and the address that will open. As with a recipe, nothing runs until “Run” and a modified file is shown again. The test runs `isola up`, waits for each service to answer, then opens the address. “Stop all” runs `isola down`.
+
+isola is a plugin shipped with Escouade, `dev.escouade.isola`: the first “launch environment”, a plugin extension point that handles `up`, the address, `down` and `destroy` of a worktree. Settings › Plugins lists it under “Shipped with Escouade”; you can turn it off for the whole app or for one project, and without it a ticket starts as if there were no isola, with a recipe on the reserved ports. A plugin installed from elsewhere cannot serve this point yet.
 
 ## Approving a ticket
 

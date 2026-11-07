@@ -1,0 +1,161 @@
+diff --git a/src/components/Composer.svelte b/src/components/Composer.svelte
+index 18aabde5..58350018 100644
+--- a/src/components/Composer.svelte
++++ b/src/components/Composer.svelte
+@@ -20,7 +20,7 @@
+   import { getDraft, setDraft } from '../lib/drafts';
+   import { injectedSource } from '../lib/events';
+   import { parseLocalCommand } from '../lib/localcmd';
+-  import { errorText, missingAccountOf } from '../lib/refusal';
++  import { errorText, refusedEngine } from '../lib/refusal';
+   import { fileOrigins } from '../lib/file-origin';
+   import { basename, dirname, fSize } from '../lib/format';
+   import { t } from '../lib/i18n';
+@@ -558,7 +558,7 @@
+       // The files of an answer never left the field.
+       giveBack(owner, prevText, answering ? [] : prevFiles);
+       // For want of an account of its harness: said in the conversation, with the way out (choice 19).
+-      const missing = missingAccountOf(e);
++      const missing = refusedEngine(e);
+       if (missing) conversationOf(owner).noAccount = { engine: missing, text: errorText(e) };
+       else app.toast(errorText(e), 'error');
+     }
+diff --git a/src/components/branches/BranchPicker.svelte b/src/components/branches/BranchPicker.svelte
+index 1512a436..464def25 100644
+--- a/src/components/branches/BranchPicker.svelte
++++ b/src/components/branches/BranchPicker.svelte
+@@ -3,7 +3,7 @@
+   import { agentGitOf, switchRefusal } from '../../lib/agent-branch';
+   import { deletable, deleteBranch, refusalText, startAgentOn, switchBranch, tellRefusal, worktreeReason } from '../../lib/branch-actions';
+   import { rankFiles } from '../../lib/editor/quick-open';
+-  import { missingAccountOf } from '../../lib/refusal';
++  import { refusedEngine } from '../../lib/refusal';
+   import { trapFocus } from '../../lib/focus';
+   import { gitSync, repoSyncInfo, syncInfo, type SyncOp } from '../../lib/git-sync.svelte';
+   import { pointerMoves } from '../../lib/hover';
+@@ -379,7 +379,7 @@
+         await load();
+         // In its note rather than a toast, which would cover the picker's foot in a narrow window (ESC-238); for want
+         // of an account, the toast that offers to add one.
+-        if (missingAccountOf(e)) tellRefusal(e, b.name);
++        if (refusedEngine(e)) tellRefusal(e, b.name);
+         else refused = refusalText(e, b.name);
+       }
+       return;
+diff --git a/src/components/docs/NewDiscussionModal.svelte b/src/components/docs/NewDiscussionModal.svelte
+index c11dde93..c3adcc10 100644
+--- a/src/components/docs/NewDiscussionModal.svelte
++++ b/src/components/docs/NewDiscussionModal.svelte
+@@ -15,7 +15,7 @@
+   import { app } from '../../lib/state.svelte';
+   import { accountChoices, labelOf, modelChoices } from '../../lib/ticket-options';
+   import { holds } from '../../lib/discussions';
+-  import { errorText, missingAccountOf } from '../../lib/refusal';
++  import { errorText, refusedEngine } from '../../lib/refusal';
+   import type { DiscussionKind, DiscussionPreset, DocsCheck, EngineId } from '../../lib/types';
+ 
+   // « Nouvelle discussion » of the Docs tab (ESC-261, design/factory/3-nouvelle-discussion.png): a discussion with the
+@@ -140,7 +140,7 @@
+       } catch (e) {
+         // Said here, where it can start again or on another account; for want of an account, the toast offers to add one.
+         refused = errorText(e);
+-        if (missingAccountOf(e)) app.refused(e);
++        if (refusedEngine(e)) app.refused(e);
+         return;
+       }
+       app.agents[agent.id] = agent;
+diff --git a/src/lib/branch-actions.ts b/src/lib/branch-actions.ts
+index bd1bb77d..eae710a1 100644
+--- a/src/lib/branch-actions.ts
++++ b/src/lib/branch-actions.ts
+@@ -3,7 +3,7 @@
+ // `core::BranchRefusal`) become a question or a toast in the user's own words.
+ 
+ import { t } from './i18n';
+-import { missingAccountOf } from './refusal';
++import { refusedEngine } from './refusal';
+ import { api } from './ipc';
+ import { app } from './state.svelte';
+ import type { BranchInfo } from './types';
+@@ -49,7 +49,7 @@ export function refusalText(error: unknown, branch: string): string {
+ /** Tells in a toast why the backend refused an operation on `branch`. */
+ export function tellRefusal(error: unknown, branch: string) {
+   // For want of an account (ESC-128): with « Ajouter un compte… ».
+-  if (missingAccountOf(error)) return app.refused(error);
++  if (refusedEngine(error)) return app.refused(error);
+   app.toast(refusalText(error, branch), 'error');
+ }
+ 
+diff --git a/src/lib/refusal.test.ts b/src/lib/refusal.test.ts
+index 6de515e9..de426a3d 100644
+--- a/src/lib/refusal.test.ts
++++ b/src/lib/refusal.test.ts
+@@ -1,6 +1,6 @@
+ import { screen } from '@testing-library/svelte';
+ import { beforeEach, describe, expect, it } from 'vitest';
+-import { errorText, missingAccountOf } from './refusal';
++import { errorText, refusedEngine } from './refusal';
+ import { app } from './state.svelte';
+ import { fakeBackend, resetApp } from '../test/ipc';
+ 
+@@ -12,13 +12,13 @@ describe('the refusals of the backend', () => {
+   beforeEach(() => resetApp());
+ 
+   it('reads the harness a refusal wants an account of, and says it without its mark', () => {
+-    expect(missingAccountOf(NO_CODEX)).toBe('codex');
++    expect(refusedEngine(NO_CODEX)).toBe('codex');
+     expect(errorText(NO_CODEX)).toBe('Aucun compte Codex : ajoute-en un dans Réglages › Comptes.');
+     // Any other refusal, as it is.
+-    expect(missingAccountOf('ticket introuvable')).toBeNull();
++    expect(refusedEngine('ticket introuvable')).toBeNull();
+     expect(errorText('ticket introuvable')).toBe('ticket introuvable');
+     // The mark is at the start only: a text that quotes it is not one.
+-    expect(missingAccountOf('dit « no-account:codex|… »')).toBeNull();
++    expect(refusedEngine('dit « no-account:codex|… »')).toBeNull();
+   });
+ 
+   it('refuses a new agent without an account of its harness with « Ajouter un compte… » on it', async () => {
+diff --git a/src/lib/refusal.ts b/src/lib/refusal.ts
+index d7e3532d..f496fef0 100644
+--- a/src/lib/refusal.ts
++++ b/src/lib/refusal.ts
+@@ -11,7 +11,7 @@ export function errorText(e: unknown): string {
+ }
+ 
+ /** The harness a refusal wants an account of (ESC-128), if it is one for want of an account. */
+-export function missingAccountOf(e: unknown): EngineId | null {
++export function refusedEngine(e: unknown): EngineId | null {
+   const m = String(e).match(NO_ACCOUNT);
+   return m ? (m[1] as EngineId) : null;
+ }
+diff --git a/src/lib/state.svelte.ts b/src/lib/state.svelte.ts
+index eeb4a00e..5f2639d8 100644
+--- a/src/lib/state.svelte.ts
++++ b/src/lib/state.svelte.ts
+@@ -17,7 +17,7 @@ import { dictation } from './dictation.svelte';
+ import { conversation } from './conversation.svelte';
+ import { mcp } from './mcp.svelte';
+ import { readPref, writePref } from './prefs';
+-import { errorText, missingAccountOf } from './refusal';
++import { errorText, refusedEngine } from './refusal';
+ import { parseTestId, parseWorktreeRunId, testCommand, worktreeCommand } from './recipe';
+ import type { IconName } from './icons';
+ import type { SettingsTab } from './settings.svelte';
+@@ -701,7 +701,7 @@ class AppState {
+         break;
+       case 'toast':
+         // For want of an account (ESC-128): with « Ajouter un compte… ».
+-        if (missingAccountOf(e.text)) this.refused(e.text);
++        if (refusedEngine(e.text)) this.refused(e.text);
+         else this.toast(e.text, 'info');
+         break;
+       case 'language':
+@@ -1454,7 +1454,7 @@ class AppState {
+ 
+   /** A refusal told by a toast; one for want of an account of a harness (ESC-128) with « Ajouter un compte… » on it. */
+   refused(e: unknown) {
+-    const engine = missingAccountOf(e);
++    const engine = refusedEngine(e);
+     if (!engine) return this.toast(errorText(e), 'error');
+     this.toast(errorText(e), 'error', { label: t('accounts.tab.add'), onClick: () => (this.modal = { kind: 'account', engine }) });
+   }

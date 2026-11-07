@@ -2,10 +2,21 @@
 *
 !website
 !src-tauri/tauri.conf.json
+# The privacy page lists the events of this file, checked by its tests.
+!src-tauri/src/telemetry.rs
 !docs/TODO-*.md
 # The page of the example plugins shows their code, checked against these files by its tests.
-!plugin-examples
-plugin-examples/*/node_modules
+!plugins
+plugins/*/node_modules
+# The pages of the plugins show the code of the SDK's templates too (ESC-325), checked the same way.
+!sdk/create-escouade-plugin/templates
+sdk/create-escouade-plugin/templates/*/node_modules
+sdk/create-escouade-plugin/templates/*/target
+# And the two plugins their examples are quoted from (ESC-342).
+!sdk/doc-examples
+sdk/doc-examples/*/node_modules
+sdk/doc-examples/*/target
+sdk/doc-examples/*/dist
 website/node_modules
 website/.nuxt
 website/.output

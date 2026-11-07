@@ -1,12 +1,16 @@
 //! Each service's stream against a fake server that speaks as its documentation says (texts as it goes, then the final
-//! one), refuses the key, fails, or closes; and the proxy the stream goes through.
+//! one), refuses the key, fails, or closes. The service is its plugin.
 
-use super::super::online;
+use super::super::online::Spec;
 use super::*;
+use base64::Engine as _;
+use escouade_voice::live::url_of;
+use futures_util::{SinkExt, StreamExt};
 use parking_lot::Mutex;
+use std::sync::Arc;
 use std::time::Instant;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio_tungstenite::tungstenite::protocol::Role;
+use tokio_tungstenite::tungstenite::{self, protocol::Role, Message};
 
 pub(crate) const KEY: &str = "sk-live-test-key-123456";
 
@@ -69,9 +73,9 @@ impl FakeLive {
     pub fn spec(&self, p: Provider) -> Spec {
         Spec {
             base: self.url.clone(),
-            ..Spec::new(p, KEY.into(), reqwest::Client::new())
+            live: Some(p.live_model(p.model())),
+            ..Spec::new(p, KEY.into())
         }
-        .with_live(Some(p.live_model(p.model())))
     }
 }
 
@@ -392,6 +396,11 @@ pub(crate) fn speech(secs: f32) -> Vec<f32> {
 }
 
 /// Pushes `samples` 20 ms at a time, then waits for the final text.
+/// The stream of `spec`, as its plugin serves it.
+pub(crate) fn open(spec: &Spec, language: &str, rate: u32, partial: Partial) -> LiveStream {
+    crate::voice::service::of(spec.provider).open_live(spec, language, rate, partial)
+}
+
 fn say(stream: LiveStream, samples: &[f32]) -> Result<String, OnlineError> {
     for frame in samples.chunks(960) {
         stream.push(frame);
@@ -415,7 +424,7 @@ fn each_service_writes_the_text_as_it_hears_then_gives_the_final_one() {
     ] {
         let f = fake(p, Mode::Speaks);
         let (partial, seen) = partials();
-        let stream = LiveStream::open(&f.spec(p), "fr", 48_000, partial);
+        let stream = open(&f.spec(p), "fr", 48_000, partial);
         let text = say(stream, &speech(1.0)).unwrap();
         assert_eq!(text, FINAL, "{p:?}");
         let seen = seen.lock().clone();
@@ -447,7 +456,7 @@ fn each_service_writes_the_text_as_it_hears_then_gives_the_final_one() {
 fn each_stream_says_its_model_language_and_key_as_its_service_asks() {
     let check = |p: Provider, line_has: &[&str], header: (&str, String), texts_have: &[&str]| {
         let f = fake(p, Mode::Speaks);
-        let stream = LiveStream::open(&f.spec(p), "fr", 48_000, Box::new(|_| {}));
+        let stream = open(&f.spec(p), "fr", 48_000, Box::new(|_| {}));
         say(stream, &speech(0.3)).unwrap();
         let c = f.conns()[0].clone();
         for want in line_has {
@@ -524,7 +533,7 @@ fn a_refused_key_a_failure_or_a_stream_cut_is_said_and_nothing_hangs() {
         Provider::OpenAi,
     ] {
         let f = fake(p, Mode::Refuses(401));
-        let stream = LiveStream::open(&f.spec(p), "fr", 48_000, Box::new(|_| {}));
+        let stream = open(&f.spec(p), "fr", 48_000, Box::new(|_| {}));
         assert_eq!(
             say(stream, &speech(0.3)),
             Err(OnlineError::KeyRefused(p)),
@@ -532,32 +541,32 @@ fn a_refused_key_a_failure_or_a_stream_cut_is_said_and_nothing_hangs() {
         );
 
         let f = fake(p, Mode::Refuses(429));
-        let stream = LiveStream::open(&f.spec(p), "fr", 48_000, Box::new(|_| {}));
+        let stream = open(&f.spec(p), "fr", 48_000, Box::new(|_| {}));
         assert!(
             matches!(say(stream, &speech(0.3)), Err(OnlineError::Quota(..))),
             "{p:?}"
         );
 
         let f = fake(p, Mode::Fails);
-        let stream = LiveStream::open(&f.spec(p), "fr", 48_000, Box::new(|_| {}));
+        let stream = open(&f.spec(p), "fr", 48_000, Box::new(|_| {}));
         let e = say(stream, &speech(0.5)).unwrap_err();
         assert!(e.to_string().contains("boom"), "{p:?}: {e}");
 
         let f = fake(p, Mode::Closes);
-        let stream = LiveStream::open(&f.spec(p), "fr", 48_000, Box::new(|_| {}));
+        let stream = open(&f.spec(p), "fr", 48_000, Box::new(|_| {}));
         let e = say(stream, &speech(0.5)).unwrap_err();
         assert!(matches!(e, OnlineError::Network(..)), "{p:?}: {e:?}");
 
         // Cut once the end was sent, before any final text: no empty sentence (it would be lost), the cut is said and
         // the sentence goes by request. Deepgram's close only ends a sentence once it answered its `Finalize`.
         let f = fake(p, Mode::ClosesAtEnd);
-        let stream = LiveStream::open(&f.spec(p), "fr", 48_000, Box::new(|_| {}));
+        let stream = open(&f.spec(p), "fr", 48_000, Box::new(|_| {}));
         let e = say(stream, &speech(0.5)).unwrap_err();
         assert!(matches!(e, OnlineError::Network(..)), "{p:?}: {e:?}");
     }
     // A service that never gives its final text: given up after the wait.
     let f = fake(Provider::ElevenLabs, Mode::Mute);
-    let stream = LiveStream::open(
+    let stream = open(
         &f.spec(Provider::ElevenLabs),
         "fr",
         48_000,
@@ -578,7 +587,7 @@ fn a_refused_key_a_failure_or_a_stream_cut_is_said_and_nothing_hangs() {
         ..f.spec(Provider::ElevenLabs)
     };
     let started = Instant::now();
-    let stream = LiveStream::open(&spec, "fr", 48_000, Box::new(|_| {}));
+    let stream = open(&spec, "fr", 48_000, Box::new(|_| {}));
     assert!(matches!(
         say(stream, &speech(0.3)),
         Err(OnlineError::Network(..))
@@ -589,7 +598,7 @@ fn a_refused_key_a_failure_or_a_stream_cut_is_said_and_nothing_hangs() {
 #[test]
 fn the_key_never_shows_in_what_a_failure_says() {
     let f = fake(Provider::Mistral, Mode::Refuses(500));
-    let stream = LiveStream::open(&f.spec(Provider::Mistral), "fr", 48_000, Box::new(|_| {}));
+    let stream = open(&f.spec(Provider::Mistral), "fr", 48_000, Box::new(|_| {}));
     let e = say(stream, &speech(0.2)).unwrap_err();
     assert!(!format!("{e:?}").contains(KEY));
     assert!(
@@ -601,7 +610,7 @@ fn the_key_never_shows_in_what_a_failure_says() {
 #[test]
 fn a_stream_dropped_before_its_end_closes_without_its_final_text() {
     let f = fake(Provider::ElevenLabs, Mode::Speaks);
-    let stream = LiveStream::open(
+    let stream = open(
         &f.spec(Provider::ElevenLabs),
         "fr",
         48_000,
@@ -619,126 +628,9 @@ fn a_stream_dropped_before_its_end_closes_without_its_final_text() {
     assert!(!f.conns()[0].ended);
 }
 
-/// The CONNECT lines a fake proxy got, with their `Proxy-Authorization`.
-pub(crate) type Connects = Arc<Mutex<Vec<(String, Option<String>)>>>;
-
-/// A fake HTTP proxy: the CONNECT it got, then a tunnel to where it was asked.
-pub(crate) fn fake_proxy(rt: &tokio::runtime::Runtime, refuse: bool) -> (String, Connects) {
-    let listener = rt
-        .block_on(tokio::net::TcpListener::bind("127.0.0.1:0"))
-        .unwrap();
-    let addr = listener.local_addr().unwrap();
-    let got = Arc::new(Mutex::new(Vec::new()));
-    let g = got.clone();
-    rt.spawn(async move {
-        loop {
-            let Ok((mut sock, _)) = listener.accept().await else {
-                return;
-            };
-            let g = g.clone();
-            tokio::spawn(async move {
-                let Some((line, headers)) = read_head(&mut sock).await else {
-                    return;
-                };
-                let auth = headers
-                    .iter()
-                    .find(|(n, _)| n == "proxy-authorization")
-                    .map(|(_, v)| v.clone());
-                g.lock().push((line.clone(), auth));
-                if refuse {
-                    let _ = sock
-                        .write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n")
-                        .await;
-                    return;
-                }
-                let target = line.split_whitespace().nth(1).unwrap_or("").to_string();
-                let Ok(mut up) = tokio::net::TcpStream::connect(target).await else {
-                    let _ = sock.write_all(b"HTTP/1.1 502 Bad Gateway\r\n\r\n").await;
-                    return;
-                };
-                let _ = sock
-                    .write_all(b"HTTP/1.1 200 Connection established\r\n\r\n")
-                    .await;
-                let _ = tokio::io::copy_bidirectional(&mut sock, &mut up).await;
-            });
-        }
-    });
-    (format!("http://user:p%40ss@{addr}"), got)
-}
-
-#[test]
-fn the_stream_goes_through_the_proxy_of_the_settings_unless_no_proxy_names_the_service() {
-    let f = fake(Provider::ElevenLabs, Mode::Speaks);
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    let (proxy, got) = fake_proxy(&rt, false);
-    let port = f.url.rsplit(':').next().unwrap().to_string();
-    // Through the proxy: the CONNECT it got names the service.
-    let spec = Spec {
-        base: f.url.clone(),
-        net: online::Net {
-            proxy: proxy.clone(),
-            no_proxy: String::new(),
-            insecure: false,
-        },
-        ..f.spec(Provider::ElevenLabs)
-    };
-    let stream = LiveStream::open(&spec, "fr", 48_000, Box::new(|_| {}));
-    assert_eq!(say(stream, &speech(0.3)).unwrap(), FINAL);
-    let g = got.lock().clone();
-    assert_eq!(g.len(), 1);
-    assert_eq!(g[0].0, format!("CONNECT 127.0.0.1:{port} HTTP/1.1"));
-    // user:p@ss
-    assert_eq!(g[0].1.as_deref(), Some("Basic dXNlcjpwQHNz"));
-
-    // Named by `no_proxy`: straight to it.
-    let around = Spec {
-        net: online::Net {
-            no_proxy: "localhost, 127.0.0.1".into(),
-            ..spec.net.clone()
-        },
-        ..spec.clone()
-    };
-    let stream = LiveStream::open(&around, "fr", 48_000, Box::new(|_| {}));
-    assert_eq!(say(stream, &speech(0.3)).unwrap(), FINAL);
-    assert_eq!(got.lock().len(), 1);
-
-    // A proxy that refuses WebSockets (a corporate one): said, for the sentence to go by request.
-    let (refusing, _) = fake_proxy(&rt, true);
-    let refused = Spec {
-        net: online::Net {
-            proxy: refusing,
-            ..Default::default()
-        },
-        ..spec
-    };
-    let stream = LiveStream::open(&refused, "fr", 48_000, Box::new(|_| {}));
-    let e = say(stream, &speech(0.3)).unwrap_err();
-    assert!(e.to_string().contains("403"), "{e}");
-}
-
-#[test]
-fn no_proxy_takes_hosts_domains_and_a_star() {
-    let net = |no: &str| online::Net {
-        proxy: "proxy.corp:8080".into(),
-        no_proxy: no.into(),
-        insecure: false,
-    };
-    assert_eq!(
-        proxy_for(&net(""), "api.elevenlabs.io").unwrap().as_str(),
-        "http://proxy.corp:8080/"
-    );
-    assert!(proxy_for(&net("elevenlabs.io"), "api.elevenlabs.io").is_none());
-    assert!(proxy_for(&net(".elevenlabs.io"), "api.elevenlabs.io").is_none());
-    assert!(proxy_for(&net("*"), "api.deepgram.com").is_none());
-    assert!(proxy_for(&net("labs.io"), "api.elevenlabs.io").is_some());
-    assert!(proxy_for(&online::Net::default(), "api.elevenlabs.io").is_none());
-}
-
 #[test]
 fn a_service_found_in_any_language_is_not_told_one() {
-    let spec = |p: Provider| {
-        Spec::new(p, KEY.into(), reqwest::Client::new()).with_live(Some(p.live_model(p.model())))
-    };
+    let spec = |p: Provider| Spec::new(p, KEY.into()).with_live(Some(p.live_model(p.model())));
     let el = url_of(&spec(Provider::ElevenLabs), "auto");
     assert!(
         el.starts_with("wss://api.elevenlabs.io/v1/speech-to-text/realtime?"),
@@ -746,7 +638,7 @@ fn a_service_found_in_any_language_is_not_told_one() {
     );
     assert!(!el.contains("language_code"));
     assert!(url_of(&spec(Provider::Deepgram), "auto").contains("language=multi"));
-    let nova2 = Spec::new(Provider::Deepgram, KEY.into(), reqwest::Client::new())
+    let nova2 = Spec::new(Provider::Deepgram, KEY.into())
         .with_model("nova-2")
         .with_live(Some("nova-2".into()));
     let u = url_of(&nova2, "auto");
@@ -759,8 +651,7 @@ fn a_service_found_in_any_language_is_not_told_one() {
 #[test]
 fn groq_streams_nothing_and_the_others_take_their_live_model() {
     assert!(!Provider::Groq.offers_live());
-    let groq =
-        Spec::new(Provider::Groq, KEY.into(), reqwest::Client::new()).with_live(Some("x".into()));
+    let groq = Spec::new(Provider::Groq, KEY.into()).with_live(Some("x".into()));
     assert_eq!(groq.live, None);
     assert_eq!(
         Provider::ElevenLabs.live_model("scribe_v2"),
@@ -791,12 +682,11 @@ fn real_elevenlabs_live() {
         .samples::<i16>()
         .map(|s| s.unwrap() as f32 / i16::MAX as f32)
         .collect();
-    let spec = Spec::new(Provider::ElevenLabs, key, reqwest::Client::new())
-        .with_live(Some("scribe_v2_realtime".into()));
+    let spec = Spec::new(Provider::ElevenLabs, key).with_live(Some("scribe_v2_realtime".into()));
     let started = Instant::now();
     let seen = Arc::new(Mutex::new(Vec::<(u128, String)>::new()));
     let s2 = seen.clone();
-    let stream = LiveStream::open(
+    let stream = open(
         &spec,
         "fr",
         rate,

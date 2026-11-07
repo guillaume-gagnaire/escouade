@@ -38,45 +38,6 @@ fn the_models_of_a_session_make_the_menu() {
 }
 
 #[test]
-fn a_question_is_kept_out_of_the_thread_even_cut_in_pieces() {
-    let block = r#"<escouade_question>{"questions": [{"question": "Rouge ou bleu ?", "options": ["rouge", "bleu"], "multiSelect": false}]}</escouade_question>"#;
-    let text = format!("Il me faut ton choix.\n{block}");
-    for size in [1, 3, 7, 12, 200] {
-        let mut f = QuestionFilter::default();
-        let mut shown = String::new();
-        let chars: Vec<char> = text.chars().collect();
-        for piece in chars.chunks(size) {
-            shown.push_str(&f.push(&piece.iter().collect::<String>()));
-        }
-        shown.push_str(&f.flush());
-        assert_eq!(shown, "Il me faut ton choix.\n", "pieces of {size}");
-        let kept = f.take_block().expect("the block");
-        let params = question_params("c1", &kept).unwrap();
-        assert_eq!(params["questions"][0]["prompt"], "Rouge ou bleu ?");
-        assert_eq!(params["questions"][0]["options"][1]["label"], "bleu");
-        assert_eq!(params["questions"][0]["allowMultiple"], false);
-    }
-    // A text that only looks like the start of the tag is shown whole.
-    let mut f = QuestionFilter::default();
-    let mut shown = f.push("a <esc");
-    shown.push_str(&f.push("ape> b"));
-    shown.push_str(&f.flush());
-    assert_eq!(shown, "a <escape> b");
-    assert!(f.take_block().is_none());
-    // A block that is no question.
-    assert!(question_params("c", "<escouade_question>pas du json</escouade_question>").is_none());
-    let answers = answers_message(
-        &question_params("c", block).unwrap(),
-        &json!({ "Rouge ou bleu ?": "rouge" }),
-    );
-    assert_eq!(
-        answers,
-        "The user answered your questions:\n- Rouge ou bleu ? → rouge"
-    );
-    assert!(QUESTIONS.contains(QUESTION_OPEN) && QUESTIONS.contains(QUESTION_CLOSE));
-}
-
-#[test]
 fn the_rules_refuse_the_fence_to_its_file_tools_and_commands_whatever_the_separators() {
     assert_eq!(policy(&[], false), None);
     let rules = policy(&["C:\\x\\Privé.v1".into()], false).unwrap();
@@ -230,6 +191,13 @@ fn a_text_is_asked_of_gemini_p_without_any_tool_its_question_on_its_input() {
     assert_eq!(at("-e"), Some("none"));
     assert_eq!(at("--policy"), Some("C:/x/escouade-policy.toml"));
     assert_eq!(one_shot_args(Weight::Reading, policy)[5], "flash");
+    // A text given: the model of a reading, under the same rules.
+    let given = one_shot_args(Weight::Given, policy);
+    assert_eq!(given[5], "flash");
+    assert_eq!(
+        given.last().map(String::as_str),
+        Some("C:/x/escouade-policy.toml")
+    );
     // Every tool refused, whatever its name.
     let rules: toml_edit::DocumentMut = NO_TOOLS.parse().unwrap();
     let rule = &rules["rule"].as_array_of_tables().unwrap().get(0).unwrap();

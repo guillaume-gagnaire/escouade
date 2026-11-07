@@ -1,0 +1,61 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.cursor-cli",
+  "name": "Cursor CLI",
+  "version": "2.2.0",
+  "description": {
+    "fr": "Cursor CLI comme harness, par ACP : la conversation, sa vue terminal, les permissions, les modèles et l'usage du compte.",
+    "en": "Cursor CLI as a harness, over ACP: the conversation, its terminal view, permissions, models and the account's usage."
+  },
+  "author": {
+    "name": "Escouade",
+    "url": "https://escouade.dev"
+  },
+  "license": "GPL-3.0-or-later",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/cursor",
+  "escouade": {
+    "api": "1",
+    "min": "2.2.0"
+  },
+  "run": { "wasm": "Cargo.toml" },
+  "limits": { "memoryBytes": 268435456, "turnSeconds": 10 },
+  "contributes": {
+    "harnesses": [
+      {
+        "id": "cursor",
+        "name": "Cursor CLI",
+        "speaker": "Cursor",
+        "writer": "Cursor (Auto)",
+        "locate": { "names": ["agent"] },
+        "versionArgs": ["--version"],
+        "tested": { "oldest": "2026.10.22", "newest": "2026.10.22" },
+        "caps": {
+          "modes": ["default", "plan", "acceptEdits", "bypassPermissions"],
+          "effort": true,
+          "images": true,
+          "terminalView": true,
+          "accountsByKey": true
+        },
+        "models": [{ "id": "default", "label": "Auto" }],
+        "efforts": ["low", "medium", "high", "xhigh"],
+        "accountVar": "CURSOR_CONFIG_DIR",
+        "keyVar": "CURSOR_API_KEY",
+        "closeGraceMs": 2000,
+        "install": {
+          "windows": "irm 'https://cursor.com/install?win32=true' | iex",
+          "unix": "curl https://cursor.com/install -fsS | bash"
+        },
+        "updateCommand": "agent update",
+        "acp": {
+          "args": ["acp"],
+          "removeEnv": ["MSYSTEM", "EXEPATH"],
+          "fs": false,
+          "fenceOnPermissions": true,
+          "modes": { "default": "agent", "plan": "plan", "acceptEdits": "agent", "bypassPermissions": "agent" },
+          "modelOption": "model",
+          "extensions": ["cursor"]
+        }
+      }
+    ]
+  }
+}

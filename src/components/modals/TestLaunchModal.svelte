@@ -1,12 +1,11 @@
 <script lang="ts">
-  import { openUrl } from '../../lib/opener';
   import { onDestroy } from 'svelte';
   import { engineName } from '../../lib/engines';
   import { t } from '../../lib/i18n';
   import Rich from '../../lib/i18n/Rich.svelte';
   import { isolaApproved, openAddress, recipeApproved, revealHidden } from '../../lib/recipe';
   import { app } from '../../lib/state.svelte';
-  import { approveAndTest, flows, stopTests } from '../../lib/test-launch.svelte';
+  import { approveAndTest, flows, openPage, stopTests } from '../../lib/test-launch.svelte';
   import Icon from '../Icon.svelte';
   import Modal from './Modal.svelte';
 
@@ -126,7 +125,13 @@
     {#if flow.opened}
       <p class="opened done">
         <Icon name="ext" size={14} />
-        <Rich k="runs.testLaunch.opened">{#snippet address()}<span class="mono">{flow.opened}</span>{/snippet}</Rich>
+        <Rich
+          k={flow.where === 'agent'
+            ? 'runs.testLaunch.openedHere'
+            : flow.where === 'window'
+              ? 'runs.testLaunch.openedWindow'
+              : 'runs.testLaunch.opened'}>{#snippet address()}<span class="mono">{flow.opened}</span>{/snippet}</Rich
+        >
       </p>
     {/if}
   {:else if reading}
@@ -219,7 +224,7 @@
     {:else}
       {#if flow?.opened}
         {@const opened = flow.opened}
-        <button class="btn reopen" onclick={() => app.run(openUrl(opened))}>{t('runs.testLaunch.reopen')}</button>
+        <button class="btn reopen" onclick={() => agent && flow && openPage(agent, flow, opened)}>{t('runs.testLaunch.reopen')}</button>
       {/if}
       <button class="btn" disabled={!logs} onclick={() => viewLog(logs)}>{t('runs.testLaunch.viewLogs')}</button>
       <button class="btn danger" onclick={() => stopTests(agentId)}>{t('common.stopAll')}</button>

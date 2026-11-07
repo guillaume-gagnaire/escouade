@@ -5,14 +5,14 @@
 // the user lets it (`approveAndTest`; the backend refuses a recipe that was not approved all the same). With isola,
 // what runs is the commands of the worktree's .isola.toml, which the agent can write too: that file is what is shown.
 
-import { openUrl } from './opener';
+import { openLaunchPage } from './devpage.svelte';
 import { fNum } from './format';
 import { t } from './i18n';
 import { api } from './ipc';
 import { crashedLabel, startLaunch, stopAgentTests, stopLaunch } from './launch-actions';
 import { isolaApproved, isolaCommand, openAddress, parseTestId, recipeApproved, recipeCommands } from './recipe';
 import { app } from './state.svelte';
-import type { Agent, IsolaService, LaunchState, Project, RunCommand } from './types';
+import type { Agent, IsolaService, LaunchState, PagesOpen, Project, RunCommand } from './types';
 
 /** How often a server is asked whether it is up, and for how long at most. */
 export const POLL_MS = 500;
@@ -35,8 +35,10 @@ export interface TestFlow {
   lines: FlowLine[];
   phase: 'running' | 'ready' | 'failed';
   error: string | null;
-  /** The address opened in the browser. */
+  /** The address opened, in Escouade or in the browser. */
   opened: string | null;
+  /** Where it opened (ESC-311): the agent's view, the project's « Pages » window, the system's browser. */
+  where?: PagesOpen;
 }
 
 class TestFlows {
@@ -63,6 +65,12 @@ app.onTicketDone((id) => {
   delete flows.all[id];
   if (app.modal?.kind === 'testLaunch' && app.modal.agentId === id) app.modal = null;
 });
+
+/** The page of its launch (ESC-311), where its project says; where it opened is kept for the modal. */
+export async function openPage(agent: Agent, flow: TestFlow, address: string) {
+  const where = await app.run(openLaunchPage(agent, address));
+  if (where) flow.where = where;
+}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const seconds = (ms: number) => fNum(ms / 1000, 1);
@@ -216,7 +224,7 @@ async function launchTest(agent: Agent, project: Project) {
   // Already up: the modal on its state, and the browser again. (isola's services run apart from the app, and may
   // have been stopped since: its test checks again, isola up taking no time when all of them run.)
   if (current?.phase === 'ready' && !agent.isola && allRunning(agent)) {
-    if (current.opened) app.run(openUrl(current.opened));
+    if (current.opened) void openPage(agent, current, current.opened);
     return;
   }
   if (current?.phase === 'running') return;
@@ -352,7 +360,7 @@ async function launchTest(agent: Agent, project: Project) {
     const address = recipe?.open.trim() || services.map((s) => s.url).find(Boolean) || null;
     flow.phase = 'ready';
     flow.opened = address;
-    if (address) app.run(openUrl(address));
+    if (address) void openPage(agent, flow, address);
     return;
   }
   if (!recipe) return;
@@ -439,7 +447,7 @@ async function launchTest(agent: Agent, project: Project) {
   const address = openAddress(agent);
   flow.phase = 'ready';
   flow.opened = address;
-  if (address) app.run(openUrl(address));
+  if (address) void openPage(agent, flow, address);
 
   // 5. While it is up, a process that ends says so: the test is over.
   const watch = async () => {

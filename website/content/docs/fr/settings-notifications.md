@@ -24,6 +24,10 @@ Quatre interrupteurs choisissent les types d’événements qui font sonner et q
 > [!NOTE]
 > Un agent dont le ticket est « En cours » ne prévient que pour ses questions et ses autorisations. Pour le reste, c’est le [Kanban](board) qui prévient, par le type « Tickets », quand le ticket est prêt à tester ou bloqué.
 
+### Pull requests et déploiements
+
+Huit interrupteurs de plus, tous activés par défaut, pour ce qu’un [hébergeur de code](code-hosts#les-nouvelles-des-hebergeurs) a de nouveau : « CI en échec », « Changements demandés », « PR approuvée », « PR mergée », « Conflit », « Relecture demandée », « Déploiement en production réussi » et « Déploiement en échec ». Escouade les signale quand elle relit ce qu’elle suit. Un type désactivé ne dit plus rien.
+
 ## Canaux
 
 | Réglage | Effet | Par défaut |

@@ -375,7 +375,7 @@ async fn update(program: &Program, settings: &Settings, data: &Path) -> Status {
     engine::registry::forget();
     if status.version.is_none() && status.state == State::UpToDate {
         status.version =
-            engine::registry::version(engine::by_id(crate::model::EngineId::Claude), program).await;
+            engine::registry::version(engine::by_id(crate::model::EngineId::CLAUDE), program).await;
     }
     status.at = Some(now_ms());
     status

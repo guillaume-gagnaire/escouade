@@ -46,7 +46,7 @@ fn codex_account(h: &Harness, repo: &Path, trusted: bool) -> PathBuf {
     s.accounts.push(Account {
         id: "cx".into(),
         name: "Codex".into(),
-        engine: EngineId::Codex,
+        engine: EngineId::CODEX,
         config_dir: home.to_string_lossy().into(),
         claude_path: fake_codex(),
         ..Default::default()
@@ -71,7 +71,7 @@ async fn new_codex_agent(h: &Harness, trusted: bool) -> (String, PathBuf) {
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Codex),
+                engine: Some(EngineId::CODEX),
                 account: Some("cx".into()),
                 ..Default::default()
             },
@@ -421,7 +421,7 @@ async fn real_codex_view() {
     s.accounts.push(Account {
         id: "cx".into(),
         name: "Codex".into(),
-        engine: EngineId::Codex,
+        engine: EngineId::CODEX,
         config_dir: home.to_string_lossy().into(),
         claude_path: program,
         ..Default::default()
@@ -432,7 +432,7 @@ async fn real_codex_view() {
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Codex),
+                engine: Some(EngineId::CODEX),
                 account: Some("cx".into()),
                 mode: Some("default".into()),
                 ..Default::default()
@@ -539,14 +539,14 @@ async fn an_agent_handed_over_from_the_claude_code_view_goes_on_in_the_codex_vie
     crate::core_tests::second_account(&h);
     let home = codex_account(&h, &repo, true);
     let mut s = h.core.settings.read().clone();
-    s.engine_order = vec![EngineId::Codex];
+    s.engine_order = vec![EngineId::CODEX];
     h.core.save_settings(s).unwrap();
     let in_view = crate::core_tests::agent_on(&h, &p, "pro").await.id;
     let in_escouade = crate::core_tests::agent_on(&h, &p, "pro").await.id;
     h.core.set_agent_view(&in_view, true).await.unwrap();
     assert_eq!(
         h.core.handover_targets(&in_view).unwrap(),
-        [EngineId::Codex]
+        [EngineId::CODEX]
     );
     let handed = |h: &Harness, id: &str| {
         let turns = items_of(h, id, "turn");
@@ -554,12 +554,12 @@ async fn an_agent_handed_over_from_the_claude_code_view_goes_on_in_the_codex_vie
     };
 
     h.core
-        .continue_on_engine(&in_view, EngineId::Codex)
+        .continue_on_engine(&in_view, EngineId::CODEX)
         .await
         .unwrap();
     // The file goes over the stream: Escouade's view meanwhile.
     let m = h.agent(&in_view);
-    assert_eq!((m.engine, m.account.as_str()), (EngineId::Codex, "cx"));
+    assert_eq!((m.engine, m.account.as_str()), (EngineId::CODEX, "cx"));
     assert!(!m.terminal);
     h.wait("the turn of the handover file", |h| handed(h, &in_view))
         .await;
@@ -575,14 +575,14 @@ async fn an_agent_handed_over_from_the_claude_code_view_goes_on_in_the_codex_vie
 
     // In Escouade's view before: it stays there.
     h.core
-        .continue_on_engine(&in_escouade, EngineId::Codex)
+        .continue_on_engine(&in_escouade, EngineId::CODEX)
         .await
         .unwrap();
     h.wait("the other's handover turn", |h| handed(h, &in_escouade))
         .await;
     tokio::time::sleep(Duration::from_millis(500)).await;
     let o = h.agent(&in_escouade);
-    assert_eq!((o.engine, o.terminal), (EngineId::Codex, false));
+    assert_eq!((o.engine, o.terminal), (EngineId::CODEX, false));
 }
 
 /// ESC-205: in the Codex view, `/compact` goes to its interface as it was typed, which runs it

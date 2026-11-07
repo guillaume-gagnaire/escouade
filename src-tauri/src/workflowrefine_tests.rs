@@ -31,7 +31,7 @@ fn workflow() -> Workflow {
         id: "|claude|one".into(),
         name: "One".into(),
         kind: Kind::Cycle,
-        harness: Some(crate::model::EngineId::Claude),
+        harness: Some(crate::model::EngineId::CLAUDE),
         repo: String::new(),
         doors: Vec::new(),
         steps: vec![

@@ -15,14 +15,16 @@ import {
   summaryLines,
   type Admin,
 } from '../../scripts/plugin-review/admin';
+import { containerCompiler } from '../../scripts/plugin-review/container';
 import { parseTarget } from '../../scripts/plugin-review/download';
 import { review } from '../../scripts/plugin-review/review';
+import { sandboxedCompiler } from '../../server/utils/compile';
 import { readPublicKey } from '../../server/utils/minisign';
 import { checkRevocations, type RevocationList } from '../../server/utils/revocation-list';
 import { checkVersionSignature } from '../../server/utils/signature';
 import { sha256 } from '../../server/utils/versions';
 import { testKey } from '../fake/minisign.mjs';
-import { FAKE_ADMIN_TOKEN, startReviewStore } from '../fake/review-store.mjs';
+import { FAKE_ADMIN_TOKEN, hasRustFixture, startReviewStore } from '../fake/review-store.mjs';
 
 // What the review sends to the store from the user's machine (scripts/plugin-review/admin.ts, docs/STORE.md §4.3, §4.5,
 // §4.6): the report, the signature of a version, the revocation lists. Signed by a stand-in for minisign
@@ -31,6 +33,8 @@ import { FAKE_ADMIN_TOKEN, startReviewStore } from '../fake/review-store.mjs';
 const here = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(here, '../../..');
 const MINISIGN = join(here, '../fake/fake-minisign.mjs');
+const FAKE_CLI = join(here, '../fake/fake-escouade-plugin.mjs');
+const ENGINE = join(here, '../fake/fake-engine.mjs');
 
 let root: string;
 let store: Awaited<ReturnType<typeof startReviewStore>>;
@@ -48,18 +52,34 @@ beforeAll(async () => {
     ['stranger.key', stranger],
   ] as const)
     writeFileSync(join(root, name), k.secret);
-  for (const t of ['dev.exemple.team-rules@1.0.0', 'io.github.q7x.slak-notify@0.0.1'])
+  // The run.js plugin compiled again by the fake escouade-plugin: the same module (1.0.0), another compiler (1.0.2).
+  for (const t of [
+    'dev.exemple.team-rules@1.0.0',
+    'io.github.q7x.slak-notify@0.0.1',
+    'dev.exemple.rules-js@1.0.0',
+    'dev.exemple.rules-js@1.0.2',
+    // Without the repository's Rust fixture (the store's image), no run.wasm plugin.
+    ...(hasRustFixture ? ['dev.exemple.rust-lines@1.0.0', 'dev.exemple.rust-lines@1.0.1', 'dev.exemple.rust-lines@1.0.2'] : []),
+  ])
     await review({
       ...parseTarget(t)!,
       source: { store: store.url, githubApi: store.githubApi },
       work: join(root, 'work'),
       reports: join(root, 'reports'),
-      bench: { engine: null, cli: null, image: 'img', timeout: 10_000 },
+      bench: { engine: null, cli: null, image: 'img', timeout: 10_000, local: FAKE_CLI },
+      compile: sandboxedCompiler({ command: [process.execPath, FAKE_CLI], isolation: 'none' }),
+      container: containerCompiler({
+        engine: { program: process.execPath, prefix: [ENGINE] },
+        cli: '/opt/escouade-plugin',
+        image: 'img',
+        work: join(root, 'work'),
+      }),
       benchWhy: 'aucun moteur de conteneur (test)',
       repo: REPO,
       now: new Date('2026-10-29T10:00:00Z'),
     });
-});
+  // Seven reviews, each of which starts node several times.
+}, 180_000);
 afterAll(async () => {
   await store.close();
   rmSync(root, { recursive: true, force: true });
@@ -76,6 +96,15 @@ const admin = (over: Partial<Admin> = {}): Admin => ({
 });
 const last = (route: string) => [...store.received].reverse().find((r) => r.route === route)?.body;
 const sent = () => store.received.length;
+
+describe('the verdict of a report', () => {
+  it('reads it in the reader’s section alone, the last, not in what a plugin got quoted above it', () => {
+    const quoted = '## Constats de la revue\n\n**Verdict final : Vérifier**\n';
+    expect(reportVerdict(`# Rapport\n\n${quoted}\n## Constats de la revue\n\n_À rédiger._\n`, {} as never)).toBeNull();
+    expect(reportVerdict(`# Rapport\n\n${quoted}`, {} as never)).toBe('Vérifier');
+    expect(reportVerdict('**Verdict final : Vérifier**', { proposed: { verdict: null } } as never)).toBeNull();
+  });
+});
 
 describe('the signature of a version', () => {
   it('signs the very version.json the review read, checks it, and sends it with the public summary', async () => {
@@ -122,6 +151,53 @@ describe('the signature of a version', () => {
     } finally {
       delete process.env.FAKE_MINISIGN_FAIL;
     }
+    expect(sent()).toBe(before);
+  });
+
+  it('signs a run.js plugin whose module the review compiled again to the same fingerprint (ESC-324)', async () => {
+    const done = await signVersion(admin(), 'dev.exemple.rules-js', '1.0.0');
+    expect(done.keyId).toBe(key.id);
+    expect(last('signature')).toMatchObject({ id: 'dev.exemple.rules-js', version: '1.0.0' });
+    expect((last('signature')!.summary as { fr: string }).fr).toContain('module WASM recompilé, même empreinte');
+  });
+
+  it('refuses a run.js plugin whose module was not compiled again, or not to the same fingerprint (ESC-324)', async () => {
+    const before = sent();
+    // Another escouade-plugin than the store's: not compiled again.
+    await expect(signVersion(admin(), 'dev.exemple.rules-js', '1.0.2')).rejects.toThrow(
+      /la recompilation du module WASM n’a pas donné la même empreinte : .*escouade-plugin 2.1.9/,
+    );
+    const data = join(root, 'reports', 'dev.exemple.rules-js', '1.0.0.json');
+    const kept = readFileSync(data, 'utf8');
+    try {
+      // A review written before the recompilation, or by hand: none is noted.
+      const j = JSON.parse(kept);
+      delete j.recompile;
+      writeFileSync(data, JSON.stringify(j));
+      await expect(signVersion(admin(), 'dev.exemple.rules-js', '1.0.0')).rejects.toThrow(/elle n’a pas été faite/);
+      // Its module noted, but another than version.json's.
+      j.recompile = { ...JSON.parse(kept).recompile, sha256: sha256('other') };
+      writeFileSync(data, JSON.stringify(j));
+      await expect(signVersion(admin(), 'dev.exemple.rules-js', '1.0.0')).rejects.toThrow(/n’a pas été recompilé à la même empreinte/);
+    } finally {
+      writeFileSync(data, kept);
+    }
+    expect(sent()).toBe(before);
+  });
+
+  it.skipIf(!hasRustFixture)('signs a run.wasm whose module the review compiled again, and nothing else (ESC-337)', async () => {
+    const done = await signVersion(admin(), 'dev.exemple.rust-lines', '1.0.0');
+    expect(done.keyId).toBe(key.id);
+    expect((last('signature')!.summary as { fr: string }).fr).toContain('module WASM recompilé, même empreinte');
+    const before = sent();
+    // Another fingerprint: the review stopped there, « Refuser ».
+    await expect(signVersion(admin(), 'dev.exemple.rust-lines', '1.0.1')).rejects.toThrow(
+      /n’est pas la recompilation des sources de l’archive/,
+    );
+    // Another rustc-canon than the store's: not compiled again.
+    await expect(signVersion(admin(), 'dev.exemple.rust-lines', '1.0.2')).rejects.toThrow(
+      /la recompilation du module WASM n’a pas donné la même empreinte : .*rustc-canon dddddddddddd/,
+    );
     expect(sent()).toBe(before);
   });
 

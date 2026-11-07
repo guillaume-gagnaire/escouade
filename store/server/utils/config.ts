@@ -39,6 +39,11 @@ export const FEATURES: readonly Feature[] = [
     vars: ['STORE_ADMINS'],
     without: 'the review queue has no administrator',
   },
+  {
+    name: 'compiler',
+    vars: ['STORE_ESCOUADE_PLUGIN'],
+    without: 'the run.js and run.wasm plugins are not compiled: their versions wait in error (docs/STORE.md §3.3)',
+  },
   // The channels of Escouade's Discord (server/utils/discord.ts): each its own webhook, each optional.
   {
     name: 'discord admin',
@@ -97,6 +102,12 @@ export function admins(env: Env): number[] {
     .map(Number)
     .filter((n) => Number.isSafeInteger(n) && n > 0);
 }
+
+/**
+ * The app's repository (`owner/name`), the only one whose submissions may take the ids `dev.escouade.*` (ESC-314,
+ * decision 21): its plugins of Escouade's own hand, in `plugins/<id>/`. Compared by its GitHub id, never by its name.
+ */
+export const firstPartyRepo = (env: Env) => (env.STORE_FIRST_PARTY_REPO ?? '').trim() || 'guillaume-gagnaire/escouade';
 
 /**
  * Where the public keys of the store's signatures are read (`*.pub`, the ones the app embeds): `store/keys/` of the

@@ -91,8 +91,11 @@ impl Target for OnBench {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn the_fake_copilot_passes_the_bench() {
+    // Its conversation goes through its plugin (INT-10.3): the plugins the app gives, in a runtime of their own.
+    let (rt, plugins, _) = crate::plugins_acp_tests::runtime("int10-copilot-bench");
+    crate::plugins::harness::sync(&rt, &plugins);
     let dir = bench_dir("esc39-bench-copilot");
     let played = run(&OnBench, &dir).await;
     // The month's credits (ESC-40): the limit and the quota too.

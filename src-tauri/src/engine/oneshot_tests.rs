@@ -40,7 +40,7 @@ impl Drop for OnDrop {
 
 impl Engine for Fake {
     fn id(&self) -> EngineId {
-        EngineId::Codex
+        EngineId::CODEX
     }
     fn name(&self) -> &'static str {
         "Faux"
@@ -167,19 +167,39 @@ fn question(limit: Duration) -> OneShot<'static> {
 
 #[test]
 fn the_texts_go_to_the_harness_chosen_while_it_is_found_else_to_claude_haiku_else_to_one_found() {
-    use EngineId::*;
     // Nothing chosen: Claude Code when it is found, wherever it is listed.
-    assert_eq!(writer(None, &[Claude, Codex]), Some(Claude));
-    assert_eq!(writer(None, &[Codex, Claude]), Some(Claude));
+    assert_eq!(
+        writer(None, &[EngineId::CLAUDE, EngineId::CODEX]),
+        Some(EngineId::CLAUDE)
+    );
+    assert_eq!(
+        writer(None, &[EngineId::CODEX, EngineId::CLAUDE]),
+        Some(EngineId::CLAUDE)
+    );
     // Chosen and found.
-    assert_eq!(writer(Some(Codex), &[Claude, Codex]), Some(Codex));
+    assert_eq!(
+        writer(Some(EngineId::CODEX), &[EngineId::CLAUDE, EngineId::CODEX]),
+        Some(EngineId::CODEX)
+    );
     // Chosen but gone: as if nothing was.
-    assert_eq!(writer(Some(Codex), &[Claude]), Some(Claude));
+    assert_eq!(
+        writer(Some(EngineId::CODEX), &[EngineId::CLAUDE]),
+        Some(EngineId::CLAUDE)
+    );
     // No Claude Code: the first harness found.
-    assert_eq!(writer(None, &[Codex, Opencode]), Some(Codex));
-    assert_eq!(writer(Some(Cursor), &[Codex, Opencode]), Some(Codex));
+    assert_eq!(
+        writer(None, &[EngineId::CODEX, EngineId::OPENCODE]),
+        Some(EngineId::CODEX)
+    );
+    assert_eq!(
+        writer(
+            Some(EngineId::CURSOR),
+            &[EngineId::CODEX, EngineId::OPENCODE]
+        ),
+        Some(EngineId::CODEX)
+    );
     // None found.
-    assert_eq!(writer(Some(Claude), &[]), None);
+    assert_eq!(writer(Some(EngineId::CLAUDE), &[]), None);
 }
 
 #[tokio::test]
@@ -264,4 +284,36 @@ async fn a_process_that_says_too_much_is_killed_and_one_that_never_reads_its_que
     .expect("not held by its question")
     .unwrap();
     assert_eq!(String::from_utf8_lossy(&out).trim(), "ok");
+}
+
+/// A text from a third party (ESC-66): each harness says it can go without tools, and the one that
+/// cannot is refused before its process starts.
+#[tokio::test]
+async fn a_text_given_goes_to_a_harness_that_can_cut_its_tools_and_no_other() {
+    use crate::engine::{AGY, CLAUDE, CODEX, COPILOT, CURSOR, GEMINI, OPENCODE, VIBE};
+    for harness in [
+        &CLAUDE as &dyn Engine,
+        &CODEX,
+        &COPILOT,
+        &OPENCODE,
+        &VIBE,
+        &AGY,
+        &GEMINI,
+    ] {
+        assert!(harness.answers_without_tools(), "{}", harness.name());
+    }
+    assert!(!CURSOR.answers_without_tools());
+    let given = OneShot {
+        weight: Weight::Given,
+        ..question(Duration::from_secs(5))
+    };
+    let e = ask(&CURSOR, given).await.unwrap_err();
+    assert!(e.to_string().contains("sans outil"), "{e}");
+    // The engine's process is never reached: a harness that says nothing is refused the same.
+    let ran = Fake::new(Answers::Bytes(10));
+    let given = OneShot {
+        weight: Weight::Given,
+        ..question(Duration::from_secs(5))
+    };
+    assert!(ask(&ran, given).await.is_err());
 }

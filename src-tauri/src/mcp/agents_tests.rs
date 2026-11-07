@@ -225,11 +225,11 @@ fn gives_the_server() -> Vec<&'static dyn Engine> {
         .filter(|e| {
             !matches!(
                 e.id(),
-                EngineId::Opencode
-                    | EngineId::Cursor
-                    | EngineId::Vibe
-                    | EngineId::Agy
-                    | EngineId::Gemini
+                EngineId::OPENCODE
+                    | EngineId::CURSOR
+                    | EngineId::VIBE
+                    | EngineId::AGY
+                    | EngineId::GEMINI
             )
         })
         .collect()
@@ -717,7 +717,7 @@ async fn a_codex_agent_is_given_the_server_by_its_options_and_its_token_by_its_e
         s.accounts.push(Account {
             id: "codex-work".into(),
             name: "Codex".into(),
-            engine: EngineId::Codex,
+            engine: EngineId::CODEX,
             config_dir: home.to_string_lossy().into(),
             claude_path: crate::engine::fake_codex(),
             active: true,
@@ -731,7 +731,7 @@ async fn a_codex_agent_is_given_the_server_by_its_options_and_its_token_by_its_e
         .create_agent_with(
             &p.id,
             crate::core::AgentOptions {
-                engine: Some(EngineId::Codex),
+                engine: Some(EngineId::CODEX),
                 account: Some("codex-work".into()),
                 ..Default::default()
             },
@@ -834,7 +834,7 @@ async fn a_copilot_agent_is_given_the_server_by_a_file_naming_its_token_or_refus
         s.accounts.push(Account {
             id: "copilot-work".into(),
             name: "Copilot".into(),
-            engine: EngineId::Copilot,
+            engine: EngineId::COPILOT,
             config_dir: home.to_string_lossy().into(),
             claude_path: crate::engine::fake_copilot(),
             active: true,
@@ -848,7 +848,7 @@ async fn a_copilot_agent_is_given_the_server_by_a_file_naming_its_token_or_refus
         .create_agent_with(
             &p.id,
             crate::core::AgentOptions {
-                engine: Some(EngineId::Copilot),
+                engine: Some(EngineId::COPILOT),
                 account: Some("copilot-work".into()),
                 ..Default::default()
             },
@@ -936,7 +936,7 @@ async fn a_cursor_agent_reaches_escouade_by_the_server_its_session_is_given() {
         s.accounts.push(Account {
             id: "principal-cursor".into(),
             name: "Principal".into(),
-            engine: EngineId::Cursor,
+            engine: EngineId::CURSOR,
             claude_path: program.clone(),
             active: true,
             ..Default::default()
@@ -955,7 +955,7 @@ async fn a_cursor_agent_reaches_escouade_by_the_server_its_session_is_given() {
             c.create_agent_with(
                 &p,
                 crate::core::AgentOptions {
-                    engine: Some(EngineId::Cursor),
+                    engine: Some(EngineId::CURSOR),
                     model: Some("default".into()),
                     ..Default::default()
                 },
@@ -972,8 +972,15 @@ async fn a_cursor_agent_reaches_escouade_by_the_server_its_session_is_given() {
         .send_message(&id, format!("outil escouade {TEST_TOOL}"), vec![])
         .await
         .unwrap();
-    h.wait("its answer", |h| said(h, &id, "Escouade a").is_some())
-        .await;
+    // Its whole answer: a text read while it still streams stops in the middle of its JSON ("Escouade a r", the CI's
+    // Linux, 2026-11-05).
+    let whole = |a: &str| {
+        serde_json::from_str::<Value>(a.trim_start_matches("Escouade a répondu : ")).is_ok()
+    };
+    h.wait("its answer", |h| {
+        said(h, &id, "Escouade a").is_some_and(|a| whole(&a))
+    })
+    .await;
     let answer = said(&h, &id, "Escouade a").unwrap();
     let who: Value = serde_json::from_str(answer.trim_start_matches("Escouade a répondu : "))
         .unwrap_or_else(|_| panic!("{answer}"));

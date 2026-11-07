@@ -1,0 +1,631 @@
+{
+  "commit": "9632cde9",
+  "model": "claude-sonnet-5-5",
+  "models": ["claude-sonnet-5-5", "claude-haiku-5-5"],
+  "effort": "medium",
+  "passes": 2,
+  "timeoutS": 1800,
+  "multiRule": "Fais ce changement dans tout le code qu’il touche, sans rien changer d’autre. Ton terminal ne sert qu’à vérifier ton travail, depuis la racine du dépôt : `cargo check --manifest-path src-tauri/Cargo.toml --lib --tests`, `cargo test --manifest-path src-tauri/Cargo.toml --lib <filtre>`, `npm run check`, `npx vitest run <fichiers>` et `node sdk/plugin/scripts/generate.mjs` ; toute autre commande est refusée (pas de `cd`, de tube ni de `&&`). Termine par une ligne « FAIT : <les fichiers changés> ».",
+  "terminal": ["cargo check", "cargo test", "npm run check", "npx vitest run", "node sdk/plugin/scripts/generate.mjs"],
+  "tokensaveRule": "## Prefer tokensave MCP tools\n\nBefore reading source files or scanning a codebase, use the tokensave MCP tools: `tokensave_context` for exploration, `tokensave_search` for a known symbol, plus `tokensave_callers`, `tokensave_callees`, `tokensave_impact`, `tokensave_node`, `tokensave_files`, and `tokensave_affected`. A tool that is not in your tool list is listed by calling `tokensave_more` with its area: `navigate` for `tokensave_node`, `git` for `tokensave_affected` and the branch tools.\n\nTo read a file's contents, use `tokensave_read`: it reads any path, indexed or not, and slices with `mode: \"lines\"` or maps a file's symbols with `mode: \"map\"` instead of pulling in the whole body. Use the harness's own file-read tool for a file you are about to edit.\n\n### Searching code\n\nSearch code with `tokensave_search`. By default it returns where a name is defined, ranked, with its kind and signature. With `literal: true` it finds exact text. For who calls or implements a name, search the text that construct takes in the file's language, in every form the language allows. Grep when you need a regex, or for the files a literal search reports as `unscanned`.\n\n### Check freshness before relying on the graph\n\nCall the `tokensave_status` MCP tool (not the `tokensave status` CLI, which indexes a folder that has no index) to see when the index was last synced. Run `tokensave sync` or `tokensave branch add` only when the user has asked for an index update or the task already involves modifying this repository; otherwise disclose the staleness and fall back to read-only source inspection.\n\n### Cross-project and cross-branch queries\n\nPass an absolute `graph_root` to query a different initialized project, adding `graph_branch` to select one of that project's tracked branches. `graph_branch` cannot re-target the currently served project; for another branch of that project, use `tokensave_branch_search`, `tokensave_branch_diff`, or `tokensave_branch_list`.\n\n### Scoping\n\nFor non-code tasks or searching outside an indexed project, use normal filesystem and shell tools instead of tokensave MCP tools.\n\n### SQL fallback\n\nIf the graph tools cannot answer a question, find the active database in `.tokensave/branch-meta.json` (`db_file`) (or `.tokensave/tokensave.db` if branch-meta.json is absent) before querying it directly with SQL. Beta builds use `.tokensave/beta/branch-meta.json` and `.tokensave/beta/tokensave.db` instead; never use the stable index for a beta session (tables: `nodes`, `edges`, `files`).\n\n### Tool gaps\n\nIf a tokensave tool could answer a question natively but does not, suggest the user file an issue at https://github.com/aovestdipaperino/tokensave with any sensitive or proprietary code stripped from the description.\n",
+  "tasks": [
+    {
+      "id": "plugins-forget",
+      "from": "renommer une méthode au nom commun (homonymes)",
+      "widened": "Le 8e « plugin_runtime.forget( » de codeindex_links_tests.rs n’est pas une fixture : il est dans le test ignoré qui compte sur le dépôt les appelants de Runtime::forget. Le renommer avec la méthode est juste ; 7 fixtures gardées au lieu de 8.",
+      "prompt": "Dans le runtime des plugins (`src-tauri/src/plugins/runtime.rs`), la méthode `Runtime::forget` porte un nom trop vague : renomme-la `unload`, partout où elle sert.",
+      "multi": {
+        "places": [
+          {
+            "file": "src-tauri/src/plugins/runtime.rs",
+            "text": "fn unload(&self",
+            "count": 1
+          },
+          {
+            "file": "src-tauri/src/plugins/runtime.rs",
+            "text": "rt.unload(id)",
+            "count": 1
+          },
+          {
+            "file": "src-tauri/src/commands.rs",
+            "text": "plugin_runtime.unload(",
+            "count": 4
+          },
+          {
+            "file": "src-tauri/src/plugins_runtime_tests.rs",
+            "text": "rt.unload(ID)",
+            "count": 2
+          }
+        ],
+        "gone": [
+          {
+            "text": "plugin_runtime.forget(",
+            "files": ["src-tauri/src/commands.rs"]
+          },
+          {
+            "text": "rt.forget(",
+            "files": ["src-tauri/src/plugins/runtime.rs", "src-tauri/src/plugins_runtime_tests.rs"]
+          },
+          {
+            "text": "pub fn forget(&self, id: &str)",
+            "files": ["src-tauri/src/plugins/runtime.rs"]
+          }
+        ],
+        "kept": [
+          {
+            "file": "src-tauri/src/codeindex_links_tests.rs",
+            "text": "plugin_runtime.forget(",
+            "count": 7
+          },
+          {
+            "file": "src-tauri/src/commands.rs",
+            "text": "crate::wsl::forget(",
+            "count": 2
+          },
+          {
+            "file": "src-tauri/src/commands.rs",
+            "text": "registry::forget()",
+            "count": 1
+          },
+          {
+            "file": "src-tauri/src/attachfiles.rs",
+            "text": "uploads.forget(",
+            "count": 2
+          }
+        ],
+        "commands": [
+          "cargo check --manifest-path src-tauri/Cargo.toml --lib --tests",
+          "cargo test --manifest-path src-tauri/Cargo.toml --lib plugins_runtime_tests"
+        ],
+        "patch": "plugins-forget.patch",
+        "badSkip": "src-tauri/src/plugins_runtime_tests.rs"
+      }
+    },
+    {
+      "id": "drafts-files",
+      "from": "renommer une fonction au nom rare",
+      "prompt": "`DataDir::drafts_files` (`src-tauri/src/paths.rs`) ne dit pas ce que contient ce dossier : les fichiers des formulaires de ticket. Renomme-la `ticket_form_files`, partout.",
+      "multi": {
+        "places": [
+          {
+            "file": "src-tauri/src/paths.rs",
+            "text": "pub fn ticket_form_files(",
+            "count": 1
+          },
+          {
+            "file": "src-tauri/src/attachfiles.rs",
+            "text": "ticket_form_files()",
+            "count": 1
+          },
+          {
+            "file": "src-tauri/src/attachfiles_tests.rs",
+            "text": "ticket_form_files()",
+            "count": 1
+          },
+          {
+            "file": "src-tauri/src/mcp/docs.rs",
+            "text": "ticket_form_files()",
+            "count": 1
+          },
+          {
+            "file": "src-tauri/src/mcp/files_tests.rs",
+            "text": "ticket_form_files()",
+            "count": 1
+          },
+          {
+            "file": "src-tauri/src/tickets.rs",
+            "text": "ticket_form_files()",
+            "count": 2
+          },
+          {
+            "file": "src-tauri/src/tickets_tests.rs",
+            "text": "ticket_form_files()",
+            "count": 2
+          }
+        ],
+        "gone": [
+          {
+            "text": "drafts_files",
+            "files": [
+              "src-tauri/src/paths.rs",
+              "src-tauri/src/attachfiles.rs",
+              "src-tauri/src/attachfiles_tests.rs",
+              "src-tauri/src/mcp/docs.rs",
+              "src-tauri/src/mcp/files_tests.rs",
+              "src-tauri/src/tickets.rs",
+              "src-tauri/src/tickets_tests.rs"
+            ]
+          }
+        ],
+        "commands": [
+          "cargo check --manifest-path src-tauri/Cargo.toml --lib --tests",
+          "cargo test --manifest-path src-tauri/Cargo.toml --lib attachfiles"
+        ],
+        "patch": "drafts-files.patch",
+        "badSkip": "src-tauri/src/tickets_tests.rs"
+      }
+    },
+    {
+      "id": "checkout-of",
+      "from": "renommer une fonction qui a un homonyme",
+      "prompt": "La fonction `git::checkout_of` (`src-tauri/src/git.rs`) dit en fait dans quel dossier une branche est extraite : renomme-la `branch_checkout`, partout où elle est appelée.",
+      "multi": {
+        "places": [
+          {
+            "file": "src-tauri/src/git.rs",
+            "text": "branch_checkout(",
+            "count": 7
+          },
+          {
+            "file": "src-tauri/src/core.rs",
+            "text": "git::branch_checkout(",
+            "count": 2
+          },
+          {
+            "file": "src-tauri/src/agentbranch.rs",
+            "text": "git::branch_checkout(",
+            "count": 1
+          },
+          {
+            "file": "src-tauri/src/docsbranch.rs",
+            "text": "git::branch_checkout(",
+            "count": 1
+          },
+          {
+            "file": "src-tauri/src/tickets.rs",
+            "text": "git::branch_checkout(",
+            "count": 2
+          }
+        ],
+        "gone": [
+          {
+            "text": "git::checkout_of(",
+            "files": ["src-tauri/src/core.rs", "src-tauri/src/agentbranch.rs", "src-tauri/src/docsbranch.rs", "src-tauri/src/tickets.rs"]
+          },
+          {
+            "text": "checkout_of(",
+            "files": ["src-tauri/src/git.rs"]
+          }
+        ],
+        "kept": [
+          {
+            "file": "src-tauri/src/core.rs",
+            "text": "Self::checkout_of(",
+            "count": 1
+          },
+          {
+            "file": "src-tauri/src/repos.rs",
+            "text": "fn checkout_of<'a>(",
+            "count": 1
+          }
+        ],
+        "commands": [
+          "cargo check --manifest-path src-tauri/Cargo.toml --lib --tests",
+          "cargo test --manifest-path src-tauri/Cargo.toml --lib checkout"
+        ],
+        "patch": "checkout-of.patch",
+        "badSkip": "src-tauri/src/tickets.rs"
+      }
+    },
+    {
+      "id": "account-skip",
+      "from": "ajouter un paramètre et suivre ses appels",
+      "prompt": "Pour préparer le changement de compte, `account_for_new` (`src-tauri/src/tickets.rs`) doit pouvoir écarter un compte : ajoute-lui un dernier paramètre `skip: Option<&str>`, un compte qu’elle ne choisit jamais. Les appels d’aujourd’hui n’écartent rien.",
+      "multi": {
+        "places": [
+          {
+            "file": "src-tauri/src/tickets.rs",
+            "text": "skip: Option<&str>",
+            "count": 1
+          },
+          {
+            "file": "src-tauri/src/tickets.rs",
+            "text": "engine, None)",
+            "count": 2
+          },
+          {
+            "file": "src-tauri/src/tickets.rs",
+            "text": "p.engine(), None)",
+            "count": 1
+          },
+          {
+            "file": "src-tauri/src/accounts.rs",
+            "text": "engine, None)",
+            "count": 1
+          },
+          {
+            "file": "src-tauri/src/core.rs",
+            "text": "engine, None)",
+            "count": 3
+          },
+          {
+            "file": "src-tauri/src/mcp/act.rs",
+            "text": "engine, None)",
+            "count": 1
+          },
+          {
+            "file": "src-tauri/src/switching_tests.rs",
+            "text": "Claude, None)",
+            "count": 2
+          },
+          {
+            "file": "src-tauri/src/tickets_tests.rs",
+            "text": "Claude, None)",
+            "count": 2
+          }
+        ],
+        "commands": [
+          "cargo check --manifest-path src-tauri/Cargo.toml --lib --tests",
+          "cargo test --manifest-path src-tauri/Cargo.toml --lib switching_tests"
+        ],
+        "patch": "account-skip.patch",
+        "badSkip": "src-tauri/src/mcp/act.rs"
+      }
+    },
+    {
+      "id": "commit-root",
+      "from": "ajouter un champ sérialisé et le propager (Rust, TypeScript, textes, tests)",
+      "prompt": "La fenêtre de commit ne dit pas dans quel dossier le commit se fera. Ajoute à ce que rend l’aperçu du commit (`CommitScope`) un champ `commit_root` (`commitRoot` en TypeScript) : le dossier du commit, celui du projet ou le worktree de l’agent. Affiche-le dans la fenêtre sous « Modifications de … », par un texte « Dans {folder} » (« In {folder} » en anglais), et tiens les tests à jour.",
+      "multi": {
+        "places": [
+          {
+            "file": "src-tauri/src/model.rs",
+            "text": "pub commit_root: String",
+            "count": 1
+          },
+          {
+            "file": "src-tauri/src/core.rs",
+            "text": "commit_root",
+            "count": 1
+          },
+          {
+            "file": "src-tauri/src/repos.rs",
+            "text": "commit_root",
+            "count": 1
+          },
+          {
+            "file": "src/lib/types.ts",
+            "text": "commitRoot: string",
+            "count": 1
+          },
+          {
+            "file": "src/components/modals/CommitModal.svelte",
+            "text": "commitRoot",
+            "count": 1
+          },
+          {
+            "file": "src/components/modals/CommitModal.test.ts",
+            "text": "commitRoot",
+            "count": 2
+          },
+          {
+            "file": "src/lib/i18n/fr/git.ts",
+            "text": "{folder}",
+            "count": 1
+          },
+          {
+            "file": "src/lib/i18n/en/git.ts",
+            "text": "{folder}",
+            "count": 1
+          }
+        ],
+        "commands": [
+          "cargo check --manifest-path src-tauri/Cargo.toml --lib --tests",
+          "npm run check",
+          "npx vitest run src/components/modals/CommitModal.test.ts"
+        ],
+        "patch": "commit-root.patch",
+        "badSkip": "src/lib/i18n/en/git.ts"
+      }
+    },
+    {
+      "id": "i18n-unverified",
+      "from": "renommer une clé i18n de plusieurs composants Svelte",
+      "prompt": "La pastille « Non vérifié » des plugins a pour clé `plugins.tag.unverified` ; renomme cette clé `plugins.tag.unreviewed`, dans les deux langues et partout où elle sert.",
+      "multi": {
+        "places": [
+          {
+            "file": "src/components/plugins/InstallModal.svelte",
+            "text": "plugins.tag.unreviewed",
+            "count": 1
+          },
+          {
+            "file": "src/components/plugins/PluginPage.svelte",
+            "text": "plugins.tag.unreviewed",
+            "count": 1
+          },
+          {
+            "file": "src/components/plugins/PluginRows.svelte",
+            "text": "plugins.tag.unreviewed",
+            "count": 1
+          },
+          {
+            "file": "src/components/plugins/StorePluginPage.svelte",
+            "text": "plugins.tag.unreviewed",
+            "count": 2
+          },
+          {
+            "file": "src/components/plugins/StoreRow.svelte",
+            "text": "plugins.tag.unreviewed",
+            "count": 1
+          },
+          {
+            "file": "src/lib/i18n/fr/plugins.ts",
+            "text": "unreviewed: 'Non vérifié'",
+            "count": 1
+          },
+          {
+            "file": "src/lib/i18n/en/plugins.ts",
+            "text": "unreviewed: 'Not verified'",
+            "count": 1
+          }
+        ],
+        "gone": [
+          {
+            "text": "plugins.tag.unverified",
+            "files": [
+              "src/components/plugins/InstallModal.svelte",
+              "src/components/plugins/PluginPage.svelte",
+              "src/components/plugins/PluginRows.svelte",
+              "src/components/plugins/StorePluginPage.svelte",
+              "src/components/plugins/StoreRow.svelte"
+            ]
+          }
+        ],
+        "kept": [
+          {
+            "file": "src/lib/i18n/fr/plugins.ts",
+            "text": "unverified:",
+            "count": 2
+          },
+          {
+            "file": "src/lib/i18n/en/plugins.ts",
+            "text": "unverified:",
+            "count": 2
+          },
+          {
+            "file": "src/lib/i18n/fr/plugins.ts",
+            "text": "updateUnverified:",
+            "count": 1
+          }
+        ],
+        "commands": ["npm run check", "npx vitest run src/components/plugins"],
+        "patch": "i18n-unverified.patch",
+        "badSkip": "src/lib/i18n/en/plugins.ts"
+      }
+    },
+    {
+      "id": "fact-docs-gaps",
+      "from": "renommer un fait du protocole des plugins (cœur, schéma, SDK, doc)",
+      "prompt": "Le fait `docs.gaps` du protocole des plugins se lit mal : renomme-le `docs.compared`, dans le cœur, le schéma du protocole, le SDK et la documentation des plugins.",
+      "multi": {
+        "places": [
+          {
+            "file": "src-tauri/src/facts.rs",
+            "text": "docs.compared",
+            "count": 2
+          },
+          {
+            "file": "src-tauri/src/facts_tests.rs",
+            "text": "docs.compared",
+            "count": 2
+          },
+          {
+            "file": "schemas/plugin-protocol-1.json",
+            "text": "docs.compared",
+            "count": 1
+          },
+          {
+            "file": "website/public/schemas/plugin-protocol-1.json",
+            "text": "docs.compared",
+            "count": 1
+          },
+          {
+            "file": "sdk/plugin/src/protocol.ts",
+            "text": "docs.compared",
+            "count": 2
+          },
+          {
+            "file": "website/content/docs/en/plugins/events.md",
+            "text": "docs.compared",
+            "count": 1
+          },
+          {
+            "file": "website/content/docs/fr/plugins/events.md",
+            "text": "docs.compared",
+            "count": 1
+          }
+        ],
+        "gone": [
+          {
+            "text": "docs.gaps",
+            "files": [
+              "src-tauri/src/facts.rs",
+              "src-tauri/src/facts_tests.rs",
+              "src-tauri/src/docscompare.rs",
+              "schemas/plugin-protocol-1.json",
+              "website/public/schemas/plugin-protocol-1.json",
+              "sdk/plugin/src/protocol.ts",
+              "website/content/docs/en/plugins/events.md",
+              "website/content/docs/fr/plugins/events.md"
+            ]
+          }
+        ],
+        "commands": [
+          "cargo check --manifest-path src-tauri/Cargo.toml --lib --tests",
+          "cargo test --manifest-path src-tauri/Cargo.toml --lib facts_tests",
+          "cargo test --manifest-path src-tauri/Cargo.toml --lib plugins_protocol_tests",
+          "node sdk/plugin/scripts/generate.mjs --check"
+        ],
+        "patch": "fact-docs-gaps.patch",
+        "badSkip": "website/public/schemas/plugin-protocol-1.json"
+      }
+    },
+    {
+      "id": "app-env-struct",
+      "from": "remplacer un type dans une signature et suivre les erreurs",
+      "prompt": "`accounts::app_env` (`src-tauri/src/accounts.rs`) rend un tuple `(Option<String>, PathBuf)` que ses appelants lisent par `.1` ou en le déstructurant. Remplace-le par une structure `AppEnv` aux champs nommés `config_dir` et `home`, et suis ses appels.",
+      "multi": {
+        "places": [
+          {
+            "file": "src-tauri/src/accounts.rs",
+            "text": "struct AppEnv",
+            "count": 1
+          },
+          {
+            "file": "src-tauri/src/accounts.rs",
+            "text": "fn app_env() -> AppEnv",
+            "count": 1
+          }
+        ],
+        "gone": [
+          {
+            "text": "let (_, home) = app_env();",
+            "files": ["src-tauri/src/accounts.rs"]
+          },
+          {
+            "text": "app_env().1",
+            "files": ["src-tauri/src/fence.rs"]
+          },
+          {
+            "text": "app_env()\n            .1",
+            "files": ["src-tauri/src/engine/cursor/terminal.rs"]
+          },
+          {
+            "text": "let (_, home) = accounts::app_env();",
+            "files": ["src-tauri/src/selfupdate.rs"]
+          },
+          {
+            "text": "let (env, home) = crate::accounts::app_env();",
+            "files": ["src-tauri/src/workflow.rs"]
+          }
+        ],
+        "commands": [
+          "cargo check --manifest-path src-tauri/Cargo.toml --lib --tests",
+          "cargo test --manifest-path src-tauri/Cargo.toml --lib accounts"
+        ],
+        "patch": "app-env-struct.patch",
+        "badSkip": "src-tauri/src/workflow.rs"
+      }
+    },
+    {
+      "id": "slugify-gone",
+      "from": "supprimer une fonction devenue inutile et tous ses appels",
+      "prompt": "`core::slugify` (`src-tauri/src/core.rs`) n’ajoute rien à `slug_within` : elle l’appelle avec 40. Supprime-la, et appelle `slug_within(…, 40)` à sa place partout.",
+      "multi": {
+        "places": [
+          {
+            "file": "src-tauri/src/accounts.rs",
+            "text": "slug_within(",
+            "count": 2
+          },
+          {
+            "file": "src-tauri/src/board.rs",
+            "text": "slug_within(",
+            "count": 3
+          },
+          {
+            "file": "src-tauri/src/core.rs",
+            "text": "slug_within(",
+            "count": 10
+          },
+          {
+            "file": "src-tauri/src/integrations/text.rs",
+            "text": "slug_within(",
+            "count": 2
+          }
+        ],
+        "gone": [
+          {
+            "text": "slugify",
+            "files": ["src-tauri/src/accounts.rs", "src-tauri/src/board.rs", "src-tauri/src/core.rs", "src-tauri/src/integrations/text.rs"]
+          }
+        ],
+        "kept": [
+          {
+            "file": "src-tauri/src/agent.rs",
+            "text": "slugify",
+            "count": 12
+          },
+          {
+            "file": "src-tauri/src/planfiles_tests.rs",
+            "text": "slugify",
+            "count": 18
+          },
+          {
+            "file": "src-tauri/src/core_tests.rs",
+            "text": "slugify",
+            "count": 1
+          }
+        ],
+        "commands": [
+          "cargo check --manifest-path src-tauri/Cargo.toml --lib --tests",
+          "cargo test --manifest-path src-tauri/Cargo.toml --lib slug"
+        ],
+        "patch": "slugify-gone.patch",
+        "badSkip": "src-tauri/src/integrations/text.rs"
+      }
+    },
+    {
+      "id": "missing-account-ts",
+      "from": "renommer une fonction TypeScript de plusieurs composants",
+      "prompt": "Dans le front, `missingAccountOf` (`src/lib/refusal.ts`) dit en fait de quel harness un refus manque de compte : renomme-la `refusedEngine`, partout.",
+      "multi": {
+        "places": [
+          {
+            "file": "src/lib/refusal.ts",
+            "text": "export function refusedEngine(",
+            "count": 1
+          },
+          {
+            "file": "src/components/branches/BranchPicker.svelte",
+            "text": "refusedEngine",
+            "count": 2
+          },
+          {
+            "file": "src/components/Composer.svelte",
+            "text": "refusedEngine",
+            "count": 2
+          },
+          {
+            "file": "src/components/docs/NewDiscussionModal.svelte",
+            "text": "refusedEngine",
+            "count": 2
+          },
+          {
+            "file": "src/lib/branch-actions.ts",
+            "text": "refusedEngine",
+            "count": 2
+          },
+          {
+            "file": "src/lib/refusal.test.ts",
+            "text": "refusedEngine",
+            "count": 4
+          },
+          {
+            "file": "src/lib/state.svelte.ts",
+            "text": "refusedEngine",
+            "count": 3
+          }
+        ],
+        "gone": [
+          {
+            "text": "missingAccountOf",
+            "files": [
+              "src/lib/refusal.ts",
+              "src/components/branches/BranchPicker.svelte",
+              "src/components/Composer.svelte",
+              "src/components/docs/NewDiscussionModal.svelte",
+              "src/lib/branch-actions.ts",
+              "src/lib/refusal.test.ts",
+              "src/lib/state.svelte.ts"
+            ]
+          }
+        ],
+        "commands": ["npm run check", "npx vitest run src/lib/refusal.test.ts"],
+        "patch": "missing-account-ts.patch",
+        "badSkip": "src/lib/state.svelte.ts"
+      }
+    }
+  ]
+}

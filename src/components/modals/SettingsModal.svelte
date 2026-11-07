@@ -9,13 +9,13 @@
   import ApplicationTab from '../settings/ApplicationTab.svelte';
   import BoardTab from '../settings/BoardTab.svelte';
   import ClosedProjects from '../settings/ClosedProjects.svelte';
-  import CodeIndexAllSection from '../settings/CodeIndexAllSection.svelte';
   import NewProjects from '../settings/NewProjects.svelte';
   import PrivateMark from '../PrivateMark.svelte';
   import IntegrationsTab from '../settings/IntegrationsTab.svelte';
   import McpSection from '../settings/McpSection.svelte';
   import ProjectTab from '../settings/ProjectTab.svelte';
   import VoiceTab from '../settings/VoiceTab.svelte';
+  import VectorsSection from '../settings/VectorsSection.svelte';
   import { tip } from '../../lib/tip';
   import Icon from '../Icon.svelte';
 
@@ -153,7 +153,7 @@
             <p class="none">{t('settings.modal.noProject')}</p>
           {/if}
           <!-- Also with no project open: that is when a folder's old history is most worth finding. -->
-          {#if current.id === 'projects'}<CodeIndexAllSection /><NewProjects /><ClosedProjects />{/if}
+          {#if current.id === 'projects'}<VectorsSection /><NewProjects /><ClosedProjects />{/if}
         {:else if current.id === 'app'}
           <ApplicationTab />
         {:else if current.id === 'accounts'}

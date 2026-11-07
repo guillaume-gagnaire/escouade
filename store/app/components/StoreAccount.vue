@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import { ACCOUNT_TEXTS } from '~/data/account';
+import type { ConnectedAppLine } from '~/data/agents';
 import { pathIn } from '~/data/language';
 import { hueOf, markOf, type Icon } from '~~/shared/tile';
 
 // The author's account, as the preview draws it (design/store/, #account): « Mes plugins · login », the version
 // found on a new tag that waits for a click (the banner), their plugins with their state, latest version and installs
-// (a refused first version says why below its row), then the chosen plugin's management — its versions, taking one
-// back, new tags, the list, the transfer, the deletion (docs/STORE.md, §2.2) — and the App's installations; on the
-// right the chosen plugin's installs by week, the e-mail notices and « Mes données » (export, sign-out, deletion).
-// Every action is a plain form: it works without script, under the strict Content-Security-Policy, and the server
-// answers with the page and a notice.
+// (a refused first version says why below its row), and the App's installations; on the right the account alone: the
+// e-mail notices, the connected applications (ESC-317) and « Mes données » (export, sign-out, deletion).
+// Each plugin's « ⋯ » opens its modal (direction A of design/store-account/, ESC-318): its installs by week, its
+// versions (publish the one that waits, take one back), new tags and the list, then apart the transfer and the
+// deletion (docs/STORE.md, §2.2). The modal lives in the address (`?plugin=<id>`), so a link, a reload and the
+// redirect after a form open it again. Every action is a plain form: it works without script, under the strict
+// Content-Security-Policy, and the server answers with the page, the modal and a notice.
 interface Installation {
   id: number;
   owner: string;
@@ -98,6 +101,8 @@ interface AccountData {
   offers: { id: string; from: string | null; at: string | null; icon: Icon | null }[];
   claims: { id: string; repository: string; at: string | null; icon: Icon | null }[];
   selected: Selected | null;
+  /** The MCP clients the author let in (ESC-317). */
+  apps: ConnectedAppLine[];
   now: string;
 }
 
@@ -113,7 +118,15 @@ const submit = computed(() => pathIn(lang.value, '/submit'));
 const query = computed(() => (typeof route.query.plugin === 'string' ? { plugin: route.query.plugin } : {}));
 const { data, error } = await useFetch<AccountData>('/api/account', { key: 'account', query });
 const rows = computed(() => data.value?.plugins ?? []);
+/** The plugin whose modal is open: the one `?plugin=` names, when it is theirs and published. */
 const chosen = computed(() => rows.value.find((p) => p.id === data.value?.selected?.id) ?? null);
+/** The version found on a new tag that waits for a click, when `id` is one: published from its row in the modal. */
+const waiting = (id: number) => data.value?.pending.find((p) => p.id === id) ?? null;
+/** A form opened in the modal (transfer, deletion) takes the focus in its field, which brings it into view on a phone. */
+function reveal(e: Event) {
+  const box = e.target as HTMLDetailsElement;
+  if (box.open) box.querySelector<HTMLInputElement>('input:not([type="hidden"])')?.focus();
+}
 const inTheWay = computed(() => rows.value.filter((p) => p.submission === null && !p.deletedAt).map((p) => p.id));
 const num = (n: number) => n.toLocaleString(lang.value === 'fr' ? 'fr-FR' : 'en-GB');
 const date = (iso: string | null) =>
@@ -180,7 +193,7 @@ useHead(() => ({
       <h1 class="page-title">
         {{ text.mine }} <span class="more">· {{ data.login }}</span>
       </h1>
-      <p v-if="notice" class="notice" :class="notice[0]" role="status">{{ notice[1] }}</p>
+      <p v-if="notice && !chosen" class="notice" :class="notice[0]" role="status">{{ notice[1] }}</p>
 
       <div v-for="o in data.offers" :key="`o${o.id}`" class="banner">
         <PluginTile :mark="markOf(o.id.split('.').pop() ?? o.id)" :hue="hueOf(o.id)" :icon="o.icon" size="sm" />
@@ -280,7 +293,9 @@ useHead(() => ({
                 <NuxtLink
                   v-if="r.submission === null"
                   class="btn sm ghost icon"
-                  :to="{ path: here, query: { plugin: r.id }, hash: '#manage' }"
+                  :to="{ path: here, query: { plugin: r.id } }"
+                  :data-manage="r.id"
+                  aria-haspopup="dialog"
                   :aria-label="a.manage(r.name)"
                   :title="a.manage(r.name)"
                   ><svg class="i" viewBox="0 0 16 16" aria-hidden="true">
@@ -325,132 +340,6 @@ useHead(() => ({
       </table>
       <p class="sub note">{{ text.installsNote }}</p>
 
-      <section v-if="data.selected && chosen" id="manage" class="manage" aria-labelledby="manage-title">
-        <div class="manage-head">
-          <PluginTile :mark="markOf(chosen.name)" :hue="hueOf(chosen.id)" :icon="chosen.icon" />
-          <div>
-            <h2 id="manage-title" class="h2">{{ chosen.name }}</h2>
-            <small class="mono">{{ chosen.id }}</small>
-          </div>
-        </div>
-        <p class="sub">{{ a.from(chosen.repository) }}</p>
-        <p v-if="chosen.transferredAt && chosen.transferredFrom" class="sub">
-          {{ a.transferred(chosen.transferredFrom, date(chosen.transferredAt)) }}
-        </p>
-        <p v-if="chosen.frozenUntil" class="notice warn">{{ a.frozenUntil(date(chosen.frozenUntil)) }}</p>
-        <div v-if="chosen.deletedAt" class="notice bad deleted">
-          <span>{{ a.deletedOn(date(chosen.purgeOn)) }}</span>
-          <form method="post" :action="action(chosen.id, 'restore')">
-            <input type="hidden" name="lang" :value="lang" />
-            <button class="btn sm" type="submit">{{ a.restore }}</button>
-          </form>
-        </div>
-
-        <table class="t versions">
-          <thead>
-            <tr>
-              <th v-for="(h, n) in a.versions" :key="n" :class="{ r: n > 2, 'hide-sm': n === 2 || n === 4 }">{{ h }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="v in data.selected.versions" :key="v.id">
-              <td class="mono">{{ v.version ? `v${v.version}` : v.tag }}</td>
-              <td>
-                <span
-                  class="tag"
-                  :class="{
-                    bad: v.state === 'rejected' || v.state === 'error',
-                    warn: v.state === 'ready' || v.state === 'held',
-                    review: versionState(v) === 'review',
-                    ok: versionState(v) === 'verified',
-                  }"
-                  >{{ a.vstates[versionState(v)] ?? v.state }}</span
-                >
-                <span v-if="v.tagMovedAt" class="tag warn moved">{{ a.moved }}</span>
-                <small v-if="v.reviewMessage && (v.reviewState === 'changes' || v.reviewState === 'refused')" class="review-said">{{
-                  v.reviewMessage
-                }}</small>
-              </td>
-              <td class="hide-sm dim nowrap">{{ date(v.publishedAt) || '—' }}</td>
-              <td class="r num">{{ num(v.installs) }}</td>
-              <td class="r num hide-sm dim">{{ num(v.updates) }}</td>
-              <td class="act">
-                <details v-if="v.state === 'published' && !v.yankedAt && v.version" class="yank">
-                  <summary class="btn sm ghost">{{ a.yank }}</summary>
-                  <form method="post" :action="versionAction(v.id, 'yank')">
-                    <p>{{ a.yankWhat(v.version) }}</p>
-                    <input type="hidden" name="lang" :value="lang" />
-                    <button class="btn sm danger" type="submit">{{ a.yankNow(v.version) }}</button>
-                  </form>
-                </details>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div v-if="!chosen.deletedAt" class="rows">
-          <div class="row">
-            <div>
-              <b>{{ a.auto.title }}</b>
-              <p>{{ data.selected.autoPublish ? a.auto.on : a.auto.off }}</p>
-            </div>
-            <form method="post" :action="action(chosen.id, data.selected.autoPublish ? 'auto-off' : 'auto-on')">
-              <input type="hidden" name="lang" :value="lang" />
-              <button class="btn sm" type="submit">{{ data.selected.autoPublish ? a.auto.turnOff : a.auto.turnOn }}</button>
-            </form>
-          </div>
-          <div class="row">
-            <div>
-              <b>{{ a.list.title }}</b>
-              <p>{{ chosen.unlistedAt ? a.list.off : a.list.on }}</p>
-            </div>
-            <form method="post" :action="action(chosen.id, chosen.unlistedAt ? 'relist' : 'unlist')">
-              <input type="hidden" name="lang" :value="lang" />
-              <button class="btn sm" type="submit">{{ chosen.unlistedAt ? a.list.relist : a.list.unlist }}</button>
-            </form>
-          </div>
-          <div class="row">
-            <div>
-              <b>{{ a.transfer.title }}</b>
-              <p>{{ chosen.transferTo ? a.transfer.waiting(chosen.transferTo) : a.transfer.about }}</p>
-            </div>
-            <form v-if="chosen.transferTo" method="post" :action="action(chosen.id, 'cancel-transfer')">
-              <input type="hidden" name="lang" :value="lang" />
-              <button class="btn sm" type="submit">{{ a.transfer.cancel }}</button>
-            </form>
-            <form v-else method="post" class="inline" :action="action(chosen.id, 'transfer')">
-              <label class="sr" for="transfer-login">{{ a.transfer.label }}</label>
-              <input
-                id="transfer-login"
-                class="input"
-                name="login"
-                required
-                maxlength="40"
-                autocomplete="off"
-                :placeholder="a.transfer.label"
-              />
-              <input type="hidden" name="lang" :value="lang" />
-              <button class="btn sm" type="submit">{{ a.transfer.send }}</button>
-            </form>
-          </div>
-          <div class="row">
-            <div>
-              <b>{{ a.remove.title }}</b>
-              <p>{{ a.remove.about }}</p>
-            </div>
-            <details class="delete">
-              <summary class="btn sm danger">{{ a.remove.open }}</summary>
-              <form method="post" :action="action(chosen.id, 'delete')">
-                <label for="confirm-plugin">{{ a.remove.confirm(chosen.id) }}</label>
-                <input id="confirm-plugin" class="input" name="confirm" required autocomplete="off" :placeholder="a.remove.label" />
-                <input type="hidden" name="lang" :value="lang" />
-                <button class="btn sm danger" type="submit">{{ a.remove.now }}</button>
-              </form>
-            </details>
-          </div>
-        </div>
-      </section>
-
       <section class="app" aria-labelledby="app-title">
         <div class="app-head">
           <h2 id="app-title" class="h2">{{ text.app.title }}</h2>
@@ -475,28 +364,6 @@ useHead(() => ({
     </section>
 
     <aside>
-      <div v-if="data.selected && chosen" class="side-card stats">
-        <h3 class="h2">{{ a.stats.title(chosen.name) }}</h3>
-        <div>
-          <span class="stat-n num">{{ num(data.selected.installs) }}</span>
-          <span class="sub small">{{ a.stats.recent(num(data.selected.recent)) }}</span>
-        </div>
-        <svg
-          class="bars"
-          viewBox="0 0 119 54"
-          preserveAspectRatio="none"
-          role="img"
-          :aria-label="a.stats.chart(num(data.selected.weeks.at(-1)?.installs ?? 0))"
-        >
-          <rect v-for="(b, n) in bars" :key="n" :x="b.x" :y="b.y" width="9" :height="b.h" rx="1" :class="{ last: n === bars.length - 1 }" />
-        </svg>
-        <div class="axis">
-          <span>{{ a.stats.first }}</span
-          ><span>{{ a.stats.last }}</span>
-        </div>
-        <p>{{ a.stats.updates(num(data.selected.updates)) }}</p>
-      </div>
-
       <div class="side-card">
         <h3 class="h2">{{ text.email.title }}</h3>
         <div v-if="data.email" class="field">
@@ -531,6 +398,8 @@ useHead(() => ({
         </form>
       </div>
 
+      <ConnectedApps :apps="data.apps ?? []" :now="data.now" />
+
       <div class="side-card">
         <h3 class="h2">{{ text.data.title }}</h3>
         <p>{{ text.data.about }}</p>
@@ -560,6 +429,199 @@ useHead(() => ({
       </div>
       <AdminTokens v-if="me.account?.admin" />
     </aside>
+
+    <!-- The plugin's details and management, in a modal that the address opens (?plugin=<id>, ESC-318). -->
+    <StoreDialog
+      v-if="data.selected && chosen"
+      :key="chosen.id"
+      :close-to="here"
+      labelledby="manage-title"
+      :close-label="a.close"
+      :return-to="`[data-manage='${chosen.id}']`"
+    >
+      <div class="m-head">
+        <PluginTile :mark="markOf(chosen.name)" :hue="hueOf(chosen.id)" :icon="chosen.icon" />
+        <div>
+          <h2 id="manage-title" class="m-title" tabindex="-1" data-dialog-title>{{ chosen.name }}</h2>
+          <small class="mono">{{ chosen.id }}</small>
+        </div>
+      </div>
+      <div id="manage" class="m-body">
+        <p v-if="notice" class="notice" :class="notice[0]" role="status">{{ notice[1] }}</p>
+        <div class="meta">
+          <VerifiedSeal v-if="chosen.state === 'verified'" :version="chosen.version ?? undefined" />
+          <span v-else class="tag" :class="a.states[chosen.state]?.[0]">{{ a.states[chosen.state]?.[1] ?? chosen.state }}</span>
+          <span>{{ a.from(chosen.repository) }}</span>
+        </div>
+        <p v-if="chosen.transferredAt && chosen.transferredFrom" class="sub said">
+          {{ a.transferred(chosen.transferredFrom, date(chosen.transferredAt)) }}
+        </p>
+        <p v-if="chosen.frozenUntil" class="notice warn">{{ a.frozenUntil(date(chosen.frozenUntil)) }}</p>
+        <div v-if="chosen.deletedAt" class="notice bad deleted">
+          <span>{{ a.deletedOn(date(chosen.purgeOn)) }}</span>
+          <form method="post" :action="action(chosen.id, 'restore')">
+            <input type="hidden" name="lang" :value="lang" />
+            <button class="btn sm" type="submit">{{ a.restore }}</button>
+          </form>
+        </div>
+
+        <div class="stats">
+          <div>
+            <span class="stat-n num">{{ num(data.selected.installs) }}</span>
+            <p class="sub">{{ a.stats.installs(num(data.selected.recent)) }} · {{ a.stats.updates(num(data.selected.updates)) }}</p>
+          </div>
+          <div class="chart">
+            <svg
+              class="bars"
+              viewBox="0 0 119 54"
+              preserveAspectRatio="none"
+              role="img"
+              :aria-label="a.stats.chart(num(data.selected.weeks.at(-1)?.installs ?? 0))"
+            >
+              <rect
+                v-for="(b, n) in bars"
+                :key="n"
+                :x="b.x"
+                :y="b.y"
+                width="9"
+                :height="b.h"
+                rx="1"
+                :class="{ last: n === bars.length - 1 }"
+              />
+            </svg>
+            <div class="axis">
+              <span>{{ a.stats.first }}</span
+              ><span>{{ a.stats.last }}</span>
+            </div>
+          </div>
+        </div>
+
+        <h3 class="sec">{{ a.sections.versions }}</h3>
+        <table class="t versions">
+          <thead>
+            <tr>
+              <th v-for="(h, n) in a.versions" :key="n" :class="{ r: n > 2, 'hide-sm': n === 2 }">{{ h }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="v in data.selected.versions" :key="v.id">
+              <td class="mono">{{ v.version ? `v${v.version}` : v.tag }}</td>
+              <td>
+                <span
+                  class="tag"
+                  :class="{
+                    bad: v.state === 'rejected' || v.state === 'error',
+                    warn: v.state === 'ready' || v.state === 'held',
+                    review: versionState(v) === 'review',
+                    ok: versionState(v) === 'verified',
+                  }"
+                  >{{ a.vstates[versionState(v)] ?? v.state }}</span
+                >
+                <span v-if="v.tagMovedAt" class="tag warn moved">{{ a.moved }}</span>
+                <small v-if="v.reviewMessage && (v.reviewState === 'changes' || v.reviewState === 'refused')" class="review-said">{{
+                  v.reviewMessage
+                }}</small>
+              </td>
+              <td class="hide-sm dim nowrap">{{ date(v.publishedAt) || '—' }}</td>
+              <td class="r num">{{ num(v.installs) }}</td>
+              <td class="act">
+                <form v-if="waiting(v.id) && !chosen.deletedAt" method="post" :action="versionAction(v.id, 'publish')">
+                  <input type="hidden" name="lang" :value="lang" />
+                  <button
+                    class="btn sm primary"
+                    type="submit"
+                    :disabled="!!waiting(v.id)?.frozenUntil"
+                    :aria-label="a.pending.publish(waiting(v.id)?.version ?? '')"
+                  >
+                    {{ a.publishShort }}
+                  </button>
+                </form>
+                <details v-else-if="v.state === 'published' && !v.yankedAt && v.version" class="yank">
+                  <summary class="btn sm ghost">{{ a.yank }}</summary>
+                  <form method="post" :action="versionAction(v.id, 'yank')">
+                    <p>{{ a.yankWhat(v.version) }}</p>
+                    <input type="hidden" name="lang" :value="lang" />
+                    <button class="btn sm danger" type="submit">{{ a.yankNow(v.version) }}</button>
+                  </form>
+                </details>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <template v-if="!chosen.deletedAt">
+          <h3 class="sec">{{ a.sections.publishing }}</h3>
+          <div class="settings">
+            <div class="row">
+              <div>
+                <b>{{ a.auto.title }}</b>
+                <p>{{ data.selected.autoPublish ? a.auto.on : a.auto.off }}</p>
+              </div>
+              <form method="post" :action="action(chosen.id, data.selected.autoPublish ? 'auto-off' : 'auto-on')">
+                <input type="hidden" name="lang" :value="lang" />
+                <button class="btn sm" type="submit">{{ data.selected.autoPublish ? a.auto.turnOff : a.auto.turnOn }}</button>
+              </form>
+            </div>
+            <div class="row">
+              <div>
+                <b>{{ a.list.title }}</b>
+                <p>{{ chosen.unlistedAt ? a.list.off : a.list.on }}</p>
+              </div>
+              <form method="post" :action="action(chosen.id, chosen.unlistedAt ? 'relist' : 'unlist')">
+                <input type="hidden" name="lang" :value="lang" />
+                <button class="btn sm" type="submit">{{ chosen.unlistedAt ? a.list.relist : a.list.unlist }}</button>
+              </form>
+            </div>
+          </div>
+
+          <section class="zone" aria-labelledby="zone-title">
+            <h3 id="zone-title">{{ a.sections.danger }}</h3>
+            <div class="row">
+              <div>
+                <b>{{ a.transfer.title }}</b>
+                <p>{{ chosen.transferTo ? a.transfer.waiting(chosen.transferTo) : a.transfer.about }}</p>
+              </div>
+              <form v-if="chosen.transferTo" method="post" :action="action(chosen.id, 'cancel-transfer')">
+                <input type="hidden" name="lang" :value="lang" />
+                <button class="btn sm" type="submit">{{ a.transfer.cancel }}</button>
+              </form>
+              <details v-else class="open-form" @toggle="reveal">
+                <summary class="btn sm">{{ a.transfer.open }}</summary>
+                <form method="post" :action="action(chosen.id, 'transfer')">
+                  <label for="transfer-login">{{ a.transfer.label }}</label>
+                  <div class="inline">
+                    <input id="transfer-login" class="input" name="login" required maxlength="40" autocomplete="off" />
+                    <input type="hidden" name="lang" :value="lang" />
+                    <button class="btn sm" type="submit">{{ a.transfer.send }}</button>
+                  </div>
+                </form>
+              </details>
+            </div>
+            <div class="row">
+              <div>
+                <b>{{ a.remove.title }}</b>
+                <p>{{ a.remove.about }}</p>
+              </div>
+              <details class="open-form gone" @toggle="reveal">
+                <summary class="btn sm danger">{{ a.remove.open }}</summary>
+                <form method="post" :action="action(chosen.id, 'delete')">
+                  <label for="confirm-plugin">{{ a.remove.confirm(chosen.id) }}</label>
+                  <input id="confirm-plugin" class="input" name="confirm" required autocomplete="off" :placeholder="a.remove.label" />
+                  <input type="hidden" name="lang" :value="lang" />
+                  <button class="btn sm danger solid" type="submit">{{ a.remove.now }}</button>
+                </form>
+              </details>
+            </div>
+          </section>
+        </template>
+      </div>
+      <div v-if="!chosen.deletedAt" class="m-foot">
+        <NuxtLink :to="pathIn(lang, `/plugins/${encodeURIComponent(chosen.id)}`)"
+          ><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M9 3H13V7M13 3L7.5 8.5M11.5 9.5V13H3V4.5H6.5" /></svg
+          >{{ a.publicPage }}</NuxtLink
+        >
+      </div>
+    </StoreDialog>
   </div>
 
   <div v-else class="wrap guest">
@@ -762,24 +824,74 @@ table.t tr.sel td {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
-.manage {
-  margin-top: 40px;
-  scroll-margin-top: 80px;
-}
-.manage-head {
+/* The plugin's modal (StoreDialog): its head, its body that scrolls, its foot. */
+.m-head {
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-bottom: 10px;
+  padding: 20px 64px 16px 22px;
 }
-.manage-head small {
+.m-head > div {
+  min-width: 0;
+}
+.m-title {
+  font-size: 19px;
+  font-weight: 640;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.m-title:focus {
+  outline: none;
+}
+.m-head small {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
   color: var(--dim);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.manage > .sub {
-  margin: 4px 0 0;
+.m-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 22px 22px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.m-body > .notice:first-child {
+  margin: 0 0 16px;
+}
+.m-foot {
+  display: flex;
+  padding: 12px 22px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+.m-foot a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+.m-foot a:hover {
+  color: var(--text);
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  color: var(--muted);
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+}
+.said {
+  margin: 8px 0 0;
   font-size: 13.5px;
 }
-.manage .notice {
+.m-body .notice {
   margin-top: 14px;
 }
 .notice.deleted {
@@ -789,19 +901,71 @@ table.t tr.sel td {
   justify-content: space-between;
   gap: 10px;
 }
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin-top: 18px;
+}
+.stats .sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+}
+.stat-n {
+  font-size: 26px;
+  font-weight: 620;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.chart {
+  width: 236px;
+}
+.bars {
+  display: block;
+  width: 100%;
+  height: 40px;
+}
+.bars rect {
+  fill: color-mix(in srgb, var(--text) 22%, transparent);
+}
+.bars rect.last {
+  fill: var(--brand);
+}
+.axis {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  color: var(--dim);
+  font: 10.5px var(--mono);
+  white-space: nowrap;
+}
+.sec {
+  margin: 28px 0 0;
+  color: var(--soft);
+  font-size: 13px;
+  font-weight: 620;
+}
 table.versions {
-  margin-top: 20px;
+  margin-top: 8px;
+  font-size: 13.5px;
+}
+table.versions th {
+  padding-bottom: 8px;
 }
 table.versions td {
-  padding-block: 12px;
+  padding-block: 10px;
+  vertical-align: middle;
 }
 table.versions th:nth-child(1) {
-  width: 18%;
+  width: 15%;
 }
 table.versions th:nth-child(2) {
-  width: 30%;
+  width: 34%;
 }
-table.versions th:nth-child(6) {
+table.versions th:nth-child(5) {
   width: 92px;
 }
 .tag.moved {
@@ -812,11 +976,12 @@ table.versions th:nth-child(6) {
   display: inline-block;
 }
 .yank summary,
-.delete summary {
+.open-form summary {
   display: inline-flex;
   list-style: none;
 }
-.yank summary::-webkit-details-marker {
+.yank summary::-webkit-details-marker,
+.open-form summary::-webkit-details-marker {
   display: none;
 }
 .yank form {
@@ -842,22 +1007,22 @@ table.versions th:nth-child(6) {
 .yank .btn {
   justify-self: start;
 }
-.rows {
+.settings {
   display: grid;
-  margin-top: 28px;
+  margin-top: 8px;
   border-top: 1px solid var(--line);
 }
 .row {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px 24px;
-  padding: 16px 0;
+  gap: 10px 20px;
+  padding: 14px 0;
   border-bottom: 1px solid var(--line);
 }
 .row > div {
-  flex: 1 1 280px;
+  flex: 1 1 260px;
   min-width: 0;
 }
 .row b {
@@ -865,48 +1030,63 @@ table.versions th:nth-child(6) {
   font-weight: 600;
 }
 .row p {
-  max-width: 62ch;
-  margin: 4px 0 0;
+  max-width: 58ch;
+  margin: 2px 0 0;
   color: var(--muted);
-  font-size: 13.5px;
+  font-size: 13px;
 }
-.row form.inline {
+/* What can neither be undone in a click nor done by mistake: framed apart, at the end. */
+.zone {
+  margin-top: 28px;
+  border: 1px solid color-mix(in oklch, var(--danger) 32%, transparent);
+  border-radius: 12px;
+}
+.zone h3 {
+  margin: 0;
+  padding: 12px 14px 0;
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 620;
+}
+.zone .row {
+  padding: 12px 14px;
+}
+.zone .row:last-child {
+  border-bottom: 0;
+}
+.open-form[open] {
+  flex-basis: 100%;
+}
+.open-form form {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--surface);
+}
+.open-form.gone form {
+  background: var(--danger-bg);
+}
+.open-form label {
+  color: var(--soft);
+  font-size: 13px;
+}
+.open-form .inline {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
-.row form.inline .input {
-  width: 200px;
-  height: 30px;
+.open-form .inline .input {
+  flex: 1 1 200px;
+  width: auto;
 }
-.row .delete form {
-  min-width: 260px;
+.open-form .btn {
+  justify-self: start;
 }
-.stats .small {
-  margin-left: 4px;
-  font-size: 13px;
-}
-.stat-n {
-  font-size: 26px;
-  font-weight: 620;
-  letter-spacing: -0.03em;
-}
-.bars {
-  display: block;
-  width: 100%;
-  height: 54px;
-}
-.bars rect {
-  fill: color-mix(in srgb, var(--text) 22%, transparent);
-}
-.bars rect.last {
-  fill: var(--brand);
-}
-.axis {
-  display: flex;
-  justify-content: space-between;
-  color: var(--dim);
-  font: 11px var(--mono);
+.btn.danger.solid {
+  border-color: transparent;
+  background: var(--danger);
+  color: #fff;
 }
 table.t th {
   padding: 0 12px 10px;
@@ -1204,8 +1384,15 @@ input.input:focus-visible {
   .mine tr.empty {
     display: block;
   }
-  .row form.inline .input {
-    width: 100%;
+  /* The modal as a sheet: closer to the edges, its versions without their date and updates. */
+  .m-head {
+    padding: 16px 56px 12px 16px;
+  }
+  .m-body {
+    padding: 0 16px 20px;
+  }
+  .m-foot {
+    padding: 12px 16px;
   }
 }
 </style>

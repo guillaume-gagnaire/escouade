@@ -11,7 +11,7 @@ import {
   type RevocationList,
 } from '../../server/utils/revocation-list';
 import { checkVersionSignature, verifiedComment } from '../../server/utils/signature';
-import { sha256 } from '../../server/utils/versions';
+import { sha256, wasmOf } from '../../server/utils/versions';
 import { catalog, Integrity, type Source } from './download';
 import { blockers, type ReviewData } from './report';
 
@@ -201,6 +201,13 @@ export async function signVersion(a: Admin, id: string, version: string, now = n
   if (got !== entry.sha256) throw new Integrity(`version.json : empreinte ${got}, le catalogue dit ${entry.sha256}`);
   if (got !== data.versionSha256)
     throw new Integrity(`version.json a changé depuis la revue (${data.versionSha256} relu, ${got} servi) : relance la revue`);
+  // The signature covers version.json, so the module it names (ESC-324): signed only when the review compiled the bundle
+  // again to that very module.
+  const wasm = wasmOf(json.toString('utf8'));
+  if (wasm && (data.recompile?.state !== 'same' || data.recompile.sha256 !== wasm.sha256))
+    throw new Error(
+      `le module WASM ${wasm.sha256} n’a pas été recompilé à la même empreinte par la revue : relance-la avec l’escouade-plugin ${'prelude' in wasm.compiler ? wasm.compiler.prelude : 'de cette version'}`,
+    );
 
   const fr = join(a.reports, id, `${version}.public.md`);
   const en = join(a.reports, id, `${version}.public.en.md`);
@@ -224,10 +231,15 @@ export async function signVersion(a: Admin, id: string, version: string, now = n
   }
 }
 
-/** The verdict the reader settled in the report (« Verdict : … » in its findings), else the one the script proposed. */
+const FINDINGS = '## Constats de la revue';
+
+/**
+ * The verdict the reader settled in the report (« Verdict : … » in its findings), else the one the script proposed. Their
+ * section is the report's last: a heading the same quoted from a plugin, above it, settles nothing.
+ */
 export function reportVerdict(report: string, data: ReviewData & { proposed?: { verdict: string | null } }): string | null {
   const settled = /^[-*\s]*\**verdict(?: final)?\**\s*:\s*\**\s*(Vérifier|Demander des changements|Refuser)\b/im.exec(
-    report.split('## Constats de la revue')[1] ?? '',
+    report.includes(FINDINGS) ? report.slice(report.lastIndexOf(FINDINGS)) : '',
   );
   return settled?.[1] ?? data.proposed?.verdict ?? null;
 }

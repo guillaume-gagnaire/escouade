@@ -14,6 +14,7 @@ L’en-tête donne le compte : « 2 projets · 7 agents · 3 en cours ». Dess
 
 1. **« Attend ta réponse »** : les agents au statut « Question », de tous les projets, celui qui attend depuis le plus longtemps en premier, avec le nom de son projet.
 2. **Un groupe par projet**, dans l’ordre de la barre des projets, avec sa couleur ; les agents y sont dans l’ordre de la barre latérale.
+3. **« Pull requests »** (« Merge requests » quand toutes viennent de GitLab), quand une PR attend ta main, tous projets confondus : « À corriger », « À merger » et « Relectures demandées ». Un clic ouvre son agent, sinon le Kanban de son ticket, sinon la vue « Pull requests » de son projet (voir [les hébergeurs de code](code-hosts#les-nouvelles-des-hebergeurs)).
 
 Un agent n’apparaît qu’une fois, et les agents archivés ne sont pas listés. Chaque ligne a six colonnes :
 

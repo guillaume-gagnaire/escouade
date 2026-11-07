@@ -1,49 +1,57 @@
 # Example plugins
 
-Four complete plugins to copy, read and install as they are: a theme, a Discord webhook with no code, and Slack and a team’s rules in TypeScript. Each one passes the conformance bench on every change.
+Five complete plugins to read, copy and install: a theme, a Discord webhook with no code, Slack and a team’s rules in TypeScript, and Goose, a harness described with no code. They are Escouade’s own plugins, on its store; each one passes the conformance bench on every change.
 
 ## Where to find them
 
-They are in the `plugin-examples/` folder of Escouade’s repository, one folder per plugin, each readable on its own and under the MIT license: https://github.com/guillaume-gagnaire/escouade/tree/main/plugin-examples
+They are in the `plugins/` folder of Escouade’s repository, one folder per plugin (`plugins/slack/`…), each readable on its own with its manifest, its README, its LICENSE (MIT), its CHANGELOG and its tests: https://github.com/guillaume-gagnaire/escouade/tree/main/plugins. The store publishes them as `dev.escouade.high-contrast`, `dev.escouade.discord`, `dev.escouade.slack`, `dev.escouade.team-rules` and `dev.escouade.goose`, taken from these folders at their tags `plugins/<folder>/v1.2.3` (see [Publishing a plugin](plugins/publishing)).
+
+To make one yours, copy its folder and give it an id of your own (`io.github.<your-login>.slack`): `dev.escouade.*` is kept for Escouade’s own plugins, and the store takes it from Escouade’s repository alone.
 
 | Example | What it shows | Kind |
 | --- | --- | --- |
 | High contrast | A theme, dark and light, and a palette of project colors | Declarative |
-| Discord webhook | Tickets to review and agents waiting, in a Discord channel | Declarative |
+| Discord | Tickets to review and agents waiting, in a Discord channel | Declarative |
 | Slack | The same in Slack, in each project’s channel, with a secret in the keychain | TypeScript program |
 | Team rules | The agents’ commands allowed or denied by a file of the repository | TypeScript program |
+| Goose | An agent that speaks ACP, added as a harness | Declarative |
+| Linear | A source of the Kanban, on the kit | Rust module |
 
-The code shown here is the repository’s: a test of the site checks it has not changed since. Gemini CLI ships with Escouade; the example of a harness described by a plugin will come with that extension point.
+The code shown here is the repository’s: a test of the site checks it has not changed since.
+
+> [!NOTE]
+> Slack and Team rules are `run.js` plugins since their 2.0.0: Escouade runs their `dist/plugin.mjs` inside the app, in WASM, with no Node on the machine (see [the protocol](plugins/api#a-program-in-wasm)). They need Escouade 2.2.0 or later (`escouade.min`); their 1.x versions, started through Node, stay on the store for the versions before. Node only serves their authors, to build and test them.
 
 ## Trying them
 
-In **Plugins**, “In development”, pick an example’s folder: it is loaded in place and read again when it changes. Enter its secrets in the “Settings” tab of its page.
+Install them from the store, in **Plugins**. To change one: “In development”, pick an example’s folder; it is loaded in place and read again when it changes. Enter its secrets in the “Settings” tab of its page.
 
-To check them as the repository’s CI does: the TypeScript examples pass their tests and their typecheck, their `dist/plugin.mjs` is compared to the build of `src/`, then each one passes `escouade-plugin validate` and the bench (see [Testing a plugin](plugins/testing)).
+To check them as the repository’s CI does: each one passes its tests (and, in TypeScript, its typecheck; its `dist/plugin.mjs` is compared to the build of `src/`), then `escouade-plugin validate` and the bench, with `--first-party` for their reserved ids (see [Testing a plugin](plugins/testing)).
 
 ```sh
 npx tsc -p sdk/plugin/tsconfig.json
-ESCOUADE_PLUGIN_BIN=/path/to/escouade-plugin node plugin-examples/ci.mjs
+ESCOUADE_PLUGIN_BIN=/path/to/escouade-plugin node plugins/ci.mjs
 ```
 
 ## High contrast
 
 A theme with no code: values for the window’s tokens, dark and light, and a palette for project colors. Escouade filters each value before it sets it; a token left out keeps Escouade’s. See [Themes](plugins/themes).
 
-`plugin-examples/high-contrast/escouade-plugin.json`
+`plugins/high-contrast/escouade-plugin.json`
 
 ```json
 {
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
-  "id": "dev.exemple.high-contrast",
+  "id": "dev.escouade.high-contrast",
   "name": { "fr": "Contraste élevé", "en": "High contrast" },
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": {
     "fr": "Un thème à fort contraste, clair et sombre : texte pur, bordures nettes, couleurs d'état franches.",
     "en": "A high-contrast theme, light and dark: pure text, sharp borders, plain status colors."
   },
   "author": { "name": "Escouade", "url": "https://escouade.dev" },
   "license": "MIT",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/high-contrast",
   "escouade": { "api": "1", "min": "2.1.0" },
   "contributes": {
     "themes": [
@@ -101,24 +109,25 @@ A theme with no code: values for the window’s tokens, dark and light, and a pa
 
 Pick it in Settings › Application, “Colors” row.
 
-## Discord webhook
+## Discord
 
 Two declared webhooks, no program: a ticket moved to “To review”, and an agent waiting for your answer. The Discord webhook’s address is a secret: it stays in the system’s keychain and never shows in the journal. See [Events](plugins/events#a-webhook-without-code).
 
-`plugin-examples/discord-webhook/escouade-plugin.json`
+`plugins/discord/escouade-plugin.json`
 
 ```json
 {
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
-  "id": "dev.exemple.discord",
+  "id": "dev.escouade.discord",
   "name": "Discord",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": {
     "fr": "Les tickets à tester et les agents qui attendent, dans un salon Discord : un webhook, sans code.",
     "en": "Tickets to test and agents waiting, in a Discord channel: a webhook, no code."
   },
   "author": { "name": "Escouade", "url": "https://escouade.dev" },
   "license": "MIT",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/discord",
   "escouade": { "api": "1", "min": "2.1.0" },
   "permissions": {
     "events": ["ticket.column", "agent.status"],
@@ -157,22 +166,23 @@ In Discord, create the webhook in the channel’s settings (Integrations › Web
 
 A TypeScript program, written with the [SDK](plugins/sdk). It posts in each project’s channel: the one `channels.json` gives, else `escouade-<project name>`. The bot’s token (`xoxb-…`) is asked of Escouade on each fact (`secrets/get`), never written in a file.
 
-`plugin-examples/slack/escouade-plugin.json`
+`plugins/slack/escouade-plugin.json`
 
 ```json
 {
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
-  "id": "dev.exemple.slack",
+  "id": "dev.escouade.slack",
   "name": "Slack",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "description": {
     "fr": "Les tickets à tester et les agents qui attendent, dans le salon Slack de chaque projet.",
     "en": "Tickets to test and agents waiting, in each project's Slack channel."
   },
   "author": { "name": "Escouade", "url": "https://escouade.dev" },
   "license": "MIT",
-  "escouade": { "api": "1", "min": "2.1.0" },
-  "run": { "command": "slack", "windows": "slack.cmd" },
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/slack",
+  "escouade": { "api": "1", "min": "2.2.0" },
+  "run": { "js": "dist/plugin.mjs" },
   "activation": ["event:ticket.column", "event:agent.status"],
   "permissions": {
     "events": ["ticket.column", "agent.status"],
@@ -185,7 +195,7 @@ A TypeScript program, written with the [SDK](plugins/sdk). It posts in each proj
 }
 ```
 
-`plugin-examples/slack/channels.json`
+`plugins/slack/channels.json`
 
 ```json
 {
@@ -193,7 +203,7 @@ A TypeScript program, written with the [SDK](plugins/sdk). It posts in each proj
 }
 ```
 
-`plugin-examples/slack/src/plugin.ts`
+`plugins/slack/src/plugin.ts`
 
 ```ts
 // Slack: the tickets to test and the agents waiting, in each project's channel. The bot's token is kept in the
@@ -271,7 +281,7 @@ export function slack(options: Options = {}): Plugin {
 }
 ```
 
-`plugin-examples/slack/src/main.ts`
+`plugins/slack/src/main.ts`
 
 ```ts
 // The program Escouade starts (run in escouade-plugin.json): speaks the protocol on stdin and stdout.
@@ -282,34 +292,35 @@ void slack().start();
 
 In Slack, create an app with a bot that has the `chat:write` scope, invite it to the channels, then paste its token in the plugin’s “Settings” tab. Without a token, the journal says so and nothing is sent. A ticket’s title is escaped (`&`, `<`, `>`) as Slack asks: a `<!channel>` from a public issue shows without notifying anyone.
 
-Its tests drive its handlers against the SDK’s fake Escouade and a fake Slack, with no network (`npm test`). `npm run build` bundles `src/` into `dist/plugin.mjs`, which `slack` and `slack.cmd` start: Escouade runs the plugin as the repository holds it, without `npm install`.
+Its tests drive its handlers against the SDK’s fake Escouade and a fake Slack, with no network (`npm test`). `npm run build` bundles `src/` into `dist/plugin.mjs`, which `run.js` names: committed, it is the bundle the store compiles to WASM, without `npm install`. `start()` speaks to Escouade’s WASM host, or on standard input and output under Node (its tests, the bench). Its `fetch` to `slack.com/api/chat.postMessage` goes through Escouade, which lets it reach `slack.com` and its subdomains only, over https; `channels.json`, a JSON file at the root of its folder, is given to it at its start, and `readFileSync` reads it as under Node.
 
 ## Team rules
 
-A TypeScript program that decides permissions before they reach you (see [Permission rules](plugins/permission-rules)). Its rules are in `rules.json`, a file of the plugin’s repository that the team reviews like its code. A line that holds a denied command is denied, even after a `&&` or a `&`; a line made only of allowed commands is allowed, unless it holds a substitution (`$(…)`, backquotes, `$VAR`), a redirection (`>`, `<`) or an escape, which would slip something else behind an allowed start; the rest goes to the user. A rule compares the start of a command: `deny` is a safety net (`sudo rm -rf` slips past it and goes to the user), and `allow` allows any arguments.
+A TypeScript program that decides permissions before they reach you (see [Permission rules](plugins/permission-rules)). Its rules are in `rules.json`, a file of the plugin’s repository that the team reviews like its code. A line that holds a denied command is denied, even after a `&&` or a `&`; a line made only of allowed commands is allowed, unless it holds a substitution (`$(…)`, backquotes, `$VAR`), a redirection (`>`, `<`), an escape, which would slip something else behind an allowed start, or an `--output` (with it, `git diff` and `git log` write a file); the rest goes to the user. A rule compares the start of a command: `deny` is a safety net (`sudo rm -rf` slips past it and goes to the user), and `allow` allows any arguments.
 
-`plugin-examples/team-rules/escouade-plugin.json`
+`plugins/team-rules/escouade-plugin.json`
 
 ```json
 {
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
-  "id": "dev.exemple.team-rules",
+  "id": "dev.escouade.team-rules",
   "name": { "fr": "Règles de l'équipe", "en": "Team rules" },
-  "version": "1.0.1",
+  "version": "2.0.0",
   "description": {
     "fr": "Autorise ou refuse les commandes des agents selon les règles de l'équipe, écrites dans rules.json.",
     "en": "Allows or denies the agents' commands by the team's rules, written in rules.json."
   },
   "author": { "name": "Escouade", "url": "https://escouade.dev" },
   "license": "MIT",
-  "escouade": { "api": "1", "min": "2.1.0" },
-  "run": { "command": "team-rules", "windows": "team-rules.cmd" },
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/team-rules",
+  "escouade": { "api": "1", "min": "2.2.0" },
+  "run": { "js": "dist/plugin.mjs" },
   "activation": ["event:request.permission"],
   "permissions": { "decide": true }
 }
 ```
 
-`plugin-examples/team-rules/rules.json`
+`plugins/team-rules/rules.json`
 
 ```json
 {
@@ -323,7 +334,7 @@ A TypeScript program that decides permissions before they reach you (see [Permis
 }
 ```
 
-`plugin-examples/team-rules/src/plugin.ts`
+`plugins/team-rules/src/plugin.ts`
 
 ```ts
 // Team rules: the agents' commands allowed or denied by rules.json, a file of the plugin's repository that the team
@@ -357,6 +368,12 @@ export function commandsOf(line: string): string[] {
  * `git diff > ~/.bashrc` starts like `git diff`. */
 const HIDDEN = /[`$<>\\]/;
 
+/** An option that makes a command write a file of its own choosing: `git diff --output=~/.bashrc`, `git log --output …`
+ * (git takes no abbreviation of it). A redirection by another name: a line that holds it, its quotes taken out as the
+ * shell takes them out, is never allowed. */
+const WRITES = /(^|\s)--output(=|\s|$)/;
+const writes = (line: string) => WRITES.test(line.replace(/["']/g, ''));
+
 /** Whether `command` starts with `rule`, word for word (`npm testing` is not `npm test`). */
 const startsWith = (command: string, rule: string) => command === rule || command.startsWith(rule + ' ');
 
@@ -368,7 +385,8 @@ export function decide(rules: Rules, line: string): Decision {
       return { decision: 'deny', message: message ?? `The team's rules forbid \`${command}\`.` };
     }
   }
-  if (!HIDDEN.test(line) && commands.length > 0 && commands.every((c) => rules.allow.some((rule) => startsWith(c, rule)))) {
+  const plain = !HIDDEN.test(line) && !writes(line);
+  if (plain && commands.length > 0 && commands.every((c) => rules.allow.some((rule) => startsWith(c, rule)))) {
     return { decision: 'allow' };
   }
   return { decision: 'ask' };
@@ -384,7 +402,7 @@ export function teamRules(rules: Rules = readRules()): Plugin {
 }
 ```
 
-`plugin-examples/team-rules/src/main.ts`
+`plugins/team-rules/src/main.ts`
 
 ```ts
 // The program Escouade starts (run in escouade-plugin.json): speaks the protocol on stdin and stdout.
@@ -393,4 +411,102 @@ import { teamRules } from './plugin.ts';
 void teamRules().start();
 ```
 
-The rules are read once, at start: a decision has 500 ms. An edit or a file read is not a command, and goes to the user.
+The rules are read once, at start: a decision has 500 ms. In WASM, `rules.json` is given to it at its start with the other JSON files at the root of its folder; it starts nothing and reaches no network (it has no `permissions.network`). An edit or a file read is not a command, and goes to the user.
+
+## Linear
+
+A source of the Kanban in Rust: the kit’s `Hosts` answers the protocol, and the plugin gives its kind and its client. The `npm create escouade-plugin -- --kind rust` template, shorter, starts from a blank page; Linear shows a real service. It is read in [the Rust kit](plugins/rust#writing-a-source), and its code is in [`plugins/linear`](https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/linear).
+`plugins/linear/src/lib.rs` (excerpt)
+
+```rust
+impl SourceKind for LinearSource {
+    fn id(&self) -> &str {
+        ID
+    }
+    fn name(&self) -> &str {
+        S
+    }
+    fn client(&self, http: reqwest::Client, account: &Credentials) -> Box<dyn TicketSource> {
+        let base = account.api.clone().filter(|a| !a.trim().is_empty());
+        Box::new(Linear::new(http, account, base.as_deref().unwrap_or(API)))
+    }
+}
+```
+
+
+## Goose
+
+A harness without code: Goose, Block’s open source agent, described over ACP. The ACP plugin shipped with Escouade launches it and shows its conversation; the manifest says its modes, its mode that changes nothing, its model option and the names of its tools. Goose writes its files itself: no agent of a private project starts on it. See [A described ACP harness](plugins/harnesses).
+
+`plugins/goose/escouade-plugin.json`
+
+```json
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.goose",
+  "name": "Goose",
+  "version": "1.0.0",
+  "description": {
+    "fr": "Goose, l'agent open source de Block, comme harness : décrit par ACP, sans code.",
+    "en": "Goose, Block's open source agent, as a harness: described over ACP, no code."
+  },
+  "author": { "name": "Escouade", "url": "https://escouade.dev" },
+  "license": "MIT",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/goose",
+  "escouade": { "api": "1", "min": "2.1.0" },
+  "contributes": {
+    "harnesses": [
+      {
+        "id": "goose",
+        "name": "Goose",
+        "speaker": "Goose",
+        "writer": "Goose",
+        "locate": { "names": ["goose"] },
+        "tested": { "oldest": "1.57.0", "newest": "1.57.0" },
+        "caps": {
+          "modes": [
+            {
+              "id": "default",
+              "meaning": {
+                "fr": "Goose demande avant chaque outil (son mode approve). Il écrit les fichiers lui-même, sans les faire passer par Escouade.",
+                "en": "Goose asks before each tool (its approve mode). It writes files by itself, without passing them through Escouade."
+              }
+            },
+            {
+              "id": "acceptEdits",
+              "meaning": {
+                "fr": "Goose ne demande que pour ce qu'il juge sensible (son mode smart_approve) ; Escouade accepte ses écritures dans le dossier de l'agent.",
+                "en": "Goose asks only for what it deems sensitive (its smart_approve mode); Escouade accepts its writes in the agent's folder."
+              }
+            },
+            {
+              "id": "bypassPermissions",
+              "meaning": {
+                "fr": "Goose ne demande rien (son mode auto) : commandes, fichiers, tout le disque. Pas de bac à sable.",
+                "en": "Goose asks nothing (its auto mode): commands, files, the whole disk. No sandbox."
+              }
+            }
+          ],
+          "readOnly": true
+        },
+        "accountVar": "GOOSE_PATH_ROOT",
+        "install": {
+          "windows": "Invoke-WebRequest -Uri https://raw.githubusercontent.com/aaif-goose/goose/main/download_cli.ps1 -OutFile download_cli.ps1; ./download_cli.ps1",
+          "unix": "curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | CONFIGURE=false bash"
+        },
+        "updateCommand": "goose update",
+        "acp": {
+          "args": ["acp"],
+          "fs": false,
+          "modes": { "default": "approve", "acceptEdits": "smart_approve", "bypassPermissions": "auto" },
+          "readOnlyMode": "chat",
+          "modelOption": "model",
+          "questionsInText": true,
+          "tools": { "shell": "Bash", "write": "Write", "edit": "Edit", "text_editor": "Edit", "read": "Read", "tree": "Glob" }
+        }
+      }
+    ]
+  },
+  "store": { "categories": ["harness"] }
+}
+```

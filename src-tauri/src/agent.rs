@@ -25,12 +25,13 @@ mod codex;
 mod codex_tui;
 mod copilot;
 mod copilot_tui;
-mod cursor;
 mod cursor_tui;
-mod localcmd;
 // The translation of the minimal fake engine of the conformance bench (`engine/minimal/`).
 mod gemini;
 mod gemini_tui;
+// The items of a harness's plugin in process (INT-9).
+mod items;
+mod localcmd;
 #[cfg(test)]
 mod minimal;
 mod opencode;
@@ -38,8 +39,12 @@ pub mod sidechain;
 mod transcript;
 mod vibe;
 mod vibe_tui;
+mod view;
+mod words;
 
 pub use transcript::HookOutcome;
+pub use words::strip_ansi;
+use words::tool_result_text;
 
 pub type AgentHandle = Arc<parking_lot::Mutex<AgentRt>>;
 
@@ -54,6 +59,43 @@ pub enum NotifyKind {
     Error,
     /// A ticket is ready to test, or blocked (raised by the board, never by an agent's own turn).
     Ticket,
+    /// What a reading of a pull request or a deployment tells (ESC-68): the host's news, not an
+    /// agent's.
+    PrCiFailed,
+    PrChanges,
+    PrApproved,
+    PrMerged,
+    PrConflict,
+    PrReview,
+    DeployOk,
+    DeployFailed,
+}
+
+impl NotifyKind {
+    /// Every kind, for the tests of the choices.
+    #[cfg(test)]
+    pub const ALL: [Self; 12] = [
+        Self::Question,
+        Self::Done,
+        Self::Error,
+        Self::Ticket,
+        Self::PrCiFailed,
+        Self::PrChanges,
+        Self::PrApproved,
+        Self::PrMerged,
+        Self::PrConflict,
+        Self::PrReview,
+        Self::DeployOk,
+        Self::DeployFailed,
+    ];
+
+    /// The news of a code host: switched off, it says nothing at all (no agent waits behind it).
+    pub fn of_host(self) -> bool {
+        !matches!(
+            self,
+            Self::Question | Self::Done | Self::Error | Self::Ticket
+        )
+    }
 }
 
 /// A notification an agent raises: its kind, and the words it says (its title is the agent's).
@@ -113,13 +155,6 @@ pub struct Effects {
     pub sent: Vec<(String, Value)>,
 }
 
-struct Block {
-    index: u64,
-    item_id: String,
-    kind: &'static str,
-    finalized: bool,
-}
-
 struct PendingReq {
     item_id: String,
     tool_use_id: String,
@@ -144,19 +179,13 @@ pub struct Waiting {
     pub input: Value,
 }
 
-#[derive(Debug, Clone, Default)]
-struct Counters {
-    input: u64,
-    output: u64,
-    cache: u64,
-    cost: f64,
-}
-
 pub struct AgentRt {
     pub meta: AgentMeta,
     /// Where its facts go (PLG-5): its status, its requests and their answers, told where they
     /// change; nowhere outside the core.
     pub(crate) facts: crate::facts::Emitter,
+    /// The launch environments (INT-14): whether a plugin runs its worktree's services. Set by the core.
+    pub(crate) launch: Option<std::sync::Arc<crate::launchenv::Launch>>,
     pub proc: Option<Process>,
     pub gen: u64,
     pub conv: Conv,
@@ -165,16 +194,11 @@ pub struct AgentRt {
     pub context_window: u64,
     /// Model of the conversation's latest message (it may be switched mid-process).
     main_model: String,
-    /// This turn met the usage limit, and when the limit resets.
-    rate_limited: bool,
-    limit_resets_at: Option<i64>,
     /// The sign-in of its account when its process started (`usage::Stored::stamp`, ESC-162).
     pub(crate) launch_stamp: Option<String>,
     /// The restarts of its process since its turn stopped on a sign-in that could not be
     /// refreshed (`signin`): two at most, then it waits for a new one.
     pub(crate) sign_in_retries: u8,
-    /// Tasks run in the foreground: their tool rows show them end.
-    foreground_tasks: HashSet<String>,
     /// Background tasks whose end was shown, until Claude Code also replays it to Claude.
     announced_tasks: HashMap<String, u32>,
     pub commands: Vec<Value>,
@@ -228,15 +252,20 @@ pub struct AgentRt {
     /// Why the setup of its worktree failed, until its ticket's first message tells it (written in
     /// the language of the texts for Claude, as that message).
     pub setup_failure: Option<String>,
-    blocks: HashMap<String, Vec<Block>>,
-    current_msg: HashMap<String, String>,
+    /// Where its terminal view stands in the plugin of its harness (`agent/view.rs`).
+    view: view::ViewState,
+    /// The view its plugin may drop (`ViewParams::gone`).
+    view_gone: Option<String>,
+    /// What its interface asks the user, as a hook told it, until it says it waits for the answer (« Vue Copilot »).
+    tui_asked: Option<String>,
     /// Requests waiting for an answer, in the order they came (an item's id is its request's).
     pending: Vec<PendingReq>,
-    last_usage: HashMap<String, Counters>,
     /// Usage of the running turn's API messages (by message id, with their model), until the
     /// turn's result brings the exact figures.
     live: HashMap<String, (String, Usage)>,
     queued: u32,
+    /// The turn ending next waits for a limit (`Item::LimitRest`).
+    limit_rest: bool,
     /// Claude Code's own interface running for it, in a terminal (« Vue Claude Code », `tui`).
     pub tui: Option<TuiRun>,
     /// Its harness's interface joined to its process, in a terminal (`AgentMeta::attached`).
@@ -285,22 +314,10 @@ pub struct AgentRt {
     /// « Outils d'Escouade au prochain démarrage »: that process has none of Escouade's tools,
     /// which a start now would give (`Core::mark_escouade_next`, ESC-91).
     pub(crate) escouade_next: bool,
-    /// What the translation of Codex keeps between its messages (`agent/codex.rs`).
-    codex: codex::CodexState,
-    /// What the translation of Copilot keeps between its events (`agent/copilot.rs`).
-    copilot: copilot::CopilotState,
-    /// What the translation of Cursor keeps between its updates (`agent/cursor.rs`).
-    cursor: cursor::CursorState,
-    /// What the translation of OpenCode keeps between its events (`agent/opencode.rs`).
-    opencode: opencode::OpencodeState,
-    /// What the translation of Mistral Vibe keeps between its updates (`agent/vibe.rs`).
-    vibe: vibe::VibeState,
-    /// What the translation of Antigravity CLI keeps between its events (`agent/agy.rs`).
-    agy: agy::AgyState,
-    /// What the translation of Gemini CLI keeps between its updates (`agent/gemini.rs`).
-    gemini: gemini::GeminiState,
-    /// What the hooks of its Gemini interface keep between them (`agent/gemini_tui.rs`).
-    gemini_tui: gemini_tui::GeminiTuiState,
+    /// How long the turn that ends took, as its harness's plugin told it (`Item::Took`).
+    turn_took: Option<i64>,
+    /// How many task lists a harness of a plugin gave (`Item::Todos`): the id of the next one.
+    todo_writes: u32,
 }
 
 /// A stream's process linked to claude.ai, and the session it holds there (its bridge id, when
@@ -513,17 +530,15 @@ impl AgentRt {
             conv: Conv::new(conv_dir, &meta.id),
             meta,
             facts: crate::facts::Emitter::default(),
+            launch: None,
             proc: None,
             gen: 0,
             active_since: None,
             context_tokens: 0,
             context_window: 0,
             main_model: String::new(),
-            rate_limited: false,
-            limit_resets_at: None,
             launch_stamp: None,
             sign_in_retries: 0,
-            foreground_tasks: HashSet::new(),
             announced_tasks: HashMap::new(),
             commands: Vec::new(),
             interrupted: false,
@@ -545,12 +560,13 @@ impl AgentRt {
             setup: None,
             setup_output: None,
             setup_failure: None,
-            blocks: HashMap::new(),
-            current_msg: HashMap::new(),
+            view: view::ViewState::default(),
+            view_gone: None,
+            tui_asked: None,
             pending: Vec::new(),
-            last_usage: HashMap::new(),
             live: HashMap::new(),
             queued: 0,
+            limit_rest: false,
             tui: None,
             attach: None,
             tui_usage: HashMap::new(),
@@ -568,14 +584,8 @@ impl AgentRt {
             fence: crate::fence::Fence::default(),
             privacy: crate::fence::Privacy::default(),
             escouade_next: false,
-            codex: codex::CodexState::default(),
-            copilot: copilot::CopilotState::default(),
-            cursor: cursor::CursorState::default(),
-            opencode: opencode::OpencodeState::default(),
-            vibe: vibe::VibeState::default(),
-            agy: agy::AgyState::default(),
-            gemini: gemini::GeminiState::default(),
-            gemini_tui: gemini_tui::GeminiTuiState::default(),
+            turn_took: None,
+            todo_writes: 0,
         }
     }
 
@@ -617,6 +627,15 @@ impl AgentRt {
         })
     }
 
+    /// The model it runs: the one its conversation last went by (`claude-fable-5-1`), else its own.
+    pub(crate) fn model_in_use(&self) -> String {
+        if self.main_model.is_empty() {
+            self.meta.model.clone()
+        } else {
+            self.main_model.clone()
+        }
+    }
+
     pub fn view(&self) -> AgentView {
         let (live_tokens, live_cost) = self.live_totals();
         AgentView {
@@ -640,11 +659,11 @@ impl AgentRt {
             remote_state: self.remote_state.clone(),
             activity: self.activity.clone(),
             setup: self.setup.clone(),
-            isola: self
-                .meta
-                .worktree
-                .as_ref()
-                .is_some_and(|w| crate::isola::manages(&w.path)),
+            isola: self.meta.worktree.as_ref().is_some_and(|w| {
+                self.launch
+                    .as_ref()
+                    .is_some_and(|l| l.manages(&w.path, &self.meta.project_id))
+            }),
         }
     }
 
@@ -653,10 +672,8 @@ impl AgentRt {
         self.proc = Some(proc);
         // A process that just started is not idle.
         self.meta.last_activity = now_ms();
-        self.blocks.clear();
-        self.current_msg.clear();
+        self.view_reset();
         self.pending.clear();
-        self.last_usage.clear();
         self.live.clear();
         self.remote_state = None;
         self.remote_linked = false;
@@ -664,15 +681,7 @@ impl AgentRt {
         self.forget_turn();
         self.saw_init = false;
         self.queued = 0;
-        self.foreground_tasks.clear();
         self.announced_tasks.clear();
-        self.codex = codex::CodexState::default();
-        self.copilot = copilot::CopilotState::default();
-        self.cursor = cursor::CursorState::default();
-        self.opencode = opencode::OpencodeState::default();
-        self.vibe = vibe::VibeState::default();
-        self.agy = agy::AgyState::default();
-        self.gemini = gemini::GeminiState::default();
         // What ran in the process before is gone with it.
         self.interrupt_plan();
     }
@@ -1150,11 +1159,6 @@ impl AgentRt {
             };
             self.patch(&id, patch, fx);
         }
-        for blocks in self.blocks.values_mut() {
-            for b in blocks.iter_mut() {
-                b.finalized = true;
-            }
-        }
     }
 
     /// A request comes after those waiting already: the one asked first stays the one shown
@@ -1389,6 +1393,24 @@ impl AgentRt {
         Ok(())
     }
 
+    /// A recorded stream's answer to the request `request_id`, as its card says it (`decision`).
+    #[cfg(test)]
+    pub(crate) fn recorded_answer(&mut self, request_id: &str, decision: &str, fx: &mut Effects) {
+        if let Some(req) = self.take_pending(request_id) {
+            self.patch(&req.item_id, json!({ "decision": decision }), fx);
+            self.after_answer(fx);
+        }
+    }
+
+    /// A question answered in a recorded stream (`answers`, by question): its card says it, as when the user answers.
+    #[cfg(test)]
+    pub(crate) fn recorded_answers(&mut self, request_id: &str, answers: Value, fx: &mut Effects) {
+        if let Some(req) = self.take_pending(request_id) {
+            self.patch(&req.item_id, json!({ "answers": answers }), fx);
+            self.after_answer(fx);
+        }
+    }
+
     fn after_answer(&mut self, fx: &mut Effects) {
         if self.pending.is_empty() && self.meta.status == AgentStatus::Waiting {
             self.set_status(AgentStatus::Running, fx);
@@ -1451,8 +1473,8 @@ impl AgentRt {
             let mut reason = stopped(i18n::ui(), harness.name(), &code);
             // A `claude` that stopped before it started: its installation may have been cut
             // half-way (ESC-133), which is said with its repair.
-            if !self.saw_init && harness.id() == EngineId::Claude {
-                if let Some(line) = crate::engine::claude_interrupted_line(i18n::ui()) {
+            if !self.saw_init {
+                if let Some(line) = harness.interrupted_line(i18n::ui()) {
                     reason = format!("{reason}. {line}");
                 }
             }
@@ -1598,18 +1620,6 @@ fn handback_report(text: &str) -> Option<(Option<&str>, String)> {
     (!report.is_empty()).then(|| (from, report.to_string()))
 }
 
-fn tool_result_text(content: &Value) -> String {
-    match content {
-        Value::String(s) => s.clone(),
-        Value::Array(parts) => parts
-            .iter()
-            .filter_map(|b| b["text"].as_str())
-            .collect::<Vec<_>>()
-            .join("\n"),
-        _ => String::new(),
-    }
-}
-
 /// The `result` of a tool's item: `text`, the words of its result block, but a command's own
 /// output when the structured result (`tool_use_result` in the stream, `toolUseResult` in a
 /// transcript) has it, cut to `MAX_TEXT`; for a file it changed, the lines of its diff and its path.
@@ -1752,55 +1762,6 @@ fn trim_strings(v: &Value) -> Value {
         ),
         other => other.clone(),
     }
-}
-
-fn strip_tags(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut in_tag = false;
-    for c in s.chars() {
-        match c {
-            '<' => in_tag = true,
-            '>' if in_tag => in_tag = false,
-            _ if !in_tag => out.push(c),
-            _ => {}
-        }
-    }
-    strip_ansi(out.trim())
-}
-
-pub fn strip_ansi(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut chars = s.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '\u{1b}' {
-            match chars.peek() {
-                Some(&'[') => {
-                    chars.next();
-                    for n in chars.by_ref() {
-                        if n.is_ascii_alphabetic() {
-                            break;
-                        }
-                    }
-                }
-                // An OSC (a link, a title): to its BEL or its ST (ESC \).
-                Some(&']') => {
-                    while let Some(n) = chars.next() {
-                        if n == '\u{7}' {
-                            break;
-                        }
-                        if n == '\u{1b}' && chars.peek() == Some(&'\\') {
-                            chars.next();
-                            break;
-                        }
-                    }
-                }
-                _ => {}
-            }
-        } else {
-            out.push(c);
-        }
-    }
-    out
 }
 
 /// `text` in `MAX_PENDING_FIELD` characters at most; `cut` is set when it was longer.
@@ -3127,6 +3088,35 @@ mod tests {
     }
 
     #[test]
+    fn a_limit_of_fables_own_week_is_told_as_that_models_and_not_the_accounts() {
+        let mut a = rt();
+        a.meta.model = "fable".into();
+        let mut fx = Effects::default();
+        // As Claude Code 2.1.314 tells it: the type `seven_day_overage_included` (« Fable limit »),
+        // its window in `unifiedWindows` without the model's name.
+        a.handle_frame(
+            &json!({"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":1790800000,
+                    "rateLimitType":"seven_day_overage_included","unifiedWindows":{
+                        "seven_day":{"utilization":0.47,"resetsAt":1790900000},
+                        "seven_day_overage_included":{"utilization":1.0,"resetsAt":1790800000}}}}),
+            &mut fx,
+        );
+        assert_eq!(a.meta.limit_model.as_deref(), Some("fable"));
+        let rate = fx.rate.unwrap();
+        assert_eq!(rate.len(), 2);
+        assert_eq!(rate[1].minutes, Some(crate::model::WEEK));
+        assert_eq!(rate[1].model.as_deref(), Some(crate::model::MODEL_UNNAMED));
+        assert_eq!(rate[1].pct, 100.0);
+        // A limit of every model: the account's again.
+        let mut fx = Effects::default();
+        a.handle_frame(
+            &json!({"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":1790800000,"rateLimitType":"seven_day"}}),
+            &mut fx,
+        );
+        assert_eq!(a.meta.limit_model, None);
+    }
+
+    #[test]
     fn a_turn_stopped_by_the_usage_limit_tells_when_it_resets() {
         let mut a = rt();
         let mut fx = Effects::default();
@@ -3453,10 +3443,6 @@ mod tests {
     #[test]
     fn ansi_and_tags_are_stripped() {
         assert_eq!(strip_ansi("\u{1b}[31mrouge\u{1b}[0m"), "rouge");
-        assert_eq!(
-            strip_tags("<local-command-stdout>ok</local-command-stdout>"),
-            "ok"
-        );
     }
 
     #[test]

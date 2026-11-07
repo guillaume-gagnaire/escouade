@@ -54,9 +54,9 @@ La fenêtre liste les étapes, chacune avec son état (✓ prêt, … en cours, 
 1. Les étapes de préparation tournent l’une après l’autre. Elles ne tournent qu’une fois par recette : tant qu’elle ne change pas et qu’Escouade reste ouverte, un nouveau test les saute. Une étape en échec arrête le test (« Préparation en échec (code 1) »).
 2. Chaque processus démarre dans son propre terminal, en lecture seule. Ils apparaissent dans la section « Lancement » de la barre latérale, avec leurs logs (voir [Les commandes de lancement](launch)).
 3. Pour chaque processus qui a une adresse, Escouade attend qu’elle réponde (n’importe quelle réponse HTTP compte, même une 404), pendant 3 minutes au plus : « en attente de localhost:4101… », puis « prêt · 2,4 s » ou « Pas de réponse de http://localhost:4101 après 3 min ».
-4. Le navigateur s’ouvre sur l’adresse à ouvrir, à défaut sur celle du premier processus (« Ouvert dans le navigateur : … »).
+4. La page s’ouvre sur l’adresse à ouvrir, à défaut sur celle du premier processus : dans la vue « Page » de l’agent par défaut, dans la fenêtre « Pages » du projet ou dans le navigateur du système, selon Réglages › Projets › Lancement (voir [La page du lancement](browser)).
 
-Quand le test est prêt, la fenêtre propose « Rouvrir » (le navigateur), « Voir les logs », « Tout arrêter » et « Fermer ». Une ligne en échec a son « Voir le log ». Un processus qui s’arrête pendant que le test est prêt met fin au test (« web s’est arrêté »).
+Quand le test est prêt, la fenêtre propose « Rouvrir » (la page), « Voir les logs », « Tout arrêter » et « Fermer ». Une ligne en échec a son « Voir le log ». Un processus qui s’arrête pendant que le test est prêt met fin au test (« web s’est arrêté »).
 
 Tant que les serveurs tournent, la carte du ticket affiche « ■ Arrêter », qui les arrête, et « Ouvrir », qui rouvre l’adresse. Les serveurs s’arrêtent aussi d’eux-mêmes quand le ticket est validé, quand son agent est archivé ou supprimé et quand le projet est fermé.
 
@@ -65,6 +65,8 @@ Tant que les serveurs tournent, la carte du ticket affiche « ■ Arrêter »,
 Quand [isola](https://github.com/cyucelen/isola) est installé et que le worktree a un `.isola.toml`, isola lance les services du worktree sur ses propres ports et adresses. L’agent ne reçoit alors pas de bloc de ports, et il n’a pas de recette à écrire : il donne seulement l’adresse qui montre la fonctionnalité.
 
 « ▶ Tester » montre alors le `.isola.toml` sous « Configuration isola (.isola.toml) » (isola lance les commandes de ce fichier dans ton shell, hors du mode de permission de Claude Code, et l’agent peut l’avoir écrit ou modifié) et l’adresse qui s’ouvrira. Comme pour une recette, rien ne tourne avant « Lancer » et un fichier modifié est montré de nouveau. Le test lance `isola up`, attend que chaque service réponde, puis ouvre l’adresse. « Tout arrêter » lance `isola down`.
+
+isola est un plugin livré avec Escouade, `dev.escouade.isola` : le premier « environnement de lancement », un point d’extension des plugins qui prend en charge `up`, l’adresse, `down` et `destroy` d’un worktree. Réglages › Plugins le liste sous « Livrés avec Escouade » ; tu peux le couper pour toute l’app ou pour un projet, et sans lui un ticket part comme s’il n’y avait pas d’isola, avec une recette sur les ports réservés. Un plugin installé ailleurs ne peut pas encore servir ce point.
 
 ## Valider un ticket
 

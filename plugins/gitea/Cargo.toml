@@ -1,0 +1,18 @@
+[package]
+name = "escouade-plugin-gitea"
+version = "2.2.0"
+description = "Le plugin Gitea et Forgejo livré avec Escouade : les PR, la CI (statuts et Actions), les relectures et le merge de Gitea, de Forgejo et de Codeberg"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+
+# A module, compiled by `escouade-plugin build` (docs/PLUGINS.md §8.5).
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+escouade-plugin-kit = "0.1.1"
+serde_json = "1"
+anyhow = "1"
+parking_lot = "0.12"

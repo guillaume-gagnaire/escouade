@@ -1,15 +1,15 @@
 ---
 title: "Vue d'ensemble"
 subject: "Fenêtre"
-sources: ["docs/SPEC.md"]
-tickets: []
+sources: ["docs/SPEC.md","docs/TODO-1.8.md (chapitre 2, « Notifications, vue d'ensemble, serveur MCP »)","design/esc-68/README.md","src/lib/prlist.ts"]
+tickets: ["ESC-68"]
 decisions: []
 compared: null
 ---
 
 ## Ce que c'est
 
-Tous les agents de tous les projets sur un seul écran, ceux qui attendent une réponse en tête. On y voit ce que fait chacun, ce qu'il coûte et depuis quand. On peut répondre sur place à une autorisation simple, ou ouvrir l'agent.
+Tous les agents de tous les projets sur un seul écran, ceux qui attendent une réponse en tête, puis les pull requests qui attendent l'utilisateur. On y voit ce que fait chacun, ce qu'il coûte et depuis quand. On peut répondre sur place à une autorisation simple, ou ouvrir l'agent.
 
 ## Comportement
 
@@ -25,15 +25,28 @@ Tous les agents de tous les projets sur un seul écran, ceux qui attendent une r
 - En-tête : « Vue d'ensemble », « 3 projets · 8 agents · 2 en cours » et « ↑ ↓ choisir · Entrée ouvrir · Échap revenir ».
 - Groupes :
   - d'abord « Attend ta réponse » : les agents de tous les projets qui ont une question ou une autorisation en attente, celui qui attend depuis le plus longtemps d'abord, chaque ligne avec son projet ;
+  - puis « Pull requests » (voir plus bas), quand une PR attend l'utilisateur ;
   - puis un groupe par projet, dans l'ordre de la barre des projets, ses agents dans l'ordre de la barre latérale.
 - Un agent n'apparaît qu'une fois. Ni agents archivés, ni projets sans agent.
-- Sans agent : « Aucun agent pour l'instant. »
+- Sans agent ni PR : « Aucun agent pour l'instant. »
 
 ### Une ligne
 
 - Statut, nom, ticket (« ▸ DEM-1 · boucle 2/5 »).
 - Activité, comme sur les cartes du Kanban : « Lit src/db.ts », « Prépare le worktree · … », « Reprise à … », sinon le statut.
 - Modèle ; coût de la session (« ≈ » pendant un tour) ; contexte utilisé (en couleur d'attente au-delà de 80 %, « — » tant qu'il n'est pas connu) ; « Depuis » : le dernier changement de statut ou le dernier message.
+
+### Le groupe « Pull requests »
+
+- Trois parties, chacune avec son compte, la plus pressante d'abord, le plus grand numéro en tête ; une partie vide ne se montre pas :
+  - « À corriger » : ouverte et prête, CI en échec, changements demandés ou conflit ;
+  - « À merger » : ouverte et prête, au moins une approbation, ni CI en cours ni rien à corriger ;
+  - « Relectures demandées » : une relecture est demandée à l'utilisateur sur la PR de quelqu'un d'autre.
+- Sont regardées : les PR des tickets « En revue », celles des agents non archivés, et dans les listes des projets celles que l'utilisateur a ouvertes et celles dont la relecture lui est demandée. Une même PR n'a qu'une ligne, deux PR de même numéro dans deux dépôts en ont deux. La PR de quelqu'un d'autre qui ne demande rien à l'utilisateur reste dans la vue « Pull requests ». Un brouillon n'est ni à corriger ni à merger.
+- Une ligne suit les colonnes des agents : le signe de sa CI, « PR #12 » (« MR #12 » sur GitLab), son projet, son ticket ou son agent ; son titre sous « Activité » ; ses deux premières pastilles de la vue « Pull requests », sinon sa CI en mots, à la place du modèle, du coût et du contexte ; son âge sous « Depuis ». Sous 720 px, une pastille seulement.
+- Le titre est « Pull requests » ; « Merge requests » quand toutes viennent de GitLab.
+- Un clic ou Entrée ouvre son agent, sinon le Kanban de son ticket, sinon la vue « Pull requests » de son projet. Les flèches passent de ces lignes à celles des agents.
+- Les listes se lisent à l'ouverture de la vue, puis chaque minute tant qu'elle est affichée et la fenêtre visible, au plus une fois par minute par projet, celles que la vue « Pull requests » vient de lire comprises. Il reste moins d'un dixième de la limite d'appels d'un hébergeur : la dernière liste sert jusqu'à sa remise à zéro. Une liste qui échoue est laissée de côté sans message : la vue « Pull requests » dit pourquoi, et les lignes des tickets et des agents restent.
 
 ### Répondre sur place
 
@@ -54,3 +67,6 @@ Tous les agents de tous les projets sur un seul écran, ceux qui attendent une r
 ## Limites
 
 - On ne répond sur place qu'aux autorisations simples ; les questions, les plans et les autres autorisations se répondent dans la conversation.
+- La PR d'un agent ordinaire est celle qu'il a lue en dernier, quand il était affiché.
+- Sur GitLab, la liste ne dit ni la CI ni les approbations : une MR de la liste qu'aucun ticket ni agent ne tient n'y est à corriger que pour un conflit, et jamais à merger.
+- 30 PR au plus par projet, les plus récemment mises à jour.

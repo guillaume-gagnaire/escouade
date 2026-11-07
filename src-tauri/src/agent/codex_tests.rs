@@ -5,7 +5,7 @@ fn rt() -> AgentRt {
     AgentRt::new(
         AgentMeta {
             id: new_id(),
-            engine: EngineId::Codex,
+            engine: EngineId::CODEX,
             cwd: "C:/p".into(),
             mode: "default".into(),
             session_id: Some("thr".into()),
@@ -406,11 +406,6 @@ fn an_approval_is_a_card_with_its_reason_for_this_session_and_a_change_its_diff(
         .unwrap()
         .contains("réseau"));
     assert_eq!(a.waiting().len(), 3);
-}
-
-#[test]
-fn folders_are_the_same_whatever_their_slashes_and_case() {
-    assert!(same_dir(r"C:\p\wt\", "c:/p/wt"));
 }
 
 #[test]

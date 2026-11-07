@@ -21,15 +21,15 @@ fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
 }
 
-fn temp_dir(name: &str) -> PathBuf {
+pub(crate) fn temp_dir(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("store-{name}-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }
 
 /// The fake store, run by node; stopped when dropped.
-struct Fake {
-    url: String,
+pub(crate) struct Fake {
+    pub(crate) url: String,
     key: String,
     child: Child,
 }
@@ -42,7 +42,7 @@ impl Drop for Fake {
 }
 
 impl Fake {
-    fn start() -> Self {
+    pub(crate) fn start() -> Self {
         let mut child = Command::new("node")
             .arg(root().join("tests/fixtures/store/fake-store.mjs"))
             .stdout(Stdio::piped())
@@ -63,12 +63,12 @@ impl Fake {
 
     /// Trusts its key as the app trusts the store's (this test's process alone: nextest runs each
     /// test in its own).
-    fn trusted(self) -> Self {
+    pub(crate) fn trusted(self) -> Self {
         std::env::set_var("ESCOUADE_STORE_TEST_KEY", &self.key);
         self
     }
 
-    fn store(&self, data: &DataDir) -> Store {
+    pub(crate) fn store(&self, data: &DataDir) -> Store {
         Store::load(
             data,
             self.url.clone(),
@@ -77,7 +77,7 @@ impl Fake {
         )
     }
 
-    async fn post(&self, path: &str, body: Value) -> Value {
+    pub(crate) async fn post(&self, path: &str, body: Value) -> Value {
         reqwest::Client::new()
             .post(format!("{}{path}", self.url))
             .json(&body)
@@ -89,7 +89,7 @@ impl Fake {
             .unwrap()
     }
 
-    async fn state(&self) -> Value {
+    pub(crate) async fn state(&self) -> Value {
         reqwest::get(format!("{}/_fake/state", self.url))
             .await
             .unwrap()
@@ -99,7 +99,7 @@ impl Fake {
     }
 }
 
-fn http() -> reqwest::Client {
+pub(crate) fn http() -> reqwest::Client {
     reqwest::Client::builder().no_proxy().build().unwrap()
 }
 
@@ -269,6 +269,135 @@ async fn an_unverified_version_installs_with_its_program_unless_only_verified_on
 }
 
 #[tokio::test]
+async fn a_plugin_in_a_folder_keeps_its_folder_and_a_folder_that_climbs_is_refused() {
+    let fake = Fake::start().trusted();
+    let (_data, store, plugins) = ready(&fake, "in-folder").await;
+    let view = install(&store, &plugins, "dev.exemple.in-folder", None, false)
+        .await
+        .unwrap();
+    match &view.origin {
+        Origin::Store {
+            repository,
+            path,
+            tag,
+            ..
+        } => {
+            assert_eq!(path, "plugins/discord");
+            assert_eq!(repository, "https://github.com/escouade-dev/plugins");
+            assert_eq!(tag, "plugins/discord/v1.0.0");
+        }
+        other => panic!("{other:?}"),
+    }
+    let e = install(&store, &plugins, "dev.exemple.climbs", None, false)
+        .await
+        .unwrap_err();
+    assert!(
+        e.contains("Le version.json reçu nomme un dossier mal formé (../escape)"),
+        "{e}"
+    );
+    // A plugin at the root, from a version.json of before (no folder), reads as the root.
+    let root = install(&store, &plugins, "dev.exemple.team-rules", None, false)
+        .await
+        .unwrap();
+    assert!(matches!(&root.origin, Origin::Store { path, .. } if path.is_empty()));
+}
+
+/// ESC-323: a run.js plugin of the store comes with the module the store compiled of it, checked
+/// against its version.json, kept in the cache and precompiled from there (Javy not run); a module
+/// changed after its version.json stops everything.
+#[tokio::test]
+async fn a_run_js_plugin_installs_the_module_the_store_compiled_and_a_changed_one_is_refused() {
+    let fake = Fake::start().trusted();
+    let (data, store, plugins) = ready(&fake, "wasm").await;
+    let view = install(&store, &plugins, "dev.exemple.wasm", None, false)
+        .await
+        .expect("the run.js plugin installs");
+    assert_eq!(view.version, "1.0.0");
+    let served = reqwest::get(format!(
+        "{}/api/v1/plugins/dev.exemple.wasm/1.0.0/plugin.wasm",
+        fake.url
+    ))
+    .await
+    .unwrap()
+    .bytes()
+    .await
+    .unwrap()
+    .to_vec();
+    let json: Value = reqwest::get(format!(
+        "{}/api/v1/plugins/dev.exemple.wasm/1.0.0/version.json",
+        fake.url
+    ))
+    .await
+    .unwrap()
+    .json()
+    .await
+    .unwrap();
+    assert_eq!(json["wasm"]["sha256"], store::sha256(&served));
+    let kept: Vec<Vec<u8>> = std::fs::read_dir(data.plugin_wasm_dir())
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_name().to_string_lossy().ends_with(".wasm"))
+        .map(|e| std::fs::read(e.path()).unwrap())
+        .collect();
+    assert_eq!(kept, vec![served], "the store's module, in the cache");
+    // The install precompiles the store's module: the bundle is not compiled here.
+    if crate::plugins::wasm::escouade_js().is_ok() {
+        let modules = crate::plugins::wasm::Modules::new(&data, "2.1.0");
+        let (_, made) = modules
+            .prepare(Path::new(&view.folder), "dist/plugin.mjs")
+            .expect("precompiled");
+        assert_eq!(made, crate::plugins::wasm::Made::Precompiled);
+    }
+
+    let e = install(&store, &plugins, "dev.exemple.wasm-changed", None, false)
+        .await
+        .unwrap_err();
+    assert!(
+        e.contains("Le module WASM reçu ne correspond pas à celui que le store a compilé"),
+        "{e}"
+    );
+    assert!(plugins.get("dev.exemple.wasm-changed", Lang::Fr).is_none());
+}
+
+/// ESC-331: a run.wasm plugin runs the module the store compiled, checked against its version.json, kept in its folder
+/// in place of anything of that name in the archive, and precompiled; a version without one installs nothing.
+#[tokio::test]
+async fn a_run_wasm_plugin_installs_the_module_the_store_compiled_and_one_without_is_refused() {
+    let fake = Fake::start().trusted();
+    let (data, store, plugins) = ready(&fake, "reactor").await;
+    let view = install(&store, &plugins, "dev.exemple.reactor", None, false)
+        .await
+        .expect("the run.wasm plugin installs");
+    let served = reqwest::get(format!(
+        "{}/api/v1/plugins/dev.exemple.reactor/1.0.0/plugin.wasm",
+        fake.url
+    ))
+    .await
+    .unwrap()
+    .bytes()
+    .await
+    .unwrap()
+    .to_vec();
+    let module = crate::plugins::wasm::MODULE_FILE;
+    assert_eq!(
+        std::fs::read(Path::new(&view.folder).join(module)).unwrap(),
+        served,
+        "the store's module, not the archive's"
+    );
+    let modules = crate::plugins::wasm::Modules::new(&data, "2.1.0");
+    let (_, made) = modules
+        .prepare_reactor(Path::new(&view.folder))
+        .expect("precompiled");
+    assert_eq!(made, crate::plugins::wasm::Made::Precompiled);
+
+    let e = install(&store, &plugins, "dev.exemple.reactor-bare", None, false)
+        .await
+        .unwrap_err();
+    assert!(e.contains("pas de module WASM compilé par le store"), "{e}");
+    assert!(plugins.get("dev.exemple.reactor-bare", Lang::Fr).is_none());
+}
+
+#[tokio::test]
 async fn a_changed_archive_or_a_forged_seal_stops_everything() {
     let fake = Fake::start().trusted();
     let (data, store, plugins) = ready(&fake, "tampered").await;
@@ -340,11 +469,87 @@ async fn the_updates_of_a_store_plugin_come_from_the_catalogue_and_say_if_verifi
     assert!(view.update.is_none());
 }
 
+/// A plugin of Escouade's own hand (`dev.escouade.*` from `plugins/<id>/` of the app's
+/// repository, ESC-314) installs from the store signed, as any plugin of the store: its origin is
+/// `store`, its folder `<data>/plugins/<id>`, never the app's `builtin`; read again at the next
+/// start. Not signed yet, it is refused.
+#[tokio::test]
+async fn escouade_s_own_hand_installs_from_the_store_signed_and_stays_a_store_plugin() {
+    let fake = Fake::start().trusted();
+    let (data, store, plugins) = ready(&fake, "first-party").await;
+    let view = install(&store, &plugins, "dev.escouade.discord", None, false)
+        .await
+        .unwrap();
+    assert!(matches!(view.state, State::Ready), "{:?}", view.state);
+    assert!(view.verified);
+    match &view.origin {
+        Origin::Store {
+            verified,
+            repository,
+            path,
+            tag,
+            ..
+        } => {
+            assert!(*verified);
+            assert_eq!(repository, "https://github.com/guillaume-gagnaire/escouade");
+            assert_eq!(path, "plugins/discord");
+            assert_eq!(tag, "plugins/discord/v1.1.0");
+        }
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(
+        Path::new(&view.folder),
+        data.plugins_dir().join("dev.escouade.discord")
+    );
+    // At the next start, its manifest is read again for Escouade's own hand.
+    let again = Plugins::load(data.clone(), "2.1.0");
+    let listed = again.list(Lang::Fr);
+    let back = listed
+        .iter()
+        .find(|p| p.id == "dev.escouade.discord")
+        .unwrap();
+    assert!(matches!(back.state, State::Ready), "{:?}", back.state);
+    assert!(matches!(back.origin, Origin::Store { .. }));
+    // Not signed yet: refused, nothing installed.
+    let e = install(&store, &plugins, "dev.escouade.slack", None, false)
+        .await
+        .unwrap_err();
+    assert!(e.contains("que le store n'a pas encore signé"), "{e}");
+    assert!(plugins
+        .list(Lang::Fr)
+        .iter()
+        .all(|p| p.id != "dev.escouade.slack"));
+}
+
+/// The folder of a plugin of Escouade's own hand loads in development (ESC-314), as its author
+/// tries it; a folder copied or a repository cloned does not take its id.
+#[tokio::test]
+async fn escouade_s_own_folder_loads_in_development() {
+    let data = DataDir::new(temp_dir("first-party-dev").join("data"));
+    let plugins = Plugins::load(data, "2.1.0");
+    let view = plugins
+        .load_dev(&root().join("plugins/discord"), Lang::Fr)
+        .unwrap();
+    assert_eq!(view.id, "dev.escouade.discord");
+    assert!(matches!(view.origin, Origin::Dev { .. }));
+    assert!(matches!(view.state, State::Ready), "{:?}", view.state);
+}
+
 #[tokio::test]
 async fn a_plugin_from_a_folder_is_offered_the_store_version_of_its_id() {
     let fake = Fake::start().trusted();
     let (_, store, plugins) = ready(&fake, "fromgit").await;
-    let src = root().join("plugin-examples/high-contrast");
+    // Escouade's own folder is refused as a folder copied (its id dev.escouade.*, ESC-314); a third
+    // party's copy of it, under an id of its own, is the plugin of this test.
+    let own = root().join("plugins/high-contrast");
+    let e = plugins.install_folder(&own, Lang::Fr).unwrap_err();
+    assert!(e.message.contains("dev.escouade.*"), "{}", e.message);
+    let src = temp_dir("fromgit-src").join("high-contrast");
+    std::fs::create_dir_all(&src).unwrap();
+    let mut m: Value =
+        serde_json::from_slice(&std::fs::read(own.join("escouade-plugin.json")).unwrap()).unwrap();
+    m["id"] = json!("dev.exemple.high-contrast");
+    std::fs::write(src.join("escouade-plugin.json"), m.to_string()).unwrap();
     let view = plugins.install_folder(&src, Lang::Fr).unwrap();
     assert_eq!(view.id, "dev.exemple.high-contrast");
     let offer = view.in_store.expect("the store has this id");

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.copilot-cli",
+  "name": "Copilot CLI",
+  "version": "2.2.0",
+  "description": {
+    "fr": "GitHub Copilot CLI comme harness : la conversation, sa vue terminal, les permissions, les modèles et les crédits du compte.",
+    "en": "GitHub Copilot CLI as a harness: the conversation, its terminal view, permissions, models and the account's credits."
+  },
+  "author": {
+    "name": "Escouade",
+    "url": "https://escouade.dev"
+  },
+  "license": "GPL-3.0-or-later",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/copilot",
+  "escouade": {
+    "api": "1",
+    "min": "2.2.0"
+  },
+  "run": { "wasm": "Cargo.toml" },
+  "limits": { "memoryBytes": 268435456, "turnSeconds": 10 },
+  "permissions": {
+    "files": [{ "root": "agentRepo", "access": "read" }]
+  },
+  "contributes": {
+    "harnesses": [
+      {
+        "id": "copilot",
+        "name": "Copilot CLI",
+        "speaker": "Copilot",
+        "locate": { "names": ["copilot"] },
+        "versionArgs": ["--version"],
+        "tested": { "oldest": "1.0.98", "newest": "1.0.98" },
+        "caps": {
+          "modes": ["auto", "default", "plan", "acceptEdits", "bypassPermissions"],
+          "effort": true,
+          "images": true,
+          "slashCommands": true,
+          "terminalView": true,
+          "readOnly": true
+        },
+        "models": [
+          { "id": "gpt-6-luna", "label": "GPT-6 Luna", "effort": true },
+          { "id": "gpt-5-mini", "label": "GPT-5 mini", "effort": true }
+        ],
+        "efforts": ["low", "medium", "high", "xhigh", "max"],
+        "accountVar": "COPILOT_HOME",
+        "framing": "contentLength",
+        "closeLine": "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"runtime.shutdown\",\"params\":{}}",
+        "opens": true,
+        "install": {
+          "windows": "npm install -g @github/copilot",
+          "unix": "npm install -g @github/copilot"
+        },
+        "updateCommand": "npm install -g @github/copilot@latest"
+      }
+    ]
+  },
+  "store": { "categories": ["harness"] }
+}

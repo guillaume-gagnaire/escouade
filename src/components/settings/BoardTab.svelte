@@ -14,6 +14,7 @@
   import Row from './Row.svelte';
   import SharedMark from './SharedMark.svelte';
   import Switch from './Switch.svelte';
+  import { joinNames, splitNames } from '../../lib/ticket-prs';
 
   // A project's Kanban: what validating a ticket does, and the agents that take its tickets (its draft:
   // the modal's project).
@@ -41,6 +42,8 @@
   const STRATEGY_IDS: BoardSettings['strategy'][] = ['merge', 'squash', 'rebase'];
   const strategies = $derived(STRATEGY_IDS.map((value) => ({ value, label: t(`boardSettings.tab.strategies.${value}`) })));
   const CONFLICT_IDS: BoardSettings['conflict'][] = ['ask', 'agent', 'abort'];
+  const PR_UPDATE_IDS: BoardSettings['prUpdate'][] = ['merge', 'rebase'];
+  const prUpdates = $derived(PR_UPDATE_IDS.map((value) => ({ value, label: t(`boardSettings.tab.prUpdates.${value}`) })));
   const conflicts = $derived(CONFLICT_IDS.map((value) => ({ value, label: t(`boardSettings.tab.conflicts.${value}`) })));
   const PARALLEL = [1, 2, 3, 4, 5, 6].map((n) => ({ value: n, label: String(n) }));
   /** As the backend offers them (`board::QUOTA_PAUSES`). */
@@ -88,8 +91,46 @@
           <Switch label={t('boardSettings.tab.draftPr')} bind:on={b.draft} />
         </div>
         <SharedMark keys="board.draft_pr" />
+        <!-- Who its pull requests ask for a review, and their labels (ESC-59): logins and names, by commas. -->
+        <label class="line">
+          <span class="k">{t('boardSettings.tab.reviewers')}</span>
+          <input
+            class="field mono input names"
+            placeholder={t('boardSettings.tab.reviewersPlaceholder')}
+            spellcheck="false"
+            value={joinNames(b.reviewers)}
+            onchange={(e) => (b.reviewers = splitNames(e.currentTarget.value))}
+          />
+        </label>
+        <label class="line">
+          <span class="k">{t('boardSettings.tab.labels')}</span>
+          <input
+            class="field mono input names"
+            placeholder={t('boardSettings.tab.labelsPlaceholder')}
+            spellcheck="false"
+            value={joinNames(b.labels)}
+            onchange={(e) => (b.labels = splitNames(e.currentTarget.value))}
+          />
+        </label>
       {/if}
     </div>
+  {/if}
+  {#if b.action === 'pr'}
+    <!-- After its review (ESC-61): answers under the threads its agent fixed, off by default (never resolved); how a conflict with the target is settled. -->
+    <Row label={t('boardSettings.tab.replyThreads')} desc={t('boardSettings.tab.replyThreadsDesc')}>
+      <Switch label={t('boardSettings.tab.replyThreads')} bind:on={b.replyThreads} />
+    </Row>
+    <Row label={t('boardSettings.tab.prUpdate')} desc={t('boardSettings.tab.prUpdateDesc')}>
+      <span class="segmented" role="group" aria-label={t('boardSettings.tab.prUpdate')} data-pr-update>
+        {#each prUpdates as u (u.value)}
+          <button
+            class:on={(b.prUpdate || 'merge') === u.value}
+            aria-pressed={(b.prUpdate || 'merge') === u.value}
+            onclick={() => (b.prUpdate = u.value)}>{u.label}</button
+          >
+        {/each}
+      </span>
+    </Row>
   {/if}
 </Group>
 
@@ -140,6 +181,10 @@
 <Group title={t('boardSettings.tab.autopilot')}>
   <Row label={t('boardSettings.tab.autoAssign')} desc={t('boardSettings.tab.autoAssignDesc')}>
     <Switch label={t('boardSettings.tab.autoAssign')} bind:on={b.autopilot} />
+  </Row>
+  <!-- ESC-63: off by default; the target's CI is read from its code host, like the pull requests of the tickets. -->
+  <Row label={t('boardSettings.tab.redTargetPause')} desc={t('boardSettings.tab.redTargetPauseDesc')}>
+    <Switch label={t('boardSettings.tab.redTargetPause')} bind:on={() => !!b.pauseOnRedTarget, (v) => (b.pauseOnRedTarget = v)} />
   </Row>
   <!-- The quotas are the account's: an app setting, shown with each project's autopilot. -->
   <Row label={t('boardSettings.tab.quotaPause')} hint={t('boardSettings.tab.quotaPauseHint')} desc={t('boardSettings.tab.quotaPauseDesc')}>
@@ -193,6 +238,10 @@
   .k {
     color: var(--muted);
     font-size: 12px;
+  }
+  .names {
+    flex: 1 1 200px;
+    min-width: 0;
   }
   .pick {
     display: inline-flex;

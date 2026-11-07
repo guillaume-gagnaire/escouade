@@ -1,6 +1,9 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import type {
-  CodeIndexInfo,
+  MergeHow,
+  EngineDecl,
+  PageBounds,
+  PageView,
   Memory,
   VectorsModelInfo,
   OfferedMemory,
@@ -9,6 +12,7 @@ import type {
   WorkflowScan,
   SentView,
   LeftoverReport,
+  MistralKey,
   Account,
   MachineAccount,
   AccountForm,
@@ -19,6 +23,18 @@ import type {
   PrFix,
   PrProposal,
   PullRequest,
+  OverviewPrs,
+  ProjectPrs,
+  NoteChoice,
+  AgentReview,
+  ReviewVerdict,
+  PrDetail,
+  PrRead,
+  ProjectEnvironments,
+  BranchCi,
+  CiDetail,
+  CiOf,
+  NoPr,
   Agent,
   AttachedFile,
   Attachment,
@@ -168,6 +184,7 @@ export const api = {
   voiceDeleteModel: (model: string) => invoke<void>('voice_delete_model', { model }),
   /** The services of « En ligne » whose key is in the keychain; never the keys. */
   voiceOnlineKeys: () => invoke<string[]>('voice_online_keys'),
+  voiceMistralKey: () => invoke<MistralKey>('voice_mistral_key'),
   /** Keeps a service's key in the system keychain (never in a file); fails when the keychain refuses it. */
   voiceOnlineKeySet: (service: string, key: string) => invoke<void>('voice_online_key_set', { service, key }),
   voiceOnlineKeyDelete: (service: string) => invoke<void>('voice_online_key_delete', { service }),
@@ -204,6 +221,8 @@ export const api = {
   engines: () => invoke<EngineInfo[]>('engines'),
   /** The harnesses found now, the PATH of today read first (ESC-186). */
   enginesFoundNow: () => invoke<EngineId[]>('engines_found_now'),
+  /** The registry of now: the harnesses the plugins describe come and go with them (PLG-6). */
+  enginesDeclared: () => invoke<EngineDecl[]>('engines_declared'),
   /** The items of Principal's folder a new account may share (those it has), files first. */
   accountShareable: (engine?: EngineId) => invoke<string[]>('account_shareable', engine ? { engine } : {}),
   /** A new account of `engine` (Claude Code's by default), its folder made with the items `share` of its Principal's linked or copied, saved last. */
@@ -262,12 +281,6 @@ export const api = {
   projectLogo: (id: string) => invoke<string | null>('project_logo', { id }),
   /** The image of `path` as a logo would be taken (`data:` URL), or why it would be refused. */
   readLogo: (path: string) => invoke<string>('read_logo', { path }),
-  /** « Index du code » of a project (ESC-254): whether it is on, what it holds, what its fence leaves out. */
-  getCodeIndex: (id: string) => invoke<CodeIndexInfo>('get_code_index', { id }),
-  /** Turns it on (answers once the project is read) or off (its database erased), the project's choice; null follows the app's setting again. */
-  setCodeIndex: (id: string, enabled: boolean | null) => invoke<CodeIndexInfo>('set_code_index', { id, enabled }),
-  /** « Index du code sur tous les projets » (ESC-293), saved at once: on, the projects that follow it read one after the other; off, their index erased. How many follow it. */
-  setCodeIndexAll: (enabled: boolean) => invoke<number>('set_code_index_all', { enabled }),
   /** « Recherche par le sens »: the vectors' model, its download (progress in `vectorsDownload`), « Annuler », « Effacer ». */
   vectorsModel: () => invoke<VectorsModelInfo>('vectors_model'),
   vectorsModelDownload: () => invoke<VectorsModelInfo>('vectors_model_download'),
@@ -424,6 +437,9 @@ export const api = {
   refineWorkflows: (id: string) => invoke<WorkflowRefineOutcome>('refine_workflows', { id }),
   /** « Retirer du dépôt »: the file of a workflow this machine does not read (ESC-195). */
   removeWorkflowFile: (id: string, workflow: string) => invoke<WorkflowScan>('remove_workflow_file', { id, workflow }),
+  /** « Supprimer » a workflow (its file goes, no reading writes it again), « Laisser supprimé » or « Rétablir » it (ESC-309). */
+  setWorkflowRemoved: (id: string, workflow: string, removed: boolean) =>
+    invoke<WorkflowScan>('set_workflow_removed', { id, workflow, removed }),
   /** « Oublier » a repository gone from the project's folder. */
   forgetRepo: (id: string, repo: string) => invoke<Project>('forget_repo', { id, repo }),
   integrateBase: (id: string) => invoke<Integration>('integrate_base', { id }),
@@ -445,6 +461,39 @@ export const api = {
   /** `hostRepo`: the repository it was read in, when not the target's (`PullRequest.hostRepo`). */
   agentPrFix: (id: string, number: number, fix: PrFix, hostRepo?: string) =>
     invoke<void>('agent_pr_fix', { id, number, fix, ...(hostRepo ? { hostRepo } : {}) }),
+  /** The « PR et CI » tab (ESC-305): the checks, reviews, comments and deployments of the agent's pull request. */
+  agentPrDetail: (id: string, number: number, hostRepo?: string) =>
+    invoke<PrRead<PrDetail>>('agent_pr_detail', { id, number, ...(hostRepo ? { hostRepo } : {}) }),
+  /** The end of the log of a check's job. */
+  agentPrLog: (id: string, number: number, job: string, hostRepo?: string) =>
+    invoke<PrRead<string>>('agent_pr_log', { id, number, job, ...(hostRepo ? { hostRepo } : {}) }),
+  /** « Relancer les échecs », on a click only: how many runs started. */
+  agentPrRerun: (id: string, number: number, hostRepo?: string) =>
+    invoke<number>('agent_pr_rerun', { id, number, ...(hostRepo ? { hostRepo } : {}) }),
+  /** Why the agent has no « Ouvrir une PR… »; null when it can open one. */
+  agentNoPr: (id: string) => invoke<NoPr | null>('agent_no_pr', { id }),
+  /** The open pull requests of the project, on the remote of its target. */
+  projectPrs: (projectId: string) => invoke<PrRead<ProjectPrs>>('project_prs', { projectId }),
+  overviewPrs: () => invoke<OverviewPrs[]>('overview_prs'),
+  /** « Lancer un agent sur cette PR » (ESC-65): an agent in a worktree on the branch of the open pull request `number`. */
+  createAgentOnPr: (projectId: string, number: number) => invoke<Agent>('create_agent_on_pr', { projectId, number }),
+  /** The reviews written by an agent of the project (ESC-66). */
+  prReviews: (projectId: string) => invoke<AgentReview[]>('pr_reviews', { projectId }),
+  /** « Faire relire par un agent »: the review starts in the background; nothing leaves for the host. */
+  prReviewStart: (projectId: string, number: number) => invoke<AgentReview>('pr_review_start', { projectId, number }),
+  /** A comment of a review kept, edited (`body`) or dropped. */
+  prReviewNote: (projectId: string, number: number, id: number, choice: NoteChoice, body?: string) =>
+    invoke<AgentReview>('pr_review_note', { projectId, number, id, choice, body }),
+  prReviewSummary: (projectId: string, number: number, summary: string) =>
+    invoke<AgentReview>('pr_review_summary', { projectId, number, summary }),
+  /** « Publier »: the only way a review reaches the host; `moved`, nothing left: commits landed since the agent read. */
+  prReviewPublish: (projectId: string, number: number, verdict: ReviewVerdict, acceptMoved: boolean) =>
+    invoke<{ review: AgentReview; moved: boolean }>('pr_review_publish', { projectId, number, verdict, acceptMoved }),
+  prReviewDiscard: (projectId: string, number: number) => invoke<void>('pr_review_discard', { projectId, number }),
+  /** The environments of the project's host as last read (ESC-67); the project is followed while its view is open. */
+  projectEnvironments: (projectId: string) => invoke<ProjectEnvironments | null>('project_environments', { projectId }),
+  /** « Rafraîchir » of the view « Environnements »: read now. */
+  projectEnvironmentsRead: (projectId: string) => invoke<ProjectEnvironments>('project_environments_read', { projectId }),
   getCommands: (id: string) => invoke<SlashCommand[]>('get_commands', { id }),
   fileSuggestions: (id: string, query: string) => invoke<string[]>('file_suggestions', { id, query }),
   gitFiles: (projectId: string, agentId: string | null) => invoke<FileChange[]>('git_files', { projectId, agentId }),
@@ -598,6 +647,7 @@ export const api = {
   codeSearch: (projectId: string, agentId: string | null, query: SearchQuery) =>
     invoke<SearchResult>('code_search', { projectId, agentId, query }),
   setUnsaved: (count: number) => invoke<void>('set_unsaved', { count }),
+  setHeld: (agents: string[]) => invoke<void>('set_held', { agents }),
   cancelResume: (id: string) => invoke<void>('cancel_resume', { id }),
   ticketCreate: (projectId: string, draft: TicketDraft) => invoke<Ticket>('ticket_create', { projectId, draft }),
   ticketUpdate: (id: string, draft: TicketDraft) => invoke<Ticket>('ticket_update', { id, draft }),
@@ -621,6 +671,27 @@ export const api = {
   ticketReject: (id: string, comment: string) => invoke<void>('ticket_reject', { id, comment }),
   ticketResolveConflict: (id: string) => invoke<void>('ticket_resolve_conflict', { id }),
   ticketDismiss: (id: string) => invoke<void>('ticket_dismiss', { id }),
+  /** « Rafraîchir » of the column « En revue » (ESC-59): how many pull requests were read. */
+  ticketPrsRefresh: (projectId: string) => invoke<number>('ticket_prs_refresh', { projectId }),
+  /** A ticket whose pull request was closed without a merge: done all the same, or back to do. */
+  ticketPrMerge: (id: string, whenGreen: boolean) => invoke<MergeHow>('ticket_pr_merge', { id, whenGreen }),
+  ticketPrStopWaiting: (id: string) => invoke<void>('ticket_pr_stop_waiting', { id }),
+  ticketFinishAnyway: (id: string) => invoke<void>('ticket_finish_anyway', { id }),
+  ticketPrBackToTodo: (id: string) => invoke<void>('ticket_pr_back_to_todo', { id }),
+  ticketPrFixCi: (id: string) => invoke<void>('ticket_pr_fix_ci', { id }),
+  /** The CI of each project's target branch as last read (ESC-63). */
+  targetCis: () => invoke<Record<string, BranchCi>>('target_cis'),
+  /** « Rafraîchir »: a project's target and its tickets' pushed branches read now. */
+  ciRefresh: (projectId: string) => invoke<void>('ci_refresh', { projectId }),
+  ciDetail: (of: CiOf) => invoke<PrRead<CiDetail>>('ci_detail', { of }),
+  ciJobLog: (of: CiOf, job: string) => invoke<PrRead<string>>('ci_job_log', { of, job }),
+  /** « Relancer les jobs en échec »: how many runs started. */
+  ciRerun: (of: CiOf) => invoke<number>('ci_rerun', { of }),
+  /** « Envoyer à un agent »: a failed job and the end of its log go to an agent of the project. */
+  ciLogToAgent: (of: CiOf, job: string | null, check: string, url: string | null, agentId: string) =>
+    invoke<void>('ci_log_to_agent', { of, job, check, url, agentId }),
+  ticketPrFixReviews: (id: string) => invoke<void>('ticket_pr_fix_reviews', { id }),
+  ticketPrUpdateBranch: (id: string) => invoke<void>('ticket_pr_update_branch', { id }),
   boardSet: (projectId: string, settings: BoardSettings) => invoke<Project>('board_set', { projectId, settings }),
   /** « Reprendre maintenant »: the autopilot's pause (a quota, a usage limit) is lifted. */
   autopilotResume: () => invoke<void>('autopilot_resume'),
@@ -708,6 +779,19 @@ export const api = {
   updatePresence: (presence: { modal: boolean; testing: boolean; activeAt: number }) => invoke<void>('update_presence', { presence }),
   /** One HTTP request without proxy (2 s): true for any answer. */
   httpReady: (url: string, agentId?: string) => invoke<boolean>('http_ready', { url, agentId }),
+  // The launches' pages (ESC-311).
+  devpageOpen: (agentId: string, title: string, url: string, detached: boolean, bounds: PageBounds | null) =>
+    invoke<PageView>('devpage_open', { agentId, title, url, detached, bounds }),
+  devpagePlace: (agentId: string, bounds: PageBounds | null) => invoke<void>('devpage_place', { agentId, bounds }),
+  devpageGo: (agentId: string, action: 'back' | 'forward' | 'reload' | 'to', to?: string) =>
+    invoke<void>('devpage_go', { agentId, action, to: to ?? null }),
+  devpageDevtools: (agentId: string) => invoke<void>('devpage_devtools', { agentId }),
+  devpageDetach: (agentId: string, detached: boolean) => invoke<PageView>('devpage_detach', { agentId, detached }),
+  devpageMode: (agentId: string, mode: 'full' | 'tablet' | 'mobile') => invoke<void>('devpage_mode', { agentId, mode }),
+  devpageShow: (agentId: string) => invoke<void>('devpage_show', { agentId }),
+  devpageClose: (agentId: string) => invoke<void>('devpage_close', { agentId }),
+  devpageList: (projectId?: string) =>
+    invoke<{ pages: PageView[]; shown: string | null }>('devpage_list', { projectId: projectId ?? null }),
   /** The write's number, which the backend's log tells it by. */
   termWrite: (id: string, data: string) => invoke<number>('term_write', { id, data }),
   termReport: (id: string, report: TermReport) => invoke<void>('term_report', { id, report }),

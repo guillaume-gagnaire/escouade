@@ -1,0 +1,17 @@
+[package]
+name = "escouade-plugin-clickup"
+version = "2.2.1"
+description = "Le plugin ClickUp d'Escouade : les tâches d'une liste ClickUp dans le Kanban, ses statuts comme colonnes"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+
+# A module, compiled by `escouade-plugin build` (docs/PLUGINS.md §8.5).
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+escouade-plugin-kit = "0.1.1"
+serde_json = "1"
+anyhow = "1"

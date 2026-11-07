@@ -16,6 +16,7 @@ const other = computed(() => otherLang(lang.value));
       <a :href="links.privacy">{{ text.footer.privacy }}</a>
       <a :href="links.legal">{{ text.footer.legal }}</a>
       <NuxtLink :to="pathIn(lang, '/terms')">{{ text.footer.terms }}</NuxtLink>
+      <NuxtLink :to="pathIn(lang, '/agents')">{{ text.footer.agents }}</NuxtLink>
       <a :href="links.docs">{{ text.footer.docs }}</a>
       <NuxtLink :to="pathIn(other, route.path)" :lang="other" :hreflang="other">{{ text.footer.other }}</NuxtLink>
     </div>

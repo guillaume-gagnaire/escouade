@@ -18,7 +18,7 @@ Escouade devient une vraie **product factory** : de l'idée au produit livré, a
 3. Un registre précis des décisions sur le produit.
 4. Un drive des documents du projet, lus et cités par les agents.
 5. Une mémoire de travail des agents, commune à tous les harness et à l'équipe.
-6. Un index du code qui fait trouver le code aux agents plus vite et pour moins de tokens.
+6. ~~Un index du code qui fait trouver le code aux agents plus vite et pour moins de tokens.~~ Retiré le 2026-10-31 (ESC-310) : mesuré avec de vrais agents (IDX-6, `docs/archive/codeindex/CODEINDEX-PROBES.md`), il ne faisait pas économiser ; chaque harness trouve le code par ses propres outils.
 
 ## Ce qui n'en fait pas partie
 
@@ -56,6 +56,8 @@ Escouade devient une vraie **product factory** : de l'idée au produit livré, a
 ## 1. Le socle d'index local
 
 ### Le code : la structure d'abord (décidé)
+
+> Retiré le 2026-10-31 (ESC-310), après IDX-6 : ce qui suit sur l'index du code est l'histoire de sa conception. La comparaison de la spec au code et le planificateur nomment à leur agent les fichiers suivis par git qui contiennent les mots de code des pages (`codesearch.rs`).
 
 Escouade construit son propre index, à la manière de tokensave (Rust, MIT, regardé le 2026-10-27) :
 
@@ -145,14 +147,14 @@ On donne un sujet. **On ne choisit pas de documents** : l'agent a accès à tous
 Quand on a fini d'éditer la spec, un bouton **« Planifier »** appelle un **agent planificateur**, qui ajoute au Kanban les tickets nécessaires pour implémenter les modifications. (Il remplace l'idée d'une « Performance Loop » façon BMAD, abandonnée.)
 
 - **Où** (choix du chef) : sur une discussion dont les changements ont été versés, et en tête de l'espace Spécification tant que des changements de spec n'ont pas de tickets (« 3 changements sans tickets · Planifier »).
-- **Ce qu'il lit** (choix du chef) : les changements de spec et les décisions depuis la dernière planification, le code par l'index, et les tickets du Kanban, pour ne rien créer en double ni recréer ce qui est déjà fait.
+- **Ce qu'il lit** (choix du chef) : les changements de spec et les décisions depuis la dernière planification, le code (les fichiers qui contiennent les mots de code des changements, puis en lisant le dossier), et les tickets du Kanban, pour ne rien créer en double ni recréer ce qui est déjà fait.
 - **Ce qu'il fait** (choix du chef) : il crée les tickets dans « À faire », chacun avec sa description, ses critères d'acceptation, ses dépendances (« Après ») et le lien vers les pages et décisions qu'il implémente. Il ne les lance pas lui-même : le pilote auto et les règles du Kanban s'appliquent comme pour tout ticket. Il dit dans la discussion ce qu'il a créé, avec « Annuler ».
 - Les agents de ces tickets tiennent ensuite la spec à jour comme les autres (plus bas), et la carte d'un sujet montre ses tickets.
 
 **Fait (ESC-262, 2026-10-28)** : `docsplan.rs`, `components/docs/PlanResult.svelte`. Ce que le constructeur a tranché :
 
 - « depuis la dernière planification » : Escouade note, par projet, dans `planning.json` du dossier système (pas dans le dépôt), les pages versées par une discussion ou écrites dans la fenêtre, et les décisions proposées dans la fenêtre ou versées ; une planification les retire, « Annuler » les remet. Les pages écrites par l'agent d'un ticket ont déjà leur ticket ; un import n'est pas noté (toute la spec serait « sans tickets ») ;
-- le planificateur est un agent court en lecture seule (`Weight::Reading`, comme la comparaison au code, 10 min au plus), une planification à la fois par projet. Il reçoit les pages changées entières, les décisions, une ligne par ticket du Kanban (clé, colonne, titre, début de la description) et, l'index allumé, les fichiers que l'index rapproche des changements ; il lit le reste du code dans le dossier du projet. Il répond un JSON de tickets ;
+- le planificateur est un agent court en lecture seule (`Weight::Reading`, comme la comparaison au code, 10 min au plus), une planification à la fois par projet. Il reçoit les pages changées entières, les décisions, une ligne par ticket du Kanban (clé, colonne, titre, début de la description) et, les fichiers suivis par git qui contiennent leurs mots de code ; il lit le reste du code dans le dossier du projet. Il répond un JSON de tickets ;
 - « rien en double » : Escouade écarte un ticket dont le titre (sans casse, accents ni ponctuation) est celui d'un ticket du Kanban, quelle que soit sa colonne, ou d'un autre de la liste ; un ticket qui suit un écarté suit le ticket du Kanban qu'il répète. 12 tickets au plus ;
 - les liens : le ticket garde ses pages et ses décisions (`Ticket::pages`, `Ticket::decisions`, sa carte au Kanban nomme ses pages, qui s'ouvrent dans Docs), sa description finit par la phrase qui les cite pour son agent, et chaque page prend sa clé dans ses `tickets` (la carte d'un sujet montre les clés). Une décision acceptée ne se réécrit pas : le lien d'une décision reste du côté du ticket ;
 - le résultat se dit sous la discussion (« Tickets ») ou sur la carte des sujets (le dernier, pendant un jour), avec « Annuler », qui retire les tickets pas encore lancés et garde les autres en le disant ;
@@ -187,8 +189,8 @@ Quand on a fini d'éditer la spec, un bouton **« Planifier »** appelle un **ag
 
 - la consigne de chaque ticket (`board::spec_rule`, dans `protocol`) le demande toujours, en nommant les outils de docs ; une page écrite par l'agent d'un ticket prend sa clé dans ses tickets, comme une décision prend son origine ;
 - avec une branche fixe, l'agent d'un ticket (en cours ou à tester) lit et écrit une copie de la spec et des décisions de la branche (`ticket-docs/<clé>/` du dossier système, avec la copie d'origine à côté), les documents restant ceux de la branche ; à la validation, seul ce que le ticket a changé est versé (ce que l'équipe a écrit entre-temps reste ; à page égale, celle du ticket l'emporte), une décision nouvelle dont le numéro a été pris entre-temps prend le suivant ; la copie part avec un ticket supprimé ;
-- la comparaison est un agent court en lecture seule (`Weight::Reading`, le harness de « Modèle des textes rédigés »), une page à la fois, 5 min au plus chacune ; il reçoit la page et, l'index allumé, les fichiers que l'index lui rapproche ; il répond un JSON d'écarts, gardés seulement sur des fichiers du projet présents et hors clôture ;
-- les pages touchées par un ticket : celles qu'il a écrites, celles qui le citent, puis celles qui nomment un fichier qu'il a changé (chemin, ou nom pas trop commun) ou un symbole de ces fichiers (par l'index) ; 12 au plus. Elle tourne seulement quand le ticket est fusionné (« Valider et merger ») : poussé ou en PR, le code n'est pas encore là où la spec est comparée ;
+- la comparaison est un agent court en lecture seule (`Weight::Reading`, le harness de « Modèle des textes rédigés »), une page à la fois, 5 min au plus chacune ; il reçoit la page et, les fichiers suivis par git qui contiennent ses mots de code ; il répond un JSON d'écarts, gardés seulement sur des fichiers du projet présents et hors clôture ;
+- les pages touchées par un ticket : celles qu'il a écrites, celles qui le citent, puis celles qui nomment un fichier qu'il a changé (chemin, ou nom pas trop commun) ou un nom que ces fichiers déclarent ; 12 au plus. Elle tourne seulement quand le ticket est fusionné (« Valider et merger ») : poussé ou en PR, le code n'est pas encore là où la spec est comparée ;
 - « Comparer au code » sur toute la spec : 40 pages au plus, les moins récemment comparées d'abord ;
 - « Mettre la spec à jour » sur un écart : le même agent court réécrit la page sur ce point, l'écart retiré (en attendant l'agent rédacteur des discussions, ESC-261).
 
@@ -204,4 +206,4 @@ Quand on a fini d'éditer la spec, un bouton **« Planifier »** appelle un **ag
 ## Réponses de l'utilisateur à la relecture (2026-10-27)
 
 1. **La spec vit sous `.escouade/`** (décidé), comme la mémoire, les décisions et les documents. **Une spec existante détectée** (`docs/SPEC.md`, `SPEC.md`, un dossier `docs/`…) : Escouade **propose de l'importer**, découpée par sujet ; rien sans accord (décidé). **Choix du chef** : un projet sans spec part d'un espace vide, avec la proposition de faire écrire une première version par l'agent rédacteur depuis le code (un geste de l'utilisateur, parce que ça coûte des tokens).
-2. **La spec est comparée au code après chaque ticket validé** (décidé), sur les pages que le ticket touche : celles liées au code qu'il a changé (par l'index) et celles qu'il a modifiées. **Choix du chef** : « Comparer au code » reste aussi possible à la demande, page par page ou sur toute la spec.
+2. **La spec est comparée au code après chaque ticket validé** (décidé), sur les pages que le ticket touche : celles liées au code qu'il a changé (ses fichiers, les noms qu'ils déclarent) et celles qu'il a modifiées. **Choix du chef** : « Comparer au code » reste aussi possible à la demande, page par page ou sur toute la spec.

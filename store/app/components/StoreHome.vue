@@ -10,7 +10,7 @@ const { lang, text, links } = useLang();
 const { words, to } = useCatalog();
 const { data } = await useFetch('/api/catalog/home', { key: 'catalog-home' });
 const cats = computed(() => CATEGORY_ORDER.filter((c) => data.value?.counts[c]));
-const by = (e: Entry) => (e.builtin ? 'Escouade' : (e.author?.login ?? words.value.deleted));
+const by = (e: Entry) => (e.own ? 'Escouade' : (e.author?.login ?? words.value.deleted));
 </script>
 
 <template>

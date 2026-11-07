@@ -1,0 +1,83 @@
+diff --git a/src-tauri/src/commands.rs b/src-tauri/src/commands.rs
+index 4970283d..af61e955 100644
+--- a/src-tauri/src/commands.rs
++++ b/src-tauri/src/commands.rs
+@@ -416,7 +416,7 @@ pub fn plugin_install(
+ ) -> Result<crate::plugins::PluginView, crate::plugins::Refusal> {
+     let staged = core.plugins.staged(&token);
+     let view = core.plugins.install(&token, crate::i18n::ui())?;
+-    core.plugin_runtime.forget(&view.id);
++    core.plugin_runtime.unload(&view.id);
+     let from_store = matches!(view.origin, crate::plugins::Origin::Store { .. });
+     core.telemetry
+         .track(crate::telemetry::Event::PluginInstalled { from_store });
+@@ -450,7 +450,7 @@ pub fn plugin_remove(core: CoreState, id: String, keep: Option<bool>) -> Result<
+         .get(&id, crate::i18n::ui())
+         .map(|v| v.secret_keys)
+         .unwrap_or_default();
+-    core.plugin_runtime.forget(&id);
++    core.plugin_runtime.unload(&id);
+     let gone = core.plugins.remove(&id, keep).map_err(|e| e.to_string())?;
+     if gone && !keep {
+         for k in keys {
+@@ -490,7 +490,7 @@ pub fn plugin_set_enabled(
+     core.plugins
+         .choose(&id, |c| c.enabled = on)
+         .map_err(|e| e.to_string())?;
+-    core.plugin_runtime.forget(&id);
++    core.plugin_runtime.unload(&id);
+     plugin_view(&core, &id)
+ }
+ 
+@@ -535,7 +535,7 @@ pub fn plugin_set_permission(
+             }
+         })
+         .map_err(|e| e.to_string())?;
+-    core.plugin_runtime.forget(&id);
++    core.plugin_runtime.unload(&id);
+     plugin_view(&core, &id)
+ }
+ 
+diff --git a/src-tauri/src/plugins/runtime.rs b/src-tauri/src/plugins/runtime.rs
+index 04bf336c..90ece413 100644
+--- a/src-tauri/src/plugins/runtime.rs
++++ b/src-tauri/src/plugins/runtime.rs
+@@ -452,7 +452,7 @@ impl Runtime {
+         let weak = Arc::downgrade(&rt);
+         plugins.on_reload(move |id| {
+             if let Some(rt) = weak.upgrade() {
+-                rt.forget(id);
++                rt.unload(id);
+             }
+         });
+         rt
+@@ -583,7 +583,7 @@ impl Runtime {
+ 
+     /// Stops the plugin `id`'s process and forgets its host and its manifest: switched off,
+     /// uninstalled, updated, a permission taken back or given again. The next use reads it anew.
+-    pub fn forget(&self, id: &str) {
++    pub fn unload(&self, id: &str) {
+         // Its journal too, closed once its stop is noted: the next one starts from its file.
+         let journal = self.journals.lock().remove(id);
+         let Some(h) = self.hosts.lock().remove(id) else {
+diff --git a/src-tauri/src/plugins_runtime_tests.rs b/src-tauri/src/plugins_runtime_tests.rs
+index 52bbc4c7..bdd32c06 100644
+--- a/src-tauri/src/plugins_runtime_tests.rs
++++ b/src-tauri/src/plugins_runtime_tests.rs
+@@ -598,14 +598,14 @@ async fn the_users_choices_reach_its_process_once_its_host_is_forgotten() {
+     f.plugins
+         .choose(ID, |c| c.revoked.push("secrets:token".into()))
+         .unwrap();
+-    f.rt.forget(ID);
++    f.rt.unload(ID);
+     assert!(journal_has(&f.rt, Kind::Stop, "stopped"));
+     let got = secret().await.unwrap();
+     assert_eq!(got["error"]["code"], json!(NOT_YOURS), "{got}");
+ 
+     // Switched off: nothing of it runs.
+     f.plugins.choose(ID, |c| c.enabled = false).unwrap();
+-    f.rt.forget(ID);
++    f.rt.unload(ID);
+     let err = f.rt.call(ID, "echo", json!({})).await.unwrap_err();
+     assert!(
+         matches!(&err, CallError::Unavailable(why) if why.contains("switched off")),

@@ -144,6 +144,8 @@ export default {
     /** A harness not found on this machine. */
     states: {
       absent: 'Introuvable',
+      /** A harness an agent or an account names that this version does not have (a later version's, a plugin's gone, INT-3). */
+      missing: '{id} (harness absent)',
       /** Beside its name, before its version (2.0 design): « Prêt · 2.1.301 ». */
       ready: 'Prêt',
       notConnected: 'Aucun compte',
@@ -182,6 +184,12 @@ export default {
     idleStop: 'Arrêter les processus des agents inactifs après',
     idleStopHint: 'minutes, 0 = jamais',
     idleStopLabel: 'Arrêter les processus des agents inactifs après (minutes)',
+    midTurnDelay: 'Délai avant l’envoi pendant un tour',
+    midTurnDelayDesc:
+      'Un message envoyé pendant qu’un agent travaille attend ce délai : tu peux le modifier ou l’annuler d’ici là. Cursor et OpenCode le gardent jusqu’à la fin du tour, quel que soit ce réglage.',
+    midTurnDelayOff: 'Désactivé',
+    /** `{s}`: seconds. */
+    midTurnDelaySecs: '{s} s',
     terminalView: 'Vue des nouveaux agents',
     terminalViewDesc:
       'Escouade : la conversation d’Escouade. Terminal du harness : l’interface du harness elle-même (celle de Claude Code…), dans un terminal. Chaque agent change de vue depuis son en-tête ; les agents de ticket, et ceux d’un harness sans vue terminal, restent dans la vue d’Escouade.',
@@ -248,6 +256,18 @@ export default {
     done: 'Tâches terminées',
     errors: 'Erreurs',
     tickets: 'Tickets (prêt à tester, bloqué)',
+    /** The news of the code hosts, one by one (ESC-68): read from what Escouade follows, nothing more. */
+    hosts: 'Pull requests et déploiements',
+    hostsNote:
+      'Escouade les signale quand elle relit ce qu’elle suit : les PR des tickets en revue, celles de l’agent affiché, celles du projet tant que leur vue ou la vue d’ensemble est ouverte. Un type désactivé ne dit plus rien.',
+    prCiFailed: 'CI en échec',
+    prChanges: 'Changements demandés',
+    prApproved: 'PR approuvée',
+    prMerged: 'PR mergée',
+    prConflict: 'Conflit',
+    prReview: 'Relecture demandée',
+    deployOk: 'Déploiement en production réussi',
+    deployFailed: 'Déploiement en échec',
     channels: 'Canaux',
     /** `os`: « macOS » or « Windows ». */
     system: "Notifications {os} quand l'app n'est pas au premier plan",
@@ -433,6 +453,14 @@ export default {
     copyDesc: 'Seuls ceux que git ignore, jamais commités ; un motif par ligne : .env* à la racine, **/.env* partout.',
     commit: 'Commit',
     commitDesc: 'Direct : Escouade propose un message, tu le relis et tu commites toi-même.',
+    pagesOpen: 'Ouvrir les pages des lancements',
+    pagesOpenDesc:
+      'Quand « ▶ Tester » est prêt, la page s’ouvre toute seule. Dans l’agent, elle tourne à part : ni les commandes d’Escouade, ni tes cookies.',
+    pagesOpens: {
+      agent: 'Dans l’agent',
+      window: 'Dans une fenêtre à part',
+      system: 'Dans le navigateur du système',
+    },
     commitModes: {
       agent: "Rédigé par l'agent",
       direct: 'Direct, avec un message proposé',

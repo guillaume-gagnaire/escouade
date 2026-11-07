@@ -1,0 +1,6 @@
+# One target for the two workspaces of the plugins (this one and src-tauri): the modules are where the tests of the app
+# look for them, and CI caches it. What a build leaves on its way stays apart: the crates of `crates/` are in both, by the same
+# name, against the serde_json of each (« expected `Value`, found `Value` »).
+[build]
+target-dir = "../src-tauri/target"
+build-dir = "../src-tauri/target/plugins"

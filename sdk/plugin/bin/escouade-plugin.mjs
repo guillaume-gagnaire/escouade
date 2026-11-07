@@ -2,8 +2,8 @@
 // escouade-plugin, the command of @escouade-dev/plugin (ESC-181, PLG-9).
 //
 // `validate` and `pack` run here, in Node: the manifest's checks are those of the store and the app
-// (vendor/plugin-manifest.mjs, copied from schemas/). `test` (the conformance bench) and `dev` (the fake Escouade)
-// are the app's own: they go to the escouade-plugin that ships beside Escouade, found by ESCOUADE_PLUGIN_BIN, the
+// (vendor/plugin-manifest.mjs, copied from schemas/). `test` (the conformance bench), `dev` (the fake Escouade) and
+// `build` (a `run.js` plugin's bundle compiled to WASM, ESC-322) are the app's own, which need no Node: they go to the escouade-plugin that ships beside Escouade, found by ESCOUADE_PLUGIN_BIN, the
 // PATH or where Escouade installs it, so that a plugin is judged by the same bench as in the app.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -41,9 +41,12 @@ const USAGE = t(
   escouade-plugin pack [dossier] [--target <système>-<arch>] [--out <dossier>]
                                            l'archive .tar.gz et son empreinte SHA-256
                                            (--target : windows-x64, macos-arm64, linux-x64…)
+  escouade-plugin build [dossier] [--out <dossier>] [--json]
+                                           le bundle d'un plugin run.js compilé en WASM, comme le store,
+                                           et son empreinte SHA-256
 
-test et dev lancent l'escouade-plugin livré avec Escouade (ESCOUADE_PLUGIN_BIN pour un autre).
-Options : --lang fr|en
+test, dev et build lancent l'escouade-plugin livré avec Escouade (ESCOUADE_PLUGIN_BIN pour un autre).
+Options : --lang fr|en ; --first-party pour un plugin d'Escouade (plugins/<id>/ de son dépôt, dev.escouade.*)
 `,
   `escouade-plugin: write and test an Escouade plugin.
 
@@ -55,9 +58,12 @@ Options : --lang fr|en
   escouade-plugin pack [folder] [--target <system>-<arch>] [--out <folder>]
                                            the .tar.gz archive and its SHA-256
                                            (--target: windows-x64, macos-arm64, linux-x64…)
+  escouade-plugin build [folder] [--out <folder>] [--json]
+                                           a run.js plugin's bundle compiled to WASM, as the store does,
+                                           and its SHA-256
 
-test and dev run the escouade-plugin that ships with Escouade (ESCOUADE_PLUGIN_BIN for another).
-Options: --lang fr|en
+test, dev and build run the escouade-plugin that ships with Escouade (ESCOUADE_PLUGIN_BIN for another).
+Options: --lang fr|en; --first-party for a plugin of Escouade's own (plugins/<id>/ of its repository, dev.escouade.*)
 `,
 );
 
@@ -84,7 +90,8 @@ function manifestOf(folder) {
     console.error(`${path}: ${e.message}`);
     return null;
   }
-  const v = validateText(text);
+  // --first-party: a plugin of Escouade's own hand (plugins/<id>/ of its repository, ESC-314), its ids dev.escouade.*.
+  const v = validateText(text, { firstParty: args.includes('--first-party') });
   for (const f of v.ignored) console.error(t(`champ ignoré : ${f}`, `ignored field: ${f}`));
   if (!v.ok) {
     for (const e of v.errors) console.error(`✗ ${message(e, lang)}`);
@@ -98,7 +105,7 @@ function validate(folder) {
   if (!m) return 1;
   // What the manifest's run names must be in the folder (the store checks it too).
   const run = m.run ?? {};
-  const missing = ['command', 'windows', 'macos', 'linux']
+  const missing = ['command', 'js', 'windows', 'macos', 'linux']
     .map((k) => run[k])
     .filter((p) => p && p !== '{escouade}' && !existsSync(join(folder, p)));
   for (const p of missing) console.error(t(`✗ run : ${p} n'est pas dans le dossier`, `✗ run: ${p} is not in the folder`));
@@ -251,6 +258,7 @@ function main() {
       return pack(folder);
     case 'test':
     case 'dev':
+    case 'build':
       return native(command, folder);
     default:
       process.stderr.write(USAGE);

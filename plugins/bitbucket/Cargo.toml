@@ -1,0 +1,21 @@
+[package]
+name = "escouade-plugin-bitbucket"
+version = "2.2.1"
+description = "Le plugin Bitbucket Cloud d'Escouade : les PR, les statuts, les pipelines et leurs journaux, les commentaires et les déploiements"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+
+# A module, compiled by `escouade-plugin build` (docs/PLUGINS.md §8.5).
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+escouade-plugin-kit = "0.1.1"
+serde_json = "1"
+anyhow = "1"
+parking_lot = "0.12"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt", "net", "io-util", "time"] }

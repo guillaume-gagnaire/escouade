@@ -10,6 +10,7 @@ use crate::engines_tests::accounts_for_every_harness;
 use crate::i18n::Lang;
 use crate::model::*;
 use crate::plugins::journal::Kind;
+use crate::plugins::runtime::PhaseName;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -18,9 +19,8 @@ fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures")
 }
 
-/// The fake plugin `id`, named `name`, that decides as `args` say (`--decide allow`…), loaded in
-/// development in the harness's core.
-fn decider(h: &Harness, id: &str, name: &str, args: &[&str]) {
+/// The folder of the fake plugin `id`, its manifest given `permissions`.
+fn folder_of(h: &Harness, id: &str, name: &str, args: &[&str], permissions: Value) -> PathBuf {
     #[cfg(windows)]
     crate::paths::trim_test_path();
     let dir = h.dir.join(id);
@@ -34,13 +34,26 @@ fn decider(h: &Harness, id: &str, name: &str, args: &[&str]) {
         "version": "1.0.0",
         "escouade": { "api": "1", "min": "2.1.0" },
         "run": { "command": "fake-plugin", "windows": "fake-plugin.cmd", "args": args },
-        "permissions": { "decide": true },
+        "permissions": permissions,
     });
     std::fs::write(
         dir.join("escouade-plugin.json"),
         serde_json::to_string_pretty(&manifest).unwrap(),
     )
     .unwrap();
+    dir
+}
+
+/// Installs the folder `src` as the app does: read, then installed.
+fn install(h: &Harness, src: &Path) {
+    let token = h.core.plugins.inspect_folder(src, Lang::En).unwrap().token;
+    h.core.install_plugin(&token, Lang::En).unwrap();
+}
+
+/// The fake plugin `id`, named `name`, that decides as `args` say (`--decide allow`…), loaded in
+/// development in the harness's core.
+fn decider(h: &Harness, id: &str, name: &str, args: &[&str]) {
+    let dir = folder_of(h, id, name, args, json!({ "decide": true }));
     h.core.plugins.load_dev(&dir, Lang::En).unwrap();
     // Started as the app starts them, before the first permission.
     crate::plugins::decide::warm(&h.core.plugins, &h.core.plugin_runtime);
@@ -107,6 +120,93 @@ async fn left_to_the_user(h: &Harness, id: &str) {
     let card = permission(h, id).unwrap();
     assert!(card["decision"].is_null(), "{card:#}");
     assert_eq!(h.agent(id).status, AgentStatus::Waiting);
+}
+
+fn phase(h: &Harness, id: &str) -> PhaseName {
+    h.core.plugin_runtime.status(id).phase
+}
+
+async fn running(h: &Harness, id: &str, when: &str) {
+    h.wait(when, |h| phase(h, id) == PhaseName::Running).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_plugin_that_decides_runs_before_any_request_as_soon_as_it_is_ready_and_on() {
+    let h = harness("plg8-warm");
+    let id = "dev.test.warm";
+    let src = folder_of(
+        &h,
+        id,
+        "Warm",
+        &["--decide", "allow"],
+        json!({ "decide": true }),
+    );
+
+    // Installed from a folder (the store's and git's go through the same `install`).
+    install(&h, &src);
+    running(&h, id, "started at its installation").await;
+
+    // Switched off, it stops and stays so; on again, it runs.
+    h.core.plugins.choose(id, |c| c.enabled = false).unwrap();
+    h.core.plugin_changed(id);
+    assert_eq!(phase(&h, id), PhaseName::Idle);
+    h.core.plugins.choose(id, |c| c.enabled = true).unwrap();
+    h.core.plugin_changed(id);
+    running(&h, id, "started when switched on again").await;
+
+    // Its permission taken back, it decides nothing: it stops. Given again, it runs.
+    h.core
+        .plugins
+        .choose(id, |c| c.revoked.push("decide".into()))
+        .unwrap();
+    h.core.plugin_changed(id);
+    assert_eq!(phase(&h, id), PhaseName::Idle);
+    h.core.plugins.choose(id, |c| c.revoked.clear()).unwrap();
+    h.core.plugin_changed(id);
+    running(&h, id, "started with its permission given again").await;
+
+    // Updated: a new version installed over it, running (under Windows it holds its folder).
+    let manifest = src.join("escouade-plugin.json");
+    let text = std::fs::read_to_string(&manifest).unwrap();
+    std::fs::write(&manifest, text.replace("1.0.0", "1.0.1")).unwrap();
+    install(&h, &src);
+    running(&h, id, "started at its update").await;
+    assert_eq!(h.core.plugins.get(id, Lang::En).unwrap().version, "1.0.1");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_folder_in_development_that_decides_runs_again_once_read_again() {
+    let h = harness("plg8-warm-dev");
+    let id = "dev.test.warm-dev";
+    decider(&h, id, "Warm", &["--decide", "allow"]);
+    running(&h, id, "started with the app").await;
+    let before = h.core.plugin_runtime.status(id).pid;
+
+    let manifest = h.dir.join(id).join("escouade-plugin.json");
+    let text = std::fs::read_to_string(&manifest).unwrap();
+    std::fs::write(&manifest, text.replace("1.0.0", "1.0.1")).unwrap();
+    h.core.plugins.reload(&[id.to_string()]);
+    h.wait("started anew, read again", |h| {
+        let s = h.core.plugin_runtime.status(id);
+        s.phase == PhaseName::Running && s.pid != before
+    })
+    .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_plugin_that_does_not_decide_does_not_start_for_all_that() {
+    let h = harness("plg8-warm-not");
+    let id = "dev.test.nodecide";
+    let src = folder_of(&h, id, "Other", &[], json!({ "events": ["app.started"] }));
+    install(&h, &src);
+    h.core.plugins.choose(id, |c| c.enabled = false).unwrap();
+    h.core.plugin_changed(id);
+    h.core.plugins.choose(id, |c| c.enabled = true).unwrap();
+    h.core.plugin_changed(id);
+    // Long enough for a start under way to show.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(phase(&h, id), PhaseName::Idle);
+    assert!(h.core.plugin_runtime.journal(id).is_empty());
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -268,17 +368,17 @@ async fn the_plugins_decide_for_every_harness() {
             let cursor = s
                 .accounts
                 .iter_mut()
-                .find(|a| a.engine == EngineId::Cursor)
+                .find(|a| a.engine == EngineId::CURSOR)
                 .unwrap();
             cursor.id = "principal-cursor".into();
             cursor.name = "Principal".into();
             cursor.config_dir.clear();
             // Vibe, Antigravity and Gemini on their Principal, as their tests have them.
             for (engine, program) in [
-                (EngineId::Vibe, crate::engine::vibe::bench::fake_vibe()),
-                (EngineId::Agy, crate::engine::agy::bench::fake_agy()),
+                (EngineId::VIBE, crate::engine::vibe::bench::fake_vibe()),
+                (EngineId::AGY, crate::engine::agy::bench::fake_agy()),
                 (
-                    EngineId::Gemini,
+                    EngineId::GEMINI,
                     crate::engine::gemini::bench::fake_gemini(),
                 ),
             ] {
@@ -295,14 +395,14 @@ async fn the_plugins_decide_for_every_harness() {
         decider(&h, "dev.test.rules", "Règles", &args);
         let (p, _) = h.project(false).await;
         for (engine, message) in [
-            (EngineId::Claude, "permission"),
-            (EngineId::Codex, "commande"),
-            (EngineId::Copilot, "commande"),
-            (EngineId::Opencode, "commande"),
-            (EngineId::Cursor, "commande"),
-            (EngineId::Vibe, "commande"),
-            (EngineId::Agy, "commande"),
-            (EngineId::Gemini, "commande"),
+            (EngineId::CLAUDE, "permission"),
+            (EngineId::CODEX, "commande"),
+            (EngineId::COPILOT, "commande"),
+            (EngineId::OPENCODE, "commande"),
+            (EngineId::CURSOR, "commande"),
+            (EngineId::VIBE, "commande"),
+            (EngineId::AGY, "commande"),
+            (EngineId::GEMINI, "commande"),
         ] {
             let id = agent_of(&h, &p.id, engine).await;
             assert_eq!(h.agent(&id).engine, engine);
@@ -332,27 +432,41 @@ async fn the_plugins_decide_for_every_harness() {
 async fn the_team_rules_example_refuses_rm_rf_with_its_reason() {
     #[cfg(windows)]
     crate::paths::trim_test_path();
+    // team-rules is a run.js plugin since 2.0.0 (ESC-326): it runs in WASM, on escouade-js and the pinned Javy shared
+    // by the tests (`ready` fetches it once, before the 60 s of the waits below).
+    if !crate::plugins_wasm_tests::ready() {
+        return;
+    }
     let h = harness("plg8-team-rules");
-    // The example of PLG-10 (plugin-examples/, ESC-182) as its repository holds it: its program
+    // Escouade's own plugin (plugins/team-rules, ESC-182 and ESC-314) as its repository holds it: its program
     // is dist/plugin.mjs, built and committed.
-    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../plugin-examples/team-rules");
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../plugins/team-rules");
     let dir = h.dir.join("team-rules");
     std::fs::create_dir_all(dir.join("dist")).unwrap();
-    for f in [
-        "escouade-plugin.json",
-        "rules.json",
-        "team-rules",
-        "team-rules.cmd",
-        "dist/plugin.mjs",
-    ] {
+    for f in ["escouade-plugin.json", "rules.json", "dist/plugin.mjs"] {
         std::fs::copy(src.join(f), dir.join(f)).unwrap();
     }
+    // Its manifest asks for the release that serves WASM; this test plays the decision, not that version check.
+    let manifest = dir.join("escouade-plugin.json");
+    let mut m: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&manifest).unwrap()).unwrap();
+    m["escouade"]["min"] = serde_json::json!(env!("CARGO_PKG_VERSION"));
+    std::fs::write(&manifest, serde_json::to_string_pretty(&m).unwrap()).unwrap();
     h.core.plugins.load_dev(&dir, Lang::En).unwrap();
+    // Its module made now, before the waits' 60 s: Javy and wasmtime's compilation of a debug build take long on a
+    // busy machine (the CI's, 2026-11-02), as the app makes it at an install.
+    h.core
+        .plugin_runtime
+        .prepare("dev.escouade.team-rules")
+        .expect("a run.js plugin")
+        .join()
+        .unwrap()
+        .expect("its module");
     crate::plugins::decide::warm(&h.core.plugins, &h.core.plugin_runtime);
     let name = h
         .core
         .plugins
-        .get("dev.exemple.team-rules", crate::i18n::ui())
+        .get("dev.escouade.team-rules", crate::i18n::ui())
         .unwrap()
         .name;
     let (p, _) = h.project(false).await;

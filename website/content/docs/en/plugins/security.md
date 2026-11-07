@@ -1,20 +1,21 @@
 # Plugin security
 
-A plugin from the store goes through three guards: the store’s ten checks on submission, the “Verified by Escouade” review done by hand, and the app’s checks on every install. This page says what each one holds, what the review refuses, and what the seal does not promise.
+A plugin from the store goes through three guards: the store’s eleven checks on submission, the “Verified by Escouade” review done by hand, and the app’s checks on every install. This page says what each one holds, what the review refuses, and what the seal does not promise.
 
 ## What the app checks
 
-On install and on every update, Escouade downloads `version.json`, the archive and your system’s program, then checks:
+On install and on every update, Escouade downloads `version.json`, the archive and its WASM module, then checks:
 
-- **the fingerprints**: `version.json` against the catalog, the archive, the program and the manifest against `version.json` (SHA-256). One byte changed, on the store, on the way or in a cache, stops the install;
+- **the fingerprints**: `version.json` against the catalog, the archive, the module and the manifest against `version.json` (SHA-256). One byte changed, on the store, on the way or in a cache, stops the install;
 - **the signature**, for a verified version: `version.json` signed with minisign by Escouade’s key, the signature’s comment naming this id and this number. The public keys are in the app; the secret key lives on one machine, encrypted, never on the store’s server, never in the CI or in a repository. So the store cannot make a seal;
-- **the archive**, read in memory, without a symbolic link or a path that leaves the plugin’s folder.
+- **the archive**, read in memory, without a symbolic link or a path that leaves the plugin’s folder;
+- **the folder** `version.json` names for a plugin kept in a subfolder of its repository: a plain relative path, without `..`, an absolute path or a backslash; otherwise nothing is installed. The store, for its part, refuses at submission a folder that goes through a symbolic link.
 
 An installed plugin’s seal is checked again on your machine, without the store. Then the install window shows its permissions in words, before anything runs ([installing a plugin](plugins/installer)).
 
 ## What the seal covers
 
-“Verified by Escouade” stands for **one version**: its code at the published commit, its archive and its attested binaries, named by the fingerprint of its `version.json`. A new version is “not verified” until its own review, even if the one before was: an update is where an honest plugin can change hands. **Install verified versions only**, in the Plugins view, refuses any version without a seal.
+“Verified by Escouade” stands for **one version**: its code at the published commit, its archive and its module, recompiled by the review, named by the fingerprint of its `version.json`. A new version is “not verified” until its own review, even if the one before was: an update is where an honest plugin can change hands. **Install verified versions only**, in the Plugins view, refuses any version without a seal.
 
 The seal says that a person read this code against what it declares, and that the bench ran it without network. It does not promise there is no bug, nor the quality of the third-party service the plugin reaches.
 
@@ -24,7 +25,7 @@ The review reads each version with a script that prepares leads for it, file and
 
 **Refused outright**, without reading further:
 
-- an archive or a binary whose fingerprint is not the one in `version.json`;
+- an archive or a module whose fingerprint is not the one in `version.json`;
 - a version that is no longer the one the store froze.
 
 **No seal until it is fixed**:
@@ -37,7 +38,9 @@ The review reads each version with a script that prepares leads for it, file and
 - unreadable code: minified without its source, text hidden in base64, binary blobs;
 - unpinned dependencies, a `postinstall` script, a dependency pulled from a git repository;
 - instructions added to the agents that turn them from their task (a prompt injection);
-- a binary without a provenance attestation tying it to the commit read;
+- a module the recompilation does not give back, to the byte;
+- a Rust dependency that cannot be justified: what `Cargo.lock` adds is code that runs; `unsafe` code, an `extern` or a `#[link]` without a reason;
+- `agentHome`, or an entry in `*` of `permissions.commands`, without a reason that was read;
 - a tag moved since the submission, an archive entry refused (link, `..`, absolute path);
 - a conformance bench that fails, or that tries the network or a write the sandbox refuses.
 

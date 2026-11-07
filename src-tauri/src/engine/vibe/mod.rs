@@ -510,6 +510,41 @@ pub(crate) fn fenced_config(before: &str, fence: &[String]) -> Result<String> {
     Ok(doc.to_string())
 }
 
+/// The harness of the plugin Mistral (`dev.escouade.mistral`, INT-10.6 bis), if it is on: the conversation of
+/// Vibe's agents goes through it (`plugins::harness::BUILTIN_HARNESSES`).
+#[cfg(test)]
+pub fn plugged() -> Option<&'static crate::plugins::harness::ProcessEngine> {
+    crate::plugins::harness::plugged(crate::plugins::builtin::MISTRAL)
+}
+
+/// What the core writes in the agent's own `VIBE_HOME` before its launch (`plugins::harness::Prepare`), never in the
+/// user's: the trust of its folder, its view's hooks taken out (they are its interface's alone), and the refusals of
+/// its fence (`fence`, as Vibe names the paths) for its file tools. A fence that cannot be written keeps the agent from
+/// starting.
+pub(crate) fn prepare(p: &crate::plugins::harness::Preparing) -> Result<Vec<String>> {
+    let (cwd, fence) = (p.cwd, p.fence);
+    let Some(home) = p.home else {
+        if fence.is_empty() {
+            return Ok(Vec::new());
+        }
+        bail!(tr!(
+            "Mistral Vibe n’a pas de dossier de configuration où refuser les chemins des projets privés : l’agent ne démarre pas.",
+            "Mistral Vibe has no configuration folder where to refuse the private projects’ paths: the agent doesn’t start."
+        ));
+    };
+    if let Err(e) = trust(home, cwd) {
+        log::warn!("vibe: the trust of {cwd} not written: {e}");
+    }
+    terminal::forget_hooks(home);
+    fence_config(home, fence).map_err(|e| {
+        anyhow!(tr!(
+            "Les chemins des projets privés n’ont pas pu être refusés à Mistral Vibe ({e}) : l’agent ne démarre pas.",
+            "The private projects’ paths couldn’t be refused to Mistral Vibe ({e}): the agent doesn’t start."
+        ))
+    })?;
+    Ok(Vec::new())
+}
+
 /// A message to Vibe: its text, the images joined to it (ACP's `image` blocks), the text files
 /// joined to it as text. A PDF is refused.
 fn message(text: &str, attachments: &[Attachment]) -> Result<Value> {
@@ -685,8 +720,82 @@ const NO_SELF_UPDATE: [(&str, &str); 2] = [
 ];
 
 impl Engine for Vibe {
+    /// Its API key is the machine's (the system's keychain, set by `vibe --setup`), not moved by
+    /// its folder, and each agent has a `VIBE_HOME` of its own (`agent_home_var`); its other
+    /// accounts go by their key (ESC-267).
+    fn store(&self) -> crate::accounts::Store {
+        crate::accounts::Store {
+            home: ".vibe",
+            var: HOME_VAR,
+            files: &[],
+            dirs: &[],
+            login: &["--setup"],
+            xdg: None,
+        }
+    }
+
+    fn keys(&self) -> crate::accounts::KeyUse {
+        crate::accounts::KeyUse::Added
+    }
+
+    /// An account added by its key goes by it, before the keychain's and a key of the app's; its
+    /// Principal as Vibe goes in the user's terminal (`MISTRAL_API_KEY` when set, else the key
+    /// `vibe --setup` kept).
+    fn account_env(
+        &self,
+        account: &crate::model::Account,
+        _inherited: &dyn Fn(&str) -> bool,
+    ) -> Vec<(String, String)> {
+        use crate::accounts::{account_key, by_key, MISTRAL_KEY_VAR};
+        account_key(account)
+            .filter(|_| by_key(account))
+            .map(|key| (MISTRAL_KEY_VAR.to_string(), key))
+            .into_iter()
+            .collect()
+    }
+
+    fn key_missing(&self, name: &str) -> String {
+        tr!(
+            "Le compte Mistral Vibe « {name} » n’a pas de clé d’API : donne-la dans Réglages › Comptes, « Changer la clé… ».",
+            "The Mistral Vibe account “{name}” has no API key: give it in Settings › Accounts, “Change the key…”."
+        )
+    }
+
+    fn key_malformed(&self) -> String {
+        tr!(
+            "Ce n’est pas une clé d’API de Mistral : copie-la entière depuis console.mistral.ai, API Keys.",
+            "That isn’t a Mistral API key: copy it whole from console.mistral.ai, API Keys."
+        )
+    }
+
+    /// Its Principal goes by the key `vibe --setup` kept in the keychain, never read: signed in as
+    /// far as can be told. Another account by its key, shown by its end.
+    fn account_status<'a>(
+        &'a self,
+        account: &'a crate::model::Account,
+        settings: &'a crate::model::Settings,
+    ) -> BoxFuture<'a, crate::accounts::AccountStatus> {
+        Box::pin(async move {
+            if !crate::accounts::by_key(account) {
+                let dir = crate::accounts::config_dir(account, settings);
+                return crate::accounts::AccountStatus {
+                    connected: true,
+                    stamp: None,
+                    email: None,
+                    dir: dir.to_string_lossy().into_owned(),
+                };
+            }
+            crate::accounts::key_status(account, settings, (false, None))
+        })
+    }
+
+    /// In the agent's own `VIBE_HOME`, whatever its account (only its key changes, ESC-267).
+    fn sessions_in_agent_home(&self) -> bool {
+        true
+    }
+
     fn id(&self) -> EngineId {
-        EngineId::Vibe
+        EngineId::VIBE
     }
 
     fn list_models<'a>(
@@ -798,65 +907,26 @@ impl Engine for Vibe {
         on_frame: super::OnFrame,
         on_exit: super::OnExit,
     ) -> Result<Process> {
-        let escouade = match &spawn.escouade {
-            Escouade::Granted { url, token, .. } => Some((url.clone(), token.clone())),
-            Escouade::Denied { .. } => None,
-        };
-        log::info!(
-            "{}: starting {} in {} (account {})",
-            spawn.label,
-            spawn.program.describe(),
-            spawn.cwd,
-            spawn.account
-        );
-        let fence = crate::fence::spelled(&spawn.fence, &spawn.program);
-        // The trust of its folder and the refusals of its fence in its own `VIBE_HOME`, never the
-        // user's. A fence that cannot be written keeps the agent from starting.
-        if let Some((_, home)) = spawn.env.iter().find(|(k, _)| k == HOME_VAR) {
-            let home = std::path::Path::new(home);
-            if let Err(e) = trust(home, &spawn.cwd) {
-                log::warn!("vibe: the trust of {} not written: {e}", spawn.cwd);
-            }
-            // The hooks of its view are its interface's alone (`terminal`).
-            terminal::forget_hooks(home);
-            fence_config(home, &fence).map_err(|e| {
-                anyhow!(tr!(
-                    "Les chemins des projets privés n’ont pas pu être refusés à Mistral Vibe ({e}) : l’agent ne démarre pas.",
-                    "The private projects’ paths couldn’t be refused to Mistral Vibe ({e}): the agent doesn’t start."
-                ))
-            })?;
-        } else if !fence.is_empty() {
-            bail!(tr!(
-                "Mistral Vibe n’a pas de dossier de configuration où refuser les chemins des projets privés : l’agent ne démarre pas.",
-                "Mistral Vibe has no configuration folder where to refuse the private projects’ paths: the agent doesn’t start."
-            ));
-        }
-        let mut env = spawn.env;
-        env.push(("VIBE_ENABLE_TELEMETRY".into(), "false".into()));
-        let opts = process::Opts {
-            program: spawn.program,
-            cwd: spawn.cwd,
-            env,
-            start: spawn.start,
-            settings: Settings {
-                model: spawn.model,
-                effort: spawn.effort,
-                mode: spawn.mode,
-            },
-            instructions: spawn.append_prompt,
-            escouade,
-            fence,
-        };
-        let p: Process = VibeProcess::spawn(opts, on_frame, on_exit)?;
-        Ok(p)
+        // Its conversation goes through its plugin (INT-10.6): the launch it describes, checked and started by the
+        // core after `prepare`, what Vibe writes translated there.
+        crate::plugins::harness::spawn_plugged(
+            crate::plugins::builtin::MISTRAL,
+            self.name(),
+            spawn,
+            on_frame,
+            on_exit,
+        )
     }
 
     fn message(&self, text: &str, attachments: &[Attachment]) -> Result<Message> {
         message(text, attachments).map(Message)
     }
 
+    /// The items its plugin made of what Vibe wrote (`agent/items`).
     fn translate(&self, rt: &mut AgentRt, frame: &Value, fx: &mut Effects) {
-        rt.vibe_frame(frame, fx);
+        if let Some(items) = frame["items"].as_array() {
+            rt.apply_items(items, fx);
+        }
     }
 
     /// A session that cannot be loaded gives a new one (`process::open`), said by the conversation.
@@ -866,6 +936,11 @@ impl Engine for Vibe {
 
     fn one_shot<'a>(&'a self, ask: OneShot<'a>) -> BoxFuture<'a, Result<String>> {
         Box::pin(one_shot(ask))
+    }
+
+    /// `print_args` names no tool, whatever the weight.
+    fn answers_without_tools(&self) -> bool {
+        true
     }
 
     fn writer(&self, _weight: Weight) -> &'static str {

@@ -1,0 +1,1032 @@
+[
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/user"
+      }
+    ],
+    "error": null,
+    "method": "account/me",
+    "result": {
+      "label": "@ada",
+      "scopes": null,
+      "user": "ada"
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"operationName\":\"Pulls\",\"query\":\"query Pulls($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { p14768: pullRequest(number: 14768) { number url title state isDraft headRefName baseRefName mergeable author { login } createdAt isCrossRepository headRepository { nameWithOwner } mergeCommit { oid } autoMergeRequest { enabledAt } latestOpinionatedReviews(first: 50) { nodes { state } } reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } } } } reviewThreads(first: 100) { nodes { isResolved } } commits(last: 1) { nodes { commit { statusCheckRollup { state } } } } }  } }\",\"variables\":{\"name\":\"cli\",\"owner\":\"cli\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      }
+    ],
+    "error": null,
+    "method": "forge/pullRequest",
+    "result": {
+      "value": {
+        "approvals": 1,
+        "autoMerge": false,
+        "base": "trunk",
+        "changesRequested": false,
+        "checks": "success",
+        "draft": false,
+        "fork": false,
+        "head": "babakks/refresh-token-bump-deps",
+        "mergeable": null,
+        "number": 14768,
+        "openThreads": 1,
+        "state": "merged",
+        "title": "Refreshable tokens: bump cli/oauth to v1.3.0 and fix `gh status` column width",
+        "url": "https://github.com/cli/cli/pull/14768"
+      }
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"operationName\":\"PullsOfBranch\",\"query\":\"query PullsOfBranch($owner: String!, $name: String!, $branch: String!) { repository(owner: $owner, name: $name) { pullRequests(headRefName: $branch, first: 10, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { number url title state isDraft headRefName baseRefName mergeable author { login } createdAt isCrossRepository headRepository { nameWithOwner } mergeCommit { oid } autoMergeRequest { enabledAt } latestOpinionatedReviews(first: 50) { nodes { state } } reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } } } } reviewThreads(first: 100) { nodes { isResolved } } commits(last: 1) { nodes { commit { statusCheckRollup { state } } } } } } } }\",\"variables\":{\"branch\":\"trunk\",\"name\":\"cli\",\"owner\":\"cli\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      }
+    ],
+    "error": null,
+    "method": "forge/pullRequestsOfBranch",
+    "result": {
+      "value": [
+        {
+          "approvals": 1,
+          "autoMerge": false,
+          "base": "trunk",
+          "changesRequested": false,
+          "checks": "success",
+          "draft": false,
+          "fork": false,
+          "head": "babakks/refresh-token-bump-deps",
+          "mergeable": null,
+          "number": 14768,
+          "openThreads": 1,
+          "state": "merged",
+          "title": "Refreshable tokens: bump cli/oauth to v1.3.0 and fix `gh status` column width",
+          "url": "https://github.com/cli/cli/pull/14768"
+        }
+      ]
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"operationName\":\"RepoParent\",\"query\":\"query RepoParent($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { parent { name owner { login } } } }\",\"variables\":{\"name\":\"cli\",\"owner\":\"cli\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      }
+    ],
+    "error": null,
+    "method": "forge/parent",
+    "result": {
+      "value": {
+        "name": "cli",
+        "namespace": "upstream"
+      }
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"operationName\":\"OpenPulls\",\"query\":\"query OpenPulls($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { pullRequests(states: OPEN, first: 30, orderBy: {field: UPDATED_AT, direction: DESC}) { nodes { number url title state isDraft headRefName baseRefName mergeable author { login } createdAt isCrossRepository headRepository { nameWithOwner } mergeCommit { oid } autoMergeRequest { enabledAt } latestOpinionatedReviews(first: 50) { nodes { state } } reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } } } } reviewThreads(first: 100) { nodes { isResolved } } commits(last: 1) { nodes { commit { statusCheckRollup { state } } } } } } } }\",\"variables\":{\"name\":\"cli\",\"owner\":\"cli\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      }
+    ],
+    "error": null,
+    "method": "forge/openPullRequests",
+    "result": {
+      "value": []
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"operationName\":\"Pulls\",\"query\":\"query Pulls($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { p14768: pullRequest(number: 14768) { number url title state isDraft headRefName baseRefName mergeable author { login } createdAt isCrossRepository headRepository { nameWithOwner } mergeCommit { oid } autoMergeRequest { enabledAt } latestOpinionatedReviews(first: 50) { nodes { state } } reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } } } } reviewThreads(first: 100) { nodes { isResolved } } commits(last: 1) { nodes { commit { statusCheckRollup { state } } } } }  } }\",\"variables\":{\"name\":\"cli\",\"owner\":\"cli\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      }
+    ],
+    "error": null,
+    "method": "forge/pullRequests",
+    "result": {
+      "value": [
+        {
+          "approvals": 1,
+          "autoMerge": false,
+          "base": "trunk",
+          "changesRequested": false,
+          "checks": "success",
+          "draft": false,
+          "fork": false,
+          "head": "babakks/refresh-token-bump-deps",
+          "mergeable": null,
+          "number": 14768,
+          "openThreads": 1,
+          "state": "merged",
+          "title": "Refreshable tokens: bump cli/oauth to v1.3.0 and fix `gh status` column width",
+          "url": "https://github.com/cli/cli/pull/14768"
+        }
+      ]
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/cli/cli"
+      }
+    ],
+    "error": null,
+    "method": "forge/mergeOptions",
+    "result": {
+      "value": {
+        "autoMerge": true,
+        "strategies": ["squash"]
+      }
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/cli/cli/commits/6ec1ba54542baca6cc5932582634104c83f36a28/check-runs?per_page=100"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/cli/cli/commits/6ec1ba54542baca6cc5932582634104c83f36a28/status?per_page=100"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/cli/cli/pulls/14768"
+      }
+    ],
+    "error": null,
+    "method": "forge/checks",
+    "result": {
+      "value": [
+        {
+          "cancelled": false,
+          "finished": 1792584460,
+          "job": null,
+          "name": "CodeQL",
+          "started": 1792584458,
+          "state": "success",
+          "url": "https://github.com/cli/cli/runs/119212113913"
+        },
+        {
+          "cancelled": false,
+          "finished": 1792584466,
+          "job": "119211823435",
+          "name": "CodeQL-Build (actions, none, security-and-quality)",
+          "started": 1792584421,
+          "state": "success",
+          "url": "https://github.com/cli/cli/actions/runs/39597044573/job/119211823435"
+        },
+        {
+          "cancelled": false,
+          "finished": 1792584543,
+          "job": "119211822967",
+          "name": "CodeQL-Build (go, manual, ./.github/codeql/codeql-config.yml)",
+          "started": 1792584421,
+          "state": "success",
+          "url": "https://github.com/cli/cli/actions/runs/39597044573/job/119211822967"
+        },
+        {
+          "cancelled": false,
+          "finished": 1792584442,
+          "job": "119211822682",
+          "name": "govulncheck",
+          "started": 1792584421,
+          "state": "success",
+          "url": "https://github.com/cli/cli/actions/runs/39597044372/job/119211822682"
+        },
+        {
+          "cancelled": false,
+          "finished": 1792584571,
+          "job": "119211822400",
+          "name": "lint",
+          "started": 1792584421,
+          "state": "success",
+          "url": "https://github.com/cli/cli/actions/runs/39597044372/job/119211822400"
+        },
+        {
+          "cancelled": false,
+          "finished": 1792584496,
+          "job": "119211821966",
+          "name": "integration-tests (macos-latest)",
+          "started": 1792584421,
+          "state": "success",
+          "url": "https://github.com/cli/cli/actions/runs/39597044349/job/119211821966"
+        },
+        {
+          "cancelled": false,
+          "finished": 1792584524,
+          "job": "119211821944",
+          "name": "integration-tests (ubuntu-latest)",
+          "started": 1792584421,
+          "state": "success",
+          "url": "https://github.com/cli/cli/actions/runs/39597044349/job/119211821944"
+        },
+        {
+          "cancelled": false,
+          "finished": 1792584537,
+          "job": "119211821918",
+          "name": "integration-tests (windows-latest)",
+          "started": 1792584421,
+          "state": "success",
+          "url": "https://github.com/cli/cli/actions/runs/39597044349/job/119211821918"
+        },
+        {
+          "cancelled": false,
+          "finished": 1792584796,
+          "job": "119211821859",
+          "name": "build (macos-latest)",
+          "started": 1792584421,
+          "state": "success",
+          "url": "https://github.com/cli/cli/actions/runs/39597044349/job/119211821859"
+        },
+        {
+          "cancelled": false,
+          "finished": 1792585058,
+          "job": "119211821830",
+          "name": "build (windows-latest)",
+          "started": 1792584421,
+          "state": "success",
+          "url": "https://github.com/cli/cli/actions/runs/39597044349/job/119211821830"
+        },
+        {
+          "cancelled": false,
+          "finished": 1792584729,
+          "job": "119211821510",
+          "name": "build (ubuntu-latest)",
+          "started": 1792584420,
+          "state": "success",
+          "url": "https://github.com/cli/cli/actions/runs/39597044349/job/119211821510"
+        }
+      ]
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/cli/cli/actions/jobs/119211823435/logs"
+      }
+    ],
+    "error": null,
+    "method": "forge/jobLog",
+    "result": {
+      "value": "﻿2026-10-21T12:07:02.2821896Z Current runner version: '2.338.0'\n2026-10-21T12:07:02.2857418Z ##[group]Runner Image Provisioner\n2026-10-21T12:07:02.2858918Z Hosted Compute Agent\n2026-10-21T12:07:02.2859899Z Version: 20261012.601\n2026-10-21T12:07:02.2861394Z Commit: f3dc54e1fb89da6852db922499a0233137369e1d\n2026-10-21T12:07:02.2862623Z Build Date: 2026-10-12T17:48:21Z\n2026-10-21T12:07:02.2863835Z Worker ID: {6a8963a1-1d55-40f1-86ca-22e7c837e1e1}\n2026-10-21T12:07:02.2865077Z Region: eastus\n2026-10-21T12:07:02.2865988Z Cloud: Azure\n2026-10-21T12:07:02.2867005Z ##[endgroup]\n2026-10-21T12:07:02.2869139Z ##[group]Operating System\n2026-10-21T12:07:02.2870402Z Ubuntu\n2026-10-21T12:07:02.2871555Z 24.04.5\n2026-10-21T12:07:02.2872336Z LTS\n2026-10-21T12:07:02.2873332Z ##[endgroup]\n2026-10-21T12:07:02.2874244Z ##[group]Runner Image\n2026-10-21T12:07:02.2875276Z Image: ubuntu-24.04\n2026-10-21T12:07:02.2876336Z Version: 20261012.334.1\n2026-10-21T12:07:02.2878496Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261012.334/images/ubuntu/Ubuntu2404-Readme.md\n2026-10-21T12:07:02.2881487Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261012.334\n2026-10-21T12:07:02.2883381Z ##[endgroup]\n2026-10-21T12:07:02.2885616Z ##[group]GITHUB_TOKEN Permissions\n2026-10-21T12:07:02.2888564Z Actions: read\n2026-10-21T12:07:02.2889490Z Contents: read\n2026-10-21T12:07:02.2890900Z Metadata: read\n2026-10-21T12:07:02.2891899Z SecurityEvents: write\n2026-10-21T12:07:02.2892824Z ##[endgroup]\n2026-10-21T12:07:02.2895898Z Secret source: Actions\n2026-10-21T12:07:02.2897432Z Cache mode: write\n2026-10-21T12:07:02.2899237Z Prepare workflow directory\n2026-10-21T12:07:02.3386767Z Prepare all required actions\n2026-10-21T12:07:02.3458460Z Getting action download info\n2026-10-21T12:07:02.5546510Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)\n2026-10-21T12:07:02.6580755Z Download action repository 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e' (SHA:b7ad1dad31e06c5925ef5d2fc7ad053ef454303e)\n2026-10-21T12:07:02.8324691Z Download action repository 'github/codeql-action@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee' (SHA:6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee)\n2026-10-21T12:07:03.1728262Z Complete job name: CodeQL-Build (actions, none, security-and-quality)\n2026-10-21T12:07:03.2620996Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n2026-10-21T12:07:03.2622242Z with:\n2026-10-21T12:07:03.2622725Z   repository: cli/cli\n2026-10-21T12:07:03.2627066Z   token: ***\n"
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/cli/cli/commits/6ec1ba54542baca6cc5932582634104c83f36a28/check-runs?per_page=100"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/cli/cli/commits/6ec1ba54542baca6cc5932582634104c83f36a28/status?per_page=100"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/cli/cli/pulls/14768"
+      }
+    ],
+    "error": null,
+    "method": "forge/rerunFailed",
+    "result": {
+      "value": 0
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/cli/cli/commits/trunk/check-runs?per_page=100"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/cli/cli/commits/trunk/status?per_page=100"
+      }
+    ],
+    "error": null,
+    "method": "forge/branchChecks",
+    "result": {
+      "value": [
+        {
+          "cancelled": false,
+          "finished": 1792584460,
+          "job": null,
+          "name": "CodeQL",
+          "started": 1792584458,
+          "state": "success",
+          "url": "https://github.com/cli/cli/runs/119212113913"
+        },
+        {
+          "cancelled": false,
+          "finished": 1792584466,
+          "job": "119211823435",
+          "name": "CodeQL-Build (actions, none, security-and-quality)",
+          "started": 1792584421,
+          "state": "success",
+          "url": "https://github.com/cli/cli/actions/runs/39597044573/job/119211823435"
+        },
+        {
+          "cancelled": false,
+          "finished": 1792584543,
+          "job": "119211822967",
+          "name": "CodeQL-Build (go, manual, ./.github/codeql/codeql-config.yml)",
+          "started": 1792584421,
+          "state": "success",
+          "url": "https://github.com/cli/cli/actions/runs/39597044573/job/119211822967"
+        },
+        {
+          "cancelled": false,
+          "finished": 1792584442,
+          "job": "119211822682",
+          "name": "govulncheck",
+          "started": 1792584421,
+          "state": "success",
+          "url": "https://github.com/cli/cli/actions/runs/39597044372/job/119211822682"
+        },
+        {
+          "cancelled": false,
+          "finished": 1792584571,
+          "job": "119211822400",
+          "name": "lint",
+          "started": 1792584421,
+          "state": "success",
+          "url": "https://github.com/cli/cli/actions/runs/39597044372/job/119211822400"
+        },
+        {
+          "cancelled": false,
+          "finished": 1792584496,
+          "job": "119211821966",
+          "name": "integration-tests (macos-latest)",
+          "started": 1792584421,
+          "state": "success",
+          "url": "https://github.com/cli/cli/actions/runs/39597044349/job/119211821966"
+        },
+        {
+          "cancelled": false,
+          "finished": 1792584524,
+          "job": "119211821944",
+          "name": "integration-tests (ubuntu-latest)",
+          "started": 1792584421,
+          "state": "success",
+          "url": "https://github.com/cli/cli/actions/runs/39597044349/job/119211821944"
+        },
+        {
+          "cancelled": false,
+          "finished": 1792584537,
+          "job": "119211821918",
+          "name": "integration-tests (windows-latest)",
+          "started": 1792584421,
+          "state": "success",
+          "url": "https://github.com/cli/cli/actions/runs/39597044349/job/119211821918"
+        },
+        {
+          "cancelled": false,
+          "finished": 1792584796,
+          "job": "119211821859",
+          "name": "build (macos-latest)",
+          "started": 1792584421,
+          "state": "success",
+          "url": "https://github.com/cli/cli/actions/runs/39597044349/job/119211821859"
+        },
+        {
+          "cancelled": false,
+          "finished": 1792585058,
+          "job": "119211821830",
+          "name": "build (windows-latest)",
+          "started": 1792584421,
+          "state": "success",
+          "url": "https://github.com/cli/cli/actions/runs/39597044349/job/119211821830"
+        },
+        {
+          "cancelled": false,
+          "finished": 1792584729,
+          "job": "119211821510",
+          "name": "build (ubuntu-latest)",
+          "started": 1792584420,
+          "state": "success",
+          "url": "https://github.com/cli/cli/actions/runs/39597044349/job/119211821510"
+        }
+      ]
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/cli/cli/commits/trunk/check-runs?per_page=100"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/cli/cli/commits/trunk/status?per_page=100"
+      }
+    ],
+    "error": null,
+    "method": "forge/rerunFailedOfBranch",
+    "result": {
+      "value": 0
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/cli/cli/pulls/14768/reviews?per_page=100"
+      }
+    ],
+    "error": null,
+    "method": "forge/reviews",
+    "result": {
+      "value": [
+        {
+          "author": "copilot-pull-request-reviewer[bot]",
+          "body": "<!-- ccr-overview-v2 -->\n\n### 🔵 Needs a closer look\n\nThe authentication dependency upgrade needs regression-test validation and human review before approval.\n\n<details open>\n<summary><strong>1 open issue</strong></summary>\n\n- <picture><source media=\"(prefers-color-scheme: dark)\" srcset=\"https://github.githubassets.com/static/images/icons/copilot-code-review/low-v2-dark.svg\"><source media=\"(prefer",
+          "created": 1792576484,
+          "state": "commented"
+        },
+        {
+          "author": "williammartin",
+          "body": "",
+          "created": 1792576582,
+          "state": "approved"
+        }
+      ]
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/cli/cli/issues/14768/comments?per_page=100"
+      },
+      {
+        "body": "{\"operationName\":\"Threads\",\"query\":\"query Threads($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { reviewThreads(first: 100) { nodes { isResolved path line comments(first: 50) { nodes { databaseId author { login } body createdAt diffHunk } } } } } } }\",\"variables\":{\"name\":\"cli\",\"number\":14768,\"owner\":\"cli\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      }
+    ],
+    "error": null,
+    "method": "forge/comments",
+    "result": {
+      "value": [
+        {
+          "author": "copilot-pull-request-reviewer",
+          "body": "💭 Commentary: Separate the status layout fix from the OAuth upgrade\n\nOptional: move the column-width correction and its status-test updates into a separate PR. They are independent of token refreshing, and splitting them would allow separate review, backporting, and rollback. This follows the scope guidance in .github/skills/code-review/SKILL.md.",
+          "id": "4335329893",
+          "line": 679,
+          "path": "pkg/cmd/status/status.go",
+          "resolved": false
+        }
+      ]
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"body\":\"Fait.\\n\\n— Escouade\"}",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "POST",
+        "target": "/repos/cli/cli/issues/14768/comments"
+      }
+    ],
+    "error": null,
+    "method": "forge/comment",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"body\":\"Bien vu\",\"comments\":[{\"body\":\"Ici\",\"line\":3,\"path\":\"src/main.rs\",\"side\":\"RIGHT\"}],\"event\":\"APPROVE\"}",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "POST",
+        "target": "/repos/cli/cli/pulls/14768/reviews"
+      }
+    ],
+    "error": null,
+    "method": "forge/review",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"body\":\"Oui\"}",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "POST",
+        "target": "/repos/cli/cli/pulls/14768/comments/4335329893/replies"
+      }
+    ],
+    "error": null,
+    "method": "forge/reply",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [],
+    "error": {
+      "code": -32601,
+      "message": "Cet hébergeur ne sait pas faire : resolve"
+    },
+    "method": "forge/resolve",
+    "result": null
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/cli/cli/deployments/7229755238/statuses?per_page=1"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/cli/cli/deployments/7229954119/statuses?per_page=1"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/cli/cli/deployments?ref=trunk&per_page=10"
+      }
+    ],
+    "error": {
+      "code": -32404,
+      "message": "GitHub : introuvable (404) — Not Found"
+    },
+    "method": "forge/deployments",
+    "result": null
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/cli/cli/deployments/7229954119/statuses?per_page=1"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/cli/cli/deployments?per_page=30"
+      }
+    ],
+    "error": null,
+    "method": "forge/environments",
+    "result": {
+      "value": [
+        {
+          "author": "babakks",
+          "created": 1792596491,
+          "environment": "production",
+          "log": "https://github.com/cli/cli/actions/runs/39624591320/job/119311177697",
+          "sha": "7948e8056e45ac3c729b829e0eafe2d0797a95c6",
+          "state": "success",
+          "url": null
+        }
+      ]
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"base\":\"main\",\"body\":\"Son texte\\n\\nCloses #9\",\"draft\":false,\"head\":\"trunk\",\"title\":\"Une PR\"}",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "POST",
+        "target": "/repos/cli/cli/pulls"
+      },
+      {
+        "body": "{\"labels\":[\"bug\"]}",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "POST",
+        "target": "/repos/cli/cli/issues/14768/labels"
+      },
+      {
+        "body": "{\"reviewers\":[\"bob\"]}",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "POST",
+        "target": "/repos/cli/cli/pulls/14768/requested_reviewers"
+      }
+    ],
+    "error": null,
+    "method": "forge/createPr",
+    "result": {
+      "value": {
+        "approvals": 0,
+        "author": "babakks",
+        "autoMerge": false,
+        "base": "trunk",
+        "changesRequested": false,
+        "checks": null,
+        "created": 1792514441,
+        "draft": false,
+        "fork": false,
+        "head": "babakks/refresh-token-bump-deps",
+        "mergeCommit": "99750e1576b40a29afc3cb9e9737eef14fa2bcda",
+        "mergeable": null,
+        "number": 14768,
+        "openThreads": 0,
+        "state": "merged",
+        "title": "Refreshable tokens: bump cli/oauth to v1.3.0 and fix `gh status` column width",
+        "url": "https://github.com/cli/cli/pull/14768"
+      }
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"merge_method\":\"squash\"}",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "PUT",
+        "target": "/repos/cli/cli/pulls/14768/merge"
+      }
+    ],
+    "error": null,
+    "method": "forge/merge",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"operationName\":\"EnableAutoMerge\",\"query\":\"mutation EnableAutoMerge($id: ID!, $method: PullRequestMergeMethod!) { enablePullRequestAutoMerge(input: {pullRequestId: $id, mergeMethod: $method}) { pullRequest { number autoMergeRequest { enabledAt } } } }\",\"variables\":{\"id\":\"PR_1\",\"method\":\"SQUASH\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      },
+      {
+        "body": "{\"operationName\":\"PullRequestId\",\"query\":\"query PullRequestId($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { id } } }\",\"variables\":{\"name\":\"cli\",\"number\":14768,\"owner\":\"cli\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      }
+    ],
+    "error": null,
+    "method": "forge/autoMerge",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [],
+    "error": {
+      "code": -32601,
+      "message": "no method forge/nothing"
+    },
+    "method": "forge/nothing",
+    "result": null
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"operationName\":\"Pulls\",\"query\":\"query Pulls($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { p14768: pullRequest(number: 14768) { number url title state isDraft headRefName baseRefName mergeable author { login } createdAt isCrossRepository headRepository { nameWithOwner } mergeCommit { oid } autoMergeRequest { enabledAt } latestOpinionatedReviews(first: 50) { nodes { state } } reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } } } } reviewThreads(first: 100) { nodes { isResolved } } commits(last: 1) { nodes { commit { statusCheckRollup { state } } } } }  } }\",\"variables\":{\"name\":\"cli\",\"owner\":\"cli\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      }
+    ],
+    "error": null,
+    "method": "forge/pullRequest",
+    "result": {
+      "value": {
+        "approvals": 1,
+        "autoMerge": false,
+        "base": "trunk",
+        "changesRequested": false,
+        "checks": "success",
+        "draft": false,
+        "fork": false,
+        "head": "babakks/refresh-token-bump-deps",
+        "mergeable": null,
+        "number": 14768,
+        "openThreads": 1,
+        "state": "merged",
+        "title": "Refreshable tokens: bump cli/oauth to v1.3.0 and fix `gh status` column width",
+        "url": "https://github.com/cli/cli/pull/14768"
+      }
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"body\":\"Déplacé\"}",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "POST",
+        "target": "/moved-comment"
+      },
+      {
+        "body": "{\"body\":\"Déplacé\"}",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "POST",
+        "target": "/repos/cli/cli/issues/14768/comments"
+      }
+    ],
+    "error": null,
+    "method": "forge/comment",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"operationName\":\"Pulls\",\"query\":\"query Pulls($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { p14768: pullRequest(number: 14768) { number url title state isDraft headRefName baseRefName mergeable author { login } createdAt isCrossRepository headRepository { nameWithOwner } mergeCommit { oid } autoMergeRequest { enabledAt } latestOpinionatedReviews(first: 50) { nodes { state } } reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } } } } reviewThreads(first: 100) { nodes { isResolved } } commits(last: 1) { nodes { commit { statusCheckRollup { state } } } } }  } }\",\"variables\":{\"name\":\"cli\",\"owner\":\"cli\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      }
+    ],
+    "error": null,
+    "method": "forge/pullRequest",
+    "result": {
+      "value": {
+        "approvals": 1,
+        "autoMerge": false,
+        "base": "trunk",
+        "changesRequested": false,
+        "checks": "success",
+        "draft": false,
+        "fork": false,
+        "head": "babakks/refresh-token-bump-deps",
+        "mergeable": null,
+        "number": 14768,
+        "openThreads": 1,
+        "state": "merged",
+        "title": "Refreshable tokens: bump cli/oauth to v1.3.0 and fix `gh status` column width",
+        "url": "https://github.com/cli/cli/pull/14768"
+      }
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/user"
+      }
+    ],
+    "error": {
+      "code": -32401,
+      "message": "GitHub refuse ces identifiants (401) — Bad credentials"
+    },
+    "method": "account/me",
+    "result": null
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/user"
+      },
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/user"
+      }
+    ],
+    "error": {
+      "code": -32429,
+      "message": "GitHub limite les requêtes (429) : réessaie dans un moment"
+    },
+    "method": "account/me",
+    "result": null
+  }
+]

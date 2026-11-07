@@ -4,7 +4,7 @@ Cette page explique comment voir ce que tes agents ont modifié, lire un diff, c
 
 ## Le panneau des fichiers non commités
 
-Le panneau s’ouvre à droite de la conversation d’un agent. Dans la disposition classique, le compteur « Fichiers » de l’en-tête de la conversation l’ouvre et le ferme, comme `Ctrl+Maj+B` (`⇧⌘B` sous macOS) ; la croix du panneau le referme. Il a deux onglets : « Non commités », suivi du nombre de fichiers, et « Historique », décrit [plus bas](#historique-et-git-graph).
+Le panneau s’ouvre à droite de la conversation d’un agent. Dans la disposition classique, le compteur « Fichiers » de l’en-tête de la conversation l’ouvre et le ferme, comme `Ctrl+Maj+B` (`⇧⌘B` sous macOS) ; la croix du panneau le referme. Ses onglets : « Non commités », suivi du nombre de fichiers, « Historique », décrit [plus bas](#historique-et-git-graph), « Workflow », et « PR et CI » : la PR de la branche, sa CI, ses revues et ses déploiements (voir [l’interface](interface#pr-et-ci)).
 
 Sous les onglets, deux boutons choisissent ce que la liste montre :
 

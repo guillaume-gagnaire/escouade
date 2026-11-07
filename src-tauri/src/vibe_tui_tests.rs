@@ -21,7 +21,7 @@ async fn vibe_agent(h: &Harness) -> (String, PathBuf) {
         s.accounts.push(Account {
             id: "principal-vibe".into(),
             name: "Principal".into(),
-            engine: EngineId::Vibe,
+            engine: EngineId::VIBE,
             claude_path: fake_vibe(),
             active: true,
             ..Default::default()
@@ -32,7 +32,7 @@ async fn vibe_agent(h: &Harness) -> (String, PathBuf) {
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Vibe),
+                engine: Some(EngineId::VIBE),
                 model: Some("mistral-medium-3.5".into()),
                 mode: Some("default".into()),
                 ..Default::default()

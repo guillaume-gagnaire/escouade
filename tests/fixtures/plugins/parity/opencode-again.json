@@ -1,0 +1,17 @@
+[
+  {
+    "op": "context",
+    "window": 32768
+  },
+  {
+    "error": null,
+    "interrupted": false,
+    "op": "turn",
+    "usage": {
+      "cache": 0,
+      "cost": 0.0,
+      "input": 0,
+      "output": 0
+    }
+  }
+]

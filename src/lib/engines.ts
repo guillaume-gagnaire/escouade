@@ -6,7 +6,7 @@ import { intlLocale } from './i18n/locale.svelte';
 import { api } from './ipc';
 import { app } from './state.svelte';
 import { modelFamily, modelVersion, supportsAuto, toldAuto } from './models';
-import type { EngineCaps, EngineDecl, EngineId, ToldModel } from './types';
+import type { EngineCaps, EngineDecl, EngineId, KnownEngineId, ToldModel } from './types';
 
 /** The flags of `EngineCaps` that say yes or no. */
 type Flag = { [K in keyof EngineCaps]: EngineCaps[K] extends boolean ? K : never }[keyof EngineCaps];
@@ -97,8 +97,8 @@ export function engineOptions(current?: EngineId | null): { value: EngineId; lab
   return [...list, ...kept].map((e) => ({ value: e.id, label: e.name }));
 }
 
-/** The usual names of the harnesses, for one this version does not write yet (an account of it saved by a later one). */
-const NAMES: Record<EngineId, string> = {
+/** The usual names of the harnesses, before the backend declared them (the window's first frames). */
+const NAMES: Record<KnownEngineId, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
   copilot: 'Copilot CLI',
@@ -109,9 +109,14 @@ const NAMES: Record<EngineId, string> = {
   gemini: 'Gemini CLI',
 };
 
-/** The name of a harness as the interface says it: as the backend declares it, else its usual name, else its id. */
+/**
+ * The name of a harness as the interface says it: as the backend declares it, else its usual name; one neither knows is
+ * « harness absent » (INT-3: a later version's, a plugin's gone), its agents kept and none of its functions shown.
+ */
 export function engineName(engine: EngineId | null | undefined): string {
-  return engineOf(engine)?.name ?? (engine ? (NAMES[engine] ?? engine) : '');
+  const declared = engineOf(engine)?.name;
+  if (declared || !engine) return declared ?? '';
+  return NAMES[engine as KnownEngineId] ?? t('settings.claude.states.missing', { id: engine });
 }
 
 /**

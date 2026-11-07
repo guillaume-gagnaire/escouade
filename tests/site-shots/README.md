@@ -1,10 +1,10 @@
 # Les captures du site
 
-Les 11 images du site (`website/public/images/*.jpg`, et `images/en/` pour l'anglais) sont prises dans la vraie app 2.0, en une commande :
+Les 15 images du site (`website/public/images/*.jpg`, et `images/en/` pour l'anglais) sont prises dans la vraie app 2.0, en une commande :
 
 ```sh
 npx tauri build --debug --no-bundle   # l'app de debug, comme pour les e2e
-npm run site-shots                    # les 22 images, en français puis en anglais
+npm run site-shots                    # les 30 images, en français puis en anglais
 ```
 
 À relancer après un changement d'interface : les images changent, `git status` les montre.
@@ -19,6 +19,7 @@ npm run site-shots                    # les 22 images, en français puis en angl
 ## Options
 
 - `npm run site-shots -- --project=fr` (ou `en`) : une langue seulement.
+- `npm run site-shots -- --grep "code hosts"` : les 4 images des hébergeurs seulement (`prs`, `pr-review`, `board-review`, `environments`), contre le faux GitHub de `tests/fixtures/fake-trackers.mjs`, sur une démo à part : un ticket « En revue » et deux tickets mergés aux commits des environnements.
 - `ESCOUADE_SHOTS_OUT=C:\tmp\shots` : les images ailleurs que dans le site, pour les regarder d'abord ; en cas d'échec, `test-results/…/failed-<langue>.png` montre la fenêtre.
 - `ESCOUADE_E2E_ROOT` : un autre dossier de démo, à un chemin qui ne dit rien de la machine.
 

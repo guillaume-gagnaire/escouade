@@ -1,0 +1,22 @@
+{
+  "id": "dev.test.reactor",
+  "name": "Reactor",
+  "version": "1.0.0",
+  "description": {
+    "en": "A plugin in Rust compiled to wasm32-wasip1, played by the app's host (ESC-331).",
+    "fr": "Un plugin en Rust compilé en wasm32-wasip1, joué par l'hôte de l'app (ESC-331)."
+  },
+  "license": "MIT",
+  "escouade": { "api": "1", "min": "2.1.0" },
+  "run": { "wasm": "Cargo.toml" },
+  "activation": ["event:ticket.column"],
+  "permissions": {
+    "events": ["ticket.column"],
+    "network": ["hooks.example.dev"],
+    "commands": ["git --version", "git rev-parse *", "git cat-file --batch"],
+    "files": [
+      { "root": "agent", "access": "write" },
+      { "root": "agentHome", "access": "read" }
+    ]
+  }
+}

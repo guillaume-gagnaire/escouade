@@ -483,7 +483,7 @@ pub(crate) async fn quit_interface(pty: &PtyManager, term: &str, key: &'static [
 /// Escouade's server kept out of it when its tools are refused (`access`).
 #[cfg(test)]
 pub fn tui_settings(port: u16, engine: &dyn Engine, access: &Escouade) -> Value {
-    debug_assert_eq!(engine.id(), EngineId::Claude);
+    debug_assert_eq!(engine.id(), EngineId::CLAUDE);
     claude_terminal::settings(&hook_url(port), TOKEN_VAR, access)
 }
 
@@ -1410,7 +1410,7 @@ impl<R: Runtime> Core<R> {
         self.copy_first(view, h, id, &program, &settings, &account)
             .await;
         // A model its Claude account does not list: the default one, said (ESC-124).
-        if harness.id() == crate::model::EngineId::Claude {
+        if harness.models_by_alias() {
             self.fit_claude_model(h);
         }
         let started = now_ms();
@@ -2664,14 +2664,9 @@ async fn answer<R: Runtime>(
     if let (Some(event), Some(map)) = (event, hook.as_object_mut()) {
         map.insert(EVENT_KEY.into(), Value::String(event));
     }
-    // A search for a symbol is answered with a line that points to the code index: context only,
-    // never a decision (`codeindex::hint`).
-    let advice = core
-        .index_hint(&agent, &hook)
-        .map_or_else(|| "{}".to_string(), |v| v.to_string());
     // Off the connection: the interface does not wait for what Escouade makes of it.
     tauri::async_runtime::spawn_blocking(move || core.on_tui_hook(&agent, hook));
-    reply(StatusCode::OK, &advice)
+    reply(StatusCode::OK, "{}")
 }
 
 #[cfg(test)]

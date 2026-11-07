@@ -1,0 +1,21 @@
+[package]
+name = "escouade-plugin-mistral"
+version = "2.2.0"
+description = "Le plugin Mistral livré avec Escouade : Mistral Vibe comme harness, par ACP, à côté du service de voix"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+
+# A module, compiled by `escouade-plugin build` (docs/PLUGINS.md §8.5): its two sides in one instance. The voice is the crate
+# `escouade-voice`, as for the other voice services (INT-13); the harness is the ACP client of `escouade-acp` (PLG-6) with its
+# extension `vibe`, served as the generic ACP plugin serves the harnesses a manifest describes. What is not `voice/*` goes
+# to it.
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+escouade-acp = "0.1.2"
+escouade-plugin-protocol = "0.1.1"
+escouade-voice = "0.1.0"
+serde_json = "1"

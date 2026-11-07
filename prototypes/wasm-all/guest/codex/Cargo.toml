@@ -1,0 +1,19 @@
+[package]
+name = "codex"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# plugins/codex as a module: `generated/` is its source with the few lines a module changes
+# (`node prepare.mjs`, which prints them).
+[lib]
+path = "generated/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+escouade-acp = { path = "../../../../crates/escouade-acp" }
+escouade-plugin-protocol = { path = "../../../../crates/escouade-plugin-protocol" }
+escouade-turn = { path = "../escouade-turn" }
+dirs = "6"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

@@ -1,13 +1,19 @@
 // A fake store and a fake GitHub for the local review (scripts/plugin-review/, docs/STORE.md §4.2): the app's API of
 // the store (catalog.json, version.json, the archives and the binaries, as STORE-6 serves them) and the tags of
-// GitHub's API, on one port. It holds PLG-10's examples (plugin-examples/, a 1.0.0 verified and a
-// 1.1.0 of Slack that asks for more), a plugin booby-trapped on purpose, and a version whose archive was changed after
-// its fingerprint. Run alone (`node tests/fake/review-store.mjs`, FAKE_REVIEW_STORE_PORT), it serves them for a trial
+// GitHub's API, on one port. It holds the files of Escouade's own plugins (plugins/<id>/ of its repository, ESC-314):
+// dev.escouade.discord from its folder of the app's repository, as the chief reviews it, and the others under a third
+// party's id at the root of a repository of their own (a 1.0.0 verified and a 1.1.0 of Slack that asks for more), a plugin booby-trapped on purpose, and a version whose archive was changed after
+// its fingerprint; and a `run.js` plugin (team-rules' bundle) with the module the store compiled of it (ESC-324): the
+// one tests/fake/fake-escouade-plugin.mjs makes again (1.0.0), another one (1.0.1), one of another compiler (1.0.2); and
+// the same three of a `run.wasm` plugin (ESC-337), with a 1.1.0 whose `Cargo.lock` grows, a 1.2.0 full of leads, and one
+// of the first hand. Run alone (`node tests/fake/review-store.mjs`, FAKE_REVIEW_STORE_PORT), it serves them for a trial
 // of `npm run plugin-review` (ESCOUADE_STORE_URL, ESCOUADE_REVIEW_GITHUB_API). Nothing here is ever run: bytes.
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { join, relative } from 'node:path';
+import { tmpdir } from 'node:os';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MIT, tarball } from './plugins.mjs';
 
@@ -23,10 +29,13 @@ const canonical = (v) =>
           .join(',')}}`
       : JSON.stringify(v);
 
-const EXAMPLES = fileURLToPath(new URL('../../../plugin-examples/', import.meta.url));
+const EXAMPLES = fileURLToPath(new URL('../../../plugins/', import.meta.url));
 
-/** The files of an example of PLG-10, as its repository holds them (without what npm installs or packs). */
-export function exampleFiles(name) {
+/**
+ * The files of a plugin of plugins/<name>/, as its repository holds them (without what npm installs or packs); `over`
+ * changes its manifest: a third party's id in place of dev.escouade.*, which only the app's repository takes.
+ */
+export function exampleFiles(name, over = {}) {
   const root = join(EXAMPLES, name);
   const out = { 'README.md': `# ${name}\n\nUn exemple de plugin.\n`, LICENSE: MIT };
   const walk = (dir) => {
@@ -38,6 +47,24 @@ export function exampleFiles(name) {
     }
   };
   walk(root);
+  // slack and team-rules are `run.js` plugins now (2.0.0, ESC-326); these fixtures stand for the process plugins of the
+  // 1.x era (a launch script, an app of 2.1), which the store and the app still serve and judge.
+  if (name === 'slack' || name === 'team-rules') {
+    const m = JSON.parse(String(out['escouade-plugin.json']));
+    m.run = { command: name, windows: `${name}.cmd` };
+    m.escouade = { ...m.escouade, min: '2.1.0' };
+    out['escouade-plugin.json'] = Buffer.from(JSON.stringify(m, null, 2));
+    out[name] = Buffer.from(`#!/bin/sh
+exec node "$(dirname "$0")/dist/plugin.mjs" "$@"
+`);
+    out[`${name}.cmd`] = Buffer.from(`@echo off
+node "%~dp0dist\\plugin.mjs" %*
+`);
+  }
+  if (Object.keys(over).length) {
+    const m = { ...JSON.parse(String(out['escouade-plugin.json'])), ...over };
+    out['escouade-plugin.json'] = Buffer.from(JSON.stringify(m, null, 2));
+  }
   return out;
 }
 
@@ -92,18 +119,125 @@ export const TRAPPED = {
 };
 const TRAPPED_RAW = { '../../escape.txt': 'out of the folder', '/etc/evil': 'absolute' };
 
+/** A third party's manifest for a copy of plugins/<name>/: its id of old, no repository of the app's. */
+const THIRD = (name) => ({ id: `dev.exemple.${name}`, repository: undefined });
+
 const COMMIT = (n) => createHash('sha1').update(String(n)).digest('hex');
+
+/** What tests/fake/fake-escouade-plugin.mjs compiles a bundle to, and says compiled it. */
+export const FAKE_COMPILER = { javy: '9.1.0', engine: 'e'.repeat(64), prelude: '2.2.0' };
+export const fakeModule = (bundle) => Buffer.concat([Buffer.from([0, 0x61, 0x73, 0x6d, 1, 0, 0, 0]), Buffer.from(bundle)]);
+
+/**
+ * FAKE_REVIEW_ESCOUADE_PLUGIN names a real `escouade-plugin` (a trial by hand of the review, ESC-324): the modules of
+ * the `run.js` plugin are then compiled by it, as the store compiles them, with the compiler it says. FAKE_REVIEW_RUST_PLUGIN
+ * does the same for the `run.wasm` plugins (ESC-337), their sources left as the fixture's: the rest stays fake.
+ */
+const realCompiler = process.env.FAKE_REVIEW_ESCOUADE_PLUGIN || null;
+const realRust = process.env.FAKE_REVIEW_RUST_PLUGIN || null;
+
+function realBuild(cli, files) {
+  const dir = mkdtempSync(join(tmpdir(), 'fake-review-store-'));
+  try {
+    for (const [path, bytes] of Object.entries(files)) {
+      mkdirSync(dirname(join(dir, 'plugin', path)), { recursive: true });
+      writeFileSync(join(dir, 'plugin', path), bytes);
+    }
+    const r = spawnSync(cli, ['build', join(dir, 'plugin'), '--out', join(dir, 'out'), '--json', '--lang', 'en'], { encoding: 'utf8' });
+    if (r.status !== 0) throw new Error(`${cli} build: ${r.stderr}`);
+    const said = JSON.parse(r.stdout);
+    return { bytes: readFileSync(said.file), compiler: said.compiler };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** team-rules' files on `run.js`, under a third party's id, at `version`. */
+function runJs(version) {
+  const f = exampleFiles('team-rules', { ...THIRD('team-rules'), id: 'dev.exemple.rules-js', version, run: { js: 'dist/plugin.mjs' } });
+  for (const k of Object.keys(f)) if (/^(?:team-rules(?:\.cmd)?|bin\/)/.test(k)) delete f[k];
+  return f;
+}
+
+const RUST_FIXTURE = fileURLToPath(new URL('../../../tests/fixtures/plugins/rust-build/', import.meta.url));
+/** The store's image holds store/ alone: without the repository's fixture, the fake store serves no `run.wasm` plugin. */
+export const hasRustFixture = existsSync(RUST_FIXTURE);
+
+/** The files of tests/fixtures/plugins/rust-build, the `run.wasm` of the tests, under `id` at `version`. */
+function runWasm(id, version, more = {}) {
+  const out = { 'README.md': '# Rust build\n', LICENSE: MIT };
+  const walk = (dir, rest = '') => {
+    for (const name of readdirSync(dir)) {
+      const at = join(dir, name);
+      if (statSync(at).isDirectory()) walk(at, `${rest}${name}/`);
+      else out[`${rest}${name}`] = readFileSync(at).toString('utf8').replace(/\r\n/g, '\n');
+    }
+  };
+  walk(RUST_FIXTURE);
+  const m = JSON.parse(out['escouade-plugin.json']);
+  out['escouade-plugin.json'] = JSON.stringify({ ...m, id, version }, null, 2);
+  return { ...out, ...more };
+}
+
+/** A `Cargo.lock` that has one package more than the fixture's. */
+const grownLock = () =>
+  `${readFileSync(join(RUST_FIXTURE, 'Cargo.lock'), 'utf8').replace(/\r\n/g, '\n')}
+[[package]]
+name = "left-pad"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "${'a'.repeat(64)}"
+`;
+
+/** A source and a lock that the leads of a `run.wasm` must all point at. */
+const rustTraps = () => ({
+  'native/build.rs': 'fn main() {}\n',
+  'src/trap.rs': [
+    '// A comment that says unsafe does not count.',
+    'pub static KEY: &[u8] = include_bytes!("/home/user/.ssh/id_ed25519");',
+    'pub static UP: &str = include_str!("../../secret.txt");',
+    'pub static NEAR: &str = include_str!("near.txt");',
+    'pub static MADE: &str = include_str!(concat!("/ho", "me/x"));',
+    'pub fn poke(p: *mut u8) { unsafe { *p = 1 } }',
+    '',
+  ].join('\n'),
+  'src/near.txt': 'beside the source\n',
+  'Cargo.lock': `${grownLock()}
+[[package]]
+name = "helper"
+version = "0.1.0"
+source = "git+https://github.com/q7x/helper#abcdef"
+`,
+});
+
+/** What tests/fake/fake-escouade-plugin.mjs compiles a `run.wasm` to: its folder's files in order, each after its path. */
+const fakeRustModule = (files) => {
+  const order = (a, b) => {
+    const [x, y] = [a.split('/'), b.split('/')];
+    for (let i = 0; ; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1;
+  };
+  const sources = Object.keys(files)
+    .sort(order)
+    .flatMap((f) => [Buffer.from(f), Buffer.from(files[f])]);
+  return Buffer.concat([Buffer.from([0, 0x61, 0x73, 0x6d, 1, 0, 0, 0]), ...sources]);
+};
 
 /** The versions the fake store holds, by plugin; each one's archive, version.json and binaries as the store keeps them. */
 export function buildStore() {
   const spec = [
-    { id: 'dev.exemple.slack', repo: 'escouade-dev/plugin-slack', version: '1.0.0', files: exampleFiles('slack'), verified: true },
+    {
+      id: 'dev.exemple.slack',
+      repo: 'escouade-dev/plugin-slack',
+      version: '1.0.0',
+      files: exampleFiles('slack', THIRD('slack')),
+      verified: true,
+    },
     {
       id: 'dev.exemple.slack',
       repo: 'escouade-dev/plugin-slack',
       version: '1.1.0',
       files: (() => {
-        const f = exampleFiles('slack');
+        const f = exampleFiles('slack', THIRD('slack'));
         const m = JSON.parse(f['escouade-plugin.json'].toString());
         m.version = '1.1.0';
         m.permissions.network.push('api.slack.com');
@@ -114,8 +248,68 @@ export function buildStore() {
         return f;
       })(),
     },
-    { id: 'dev.exemple.team-rules', repo: 'escouade-dev/plugin-team-rules', version: '1.0.0', files: exampleFiles('team-rules') },
-    { id: 'dev.exemple.high-contrast', repo: 'escouade-dev/plugin-high-contrast', version: '1.0.0', files: exampleFiles('high-contrast') },
+    {
+      id: 'dev.exemple.team-rules',
+      repo: 'escouade-dev/plugin-team-rules',
+      version: '1.0.0',
+      files: exampleFiles('team-rules', THIRD('team-rules')),
+    },
+    {
+      id: 'dev.exemple.high-contrast',
+      repo: 'escouade-dev/plugin-high-contrast',
+      version: '1.0.0',
+      files: exampleFiles('high-contrast', THIRD('high-contrast')),
+    },
+    // A plugin of Escouade's own hand in a folder of the app's repository, which holds several (ESC-313, ESC-314): its
+    // archive holds that folder alone.
+    {
+      id: 'dev.escouade.discord',
+      repo: 'guillaume-gagnaire/escouade',
+      path: 'plugins/discord',
+      version: '1.1.0',
+      files: exampleFiles('discord'),
+    },
+    // A version.json whose folder climbs out of the repository: the review stops before reading it.
+    {
+      id: 'io.github.q7x.climb',
+      repo: 'q7x/climb',
+      path: '../escape',
+      version: '0.0.1',
+      files: exampleFiles('high-contrast', THIRD('high-contrast')),
+    },
+    // A `run.js` plugin: its module the one the bundle compiles to, another one, one of another escouade-plugin.
+    { id: 'dev.exemple.rules-js', repo: 'escouade-dev/plugin-rules-js', version: '1.0.0', files: runJs('1.0.0'), wasm: 'same' },
+    { id: 'dev.exemple.rules-js', repo: 'escouade-dev/plugin-rules-js', version: '1.0.1', files: runJs('1.0.1'), wasm: 'other' },
+    { id: 'dev.exemple.rules-js', repo: 'escouade-dev/plugin-rules-js', version: '1.0.2', files: runJs('1.0.2'), wasm: 'old' },
+    // A `run.wasm` plugin of a third party, and one of the first hand.
+    ...(hasRustFixture
+      ? [
+          ...[
+            ['1.0.0', 'same', {}, true],
+            ['1.0.1', 'other', {}],
+            ['1.0.2', 'old', {}],
+            ['1.1.0', 'same', { 'Cargo.lock': grownLock() }],
+            ['1.2.0', 'same', rustTraps()],
+          ].map(([version, wasm, more, verified]) => ({
+            id: 'dev.exemple.rust-lines',
+            repo: 'escouade-dev/plugin-rust-lines',
+            version,
+            files: runWasm('dev.exemple.rust-lines', version, more),
+            wasm,
+            verified: !!verified,
+            clean: !Object.keys(more).length,
+          })),
+          {
+            id: 'dev.escouade.rust-first',
+            repo: 'guillaume-gagnaire/escouade',
+            path: 'plugins/rust-first',
+            version: '1.0.0',
+            files: runWasm('dev.escouade.rust-first', '1.0.0'),
+            wasm: 'same',
+            clean: true,
+          },
+        ]
+      : []),
     { id: 'io.github.q7x.slak-notify', repo: 'q7x/slak-notify', version: '0.0.1', files: TRAPPED, raw: TRAPPED_RAW, moved: true },
     {
       id: 'io.github.q7x.slak-notify',
@@ -127,6 +321,7 @@ export function buildStore() {
       binaries: { 'linux-x64': Buffer.from('\x7fELF fake binary') },
     },
   ];
+  let realModule = null;
   const files = new Map(); // path -> Buffer
   const tags = new Map(); // `${repo}@${tag}` -> commit
   const plugins = new Map();
@@ -141,18 +336,48 @@ export function buildStore() {
       binaryPaths[platform] = `${base}/binaries/${platform}`;
       files.set(binaryPaths[platform], bytes);
     }
-    const tag = `v${s.version}`;
+    let wasm = null;
+    let compiler = FAKE_COMPILER;
+    if (s.wasm) {
+      const m = JSON.parse(String(s.files['escouade-plugin.json']));
+      const rust = !!m.run.wasm;
+      if (rust) compiler = { rust: '1.98.0', target: 'wasm32-wasip1', canon: 'c'.repeat(64), lock: sha256(s.files['Cargo.lock']) };
+      let bytes;
+      if (rust && realRust && s.clean) {
+        realModule ??= realBuild(realRust, s.files);
+        ({ bytes, compiler } = realModule);
+      } else if (!rust && realCompiler)
+        ({ bytes, compiler } = realBuild(realCompiler, {
+          'escouade-plugin.json': s.files['escouade-plugin.json'],
+          [m.run.js]: s.files[m.run.js],
+        }));
+      else bytes = rust ? fakeRustModule(s.files) : fakeModule(s.files[m.run.js]);
+      wasm = s.wasm === 'other' ? Buffer.concat([bytes, Buffer.from('changed')]) : bytes;
+      if (s.wasm === 'old') compiler = rust ? { ...compiler, canon: 'd'.repeat(64) } : { ...compiler, prelude: '2.1.9' };
+      files.set(`${base}/plugin.wasm`, wasm);
+    }
+    const tag = s.path ? `${s.path}/v${s.version}` : `v${s.version}`;
     const json = canonical({
       format: 1,
       id: s.id,
       version: s.version,
       repository: `https://github.com/${s.repo}`,
+      ...(s.path ? { path: s.path } : {}),
       tag,
       commit,
       archive: { sha256: sha256(archive), size: archive.length },
       binaries,
       manifest_sha256: sha256(String(s.files['escouade-plugin.json'])),
       escouade: { api: '1', min: '2.1.0' },
+      ...(wasm
+        ? {
+            wasm: {
+              sha256: sha256(wasm),
+              size: wasm.length,
+              compiler,
+            },
+          }
+        : {}),
     });
     // A tampered version: the archive the store hands out is not the one its version.json names.
     files.set(`${base}/archive.tar.gz`, s.tampered ? tarball({ ...s.files, 'extra.js': 'evil()' }, { commit }) : archive);
@@ -187,7 +412,12 @@ export function buildStore() {
       permissions: m.permissions ?? {},
       run: !!m.run,
       contributes: Object.keys(m.contributes ?? {}),
-      files: { version_json: `${base}/version.json`, archive: `${base}/archive.tar.gz`, binaries: binaryPaths },
+      files: {
+        version_json: `${base}/version.json`,
+        archive: `${base}/archive.tar.gz`,
+        binaries: binaryPaths,
+        ...(wasm ? { wasm: `${base}/plugin.wasm` } : {}),
+      },
     });
   });
   const catalog = {
@@ -252,6 +482,9 @@ export function startReviewStore(port = 0) {
     res.writeHead(404, { 'content-type': 'application/json' });
     res.end('{"message":"Not Found"}');
   });
+  // In the tests' own process: a spawnSync (minisign) stops this server too, past the 5 s it keeps an idle socket on a
+  // loaded machine, and the next request meets a socket being closed.
+  server.keepAliveTimeout = 300_000;
   return new Promise((done) =>
     server.listen(port, '127.0.0.1', () => {
       const url = `http://127.0.0.1:${server.address().port}`;

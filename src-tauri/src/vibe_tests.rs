@@ -30,7 +30,7 @@ fn machine_account(h: &Harness) {
         s.accounts.push(Account {
             id: "principal-vibe".into(),
             name: "Principal".into(),
-            engine: EngineId::Vibe,
+            engine: EngineId::VIBE,
             claude_path: program,
             active: true,
             ..Default::default()
@@ -42,7 +42,7 @@ fn machine_account(h: &Harness) {
 async fn key_account(h: &Harness, name: &str, key: Option<&str>) -> String {
     let made = h
         .core
-        .create_account(EngineId::Vibe, name, &[], crate::accounts::ShareMode::Link)
+        .create_account(EngineId::VIBE, name, &[], crate::accounts::ShareMode::Link)
         .unwrap();
     let program = crate::engine::fake_vibe();
     h.set_settings(|s| {
@@ -61,7 +61,7 @@ async fn agent_on(h: &Harness, project: &str, account: &str) -> String {
         .create_agent_with(
             project,
             AgentOptions {
-                engine: Some(EngineId::Vibe),
+                engine: Some(EngineId::VIBE),
                 mode: Some("default".into()),
                 account: Some(account.into()),
                 ..Default::default()
@@ -340,4 +340,46 @@ async fn real_vibe_writes_a_text() {
     .unwrap();
     println!("answer in {:?}: {answer}", started.elapsed());
     assert!(!answer.trim().is_empty() && answer.len() < 200, "{answer}");
+}
+
+/// INT-10.6: Vibe's conversation goes through its plugin (`dev.escouade.mistral`). Switched off, an agent's start
+/// says so, and the agent keeps its session; on again, it talks as before.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_vibe_agent_says_its_plugin_is_off_and_talks_again_once_it_is_on() {
+    let h = harness("int10-vibe-off");
+    let (p, _) = h.project(false).await;
+    machine_account(&h);
+    let a = agent_on(&h, &p.id, "principal-vibe").await;
+    let id = crate::plugins::builtin::MISTRAL;
+    h.core.plugins.choose(id, |c| c.enabled = false).unwrap();
+    h.core.plugin_runtime.forget(id);
+    h.core.sync_harnesses();
+    assert!(crate::engine::vibe::plugged().is_none());
+    let sent = h.core.send_message(&a, "bonjour".into(), vec![]).await;
+    let said = |h: &Harness| {
+        let items = Value::Array(h.items(&a)).to_string();
+        let err = sent
+            .as_ref()
+            .err()
+            .map(|e| e.to_string())
+            .unwrap_or_default();
+        format!("{err} {items}")
+    };
+    h.wait("the plugin said off", |h| said(h).contains(id))
+        .await;
+    assert!(said(&h).contains("coupé"), "{}", said(&h));
+    h.core.plugins.choose(id, |c| c.enabled = true).unwrap();
+    h.core.sync_harnesses();
+    assert!(crate::engine::vibe::plugged().is_some());
+    let ended = |h: &Harness| {
+        texts(h, &a).iter().any(|t| t == "Vibe a reçu : bonjour") && !h.agent(&a).status.is_active()
+    };
+    if !ended(&h) {
+        h.core
+            .send_message(&a, "bonjour".into(), vec![])
+            .await
+            .unwrap();
+    }
+    h.wait("its answer", ended).await;
+    h.core.stop_for_good();
 }

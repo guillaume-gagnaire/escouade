@@ -24,7 +24,9 @@ describe('BoardTab in English', () => {
     render(BoardTab, { project: app.projects[0] });
     const actions = screen.getByRole('radiogroup', { name: 'When I approve a ticket in “To review”' });
     expect(within(actions).getByRole('radio', { name: /Merge into a branch/ })).toHaveAttribute('aria-checked', 'true');
-    expect(within(actions).getByText('Pushes ticket/<key> and opens a PR to the target branch for review.')).toBeInTheDocument();
+    expect(
+      within(actions).getByText('Pushes ticket/<key>, opens its PR to the target branch and follows it “In review” until it’s merged.'),
+    ).toBeInTheDocument();
     expect(within(actions).getByRole('radio', { name: /Leave as is/ })).toBeInTheDocument();
     expect(screen.getByText('Target branch')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Squash' })).toHaveAttribute('aria-pressed', 'true');
@@ -34,6 +36,22 @@ describe('BoardTab in English', () => {
     expect(screen.queryByText('Strategy')).not.toBeInTheDocument();
   });
 
+  it('leaves the answers under the threads off by default, and settles a conflict by a merge unless told rebase (ESC-61)', async () => {
+    render(BoardTab, { project: app.projects[0] });
+    expect(screen.queryByRole('switch', { name: 'Reply under fixed threads' })).toBeNull();
+    const actions = screen.getByRole('radiogroup', { name: 'When I approve a ticket in “To review”' });
+    await userEvent.click(within(actions).getByRole('radio', { name: /Open a pull request/ }));
+    const reply = screen.getByRole('switch', { name: 'Reply under fixed threads' });
+    expect(reply).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByText(/Escouade never resolves a thread/)).toBeInTheDocument();
+    await userEvent.click(reply);
+    expect(settingsForm.project!.board.replyThreads).toBe(true);
+    const update = screen.getByRole('group', { name: 'Branch update' });
+    expect(within(update).getByRole('button', { name: 'Merge' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(within(update).getByRole('button', { name: 'Rebase' }));
+    expect(settingsForm.project!.board.prUpdate).toBe('rebase');
+  });
+
   it('removes the worktree of a done or deleted ticket by default, and says what it keeps (ESC-143)', async () => {
     render(BoardTab, { project: app.projects[0] });
     const cleanup = screen.getByRole('switch', { name: 'Delete the worktree of a done or deleted ticket' });
@@ -41,6 +59,15 @@ describe('BoardTab in English', () => {
     expect(screen.getByText(/A worktree with uncommitted changes or commits neither merged nor pushed is kept/)).toBeInTheDocument();
     await userEvent.click(cleanup);
     expect(settingsForm.project!.board.cleanup).toBe(false);
+  });
+
+  it('leaves the pause on a red target off by default, and turns it on (ESC-63)', async () => {
+    render(BoardTab, { project: app.projects[0] });
+    const pause = screen.getByRole('switch', { name: 'Pause while the target’s CI is red' });
+    expect(pause).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByText(/The autopilot starts no ticket while the CI of the target branch fails/)).toBeInTheDocument();
+    await userEvent.click(pause);
+    expect(settingsForm.project!.board.pauseOnRedTarget).toBe(true);
   });
 
   it('writes the tests, the commit message and the conflicts', () => {

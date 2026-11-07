@@ -1,21 +1,23 @@
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { judgeAttestations } from '../../server/utils/attest';
 import {
   CHECK_KEYS,
   closeNames,
-  platformOf,
   rejectionText,
   runChecks,
   verdict,
   type CheckKey,
   type CheckResult,
-  type FetchedBinary,
   type Snapshot,
 } from '../../server/utils/checks';
+import { GithubError } from '../../server/utils/github';
+import type { Source } from '../../server/utils/source';
+import { isFirstParty } from '../../server/utils/submissions';
 import { readArchive } from '../../server/utils/tar';
 import { attestation, MIT, pluginFiles, png, tarball } from '../fake/plugins.mjs';
 
-// The ten checks (docs/STORE.md §3.3) on plugins valid and booby-trapped: each trap fails its own check, says
+// The eleven checks (docs/STORE.md §3.3) on plugins valid and booby-trapped: each trap fails its own check, says
 // where and how to fix it in both languages, and the others still say what they found.
 
 const REPO = 'sroux/escouade-ntfy';
@@ -29,8 +31,6 @@ function snapshot(files: Record<string, unknown>, over: Partial<Snapshot> = {}, 
     commit: COMMIT,
     archive: { size: gz.length, read: readArchive(gz) },
     license: 'MIT',
-    binaries: [],
-    releaseAssets: null,
     existing: null,
     taken: [],
     latest: null,
@@ -43,8 +43,49 @@ const plugin = (o: Parameters<typeof pluginFiles>[1] = {}) => pluginFiles(REPO, 
 const by = (results: CheckResult[], key: CheckKey) => results.find((r) => r.key === key)!;
 const failed = (results: CheckResult[]) => results.filter((r) => r.status === 'fail').map((r) => r.key);
 
+describe('the accounts of a plugin', () => {
+  const accounts = (secrets: string[], kinds: string[]) =>
+    runChecks(
+      snapshot(
+        plugin({
+          manifest: {
+            run: { wasm: true },
+            permissions: { secrets },
+            contributes: { accounts: kinds.map((id) => ({ id, name: id, hosts: ['api.example.com'] })) },
+          },
+        }),
+      ),
+    );
+
+  it('reads the secret of a kind it declares, or of all of them', () => {
+    expect(by(accounts(['account:trello'], ['trello']), 'permissions').problems).toEqual([]);
+    expect(by(accounts(['account:*'], ['github']), 'permissions').problems).toEqual([]);
+  });
+
+  it('reads no other', () => {
+    expect(by(accounts(['account:github'], ['trello']), 'permissions').status).toBe('fail');
+    expect(by(accounts(['account:*'], []), 'permissions').status).toBe('fail');
+    expect(by(accounts(['account:'], ['trello']), 'permissions').status).toBe('fail');
+  });
+});
+
+describe('the first hand’s manifests', () => {
+  const root = new URL('../../../plugins/', import.meta.url);
+  const folders = readdirSync(root, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name)
+    .filter((name) => readdirSync(new URL(`${name}/`, root)).includes('escouade-plugin.json'));
+
+  it.each(folders)('%s passes the check of its permissions', (name) => {
+    const manifest = JSON.parse(readFileSync(new URL(`${name}/escouade-plugin.json`, root), 'utf8'));
+    // What it does not declare is not the fixture's: a theme has no permission.
+    const results = runChecks(snapshot(plugin({ manifest: { permissions: {}, contributes: {}, ...manifest } })));
+    expect(by(results, 'permissions').problems).toEqual([]);
+  });
+});
+
 describe('a valid plugin', () => {
-  it('passes the ten checks, in their order, and may be published', () => {
+  it('passes the eleven checks, in their order, and may be published', () => {
     const results = runChecks(snapshot(plugin()));
     expect(results.map((r) => r.key)).toEqual([...CHECK_KEYS]);
     expect(results.filter((r) => r.status !== 'pass')).toEqual([]);
@@ -53,33 +94,12 @@ describe('a valid plugin', () => {
     expect(by(results, 'permissions').detail.fr).toBe('Se connecte à ntfy.sh ; reçoit des événements');
     expect(by(results, 'archive').detail.en).toMatch(/^0\.0 MB, 4 files, no link nor path that leaves$/);
     expect(by(results, 'binaries').detail.en).toBe('none: the plugin runs no program');
+    expect(by(results, 'compile').detail.en).toBe('nothing to compile: neither run.js nor run.wasm');
   });
 
   it('with its icon, a square PNG of 512 px of its repository', () => {
     const results = runChecks(snapshot(plugin({ manifest: { icon: './store/icon.png' }, files: { 'store/icon.png': png(512, 512) } })));
     expect(results.filter((r) => r.status !== 'pass')).toEqual([]);
-  });
-
-  it('with a program built for every system, attested from its commit', () => {
-    const run = { command: 'bin/ntfy', windows: 'bin/ntfy.exe' };
-    const bin = (platform: FetchedBinary['platform']): FetchedBinary => ({
-      platform,
-      name: `ntfy-0.3.0-${platform}.tar.gz`,
-      sha256: 'f'.repeat(64),
-      size: 10,
-      attestation: { state: 'attested', workflow: '.github/workflows/release.yml' },
-    });
-    const results = runChecks(
-      snapshot(plugin({ manifest: { run } }), {
-        binaries: [bin('windows-x64'), bin('macos-arm64'), bin('linux-x64')],
-        releaseAssets: ['ntfy-0.3.0-windows-x64.tar.gz', 'ntfy-0.3.0-macos-arm64.tar.gz', 'ntfy-0.3.0-linux-x64.tar.gz'],
-      }),
-    );
-    expect(failed(results)).toEqual([]);
-    expect(by(results, 'binaries').detail.fr).toBe(
-      'windows-x64, macos-arm64, linux-x64 · attestés par le workflow .github/workflows/release.yml',
-    );
-    expect(by(results, 'permissions').detail.fr).toMatch(/^Lance un programme ; se connecte à ntfy.sh/);
   });
 
   it('with a later version of its own, from the same repository', () => {
@@ -115,7 +135,6 @@ describe('a booby-trapped plugin', () => {
     ],
     ['with an id of Escouade’s', 'id', () => snapshot(plugin({ manifest: { id: 'dev.escouade.ntfy' } })), 'id'],
     ['with an id of another author', 'id', () => snapshot(plugin(), { existing: { mine: false, repository: 'other/ntfy' } }), 'id'],
-    ['with an id from another repository', 'id', () => snapshot(plugin(), { existing: { mine: true, repository: 'sroux/other' } }), 'id'],
     [
       'naming another repository',
       'repository',
@@ -245,29 +264,8 @@ describe('a booby-trapped plugin', () => {
       () => snapshot(plugin({ manifest: { permissions: { network: ['https://ntfy.sh/x'] } } })),
       'permissions.network[0]',
     ],
-    [
-      'whose program is nowhere',
-      'binaries',
-      () => snapshot(plugin({ manifest: { run: { command: 'bin/ntfy' } } }), { releaseAssets: ['notes.txt'] }),
-      'run.command',
-    ],
-    [
-      'whose binary was built from another commit',
-      'binaries',
-      () =>
-        snapshot(plugin({ manifest: { run: { command: 'run.js' } }, files: { 'run.js': 'x' } }), {
-          binaries: [
-            {
-              platform: 'linux-x64',
-              name: 'ntfy-linux-x64.tar.gz',
-              sha256: 'f'.repeat(64),
-              size: 1,
-              attestation: { state: 'mismatch', commit: 'b'.repeat(40), repository: 'sroux/escouade-ntfy' },
-            },
-          ],
-        }),
-      'ntfy-linux-x64.tar.gz',
-    ],
+    ['naming a native program', 'binaries', () => snapshot(plugin({ manifest: { run: { command: 'bin/ntfy' } } })), 'run.command'],
+    ['naming a program by system', 'binaries', () => snapshot(plugin({ manifest: { run: { windows: 'bin/ntfy.exe' } } })), 'run.windows'],
   ];
 
   for (const [name, key, make, path] of cases)
@@ -317,14 +315,6 @@ describe('a booby-trapped plugin', () => {
 });
 
 describe('the binaries and their attestations', () => {
-  it('reads the platform from a release file’s name', () => {
-    expect(platformOf('ntfy-0.3.0-windows-x64.zip')).toBe('windows-x64');
-    expect(platformOf('ntfy_macos_arm64.tar.gz')).toBe('macos-arm64');
-    expect(platformOf('ntfy-linux-x64')).toBe('linux-x64');
-    expect(platformOf('ntfy-0.3.0.tar.gz')).toBeNull();
-    expect(platformOf('ntfy-darwinx-x64.zip')).toBeNull();
-  });
-
   it('ties a binary to the commit and repository its attestation names', () => {
     const want = { sha256: 'e'.repeat(64), repository: REPO, commit: COMMIT };
     expect(judgeAttestations([attestation(want.sha256, { repo: REPO, commit: COMMIT })], want)).toEqual({
@@ -361,5 +351,157 @@ describe('the names too close', () => {
   it('does not count the MIT text of the fixtures as a README', () => {
     const results = runChecks(snapshot({ ...plugin({ files: { 'README.md': null } }), 'docs/README.md': MIT }));
     expect(by(results, 'readme').status).toBe('fail');
+  });
+});
+
+describe('the ids of Escouade’s own hand (ESC-314)', () => {
+  const own = () => plugin({ manifest: { id: 'dev.escouade.ntfy' } });
+
+  it('pass from the app’s repository, the manifest and the id checks alike', () => {
+    const results = runChecks(snapshot(own(), { firstParty: true }));
+    expect(by(results, 'id').status).toBe('pass');
+    expect(by(results, 'manifest').status).toBe('pass');
+  });
+
+  it('are refused to any other repository, as before', () => {
+    const results = runChecks(snapshot(own(), { firstParty: false }));
+    expect(by(results, 'id')).toMatchObject({ status: 'fail', detail: { en: 'dev.escouade.ntfy is reserved' } });
+    expect(verdict(results)).toBe('rejected');
+  });
+
+  it('take the app’s repository by its GitHub id, from STORE_FIRST_PARTY_REPO or its default', async () => {
+    const asked: string[] = [];
+    const source = (repos: Record<string, number>) =>
+      ({
+        repo: async (name: string) => {
+          asked.push(name);
+          if (!(name in repos)) throw new GithubError('Not Found', 404);
+          return { id: repos[name]!, fullName: name, private: false };
+        },
+      }) as unknown as Source;
+    const app = source({ 'guillaume-gagnaire/escouade': 1001 });
+    expect(await isFirstParty(app, {}, 1001)).toBe(true);
+    // Another repository, whatever its name (a fork, or one that took the app's old name after a rename): its id is not.
+    expect(await isFirstParty(app, {}, 2002)).toBe(false);
+    expect(await isFirstParty(source({ 'escouade-dev/escouade': 3003 }), { STORE_FIRST_PARTY_REPO: ' escouade-dev/escouade ' }, 3003)).toBe(
+      true,
+    );
+    expect(asked).toEqual(['guillaume-gagnaire/escouade', 'guillaume-gagnaire/escouade', 'escouade-dev/escouade']);
+    // A name GitHub does not know is no repository of the app's; GitHub down throws, the check is tried again.
+    expect(await isFirstParty(source({}), {}, 1001)).toBe(false);
+    const down = {
+      repo: async () => {
+        throw new GithubError('Bad Gateway', 502);
+      },
+    } as unknown as Source;
+    await expect(isFirstParty(down, {}, 1001)).rejects.toThrow('Bad Gateway');
+  });
+});
+
+describe('the run.js plugins (ESC-323)', () => {
+  const BUNDLE = 'console.log(1);\n';
+  const js = (over: Partial<Snapshot> = {}, files: Record<string, unknown> = { 'dist/plugin.mjs': BUNDLE }) =>
+    snapshot(plugin({ manifest: { run: { js: 'dist/plugin.mjs' } }, files }), over);
+  const compiler = { javy: '9.1.0', engine: 'e'.repeat(64), prelude: '2.2.0' };
+
+  it('a run.js plugin brings no binary, and passes once compiled twice to the same module', () => {
+    const results = runChecks(js({ compiled: { state: 'built', sha256: 'a'.repeat(64), size: 1_500_000, compiler } }));
+    expect(results.filter((r) => r.status !== 'pass')).toEqual([]);
+    expect(by(results, 'binaries').detail.fr).toBe('aucun à fournir : un plugin run.js est compilé en WASM par le store');
+    expect(by(results, 'permissions').detail.fr).toBe('Tourne dans Escouade, isolé ; se connecte à ntfy.sh ; reçoit des événements');
+    expect(by(results, 'compile').detail.fr).toBe(
+      'compilé en WASM par le store, deux fois, même empreinte · 1465 Ko · sha256 aaaaaaaaaaaa… · Javy 9.1.0',
+    );
+    expect(verdict(results)).toBe('ready');
+  });
+
+  it('is not published before it is compiled', () => {
+    const results = runChecks(js());
+    expect(by(results, 'compile').status).toBe('skip');
+    expect(verdict(results)).toBe('rejected');
+  });
+
+  it('two modules that differ refuse the version: the compilation is not reproducible', () => {
+    const results = runChecks(js({ compiled: { state: 'different', first: '1'.repeat(64), second: '2'.repeat(64) } }));
+    const c = by(results, 'compile');
+    expect(c).toMatchObject({
+      status: 'fail',
+      detail: { fr: 'la compilation n’est pas reproductible', en: 'the compilation is not reproducible' },
+    });
+    expect(c.problems[0]!.why.fr).toMatch(/^La compilation n’est pas reproductible : .*111111111111… et 222222222222…/);
+    expect(verdict(results)).toBe('rejected');
+    expect(rejectionText(results, 'en')).toContain('✗ Compilation — the compilation is not reproducible');
+  });
+
+  it('a bundle Javy refuses, a bundle missing or too heavy fail the compilation, where and why', () => {
+    const refused = by(runChecks(js({ compiled: { state: 'refused', message: 'import of node:net refused' } })), 'compile');
+    expect(refused.problems[0]).toMatchObject({ path: 'dist/plugin.mjs' });
+    expect(refused.problems[0]!.why.en).toBe('`dist/plugin.mjs` does not compile to WASM: import of node:net refused');
+    const missing = by(runChecks(js({}, {})), 'compile');
+    expect(missing.problems[0]).toMatchObject({ path: 'run.js' });
+    expect(missing.problems[0]!.fix.fr).toContain('npm install');
+    const heavy = by(runChecks(js({}, { 'dist/plugin.mjs': 'x'.repeat(5 * 1024 * 1024 + 1) })), 'compile');
+    expect(heavy.problems[0]!.why.en).toBe('`dist/plugin.mjs` weighs more than 5 MB.');
+  });
+});
+
+describe('the run.wasm plugins, and no native program (ESC-336)', () => {
+  const SOURCES = { 'Cargo.toml': '[package]\nname = "ntfy"\n', 'Cargo.lock': 'version = 4\n', 'src/lib.rs': '' };
+  const rust = (over: Partial<Snapshot> = {}, files: Record<string, unknown> = SOURCES) =>
+    snapshot(plugin({ manifest: { run: { wasm: 'Cargo.toml' } }, files }), over);
+  const compiler = { rust: '1.98.0', target: 'wasm32-wasip1', canon: 'c'.repeat(64), lock: 'd'.repeat(64) };
+
+  it('a run.wasm plugin brings no binary, and passes once compiled twice to the same module', () => {
+    const results = runChecks(rust({ compiled: { state: 'built', sha256: 'a'.repeat(64), size: 459_364, compiler } }));
+    expect(results.filter((r) => r.status !== 'pass')).toEqual([]);
+    expect(by(results, 'binaries').detail.en).toBe('none to bring: a run.wasm plugin is compiled to WASM by the store');
+    expect(by(results, 'compile').detail.en).toBe(
+      'compiled to WASM by the store, twice, same fingerprint · 449 KB · sha256 aaaaaaaaaaaa… · rustc 1.98.0',
+    );
+    expect(verdict(results)).toBe('ready');
+  });
+
+  it('is not published before it is compiled', () => {
+    const results = runChecks(rust());
+    expect(by(results, 'compile')).toMatchObject({ status: 'skip', detail: { en: 'The sources were not compiled.' } });
+    expect(verdict(results)).toBe('rejected');
+  });
+
+  it('a Cargo.toml missing, a refusal and two modules fail the compilation, where and why', () => {
+    const missing = by(runChecks(rust({}, {})), 'compile');
+    expect(missing.problems[0]).toMatchObject({ path: 'run.wasm' });
+    expect(missing.problems[0]!.why.en).toBe('`Cargo.toml` is not in the archive at the root of the repository.');
+    const refused = by(runChecks(rust({ compiled: { state: 'refused', message: 'fake has a build.rs' } })), 'compile');
+    expect(refused.problems[0]!.why.en).toBe('`Cargo.toml` does not compile to WASM: fake has a build.rs');
+    expect(refused.problems[0]!.fix.fr).toContain('liste relue');
+    const different = by(runChecks(rust({ compiled: { state: 'different', first: '1'.repeat(64), second: '2'.repeat(64) } })), 'compile');
+    expect(different.problems[0]!.why.en).toContain('two compilations of the same sources gave two modules');
+  });
+
+  it.each([
+    ['a program of its own', { command: 'bin/ntfy' }, { 'bin/ntfy': 'ELF' }, ['run.command']],
+    ['a script', { command: 'start.ps1' }, { 'start.ps1': 'node x.mjs' }, ['run.command']],
+    ['node', { command: 'node' }, {}, ['run.command']],
+    [
+      'a program per system',
+      { command: 'bin/ntfy', windows: 'npx.exe', linux: 'bin/l' },
+      { 'bin/ntfy': 'x' },
+      ['run.command', 'run.windows', 'run.linux'],
+    ],
+  ])('run.command is refused to all: %s', (_, run, files, paths) => {
+    const third = runChecks(snapshot(plugin({ manifest: { run }, files })));
+    const b = by(third, 'binaries');
+    expect(b.status).toBe('fail');
+    expect(b.problems.map((p) => p.path)).toEqual(paths);
+    expect(b.problems[0]!.why.fr).toContain('le store n’en publie plus, chaque plugin tourne en WASM');
+    expect(b.problems[0]!.why.en).toContain('the store no longer publishes one, every plugin runs in WASM');
+    expect(b.problems[0]!.fix.fr).toContain('"run": { "wasm": "Cargo.toml" }');
+    expect(b.problems[0]!.fix.en).toContain('permissions.commands');
+    expect(verdict(third)).toBe('rejected');
+  });
+
+  it('the first hand has no exception', () => {
+    const own = plugin({ manifest: { id: 'dev.escouade.ntfy', run: { command: 'bin/ntfy' } }, files: { 'bin/ntfy': 'ELF' } });
+    expect(by(runChecks(snapshot(own, { firstParty: true })), 'binaries')).toMatchObject({ status: 'fail' });
   });
 });

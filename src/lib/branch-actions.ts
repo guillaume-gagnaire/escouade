@@ -119,6 +119,23 @@ export async function startAgentOn(projectId: string, branch: string, create = f
 }
 
 /**
+ * « Lancer un agent sur cette PR » (ESC-65): an agent in a worktree on the branch of the project's open pull request
+ * `number` (a fork's fetched by the reference its host keeps), shown at once like a new agent. Refusals as for a branch.
+ */
+export async function startAgentOnPr(projectId: string, number: number, branch: string): Promise<boolean> {
+  try {
+    const a = await api.createAgentOnPr(projectId, number);
+    app.agents[a.id] = a;
+    app.closeEditor(projectId);
+    app.selectAgent(a.id);
+    return true;
+  } catch (e) {
+    tellRefusal(e, branch);
+    return false;
+  }
+}
+
+/**
  * Why a local branch can be neither switched to nor deleted: a worktree other than the project's folder holds it (an
  * agent's, named, or any other, by its folder). Null for the branch of the folder, and for a branch nothing holds.
  */

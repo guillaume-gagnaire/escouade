@@ -1,0 +1,27 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.openai",
+  "name": "OpenAI",
+  "version": "2.2.1",
+  "description": {
+    "fr": "Le service de voix OpenAI (dictée, direct, voix de l'agent) : ta clé reste dans le trousseau, le plugin ne la garde pas.",
+    "en": "The OpenAI voice service (dictation, live, the agent's voice): your key stays in the keychain, the plugin keeps nothing."
+  },
+  "author": {
+    "name": "Escouade",
+    "url": "https://escouade.dev"
+  },
+  "license": "GPL-3.0-or-later",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/openai",
+  "escouade": {
+    "api": "1",
+    "min": "2.2.0"
+  },
+  "run": { "wasm": "Cargo.toml" },
+  "limits": { "fetchSeconds": 120, "fetchBytes": 33554432, "memoryBytes": 268435456, "turnSeconds": 10 },
+  "activation": ["voice:openai"],
+  "permissions": {
+    "network": ["api.openai.com"]
+  },
+  "store": { "categories": ["tools"] }
+}

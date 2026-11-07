@@ -7,7 +7,9 @@
 //! (no GSD there) still sees and follows it.
 //!
 //! A reading of this machine adds the workflows it finds and updates those whose definition
-//! changed; it never removes a file. A workflow is set apart by « Ce n'est pas un workflow » (its
+//! changed; it never removes a file. One the user removed (its file deleted by hand, or
+//! « Supprimer » in the window) is never written again (ESC-309, `Removals`): this machine
+//! remembers it, and proposes it again only when what found it changes. A workflow is set apart by « Ce n'est pas un workflow » (its
 //! file kept, marked, so that no reading makes it again) or taken out by « Retirer du dépôt ».
 //! Nothing of one machine goes in a file: no date, no fingerprint, no absolute path, no state of
 //! the work (`StateFile::exists`, `says`); what tells whether a reading is stale stays in the
@@ -448,14 +450,24 @@ pub fn load_all(p: &Places) -> Folder {
 }
 
 /// `merge_reading` in both places: each workflow read goes where it belongs (`in_repo`), the
-/// repository's only when `repo_ok` (its folder is there).
+/// repository's only when `repo_ok` (its folder is there), those the user removed left out
+/// (`Removals`, which it keeps up to date).
 pub fn merge_reading_all(
     p: &Places,
     folder: &Folder,
     read: &[Workflow],
     repo_ok: bool,
+    removals: &mut Removals,
 ) -> Vec<(String, String)> {
-    let (ours, theirs): (Vec<Workflow>, Vec<Workflow>) = read.iter().cloned().partition(in_repo);
+    if repo_ok {
+        removals.note_gone(folder);
+    }
+    let read: Vec<Workflow> = read
+        .iter()
+        .filter(|w| !removals.removed.contains_key(&w.id))
+        .cloned()
+        .collect();
+    let (ours, theirs): (Vec<Workflow>, Vec<Workflow>) = read.into_iter().partition(in_repo);
     let mut out = Vec::new();
     if repo_ok {
         out.extend(merge_reading(&p.repo, folder, &ours));
@@ -467,8 +479,160 @@ pub fn merge_reading_all(
         again = load_all(p);
         &again
     };
-    out.extend(merge_reading(&p.local, folder, &theirs));
+    let more = merge_reading(&p.local, folder, &theirs);
+    let again;
+    let folder = if more.is_empty() {
+        folder
+    } else {
+        again = load_all(p);
+        &again
+    };
+    out.extend(more);
+    if repo_ok {
+        removals.known = folder
+            .docs
+            .iter()
+            .map(|(_, d)| (d.workflow.id.clone(), Gone::of(d)))
+            .collect();
+    }
     out
+}
+
+// ---------- the workflows removed ----------
+
+/// A workflow as this machine remembers it: what found it (the fingerprint of its reading) and its
+/// name, for the window.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Gone {
+    pub fingerprint: String,
+    pub name: String,
+}
+
+impl Gone {
+    pub fn of(doc: &Doc) -> Self {
+        Gone {
+            // Refined by an agent (ESC-196): the reading it was refined from.
+            fingerprint: doc
+                .workflow
+                .refined
+                .clone()
+                .unwrap_or_else(|| fingerprint_of(&doc.workflow)),
+            name: doc.workflow.name.clone(),
+        }
+    }
+}
+
+/// The workflows the user removed from a project, kept on this machine (ESC-309,
+/// `~/.escouade/projects/<id>/workflows-removed.json`): a reading writes none of them again. And
+/// those that had a file at the last reading: one whose file is gone since was removed by hand.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Removals {
+    pub known: BTreeMap<String, Gone>,
+    pub removed: BTreeMap<String, Gone>,
+}
+
+/// A workflow removed, as the window says it.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RemovedInfo {
+    pub id: String,
+    pub name: String,
+    /// What found it changed since: proposed again, not written.
+    pub changed: bool,
+}
+
+pub fn removals_file(data: &crate::paths::DataDir, project_id: &str) -> PathBuf {
+    data.project_files(project_id)
+        .join("workflows-removed.json")
+}
+
+impl Removals {
+    pub fn load(path: &Path) -> Self {
+        std::fs::read(path)
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or_default()
+    }
+
+    /// Written when it changed from `before`.
+    pub fn save(&self, path: &Path, before: &Removals) {
+        if self == before {
+            return;
+        }
+        let write = || -> anyhow::Result<()> {
+            if let Some(dir) = path.parent() {
+                std::fs::create_dir_all(dir)?;
+            }
+            crate::paths::write_atomic(path, &serde_json::to_vec_pretty(self)?)?;
+            Ok(())
+        };
+        if let Err(e) = write() {
+            log::warn!("{}: {e:#}", path.display());
+        }
+    }
+
+    /// The workflows whose file went since the last reading are removed; those whose file is there
+    /// (again: a pull, another branch) are the project's, no longer removed. A file that cannot
+    /// be read, or a folder refused, tells nothing.
+    pub fn note_gone(&mut self, folder: &Folder) {
+        let refused = folder
+            .unreadable
+            .iter()
+            .any(|(p, _)| p.extension().is_none_or(|x| x != "yml"));
+        if !refused {
+            for (id, g) in std::mem::take(&mut self.known) {
+                let own = format!("{}.yml", safe_name(&id));
+                let unreadable = folder
+                    .unreadable
+                    .iter()
+                    .any(|(p, _)| p.file_name().is_some_and(|n| n.to_string_lossy() == own));
+                if folder.doc(&id).is_none() && !unreadable {
+                    self.removed.insert(id, g);
+                } else {
+                    self.known.insert(id, g);
+                }
+            }
+        }
+        for (_, d) in &folder.docs {
+            self.removed.remove(&d.workflow.id);
+        }
+    }
+
+    /// Removes a workflow (« Supprimer »), or keeps one removed whose finding changed as it is
+    /// now (« Laisser supprimé »): `now`, the reading's, when there is one.
+    pub fn remove(&mut self, id: &str, doc: Option<&Doc>, now: Option<&Workflow>) {
+        let mut g = doc
+            .map(Gone::of)
+            .or_else(|| self.removed.get(id).cloned())
+            .or_else(|| self.known.get(id).cloned())
+            .unwrap_or_default();
+        if let Some(w) = now {
+            g.fingerprint = fingerprint_of(w);
+            if g.name.is_empty() {
+                g.name = w.name.clone();
+            }
+        }
+        self.known.remove(id);
+        self.removed.insert(id.to_string(), g);
+    }
+
+    /// The workflows removed, as the window says them: `read`, this machine's last reading,
+    /// tells whether what found one changed.
+    pub fn listed(&self, read: &[Workflow]) -> Vec<RemovedInfo> {
+        self.removed
+            .iter()
+            .map(|(id, g)| RemovedInfo {
+                id: id.clone(),
+                name: g.name.clone(),
+                changed: read
+                    .iter()
+                    .find(|w| w.id == *id)
+                    .is_some_and(|w| fingerprint_of(w) != g.fingerprint),
+            })
+            .collect()
+    }
 }
 
 /// The files of a folder as read: each one's path, and what it holds or why it cannot be read.

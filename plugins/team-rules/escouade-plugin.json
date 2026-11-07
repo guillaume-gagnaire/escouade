@@ -1,0 +1,17 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.team-rules",
+  "name": { "fr": "Règles de l'équipe", "en": "Team rules" },
+  "version": "2.0.0",
+  "description": {
+    "fr": "Autorise ou refuse les commandes des agents selon les règles de l'équipe, écrites dans rules.json.",
+    "en": "Allows or denies the agents' commands by the team's rules, written in rules.json."
+  },
+  "author": { "name": "Escouade", "url": "https://escouade.dev" },
+  "license": "MIT",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/team-rules",
+  "escouade": { "api": "1", "min": "2.2.0" },
+  "run": { "js": "dist/plugin.mjs" },
+  "activation": ["event:request.permission"],
+  "permissions": { "decide": true }
+}

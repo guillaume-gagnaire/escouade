@@ -1,0 +1,116 @@
+{
+  "id": 101,
+  "url": "https://codeberg.org/ada/notes/pulls/7",
+  "number": 7,
+  "user": {
+    "id": 2,
+    "login": "ada",
+    "login_name": "",
+    "full_name": "ada",
+    "email": "ada@noreply.codeberg.org",
+    "avatar_url": "https://codeberg.org/avatars/2",
+    "html_url": "https://codeberg.org/ada",
+    "is_admin": false,
+    "created": "2024-01-02T10:00:00Z"
+  },
+  "title": "WIP: Add search",
+  "body": "Adds the search page.\n\nCloses #3",
+  "labels": [
+    {
+      "id": 1,
+      "name": "agent",
+      "color": "00aabb"
+    }
+  ],
+  "state": "open",
+  "draft": true,
+  "is_locked": false,
+  "comments": 1,
+  "review_comments": 2,
+  "additions": 120,
+  "deletions": 4,
+  "changed_files": 3,
+  "html_url": "https://codeberg.org/ada/notes/pulls/7",
+  "diff_url": "https://codeberg.org/ada/notes/pulls/7.diff",
+  "patch_url": "https://codeberg.org/ada/notes/pulls/7.patch",
+  "mergeable": true,
+  "merged": false,
+  "merged_at": null,
+  "merged_by": null,
+  "merge_commit_sha": null,
+  "merge_base": "0a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+  "allow_maintainer_edit": false,
+  "requested_reviewers": [
+    {
+      "id": 4,
+      "login": "linus",
+      "login_name": "",
+      "full_name": "linus",
+      "email": "linus@noreply.codeberg.org",
+      "avatar_url": "https://codeberg.org/avatars/4",
+      "html_url": "https://codeberg.org/linus",
+      "is_admin": false,
+      "created": "2024-01-02T10:00:00Z"
+    }
+  ],
+  "requested_reviewers_teams": [],
+  "head": {
+    "label": "feat/search",
+    "ref": "feat/search",
+    "sha": "3f2a9c1d5e7b84a6f0c2d9e8b7a6543210fedcba",
+    "repo_id": 5,
+    "repo": {
+      "id": 5,
+      "name": "notes",
+      "full_name": "ada/notes",
+      "owner": {
+        "id": 5,
+        "login": "ada",
+        "login_name": "",
+        "full_name": "ada",
+        "email": "ada@noreply.codeberg.org",
+        "avatar_url": "https://codeberg.org/avatars/5",
+        "html_url": "https://codeberg.org/ada",
+        "is_admin": false,
+        "created": "2024-01-02T10:00:00Z"
+      },
+      "fork": false,
+      "html_url": "https://codeberg.org/ada/notes",
+      "default_branch": "main",
+      "has_actions": true,
+      "has_pull_requests": true
+    }
+  },
+  "base": {
+    "label": "main",
+    "ref": "main",
+    "sha": "0a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+    "repo_id": 5,
+    "repo": {
+      "id": 5,
+      "name": "notes",
+      "full_name": "ada/notes",
+      "owner": {
+        "id": 5,
+        "login": "ada",
+        "login_name": "",
+        "full_name": "ada",
+        "email": "ada@noreply.codeberg.org",
+        "avatar_url": "https://codeberg.org/avatars/5",
+        "html_url": "https://codeberg.org/ada",
+        "is_admin": false,
+        "created": "2024-01-02T10:00:00Z"
+      },
+      "fork": false,
+      "html_url": "https://codeberg.org/ada/notes",
+      "default_branch": "main",
+      "has_actions": true,
+      "has_pull_requests": true
+    }
+  },
+  "created_at": "2026-10-30T09:00:00Z",
+  "updated_at": "2026-10-31T16:20:00Z",
+  "closed_at": null,
+  "due_date": null,
+  "pin_order": 0
+}

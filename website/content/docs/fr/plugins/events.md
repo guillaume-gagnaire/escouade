@@ -65,6 +65,11 @@ Un fait ne porte **jamais la conversation** : un plugin apprend qu’un tour est
 | `decision.proposed`  | Une décision est proposée ou révisée.                                                               | `id` (pas encore de numéro), `title`                                                                                                                             |
 | `decision.accepted`  | Un humain l’accepte.                                                                                | `number` (donné alors), `id`, `title`                                                                                                                             |
 | `account.switched`   | Un agent change de compte.                                                                          | `from`, `to`                                                                                                                                          |
+| `workflow.step_entered` | Un agent entre dans une étape du workflow de son projet. | `workflow`, `step`, `door` (la commande tapée, s’il y en a une), `pass` (son n-ième passage) |
+| `workflow.step_left` | Il en sort : durée, coût, issue. | `workflow`, `step`, `durationMs`, `cost`, `outcome` (`done`, `back`, `failed`, `stopped`, `left`) |
+| `workflow.looped_back` | Il revient à une étape déjà passée. | `workflow`, `from`, `to`, `reason` (la ligne où l’étape s’est arrêtée) |
+| `workflow.left` | Il sort du workflow : il fait autre chose. | `workflow`, `doing` |
+| `workflow.changed` | Une relecture des workflows du projet donne autre chose. | `workflows` (les ids de ceux qui ont changé, apparu ou disparu) |
 | `app.started`        | Escouade démarre.                                                                                   | `version`                                                                                                                                             |
 
 ## S’abonner
@@ -116,27 +121,49 @@ Un plugin **déclaratif** (sans `run`) appelle une adresse sur un fait. Chaque w
 
 Un gabarit remplace `{{chemin}}` par la valeur du fait : `{{name}}`, `{{ticket.key}}`, `{{ticket.title}}`, `{{project.name}}`, `{{agent.name}}`, `{{data.to}}`… Dans un objet, un texte qui n’est qu’un `{{chemin}}` prend la valeur telle quelle (une liste reste une liste) ; dans un texte JSON, les valeurs sont échappées. Un secret ne va jamais dans le corps.
 
-Le webhook Discord des tickets à tester :
+Le plugin Discord, en entier : un webhook pour un ticket passé « À tester », un autre pour un agent qui attend.
+
+`plugins/discord/escouade-plugin.json`
 
 ```json
 {
-  "id": "dev.exemple.discord",
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.discord",
   "name": "Discord",
-  "version": "1.0.0",
+  "version": "1.1.0",
+  "description": {
+    "fr": "Les tickets à tester et les agents qui attendent, dans un salon Discord : un webhook, sans code.",
+    "en": "Tickets to test and agents waiting, in a Discord channel: a webhook, no code."
+  },
+  "author": { "name": "Escouade", "url": "https://escouade.dev" },
+  "license": "MIT",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/discord",
   "escouade": { "api": "1", "min": "2.1.0" },
   "permissions": {
-    "events": ["ticket.column"],
+    "events": ["ticket.column", "agent.status"],
     "network": ["discord.com"],
     "secrets": ["webhook"]
   },
   "contributes": {
-    "secrets": [{ "key": "webhook", "title": { "fr": "Adresse du webhook", "en": "Webhook URL" } }],
+    "secrets": [{ "key": "webhook", "title": { "fr": "Adresse du webhook Discord", "en": "Discord webhook URL" } }],
     "webhooks": [
       {
         "url": "{{secrets.webhook}}",
         "events": ["ticket.column"],
         "when": { "data.to": "review" },
-        "body": { "content": "{{ticket.key}} à tester : {{ticket.title}} ({{project.name}})" }
+        "body": {
+          "content": "🧪 **{{ticket.key}}** to test: {{ticket.title}} ({{project.name}})",
+          "allowed_mentions": { "parse": [] }
+        }
+      },
+      {
+        "url": "{{secrets.webhook}}",
+        "events": ["agent.status"],
+        "when": { "data.status": "waiting" },
+        "body": {
+          "content": "✋ **{{agent.name}}** waits for you ({{project.name}})",
+          "allowed_mentions": { "parse": [] }
+        }
       }
     ]
   }
@@ -160,6 +187,23 @@ Le webhook Discord des tickets à tester :
 - **Rien ne tourne avant l’accord** de l’utilisateur, comme les commandes de `.escouade.yml` : l’onglet Permissions de sa fiche, dans Réglages › Plugins, les montre sous « Lance ces commandes » avec « Accepter ces commandes », et l’accord vaut pour elles telles qu’elles sont ; « Retirer l’accord » les arrête. Une commande, un fait ou une condition qui change, et il faut l’accord à nouveau. Le journal dit chaque commande refusée faute d’accord.
 - Le fait n’entre **jamais dans la ligne de commande** : un titre de ticket ne lance rien. La commande le trouve dans ses variables : `ESCOUADE_FACT` (le fait entier en JSON), `ESCOUADE_FACT_NAME`, `ESCOUADE_PROJECT`, `ESCOUADE_TICKET` (sa clé) et `ESCOUADE_AGENT`.
 - Elle a 60 s. Son journal note sa fin (`exit 0`) et, si elle échoue, ses dernières lignes.
+
+## Le lecteur de workflow
+
+Escouade lit seule les workflows d’un projet (GSD, Superpowers, Ralph…). Un plugin peut lui en apprendre un qu’elle ne connaît pas, avec `contributes.workflowReaders` :
+
+```json
+"contributes": {
+  "workflowReaders": [
+    { "id": "bmad", "name": "BMAD", "files": ["_bmad/**/*.md", "docs/*.md"] }
+  ]
+}
+```
+
+- Escouade appelle `workflow/read` avec `{ "reader": "bmad", "root": "…", "repos": [], "files": [{ "path": "_bmad/brief.md", "text": "…" }] }` : **seulement les fichiers que ses globs désignent**, depuis le dossier du projet (et celui de chaque dépôt pour un projet de plusieurs), en texte, au plus 200 fichiers de 256 Ko. Un glob avec `..` ou un chemin absolu ne trouve rien.
+- Le plugin rend le graphe : `{ "workflows": [{ "id", "name", "steps": [{ "name", "command", "description", "path", "agents", "reads", "writes" }], "transitions": [{ "from", "to", "back", "condition", "max" }], "exit" }] }`. Une étape est signalée par sa `command` tapée, par les sous-agents qu’elle nomme ou les fichiers qu’elle écrit ; une transition `back` est un retour en arrière, avec sa `condition` pour raison quand l’étape n’en donne pas.
+- Le workflow se suit comme ceux qu’Escouade lit : l’onglet Workflow, la carte, les faits `workflow.*`. Son id est `plugin:<plugin>:<id>`, donc il ne prend jamais la place d’un autre.
+- Un graphe qui ne tient pas (une étape sans nom, deux du même nom, une transition vers une étape absente, plus de 50 workflows) est refusé en entier, avec la raison, dans le journal. L’appel a 60 s.
 
 ## Le journal
 

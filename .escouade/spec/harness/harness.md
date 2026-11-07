@@ -1,10 +1,10 @@
 ---
 title: "Harness"
 subject: "Harness"
-sources: ["docs/SPEC.md"]
-tickets: ["ESC-42","ESC-49","ESC-133","ESC-159","ESC-266","ESC-268","ESC-269","ESC-270","ESC-271","ESC-272","ESC-273","ESC-274","ESC-275"]
+sources: ["docs/SPEC.md","docs/PLUGINS.md","docs/TODO-2.1.md"]
+tickets: ["ESC-42","ESC-49","ESC-133","ESC-159","ESC-266","ESC-268","ESC-269","ESC-270","ESC-271","ESC-272","ESC-273","ESC-274","ESC-275","ESC-209"]
 decisions: []
-compared: null
+compared: "2026-10-31T10:07:12+01:00"
 order: 3
 ---
 
@@ -76,3 +76,12 @@ Le modèle qui rédige les textes sans session (nom d'un agent, message de commi
 - OpenCode 2 (`@opencode/cli`) est refusé.
 - Gemini CLI n'a été étudié que sans compte, l'utilisateur n'en ayant pas à y consacrer : son adaptateur se fonde sur sa documentation, son code installé et le vrai binaire contre un faux serveur d'API, jamais sur un tour réel. Ce qui reste à voir avec un compte est dans docs/TODO-2.1.md.
 - Antigravity CLI ne prend qu'un compte Google, celui de la machine ; un autre compte passe par une clé d'API Gemini.
+
+## Harness absent
+
+Un agent, un ticket, un projet ou une ligne des statistiques peut nommer un harness que cette version n'a pas : celui d'une version plus récente d'Escouade, ou, avec les plugins de harness, celui d'un plugin désinstallé ou désactivé. Son nom est gardé tel quel, et relu tel quel ; rien n'est migré.
+
+- L'agent reste dans la liste avec sa conversation. Son harness s'y lit « <id> (harness absent) » (« <id> (harness missing) » en anglais), et aucune de ses fonctions n'est montrée.
+- Il ne démarre pas : un message, une reprise ou un lancement est refusé avec « Harness absent : « <id> » n'est pas dans cette version d'Escouade, ou son plugin est désactivé. L'agent et sa conversation sont gardés. »
+- Aucun agent n'est créé sur ce harness, ni par « Nouvel agent » sur un projet dont c'est le harness par défaut, ni par un ticket, ni par une copie.
+- Le harness revenu (la version qui l'a, le plugin réactivé), ses agents repartent comme avant.

@@ -1,5 +1,5 @@
 //! Codex on the bench, through the fake `codex app-server` (tests/fixtures/fake-codex.mjs), whose
-//! message picks the scenario; and the real streams of Codex 0.163.0 (tests/fixtures/codex/),
+//! message picks the scenario, its conversation through its plugin (INT-10.4); and the real streams of Codex 0.163.0 (tests/fixtures/codex/),
 //! replayed from tests/fixtures/replays/codex/.
 
 use super::CODEX;
@@ -78,8 +78,11 @@ impl Target for OnBench {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn the_fake_codex_passes_the_bench() {
+    // Its conversation goes through its plugin (INT-10.4): the plugins the app gives, in a runtime of their own.
+    let (rt, plugins, _) = crate::plugins_acp_tests::runtime("int10-codex-bench");
+    crate::plugins::harness::sync(&rt, &plugins);
     let dir = bench_dir("esc37-bench-codex");
     let played = run(&OnBench, &dir).await;
     assert_eq!(played, Scenario::ALL);

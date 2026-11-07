@@ -16,5 +16,9 @@ store/.nuxt
 store/.output
 store/.data
 store/server/db/migrations/meta
-# Written by the probes bench (ESC-294, `--compare` reads it): its own layout.
-docs/codeindex-probes-reference*.json
+# Written by the probes bench of the retired index (ESC-294, archived by ESC-310): its own layout.
+docs/archive/codeindex/codeindex-probes-reference*.json
+crates
+prototypes/**/target
+# moby's own seccomp profile, kept byte for byte: store/tests/unit/deploy-profiles.test.ts compares it to moby's (ESC-356).
+store/deploy/seccomp-bubblewrap.json

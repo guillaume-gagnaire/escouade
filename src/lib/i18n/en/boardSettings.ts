@@ -39,6 +39,7 @@ export default defineZone('boardSettings', {
     targetBranch: 'Waiting for the target branch',
     after: 'After {keys}',
     pause: 'Waiting: autopilot paused',
+    redTarget: 'Waiting: the target’s CI is red',
     forced: 'Start requested…',
     autopilotOff: 'Autopilot is off',
     next: 'Picked up as soon as a slot is free',
@@ -73,7 +74,7 @@ export default defineZone('boardSettings', {
       },
       pr: {
         label: 'Open a pull request',
-        desc: 'Pushes {prefix}<key> and opens a PR to the target branch for review.',
+        desc: 'Pushes {prefix}<key>, opens its PR to the target branch and follows it “In review” until it’s merged.',
       },
       push: {
         label: 'Push the ticket’s branch',
@@ -89,6 +90,16 @@ export default defineZone('boardSettings', {
     strategy: 'Strategy',
     strategies: { merge: 'Merge commit', squash: 'Squash', rebase: 'Rebase' },
     draftPr: 'Draft PR',
+    reviewers: 'Reviewers',
+    reviewersPlaceholder: 'ada, grace',
+    labels: 'Labels',
+    labelsPlaceholder: 'escouade, needs-review',
+    replyThreads: 'Reply under fixed threads',
+    replyThreadsDesc:
+      '“Fixed in abc1234” under each thread given to the agent, once its fixes are pushed. Escouade never resolves a thread.',
+    prUpdate: 'Branch update',
+    prUpdates: { merge: 'Merge', rebase: 'Rebase' },
+    prUpdateDesc: 'In conflict with the target: merge the target into the branch, or rebase and push with --force-with-lease.',
 
     beforeAfter: 'Before and after',
     testCommand: 'Test command',
@@ -110,6 +121,10 @@ export default defineZone('boardSettings', {
     quotaPauseHint: 'for all projects',
     quotaPauseDesc:
       'The autopilot starts no ticket while the 5-hour window or the weekly window is above this threshold. A ticket launched by hand still starts.',
+
+    redTargetPause: 'Pause while the target’s CI is red',
+
+    redTargetPauseDesc: 'The autopilot starts no ticket while the CI of the target branch fails. A ticket started by hand starts anyway.',
 
     parallel: 'In parallel',
     parallelDesc: 'Beyond that, “To do” tickets wait for a free slot',

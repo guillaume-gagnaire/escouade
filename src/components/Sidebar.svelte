@@ -65,12 +65,15 @@
   import { shortWindow } from '../lib/short-window.svelte';
   import { closeTerminal, newTerminal, terminalIn } from '../lib/term-actions';
   import { canPrepare, prepareLaunch, stopTests } from '../lib/test-launch.svelte';
+  import { returnHeld } from '../lib/outbox.svelte';
   import { backTarget, forwardTargets } from '../lib/handover';
   import type { Agent, AgentFolder, AgentStatus, BranchInfo, EngineId, Project } from '../lib/types';
   import RunsSection from './RunsSection.svelte';
   import EngineMark from './EngineMark.svelte';
   import StatusDot from './StatusDot.svelte';
   import FoldTitle from './FoldTitle.svelte';
+  import { ciShown } from '../lib/branch-ci';
+  import CiPill from './CiPill.svelte';
   import Icon from './Icon.svelte';
   import BranchPicker from './branches/BranchPicker.svelte';
   import { tip } from '../lib/tip';
@@ -105,6 +108,13 @@
   let pickingBase = $state<{ branch: string | null } | null>(null);
   /** The new branch the picker of the starting branch was opened for: read once it is closed, as it gives its pick then. */
   let baseFor: string | null = null;
+  /** The agent's pull request in the side panel's « PR et CI » tab (ESC-305): its CI, its log, its reviews. */
+  function showCi(id: string) {
+    app.selectAgent(id);
+    app.panelTab = 'hosts';
+    if (!app.split) app.filesOpen = true;
+  }
+
   function pickBase(branch: string | null) {
     baseFor = branch;
     pickingBase = { branch };
@@ -135,8 +145,10 @@
   const selectedAgentId = $derived(app.agent?.id);
   const termSelected = $derived(app.selectedTerm[project.id] ?? null);
   /** Another view (terminal, launch log, board) fills the main area: no agent is highlighted. */
-  const otherView = $derived(!!termSelected || !!app.runCommand || app.boardOn || app.docsOn);
+  const otherView = $derived(!!termSelected || !!app.runCommand || app.boardOn || app.docsOn || app.prsOn);
   const review = $derived(app.reviewCount(project.id));
+  /** The word of the project's code host (« PR », « MR » on GitLab): read by its view, else by one of its agents (ESC-65). */
+  const prsWord = $derived(app.prWords[project.id] ?? app.projectAgents.find((a) => a.prWord)?.prWord ?? 'PR');
   /** Who waits for an answer goes first (2.0 design). */
   const agents = $derived(app.projectAgents);
   /** What the list shows: folders and loose agents (`agents`, flat, is the same in shown order: the keys' and Ctrl+J's). */
@@ -182,7 +194,7 @@
   $effect(() => {
     if (app.newAgentMenu === menuAsked) return;
     menuAsked = app.newAgentMenu;
-    if (!app.boardOn && !app.docsOn) newAgentMenu();
+    if (!app.boardOn && !app.docsOn && !app.prsOn) newAgentMenu();
   });
 
   // « … » of an agent's header (Conversation): its menu, the one of its card, where the button is; the keyboard goes in.
@@ -377,7 +389,7 @@
    * Kanban, and not a request just shown (`HOLD_MS`).
    */
   function listKey(e: KeyboardEvent) {
-    if (e.defaultPrevented || app.modal || menu.open || app.boardOn || app.docsOn || app.ui.view !== 'project') return;
+    if (e.defaultPrevented || app.modal || menu.open || app.boardOn || app.docsOn || app.prsOn || app.ui.view !== 'project') return;
     const target = e.target instanceof Element ? e.target : null;
     if (
       target?.closest(
@@ -685,6 +697,8 @@
     const archive = () => {
       // Archiving stops its test launches: stopped first, their ends are no crashes.
       stopTests(a.id);
+      // What it holds goes back to its draft, unsent.
+      returnHeld(a.id);
       return app.run(api.archiveAgent(a.id, true));
     };
     const ticket = app.ticketOf(a.id);
@@ -958,11 +972,12 @@
 <aside class="side">
   <div class="seg segmented" role="group" aria-label={t('nav.sidebar.viewLabel')}>
     <button
-      class:on={!app.boardOn && !app.docsOn}
-      aria-pressed={!app.boardOn && !app.docsOn}
+      class:on={!app.boardOn && !app.docsOn && !app.prsOn}
+      aria-pressed={!app.boardOn && !app.docsOn && !app.prsOn}
       onclick={() => {
         app.closeBoard(project.id);
         app.closeDocs(project.id);
+        app.closePrs(project.id);
       }}
       ><Icon name="agents" size={14} />{t('common.agents')}<span class="count" aria-hidden="true">{app.projectAgents.length}</span></button
     >
@@ -970,6 +985,13 @@
       ><Icon name="kanban" size={14} />Kanban{#if review}<span class="badge" use:tip={t('nav.sidebar.toReview', { count: review })}
           >{review}</span
         >{/if}</button
+    >
+    <!-- The project's open pull requests (ESC-65), in the host's word: « PR », « MR » on GitLab. -->
+    <button
+      class:on={app.prsOn}
+      aria-pressed={app.prsOn}
+      onclick={() => app.openPrs(project.id)}
+      use:tip={t('prs.list.tabHint', { word: prsWord })}><Icon name="pr" size={14} />{t('prs.list.tab', { word: prsWord })}</button
     >
     <button class:on={app.docsOn} aria-pressed={app.docsOn} onclick={() => app.openDocs(project.id)}
       ><Icon name="file" size={14} />{t('docs.tab')}</button
@@ -1220,6 +1242,18 @@
         {/if}
       </div>
       {@const prs = cardPrs(a)}
+      {#if a.prDown && !a.ticketId}
+        <!-- Its code host's plugin does not answer (INT-8.1): said under the card, the pull requests read last kept. -->
+        <div class="prdown" role="status" data-pr-down={a.id} use:tip={t('prs.downHint', { why: a.prDown, word: prWord(a) })}>
+          <Icon name="plug" size={12} />{t('prs.down', { word: prWord(a) })}
+        </div>
+      {/if}
+      {#if !prs.length && !a.ticketId && ciShown(a.branchCi)}
+        <!-- Its branch pushed without a pull request (ESC-63): its CI, its jobs on a click. -->
+        <div class="prs" role="group" aria-label={t('prs.group', { name: a.name })} data-branch-ci={a.id}>
+          <CiPill ci={a.branchCi} of={{ kind: 'agent', id: a.id }} projectId={a.projectId} />
+        </div>
+      {/if}
       {#if prs.length}
         <!-- Under the card, not in it (the card is a button): its pull requests (ESC-64), the ones to merge first; a number
              opens it, the corrections go to the agent on a click only. -->
@@ -1233,6 +1267,14 @@
                 use:tip={{ text: prTip(word, p), aria: false }}
                 onclick={() => openPr(p)}><Icon name={prIcon(p)} size={12} />{p.repo ? `${repoLabel(p.repo)} ` : ''}#{p.number}</button
               >
+              <!-- Where it goes and its CI in words (ESC-305): « #41 → main · CI en échec ». -->
+              <span class="prto">{t('prs.to', { base: p.base })}</span>
+              {#if p.checks && p.state === 'open'}
+                <!-- Its CI opens the side panel's « PR et CI » on it, even where the panel is too narrow for that tab (choice 189). -->
+                <button class="prci {p.checks}" use:tip={t('prs.seeCi', { word, number: p.number })} onclick={() => showCi(a.id)}
+                  >{t(`prs.checks.${p.checks}`)}</button
+                >
+              {/if}
               {#if !a.archived && canFixChecks(p)}
                 <button
                   class="prfix"
@@ -1678,16 +1720,17 @@
     inset: 0 0 0 -6px;
   }
 
-  /* Agents | Kanban | Docs. */
+  /* Agents | Kanban | PR | Docs: each its own width, the short « PR » the least. */
   .seg {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: auto auto auto auto;
+    justify-content: space-between;
     gap: 0;
   }
   .seg button {
-    gap: 7px;
-    padding: 0;
-    font-size: 13px;
+    gap: 4px;
+    padding: 0 3px;
+    white-space: nowrap;
   }
   .seg .count {
     color: var(--dim);
@@ -1753,6 +1796,12 @@
   }
   /* Narrow (ESC-204), « Nouvel agent » stays whole: its shortcut goes, still in its tooltip; on a card, the bars of a
      plan and of a ticket's loops go, their words stay. */
+  /* Below its default width, the four views keep their words, without their icons. */
+  @container sidebar (max-width: 255px) {
+    .seg button :global(.icon) {
+      display: none;
+    }
+  }
   @container sidebar (max-width: 250px) {
     .new-agent kbd,
     .plan-bar,
@@ -2239,6 +2288,44 @@
   }
   .prnum.dim {
     color: var(--muted);
+  }
+  .prdown {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    margin: -2px 6px 4px 30px;
+    color: var(--warn-ink);
+    font-size: 11px;
+  }
+  .prto {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--muted);
+    font: 11px var(--mono);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .prci {
+    padding: 0;
+    border: none;
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .prci:hover {
+    text-decoration: underline;
+  }
+  .prci.success {
+    color: var(--run);
+  }
+  .prci.failure {
+    color: var(--del);
+  }
+  .prci.pending {
+    color: var(--wait);
   }
   .prfix {
     background: rgba(var(--fg-rgb), 0.05);

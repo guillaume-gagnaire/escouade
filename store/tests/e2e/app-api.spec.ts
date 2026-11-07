@@ -27,7 +27,7 @@ async function publish(page: Page, login: string, repo: string): Promise<string>
   await page.locator('.choices li', { hasText: repo }).getByRole('link', { name: 'Choisir' }).click();
   await page.getByRole('button', { name: 'Lancer les contrôles' }).click();
   await expect(page.locator('.check.run')).toHaveCount(0, { timeout: 20_000 });
-  await expect(page.locator('.check.pass')).toHaveCount(10);
+  await expect(page.locator('.check.pass')).toHaveCount(11);
   await page.getByRole('link', { name: 'Continuer' }).click();
   await page.getByRole('button', { name: 'Publier, non vérifié' }).click();
   await expect(page).toHaveURL(/notice=published$/);
@@ -41,9 +41,9 @@ async function catalog(request: APIRequestContext) {
   return { res, body: await res.json() };
 }
 
-test('the app reads the catalogue, version.json, the archive and the binaries, each checked by its SHA-256', async ({ page, request }) => {
+test('the app reads the catalogue, version.json, the archive and the module, each checked by its SHA-256', async ({ page, request }) => {
   const login = `ada-api-${RUN}`;
-  const repo = `pager-${RUN}-bin`;
+  const repo = `pager-${RUN}-wasm`;
   await publish(page, login, repo);
 
   const { res, body } = await catalog(request);
@@ -55,7 +55,7 @@ test('the app reads the catalogue, version.json, the archive and the binaries, e
   expect(plugin).toMatchObject({ author: login, installs: 0, categories: expect.any(Array) });
   const v = plugin.versions.find((x: { version: string }) => x.version === plugin.latest);
   expect(v).toMatchObject({ verified: false, run: true, escouade: { api: '1' } });
-  expect(v.platforms).toEqual(expect.arrayContaining(['linux-x64', 'windows-x64', 'macos-arm64']));
+  expect(v.platforms).toEqual([]);
 
   // The ETag: the same bytes are not sent twice; compressed for a client that takes gzip.
   const etag = res.headers()['etag']!;
@@ -83,11 +83,10 @@ test('the app reads the catalogue, version.json, the archive and the binaries, e
   expect(sha(await archive.body())).toBe(file.archive.sha256);
   expect(Number(archive.headers()['content-length'])).toBe(file.archive.size);
   expect((await request.get(v.files.archive, { headers: { ...from(), 'if-none-match': `"${file.archive.sha256}"` } })).status()).toBe(304);
-  for (const [platform, path] of Object.entries(v.files.binaries as Record<string, string>)) {
-    const bin = await request.get(path, { headers: from() });
-    expect(bin.status(), platform).toBe(200);
-    expect(sha(await bin.body()), platform).toBe(file.binaries[platform].sha256);
-  }
+  const module = await request.get(v.files.wasm, { headers: from() });
+  expect(module.status()).toBe(200);
+  expect(sha(await module.body())).toBe(file.wasm.sha256);
+  expect(Number(module.headers()['content-length'])).toBe(file.wasm.size);
   const head = await request.head(v.files.archive, { headers: from() });
   expect(head.status()).toBe(200);
   expect(Number(head.headers()['content-length'])).toBe(file.archive.size);

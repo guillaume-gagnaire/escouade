@@ -7,9 +7,14 @@
   import { shownOnBoard } from '../../lib/sharing';
   import { app } from '../../lib/state.svelte';
   import type { Project } from '../../lib/types';
+  import { ciShown, redTargetHolds, targetCiOf } from '../../lib/branch-ci';
+  import { fSince } from '../../lib/format';
+  import CiPill from '../CiPill.svelte';
   import Icon from '../Icon.svelte';
   import BoardColumn from './BoardColumn.svelte';
+  import EnvironmentsView from './EnvironmentsView.svelte';
   import { tip } from '../../lib/tip';
+  import { prColumnShown } from '../../lib/ticket-prs';
 
   let { project: given }: { project: Project } = $props();
 
@@ -22,6 +27,8 @@
   const hiddenCount = $derived(all.filter((x) => x.shared?.hidden).length);
   const tickets = $derived(shownOnBoard(all, showHidden));
   const busyCount = $derived(busy(tickets));
+  /** « En revue » (ESC-59) only when the board opens pull requests, or while a ticket is in it. */
+  const columns = $derived(COLUMNS.filter((c) => c.id !== 'pr' || prColumnShown(s, all)));
   const looping = $derived(tickets.filter((x) => x.column === 'doing').length);
   /** When the agents waiting for their quota resume, if every account this project could use waits for its own. */
   const quota = $derived(quotaOf(project));
@@ -39,6 +46,14 @@
   /** The project's harness has no account (ESC-128): « Ajouter un compte… » beside why nothing starts. */
   const engine = $derived(project.engine ?? defaultEngine());
   const noAccount = $derived(!hasAccount(engine));
+  /** The view « Environnements » in place of the tickets (ESC-67). */
+  const envs = $derived(!!app.envView[project.id]);
+  /** The CI of its target branch (ESC-63), as last read: the pill of the header; none without a host Escouade reads. */
+  const targetCi = $derived(targetCiOf(project));
+  /** Its pill: none for a target without any CI. */
+  const targetPill = $derived(ciShown(targetCi) ? targetCi : null);
+  /** « Pause quand la CI de la cible est rouge » holds the autopilot's tickets back now. */
+  const redHold = $derived(s.autopilot && redTargetHolds(s, targetCi));
 
   async function toggleAutopilot() {
     // The project comes back through the backend's event, in order with any newer one: its answer is not written over it.
@@ -49,11 +64,35 @@
 <main class="board">
   <header class="head">
     <div class="h-title">
-      <h1>Kanban</h1>
+      <h1>{envs ? t('envs.view.title') : 'Kanban'}</h1>
       <div class="crumbs" use:tip={{ text: `${project.name} · ${sub}`, cut: true }}>
         <span class="proj-name">{project.name}</span><span aria-hidden="true">·</span><span class="num sub">{sub}</span>
       </div>
+      <!-- Beside the title and its line, in the room they leave: the controls keep their place (ESC-67). -->
+      <div class="tabs" role="group" aria-label={t('envs.tabs.label')}>
+        <button
+          class:on={!envs}
+          aria-pressed={!envs}
+          aria-label={t('envs.tabs.tickets')}
+          use:tip={t('envs.tabs.tickets')}
+          onclick={() => (app.envView[project.id] = false)}
+          ><Icon name="kanban" size={14} /><span class="tl">{t('envs.tabs.tickets')}</span></button
+        >
+        <button
+          class:on={envs}
+          aria-pressed={envs}
+          aria-label={t('envs.tabs.environments')}
+          use:tip={t('envs.tabs.environments')}
+          data-env-tab
+          onclick={() => (app.envView[project.id] = true)}
+          ><Icon name="globe" size={14} /><span class="tl">{t('envs.tabs.environments')}</span></button
+        >
+      </div>
     </div>
+    {#if targetPill}
+      <!-- The CI of its target branch (ESC-63): « main ✗ depuis 2 h »; its jobs, their logs and their re-run on a click. -->
+      <span class="target-ci"><CiPill ci={targetPill} of={{ kind: 'target', id: project.id }} projectId={project.id} /></span>
+    {/if}
     {#if !app.enginesFound.length}
       <!-- No place is worth showing: nothing starts without a harness. -->
       <span class="places missing" use:tip={{ text: t('board.header.noEngine'), cut: true }}>{t('board.header.noEngine')}</span>
@@ -61,8 +100,8 @@
       <!-- Nor while the target branch cannot start a ticket. -->
       <span class="places missing" use:tip={{ text: issue, cut: true }}>{issue}</span>
       {#if noAccount}<button class="btn add-account" onclick={() => addAccount(engine)}>{t('accounts.tab.add')}</button>{/if}
-    {:else if pause}
-      <!-- Nor while the autopilot is paused: the band under the header says why. -->
+    {:else if pause || redHold}
+      <!-- Nor while the autopilot is paused (a quota, a limit, a red target): the band under the header says why. -->
     {:else}
       <span class="places" use:tip={{ text: places, cut: true }}>{places}</span>
     {/if}
@@ -107,6 +146,17 @@
       <button class="btn" onclick={() => app.run(api.autopilotResume())}>{t('board.header.resumeNow')}</button>
     </div>
   {/if}
+  {#if redHold && targetCi}
+    <!-- « Pause quand la CI de la cible est rouge » (ESC-63): nothing starts by itself until it is green again. -->
+    {@const why = t('board.ci.paused', { branch: targetCi.branch, since: targetCi.redSince ? fSince(targetCi.redSince, app.now) : '' })}
+    <div class="band pause" role="status" data-red-target>
+      <Icon name="pause" size={14} />
+      <span class="why" use:tip={{ text: why, cut: true }}>{why}</span>
+      <button class="btn" onclick={() => (app.modal = { kind: 'ci', of: { kind: 'target', id: project.id }, projectId: project.id })}
+        >{t('board.ci.pausedShow')}</button
+      >
+    </div>
+  {/if}
   {#if hasPending(project)}
     <!-- Its .escouade.yml brought commands that wait for the user: nothing of them runs until then (ESC-146, choice 29). -->
     <div class="band shared" role="status">
@@ -126,11 +176,15 @@
       >
     </div>
   {/if}
-  <div class="cols">
-    {#each COLUMNS as c (c.id)}
-      <BoardColumn column={c} tickets={columnTickets(tickets, c.id)} {project} {busyCount} {quota} />
-    {/each}
-  </div>
+  {#if envs}
+    <EnvironmentsView {project} />
+  {:else}
+    <div class="cols" style:--n={columns.length}>
+      {#each columns as c (c.id)}
+        <BoardColumn column={c} tickets={columnTickets(tickets, c.id)} {project} {busyCount} {quota} />
+      {/each}
+    </div>
+  {/if}
 </main>
 
 <style>
@@ -152,11 +206,22 @@
     border-bottom: 1px solid var(--line);
     white-space: nowrap;
   }
+  .target-ci {
+    display: flex;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 240px;
+  }
   .h-title {
     display: grid;
+    grid-template-columns: auto minmax(0, auto);
+    justify-content: start;
     gap: 2px;
     min-width: 0;
     margin-right: auto;
+  }
+  .h-title > :not(.tabs) {
+    grid-column: 1;
   }
   h1 {
     margin: 0;
@@ -211,6 +276,38 @@
     display: flex;
     align-items: center;
     gap: 6px;
+  }
+  /* « Tickets · Environnements » (ESC-67): the board's two views. */
+  .tabs {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    align-self: center;
+    margin-left: 14px;
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 9px;
+    background: var(--raise);
+  }
+  .tabs button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+    padding: 0 10px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 550;
+    cursor: pointer;
+  }
+  .tabs button.on {
+    background: rgba(var(--fg-rgb), 0.08);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--text);
   }
   /* « Après validation : merge squash → main », the button of the Kanban's settings. */
   .cfg {
@@ -290,6 +387,13 @@
     .places:not(.missing) {
       display: none;
     }
+    /* The tabs keep their icons alone: their names are in their tooltips. */
+    .tabs .tl {
+      display: none;
+    }
+    .tabs button {
+      padding: 0 7px;
+    }
     .places.missing {
       max-width: 132px;
       font-size: 11.5px;
@@ -353,7 +457,7 @@
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-columns: repeat(4, minmax(220px, 1fr));
+    grid-template-columns: repeat(var(--n, 4), minmax(220px, 1fr));
     gap: 14px;
     padding: 16px 16px 16px 18px;
     overflow: auto;

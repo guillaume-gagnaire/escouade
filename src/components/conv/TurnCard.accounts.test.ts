@@ -14,7 +14,7 @@ const TEAM: Account = { id: 'team', name: 'Équipe', configDir: 'C:\\claude\\tea
 const OFF: Account = { id: 'off', name: 'Ancien', configDir: 'C:\\claude\\off', claudePath: '', active: false };
 
 const NOW = new Date(2026, 9, 10, 14, 0).getTime();
-const win = (pct: number): RateWindow => ({ pct, resetsAt: NOW + 3_600_000 });
+const win = (pct: number, resetsAt = NOW + 3_600_000): RateWindow => ({ pct, resetsAt });
 const read = (id: string, over: Parameters<typeof usageOf>[1] = {}): AccountUsage => usageOf(id, over);
 
 const turn = (over: Partial<TurnItem> = {}): TurnItem => ({
@@ -97,15 +97,34 @@ describe('TurnCard of a turn stopped by the usage limit, with several accounts',
     expect(screen.getAllByRole('button').map((b) => b.textContent?.trim())).toEqual(['Annuler la reprise', 'Reprendre sur Principal']);
   });
 
+  it('offers an account whose week is past the threshold but starts again soon on pace, not one that would not last (PR #20)', () => {
+    // 94 % of the week, starting again in an hour: on pace and under the 95 % margin, the agent would not meet the limit there.
+    const onPace = render(TurnCard, {
+      item: turn(),
+      agent: stopped({}, [PRINCIPAL, PRO], [read('pro', { sevenDay: win(94) })]),
+      last: true,
+    });
+    expect(resume('Pro')).toBeInTheDocument();
+    onPace.unmount();
+    // 95 % of the week, 3 days left: 166 % at the reset, past the 90 % threshold.
+    const behind = render(TurnCard, {
+      item: turn(),
+      agent: stopped({}, [PRINCIPAL, PRO], [read('pro', { sevenDay: win(95, NOW + 3 * 24 * 3_600_000) })]),
+      last: true,
+    });
+    expect(resume('Pro')).not.toBeInTheDocument();
+    behind.unmount();
+  });
+
   it('offers nothing with a single account, with no other one to go to, or while the agent works', () => {
     // A single account.
     const alone = render(TurnCard, { item: turn(), agent: stopped({}, [PRINCIPAL]), last: true });
     expect(screen.queryByRole('button', { name: /^Reprendre sur/ })).not.toBeInTheDocument();
     alone.unmount();
-    // The others are past the threshold.
+    // The others are at their limit.
     const over = render(TurnCard, {
       item: turn(),
-      agent: stopped({}, [PRINCIPAL, PRO], [read('pro', { sevenDay: win(99) })]),
+      agent: stopped({}, [PRINCIPAL, PRO], [read('pro', { sevenDay: win(100) })]),
       last: true,
     });
     expect(screen.queryByRole('button', { name: /^Reprendre sur/ })).not.toBeInTheDocument();

@@ -1,9 +1,10 @@
 //! Cursor on the bench, through the fake `agent acp` (tests/fixtures/fake-cursor.mjs), whose message
-//! picks the scenario; and the real streams of Cursor CLI 2026.10.22 (tests/fixtures/cursor/),
-//! replayed from tests/fixtures/replays/cursor/.
+//! picks the scenario, its conversation through its plugin (INT-10.1). The real streams of Cursor CLI
+//! 2026.10.22 (tests/fixtures/cursor/) are replayed by the plugin's client against
+//! tests/fixtures/replays/cursor/ (`plugins_acp_tests`).
 
 use super::CURSOR;
-use crate::engine::bench::{bench_dir, replay, run, Scenario, Target};
+use crate::engine::bench::{bench_dir, run, Scenario, Target};
 use crate::engine::{Engine, Program};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -91,8 +92,12 @@ impl Target for OnBench {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn the_fake_cursor_passes_the_bench() {
+    // Its conversation goes through its plugin (INT-10.1): the plugins the app gives, in a runtime of their own.
+    let (rt, plugins, _) = crate::plugins_acp_tests::runtime("int10-cursor-bench");
+    crate::plugins::harness::sync(&rt, &plugins);
+    assert!(super::plugged().is_some(), "the plugin Cursor CLI is on");
     let dir = bench_dir("esc42-bench-cursor");
     let played = run(&OnBench, &dir).await;
     // No copy nor quota in ACP: neither asked of it.
@@ -110,9 +115,5 @@ async fn the_fake_cursor_passes_the_bench() {
             Scenario::Resume,
         ]
     );
-}
-
-#[test]
-fn the_recorded_streams_of_cursor_make_the_items_expected() {
-    replay::check_all(&CURSOR, "cursor");
+    rt.shutdown();
 }

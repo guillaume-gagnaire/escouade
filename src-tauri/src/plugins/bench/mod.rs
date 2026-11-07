@@ -6,6 +6,10 @@
 //! A scenario that the manifest says does not concern the plugin is not played: no fact without
 //! `permissions.events`, no decision without `permissions.decide`, nothing of a program for a
 //! declarative plugin.
+//!
+//! A `run.js` plugin is played in WASM (ESC-322), as the app runs it: its bundle compiled by the pinned Javy with the
+//! app's escouade-js and prelude (`plugins::wasm`), then its instance in the app's host, without Node. A `run.wasm`
+//! plugin too (ESC-331, ESC-335): compiled as the store does, or the module given.
 
 pub mod cli;
 pub mod fake;
@@ -50,10 +54,14 @@ pub enum Scenario {
     Crash,
     /// It answers `shutdown`, then ends.
     Shutdown,
+    /// A source of tickets: `account/me` and the lists answered, or refused by a typed error (INT-5).
+    Tickets,
+    /// A code host: `account/me` and a pull request read, or refused by a typed error (INT-5).
+    Forge,
 }
 
 impl Scenario {
-    pub const ALL: [Scenario; 9] = [
+    pub const ALL: [Scenario; 11] = [
         Scenario::Manifest,
         Scenario::Initialize,
         Scenario::Version,
@@ -63,6 +71,8 @@ impl Scenario {
         Scenario::Secret,
         Scenario::Crash,
         Scenario::Shutdown,
+        Scenario::Tickets,
+        Scenario::Forge,
     ];
 
     pub fn label(self, lang: Lang) -> &'static str {
@@ -76,6 +86,8 @@ impl Scenario {
             Scenario::Secret => ("Un secret", "A secret"),
             Scenario::Crash => ("Plantage", "Crash"),
             Scenario::Shutdown => ("Fermeture", "Shutdown"),
+            Scenario::Tickets => ("Source de tickets", "Ticket source"),
+            Scenario::Forge => ("Hébergeur", "Code host"),
         };
         match lang {
             Lang::Fr => fr,
@@ -139,6 +151,8 @@ pub struct Measure {
 pub struct Report {
     /// Its id and version, or its folder when its manifest does not hold.
     pub plugin: String,
+    /// The version of Escouade it was played as (`--escouade`, else this tool's): the local review reports it.
+    pub escouade: String,
     pub outcomes: Vec<Outcome>,
     pub timings: Vec<Timing>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -224,14 +238,25 @@ pub struct Options {
     pub app_version: String,
     /// The folder of the app's programs (`{escouade}/…` of a plugin of Escouade's own).
     pub escouade_dir: PathBuf,
-    /// A plugin of Escouade's own, which may take its ids and programs.
-    pub builtin: bool,
+    /// Whose hand the plugin is (`--first-party`, `--builtin`): what it may take of Escouade's own.
+    pub hand: manifest::Hand,
     /// The delay of `initialize`.
     pub initialize: Duration,
     /// How long past its delay an answer is still waited for, to say how late it came.
     pub grace: Duration,
     /// Round trips to measure; none when 0.
     pub measure: usize,
+    /// Where the pinned Javy is downloaded and the modules of the `run.js` plugins kept: the app's data folder.
+    pub data: PathBuf,
+    /// The limits of an instance in WASM: the app's.
+    pub wasm: super::wasm::Limits,
+    /// The module of a plugin in WASM to play as it is, in place of its sources compiled here:
+    /// the one the store published, played by the local review (`--wasm`, ESC-324).
+    pub module: Option<PathBuf>,
+    /// No `net/fetch` reaches the network, whatever `permissions.network` says (`--offline`): the review's bench.
+    pub offline: bool,
+    /// The hosts `{account}` reaches here (`--account`): what the user would have typed.
+    pub accounts: Vec<String>,
 }
 
 impl Default for Options {
@@ -243,10 +268,15 @@ impl Default for Options {
                 .ok()
                 .and_then(|p| p.parent().map(Path::to_path_buf))
                 .unwrap_or_default(),
-            builtin: false,
+            hand: manifest::Hand::Third,
             initialize: timeout_of("initialize"),
             grace: Duration::from_secs(2),
             measure: 0,
+            data: crate::paths::tools_data_dir(),
+            wasm: super::wasm::Limits::default(),
+            module: None,
+            offline: false,
+            accounts: Vec::new(),
         }
     }
 }
@@ -300,6 +330,146 @@ fn fact_of(patterns: &[String]) -> Option<String> {
             Some(p.clone())
         }
     })
+}
+
+/// The program the bench plays: a process, or the module of a plugin in WASM.
+#[derive(Clone)]
+pub enum Program {
+    Process(PathBuf),
+    Wasm {
+        /// Its bundle or its module, for what the bench says.
+        bundle: PathBuf,
+        module: wasmtime::Module,
+    },
+}
+
+impl Program {
+    pub fn path(&self) -> &Path {
+        match self {
+            Program::Process(p) => p,
+            Program::Wasm { bundle, .. } => bundle,
+        }
+    }
+
+    /// Starts it under the fake Escouade.
+    pub fn start(
+        &self,
+        folder: &Path,
+        m: &Manifest,
+        o: &Options,
+        secrets: HashMap<String, String>,
+        made: Option<String>,
+    ) -> std::io::Result<Session> {
+        match self {
+            Program::Process(p) => Session::start(folder, m, p, &o.app_version, secrets, made),
+            Program::Wasm { module, .. } => Session::start_wasm(
+                folder,
+                m,
+                module.clone(),
+                secrets,
+                made,
+                o.wasm.asked(m.limits),
+                fake::Reach {
+                    offline: o.offline,
+                    accounts: o.accounts.clone(),
+                },
+            ),
+        }
+    }
+}
+
+/// The module of the `run.wasm` plugin of `folder`, whose `run.wasm` is `cargo_file`: the one given, or compiled as the
+/// store does it. Why not, in words, and what the author should do.
+fn reactor_of(folder: &Path, cargo_file: &str, o: &Options) -> Result<Program, (String, String)> {
+    let lang = o.lang;
+    let path = o.module.clone().unwrap_or_else(|| folder.join(cargo_file));
+    let path = std::path::absolute(&path).unwrap_or(path);
+    let build = || {
+        tr_in!(
+            lang,
+            "un crate-type = [\"cdylib\"] avec son Cargo.lock, ou un module donné par --wasm.",
+            "a crate-type = [\"cdylib\"] with its Cargo.lock, or a module given by --wasm."
+        )
+    };
+    let said = |e: String| (tr_in!(lang, "{} : {e}", "{}: {e}", path.display()), build());
+    let bytes = match &o.module {
+        Some(_) => std::fs::read(&path).map_err(|e| said(e.to_string()))?,
+        None => {
+            escouade_plugin_cli::cli::module_of_crate(folder, cargo_file, &o.data, lang)
+                .map_err(said)?
+                .bytes
+        }
+    };
+    let module = super::wasm::reactor(&bytes).map_err(said)?;
+    Ok(Program::Wasm {
+        bundle: path,
+        module,
+    })
+}
+
+/// The program of the plugin of `m` in `folder`: its process, its module, or its bundle compiled to its module (in the
+/// cache of `o.data`); why not, in words, and what the author should do.
+pub fn program_of(folder: &Path, m: &Manifest, o: &Options) -> Result<Program, (String, String)> {
+    let lang = o.lang;
+    let run = m.run.as_ref().expect("a program");
+    if let Some(cargo_file) = &run.wasm {
+        return reactor_of(folder, cargo_file, o);
+    }
+    let Some(js) = &run.js else {
+        return Ok(Program::Process(program_path(folder, run, &o.escouade_dir)));
+    };
+    let bundle = std::path::absolute(folder.join(js)).unwrap_or_else(|_| folder.join(js));
+    let one_file = || {
+        tr_in!(
+            lang,
+            "un bundle en un fichier (esbuild, `npm run build` du SDK), qui n'importe que node:fs et node:readline.",
+            "a bundle of one file (esbuild, the SDK's `npm run build`), which imports only node:fs and node:readline."
+        )
+    };
+    let text = std::fs::read_to_string(&bundle).map_err(|e| {
+        (
+            tr_in!(lang, "{} : {e}", "{}: {e}", bundle.display()),
+            one_file(),
+        )
+    })?;
+    if let Err(r) = super::wasm::script_of(&text) {
+        return Err((r.message(lang), one_file()));
+    }
+    // The module given (`--wasm`): played as it is, never compiled again here.
+    if let Some(path) = &o.module {
+        let bytes = std::fs::read(path).map_err(|e| {
+            (
+                tr_in!(lang, "{} : {e}", "{}: {e}", path.display()),
+                one_file(),
+            )
+        })?;
+        return wasmtime::Module::new(super::wasm::engine(), &bytes)
+            .map(|module| Program::Wasm { bundle, module })
+            .map_err(|e| {
+                (
+                    tr_in!(
+                        lang,
+                        "{} n'est pas un module WASM : {e:#}",
+                        "{} is not a WASM module: {e:#}",
+                        path.display()
+                    ),
+                    one_file(),
+                )
+            });
+    }
+    let modules =
+        super::wasm::Modules::new(&crate::paths::DataDir::new(o.data.clone()), &o.app_version);
+    match modules.prepare(folder, js) {
+        Ok((module, _)) => Ok(Program::Wasm { bundle, module }),
+        Err(e) => Err((
+            tr_in!(
+                lang,
+                "{js} ne se compile pas en WASM : {e}",
+                "{js} does not compile to WASM: {e}"
+            ),
+            one_file(),
+        )),
+    }
 }
 
 fn ms(d: Duration) -> u64 {
@@ -365,12 +535,11 @@ impl Bench<'_> {
             .collect()
     }
 
-    fn start(&self, m: &Manifest, program: &Path) -> std::io::Result<Session> {
-        Session::start(
+    fn start(&self, m: &Manifest, program: &Program) -> std::io::Result<Session> {
+        program.start(
             &self.folder,
             m,
-            program,
-            &self.o.app_version,
+            self.o,
             self.secrets(m),
             Some(format!("bench-secret-{}", self.nonce)),
         )
@@ -395,7 +564,7 @@ impl Bench<'_> {
     async fn initialized(
         &mut self,
         m: &Manifest,
-        program: &Path,
+        program: &Program,
     ) -> Result<(Session, String), (String, String)> {
         let lang = self.o.lang;
         let s = self.start(m, program).map_err(|e| {
@@ -404,7 +573,7 @@ impl Bench<'_> {
                     lang,
                     "{} ne démarre pas : {e}",
                     "{} does not start: {e}",
-                    program.display()
+                    program.path().display()
                 ),
                 tr_in!(
                     lang,
@@ -550,6 +719,7 @@ pub async fn run(folder: &Path, o: &Options) -> Report {
     let skip = b.seen.len().saturating_sub(SEEN_KEPT);
     Report {
         plugin,
+        escouade: o.app_version.clone(),
         outcomes,
         timings: b.timings,
         measure,
@@ -582,7 +752,7 @@ fn manifest_of(b: &mut Bench) -> Option<Manifest> {
             return None;
         }
     };
-    let m = match manifest::read_in(&text, b.o.builtin, &b.folder).manifest {
+    let m = match manifest::read_in(&text, b.o.hand, &b.folder).manifest {
         Ok(m) => m,
         Err(problems) => {
             let said: Vec<String> = problems.iter().map(|p| p.message(lang)).collect();
@@ -622,8 +792,23 @@ fn manifest_of(b: &mut Bench) -> Option<Manifest> {
 /// The scenarios of a program; the round trips measured when asked.
 async fn program(b: &mut Bench<'_>, m: &Manifest) -> Option<Measure> {
     let lang = b.o.lang;
-    let run = m.run.as_ref().expect("a program");
-    let program = program_path(&b.folder, run, &b.o.escouade_dir);
+    // Its process, or its module (made off the runtime's threads: Javy takes a second or two).
+    let (folder, manifest, o) = (b.folder.clone(), m.clone(), b.o.clone());
+    let made = tokio::task::spawn_blocking(move || program_of(&folder, &manifest, &o))
+        .await
+        .unwrap_or_else(|e| Err((e.to_string(), String::new())));
+    let program = match made {
+        Ok(p) => p,
+        Err((said, missing)) => {
+            b.fail(Scenario::Initialize, said, missing);
+            b.skip_rest(&tr_in!(
+                lang,
+                "l'initialisation doit passer d'abord",
+                "the initialization must pass first"
+            ));
+            return None;
+        }
+    };
 
     // Initialization.
     let first = match b.initialized(m, &program).await {
@@ -801,6 +986,33 @@ async fn program(b: &mut Bench<'_>, m: &Manifest) -> Option<Measure> {
             ),
         }
     }
+
+    // The points it serves (INT-5): the calls of the core's adapters, answered or refused typed.
+    point(
+        b,
+        &first,
+        Scenario::Tickets,
+        declared(m, "ticketSources"),
+        &[
+            ("account/me", json!({ "point": "ticketSource" })),
+            ("tickets/containers", json!({})),
+        ],
+    )
+    .await;
+    point(
+        b,
+        &first,
+        Scenario::Forge,
+        declared(m, "forges"),
+        &[
+            ("account/me", json!({ "point": "forge" })),
+            (
+                "forge/pullRequestsOfBranch",
+                json!({ "repo": { "namespace": "bench", "name": "bench" }, "branch": "bench" }),
+            ),
+        ],
+    )
+    .await;
 
     // What it does not serve, refused at once.
     let unknown = b
@@ -1008,7 +1220,7 @@ async fn program(b: &mut Bench<'_>, m: &Manifest) -> Option<Measure> {
 }
 
 /// Offered a version it does not speak, it must say its own or refuse: never take it.
-async fn version(b: &mut Bench<'_>, m: &Manifest, program: &Path) {
+async fn version(b: &mut Bench<'_>, m: &Manifest, program: &Program) {
     let lang = b.o.lang;
     let missing = tr_in!(
         lang,
@@ -1020,7 +1232,7 @@ async fn version(b: &mut Bench<'_>, m: &Manifest, program: &Path) {
         Err(e) => {
             b.fail(
                 Scenario::Version,
-                format!("{}: {e}", program.display()),
+                format!("{}: {e}", program.path().display()),
                 missing,
             );
             return;
@@ -1169,4 +1381,131 @@ fn secret(b: &mut Bench, m: &Manifest) {
             ),
         );
     }
+}
+
+/// The id of the first of the manifest's `contributes.<point>`, when it has some.
+fn declared(m: &Manifest, point: &str) -> Option<String> {
+    m.contributes
+        .get(point)?
+        .as_array()?
+        .first()?
+        .get("id")?
+        .as_str()
+        .map(str::to_string)
+}
+
+/// Whether `code` is one the contract names for a refusal: an HTTP status (`-(32000 + status)`),
+/// a refusal that lasts, or a call the service does not serve.
+fn typed_code(code: i64) -> bool {
+    (-32_599..=-32_400).contains(&code)
+        || code == super::adapters::REFUSED
+        || code == METHOD_NOT_FOUND
+}
+
+/// The scenario of a point of extension (a source, a host): each call answered within its delay,
+/// by a result or a typed error. Not played when the manifest declares no such point.
+async fn point(
+    b: &mut Bench<'_>,
+    s: &Session,
+    scenario: Scenario,
+    id: Option<String>,
+    calls: &[(&str, Value)],
+) {
+    let lang = b.o.lang;
+    let Some(id) = id else {
+        b.set(
+            scenario,
+            Verdict::Skip,
+            tr_in!(
+                lang,
+                "il ne déclare pas ce point (`contributes`)",
+                "it declares no such point (`contributes`)"
+            ),
+            None,
+        );
+        return;
+    };
+    let mut done = Vec::new();
+    let mut out_of_reach = Vec::new();
+    for (method, extra) in calls {
+        let mut params = json!({ "source": id, "forge": id, "account": {} });
+        if let (Some(p), Value::Object(extra)) = (params.as_object_mut(), extra) {
+            p.extend(extra.clone());
+        }
+        let (said, missing) = match b.timed(s, method, &params, timeout_of(method)).await {
+            Reply::Answered { result: Ok(_), .. } => {
+                done.push(format!("{method}: ok"));
+                continue;
+            }
+            Reply::Answered { result: Err(e), .. } if typed_code(e.code) => {
+                done.push(format!("{method}: {}", e.code));
+                continue;
+            }
+            // Offline (the review's bench) its service is out of reach, the host's refusal is what it says: how it
+            // tells a service's error cannot be judged here. A reachable host is judged by the author's bench.
+            Reply::Answered { result: Err(e), .. }
+                if b.o.offline && e.message.contains("permissions.network") =>
+            {
+                out_of_reach.push(method.to_string());
+                continue;
+            }
+            Reply::Answered { result: Err(e), .. } => (
+                tr_in!(
+                    lang,
+                    "{method} : erreur {} ({}) qui n'est pas typée",
+                    "{method}: error {} ({}) which is not typed",
+                    e.message,
+                    e.code
+                ),
+                tr_in!(
+                    lang,
+                    "dire une erreur du service par `-(32000 + statut)` (-32401 : jeton refusé), un refus durable par -32010, un appel non servi par -32601.",
+                    "say a service error by `-(32000 + status)` (-32401: token refused), a lasting refusal by -32010, an unserved call by -32601."
+                ),
+            ),
+            Reply::Silent => (
+                tr_in!(
+                    lang,
+                    "{method} : aucune réponse dans son délai",
+                    "{method}: no answer within its delay"
+                ),
+                tr_in!(
+                    lang,
+                    "répondre à chaque appel, même par une erreur : sans réponse, la synchro attend en vain.",
+                    "answer every call, even by an error: without an answer, the sync waits in vain."
+                ),
+            ),
+            Reply::Ended { code, tail } => (
+                tr_in!(
+                    lang,
+                    "{method} : le programme s'est terminé ({}){}",
+                    "{method}: the program ended ({}){}",
+                    code.map_or("no code".into(), |c| format!("code {c}")),
+                    tail_of(&tail)
+                ),
+                tr_in!(
+                    lang,
+                    "ne pas planter sur un appel d'un point déclaré.",
+                    "not crash on a call of a declared point."
+                ),
+            ),
+        };
+        b.fail(scenario, said, missing);
+        return;
+    }
+    if !out_of_reach.is_empty() {
+        let calls = out_of_reach.join(", ");
+        b.set(
+            scenario,
+            Verdict::Skip,
+            tr_in!(
+                lang,
+                "hors ligne : {calls} joignent leur service, leurs réponses ne se jugent pas ici",
+                "offline: {calls} reach their service, their answers cannot be judged here"
+            ),
+            None,
+        );
+        return;
+    }
+    b.pass(scenario, done.join(" ; "));
 }

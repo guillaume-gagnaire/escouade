@@ -74,9 +74,44 @@ jobs:
           fi
           echo "id=$id" >> "$GITHUB_OUTPUT"
 
+  # escouade-js, the Javy plugin of the run.js plugins (ESC-320, docs/PLUGINS.md §5): built once for wasm32-wasip1 with the
+  # pinned Javy (scripts/escouade-js.sh), its SHA-256 noted, then handed to every job that builds the app, which embeds it.
+  escouade-js:
+    name: escouade-js (the JS/TS plugins' engine)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust toolchain (pinned in src-tauri/escouade-js/rust-toolchain.toml) and wasm32-wasip1
+        working-directory: src-tauri/escouade-js
+        run: |
+          rustup toolchain install
+          rustup target add wasm32-wasip1
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri/escouade-js
+          # The script decides what rustc is given (its wrapper is no input cargo sees): a cache made by another one would hand
+          # back a module with this machine's paths, and the store's image would embed another escouade-js.
+          key: ${{ hashFiles('scripts/escouade-js.sh') }}
+
+      - name: Build escouade-js
+        run: |
+          sh scripts/escouade-js.sh
+          echo "escouade-js.wasm: $(wc -c < src-tauri/escouade-js/target/escouade-js.wasm) bytes, SHA-256 $(cat src-tauri/escouade-js/target/escouade-js.wasm.sha256)" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: escouade-js
+          path: |
+            src-tauri/escouade-js/target/escouade-js.wasm
+            src-tauri/escouade-js/target/escouade-js.wasm.sha256
+          retention-days: 7
+
   build:
     name: Build and upload (${{ matrix.name }})
-    needs: create
+    needs: [create, escouade-js]
     strategy:
       fail-fast: false
       matrix:
@@ -99,10 +134,24 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # escouade-js, embedded in the app (src-tauri/build.rs).
+      - name: Download escouade-js
+        uses: actions/download-artifact@v7
+        with:
+          name: escouade-js
+          path: src-tauri/escouade-js/target
+
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
+
+      # The seed of the plugins (ESC-338, docs/PLUGINS.md §8.7): what plugins/seed.json names, the store's bytes, every
+      # signature checked with the public keys of store/keys/. A version not published, not signed or revoked stops the
+      # release: the chef publishes first, the release comes after. Tauri packs src-tauri/seed/ in the installer.
+      - name: Download and check the seed of the plugins
+        shell: bash
+        run: npx --yes tsx@4.23.15 store/scripts/seed.ts fetch
 
       - name: Rust toolchain (pinned in src-tauri/rust-toolchain.toml)
         working-directory: src-tauri
@@ -117,8 +166,12 @@ jobs:
       - name: System libraries of the Linux app (WebKitGTK, tray, AppImage, sound, whisper.cpp)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libasound2-dev libclang-dev cmake
+          # A stalled mirror once held this step 28 minutes (2026-11-04): each request gives up after 30 s and is tried again.
+          # Then Azure's mirror crawled through the big packages for all the 45 minutes of a job (2026-11-06): apt only leaves
+          # a mirror that fails, so Canonical's, already in the runner's list, goes first and Azure's stays behind it.
+          [ ! -f /etc/apt/apt-mirrors.txt ] || sudo sed -i -E 's/^(http:\/\/azure\.archive\S*\s+priority:)1/\14/' /etc/apt/apt-mirrors.txt
+          sudo apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libasound2-dev libclang-dev cmake
 
       # whisper-rs generates its bindings with libclang: the runner's LLVM (cmake is there too).
       - name: libclang for whisper.cpp (Windows)
@@ -228,6 +281,40 @@ jobs:
         run: |
           $setup = Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe | Sort-Object LastWriteTime | Select-Object -Last 1
           node scripts/windows-signing.mjs verify $setup.FullName "$env:RUNNER_TEMP\signed-binaries"
+
+      # escouade-plugins, the program of the plugins the app gives (INT-4), signed with the app on each system: the app
+      # checks before it runs it that it is its own (its path in the app's folder and, where the system checks it, its
+      # signature). Windows: the installer's check above covers it (scripts/windows-signing.mjs lists it). macOS: its code
+      # signature holds in the universal app and, with the Developer ID secrets, Gatekeeper is asked (a warning only: the build requires the notarization itself).
+      # Linux: the packages hold it; the updater's signature covers the AppImage. A failure keeps the release a draft.
+      - name: Check the signature of escouade-plugins (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          app=$(ls -d src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app | head -n 1)
+          bin="$app/Contents/MacOS/escouade-plugins"
+          test -x "$bin"
+          lipo -info "$bin" | grep -q arm64
+          lipo -info "$bin" | grep -q x86_64
+          codesign --verify --strict --verbose=2 "$bin"
+          codesign --verify --deep --strict "$app"
+          # Only a warning: the build already requires the notarization, and Gatekeeper's reading must not keep a release a draft.
+          if [ -n "$APPLE_ID" ]; then spctl --assess --type execute --verbose=2 "$app" || echo "::warning::spctl does not accept $app (the notarization is required by the build itself)"; fi
+
+      # escouade-plugin, the authors' command, compiles and plays the run.js plugins without Node (ESC-322): it embeds the
+      # escouade-js of the `escouade-js` job, the same as the app's. A build without it keeps the release a draft.
+      - name: Check escouade-plugin embeds escouade-js
+        shell: bash
+        run: |
+          bin=$(ls src-tauri/target/universal-apple-darwin/release/escouade-plugin src-tauri/target/release/escouade-plugin src-tauri/target/release/escouade-plugin.exe 2>/dev/null | head -n 1)
+          "$bin" --version
+          "$bin" --version | grep -qx "escouade-js $(cat src-tauri/escouade-js/target/escouade-js.wasm.sha256)"
+
+      - name: Check escouade-plugins is in the Linux packages
+        if: runner.os == 'Linux'
+        run: |
+          dpkg -c src-tauri/target/release/bundle/deb/*.deb | grep -E 'usr/bin/escouade-plugins$'
+          appimage=$(ls "$PWD"/src-tauri/target/release/bundle/appimage/*.AppImage)
+          (cd "$RUNNER_TEMP" && "$appimage" --appimage-extract usr/bin/escouade-plugins >/dev/null && test -x squashfs-root/usr/bin/escouade-plugins)
 
   # Runs only when the three builds succeeded. The updater reads the latest release, so the draft
   # is published once its latest.json holds every system and each file it names is in: the three

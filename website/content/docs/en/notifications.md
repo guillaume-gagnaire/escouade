@@ -56,6 +56,8 @@ Escouade keeps an icon in the notification area (the menu bar on macOS). An ambe
 | End of turn | The first line of Claude’s reply, without Markdown formatting; “Task done” if it has no text |
 | Error | “Error: ” followed by the reason, for example “Error: Claude Code stopped (code 1)” |
 | Ticket | The title is the project’s name, the text “ATL-42 ready to review” or “ATL-42 blocked: ” followed by the reason |
+| Pull request | “PR #12: CI failed”, “DEM-1 · PR #12: approved” for a ticket’s (“MR” on GitLab). Never its title: a third party wrote it and it leaves the app. |
+| Deployment | “Deployed: production (<commit>)”, “Deployment failed: production (<commit>)” |
 
 An agent’s text is cut at 120 characters.
 

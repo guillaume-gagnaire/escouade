@@ -176,12 +176,41 @@ describe('SettingsModal', () => {
     expect(tab('Notifications')).toHaveClass('changed');
     await save();
     expect(backend.called('save_settings')[0].args.settings.notifyFor).toEqual({
+      ...app.settings.notifyFor,
       questions: true,
       done: false,
       errors: true,
       tickets: true,
     });
     expect(app.settings.notifyFor.done).toBe(false);
+  });
+
+  it('sets each news of the code hosts on its own (ESC-68)', async () => {
+    const backend = backendSaving();
+    render(SettingsModal);
+    await userEvent.click(tab('Notifications'));
+    const hosts = within(panel()).getByRole('heading', { name: 'Pull requests et déploiements' }).closest('section')!;
+    const names = within(hosts)
+      .getAllByRole('checkbox')
+      .map((c) => c.closest('label')?.textContent?.trim());
+    expect(names).toEqual([
+      'CI en échec',
+      'Changements demandés',
+      'PR approuvée',
+      'PR mergée',
+      'Conflit',
+      'Relecture demandée',
+      'Déploiement en production réussi',
+      'Déploiement en échec',
+    ]);
+    await userEvent.click(within(hosts).getByRole('checkbox', { name: 'PR approuvée' }));
+    await userEvent.click(within(hosts).getByRole('checkbox', { name: 'Déploiement en production réussi' }));
+    await save();
+    const saved = backend.called('save_settings')[0].args.settings.notifyFor;
+    expect(saved.prApproved).toBe(false);
+    expect(saved.deployOk).toBe(false);
+    expect(saved.prCiFailed).toBe(true);
+    expect(saved.deployFailed).toBe(true);
   });
 
   it('has no defaults of new agents for every harness any more: each account has its own (ESC-128)', async () => {
@@ -216,6 +245,23 @@ describe('SettingsModal', () => {
     await save();
     expect(backend.called('save_settings')[0].args.settings).toMatchObject({ terminalView: true });
     expect(app.settings.terminalView).toBe(true);
+  });
+
+  it('saves the delay before a message sent during a turn', async () => {
+    const backend = backendSaving();
+    render(SettingsModal);
+    const delay = group('Tous les harness').getByRole('group', { name: 'Délai avant l’envoi pendant un tour' });
+    expect(screen.getByText(/tu peux le modifier ou l’annuler d’ici là/)).toHaveTextContent(/Cursor et OpenCode/);
+    expect(
+      within(delay)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Désactivé', '5 s', '10 s', '20 s', '30 s']);
+    await userEvent.click(within(delay).getByRole('button', { name: '20 s' }));
+    expect(within(delay).getByRole('button', { name: '20 s' })).toHaveAttribute('aria-pressed', 'true');
+    await save();
+    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ midTurnDelaySecs: 20 });
+    expect(app.settings.midTurnDelaySecs).toBe(20);
   });
 
   it('lets the agents keep a task list, from the group of the processes, on by default', async () => {
@@ -437,7 +483,12 @@ describe('SettingsModal', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Rebase' }));
     expect(screen.queryByRole('switch', { name: 'PR en brouillon' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('radio', { name: /Ouvrir une pull request/ }));
-    expect(screen.queryByRole('button', { name: 'Rebase' })).not.toBeInTheDocument();
+    // The merge strategy goes; « Mise à jour de la branche » (ESC-61) has a Rebase of its own.
+    expect(screen.queryByRole('group', { name: 'Stratégie' })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('group', { name: 'Mise à jour de la branche' })).getByRole('button', { name: 'Merge' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     await userEvent.click(screen.getByRole('switch', { name: 'PR en brouillon' }));
     expect(backend.called('board_set')).toHaveLength(0);
     await save();
@@ -642,6 +693,18 @@ describe('SettingsModal', () => {
     await save();
     expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', commitMode: 'direct' });
     expect(app.projects[0].commitMode).toBe('direct');
+  });
+
+  it('chooses where the launches’ pages open, in the agent by default (ESC-311)', async () => {
+    const backend = backendSaving();
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    const choice = screen.getByRole('group', { name: 'Ouvrir les pages des lancements' });
+    expect(within(choice).getByRole('button', { name: 'Dans l’agent' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(choice).getByRole('button', { name: 'Dans une fenêtre à part' })).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(within(choice).getByRole('button', { name: 'Dans le navigateur du système' }));
+    await save();
+    expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', pagesOpen: 'system' });
+    expect(app.projects[0].pagesOpen).toBe('system');
   });
 
   it('offers no preferred account with a single account', () => {
@@ -1402,7 +1465,7 @@ describe('SettingsModal in English', () => {
       within(panel())
         .getAllByRole('heading')
         .map((h) => h.textContent),
-    ).toEqual(['Notify me about', 'Channels', 'Sound']);
+    ).toEqual(['Notify me about', 'Pull requests and deployments', 'Channels', 'Sound']);
     expect(
       group('Notify me about')
         .getAllByRole('checkbox')
@@ -1448,7 +1511,6 @@ describe('SettingsModal in English', () => {
       'Worktrees',
       'Launch',
       '.escouade.yml',
-      'Code index',
       'Shared memory',
       'Shared Kanban',
       'Danger zone',

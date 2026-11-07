@@ -34,7 +34,7 @@ Nothing is installed at once: the plugin is read, set aside, and the install win
 
 Escouade offers **the last version it can run**: a version written for a newer Escouade is skipped, and so is one its author took back.
 
-**Install** downloads the version, then checks everything before the install window opens: `version.json` against the catalog’s fingerprint, the signature against the public keys Escouade embeds (the store cannot make a seal: it does not have the key), the archive and your system’s program against `version.json`, the manifest against its fingerprint. A gap stops everything and says so (“The archive received is not the one the store published”): nothing is installed. The catalog, the archives and the revocation list go through **Settings › Network** (proxy, the system’s certificates).
+**Install** downloads the version, then checks everything before the install window opens: `version.json` against the catalog’s fingerprint, the signature against the public keys Escouade embeds (the store cannot make a seal: it does not have the key), the archive and its module against `version.json`, the manifest against its fingerprint. A gap stops everything and says so (“The archive received is not the one the store published”): nothing is installed. The catalog, the archives and the revocation list go through **Settings › Network** (proxy, the system’s certificates).
 
 The install window then says “Verified by Escouade” and “Signature: checked here, by the app”; for an unverified version, a band: “Nobody has reviewed this version. It comes from the store, its archive is the one its author published, but nothing says what its program does”, and the button “Install anyway”.
 
@@ -58,14 +58,34 @@ It tells, before anything is installed:
 
 | Permission | What the window says |
 | --- | --- |
-| `run` | “Runs a program on your computer, with your rights”, in bold |
+| `run.command` | “Runs a program on your computer, with your rights”, in bold |
+| `run.js` | “Runs inside Escouade, isolated”: a program in WASM, with no access to the disk outside its folder |
 | `permissions.decide` | “Decides your agents’ permissions”, in red |
 | `permissions.commands` | “Runs commands”, and which |
 | `permissions.events` | “Gets these events”, and which |
-| `permissions.network` | “Connects to”, and the host: declared, Escouade does not filter a program’s network yet |
+| `permissions.network` | “Connects to”, and the host: enforced for a `run.js` program and for webhooks, which Escouade only sends to those hosts; only declared for a `run.command` program, whose network Escouade does not filter |
 | `permissions.secrets` | “Keeps a secret:”, and its name |
 
 “Install anyway” installs the plugin; “Cancel” erases what was set aside. A manifest that does not hold opens no window: the reason shows at the top of the view, field by field (see [the manifest](plugins/manifest)).
+
+## The plugins shipped with Escouade
+
+Some of Escouade’s integrations are plugins, shipped with the app, signed and updated with it: the Plugins view lists them under “Shipped with Escouade”, with the same page as the others (what they add, their permissions, their journal). They are on everywhere from the start, private projects included, as when they were part of the app.
+
+| Plugin | What it serves |
+| --- | --- |
+| GitHub | The GitHub code host (PRs, CI, reviews, deployments) and the GitHub Issues source, on one account. See [integrations](integrations). |
+| GitLab | The GitLab code host, gitlab.com and your instances (merge requests, pipelines, discussions, deployments). GitLab Issues is still part of the app, on the same account. |
+| Bitbucket | The Bitbucket Cloud code host. |
+| Gitea / Forgejo | The code host of Gitea, Forgejo and Codeberg. |
+| Trello | The Trello source of the board. |
+| ACP | The [ACP harnesses described](plugins/harnesses) by a plugin, like Goose. |
+| isola | The isola launch environment, for [test launches](testing). |
+| OpenAI, Groq, Mistral, ElevenLabs, Deepgram | The online voice services (see [Settings › Voice](settings-voice)). |
+
+- **Switching them off**: their switch, for the whole app, or their Projects tab, for one project. Nothing they did is lost, and your choices are kept for when you switch them back on.
+- **What shows**: a code host switched off or stopped no longer follows the PRs, and the agent’s card and Settings › Integrations say so; a source switched off stops its sync, which says why; a voice service switched off leaves Settings › Voice, and dictation goes back to local; the agents of an ACP harness stay, marked “Harness missing”.
+- **No uninstall**, and no update of their own: they change with the app. A plugin by another author cannot take their id (`dev.escouade.*` is reserved); it can serve the same service beside them, and the account says which one serves it.
 
 ## Switching on for the app or by project
 
@@ -81,7 +101,7 @@ The Permissions tab of its page lists what it can do, with a switch per permissi
 
 ## Its settings and secrets
 
-The Settings tab shows the fields it declares (`contributes.settings`, `contributes.secrets`). A setting is kept with the list of the installed plugins and given to it by `settings/get`. A secret goes to the system’s keychain, under a name of its own (`plugin:<id>:<key>`): the tab only says whether it is kept, and “Forget” erases it.
+The Settings tab shows the fields it declares (`contributes.settings`, `contributes.secrets`). A setting is kept with the list of the installed plugins and given to it by `settings/get`; in a project whose [`.escouade.yml`](escouade-yml) sets the plugin (`plugins.<id>`), the project’s value goes first. A secret goes to the system’s keychain, under a name of its own (`plugin:<id>:<key>`): the tab only says whether it is kept, and “Forget” erases it.
 
 ## The journal
 

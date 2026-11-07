@@ -59,12 +59,18 @@ fn the_reader_says_of_each_shared_case_what_the_store_says() {
     assert!(cases.len() >= 10);
     for case in cases {
         let name = case["name"].as_str().unwrap();
-        let builtin = case["builtin"].as_bool().unwrap_or(false);
+        let hand = if case["builtin"].as_bool().unwrap_or(false) {
+            manifest::Hand::Builtin
+        } else if case["firstParty"].as_bool().unwrap_or(false) {
+            manifest::Hand::First
+        } else {
+            manifest::Hand::Third
+        };
         let files = case["files"].as_object();
         let file = |p: &str| files.and_then(|f| f.get(p)).map(bytes_of);
         let read = manifest::check_with(
             &case["manifest"],
-            builtin,
+            hand,
             files.map(|_| &file as manifest::FileOf),
         );
         let errors: Vec<String> = match &read.manifest {
@@ -109,7 +115,9 @@ fn valid() -> Value {
 
 #[test]
 fn a_valid_manifest_gives_what_the_app_reads_without_running_anything() {
-    let m = manifest::check(&valid(), false).manifest.unwrap();
+    let m = manifest::check(&valid(), manifest::Hand::Third)
+        .manifest
+        .unwrap();
     assert_eq!(m.id, "dev.exemple.slack");
     assert_eq!(m.name.get(Lang::Fr), "Slack fr");
     assert_eq!(m.name.get(Lang::En), "Slack");
@@ -125,10 +133,10 @@ fn a_valid_manifest_gives_what_the_app_reads_without_running_anything() {
     // A text in one language is read in the other.
     let mut v = valid();
     v["name"] = json!({ "fr": "Seulement" });
-    let m = manifest::check(&v, false).manifest.unwrap();
+    let m = manifest::check(&v, manifest::Hand::Third).manifest.unwrap();
     assert_eq!(m.name.get(Lang::En), "Seulement");
     // Not JSON at all: the whole file says so.
-    let r = manifest::read("{ id: ", false);
+    let r = manifest::read("{ id: ", manifest::Hand::Third);
     let p = r.manifest.unwrap_err();
     assert_eq!((p[0].path.as_str(), p[0].code), ("", Code::Type));
 }
@@ -139,7 +147,9 @@ fn each_problem_says_its_field_and_why_in_both_languages() {
     v["id"] = json!("Slack");
     v["escouade"]["api"] = json!("v1");
     v["contributes"]["settings"] = json!([{ "key": "a", "type": "colour", "title": "A" }]);
-    let problems = manifest::check(&v, false).manifest.unwrap_err();
+    let problems = manifest::check(&v, manifest::Hand::Third)
+        .manifest
+        .unwrap_err();
     let fr: Vec<String> = problems.iter().map(|p| p.message(Lang::Fr)).collect();
     let en: Vec<String> = problems.iter().map(|p| p.message(Lang::En)).collect();
     assert_eq!(
@@ -154,13 +164,41 @@ fn each_problem_says_its_field_and_why_in_both_languages() {
         en[0],
         "`id` is no reversed domain name in lower case (`dev.exemple.slack`)."
     );
-    let missing = manifest::check(&json!({}), false).manifest.unwrap_err();
+    let missing = manifest::check(&json!({}), manifest::Hand::Third)
+        .manifest
+        .unwrap_err();
     assert_eq!(missing[0].message(Lang::Fr), "`id` manque.");
     assert_eq!(missing[0].message(Lang::En), "`id` is missing.");
-    let not_object = manifest::read("[]", false).manifest.unwrap_err();
+    let not_object = manifest::read("[]", manifest::Hand::Third)
+        .manifest
+        .unwrap_err();
     assert_eq!(
         not_object[0].message(Lang::Fr),
         "Le manifeste devrait être un objet."
+    );
+}
+
+/// ESC-320: a bundle of the folder (`run.js`), run in WASM; never beside a command, and why.
+#[test]
+fn a_bundle_is_a_program_of_its_own_never_beside_a_command() {
+    let mut v = valid();
+    v["run"] = json!({ "js": "dist/plugin.mjs" });
+    let m = manifest::check(&v, manifest::Hand::Third).manifest.unwrap();
+    let run = m.run.as_ref().unwrap();
+    assert_eq!(run.js.as_deref(), Some("dist/plugin.mjs"));
+    assert_eq!(run.command, "");
+    assert!(!m.declarative());
+    v["run"]["command"] = json!("bin/slack");
+    let p = manifest::check(&v, manifest::Hand::Third)
+        .manifest
+        .unwrap_err();
+    assert_eq!(
+        p.iter().map(|p| p.message(Lang::Fr)).collect::<Vec<_>>(),
+        ["`run.js` ne va pas avec `run.command`, `run.js` ou `run.wasm` : un programme est une commande, un bundle JS/TS ou un module Rust, un seul des trois."]
+    );
+    assert_eq!(
+        p[0].message(Lang::En),
+        "`run.js` does not go with `run.command`, `run.js` or `run.wasm`: a program is a command, a JS/TS bundle or a Rust module, one of the three."
     );
 }
 
@@ -170,7 +208,7 @@ fn with_range(api: &str, min: &str, max: Option<&str>) -> manifest::Manifest {
     if let Some(max) = max {
         v["escouade"]["max"] = json!(max);
     }
-    manifest::check(&v, false).manifest.unwrap()
+    manifest::check(&v, manifest::Hand::Third).manifest.unwrap()
 }
 
 /// As a harness's `Tested`: an API this Escouade does not serve, or an Escouade out of the range,
@@ -610,7 +648,7 @@ fn an_update_keeps_the_users_choices_and_says_what_it_asks_for_more() {
 fn a_permission_taken_back_is_not_given_and_a_private_project_is_off_unless_chosen() {
     let m = manifest::read(
         &programmed("dev.exemple.slack", "1.0.0", &["hooks.slack.com"]).to_string(),
-        false,
+        manifest::Hand::Third,
     )
     .manifest
     .unwrap();
@@ -676,6 +714,7 @@ async fn a_newer_version_is_offered_and_never_installed_by_itself() {
             version: "1.1.0".into(),
             tag: Some("v1.1.0".into()),
             verified: None,
+            seed: false,
         })
     );
     assert_eq!(git.version, "1.0.0", "not installed by itself");
@@ -856,4 +895,57 @@ fn a_host_is_read_from_an_address_written_whole_never_from_a_template() {
     assert_eq!(host("{{secrets.webhook}}"), None);
     assert_eq!(host("https://{{data.host}}/x"), None);
     assert_eq!(host("ftp://hooks.slack.com"), None);
+}
+
+/// The settings of a plugin in a project (PLG-14): the project's `.escouade.yml` over the user's,
+/// only the keys the plugin declares with a value of their type, never one of its secrets.
+#[test]
+fn a_project_s_settings_go_over_the_user_s_only_as_the_plugin_declares_them() {
+    let m = manifest::read(
+        &json!({
+            "id": "dev.exemple.slack",
+            "name": "Slack",
+            "version": "1.0.0",
+            "escouade": { "api": "1", "min": "2.1.0" },
+            "contributes": {
+                "settings": [
+                    { "key": "channel", "title": "Salon", "type": "string" },
+                    { "key": "max", "title": "Au plus", "type": "number" },
+                    { "key": "mentions", "title": "Mentions", "type": "boolean" },
+                    { "key": "tone", "title": "Ton", "type": "select", "options": ["sec", { "value": "chaleureux", "title": "Chaleureux" }] },
+                    { "key": "free", "title": "Libre", "type": "select" }
+                ],
+                "secrets": [{ "key": "webhook", "title": "Adresse du webhook" }]
+            }
+        })
+        .to_string(),
+        manifest::Hand::Third,
+    )
+    .manifest
+    .unwrap();
+    let mine = json!({ "channel": "#escouade", "max": 3 });
+    let file = json!({
+        "channel": "#equipe",
+        "max": "beaucoup",
+        "mentions": true,
+        "tone": "chaleureux",
+        "free": "n'importe",
+        "webhook": "https://hooks.slack.com/services/x",
+        "unknown": 1
+    });
+    let got =
+        crate::plugins::project_settings(&m, mine.as_object().unwrap(), file.as_object().unwrap());
+    assert_eq!(
+        Value::Object(got),
+        json!({ "channel": "#equipe", "max": 3, "mentions": true, "tone": "chaleureux", "free": "n'importe" })
+    );
+    // A select outside its options keeps the user's.
+    let got = crate::plugins::project_settings(
+        &m,
+        mine.as_object().unwrap(),
+        json!({ "tone": "froid", "mentions": "oui" })
+            .as_object()
+            .unwrap(),
+    );
+    assert_eq!(Value::Object(got), mine);
 }

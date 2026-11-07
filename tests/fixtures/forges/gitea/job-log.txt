@@ -1,0 +1,4 @@
+2026-10-31T15:05:12.1Z ##[group]Run cargo test
+2026-10-31T15:07:40.8Z test search::finds_notes ... FAILED
+2026-10-31T15:07:41.0Z thread 'search::finds_notes' panicked at src/search.rs:14:5:
+2026-10-31T15:09:00.2Z ##[error]Process completed with exit code 101.

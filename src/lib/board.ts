@@ -8,7 +8,7 @@ import { fSpentUsd, spent, type Spent } from './spend';
 import type { Agent, AutopilotPause, BoardAction, BoardSettings, Column, Ticket } from './types';
 
 /**
- * The four columns in order, with the tone of their ring and how far it is filled (as in the preview: empty to do, half
+ * The columns in order (« En revue » only when the board opens pull requests or holds one: `prColumnShown`), with the tone of their ring and how far it is filled (as in the preview: empty to do, half
  * under way, three quarters to test, whole once done); their names and what they say while empty are in the `board`
  * zone, by `id`.
  */
@@ -16,6 +16,8 @@ export const COLUMNS: { id: Column; tone: string; fill: number }[] = [
   { id: 'todo', tone: 'var(--code-dim)', fill: 0 },
   { id: 'doing', tone: 'var(--run)', fill: 50 },
   { id: 'review', tone: 'var(--wait)', fill: 75 },
+  // « En revue » (ESC-59): its pull request open on its host, the hue of a merge; shown when the board opens them.
+  { id: 'pr', tone: 'var(--syn-k)', fill: 90 },
   { id: 'done', tone: 'var(--done)', fill: 100 },
 ];
 
@@ -30,14 +32,16 @@ export function columnTickets(tickets: Ticket[], column: Column): Ticket[] {
   const list = tickets.filter((ticket) => ticket.column === column);
   if (column === 'todo') return list.sort((a, b) => a.rank - b.rank || a.createdAt - b.createdAt);
   if (column === 'done') return list.sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0));
-  if (column === 'review') return list.sort((a, b) => (a.reviewAt ?? 0) - (b.reviewAt ?? 0));
+  if (column === 'review' || column === 'pr') return list.sort((a, b) => (a.reviewAt ?? 0) - (b.reviewAt ?? 0));
   return list.sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0));
 }
 
-/** Tickets "En cours" holding a place (a blocked one gives it up). */
+/** Tickets "En cours" holding a place (a blocked one gives it up), and « En revue » while their agent fixes their CI (ESC-60). */
 export function busy(tickets: Ticket[]): number {
   // One under way on a teammate's machine (ESC-190) takes no place here.
-  return tickets.filter((ticket) => ticket.column === 'doing' && !ticket.blocked && !elsewhere(ticket)).length;
+  return tickets.filter(
+    (ticket) => (ticket.column === 'doing' && !ticket.blocked && !elsewhere(ticket)) || (ticket.column === 'pr' && !!ticket.pr?.fixing),
+  ).length;
 }
 
 /** When the agents stopped by the usage limit resume, if one is waiting: nothing starts until then. */
@@ -114,6 +118,7 @@ export function waitLabel(
   issue: string | null = null,
   pause: AutopilotPause | null = null,
   waiting: string[] = [],
+  redTarget = false,
 ): string {
   if (issue) return t('boardSettings.wait.targetBranch');
   if (waiting.length && !ticket.forced) return t('boardSettings.wait.after', { keys: keyList(waiting) });
@@ -122,6 +127,8 @@ export function waitLabel(
   // Another one's shared ticket (ESC-190): the autopilot never starts it.
   if (isTheirs(ticket)) return theirsLine(ticket) ?? t('boardSettings.wait.autopilotOff');
   if (!s.autopilot) return t('boardSettings.wait.autopilotOff');
+  // « Pause quand la CI de la cible est rouge » (ESC-63): the autopilot's alone, « Lancer » starts it all the same.
+  if (redTarget) return t('boardSettings.wait.redTarget');
   return queueIndex === 0 ? t('boardSettings.wait.next') : t('boardSettings.wait.place', { busy: busyCount, max: s.maxParallel });
 }
 
@@ -181,11 +188,12 @@ export function canStart(
   quota: number | null,
   issue: string | null = null,
   pause: AutopilotPause | null = null,
+  redTarget = false,
 ): boolean {
   // Another one's shared ticket (ESC-190) is launched by hand whatever the autopilot: it never starts it. One whose file
-  // cannot be read never starts.
+  // cannot be read never starts. Held by a red target (ESC-63), the autopilot starts none: « Lancer » does.
   if (ticket.shared?.problem) return false;
-  return !issue && !pause && (!s.autopilot || isTheirs(ticket)) && !ticket.forced && !quota && busyCount < s.maxParallel;
+  return !issue && !pause && (!s.autopilot || isTheirs(ticket) || redTarget) && !ticket.forced && !quota && busyCount < s.maxParallel;
 }
 
 /** As the backend fixes it: the first three letters of the project's name (accents folded), TIC without any. */

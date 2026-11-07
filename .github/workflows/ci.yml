@@ -63,17 +63,21 @@ jobs:
             store:
               - 'store/**'
               - 'schemas/**'
-              - 'plugin-examples/**'
+              - 'plugins/**'
               - 'website/app/assets/main.css'
               - 'design/store/**'
               - '.github/workflows/ci.yml'
+              - 'crates/escouade-plugin-cli/**'
+              - 'src-tauri/escouade-js/**'
+              - 'src-tauri/Cargo.lock'
+              - 'scripts/escouade-js.sh'
 
   store:
     name: Store (format, types, tests, e2e, image)
-    needs: store-changes
+    needs: [store-changes, escouade-js]
     if: needs.store-changes.outputs.store == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     # The migrations are played from an empty base, then the tests run against it: PostgreSQL 17, as Coolify's.
     services:
       postgres:
@@ -142,6 +146,106 @@ jobs:
         working-directory: .
         run: docker build -f store/Dockerfile -t escouade-store:ci .
 
+      # Its compiler answers, a run.js plugin compiles in it twice to the same bytes, with the escouade-js the app embeds,
+      # and the store starts and says the isolation it got (ESC-328).
+      - name: Download escouade-js
+        uses: actions/download-artifact@v7
+        with:
+          name: escouade-js
+          path: src-tauri/escouade-js/target
+
+      # A run.wasm compiles in bubblewrap (ESC-336), which Docker's default profiles refuse: image-test.mjs gives it the two
+      # of store/deploy (ESC-356, docs/STORE.md §3.3), and an AppArmor profile is loaded on the host. The runner keeps
+      # Ubuntu 24.04's restriction of user namespaces, as a server would: a named profile does not need it lifted.
+      - name: The compiler in the image
+        working-directory: .
+        env:
+          IMAGE_TEST_DATABASE_URL: postgres://store:store@localhost:5432/store
+        run: |
+          sudo apparmor_parser -r store/deploy/apparmor-bubblewrap
+          node store/scripts/image-test.mjs escouade-store:ci src-tauri/escouade-js/target/escouade-js.wasm.sha256
+
+  # escouade-js, the Javy plugin of the run.js plugins (ESC-320, docs/PLUGINS.md §5): built once for wasm32-wasip1 with the
+  # pinned Javy (scripts/escouade-js.sh), its SHA-256 noted, then handed to every job that builds the app, which embeds it.
+  escouade-js:
+    name: escouade-js (the JS/TS plugins' engine)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust toolchain (pinned in src-tauri/escouade-js/rust-toolchain.toml) and wasm32-wasip1
+        working-directory: src-tauri/escouade-js
+        run: |
+          rustup toolchain install
+          rustup target add wasm32-wasip1
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri/escouade-js
+          # The script decides what rustc is given (its wrapper is no input cargo sees): a cache made by another one would hand
+          # back a module with this machine's paths, and the store's image would embed another escouade-js.
+          key: ${{ hashFiles('scripts/escouade-js.sh') }}
+
+      - name: Build escouade-js
+        run: |
+          sh scripts/escouade-js.sh
+          echo "escouade-js.wasm: $(wc -c < src-tauri/escouade-js/target/escouade-js.wasm) bytes, SHA-256 $(cat src-tauri/escouade-js/target/escouade-js.wasm.sha256)" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: escouade-js
+          path: |
+            src-tauri/escouade-js/target/escouade-js.wasm
+            src-tauri/escouade-js/target/escouade-js.wasm.sha256
+          retention-days: 7
+
+  # The kit of the plugins in Rust as modules (ESC-334, docs/PLUGINS.md §8.10, A4): these crates compile for wasm32-wasip1, the
+  # toolchain's file brings the target; Linear and Codex, compiled from their crates, prove it. What A9 will publish stays
+  # publishable.
+  plugin-kit-wasm:
+    name: Plugin kit (wasm32-wasip1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust toolchain (pinned in src-tauri/rust-toolchain.toml)
+        working-directory: src-tauri
+        run: rustup toolchain install
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Clippy for wasm32-wasip1
+        working-directory: src-tauri
+        run: cargo clippy --locked --target wasm32-wasip1 -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp -p escouade-voice -- -D warnings
+
+      # The workspace of plugins/: the plugins in run.wasm, which that of src-tauri does not hold.
+      - name: The modules' workspace, formatted and without warnings
+        working-directory: plugins
+        run: |
+          cargo fmt --all --check
+          cargo clippy --locked --workspace --all-targets -- -D warnings
+          cargo clippy --locked --workspace --target wasm32-wasip1 -- -D warnings
+
+      - name: The modules
+        run: sh scripts/plugins-wasm.sh
+
+      - name: The examples and the documentation of the crates of crates.io
+        working-directory: src-tauri
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: |
+          cargo test --doc --locked -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp -p escouade-voice
+          cargo doc --no-deps --locked -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp -p escouade-voice
+          cargo doc --no-deps --locked --target wasm32-wasip1 -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp -p escouade-voice
+
+      - name: The crates of crates.io can be published (a dry run)
+        working-directory: src-tauri
+        run: cargo publish --dry-run --locked -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp -p escouade-voice
+
   windows-lint:
     name: Windows (Rust format and Clippy)
     runs-on: windows-latest
@@ -172,10 +276,18 @@ jobs:
 
   windows-build:
     name: Windows (build)
+    needs: escouade-js
     runs-on: windows-latest
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
+
+      # escouade-js, embedded in the app (src-tauri/build.rs).
+      - name: Download escouade-js
+        uses: actions/download-artifact@v7
+        with:
+          name: escouade-js
+          path: src-tauri/escouade-js/target
 
       - uses: actions/setup-node@v7
         with:
@@ -204,6 +316,12 @@ jobs:
         with:
           tool: cargo-nextest
 
+      # What the tests of the app and its end-to-end tests play in its host (docs/PLUGINS.md §8.6.4), in the archive below
+      # (.config/nextest.toml) and in the app's artifact.
+      - name: The modules of the plugins
+        shell: bash
+        run: sh scripts/plugins-wasm.sh
+
       # The test binaries, with what they run beside them (escouade-hook, examples/fake_codex): built once, run by
       # the two windows-rust runners.
       - name: Rust tests, built once (nextest archive)
@@ -213,6 +331,13 @@ jobs:
       - name: Build the app for end-to-end tests
         run: npx tauri build --debug --no-bundle
 
+      # escouade-plugins, the program of the plugins the app gives, is built beside the app (INT-4). Its Authenticode
+      # signature is checked by the Release (scripts/windows-signing.mjs verify, on the installer), which has the
+      # certificate; the tests of the registry run the build's own program.
+      - name: The app's folder holds escouade-plugins
+        shell: bash
+        run: test -f src-tauri/target/debug/escouade-plugins.exe
+
       - name: Upload the Rust tests
         uses: actions/upload-artifact@v7
         with:
@@ -221,7 +346,8 @@ jobs:
           retention-days: 1
           compression-level: 0
 
-      # The app and its hook (looked for beside it): what the end-to-end tests drive.
+      # The app, its hook and the program of the plugins it gives (each looked for beside it): what the end-to-end tests
+      # drive. Without escouade-plugins, a plugin of the first hand (GitHub, isola, the voice…) has no process to start.
       - name: Upload the app
         uses: actions/upload-artifact@v7
         with:
@@ -229,6 +355,8 @@ jobs:
           path: |
             src-tauri/target/debug/escouade.exe
             src-tauri/target/debug/escouade-hook.exe
+            src-tauri/target/debug/escouade-plugins.exe
+            src-tauri/target/plugins-wasm/
           retention-days: 1
 
   windows-rust:
@@ -300,11 +428,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # src-tauri/target: the artifact holds debug/ and plugins-wasm/.
       - name: Download the app
         uses: actions/download-artifact@v7
         with:
           name: app-windows
-          path: src-tauri/target/debug
+          path: src-tauri/target
 
       # Surfaced as an annotation: the end-to-end tests need the Evergreen WebView2 runtime.
       - name: WebView2 runtime
@@ -346,10 +475,21 @@ jobs:
 
   linux:
     name: Linux (lint, tests and packages)
+    needs: escouade-js
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
+      # Two commits: on a pull request, the merge and its base, which `plugins/ci.mjs --changed` compares.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      # escouade-js, embedded in the app (src-tauri/build.rs).
+      - name: Download escouade-js
+        uses: actions/download-artifact@v7
+        with:
+          name: escouade-js
+          path: src-tauri/escouade-js/target
 
       - uses: actions/setup-node@v7
         with:
@@ -359,8 +499,12 @@ jobs:
       # libasound2-dev: the microphone (cpal); libclang-dev and cmake: whisper.cpp, built by whisper-rs.
       - name: System libraries (WebKitGTK, tray, AppImage, sound, whisper.cpp)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libasound2-dev libclang-dev cmake
+          # A stalled mirror once held this step 28 minutes (2026-11-04): each request gives up after 30 s and is tried again.
+          # Then Azure's mirror crawled through the big packages for all the 45 minutes of the job (2026-11-06): apt only leaves
+          # a mirror that fails, so Canonical's, already in the runner's list, goes first and Azure's stays behind it.
+          [ ! -f /etc/apt/apt-mirrors.txt ] || sudo sed -i -E 's/^(http:\/\/azure\.archive\S*\s+priority:)1/\14/' /etc/apt/apt-mirrors.txt
+          sudo apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libasound2-dev libclang-dev cmake
 
       - name: Rust toolchain (pinned in src-tauri/rust-toolchain.toml)
         working-directory: src-tauri
@@ -380,6 +524,9 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
+
+      - name: The modules of the plugins, which the tests play
+        run: sh scripts/plugins-wasm.sh
 
       # The app's MCP server takes its port in 47000-47999, which a runner also hands out to the
       # outgoing connections of other programs: keep that range out of the ephemeral ones, so a test
@@ -403,6 +550,12 @@ jobs:
           node ../scripts/nextest-annotations.mjs nextest.log target/nextest/ci/junit.xml $status
           exit $status
 
+      # A launch's page in a real WebKitGTK (ESC-311): no command of Escouade answers it, its storage is
+      # its project's, its devtools open, and it sees a phone's then a tablet's width.
+      - name: A launch's page in a real webview
+        working-directory: src-tauri
+        run: xvfb-run -a cargo run --example devpage_probe
+
       # The conversation's voice under Linux: Microsoft's ONNX Runtime (glibc 2.27), in the .deb and the AppImage
       # (tauri.ort-linux.conf.json), its checksum checked; pyke's needs glibc 2.38.
       - name: ONNX Runtime for Linux
@@ -414,12 +567,14 @@ jobs:
           npx tauri build --debug --config src-tauri/tauri.ort-linux.conf.json --config '{"bundle":{"createUpdaterArtifacts":false}}'
           dpkg -c src-tauri/target/debug/bundle/deb/*.deb | grep -q usr/lib/escouade/libonnxruntime.so.1.23.2
 
-      # escouade-hook, the hook of the harnesses that run theirs as commands, and escouade-plugin, the command of
-      # the plugins' authors (their conformance bench), ship beside the app.
-      - name: The packages hold escouade-hook and escouade-plugin
+      # escouade-hook, the hook of the harnesses that run theirs as commands, escouade-plugin, the command of the
+      # plugins' authors (their conformance bench), and escouade-plugins, the program of the plugins the app gives
+      # (INT-4, which the app checks is its own before it runs it), ship beside the app. On Linux no signature is
+      # checked by the system: the packages are the updater's and the repository's.
+      - name: The packages hold escouade-hook, escouade-plugin and escouade-plugins
         run: |
           appimage=$(ls "$PWD"/src-tauri/target/debug/bundle/appimage/*.AppImage)
-          for bin in escouade-hook escouade-plugin; do
+          for bin in escouade-hook escouade-plugin escouade-plugins; do
             dpkg -c src-tauri/target/debug/bundle/deb/*.deb | grep -E "usr/bin/$bin$"
             (cd "$RUNNER_TEMP" && "$appimage" --appimage-extract "usr/bin/$bin" >/dev/null && test -x "squashfs-root/usr/bin/$bin")
           done
@@ -431,12 +586,15 @@ jobs:
           ESCOUADE_PLUGIN_BIN: src-tauri/target/debug/escouade-plugin
         run: node sdk/scripts/template-ci.mjs
 
-      # PLG-10's example plugins (plugin-examples/, ESC-182), as their author checks them before a tag: the TypeScript
-      # ones' tests, their dist/ rebuilt and compared, then validate and the bench for all (the SDK built by the step above).
-      - name: The example plugins pass their tests, validate and the bench
+      # Escouade's own plugins (plugins/<id>/, PLG-10's examples, ESC-182, ESC-314 and ESC-340), as their author checks them
+      # before a tag: LICENSE and CHANGELOG, their tests (cargo test for the crates), the TypeScript ones' dist/ rebuilt
+      # and compared, a crate's version against its manifest, then validate, and the bench for all but those the app still
+      # gives (--first-party: their ids dev.escouade.*; the SDK built by the step above). All of them on main; on a
+      # pull request, those it touches (docs/PLUGINS.md §8.6.4).
+      - name: Escouade's own plugins pass their tests, validate and the bench
         env:
           ESCOUADE_PLUGIN_BIN: src-tauri/target/debug/escouade-plugin
-        run: node plugin-examples/ci.mjs
+        run: node plugins/ci.mjs ${{ github.event_name == 'pull_request' && '--changed HEAD^1' || '' }}
 
       - name: Upload the packages
         uses: actions/upload-artifact@v7
@@ -449,10 +607,19 @@ jobs:
 
   macos:
     name: macOS (lint and tests)
+    needs: escouade-js
     runs-on: macos-latest
-    timeout-minutes: 45
+    # 16 to 45 min on 2026-11-01 as the plugins' tests grew (WASM, harness, voice): room above the slowest runner.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
+
+      # escouade-js, embedded in the app (src-tauri/build.rs).
+      - name: Download escouade-js
+        uses: actions/download-artifact@v7
+        with:
+          name: escouade-js
+          path: src-tauri/escouade-js/target
 
       - uses: actions/setup-node@v7
         with:
@@ -478,6 +645,9 @@ jobs:
         with:
           tool: cargo-nextest
 
+      - name: The modules of the plugins, which the tests play
+        run: sh scripts/plugins-wasm.sh
+
       # One process per test (src-tauri/.config/nextest.toml): a test that hangs is killed after
       # 3 minutes and named, one that fails runs again twice. Reading the job's log takes admin
       # rights: the failures, and the tests that passed at a new try, are also annotations.
@@ -495,12 +665,31 @@ jobs:
           node ../scripts/nextest-annotations.mjs nextest.log target/nextest/ci/junit.xml $status
           exit $status
 
+      # A launch's page in a real WKWebView (ESC-311), in the runner's own session: its devtools last,
+      # then first, as a user opens them.
+      - name: A launch's page in a real webview
+        working-directory: src-tauri
+        shell: bash
+        run: |
+          set +e
+          cargo run --example devpage_probe -- --devtools-last; last=$?
+          cargo run --example devpage_probe; first=$?
+          exit $((last || first))
+
   macos-bundle:
     name: macOS (app bundle)
+    needs: escouade-js
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+
+      # escouade-js, embedded in the app (src-tauri/build.rs).
+      - name: Download escouade-js
+        uses: actions/download-artifact@v7
+        with:
+          name: escouade-js
+          path: src-tauri/escouade-js/target
 
       - uses: actions/setup-node@v7
         with:
@@ -539,11 +728,15 @@ jobs:
           npx tauri build --debug --bundles app,dmg --config src-tauri/tauri.ort-macos.conf.json --config '{"bundle":{"createUpdaterArtifacts":false}}'
           test -f src-tauri/target/debug/bundle/macos/Escouade.app/Contents/Frameworks/libonnxruntime.1.23.2.dylib
 
-      # escouade-hook and escouade-plugin ship beside the app.
-      - name: The app holds escouade-hook and escouade-plugin
+      # escouade-hook, escouade-plugin and escouade-plugins ship beside the app, each with a code signature that holds
+      # (ad hoc here, as the Release signs without its certificate: the app checks escouade-plugins's before it runs it).
+      - name: The app holds escouade-hook, escouade-plugin and escouade-plugins, signed
         run: |
-          test -x src-tauri/target/debug/bundle/macos/Escouade.app/Contents/MacOS/escouade-hook
-          test -x src-tauri/target/debug/bundle/macos/Escouade.app/Contents/MacOS/escouade-plugin
+          macos=src-tauri/target/debug/bundle/macos/Escouade.app/Contents/MacOS
+          for bin in escouade-hook escouade-plugin escouade-plugins; do
+            test -x "$macos/$bin"
+            codesign --verify --strict --verbose=2 "$macos/$bin"
+          done
 
       - name: Upload the disk image
         uses: actions/upload-artifact@v7

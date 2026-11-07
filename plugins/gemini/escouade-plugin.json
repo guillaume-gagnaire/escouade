@@ -1,0 +1,63 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.gemini-cli",
+  "name": "Gemini CLI",
+  "version": "2.2.0",
+  "description": {
+    "fr": "Gemini CLI comme harness, par ACP : la conversation, sa vue terminal, les permissions et les comptes.",
+    "en": "Gemini CLI as a harness, over ACP: the conversation, its terminal view, permissions and accounts."
+  },
+  "author": {
+    "name": "Escouade",
+    "url": "https://escouade.dev"
+  },
+  "license": "GPL-3.0-or-later",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/gemini",
+  "escouade": {
+    "api": "1",
+    "min": "2.2.0"
+  },
+  "run": { "wasm": "Cargo.toml" },
+  "limits": { "memoryBytes": 268435456, "turnSeconds": 10 },
+  "permissions": {
+    "files": [{ "root": "agentHome", "access": "read" }]
+  },
+  "contributes": {
+    "harnesses": [
+      {
+        "id": "gemini",
+        "name": "Gemini CLI",
+        "speaker": "Gemini",
+        "writer": "Gemini CLI",
+        "locate": { "names": ["gemini"] },
+        "versionArgs": ["--version"],
+        "tested": { "oldest": "0.66.0", "newest": "0.66.0" },
+        "caps": {
+          "modes": ["default", "plan", "acceptEdits", "bypassPermissions"],
+          "images": true,
+          "terminalView": true,
+          "readOnly": true
+        },
+        "models": [{ "id": "auto", "label": "Auto" }],
+        "accountVar": "GEMINI_CLI_HOME",
+        "keyVar": "GEMINI_API_KEY",
+        "closeGraceMs": 2000,
+        "install": {
+          "windows": "npm install -g @google/gemini-cli",
+          "unix": "npm install -g @google/gemini-cli"
+        },
+        "updateCommand": "npm install -g @google/gemini-cli",
+        "acp": {
+          "args": ["--acp"],
+          "env": { "GEMINI_CLI_TRUST_WORKSPACE": "true" },
+          "fs": false,
+          "fenceOnPermissions": true,
+          "modes": { "default": "default", "plan": "plan", "acceptEdits": "autoEdit", "bypassPermissions": "yolo" },
+          "readOnlyMode": "default",
+          "questionsInText": true,
+          "extensions": ["gemini"]
+        }
+      }
+    ]
+  }
+}

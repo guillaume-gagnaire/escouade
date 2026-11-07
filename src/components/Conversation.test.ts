@@ -31,10 +31,22 @@ vi.mock('../lib/terminals', () => ({
 
 import { applyConvOps, conversationOf, releaseIdle } from '../lib/conversations.svelte';
 import { setLang } from '../lib/i18n';
+import { cancelHeld, heldOf } from '../lib/outbox.svelte';
 import { app } from '../lib/state.svelte';
 import type { Agent } from '../lib/types';
 import { answerClock, settle } from '../test/conversation';
-import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, gitInfo, project, pullRequest, resetApp, ticket } from '../test/ipc';
+import {
+  agent,
+  BARE_ENGINE,
+  CLAUDE_ENGINE,
+  CURSOR_ENGINE,
+  fakeBackend,
+  gitInfo,
+  project,
+  pullRequest,
+  resetApp,
+  ticket,
+} from '../test/ipc';
 import { workflows } from '../lib/workflows.svelte';
 import { GSD_ID, gsd, passage, scanOf, track } from '../test/workflows';
 import Conversation from './Conversation.svelte';
@@ -176,6 +188,53 @@ describe('Conversation', () => {
       out.dispatchEvent(new Event('scroll'));
       app.setupOutput = { [a.id]: { step: 0, total: 3, lines: ['un', 'deux', 'trois'] } };
       await waitFor(() => expect(out.scrollTop).toBe(2000));
+    });
+  });
+
+  describe('a message typed during a turn', () => {
+    function typeDuringTurn(over: Partial<Agent> = {}) {
+      const a = agent({ id: `h${Math.random()}`, status: 'running', ...over });
+      resetApp({ projects: [project()], agents: [a] });
+      app.engines = [CLAUDE_ENGINE, CURSOR_ENGINE];
+      app.settings.midTurnDelaySecs = 10;
+      const backend = fakeBackend({ get_conversation: () => [] });
+      render(Conversation, { agent: a, project: project() });
+      return { a, backend, textarea: screen.getByRole('textbox') as HTMLTextAreaElement };
+    }
+    // What a test leaves held would go once its delay is over, in the next test.
+    afterEach(() => {
+      for (const id of Object.keys(app.agents)) for (const h of heldOf(id)) cancelHeld(h.id);
+    });
+
+    it('shows it held with its countdown, and gives it back to the field on « Modifier »', async () => {
+      const { backend, textarea } = typeDuringTurn();
+      await userEvent.type(textarea, 'Ajoute des tests{Enter}');
+      const bubble = (await screen.findByText('Ajoute des tests')).closest('.msg') as HTMLElement;
+      expect(within(bubble).getByText(/^Envoi dans (10|9) s$/)).toBeInTheDocument();
+      await userEvent.click(within(bubble).getByRole('button', { name: 'Modifier' }));
+      await waitFor(() => expect(textarea).toHaveValue('Ajoute des tests'));
+      expect(screen.queryByText(/^Envoi dans/)).not.toBeInTheDocument();
+      expect(backend.called('send_message')).toEqual([]);
+    });
+
+    it('sends it at once on « Envoyer maintenant », and nothing on « Annuler »', async () => {
+      const { a, backend, textarea } = typeDuringTurn();
+      await userEvent.type(textarea, 'Premier{Enter}');
+      await userEvent.click(await screen.findByRole('button', { name: 'Envoyer maintenant' }));
+      await waitFor(() => expect(backend.called('send_message').map((c) => c.args.text)).toEqual(['Premier']));
+      await userEvent.type(textarea, 'Second{Enter}');
+      await userEvent.click(await screen.findByRole('button', { name: 'Annuler' }));
+      expect(screen.queryByText('Second')).not.toBeInTheDocument();
+      expect(heldOf(a.id)).toEqual([]);
+      expect(backend.called('send_message')).toHaveLength(1);
+    });
+
+    it('keeps one to Cursor until the end of the turn, with no « Envoyer maintenant »', async () => {
+      const { textarea } = typeDuringTurn({ engine: 'cursor' });
+      await userEvent.type(textarea, 'Pour Cursor{Enter}');
+      const bubble = (await screen.findByText('Pour Cursor')).closest('.msg') as HTMLElement;
+      expect(within(bubble).getByText('Attend la fin du tour')).toBeInTheDocument();
+      expect(within(bubble).queryByRole('button', { name: 'Envoyer maintenant' })).not.toBeInTheDocument();
     });
   });
 

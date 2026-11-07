@@ -3,9 +3,11 @@
 //! (tests/fixtures/opencode/), replayed from tests/fixtures/replays/opencode/.
 
 use super::OPENCODE;
+use crate::agent::{AgentRt, Effects};
 use crate::engine::bench::{bench_dir, replay, run, Scenario, Target};
 use crate::engine::{Engine, Program};
-use serde_json::Value;
+use escouade_plugin_protocol::engine::method;
+use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
 fn fixtures() -> PathBuf {
@@ -34,6 +36,31 @@ pub(crate) fn recorded(file: &str) -> Vec<Value> {
         .filter(|l| l["dir"] == "s2c")
         .map(|l| l["msg"].clone())
         .collect()
+}
+
+/// The translation of its module: a frame of OpenCode's, its items applied to the agent.
+#[derive(Default)]
+pub(crate) struct Through(Option<String>);
+
+impl Through {
+    pub(crate) fn frame(&mut self, rt: &mut AgentRt, frame: &Value, fx: &mut Effects) {
+        let plugin = crate::plugins::builtin::OPENCODE;
+        let agent = match &self.0 {
+            Some(agent) => agent.clone(),
+            None => {
+                let agent = uuid::Uuid::new_v4().simple().to_string();
+                let attach = json!({
+                    "agent": agent, "cwd": rt.meta.cwd, "model": rt.meta.model,
+                    "session": rt.meta.session_id, "lang": "fr",
+                });
+                crate::plugins::view::call(plugin, method::ATTACH, &attach).unwrap();
+                self.0.insert(agent).clone()
+            }
+        };
+        let frames = json!({ "agent": agent, "frames": [frame.to_string()] });
+        let answer = crate::plugins::view::call(plugin, method::FRAMES, &frames).unwrap();
+        rt.apply_items(answer["items"].as_array().unwrap(), fx);
+    }
 }
 
 pub(crate) struct OnBench;
@@ -79,8 +106,11 @@ impl Target for OnBench {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn the_fake_opencode_passes_the_bench() {
+    // Its conversation goes through its plugin (INT-10.2): the plugins the app gives, in a runtime of their own.
+    let (rt, plugins, _) = crate::plugins_acp_tests::runtime("int10-opencode-bench");
+    crate::plugins::harness::sync(&rt, &plugins);
     let dir = bench_dir("esc44-bench-opencode");
     let played = run(&OnBench, &dir).await;
     // No quota: neither the limit nor the quota is asked of it.
@@ -90,10 +120,14 @@ async fn the_fake_opencode_passes_the_bench() {
         .collect();
     assert_eq!(played, expected);
     // Every agent stopped, its server too.
-    assert_eq!(super::server::running(), 0);
+    assert_eq!(crate::plugins::shared::running(), 0);
+    rt.shutdown();
 }
 
 #[test]
 fn the_recorded_streams_of_opencode_make_the_items_expected() {
-    replay::check_all(&OPENCODE, "opencode");
+    replay::check_all_through(&OPENCODE, "opencode", || {
+        let mut through = Through::default();
+        Box::new(move |rt, frame, fx| through.frame(rt, frame, fx))
+    });
 }

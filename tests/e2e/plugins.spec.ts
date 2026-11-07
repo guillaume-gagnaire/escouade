@@ -14,6 +14,19 @@ function plugin(dir: string, manifest: unknown) {
   fs.writeFileSync(path.join(dir, 'themes', 'contrast.json'), '{}');
 }
 
+// The plugins the app gives (origin builtin), and the others. Each plugin the app comes to give (INT-7, 8, 10, 13…) adds
+// one: the test reads them as a set that holds the demonstration plugin and isola, never as these alone.
+const builtin = (list: { ok: View[] } | { err: unknown }) => ('ok' in list ? list.ok : []).filter((p) => p.origin.kind === 'builtin');
+const others = (list: { ok: View[] } | { err: unknown }) => ('ok' in list ? list.ok : []).filter((p) => p.origin.kind !== 'builtin');
+const OURS = [
+  'dev.escouade.minimal',
+  'dev.escouade.isola',
+  'dev.escouade.github',
+  'dev.escouade.gitlab',
+  'dev.escouade.bitbucket',
+  'dev.escouade.gitea',
+];
+
 interface View {
   id: string;
   name: string;
@@ -33,6 +46,8 @@ test('a declarative plugin is installed from a folder, and an invalid one says w
     async (cmd, args = {}) => {
       for (let tries = 1; ; tries++) {
         try {
+          // Attached on the blank page a start shows before the app's (a slow runner takes seconds): wait for the app's.
+          await page.waitForFunction(() => '__TAURI_INTERNALS__' in window, null, { timeout: 30_000 });
           return await call(page, cmd, args);
         } catch (e) {
           if (tries === 3 || !String(e).includes('Execution context was destroyed')) throw e;
@@ -65,7 +80,13 @@ test('a declarative plugin is installed from a folder, and an invalid one says w
     later: { field: 'of a later Escouade' },
   });
 
-  expect(await invoke<View[]>('plugins_list')).toEqual({ ok: [] });
+  // The app gives its own (INT-4): the demonstration plugin and isola among them, from the start, with the origin builtin.
+  const first = await invoke<View[]>('plugins_list');
+  expect(others(first)).toEqual([]);
+  expect(builtin(first).map((p) => p.id)).toEqual(expect.arrayContaining(OURS));
+  for (const p of builtin(first).filter((p) => OURS.includes(p.id))) expect(p.state, p.id).toMatchObject({ kind: 'ready' });
+  expect(await invoke('plugin_remove', { id: 'dev.escouade.github', keep: false })).toHaveProperty('err');
+  expect(await invoke('plugin_remove', { id: 'dev.escouade.minimal', keep: false })).toHaveProperty('err');
   // Read first (the install window's), then installed on the user's consent.
   const read = await invoke<{ token: string }>('plugin_inspect_folder', { path: src });
   expect('ok' in read, JSON.stringify(read)).toBe(true);
@@ -101,7 +122,8 @@ test('a declarative plugin is installed from a folder, and an invalid one says w
   // Started anew, the app finds it as it was installed.
   invoke = invokeOn(await app.restart());
   const again = await invoke<View[]>('plugins_list');
-  expect(again).toMatchObject({ ok: [{ id: 'dev.exemple.contraste', fingerprint: view.fingerprint, state: { kind: 'ready' } }] });
+  expect(others(again)).toMatchObject([{ id: 'dev.exemple.contraste', fingerprint: view.fingerprint, state: { kind: 'ready' } }]);
+  expect(builtin(again).map((p) => p.id)).toEqual(expect.arrayContaining(OURS));
 
   // PLG-13: its icon by its id alone, as an address the window shows; none without one; an unknown id refused.
   expect(await invoke('plugin_icon', { id: 'dev.exemple.contraste' })).toEqual({ ok: null });
@@ -127,5 +149,7 @@ test('a declarative plugin is installed from a folder, and an invalid one says w
   expect(await invoke('plugin_remove', { id: 'dev.exemple.contraste', keep: false })).toEqual({ ok: true });
   expect(fs.existsSync(copy)).toBe(false);
   expect(fs.existsSync(path.join(src, 'escouade-plugin.json'))).toBe(true);
-  expect(await invoke<View[]>('plugins_list')).toEqual({ ok: [] });
+  const last = await invoke<View[]>('plugins_list');
+  expect(others(last)).toEqual([]);
+  expect(builtin(last).map((p) => p.id)).toEqual(expect.arrayContaining(OURS));
 });

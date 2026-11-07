@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { and, eq, isNull, lt, sql } from 'drizzle-orm';
+import { and, eq, isNull, like, lt, sql } from 'drizzle-orm';
 import { accounts, installsDaily, plugins, reports, versions } from '../db/schema';
-import { BUILTINS, isBuiltinId, type Builtin } from './builtin';
+import { BUILTINS, isBuiltinId, isOwnId, ownLogo, sourceUrl, type Builtin } from './builtin';
 import { textOf, type Lang, type Text } from './checks';
 import type { Db } from './db';
 import { renderDocs, type Docs } from './readme';
@@ -37,7 +37,7 @@ export const CATEGORY_NAMES: Record<Category, Text> = {
 };
 
 /** What a plugin asks for, in one line of a list: the strongest first (docs/PLUGINS.md §3.4). */
-export type Ask = { kind: 'run' | 'decide' | 'events' | 'secret' | 'none' } | { kind: 'net'; host: string };
+export type Ask = { kind: 'run' | 'wasm' | 'decide' | 'events' | 'secret' | 'none' } | { kind: 'net'; host: string };
 
 /** Where a plugin's version stands with the review: Escouade's own, verified (signed, STORE-8), asked, or not. */
 export type Trust = 'builtin' | 'verified' | 'review' | 'unverified';
@@ -54,7 +54,8 @@ export interface Entry {
   /** The logo of one of Escouade's own, drawn inline (shared/marks.ts); null for the others. */
   logo: Logo | null;
   author: { login: string; githubId: number } | null;
-  builtin: boolean;
+  /** One of Escouade's own (the reserve `dev.escouade.*`): the mark « Escouade » in place of its author (ESC-353). */
+  own: boolean;
   categories: Category[];
   keywords: string[];
   /** Its last published version; Escouade's own have the app's. */
@@ -91,7 +92,8 @@ export function localized(v: unknown): Text {
 /** What a manifest asks for, in one line. */
 export function asksOf(m: Record<string, unknown>): Ask[] {
   const p = obj(m.permissions);
-  const asks: Ask[] = [m.run ? { kind: 'run' } : { kind: 'none' }];
+  // A run.js plugin runs in Escouade, in WASM, the module compiled by the store (ESC-323): no program of its own.
+  const asks: Ask[] = [obj(m.run).js || obj(m.run).wasm ? { kind: 'wasm' } : m.run ? { kind: 'run' } : { kind: 'none' }];
   if (p.decide === true) asks.push({ kind: 'decide' });
   for (const host of list(p.network)) asks.push({ kind: 'net', host });
   if (list(p.secrets).length) asks.push({ kind: 'secret' });
@@ -103,7 +105,15 @@ export function permissionsOf(m: Record<string, unknown>, binaries: Record<strin
   const p = obj(m.permissions);
   const run = obj(m.run);
   const out: Permission[] = [];
-  if (m.run) {
+  if (typeof run.js === 'string' || typeof run.wasm === 'string')
+    out.push({
+      icon: 'run',
+      tone: '',
+      text: t('Tourne dans Escouade, isolé', 'Runs inside Escouade, sandboxed'),
+      mono: (run.js ?? run.wasm) as string,
+      detail: t('compilé en WASM par le store', 'compiled to WASM by the store'),
+    });
+  else if (m.run) {
     const attested = Object.values(binaries ?? {}).some((b) => obj(b).attested === true);
     out.push({
       icon: 'run',
@@ -124,7 +134,17 @@ export function permissionsOf(m: Record<string, unknown>, binaries: Record<strin
     out.push({ icon: 'tool', tone: '', text: t('Lance ces commandes', 'Runs these commands'), mono: list(p.commands).join(' · ') });
   if (list(p.events).length)
     out.push({ icon: 'bolt', tone: '', text: t('Reçoit ces événements', 'Gets these events'), mono: list(p.events).join(' · ') });
-  for (const host of list(p.network)) out.push({ icon: 'net', tone: '', text: t('Se connecte à', 'Connects to'), mono: host });
+  for (const host of list(p.network)) {
+    if (host === '{account}')
+      out.push({ icon: 'net', tone: '', text: t('Se connecte aux instances que tu lui donnes', 'Connects to the instances you give it') });
+    else if (host === 'local:shared')
+      out.push({
+        icon: 'net',
+        tone: '',
+        text: t('Parle au serveur local du harness, lancé par Escouade', 'Talks to the harness’s local server, started by Escouade'),
+      });
+    else out.push({ icon: 'net', tone: '', text: t('Se connecte à', 'Connects to'), mono: host });
+  }
   const titles = new Map(
     (Array.isArray(obj(m.contributes).secrets) ? (obj(m.contributes).secrets as unknown[]) : []).map((s) => [
       obj(s).key,
@@ -172,7 +192,7 @@ function builtinEntry(b: Builtin): Entry {
     icon: null,
     logo: b.logo,
     author: null,
-    builtin: true,
+    own: true,
     categories: b.categories as Category[],
     keywords: [],
     version: null,
@@ -261,9 +281,9 @@ function entriesOf(all: Row[], ctx: Context, taken = false): Entry[] {
       mark: markOf(name.en),
       hue: hueOf(plugin.id),
       icon: v.icon ?? null,
-      logo: null,
+      logo: ownLogo(plugin.id, plugin.categories),
       author: login && githubId ? { login, githubId } : null,
-      builtin: false,
+      own: isOwnId(plugin.id),
       categories: plugin.categories.filter((c): c is Category => (CATEGORIES as readonly string[]).includes(c)),
       keywords: plugin.keywords,
       version: v.version,
@@ -306,7 +326,7 @@ export function score(e: Entry, q: string): number {
   const nameWords = names.flatMap((n) => n.split(/\s+/));
   const keywords = e.keywords.flatMap(words);
   const cats = e.categories.flatMap((c) => [CATEGORY_NAMES[c].fr, CATEGORY_NAMES[c].en, c]).flatMap(words);
-  const author = fold(e.builtin ? 'escouade' : (e.author?.login ?? ''));
+  const author = fold(e.own ? 'escouade' : (e.author?.login ?? ''));
   const desc = [e.description.fr, e.description.en].map(fold).join(' ');
   const id = fold(e.id);
   let total = 0;
@@ -373,13 +393,12 @@ function mixed(own: Entry[]): Entry[] {
 export function home(entries: Entry[]) {
   const counts: Record<string, number> = {};
   for (const e of entries) for (const c of e.categories) counts[c] = (counts[c] ?? 0) + 1;
-  const store = entries.filter((e) => !e.builtin);
   return {
     total: entries.length,
     counts,
-    verified: [...store.filter(verifiedish), ...mixed(entries.filter((e) => e.builtin))].slice(0, 6),
-    fresh: [...store].sort((a, b) => (b.firstAt ?? '').localeCompare(a.firstAt ?? '')).slice(0, 4),
-    top: store
+    verified: [...entries.filter((e) => !e.own && verifiedish(e)), ...mixed(entries.filter((e) => e.own && verifiedish(e)))].slice(0, 6),
+    fresh: [...entries].sort((a, b) => (b.firstAt ?? '').localeCompare(a.firstAt ?? '')).slice(0, 4),
+    top: entries
       .filter((e) => e.installs > 0)
       .sort((a, b) => b.installs - a.installs)
       .slice(0, 4),
@@ -414,7 +433,7 @@ export async function docsOf(db: Db, dir: string, v: typeof versions.$inferSelec
   if (!v.archiveSha256) return null;
   try {
     const gz = await readFile(join(dir, 'sha256', v.archiveSha256.slice(0, 2), `${v.archiveSha256}.tar.gz`));
-    const docs = await renderDocs(readArchive(gz), { repo: v.repoFullName, commit: v.commit, keep: keepImage(dir) });
+    const docs = await renderDocs(readArchive(gz), { repo: v.repoFullName, commit: v.commit, path: v.path, keep: keepImage(dir) });
     await db.update(versions).set({ docs }).where(eq(versions.id, v.id));
     return docs;
   } catch (e) {
@@ -429,7 +448,7 @@ export async function pluginPage(db: Db | null, dir: string, id: string) {
   if (b)
     return {
       entry: builtinEntry(b),
-      builtin: { docs: b.docs },
+      builtin: { docs: b.docs, source: b.source ? sourceUrl(b.source) : null },
       permissions: builtinPermissions(b),
       versions: [],
       latest: null,
@@ -473,9 +492,12 @@ export async function pluginPage(db: Db | null, dir: string, id: string) {
       deletedAt: plugin.deletedAt?.toISOString() ?? null,
       transferredAt: plugin.transferredAt?.toISOString() ?? null,
       transferredFrom: plugin.transferredFrom,
+      sourceChangedAt: plugin.sourceChangedAt?.toISOString() ?? null,
+      sourceFrom: plugin.sourceFrom,
     },
     latest: {
       repository: v.repoFullName,
+      path: v.path,
       tag: v.tag,
       commit: v.commit,
       sha256: v.versionSha256,
@@ -497,7 +519,10 @@ export async function pluginPage(db: Db | null, dir: string, id: string) {
 
 /** An author's page: who they are on GitHub, and their published plugins; null if nobody has this login. */
 export async function authorPage(db: Db | null, login: string) {
-  if (login.toLowerCase() === 'escouade') return { author: null, builtin: true, plugins: BUILTINS.map(builtinEntry) };
+  if (login.toLowerCase() === 'escouade') {
+    const own = db ? entriesOf(await publishedRows(db, and(like(plugins.id, 'dev.escouade.%'), listed)), await contextOf(db)) : [];
+    return { author: null, builtin: true, plugins: [...BUILTINS.map(builtinEntry), ...own] };
+  }
   if (!db || !/^[A-Za-z0-9-]{1,39}$/.test(login)) return null;
   const [account] = await db
     .select({ id: accounts.id, login: accounts.login, githubId: accounts.githubId, name: accounts.name, createdAt: accounts.createdAt })

@@ -14,7 +14,7 @@ fn rt(cwd: &str) -> AgentRt {
     AgentRt::new(
         AgentMeta {
             id: new_id(),
-            engine: EngineId::Agy,
+            engine: EngineId::AGY,
             cwd: cwd.into(),
             mode: "default".into(),
             ..Default::default()
@@ -111,6 +111,10 @@ impl Live {
         program: crate::engine::Program,
         escouade: crate::engine::Escouade,
     ) -> Live {
+        // Its conversation goes through its plugin (INT-10.8).
+        let (rt, plugins, _) =
+            crate::plugins_acp_tests::runtime(&format!("int10-agy-{}", new_id()));
+        crate::plugins::harness::sync(&rt, &plugins);
         let home = dir.join("agy-home");
         let log = dir.join("fake-agy.jsonl");
         let env = vec![
@@ -253,7 +257,7 @@ fn meta(dir: &std::path::Path, mode: &str) -> AgentMeta {
     std::fs::create_dir_all(&cwd).unwrap();
     AgentMeta {
         id: new_id(),
-        engine: EngineId::Agy,
+        engine: EngineId::AGY,
         cwd: cwd.to_string_lossy().into_owned(),
         model: "gemini-3.8-flash".into(),
         effort: "high".into(),
@@ -262,7 +266,7 @@ fn meta(dir: &std::path::Path, mode: &str) -> AgentMeta {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn a_turn_on_the_fake_has_its_model_effort_mode_home_and_server_without_its_token_in_the_arguments(
 ) {
     let dir = crate::paths::test_dir("esc270-agy-live-turn");
@@ -313,7 +317,7 @@ async fn a_turn_on_the_fake_has_its_model_effort_mode_home_and_server_without_it
     assert!(!mcp.contains("s3cr3t"), "{mcp}");
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn a_command_refused_asks_once_the_turn_is_over_then_runs_and_always_holds() {
     let dir = crate::paths::test_dir("esc270-agy-live-perm");
     let mut live = Live::start(&dir, meta(&dir, "default"), Default::default()).await;
@@ -352,7 +356,7 @@ async fn a_command_refused_asks_once_the_turn_is_over_then_runs_and_always_holds
     live.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn a_refusal_ends_the_turn_and_once_is_taken_back_after() {
     let dir = crate::paths::test_dir("esc270-agy-live-deny");
     let mut live = Live::start(&dir, meta(&dir, "default"), Default::default()).await;
@@ -383,7 +387,7 @@ async fn a_refusal_ends_the_turn_and_once_is_taken_back_after() {
     live.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn a_write_in_the_folder_goes_through_with_its_diff_and_one_outside_asks() {
     let dir = crate::paths::test_dir("esc270-agy-live-write");
     let mut live = Live::start(&dir, meta(&dir, "default"), Default::default()).await;
@@ -420,7 +424,7 @@ async fn a_write_in_the_folder_goes_through_with_its_diff_and_one_outside_asks()
     live.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn a_question_skipped_by_agy_is_asked_then_answered() {
     let dir = crate::paths::test_dir("esc270-agy-live-question");
     let mut live = Live::start(&dir, meta(&dir, "default"), Default::default()).await;
@@ -452,7 +456,7 @@ async fn a_question_skipped_by_agy_is_asked_then_answered() {
     live.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn in_the_mode_plan_its_plan_is_approved_then_carried_out() {
     let dir = crate::paths::test_dir("esc270-agy-live-plan");
     let mut live = Live::start(&dir, meta(&dir, "plan"), Default::default()).await;
@@ -484,7 +488,7 @@ async fn in_the_mode_plan_its_plan_is_approved_then_carried_out() {
     live.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn a_turn_stopped_kills_its_program_and_the_next_resumes_the_conversation() {
     let dir = crate::paths::test_dir("esc270-agy-live-stop");
     let mut live = Live::start(&dir, meta(&dir, "default"), Default::default()).await;
@@ -517,7 +521,7 @@ async fn a_turn_stopped_kills_its_program_and_the_next_resumes_the_conversation(
     live.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn a_conversation_is_resumed_by_a_new_process_and_one_gone_starts_anew() {
     let dir = crate::paths::test_dir("esc270-agy-live-resume");
     let m = meta(&dir, "default");
@@ -556,7 +560,7 @@ async fn a_conversation_is_resumed_by_a_new_process_and_one_gone_starts_anew() {
     live.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn a_fenced_path_is_refused_by_its_rules_even_in_bypass_without_a_card() {
     let dir = crate::paths::test_dir("esc270-agy-live-fence");
     let m = meta(&dir, "bypassPermissions");
@@ -620,7 +624,7 @@ fn stamps(
 /// of a private project its rules refuse. The user's `~/.gemini` but `antigravity-cli` (where a
 /// session of the user's may be writing its logs) is the same, by size and date, before and after.
 /// About 4 turns of Gemini Flash (Low), ~30 000 input tokens of its weekly quota.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[ignore = "real Antigravity CLI: ESCOUADE_TEST_REAL_AGY=<agy>"]
 async fn real_agy() {
     let program = std::env::var("ESCOUADE_TEST_REAL_AGY").expect("ESCOUADE_TEST_REAL_AGY");

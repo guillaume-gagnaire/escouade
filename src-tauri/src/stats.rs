@@ -26,13 +26,6 @@ CREATE TABLE IF NOT EXISTS prompts (
   engine TEXT NOT NULL DEFAULT 'claude'
 );
 CREATE INDEX IF NOT EXISTS prompts_ts ON prompts(ts);
-CREATE TABLE IF NOT EXISTS index_savings (
-  id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, agent_id TEXT NOT NULL, project_id TEXT NOT NULL,
-  tool TEXT NOT NULL, files_tokens INTEGER NOT NULL, answer_tokens INTEGER NOT NULL,
-  saved_cost REAL NOT NULL DEFAULT 0, saved_tokens INTEGER
-);
-CREATE INDEX IF NOT EXISTS index_savings_ts ON index_savings(ts);
-CREATE INDEX IF NOT EXISTS index_savings_agent ON index_savings(agent_id);
 ";
 
 /// What an older database lacks to be read as `SCHEMA` says, with the default its lines take.
@@ -61,29 +54,8 @@ fn migrate(c: &Connection) -> rusqlite::Result<()> {
             ))?;
         }
     }
-    // What the code index saved in dollars came after its tokens (ESC-254): the answers counted
-    // before it are worth nothing there.
-    let has: i64 = c.query_row(
-        "SELECT COUNT(*) FROM pragma_table_info('index_savings') WHERE name = 'saved_cost'",
-        [],
-        |r| r.get(0),
-    )?;
-    if has == 0 {
-        c.execute_batch(
-            "ALTER TABLE index_savings ADD COLUMN saved_cost REAL NOT NULL DEFAULT 0;
-             CREATE INDEX IF NOT EXISTS index_savings_ts ON index_savings(ts);",
-        )?;
-    }
-    // What an answer credited, its session's debt paid first, came with tokensave's count
-    // (ESC-298): an answer counted before it saved its files less itself, as it was told.
-    let has: i64 = c.query_row(
-        "SELECT COUNT(*) FROM pragma_table_info('index_savings') WHERE name = 'saved_tokens'",
-        [],
-        |r| r.get(0),
-    )?;
-    if has == 0 {
-        c.execute_batch("ALTER TABLE index_savings ADD COLUMN saved_tokens INTEGER")?;
-    }
+    // The index retired by ESC-310 is gone: what it was said to save goes with it, the rest stays.
+    c.execute_batch("DROP TABLE IF EXISTS index_savings")?;
     Ok(())
 }
 
@@ -145,23 +117,6 @@ pub struct EngineShare {
     pub cost: f64,
     pub turns: u64,
     pub agents: u64,
-}
-
-/// What the code index saved, summed (ESC-253): per agent (`agent_id` set) or per project.
-#[derive(Debug, Clone, Serialize, Default, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct IndexSaving {
-    /// The agent; empty in a per-project sum.
-    pub agent_id: String,
-    pub project_id: String,
-    pub calls: u64,
-    /// What reading the files the answers draw on would have cost, in estimated tokens.
-    pub files_tokens: u64,
-    pub answer_tokens: u64,
-    pub saved_tokens: u64,
-    /// The tokens saved at the input price of the model the agent ran on (ESC-254), in USD: 0 for
-    /// an answer whose model is not known.
-    pub saved_cost: f64,
 }
 
 /// What the statistics are narrowed to: one account, one harness, or both (none: everything).
@@ -235,55 +190,6 @@ pub struct StatsView {
     pub accounts: Vec<String>,
     /// Every harness that ever ran a turn, whichever the period or the harness asked for.
     pub engines: Vec<String>,
-    /// What the code index saved over the period, per project (ESC-254), whatever the account or
-    /// the harness asked for: an answer of the index has neither.
-    pub index_by_project: Vec<IndexSaving>,
-}
-
-/// The model of the last turn `agent_id` ran: the one an answer of the index is priced at.
-fn last_model(c: &Connection, agent_id: &str) -> Option<String> {
-    c.query_row(
-        "SELECT model FROM turns WHERE agent_id = ?1 ORDER BY ts DESC LIMIT 1",
-        [agent_id],
-        |r| r.get(0),
-    )
-    .ok()
-}
-
-/// What the index saved between `since` and `until` (ms), per agent (`by_agent`) or per project,
-/// `project_id` narrowing it to one project. Each answer counts for what it credited (tokensave's
-/// count: the files capped at 4 times the answer, against the answer, the request and the schemas,
-/// a shortfall paid by the next answers of the session); one counted before saved its files less
-/// itself, never below nothing.
-fn savings(
-    c: &Connection,
-    by_agent: bool,
-    project_id: Option<&str>,
-    since: i64,
-    until: i64,
-) -> Vec<IndexSaving> {
-    let key = if by_agent { "agent_id" } else { "''" };
-    let sql = format!(
-        "SELECT {key}, project_id, COUNT(*), SUM(files_tokens), SUM(answer_tokens),
-                SUM(COALESCE(saved_tokens, MAX(files_tokens - answer_tokens, 0))), SUM(saved_cost)
-         FROM index_savings WHERE (?1 IS NULL OR project_id = ?1) AND ts >= ?2 AND ts < ?3
-         GROUP BY {key}, project_id ORDER BY 6 DESC"
-    );
-    let Ok(mut stmt) = c.prepare(&sql) else {
-        return Vec::new();
-    };
-    let rows = stmt.query_map(params![project_id, since, until], |r| {
-        Ok(IndexSaving {
-            agent_id: r.get(0)?,
-            project_id: r.get(1)?,
-            calls: r.get::<_, i64>(2)? as u64,
-            files_tokens: r.get::<_, i64>(3)? as u64,
-            answer_tokens: r.get::<_, i64>(4)? as u64,
-            saved_tokens: r.get::<_, i64>(5)? as u64,
-            saved_cost: r.get(6)?,
-        })
-    });
-    rows.map(|r| r.flatten().collect()).unwrap_or_default()
 }
 
 impl Stats {
@@ -340,63 +246,6 @@ impl Stats {
                 log::warn!("stats insert failed: {e}");
             }
         }
-    }
-
-    /// An answer of the code index to `agent_id` (empty for a client outside Escouade), counted as
-    /// tokensave counts it (`codeindex::accounting`): `before` (the files it draws on, capped),
-    /// `after` (what the model paid for the call) and what it credited. What it credited is priced
-    /// at the input price of the model the agent last ran a turn on, else of `model` (the agent's
-    /// setting): those tokens would have come in as input.
-    pub fn record_index(
-        &self,
-        agent_id: &str,
-        project_id: &str,
-        tool: &str,
-        m: &crate::codeindex::accounting::Metrics,
-        model: &str,
-    ) {
-        self.record_index_at(
-            now_ms(),
-            agent_id,
-            project_id,
-            tool,
-            (m.before, m.after, m.credited),
-            model,
-        );
-    }
-
-    fn record_index_at(
-        &self,
-        ts: i64,
-        agent_id: &str,
-        project_id: &str,
-        tool: &str,
-        (files_tokens, answer_tokens, credited): (u64, u64, u64),
-        model: &str,
-    ) {
-        let guard = self.conn.lock();
-        if let Some(c) = guard.as_ref() {
-            let ran = (!agent_id.is_empty())
-                .then(|| last_model(c, agent_id))
-                .flatten();
-            let saved = credited as f64;
-            let cost = crate::pricing::price(ran.as_deref().unwrap_or(model))
-                .map_or(0.0, |p| saved * p.input / 1_000_000.0);
-            let _ = c.execute(
-                "INSERT INTO index_savings (ts, agent_id, project_id, tool, files_tokens, answer_tokens, saved_cost, saved_tokens) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
-                params![ts, agent_id, project_id, tool, files_tokens as i64, answer_tokens as i64, cost, credited as i64],
-            );
-        }
-    }
-
-    /// What the index saved, per agent (`by_agent`) or per project, `project_id` narrowing it to
-    /// one project. Each answer counts for what it saved, never below nothing.
-    pub fn index_savings(&self, by_agent: bool, project_id: Option<&str>) -> Vec<IndexSaving> {
-        let guard = self.conn.lock();
-        let Some(c) = guard.as_ref() else {
-            return Vec::new();
-        };
-        savings(c, by_agent, project_id, i64::MIN, i64::MAX)
     }
 
     pub fn record_prompt(&self, account: &str, engine: &str, agent_id: &str, project_id: &str) {
@@ -655,7 +504,6 @@ impl Stats {
             let rows = stmt.query_map([], |r| r.get::<_, String>(0));
             view.engines = rows.into_iter().flatten().flatten().collect();
         }
-        view.index_by_project = savings(c, false, None, first, end);
         view
     }
 }
@@ -1511,7 +1359,7 @@ mod tests {
         assert_eq!(engine_shares(&v), [("claude", 320, 1.5)]);
         // A turn written from now on keeps the harness that ran it.
         let codex = TurnRow {
-            engine: crate::model::EngineId::Codex,
+            engine: crate::model::EngineId::CODEX,
             ..row("gpt-5.5", 50, 2.0)
         };
         s.record_turns_at(noon, "principal", "a3", "p1", &[codex]);
@@ -1536,12 +1384,35 @@ mod tests {
             engine,
             ..row("model", 50, 1.0)
         };
-        use crate::model::EngineId::{Claude, Codex};
         // Claude Code on Principal (a1) and Pro (a2), Codex on Work (a3, two turns).
-        s.record_turns_at(noon, "principal", "a1", "p1", &[on(Claude)]);
-        s.record_turns_at(noon, "pro", "a2", "p1", &[on(Claude)]);
-        s.record_turns_at(noon, "work", "a3", "p1", &[on(Codex)]);
-        s.record_turns_at(noon + 1, "work", "a3", "p1", &[on(Codex)]);
+        s.record_turns_at(
+            noon,
+            "principal",
+            "a1",
+            "p1",
+            &[on(crate::model::EngineId::CLAUDE)],
+        );
+        s.record_turns_at(
+            noon,
+            "pro",
+            "a2",
+            "p1",
+            &[on(crate::model::EngineId::CLAUDE)],
+        );
+        s.record_turns_at(
+            noon,
+            "work",
+            "a3",
+            "p1",
+            &[on(crate::model::EngineId::CODEX)],
+        );
+        s.record_turns_at(
+            noon + 1,
+            "work",
+            "a3",
+            "p1",
+            &[on(crate::model::EngineId::CODEX)],
+        );
         s.record_prompt_with(noon, "work", "codex", "a3", "p1");
         s.record_prompt_with(noon, "pro", "claude", "a2", "p1");
         let by = |account, engine| {
@@ -1599,88 +1470,46 @@ mod tests {
     }
 
     #[test]
-    fn what_the_index_saved_is_priced_at_the_model_the_agent_ran_on_and_kept_to_the_period() {
-        let s = Stats::memory();
-        let today = NaiveDate::from_ymd_opt(2026, 9, 27).unwrap();
-        let noon = |days_ago: i64| local_ms(today - Duration::days(days_ago)) + 12 * 3600 * 1000;
-        // a1 ran on Opus 5.5 ($4 per million input tokens): its setting (sonnet) is not what it ran on.
-        s.record_turns_at(
-            noon(0),
-            "principal",
-            "a1",
-            "p1",
-            &[row("claude-opus-5-5", 50, 1.0)],
-        );
-        s.record_index_at(
-            noon(0),
-            "a1",
-            "p1",
-            "index_search",
-            (1_000_000, 0, 1_000_000),
-            "sonnet",
-        );
-        // a2 never ran a turn: its setting prices it (Haiku, $1). A client outside Escouade, unknown model: nothing.
-        s.record_index_at(
-            noon(1),
-            "a2",
-            "p1",
-            "index_context",
-            (600_000, 100_000, 500_000),
-            "haiku",
-        );
-        s.record_index_at(noon(1), "", "p2", "index_search", (5_000, 1_000, 4_000), "");
-        // An answer longer than the files credits nothing (its shortfall is the session's debt).
-        s.record_index_at(noon(1), "a2", "p2", "index_search", (100, 900, 0), "haiku");
-        // Before the period of 14 days.
-        s.record_index_at(
-            noon(30),
-            "a1",
-            "p1",
-            "index_search",
-            (2_000_000, 0, 2_000_000),
-            "",
-        );
-
-        let v = s.query_at("day", today, None, &Labels::default());
-        let of = |p: &str| {
-            v.index_by_project
-                .iter()
-                .find(|x| x.project_id == p)
-                .cloned()
-                .unwrap()
-        };
-        let p1 = of("p1");
-        assert_eq!((p1.calls, p1.saved_tokens), (2, 1_500_000));
-        assert!((p1.saved_cost - 4.5).abs() < 1e-9, "{}", p1.saved_cost);
-        let p2 = of("p2");
-        assert_eq!((p2.calls, p2.saved_tokens), (2, 4_000));
-        assert_eq!(p2.saved_cost, 0.0);
-        // The project that saved the most comes first; all time, the older answer counts too.
-        assert_eq!(v.index_by_project[0].project_id, "p1");
-        let all = s.index_savings(false, Some("p1"));
-        assert_eq!(all[0].saved_tokens, 3_500_000);
-        assert!((all[0].saved_cost - 12.5).abs() < 1e-9);
-    }
-
-    #[test]
-    fn a_database_whose_index_savings_had_no_cost_gets_it_at_nothing() {
-        let path = test_dir("esc254-stats-saved-cost").join("stats.db");
+    fn the_savings_of_the_retired_index_are_dropped_and_the_rest_kept() {
+        let path = test_dir("esc310-stats-no-index").join("stats.db");
         let _ = std::fs::remove_file(&path);
         {
-            let c = Connection::open(&path).unwrap();
-            c.execute_batch(
-                "CREATE TABLE index_savings (
-                   id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, agent_id TEXT NOT NULL, project_id TEXT NOT NULL,
-                   tool TEXT NOT NULL, files_tokens INTEGER NOT NULL, answer_tokens INTEGER NOT NULL);
-                 INSERT INTO index_savings (ts, agent_id, project_id, tool, files_tokens, answer_tokens)
-                   VALUES (1, 'a1', 'p1', 'index_search', 900, 100);",
-            )
-            .unwrap();
+            let s = Stats::open(&path);
+            s.record_turns_at(
+                1,
+                "principal",
+                "a1",
+                "p1",
+                &[row("claude-opus-5-5", 50, 1.0)],
+            );
+            let c = s.conn.lock();
+            c.as_ref()
+                .unwrap()
+                .execute_batch(
+                    "CREATE TABLE index_savings (
+                       id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, agent_id TEXT NOT NULL, project_id TEXT NOT NULL,
+                       tool TEXT NOT NULL, files_tokens INTEGER NOT NULL, answer_tokens INTEGER NOT NULL);
+                     INSERT INTO index_savings (ts, agent_id, project_id, tool, files_tokens, answer_tokens)
+                       VALUES (1, 'a1', 'p1', 'a_tool', 900, 100);",
+                )
+                .unwrap();
         }
         for _ in 0..2 {
             let s = Stats::open(&path);
-            let all = s.index_savings(false, None);
-            assert_eq!((all[0].saved_tokens, all[0].saved_cost), (800, 0.0));
+            let c = s.conn.lock();
+            let c = c.as_ref().unwrap();
+            let tables: i64 = c
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'index_savings%'",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(tables, 0);
+            let turns: i64 = c
+                .query_row("SELECT COUNT(*) FROM turns", [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(turns, 1);
         }
     }
 }

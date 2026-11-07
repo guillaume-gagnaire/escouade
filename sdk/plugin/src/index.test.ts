@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { createPlugin, ERRORS, FACT_NAMES, PROTOCOL_VERSION, RpcError, type Fact } from './index';
-import { connect, decisionRequest, fact } from './testing';
+import { connect, decisionRequest, fact, refusedPath } from './testing';
 
 // The SDK's client (ESC-181, PLG-9), driven line by line as Escouade drives it: the handshake, batches, facts by name
 // and by pattern, decisions, secrets, logs, errors, shutdown.
@@ -18,6 +18,51 @@ function wired() {
   });
   return { plugin, out, traces, ended: () => ended };
 }
+
+describe('its folders and its programs', () => {
+  it('fs and spawn go by their methods, and a program says what it wrote and how it ended', async () => {
+    const plugin = createPlugin();
+    const asked: unknown[] = [];
+    const fake = connect(plugin, {
+      host: {
+        'fs/read': (params) => (asked.push(params), { text: 'dans son dossier' }),
+        'proc/spawn': () => ({ proc: 7 }),
+        'proc/write': (params) => (asked.push(params), null),
+      },
+    });
+    await fake.initialize();
+    expect(await plugin.fs.text({ agent: 'a', root: 'agent', path: 'n.txt' })).toBe('dans son dossier');
+    const said: string[] = [];
+    // What comes before the answer of `proc/spawn` is not lost.
+    const started = plugin.runProgram({ command: 'git', args: ['--version'] }, (data, stream) => said.push(`${stream}:${data}`));
+    await fake.notify('proc/out', { proc: 7, stream: 'stdout', data: 'git version' });
+    const program = await started;
+    await fake.notify('proc/out', { proc: 7, stream: 'stderr', data: 'warn' });
+    await program.write('x', true);
+    await fake.notify('proc/exit', { proc: 7, code: 0 });
+    expect(await program.exited).toBe(0);
+    expect(said).toEqual(['stdout:git version', 'stderr:warn']);
+    expect(asked).toEqual([
+      { agent: 'a', root: 'agent', path: 'n.txt' },
+      { proc: 7, data: 'x', close: true },
+    ]);
+  });
+
+  it('a file that is no text and a refusal reject', async () => {
+    const plugin = createPlugin();
+    const fake = connect(plugin, {
+      host: {
+        'fs/read': (p: { path: string }) => {
+          if (p.path === 'out') throw new RpcError(ERRORS.refused, 'leads out');
+          return { dataBase64: '//4=' };
+        },
+      },
+    });
+    await fake.initialize();
+    await expect(plugin.fs.text({ root: 'temp', path: 'bin' })).rejects.toMatchObject({ code: ERRORS.failed });
+    await expect(plugin.fs.read({ root: 'temp', path: 'out' })).rejects.toMatchObject({ code: ERRORS.refused });
+  });
+});
 
 describe('@escouade-dev/plugin', () => {
   it('answers initialize with its version whatever is offered, and keeps what Escouade said', async () => {
@@ -108,6 +153,25 @@ describe('@escouade-dev/plugin', () => {
     expect(escouade.secretsAsked).toEqual(['webhook', 'empty', 'other']);
   });
 
+  it('asks for its settings, those of the fact’s project over the user’s', async () => {
+    const plugin = createPlugin();
+    const got: unknown[] = [];
+    plugin.onEvent('ticket.column', async (f, p) => {
+      got.push(await p.settings());
+      got.push(await p.settings(f.project?.id));
+    });
+    const escouade = connect(plugin, {
+      settings: { channel: '#escouade', mentions: false },
+      projectSettings: { 'bench-project': { channel: '#equipe' } },
+    });
+    await escouade.initialize();
+    await escouade.fact('ticket.column');
+    expect(got).toEqual([
+      { channel: '#escouade', mentions: false },
+      { channel: '#equipe', mentions: false },
+    ]);
+  });
+
   it('logs to the journal, serves its own methods, and ends after shutdown once its handlers ran', async () => {
     const { plugin, out, ended } = wired();
     let closed = false;
@@ -138,5 +202,74 @@ describe('@escouade-dev/plugin', () => {
     });
     expect(decisionRequest().request).toEqual({ id: 'bench-request', kind: 'command', tool: 'Bash', input: { command: 'npm test' } });
     expect(FACT_NAMES).toContain('turn.ended');
+  });
+
+  it('reads a file of its folder by files/read, and is refused any path out of it (ESC-321)', async () => {
+    const plugin = createPlugin();
+    const escouade = connect(plugin, { files: { 'rules.json': '{"a":1}', 'data/words.txt': 'un' } });
+    await escouade.initialize();
+    await expect(plugin.file('rules.json')).resolves.toBe('{"a":1}');
+    await expect(plugin.file('data/words.txt')).resolves.toBe('un');
+    for (const path of ['../x.json', '/etc/passwd', 'C:/x', 'data/../../x', '.env', '.git/config', 'escouade-plugin.json', '']) {
+      await expect(plugin.file(path), path).rejects.toMatchObject({ code: ERRORS.refused });
+    }
+    await expect(plugin.file('nope.json')).rejects.toMatchObject({ code: ERRORS.notFound });
+    expect(refusedPath('data/words.txt')).toBeNull();
+    expect(escouade.received.filter((m) => (m as { method?: string }).method === 'files/read')).toHaveLength(11);
+  });
+
+  it("speaks through Escouade's WASM host when it is there, without a timer for shutdown (ESC-321)", async () => {
+    const g = globalThis as Record<string, unknown>;
+    const sent: string[] = [];
+    const traces: string[] = [];
+    let listener: ((line: string) => void) | undefined;
+    let ended = false;
+    const timer = g.setTimeout;
+    g.Javy = { IO: {} };
+    g.__esc = {
+      listen: (cb: (line: string) => void) => (listener = cb),
+      write: (line: string) => sent.push(line),
+      trace: (line: string) => traces.push(line),
+      end: () => (ended = true),
+    };
+    try {
+      const plugin = createPlugin();
+      let closed = false;
+      plugin.onShutdown(() => void (closed = true));
+      plugin.onEvent('app.started', () => {
+        throw new Error('boom');
+      });
+      let resolved = false;
+      void plugin.start().then(() => (resolved = true));
+      expect(listener).toBeDefined();
+      listener!(
+        '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1,"escouade":{"version":"2.2.0"},"plugin":{"id":"a.b","version":"1.0.0"},"capabilities":{}}}',
+      );
+      listener!(JSON.stringify({ jsonrpc: '2.0', method: 'events/fact', params: fact('app.started') }));
+      const asked = plugin.file('rules.json');
+      await plugin.idle();
+      listener!('{"jsonrpc":"2.0","id":"p1","result":"{}"}');
+      await expect(asked).resolves.toBe('{}');
+      // No setTimeout in WASM: shutdown is answered once its handlers are done.
+      g.setTimeout = undefined;
+      listener!('{"jsonrpc":"2.0","id":2,"method":"shutdown"}');
+      await plugin.idle();
+      expect(sent.map((l) => JSON.parse(l))).toEqual(
+        expect.arrayContaining([
+          { jsonrpc: '2.0', id: 1, result: { protocolVersion: PROTOCOL_VERSION, capabilities: { batch: true } } },
+          { jsonrpc: '2.0', id: 'p1', method: 'files/read', params: { path: 'rules.json' } },
+          { jsonrpc: '2.0', id: 2, result: null },
+        ]),
+      );
+      expect(sent).toHaveLength(3);
+      expect(traces.join('\n')).toContain('events/fact app.started: Error: boom');
+      expect(closed).toBe(true);
+      expect(ended).toBe(true);
+      expect(resolved).toBe(false);
+    } finally {
+      g.setTimeout = timer;
+      delete g.Javy;
+      delete g.__esc;
+    }
   });
 });

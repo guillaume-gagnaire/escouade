@@ -280,3 +280,76 @@ describe('Réglages › Projets › Workflow (ESC-195)', () => {
     expect(s.getByRole('button', { name: 'Add a step' })).toBeInTheDocument();
   });
 });
+
+describe('Réglages › Projets › Workflow, supprimer et « Pas de workflow » (ESC-309)', () => {
+  it('deletes a workflow at once and says the reading will not make it again', async () => {
+    const backend = open({}, gsdScan(), {
+      set_workflow_removed: () => gsdScan({ workflows: [], removed: [{ id: '|claude|gsd', name: 'GSD', changed: false }] }),
+    });
+    const s = within(section());
+    await userEvent.click(await s.findByRole('button', { name: 'Supprimer ce workflow' }));
+    expect(backend.called('set_workflow_removed')).toEqual([
+      expect.objectContaining({ args: { id: 'p1', workflow: '|claude|gsd', removed: true } }),
+    ]);
+    const row = await s.findByTestId('wf-removed');
+    expect(row).toHaveTextContent('GSDsupprimé, ne sera pas recréé');
+    expect(s.getByText('Supprimés')).toBeInTheDocument();
+    expect(s.queryByRole('button', { name: 'Corriger les étapes de GSD' })).toBeNull();
+    expect(app.toasts.at(-1)?.text).toBe(
+      'GSD supprimé : la relecture ne le recréera pas. « Rétablir » sous « Supprimés » pour le défaire.',
+    );
+  });
+
+  it('proposes again a workflow deleted whose finding changed, kept deleted or taken back', async () => {
+    const removed = (changed: boolean) => gsdScan({ workflows: [], removed: [{ id: '|claude|gsd', name: 'GSD', changed }] });
+    const backend = open({}, removed(true), {
+      set_workflow_removed: ({ removed: r }) => (r ? removed(false) : gsdScan()),
+    });
+    const s = within(section());
+    expect(await s.findByTestId('wf-removed')).toHaveTextContent('supprimé, mais ce qui l’a fait trouver a changé : le reprendre ?');
+    await userEvent.click(s.getByRole('button', { name: 'Laisser supprimé' }));
+    expect(await s.findByText('supprimé, ne sera pas recréé')).toBeInTheDocument();
+    await userEvent.click(s.getByRole('button', { name: 'Rétablir' }));
+    expect(backend.called('set_workflow_removed').map((c) => c.args.removed)).toEqual([true, false]);
+    expect(await s.findByRole('button', { name: 'Corriger les étapes de GSD' })).toBeInTheDocument();
+    expect(s.queryByTestId('wf-removed')).toBeNull();
+  });
+
+  it('sets « Pas de workflow pour ce projet », says what it does and how to undo it, and saves it', async () => {
+    const backend = open();
+    const s = within(section());
+    expect(await s.findByRole('radio', { name: 'Lire les workflows' })).toBeChecked();
+    await userEvent.click(s.getByRole('radio', { name: 'Pas de workflow pour ce projet' }));
+    const note = s.getByTestId('workflows-off');
+    expect(note).toHaveTextContent('Escouade ne lit ni n’écrit ses workflows');
+    expect(note).toHaveTextContent('.escouade/workflows/ reste tel quel');
+    expect(note).toHaveTextContent('Pour le défaire, choisis « Lire les workflows » et enregistre.');
+    // Nothing of the workflows is offered while it is chosen.
+    expect(s.queryByRole('button', { name: 'Relire' })).toBeNull();
+    expect(s.queryByRole('button', { name: 'Corriger les étapes de GSD' })).toBeNull();
+    await save();
+    expect(backend.called('update_project')[0].args.project).toMatchObject({ workflowsEnabled: false });
+  });
+
+  it('says a project without workflows as such, and reads them again once undone', async () => {
+    const backend = open({ workflowsEnabled: false }, { ...gsdScan({ workflows: [], sources: [] }), off: true });
+    const s = within(section());
+    expect(await s.findByRole('radio', { name: 'Pas de workflow pour ce projet' })).toBeChecked();
+    expect(s.getByTestId('workflows-off')).toBeInTheDocument();
+    await userEvent.click(s.getByRole('radio', { name: 'Lire les workflows' }));
+    expect(s.getByTestId('workflows-off')).toHaveTextContent('Enregistre pour lire à nouveau les workflows du projet.');
+    await save();
+    expect(backend.called('update_project')[0].args.project).toMatchObject({ workflowsEnabled: true });
+  });
+
+  it('says it in English', async () => {
+    setLang('en');
+    open({ workflowsEnabled: false }, { ...gsdScan({ workflows: [] }), off: true });
+    const s = within(section());
+    expect(await s.findByRole('radio', { name: 'No workflow for this project' })).toBeChecked();
+    expect(s.getByTestId('workflows-off')).toHaveTextContent(
+      'No workflow for this project: Escouade neither reads nor writes its workflows and follows no agent in them; .escouade/workflows/ is left as it is. To undo it, choose “Read the workflows” and save.',
+    );
+    setLang('fr');
+  });
+});

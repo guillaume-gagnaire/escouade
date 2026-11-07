@@ -1,7 +1,11 @@
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_IMAGE, DEFAULT_TIMEOUT, findCli, findEngine } from './bench';
+import { DEFAULT_IMAGE, DEFAULT_TIMEOUT, findCli, findEngine, findLocalCli, localCommand, readDevelopmentVersion } from './bench';
+import { containerCompiler, DEFAULT_RUST_IMAGE, FETCH_LIMIT } from './container';
+import { sandboxedCompiler } from '../../server/utils/compile';
+import { firstPartyRepo } from '../../server/utils/config';
+import { engineFolder, engineHelp } from './engine';
 import { parseTarget, type Source } from './download';
 import { keysIn, readToken, revoke, saveToken, sendReport, signingKey, signVersion, workDir, type Admin } from './admin';
 import { review } from './review';
@@ -13,8 +17,13 @@ import { review } from './review';
 //   ESCOUADE_REVIEW_HOME         the reports (~/.escouade-review)
 //   ESCOUADE_REVIEW_WORK         where the versions are unpacked (<temp>/escouade-review)
 //   ESCOUADE_REVIEW_ENGINE       docker, podman, or none (docker, else podman)
-//   ESCOUADE_PLUGIN_LINUX        the Linux x64 `escouade-plugin` mounted in the container
-//   ESCOUADE_REVIEW_IMAGE        the container's image (docker.io/library/node:22-trixie-slim)
+//   ESCOUADE_PLUGIN_LINUX        the Linux x64 `escouade-plugin` mounted in the container: the bench of a plugin with a
+//                                program, and the recompilation of a third party's `run.wasm` (ESC-337)
+//   ESCOUADE_PLUGIN              this machine's `escouade-plugin` (else the PATH's, else src-tauri/target's): it compiles a
+//                                `run.js` bundle or a first-party `run.wasm` again, and plays a module in WASM (ESC-324)
+//   ESCOUADE_JAVY                the pinned Javy it compiles with (else downloaded once into <reports>/.escouade-plugin)
+//   ESCOUADE_REVIEW_IMAGE        the bench container's image (docker.io/library/node:22-trixie-slim)
+//   ESCOUADE_REVIEW_RUST_IMAGE   the image a third party's `run.wasm` compiles in (docker.io/library/rust:1.98.0-trixie)
 //   ESCOUADE_REVIEW_GITHUB_API   GitHub's API, and GITHUB_TOKEN or GH_TOKEN for its limits
 // And for what is sent to the store (report, sign, revoke, lift, revoke-key):
 //   ESCOUADE_STORE_TOKEN         the administration token (else the system's keychain, saved by `token`)
@@ -29,12 +38,19 @@ const USAGE = `npm run plugin-review -- <id>@<version> [--since <version>]
        npm run plugin-review -- revoke-key <id de clé> --fr <raison> --en <reason>
        npm run plugin-review -- token
 
-  Télécharge la version depuis le store, vérifie ses empreintes, l'extrait hors du dépôt sans rien exécuter,
-  prépare les pistes, passe le banc dans un conteneur sans réseau, fait le diff avec la dernière version vérifiée
+  Télécharge la version depuis le store, vérifie ses empreintes (archive, binaires, module WASM), l'extrait hors du
+  dépôt sans rien exécuter, recompile le bundle d'un plugin run.js ou les sources d'un plugin run.wasm (sur le poste pour
+  la première main, dans un conteneur pour un tiers, ESCOUADE_PLUGIN_LINUX) des versions que nomme version.json et
+  compare l'empreinte du module (un écart : « Refuser »), prépare les pistes, passe le banc (dans un conteneur sans
+  réseau ; le module publié dans l'hôte WASM, hors ligne), fait le diff avec la dernière version vérifiée
   (ou --since), et écrit le rapport dans ~/.escouade-review/<id>/<version>.md.
+  La première main (dev.escouade.*) est jouée comme la version en développement (NEXT de website/app/data/site.ts) : elle
+  est signée avant sa release. Un tiers est toujours joué comme l'outil du poste ; le rapport dit la version jouée.
+  Sans le bon escouade-js dans escouade-plugin, la revue le récupère de la CI de main (gh run download, empreinte de
+  version.json vérifiée) dans src-tauri/escouade-js/target/ ; reste \`cargo build\`.
 
   report : envoie le rapport à la file du store (les administrateurs seuls le lisent).
-  sign : après ta décision « Vérifier », signe version.json avec la clé du store (minisign demande son mot de
+  sign : après ta décision « Vérifier » (et, pour un plugin à module, une recompilation à la même empreinte), signe version.json avec la clé du store (minisign demande son mot de
   passe), vérifie la signature avec les clés publiques de store/keys/, puis la dépose avec le résumé public.
   revoke, lift, revoke-key : signent et déposent la liste de révocation suivante (serial + 1).
   token : garde le jeton d’administration dans le trousseau du système (collé, jamais affiché).
@@ -56,6 +72,11 @@ async function main(argv: string[]): Promise<number> {
   const env = process.env;
   const { engine, why } = findEngine(env);
   const here = dirname(fileURLToPath(import.meta.url));
+  const repo = resolve(here, '../../..');
+  const reports = resolve(env.ESCOUADE_REVIEW_HOME ?? join(homedir(), '.escouade-review'));
+  const local = findLocalCli(env, repo);
+  const cli = findCli(env);
+  const work = resolve(env.ESCOUADE_REVIEW_WORK ?? join(tmpdir(), 'escouade-review'));
   const done = await review({
     ...target,
     since: since?.replace(/^v/, ''),
@@ -64,11 +85,26 @@ async function main(argv: string[]): Promise<number> {
       githubApi: (env.ESCOUADE_REVIEW_GITHUB_API ?? 'https://api.github.com').replace(/\/$/, ''),
       githubToken: env.GITHUB_TOKEN ?? env.GH_TOKEN,
     },
-    work: resolve(env.ESCOUADE_REVIEW_WORK ?? join(tmpdir(), 'escouade-review')),
-    reports: resolve(env.ESCOUADE_REVIEW_HOME ?? join(homedir(), '.escouade-review')),
-    bench: { engine, cli: findCli(env), image: env.ESCOUADE_REVIEW_IMAGE ?? DEFAULT_IMAGE, timeout: DEFAULT_TIMEOUT },
+    work,
+    reports,
+    bench: { engine, cli, image: env.ESCOUADE_REVIEW_IMAGE ?? DEFAULT_IMAGE, timeout: DEFAULT_TIMEOUT, local },
     benchWhy: why,
-    repo: resolve(here, '../../..'),
+    // escouade-plugin build in a folder of its own each time, without the review's variables, as the store's. `rust: 'none'`
+    // is for the first hand alone, as review() sees to it: a third party's `run.wasm` goes to the container.
+    compile: local
+      ? sandboxedCompiler({
+          command: localCommand(local),
+          javy: env.ESCOUADE_JAVY,
+          data: join(reports, '.escouade-plugin'),
+          rust: 'none',
+          fetchTimeoutMs: FETCH_LIMIT,
+        })
+      : null,
+    container: engine && cli ? containerCompiler({ engine, cli, image: env.ESCOUADE_REVIEW_RUST_IMAGE ?? DEFAULT_RUST_IMAGE, work }) : null,
+    containerWhy: engine ? 'pas d’`escouade-plugin` pour Linux à y mettre (ESCOUADE_PLUGIN_LINUX : le binaire Linux x64)' : why,
+    engine: (sha256) => engineHelp(sha256, engineFolder(repo), firstPartyRepo(env)),
+    development: readDevelopmentVersion(repo),
+    repo,
   });
   const d = done.data;
   const lines = [`Rapport : ${done.report}`];

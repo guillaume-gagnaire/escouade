@@ -38,6 +38,7 @@ interface QVersion {
   message: string | null;
   reviewedAt: string | null;
   command: string;
+  source: { repository: string; path: string; changedFrom: string | null };
 }
 interface QReport {
   reportId: number;
@@ -60,6 +61,7 @@ interface QHeld {
   mark: string;
   hue: number;
   repository: string;
+  path: string;
   author: string | null;
   why: Words;
   createdAt: string;
@@ -263,6 +265,13 @@ useHead(() => ({ title: t.value.title, meta: [{ name: 'robots', content: 'noinde
           ></span
         >
       </div>
+      <p class="sub source">
+        {{ t.repo }} : <span class="mono">github.com/{{ chosen.source.repository }}</span
+        ><template v-if="chosen.source.path">
+          · {{ t.folder }} <span class="mono">{{ chosen.source.path }}</span></template
+        >
+      </p>
+      <p v-if="chosen.source.changedFrom" class="notice warn moved" role="status">{{ t.sourceChanged(chosen.source.changedFrom) }}</p>
       <div>
         <h3 class="h3">{{ t.readOnMachine }}</h3>
         <div class="cmd">
@@ -387,7 +396,8 @@ useHead(() => ({ title: t.value.title, meta: [{ name: 'robots', content: 'noinde
         >
       </div>
       <div class="flag">
-        {{ held.why[lang] }}<small>{{ t.repo }} : github.com/{{ held.repository }}</small>
+        {{ held.why[lang]
+        }}<small>{{ t.repo }} : github.com/{{ held.repository }}{{ held.path ? ` · ${t.folder} ${held.path}` : '' }}</small>
       </div>
       <form method="post" :action="versionAction(held.versionId, 'release')">
         <input type="hidden" name="lang" :value="lang" />

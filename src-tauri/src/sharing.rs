@@ -32,7 +32,7 @@ pub const MAX_SHARED_FILE: u64 = 5 * 1024 * 1024;
 const ALPHABET: &[u8] = b"23456789abcdefghijkmnpqrstuvwxyz";
 
 /// The statuses of a file, in the board's order.
-pub const STATUSES: [&str; 4] = ["todo", "in-progress", "review", "done"];
+pub const STATUSES: [&str; 5] = ["todo", "in-progress", "review", "in-review", "done"];
 
 /// What a field's value is.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -97,7 +97,7 @@ pub const FIELDS: &[Field] = &[
         "status",
         Kind::Status,
         true,
-        "Its column: todo, in-progress, review or done.",
+        "Its column: todo, in-progress, review, in-review or done.",
     ),
     field("author", Kind::Person, true, "Who shared it: { name, id }."),
     field(
@@ -205,7 +205,8 @@ pub fn status_name(c: Column) -> &'static str {
         Column::Todo => STATUSES[0],
         Column::Doing => STATUSES[1],
         Column::Review => STATUSES[2],
-        Column::Done => STATUSES[3],
+        Column::Pr => STATUSES[3],
+        Column::Done => STATUSES[4],
     }
 }
 
@@ -214,6 +215,7 @@ pub fn column_of(status: &str) -> Option<Column> {
         "todo" => Column::Todo,
         "in-progress" => Column::Doing,
         "review" => Column::Review,
+        "in-review" => Column::Pr,
         "done" => Column::Done,
         _ => return None,
     })
@@ -488,8 +490,8 @@ fn read_tree(t: &Node) -> Result<Read, Read> {
                         return Err(invalid(
                             line(n),
                             tr!(
-                                "status doit être todo, in-progress, review ou done",
-                                "status must be todo, in-progress, review or done"
+                                "status doit être todo, in-progress, review, in-review ou done",
+                                "status must be todo, in-progress, review, in-review or done"
                             ),
                         ))
                     }
@@ -746,7 +748,7 @@ fn schema_of(f: &Field) -> Value {
                 {
                     "type": "object",
                     "properties": {
-                        "source": { "type": "string", "enum": crate::model::Service::ALL },
+                        "source": { "type": "string", "enum": crate::integrations::source::registry().services() },
                         "key": { "type": "string" },
                         "url": { "type": "string" },
                     },
@@ -881,7 +883,7 @@ pub fn file_of(t: &Ticket, tickets: &[Ticket], me: &Person, now: &str) -> Ticket
 
 /// Whether this machine's agent holds the ticket: its column is then its own, whatever a file says.
 fn held_here(t: &Ticket) -> bool {
-    t.agent_id.is_some() && matches!(t.column, Column::Doing | Column::Review)
+    t.agent_id.is_some() && matches!(t.column, Column::Doing | Column::Review | Column::Pr)
 }
 
 /// What a file says, put into its ticket: its text, its criteria (those already met stay so), the

@@ -1,0 +1,62 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.minimal",
+  "name": "Minimal",
+  "version": "0.0.0",
+  "description": {
+    "fr": "Le plugin de démonstration livré avec Escouade : le moins qu'un plugin de l'app fasse, pour prouver le chemin du registre au process.",
+    "en": "The demonstration plugin shipped with Escouade: the least a plugin of the app does, to prove the way from the registry to a process."
+  },
+  "author": {
+    "name": "Escouade",
+    "url": "https://escouade.dev"
+  },
+  "license": "GPL-3.0-or-later",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/tests/fixtures/plugins/minimal",
+  "escouade": {
+    "api": "1",
+    "min": "2.1.0"
+  },
+  "run": {
+    "command": "{escouade}/escouade-plugins",
+    "args": ["minimal"]
+  },
+  "activation": ["event:ticket.column"],
+  "permissions": {
+    "events": ["ticket.column"]
+  },
+  "contributes": {
+    "harnesses": [
+      {
+        "id": "minimal",
+        "name": "Minimal",
+        "speaker": "Minimal",
+        "locate": {
+          "program": "{escouade}/escouade-plugins"
+        },
+        "tested": {
+          "oldest": "0",
+          "newest": "0"
+        },
+        "caps": {
+          "modes": ["default"],
+          "readOnly": true
+        },
+        "models": [
+          {
+            "id": "grand",
+            "label": "Grand"
+          },
+          {
+            "id": "petit",
+            "label": "Petit"
+          }
+        ],
+        "accountVar": "MINIMAL_HOME",
+        "memory": {
+          "dir": "{configDir}/projects/{projectKey}/memory"
+        }
+      }
+    ]
+  }
+}

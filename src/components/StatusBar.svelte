@@ -14,6 +14,7 @@
     projectionTip,
     quotaTip,
     statusEngine,
+    meterKey,
   } from '../lib/accounts';
   import { dayCostStandsIn, engineName } from '../lib/engines';
   import { fAgo, fBytes, fPct, fUsd } from '../lib/format';
@@ -133,7 +134,10 @@
     const lines = [
       ...(overage ? [overage] : []),
       ...meters.map((m) =>
-        t('accounts.quota.line', { name: meterName(m.minutes), tip: quotaTip(m.usage) + projectionTip(m.minutes, m.usage, app.now) }),
+        t('accounts.quota.line', {
+          name: meterName(m.minutes, m.model),
+          tip: quotaTip(m.usage) + projectionTip(m.minutes, m.usage, app.now),
+        }),
       ),
       ...(day ? [day.tip] : []),
     ];
@@ -369,8 +373,8 @@
           {#each groups as g (g.engine)}
             <span class="grp" data-engine={g.engine}>
               <span class="hn">{g.short}</span>
-              {#each g.meters as m (m.minutes ?? 'credits')}
-                <QuotaMeter minutes={m.minutes} usage={m.usage} now={app.now} focusable={false} />
+              {#each g.meters as m (meterKey(m))}
+                <QuotaMeter minutes={m.minutes} model={m.model} usage={m.usage} now={app.now} focusable={false} />
               {/each}
               {#if g.day}
                 <span class="day" class:over={g.day.over}

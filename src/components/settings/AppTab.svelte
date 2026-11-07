@@ -28,6 +28,12 @@
     { value: 'path' as const, label: t('settings.claude.attachBigTextPath') },
     { value: 'refuse' as const, label: t('settings.claude.attachBigTextRefuse') },
   ]);
+  const midTurnDelayOptions = $derived(
+    [0, 5, 10, 20, 30].map((s) => ({
+      value: s,
+      label: s ? t('settings.claude.midTurnDelaySecs', { s }) : t('settings.claude.midTurnDelayOff'),
+    })),
+  );
   let checking = $state(false);
   /** The harnesses found, for « À propos ». */
   const found = $derived(offered());
@@ -333,6 +339,9 @@
       <input class="field input num" type="number" min="0" aria-label={t('settings.claude.idleStopLabel')} bind:value={s.idleStopMinutes} />
       <span class="hint">{t('settings.claude.idleStopHint')}</span>
     </Row>
+    <Row label={t('settings.claude.midTurnDelay')} desc={t('settings.claude.midTurnDelayDesc')}>
+      <Chips label={t('settings.claude.midTurnDelay')} options={midTurnDelayOptions} bind:value={s.midTurnDelaySecs} />
+    </Row>
   </Group>
   <Group title={t('settings.claude.attachments')} note={t('settings.claude.attachmentsNote')}>
     <Row label={t('settings.claude.attachMax')}>
@@ -368,6 +377,17 @@
     <!-- The types, ticked (`.checks` of the 2.0 design, `.w-tick` of the windows). -->
     <div class="checks">
       {#each ['questions', 'done', 'errors', 'tickets'] as const as k (k)}
+        <label class="w-tick check-row">
+          <input type="checkbox" bind:checked={s.notifyFor[k]} />
+          <span class="tick-box" aria-hidden="true"><Icon name="check" size={12} /></span>
+          <span>{t(`settings.notifications.${k}`)}</span>
+        </label>
+      {/each}
+    </div>
+  </Group>
+  <Group title={t('settings.notifications.hosts')} note={t('settings.notifications.hostsNote')}>
+    <div class="checks">
+      {#each ['prCiFailed', 'prChanges', 'prApproved', 'prMerged', 'prConflict', 'prReview', 'deployOk', 'deployFailed'] as const as k (k)}
         <label class="w-tick check-row">
           <input type="checkbox" bind:checked={s.notifyFor[k]} />
           <span class="tick-box" aria-hidden="true"><Icon name="check" size={12} /></span>

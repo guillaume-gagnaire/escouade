@@ -76,43 +76,8 @@ pub fn parse(url: &str) -> Option<Address> {
     })
 }
 
-/// A repository on a code host: its namespace (owner, organization, GitLab group and subgroups,
-/// Bitbucket workspace) and its name.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RepoRef {
-    pub namespace: String,
-    pub name: String,
-}
-
-impl RepoRef {
-    /// `namespace/name`.
-    pub fn full(&self) -> String {
-        format!("{}/{}", self.namespace, self.name)
-    }
-
-    /// Exactly two segments: an owner and a repository (GitHub, Bitbucket, Gitea).
-    pub fn two(segments: &[String]) -> Option<Self> {
-        match segments {
-            [owner, name] => Some(Self {
-                namespace: owner.clone(),
-                name: name.clone(),
-            }),
-            _ => None,
-        }
-    }
-
-    /// Two segments or more: groups and subgroups, then the project (GitLab).
-    pub fn nested(segments: &[String]) -> Option<Self> {
-        match segments {
-            [groups @ .., name] if !groups.is_empty() => Some(Self {
-                namespace: groups.join("/"),
-                name: name.clone(),
-            }),
-            _ => None,
-        }
-    }
-}
+/// A repository on a code host: shared with the plugins (`escouade_plugin_protocol::forge`).
+pub use escouade_plugin_protocol::forge::RepoRef;
 
 #[cfg(test)]
 mod tests {

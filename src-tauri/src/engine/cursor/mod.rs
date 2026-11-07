@@ -39,6 +39,23 @@ use crate::model::EngineId;
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Value};
 
+/// The harness of the plugin Cursor CLI (`dev.escouade.cursor-cli`, INT-10.1), if it is on: the conversation of
+/// Cursor's agents goes through it (`plugins::harness::BUILTIN_HARNESSES`).
+#[cfg(test)]
+pub fn plugged() -> Option<&'static crate::plugins::harness::ProcessEngine> {
+    crate::plugins::harness::plugged(crate::plugins::builtin::CURSOR)
+}
+
+/// What the launcher Cursor's installer leaves runs: the `node` and the `index.js` of its newest version
+/// (`ProcessEngine::with_native`).
+pub fn native(program: &Program) -> Option<(std::path::PathBuf, Vec<String>)> {
+    let Program::Native(launcher) = program else {
+        return None;
+    };
+    locate::native_of(launcher)
+        .map(|(node, index)| (node, vec![index.to_string_lossy().into_owned()]))
+}
+
 /// Cursor CLI.
 pub struct Cursor;
 
@@ -69,10 +86,6 @@ const MODELS: [(&str, &str); 1] = [(AUTO, "Auto")];
 
 /// The efforts Escouade's menu has, in its order: a model's own among them.
 const EFFORTS: [&str; 4] = ["low", "medium", "high", "xhigh"];
-
-/// What Cursor answers, for any message, on a model its plan does not offer: a text, no error
-/// (tried with `composer-2.5` on a Free account).
-pub(crate) const UPGRADE: &str = "Upgrade your plan to continue";
 
 /// The model, effort and mode in force (Cursor takes them at once).
 #[derive(Debug, Clone, Default)]
@@ -142,7 +155,7 @@ pub fn caps() -> EngineCaps {
         fork: ForkPoint::None,
         resume_other_account: false,
         // A second prompt would cancel the running turn: the process holds it until its end.
-        mid_turn: MidTurn::Queued,
+        mid_turn: MidTurn::TurnEnd,
         slash_commands: false,
         // Its usage of the month is told by its interface alone (`/usage`, from the API of its
         // dashboard with the token of the sign-in, which Escouade never reads): its dashboard is
@@ -281,21 +294,14 @@ pub(crate) fn catalog(told: &[ToldOf]) -> Vec<ToldModel> {
 
 /// What `session/new` and `session/load` are given of MCP servers: Escouade's, as the agent (its
 /// address and token; the token in a header, on the process's input, never its command line), or
-/// none. An entry of the user's of that name is replaced by it (tried).
+/// none. The ACP client's (`escouade_acp`, PLG-6), which Mistral Vibe and Gemini CLI share.
 pub(crate) fn mcp_servers(escouade: Option<&(String, String)>) -> Value {
-    match escouade {
-        Some((url, token)) => json!([{
-            "type": "http", "name": mcp::SERVER, "url": url,
-            "headers": [{ "name": "Authorization", "value": format!("Bearer {token}") }],
-        }]),
-        None => json!([]),
-    }
+    escouade_acp::mcp_servers(escouade.map(|(u, t)| (u.as_str(), t.as_str())))
 }
 
-/// The instructions added to an agent (a ticket's protocol), as they go before its first message:
-/// ACP has no system message, and `session/load` keeps them (tried).
+/// The instructions added to an agent, as they go before its first message (`escouade_acp`).
 pub(crate) fn preamble(instructions: &str) -> String {
-    format!("<instructions>\n{}\n</instructions>", instructions.trim())
+    escouade_acp::preamble(instructions)
 }
 
 /// What was said in the agent's interface (« Vue Cursor », `handover::relay`), as it goes before its
@@ -309,17 +315,9 @@ pub(crate) fn relayed(relay: &str) -> String {
     )
 }
 
-/// The option of a permission (`session/request_permission`) of `kind` (`allow_once`,
-/// `allow_always`, `reject_once`), by the id Cursor gave it.
+/// The option of a permission (`session/request_permission`) of `kind` (`escouade_acp`).
 pub(crate) fn option_of(params: &Value, kind: &str) -> String {
-    params["options"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .find(|o| o["kind"] == kind)
-        .and_then(|o| o["optionId"].as_str())
-        .map(str::to_string)
-        .unwrap_or_else(|| kind.replace('_', "-"))
+    escouade_acp::option_of(params, kind)
 }
 
 /// The answer to `cursor/ask_question` (its `params`) from a card's `answers` (by question, its
@@ -362,36 +360,10 @@ pub(crate) fn question_outcome(params: &Value, answers: &Value) -> Value {
     }
 }
 
-/// « Projet privé » (ESC-140): whether the permission Cursor asks (`params` of
-/// `session/request_permission`) names a path of `fence` (as Cursor names them): its command, its
-/// title, the files it writes or reads. Cursor reads without asking, and a command can reach a path
-/// it does not name: a guard of Escouade's, not a barrier.
+/// « Projet privé » (ESC-140): whether the permission an ACP agent asks names a path of `fence`
+/// (`escouade_acp::fenced`): a guard of Escouade's, not a barrier.
 pub(crate) fn fenced(params: &Value, fence: &[String]) -> bool {
-    if fence.is_empty() {
-        return false;
-    }
-    let tc = &params["toolCall"];
-    let mut texts: Vec<&str> = tc["title"].as_str().into_iter().collect();
-    for v in tc["rawInput"]
-        .as_object()
-        .into_iter()
-        .flatten()
-        .map(|(_, v)| v)
-    {
-        texts.extend(v.as_str());
-    }
-    for k in ["content", "locations"] {
-        texts.extend(
-            tc[k]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(|c| c["path"].as_str()),
-        );
-    }
-    texts
-        .iter()
-        .any(|t| fence.iter().any(|p| crate::fence::names(t, p)))
+    escouade_acp::fenced(params, fence)
 }
 
 /// Refused: the ACP of the process is not the one Escouade speaks.
@@ -417,85 +389,6 @@ fn session_refused(lang: Lang, e: &anyhow::Error) -> String {
 /// (its `/usage` says it). Escouade reads no usage of Cursor's (ESC-43): ACP tells none, and its
 /// dashboard's API takes the token of the sign-in, which Escouade never reads.
 pub const DASHBOARD: &str = "https://cursor.com/dashboard?tab=usage";
-
-/// What Cursor answers in place of a turn it does not run: a text as its last words, the turn ending
-/// as any other (`end_turn`, no error), by the action it asks (read in its code, 2026.10.22: `login`,
-/// `upgrade`, `payment`, and a key refused).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Refusal {
-    /// « Upgrade your plan to continue »: the included usage of the month spent, or a model the
-    /// plan does not offer (tried with `composer-2.5` on a Free account).
-    Upgrade,
-    /// « Add a payment method to continue »: on-demand usage, without a means to pay.
-    Payment,
-    /// « Please sign in to continue ».
-    SignIn,
-    /// « Error: [unauthenticated] Backend rejected authentication… »: the account's key refused.
-    Unauthenticated,
-}
-
-/// The refusal a turn's text `text` ends with, if any.
-pub(crate) fn refusal(text: &str) -> Option<Refusal> {
-    let last = text.trim().rsplit("\n\n").next().unwrap_or_default().trim();
-    match last {
-        UPGRADE => Some(Refusal::Upgrade),
-        "Add a payment method to continue" => Some(Refusal::Payment),
-        "Please sign in to continue" => Some(Refusal::SignIn),
-        t if t.starts_with("Error: [unauthenticated]") => Some(Refusal::Unauthenticated),
-        _ => None,
-    }
-}
-
-/// Whether the refusal is the account's usage limit: its turn ends « limité », on the amber card.
-pub(crate) fn at_limit(refusal: Refusal) -> bool {
-    matches!(refusal, Refusal::Upgrade | Refusal::Payment)
-}
-
-/// What the card says of a turn Cursor refused (`refusal`), the agent on `model`, its account by
-/// its key or not (`by_key`).
-pub(crate) fn refusal_error(lang: Lang, refusal: Refusal, model: &str, by_key: bool) -> String {
-    match refusal {
-        Refusal::Upgrade if model == AUTO || model.is_empty() => tr_in!(
-            lang,
-            "Limite d’usage de ce compte Cursor atteinte (« Upgrade your plan to continue ») : l’usage inclus du mois est épuisé jusqu’à la remise à zéro de son offre. Son usage : {url}",
-            "This Cursor account’s usage limit is reached (“Upgrade your plan to continue”): the month’s included usage is spent until its plan resets. Its usage: {url}",
-            url = DASHBOARD
-        ),
-        Refusal::Upgrade => tr_in!(
-            lang,
-            "Cursor refuse le modèle {model} sur ce compte (« Upgrade your plan to continue ») : il n’est pas dans l’offre de ce compte Cursor, ou son usage inclus du mois est épuisé. Choisis Auto dans le menu Modèle ; son usage : {url}",
-            "Cursor refuses the model {model} on this account (“Upgrade your plan to continue”): it isn’t in this Cursor account’s plan, or its included usage of the month is spent. Choose Auto in the Model menu; its usage: {url}",
-            url = DASHBOARD
-        ),
-        Refusal::Payment => tr_in!(
-            lang,
-            "Limite d’usage de ce compte Cursor atteinte : la suite passe par l’usage à la demande, qui demande un moyen de paiement (« Add a payment method to continue »). Son usage : {url}",
-            "This Cursor account’s usage limit is reached: what comes next is on-demand usage, which needs a payment method (“Add a payment method to continue”). Its usage: {url}",
-            url = DASHBOARD
-        ),
-        Refusal::SignIn | Refusal::Unauthenticated if by_key => tr_in!(
-            lang,
-            "Cursor a refusé la clé d’API de ce compte : donne-la de nouveau dans Réglages › Comptes, « Changer la clé… ».",
-            "Cursor refused this account’s API key: give it again in Settings › Accounts, “Change the key…”."
-        ),
-        Refusal::SignIn | Refusal::Unauthenticated => tr_in!(
-            lang,
-            "Cursor CLI n’est pas connecté sur cette machine (« Please sign in to continue ») : lance agent login dans un terminal.",
-            "Cursor CLI isn’t signed in on this machine (“Please sign in to continue”): run agent login in a terminal."
-        ),
-    }
-}
-
-/// What a write of Cursor that changed nothing says (its call ends `completed` with no diff): Cursor
-/// gives a write done its diff, and in ACP says nothing of one refused, by a hook of the user's
-/// (those of Claude Code run under Cursor too) or by Cursor itself (read in its code, 2026.10.22).
-pub(crate) fn write_not_done(lang: Lang) -> String {
-    tr_in!(
-        lang,
-        "Cursor n’a rien écrit : l’écriture a été refusée, par un hook (ceux de Claude Code tournent aussi sous Cursor) ou par Cursor lui-même, qui n’en donne pas la raison.",
-        "Cursor wrote nothing: the write was refused, by a hook (those of Claude Code run under Cursor too) or by Cursor itself, which doesn’t give the reason."
-    )
-}
 
 /// A message to Cursor: its text, the images joined to it (ACP's `image` blocks), the text files
 /// joined to it as text. A PDF is refused.
@@ -544,7 +437,8 @@ fn message(text: &str, attachments: &[Attachment]) -> Result<Value> {
 }
 
 /// One question to a process of its own (`agent acp`, in its mode Ask, on Auto), in a configuration
-/// folder of its own removed once answered: its last words.
+/// folder of its own removed once answered: its last words. Its mode Ask reads the disk and nothing
+/// cuts that off: it does not say `answers_without_tools`, so a `Weight::Given` never gets here.
 async fn one_shot(ask: OneShot<'_>) -> Result<String> {
     let home =
         std::env::temp_dir().join(format!("escouade-cursor-{}", uuid::Uuid::new_v4().simple()));
@@ -697,8 +591,89 @@ pub(crate) fn listed_of(options: &Value) -> Value {
 }
 
 impl Engine for Cursor {
+    /// Its sign-in is the machine's (`agent login`, not moved by its folder), and each agent has a
+    /// folder of its own (`agent_home_var`); its other accounts go by their key (ESC-43).
+    fn store(&self) -> crate::accounts::Store {
+        crate::accounts::Store {
+            home: ".cursor",
+            var: CONFIG_VAR,
+            files: &[],
+            dirs: &[],
+            login: &["login"],
+            xdg: None,
+        }
+    }
+
+    fn keys(&self) -> crate::accounts::KeyUse {
+        crate::accounts::KeyUse::Added
+    }
+
+    /// An account added by its key goes by it, never by a token of the app's; its Principal by the
+    /// machine's sign-in, never by a key or token of the app's (ESC-43).
+    fn account_env(
+        &self,
+        account: &crate::model::Account,
+        inherited: &dyn Fn(&str) -> bool,
+    ) -> Vec<(String, String)> {
+        use crate::accounts::{account_key, by_key, CURSOR_KEY_VAR, CURSOR_TOKEN_VAR};
+        let key = account_key(account).filter(|_| by_key(account));
+        let mut env: Vec<(String, String)> = [CURSOR_TOKEN_VAR, CURSOR_KEY_VAR]
+            .into_iter()
+            .filter(|v| inherited(v) && (*v == CURSOR_TOKEN_VAR || key.is_none()))
+            .map(|v| (v.to_string(), String::new()))
+            .collect();
+        if let Some(key) = key {
+            env.push((CURSOR_KEY_VAR.to_string(), key));
+        }
+        env
+    }
+
+    fn key_missing(&self, name: &str) -> String {
+        tr!(
+            "Le compte Cursor « {name} » n’a pas de clé d’API : donne-la dans Réglages › Comptes, « Changer la clé… ».",
+            "The Cursor account “{name}” has no API key: give it in Settings › Accounts, “Change the key…”."
+        )
+    }
+
+    fn key_malformed(&self) -> String {
+        tr!(
+            "Ce n’est pas une clé d’API de Cursor : copie-la entière depuis cursor.com, Settings › API Keys.",
+            "That isn’t a Cursor API key: copy it whole from cursor.com, Settings › API Keys."
+        )
+    }
+
+    /// Its Principal signed in by `agent login`, the same for all its folders, never read; another
+    /// account by its key, kept in the keychain (ESC-43), shown by its end.
+    fn account_status<'a>(
+        &'a self,
+        account: &'a crate::model::Account,
+        settings: &'a crate::model::Settings,
+    ) -> BoxFuture<'a, crate::accounts::AccountStatus> {
+        Box::pin(async move {
+            let machine = if crate::accounts::by_key(account) {
+                (false, None)
+            } else {
+                (crate::accounts::cursor_signed_in(), None)
+            };
+            crate::accounts::key_status(account, settings, machine)
+        })
+    }
+
+    fn workflow_folders(&self) -> crate::workflow::Folders {
+        &[(".cursor/commands", crate::workflow::DocKind::Command)]
+    }
+
+    /// No cost told; in its own interface, neither its subagents nor the time of its steps.
+    fn track_missing(&self, view: bool) -> &'static [&'static str] {
+        if view {
+            &["subagents", "cost", "timing"]
+        } else {
+            &["cost"]
+        }
+    }
+
     fn id(&self) -> EngineId {
-        EngineId::Cursor
+        EngineId::CURSOR
     }
 
     /// `cursor/list_available_models` of an `agent acp` of its own (`read_models`, ESC-186).
@@ -809,44 +784,26 @@ impl Engine for Cursor {
         on_frame: super::OnFrame,
         on_exit: super::OnExit,
     ) -> Result<Process> {
-        let escouade = match &spawn.escouade {
-            Escouade::Granted { url, token, .. } => Some((url.clone(), token.clone())),
-            Escouade::Denied { .. } => None,
-        };
-        log::info!(
-            "{}: starting {} acp in {} (account {})",
-            spawn.label,
-            spawn.program.describe(),
-            spawn.cwd,
-            spawn.account
-        );
-        let fence = crate::fence::spelled(&spawn.fence, &spawn.program);
-        let opts = process::Opts {
-            program: spawn.program,
-            cwd: spawn.cwd,
-            args: vec!["acp".into()],
-            env: spawn.env,
-            start: spawn.start,
-            settings: Settings {
-                model: spawn.model,
-                effort: spawn.effort,
-                mode: spawn.mode,
-            },
-            instructions: spawn.append_prompt,
-            relay: spawn.relay,
-            escouade,
-            fence,
-        };
-        let p: Process = CursorProcess::spawn(opts, on_frame, on_exit)?;
-        Ok(p)
+        // Its conversation goes through its plugin (INT-10.1): the launch it describes, checked and started by the
+        // core, what Cursor writes translated there.
+        crate::plugins::harness::spawn_plugged(
+            crate::plugins::builtin::CURSOR,
+            self.name(),
+            spawn,
+            on_frame,
+            on_exit,
+        )
     }
 
     fn message(&self, text: &str, attachments: &[Attachment]) -> Result<Message> {
         message(text, attachments).map(Message)
     }
 
+    /// The items its plugin made of what Cursor wrote (`agent/items`).
     fn translate(&self, rt: &mut AgentRt, frame: &Value, fx: &mut Effects) {
-        rt.cursor_frame(frame, fx);
+        if let Some(items) = frame["items"].as_array() {
+            rt.apply_items(items, fx);
+        }
     }
 
     /// A session that cannot be loaded gives a new one (`process::open`), said by the conversation.
@@ -906,7 +863,7 @@ mod tests {
         let c = caps();
         assert!(!c.modes.iter().any(|m| m.id == "ask" || m.id == "auto"));
         assert_eq!(c.fork, ForkPoint::None);
-        assert_eq!(c.mid_turn, MidTurn::Queued);
+        assert_eq!(c.mid_turn, MidTurn::TurnEnd);
     }
 
     #[test]
@@ -1018,48 +975,5 @@ mod tests {
         assert_eq!(mcp_servers(None), json!([]));
         assert_eq!(CURSOR.agent_home_var(), Some("CURSOR_CONFIG_DIR"));
         assert!(preamble(" Fais court. ").contains("<instructions>\nFais court.\n</instructions>"));
-    }
-
-    /// The texts Cursor answers in place of a turn (read in its code, 2026.10.22), as the last
-    /// paragraph of the turn's words; each said in both languages.
-    #[test]
-    fn the_refusals_of_cursor_are_read_from_the_last_words_of_the_turn() {
-        assert_eq!(refusal(UPGRADE), Some(Refusal::Upgrade));
-        assert_eq!(
-            refusal("Je regarde.\n\nAdd a payment method to continue"),
-            Some(Refusal::Payment)
-        );
-        assert_eq!(
-            refusal("\n\nPlease sign in to continue"),
-            Some(Refusal::SignIn)
-        );
-        assert_eq!(
-            refusal("\n\nError: [unauthenticated] Backend rejected authentication. Verify…"),
-            Some(Refusal::Unauthenticated)
-        );
-        // Said in passing, it is no refusal.
-        assert_eq!(
-            refusal("Le message « Upgrade your plan to continue » vient de Cursor."),
-            None
-        );
-        assert_eq!(refusal(""), None);
-        assert!(at_limit(Refusal::Upgrade) && at_limit(Refusal::Payment));
-        assert!(!at_limit(Refusal::SignIn) && !at_limit(Refusal::Unauthenticated));
-        for r in [
-            Refusal::Upgrade,
-            Refusal::Payment,
-            Refusal::SignIn,
-            Refusal::Unauthenticated,
-        ] {
-            for (model, key) in [(AUTO, false), ("composer-2.5", true)] {
-                let (fr, en) = (
-                    refusal_error(Lang::Fr, r, model, key),
-                    refusal_error(Lang::En, r, model, key),
-                );
-                assert!(fr != en && !fr.is_empty(), "{r:?}");
-            }
-        }
-        assert!(refusal_error(Lang::Fr, Refusal::Upgrade, "composer-2.5", false).contains("Auto"));
-        assert_ne!(write_not_done(Lang::Fr), write_not_done(Lang::En));
     }
 }

@@ -5,12 +5,19 @@
 //! only, as `runtime` serves them), its `log` lines, its standard error, what it sends that answers
 //! nothing. The bench plays its scenarios through it; `escouade-plugin dev` lets an author drive it
 //! by hand.
+//!
+//! A `run.js` plugin is played in WASM (ESC-322), in the app's own host (`plugins::wasm`): its module, an instance on a
+//! thread of its own, `net/fetch` served by the host and closed to what `permissions.network` does not name; no Node.
+//! As in the app, its instance ends once it answered `shutdown`, and a fault (its time, its memory, an exception) ends
+//! it as a crash ends a process. Its `fs/*` and `proc/*` are the app's (ESC-333), on the manifest as it is, around one agent
+//! of the bench, `BENCH_AGENT`, in a scratch folder that goes with the session; offline, it runs no program.
 
 use crate::job::Job;
 use crate::plugins::manifest::Manifest;
 use crate::plugins::runtime::{
     matches, notification_line, request_line, METHOD_NOT_FOUND, NOT_YOURS, PROTOCOL,
 };
+use crate::plugins::{files, procs, wasm};
 use parking_lot::Mutex;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -23,6 +30,52 @@ use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::{mpsc, oneshot, Notify};
+
+/// The key of the bench's agent, for `fs/*` and `proc/*`.
+pub const BENCH_AGENT: &str = "bench";
+
+/// What a plugin in WASM reaches in the bench: the app's rules, around a scratch folder and its one agent. `back` is the
+/// way to its channel; offline, the manifest's commands are not given.
+fn capabilities(
+    shared: Arc<Shared>,
+    manifest: &Manifest,
+    folder: &Path,
+    scratch: &Path,
+    offline: bool,
+    back: mpsc::WeakUnboundedSender<wasm::Frame>,
+) -> Arc<wasm::Capabilities> {
+    for d in ["agent", "repo", "home", "project", "temp"] {
+        let _ = std::fs::create_dir_all(scratch.join(d));
+    }
+    let agents: files::Agents = Arc::default();
+    agents.lock().insert(
+        BENCH_AGENT.to_string(),
+        files::AgentPlace {
+            cwd: scratch.join("agent"),
+            repo: Some(scratch.join("repo")),
+            home: Some(scratch.join("home")),
+            fence: crate::fence::Fence::default(),
+            project: "bench".into(),
+        },
+    );
+    let told: procs::Told = Arc::new(move |_, line| shared.tell(line.to_string()));
+    let project = scratch.join("project");
+    let procs = procs::Procs::new(procs::ProcsOf {
+        commands: if offline {
+            Vec::new()
+        } else {
+            manifest.permissions.commands.clone()
+        },
+        temp: scratch.join("temp"),
+        agents: agents.clone(),
+        projects: Arc::new(move |_| Ok(project.clone())),
+        agent_env: Vec::new(),
+        back,
+        told: told.clone(),
+    });
+    let access = files::Access::new(manifest, folder, scratch.join("temp"), agents);
+    wasm::Capabilities::new(access, procs, told)
+}
 
 /// How many lines of its standard error an end tells.
 const TAIL: usize = 10;
@@ -69,6 +122,15 @@ pub enum Seen {
     Stray { line: String },
 }
 
+/// What a plugin in WASM reaches on the bench.
+#[derive(Debug, Clone, Default)]
+pub struct Reach {
+    /// No host at all (`--offline`).
+    pub offline: bool,
+    /// The hosts `{account}` opens (`--account`).
+    pub accounts: Vec<String>,
+}
+
 struct Shared {
     tx: Mutex<Option<mpsc::UnboundedSender<Vec<u8>>>>,
     pending: Mutex<HashMap<u64, oneshot::Sender<Result<Value, RemoteError>>>>,
@@ -80,19 +142,69 @@ struct Shared {
     /// For a key of its own with no value kept: `<made>-<key>` (the bench's), else `null`.
     made: Option<String>,
     patterns: Vec<String>,
+    /// Its folder, for `files/read`.
+    folder: std::path::PathBuf,
     /// Its exit code, once it ended (`Some(None)`: no code, killed).
     ended: Mutex<Option<Option<i32>>>,
     end: Notify,
     /// Each new thing seen: for `escouade-plugin dev`, which shows them as they come.
     watch: Mutex<Option<mpsc::UnboundedSender<Seen>>>,
+    /// An instance in WASM: the id of the `shutdown` asked, whose answer ends it, as Escouade ends it.
+    wasm: bool,
+    shutdown: Mutex<Option<u64>>,
 }
 
 impl Shared {
+    fn new(
+        tx: mpsc::UnboundedSender<Vec<u8>>,
+        folder: &Path,
+        manifest: &Manifest,
+        secrets: HashMap<String, String>,
+        made: Option<String>,
+        wasm: bool,
+    ) -> Arc<Self> {
+        Arc::new(Shared {
+            tx: Mutex::new(Some(tx)),
+            pending: Mutex::new(HashMap::new()),
+            next: AtomicU64::new(1),
+            seen: Mutex::new(Vec::new()),
+            tail: Mutex::new(VecDeque::new()),
+            secrets,
+            made,
+            patterns: manifest.permissions.secrets.clone(),
+            folder: folder.to_path_buf(),
+            ended: Mutex::new(None),
+            end: Notify::new(),
+            watch: Mutex::new(None),
+            wasm,
+            shutdown: Mutex::new(None),
+        })
+    }
+
     fn see(&self, s: Seen) {
         if let Some(w) = self.watch.lock().as_ref() {
             let _ = w.send(s.clone());
         }
         self.seen.lock().push(s);
+    }
+
+    fn tell(&self, line: String) {
+        {
+            let mut t = self.tail.lock();
+            t.push_back(line.clone());
+            while t.len() > TAIL {
+                t.pop_front();
+            }
+        }
+        self.see(Seen::Stderr { line });
+    }
+
+    /// It ended (`code`: none when it was killed): what still waits gets no answer.
+    fn end(&self, code: Option<i32>) {
+        self.tx.lock().take();
+        *self.ended.lock() = Some(code);
+        self.pending.lock().clear();
+        self.end.notify_waiters();
     }
 
     fn write(&self, line: &str) -> bool {
@@ -150,19 +262,7 @@ impl Session {
         let stderr = child.stderr.take().expect("piped");
         let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
         let (kill_tx, mut kill_rx) = oneshot::channel::<()>();
-        let shared = Arc::new(Shared {
-            tx: Mutex::new(Some(tx)),
-            pending: Mutex::new(HashMap::new()),
-            next: AtomicU64::new(1),
-            seen: Mutex::new(Vec::new()),
-            tail: Mutex::new(VecDeque::new()),
-            secrets,
-            made,
-            patterns: manifest.permissions.secrets.clone(),
-            ended: Mutex::new(None),
-            end: Notify::new(),
-            watch: Mutex::new(None),
-        });
+        let shared = Shared::new(tx, folder, manifest, secrets, made, false);
 
         tokio::spawn(async move {
             while let Some(bytes) = rx.recv().await {
@@ -181,14 +281,7 @@ impl Session {
                     let line = String::from_utf8_lossy(&line)
                         .trim_end_matches('\r')
                         .to_string();
-                    {
-                        let mut t = shared.tail.lock();
-                        t.push_back(line.clone());
-                        while t.len() > TAIL {
-                            t.pop_front();
-                        }
-                    }
-                    shared.see(Seen::Stderr { line });
+                    shared.tell(line);
                 }
                 let _ = err_tx.send(());
             });
@@ -212,11 +305,7 @@ impl Session {
                 }
                 let code = child.wait().await.ok().and_then(|s| s.code());
                 let _ = tokio::time::timeout(Duration::from_millis(500), err_rx).await;
-                shared.tx.lock().take();
-                *shared.ended.lock() = Some(code);
-                // What still waits gets no answer: its sender dropped.
-                shared.pending.lock().clear();
-                shared.end.notify_waiters();
+                shared.end(code);
             });
         }
 
@@ -228,12 +317,107 @@ impl Session {
         })
     }
 
+    /// Starts the instance of `module`, the WASM of the plugin of `manifest` in `folder`, in Escouade's host,
+    /// with its limits; `secrets` and `made` as for a process.
+    pub fn start_wasm(
+        folder: &Path,
+        manifest: &Manifest,
+        module: wasmtime::Module,
+        secrets: HashMap<String, String>,
+        made: Option<String>,
+        limits: wasm::Limits,
+        reach: Reach,
+    ) -> std::io::Result<Self> {
+        let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
+        let shared = Shared::new(tx, folder, manifest, secrets, made, true);
+        let (ftx, frames) = mpsc::unbounded_channel::<wasm::Frame>();
+        let back = ftx.downgrade();
+        // What the bench writes, to the instance's thread; closed when the bench closes it (`kill`, `shutdown`).
+        std::thread::Builder::new()
+            .name(format!("bench {} input", manifest.id))
+            .spawn(move || {
+                while let Some(bytes) = rx.blocking_recv() {
+                    if ftx.send((bytes, None)).is_err() {
+                        break;
+                    }
+                }
+            })?;
+        let files = wasm::files_of(folder);
+        let offline = reach.offline;
+        // Offline (the review's bench), no host is covered: every fetch is refused, as the container's `--network=none`.
+        let fetcher = wasm::Fetcher::new(
+            &manifest.id,
+            if reach.offline {
+                &[]
+            } else {
+                &manifest.permissions.network
+            },
+            &wasm::Net {
+                accounts: Some(Arc::new(move |_| reach.accounts.clone())),
+                ..wasm::Net::default()
+            },
+        )
+        .limited(manifest.limits);
+        let scratch =
+            std::env::temp_dir().join(format!("escouade-bench-{}", uuid::Uuid::new_v4().simple()));
+        let reached = capabilities(
+            shared.clone(),
+            manifest,
+            folder,
+            &scratch,
+            offline,
+            back.clone(),
+        );
+        let (s1, s2, s3, s4, s5) = (
+            shared.clone(),
+            shared.clone(),
+            shared.clone(),
+            shared.clone(),
+            shared.clone(),
+        );
+        std::thread::Builder::new()
+            .name(format!("bench {}", manifest.id))
+            .spawn(move || {
+                let calls = Some(reached.calls());
+                let fault = match wasm::Instance::start_with(&module, &files, limits, calls) {
+                    Err(f) => Some(f),
+                    Ok(instance) => {
+                        let wiring = wasm::Wiring {
+                            rx: frames,
+                            back,
+                            line: Box::new(move |l| incoming(&s1, l)),
+                            stderr: Box::new(move |l| s2.tell(l.to_string())),
+                            refused: Arc::new(move |l| s3.tell(l.to_string())),
+                            said: Arc::new(move |l| s5.tell(l.to_string())),
+                            capabilities: Some(reached.clone()),
+                        };
+                        wasm::serve(instance, fetcher, wiring)
+                    }
+                };
+                reached.end();
+                let _ = std::fs::remove_dir_all(&scratch);
+                // A fault ends it as a crash ends a process (code 1); its input closed, it was stopped.
+                let code = fault.map(|f| {
+                    s4.tell(f.to_string());
+                    1
+                });
+                s4.end(code);
+            })?;
+        Ok(Self {
+            shared,
+            job: None,
+            kill: Mutex::new(None),
+            pid: None,
+        })
+    }
+
     /// The `initialize` Escouade sends, offering `version` of the protocol.
     pub fn hello(manifest: &Manifest, app_version: &str, version: u64) -> Value {
         json!({
             "protocolVersion": version,
             "escouade": { "version": app_version },
             "plugin": { "id": manifest.id, "version": manifest.version },
+            "lang": "fr",
             "capabilities": { "batch": true, "secrets": true, "log": true, "attach": true },
         })
     }
@@ -264,6 +448,9 @@ impl Session {
     ) -> Option<oneshot::Receiver<Result<Value, RemoteError>>> {
         let params = serde_json::value::to_raw_value(params).ok()?;
         let id = self.shared.next.fetch_add(1, Ordering::Relaxed);
+        if method == "shutdown" && self.shared.wasm {
+            *self.shared.shutdown.lock() = Some(id);
+        }
         let (tx, rx) = oneshot::channel();
         self.shared.pending.lock().insert(id, tx);
         if self.shared.write(&request_line(id, method, &params)) {
@@ -334,6 +521,10 @@ impl Session {
         if let Some(k) = self.kill.lock().take() {
             let _ = k.send(());
         }
+        // An instance: its input closed, its thread ends it.
+        if self.shared.wasm {
+            self.shared.tx.lock().take();
+        }
     }
 }
 
@@ -388,6 +579,10 @@ fn message(shared: &Shared, msg: Value) {
                 None => Ok(msg.get("result").cloned().unwrap_or(Value::Null)),
             };
             let _ = tx.send(result);
+            // Its answer to `shutdown`: Escouade ends its instance.
+            if shared.wasm && id.as_u64().is_some() && *shared.shutdown.lock() == id.as_u64() {
+                shared.tx.lock().take();
+            }
         }
         (Some(method), Some(id)) => {
             let params = msg.get("params").cloned().unwrap_or(Value::Null);
@@ -451,6 +646,8 @@ fn request(shared: &Shared, method: &str, params: &Value) -> Result<Value, (i64,
                 ))
             }
         }
+        // As the app serves it (ESC-321).
+        "files/read" => crate::plugins::files::read(&shared.folder, params),
         _ => {
             shared.see(Seen::Unserved {
                 method: method.to_string(),

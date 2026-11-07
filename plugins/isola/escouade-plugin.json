@@ -1,0 +1,29 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.isola",
+  "name": "isola",
+  "version": "2.2.0",
+  "description": {
+    "fr": "Les services de chaque worktree sur ses ports et ses adresses *.localhost, avec isola : « ▶ Tester » lance `isola up`, ouvre l'adresse, arrête `isola down` et détruit `isola destroy` avec le worktree.",
+    "en": "Each worktree's services on ports and *.localhost addresses of their own, with isola: “▶ Test” runs `isola up`, opens the address, `isola down` stops it and `isola destroy` tears it down with the worktree."
+  },
+  "author": { "name": "Escouade", "url": "https://escouade.dev" },
+  "license": "GPL-3.0-or-later",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/isola",
+  "escouade": { "api": "1", "min": "2.2.0" },
+  "run": { "wasm": "Cargo.toml" },
+  "activation": ["launch:isola"],
+  "permissions": { "commands": ["isola ls --json", "isola down", "isola destroy"] },
+  "contributes": {
+    "launchEnvironments": [
+      {
+        "id": "isola",
+        "name": "isola",
+        "detect": ".isola.toml",
+        "program": "isola",
+        "up": "isola up"
+      }
+    ]
+  },
+  "store": { "categories": ["tools"] }
+}

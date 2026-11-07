@@ -8,6 +8,7 @@ export default defineZone('shell', {
     cantStart: 'Can’t start: {error}',
     noAgent: 'No agents in this project.',
     newAgent: 'New agent',
+    projectPrs: 'Project PRs and CI',
   },
   welcome: {
     intro: 'Add a project to run agents, follow their questions, and open terminals.',

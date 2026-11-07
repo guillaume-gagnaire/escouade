@@ -21,7 +21,7 @@
 // message and assistant entry on a line), and a --resume of a session absent from every
 // <dir>/projects/* folder fails as an unknown one does; while a <dir>/fake-limit file is there, every
 // turn is stopped by the usage limit (as "limite") and its quota windows say 100 % (rate_limit_event,
-// get_usage). While a <dir>/fake-error file is there, every turn fails with an error of the API
+// get_usage); while a <dir>/fake-usage.json file is there, get_usage tells its body as its rate_limits. While a <dir>/fake-error file is there, every turn fails with an error of the API
 // ("Invalid API key", as an account the user is not signed in to gets), which is no usage limit.
 // While a <dir>/fake-oauth-lost file is there, a turn fails as a sign-in Claude Code could not refresh does
 // (« OAuth session expired and could not be refreshed », ESC-162), and the process that failed so fails every turn after
@@ -49,7 +49,10 @@
 // interrupt, [commite] its work committed by itself (every file of its folder, a copied .env forced
 // in), [retire-env] then .env taken out of git again in a second commit (still in the branch's
 // history), [tenace] a process that lasts 5 s once its input is closed, [rien] no file written (nothing
-// to merge), [dans:api] its file written in that folder instead (each one named; ESC-169); by default criterion n is
+// to merge), [dans:api] its file written in that folder instead (each one named; ESC-169); given its pull request's CI to
+// fix (« La CI de la PR #n », ESC-60), it writes ci.txt and commits it (nothing with [ci-rien]), and ends its turn with no
+// report; given its review's comments (ESC-61), retours.txt the same; its conflict with its target, resolved with its own
+// side (or its rebase done); by default criterion n is
 // met from loop n on. "faits-workflow: [...]" in its ticket (ESC-197) plays those facts first, then holds its turn 10 min
 // as [lent] does: the agent of a ticket under way that follows a workflow too. [spec:<project>] (ESC-263): before its first
 // report it keeps the spec as its protocol asks, by Escouade's docs tools (its --mcp-config server): the page
@@ -99,6 +102,9 @@
 // of the project, one that holds a line break), only refused ones in a folder named "all-refused", or
 // nothing readable in a folder named "unreadable". Asked for a direct commit's message (<fichiers>, <files>),
 // it names the latest commit subject (<sujets-recents>, <recent-subjects>) and the files of the diff it read.
+// Asked to review a pull request (<pr-diff>, ESC-66), it answers a comment on the first added line of the diff and one on
+// a line out of it, its text saying whether its folder is empty and repeating the title it read; a diff that says
+// [relecture-illisible] gets prose.
 // Asked for a pull request (<commits>), it answers a title (« Le travail de l’agent, proposé par le faux claude », with
 // " (en)" in English) and the commits it read as the description.
 // Asked to name a task (<tache>, <task>), it answers with its first two words. Asked in English (its
@@ -506,6 +512,32 @@ if (argv[0] === 'mcp') {
       return;
     }
     // A pull request's title and description (ESC-64): from the commits it read.
+    if (input.includes('<pr-diff>')) {
+      if (input.includes('[relecture-illisible]')) {
+        process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result: 'Tout me semble bon.' }));
+        return;
+      }
+      // The website's screenshots give it its words (`$FAKE_CLAUDE_REVIEW`, tests/site-shots/demo.ts).
+      if (process.env.FAKE_CLAUDE_REVIEW) {
+        const text = '```json\n' + fs.readFileSync(process.env.FAKE_CLAUDE_REVIEW, 'utf8') + '\n```';
+        process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result: text }));
+        return;
+      }
+      const path_ = input.match(/<file path="([^"]+)">/)?.[1] ?? '';
+      const line = Number(input.match(/^\s*(\d+) \+ /m)?.[1] ?? 0);
+      const folder = fs.readdirSync(process.cwd()).length ? 'dossier plein' : 'dossier vide';
+      const title = input.match(/<title>(.*)<\/title>/)?.[1] ?? '';
+      const review = {
+        summary: `Relu par le faux claude (${folder}) : ${title}`,
+        comments: [
+          { path: path_, line, body: 'Cette ligne mérite un test.' },
+          { path: path_, line: 9999, body: 'Hors du diff.' },
+        ],
+      };
+      const text = 'Voici ma relecture :\n```json\n' + JSON.stringify(review) + '\n```';
+      process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result: text }));
+      return;
+    }
     if (input.includes('<commits>')) {
       const commits = input.match(/<commits>\n([\s\S]*?)<\/commits>/)?.[1].trim() ?? '';
       const asked = tongue(input.startsWith('Write the title'));
@@ -1043,10 +1075,14 @@ function startSession() {
   // While a <dir>/fake-overage file is there, the account answers as extra usage (ESC-147), its 5-hour window full.
   const overageOn = () => configDir !== null && fs.existsSync(path.join(configDir, 'fake-overage'));
   // While a <dir>/fake-pct file is there, the 5-hour window says the percentage it holds, until in an hour (ESC-148);
-  // <dir>/fake-week-pct, the weekly window, until in a day.
-  const pctOf = (name = 'fake-pct') => {
+  // <dir>/fake-week-pct, the weekly window, until in a day, or in as many minutes as <dir>/fake-week-reset-min holds (ESC-3).
+  const numberOf = (name) => {
     const file = configDir === null ? null : path.join(configDir, name);
-    return file && fs.existsSync(file) ? Number(fs.readFileSync(file, 'utf8')) / 100 : null;
+    return file && fs.existsSync(file) ? Number(fs.readFileSync(file, 'utf8')) : null;
+  };
+  const pctOf = (name = 'fake-pct') => {
+    const n = numberOf(name);
+    return n === null ? null : n / 100;
   };
   const windows = () => {
     const now = Math.floor(Date.now() / 1000);
@@ -1059,9 +1095,17 @@ function startSession() {
           : { utilization: limited() ? 1 : isPaced() ? 0.5 : 0.12, resetsAt: isPaced() ? now + 3 * 3600 : 1790558400 },
       seven_day:
         pctOf('fake-week-pct') !== null
-          ? { utilization: pctOf('fake-week-pct'), resetsAt: now + 24 * 3600 }
+          ? { utilization: pctOf('fake-week-pct'), resetsAt: now + (numberOf('fake-week-reset-min') ?? 24 * 60) * 60 }
           : { utilization: 0.34, resetsAt: isPaced() ? now + 84 * 3600 : 1790805600 },
+      // A model's own week of <dir>/fake-usage.json (ESC-312), as Claude Code tells it: without the model's name.
+      ...scopedWeek(now),
     };
+  };
+  const scopedWeek = (now) => {
+    const file = configDir === null ? null : path.join(configDir, 'fake-usage.json');
+    if (!file || !fs.existsSync(file)) return {};
+    const row = (JSON.parse(fs.readFileSync(file, 'utf8')).limits ?? []).find((l) => l.kind === 'weekly_scoped');
+    return row ? { seven_day_overage_included: { utilization: row.percent / 100, resetsAt: now + 24 * 3600 } } : {};
   };
 
   // `parent`: the call of the subagent that makes this message (null: the main thread).
@@ -1182,6 +1226,44 @@ function startSession() {
 
   function ticketTurn(text) {
     const key = sys.match(/ticket ([A-Z]+-\d+)/)?.[1] ?? 'TIC-0';
+    if (/(?:La CI de la|The CI of) (?:PR|MR) #\d+/.test(text)) {
+      if (!`${sys}\n${text}`.includes('[ci-rien]')) {
+        const n = (fs.existsSync('ci.txt') ? fs.readFileSync('ci.txt', 'utf8').split('\n').length - 1 : 0) + 1;
+        fs.appendFileSync('ci.txt', `correctif ${n}\n`);
+        execFileSync('git', ['add', 'ci.txt']);
+        execFileSync('git', ['commit', '-qm', `fix: CI de ${key}`]);
+      }
+      streamText('CI corrigée.');
+      result();
+      return;
+    }
+    // Its pull request's review comments to address (ESC-61): retours.txt written and committed.
+    if (/(?:a des retours de relecture|has review feedback)/.test(text)) {
+      fs.appendFileSync('retours.txt', 'retour traité\n');
+      execFileSync('git', ['add', 'retours.txt']);
+      execFileSync('git', ['commit', '-qm', `fix: retours de ${key}`]);
+      streamText('Retours traités.');
+      result();
+      return;
+    }
+    // Its pull request in conflict with its target (ESC-61): the merge's conflicts resolved with its own side and
+    // committed; or the rebase it is asked for, its own side kept.
+    if (/(?:est en conflit avec|conflicts with) /.test(text) && /(?:PR|MR) #\d+/.test(text)) {
+      const onto = text.match(/git rebase (\S+)\)/)?.[1];
+      if (onto) {
+        execFileSync('git', ['rebase', '-X', 'theirs', onto]);
+      } else {
+        const unmerged = execFileSync('git', ['diff', '--name-only', '--diff-filter=U']).toString().split('\n').filter(Boolean);
+        for (const u of unmerged) {
+          execFileSync('git', ['checkout', '--ours', '--', u]);
+          execFileSync('git', ['add', '--', u]);
+        }
+        execFileSync('git', ['commit', '--no-edit', '-q']);
+      }
+      streamText('Conflits résolus.');
+      result();
+      return;
+    }
     const count = Number(sys.match(/(?:Critères d'acceptation|Acceptance criteria) \((\d+)\)/)?.[1] ?? 1);
     const loop = Number(text.match(/(?:Boucle|Loop) (\d+)\//)?.[1] ?? 1);
     const all = `${sys}\n${text}`;
@@ -3011,14 +3093,18 @@ function startSession() {
             }),
           );
         case 'get_usage':
+          // While a <dir>/fake-usage.json file is there, its body is the rate_limits told (ESC-312: the rows limits[]).
+          if (configDir !== null && fs.existsSync(path.join(configDir, 'fake-usage.json')))
+            return ok(m.request_id, { rate_limits: JSON.parse(fs.readFileSync(path.join(configDir, 'fake-usage.json'), 'utf8')) });
           // Once [quota-rythme] was asked, the windows it tells, read again as the endpoint writes them.
           if (isPaced()) {
             const w = windows();
             const said = (x) => ({ utilization: x.utilization * 100, resets_at: new Date(x.resetsAt * 1000).toISOString() });
-            return ok(m.request_id, { rate_limits: { five_hour: said(w.five_hour), seven_day: said(w.seven_day) } });
+            return ok(m.request_id, { rate_limits: { limits: null, five_hour: said(w.five_hour), seven_day: said(w.seven_day) } });
           }
           return ok(m.request_id, {
             rate_limits: {
+              limits: null,
               five_hour: { utilization: limited() ? 100 : 12, resets_at: '2026-09-28T01:20:00+00:00' },
               seven_day: { utilization: 34, resets_at: '2026-09-30T22:00:00+00:00' },
             },

@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/svelte';
+import { render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { setLang } from '../../lib/i18n';
@@ -153,6 +153,87 @@ describe('the install window', () => {
     expect(d.getByRole('button', { name: 'Installer quand même' })).toBeTruthy();
   });
 
+  it('says a JS/TS plugin runs inside Escouade, isolated, and that its hosts are enforced (ESC-320)', () => {
+    const wasm = { ...MANIFEST, run: { command: '', js: 'dist/plugin.mjs', args: [] } };
+    plugins.install = { kind: 'preview', preview: preview({ manifest: wasm }), busy: false, error: null };
+    render(InstallModal, { step: plugins.install });
+    const dialog = screen.getByRole('dialog', { name: 'Installer Slack ?' });
+    const first = dialog.querySelector('.asks li');
+    expect(first?.textContent).toContain('Tourne dans Escouade, isolé');
+    expect(first?.textContent).toContain('dist/plugin.mjs');
+    expect(first?.classList.contains('strong')).toBe(false);
+    expect(dialog.textContent).not.toContain('Lance un programme');
+    expect(dialog.textContent).toContain(
+      'appliqué par Escouade : il ne joint aucun autre hôte, ni une adresse de ta machine ou de ton réseau local',
+    );
+    expect(dialog.textContent).not.toContain('ne filtre pas encore');
+  });
+
+  it('says the folders and the commands of a plugin in WASM, writing in orange and commands in red (ESC-333)', () => {
+    const wasm = {
+      ...MANIFEST,
+      run: { command: '', js: 'dist/plugin.mjs', args: [] },
+      permissions: {
+        ...MANIFEST.permissions,
+        commands: ['isola ls --json'],
+        files: [
+          { root: 'agent', access: 'write' },
+          { root: 'agentRepo', access: 'read' },
+          { root: 'agentHome', access: 'read' },
+        ],
+      },
+    };
+    const asks = ['run', 'commands:isola ls --json', 'files:agent:write', 'files:agentRepo:read', 'files:agentHome:read'];
+    plugins.install = { kind: 'preview', preview: preview({ manifest: wasm, asks }), busy: false, error: null };
+    render(InstallModal, { step: plugins.install });
+    const dialog = screen.getByRole('dialog', { name: 'Installer Slack ?' });
+    const line = (text: string) => [...dialog.querySelectorAll('.asks li')].find((l) => l.textContent?.includes(text));
+    const command = line('Lance cette commande sur ton ordinateur');
+    expect(command?.textContent).toContain('isola ls --json');
+    expect(command?.textContent).toContain('appliqué par Escouade');
+    expect(command?.classList.contains('red')).toBe(true);
+    expect(line('Écrit dans les dossiers de tes agents')?.classList.contains('orange')).toBe(true);
+    expect(line('Lit les fichiers de tes agents')?.classList.contains('orange')).toBe(false);
+    expect(line('Lit le dossier de compte de tes agents')).toBeTruthy();
+  });
+
+  it('says a command of a process is only declared (ESC-333)', () => {
+    const asks = ['run', 'commands:isola down'];
+    plugins.install = { kind: 'preview', preview: preview({ asks }), busy: false, error: null };
+    render(InstallModal, { step: plugins.install });
+    const dialog = screen.getByRole('dialog', { name: 'Installer Slack ?' });
+    expect(dialog.textContent).toContain('déclaré par le plugin : Escouade ne filtre pas ce que lance son programme');
+  });
+
+  it('says Escouade holds the webhooks of a declarative plugin to its hosts (ESC-184)', () => {
+    const declarative = { ...MANIFEST, run: undefined };
+    plugins.install = { kind: 'preview', preview: preview({ manifest: declarative }), busy: false, error: null };
+    render(InstallModal, { step: plugins.install });
+    const dialog = screen.getByRole('dialog', { name: 'Installer Slack ?' });
+    expect(dialog.textContent).toContain('appliqué par Escouade : ses webhooks ne partent que vers cet hôte');
+    expect(dialog.textContent).not.toContain('ne filtre pas encore');
+  });
+
+  it('names a webhook by what sets it off, and says where a store plugin comes from once (ESC-184)', () => {
+    const contributes = { webhooks: [{ events: ['ticket.column'] }, { events: ['agent.status'] }] };
+    const manifest = { ...MANIFEST, contributes } as unknown as typeof MANIFEST;
+    const origin = {
+      kind: 'store' as const,
+      version: '1.0.0',
+      sha256: 'abc',
+      verified: true,
+      repository: 'https://github.com/o/r',
+      tag: 'v1.0.0',
+      commit: 'a2480d724f8e',
+    };
+    plugins.install = { kind: 'preview', preview: preview({ manifest, origin }), busy: false, error: null };
+    render(InstallModal, { step: plugins.install });
+    const dialog = screen.getByRole('dialog', { name: 'Installer Slack ?' });
+    expect(dialog.textContent).toContain('2 webhooks : ticket.column, agent.status');
+    expect(dialog.textContent).not.toContain('store.escouade.dev · store.escouade.dev');
+    expect(dialog.textContent).toContain('store.escouade.dev');
+  });
+
   it('installs nothing before « Installer », then the plugin; cancelled, what was set aside is discarded', async () => {
     const backend = fakeBackend({ plugin_install: () => view() });
     plugins.install = { kind: 'preview', preview: preview(), busy: false, error: null };
@@ -271,6 +352,96 @@ describe('the view', () => {
     // The sidebar counts the updates, in amber.
     const nav = screen.getByRole('complementary', { name: 'Plugins' });
     expect(within(nav).getByRole('button', { name: /Mises à jour/ }).className).toContain('upd');
+  });
+
+  it('puts a dev.escouade.* of the store with the plugins added, not with those the app gives (ESC-314)', async () => {
+    const store = {
+      kind: 'store' as const,
+      version: '1.1.0',
+      sha256: 'a'.repeat(64),
+      verified: true,
+      repository: 'https://github.com/guillaume-gagnaire/escouade',
+      path: 'plugins/slack',
+      tag: 'plugins/slack/v1.1.0',
+      commit: 'c'.repeat(40),
+    };
+    fakeBackend({
+      plugins_list: () => [
+        view({ id: 'dev.escouade.slack', origin: store, folder: 'C:/data/plugins/dev.escouade.slack' }),
+        view({ id: 'dev.escouade.github', name: 'GitHub', origin: { kind: 'builtin' } }),
+      ],
+    });
+    render(PluginsView);
+    const added = await screen.findByRole('table', { name: 'Ajoutés' });
+    expect(added.textContent).toContain('Slack');
+    expect(added.textContent).not.toContain('GitHub');
+    const shipped = screen.getByRole('table', { name: 'Livrés avec Escouade' });
+    expect(shipped.textContent).toContain('GitHub');
+    expect(shipped.textContent).not.toContain('Slack');
+  });
+
+  it('proposes what the seed holds and is not installed, and installs it on a click only (ESC-338)', async () => {
+    const calls: string[] = [];
+    fakeBackend({
+      plugins_list: () => [],
+      plugin_seed_offers: () => [
+        { id: 'dev.escouade.trello', name: 'Trello', version: '2.2.0', removed: '2.2.0', refused: null },
+        { id: 'dev.escouade.jira', name: 'dev.escouade.jira', version: '2.2.0', removed: null, refused: 'La signature ne tient pas.' },
+      ],
+      plugin_inspect_seed: ({ id }: { id: string }) => {
+        calls.push(id);
+        return preview({ id });
+      },
+    });
+    render(PluginsView);
+    const proposed = await screen.findByRole('region', { name: 'Proposés par Escouade' });
+    expect(proposed.textContent).toContain('Tu l’as désinstallé (v2.2.0)');
+    expect(proposed.textContent).toContain('Non installé : La signature ne tient pas.');
+    expect(calls).toEqual([]);
+    await userEvent.click(within(proposed).getAllByRole('button', { name: 'Installer' })[0]!);
+    expect(calls).toEqual(['dev.escouade.trello']);
+    expect(plugins.install?.kind).toBe('preview');
+  });
+
+  it('takes a proposed plugin from the store when the store has a newer version (ESC-338)', async () => {
+    plugins.offers = [];
+    const calls: string[] = [];
+    fakeBackend({
+      plugins_list: () => [],
+      plugin_seed_offers: () => [{ id: 'dev.escouade.trello', name: 'Trello', version: '2.2.0', removed: '2.2.0', refused: null }],
+      store_view: () => ({
+        url: '',
+        catalog: null,
+        readAt: '2026-11-05T00:00:00Z',
+        error: null,
+        best: { 'dev.escouade.trello': '2.10.0' },
+      }),
+      plugin_inspect_store: ({ id }: { id: string }) => {
+        calls.push(`store:${id}`);
+        return preview({ id });
+      },
+      plugin_inspect_seed: ({ id }: { id: string }) => {
+        calls.push(`seed:${id}`);
+        return preview({ id });
+      },
+    });
+    render(PluginsView);
+    const proposed = await screen.findByRole('region', { name: 'Proposés par Escouade' });
+    await waitFor(() => expect(plugins.store?.best).toBeTruthy());
+    await userEvent.click(within(proposed).getByRole('button', { name: 'Installer' }));
+    expect(calls).toEqual(['store:dev.escouade.trello']);
+  });
+
+  it('installs an update the seed holds from the seed, with no network (ESC-338)', async () => {
+    const calls: string[] = [];
+    fakeBackend({
+      plugin_inspect_seed: ({ id }: { id: string }) => {
+        calls.push(id);
+        return preview({ id });
+      },
+    });
+    await plugins.update(view({ id: 'dev.escouade.trello', update: { version: '2.3.0', verified: true, seed: true } }));
+    expect(calls).toEqual(['dev.escouade.trello']);
   });
 
   it('a plugin is uninstalled after its confirmation, its data kept if asked', async () => {

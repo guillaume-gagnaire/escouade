@@ -91,7 +91,7 @@ The interface comes in French and English. By default it follows the system lang
 
 - **Get started**: [installation](installation), the [quick start](quick-start) and a tour of [the interface](interface).
 - **Agents and chat**: start with [agents](managing-agents), then the conversation, the overview, notifications, the Claude Code view and remote control.
-- **Code and Git**: [Git and commits](git), then worktrees, branches, the editor, terminals and running the project.
+- **Code and Git**: [Git and commits](git), then worktrees, branches, the [code hosts](code-hosts), the editor, terminals and running the project.
 - **Kanban and automation**: [the Kanban](board), then autopilot, testing and approving tickets, integrations and the MCP server.
 - **Accounts and usage**: [Claude accounts](accounts), then quotas, cost and statistics.
 - **Settings**: every tab of the settings window, option by option, starting with [Application](settings-application).

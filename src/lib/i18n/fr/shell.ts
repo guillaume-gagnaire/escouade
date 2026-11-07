@@ -8,6 +8,7 @@ export default {
     cantStart: 'Impossible de démarrer : {error}',
     noAgent: 'Aucun agent dans ce projet.',
     newAgent: 'Nouvel agent',
+    projectPrs: 'PR et CI du projet',
   },
   welcome: {
     intro: 'Ajoute un projet pour y lancer des agents, suivre leurs questions et ouvrir des terminaux.',

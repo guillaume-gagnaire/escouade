@@ -186,7 +186,7 @@ test('no « Ouvrir une PR » in a project whose remote is on no code host Escoua
   await expect(page.getByRole('menuitem', { name: 'Ouvrir une PR…' })).toHaveCount(0);
   await page.keyboard.press('Escape');
 
-  // A GitLab remote: GitLab has no client yet, nothing either.
+  // A GitLab remote without a GitLab account: nothing either.
   git(app.repo, 'remote', 'add', 'origin', 'git@gitlab.com:acme/demo.git');
   await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
   await expect(cards).toHaveCount(2);

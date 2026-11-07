@@ -56,6 +56,8 @@ Escouade garde une icône dans la zone de notification (la barre des menus sous 
 | Fin de tour | La première ligne de la réponse de Claude, sans la mise en forme Markdown ; « Tâche terminée » si elle n’a pas de texte |
 | Erreur | « Erreur : » suivi de la raison, par exemple « Erreur : Claude Code s’est arrêté (code 1) » |
 | Ticket | Le titre est le nom du projet, le texte « ATL-42 prêt à tester » ou « ATL-42 bloqué : » suivi de la raison |
+| Pull request | « PR #12 : CI en échec », « DEM-1 · PR #12 : approuvée » pour celle d’un ticket (« MR » sur GitLab). Jamais son titre : il est écrit par un tiers et part hors de l’app. |
+| Déploiement | « Déployé : production (<commit>) », « Déploiement en échec : production (<commit>) » |
 
 Le texte d’un agent est coupé à 120 caractères.
 

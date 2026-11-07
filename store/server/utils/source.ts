@@ -19,12 +19,25 @@ export interface Asset {
   url: string;
 }
 
+/** An entry of a commit's tree (`GET /repos/{o}/{r}/git/trees/<sha>?recursive=1`): `120000` is a symbolic link. */
+export interface TreeEntry {
+  path: string;
+  type: 'blob' | 'tree' | 'commit';
+  mode: string;
+  sha: string;
+  size?: number;
+}
+
 export interface Source {
   repo(fullName: string): Promise<{ id: number; fullName: string; private: boolean }>;
   tags(fullName: string): Promise<TagChoice[]>;
   /** The commit a tag names now, an annotated tag unwrapped. */
   resolve(fullName: string, tag: string): Promise<{ commit: string; date: string | null }>;
   tarball(fullName: string, commit: string, max: number): Promise<Buffer>;
+  /** The commit's whole tree, its paths and kinds without their bytes (`truncated` past GitHub's own bound). */
+  tree(fullName: string, commit: string): Promise<{ entries: TreeEntry[]; truncated: boolean }>;
+  /** A file of the repository by its blob's SHA, `max` bytes at most. */
+  blob(fullName: string, sha: string, max: number): Promise<Buffer>;
   /** The SPDX id GitHub detects in the commit's license file (`NOASSERTION` if it does not know it), null without one. */
   license(fullName: string, commit: string): Promise<string | null>;
   /** The files of the release attached to the tag, null if the tag has none. */
@@ -137,6 +150,23 @@ export function githubSource(app: GithubApp, installationId: number): Source {
     async tarball(fullName, commit, max) {
       const res = await get(`/repos/${repoPath(fullName)}/tarball/${commit}`, { timeout: 120_000 });
       if (!res.ok) throw new GithubError(`GitHub answered ${res.status} to the archive`, res.status);
+      return bounded(res, max);
+    },
+    async tree(fullName, commit) {
+      const body = await json<{ tree: TreeEntry[]; truncated: boolean }>(
+        `/repos/${repoPath(fullName)}/git/trees/${encodeURIComponent(commit)}?recursive=1`,
+      );
+      return {
+        entries: body.tree.map((e) => ({ path: e.path, type: e.type, mode: e.mode, sha: e.sha, size: e.size })),
+        truncated: body.truncated,
+      };
+    },
+    async blob(fullName, sha, max) {
+      const res = await get(`/repos/${repoPath(fullName)}/git/blobs/${encodeURIComponent(sha)}`, {
+        accept: 'application/vnd.github.raw+json',
+        timeout: 60_000,
+      });
+      if (!res.ok) throw new GithubError(`GitHub answered ${res.status} to a file`, res.status);
       return bounded(res, max);
     },
     async license(fullName, commit) {

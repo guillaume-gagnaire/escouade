@@ -1,15 +1,32 @@
 //! Each service's voice against a fake server that answers as its documentation says: the request (its address, its
 //! key, its model, its voice, the language and the pace), its sound streamed in pieces (raw PCM, a WAV file, Mistral's
-//! events of float PCM), its refusals (401, 429, 5xx, a voice it does not know), the network cut and the proxy.
+//! events of float PCM), its refusals (401, 429, 5xx, a voice it does not know) and the network cut.
 
 use super::super::online::tests::{nowhere, serve, serve_with, Got, Reply, KEY};
 use super::*;
+use crate::voice::online::Provider;
+use base64::Engine as _;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
+
+/// The reading, as its plugin serves it.
+async fn speak(
+    spec: &Spec,
+    choice: &SpeakChoice,
+    sentence: &str,
+    cancel: &AtomicBool,
+    on: &mut dyn FnMut(Audio),
+) -> Result<Option<Duration>, OnlineError> {
+    crate::voice::service::of(spec.provider)
+        .speak(spec, choice, sentence, cancel, on)
+        .await
+}
 
 fn spec(p: Provider, base: &str) -> Spec {
     Spec {
         base: base.into(),
-        ..Spec::new(p, KEY.into(), reqwest::Client::new())
+        ..Spec::new(p, KEY.into())
     }
 }
 
@@ -69,7 +86,7 @@ fn samples(pieces: &[Audio]) -> usize {
     pieces.iter().map(|a| a.samples.len()).sum()
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn openai_reads_a_sentence_in_raw_pcm_heard_as_it_streams() {
     let reply = streamed("application/octet-stream", pcm16(24_000), 4, 150);
     let (url, got) = serve_with(Arc::new(move |_: &Got| reply.clone())).await;
@@ -138,7 +155,7 @@ fn wav_stream(n: usize, rate: u32) -> Vec<u8> {
     out
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn groq_reads_with_orpheus_in_a_wav_file_its_header_split_across_pieces() {
     // Pieces of 7 bytes: the header comes in several.
     let wav = wav_stream(4_800, 48_000);
@@ -196,7 +213,7 @@ fn mistral_events(bytes: &[u8], pieces: usize) -> Vec<u8> {
     out.into_bytes()
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn mistral_reads_with_voxtral_its_float_pcm_in_events() {
     let events = mistral_events(&pcm_f32(12_000), 5);
     // Cut anywhere: an event may come in two pieces.
@@ -241,7 +258,7 @@ async fn mistral_reads_with_voxtral_its_float_pcm_in_events() {
     assert_eq!(samples(&pieces), 2_400);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn elevenlabs_streams_its_pcm_told_the_language_and_the_pace_it_takes() {
     let reply = streamed("audio/pcm", pcm16(9_600), 3, 20);
     let (url, got) = serve_with(Arc::new(move |_: &Got| reply.clone())).await;
@@ -282,7 +299,7 @@ async fn elevenlabs_streams_its_pcm_told_the_language_and_the_pace_it_takes() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn deepgram_reads_with_the_aura_voice_asked_as_its_model() {
     let reply = streamed("audio/l16;rate=24000", pcm16(4_800), 2, 10);
     let (url, got) = serve_with(Arc::new(move |_: &Got| reply.clone())).await;
@@ -318,12 +335,12 @@ async fn deepgram_reads_with_the_aura_voice_asked_as_its_model() {
 
 /// A choice each service takes.
 fn any_choice(p: Provider) -> SpeakChoice {
-    let model = super::super::online_catalog::default_speak_model(p);
-    let voice = super::super::online_catalog::default_voice(p, model, "en").unwrap();
+    let model = escouade_voice::catalog::default_speak_model(p);
+    let voice = escouade_voice::catalog::default_voice(p, model, "en").unwrap();
     choice(model, voice, "en", 1.0)
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn the_refusals_of_every_service_say_what_to_do_without_the_key() {
     for p in super::super::online::PROVIDERS {
         let c = any_choice(p);
@@ -340,79 +357,54 @@ async fn the_refusals_of_every_service_say_what_to_do_without_the_key() {
             e,
             OnlineError::Quota(p, "This request exceeds your quota.".into())
         );
-        let m = e.message(crate::i18n::Lang::Fr);
+        let m = e.message(crate::i18n::kit(crate::i18n::Lang::Fr));
         assert!(m.contains(p.label()) && m.contains("quota"), "{m}");
         let (url, _) = serve(503, &format!("upstream {KEY} down")).await;
         let e = read(&spec(p, &url), &c, "Hi.").await.unwrap_err();
         assert_eq!(e, OnlineError::Speech(p, 503, "upstream *** down".into()));
         assert!(!refuses_the_voice(&e));
         assert!(e
-            .message(crate::i18n::Lang::En)
+            .message(crate::i18n::kit(crate::i18n::Lang::En))
             .contains("did not read the passage"));
         let (url, _) = serve(404, r#"{"detail":{"status":"voice_not_found","message":"A voice with the voice_id x was not found."}}"#).await;
         let e = read(&spec(p, &url), &c, "Hi.").await.unwrap_err();
         assert!(refuses_the_voice(&e), "{e:?}");
         let e = read(&spec(p, &nowhere()), &c, "Hi.").await.unwrap_err();
         assert!(matches!(&e, OnlineError::Network(q, _) if *q == p), "{e:?}");
-        assert!(e.message(crate::i18n::Lang::En).contains("proxy"));
+        assert!(e
+            .message(crate::i18n::kit(crate::i18n::Lang::En))
+            .contains("proxy"));
     }
 }
 
-#[tokio::test]
-async fn the_voice_goes_through_the_proxy_of_the_settings() {
-    let reply = streamed("audio/pcm", pcm16(2_400), 1, 0);
-    let (proxy, got) = serve_with(Arc::new(move |_: &Got| reply.clone())).await;
-    let settings = crate::model::Settings {
-        proxy_url: proxy,
-        ..Default::default()
-    };
-    let s = Spec {
-        base: "http://api.elevenlabs.example.invalid".into(),
-        ..Spec::new(
-            Provider::ElevenLabs,
-            KEY.into(),
-            super::super::models::client(&settings).unwrap(),
-        )
-    };
-    let (pieces, _) = read(&s, &choice("eleven_flash_v2_5", "v1", "fr", 1.0), "Oui.")
-        .await
-        .unwrap();
-    assert_eq!(samples(&pieces), 2_400);
-    assert_eq!(
-        got.lock()[0].line,
-        "POST http://api.elevenlabs.example.invalid/v1/text-to-speech/v1/stream?output_format=pcm_24000 HTTP/1.1"
-    );
-}
-
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_barge_in_gives_up_the_stream_at_once() {
     // A long stream: 20 pieces, 200 ms apart.
     let reply = streamed("audio/pcm", pcm16(48_000), 20, 200);
     let (url, _) = serve_with(Arc::new(move |_: &Got| reply.clone())).await;
     let cancel = Arc::new(AtomicBool::new(false));
     let c = cancel.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(300)).await;
-        c.store(true, Ordering::Release);
-    });
-    let started = Instant::now();
+    // On what is heard, not on a delay: its service starts its module at this first call.
+    let mut heard = None;
     let mut n = 0;
     let first = speak(
         &spec(Provider::OpenAi, &url),
         &choice("gpt-4o-mini-tts", "marin", "fr", 1.0),
         "Une longue phrase.",
         &cancel,
-        &mut |a| n += a.samples.len(),
+        &mut |a| {
+            n += a.samples.len();
+            heard.get_or_insert_with(Instant::now);
+            c.store(true, Ordering::Release);
+        },
     )
     .await
     .unwrap();
     assert!(first.is_some());
     assert!(n < 48_000);
-    assert!(
-        started.elapsed() < Duration::from_secs(1),
-        "{:?}",
-        started.elapsed()
-    );
+    // Left to run, the stream lasts 4 s.
+    let left = heard.unwrap().elapsed();
+    assert!(left < Duration::from_secs(1), "{left:?}");
 }
 
 #[test]
@@ -525,15 +517,16 @@ fn a_service_that_does_not_speak_the_language_leaves_it_to_piper_and_says_so() {
 
 /// The real ElevenLabs, OpenAI… with the user's key given to this process only (`ESC132_SERVICE`, and the key in
 /// `ESC132_KEY`): run by hand, never in CI, never with the key written anywhere. Prints how long the first sound took.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore]
 async fn real_service() {
-    let p = Provider::find(&std::env::var("ESC132_SERVICE").expect("ESC132_SERVICE")).unwrap();
+    let p = crate::voice::online::find(&std::env::var("ESC132_SERVICE").expect("ESC132_SERVICE"))
+        .unwrap();
     let key = std::env::var("ESC132_KEY").expect("ESC132_KEY");
-    let s = Spec::new(p, key, reqwest::Client::new());
-    let model = super::super::online_catalog::default_speak_model(p);
+    let s = Spec::new(p, key);
+    let model = escouade_voice::catalog::default_speak_model(p);
     let lang = if p == Provider::Groq { "en" } else { "fr" };
-    let voice = super::super::online_catalog::default_voice(p, model, lang).unwrap();
+    let voice = escouade_voice::catalog::default_voice(p, model, lang).unwrap();
     let c = choice(model, voice, lang, 1.0);
     for text in [
         "Bonjour, les tests passent.",
@@ -550,7 +543,10 @@ async fn real_service() {
             started.elapsed().as_millis()
         );
     }
-    let listed = super::super::online_catalog::fetch(&s).await.unwrap();
+    let listed = crate::voice::service::of(s.provider)
+        .list(&s)
+        .await
+        .unwrap();
     println!(
         "listed: {:?} speak models, {:?} voices",
         listed

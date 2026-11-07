@@ -17,10 +17,11 @@
   import { accountName, accountsOf, newAgentAccount, serves } from '../lib/accounts';
   import { applyCompletion, detectTrigger, filterCommands, type Trigger } from '../lib/complete';
   import { conversationOf } from '../lib/conversations.svelte';
-  import { getDraft, setDraft } from '../lib/drafts';
+  import { getDraft, giveBack, setDraft } from '../lib/drafts';
+  import { hold, holdModeOf, settled } from '../lib/outbox.svelte';
   import { injectedSource } from '../lib/events';
   import { parseLocalCommand } from '../lib/localcmd';
-  import { errorText, missingAccountOf } from '../lib/refusal';
+  import { reportRefusal, sendDraft } from '../lib/send.svelte';
   import { fileOrigins } from '../lib/file-origin';
   import { basename, dirname, fSize } from '../lib/format';
   import { t } from '../lib/i18n';
@@ -45,7 +46,7 @@
   } from '../lib/engines';
   import { keyLabel } from '../lib/platform';
   import { observeWidth } from '../lib/resize';
-  import { app } from '../lib/state.svelte';
+  import { app, atWork } from '../lib/state.svelte';
   import type { Agent, QuestionItem } from '../lib/types';
   import { insertAt } from '../lib/dictation';
   import type { DictationTarget } from '../lib/dictation.svelte';
@@ -102,7 +103,16 @@
 
   const conv = $derived(conversationOf(agent.id));
   const pendingItem = $derived(agent.pending.length ? conv.items.find((i) => i.id === agent.pending[0]) : undefined);
-  const busy = $derived(agent.status === 'running' || agent.status === 'waiting');
+  const busy = $derived(atWork(agent));
+  const sendTitle = $derived.by(() => {
+    const engine = speakerOf(agent.engine);
+    const enter = keyLabel('Enter');
+    const mode = pendingItem ? null : holdModeOf(agent);
+    if (mode === 'delay') return t('composer.send.titleHeld', { engine, s: app.settings.midTurnDelaySecs, enter });
+    if (mode === 'turnEnd') return t('composer.send.titleTurnEnd', { engine, enter });
+    if (busy && !pendingItem) return t('composer.send.titleQueued', { engine, enter });
+    return t('composer.send.title', { enter, newline: keyLabel('Shift+Enter') });
+  });
   // The menus are those of the agent's harness: its models, its efforts, its modes.
   const effortOk = $derived(modelTakes(agent, agent.model, 'effort'));
   // A harness that lists many models, or those of its providers (OpenCode): a search, the favorites first, then a group by
@@ -216,6 +226,17 @@
 
   $effect(() => {
     queueMicrotask(autosize);
+  });
+
+  // A message given back to this draft from elsewhere (`giveBack`).
+  $effect(() => {
+    if (!app.draftReturned[agentId]) return;
+    untrack(() => {
+      const d = getDraft(draftFor);
+      text = d.text;
+      files = d.files;
+      queueMicrotask(autosize);
+    });
   });
 
   // A door of the Workflow tab (ESC-194): its command at the head of the message, in place of a command already there;
@@ -491,6 +512,13 @@
     }
     // Text typed while Claude waits answers the question / refuses the permission.
     const answering = body ? pendingItem : undefined;
+    const mode = answering ? null : holdModeOf(agent);
+    if (mode) {
+      hold(agent.id, body, files.slice(), mode);
+      text = '';
+      files = [];
+      return;
+    }
     const message = { id: agent.id, conv, owner: draftFor, body, answering, prevText: text, prevFiles: files };
     // Another one may still be on its way (its answer can show before its call returns): this one leaves the field at
     // once, as it would, and goes right after it.
@@ -499,6 +527,8 @@
     if (!answering) files = [];
     const mine = (async () => {
       if (before) await before;
+      // Nor before a held message on its way.
+      await settled(message.id);
       await deliver(message);
     })();
     inflight = mine;
@@ -543,12 +573,7 @@
       } else if (answering?.kind === 'permission') {
         await api.answerPermission(id, answering.id, 'deny', body);
       } else {
-        await api.sendMessage(
-          id,
-          body,
-          prevFiles.filter((f) => f.kind !== 'file').map(({ name, mediaType, data }) => ({ name, mediaType, data })),
-          prevFiles.filter((f) => f.file).map((f) => $state.snapshot(f.file!)),
-        );
+        await sendDraft(id, body, prevFiles);
       }
       if (answering && prevFiles.length) {
         app.toast(t('composer.send.filesKept'));
@@ -558,27 +583,12 @@
       // The files of an answer never left the field.
       giveBack(owner, prevText, answering ? [] : prevFiles);
       // For want of an account of its harness: said in the conversation, with the way out (choice 19).
-      const missing = missingAccountOf(e);
-      if (missing) conversationOf(owner).noAccount = { engine: missing, text: errorText(e) };
-      else app.toast(errorText(e), 'error');
+      reportRefusal(owner, e);
     }
     // Recorded by now, or given back to the field above.
     unhold?.();
     heldFor = null;
     sending = false;
-  }
-
-  /**
-   * A message refused given back to the draft it was sent from (another agent's may be on screen by now), before what
-   * was typed and attached there since: a send held for minutes by a worktree's setup leaves time to write the next one.
-   */
-  function giveBack(owner: string, back: string, backFiles: DraftAttachment[]) {
-    const here = owner === draftFor;
-    const since = here ? { text, files } : getDraft(owner);
-    const draft = { text: since.text.trim() ? `${back}\n\n${since.text}` : back, files: [...backFiles, ...since.files] };
-    if (!here) return setDraft(owner, draft);
-    text = draft.text;
-    files = draft.files;
   }
 
   function stop() {
@@ -791,9 +801,7 @@
         {/if}
         <button
           class="btn primary send"
-          use:tip={busy && !pendingItem
-            ? t('composer.send.titleQueued', { engine: speakerOf(agent.engine), enter: keyLabel('Enter') })
-            : t('composer.send.title', { enter: keyLabel('Enter'), newline: keyLabel('Shift+Enter') })}
+          use:tip={sendTitle}
           disabled={sending || reading > 0 || copying || (!text.trim() && !files.length)}
           onclick={send}
         >

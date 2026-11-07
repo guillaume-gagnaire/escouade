@@ -1,0 +1,6519 @@
+{
+  "commit": "303fb5f2e447de6eb5bac91ecface391b5c97e75",
+  "date": "2026-10-30 13:32",
+  "indexing": {
+    "backMs": 8050,
+    "backParsed": 392,
+    "branchFilesChanged": 517,
+    "branchMs": 6295,
+    "branchParsed": 169,
+    "bytes": 129544192,
+    "commitMs": 193,
+    "commitParsed": 1,
+    "files": 1578,
+    "fullMs": 20982,
+    "links": 93054,
+    "symbols": 35799,
+    "worktreeMs": 9975,
+    "worktreeParsed": 2
+  },
+  "probes": [
+    {
+      "grep": {
+        "blindCalls": 5,
+        "blindTokens": 2491,
+        "calls": 5,
+        "score": {
+          "expected": 1,
+          "firstGood": 14,
+          "found": 1,
+          "good": 4,
+          "precision": 0.23529411764705882,
+          "recall": 1.0,
+          "results": 17
+        },
+        "totalTokens": 2491
+      },
+      "id": "cas-memoire-en",
+      "index": {
+        "announcedFilesTokens": 6240,
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 50
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "coldMs": 141.2,
+        "realCalls": 14,
+        "realTokens": 7259,
+        "responseTokens": 1604,
+        "warmMs": 70.3,
+        "wrongTokens": 2232
+      },
+      "realPercent": -191,
+      "suffice": null,
+      "tags": [
+        "cas-2026-10-29",
+        "en"
+      ],
+      "tokensave": {
+        "announcedPercent": 18,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 4
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 49
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 4
+        },
+        "coldMs": 245.7,
+        "duel": "tokensave",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 4
+        },
+        "notPlayed": null,
+        "realCalls": 7,
+        "realTokens": 3899,
+        "responseTokens": 898,
+        "results": [
+          "✗ store/server/utils/limits.ts:37",
+          "✗ store/server/utils/limits.ts:56",
+          "✗ store/server/utils/limits.ts:30",
+          "✗ store/server/utils/limits.ts:42"
+        ],
+        "suffice": null,
+        "warmMs": 56.4,
+        "wrongTokens": 45
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 5,
+        "blindTokens": 2491,
+        "calls": 5,
+        "score": {
+          "expected": 1,
+          "firstGood": 14,
+          "found": 1,
+          "good": 4,
+          "precision": 0.23529411764705882,
+          "recall": 1.0,
+          "results": 17
+        },
+        "totalTokens": 2491
+      },
+      "id": "cas-memoire-fr",
+      "index": {
+        "announcedFilesTokens": 4028,
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 51
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "coldMs": 132.5,
+        "realCalls": 13,
+        "realTokens": 6385,
+        "responseTokens": 1050,
+        "warmMs": 59.2,
+        "wrongTokens": 1510
+      },
+      "realPercent": -156,
+      "suffice": null,
+      "tags": [
+        "cas-2026-10-29",
+        "fr"
+      ],
+      "tokensave": {
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 51
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 4
+        },
+        "coldMs": 240.8,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 6
+        },
+        "notPlayed": null,
+        "realCalls": 14,
+        "realTokens": 6726,
+        "responseTokens": 1072,
+        "results": [
+          "✗ store/server/utils/listing.ts:321",
+          "✗ src-tauri/src/plugins/runtime.rs:383",
+          "✗ store/server/utils/submissions.ts:597",
+          "✗ src-tauri/src/paths.rs:343",
+          "✗ src-tauri/src/plugins/mod.rs:1121",
+          "✗ src-tauri/src/plugins/runtime.rs:541",
+          "✗ src-tauri/src/plugins/runtime.rs:710",
+          "✗ src-tauri/src/plugins_runtime_tests.rs:36",
+          "✗ src-tauri/src/sharing_tests.rs:60",
+          "✗ store/server/utils/listing.ts:324",
+          "✗ store/server/utils/listing.ts:44"
+        ],
+        "suffice": null,
+        "warmMs": 51.0,
+        "wrongTokens": 77
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 9,
+        "blindTokens": 4262,
+        "calls": 9,
+        "score": {
+          "expected": 8,
+          "firstGood": 6,
+          "found": 8,
+          "good": 8,
+          "precision": 0.2962962962962963,
+          "recall": 1.0,
+          "results": 27
+        },
+        "totalTokens": 4262
+      },
+      "id": "cas-forget",
+      "index": {
+        "announcedFilesTokens": 2628,
+        "announcedPercent": 72,
+        "at10": {
+          "expected": 8,
+          "firstGood": 1,
+          "found": 8,
+          "good": 8,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 8
+        },
+        "at50": {
+          "expected": 8,
+          "firstGood": 1,
+          "found": 8,
+          "good": 8,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 8
+        },
+        "codeWords": null,
+        "coldMs": 224.8,
+        "realCalls": 6,
+        "realTokens": 3164,
+        "responseTokens": 700,
+        "warmMs": 16.8,
+        "wrongTokens": 0
+      },
+      "realPercent": 25,
+      "suffice": null,
+      "tags": [
+        "cas-2026-10-29",
+        "homonyme"
+      ],
+      "tokensave": {
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 8,
+          "firstGood": 13,
+          "found": 1,
+          "good": 1,
+          "precision": 0.0625,
+          "recall": 0.125,
+          "results": 16
+        },
+        "at50": {
+          "expected": 8,
+          "firstGood": 13,
+          "found": 1,
+          "good": 1,
+          "precision": 0.0625,
+          "recall": 0.125,
+          "results": 16
+        },
+        "codeWords": null,
+        "coldMs": 193.6,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": null,
+        "realCalls": 11,
+        "realTokens": 4797,
+        "responseTokens": 1148,
+        "results": [
+          "✗ src-tauri/src/engine/opencode/server.rs:402",
+          "✗ src-tauri/src/agent/sidechain.rs:220",
+          "✗ src-tauri/src/agent/sidechain.rs:1014",
+          "✗ src/components/settings/MemorySection.svelte:38",
+          "✗ src-tauri/src/engine/registry.rs:426",
+          "✗ src/lib/updater.ts:28",
+          "✗ src-tauri/src/integrations/sync.rs:241",
+          "✗ src-tauri/src/forge/accounts.rs:118",
+          "✗ src-tauri/src/mcp/memory.rs:115",
+          "✗ src-tauri/src/memory.rs:354",
+          "✗ src-tauri/src/integrations/secrets.rs:241",
+          "✗ src-tauri/src/wsl.rs:202",
+          "✓ src-tauri/src/plugins/runtime.rs:541",
+          "✗ src-tauri/src/attachfiles.rs:377",
+          "✗ src-tauri/src/engine/copilot/terminal.rs:527",
+          "✗ src-tauri/src/engine/terminal.rs:141"
+        ],
+        "suffice": null,
+        "warmMs": 424.2,
+        "wrongTokens": 1020
+      },
+      "tool": "index_callers",
+      "winner": "index"
+    },
+    {
+      "grep": {
+        "blindCalls": 2,
+        "blindTokens": 265,
+        "calls": 2,
+        "score": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 1
+        },
+        "totalTokens": 265
+      },
+      "id": "rs-search-tokens_of",
+      "index": {
+        "announcedFilesTokens": 1416,
+        "announcedPercent": 70,
+        "at10": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 0.1,
+          "recall": 1.0,
+          "results": 10
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 0.020833333333333332,
+          "recall": 1.0,
+          "results": 48
+        },
+        "codeWords": null,
+        "coldMs": 101.5,
+        "realCalls": 2,
+        "realTokens": 635,
+        "responseTokens": 396,
+        "warmMs": 28.8,
+        "wrongTokens": 589
+      },
+      "realPercent": -139,
+      "suffice": null,
+      "tags": [],
+      "tokensave": {
+        "announcedPercent": 71,
+        "at10": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 0.1,
+          "recall": 1.0,
+          "results": 10
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 0.020833333333333332,
+          "recall": 1.0,
+          "results": 48
+        },
+        "codeWords": null,
+        "coldMs": 45.4,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": null,
+        "realCalls": 2,
+        "realTokens": 726,
+        "responseTokens": 487,
+        "results": [
+          "✓ src-tauri/src/codeindex/mod.rs:203",
+          "✗ src-tauri/src/tui_tests.rs:1781",
+          "✗ src-tauri/src/tui.rs:3114",
+          "✗ src/lib/mcp.test.ts:30",
+          "✗ src-tauri/src/mcp/agents_tests.rs:298",
+          "✗ src/components/Stats.test.ts:209",
+          "✗ src/components/settings/IntegrationsTab.test.ts:466",
+          "✗ src/lib/editor/theme.test.ts:91",
+          "✗ src/lib/terminals.test.ts:1876",
+          "✗ src-tauri/src/agent/codex.rs:51"
+        ],
+        "suffice": null,
+        "warmMs": 42.6,
+        "wrongTokens": 401
+      },
+      "tool": "index_search",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 3,
+        "blindTokens": 669,
+        "calls": 3,
+        "score": {
+          "expected": 3,
+          "firstGood": 1,
+          "found": 3,
+          "good": 3,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 3
+        },
+        "totalTokens": 669
+      },
+      "id": "rs-callers-tokens_of",
+      "index": {
+        "announcedFilesTokens": 564,
+        "announcedPercent": 64,
+        "at10": {
+          "expected": 3,
+          "firstGood": 1,
+          "found": 3,
+          "good": 3,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 3
+        },
+        "at50": {
+          "expected": 3,
+          "firstGood": 1,
+          "found": 3,
+          "good": 3,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 3
+        },
+        "codeWords": null,
+        "coldMs": 89.8,
+        "realCalls": 3,
+        "realTokens": 785,
+        "responseTokens": 183,
+        "warmMs": 16.4,
+        "wrongTokens": 0
+      },
+      "realPercent": -17,
+      "suffice": null,
+      "tags": [],
+      "tokensave": {
+        "announcedPercent": 67,
+        "at10": {
+          "expected": 3,
+          "firstGood": 1,
+          "found": 3,
+          "good": 3,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 3
+        },
+        "at50": {
+          "expected": 3,
+          "firstGood": 1,
+          "found": 3,
+          "good": 3,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 3
+        },
+        "codeWords": null,
+        "coldMs": 43.8,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": null,
+        "realCalls": 3,
+        "realTokens": 855,
+        "responseTokens": 253,
+        "results": [
+          "✓ src-tauri/src/codeindex/mod.rs:203",
+          "✓ src-tauri/src/codeindex/api.rs:594",
+          "✓ src-tauri/src/codeindex/api.rs:595"
+        ],
+        "suffice": null,
+        "warmMs": 224.6,
+        "wrongTokens": 0
+      },
+      "tool": "index_callers",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 2,
+        "blindTokens": 311,
+        "calls": 2,
+        "score": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 1
+        },
+        "totalTokens": 311
+      },
+      "id": "rs-search-saving",
+      "index": {
+        "announcedFilesTokens": 960,
+        "announcedPercent": 68,
+        "at10": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 0.1,
+          "recall": 1.0,
+          "results": 10
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 0.058823529411764705,
+          "recall": 1.0,
+          "results": 17
+        },
+        "codeWords": null,
+        "coldMs": 91.3,
+        "realCalls": 2,
+        "realTokens": 571,
+        "responseTokens": 282,
+        "warmMs": 17.9,
+        "wrongTokens": 589
+      },
+      "realPercent": -83,
+      "suffice": null,
+      "tags": [],
+      "tokensave": {
+        "announcedPercent": 68,
+        "at10": {
+          "expected": 1,
+          "firstGood": 9,
+          "found": 1,
+          "good": 1,
+          "precision": 0.1,
+          "recall": 1.0,
+          "results": 10
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 0.02,
+          "recall": 1.0,
+          "results": 50
+        },
+        "codeWords": null,
+        "coldMs": 219.2,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": null,
+        "realCalls": 9,
+        "realTokens": 3131,
+        "responseTokens": 270,
+        "results": [
+          "✗ src/lib/editor/actions.ts:26",
+          "✗ src/lib/drafts.ts:56",
+          "✗ src/components/modals/AccountModal.svelte:332",
+          "✗ src/components/TileFace.test.ts:19",
+          "✗ src/components/editor/EditorView.svelte:743",
+          "✗ src-tauri/src/plugins/mod.rs:424",
+          "✗ src-tauri/src/core.rs:2138",
+          "✗ src-tauri/src/core.rs:2132",
+          "✓ src-tauri/src/codeindex/api.rs:16",
+          "✗ video/scripts/voice.ts:45"
+        ],
+        "suffice": null,
+        "warmMs": 42.1,
+        "wrongTokens": 194
+      },
+      "tool": "index_search",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 6,
+        "blindTokens": 1837,
+        "calls": 6,
+        "score": {
+          "expected": 7,
+          "firstGood": 1,
+          "found": 7,
+          "good": 7,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 7
+        },
+        "totalTokens": 1837
+      },
+      "id": "rs-callees-ensure_fresh",
+      "index": {
+        "announcedFilesTokens": 2048,
+        "announcedPercent": 71,
+        "at10": {
+          "expected": 7,
+          "firstGood": 1,
+          "found": 6,
+          "good": 6,
+          "precision": 1.0,
+          "recall": 0.8571428571428571,
+          "results": 6
+        },
+        "at50": {
+          "expected": 7,
+          "firstGood": 1,
+          "found": 6,
+          "good": 6,
+          "precision": 1.0,
+          "recall": 0.8571428571428571,
+          "results": 6
+        },
+        "codeWords": null,
+        "coldMs": 93.3,
+        "realCalls": 4,
+        "realTokens": 1871,
+        "responseTokens": 555,
+        "warmMs": 16.5,
+        "wrongTokens": 0
+      },
+      "realPercent": -1,
+      "suffice": null,
+      "tags": [
+        "homonyme"
+      ],
+      "tokensave": {
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 7,
+          "firstGood": 1,
+          "found": 6,
+          "good": 6,
+          "precision": 0.5454545454545454,
+          "recall": 0.8571428571428571,
+          "results": 11
+        },
+        "at50": {
+          "expected": 7,
+          "firstGood": 1,
+          "found": 6,
+          "good": 6,
+          "precision": 0.15384615384615385,
+          "recall": 0.8571428571428571,
+          "results": 39
+        },
+        "codeWords": null,
+        "coldMs": 43.9,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": null,
+        "realCalls": 8,
+        "realTokens": 3636,
+        "responseTokens": 929,
+        "results": [
+          "✓ src-tauri/src/codeindex/mod.rs:135",
+          "✓ src-tauri/src/codeindex/scan.rs:46",
+          "✓ src-tauri/src/codeindex/mod.rs:111",
+          "✓ src-tauri/src/codeindex/mod.rs:118",
+          "✓ src-tauri/src/codeindex/scan.rs:29",
+          "✓ src-tauri/src/codeindex/mod.rs:67",
+          "✗ src-tauri/src/codeindex/store.rs:115",
+          "✗ src-tauri/src/codeindex/scan.rs:239",
+          "✗ src-tauri/src/codeindex/scan.rs:291",
+          "✗ src-tauri/src/sharing_tests.rs:60",
+          "✗ src-tauri/src/codeindex/scan.rs:249"
+        ],
+        "suffice": null,
+        "warmMs": 232.5,
+        "wrongTokens": 369
+      },
+      "tool": "index_callees",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 7,
+        "blindTokens": 2647,
+        "calls": 7,
+        "score": {
+          "expected": 8,
+          "firstGood": 1,
+          "found": 8,
+          "good": 8,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 8
+        },
+        "totalTokens": 2647
+      },
+      "id": "rs-callees-task_context",
+      "index": {
+        "announcedFilesTokens": 3348,
+        "announcedPercent": 72,
+        "at10": {
+          "expected": 8,
+          "firstGood": 1,
+          "found": 8,
+          "good": 8,
+          "precision": 0.8888888888888888,
+          "recall": 1.0,
+          "results": 9
+        },
+        "at50": {
+          "expected": 8,
+          "firstGood": 1,
+          "found": 8,
+          "good": 8,
+          "precision": 0.8888888888888888,
+          "recall": 1.0,
+          "results": 9
+        },
+        "codeWords": null,
+        "coldMs": 89.4,
+        "realCalls": 7,
+        "realTokens": 3603,
+        "responseTokens": 880,
+        "warmMs": 16.2,
+        "wrongTokens": 55
+      },
+      "realPercent": -36,
+      "suffice": null,
+      "tags": [],
+      "tokensave": {
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 8,
+          "firstGood": 1,
+          "found": 8,
+          "good": 8,
+          "precision": 0.7272727272727273,
+          "recall": 1.0,
+          "results": 11
+        },
+        "at50": {
+          "expected": 8,
+          "firstGood": 1,
+          "found": 8,
+          "good": 8,
+          "precision": 0.4,
+          "recall": 1.0,
+          "results": 20
+        },
+        "codeWords": null,
+        "coldMs": 191.5,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": null,
+        "realCalls": 8,
+        "realTokens": 3963,
+        "responseTokens": 925,
+        "results": [
+          "✓ src-tauri/src/codeindex/api.rs:197",
+          "✓ src-tauri/src/codeindex/api.rs:623",
+          "✓ src-tauri/src/codeindex/api.rs:632",
+          "✓ src-tauri/src/codeindex/api.rs:161",
+          "✗ src-tauri/src/codeindex/api.rs:107",
+          "✓ src-tauri/src/codeindex/api.rs:576",
+          "✓ src-tauri/src/codeindex/api.rs:320",
+          "✓ src-tauri/src/codeindex/api.rs:261",
+          "✓ src-tauri/src/codeindex/api.rs:339",
+          "✗ src-tauri/src/mcp/activity.rs:78",
+          "✗ src-tauri/src/codeindex/api.rs:118"
+        ],
+        "suffice": null,
+        "warmMs": 420.6,
+        "wrongTokens": 204
+      },
+      "tool": "index_callees",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 6,
+        "blindTokens": 1856,
+        "calls": 6,
+        "score": {
+          "expected": 5,
+          "firstGood": 1,
+          "found": 5,
+          "good": 5,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 5
+        },
+        "totalTokens": 1856
+      },
+      "id": "rs-impact-scope_of",
+      "index": {
+        "announcedFilesTokens": 1312,
+        "announcedPercent": 70,
+        "at10": {
+          "expected": 5,
+          "firstGood": 1,
+          "found": 5,
+          "good": 5,
+          "precision": 0.7142857142857143,
+          "recall": 1.0,
+          "results": 7
+        },
+        "at50": {
+          "expected": 5,
+          "firstGood": 1,
+          "found": 5,
+          "good": 5,
+          "precision": 0.7142857142857143,
+          "recall": 1.0,
+          "results": 7
+        },
+        "codeWords": null,
+        "coldMs": 105.2,
+        "realCalls": 7,
+        "realTokens": 2847,
+        "responseTokens": 370,
+        "warmMs": 30.1,
+        "wrongTokens": 76
+      },
+      "realPercent": -53,
+      "suffice": null,
+      "tags": [
+        "homonyme"
+      ],
+      "tokensave": {
+        "announcedPercent": 71,
+        "at10": {
+          "expected": 5,
+          "firstGood": 1,
+          "found": 5,
+          "good": 5,
+          "precision": 0.7142857142857143,
+          "recall": 1.0,
+          "results": 7
+        },
+        "at50": {
+          "expected": 5,
+          "firstGood": 1,
+          "found": 5,
+          "good": 5,
+          "precision": 0.7142857142857143,
+          "recall": 1.0,
+          "results": 7
+        },
+        "codeWords": null,
+        "coldMs": 43.9,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": null,
+        "realCalls": 7,
+        "realTokens": 3120,
+        "responseTokens": 580,
+        "results": [
+          "✓ src-tauri/src/codeindex/store.rs:86",
+          "✓ src-tauri/src/codeindex/mod.rs:67",
+          "✗ src-tauri/src/pty.rs:4171",
+          "✓ src-tauri/src/codeindex_tests.rs:608",
+          "✓ src-tauri/src/codeindex/mod.rs:162",
+          "✓ src-tauri/src/codeindex/mod.rs:135",
+          "✗ src-tauri/src/telemetry.rs:484"
+        ],
+        "suffice": null,
+        "warmMs": 40.1,
+        "wrongTokens": 88
+      },
+      "tool": "index_impact",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 8,
+        "blindTokens": 2701,
+        "calls": 8,
+        "score": {
+          "expected": 7,
+          "firstGood": 1,
+          "found": 7,
+          "good": 8,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 8
+        },
+        "totalTokens": 2701
+      },
+      "id": "rs-impact-tokens_of",
+      "index": {
+        "announcedFilesTokens": 1320,
+        "announcedPercent": 70,
+        "at10": {
+          "expected": 7,
+          "firstGood": 1,
+          "found": 7,
+          "good": 8,
+          "precision": 0.8888888888888888,
+          "recall": 1.0,
+          "results": 9
+        },
+        "at50": {
+          "expected": 7,
+          "firstGood": 1,
+          "found": 7,
+          "good": 8,
+          "precision": 0.8888888888888888,
+          "recall": 1.0,
+          "results": 9
+        },
+        "codeWords": null,
+        "coldMs": 109.2,
+        "realCalls": 8,
+        "realTokens": 3211,
+        "responseTokens": 372,
+        "warmMs": 31.0,
+        "wrongTokens": 8
+      },
+      "realPercent": -18,
+      "suffice": null,
+      "tags": [],
+      "tokensave": {
+        "announcedPercent": 72,
+        "at10": {
+          "expected": 7,
+          "firstGood": 1,
+          "found": 7,
+          "good": 7,
+          "precision": 0.875,
+          "recall": 1.0,
+          "results": 8
+        },
+        "at50": {
+          "expected": 7,
+          "firstGood": 1,
+          "found": 7,
+          "good": 7,
+          "precision": 0.875,
+          "recall": 1.0,
+          "results": 8
+        },
+        "codeWords": null,
+        "coldMs": 43.3,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": null,
+        "realCalls": 8,
+        "realTokens": 3295,
+        "responseTokens": 627,
+        "results": [
+          "✓ src-tauri/src/codeindex/mod.rs:203",
+          "✓ src-tauri/src/codeindex/api.rs:576",
+          "✗ src-tauri/src/codeindex/api.rs:5",
+          "✓ src-tauri/src/codeindex/api.rs:437",
+          "✓ src-tauri/src/codeindex/api.rs:142",
+          "✓ src-tauri/src/codeindex/api.rs:374",
+          "✓ src-tauri/src/codeindex/api.rs:389",
+          "✓ src-tauri/src/codeindex/api.rs:197"
+        ],
+        "suffice": null,
+        "warmMs": 44.7,
+        "wrongTokens": 59
+      },
+      "tool": "index_impact",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 5,
+        "blindTokens": 1928,
+        "calls": 5,
+        "score": {
+          "expected": 5,
+          "firstGood": 1,
+          "found": 4,
+          "good": 4,
+          "precision": 1.0,
+          "recall": 0.8,
+          "results": 4
+        },
+        "totalTokens": 1928
+      },
+      "id": "rs-impact-hint-file",
+      "index": {
+        "announcedFilesTokens": 7584,
+        "announcedPercent": 74,
+        "at10": {
+          "expected": 5,
+          "firstGood": 1,
+          "found": 4,
+          "good": 20,
+          "precision": 0.7142857142857143,
+          "recall": 0.8,
+          "results": 28
+        },
+        "at50": {
+          "expected": 5,
+          "firstGood": 1,
+          "found": 5,
+          "good": 21,
+          "precision": 0.6363636363636364,
+          "recall": 1.0,
+          "results": 33
+        },
+        "codeWords": null,
+        "coldMs": 284.8,
+        "realCalls": 6,
+        "realTokens": 4241,
+        "responseTokens": 1939,
+        "warmMs": 17.4,
+        "wrongTokens": 256
+      },
+      "realPercent": -119,
+      "suffice": null,
+      "tags": [],
+      "tokensave": {
+        "announcedPercent": 65,
+        "at10": {
+          "expected": 5,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 1.0,
+          "recall": 0.2,
+          "results": 1
+        },
+        "at50": {
+          "expected": 5,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 1.0,
+          "recall": 0.2,
+          "results": 1
+        },
+        "codeWords": null,
+        "coldMs": 41.4,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": null,
+        "realCalls": 2,
+        "realTokens": 504,
+        "responseTokens": 221,
+        "results": [
+          "✓ src-tauri/src/codeindex/hint.rs:1"
+        ],
+        "suffice": null,
+        "warmMs": 222.5,
+        "wrongTokens": 0
+      },
+      "tool": "index_impact",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 7,
+        "blindTokens": 2867,
+        "calls": 7,
+        "score": {
+          "expected": 4,
+          "firstGood": 1,
+          "found": 3,
+          "good": 3,
+          "precision": 0.42857142857142855,
+          "recall": 0.75,
+          "results": 7
+        },
+        "totalTokens": 2867
+      },
+      "id": "rs-homonyme-new",
+      "index": {
+        "announcedFilesTokens": 1736,
+        "announcedPercent": 71,
+        "at10": {
+          "expected": 4,
+          "firstGood": 1,
+          "found": 3,
+          "good": 3,
+          "precision": 0.75,
+          "recall": 0.75,
+          "results": 4
+        },
+        "at50": {
+          "expected": 4,
+          "firstGood": 1,
+          "found": 3,
+          "good": 3,
+          "precision": 0.75,
+          "recall": 0.75,
+          "results": 4
+        },
+        "codeWords": null,
+        "coldMs": 268.5,
+        "realCalls": 4,
+        "realTokens": 1735,
+        "responseTokens": 477,
+        "warmMs": 21.3,
+        "wrongTokens": 30
+      },
+      "realPercent": 39,
+      "suffice": null,
+      "tags": [
+        "homonyme"
+      ],
+      "tokensave": {
+        "announcedPercent": 74,
+        "at10": {
+          "expected": 4,
+          "firstGood": 31,
+          "found": 1,
+          "good": 1,
+          "precision": 0.02631578947368421,
+          "recall": 0.25,
+          "results": 38
+        },
+        "at50": {
+          "expected": 4,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 31
+        },
+        "codeWords": null,
+        "coldMs": 356.9,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": null,
+        "realCalls": 10,
+        "realTokens": 7265,
+        "responseTokens": 3802,
+        "results": [
+          "✗ src-tauri/src/planfiles_tests.rs:396",
+          "✗ src-tauri/src/planfiles_tests.rs:1062",
+          "✗ src-tauri/src/planfiles_tests.rs:717",
+          "✗ src-tauri/src/planfiles_tests.rs:731",
+          "✗ src-tauri/src/planfiles_tests.rs:1289",
+          "✗ src-tauri/src/planfiles_tests.rs:1365",
+          "✗ src-tauri/src/planfiles_tests.rs:1137",
+          "✗ src-tauri/src/planfiles_tests.rs:1432",
+          "✗ src-tauri/src/planfiles_tests.rs:556",
+          "✗ src-tauri/src/planfiles_tests.rs:488",
+          "✗ src-tauri/src/planfiles_tests.rs:901",
+          "✗ src-tauri/src/planfiles_tests.rs:1258",
+          "✗ src-tauri/src/updates/flow_tests.rs:100",
+          "✗ src-tauri/src/updates/flow_tests.rs:388",
+          "✗ src-tauri/src/updates/flow_tests.rs:268",
+          "✗ src-tauri/src/updates/flow_tests.rs:246",
+          "✗ src-tauri/src/updates/flow_tests.rs:643",
+          "✗ src-tauri/src/updates/flow_tests.rs:378",
+          "✗ src-tauri/src/updates/flow_tests.rs:610",
+          "✗ src-tauri/src/updates/flow_tests.rs:714",
+          "✗ src-tauri/src/updates/flow_tests.rs:167",
+          "✗ src-tauri/src/updates/flow_tests.rs:752",
+          "✗ src-tauri/src/updates/flow_tests.rs:185",
+          "✗ src-tauri/src/telemetry.rs:254",
+          "✗ src-tauri/src/telemetry.rs:308",
+          "✗ src-tauri/src/telemetry.rs:364",
+          "✗ src-tauri/src/voice/transcribe.rs:218",
+          "✗ src-tauri/src/signin.rs:129",
+          "✗ src-tauri/src/workflow_track_tests.rs:46",
+          "✗ src-tauri/src/plugins/journal.rs:69",
+          "✓ src-tauri/src/codeindex/mod.rs:104",
+          "✗ src-tauri/src/paths.rs:297",
+          "✗ src-tauri/src/voice/speech/piper.rs:118",
+          "✗ src-tauri/src/signin.rs:467",
+          "✗ src-tauri/src/voice/vad.rs:54",
+          "✗ src-tauri/src/integrations/azure.rs:102",
+          "✗ src-tauri/src/windowthread.rs:111",
+          "✗ src-tauri/src/voice/online_speech.rs:468"
+        ],
+        "suffice": null,
+        "warmMs": 394.0,
+        "wrongTokens": 3668
+      },
+      "tool": "index_callers",
+      "winner": "index"
+    },
+    {
+      "grep": {
+        "blindCalls": 6,
+        "blindTokens": 2907,
+        "calls": 6,
+        "score": {
+          "expected": 5,
+          "firstGood": 27,
+          "found": 5,
+          "good": 5,
+          "precision": 0.16129032258064516,
+          "recall": 1.0,
+          "results": 31
+        },
+        "totalTokens": 2907
+      },
+      "id": "rs-homonyme-load",
+      "index": {
+        "announcedFilesTokens": 2136,
+        "announcedPercent": 71,
+        "at10": {
+          "expected": 5,
+          "firstGood": 1,
+          "found": 5,
+          "good": 5,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 5
+        },
+        "at50": {
+          "expected": 5,
+          "firstGood": 1,
+          "found": 5,
+          "good": 5,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 5
+        },
+        "codeWords": null,
+        "coldMs": 91.0,
+        "realCalls": 4,
+        "realTokens": 1646,
+        "responseTokens": 576,
+        "warmMs": 17.8,
+        "wrongTokens": 0
+      },
+      "realPercent": 43,
+      "suffice": null,
+      "tags": [
+        "homonyme"
+      ],
+      "tokensave": {
+        "announcedPercent": 74,
+        "at10": {
+          "expected": 5,
+          "firstGood": 45,
+          "found": 1,
+          "good": 1,
+          "precision": 0.01818181818181818,
+          "recall": 0.2,
+          "results": 55
+        },
+        "at50": {
+          "expected": 5,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 49
+        },
+        "codeWords": null,
+        "coldMs": 44.6,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": null,
+        "realCalls": 7,
+        "realTokens": 5961,
+        "responseTokens": 3699,
+        "results": [
+          "✗ src-tauri/src/planfiles_tests.rs:438",
+          "✗ src-tauri/src/planfiles_tests.rs:1075",
+          "✗ src-tauri/src/planfiles_tests.rs:728",
+          "✗ src-tauri/src/planfiles_tests.rs:570",
+          "✗ src-tauri/src/planfiles_tests.rs:492",
+          "✗ src-tauri/src/planfiles_tests.rs:500",
+          "✗ src-tauri/src/planfiles_tests.rs:506",
+          "✗ src-tauri/src/planfiles_tests.rs:512",
+          "✗ src-tauri/src/planfiles_tests.rs:908",
+          "✗ src-tauri/src/planfiles_tests.rs:910",
+          "✗ src-tauri/src/planfiles_tests.rs:845",
+          "✗ src-tauri/src/planfiles_tests.rs:529",
+          "✗ src-tauri/src/planfiles_tests.rs:539",
+          "✗ src-tauri/src/planfiles_tests.rs:549",
+          "✗ src-tauri/src/planfiles_tests.rs:879",
+          "✗ src-tauri/src/planfiles_tests.rs:882",
+          "✗ src-tauri/src/planfiles_tests.rs:886",
+          "✗ src-tauri/src/planfiles_tests.rs:894",
+          "✗ src-tauri/src/planfiles_tests.rs:593",
+          "✗ src-tauri/src/planfiles_tests.rs:970",
+          "✗ src/lib/conversations.svelte.ts:88",
+          "✗ src/lib/conversations.svelte.ts:179",
+          "✗ src/lib/conversations.svelte.ts:62",
+          "✗ src/components/branches/BranchPicker.svelte:124",
+          "✗ src/components/branches/BranchPicker.svelte:140",
+          "✗ src/components/branches/BranchPicker.svelte:379",
+          "✗ src/components/branches/BranchPicker.svelte:390",
+          "✗ src/components/settings/VoiceTab.svelte:29",
+          "✗ src/components/docs/SpecPage.svelte:27",
+          "✗ src/components/settings/SpeechSettings.svelte:50",
+          "✗ src/components/branches/MergedBranchesModal.svelte:26",
+          "✗ src/components/settings/VectorsModelRow.svelte:16",
+          "✗ src-tauri/src/voice/speech/mod.rs:88",
+          "✗ src/components/settings/MemorySection.svelte:19",
+          "✗ src/components/settings/AccountsTab.svelte:119",
+          "✗ src/lib/plugins-view.svelte.ts:54",
+          "✗ src/components/settings/CodeIndexSection.svelte:24",
+          "✗ src/components/settings/WorkflowSection.svelte:43",
+          "✗ src/components/FileDiff.svelte:29",
+          "✗ src/components/FilesPanel.svelte:60",
+          "✗ src-tauri/src/core.rs:1712",
+          "✗ src-tauri/src/vectors/model.rs:129",
+          "✗ src/components/GitGraph.svelte:80",
+          "✗ src/lib/editor/trees.svelte.ts:14",
+          "✓ src-tauri/src/workflowfiles.rs:507",
+          "✗ src/lib/editor/buffers.svelte.ts:103",
+          "✗ src-tauri/src/voice/speech/piper.rs:272",
+          "✗ src/lib/appearance.test.ts:22",
+          "✗ src-tauri/src/plugins/mod.rs:392",
+          "✗ src/lib/docs.svelte.ts:26",
+          "✗ src/lib/mcp.svelte.ts:26",
+          "✗ src/lib/online-voice.svelte.ts:19",
+          "✗ src-tauri/src/vectors/embed.rs:60",
+          "✗ src-tauri/src/planfiles.rs:715",
+          "✗ src-tauri/src/forge/accounts.rs:144"
+        ],
+        "suffice": null,
+        "warmMs": 42.4,
+        "wrongTokens": 3583
+      },
+      "tool": "index_callers",
+      "winner": "index"
+    },
+    {
+      "grep": {
+        "blindCalls": 4,
+        "blindTokens": 1314,
+        "calls": 4,
+        "score": {
+          "expected": 3,
+          "firstGood": 1,
+          "found": 3,
+          "good": 3,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 3
+        },
+        "totalTokens": 1314
+      },
+      "id": "rs-homonyme-place",
+      "index": {
+        "announcedFilesTokens": 760,
+        "announcedPercent": 65,
+        "at10": {
+          "expected": 3,
+          "firstGood": 1,
+          "found": 2,
+          "good": 2,
+          "precision": 1.0,
+          "recall": 0.6666666666666666,
+          "results": 2
+        },
+        "at50": {
+          "expected": 3,
+          "firstGood": 1,
+          "found": 2,
+          "good": 2,
+          "precision": 1.0,
+          "recall": 0.6666666666666666,
+          "results": 2
+        },
+        "codeWords": null,
+        "coldMs": 265.4,
+        "realCalls": 3,
+        "realTokens": 995,
+        "responseTokens": 232,
+        "warmMs": 16.7,
+        "wrongTokens": 0
+      },
+      "realPercent": 24,
+      "suffice": null,
+      "tags": [
+        "homonyme"
+      ],
+      "tokensave": {
+        "announcedPercent": 74,
+        "at10": {
+          "expected": 3,
+          "firstGood": 21,
+          "found": 1,
+          "good": 1,
+          "precision": 0.030303030303030304,
+          "recall": 0.3333333333333333,
+          "results": 33
+        },
+        "at50": {
+          "expected": 3,
+          "firstGood": 21,
+          "found": 1,
+          "good": 1,
+          "precision": 0.030303030303030304,
+          "recall": 0.3333333333333333,
+          "results": 33
+        },
+        "codeWords": null,
+        "coldMs": 47.4,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": null,
+        "realCalls": 5,
+        "realTokens": 3474,
+        "responseTokens": 2077,
+        "results": [
+          "✗ src-tauri/src/engine/registry.rs:279",
+          "✗ src-tauri/src/engine/registry.rs:479",
+          "✗ src-tauri/src/engine/registry.rs:384",
+          "✗ src-tauri/src/engine/registry_tests.rs:38",
+          "✗ src-tauri/src/engine/registry_tests.rs:39",
+          "✗ src-tauri/src/engine/registry_tests.rs:40",
+          "✗ src-tauri/src/engine/registry_tests.rs:41",
+          "✗ src-tauri/src/engine/registry_tests.rs:42",
+          "✗ src-tauri/src/engine/registry_tests.rs:43",
+          "✗ src-tauri/src/engine/registry_tests.rs:44",
+          "✗ src-tauri/src/docsimport.rs:266",
+          "✗ src-tauri/src/docsimport.rs:324",
+          "✗ src/lib/editor/definitions.ts:315",
+          "✗ src/lib/editor/definitions.ts:383",
+          "✗ src/lib/editor/definitions.ts:420",
+          "✗ src-tauri/src/mcp/images.rs:484",
+          "✗ src-tauri/src/forge/accounts.rs:101",
+          "✗ src/lib/tip.ts:292",
+          "✗ src-tauri/src/docsdrive.rs:385",
+          "✗ src-tauri/src/ticketfiles.rs:207",
+          "✓ src-tauri/src/integrations/secrets.rs:211",
+          "✗ tests/e2e/workflow-look.spec.ts:53",
+          "✗ tests/e2e/sidebar.spec.ts:50",
+          "✗ tests/e2e/board-look.spec.ts:57",
+          "✗ tests/e2e/conversation-look.spec.ts:49",
+          "✗ tests/e2e/settings-look.spec.ts:51",
+          "✗ tests/e2e/git-look.spec.ts:51",
+          "✗ tests/e2e/plan-look.spec.ts:48",
+          "✗ tests/e2e/editor-look.spec.ts:51",
+          "✗ tests/e2e/terminals-look.spec.ts:54",
+          "✗ tests/e2e/windows-look.spec.ts:55",
+          "✗ tests/e2e/shell.spec.ts:43",
+          "✗ tests/e2e/overview-stats-look.spec.ts:51"
+        ],
+        "suffice": null,
+        "warmMs": 44.8,
+        "wrongTokens": 1951
+      },
+      "tool": "index_callers",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 2,
+        "blindTokens": 735,
+        "calls": 2,
+        "score": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 3,
+          "precision": 0.16666666666666666,
+          "recall": 1.0,
+          "results": 18
+        },
+        "totalTokens": 735
+      },
+      "id": "rs-notion-timing-en",
+      "index": {
+        "announcedFilesTokens": 2864,
+        "announcedPercent": 72,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "coldMs": 113.9,
+        "realCalls": 9,
+        "realTokens": 3771,
+        "responseTokens": 759,
+        "warmMs": 39.7,
+        "wrongTokens": 1156
+      },
+      "realPercent": -413,
+      "suffice": null,
+      "tags": [
+        "notion",
+        "en"
+      ],
+      "tokensave": {
+        "announcedPercent": 72,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 9
+        },
+        "coldMs": 62.0,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "notPlayed": null,
+        "realCalls": 9,
+        "realTokens": 3791,
+        "responseTokens": 779,
+        "results": [
+          "✗ src/lib/mcp.svelte.ts:68",
+          "✗ src-tauri/src/engine/codex/git.rs:374",
+          "✗ src-tauri/src/engine/codex/git.rs:399",
+          "✗ src-tauri/src/docs.rs:444",
+          "✗ src-tauri/src/engine/codex/git.rs:364",
+          "✗ src-tauri/src/engine/codex/git.rs:38",
+          "✗ src-tauri/src/engine/codex/git.rs:660",
+          "✗ src-tauri/src/engine/codex/git.rs:343",
+          "✗ src-tauri/src/engine/codex/git.rs:419",
+          "✗ src-tauri/src/worktrees.rs:249"
+        ],
+        "suffice": null,
+        "warmMs": 219.0,
+        "wrongTokens": 86
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 3,
+        "blindTokens": 1602,
+        "calls": 3,
+        "score": {
+          "expected": 1,
+          "firstGood": 4,
+          "found": 1,
+          "good": 6,
+          "precision": 0.6,
+          "recall": 1.0,
+          "results": 10
+        },
+        "totalTokens": 1602
+      },
+      "id": "rs-notion-gap-fr",
+      "index": {
+        "announcedFilesTokens": 6180,
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 34
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "coldMs": 134.7,
+        "realCalls": 9,
+        "realTokens": 5819,
+        "responseTokens": 1588,
+        "warmMs": 60.1,
+        "wrongTokens": 2191
+      },
+      "realPercent": -263,
+      "suffice": null,
+      "tags": [
+        "notion",
+        "fr"
+      ],
+      "tokensave": {
+        "announcedPercent": 72,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 35
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": 4,
+          "found": 1,
+          "good": 1,
+          "precision": 0.1111111111111111,
+          "recall": 1.0,
+          "results": 9
+        },
+        "coldMs": 215.1,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "notPlayed": null,
+        "realCalls": 12,
+        "realTokens": 6213,
+        "responseTokens": 966,
+        "results": [
+          "✗ src-tauri/src/voice/audio.rs:20",
+          "✗ docs/PROTOCOL.md:315",
+          "✗ src-tauri/src/voice/audio.rs:95",
+          "✗ src-tauri/src/voice/audio.rs:126",
+          "✗ src-tauri/src/voice/audio.rs:115",
+          "✗ src-tauri/src/voice/conv_tests.rs:991",
+          "✗ src-tauri/src/voice/conv_tests.rs:812",
+          "✗ src-tauri/src/voice/conv_tests.rs:1110",
+          "✗ src-tauri/src/voice/live.rs:522",
+          "✗ src-tauri/src/voice/speech/piper.rs:502",
+          "✗ src-tauri/src/voice/tests.rs:637",
+          "✗ src-tauri/src/voice/transcribe.rs:304"
+        ],
+        "suffice": null,
+        "warmMs": 54.0,
+        "wrongTokens": 143
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 3,
+        "blindTokens": 1602,
+        "calls": 3,
+        "score": {
+          "expected": 1,
+          "firstGood": 4,
+          "found": 1,
+          "good": 6,
+          "precision": 0.6,
+          "recall": 1.0,
+          "results": 10
+        },
+        "totalTokens": 1602
+      },
+      "id": "rs-notion-gap-en",
+      "index": {
+        "announcedFilesTokens": 3924,
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": 9,
+          "found": 1,
+          "good": 1,
+          "precision": 0.1,
+          "recall": 1.0,
+          "results": 10
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": 9,
+          "found": 1,
+          "good": 1,
+          "precision": 0.02,
+          "recall": 1.0,
+          "results": 50
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "coldMs": 332.3,
+        "realCalls": 4,
+        "realTokens": 2711,
+        "responseTokens": 1024,
+        "warmMs": 70.0,
+        "wrongTokens": 1129
+      },
+      "realPercent": -69,
+      "suffice": null,
+      "tags": [
+        "notion",
+        "en"
+      ],
+      "tokensave": {
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": 5,
+          "found": 1,
+          "good": 1,
+          "precision": 0.1,
+          "recall": 1.0,
+          "results": 10
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": 5,
+          "found": 1,
+          "good": 1,
+          "precision": 0.0625,
+          "recall": 1.0,
+          "results": 16
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": 4,
+          "found": 1,
+          "good": 1,
+          "precision": 0.1111111111111111,
+          "recall": 1.0,
+          "results": 9
+        },
+        "coldMs": 60.5,
+        "duel": "tokensave",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": 9,
+          "found": 1,
+          "good": 1,
+          "precision": 0.1,
+          "recall": 1.0,
+          "results": 10
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": 5,
+          "found": 1,
+          "good": 1,
+          "precision": 0.09090909090909091,
+          "recall": 1.0,
+          "results": 11
+        },
+        "notPlayed": null,
+        "realCalls": 2,
+        "realTokens": 1707,
+        "responseTokens": 1090,
+        "results": [
+          "✗ src/lib/tab-strip.ts:15",
+          "✗ src-tauri/src/codeindex_tests.rs:467",
+          "✗ src-tauri/src/vectors/index.rs:158",
+          "✗ src-tauri/src/codeindex/mod.rs:162",
+          "✓ src-tauri/src/codeindex/mod.rs:135",
+          "✗ src-tauri/src/codeindex_tests.rs:285",
+          "✗ src-tauri/src/codeindex_tests.rs:262",
+          "✗ src-tauri/src/codeindex_tests.rs:306",
+          "✗ src-tauri/src/plan_tests.rs:18",
+          "✗ src/lib/project-rail.ts:94"
+        ],
+        "suffice": null,
+        "warmMs": 232.2,
+        "wrongTokens": 81
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 6,
+        "blindTokens": 1922,
+        "calls": 6,
+        "score": {
+          "expected": 2,
+          "firstGood": 2,
+          "found": 2,
+          "good": 3,
+          "precision": 0.6,
+          "recall": 1.0,
+          "results": 5
+        },
+        "totalTokens": 1922
+      },
+      "id": "rs-context-hint-en",
+      "index": {
+        "announcedFilesTokens": 5360,
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 2,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "at50": {
+          "expected": 2,
+          "firstGood": 1,
+          "found": 1,
+          "good": 2,
+          "precision": 0.0392156862745098,
+          "recall": 0.5,
+          "results": 51
+        },
+        "codeWords": {
+          "expected": 2,
+          "firstGood": 3,
+          "found": 1,
+          "good": 1,
+          "precision": 0.09090909090909091,
+          "recall": 0.5,
+          "results": 11
+        },
+        "coldMs": 139.3,
+        "realCalls": 14,
+        "realTokens": 6174,
+        "responseTokens": 1383,
+        "warmMs": 63.1,
+        "wrongTokens": 1960
+      },
+      "realPercent": -221,
+      "suffice": null,
+      "tags": [
+        "en"
+      ],
+      "tokensave": {
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 2,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "at50": {
+          "expected": 2,
+          "firstGood": 1,
+          "found": 1,
+          "good": 2,
+          "precision": 0.0392156862745098,
+          "recall": 0.5,
+          "results": 51
+        },
+        "codeWords": {
+          "expected": 2,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "coldMs": 180.6,
+        "duel": "tokensave",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 2,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "keywords": {
+          "expected": 2,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "notPlayed": null,
+        "realCalls": 14,
+        "realTokens": 5717,
+        "responseTokens": 1352,
+        "results": [
+          "✗ src-tauri/src/search.rs:492",
+          "✗ src-tauri/src/vectors/index.rs:158",
+          "✗ src-tauri/src/vectors/index.rs:262",
+          "✗ src-tauri/src/search.rs:400",
+          "✗ src-tauri/src/search.rs:1121",
+          "✗ src-tauri/src/search.rs:34",
+          "✗ src-tauri/src/sharing_tests.rs:60",
+          "✗ src-tauri/src/vectors/chunk.rs:46",
+          "✗ src-tauri/src/vectors/index.rs:83",
+          "✗ src-tauri/src/vectors/index.rs:79",
+          "✗ src-tauri/src/vectors/index.rs:33"
+        ],
+        "suffice": null,
+        "warmMs": 56.5,
+        "wrongTokens": 79
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 3,
+        "blindTokens": 1018,
+        "calls": 3,
+        "score": {
+          "expected": 1,
+          "firstGood": 2,
+          "found": 1,
+          "good": 1,
+          "precision": 0.5,
+          "recall": 1.0,
+          "results": 2
+        },
+        "totalTokens": 1018
+      },
+      "id": "ts-search-tip-place",
+      "index": {
+        "announcedFilesTokens": 1056,
+        "announcedPercent": 69,
+        "at10": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 0.1,
+          "recall": 1.0,
+          "results": 10
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 0.02,
+          "recall": 1.0,
+          "results": 50
+        },
+        "codeWords": null,
+        "coldMs": 290.4,
+        "realCalls": 2,
+        "realTokens": 812,
+        "responseTokens": 306,
+        "warmMs": 28.4,
+        "wrongTokens": 440
+      },
+      "realPercent": 20,
+      "suffice": null,
+      "tags": [
+        "homonyme"
+      ],
+      "tokensave": {
+        "announcedPercent": 69,
+        "at10": {
+          "expected": 1,
+          "firstGood": 2,
+          "found": 1,
+          "good": 1,
+          "precision": 0.1,
+          "recall": 1.0,
+          "results": 10
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": 2,
+          "found": 1,
+          "good": 1,
+          "precision": 0.02,
+          "recall": 1.0,
+          "results": 50
+        },
+        "codeWords": null,
+        "coldMs": 44.5,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": null,
+        "realCalls": 3,
+        "realTokens": 1181,
+        "responseTokens": 309,
+        "results": [
+          "✗ src/lib/tip.test.ts:451",
+          "✓ src/lib/tip.ts:292",
+          "✗ src/lib/tip.test.ts:470",
+          "✗ src/lib/tip.test.ts:466",
+          "✗ src/lib/tip.test.ts:462",
+          "✗ src/lib/tip.ts:314",
+          "✗ src/lib/tip.test.ts:18",
+          "✗ src/lib/tip.test.ts:7",
+          "✗ src/app.css:916",
+          "✗ src/app.css:966"
+        ],
+        "suffice": null,
+        "warmMs": 42.8,
+        "wrongTokens": 234
+      },
+      "tool": "index_search",
+      "winner": "="
+    },
+    {
+      "grep": {
+        "blindCalls": 6,
+        "blindTokens": 4218,
+        "calls": 6,
+        "score": {
+          "expected": 6,
+          "firstGood": 20,
+          "found": 6,
+          "good": 6,
+          "precision": 0.24,
+          "recall": 1.0,
+          "results": 25
+        },
+        "totalTokens": 4218
+      },
+      "id": "ts-callers-tip-place",
+      "index": {
+        "announcedFilesTokens": 840,
+        "announcedPercent": 67,
+        "at10": {
+          "expected": 6,
+          "firstGood": 1,
+          "found": 6,
+          "good": 6,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 6
+        },
+        "at50": {
+          "expected": 6,
+          "firstGood": 1,
+          "found": 6,
+          "good": 6,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 6
+        },
+        "codeWords": null,
+        "coldMs": 91.8,
+        "realCalls": 4,
+        "realTokens": 1284,
+        "responseTokens": 252,
+        "warmMs": 16.1,
+        "wrongTokens": 0
+      },
+      "realPercent": 69,
+      "suffice": null,
+      "tags": [
+        "homonyme"
+      ],
+      "tokensave": {
+        "announcedPercent": 74,
+        "at10": {
+          "expected": 6,
+          "firstGood": 18,
+          "found": 1,
+          "good": 1,
+          "precision": 0.030303030303030304,
+          "recall": 0.16666666666666666,
+          "results": 33
+        },
+        "at50": {
+          "expected": 6,
+          "firstGood": 18,
+          "found": 1,
+          "good": 1,
+          "precision": 0.030303030303030304,
+          "recall": 0.16666666666666666,
+          "results": 33
+        },
+        "codeWords": null,
+        "coldMs": 232.0,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": null,
+        "realCalls": 5,
+        "realTokens": 3474,
+        "responseTokens": 2077,
+        "results": [
+          "✗ src-tauri/src/engine/registry.rs:279",
+          "✗ src-tauri/src/engine/registry.rs:479",
+          "✗ src-tauri/src/engine/registry.rs:384",
+          "✗ src-tauri/src/engine/registry_tests.rs:38",
+          "✗ src-tauri/src/engine/registry_tests.rs:39",
+          "✗ src-tauri/src/engine/registry_tests.rs:40",
+          "✗ src-tauri/src/engine/registry_tests.rs:41",
+          "✗ src-tauri/src/engine/registry_tests.rs:42",
+          "✗ src-tauri/src/engine/registry_tests.rs:43",
+          "✗ src-tauri/src/engine/registry_tests.rs:44",
+          "✗ src-tauri/src/docsimport.rs:266",
+          "✗ src-tauri/src/docsimport.rs:324",
+          "✗ src/lib/editor/definitions.ts:315",
+          "✗ src/lib/editor/definitions.ts:383",
+          "✗ src/lib/editor/definitions.ts:420",
+          "✗ src-tauri/src/mcp/images.rs:484",
+          "✗ src-tauri/src/forge/accounts.rs:101",
+          "✓ src/lib/tip.ts:292",
+          "✗ src-tauri/src/docsdrive.rs:385",
+          "✗ src-tauri/src/ticketfiles.rs:207",
+          "✗ src-tauri/src/integrations/secrets.rs:211",
+          "✗ tests/e2e/workflow-look.spec.ts:53",
+          "✗ tests/e2e/sidebar.spec.ts:50",
+          "✗ tests/e2e/board-look.spec.ts:57",
+          "✗ tests/e2e/conversation-look.spec.ts:49",
+          "✗ tests/e2e/settings-look.spec.ts:51",
+          "✗ tests/e2e/git-look.spec.ts:51",
+          "✗ tests/e2e/plan-look.spec.ts:48",
+          "✗ tests/e2e/editor-look.spec.ts:51",
+          "✗ tests/e2e/terminals-look.spec.ts:54",
+          "✗ tests/e2e/windows-look.spec.ts:55",
+          "✗ tests/e2e/shell.spec.ts:43",
+          "✗ tests/e2e/overview-stats-look.spec.ts:51"
+        ],
+        "suffice": null,
+        "warmMs": 408.5,
+        "wrongTokens": 1958
+      },
+      "tool": "index_callers",
+      "winner": "index"
+    },
+    {
+      "grep": {
+        "blindCalls": 6,
+        "blindTokens": 3111,
+        "calls": 6,
+        "score": {
+          "expected": 8,
+          "firstGood": 1,
+          "found": 8,
+          "good": 8,
+          "precision": 0.8888888888888888,
+          "recall": 1.0,
+          "results": 9
+        },
+        "totalTokens": 3111
+      },
+      "id": "ts-callees-definitions",
+      "index": {
+        "announcedFilesTokens": 2516,
+        "announcedPercent": 72,
+        "at10": {
+          "expected": 8,
+          "firstGood": 1,
+          "found": 8,
+          "good": 8,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 8
+        },
+        "at50": {
+          "expected": 8,
+          "firstGood": 1,
+          "found": 8,
+          "good": 8,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 8
+        },
+        "codeWords": null,
+        "coldMs": 91.7,
+        "realCalls": 4,
+        "realTokens": 3160,
+        "responseTokens": 672,
+        "warmMs": 16.0,
+        "wrongTokens": 0
+      },
+      "realPercent": -1,
+      "suffice": null,
+      "tags": [
+        "homonyme"
+      ],
+      "tokensave": {
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 8,
+          "firstGood": 1,
+          "found": 8,
+          "good": 8,
+          "precision": 0.7272727272727273,
+          "recall": 1.0,
+          "results": 11
+        },
+        "at50": {
+          "expected": 8,
+          "firstGood": 1,
+          "found": 8,
+          "good": 8,
+          "precision": 0.1951219512195122,
+          "recall": 1.0,
+          "results": 41
+        },
+        "codeWords": null,
+        "coldMs": 43.4,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": null,
+        "realCalls": 6,
+        "realTokens": 4301,
+        "responseTokens": 936,
+        "results": [
+          "✓ src/lib/editor/definitions.ts:414",
+          "✓ src/lib/editor/definitions.ts:40",
+          "✓ src/lib/editor/definitions.ts:315",
+          "✓ src/lib/editor/definitions.ts:387",
+          "✓ src/lib/editor/definitions.ts:283",
+          "✓ src/lib/editor/definitions.ts:310",
+          "✓ src/lib/editor/definitions.ts:365",
+          "✓ src/lib/editor/definitions.ts:297",
+          "✗ src/lib/editor/links.ts:93",
+          "✗ src/lib/editor/goto.ts:44",
+          "✗ src/lib/editor/links.ts:90"
+        ],
+        "suffice": null,
+        "warmMs": 42.9,
+        "wrongTokens": 204
+      },
+      "tool": "index_callees",
+      "winner": "="
+    },
+    {
+      "grep": {
+        "blindCalls": 3,
+        "blindTokens": 755,
+        "calls": 3,
+        "score": {
+          "expected": 3,
+          "firstGood": 1,
+          "found": 2,
+          "good": 2,
+          "precision": 1.0,
+          "recall": 0.6666666666666666,
+          "results": 2
+        },
+        "totalTokens": 755
+      },
+      "id": "ts-impact-definitions-file",
+      "index": {
+        "announcedFilesTokens": 15032,
+        "announcedPercent": 74,
+        "at10": {
+          "expected": 3,
+          "firstGood": 4,
+          "found": 3,
+          "good": 69,
+          "precision": 0.8846153846153846,
+          "recall": 1.0,
+          "results": 78
+        },
+        "at50": {
+          "expected": 3,
+          "firstGood": 4,
+          "found": 3,
+          "good": 72,
+          "precision": 0.6101694915254238,
+          "recall": 1.0,
+          "results": 118
+        },
+        "codeWords": null,
+        "coldMs": 100.2,
+        "realCalls": 9,
+        "realTokens": 7071,
+        "responseTokens": 3802,
+        "warmMs": 26.0,
+        "wrongTokens": 270
+      },
+      "realPercent": -836,
+      "suffice": null,
+      "tags": [],
+      "tokensave": {
+        "announcedPercent": 69,
+        "at10": {
+          "expected": 3,
+          "firstGood": 1,
+          "found": 3,
+          "good": 3,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 3
+        },
+        "at50": {
+          "expected": 3,
+          "firstGood": 1,
+          "found": 3,
+          "good": 3,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 3
+        },
+        "codeWords": null,
+        "coldMs": 41.4,
+        "duel": "tokensave",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": null,
+        "realCalls": 4,
+        "realTokens": 1349,
+        "responseTokens": 343,
+        "results": [
+          "✓ src/lib/editor/definitions.ts:1",
+          "✓ src/components/editor/EditorView.svelte:9",
+          "✓ src/lib/editor/definitions.test.ts:4"
+        ],
+        "suffice": null,
+        "warmMs": 227.1,
+        "wrongTokens": 0
+      },
+      "tool": "index_impact",
+      "winner": "index"
+    },
+    {
+      "grep": {
+        "blindCalls": 9,
+        "blindTokens": 6619,
+        "calls": 9,
+        "score": {
+          "expected": 1,
+          "firstGood": 79,
+          "found": 1,
+          "good": 1,
+          "precision": 0.01,
+          "recall": 1.0,
+          "results": 100
+        },
+        "totalTokens": 6619
+      },
+      "id": "ts-context-tooltip-en",
+      "index": {
+        "announcedFilesTokens": 2164,
+        "announcedPercent": 71,
+        "at10": {
+          "expected": 1,
+          "firstGood": 3,
+          "found": 1,
+          "good": 1,
+          "precision": 0.1,
+          "recall": 1.0,
+          "results": 10
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "coldMs": 134.8,
+        "realCalls": 1,
+        "realTokens": 584,
+        "responseTokens": 584,
+        "warmMs": 59.3,
+        "wrongTokens": 786
+      },
+      "realPercent": 91,
+      "suffice": null,
+      "tags": [
+        "en"
+      ],
+      "tokensave": {
+        "announcedPercent": 71,
+        "at10": {
+          "expected": 1,
+          "firstGood": 2,
+          "found": 1,
+          "good": 3,
+          "precision": 0.2727272727272727,
+          "recall": 1.0,
+          "results": 11
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 49
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "coldMs": 54.2,
+        "duel": "=",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": 3,
+          "found": 1,
+          "good": 1,
+          "precision": 0.1,
+          "recall": 1.0,
+          "results": 10
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": 2,
+          "found": 1,
+          "good": 3,
+          "precision": 0.2727272727272727,
+          "recall": 1.0,
+          "results": 11
+        },
+        "notPlayed": null,
+        "realCalls": 1,
+        "realTokens": 628,
+        "responseTokens": 628,
+        "results": [
+          "✗ src-tauri/src/menus.rs:34",
+          "✓ src/lib/tip.ts:180",
+          "✗ src-tauri/src/mcp/tools.rs:264",
+          "✗ src-tauri/src/core.rs:2856",
+          "✗ src-tauri/src/lib.rs:276",
+          "✗ src-tauri/src/menus.rs:193",
+          "✗ src-tauri/src/menus.rs:216",
+          "✓ src/lib/tip.ts:292",
+          "✗ src/lib/tip.ts:273",
+          "✓ src/lib/tip.ts:279",
+          "✗ src/lib/tip.ts:137"
+        ],
+        "suffice": null,
+        "warmMs": 242.7,
+        "wrongTokens": 68
+      },
+      "tool": "index_context",
+      "winner": "index"
+    },
+    {
+      "grep": {
+        "blindCalls": 2,
+        "blindTokens": 542,
+        "calls": 2,
+        "score": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 0.5,
+          "recall": 1.0,
+          "results": 2
+        },
+        "totalTokens": 542
+      },
+      "id": "svelte-search-planbanner",
+      "index": {
+        "announcedFilesTokens": 932,
+        "announcedPercent": 68,
+        "at10": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 6,
+          "precision": 0.6,
+          "recall": 1.0,
+          "results": 10
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 13,
+          "precision": 0.34210526315789475,
+          "recall": 1.0,
+          "results": 38
+        },
+        "codeWords": null,
+        "coldMs": 291.7,
+        "realCalls": 2,
+        "realTokens": 534,
+        "responseTokens": 275,
+        "warmMs": 26.3,
+        "wrongTokens": 157
+      },
+      "realPercent": 1,
+      "suffice": null,
+      "tags": [],
+      "tokensave": {
+        "announcedPercent": 69,
+        "at10": {
+          "expected": 1,
+          "firstGood": 8,
+          "found": 1,
+          "good": 2,
+          "precision": 0.2,
+          "recall": 1.0,
+          "results": 10
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": 8,
+          "found": 1,
+          "good": 5,
+          "precision": 0.1,
+          "recall": 1.0,
+          "results": 50
+        },
+        "codeWords": null,
+        "coldMs": 385.2,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": null,
+        "realCalls": 8,
+        "realTokens": 3883,
+        "responseTokens": 310,
+        "results": [
+          "✗ src/components/PlanBanner.test.ts:112",
+          "✗ src/components/PlanBanner.test.ts:1090",
+          "✗ src/components/PlanBanner.test.ts:129",
+          "✗ src/components/PlanBanner.test.ts:819",
+          "✗ src/components/PlanBanner.test.ts:451",
+          "✗ src/components/PlanBanner.test.ts:1000",
+          "✗ src/components/PlanBanner.test.ts:501",
+          "✓ src/components/PlanBanner.svelte:46",
+          "✓ src/components/PlanBanner.svelte:65",
+          "✗ src/components/PlanBanner.test.ts:410"
+        ],
+        "suffice": null,
+        "warmMs": 406.6,
+        "wrongTokens": 212
+      },
+      "tool": "index_search",
+      "winner": "index"
+    },
+    {
+      "grep": {
+        "blindCalls": 4,
+        "blindTokens": 950,
+        "calls": 4,
+        "score": {
+          "expected": 2,
+          "firstGood": 1,
+          "found": 2,
+          "good": 2,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 2
+        },
+        "totalTokens": 950
+      },
+      "id": "svelte-callers-planbanner",
+      "index": {
+        "announcedFilesTokens": 368,
+        "announcedPercent": 58,
+        "at10": {
+          "expected": 2,
+          "firstGood": 1,
+          "found": 2,
+          "good": 2,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 2
+        },
+        "at50": {
+          "expected": 2,
+          "firstGood": 1,
+          "found": 2,
+          "good": 2,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 2
+        },
+        "codeWords": null,
+        "coldMs": 89.8,
+        "realCalls": 3,
+        "realTokens": 787,
+        "responseTokens": 134,
+        "warmMs": 15.7,
+        "wrongTokens": 0
+      },
+      "realPercent": 17,
+      "suffice": null,
+      "tags": [],
+      "tokensave": {
+        "announcedPercent": null,
+        "at10": null,
+        "at50": null,
+        "codeWords": null,
+        "coldMs": null,
+        "duel": "—",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": "un composant Svelte n'est pas un symbole chez lui (ni son usage dans un gabarit)",
+        "realCalls": null,
+        "realTokens": null,
+        "responseTokens": null,
+        "results": null,
+        "suffice": null,
+        "warmMs": null,
+        "wrongTokens": null
+      },
+      "tool": "index_callers",
+      "winner": "index"
+    },
+    {
+      "grep": {
+        "blindCalls": 2,
+        "blindTokens": 544,
+        "calls": 2,
+        "score": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 0.5,
+          "recall": 1.0,
+          "results": 2
+        },
+        "totalTokens": 544
+      },
+      "id": "svelte-context-banner-fr",
+      "index": {
+        "announcedFilesTokens": 4944,
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 19
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 5,
+          "precision": 0.4166666666666667,
+          "recall": 1.0,
+          "results": 12
+        },
+        "coldMs": 108.0,
+        "realCalls": 11,
+        "realTokens": 4849,
+        "responseTokens": 1279,
+        "warmMs": 33.9,
+        "wrongTokens": 1680
+      },
+      "realPercent": -791,
+      "suffice": null,
+      "tags": [
+        "fr"
+      ],
+      "tokensave": {
+        "announcedPercent": 67,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 3
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 18
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 7
+        },
+        "coldMs": 55.0,
+        "duel": "tokensave",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 3
+        },
+        "notPlayed": null,
+        "realCalls": 3,
+        "realTokens": 831,
+        "responseTokens": 287,
+        "results": [
+          "✗ src/app.css:431",
+          "✗ store/app/assets/store.css:14",
+          "✗ website/content/docs/fr/plan.md:5"
+        ],
+        "suffice": null,
+        "warmMs": 52.5,
+        "wrongTokens": 44
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 2,
+        "blindTokens": 528,
+        "calls": 2,
+        "score": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 1
+        },
+        "totalTokens": 528
+      },
+      "id": "vue-search-plugintile",
+      "index": {
+        "announcedFilesTokens": 461,
+        "announcedPercent": 60,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 6
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 6
+        },
+        "codeWords": null,
+        "coldMs": 104.6,
+        "realCalls": 4,
+        "realTokens": 1001,
+        "responseTokens": 167,
+        "warmMs": 26.3,
+        "wrongTokens": 228
+      },
+      "realPercent": -89,
+      "suffice": null,
+      "tags": [],
+      "tokensave": {
+        "announcedPercent": null,
+        "at10": null,
+        "at50": null,
+        "codeWords": null,
+        "coldMs": null,
+        "duel": "—",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": "une réponse attendue n'est que dans des .vue, qu'il ne lit pas",
+        "realCalls": null,
+        "realTokens": null,
+        "responseTokens": null,
+        "results": null,
+        "suffice": null,
+        "warmMs": null,
+        "wrongTokens": null
+      },
+      "tool": "index_search",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 7,
+        "blindTokens": 3245,
+        "calls": 7,
+        "score": {
+          "expected": 7,
+          "firstGood": 1,
+          "found": 7,
+          "good": 7,
+          "precision": 0.875,
+          "recall": 1.0,
+          "results": 8
+        },
+        "totalTokens": 3245
+      },
+      "id": "vue-callers-hueOf",
+      "index": {
+        "announcedFilesTokens": 2204,
+        "announcedPercent": 72,
+        "at10": {
+          "expected": 7,
+          "firstGood": 3,
+          "found": 2,
+          "good": 2,
+          "precision": 0.4,
+          "recall": 0.2857142857142857,
+          "results": 5
+        },
+        "at50": {
+          "expected": 7,
+          "firstGood": 3,
+          "found": 2,
+          "good": 2,
+          "precision": 0.4,
+          "recall": 0.2857142857142857,
+          "results": 5
+        },
+        "codeWords": null,
+        "coldMs": 116.3,
+        "realCalls": 6,
+        "realTokens": 2444,
+        "responseTokens": 594,
+        "warmMs": 40.9,
+        "wrongTokens": 158
+      },
+      "realPercent": 24,
+      "suffice": null,
+      "tags": [],
+      "tokensave": {
+        "announcedPercent": null,
+        "at10": null,
+        "at50": null,
+        "codeWords": null,
+        "coldMs": null,
+        "duel": "—",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": "une réponse attendue n'est que dans des .vue, qu'il ne lit pas",
+        "realCalls": null,
+        "realTokens": null,
+        "responseTokens": null,
+        "results": null,
+        "suffice": null,
+        "warmMs": null,
+        "wrongTokens": null
+      },
+      "tool": "index_callers",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 6,
+        "blindTokens": 2844,
+        "calls": 6,
+        "score": {
+          "expected": 2,
+          "firstGood": 5,
+          "found": 2,
+          "good": 5,
+          "precision": 0.23809523809523808,
+          "recall": 1.0,
+          "results": 21
+        },
+        "totalTokens": 2844
+      },
+      "id": "vue-context-tile-en",
+      "index": {
+        "announcedFilesTokens": 2904,
+        "announcedPercent": 72,
+        "at10": {
+          "expected": 2,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "at50": {
+          "expected": 2,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 5
+        },
+        "codeWords": {
+          "expected": 2,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "coldMs": 270.6,
+        "realCalls": 13,
+        "realTokens": 5357,
+        "responseTokens": 769,
+        "warmMs": 61.6,
+        "wrongTokens": 996
+      },
+      "realPercent": -88,
+      "suffice": null,
+      "tags": [
+        "en"
+      ],
+      "tokensave": {
+        "announcedPercent": null,
+        "at10": null,
+        "at50": null,
+        "codeWords": null,
+        "coldMs": null,
+        "duel": "—",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": "une réponse attendue n'est que dans des .vue, qu'il ne lit pas",
+        "realCalls": null,
+        "realTokens": null,
+        "responseTokens": null,
+        "results": null,
+        "suffice": null,
+        "warmMs": null,
+        "wrongTokens": null
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 2,
+        "blindTokens": 2562,
+        "calls": 2,
+        "score": {
+          "expected": 1,
+          "firstGood": 2,
+          "found": 1,
+          "good": 1,
+          "precision": 0.04,
+          "recall": 1.0,
+          "results": 25
+        },
+        "totalTokens": 2562
+      },
+      "id": "md-search-socle",
+      "index": {
+        "announcedFilesTokens": 1016,
+        "announcedPercent": 69,
+        "at10": {
+          "expected": 1,
+          "firstGood": 8,
+          "found": 1,
+          "good": 1,
+          "precision": 0.1,
+          "recall": 1.0,
+          "results": 10
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 50
+        },
+        "codeWords": null,
+        "coldMs": 250.1,
+        "realCalls": 9,
+        "realTokens": 3881,
+        "responseTokens": 296,
+        "warmMs": 28.3,
+        "wrongTokens": 421
+      },
+      "realPercent": -51,
+      "suffice": null,
+      "tags": [
+        "fr"
+      ],
+      "tokensave": {
+        "announcedPercent": 68,
+        "at10": {
+          "expected": 1,
+          "firstGood": 10,
+          "found": 1,
+          "good": 1,
+          "precision": 0.1,
+          "recall": 1.0,
+          "results": 10
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 50
+        },
+        "codeWords": null,
+        "coldMs": 46.4,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": null,
+        "realCalls": 10,
+        "realTokens": 4451,
+        "responseTokens": 289,
+        "results": [
+          "✗ src/lib/localcmd.test.ts:49",
+          "✗ src-tauri/src/docsextract.rs:155",
+          "✗ src/lib/localcmd.ts:10",
+          "✗ src/lib/i18n/index.ts:9",
+          "✗ src/components/branches/BranchPicker.svelte:222",
+          "✗ src-tauri/src/workflowfiles.rs:407",
+          "✗ src-tauri/src/telemetry.rs:190",
+          "✗ src/lib/localcmd.ts:1",
+          "✗ src-tauri/src/agent.rs:30",
+          "✓ docs/FACTORY.md:56"
+        ],
+        "suffice": null,
+        "warmMs": 43.7,
+        "wrongTokens": 206
+      },
+      "tool": "index_search",
+      "winner": "="
+    },
+    {
+      "grep": {
+        "blindCalls": 2,
+        "blindTokens": 1670,
+        "calls": 2,
+        "score": {
+          "expected": 1,
+          "firstGood": 2,
+          "found": 1,
+          "good": 3,
+          "precision": 0.2,
+          "recall": 1.0,
+          "results": 15
+        },
+        "totalTokens": 1670
+      },
+      "id": "md-context-allumer-fr",
+      "index": {
+        "announcedFilesTokens": 3912,
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 50
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "coldMs": 132.3,
+        "realCalls": 11,
+        "realTokens": 5742,
+        "responseTokens": 1021,
+        "warmMs": 60.2,
+        "wrongTokens": 1409
+      },
+      "realPercent": -243,
+      "suffice": null,
+      "tags": [
+        "fr"
+      ],
+      "tokensave": {
+        "announcedPercent": 69,
+        "at10": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 2,
+          "precision": 0.3333333333333333,
+          "recall": 1.0,
+          "results": 6
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 34
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "coldMs": 51.4,
+        "duel": "tokensave",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "notPlayed": null,
+        "realCalls": 1,
+        "realTokens": 406,
+        "responseTokens": 406,
+        "results": [
+          "✓ website/content/docs/fr/code-index.md:28",
+          "✗ src-tauri/src/pty.rs:1438",
+          "✓ website/content/docs/fr/code-index.md:18",
+          "✗ src-tauri/src/pty.rs:1444",
+          "✗ src-tauri/src/pty.rs:1473",
+          "✗ src-tauri/src/pty.rs:1463"
+        ],
+        "suffice": null,
+        "warmMs": 49.9,
+        "wrongTokens": 48
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 2,
+        "blindTokens": 1524,
+        "calls": 2,
+        "score": {
+          "expected": 1,
+          "firstGood": 2,
+          "found": 1,
+          "good": 3,
+          "precision": 0.2,
+          "recall": 1.0,
+          "results": 15
+        },
+        "totalTokens": 1524
+      },
+      "id": "md-context-turnon-en",
+      "index": {
+        "announcedFilesTokens": 5032,
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 52
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "coldMs": 110.7,
+        "realCalls": 9,
+        "realTokens": 5053,
+        "responseTokens": 1302,
+        "warmMs": 37.7,
+        "wrongTokens": 1727
+      },
+      "realPercent": -231,
+      "suffice": null,
+      "tags": [
+        "en"
+      ],
+      "tokensave": {
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 51
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "coldMs": 57.1,
+        "duel": "tokensave",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "notPlayed": null,
+        "realCalls": 9,
+        "realTokens": 4766,
+        "responseTokens": 1024,
+        "results": [
+          "✗ src-tauri/src/vectors/index.rs:158",
+          "✗ src-tauri/src/vectors/index.rs:262",
+          "✗ src-tauri/src/vectors/index.rs:106",
+          "✗ src-tauri/src/sharing_tests.rs:60",
+          "✗ src-tauri/src/vectors/chunk.rs:46",
+          "✗ src-tauri/src/vectors/chunk.rs:17",
+          "✗ src-tauri/src/vectors/chunk.rs:37",
+          "✗ src-tauri/src/vectors/index.rs:83",
+          "✗ src-tauri/src/vectors/index.rs:79",
+          "✗ src-tauri/src/vectors/index.rs:33",
+          "✗ src-tauri/src/vectors/index.rs:235",
+          "✗ src-tauri/src/vectors/tests.rs:125"
+        ],
+        "suffice": null,
+        "warmMs": 234.2,
+        "wrongTokens": 83
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 11,
+        "blindTokens": 30022,
+        "calls": 9,
+        "score": {
+          "expected": 1,
+          "firstGood": 33,
+          "found": 1,
+          "good": 2,
+          "precision": 0.044444444444444446,
+          "recall": 1.0,
+          "results": 45
+        },
+        "totalTokens": 4123
+      },
+      "id": "tache-modeles-harness",
+      "index": {
+        "announcedFilesTokens": 3456,
+        "announcedPercent": 72,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 51
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "coldMs": 138.6,
+        "realCalls": 17,
+        "realTokens": 7801,
+        "responseTokens": 907,
+        "warmMs": 63.8,
+        "wrongTokens": 1299
+      },
+      "realPercent": -89,
+      "suffice": {
+        "blindCalls": 6,
+        "blindTokens": 7229,
+        "grepCalls": 6,
+        "grepTokens": 2097,
+        "index": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 6,
+          "moreGrep": 1,
+          "moreRead": 5,
+          "moreTokens": 2097,
+          "needed": 104
+        },
+        "old": {},
+        "ranges": 5
+      },
+      "tags": [
+        "tâche"
+      ],
+      "tokensave": {
+        "announcedPercent": 71,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 17
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "coldMs": 435.5,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 7
+        },
+        "notPlayed": null,
+        "realCalls": 17,
+        "realTokens": 7871,
+        "responseTokens": 543,
+        "results": [
+          "✗ src-tauri/src/model.rs:2027",
+          "✗ store/server/utils/listing.ts:78",
+          "✗ src/lib/sidebar.ts:79",
+          "✗ src-tauri/src/core.rs:3247",
+          "✗ src-tauri/src/core.rs:3232",
+          "✗ src-tauri/src/engine/claude/mod.rs:1176",
+          "✗ src-tauri/src/engine/claude/mod.rs:1092",
+          "✗ src-tauri/src/model.rs:2400",
+          "✗ src-tauri/src/model.rs:3439",
+          "✗ src-tauri/src/sharing_tests.rs:60",
+          "✗ store/server/utils/listing.ts:101"
+        ],
+        "suffice": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 6,
+          "moreGrep": 1,
+          "moreRead": 5,
+          "moreTokens": 2097,
+          "needed": 104
+        },
+        "warmMs": 54.1,
+        "wrongTokens": 106
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 10,
+        "blindTokens": 24298,
+        "calls": 6,
+        "score": {
+          "expected": 1,
+          "firstGood": 16,
+          "found": 1,
+          "good": 1,
+          "precision": 0.041666666666666664,
+          "recall": 1.0,
+          "results": 24
+        },
+        "totalTokens": 3429
+      },
+      "id": "tache-compte-limite",
+      "index": {
+        "announcedFilesTokens": 5992,
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 51
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 7
+        },
+        "coldMs": 142.4,
+        "realCalls": 16,
+        "realTokens": 8559,
+        "responseTokens": 1542,
+        "warmMs": 69.9,
+        "wrongTokens": 2031
+      },
+      "realPercent": -149,
+      "suffice": {
+        "blindCalls": 6,
+        "blindTokens": 12458,
+        "grepCalls": 5,
+        "grepTokens": 1789,
+        "index": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 5,
+          "moreGrep": 1,
+          "moreRead": 4,
+          "moreTokens": 1789,
+          "needed": 108
+        },
+        "old": {},
+        "ranges": 4
+      },
+      "tags": [
+        "tâche",
+        "réel"
+      ],
+      "tokensave": {
+        "announcedPercent": 69,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 5
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 4
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 6
+        },
+        "coldMs": 89.3,
+        "duel": "tokensave",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "notPlayed": null,
+        "realCalls": 9,
+        "realTokens": 4608,
+        "responseTokens": 395,
+        "results": [
+          "✗ store/server/utils/limits.ts:74",
+          "✗ src/components/board/TicketCard.svelte:159",
+          "✗ src-tauri/src/workflow_track.rs:86",
+          "✗ src/components/board/TicketCard.svelte:275",
+          "✗ src/lib/state.svelte.ts:1029"
+        ],
+        "suffice": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 5,
+          "moreGrep": 1,
+          "moreRead": 4,
+          "moreTokens": 1789,
+          "needed": 108
+        },
+        "warmMs": 64.4,
+        "wrongTokens": 53
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 11,
+        "blindTokens": 27612,
+        "calls": 4,
+        "score": {
+          "expected": 2,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 53
+        },
+        "totalTokens": 3137
+      },
+      "id": "tache-mcp-codex",
+      "index": {
+        "announcedFilesTokens": 1808,
+        "announcedPercent": 70,
+        "at10": {
+          "expected": 2,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 3
+        },
+        "at50": {
+          "expected": 2,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 3
+        },
+        "codeWords": {
+          "expected": 2,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "coldMs": 110.8,
+        "realCalls": 5,
+        "realTokens": 3632,
+        "responseTokens": 495,
+        "warmMs": 36.5,
+        "wrongTokens": 402
+      },
+      "realPercent": -15,
+      "suffice": {
+        "blindCalls": 7,
+        "blindTokens": 8193,
+        "grepCalls": 6,
+        "grepTokens": 2335,
+        "index": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 6,
+          "moreGrep": 1,
+          "moreRead": 5,
+          "moreTokens": 2335,
+          "needed": 61
+        },
+        "old": {},
+        "ranges": 5
+      },
+      "tags": [
+        "tâche"
+      ],
+      "tokensave": {
+        "announcedPercent": 68,
+        "at10": {
+          "expected": 2,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 4
+        },
+        "at50": {
+          "expected": 2,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 4
+        },
+        "codeWords": {
+          "expected": 2,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "coldMs": 211.3,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 2,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "keywords": {
+          "expected": 2,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 4
+        },
+        "notPlayed": null,
+        "realCalls": 6,
+        "realTokens": 3812,
+        "responseTokens": 363,
+        "results": [
+          "✗ src/lib/mcp.svelte.ts:68",
+          "✗ src-tauri/src/mcp/http.rs:242",
+          "✗ src-tauri/src/mcp/http.rs:59",
+          "✗ src-tauri/src/mcp/tools.rs:198"
+        ],
+        "suffice": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 6,
+          "moreGrep": 1,
+          "moreRead": 5,
+          "moreTokens": 2335,
+          "needed": 61
+        },
+        "warmMs": 409.6,
+        "wrongTokens": 40
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 9,
+        "blindTokens": 16104,
+        "calls": 8,
+        "score": {
+          "expected": 1,
+          "firstGood": 30,
+          "found": 1,
+          "good": 1,
+          "precision": 0.008130081300813009,
+          "recall": 1.0,
+          "results": 123
+        },
+        "totalTokens": 7712
+      },
+      "id": "tache-branche-premier-message",
+      "index": {
+        "announcedFilesTokens": 5812,
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 52
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "coldMs": 155.7,
+        "realCalls": 16,
+        "realTokens": 12676,
+        "responseTokens": 1496,
+        "warmMs": 61.2,
+        "wrongTokens": 1931
+      },
+      "realPercent": -64,
+      "suffice": {
+        "blindCalls": 4,
+        "blindTokens": 11281,
+        "grepCalls": 4,
+        "grepTokens": 5757,
+        "index": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 4,
+          "moreGrep": 1,
+          "moreRead": 3,
+          "moreTokens": 5757,
+          "needed": 181
+        },
+        "old": {},
+        "ranges": 3
+      },
+      "tags": [
+        "tâche"
+      ],
+      "tokensave": {
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 8
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 35
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "coldMs": 246.7,
+        "duel": "tokensave",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "notPlayed": null,
+        "realCalls": 13,
+        "realTokens": 11057,
+        "responseTokens": 1292,
+        "results": [
+          "✗ src/components/branches/BranchPicker.svelte:154",
+          "✗ src/components/branches/BranchPicker.test.ts:680",
+          "✗ src/components/branches/BranchPicker.test.ts:38",
+          "✗ src/components/branches/BranchPicker.svelte:191",
+          "✗ src/components/branches/BranchPicker.svelte:171",
+          "✗ src/components/branches/BranchPicker.svelte:398",
+          "✗ src/lib/editor/goto.ts:129",
+          "✗ src/lib/types.ts:1803"
+        ],
+        "suffice": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 4,
+          "moreGrep": 1,
+          "moreRead": 3,
+          "moreTokens": 5757,
+          "needed": 181
+        },
+        "warmMs": 393.8,
+        "wrongTokens": 88
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 10,
+        "blindTokens": 48380,
+        "calls": 6,
+        "score": {
+          "expected": 1,
+          "firstGood": 82,
+          "found": 1,
+          "good": 1,
+          "precision": 0.005917159763313609,
+          "recall": 1.0,
+          "results": 169
+        },
+        "totalTokens": 6793
+      },
+      "id": "tache-reprise-limite",
+      "index": {
+        "announcedFilesTokens": 5264,
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 43
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "coldMs": 138.0,
+        "realCalls": 16,
+        "realTokens": 11271,
+        "responseTokens": 1359,
+        "warmMs": 60.9,
+        "wrongTokens": 1677
+      },
+      "realPercent": -65,
+      "suffice": {
+        "blindCalls": 4,
+        "blindTokens": 5127,
+        "grepCalls": 4,
+        "grepTokens": 4335,
+        "index": {
+          "held": 12,
+          "moreBody": 0,
+          "moreCalls": 2,
+          "moreGrep": 0,
+          "moreRead": 2,
+          "moreTokens": 371,
+          "needed": 48
+        },
+        "old": {},
+        "ranges": 3
+      },
+      "tags": [
+        "tâche",
+        "réel"
+      ],
+      "tokensave": {
+        "announcedPercent": 17,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 4
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 20
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "coldMs": 50.8,
+        "duel": "tokensave",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "notPlayed": null,
+        "realCalls": 8,
+        "realTokens": 8207,
+        "responseTokens": 904,
+        "results": [
+          "✗ store/server/utils/limits.ts:37",
+          "✗ store/server/utils/limits.ts:56",
+          "✗ store/server/utils/limits.ts:30",
+          "✗ store/server/utils/limits.ts:42"
+        ],
+        "suffice": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 4,
+          "moreGrep": 1,
+          "moreRead": 3,
+          "moreTokens": 4335,
+          "needed": 48
+        },
+        "warmMs": 232.0,
+        "wrongTokens": 45
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 9,
+        "blindTokens": 28043,
+        "calls": 5,
+        "score": {
+          "expected": 1,
+          "firstGood": 55,
+          "found": 1,
+          "good": 9,
+          "precision": 0.041666666666666664,
+          "recall": 1.0,
+          "results": 216
+        },
+        "totalTokens": 7166
+      },
+      "id": "tache-zoom-borne",
+      "index": {
+        "announcedFilesTokens": 2848,
+        "announcedPercent": 72,
+        "at10": {
+          "expected": 1,
+          "firstGood": 2,
+          "found": 1,
+          "good": 2,
+          "precision": 0.2,
+          "recall": 1.0,
+          "results": 10
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": 2,
+          "found": 1,
+          "good": 2,
+          "precision": 0.18181818181818182,
+          "recall": 1.0,
+          "results": 11
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": 2,
+          "found": 1,
+          "good": 1,
+          "precision": 0.09090909090909091,
+          "recall": 1.0,
+          "results": 11
+        },
+        "coldMs": 126.2,
+        "realCalls": 1,
+        "realTokens": 755,
+        "responseTokens": 755,
+        "warmMs": 26.3,
+        "wrongTokens": 967
+      },
+      "realPercent": 89,
+      "suffice": {
+        "blindCalls": 5,
+        "blindTokens": 7810,
+        "grepCalls": 5,
+        "grepTokens": 6196,
+        "index": {
+          "held": 17,
+          "moreBody": 0,
+          "moreCalls": 3,
+          "moreGrep": 0,
+          "moreRead": 3,
+          "moreTokens": 713,
+          "needed": 73
+        },
+        "old": {},
+        "ranges": 4
+      },
+      "tags": [
+        "tâche",
+        "réel"
+      ],
+      "tokensave": {
+        "announcedPercent": 72,
+        "at10": {
+          "expected": 1,
+          "firstGood": 2,
+          "found": 1,
+          "good": 2,
+          "precision": 0.2222222222222222,
+          "recall": 1.0,
+          "results": 9
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": 2,
+          "found": 1,
+          "good": 2,
+          "precision": 0.18181818181818182,
+          "recall": 1.0,
+          "results": 11
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": 2,
+          "found": 1,
+          "good": 1,
+          "precision": 0.1,
+          "recall": 1.0,
+          "results": 10
+        },
+        "coldMs": 55.9,
+        "duel": "=",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": 2,
+          "found": 1,
+          "good": 1,
+          "precision": 0.08333333333333333,
+          "recall": 1.0,
+          "results": 12
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 0.09090909090909091,
+          "recall": 1.0,
+          "results": 11
+        },
+        "notPlayed": null,
+        "realCalls": 1,
+        "realTokens": 793,
+        "responseTokens": 793,
+        "results": [
+          "✗ src/lib/display.svelte.ts:33",
+          "✓ src-tauri/src/model.rs:244",
+          "✗ src-tauri/src/job.rs:414",
+          "✗ src-tauri/src/attachfiles.rs:100",
+          "✗ src-tauri/src/job.rs:61",
+          "✗ src-tauri/src/lib.rs:366",
+          "✗ src-tauri/src/model.rs:3132",
+          "✓ src/lib/display.svelte.ts:27",
+          "✗ src/lib/display.svelte.ts:141"
+        ],
+        "suffice": {
+          "held": 17,
+          "moreBody": 0,
+          "moreCalls": 3,
+          "moreGrep": 0,
+          "moreRead": 3,
+          "moreTokens": 713,
+          "needed": 73
+        },
+        "warmMs": 234.2,
+        "wrongTokens": 57
+      },
+      "tool": "index_context",
+      "winner": "index"
+    },
+    {
+      "grep": {
+        "blindCalls": 20,
+        "blindTokens": 12757,
+        "calls": 10,
+        "score": {
+          "expected": 1,
+          "firstGood": 9,
+          "found": 1,
+          "good": 1,
+          "precision": 0.08333333333333333,
+          "recall": 1.0,
+          "results": 12
+        },
+        "totalTokens": 4367
+      },
+      "id": "tache-xterm-couleurs",
+      "index": {
+        "announcedFilesTokens": 2032,
+        "announcedPercent": 71,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 6
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 6
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 0.1,
+          "recall": 1.0,
+          "results": 10
+        },
+        "coldMs": 164.2,
+        "realCalls": 14,
+        "realTokens": 6508,
+        "responseTokens": 551,
+        "warmMs": 52.2,
+        "wrongTokens": 587
+      },
+      "realPercent": -49,
+      "suffice": {
+        "blindCalls": 4,
+        "blindTokens": 1386,
+        "grepCalls": 3,
+        "grepTokens": 666,
+        "index": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 2,
+          "moreGrep": 0,
+          "moreRead": 2,
+          "moreTokens": 394,
+          "needed": 38
+        },
+        "old": {},
+        "ranges": 2
+      },
+      "tags": [
+        "tâche"
+      ],
+      "tokensave": {
+        "announcedPercent": 71,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 14
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 0.1,
+          "recall": 1.0,
+          "results": 10
+        },
+        "coldMs": 64.2,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "notPlayed": null,
+        "realCalls": 16,
+        "realTokens": 7666,
+        "responseTokens": 521,
+        "results": [
+          "✗ src/lib/terminals.ts:27",
+          "✗ src-tauri/src/commands.rs:2443",
+          "✗ src/lib/terminals.ts:42",
+          "✗ src/lib/terminals.ts:600",
+          "✗ src/lib/terminals.ts:342",
+          "✗ src/lib/terminals.ts:501",
+          "✗ src/lib/terminals.ts:374",
+          "✗ src/lib/terminals.ts:636",
+          "✗ src/lib/terminals.ts:201",
+          "✗ src/lib/terminals.ts:192",
+          "✗ src/lib/terminals.ts:285"
+        ],
+        "suffice": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 2,
+          "moreGrep": 0,
+          "moreRead": 2,
+          "moreTokens": 394,
+          "needed": 38
+        },
+        "warmMs": 43.3,
+        "wrongTokens": 75
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 9,
+        "blindTokens": 27015,
+        "calls": 5,
+        "score": {
+          "expected": 1,
+          "firstGood": 4,
+          "found": 1,
+          "good": 2,
+          "precision": 0.4,
+          "recall": 1.0,
+          "results": 5
+        },
+        "totalTokens": 1227
+      },
+      "id": "tache-lance-processus",
+      "index": {
+        "announcedFilesTokens": 3924,
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 50
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": 9,
+          "found": 1,
+          "good": 1,
+          "precision": 0.09090909090909091,
+          "recall": 1.0,
+          "results": 11
+        },
+        "coldMs": 151.7,
+        "realCalls": 13,
+        "realTokens": 4768,
+        "responseTokens": 1024,
+        "warmMs": 61.5,
+        "wrongTokens": 1331
+      },
+      "realPercent": -288,
+      "suffice": {
+        "blindCalls": 7,
+        "blindTokens": 11765,
+        "grepCalls": 6,
+        "grepTokens": 1292,
+        "index": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 6,
+          "moreGrep": 2,
+          "moreRead": 4,
+          "moreTokens": 1292,
+          "needed": 116
+        },
+        "old": {},
+        "ranges": 4
+      },
+      "tags": [
+        "tâche",
+        "réel"
+      ],
+      "tokensave": {
+        "announcedPercent": 71,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 5
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": 7,
+          "found": 1,
+          "good": 1,
+          "precision": 0.09090909090909091,
+          "recall": 1.0,
+          "results": 11
+        },
+        "coldMs": 73.3,
+        "duel": "tokensave",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": 9,
+          "found": 1,
+          "good": 1,
+          "precision": 0.08333333333333333,
+          "recall": 1.0,
+          "results": 12
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": 5,
+          "found": 1,
+          "good": 1,
+          "precision": 0.08333333333333333,
+          "recall": 1.0,
+          "results": 12
+        },
+        "notPlayed": null,
+        "realCalls": 8,
+        "realTokens": 2652,
+        "responseTokens": 538,
+        "results": [
+          "✗ src-tauri/src/testlaunch.rs:449",
+          "✗ website/content/docs/fr/managing-agents.md:165",
+          "✗ docs/superpowers/plans/2026-10-13-fiabilite-ci.md:153",
+          "✗ src-tauri/src/testlaunch.rs:468",
+          "✗ src-tauri/src/testlaunch.rs:893"
+        ],
+        "suffice": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 6,
+          "moreGrep": 2,
+          "moreRead": 4,
+          "moreTokens": 1292,
+          "needed": 116
+        },
+        "warmMs": 54.5,
+        "wrongTokens": 93
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 12,
+        "blindTokens": 18540,
+        "calls": 2,
+        "score": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 5,
+          "precision": 0.078125,
+          "recall": 1.0,
+          "results": 64
+        },
+        "totalTokens": 1614
+      },
+      "id": "tache-taille-terminal",
+      "index": {
+        "announcedFilesTokens": 4920,
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 50
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 6
+        },
+        "coldMs": 165.5,
+        "realCalls": 11,
+        "realTokens": 5954,
+        "responseTokens": 1273,
+        "warmMs": 58.3,
+        "wrongTokens": 2017
+      },
+      "realPercent": -268,
+      "suffice": {
+        "blindCalls": 5,
+        "blindTokens": 4097,
+        "grepCalls": 4,
+        "grepTokens": 1966,
+        "index": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 4,
+          "moreGrep": 1,
+          "moreRead": 3,
+          "moreTokens": 1966,
+          "needed": 86
+        },
+        "old": {},
+        "ranges": 3
+      },
+      "tags": [
+        "tâche",
+        "réel"
+      ],
+      "tokensave": {
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 50
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 9
+        },
+        "coldMs": 258.8,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 9
+        },
+        "notPlayed": null,
+        "realCalls": 11,
+        "realTokens": 6383,
+        "responseTokens": 1618,
+        "results": [
+          "✗ src-tauri/src/tui.rs:1145",
+          "✗ src-tauri/src/worktrees.rs:577",
+          "✗ src-tauri/src/engine/cursor/mod.rs:456",
+          "✗ src-tauri/src/attach.rs:92",
+          "✗ src-tauri/src/core.rs:167",
+          "✗ src-tauri/src/core.rs:2298",
+          "✗ src-tauri/src/tui.rs:866",
+          "✗ src-tauri/src/tui.rs:847",
+          "✗ src-tauri/src/tui.rs:626",
+          "✗ src-tauri/src/tui.rs:301",
+          "✗ src-tauri/src/tui.rs:257",
+          "✗ src-tauri/src/tui.rs:1203"
+        ],
+        "suffice": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 4,
+          "moreGrep": 1,
+          "moreRead": 3,
+          "moreTokens": 1966,
+          "needed": 86
+        },
+        "warmMs": 226.4,
+        "wrongTokens": 92
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 21,
+        "blindTokens": 20011,
+        "calls": 10,
+        "score": {
+          "expected": 1,
+          "firstGood": 85,
+          "found": 1,
+          "good": 1,
+          "precision": 0.008,
+          "recall": 1.0,
+          "results": 125
+        },
+        "totalTokens": 6418
+      },
+      "id": "tache-ticket-termine",
+      "index": {
+        "announcedFilesTokens": 5984,
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 51
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "coldMs": 145.4,
+        "realCalls": 20,
+        "realTokens": 11010,
+        "responseTokens": 1539,
+        "warmMs": 62.2,
+        "wrongTokens": 1809
+      },
+      "realPercent": -71,
+      "suffice": {
+        "blindCalls": 5,
+        "blindTokens": 4753,
+        "grepCalls": 4,
+        "grepTokens": 3543,
+        "index": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 4,
+          "moreGrep": 1,
+          "moreRead": 3,
+          "moreTokens": 3543,
+          "needed": 61
+        },
+        "old": {},
+        "ranges": 3
+      },
+      "tags": [
+        "tâche",
+        "réel"
+      ],
+      "tokensave": {
+        "announcedPercent": 67,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 3
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 7
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "coldMs": 74.2,
+        "duel": "tokensave",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 5
+        },
+        "notPlayed": null,
+        "realCalls": 11,
+        "realTokens": 6714,
+        "responseTokens": 296,
+        "results": [
+          "✗ src/app.css:431",
+          "✗ store/app/assets/store.css:14",
+          "✗ src-tauri/src/updates.rs:393"
+        ],
+        "suffice": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 4,
+          "moreGrep": 1,
+          "moreRead": 3,
+          "moreTokens": 3543,
+          "needed": 61
+        },
+        "warmMs": 193.5,
+        "wrongTokens": 38
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 12,
+        "blindTokens": 7329,
+        "calls": 9,
+        "score": {
+          "expected": 1,
+          "firstGood": 25,
+          "found": 1,
+          "good": 1,
+          "precision": 0.011764705882352941,
+          "recall": 1.0,
+          "results": 85
+        },
+        "totalTokens": 5904
+      },
+      "id": "tache-langue-defaut",
+      "index": {
+        "announcedFilesTokens": 2492,
+        "announcedPercent": 72,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 8
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "coldMs": 147.5,
+        "realCalls": 15,
+        "realTokens": 8566,
+        "responseTokens": 666,
+        "warmMs": 57.1,
+        "wrongTokens": 833
+      },
+      "realPercent": -45,
+      "suffice": {
+        "blindCalls": 4,
+        "blindTokens": 2359,
+        "grepCalls": 3,
+        "grepTokens": 2281,
+        "index": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 3,
+          "moreGrep": 1,
+          "moreRead": 2,
+          "moreTokens": 2281,
+          "needed": 29
+        },
+        "old": {},
+        "ranges": 2
+      },
+      "tags": [
+        "tâche"
+      ],
+      "tokensave": {
+        "announcedPercent": 71,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 8
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 9
+        },
+        "coldMs": 69.2,
+        "duel": "tokensave",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 9
+        },
+        "notPlayed": null,
+        "realCalls": 14,
+        "realTokens": 8380,
+        "responseTokens": 711,
+        "results": [
+          "✗ src/lib/editor/languages.ts:70",
+          "✗ src/lib/appearance.ts:29",
+          "✗ src-tauri/src/telemetry.rs:197",
+          "✗ src-tauri/src/engine/registry.rs:432",
+          "✗ src/lib/appearance.ts:34",
+          "✗ src/lib/appearance.ts:45",
+          "✗ src/lib/editor/languages.ts:63",
+          "✗ src/lib/i18n/index.ts:63"
+        ],
+        "suffice": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 3,
+          "moreGrep": 1,
+          "moreRead": 2,
+          "moreTokens": 2281,
+          "needed": 29
+        },
+        "warmMs": 51.9,
+        "wrongTokens": 61
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 5,
+        "blindTokens": 12992,
+        "calls": 12,
+        "score": {
+          "expected": 1,
+          "firstGood": 22,
+          "found": 1,
+          "good": 1,
+          "precision": 0.01639344262295082,
+          "recall": 1.0,
+          "results": 61
+        },
+        "totalTokens": 6028
+      },
+      "id": "tache-permission-plugin",
+      "index": {
+        "announcedFilesTokens": 2876,
+        "announcedPercent": 72,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 18
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "coldMs": 150.6,
+        "realCalls": 20,
+        "realTokens": 9112,
+        "responseTokens": 762,
+        "warmMs": 59.9,
+        "wrongTokens": 923
+      },
+      "realPercent": -51,
+      "suffice": {
+        "blindCalls": 4,
+        "blindTokens": 6391,
+        "grepCalls": 5,
+        "grepTokens": 2135,
+        "index": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 5,
+          "moreGrep": 2,
+          "moreRead": 3,
+          "moreTokens": 2135,
+          "needed": 50
+        },
+        "old": {},
+        "ranges": 3
+      },
+      "tags": [
+        "tâche"
+      ],
+      "tokensave": {
+        "announcedPercent": 72,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 13
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "coldMs": 79.6,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 7
+        },
+        "notPlayed": null,
+        "realCalls": 20,
+        "realTokens": 10086,
+        "responseTokens": 997,
+        "results": [
+          "✗ src-tauri/src/tui_tests.rs:1686",
+          "✗ src/lib/plugins.ts:245",
+          "✗ website/content/docs/fr/plugins/installer.md:54",
+          "✗ src-tauri/src/core.rs:2298",
+          "✗ src-tauri/src/discussion.rs:146",
+          "✗ src-tauri/src/tui.rs:1145",
+          "✗ src-tauri/src/tui.rs:2173",
+          "✗ src-tauri/src/tui_tests.rs:15",
+          "✗ src-tauri/src/tui_tests.rs:1685",
+          "✗ src/components/plugins/PluginRows.svelte:21",
+          "✗ src/components/plugins/PluginRows.svelte:16"
+        ],
+        "suffice": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 5,
+          "moreGrep": 2,
+          "moreRead": 3,
+          "moreTokens": 2135,
+          "needed": 50
+        },
+        "warmMs": 53.9,
+        "wrongTokens": 103
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 22,
+        "blindTokens": 14668,
+        "calls": 12,
+        "score": {
+          "expected": 1,
+          "firstGood": 23,
+          "found": 1,
+          "good": 2,
+          "precision": 0.08,
+          "recall": 1.0,
+          "results": 25
+        },
+        "totalTokens": 4905
+      },
+      "id": "tache-store-controles",
+      "index": {
+        "announcedFilesTokens": 3824,
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 52
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 0.08333333333333333,
+          "recall": 1.0,
+          "results": 12
+        },
+        "coldMs": 132.5,
+        "realCalls": 22,
+        "realTokens": 9281,
+        "responseTokens": 999,
+        "warmMs": 56.2,
+        "wrongTokens": 1411
+      },
+      "realPercent": -89,
+      "suffice": {
+        "blindCalls": 6,
+        "blindTokens": 2597,
+        "grepCalls": 5,
+        "grepTokens": 1636,
+        "index": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 5,
+          "moreGrep": 2,
+          "moreRead": 3,
+          "moreTokens": 1636,
+          "needed": 111
+        },
+        "old": {},
+        "ranges": 3
+      },
+      "tags": [
+        "tâche"
+      ],
+      "tokensave": {
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 48
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 0.08333333333333333,
+          "recall": 1.0,
+          "results": 12
+        },
+        "coldMs": 234.2,
+        "duel": "tokensave",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 5
+        },
+        "notPlayed": null,
+        "realCalls": 18,
+        "realTokens": 8772,
+        "responseTokens": 1196,
+        "results": [
+          "✗ store/server/utils/mail.ts:81",
+          "✗ store/server/utils/listing.ts:321",
+          "✗ scripts/windows-signing.mjs:219",
+          "✗ store/server/utils/author.ts:36",
+          "✗ store/server/utils/listing.ts:324",
+          "✗ store/server/utils/mail.ts:78",
+          "✗ store/server/utils/mail.ts:77",
+          "✗ store/server/utils/mail.ts:7",
+          "✗ store/server/utils/mail.ts:62",
+          "✗ store/server/utils/submissions.ts:468"
+        ],
+        "suffice": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 5,
+          "moreGrep": 2,
+          "moreRead": 3,
+          "moreTokens": 1636,
+          "needed": 111
+        },
+        "warmMs": 387.8,
+        "wrongTokens": 70
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 11,
+        "blindTokens": 10237,
+        "calls": 5,
+        "score": {
+          "expected": 1,
+          "firstGood": 11,
+          "found": 1,
+          "good": 2,
+          "precision": 0.05263157894736842,
+          "recall": 1.0,
+          "results": 38
+        },
+        "totalTokens": 3442
+      },
+      "id": "tache-sauvegarde-etat",
+      "index": {
+        "announcedFilesTokens": 4152,
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 17
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "coldMs": 122.8,
+        "realCalls": 12,
+        "realTokens": 7133,
+        "responseTokens": 1081,
+        "warmMs": 28.1,
+        "wrongTokens": 1392
+      },
+      "realPercent": -107,
+      "suffice": {
+        "blindCalls": 3,
+        "blindTokens": 3050,
+        "grepCalls": 3,
+        "grepTokens": 1202,
+        "index": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 3,
+          "moreGrep": 1,
+          "moreRead": 2,
+          "moreTokens": 1202,
+          "needed": 69
+        },
+        "old": {},
+        "ranges": 2
+      },
+      "tags": [
+        "tâche",
+        "réel"
+      ],
+      "tokensave": {
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 21
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 7
+        },
+        "coldMs": 203.6,
+        "duel": "index",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "notPlayed": null,
+        "realCalls": 12,
+        "realTokens": 7508,
+        "responseTokens": 1226,
+        "results": [
+          "✗ src/lib/workflow-view.ts:244",
+          "✗ video/src/ui/Editor.tsx:304",
+          "✗ src-tauri/src/codeindex_tests.rs:558",
+          "✗ src/lib/i18n/index.ts:63",
+          "✗ src/lib/types.ts:2313",
+          "✗ src/lib/workflow-view.ts:277",
+          "✗ src/lib/workflow-view.ts:238",
+          "✗ src/lib/worktrees.ts:20",
+          "✗ video/src/lang.ts:59",
+          "✗ video/src/ui/Sidebar.tsx:44"
+        ],
+        "suffice": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 3,
+          "moreGrep": 1,
+          "moreRead": 2,
+          "moreTokens": 1202,
+          "needed": 69
+        },
+        "warmMs": 42.9,
+        "wrongTokens": 88
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 10,
+        "blindTokens": 44522,
+        "calls": 3,
+        "score": {
+          "expected": 1,
+          "firstGood": 2,
+          "found": 1,
+          "good": 4,
+          "precision": 0.25,
+          "recall": 1.0,
+          "results": 16
+        },
+        "totalTokens": 1251
+      },
+      "id": "tache-worktree-cree",
+      "index": {
+        "announcedFilesTokens": 6092,
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": 33,
+          "found": 1,
+          "good": 1,
+          "precision": 0.019230769230769232,
+          "recall": 1.0,
+          "results": 52
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "coldMs": 610.4,
+        "realCalls": 12,
+        "realTokens": 5206,
+        "responseTokens": 1566,
+        "warmMs": 64.3,
+        "wrongTokens": 1795
+      },
+      "realPercent": -316,
+      "suffice": {
+        "blindCalls": 4,
+        "blindTokens": 6486,
+        "grepCalls": 3,
+        "grepTokens": 1725,
+        "index": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 3,
+          "moreGrep": 1,
+          "moreRead": 2,
+          "moreTokens": 1725,
+          "needed": 136
+        },
+        "old": {},
+        "ranges": 2
+      },
+      "tags": [
+        "tâche"
+      ],
+      "tokensave": {
+        "announcedPercent": 71,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 41
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "coldMs": 68.6,
+        "duel": "tokensave",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "notPlayed": null,
+        "realCalls": 9,
+        "realTokens": 4384,
+        "responseTokens": 637,
+        "results": [
+          "✗ src/components/branches/BranchPicker.svelte:171",
+          "✗ website/content/docs/fr/testing.md:63",
+          "✗ website/content/docs/fr/branches.md:65",
+          "✗ src/components/branches/BranchPicker.svelte:160",
+          "✗ src/components/branches/BranchPicker.svelte:167",
+          "✗ src/components/branches/BranchPicker.svelte:163",
+          "✗ src/components/branches/BranchPicker.svelte:154",
+          "✗ src/components/branches/BranchPicker.svelte:222",
+          "✗ src/lib/branch-actions.ts:125",
+          "✗ src/lib/i18n/index.ts:63",
+          "✗ src/lib/types.ts:1803"
+        ],
+        "suffice": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 3,
+          "moreGrep": 1,
+          "moreRead": 2,
+          "moreTokens": 1725,
+          "needed": 136
+        },
+        "warmMs": 243.6,
+        "wrongTokens": 84
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 8,
+        "blindTokens": 19009,
+        "calls": 10,
+        "score": {
+          "expected": 1,
+          "firstGood": 10,
+          "found": 1,
+          "good": 2,
+          "precision": 0.058823529411764705,
+          "recall": 1.0,
+          "results": 34
+        },
+        "totalTokens": 4572
+      },
+      "id": "tache-quota-compte",
+      "index": {
+        "announcedFilesTokens": 3004,
+        "announcedPercent": 72,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 29
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "coldMs": 210.3,
+        "realCalls": 14,
+        "realTokens": 7834,
+        "responseTokens": 794,
+        "warmMs": 54.4,
+        "wrongTokens": 1440
+      },
+      "realPercent": -71,
+      "suffice": {
+        "blindCalls": 2,
+        "blindTokens": 9999,
+        "grepCalls": 2,
+        "grepTokens": 1796,
+        "index": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 2,
+          "moreGrep": 1,
+          "moreRead": 1,
+          "moreTokens": 1796,
+          "needed": 88
+        },
+        "old": {},
+        "ranges": 1
+      },
+      "tags": [
+        "tâche"
+      ],
+      "tokensave": {
+        "announcedPercent": 71,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 21
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "coldMs": 47.9,
+        "duel": "tokensave",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
+        },
+        "notPlayed": null,
+        "realCalls": 16,
+        "realTokens": 7802,
+        "responseTokens": 554,
+        "results": [
+          "✗ src-tauri/src/model.rs:2244",
+          "✗ src-tauri/src/model.rs:2236",
+          "✗ src-tauri/src/model.rs:2227",
+          "✗ src-tauri/src/engine/agy/tests.rs:300",
+          "✗ src-tauri/src/model.rs:2307",
+          "✗ src-tauri/src/model.rs:2316",
+          "✗ src-tauri/src/paths.rs:1347",
+          "✗ src-tauri/src/paths.rs:1328",
+          "✗ src-tauri/src/paths.rs:1361",
+          "✗ src-tauri/src/projectfile_tests.rs:155",
+          "✗ src-tauri/src/projectfile_tests.rs:231"
+        ],
+        "suffice": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 2,
+          "moreGrep": 1,
+          "moreRead": 1,
+          "moreTokens": 1796,
+          "needed": 88
+        },
+        "warmMs": 45.4,
+        "wrongTokens": 146
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 8,
+        "blindTokens": 27280,
+        "calls": 4,
+        "score": {
+          "expected": 1,
+          "firstGood": 3,
+          "found": 1,
+          "good": 3,
+          "precision": 0.42857142857142855,
+          "recall": 1.0,
+          "results": 7
+        },
+        "totalTokens": 1200
+      },
+      "id": "tache-cree-agent",
+      "index": {
+        "announcedFilesTokens": 5192,
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 15
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 6
+        },
+        "coldMs": 155.8,
+        "realCalls": 13,
+        "realTokens": 5818,
+        "responseTokens": 1341,
+        "warmMs": 62.1,
+        "wrongTokens": 1849
+      },
+      "realPercent": -384,
+      "suffice": {
+        "blindCalls": 4,
+        "blindTokens": 11057,
+        "grepCalls": 3,
+        "grepTokens": 1157,
+        "index": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 3,
+          "moreGrep": 1,
+          "moreRead": 2,
+          "moreTokens": 1157,
+          "needed": 116
+        },
+        "old": {},
+        "ranges": 2
+      },
+      "tags": [
+        "tâche",
+        "réel"
+      ],
+      "tokensave": {
+        "announcedPercent": 73,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 6
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 33
+        },
+        "codeWords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "coldMs": 199.6,
+        "duel": "tokensave",
+        "failed": false,
+        "indexKeywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 10
+        },
+        "keywords": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 5
+        },
+        "notPlayed": null,
+        "realCalls": 8,
+        "realTokens": 3325,
+        "responseTokens": 1171,
+        "results": [
+          "✗ src/components/Sidebar.test.ts:175",
+          "✗ src/lib/shortcuts.test.ts:39",
+          "✗ tests/e2e/branches.spec.ts:88",
+          "✗ src/lib/shortcuts.ts:122",
+          "✗ src/test/ipc.ts:137",
+          "✗ src/test/ipc.ts:44"
+        ],
+        "suffice": {
+          "held": 0,
+          "moreBody": 0,
+          "moreCalls": 3,
+          "moreGrep": 1,
+          "moreRead": 2,
+          "moreTokens": 1157,
+          "needed": 116
+        },
+        "warmMs": 56.3,
+        "wrongTokens": 119
+      },
+      "tool": "index_context",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 2,
+        "blindTokens": 271,
+        "calls": 2,
+        "score": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 1
+        },
+        "totalTokens": 271
+      },
+      "id": "wt-search-renamed",
+      "index": {
+        "announcedFilesTokens": 284,
+        "announcedPercent": 54,
+        "at10": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 0.3333333333333333,
+          "recall": 1.0,
+          "results": 3
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 0.3333333333333333,
+          "recall": 1.0,
+          "results": 3
+        },
+        "codeWords": null,
+        "coldMs": 184.3,
+        "realCalls": 2,
+        "realTokens": 353,
+        "responseTokens": 112,
+        "warmMs": 26.1,
+        "wrongTokens": 118
+      },
+      "realPercent": -30,
+      "suffice": null,
+      "tags": [
+        "worktree"
+      ],
+      "tokensave": {
+        "announcedPercent": null,
+        "at10": null,
+        "at50": null,
+        "codeWords": null,
+        "coldMs": null,
+        "duel": "—",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": "un index par dossier, pas de delta de worktree",
+        "realCalls": null,
+        "realTokens": null,
+        "responseTokens": null,
+        "results": null,
+        "suffice": null,
+        "warmMs": null,
+        "wrongTokens": null
+      },
+      "tool": "index_search",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 3,
+        "blindTokens": 681,
+        "calls": 3,
+        "score": {
+          "expected": 3,
+          "firstGood": 1,
+          "found": 3,
+          "good": 3,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 3
+        },
+        "totalTokens": 681
+      },
+      "id": "wt-callers-renamed",
+      "index": {
+        "announcedFilesTokens": 588,
+        "announcedPercent": 64,
+        "at10": {
+          "expected": 3,
+          "firstGood": 1,
+          "found": 3,
+          "good": 3,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 3
+        },
+        "at50": {
+          "expected": 3,
+          "firstGood": 1,
+          "found": 3,
+          "good": 3,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 3
+        },
+        "codeWords": null,
+        "coldMs": 153.3,
+        "realCalls": 3,
+        "realTokens": 796,
+        "responseTokens": 189,
+        "warmMs": 9.2,
+        "wrongTokens": 0
+      },
+      "realPercent": -16,
+      "suffice": null,
+      "tags": [
+        "worktree"
+      ],
+      "tokensave": {
+        "announcedPercent": null,
+        "at10": null,
+        "at50": null,
+        "codeWords": null,
+        "coldMs": null,
+        "duel": "—",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": "un index par dossier, pas de delta de worktree",
+        "realCalls": null,
+        "realTokens": null,
+        "responseTokens": null,
+        "results": null,
+        "suffice": null,
+        "warmMs": null,
+        "wrongTokens": null
+      },
+      "tool": "index_callers",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 1,
+        "blindTokens": 8,
+        "calls": 1,
+        "score": {
+          "expected": 0,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 0
+        },
+        "totalTokens": 8
+      },
+      "id": "wt-callers-old-name",
+      "index": {
+        "announcedFilesTokens": 0,
+        "announcedPercent": 0,
+        "at10": {
+          "expected": 0,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 0
+        },
+        "at50": {
+          "expected": 0,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 0
+        },
+        "codeWords": null,
+        "coldMs": 291.0,
+        "realCalls": 1,
+        "realTokens": 12,
+        "responseTokens": 12,
+        "warmMs": 8.6,
+        "wrongTokens": 0
+      },
+      "realPercent": -50,
+      "suffice": null,
+      "tags": [
+        "worktree"
+      ],
+      "tokensave": {
+        "announcedPercent": null,
+        "at10": null,
+        "at50": null,
+        "codeWords": null,
+        "coldMs": null,
+        "duel": "—",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": "un index par dossier, pas de delta de worktree",
+        "realCalls": null,
+        "realTokens": null,
+        "responseTokens": null,
+        "results": null,
+        "suffice": null,
+        "warmMs": null,
+        "wrongTokens": null
+      },
+      "tool": "index_callers",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 2,
+        "blindTokens": 226,
+        "calls": 2,
+        "score": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 1
+        },
+        "totalTokens": 226
+      },
+      "id": "fresh-now",
+      "index": {
+        "announcedFilesTokens": 0,
+        "announcedPercent": 0,
+        "at10": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 0
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 0
+        },
+        "codeWords": null,
+        "coldMs": 64.1,
+        "realCalls": 3,
+        "realTokens": 229,
+        "responseTokens": 3,
+        "warmMs": 64.1,
+        "wrongTokens": 0
+      },
+      "realPercent": -1,
+      "suffice": null,
+      "tags": [
+        "fraîcheur"
+      ],
+      "tokensave": {
+        "announcedPercent": null,
+        "at10": null,
+        "at50": null,
+        "codeWords": null,
+        "coldMs": null,
+        "duel": "—",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": "la copie n'est jamais écrite (fraîcheur après écriture)",
+        "realCalls": null,
+        "realTokens": null,
+        "responseTokens": null,
+        "results": null,
+        "suffice": null,
+        "warmMs": null,
+        "wrongTokens": null
+      },
+      "tool": "index_search",
+      "winner": "grep"
+    },
+    {
+      "grep": {
+        "blindCalls": 2,
+        "blindTokens": 226,
+        "calls": 2,
+        "score": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 1
+        },
+        "totalTokens": 226
+      },
+      "id": "fresh-after-gap",
+      "index": {
+        "announcedFilesTokens": 120,
+        "announcedPercent": 25,
+        "at10": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 1
+        },
+        "at50": {
+          "expected": 1,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 1.0,
+          "recall": 1.0,
+          "results": 1
+        },
+        "codeWords": null,
+        "coldMs": 158.6,
+        "realCalls": 2,
+        "realTokens": 268,
+        "responseTokens": 71,
+        "warmMs": 158.6,
+        "wrongTokens": 0
+      },
+      "realPercent": -18,
+      "suffice": null,
+      "tags": [
+        "fraîcheur"
+      ],
+      "tokensave": {
+        "announcedPercent": null,
+        "at10": null,
+        "at50": null,
+        "codeWords": null,
+        "coldMs": null,
+        "duel": "—",
+        "failed": false,
+        "indexKeywords": null,
+        "keywords": null,
+        "notPlayed": "la copie n'est jamais écrite (fraîcheur après écriture)",
+        "realCalls": null,
+        "realTokens": null,
+        "responseTokens": null,
+        "results": null,
+        "suffice": null,
+        "warmMs": null,
+        "wrongTokens": null
+      },
+      "tool": "index_search",
+      "winner": "grep"
+    }
+  ],
+  "readMax": 10,
+  "readRadius": 20,
+  "tokensave": {
+    "indexBytes": 240821451,
+    "initMs": 13268,
+    "initSummary": "indexing done — 1588 files, 52361 nodes, 147408 edges in 13006ms\nSkipped 83 tracked files (unsupported extension): .vue (71), .mmd (4), .dockerignore (2), .strings (2), .vtt (2), and 2 more extension(s)",
+    "project": "C:\\tmp\\tokensave-snapshot",
+    "version": "tokensave 7.17.0"
+  }
+}

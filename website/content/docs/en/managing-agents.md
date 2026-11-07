@@ -76,7 +76,7 @@ The model, effort, and mode menus stay usable for the agent’s whole life, even
 
 ## An agent’s account
 
-When you’ve added several Claude accounts, an “Account” menu joins the others. Its first choice, “Automatic”, lets Escouade take the project’s account (its “Preferred account”), otherwise the first active account under the pause threshold; the name of the chosen account is written in parentheses. An agent’s account can no longer change after its first message, since its conversation is filed in that account: the menu is then read-only.
+When you’ve added several Claude accounts, an “Account” menu joins the others. Its first choice, “Automatic”, lets Escouade take the project’s account (its “Preferred account”), otherwise the first “good” active account (5 hours under the pause and switch thresholds, week on pace); the name of the chosen account is written in parentheses. An agent’s account can no longer change after its first message, since its conversation is filed in that account: the menu is then read-only.
 
 The page on [accounts](accounts) explains how to add them and what “Resume on…” does when an agent reaches the usage limit. The options are in [the accounts settings](settings-accounts).
 

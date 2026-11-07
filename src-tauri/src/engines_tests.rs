@@ -50,7 +50,7 @@ async fn a_state_saved_before_the_harnesses_loads_on_claude_code_and_loses_nothi
     let app = mock_app();
     let (core, _rx) = Core::load(app.handle().clone(), data.clone());
     let a = core.agent("a1").unwrap().lock().meta.clone();
-    assert_eq!(a.engine, EngineId::Claude);
+    assert_eq!(a.engine, EngineId::CLAUDE);
     assert_eq!(
         (
             a.name.as_str(),
@@ -86,7 +86,7 @@ async fn a_state_saved_before_the_harnesses_loads_on_claude_code_and_loses_nothi
     );
     assert_eq!(t.criteria[0].note, "vu");
     let p = core.project("p1").unwrap();
-    assert_eq!((p.engine, p.engine()), (None, EngineId::Claude));
+    assert_eq!((p.engine, p.engine()), (None, EngineId::CLAUDE));
     assert_eq!(
         (
             p.board.action.as_str(),
@@ -138,10 +138,10 @@ async fn a_state_saved_before_the_harnesses_loads_on_claude_code_and_loses_nothi
 pub(crate) fn accounts_for_every_harness(h: &Harness) {
     h.set_settings(|s| {
         for engine in [
-            EngineId::Codex,
-            EngineId::Copilot,
-            EngineId::Cursor,
-            EngineId::Opencode,
+            EngineId::CODEX,
+            EngineId::COPILOT,
+            EngineId::CURSOR,
+            EngineId::OPENCODE,
         ] {
             s.accounts.push(crate::model::Account {
                 id: format!("{engine}-work"),
@@ -149,10 +149,10 @@ pub(crate) fn accounts_for_every_harness(h: &Harness) {
                 engine,
                 config_dir: h.dir.join(engine.as_str()).to_string_lossy().into(),
                 claude_path: match engine {
-                    EngineId::Codex => crate::engine::fake_codex(),
-                    EngineId::Opencode => crate::engine::fake_opencode(),
-                    EngineId::Copilot => crate::engine::fake_copilot(),
-                    EngineId::Cursor => crate::engine::fake_cursor(),
+                    EngineId::CODEX => crate::engine::fake_codex(),
+                    EngineId::OPENCODE => crate::engine::fake_opencode(),
+                    EngineId::COPILOT => crate::engine::fake_copilot(),
+                    EngineId::CURSOR => crate::engine::fake_cursor(),
                     _ => String::new(),
                 },
                 ..Default::default()
@@ -168,29 +168,29 @@ async fn a_new_agent_runs_on_its_projects_harness_unless_told_another() {
     accounts_for_every_harness(&h);
     // A project saved before 1.8, or whose harness is the default: Claude Code.
     let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
-    assert_eq!(a.engine, EngineId::Claude);
+    assert_eq!(a.engine, EngineId::CLAUDE);
     h.core
         .projects
         .write()
         .iter_mut()
         .find(|x| x.id == p.id)
         .unwrap()
-        .engine = Some(EngineId::Codex);
+        .engine = Some(EngineId::CODEX);
     let b = h.core.create_agent(&p.id, None).await.unwrap().meta;
-    assert_eq!(b.engine, EngineId::Codex);
+    assert_eq!(b.engine, EngineId::CODEX);
     let c = h
         .core
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Copilot),
+                engine: Some(EngineId::COPILOT),
                 ..Default::default()
             },
         )
         .await
         .unwrap()
         .meta;
-    assert_eq!(c.engine, EngineId::Copilot);
+    assert_eq!(c.engine, EngineId::COPILOT);
     // Kept with the agent.
     h.core.save_state().unwrap();
     let saved: Value =
@@ -231,7 +231,7 @@ async fn each_turn_keeps_the_harness_that_ran_it_and_a_copy_takes_the_one_its_or
         if let Some(p) = rt.detach() {
             p.kill();
         }
-        rt.meta.engine = EngineId::Codex;
+        rt.meta.engine = EngineId::CODEX;
         rt.meta.account = "codex-work".into();
         rt.meta.session_id = None;
     }
@@ -270,7 +270,7 @@ async fn each_turn_keeps_the_harness_that_ran_it_and_a_copy_takes_the_one_its_or
     assert_eq!(by_engine, ["claude", "codex"]);
     // Its copy takes the harness it has now, not the one it began on.
     let copy = h.core.duplicate_agent(&id).await.unwrap().meta;
-    assert_eq!(copy.engine, EngineId::Codex);
+    assert_eq!(copy.engine, EngineId::CODEX);
 }
 
 #[tokio::test]
@@ -288,7 +288,7 @@ async fn a_tickets_agent_runs_on_the_tickets_harness_else_on_its_projects() {
     assert_eq!(own.engine, None);
     h.core
         .edit_ticket(&own.id, |t| {
-            t.engine = Some(EngineId::Cursor);
+            t.engine = Some(EngineId::CURSOR);
             Ok(())
         })
         .unwrap();
@@ -296,7 +296,7 @@ async fn a_tickets_agent_runs_on_the_tickets_harness_else_on_its_projects() {
     h.wait("its agent", |h| h.ticket(&own.id).agent_id.is_some())
         .await;
     let agent = h.ticket(&own.id).agent_id.unwrap();
-    assert_eq!(h.agent(&agent).engine, EngineId::Cursor);
+    assert_eq!(h.agent(&agent).engine, EngineId::CURSOR);
     // One that says none: its project's.
     h.core
         .projects
@@ -304,7 +304,7 @@ async fn a_tickets_agent_runs_on_the_tickets_harness_else_on_its_projects() {
         .iter_mut()
         .find(|x| x.id == p.id)
         .unwrap()
-        .engine = Some(EngineId::Opencode);
+        .engine = Some(EngineId::OPENCODE);
     let theirs = h
         .core
         .ticket_create(&p.id, draft("Celui du projet [ok]", &[], 5))
@@ -314,7 +314,7 @@ async fn a_tickets_agent_runs_on_the_tickets_harness_else_on_its_projects() {
     h.wait("its agent", |h| h.ticket(&theirs.id).agent_id.is_some())
         .await;
     let agent = h.ticket(&theirs.id).agent_id.unwrap();
-    assert_eq!(h.agent(&agent).engine, EngineId::Opencode);
+    assert_eq!(h.agent(&agent).engine, EngineId::OPENCODE);
 }
 
 // ---------- Choosing the harness (ESC-29) ----------
@@ -339,7 +339,7 @@ async fn a_tickets_form_sets_its_harness_and_a_draft_without_one_keeps_it() {
         .ticket_create(&p.id, form(json!("codex")))
         .await
         .unwrap();
-    assert_eq!(t.engine, Some(EngineId::Codex));
+    assert_eq!(t.engine, Some(EngineId::CODEX));
     let none = h
         .core
         .ticket_create(&p.id, form(json!(null)))
@@ -353,13 +353,13 @@ async fn a_tickets_form_sets_its_harness_and_a_draft_without_one_keeps_it() {
     let kept = h.core.ticket_update(&t.id, without).unwrap();
     assert_eq!(
         (kept.title.as_str(), kept.engine),
-        ("Renommé", Some(EngineId::Codex))
+        ("Renommé", Some(EngineId::CODEX))
     );
     // Null: back to the project's.
     let back = h.core.ticket_update(&t.id, form(json!(null))).unwrap();
     assert_eq!(back.engine, None);
     let other = h.core.ticket_update(&t.id, form(json!("cursor"))).unwrap();
-    assert_eq!(other.engine, Some(EngineId::Cursor));
+    assert_eq!(other.engine, Some(EngineId::CURSOR));
 }
 
 /// Only a harness whose program is found is offered (`engines_found`): with none, the first start
@@ -367,7 +367,7 @@ async fn a_tickets_form_sets_its_harness_and_a_draft_without_one_keeps_it() {
 #[tokio::test]
 async fn the_harnesses_offered_are_those_whose_program_is_found() {
     let h = harness("esc29-found");
-    assert_eq!(h.core.engines_found(), [EngineId::Claude]);
+    assert_eq!(h.core.engines_found(), [EngineId::CLAUDE]);
     let absent = h.dir.join("absent.cmd").to_string_lossy().to_string();
     let mut s = h.core.settings.read().clone();
     s.claude_path = absent;
@@ -376,5 +376,5 @@ async fn the_harnesses_offered_are_those_whose_program_is_found() {
     let mut s = h.core.settings.read().clone();
     s.claude_path = crate::core_tests::fake_cli();
     h.core.save_settings(s).unwrap();
-    assert_eq!(h.core.engines_found(), [EngineId::Claude]);
+    assert_eq!(h.core.engines_found(), [EngineId::CLAUDE]);
 }

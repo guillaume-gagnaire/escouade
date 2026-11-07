@@ -31,7 +31,6 @@
   $effect(() => {
     if (listFor !== null) count = files.length;
   });
-  let loading = $state(false);
   let error = $state<string | null>(null);
   let timer: ReturnType<typeof setTimeout> | undefined;
   let seq = 0;
@@ -63,7 +62,7 @@
       setFiles([], listKey(pid, aid, agentScope));
       return;
     }
-    loading = true;
+    // No loading flag: a re-read keeps what is shown until its answer, so nothing blinks.
     try {
       const result = await api.gitFiles(pid, aid);
       if (mine !== seq) return; // superseded by a newer request
@@ -74,11 +73,11 @@
       error = String(e);
       setFiles([], listKey(pid, aid, agentScope));
     }
-    loading = false;
   }
 
   function setFiles(list: FileChange[], key: string) {
-    files = list;
+    // The same list again: leave `files` alone so nothing downstream re-renders.
+    if (JSON.stringify(list) !== JSON.stringify(files)) files = list;
     listFor = key;
     // Pin the file shown (the first one by default): a file sorting before it must not take its place.
     if (!list.some((f) => keyOf(f) === picked)) picked = list[0] ? keyOf(list[0]) : null;
@@ -229,7 +228,7 @@
   <div class="list">
     {#if error}
       <div class="empty">{error}</div>
-    {:else if !files.length && !loading}
+    {:else if !files.length && listFor === wanted}
       <div class="empty">{scope === 'agent' ? t('git.files.emptyAgent') : t('git.files.emptyProject')}</div>
     {/if}
     {#if multi}

@@ -17,12 +17,14 @@ import handover from './handover';
 import integrations from './integrations';
 import mcp from './mcp';
 import memory from './memory';
-import codeindex from './codeindex';
+import vectors from './vectors';
 import nav from './nav';
 import plan from './plan';
 import prs from './prs';
+import envs from './envs';
 import repos from './repos';
 import runs from './runs';
+import devpage from './devpage';
 import settings from './settings';
 import share from './share';
 import shell from './shell';
@@ -49,16 +51,18 @@ export const fr = {
   conv,
   composer,
   runs,
+  devpage,
   shell,
   errors,
   accounts,
   handover,
   mcp,
   memory,
-  codeindex,
+  vectors,
   branches,
   plan,
   prs,
+  envs,
   repos,
   subagents,
   bgtasks,

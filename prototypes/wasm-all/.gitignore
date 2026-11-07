@@ -1,0 +1,4 @@
+target/
+guest/*/generated/
+guest/kit/src/generated/
+guest/codex/escouade-plugin.json

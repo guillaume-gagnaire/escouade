@@ -1,7 +1,8 @@
 //! GitHub: github.com, GHE.com (`<name>.ghe.com`) and GitHub Enterprise Server. Its token is the
-//! `gh` CLI's, else one the user makes. The PR's calls are in `github_api`.
+//! `gh` CLI's, else one the user makes. What the core knows of it is declared here (its hosts, its
+//! rights, its CLI): its client is in the plugin « GitHub » (`plugins/github`,
+//! INT-8.1), which serves its accounts in a process of its own.
 
-use super::github_api::Github;
 use super::*;
 
 pub struct GithubProvider;
@@ -22,8 +23,11 @@ pub fn api_base(url: &str) -> String {
 }
 
 impl Provider for GithubProvider {
-    fn kind(&self) -> &'static str {
-        "github"
+    fn kind(&self) -> String {
+        "github".into()
+    }
+    fn pull_fetch(&self, number: u64) -> Option<PullFetch> {
+        Some(PullFetch::Head(format!("refs/pull/{number}/head")))
     }
 
     fn name(&self) -> &'static str {
@@ -64,8 +68,8 @@ impl Provider for GithubProvider {
     /// A classic token's: the PR, its checks, its Actions' logs and the deployments. A
     /// fine-grained one does not say its rights (pull requests and contents in writing; checks,
     /// statuses, Actions and deployments in reading).
-    fn scopes(&self) -> &'static [&'static str] {
-        &["repo"]
+    fn scopes(&self) -> Vec<String> {
+        ["repo"].map(String::from).to_vec()
     }
 
     fn token_page(&self, url: &str) -> String {
@@ -79,23 +83,20 @@ impl Provider for GithubProvider {
 
     fn cli(&self, host: &str) -> Option<CliToken> {
         Some(CliToken {
-            program: "gh",
+            program: "gh".into(),
             args: ["auth", "token", "--hostname", host]
                 .map(str::to_string)
                 .to_vec(),
-            login: "gh auth login",
-            parse: |out, _| Some(out.trim().to_string()).filter(|t| !t.is_empty()),
+            login: "gh auth login".into(),
+            read: CliRead::Stdout,
         })
     }
 
-    fn client(&self, http: reqwest::Client, account: &Credentials) -> Box<dyn Forge> {
-        Box::new(Github::new(
-            http,
-            account
-                .api
-                .clone()
-                .unwrap_or_else(|| api_base(&account.url)),
-            account.token.clone(),
-        ))
+    fn plugin(&self) -> Option<&'static str> {
+        Some(crate::plugins::builtin::GITHUB)
+    }
+
+    fn client(&self, _http: reqwest::Client, _account: &Credentials) -> Box<dyn Forge> {
+        Box::new(Unserved(NAME))
     }
 }

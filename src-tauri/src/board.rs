@@ -395,12 +395,9 @@ pub fn to_start(
 ) -> Vec<String> {
     let mut held = held;
     let mine = || tickets.iter().filter(|t| t.project_id == project_id);
-    // A ticket under way on a teammate's machine (ESC-190) takes no place here.
-    let busy = mine()
-        .filter(|t| {
-            t.column == Column::Doing && t.blocked.is_none() && !crate::sharing::elsewhere(t)
-        })
-        .count();
+    // A ticket under way on a teammate's machine (ESC-190) takes no place here; one « En revue »
+    // whose agent fixes its CI does (ESC-60).
+    let busy = crate::ticketprs::busy(tickets, project_id);
     let free = (s.max_parallel.clamp(1, 6) as usize).saturating_sub(busy);
     // A ticket gone, or of another project, holds nothing back.
     let unfinished: HashSet<&str> = mine()
@@ -553,8 +550,9 @@ pub fn switch_threshold(settings: &Settings) -> u32 {
     quota_threshold(settings.switch_at)
 }
 
-/// The use past which an account takes no new agent while another can (`accounts::pick`): the
-/// lower of « Pause au-delà du quota » and « Changer de compte à ».
+/// The use at which a short window puts an account out of the choice while another can take the
+/// agent (`accounts::pick`, `pace::judge`): the lower of « Pause au-delà du quota » and « Changer
+/// de compte à ».
 pub fn pick_threshold(settings: &Settings) -> u32 {
     quota_threshold(settings.quota_pause).min(switch_threshold(settings))
 }
@@ -1333,16 +1331,13 @@ pub fn merged_outcome(lang: Lang, target: &str, strategy: &str) -> String {
     )
 }
 
-pub fn pr_outcome(number: u32, target: &str) -> String {
-    format!("⇡ PR #{number} → {target}")
-}
-
-/// Pushed to GitHub without `gh`: the PR is finished in the browser.
-pub fn pushed_for_pr_outcome(lang: Lang, branch: &str) -> String {
+/// Pushed without an account of its host (or refused by it): the PR (`word`, « MR » on GitLab) is
+/// finished on the host's page, in the browser.
+pub fn pushed_for_pr_outcome(lang: Lang, word: &str, branch: &str) -> String {
     tr_in!(
         lang,
-        "⇡ {branch} poussée · PR à finaliser",
-        "⇡ {branch} pushed · PR to finish"
+        "⇡ {branch} poussée · {word} à finaliser",
+        "⇡ {branch} pushed · {word} to finish"
     )
 }
 
@@ -1399,13 +1394,14 @@ pub(crate) fn encode(s: &str, keep_slash: bool) -> String {
 /// What the compare page's address keeps of the title and of the description, in bytes before
 /// encoding (each may triple): the address stays a few KB, which browsers and the system's opener
 /// take (a longer one meets "414 URI Too Long").
-const COMPARE_TITLE_MAX: usize = 200;
-const COMPARE_BODY_MAX: usize = 1500;
+pub(crate) const COMPARE_TITLE_MAX: usize = 200;
+pub(crate) const COMPARE_BODY_MAX: usize = 1500;
 
-/// GitHub's page that opens a pull request of `branch` into `target`, filled in (the title and
-/// the description cut, with a "…", when long).
+/// The page of GitHub (or of Gitea, `base` its instance's address) that opens a pull request of
+/// `branch` into `target` of `repo` (`acme/demo`), filled in (the title and the description cut,
+/// with a "…", when long).
 pub fn compare_url(
-    owner: &str,
+    base: &str,
     repo: &str,
     target: &str,
     branch: &str,
@@ -1413,20 +1409,12 @@ pub fn compare_url(
     body: &str,
 ) -> String {
     format!(
-        "https://github.com/{owner}/{repo}/compare/{}...{}?expand=1&title={}&body={}",
+        "{base}/{repo}/compare/{}...{}?expand=1&title={}&body={}",
         encode(target, true),
         encode(branch, true),
         encode(&truncate(title, COMPARE_TITLE_MAX), false),
         encode(&truncate(body, COMPARE_BODY_MAX), false)
     )
-}
-
-/// The number and address of the PR `gh pr create` printed.
-pub fn pr_number(gh_output: &str) -> Option<(u32, String)> {
-    gh_output.split_whitespace().find_map(|w| {
-        let (_, n) = w.rsplit_once("/pull/")?;
-        Some((n.trim_end_matches('/').parse().ok()?, w.to_string()))
-    })
 }
 
 /// A PR's description, in `lang`: the ticket's, what its agent says it did (when it said), then
@@ -2502,7 +2490,7 @@ mod tests {
         let usage = [
             account("principal", 100.0, NOW + 9_000),
             AccountUsage {
-                engine: EngineId::Codex,
+                engine: EngineId::CODEX,
                 ..account("work", 10.0, NOW + 9_000)
             },
         ];
@@ -4008,22 +3996,22 @@ mod tests {
     fn an_imported_ticket_is_named_after_its_source_key_and_its_title() {
         let name = |s, k: &str| ticket_agent_name(&imported(s, k, "Corriger la connexion"));
         assert_eq!(
-            name(Service::Jira, "PROJ-123"),
+            name(Service::JIRA, "PROJ-123"),
             "proj-123-corriger-la-connexion"
         );
         assert_eq!(
-            name(Service::Linear, "ENG-42"),
+            name(Service::LINEAR, "ENG-42"),
             "eng-42-corriger-la-connexion"
         );
-        assert_eq!(name(Service::Github, "#45"), "45-corriger-la-connexion");
-        assert_eq!(name(Service::Gitlab, "#7"), "7-corriger-la-connexion");
-        assert_eq!(name(Service::Azure, "#678"), "678-corriger-la-connexion");
-        assert_eq!(name(Service::Trello, "#12"), "12-corriger-la-connexion");
+        assert_eq!(name(Service::GITHUB, "#45"), "45-corriger-la-connexion");
+        assert_eq!(name(Service::GITLAB, "#7"), "7-corriger-la-connexion");
+        assert_eq!(name(Service::AZURE, "#678"), "678-corriger-la-connexion");
+        assert_eq!(name(Service::TRELLO, "#12"), "12-corriger-la-connexion");
         // A key with nothing readable: the title alone.
-        assert_eq!(name(Service::Clickup, ""), "corriger-la-connexion");
-        assert_eq!(name(Service::Clickup, "#"), "corriger-la-connexion");
+        assert_eq!(name(Service::CLICKUP, ""), "corriger-la-connexion");
+        assert_eq!(name(Service::CLICKUP, "#"), "corriger-la-connexion");
         // The branch is the same slug behind the project's prefix, in lower case and ASCII.
-        let t = imported(Service::Jira, "PROJ-123", "Corriger la connexion");
+        let t = imported(Service::JIRA, "PROJ-123", "Corriger la connexion");
         assert_eq!(
             ticket_branch("ticket/", &t),
             "ticket/proj-123-corriger-la-connexion"
@@ -4034,7 +4022,7 @@ mod tests {
         );
         // Special characters fold or go; a long title is cut at a word, within 40 characters.
         let t = imported(
-            Service::Jira,
+            Service::JIRA,
             "PROJ-1",
             "Réparer l'écran d'accueil !? (urgent) & co",
         );
@@ -4042,7 +4030,7 @@ mod tests {
             ticket_agent_name(&t),
             "proj-1-reparer-l-ecran-d-accueil-urgent"
         );
-        let t = imported(Service::Github, "#45", &"mot ".repeat(30));
+        let t = imported(Service::GITHUB, "#45", &"mot ".repeat(30));
         let (n, b) = (ticket_agent_name(&t), ticket_branch("ticket/", &t));
         assert!(n.len() <= 40 && n.starts_with("45-mot-mot"), "{n}");
         assert_eq!(b, format!("ticket/{n}"));
@@ -4062,7 +4050,7 @@ mod tests {
 
     #[test]
     fn the_commit_and_so_the_pr_carry_the_source_key() {
-        let t = imported(Service::Jira, "PROJ-123", "Corriger la connexion");
+        let t = imported(Service::JIRA, "PROJ-123", "Corriger la connexion");
         assert_eq!(shown_key(&t), "PROJ-123");
         assert_eq!(
             fallback_commit(&t),
@@ -4071,10 +4059,10 @@ mod tests {
         assert_eq!(plain_commit(&t), "PROJ-123 Corriger la connexion");
         let p = commit_prompt(Lang::En, &t, "");
         assert!(p.contains("[PROJ-123]") && !p.contains("DEM-12"), "{p}");
-        let t = imported(Service::Github, "#45", "Corriger");
+        let t = imported(Service::GITHUB, "#45", "Corriger");
         assert_eq!(fallback_commit(&t), "feat: Corriger [#45]");
         // A source without a key keeps the ticket's own.
-        let t = imported(Service::Clickup, " ", "Corriger");
+        let t = imported(Service::CLICKUP, " ", "Corriger");
         assert_eq!(shown_key(&t), "DEM-12");
     }
 
@@ -4332,7 +4320,7 @@ mod tests {
         assert_eq!(
             [
                 merged_outcome(En, "main", "squash"),
-                pushed_for_pr_outcome(En, "ticket/a"),
+                pushed_for_pr_outcome(En, "PR", "ticket/a"),
                 pushed_elsewhere_outcome(En, "ticket/a"),
                 pushed_outcome(En, "ticket/a"),
                 kept_outcome(En),
@@ -4380,10 +4368,10 @@ mod tests {
             merged_outcome(Lang::Fr, "main", "rebase"),
             "⤵ Mergé dans main · rebase"
         );
-        assert_eq!(pr_outcome(12, "main"), "⇡ PR #12 → main");
+
         assert_eq!(
-            pushed_for_pr_outcome(Lang::Fr, "ticket/atl-42"),
-            "⇡ ticket/atl-42 poussée · PR à finaliser"
+            pushed_for_pr_outcome(Lang::Fr, "MR", "ticket/atl-42"),
+            "⇡ ticket/atl-42 poussée · MR à finaliser"
         );
         assert_eq!(
             pushed_elsewhere_outcome(Lang::Fr, "ticket/atl-42"),
@@ -4424,8 +4412,8 @@ mod tests {
     fn the_compare_address_opens_a_pull_request_to_finalize() {
         assert_eq!(
             compare_url(
-                "acme",
-                "demo",
+                "https://github.com",
+                "acme/demo",
                 "main",
                 "ticket/atl-42",
                 "feat: x & y [ATL-42]",
@@ -4433,11 +4421,6 @@ mod tests {
             ),
             "https://github.com/acme/demo/compare/main...ticket/atl-42?expand=1&title=feat%3A%20x%20%26%20y%20%5BATL-42%5D&body=Ligne%201%0ACrit%C3%A8res"
         );
-        assert_eq!(
-            pr_number("Creating pull request…\nhttps://github.com/acme/demo/pull/12\n"),
-            Some((12, "https://github.com/acme/demo/pull/12".to_string()))
-        );
-        assert_eq!(pr_number("rien"), None);
         let mut t = ticket(2, 5);
         t.description = "Contexte".into();
         t.criteria[0].ok = true;
@@ -4466,7 +4449,14 @@ mod tests {
     #[test]
     fn the_compare_address_stays_short_whatever_the_ticket_says() {
         let long = "é".repeat(20_000);
-        let url = compare_url("acme", "demo", "main", "ticket/atl-42", &long, &long);
+        let url = compare_url(
+            "https://github.com",
+            "acme/demo",
+            "main",
+            "ticket/atl-42",
+            &long,
+            &long,
+        );
         assert!(url.len() < 6 * 1024, "{}", url.len());
         let (head, body) = url.split_once("&body=").unwrap();
         // Cut on a character, and said so.

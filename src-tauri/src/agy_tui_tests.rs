@@ -21,7 +21,7 @@ async fn agy_agent(h: &Harness) -> (String, PathBuf) {
         s.accounts.push(Account {
             id: "principal-agy".into(),
             name: "Principal".into(),
-            engine: EngineId::Agy,
+            engine: EngineId::AGY,
             claude_path: fake_agy(),
             active: true,
             ..Default::default()
@@ -32,7 +32,7 @@ async fn agy_agent(h: &Harness) -> (String, PathBuf) {
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Agy),
+                engine: Some(EngineId::AGY),
                 model: Some("gemini-3.8-flash".into()),
                 effort: Some("low".into()),
                 mode: Some("default".into()),
@@ -150,6 +150,7 @@ async fn agys_view_resumes_the_agents_conversation_follows_its_turns_and_hands_i
     h.core.set_agent_view(&id, true).await.unwrap();
     let (info, screen) = open_agy(&h, &id, &format!("fake-agy-tui {session}")).await;
     let launch = jsonl(&home.join("fake-tui-launches.jsonl")).pop().unwrap();
+    assert_eq!(launch["autoUpdate"], "1", "{launch}");
     let argv: Vec<String> = serde_json::from_value(launch["argv"].clone()).unwrap();
     let flag = |k: &str| argv.windows(2).find(|w| w[0] == k).map(|w| w[1].clone());
     assert_eq!(

@@ -1,0 +1,127 @@
+[
+  {
+    "id": 546252446,
+    "iid": 3101,
+    "project_id": 65271576,
+    "title": "feat(merge_requests): add CancelAutoMerge",
+    "description": "With `CancelMergeWhenPipelineSucceeds`, Go callers cannot tell if anything was cancelled. GitLab answers that endpoint with a small status object instead of the merge request. It also returns 201 when the merge request was not set to auto-merge. So the method returns an empty `MergeRequest` and no error in both cases.\n\nGitLab 19.5 adds a new endpoint for this (gitlab-org/gitlab!255702), and I adde",
+    "state": "merged",
+    "created_at": "2026-10-10T12:06:13.882Z",
+    "updated_at": "2026-10-29T14:39:32.622Z",
+    "merged_by": {
+      "id": 8095268,
+      "username": "bob",
+      "public_email": "",
+      "name": "Bob",
+      "state": "active",
+      "locked": false,
+      "web_url": "https://gitlab.com/bob"
+    },
+    "merge_user": {
+      "id": 8095268,
+      "username": "bob",
+      "public_email": "",
+      "name": "Bob",
+      "state": "active",
+      "locked": false,
+      "web_url": "https://gitlab.com/bob"
+    },
+    "merged_at": "2026-10-29T14:23:12.547Z",
+    "closed_by": null,
+    "closed_at": null,
+    "target_branch": "main",
+    "source_branch": "cancel-auto-merge",
+    "user_notes_count": 24,
+    "upvotes": 0,
+    "downvotes": 0,
+    "author": {
+      "id": 30770856,
+      "username": "frank",
+      "public_email": "frank@example.com",
+      "name": "Frank",
+      "state": "active",
+      "locked": false,
+      "web_url": "https://gitlab.com/frank",
+      "bot": false
+    },
+    "assignees": [
+      {
+        "id": 30770856,
+        "username": "frank",
+        "public_email": "frank@example.com",
+        "name": "Frank",
+        "state": "active",
+        "locked": false,
+        "web_url": "https://gitlab.com/frank"
+      }
+    ],
+    "assignee": {
+      "id": 30770856,
+      "username": "frank",
+      "public_email": "frank@example.com",
+      "name": "Frank",
+      "state": "active",
+      "locked": false,
+      "web_url": "https://gitlab.com/frank"
+    },
+    "reviewers": [
+      {
+        "id": 3714742,
+        "username": "alice",
+        "public_email": "",
+        "name": "Alice",
+        "state": "active",
+        "locked": false,
+        "web_url": "https://gitlab.com/alice"
+      },
+      {
+        "id": 8095268,
+        "username": "bob",
+        "public_email": "",
+        "name": "Bob",
+        "state": "active",
+        "locked": false,
+        "web_url": "https://gitlab.com/bob"
+      }
+    ],
+    "source_project_id": 65275361,
+    "target_project_id": 65271576,
+    "labels": [
+      "Community contribution",
+      "Hackathon",
+      "automation:ml",
+      "backend",
+      "devops::ai coding",
+      "feature::addition",
+      "group::code review",
+      "section::ai",
+      "type::feature",
+      "workflow::in dev"
+    ],
+    "draft": false,
+    "imported": false,
+    "imported_from": "none",
+    "work_in_progress": false,
+    "milestone": null,
+    "merge_when_pipeline_succeeds": true,
+    "merge_status": "can_be_merged",
+    "detailed_merge_status": "not_open",
+    "merge_after": null,
+    "sha": "24c5c32eb4f7dae8f76fb33a02204ab46509d63c",
+    "merge_commit_sha": "07637978489e826011c6100aeee62a003f8513da",
+    "squash_commit_sha": "28c27c7623621ab535bceabe0b599aba3838fe3d",
+    "discussion_locked": null,
+    "should_remove_source_branch": true,
+    "force_remove_source_branch": true,
+    "prepared_at": "2026-10-10T12:06:16.577Z",
+    "allow_collaboration": true,
+    "allow_maintainer_to_push": true,
+    "reference": "!3101",
+    "web_url": "https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3101",
+    "squash": true,
+    "squash_on_merge": true,
+    "has_conflicts": false,
+    "blocking_discussions_resolved": true,
+    "approvals_before_merge": null
+  }
+]

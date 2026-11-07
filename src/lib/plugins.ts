@@ -9,7 +9,32 @@ export type Origin =
   | { kind: 'git'; url: string; tag: string }
   | { kind: 'dev'; path: string }
   /** A version of store.escouade.dev (STORE-9), pinned by its version.json's SHA-256. */
-  | { kind: 'store'; version: string; sha256: string; verified: boolean; repository: string; tag: string; commit: string };
+  | {
+      kind: 'store';
+      version: string;
+      sha256: string;
+      verified: boolean;
+      repository: string;
+      /** Its folder in the repository (ESC-313), absent at its root. */
+      path?: string;
+      tag: string;
+      commit: string;
+      /** Installed from the app's seed, with no network (ESC-338): the same bytes as the store's, a plugin like any other. */
+      seed?: boolean;
+    }
+  /**
+   * A plugin the app gives (INT-4, ESC-210), read from the app's own files. Not the same as a `dev.escouade.*` of the store
+   * (ESC-314): that one is `store`, kept in the data's plugins/ as any other; the origin tells them apart, never the id.
+   */
+  | { kind: 'builtin' };
+
+/** Whether the app gives this plugin (« Livrés avec l'app »), by its origin alone: a `dev.escouade.*` of the store is not. */
+export const shippedWithApp = (p: Pick<PluginView, 'origin'>) => p.origin.kind === 'builtin';
+
+/** The page of a plugin's source on GitHub: its repository, or its folder at its tag (`<repository>/tree/<tag>/<folder>`). */
+export function sourceUrl(o: { repository: string; tag: string; path?: string }): string {
+  return o.path && o.tag ? `${o.repository.replace(/\/$/, '')}/tree/${o.tag}/${o.path}` : o.repository;
+}
 
 export type PluginState =
   | { kind: 'ready' }
@@ -37,9 +62,17 @@ export interface Manifest {
   license?: string;
   repository?: string;
   escouade: { api: number; min: string; max?: string };
-  run?: { command: string; args: string[] };
+  /** A command (a process), or a JS/TS bundle that Escouade runs in WASM (`js`, ESC-320). */
+  run?: { command: string; js?: string; wasm?: string; args: string[] };
   activation: string[];
-  permissions: { events: string[]; network: string[]; secrets: string[]; commands: string[]; decide: boolean };
+  permissions: {
+    events: string[];
+    network: string[];
+    secrets: string[];
+    commands: string[];
+    files?: { root: string; access: string }[];
+    decide: boolean;
+  };
   contributes: Record<string, unknown>;
 }
 
@@ -57,6 +90,8 @@ export interface PluginUpdate {
   tag?: string;
   /** For a plugin of the store: whether that version is verified. */
   verified?: boolean;
+  /** That version is the one the app's seed holds: it installs from there, with no network. */
+  seed?: boolean;
 }
 
 /** What the revocation list says of the version a plugin runs (docs/STORE.md §4.6). */
@@ -93,6 +128,17 @@ export interface PluginView {
   withdrawn: Withdrawn | null;
   /** Not from the store, but the store has its id: the version it would install in its place. */
   inStore: { version: string; verified: boolean } | null;
+}
+
+/** A plugin of the app's seed that is not installed (ESC-338): uninstalled by the user, or refused by the seed. */
+export interface SeedOffer {
+  id: string;
+  name: string;
+  version: string;
+  /** The version the user uninstalled. */
+  removed: string | null;
+  /** Why the seed did not install it. */
+  refused: string | null;
 }
 
 /** A plugin read before it is installed: the install window's. */
@@ -152,6 +198,9 @@ export const pluginsApi = {
   inspectDev: (path: string) => invoke<PluginPreview>('plugin_inspect_dev', { path }),
   /** Downloads a version of the store and checks it (the last one this Escouade runs when none is named). */
   inspectStore: (id: string, version: string | null = null) => invoke<PluginPreview>('plugin_inspect_store', { id, version }),
+  /** Reads the seed's version of a plugin and checks it, with no network (ESC-338). */
+  inspectSeed: (id: string) => invoke<PluginPreview>('plugin_inspect_seed', { id }),
+  seedOffers: () => invoke<SeedOffer[]>('plugin_seed_offers'),
   install: (token: string) => invoke<PluginView>('plugin_install', { token }),
   discard: (token: string) => invoke<void>('plugin_discard', { token }),
   remove: (id: string, keep: boolean) => invoke<boolean>('plugin_remove', { id, keep }),
@@ -180,11 +229,15 @@ export function textOf(text: ManifestText | undefined, lang: string): string {
 /** A permission in words: its icon, what it says, its detail (a host, an event…), and how strong it is. */
 export interface Ask {
   word: string;
-  icon: 'term' | 'shield' | 'bash' | 'spark' | 'globe' | 'lock';
+  icon: 'term' | 'shield' | 'bash' | 'spark' | 'globe' | 'lock' | 'folder';
   text: string;
   detail: string;
   strong: boolean;
   red: boolean;
+  /** What writes on the user's disk, in orange (§8.4.6). */
+  orange?: boolean;
+  /** What it says under it: whether Escouade enforces it (a host of a plugin in WASM) or only shows it. */
+  note?: string;
 }
 
 /** The title of a secret's field, or its key. */
@@ -193,21 +246,83 @@ function secretTitle(m: Manifest | null, key: string, lang: string) {
   return textOf(fields.find((f) => f.key === key)?.title, lang) || key;
 }
 
+/** A folder it asks for, `files:<root>:<access>` (§8.4.6): writing in the user's folders is in orange. */
+function askOfFiles(word: string, root: string, writes: boolean): Ask {
+  const note = t('plugins.perms.filesApplied');
+  const line = (text: string, orange = false): Ask => ({
+    word,
+    icon: 'folder',
+    text,
+    detail: root,
+    strong: orange,
+    red: false,
+    orange,
+    note,
+  });
+  if (root === 'plugin') return { ...line(t('plugins.ask.filesPlugin')), note: undefined };
+  if (root === 'temp') return { ...line(t('plugins.ask.filesTemp')), note: undefined };
+  if (writes) return line(t('plugins.ask.filesWrite'), true);
+  return line(t(root === 'agentHome' ? 'plugins.ask.filesHome' : 'plugins.ask.filesRead'));
+}
+
 /** What the permission `word` lets the plugin do, in words (§3.4). */
 export function askOf(word: string, m: Manifest | null, lang: string): Ask {
   const [kind, ...rest] = word.split(':');
   const what = rest.join(':');
   switch (kind) {
     case 'run':
+      // A JS/TS bundle or a Rust module runs inside Escouade, isolated (ESC-320, ESC-331): no program of the user's machine.
+      if (m?.run?.js || m?.run?.wasm)
+        return { word, icon: 'shield', text: t('plugins.ask.wasm'), detail: m.run.js ?? m.run.wasm ?? '', strong: false, red: false };
       return { word, icon: 'term', text: t('plugins.ask.run'), detail: m?.run?.command ?? '', strong: true, red: false };
     case 'decide':
       return { word, icon: 'shield', text: t('plugins.ask.decide'), detail: '', strong: true, red: true };
+    case 'harness':
+      // A harness it describes (PLG-6): the program of the user's machine its agents run, with its arguments.
+      return { word, icon: 'term', text: t('plugins.ask.harness'), detail: what, strong: true, red: false };
     case 'commands':
-      return { word, icon: 'bash', text: t('plugins.ask.commands'), detail: what, strong: false, red: false };
+      return {
+        word,
+        icon: 'bash',
+        text: t('plugins.ask.commands'),
+        detail: what,
+        strong: true,
+        red: true,
+        // A program of a plugin in WASM goes through Escouade (`proc/spawn`); a process runs what it likes.
+        note: t(m?.run?.js || m?.run?.wasm ? 'plugins.perms.commandsApplied' : 'plugins.perms.commandsNote'),
+      };
+    case 'files':
+      return askOfFiles(word, rest[0] ?? '', rest[1] === 'write');
     case 'events':
       return { word, icon: 'spark', text: t('plugins.ask.events'), detail: what, strong: false, red: false };
     case 'network':
-      return { word, icon: 'globe', text: t('plugins.ask.network'), detail: what, strong: false, red: false };
+      // The hosts the user types for its accounts, and the local server of its harness: no host to name (ESC-332).
+      if (what === '{account}' || what === 'local:shared')
+        return {
+          word,
+          icon: 'globe',
+          text: t(what === '{account}' ? 'plugins.ask.networkAccount' : 'plugins.ask.networkShared'),
+          detail: '',
+          strong: false,
+          red: false,
+        };
+      return {
+        word,
+        icon: 'globe',
+        text: t('plugins.ask.network'),
+        detail: what,
+        strong: false,
+        red: false,
+        // A bundle goes through Escouade's `net/fetch`, a declarative plugin's webhooks are sent by Escouade: only a
+        // command keeps a network of its own.
+        note: t(
+          m?.run?.js || m?.run?.wasm
+            ? 'plugins.perms.networkApplied'
+            : m && !m.run
+              ? 'plugins.perms.networkWebhooks'
+              : 'plugins.perms.networkNote',
+        ),
+      };
     default:
       return {
         word,
@@ -228,11 +343,12 @@ export function contributionsOf(m: Manifest | null, lang: string): string[] {
   if (!m) return [];
   const out: string[] = [];
   const list = (key: string) => (Array.isArray(m.contributes[key]) ? (m.contributes[key] as Record<string, unknown>[]) : []);
-  const names = (key: string) =>
-    list(key)
-      .map((i) => textOf((i.name ?? i.title ?? i.id) as ManifestText | undefined, lang))
-      .filter(Boolean)
-      .join(', ');
+  // A webhook has no name of its own: what sets it off says it.
+  const nameOf = (i: Record<string, unknown>) =>
+    Array.isArray(i.events) && !i.name && !i.title && !i.id
+      ? i.events.join(' ')
+      : textOf((i.name ?? i.title ?? i.id) as ManifestText | undefined, lang);
+  const names = (key: string) => list(key).map(nameOf).filter(Boolean).join(', ');
   const points: [
     string,
     (
@@ -242,6 +358,7 @@ export function contributionsOf(m: Manifest | null, lang: string): string[] {
       | 'commands'
       | 'ticketSources'
       | 'forges'
+      | 'launchEnvironments'
       | 'accounts'
       | 'menus'
       | 'statusBar'
@@ -255,6 +372,7 @@ export function contributionsOf(m: Manifest | null, lang: string): string[] {
     ['harnesses', 'harnesses'],
     ['ticketSources', 'ticketSources'],
     ['forges', 'forges'],
+    ['launchEnvironments', 'launchEnvironments'],
     ['accounts', 'accounts'],
     ['webhooks', 'webhooks'],
     ['commands', 'commands'],
@@ -288,7 +406,7 @@ export function categoriesOf(p: PluginView): Category[] {
   if (has('themes')) out.push('themes');
   if (has('webhooks') || has('notifications')) out.push('notifications');
   if (m.permissions.decide || has('permissionRules')) out.push('permissions');
-  if (has('commands') || has('menus') || has('statusBar') || has('badges')) out.push('tools');
+  if (has('commands') || has('menus') || has('statusBar') || has('badges') || has('launchEnvironments')) out.push('tools');
   if (has('languages')) out.push('languages');
   return out;
 }
@@ -304,6 +422,8 @@ export function originOf(o: Origin): string {
       return `${o.url.replace(/^https?:\/\//, '').replace(/\.git$/, '')} · ${o.tag}`;
     case 'store':
       return 'store.escouade.dev';
+    case 'builtin':
+      return 'Escouade';
     default:
       return o.path;
   }

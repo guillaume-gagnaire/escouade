@@ -14,7 +14,7 @@ vi.mock('../../lib/terminals', () => ({
 import { setLang } from '../../lib/i18n';
 import { menu } from '../../lib/menu.svelte';
 import { app } from '../../lib/state.svelte';
-import { agent, fakeBackend, project, resetApp, ticket } from '../../test/ipc';
+import { agent, board, fakeBackend, project, resetApp, ticket, ticketPr } from '../../test/ipc';
 import Board from './Board.svelte';
 
 const col = (name: string) => screen.getByRole('region', { name });
@@ -66,6 +66,28 @@ describe('Board', () => {
     );
     expect(screen.getByText('1 place libre')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Après validation : merge squash → main/ })).toBeInTheDocument();
+  });
+
+  it('shows « En revue » only when the board opens pull requests or holds a ticket there, and refreshes it (ESC-59)', async () => {
+    const backend = fakeBackend({ ticket_prs_refresh: () => 1 });
+    const { unmount } = render(Board, { project: app.projects[0] });
+    expect(screen.queryByRole('region', { name: 'En revue' })).toBeNull();
+    unmount();
+    app.projects[0] = project({ board: board({ action: 'pr' }) });
+    render(Board, { project: app.projects[0] });
+    expect(within(col('En revue')).getByText('Aucune PR en revue')).toBeInTheDocument();
+    // Between « À tester » and « Terminé ».
+    const names = screen.getAllByRole('region').map((r) => r.getAttribute('aria-label'));
+    expect(names).toEqual(['À faire', 'En cours', 'À tester', 'En revue', 'Terminé']);
+    await userEvent.click(within(col('En revue')).getByRole('button', { name: 'Rafraîchir' }));
+    expect(backend.called('ticket_prs_refresh')).toEqual([{ cmd: 'ticket_prs_refresh', args: { projectId: 'p1' } }]);
+  });
+
+  it('keeps « En revue » while a ticket is in it, whatever the board does now', () => {
+    fakeBackend();
+    app.tickets.t9 = ticket({ id: 't9', key: 'DEM-9', title: 'Revue', column: 'pr', pr: ticketPr() });
+    render(Board, { project: app.projects[0] });
+    expect(within(col('En revue')).getByText('DEM-9')).toBeInTheDocument();
   });
 
   it('says that no ticket starts while no harness is found', () => {

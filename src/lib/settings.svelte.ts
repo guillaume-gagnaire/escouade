@@ -10,6 +10,7 @@ import { app } from './state.svelte';
 import type {
   BoardSettings,
   CommitMode,
+  PagesOpen,
   EngineId,
   Project,
   ProjectIntegrations,
@@ -94,6 +95,7 @@ const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
     'todoTools',
     'claudeSelfUpdate',
     'idleStopMinutes',
+    'midTurnDelaySecs',
     'attachMaxMb',
     'attachWarnMb',
     'attachOrigin',
@@ -132,6 +134,7 @@ type ProjectFields = Pick<
   | 'worktreeSetup'
   | 'worktreeTeardown'
   | 'commitMode'
+  | 'pagesOpen'
   | 'account'
   | 'worktreeDir'
   | 'agentBranchPrefix'
@@ -143,6 +146,7 @@ type ProjectFields = Pick<
   | 'workflowFixes'
   | 'workflowsAutoRead'
   | 'workflowsInRepo'
+  | 'workflowsEnabled'
   | 'userName'
   | 'shareNew'
   | 'docsBranch'
@@ -176,6 +180,8 @@ export interface ProjectDraft {
   worktreeTeardown: WorktreeStep[];
   /** « Commit »: the agent writes the commits, or the app commits with the message the user read. */
   commitMode: CommitMode;
+  /** « Ouvrir les pages des lancements » (ESC-311). */
+  pagesOpen: PagesOpen;
   /** « Compte préféré »: the Claude account its agents and tickets go to; empty is « Automatique ». */
   account: string;
   /** « Dossier des worktrees », as typed: empty is `.claude/worktrees`. */
@@ -198,6 +204,8 @@ export interface ProjectDraft {
   workflowsAutoRead: boolean;
   /** « Où garder la configuration des workflows »: in the repository (`.escouade/workflows/`), or on this machine. */
   workflowsInRepo: boolean;
+  /** Off: « Pas de workflow pour ce projet » (ESC-309). */
+  workflowsEnabled: boolean;
   /** « Ton nom dans ce projet » (ESC-190): empty is the app's. */
   userName: string;
   /** « Partager chaque nouveau ticket » (ESC-190). */
@@ -223,6 +231,7 @@ function draftOf(p: Project): ProjectDraft {
     worktreeSetup,
     worktreeTeardown,
     commitMode,
+    pagesOpen,
     account,
     worktreeDir,
     agentBranchPrefix,
@@ -234,6 +243,7 @@ function draftOf(p: Project): ProjectDraft {
     workflowFixes,
     workflowsAutoRead,
     workflowsInRepo,
+    workflowsEnabled,
     userName,
     shareNew,
     docsBranch,
@@ -259,6 +269,8 @@ function draftOf(p: Project): ProjectDraft {
     worktreeSetup,
     worktreeTeardown,
     commitMode,
+    // Absent from a project saved before ESC-311: in the agent.
+    pagesOpen: pagesOpen ?? 'agent',
     account,
     worktreeDir,
     agentBranchPrefix,
@@ -274,6 +286,8 @@ function draftOf(p: Project): ProjectDraft {
     workflowFixes: workflowFixes ?? [],
     workflowsAutoRead: workflowsAutoRead ?? true,
     workflowsInRepo: workflowsInRepo ?? true,
+    // Absent from a project of the window's tests made before ESC-309.
+    workflowsEnabled: workflowsEnabled ?? true,
     // Absent from a project of the window's tests made before ESC-190.
     userName: userName ?? '',
     shareNew: !!shareNew,
@@ -328,6 +342,7 @@ function fieldsOf(d: ProjectDraft): ProjectFields {
     worktreeSetup: stepsOf(d.worktreeSetup),
     worktreeTeardown: stepsOf(d.worktreeTeardown),
     commitMode: d.commitMode,
+    pagesOpen: d.pagesOpen,
     account: d.account,
     worktreeDir: d.worktreeDir.trim(),
     agentBranchPrefix: d.agentBranchPrefix.trim(),
@@ -339,6 +354,7 @@ function fieldsOf(d: ProjectDraft): ProjectFields {
     workflowFixes: d.workflowFixes,
     workflowsAutoRead: d.workflowsAutoRead,
     workflowsInRepo: d.workflowsInRepo,
+    workflowsEnabled: d.workflowsEnabled,
     userName: d.userName.trim(),
     shareNew: d.shareNew,
     docsBranch: d.docsBranch.trim(),

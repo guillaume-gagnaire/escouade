@@ -1,11 +1,14 @@
 //! Mistral Vibe's translation, on the streams of the real Vibe 3.0.3 (tests/fixtures/vibe/) and on
 //! its fake (tests/fixtures/fake-vibe.mjs): the turn, its permission, its question, its plan, its
-//! cancel, its resume, the fence (ESC-266).
+//! cancel, its resume, the fence (ESC-266). Since INT-10.6 it is its plugin's (`dev.escouade.mistral`):
+//! the streams go through its client, the fake is driven through its process.
 
-use super::*;
+use crate::agent::*;
 use crate::engine::vibe::{bench, VIBE};
 use crate::engine::{Engine, Spawn, Start};
 use crate::model::{AgentMeta, EngineId};
+use escouade_acp::{cursor, vibe::normalized};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
@@ -14,7 +17,7 @@ fn rt(cwd: &str) -> AgentRt {
     AgentRt::new(
         AgentMeta {
             id: new_id(),
-            engine: EngineId::Vibe,
+            engine: EngineId::VIBE,
             cwd: cwd.into(),
             mode: "default".into(),
             ..Default::default()
@@ -23,16 +26,23 @@ fn rt(cwd: &str) -> AgentRt {
     )
 }
 
-/// The stream `file` as it was recorded, through the translation.
+/// The stream `file` as it was recorded, through the translation (its plugin's client).
 fn replayed(file: &str, cwd: &str) -> AgentRt {
-    let mut rt = rt(cwd);
+    let rt = rt(cwd);
     // Its folders as a machine names them (`<ESSAI>` in the recording).
-    for line in bench::stream(file) {
-        let line: Value =
-            serde_json::from_str(&line.to_string().replace("<ESSAI>", "C:\\\\essai")).unwrap();
-        rt.vibe_frame(&line, &mut Effects::default());
-    }
-    rt
+    let lines: Vec<Value> = bench::stream(file)
+        .into_iter()
+        .map(|line| {
+            serde_json::from_str(&line.to_string().replace("<ESSAI>", "C:\\\\essai")).unwrap()
+        })
+        .collect();
+    let dir = crate::paths::test_dir(&format!("int10-vibe-{}", new_id()));
+    crate::plugins_acp_tests::replayed_through_the_client(
+        &crate::plugins_acp_tests::vibe_decl(),
+        rt.meta.clone(),
+        &lines,
+        &dir,
+    )
 }
 
 #[test]
@@ -108,7 +118,7 @@ fn an_mcp_tool_of_vibe_takes_claude_codes_name() {
         "C:\\repo",
     )
     .unwrap();
-    let (name, input) = cursor::tool_of(&n, "C:\\repo");
+    let (name, input) = cursor::tool_of(&n, "C:\\repo").unwrap();
     assert_eq!(name, "mcp__escouade__get_board");
     assert_eq!(input, json!({ "x": 1 }));
     // Its own tools shown otherwise, or not at all.
@@ -134,6 +144,8 @@ enum Heard {
 /// An agent of Vibe on the fake, in `dir`, its frames translated as the core does.
 struct Live {
     rt: AgentRt,
+    /// The plugins the app gives, in a runtime of its own: Vibe's conversation goes through its plugin (INT-10.6).
+    plugins: Arc<crate::plugins::runtime::Runtime>,
     heard: mpsc::UnboundedReceiver<Heard>,
     log: std::path::PathBuf,
     home: std::path::PathBuf,
@@ -157,6 +169,9 @@ impl Live {
         program: crate::engine::Program,
         escouade: crate::engine::Escouade,
     ) -> Live {
+        let (plugins, installed, _) =
+            crate::plugins_acp_tests::runtime(&format!("int10-vibe-{}", new_id()));
+        crate::plugins::harness::sync(&plugins, &installed);
         let home = dir.join("vibe-home");
         let log = dir.join("fake-vibe.jsonl");
         let env = vec![
@@ -184,10 +199,34 @@ impl Live {
         proc.initialize().await.unwrap();
         let mut live = Live {
             rt,
+            plugins,
             heard,
             log,
             home,
         };
+        // Its session open (new, resumed or copied), as the core's own client had it at the end of `initialize`: its
+        // plugin says it (`session`).
+        let started = std::time::Instant::now();
+        loop {
+            assert!(
+                started.elapsed() < Duration::from_secs(60),
+                "no session: {}",
+                live.launched()
+            );
+            match tokio::time::timeout(Duration::from_millis(200), live.heard.recv()).await {
+                Ok(Some(Heard::Frame(f))) => {
+                    VIBE.translate(&mut live.rt, &f, &mut Effects::default());
+                    let opened = f["items"]
+                        .as_array()
+                        .is_some_and(|i| i.iter().any(|i| i["op"] == "session"));
+                    if opened {
+                        break;
+                    }
+                }
+                Ok(Some(Heard::Exit)) | Ok(None) => panic!("the fake left: {}", live.launched()),
+                Err(_) => {}
+            }
+        }
         live.drain().await;
         live
     }
@@ -247,6 +286,7 @@ impl Live {
         let proc = self.rt.proc.clone().unwrap();
         proc.kill();
         proc.wait_gone(Duration::from_secs(5)).await;
+        self.plugins.shutdown();
     }
 }
 
@@ -255,7 +295,7 @@ fn meta(dir: &std::path::Path, mode: &str) -> AgentMeta {
     std::fs::create_dir_all(&cwd).unwrap();
     AgentMeta {
         id: new_id(),
-        engine: EngineId::Vibe,
+        engine: EngineId::VIBE,
         cwd: cwd.to_string_lossy().into_owned(),
         model: "devstral-2".into(),
         effort: "low".into(),
@@ -264,7 +304,7 @@ fn meta(dir: &std::path::Path, mode: &str) -> AgentMeta {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn a_turn_on_the_fake_has_its_model_thinking_agent_and_server_without_its_token_in_the_arguments(
 ) {
     let dir = crate::paths::test_dir("esc266-vibe-live-turn");
@@ -309,7 +349,7 @@ async fn a_turn_on_the_fake_has_its_model_thinking_agent_and_server_without_its_
     live.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn a_permission_refused_cuts_the_turn_and_always_holds_for_the_agent() {
     let dir = crate::paths::test_dir("esc266-vibe-live-perm");
     let mut live = Live::start(&dir, meta(&dir, "default"), Default::default()).await;
@@ -380,7 +420,7 @@ async fn a_permission_refused_cuts_the_turn_and_always_holds_for_the_agent() {
     live.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn a_write_in_the_folder_goes_through_and_one_outside_asks_with_its_diff() {
     let dir = crate::paths::test_dir("esc266-vibe-live-write");
     let mut live = Live::start(&dir, meta(&dir, "default"), Default::default()).await;
@@ -416,7 +456,7 @@ async fn a_write_in_the_folder_goes_through_and_one_outside_asks_with_its_diff()
     live.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn a_question_is_answered_from_its_card() {
     let dir = crate::paths::test_dir("esc266-vibe-live-question");
     let mut live = Live::start(&dir, meta(&dir, "default"), Default::default()).await;
@@ -452,7 +492,7 @@ async fn a_question_is_answered_from_its_card() {
     live.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn in_the_mode_plan_its_last_words_are_a_plan_to_approve_then_carried_out() {
     let dir = crate::paths::test_dir("esc266-vibe-live-plan");
     let mut live = Live::start(&dir, meta(&dir, "plan"), Default::default()).await;
@@ -498,7 +538,7 @@ async fn in_the_mode_plan_its_last_words_are_a_plan_to_approve_then_carried_out(
     live.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn a_session_is_resumed_and_copied_by_a_new_process() {
     let dir = crate::paths::test_dir("esc266-vibe-live-resume");
     let m = meta(&dir, "default");
@@ -535,7 +575,7 @@ async fn a_session_is_resumed_and_copied_by_a_new_process() {
 }
 
 /// « Projet privé »: a permission naming a path of the fence is refused at once, never a card.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn a_write_naming_a_fenced_path_is_refused_without_a_card() {
     let dir = crate::paths::test_dir("esc266-vibe-live-fence");
     // In Bypass too: Vibe kept in its agent `ask`, its `auto-approve` letting all through.
@@ -593,7 +633,7 @@ fn snapshot(dir: &std::path::Path) -> std::collections::BTreeMap<String, Vec<u8>
 /// own: a command whose permission is allowed from its card, then, in Bypass, a file of a private
 /// project its fence refuses. The user's `~/.vibe` is compared byte for byte before and after.
 /// About 0.03 $ on Mistral Medium 3.5.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[ignore = "real Mistral Vibe: ESCOUADE_TEST_REAL_VIBE=<vibe-acp>"]
 async fn real_vibe() {
     let program = std::env::var("ESCOUADE_TEST_REAL_VIBE").expect("ESCOUADE_TEST_REAL_VIBE");
