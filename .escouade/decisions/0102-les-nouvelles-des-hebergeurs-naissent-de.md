@@ -1,9 +1,9 @@
 ---
-number: null
+number: 102
 id: "les-nouvelles-des-hebergeurs-naissent-de"
 title: "Les nouvelles des hébergeurs naissent des lectures déjà faites, et se règlent une à une"
 date: "2026-11-07"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-68"
 pages: ["fenetre/notifications","fenetre/vue-d-ensemble","kanban/environnements","harness/serveur-mcp","git-fichiers/pull-requests","git-fichiers/vue-pull-requests"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"fenetre/notifications","added":16,"removed":2},{"page":"fenetre/vue-d-ensemble","added":16,"removed":2},{"page":"kanban/environnements","added":3,"removed":1},{"page":"harness/serveur-mcp","added":8,"removed":0},{"page":"git-fichiers/pull-requests","added":1,"removed":0},{"page":"git-fichiers/vue-pull-requests","added":1,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-07T02:47:09+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
