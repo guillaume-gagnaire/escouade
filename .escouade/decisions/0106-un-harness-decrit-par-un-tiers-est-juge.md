@@ -1,9 +1,9 @@
 ---
-number: null
+number: 106
 id: "un-harness-decrit-par-un-tiers-est-juge"
 title: "Un harness décrit par un tiers est jugé sur son auteur, pas sur le plugin qui le sert"
 date: "2026-11-07"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-361"
 pages: ["plugins/harness-acp-decrits"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/harness-acp-decrits","added":7,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-07T06:24:05+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
