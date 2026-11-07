@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-acp"
-version = "2.2.1"
+version = "2.2.2"
 description = "Le plugin ACP d'Escouade : les harness qui parlent ACP, décrits par un plugin sans code"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"

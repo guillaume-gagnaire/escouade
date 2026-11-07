@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.0.1
 
 - Its page has its documentation in French and in English: README.fr.md, README.en.md and the pages of docs/fr and docs/en (`store.docs`).
 

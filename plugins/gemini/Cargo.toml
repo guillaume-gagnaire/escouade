@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-gemini"
-version = "2.2.1"
+version = "2.2.2"
 description = "Le plugin Gemini CLI d'Escouade : Gemini CLI comme harness, par ACP"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"

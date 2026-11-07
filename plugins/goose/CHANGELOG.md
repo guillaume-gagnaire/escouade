@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.1
 
 - Its page has its documentation, in French and in English: README.fr.md, README.en.md and five pages in docs/.
 

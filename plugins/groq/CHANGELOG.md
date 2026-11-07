@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.2.2
 
 - Its page has its documentation, in French and in English: install, use, permissions, troubleshooting, develop.
 

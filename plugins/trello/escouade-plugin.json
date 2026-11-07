@@ -2,7 +2,7 @@
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.trello",
   "name": "Trello",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "description": {
     "fr": "Les cartes de Trello dans le Kanban, leurs listes comme colonnes.",
     "en": "Trello cards in the Kanban, their lists as columns."

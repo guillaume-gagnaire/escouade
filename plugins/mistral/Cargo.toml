@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-mistral"
-version = "2.2.1"
+version = "2.2.2"
 description = "Le plugin Mistral d'Escouade : Mistral Vibe comme harness, par ACP, à côté du service de voix"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"

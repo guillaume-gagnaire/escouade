@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.2.2
 
 - Its page has its documentation, in French and in English: README.fr.md, README.en.md and five pages in docs/.
 
