@@ -1,9 +1,9 @@
 ---
-number: null
+number: 103
 id: "plugins-publish-publier-avant-la-revue-e"
 title: "plugins:publish : publier avant la revue, et un jeton d'administration limité à trois outils sur /mcp"
 date: "2026-11-06"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-353"
 pages: ["store/revue-et-signature","store/serveur-mcp","plugins/tous-les-plugins-en-wasm"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"store/revue-et-signature","added":10,"removed":0},{"page":"store/serveur-mcp","added":4,"removed":0},{"page":"plugins/tous-les-plugins-en-wasm","added":7,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-07T02:47:55+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
