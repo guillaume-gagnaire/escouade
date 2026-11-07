@@ -80,6 +80,8 @@ export default {
   },
   /** The update downloaded, its notes once installed, and the toasts about it. */
   update: {
+    /** A beta's version, wherever the app says it (ESC-374). */
+    betaVersion: '{version} (bêta)',
     ready: 'Escouade {version} est prête',
     notes: 'Nouveautés d’Escouade {version}',
     saveFirst: {

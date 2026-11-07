@@ -2,6 +2,7 @@
   import { flushDrafts } from '../../lib/drafts';
   import { buffers } from '../../lib/editor/buffers.svelte';
   import { t } from '../../lib/i18n';
+  import { shownVersion } from '../../lib/updater';
   import { api } from '../../lib/ipc';
   import type { SettingsTab } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
@@ -41,7 +42,13 @@
   }
 </script>
 
-<Modal title={installed ? t('shell.update.notes', { version }) : t('shell.update.ready', { version })} width={560} onclose={close}>
+<Modal
+  title={installed
+    ? t('shell.update.notes', { version: shownVersion(version) })
+    : t('shell.update.ready', { version: shownVersion(version) })}
+  width={560}
+  onclose={close}
+>
   {#snippet lead()}<span class="lead"><Icon name="download" /></span>{/snippet}
   {#if !installed && unsaved}
     {@const [b, rest] = subject(t('shell.update.saveFirst', { count: unsaved }))}

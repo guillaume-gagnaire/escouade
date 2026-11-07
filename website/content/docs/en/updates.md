@@ -9,6 +9,17 @@ Escouade updates itself from GitHub releases: it downloads in the background, th
 - Once downloaded, the update waits: the status bar shows “Update 1.8.0 ready · Restart”. It installs when you restart the app, when the app restarts by itself, or when you quit it.
 - Installation happens without an installer window. The proxy and certificate verification set in Settings › Network apply to the checks and downloads too. When something fails, see [“When it fails”](#when-it-fails).
 
+## Beta versions
+
+A beta is an early version, published so that volunteers can try it before everyone else: it carries the number of the version it prepares followed by `-beta` and a number, for example “2.2.0-beta.1”. It may have flaws the stable version won’t have.
+
+The “Receive beta versions” option (Settings › About, unticked by default) decides whether you get them:
+
+- **Unticked**, Escouade ignores every beta and reads only `latest.json`, which never holds one. If you are already on a beta, you stay on it until the stable version that follows it (2.2.0 after 2.2.0-beta.3); an older version, such as a 2.1.5, doesn’t replace it.
+- **Ticked**, Escouade first reads `beta.json`, in the latest stable release, which gives the most recent version, beta or stable; if it’s missing, it reads `latest.json`. Ticking it starts a check at once, and the setting is saved right away, without “Save”.
+
+A beta shows wherever Escouade says a version: “Escouade 2.2.0-beta.1 (beta)” in Settings › About and at the bottom of the tab column, “Update 2.2.0-beta.1 (beta)…” in the status bar. Its notes are in the update window as for any version; it isn’t announced on Discord.
+
 ## Installing an update
 
 ### Restart yourself

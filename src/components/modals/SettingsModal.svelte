@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
   import { trapFocus } from '../../lib/focus';
   import { t } from '../../lib/i18n';
+  import { shownVersion } from '../../lib/updater';
   import { SETTINGS_TABS, settingsForm, type SettingsTab } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import AccountsTab from '../settings/AccountsTab.svelte';
@@ -114,7 +115,7 @@
         {/each}
       </div>
       <span id="settings-changed" hidden>{t('settings.modal.changed')}</span>
-      <span class="s-ver">Escouade {app.version}</span>
+      <span class="s-ver">Escouade {shownVersion(app.version)}</span>
     </nav>
     <div class="s-main">
       <div class="s-head">

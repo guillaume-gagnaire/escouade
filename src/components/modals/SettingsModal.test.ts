@@ -1111,6 +1111,40 @@ describe('SettingsModal', () => {
     expect(app.settings.autoUpdate).toBe(false);
   });
 
+  it('receives the betas only once ticked, saved at once, a check following (ESC-374)', async () => {
+    const backend = fakeBackend({ save_settings: () => [], update_check: () => ({ kind: 'none' }) });
+    render(SettingsModal, { tab: 'about' });
+    const beta = screen.getByRole('switch', { name: 'Recevoir les versions bêta' });
+    expect(beta).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByText(/Les bêtas arrivent avant tout le monde et peuvent avoir des défauts/)).toBeInTheDocument();
+    await userEvent.click(beta);
+    // Saved without « Enregistrer »: the check that follows reads the saved settings.
+    await waitFor(() => expect(backend.called('update_check')).toHaveLength(1));
+    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ betaUpdates: true });
+    expect(backend.called('update_check')[0].args).toEqual({ manual: true });
+    expect(app.settings.betaUpdates).toBe(true);
+    expect(tab('À propos')).not.toHaveClass('changed');
+    await expect.poll(() => app.toasts.at(-1)?.text).toBe('Aucune mise à jour disponible.');
+    // Unticked: saved, and a quiet check takes back a beta on offer.
+    await userEvent.click(beta);
+    await waitFor(() => expect(backend.called('update_check')).toHaveLength(2));
+    expect(backend.called('save_settings')[1].args.settings).toMatchObject({ betaUpdates: false });
+    expect(backend.called('update_check')[1].args).toEqual({ manual: false });
+    expect(beta).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('says « bêta » beside the version of an app on a beta, and of a beta found', async () => {
+    app.version = '2.2.0-beta.1';
+    fakeBackend({
+      update_check: () => ({ kind: 'found', update: { id: 3, version: '2.2.0-beta.2', notes: '' } }),
+      update_download: () => new Promise(() => {}),
+    });
+    render(SettingsModal, { tab: 'about' });
+    expect(screen.getByTestId('app-version')).toHaveTextContent('Escouade 2.2.0-beta.1 (bêta)');
+    await userEvent.click(screen.getByRole('button', { name: 'Rechercher une mise à jour' }));
+    await expect.poll(() => screen.queryByText('Escouade 2.2.0-beta.2 (bêta) disponible')).not.toBeNull();
+  });
+
   it('shares the usage statistics only once switched on', async () => {
     const backend = fakeBackend({ save_settings: () => [] });
     app.settings = { ...app.settings, telemetry: null };

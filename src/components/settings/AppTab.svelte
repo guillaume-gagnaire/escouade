@@ -11,7 +11,7 @@
   import { CREDITS_URL } from '../../lib/conversation';
   import { DISCORD_URL, siteUrl, supportUrl } from '../../lib/links';
   import type { ClaudeLocated, ClaudeUpdateStatus, EngineDecl, EngineInfo } from '../../lib/types';
-  import { checkForUpdate, postponeRestart, restartIn } from '../../lib/updater';
+  import { checkForUpdate, postponeRestart, restartIn, shownVersion } from '../../lib/updater';
   import Markdown from '../conv/Markdown.svelte';
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
@@ -165,8 +165,8 @@
     !update
       ? ''
       : update.ready
-        ? t('settings.about.updateReadyLive', { version: update.version })
-        : t('settings.about.updateFoundLive', { version: update.version }),
+        ? t('settings.about.updateReadyLive', { version: shownVersion(update.version) })
+        : t('settings.about.updateFoundLive', { version: shownVersion(update.version) }),
   );
 
   async function check() {
@@ -175,6 +175,21 @@
     checking = false;
     // A check that failed has told why: it is not "nothing new".
     if (found === false) app.toast(t('settings.about.noUpdate'), 'info');
+  }
+
+  /**
+   * « Recevoir les versions bêta » (ESC-374): saved at once, as the accounts are, for the check that follows reads the
+   * saved settings. Ticked, a check runs as with the button; unticked, a quiet one, which takes back a beta on offer.
+   */
+  async function setBetaUpdates(on: boolean) {
+    app.settings.betaUpdates = on;
+    const saved = await app.run(api.saveSettings($state.snapshot(app.settings)));
+    if (saved === undefined) {
+      app.settings.betaUpdates = !on;
+      return;
+    }
+    if (on) await check();
+    else await checkForUpdate(false);
   }
 </script>
 
@@ -437,7 +452,7 @@
   <div class="about-id">
     <img src="/logo.svg" alt="" draggable="false" />
     <div class="who">
-      <b>Escouade {app.version}</b>
+      <b data-testid="app-version">Escouade {shownVersion(app.version)}</b>
       <span
         >{found.length
           ? t('settings.about.enginesFound', { list: found.map((e) => e.name).join(', ') })
@@ -451,10 +466,13 @@
     <Row label={t('settings.about.autoUpdate')} desc={t('settings.about.autoUpdateDesc')}>
       <Switch label={t('settings.about.autoUpdate')} bind:on={s.autoUpdate} />
     </Row>
+    <Row label={t('settings.about.betaUpdates')} desc={t('settings.about.betaUpdatesDesc')}>
+      <Switch label={t('settings.about.betaUpdates')} bind:on={() => app.settings.betaUpdates === true, (on) => void setBetaUpdates(on)} />
+    </Row>
     <!-- The update found, as the status bar says it (ESC-250): downloading, then ready with its restart and its notes. -->
     {#if update?.ready}
       {@const notes = update.notes.trim()}
-      <Row label={t('settings.about.updateReady', { version: update.version })} desc={t('settings.about.updateReadyDesc')}>
+      <Row label={t('settings.about.updateReady', { version: shownVersion(update.version) })} desc={t('settings.about.updateReadyDesc')}>
         {#snippet extra()}
           <div class="upd" data-update="ready">
             {#if restartSeconds !== null}
@@ -475,14 +493,14 @@
         <button class="btn primary" onclick={() => (app.modal = { kind: 'update', back: 'about' })}>{t('shell.update.restartNow')}</button>
       </Row>
     {:else if update}
-      <Row label={t('settings.about.updateFound', { version: update.version })}>
+      <Row label={t('settings.about.updateFound', { version: shownVersion(update.version) })}>
         {#snippet extra()}<span class="more upd" data-update="downloading">{t('settings.about.updateDownloading')}</span>{/snippet}
       </Row>
     {/if}
     <!-- An update that does not download, said here while it lasts (choice 13 of the 2.0 design). -->
     {#if app.updateTrouble && !update}
       {@const trouble = app.updateTrouble}
-      <Row label={t('settings.about.updateTrouble', { version: trouble.version })}>
+      <Row label={t('settings.about.updateTrouble', { version: shownVersion(trouble.version) })}>
         {#snippet extra()}
           <span class="warn">{t('settings.about.updateTroubleDesc', { error: trouble.message })}</span>
         {/snippet}

@@ -9,6 +9,17 @@ Escouade se met à jour seule depuis les releases GitHub : elle télécharge en 
 - Une fois téléchargée, la mise à jour attend : la barre d’état affiche « Mise à jour 1.8.0 prête · Redémarrer ». Elle s’installe quand tu redémarres l’app, quand l’app redémarre d’elle-même, ou quand tu la quittes.
 - L’installation se fait sans fenêtre d’installeur. Le proxy et la vérification des certificats réglés dans Réglages › Réseau valent aussi pour les vérifications et les téléchargements. Quand quelque chose échoue, voir [« Quand ça échoue »](#quand-ca-echoue).
 
+## Versions bêta
+
+Une bêta est une version en avance, publiée pour que des volontaires l’essaient avant tout le monde : elle porte le numéro de la version qu’elle prépare suivi de `-beta` et d’un numéro, par exemple « 2.2.0-beta.1 ». Elle peut avoir des défauts que la version stable n’aura plus.
+
+L’option « Recevoir les versions bêta » (Réglages › À propos, décochée par défaut) décide si tu les reçois :
+
+- **Décochée**, Escouade ignore toute bêta et ne lit que `latest.json`, qui n’en contient jamais. Si tu es déjà sur une bêta, tu y restes jusqu’à la version stable qui la suit (2.2.0 après 2.2.0-beta.3) ; une version plus ancienne, comme une 2.1.5, ne la remplace pas.
+- **Cochée**, Escouade lit d’abord `beta.json`, dans la dernière release stable, qui donne la version la plus récente, bêta ou stable ; s’il manque, elle lit `latest.json`. La cocher lance aussitôt une recherche, et le réglage s’enregistre tout de suite, sans « Enregistrer ».
+
+Une bêta se reconnaît partout où Escouade dit une version : « Escouade 2.2.0-beta.1 (bêta) » dans Réglages › À propos et en bas de la colonne des onglets, « Mise à jour 2.2.0-beta.1 (bêta)… » dans la barre d’état. Ses notes sont dans la fenêtre de la mise à jour comme pour une autre version ; elle n’est pas annoncée sur Discord.
+
 ## Installer une mise à jour
 
 ### Redémarrer toi-même

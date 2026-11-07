@@ -101,6 +101,16 @@ export async function checkForUpdate(manual = false): Promise<boolean | null> {
   }
 }
 
+/** Whether `version` is a beta: a pre-release suffix (`2.2.0-beta.1`), as the backend's `updates::accepts` has it. */
+export function isBeta(version: string): boolean {
+  return /^\d+\.\d+\.\d+-/.test(version);
+}
+
+/** A version as the app says it: « (bêta) » after a beta's, the app's own and an update's alike. */
+export function shownVersion(version: string): string {
+  return isBeta(version) ? t('shell.update.betaVersion', { version }) : version;
+}
+
 /** Seconds left before the automatic restart for the update, when one is planned. */
 export function restartIn(): number | null {
   return app.restartAt === null ? null : Math.max(0, Math.ceil((app.restartAt - app.now) / 1000));

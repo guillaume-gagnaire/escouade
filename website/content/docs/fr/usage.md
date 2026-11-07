@@ -37,11 +37,11 @@ Escouade suit les deux fenêtres de quota de ton abonnement Claude : la fenêtre
 
 ### Le quota d’un modèle
 
-Sur certains forfaits, Claude compte un modèle à part : la semaine de Fable, par exemple, a son propre plafond et sa propre remise à zéro. Escouade lui donne une barre de plus, à côté des autres et sous le nom que donne Anthropic : « Fable · semaine ». Elle se lit comme les autres (infobulle, lecteurs d’écran : « Quota sur 7 jours de Fable »), dans la barre de statut, le panneau des quotas et Réglages › Comptes.
+Sur certains forfaits, Claude compte un modèle à part : la semaine de Fable, par exemple, a son propre plafond et sa propre remise à zéro. Escouade lui donne une barre de plus, à côté des autres et sous le nom que donne Anthropic : « Fable · semaine ». Elle se lit comme les autres (infobulle, lecteurs d’écran : « Quota sur 7 jours de Fable »), dans la barre de statut, le panneau des quotas et Réglages › Comptes.
 
-Ce quota ne retient que les agents et les tickets de ce modèle. Quand la semaine de Fable passe le seuil, un ticket Fable part sur un autre compte ou attend, et les tickets Opus ou Sonnet continuent sur le même compte. Le pilote auto n’est pas mis en pause pour autant. Un agent Fable arrêté par sa limite attend sa remise à zéro sans bloquer les autres modèles. Escouade reconnaît le modèle par son nom (« fable », « claude-fable-5-1 »…), quel que soit le nom qu’on lui donne.
+Ce quota ne retient que les agents et les tickets de ce modèle. Quand la semaine de Fable passe le seuil, un ticket Fable part sur un autre compte ou attend, et les tickets Opus ou Sonnet continuent sur le même compte. Le pilote auto n’est pas mis en pause pour autant. Un agent Fable arrêté par sa limite attend sa remise à zéro sans bloquer les autres modèles. Escouade reconnaît le modèle par son nom (« fable », « claude-fable-5-1 »…), quel que soit le nom qu’on lui donne.
 
-Les barres suivent ce qu’annonce le serveur : un forfait qui n’a pas de fenêtre de 5 heures (certains forfaits Max) n’a pas de barre « 5h », et une fenêtre qui disparaît du forfait disparaît de la barre à la lecture suivante.
+Les barres suivent ce qu’annonce le serveur : un forfait qui n’a pas de fenêtre de 5 heures (certains forfaits Max) n’a pas de barre « 5h », et une fenêtre qui disparaît du forfait disparaît de la barre à la lecture suivante.
 
 ### Avec plusieurs comptes
 

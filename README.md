@@ -214,6 +214,17 @@ Si quelque chose casse :
 - **la publication elle-même est refusée** (« Resource not accessible by integration ») : le brouillon est complet, publie-le à la main avec `gh release edit vX.Y.Z --draft=false --latest` (sans `--latest` pour une pré-version) ;
 - **l'annonce sur Discord échoue ou manque** : `gh run rerun <id> --failed` ne relance qu'elle, ou `gh workflow run discord.yml -f tag=vX.Y.Z` poste les notes d'une version déjà publiée.
 
+#### Sortir une bêta
+
+Une bêta se fait tester par les volontaires sans toucher les autres : ceux qui ont coché « Recevoir les versions bêta » (Réglages › À propos) la reçoivent, les autres restent sur la dernière version stable.
+
+1. Son numéro est la version qu'elle prépare suivie de `-beta.N` (le point compte : `beta.10` vient après `beta.9`) : `npm run version:set -- 2.2.0-beta.1`, puis le tag `v2.2.0-beta.1`, poussé comme une version.
+2. Ses notes : sa propre section `## [2.2.0-beta.1]` des deux journaux si elle en a une, sinon celle de `## [Non publié]` (`## [Unreleased]` en anglais), qu'on ne renomme pas (`scripts/changelog.mjs`). Elle n'est pas annoncée sur Discord.
+3. Sa release est une pré-version, jamais « latest » : son `latest.json` reste chez elle, et les versions sans l'option (2.1.3 et avant), qui ne lisent que celui de la dernière release, ne la voient jamais. Une fois publiée, le job `publish` dépose son `latest.json`, notes comprises, en `beta.json` dans la dernière release stable, à la place de celui qui y était (`scripts/beta-channel.mjs`).
+4. Une version stable met dans sa release, avant d'être marquée « latest », un `beta.json` : son propre `latest.json`, ou le `beta.json` de la dernière release quand il est plus récent (une bêta de la version suivante en cours). Ainsi `…/releases/latest/download/beta.json` donne toujours la version la plus récente, stable ou bêta, et l'étape « Check what the updater reads with the betas » le contrôle.
+
+Avec l'option, l'app lit `beta.json` puis, s'il manque, `latest.json` ; sans elle, `latest.json` seul, et elle écarte toute version suffixée. Une app sur une bêta dont on décoche l'option reste dessus jusqu'à la version stable qui la suit.
+
 Tague toujours la tête de `main`, et attends que la release soit créée (première minute du workflow) avant de pousser d'autres commits : une fois `main` plus loin que le tag, le `GITHUB_TOKEN` des Actions n'a plus le droit de créer la release (« Resource not accessible by integration »).
 
 ### Vidéo de présentation

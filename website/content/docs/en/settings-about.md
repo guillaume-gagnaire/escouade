@@ -8,12 +8,13 @@ Open the settings with `Ctrl+,` (`⌘,` on macOS), then choose “About” (“V
 
 ## Escouade
 
-The tab has a single group, “Escouade”, with eight lines, plus that of an update found, under “Install updates automatically”, until it is installed (see [“Check for updates”](#check-for-updates)).
+The tab has a single group, “Escouade”, with nine lines, plus that of an update found, under “Install updates automatically”, until it is installed (see [“Check for updates”](#check-for-updates)).
 
 | Line | What it shows or does | Default |
 |---|---|---|
-| “Escouade” followed by the version | The installed version. Below it, the harnesses Escouade finds on your machine (“Harnesses detected: Claude Code, Codex”), or “No harness found”. On the right, the “Check for updates” button. | — |
+| “Escouade” followed by the version | The installed version, followed by “(beta)” for a beta. Below it, the harnesses Escouade finds on your machine (“Harnesses detected: Claude Code, Codex”), or “No harness found”. On the right, the “Check for updates” button. | — |
 | “Install updates automatically” | “Escouade restarts itself when no agent is working and everything is saved.” | On |
+| “Receive beta versions” | “Betas come before everyone else’s update and may have flaws. Unticked, Escouade stays on its beta until the stable version that follows it.” Saved at once; ticked, it starts a check (see [“Beta versions”](updates#beta-versions)). | Off |
 | “Usage statistics” | “The features used, the version of Escouade and the system, under an id drawn at random: nothing that identifies you, nor your projects or your code.” On the right, the “In detail” button (it opens the [Privacy](/en/privacy/) page) and a switch. | Off until you accept the first-start question |
 | “Local data” | The folder where Escouade keeps its data: `~/.escouade/`. | — |
 | “Credits and licenses” | The components and voices Escouade ships, with their licenses. The “Open” button shows the list in your browser. | — |
