@@ -1127,7 +1127,7 @@ Relevé sur `main` au 2026-11-04, et sur `ticket/esc-226` (c291625b) pour Claude
 | `dev.escouade.trello` | `api.trello.com` | rien | `plugins/trello/src/lib.rs` |
 | `dev.escouade.jira` | `*.atlassian.net` | rien ; le site est tapé par l'utilisateur | `plugins/jira/src/lib.rs` |
 | `dev.escouade.clickup` | `api.clickup.com` | une attente de limite d'appels, l'heure | `src/lib.rs:84`, `:692` |
-| `dev.escouade.github` | `api.github.com`, `*.ghe.com`, `api.*.ghe.com` ; toute instance Server | une pause par limite d'appels, l'heure | `src/pulls.rs:160`, `:107` |
+| `dev.escouade.github` | `api.github.com`, `*.ghe.com` ; toute instance Server | une pause par limite d'appels, l'heure | `src/pulls.rs:160`, `:107` |
 | `dev.escouade.gitlab` | `gitlab.com` ; toute instance | une pause, l'heure | `src/merges.rs:317`, `:62` |
 | `dev.escouade.bitbucket` | `api.bitbucket.org` | une pause, l'heure | `src/pulls.rs:172`, `:93` |
 | `dev.escouade.gitea` | `codeberg.org`, `gitea.com` ; toute instance | rien | `src/pulls.rs` |

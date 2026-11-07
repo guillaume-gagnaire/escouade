@@ -15,7 +15,7 @@
   "run": { "wasm": "Cargo.toml" },
   "activation": ["account:github"],
   "permissions": {
-    "network": ["api.github.com", "*.ghe.com", "api.*.ghe.com", "*.actions.githubusercontent.com", "*.blob.core.windows.net", "{account}"],
+    "network": ["api.github.com", "*.ghe.com", "*.actions.githubusercontent.com", "*.blob.core.windows.net", "{account}"],
     "secrets": ["account:*"]
   },
   "limits": { "fetchSeconds": 15, "fetchBytes": 8388608 },

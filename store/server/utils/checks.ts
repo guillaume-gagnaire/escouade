@@ -882,6 +882,10 @@ function checkPermissions(m: Manifest | null): CheckResult {
   const runs = !!m.run;
   const webhooks = Array.isArray(c.webhooks) && c.webhooks.length > 0;
   const declared = Array.isArray(c.secrets) ? c.secrets.map((x) => (x as Record<string, unknown>)?.key).filter(Boolean) : [];
+  const accounts = Array.isArray(c.accounts) ? c.accounts.map((x) => (x as Record<string, unknown>)?.id).filter(Boolean) : [];
+  // The secret of an account it declares (`account:<id>`, or all of them, `account:*`): the app keeps it apart by plugin.
+  const ofAccount = (key: string) =>
+    key.startsWith('account:') && accounts.length > 0 && (key === 'account:*' || accounts.includes(key.slice('account:'.length)));
   const problems: Problem[] = [];
   const unused = (key: string, what: Text) =>
     list(p[key]).forEach((_, i) =>
@@ -923,12 +927,12 @@ function checkPermissions(m: Manifest | null): CheckResult {
       });
   });
   list(p.secrets).forEach((key, i) => {
-    if (!declared.includes(key))
+    if (!declared.includes(key) && !ofAccount(key))
       problems.push({
         path: `permissions.secrets[${i}]`,
         why: t(
-          `${code(key)} n’est pas un secret de ${code('contributes.secrets')}.`,
-          `${code(key)} is no secret of ${code('contributes.secrets')}.`,
+          `${code(key)} n’est pas un secret de ${code('contributes.secrets')}, ni le compte d’un genre de ${code('contributes.accounts')}.`,
+          `${code(key)} is no secret of ${code('contributes.secrets')}, nor the account of a kind of ${code('contributes.accounts')}.`,
         ),
         fix: t(
           'Déclare le champ du secret dans contributes.secrets, ou retire la permission.',
