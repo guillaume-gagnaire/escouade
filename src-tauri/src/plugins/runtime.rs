@@ -762,6 +762,33 @@ impl Runtime {
         started
     }
 
+    /// An instance of the module of the plugin `id`, for its views (`plugins/view.rs`): greeted, and asking nothing of the
+    /// machine.
+    pub fn view_instance(&self, id: &str) -> Result<super::wasm::Instance, String> {
+        let (folder, manifest) = self.runnable(id).map_err(|e| e.to_string())?;
+        let run = manifest.run.as_ref().ok_or("no program")?;
+        if run.in_wasm().is_none() {
+            return Err(format!("{id} is no module"));
+        }
+        let (module, _) = self.modules.of(&folder, run)?;
+        let limits = self.limits.wasm.asked(manifest.limits);
+        let files = super::wasm::files_of(&folder);
+        let mut instance = super::wasm::Instance::start_with(&module, &files, limits, None)
+            .map_err(|f| f.to_string())?;
+        let hello = json!({
+            "jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {
+                "protocolVersion": PROTOCOL,
+                "escouade": { "version": self.app_version },
+                "plugin": { "id": id, "version": manifest.version },
+                "lang": self.lang(),
+                "capabilities": {},
+            },
+        });
+        instance.push(format!("{hello}\n").as_bytes());
+        instance.turn(limits.turn).map_err(|f| f.to_string())?;
+        Ok(instance)
+    }
+
     /// A crash of the instance of the plugin `id`, which has no process to kill: as a fault of its module.
     #[cfg(test)]
     pub fn crash_instance(&self, id: &str) {
@@ -2010,6 +2037,7 @@ impl Host {
 
     /// Stops its process for `stop`: what waits fails, and it does not start again by itself.
     fn stop_with(&self, stop: Stop) {
+        super::view::forget(&self.id);
         let conn = {
             let mut inner = self.inner.lock();
             if matches!(inner.phase, Phase::Stopped(_)) && inner.conn.is_none() {

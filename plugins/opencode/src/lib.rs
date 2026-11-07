@@ -10,9 +10,6 @@
 //!
 //! What it does as Escouade drives it comes from the real runs of OpenCode 1.19.3 with local models (ESC-25), whose
 //! streams are in `tests/fixtures/opencode/` and whose schema is `tests/fixtures/engines/opencode-1.19.3.openapi.json`.
-//!
-//! The core still links this crate as a library, for its « Vue OpenCode » and its accounts (`rules`, `translate`), until
-//! P8 (docs/PLUGINS.md §8.2): hence the `rlib` beside the `cdylib`.
 
 pub mod rules;
 mod server;

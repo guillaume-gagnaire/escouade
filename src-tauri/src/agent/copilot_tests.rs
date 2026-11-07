@@ -287,38 +287,6 @@ fn a_permission_is_offered_for_the_session_on_the_list_too() {
 }
 
 #[test]
-fn safe_requests_go_without_a_card_only_when_a_process_answers_them() {
-    let mut rt = agent(WT, "acceptEdits");
-    let read = json!({ "kind": "read", "path": format!("{WT}\\calc.js") });
-    let outside = json!({ "kind": "read", "path": "C:\\Windows\\win.ini" });
-    let write = json!({ "kind": "write", "fileName": format!("{WT}\\a.txt") });
-    assert!(rt.cp_safe(&read));
-    assert!(!rt.cp_safe(&outside));
-    assert!(rt.cp_safe(&write));
-    rt.meta.mode = "plan".into();
-    assert!(!rt.cp_safe(&write), "nothing written in the mode Plan");
-    assert!(rt.cp_safe(&read));
-    rt.meta.mode = "default".into();
-    assert!(rt.cp_safe(&write));
-    let npm = json!({ "kind": "shell", "fullCommandText": "npm test", "commands": [{ "identifier": "npm test" }] });
-    assert!(!rt.cp_safe(&npm));
-    // A discussion of the Docs tab (ESC-261): its reads alone, in any mode.
-    rt.meta.discussion = Some(Default::default());
-    let commit = json!({ "kind": "shell", "fullCommandText": "git commit -m x", "commands": [{ "identifier": "git commit" }] });
-    for mode in ["default", "acceptEdits", "auto"] {
-        rt.meta.mode = mode.into();
-        assert!(!rt.cp_safe(&write), "{mode}");
-        assert!(!rt.cp_safe(&commit), "{mode}");
-        assert!(rt.cp_safe(&read), "{mode}");
-    }
-    assert!(inside(
-        "c:/users/user/appdata/local/temp/esc23/wt-agent1/x",
-        WT
-    ));
-    assert!(!inside(&format!("{WT}-autre\\x"), WT));
-}
-
-#[test]
 fn a_subagents_events_go_under_its_task_and_the_tasks_into_the_plan() {
     let mut rt = agent("C:/p", "default");
     start(&mut rt);
@@ -433,41 +401,6 @@ fn an_account_of_the_github_cli_is_told() {
         .find(|i| i["kind"] == "notice")
         .expect("a notice");
     assert!(notice["text"].as_str().unwrap().contains("copilot login"));
-}
-
-#[test]
-fn the_tools_take_claude_codes_names() {
-    let cwd = "C:\\p";
-    let (n, i) = tool_of("powershell", &json!({ "command": "ls" }), None, cwd);
-    assert_eq!((n.as_str(), i["command"].as_str()), ("Bash", Some("ls")));
-    let (n, i) = tool_of("view", &json!({ "path": "a.js" }), None, cwd);
-    assert_eq!(
-        (n.as_str(), i["file_path"].as_str()),
-        ("Read", Some("C:\\p\\a.js"))
-    );
-    let (n, _) = tool_of("rg", &json!({ "pattern": "x" }), None, cwd);
-    assert_eq!(n, "Grep");
-    let (n, i) = tool_of(
-        "apply_patch",
-        &json!("*** Begin Patch\n*** Add File: b.txt\n+x\n*** End Patch\n"),
-        None,
-        cwd,
-    );
-    assert_eq!(
-        (n.as_str(), i["file_path"].as_str()),
-        ("Write", Some("C:\\p\\b.txt"))
-    );
-    let (n, _) = tool_of("essai-ping", &json!({}), Some("essai"), cwd);
-    assert_eq!(n, "mcp__essai__ping");
-    let (n, _) = tool_of(
-        "github-mcp-server/get_file_contents",
-        &json!({}),
-        Some("github-mcp-server"),
-        cwd,
-    );
-    assert_eq!(n, "mcp__github-mcp-server__get_file_contents");
-    let (n, _) = tool_of("sql", &json!({}), None, cwd);
-    assert_eq!(n, "sql");
 }
 
 #[test]

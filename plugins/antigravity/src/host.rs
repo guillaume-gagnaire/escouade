@@ -1,5 +1,5 @@
 //! What it asks of the host, in a module: the agent's home by `fs/read` (the root `agentHome`, docs/PLUGINS.md §8.4.6), a
-//! timer, items said unasked. Natively (the tests, and the core that reads this crate as a library) it reads the disk, and
+//! timer, items said unasked. Natively (the tests) it reads the disk, and
 //! nothing rings: the tests call `Client::tick` themselves.
 
 use std::path::Path;

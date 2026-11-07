@@ -189,6 +189,8 @@ mod plugins_tests;
 #[cfg(test)]
 mod plugins_trello_tests;
 #[cfg(test)]
+mod plugins_view_parity_tests;
+#[cfg(test)]
 mod plugins_wasm_hosts_parity_tests;
 #[cfg(test)]
 mod plugins_wasm_parity_tests;

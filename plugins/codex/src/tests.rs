@@ -391,3 +391,34 @@ fn a_git_commit_of_its_worktree_is_accepted_without_a_card_only_by_a_process_in_
     let items = asks.frames(&[ask]);
     assert!(matches!(&items[..], [Item::PermissionCard { .. }]));
 }
+
+#[test]
+fn the_rollouts_items_take_the_app_servers_form() {
+    let cmd = crate::view::rollout_item(&json!({
+        "type": "CommandExecution", "id": "exec-1",
+        "command": ["pwsh.exe", "-Command", "git status"],
+        "parsed_cmd": [{ "type": "unknown", "cmd": "git status" }],
+        "status": "completed", "aggregated_output": "ok", "exit_code": 0,
+    }));
+    assert_eq!(cmd["type"], "commandExecution");
+    assert_eq!(cmd["commandActions"], json!([{ "command": "git status" }]));
+    assert_eq!(cmd["aggregatedOutput"], "ok");
+    assert_eq!(cmd["exitCode"], 0);
+    let change = crate::view::rollout_item(&json!({
+        "type": "FileChange", "id": "fc-1",
+        "changes": { "src/a.ts": { "type": "update", "unified_diff": "@@ -1 +1 @@\n-a\n+b\n", "move_path": null } },
+    }));
+    assert_eq!(change["type"], "fileChange");
+    assert_eq!(change["changes"][0]["path"], "src/a.ts");
+    assert_eq!(change["changes"][0]["kind"]["type"], "update");
+    assert_eq!(change["status"], "completed");
+    let reasoning = crate::view::rollout_item(&json!({
+        "type": "Reasoning", "id": "r1", "summary_text": ["**Plan**"], "raw_content": [],
+    }));
+    assert_eq!(reasoning["summary"], json!(["**Plan**"]));
+}
+
+#[test]
+fn folders_are_the_same_whatever_their_slashes_and_case() {
+    assert!(crate::translate::same_dir(r"C:\p\wt\", "c:/p/wt"));
+}

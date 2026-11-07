@@ -1,7 +1,7 @@
 //! What Escouade knows of Copilot CLI beside its conversation: the arguments of its server, its modes, its models and
 //! their prices, the month's credits, the answers its requests take, and the lines said in the app's language. All
 //! pure, from what its real runs showed (Copilot CLI 1.0.98 on a Copilot Free account, docs/PROTOCOL.md, « Copilot
-//! SDK »). The core's engine `Copilot` reads the same ones for what stays in it: an account's quota and models.
+//! SDK »).
 
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;

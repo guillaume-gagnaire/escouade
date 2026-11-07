@@ -267,7 +267,7 @@ impl TerminalView for VibeTerminal {
     }
 
     fn on_log_entry(&self, rt: &mut AgentRt, entry: &Value, fx: &mut Effects) {
-        rt.vibe_log(entry, fx);
+        rt.view_line(entry, fx);
     }
 
     fn says_session_lost(&self, output: &[u8]) -> bool {

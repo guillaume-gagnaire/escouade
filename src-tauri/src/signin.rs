@@ -25,11 +25,23 @@ pub(crate) use crate::engine::claude::signin::can_go_on;
 use crate::i18n::{self, Lang};
 use crate::model::*;
 use crate::usage::{self, Credentials, Stored};
-#[cfg(test)]
-pub(crate) use escouade_plugin_claude::translate::lost;
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::future::Future;
+
+/// What Claude Code says of a sign-in its process could not refresh: refused (`OAuthRefreshDeadError`),
+/// or held by another process past its wait (`OAuthRefreshLockTimeoutError`).
+#[cfg(test)]
+const LOST: [&str; 2] = [
+    "OAuth session expired and could not be refreshed",
+    "Failed to refresh OAuth token: another Claude Code process is refreshing it",
+];
+
+/// Whether `text`, the error of a turn, is a sign-in Claude Code could not refresh.
+#[cfg(test)]
+pub(crate) fn lost(text: &str) -> bool {
+    LOST.iter().any(|l| text.contains(l))
+}
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 use tauri::Runtime;

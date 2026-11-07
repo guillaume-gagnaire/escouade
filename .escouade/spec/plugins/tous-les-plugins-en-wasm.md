@@ -2,7 +2,7 @@
 title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","docs/PLUGINS.md §8.19 (ESC-344)","docs/PLUGINS.md §8.20 (ESC-337)","docs/PLUGINS.md §8.22 (ESC-351)","docs/PLUGINS.md §8.23 (ESC-349)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire","docs/PLUGINS.md §8.24 (ESC-348)","docs/PLUGINS.md §8.25 (ESC-345)","docs/PLUGINS.md §8.27 (ESC-347)","docs/PLUGINS.md §8.28 (ESC-350)","docs/PLUGINS.md §8.29 (ESC-358)","Accord de l'utilisateur du 2026-11-06 : publication et MIT d'escouade-voice"]
-tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351","ESC-349","ESC-348","ESC-345","ESC-346","ESC-347","ESC-350","ESC-358"]
+tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351","ESC-352","ESC-349","ESC-348","ESC-345","ESC-346","ESC-347","ESC-350","ESC-358"]
 decisions: [73,71,70,72,75,80,84,86,89,92,93,96,99]
 compared: null
 ---
@@ -237,3 +237,9 @@ Publiés le 2026-11-06 par l'utilisateur : `escouade-plugin-kit` `0.1.1`, `escou
 - **`host::Host` donne les mêmes tours à un plugin qui sert ses lignes lui-même**, avec `net/stream`, `ws/*` et des tâches qu'aucun appel n'a commencées. OpenCode et la voix s'en servent : ceci remplace « Il n'utilise pas le kit » pour OpenCode. Un minuteur refusé va au journal du plugin.
 - **Un corps qui n'est pas de l'UTF-8** arrive au client du kit avec ses caractères de remplacement, au lieu d'arriver vide.
 - **`proc/*` reste sans API dans le kit** : seul isola lance un programme, et le réacteur réglé, son code n'a plus de contournement.
+
+## Le cœur ne lie plus aucun plugin (P8, ESC-352)
+
+Ce qui est dit plus haut des crates liées au cœur « jusqu'à P8 » est fini : `src-tauri/Cargo.toml` ne dépend d'aucun dossier de `plugins/`, et les crates de harness sont des `cdylib` seules. Les vues terminal de Claude Code, Codex, Copilot CLI, Cursor CLI, Gemini CLI, Mistral Vibe et Antigravity CLI passent par leur module (`view/translate`, voir *Le contrat des harness en process*). Le cœur garde `crates/escouade-acp`, `escouade-voice` et le kit, qui ne sont pas des plugins.
+
+Le contrat a grandi : `escouade-plugin-protocol` 0.1.1 et `escouade-acp` 0.1.2, qui porte les vues de Cursor CLI, Gemini CLI et Mistral Vibe, sont publiées. Antigravity CLI, Claude Code, Codex, Copilot CLI, Cursor CLI, Gemini CLI et Mistral compilent depuis crates.io. Leurs empreintes ont changé, comme celle d'OpenCode, redevenu un `cdylib` seul ; les 15 autres plugins n'ont pas bougé.

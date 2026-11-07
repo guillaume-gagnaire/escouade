@@ -131,7 +131,7 @@ fn light_dir() -> PathBuf {
 pub(crate) async fn one_shot(ask: OneShot<'_>) -> Result<String> {
     let model = ask.model.as_str();
     if split_model(model).is_none() {
-        bail!(escouade_plugin_opencode::no_model(i18n::ui().tag()));
+        bail!(super::rules::no_model(i18n::ui().tag()));
     }
     let cwd: PathBuf = match ask.weight {
         Weight::Light | Weight::Given => light_dir(),

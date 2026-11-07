@@ -2,7 +2,7 @@
 title: "Claude Code en plugin"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4 (INT-10.5)","docs/PLUGINS.md §8.27 (ESC-347)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-226","plugins/claude/README.md"]
-tickets: ["ESC-226","ESC-347"]
+tickets: ["ESC-226","ESC-347","ESC-352"]
 decisions: []
 compared: null
 ---
@@ -26,8 +26,8 @@ Le moteur `Claude` du registre garde ce qui n'est pas la conversation : ses capa
 
 La lecture d'une connexion (ce que Claude Code garde dans son dossier et, sous macOS, son trousseau, l'empreinte d'une connexion) est au cœur seul, dans `src-tauri/src/engine/claude/signin.rs` : le plugin ne voit jamais une connexion. Il ne garde que les mots d'un tour qui l'a perdue, pour les traduire. Le cœur garde aussi ce qui décide : relancer un agent une fois sa connexion bonne, et le quota lu au point d'accès OAuth avec les réglages réseau de l'app.
 
-**La vue Claude Code lit son transcript par la traduction du plugin, prise comme une bibliothèque**, pour une seule traduction dans les deux vues. C'est pourquoi la crate reste une `rlib` à côté de son `cdylib`, jusqu'à P8.
+**La vue Claude Code passe par le module** (`view/translate`, ESC-352) : le cœur lit le transcript et passe ses lignes au plugin, une seule traduction pour les deux vues. Le coût d'un tour de la vue reste calculé par le cœur, sur l'usage de ses messages aux prix publics, et rendu au plugin avec la fin du tour. Voir *Le contrat des harness en process*.
 
 ## Un arrêt se dit
 
-Coupé pour l'app ou pas chargé, un agent de Claude Code dit au lancement « Le plugin Claude Code (dev.escouade.claude-code) est coupé ou n'est pas chargé : rallume-le dans la vue Plugins… » et garde sa session ; rallumé, il reprend. Un plugin qui plante pendant un tour est relancé comme tout plugin de harness et la conversation le dit (voir *Le contrat des harness en process*). Les textes rédigés, le quota d'un compte et la vue terminal ne passent pas par lui.
+Coupé pour l'app ou pas chargé, un agent de Claude Code dit au lancement « Le plugin Claude Code (dev.escouade.claude-code) est coupé ou n'est pas chargé : rallume-le dans la vue Plugins… » et garde sa session ; rallumé, il reprend. Un plugin qui plante pendant un tour est relancé comme tout plugin de harness et la conversation le dit (voir *Le contrat des harness en process*). Les textes rédigés et le quota d'un compte ne passent pas par lui. Sa vue terminal marche plugin coupé, mais la conversation ne la suit plus, et le dit.

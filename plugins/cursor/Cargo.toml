@@ -13,5 +13,5 @@ rust-version = "1.88"
 crate-type = ["cdylib"]
 
 [dependencies]
-escouade-acp = "0.1.1"
-escouade-plugin-protocol = "0.1.0"
+escouade-acp = "0.1.2"
+escouade-plugin-protocol = "0.1.1"

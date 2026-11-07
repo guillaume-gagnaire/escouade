@@ -10,7 +10,7 @@ use crate::translate::{Ctx, Seen, Translator};
 use crate::words::{self, id_key, is_plan_approval, mode_params, Settings};
 use escouade_acp::vibe::worded;
 use escouade_plugin_protocol::engine::{
-    AnswerPermission, Attach, EnvVar, Item, Launch, LaunchParams, StartAt,
+    AnswerPermission, Attach, EnvVar, Item, Launch, LaunchParams, StartAt, ViewKnown,
 };
 use escouade_plugin_protocol::turn;
 use serde_json::{json, Value};
@@ -45,7 +45,7 @@ struct Asked {
 /// What the conversation holds, as the translation asks it: the core keeps the conversation, this is the plugin's
 /// memory of it, no more than each call's name and whether it runs.
 #[derive(Default)]
-struct Own {
+pub(crate) struct Own {
     ids: HashSet<String>,
     calls: HashMap<String, (String, &'static str)>,
 }
@@ -61,7 +61,26 @@ impl Seen for Own {
 }
 
 impl Own {
-    fn note(&mut self, items: &[Item]) {
+    /// What the core's conversation holds, for a view that starts on it.
+    pub(crate) fn knows(&mut self, known: &[ViewKnown]) {
+        for k in known {
+            match (&k.name, k.status.as_deref()) {
+                (Some(name), status) => {
+                    let status = match status {
+                        Some("running") => "running",
+                        Some("ok") => "ok",
+                        _ => "interrupted",
+                    };
+                    self.calls.insert(k.id.clone(), (name.clone(), status));
+                }
+                _ => {
+                    self.ids.insert(k.id.clone());
+                }
+            }
+        }
+    }
+
+    pub(crate) fn note(&mut self, items: &[Item]) {
         for item in items {
             match item {
                 Item::Delta { id, .. }

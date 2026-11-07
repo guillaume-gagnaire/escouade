@@ -2,7 +2,7 @@
 title: "Codex en plugin"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4 (INT-10.4)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-225","plugins/codex/README.md"]
-tickets: ["ESC-225","ESC-346"]
+tickets: ["ESC-225","ESC-346","ESC-352"]
 decisions: []
 compared: null
 ---
@@ -26,7 +26,7 @@ Codex n'est pas un harness ACP : il garde son client propre, `codex app-server` 
 
 Le moteur `Codex` du registre garde ce qui n'est pas la conversation : ses capacités et le sens de ses modes, les comptes et leur connexion, le quota et les modèles d'un compte sans agent (un app-server à lui, lancé puis arrêté), les textes rédigés (`codex exec`), la vue terminal et la confiance de ses hooks, le serveur MCP d'Escouade.
 
-**La vue Codex lit son rollout par la traduction du plugin, prise comme une bibliothèque**, pour une seule traduction dans les deux vues.
+**La vue Codex passe par le module** (`view/translate`, ESC-352) : le cœur lit le rollout et passe ses lignes au plugin, qui les traduit comme les messages d'un process. Voir *Le contrat des harness en process*. Plugin coupé, le terminal marche et la conversation dit qu'elle ne le suit plus.
 
 ## Un arrêt se dit
 

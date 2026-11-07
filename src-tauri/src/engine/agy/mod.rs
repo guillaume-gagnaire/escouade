@@ -18,6 +18,7 @@
 pub(crate) mod bench;
 mod locate;
 pub(crate) mod terminal;
+mod words;
 
 use super::registry::{
     CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested,
@@ -32,9 +33,9 @@ use crate::core::Attachment;
 use crate::i18n::{self, Lang};
 use crate::model::EngineId;
 use anyhow::{anyhow, bail, Result};
-pub(crate) use escouade_plugin_agy::words::*;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
+pub(crate) use words::*;
 
 /// Antigravity CLI.
 pub struct Agy;
@@ -67,7 +68,7 @@ pub(crate) use escouade_acp::limits::{CAPACITY_RESUME_MS, QUOTA_RESUME_MS};
 /// What the card of a turn stopped by its limit says (`said`: `agy`'s own words).
 #[cfg(test)]
 pub(crate) fn limited_error(lang: Lang, said: &str) -> String {
-    escouade_plugin_agy::words::limited_error(lang.tag(), said)
+    words::limited_error(lang.tag(), said)
 }
 
 /// The modes Escouade gives Antigravity, in the menu's order (its `auto` is not offered: « not

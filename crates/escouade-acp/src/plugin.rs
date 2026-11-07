@@ -6,10 +6,11 @@
 //! It lives in this crate and not in a plugin: a plugin is compiled from its folder alone (docs/PLUGINS.md §8.5.3), so it
 //! cannot depend on another by a path.
 
+use crate::view::View;
 use crate::Agent;
 use escouade_plugin_protocol::engine::{
     method, AgentRef, AnswerPermission, AnswerQuestion, Attach, Frames, HarnessDecl, Items,
-    LaunchParams, SendMessage, SetValue, Usage, Writes,
+    LaunchParams, SendMessage, SetValue, Usage, ViewParams, Writes,
 };
 use escouade_plugin_protocol::{greeting, turn, Refusal};
 use serde::de::DeserializeOwned;
@@ -21,6 +22,7 @@ use std::path::Path;
 #[derive(Default)]
 struct Plugin {
     agents: HashMap<String, Agent>,
+    views: HashMap<String, View>,
     /// The harness of a plugin of Escouade's own on this client (Cursor CLI, INT-10.1), as its manifest declares it:
     /// taken when the core describes none (`described` is for the harnesses other plugins describe).
     own: Option<HarnessDecl>,
@@ -203,6 +205,26 @@ impl Plugin {
             }
             // ACP tells no quota.
             method::READ_USAGE => give(Usage::default()),
+            method::VIEW_TRANSLATE => {
+                let p: ViewParams = read(params)?;
+                if let Some(gone) = &p.gone {
+                    self.views.remove(gone);
+                }
+                if !self.views.contains_key(&p.agent) {
+                    let speaker = self.own.as_ref().map_or(p.harness.clone(), |d| {
+                        d.speaker.clone().unwrap_or_else(|| d.name.clone())
+                    });
+                    let view = View::new(&p, &speaker).ok_or_else(|| Refusal::not_found(m))?;
+                    self.views.insert(p.agent.clone(), view);
+                }
+                let mut items = Vec::new();
+                if let Some(view) = self.views.get_mut(&p.agent) {
+                    for line in &p.lines {
+                        view.line(line, &p, &mut items);
+                    }
+                }
+                give(Items { items })
+            }
             other => Err(Refusal::not_found(other)),
         }
     }

@@ -1,6 +1,5 @@
 //! What Escouade says to Codex and reads of it, without state: its modes, the fence of a private project, Escouade's
-//! server among its options, the answers of a card, its quota and its models. The core reads this too, as a library,
-//! for what stays in it: the launch of its terminal view, an account's quota and models.
+//! server among its options, the answers of a card, its quota and its models.
 
 use escouade_plugin_protocol::engine::Grant;
 use serde_json::{json, Value};

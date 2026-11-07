@@ -26,7 +26,7 @@ use crate::mcp::install::{Entry, Standing, Target};
 #[cfg(test)]
 use crate::model::AgentMeta;
 use anyhow::{anyhow, bail, Context, Result};
-use escouade_plugin_claude::client;
+pub(crate) mod client;
 use serde_json::{json, Value};
 use std::time::Duration;
 
@@ -694,7 +694,10 @@ impl Engine for Claude {
     fn translate(&self, rt: &mut AgentRt, frame: &Value, fx: &mut Effects) {
         match frame["items"].as_array() {
             Some(items) => rt.apply_items(items, fx),
+            #[cfg(test)]
             None => rt.claude_frame(frame, fx),
+            #[cfg(not(test))]
+            None => {}
         }
     }
 

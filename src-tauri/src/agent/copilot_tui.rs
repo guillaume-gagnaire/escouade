@@ -1,12 +1,7 @@
 //! « Vue Copilot »: the agent's conversation as Copilot's own interface (`copilot`, in a terminal)
-//! writes it in its session's log (`session-state/<id>/events.jsonl`), and what its hooks tell while
-//! it runs (`tui`, `engine/copilot/terminal.rs`).
-//!
-//! The log's entries are the events of the session, as `copilot --server --stdio` sends them
-//! (`session.event`), less those it never keeps (`ephemeral`: the deltas, `assistant.usage`,
-//! `session.idle`): each goes through the same translation (`cp_event`). What is missing is made
-//! up: the user's message from its `user.message`, the usage of each call from its
-//! `session.usage_record`, the end of a turn from the `agentStop` hook (or `abort` for Escape).
+//! writes it in its session's log (`session-state/<id>/events.jsonl`), which its plugin translates
+//! (`view/translate`, `plugins/copilot/src/view.rs`), and what its hooks tell while it runs
+//! (`tui`, `engine/copilot/terminal.rs`).
 //!
 //! Its hooks (docs/TODO-1.8.md, point 0, « Vue terminal », `tests/fixtures/copilot/tui-hooks.jsonl`)
 //! do not say their event: `escouade-hook <event>` names it (`tui::EVENT_KEY`). A permission waits
@@ -18,118 +13,9 @@ use std::path::Path;
 
 impl AgentRt {
     /// One entry of the log its Copilot interface writes.
+    #[cfg(test)]
     pub(crate) fn copilot_log(&mut self, e: &Value, fx: &mut Effects) {
-        // Written since it started: it is past its question about the folder.
-        if let Some(run) = self.tui.as_mut() {
-            run.spoke = true;
-        }
-        let Some(kind) = e["type"].as_str() else {
-            return;
-        };
-        let own = e["agentId"].is_null();
-        if own && (kind.starts_with("user.") || kind.starts_with("assistant.")) {
-            self.unwritten_session = None;
-        }
-        let d = &e["data"];
-        match kind {
-            "user.message" if own => self.copilot_typed(e, fx),
-            // Answered in its interface, never by Escouade: what waits for the user is told by
-            // its hook (a permission) or by its event (the rest).
-            "permission.requested" => {}
-            "user_input.requested" => {
-                let body = d["question"].as_str().unwrap_or_default().to_string();
-                self.tui_wait(body, fx);
-            }
-            "elicitation.requested" => {
-                let body = d["message"].as_str().unwrap_or_default().to_string();
-                self.tui_wait(body, fx);
-            }
-            "exit_plan_mode.requested" => {
-                let plan = d["planContent"].as_str().or(d["summary"].as_str());
-                let body = notify::permission_body(
-                    "ExitPlanMode",
-                    &json!({ "plan": plan }),
-                    &self.meta.cwd,
-                );
-                self.tui_wait(body, fx);
-            }
-            "permission.completed"
-            | "user_input.completed"
-            | "elicitation.completed"
-            | "exit_plan_mode.completed" => {
-                self.copilot.asked = None;
-                if self.meta.status == AgentStatus::Waiting {
-                    self.set_status(AgentStatus::Running, fx);
-                }
-            }
-            // Each call of the model, with its usage and its cost (`assistant.usage` is not kept).
-            "session.usage_record" => {
-                let usage = json!({ "type": "assistant.usage", "data": d["usage"], "agentId": e["agentId"] });
-                self.cp_event(&usage, fx);
-            }
-            // Before any turn (its start: a model of `--model` it does not have, and takes `auto`
-            // instead, tried on a Free account): said, never the error of the next turn.
-            "session.error" if own && !self.meta.status.is_active() => {
-                let message = d["message"].as_str().unwrap_or_default().trim();
-                if !message.is_empty() {
-                    self.notice("warn", message.to_string(), fx);
-                }
-            }
-            // Escape: the turn is over, as interrupted (no `agentStop` comes for it).
-            "abort" if own => {
-                if self.meta.status.is_active() {
-                    self.copilot.aborted = true;
-                    self.copilot_tui_end(fx);
-                }
-            }
-            _ => self.cp_event(e, fx),
-        }
-        fx.agent_changed = true;
-    }
-
-    /// What the user typed in the interface (or Escouade pasted there): their message.
-    fn copilot_typed(&mut self, e: &Value, fx: &mut Effects) {
-        let d = &e["data"];
-        let text = d["content"].as_str().unwrap_or_default().to_string();
-        let images = d["attachments"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter(|a| a["type"] == "file" || a["type"] == "image")
-            .count() as u32;
-        if text.trim().is_empty() && images == 0 {
-            return;
-        }
-        let id = d["messageId"]
-            .as_str()
-            .or(e["id"].as_str())
-            .map(str::to_string)
-            .unwrap_or_else(new_id);
-        if self.conv.contains(&id) {
-            return;
-        }
-        let item = json!({
-            "kind": "user", "id": id, "text": text, "images": images, "ts": now_ms(),
-            "queued": false, "origin": "terminal",
-        });
-        self.meta.resume_at = None;
-        self.append(item, fx);
-        if self.tui_prompt.is_none() {
-            self.turn_text.clear();
-            self.final_text.clear();
-            self.interrupted = false;
-            if self.meta.plan.as_ref().is_some_and(PlanState::is_finished) {
-                self.reset_plan(fx);
-            }
-        }
-        if !self.meta.status.is_active() {
-            self.set_status(AgentStatus::Running, fx);
-        }
-        self.meta.prompts += 1;
-        self.meta.last_activity = now_ms();
-        self.tui_prompt = Some(text);
-        fx.agent_changed = true;
-        fx.save = true;
+        self.view_line(e, fx);
     }
 
     /// One of the hooks its Copilot interface runs (`escouade-hook <event>`,
@@ -166,7 +52,7 @@ impl AgentRt {
                     .and_then(|t| t.transcript.as_deref())
                     .and_then(|p| p.parent()?.parent().map(Path::to_path_buf))
                     .map(|states| states.join(sid).join("events.jsonl"));
-                self.copilot_new_conversation();
+                self.view_reset();
                 self.meta.session_id = Some(sid.to_string());
                 self.meta.last_entry = None;
                 self.meta.fork_of = None;
@@ -187,19 +73,17 @@ impl AgentRt {
             }
             // What it is about to ask: told once it waits for the answer.
             "permissionRequest" => {
-                let tool = h["toolName"].as_str().unwrap_or_default();
-                let (name, input) = copilot::tool_of(tool, &h["toolInput"], None, &self.meta.cwd);
-                self.copilot.asked = Some(notify::permission_body(&name, &input, &self.meta.cwd));
+                self.view_note(json!({ "escouade": "hook", "hook": h }), fx);
             }
             "notification" => {
                 let kind = h["notification_type"]
                     .as_str()
                     .or(h["notificationType"].as_str());
                 if kind == Some("permission_prompt") {
-                    let body =
-                        self.copilot.asked.take().unwrap_or_else(|| {
-                            h["message"].as_str().unwrap_or_default().to_string()
-                        });
+                    let body = self
+                        .tui_asked
+                        .take()
+                        .unwrap_or_else(|| h["message"].as_str().unwrap_or_default().to_string());
                     self.tui_wait(body, fx);
                 }
             }
@@ -213,17 +97,6 @@ impl AgentRt {
         }
         fx.agent_changed = true;
         out
-    }
-
-    /// The running turn of its Copilot interface is over: after its `agentStop`, its interface
-    /// gone, or Escape (`abort`).
-    pub(super) fn copilot_tui_end(&mut self, fx: &mut Effects) {
-        if !self.meta.status.is_active() {
-            return;
-        }
-        self.copilot.asked = None;
-        self.cp_turn_end(fx);
-        self.tui_prompt = None;
     }
 }
 

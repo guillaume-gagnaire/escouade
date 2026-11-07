@@ -25,7 +25,7 @@ and its control protocol (docs/PROTOCOL.md). On the contract of the harnesses in
 What stays in the core, as the contract says: Claude Code's place in the registry (its capabilities, its models and their
 efforts), the accounts and the restart of an agent once its sign-in is good, an account's quota read from the usage
 endpoint, the models of an account when none of its agents runs, the texts it writes (`claude -p`), the terminal view (its
-PTY, its hooks, its transcript read through this plugin's translation, used as a library), Escouade's MCP server, and the
+PTY, its hooks, its transcript read line by line by this plugin, `view/translate`), Escouade's MCP server, and the
 plan, the requests and the conversation of each agent.
 
 ## What it may do
@@ -83,8 +83,8 @@ escouade_plugin_protocol::module!(run);
 and nothing needs to: `client.rs` and `translate.rs` hold their state between two lines, and what is asked of `claude` comes
 back as a later line (`Asked`, `Item::Answer`). No `tokio`, no thread, no `std::fs`, no `std::process`.
 
-The core still reads `translate`, `words`, `localcmd` and `client`'s arguments as a library, for « Vue Claude Code », which
-is why this crate is an `rlib` too (until P8, docs/PLUGINS.md §8.10). The store compiles the `cdylib`.
+« Vue Claude Code » goes through the module too (`src/view.rs`, `view/translate`, docs/PLUGINS.md §8): the core links no crate of
+a plugin.
 
 ## Its tests
 

@@ -530,3 +530,76 @@ fn its_manifest_declares_the_harness_opencode() {
     assert_eq!(h["id"], "opencode");
     assert_eq!(h["accountVar"], "OPENCODE_CONFIG_DIR");
 }
+
+#[test]
+fn the_tools_take_claude_codes_names() {
+    let cwd = if cfg!(windows) { "C:\\p" } else { "/p" };
+    let (n, i) = crate::translate::tool_of(
+        "edit",
+        &json!({ "filePath": "a.py", "oldString": "x", "newString": "y" }),
+        cwd,
+    );
+    assert_eq!(n, "Edit");
+    assert_eq!(
+        i["file_path"],
+        std::path::Path::new(cwd)
+            .join("a.py")
+            .to_string_lossy()
+            .as_ref()
+    );
+    assert_eq!(
+        crate::translate::tool_of("list", &json!({ "path": "src" }), cwd).0,
+        "LS"
+    );
+    assert_eq!(
+        crate::translate::tool_of("grep", &json!({ "pattern": "x", "include": "*.rs" }), cwd).1
+            ["glob"],
+        "*.rs"
+    );
+    assert_eq!(
+        crate::translate::tool_of("escouade_get_board", &json!({}), cwd).0,
+        "mcp__escouade__get_board"
+    );
+    let (n, i) = crate::translate::tool_of(
+        "apply_patch",
+        &json!({ "patchText": "*** Begin Patch\n*** Update File: src/a.ts\n@@\n-a\n+b\n*** End Patch" }),
+        cwd,
+    );
+    assert_eq!(n, "Edit");
+    assert!(i["file_path"].as_str().unwrap().ends_with("a.ts"));
+    assert_eq!(
+        crate::translate::tool_of("webfetch", &json!({ "url": "https://x" }), cwd).0,
+        "WebFetch"
+    );
+    assert_eq!(
+        crate::translate::tool_of("bash", &json!({ "command": "ls" }), cwd).1,
+        json!({ "command": "ls" })
+    );
+}
+
+#[test]
+fn a_path_of_windows_or_of_posix_is_absolute_on_every_system() {
+    let cwd = "/work/wt";
+    for path in [
+        r"C:\Users\user\wt\calc.py",
+        "C:/Users/user/wt/calc.py",
+        r"\\server\share\calc.py",
+        "/home/user/wt/calc.py",
+    ] {
+        assert_eq!(crate::translate::absolute(path, cwd), path);
+    }
+    // A relative one is joined with the separator of the folder, whatever the system.
+    assert_eq!(
+        crate::translate::absolute("calc.py", cwd),
+        "/work/wt/calc.py"
+    );
+    assert_eq!(
+        crate::translate::absolute("src/app.ts", "/work/wt/"),
+        "/work/wt/src/app.ts"
+    );
+    assert_eq!(
+        crate::translate::absolute("calc.py", r"C:\Users\user\wt"),
+        r"C:\Users\user\wt\calc.py"
+    );
+    assert_eq!(crate::translate::absolute("", cwd), "");
+}

@@ -1,6 +1,5 @@
 //! What Antigravity CLI's words are, as Escouade drives it: its launch, its modes and rules, the files of the agent's own
-//! home, its calls in ACP's form, its questions. Pure, and read by the core too, as a library, for what stays in it: its
-//! « Vue Antigravity » writes the same rules and server, and reads its calls in the same form.
+//! home, its calls in ACP's form, its questions. Pure.
 //!
 //! What it does comes from the real runs of `agy` 1.4.9 (ESC-269, docs/PROTOCOL.md, « Antigravity CLI »), whose streams are
 //! in `tests/fixtures/agy/`.

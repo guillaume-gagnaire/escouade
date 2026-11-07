@@ -2,8 +2,7 @@
 //! which the core applies to the agent. The state of the agent stays the core's, the plan's and the requests' too: what
 //! this keeps between its frames is the stream's own, the blocks of the message under way, the tokens counted so far.
 //!
-//! The transcript of the Claude Code view has the shape of these frames: the core reads it through this same translation,
-//! as a library (`src-tauri/src/agent/claude.rs`).
+//! The transcript of the Claude Code view has the shape of these frames: it goes through this same translation (`view`).
 
 use crate::localcmd::{self, Part};
 use crate::words::{rate_meters, said, strip_tags, tool_result_text};

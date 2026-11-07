@@ -33,7 +33,8 @@ use crate::core::{size_label, Attachment, MAX_IMAGE, MAX_TOTAL};
 use crate::i18n::{self, Lang};
 use crate::model::EngineId;
 use anyhow::{bail, Result};
-use escouade_plugin_opencode::{listed, split_model};
+pub(crate) mod rules;
+use rules::{listed, split_model};
 use serde_json::{json, Value};
 
 /// OpenCode.
@@ -58,7 +59,7 @@ const INSTALL: Install = Install {
 const EFFORTS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
 
 /// The models OpenCode lists, as the core keeps them.
-fn told(models: Vec<escouade_plugin_opencode::rules::Told>) -> Vec<ToldModel> {
+fn told(models: Vec<rules::Told>) -> Vec<ToldModel> {
     models
         .into_iter()
         .map(|m| ToldModel {
@@ -392,7 +393,7 @@ impl Engine for Opencode {
         // for what it does on its own (a title, a name; OpenCode Zen without an account, seen at
         // the real run of ESC-25), for every agent the server serves afterwards.
         if split_model(&spawn.model).is_none() {
-            bail!(escouade_plugin_opencode::no_model(i18n::ui().tag()));
+            bail!(rules::no_model(i18n::ui().tag()));
         }
         crate::plugins::harness::spawn_plugged(
             crate::plugins::builtin::OPENCODE,
@@ -462,8 +463,8 @@ impl Engine for Opencode {
 
 #[cfg(test)]
 mod tests {
+    use super::rules::catalog;
     use super::*;
-    use escouade_plugin_opencode::catalog;
 
     fn recorded(file: &str) -> Vec<Value> {
         bench::recorded(file)

@@ -1,7 +1,6 @@
 # One target for the two workspaces of the plugins (this one and src-tauri): the modules are where the tests of the app
-# look for them, and CI caches it. What a build leaves on its way stays apart: a plugin the core still links (Claude Code, Codex,
-# Copilot and OpenCode, until P8) is a crate of both, by the same name, and a `cargo test` here would overwrite the rlib the app is
-# linked to, against the serde_json of the other workspace (« expected `Value`, found `Value` »).
+# look for them, and CI caches it. What a build leaves on its way stays apart: the crates of `crates/` are in both, by the same
+# name, against the serde_json of each (« expected `Value`, found `Value` »).
 [build]
 target-dir = "../src-tauri/target"
 build-dir = "../src-tauri/target/plugins"

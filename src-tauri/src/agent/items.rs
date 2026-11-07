@@ -19,6 +19,9 @@ impl AgentRt {
     }
 
     pub(super) fn apply_item(&mut self, item: Item, fx: &mut Effects) {
+        let Some(item) = self.apply_view_item(item, fx) else {
+            return;
+        };
         match item {
             Item::Start { session } => {
                 if let Some(session) = session {
@@ -691,6 +694,22 @@ impl AgentRt {
             | Item::File { .. }
             | Item::Closed
             | Item::Unknown => {}
+            // `apply_view_item` took them.
+            Item::Typed { .. }
+            | Item::Spoke
+            | Item::Wrote
+            | Item::Waits { .. }
+            | Item::WaitsOn { .. }
+            | Item::Asks { .. }
+            | Item::Runs
+            | Item::Goes
+            | Item::ViewTurn { .. }
+            | Item::ViewEnd { .. }
+            | Item::ViewUsage { .. }
+            | Item::ViewError { .. }
+            | Item::Row { .. }
+            | Item::Bridged { .. }
+            | Item::Linked => {}
         }
     }
 

@@ -6,7 +6,8 @@ use super::OPENCODE;
 use crate::agent::{AgentRt, Effects};
 use crate::engine::bench::{bench_dir, replay, run, Scenario, Target};
 use crate::engine::{Engine, Program};
-use serde_json::Value;
+use escouade_plugin_protocol::engine::method;
+use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
 fn fixtures() -> PathBuf {
@@ -37,20 +38,28 @@ pub(crate) fn recorded(file: &str) -> Vec<Value> {
         .collect()
 }
 
-/// The translation of its plugin, in this process: a frame of OpenCode's, its items applied to the agent.
+/// The translation of its module: a frame of OpenCode's, its items applied to the agent.
 #[derive(Default)]
-pub(crate) struct Through(Option<escouade_plugin_opencode::Translator>);
+pub(crate) struct Through(Option<String>);
 
 impl Through {
     pub(crate) fn frame(&mut self, rt: &mut AgentRt, frame: &Value, fx: &mut Effects) {
-        let t = self.0.get_or_insert_with(|| {
-            let (cwd, model) = (&rt.meta.cwd, &rt.meta.model);
-            escouade_plugin_opencode::Translator::new(cwd, model, rt.meta.session_id.clone(), "fr")
-        });
-        let mut items = Vec::new();
-        t.frame(frame, &mut items);
-        let items = serde_json::to_value(items).unwrap();
-        rt.apply_items(items.as_array().unwrap(), fx);
+        let plugin = crate::plugins::builtin::OPENCODE;
+        let agent = match &self.0 {
+            Some(agent) => agent.clone(),
+            None => {
+                let agent = uuid::Uuid::new_v4().simple().to_string();
+                let attach = json!({
+                    "agent": agent, "cwd": rt.meta.cwd, "model": rt.meta.model,
+                    "session": rt.meta.session_id, "lang": "fr",
+                });
+                crate::plugins::view::call(plugin, method::ATTACH, &attach).unwrap();
+                self.0.insert(agent).clone()
+            }
+        };
+        let frames = json!({ "agent": agent, "frames": [frame.to_string()] });
+        let answer = crate::plugins::view::call(plugin, method::FRAMES, &frames).unwrap();
+        rt.apply_items(answer["items"].as_array().unwrap(), fx);
     }
 }
 

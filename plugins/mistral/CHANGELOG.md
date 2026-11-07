@@ -2,6 +2,7 @@
 
 ## 2.2.0
 
+- Its « Vue Vibe » is read by the module (`view/translate`), no longer by a translation of the core's.
 - A WASM module (`run.wasm`), run in Escouade's host: no process of its own any more. The dictation goes by `net/fetch`,
   the voice by `net/stream`, the transcription as one speaks by a WebSocket (`ws/*`), cut and resumed as before. The code of the
   service is the crate `escouade-voice`. Mistral Vibe is served in the same module, on the client of `escouade-acp`. It has its own version, is published on the store and can be

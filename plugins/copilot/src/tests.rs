@@ -358,3 +358,89 @@ fn the_host_of_an_address_is_read_as_a_permission_wants_it() {
         assert_eq!(host(no), None, "{no}");
     }
 }
+
+#[test]
+fn the_tools_take_claude_codes_names() {
+    let cwd = "C:\\p";
+    let (n, i) = crate::translate::tool_of("powershell", &json!({ "command": "ls" }), None, cwd);
+    assert_eq!((n.as_str(), i["command"].as_str()), ("Bash", Some("ls")));
+    let (n, i) = crate::translate::tool_of("view", &json!({ "path": "a.js" }), None, cwd);
+    assert_eq!(
+        (n.as_str(), i["file_path"].as_str()),
+        ("Read", Some("C:\\p\\a.js"))
+    );
+    let (n, _) = crate::translate::tool_of("rg", &json!({ "pattern": "x" }), None, cwd);
+    assert_eq!(n, "Grep");
+    let (n, i) = crate::translate::tool_of(
+        "apply_patch",
+        &json!("*** Begin Patch\n*** Add File: b.txt\n+x\n*** End Patch\n"),
+        None,
+        cwd,
+    );
+    assert_eq!(
+        (n.as_str(), i["file_path"].as_str()),
+        ("Write", Some("C:\\p\\b.txt"))
+    );
+    let (n, _) = crate::translate::tool_of("essai-ping", &json!({}), Some("essai"), cwd);
+    assert_eq!(n, "mcp__essai__ping");
+    let (n, _) = crate::translate::tool_of(
+        "github-mcp-server/get_file_contents",
+        &json!({}),
+        Some("github-mcp-server"),
+        cwd,
+    );
+    assert_eq!(n, "mcp__github-mcp-server__get_file_contents");
+    let (n, _) = crate::translate::tool_of("sql", &json!({}), None, cwd);
+    assert_eq!(n, "sql");
+}
+
+/// A conversation that holds nothing.
+struct Nothing;
+
+impl crate::translate::Seen for Nothing {
+    fn has(&self, _: &str) -> bool {
+        false
+    }
+    fn call(&self, _: &str) -> Option<Value> {
+        None
+    }
+}
+
+fn safe(r: &Value, mode: &str, discussion: bool) -> bool {
+    let c = crate::translate::Ctx {
+        cwd: CWD,
+        mode,
+        active: true,
+        discussion,
+        process: true,
+        lang: "fr",
+        resumed: None,
+        seen: &Nothing,
+    };
+    crate::translate::Translator::safe(r, &c)
+}
+
+#[test]
+fn safe_requests_go_without_a_card_only_when_a_process_answers_them() {
+    let read = json!({ "kind": "read", "path": format!("{CWD}\\calc.js") });
+    let outside = json!({ "kind": "read", "path": "C:\\Windows\\win.ini" });
+    let write = json!({ "kind": "write", "fileName": format!("{CWD}\\a.txt") });
+    assert!(safe(&read, "acceptEdits", false));
+    assert!(!safe(&outside, "acceptEdits", false));
+    assert!(safe(&write, "acceptEdits", false));
+    assert!(
+        !safe(&write, "plan", false),
+        "nothing written in the mode Plan"
+    );
+    assert!(safe(&read, "plan", false));
+    assert!(safe(&write, "default", false));
+    let npm = json!({ "kind": "shell", "fullCommandText": "npm test", "commands": [{ "identifier": "npm test" }] });
+    assert!(!safe(&npm, "default", false));
+    // A discussion of the Docs tab (ESC-261): its reads alone, in any mode.
+    let commit = json!({ "kind": "shell", "fullCommandText": "git commit -m x", "commands": [{ "identifier": "git commit" }] });
+    for mode in ["default", "acceptEdits", "auto"] {
+        assert!(!safe(&write, mode, true), "{mode}");
+        assert!(!safe(&commit, mode, true), "{mode}");
+        assert!(safe(&read, mode, true), "{mode}");
+    }
+}

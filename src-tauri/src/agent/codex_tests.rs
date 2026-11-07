@@ -409,11 +409,6 @@ fn an_approval_is_a_card_with_its_reason_for_this_session_and_a_change_its_diff(
 }
 
 #[test]
-fn folders_are_the_same_whatever_their_slashes_and_case() {
-    assert!(same_dir(r"C:\p\wt\", "c:/p/wt"));
-}
-
-#[test]
 fn the_mode_follows_what_codex_says_of_the_threads_settings() {
     let mut a = rt();
     frame(

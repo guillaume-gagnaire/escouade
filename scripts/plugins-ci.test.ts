@@ -151,8 +151,7 @@ describe('the workspace of the modules', () => {
   it('gives each of them a form the store can compile, its folder alone', () => {
     for (const { name } of ported) {
       const toml = readFileSync(`plugins/${name}/Cargo.toml`, 'utf8');
-      // An `rlib` too for what the core still links (Claude Code, Codex, Copilot, OpenCode, Antigravity, until P8): docs/PLUGINS.md §8.2.
-      expect(toml, name).toMatch(/^crate-type = \["cdylib"(, "rlib")?\]$/m);
+      expect(toml, name).toMatch(/^crate-type = \["cdylib"\]$/m);
       expect(toml, name).not.toMatch(/^workspace\s*=/m);
       expect(toml, name).not.toMatch(/path\s*=/);
     }

@@ -47,6 +47,7 @@ pub mod store;
 // The seal of a version from the store, checked with the keys the app embeds (STORE-8).
 pub mod store_keys;
 /// The plugins in WASM, inside the app: `run.js` (ESC-320), `run.wasm` (ESC-331).
+pub mod view;
 pub mod wasm;
 
 use crate::i18n::Lang;

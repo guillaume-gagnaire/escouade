@@ -74,7 +74,7 @@ models of an account and the terminal view don't go through it.
 | `README.md`            | This page                                                       |
 
 Its program is a module (`run.wasm`), compiled by `escouade-plugin build` from this folder and its `Cargo.lock`, on the crates
-`escouade-plugin-protocol` and `escouade-acp`. Its `rlib` is for the core, whose terminal view reads `words.rs` until P8. Its
+`escouade-plugin-protocol` and `escouade-acp`. Its
 tests: `src/tests.rs`, the bench of the harnesses on the fake `agy` (`src-tauri/src/engine/agy/bench.rs`, its transcript late
 too), the parity with the native plugin on the streams of `agy` 1.4.9 (`src-tauri/src/plugins_wasm_agy_tests.rs`), the recorded
 streams (`src-tauri/src/agent/agy_tests.rs`, `tests/fixtures/replays/agy/`), the tests of the core that go through it

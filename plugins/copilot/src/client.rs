@@ -14,7 +14,7 @@
 use crate::translate::{form_questions, Ctx, Seen, Translator};
 use crate::words::{self, agent_mode, permission_mode, takes_effort};
 use escouade_plugin_protocol::engine::{
-    AnswerPermission, Attach, EnvVar, Item, Launch, LaunchParams, StartAt,
+    AnswerPermission, Attach, EnvVar, Item, Launch, LaunchParams, StartAt, ViewKnown,
 };
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
@@ -56,7 +56,7 @@ enum Ours {
 /// What the conversation holds, as the translation asks it: the core keeps the conversation, this is the plugin's
 /// memory of the running turn.
 #[derive(Default)]
-struct Own {
+pub(crate) struct Own {
     ids: HashSet<String>,
     calls: HashMap<String, Value>,
 }
@@ -71,7 +71,22 @@ impl Seen for Own {
 }
 
 impl Own {
-    fn note(&mut self, items: &[Item]) {
+    /// What the core's conversation holds, for a view that starts on it.
+    pub(crate) fn knows(&mut self, known: &[ViewKnown]) {
+        for k in known {
+            match &k.name {
+                Some(name) => {
+                    let call = json!({ "name": name, "status": k.status });
+                    self.calls.insert(k.id.clone(), call);
+                }
+                None => {
+                    self.ids.insert(k.id.clone());
+                }
+            }
+        }
+    }
+
+    pub(crate) fn note(&mut self, items: &[Item]) {
         for item in items {
             match item {
                 Item::Delta { id, .. }

@@ -2,7 +2,7 @@
 title: "Antigravity CLI en plugin"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4 (INT-10.8)","docs/PLUGINS.md §8.24 (ESC-348)","docs/PROTOCOL.md, Antigravity CLI","docs/TODO-2.2.md, INT-10.8","Ticket ESC-283","Ticket ESC-348","plugins/antigravity/README.md"]
-tickets: ["ESC-283","ESC-348"]
+tickets: ["ESC-283","ESC-348","ESC-352"]
 decisions: [68,94]
 compared: null
 ---
@@ -42,7 +42,7 @@ Du transcript, il ne lit que les 4 derniers Mio : une étape plus ancienne n'y e
 
 Le moteur `Agy` du registre garde ce qui n'est pas la conversation : ses capacités et le sens de ses modes, les comptes (celui de la machine connecté par `agy` dans un terminal, les autres par une clé Gemini), `agy models`, les textes rédigés (`agy -p`), la vue terminal (son `--conversation`, son transcript, ses hooks), le serveur MCP d'Escouade, le retrait de son jeton du dossier de l'agent à la fin du process, et ce qui garde les outils de l'utilisateur à leur place (sa configuration git, Rust) : un module ne connaît pas son dossier.
 
-**La vue lit les mots du plugin, pris comme une bibliothèque**, pour les mêmes règles et les mêmes appels des deux côtés, jusqu'à ce que les « Vue X » sortent du cœur (P8).
+**La vue passe par le module** (`view/translate`, ESC-352) : le cœur lit le transcript et passe ses lignes au plugin. Plugin coupé, le terminal marche et la conversation dit qu'elle ne le suit plus. Le cœur garde sa copie des mots du lancement de l'interface. Voir *Le contrat des harness en process*.
 
 ## Un arrêt se dit
 

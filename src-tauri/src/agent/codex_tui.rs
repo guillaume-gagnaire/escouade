@@ -1,12 +1,7 @@
 //! « Vue Codex »: the agent's conversation as Codex's own interface (in a terminal) writes it in
-//! its session's rollout (`sessions/…/rollout-<date>-<session>.jsonl`), and what its hooks tell
-//! while it runs (`tui`, `engine/codex/terminal.rs`).
-//!
-//! The rollout's events (`event_msg`) tell what the app-server's notifications tell, in Codex's
-//! inner form (snake_case, items in PascalCase): each is turned into the notification it stands for
-//! and goes through the same translation (`codex_frame`). The rest of the rollout (the model's own
-//! `response_item`s, the turns' contexts) says nothing more. What the user types in the interface
-//! is shown as their message, as the transcript of Claude Code's tells it.
+//! its session's rollout (`sessions/…/rollout-<date>-<session>.jsonl`), which its plugin translates
+//! (`view/translate`, `plugins/codex/src/view.rs`), and what its hooks tell while it runs
+//! (`tui`, `engine/codex/terminal.rs`).
 //!
 //! Its hooks have the payloads of Claude Code's (docs/TODO-1.8.md, point 0, « Vue terminal »,
 //! `tests/fixtures/codex/hooks-payloads.jsonl`): `UserPromptSubmit`, `PermissionRequest`,
@@ -14,275 +9,11 @@
 
 use super::*;
 
-/// A `snake_case` key in `camelCase`.
-fn camel(key: &str) -> String {
-    let mut out = String::with_capacity(key.len());
-    let mut up = false;
-    for c in key.chars() {
-        if c == '_' {
-            up = true;
-        } else if up {
-            out.extend(c.to_uppercase());
-            up = false;
-        } else {
-            out.push(c);
-        }
-    }
-    out
-}
-
-/// An object whose keys are turned into `camelCase` (its own only, not those of its values).
-fn camel_keys(v: &Value) -> Value {
-    match v.as_object() {
-        Some(map) => Value::Object(map.iter().map(|(k, v)| (camel(k), v.clone())).collect()),
-        None => v.clone(),
-    }
-}
-
-/// An item of the rollout (`UserMessage`, `AgentMessage`, `CommandExecution`…) as the app-server
-/// sends it (`userMessage`, `agentMessage`, `commandExecution`…).
-pub(crate) fn rollout_item(item: &Value) -> Value {
-    let mut out = camel_keys(item);
-    let kind = item["type"].as_str().unwrap_or_default();
-    let mut chars = kind.chars();
-    let kind = match chars.next() {
-        Some(first) => first.to_lowercase().chain(chars).collect::<String>(),
-        None => String::new(),
-    };
-    out["type"] = json!(kind);
-    let texts = |v: &Value| -> String {
-        v.as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(|c| c["text"].as_str())
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
-    match kind.as_str() {
-        "agentMessage" | "plan" if out["text"].is_null() => {
-            out["text"] = json!(texts(&item["content"]));
-        }
-        "reasoning" => {
-            if out["summary"].is_null() {
-                out["summary"] = item["summary_text"].clone();
-            }
-            if out["content"].is_null() {
-                out["content"] = item["raw_content"].clone();
-            }
-        }
-        "commandExecution" => {
-            // The command as it was run (its shell and all), and as the model wrote it.
-            if let Some(argv) = item["command"].as_array() {
-                let words: Vec<&str> = argv.iter().filter_map(Value::as_str).collect();
-                out["command"] = json!(words.join(" "));
-            }
-            let actions: Vec<Value> = item["parsed_cmd"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(|a| a["cmd"].as_str())
-                .map(|c| json!({ "command": c }))
-                .collect();
-            out["commandActions"] = json!(actions);
-        }
-        "fileChange" => {
-            // By path in the rollout (`{ path: { type, unified_diff | content, move_path } }`), a
-            // list in the app-server's.
-            if let Some(by_path) = item["changes"].as_object() {
-                let changes: Vec<Value> = by_path
-                    .iter()
-                    .map(|(path, c)| {
-                        let diff = c["unified_diff"]
-                            .as_str()
-                            .or_else(|| c["content"].as_str())
-                            .unwrap_or_default();
-                        json!({
-                            "path": path, "diff": diff,
-                            "kind": { "type": c["type"], "move_path": c["move_path"] },
-                        })
-                    })
-                    .collect();
-                out["changes"] = json!(changes);
-            }
-            if out["status"].is_null() {
-                out["status"] = json!("completed");
-            }
-        }
-        _ => {}
-    }
-    if let Some(status) = out["status"].as_str() {
-        out["status"] = json!(camel(&status.to_lowercase()));
-    }
-    out
-}
-
-/// The rate limits of a rollout's `token_count`, as `account/rateLimits/updated` gives them.
-fn rate_limits(r: &Value) -> Value {
-    let window = |w: &Value| {
-        if !w.is_object() {
-            return Value::Null;
-        }
-        json!({
-            "usedPercent": w["used_percent"],
-            "windowDurationMins": w["window_minutes"],
-            "resetsAt": w["resets_at"],
-        })
-    };
-    json!({
-        "primary": window(&r["primary"]),
-        "secondary": window(&r["secondary"]),
-        "rateLimitReachedType": r["rate_limit_reached_type"],
-    })
-}
-
 impl AgentRt {
     /// One entry of the rollout its Codex interface writes.
+    #[cfg(test)]
     pub(crate) fn codex_rollout(&mut self, e: &Value, fx: &mut Effects) {
-        if e["type"] != "event_msg" {
-            return;
-        }
-        let p = &e["payload"];
-        let own = self.meta.session_id.clone();
-        let notification =
-            |method: &str, params: Value| json!({ "method": method, "params": params });
-        let frame = match p["type"].as_str().unwrap_or_default() {
-            "task_started" => notification(
-                "turn/started",
-                json!({ "threadId": own, "turn": { "id": p["turn_id"] } }),
-            ),
-            "task_complete" | "turn_aborted" => {
-                // Ended already, by the core, after a `Stop` whose end came late.
-                if !self.meta.status.is_active() {
-                    return;
-                }
-                // That of an earlier turn, the core ended, read once the next one started.
-                if let (Some(running), Some(ended)) = (self.codex_turn(), p["turn_id"].as_str()) {
-                    if running != ended {
-                        return;
-                    }
-                }
-                let status = if p["type"] == "turn_aborted" {
-                    "interrupted"
-                } else {
-                    "completed"
-                };
-                let turn =
-                    json!({ "id": p["turn_id"], "status": status, "durationMs": p["duration_ms"] });
-                notification("turn/completed", json!({ "threadId": own, "turn": turn }))
-            }
-            kind @ ("item_started" | "item_completed") => {
-                let item = &p["item"];
-                if item["type"] == "UserMessage" {
-                    if kind == "item_completed" {
-                        self.codex_typed(item, fx);
-                    }
-                    return;
-                }
-                // What a turn already over tells late (its interrupted command) is left out.
-                let id = item["id"].as_str().unwrap_or_default();
-                if self.codex_turn().is_none() && !self.conv.contains(id) {
-                    return;
-                }
-                let method = if kind == "item_started" {
-                    "item/started"
-                } else {
-                    "item/completed"
-                };
-                notification(
-                    method,
-                    json!({ "threadId": p["thread_id"], "turnId": p["turn_id"], "item": rollout_item(item) }),
-                )
-            }
-            "token_count" => {
-                if p["rate_limits"].is_object() {
-                    let limits = rate_limits(&p["rate_limits"]);
-                    self.codex_frame(
-                        &notification(
-                            "account/rateLimits/updated",
-                            json!({ "rateLimits": limits }),
-                        ),
-                        fx,
-                    );
-                }
-                let info = &p["info"];
-                if !info.is_object() {
-                    return;
-                }
-                let usage = json!({
-                    "total": camel_keys(&info["total_token_usage"]),
-                    "last": camel_keys(&info["last_token_usage"]),
-                    "modelContextWindow": info["model_context_window"],
-                });
-                notification(
-                    "thread/tokenUsage/updated",
-                    json!({ "threadId": own, "tokenUsage": usage }),
-                )
-            }
-            "error" => notification(
-                "error",
-                json!({ "threadId": own, "error": { "message": p["message"] } }),
-            ),
-            _ => return,
-        };
-        let ends = frame["method"] == "turn/completed";
-        self.codex_frame(&frame, fx);
-        if ends {
-            self.tui_prompt = None;
-        }
-    }
-
-    /// What the user typed in the interface (or Escouade pasted there): their message.
-    fn codex_typed(&mut self, item: &Value, fx: &mut Effects) {
-        let content = item["content"]
-            .as_array()
-            .map(Vec::as_slice)
-            .unwrap_or_default();
-        let text = content
-            .iter()
-            .filter_map(|c| c["text"].as_str())
-            .collect::<Vec<_>>()
-            .join("\n");
-        let images = content
-            .iter()
-            .filter(|c| {
-                matches!(
-                    c["type"].as_str(),
-                    Some("image" | "local_image" | "localImage")
-                )
-            })
-            .count() as u32;
-        if text.trim().is_empty() && images == 0 {
-            return;
-        }
-        let id = item["id"]
-            .as_str()
-            .map(str::to_string)
-            .unwrap_or_else(new_id);
-        if self.conv.contains(&id) {
-            return;
-        }
-        let item = json!({
-            "kind": "user", "id": id, "text": text, "images": images, "ts": now_ms(),
-            "queued": false, "origin": "terminal",
-        });
-        self.meta.resume_at = None;
-        self.append(item, fx);
-        if self.tui_prompt.is_none() {
-            self.turn_text.clear();
-            self.final_text.clear();
-            self.interrupted = false;
-            if self.meta.plan.as_ref().is_some_and(PlanState::is_finished) {
-                self.reset_plan(fx);
-            }
-        }
-        if !self.meta.status.is_active() {
-            self.set_status(AgentStatus::Running, fx);
-        }
-        self.meta.prompts += 1;
-        self.meta.last_activity = now_ms();
-        self.tui_prompt = Some(text);
-        fx.agent_changed = true;
-        fx.save = true;
+        self.view_line(e, fx);
     }
 
     /// One of the hooks its Codex interface runs (`escouade-hook`, `engine/codex/terminal.rs`).
@@ -304,7 +35,7 @@ impl AgentRt {
                         fx,
                     );
                 }
-                self.codex_new_conversation();
+                self.view_reset();
                 self.meta.session_id = Some(sid.to_string());
                 self.meta.last_entry = None;
                 self.meta.fork_of = None;
@@ -342,25 +73,6 @@ impl AgentRt {
         }
         fx.agent_changed = true;
         out
-    }
-
-    /// The running turn of its Codex interface is over, though its rollout did not say so (its
-    /// interface gone, or a `Stop` with no end written): told as Codex tells a turn's end.
-    pub(super) fn codex_tui_end(&mut self, fx: &mut Effects) {
-        if !self.meta.status.is_active() {
-            return;
-        }
-        let status = if self.interrupted {
-            "interrupted"
-        } else {
-            "completed"
-        };
-        let turn = json!({ "id": self.codex_turn(), "status": status });
-        self.codex_frame(
-            &json!({ "method": "turn/completed", "params": { "turn": turn } }),
-            fx,
-        );
-        self.tui_prompt = None;
     }
 }
 
@@ -444,32 +156,6 @@ mod tests {
         assert_eq!(a.context_window, 258_400);
         assert!(fx.rate.is_some());
         assert_eq!(a.tui_prompt, None);
-    }
-
-    #[test]
-    fn the_rollouts_items_take_the_app_servers_form() {
-        let cmd = rollout_item(&json!({
-            "type": "CommandExecution", "id": "exec-1",
-            "command": ["pwsh.exe", "-Command", "git status"],
-            "parsed_cmd": [{ "type": "unknown", "cmd": "git status" }],
-            "status": "completed", "aggregated_output": "ok", "exit_code": 0,
-        }));
-        assert_eq!(cmd["type"], "commandExecution");
-        assert_eq!(cmd["commandActions"], json!([{ "command": "git status" }]));
-        assert_eq!(cmd["aggregatedOutput"], "ok");
-        assert_eq!(cmd["exitCode"], 0);
-        let change = rollout_item(&json!({
-            "type": "FileChange", "id": "fc-1",
-            "changes": { "src/a.ts": { "type": "update", "unified_diff": "@@ -1 +1 @@\n-a\n+b\n", "move_path": null } },
-        }));
-        assert_eq!(change["type"], "fileChange");
-        assert_eq!(change["changes"][0]["path"], "src/a.ts");
-        assert_eq!(change["changes"][0]["kind"]["type"], "update");
-        assert_eq!(change["status"], "completed");
-        let reasoning = rollout_item(&json!({
-            "type": "Reasoning", "id": "r1", "summary_text": ["**Plan**"], "raw_content": [],
-        }));
-        assert_eq!(reasoning["summary"], json!(["**Plan**"]));
     }
 
     #[test]

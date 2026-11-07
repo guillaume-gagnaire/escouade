@@ -1188,7 +1188,7 @@ Le jeton de la CLI (`gh auth token`, `glab auth status --show-token`, `az accoun
 - le jugement de la clôture des projets privés sur les fichiers, que `escouade-acp` tient aujourd'hui lui-même (`paths.rs`) : avec `fs/*`, c'est l'hôte qui le tient (§8.4.6). C'est plus sûr qu'aujourd'hui.
 - le tunnel de proxy et le TLS du WebSocket, aujourd'hui dans `voice/live.rs` : l'hôte les fait pour tous (§8.4.4).
 
-**Ce qui doit sortir du cœur.** Le cœur lie aujourd'hui des crates de plugins **en bibliothèque** : 8 usages d'`escouade_plugin_opencode`, 7 de `_codex`, 5 de `_copilot`, 5 de `_agy` et 19 d'`escouade_acp` hors tests, pour ses « Vue X » et ses comptes (`src-tauri/src/agent/*.rs`, `engine/*/mod.rs`). Un correctif publié au store ne corrigerait donc pas la vue, qui resterait à la version de l'app. **Retenu** : une méthode du contrat (`view/translate`), le cœur lisant le fichier de la session et le plugin le traduisant. Le cœur ne lie plus que `escouade-plugin-protocol`. C'est le ticket P8 du plan ; il peut attendre après la 2.2 sans rien casser, le code restant commun.
+**Ce qui est sorti du cœur.** Le cœur liait des crates de plugins **en bibliothèque**, pour ses « Vue X » et ses comptes : un correctif publié au store n'aurait pas corrigé la vue, restée à la version de l'app. C'est fini (P8, §8.30) : les vues passent par `view/translate`, le cœur lisant le fichier de la session et le plugin le traduisant, et `src-tauri/Cargo.toml` ne dépend plus d'aucun dossier de `plugins/`. Le cœur garde les crates de `crates/` (le protocole, le kit, `escouade-acp`, `escouade-voice`), qui ne sont pas des plugins.
 
 ### 8.3 Le modèle d'exécution
 
@@ -1588,7 +1588,7 @@ Les tickets du portage, dans l'ordre. **Les lettres sont des noms de travail**, 
 | **P5** (fait, §8.23) | OpenCode | SSE, `local:shared`, ses trois tâches ; le plus risqué des harness |
 | **P6** (fait, §8.28) | OpenAI, Groq, Mistral, ElevenLabs, Deepgram | sortir `voice/online*`, `live.rs`, `wire.rs` du crate de l'app dans une crate commune ; WebSocket ; INT-13 rejoué |
 | **P7** (fait, §8.22) | isola | `proc/*` |
-| **P8** | les « Vue X » | `view/translate` ; le cœur ne lie plus aucun plugin ; peut suivre la 2.2 |
+| **P8** (fait, §8.30) | les « Vue X » | `view/translate` ; le cœur ne lie plus aucun plugin |
 
 **Z. La fin, dans cet ordre :**
 
@@ -1871,7 +1871,7 @@ Deux mesures, les fourchettes vont de l'une à l'autre. **Le seuil de latence es
 
 | Plugin | SHA-256 | Taille |
 | --- | --- | --- |
-| OpenCode | `a27e692ff08426dd02db9d9cdeb8700c10d8cb673a5878af389fedee3ca0c785` | 743 065 o |
+| OpenCode | `eb47097b3696d6d40fa01c46ad175f85e5cd21c7f4925ef1af3fb39878277bdf` | 756 021 o |
 
 Identique sous Windows, compilé deux fois, et sous Linux, dans deux dossiers (`sh scripts/plugin-build-linux.sh plugins/opencode --first-party`, `rust:1.98.0-bookworm`, Podman), `canon` `4d3e106a…`. macOS n'a pas été essayé. Le banc `--first-party --escouade 2.2.0` passe sur ce module : 6 réussis, 0 échoué, 5 sans objet.
 
@@ -1904,7 +1904,7 @@ Antigravity CLI est le premier harness porté de bout en bout, en `2.2.0`, `esco
 
 **Une limite.** Si l'instance plante pendant l'attente, ce qu'elle gardait est perdu, y compris un `result` : `agent/frames` a déjà répondu, et le cœur ne le redonne pas. Le tour reste alors ouvert jusqu'au message suivant ou à l'arrêt. Il faut un plantage dans une fenêtre de 600 ms ; ce n'est pas traité.
 
-**L'empreinte** (compilée depuis crates.io, refaite sur `escouade-acp` `0.1.1`, §8.29, `escouade-plugin build`, deux fois sous Windows, deux dossiers sous Linux, `rust:1.98.0-bookworm`, Podman, `canon` `4d3e106a…`) : `7ea252bc86f6d84ff7e831d3123eeb9ffcfe63bc758c61883504af8fb62b75b2`, 860 882 o, la même partout. C'est celle du module que le store publiera. macOS n'a pas été essayé.
+**L'empreinte** (compilée depuis crates.io, refaite sur `escouade-acp` `0.1.2`, §8.30, `escouade-plugin build`, deux fois sous Windows, deux dossiers sous Linux, `rust:1.98.0-bookworm`, Podman, `canon` `4d3e106a…`) : `c215c7e1cb36a45bcef5144eb146289479c9edeb862ee513fa609b1368aea531`, 981 294 o, la même partout. C'est celle du module que le store publiera. macOS n'a pas été essayé.
 
 **INT-0.** `ESCOUADE_BENCH_ONLY=agy npm run bench:int0 -- --flux-only`, 20 passes au plus vite sur les six flux d'`agy`, en release, sous Windows, d'autres worktrees compilant : **médiane 104 µs, 99e centile 1 058 µs, 6 231 lignes/s**, 280 lignes sans événement sur 1 380 comme avant. Le process du §4 donnait 161 µs, 1 015 µs et 4 739 lignes/s, le cœur 36 µs, 1 010 µs et 9 462 lignes/s. Le seuil (5 ms de plus au 99e centile) est tenu : +48 µs sur le cœur. Le flux enregistré n'a pas de dossier d'agent, il ne mesure donc pas la lecture du transcript, dont le coût ne compte que par ligne qui le lit.
 
@@ -2050,7 +2050,7 @@ Dans les seuils : +0,3 ms au 99e centile, plus de 2 200 lignes/s. Le module coû
 
 **L'essai réel.** `real-harnesses` a rejoué le vrai Claude Code 2.1.318 sur le module : un ticket jusqu'à sa fusion, et sa vue terminal. Goose n'est pas installé sur ce poste : `real_goose` n'a pas tourné. Il tourne sur le module par `acp-harness.spec.ts` et `plugins_acp_tests`, sur un faux agent.
 
-**L'empreinte de Claude Code**, compilée depuis crates.io, `escouade-plugin build` : `b3fd405448a7b0b3ddcdfeaf9ee2a439a7c388a2b54304d36a00da66feaa6b36`, 500 919 o. La même sous Linux a été vérifiée au §8.29.
+**L'empreinte de Claude Code**, compilée depuis crates.io, `escouade-plugin build` : `013dba0ea81041981d2b572bf589ac26552d1f8322e81ee407a2e5653a96540b`, 528 940 o. La même sous Linux a été vérifiée au §8.30.
 
 **Le piège de `Reactor::turn`** (P7) ne les touche pas : ni ACP ni Claude Code n'utilisent le kit. Une machine à états répond dans le tour, par `turn::run`.
 
@@ -2143,17 +2143,17 @@ Ce que les portages avaient contourné chacun de leur côté remonte dans `escou
 | Plugin | SHA-256 | Taille |
 | --- | --- | --- |
 | ACP | `a4c1c4faa5e9f9c559e27fc90a53647e55d8c8bf4d4005ce61eeb6dc90409149` | 758 256 o |
-| Antigravity CLI | `7ea252bc86f6d84ff7e831d3123eeb9ffcfe63bc758c61883504af8fb62b75b2` | 860 882 o |
+| Antigravity CLI | `c215c7e1cb36a45bcef5144eb146289479c9edeb862ee513fa609b1368aea531` | 981 294 o |
 | Azure DevOps | `edc70b1076ff077ddd53af11ffeaf373f9bc9e1730c8e195e054dd8dd467156e` | 725 849 o |
 | Bitbucket | `e0584248908e12e72b5a0c130fc2a9257c061cb05e8d3e9f5714dd00dddbd5d1` | 569 705 o |
-| Claude Code | `b3fd405448a7b0b3ddcdfeaf9ee2a439a7c388a2b54304d36a00da66feaa6b36` | 500 919 o |
+| Claude Code | `013dba0ea81041981d2b572bf589ac26552d1f8322e81ee407a2e5653a96540b` | 528 940 o |
 | ClickUp | `3a52c75b2d94d1945e5ff8cf72452fb9cbb1f73a77d2176dbd1a866392fa0192` | 569 666 o |
-| Codex | `962bdd7fe9acf1f7b3b7616c6fbc5471df0c8e76ebab4fe71aed75d21e7202af` | 608 087 o |
-| Copilot CLI | `4de6bd2b64309fdc64f4df05dc0a7859e8b7bf8328ce1e026e3179d496ed2bfc` | 690 015 o |
-| Cursor CLI | `9bad956799a22fc525dcf28033fc878e7a22b6c9803e5b3c92793329f754fa7d` | 765 440 o |
+| Codex | `2af09ad1c2a5305236b0f12bb7f6e9959294ec71fe4684c534c9bf7fe6ad0d6e` | 673 553 o |
+| Copilot CLI | `08b46076ddc4bb438592f2b368372a61ab042fd70e26e9953b0406f06b59e6d1` | 752 915 o |
+| Cursor CLI | `09ee107c99ca7ffa0c7064911733b15599bbed2dc66b217e49e183edc19ae07c` | 853 575 o |
 | Deepgram | `5ea971014abbe346b90aca6f14e921d811f50e20eea52166cfa509c62ce18b9e` | 531 268 o |
 | ElevenLabs | `ec5e71af06044e9167b26770eede85f350b3985e8124a46e06a5299777ac97ce` | 531 268 o |
-| Gemini CLI | `138be33d24db9ff22e226a792cf2fac02a9d2167298a304f1dff2ce66a0ce976` | 765 440 o |
+| Gemini CLI | `4dfa2efb4b7d97a9ccc09c27bfb5ad27ae673545e4819cee4cd167a59651705f` | 853 575 o |
 | Gitea | `8e97c0d31ce96844d9d6adb4cfa3b87cf6bbd72533d6f4cae87d38408ec86572` | 545 132 o |
 | GitHub | `6d2101591831738033c4df6f02318760d4dfdd4644c91892c89a53a53ed50ef0` | 622 270 o |
 | GitLab | `a984ce48ed7551b75b1e2666cd5707c6f5732162f82173e511666d5fd032eb7f` | 607 201 o |
@@ -2161,13 +2161,68 @@ Ce que les portages avaient contourné chacun de leur côté remonte dans `escou
 | isola | `67c8b84a58aaedfc9ad35987e24f35b8d408a5a2d63dc561cf739ff1ef630573` | 239 368 o |
 | Jira | `8e8c4a1c8d50dad22815baded6cda09e97856f2304eecb1ba01a6d75f876466d` | 524 404 o |
 | Linear | `9f6d4c20d128deeafb8ca4e97ffa9bd078b5f327d2489e5b73922d19e53ce513` | 495 974 o |
-| Mistral | `8595f152af0fb5411a9840fbefcf2b25fd477b9dab907e27e43ae991aa2dba69` | 1 115 045 o |
+| Mistral | `21e0d78f6121728796d350b9599ecea74cb14532600e273a7b7436214c82fd25` | 1 200 832 o |
 | OpenAI | `e0f11f6bac475a86d3ce7cc5404075ff1789f423019883ac8902e8202630f28c` | 531 268 o |
-| OpenCode | `a27e692ff08426dd02db9d9cdeb8700c10d8cb673a5878af389fedee3ca0c785` | 743 065 o |
+| OpenCode | `eb47097b3696d6d40fa01c46ad175f85e5cd21c7f4925ef1af3fb39878277bdf` | 756 021 o |
 | Trello | `42b0d2029c45c1d94ae057b381110b7793d306788d11cbbe26720dd8d8d371b7` | 480 578 o |
+
+Huit lignes de ce tableau sont celles de P8 (§8.30) : Antigravity CLI, Claude Code, Codex, Copilot CLI, Cursor CLI, Gemini CLI, Mistral et OpenCode.
 
 **Le banc** `escouade-plugin validate`, puis `test <court> --first-party --escouade 2.2.0 --wasm`, sur ces modules-là : 23 sur 23, aucun échec.
 
 **Rien n'a été réenregistré.** Les parités rejouent les transcriptions d'avant le portage, et aucune fixture n'a changé. Ce ticket n'ajoute ni calcul flottant ni `cfg` de système : le kit et la voix n'ont que `target_family = "wasm"`.
 
 **Pas fait ici.** Ni étiquette, ni soumission, ni signature (Z1, Z2).
+
+### 8.30 Ce que P8 a construit (ESC-352)
+
+**Le cœur ne lie plus aucun plugin.** `src-tauri/Cargo.toml` ne dépend d'aucun dossier de `plugins/`. Claude Code, Codex, Copilot, Antigravity et OpenCode redeviennent des `cdylib` seules. `escouade-plugins` reste pour le plugin de démonstration, jusqu'à Z3.
+
+**`view/translate`.** Le cœur garde le PTY, le fichier que l'interface écrit, ses hooks et l'état de l'agent ; le plugin dit ce que les lignes veulent dire. Le cœur lui passe les lignes (`ViewParams`, `schemas/plugin-protocol-1.json`), avec ce qu'il sait de l'agent, et lit des éléments : ceux d'`agent/frames`, plus ceux d'une vue (`typed`, `spoke`, `wrote`, `waits`, `waitsOn`, `asks`, `runs`, `goes`, `viewTurn`, `viewEnd`, `viewUsage`, `viewError`, `row`, `bridged`, `linked`). Ce que seul le cœur sait part comme une **note**, une ligne `{"escouade": …}` : `end` (la fin d'un tour, avec le coût que le cœur calcule pour Claude Code), `hook` (Gemini CLI n'a que ses hooks ; le `permissionRequest` de Copilot), `frame` (un flux enregistré, pour les tests).
+
+**Pourquoi synchrone, ligne à ligne.** Les vues du cœur lisaient chaque ligne sous le verrou de l'agent, chacune voyant ce que la précédente avait fait (le statut, le tour), et une fin de tour se fait sous ce verrou, depuis partout (`end_tui_turn`). Passer par le runtime aurait demandé un appel asynchrone sous verrou, ou tout le code des vues à refaire, et le fil du module sert aussi `fs/*`, qui peut vouloir ce verrou. **Retenu** : une **instance à part** par plugin (`plugins/view.rs`), du même module, sans `escouade.call`, sur un fil à elle (WASI bloque sur un runtime à lui, ce qu'un fil de tokio ne peut pas), appelée en attendant sa réponse, par le même tour que le reste (`Instance::turn`), bornée par le temps d'un tour du plugin. Une vue ne demande rien à la machine. Une instance en faute est remplacée à l'appel suivant : la vue repart avec une nouvelle clé, le cœur lui disant ce que la conversation contient (`known`). Un plugin arrêté perd son instance de vues.
+
+**Chaque vue.**
+
+| Vue | Où | Ce qui change |
+| --- | --- | --- |
+| Claude Code | `plugins/claude/src/view.rs` | les entrées du transcript, les commandes locales, le lien à claude.ai ; le coût reste calculé par le cœur |
+| Codex | `plugins/codex/src/view.rs` | les `event_msg` du rollout, en notifications de l'app-server |
+| Copilot CLI | `plugins/copilot/src/view.rs` | les événements du journal ; `permissionRequest` traduit par le plugin (`asks`) |
+| Antigravity CLI | `plugins/antigravity/src/view.rs` | les étapes du transcript, en forme ACP |
+| Cursor CLI, Mistral Vibe, Gemini CLI | `crates/escouade-acp/src/view.rs` | le client ACP (`Speaker`) à la place de `agent/cursor.rs` du cœur, retiré |
+| OpenCode | rien à faire | `opencode attach` n'a pas de fichier à lire : ses événements passent déjà par le plugin |
+
+**Une différence de comportement, voulue.** Plugin coupé ou désinstallé, le terminal marche, mais la conversation ne le suit plus et le dit une fois. Avant, la vue marchait plugin coupé, sa traduction étant liée.
+
+**Un module qui ne répond plus.** Chaque essai peut durer tout le temps d'un tour, 10 s pour la plupart des harness, sous le verrou de l'agent. Le premier échec a donc droit à deux essais, l'instance étant refaite entre les deux, puis la conversation le dit, une fois, dans la langue de l'app : « Le plugin de Claude Code n'a pas lu ce que sa vue a écrit (il est coupé ou n'est pas installé). ». Les lignes passent ensuite sans lui pendant 30 s (`VIEW_PAUSE`), puis un seul essai, et ainsi de suite ; elles ne sont pas relues. Une fin de tour que le plugin ne peut pas lire se fait quand même, par le cœur, sans son coût. `agent/view_tests.rs` le joue sur un module qui boucle et sur un plugin coupé puis rallumé.
+
+**Un écart corrigé en passant.** La fin d'un tour de « Vue Gemini » que le cœur fait à la fermeture de l'interface passait par la branche de Claude Code de `end_tui_turn`. Elle passe maintenant par son plugin.
+
+**La parité.** `plugins_view_parity_tests` joue les 16 enregistrements des tests des vues, par les entrées et les hooks que reçoit le cœur, contre `tests/fixtures/plugins/parity/view.json`, écrit par la traduction liée avant son retrait (3931b674, `ESCOUADE_VIEW_PARITY=record`). À chaque étape : statut, messages, fin de tour, alerte, sortie du hook, lignes de stats, quota ; à la fin : la conversation entière, l'agent. Seuls les ids faits par le cœur et les heures sont normalisés. **Aucun écart.** Retirer un module fait échouer le test : il passe bien par lui.
+
+**Les tests du cœur** n'ont pas changé d'assertion sur les vues : `codex_rollout`, `copilot_log`, `on_transcript`… passent par le module, et les flux enregistrés par la note `frame`. Les tests qui ne regardaient qu'une fonction pure du plugin sont partis avec elle (`tool_of`, `rollout_item`, `same_dir`, `safe`, `absolute`, les appels de Gemini). `agent/cursor_tests.rs` part avec `agent/cursor.rs` : le client ACP a ses propres tests et sa parité (§8.27). `Through`, qui jouait OpenCode dans le process, passe par `agent/frames` du module.
+
+**Ce que le cœur garde de copié.** `terminal/launch` n'est toujours pas servi : le cœur lance encore lui-même les interfaces, et lit le quota et les modèles d'un compte. Il garde donc sa copie de ce qu'il lui faut, dans `engine/<harness>/{words,prices,client,rules}.rs` et `agent/{words,localcmd}.rs`. Une règle de lancement corrigée au store ne corrige donc pas encore celle de l'interface. Ce que seuls les tests du cœur lisent de ces copies est sous `cfg(test)` : à retirer quand ces tests iront dans les crates.
+
+**La publication.** Le contrat a grandi, et une version ne se retire pas : l'utilisateur a publié `escouade-plugin-protocol` 0.1.1 et `escouade-acp` 0.1.2, `view.rs` n'étant pas dans la 0.1.1 sortie pendant ce ticket. Antigravity, Claude Code, Codex, Copilot CLI, Cursor CLI, Gemini CLI et Mistral ont leur `Cargo.lock` sur ces versions, et `AWAITING_PUBLICATION` a disparu pour de bon. ACP et les plugins sans vue restent sur le protocole 0.1.0 : un plugin ne suit une crate que s'il en a besoin.
+
+**Les empreintes**, compilées depuis crates.io par `escouade-plugin build --first-party`, sont au tableau du §8.29. Les 23 plugins : deux dossiers sous Linux (`rust:1.98.0-bookworm`, Podman, `canon` `4d3e106a…`) et une passe sous Windows, sans aucun écart. Les 8 qui ont changé : deux passes de plus sous Windows, dans un dossier de données neuf, sans cache. macOS n'a pas été essayé. **15 plugins n'ont pas bougé.** Aux 7 du protocole s'ajoute **OpenCode**, qui ne s'en sert pas : retirer `rlib` de sa crate fait passer son module de 743 065 à 756 021 o, et le commentaire retiré de `lib.rs` décale les lignes que ses panics citent, si bien que `rlib` remis seul rend la taille, pas l'empreinte (essayé sous Linux). Il reste sur le protocole 0.1.0, et son `Cargo.lock` n'a pas changé.
+
+**Le banc** `escouade-plugin validate`, puis `test <court> --first-party --escouade 2.2.0 --wasm`, sur les modules de ces empreintes : 23 sur 23, aucun échec. La parité reste sans écart avec `ESCOUADE_PARITY=1`.
+
+**INT-0.** `int0_view_bench` (`plugins_view_parity_tests.rs`, ignoré) lit chaque enregistrement ligne à ligne, 200 fois, ce qu'une ligne prend de son entrée à ses effets sur l'agent. En release sans LTO, poste chargé, le même test sur 3931b674 pour la traduction liée :
+
+| Vue | Liée : 50e / 99e centile | Module : 50e / 99e centile | Lignes/s, liée puis module |
+| --- | --- | --- | --- |
+| Claude Code (transcript) | 0,4 / 451 µs | 39 / 438 µs | 30 408 → 13 830 |
+| Codex | 0,1 / 405 µs | 64 / 462 µs | 33 919 → 10 101 |
+| Copilot CLI | 0,4 / 416 µs | 46 / 461 µs | 39 834 → 11 916 |
+| Cursor CLI (transcript) | 56 / 693 µs | 183 / 1 400 µs | 4 706 → 2 337 |
+| Mistral Vibe (outil) | 0,4 / 387 µs | 64 / 542 µs | 17 912 → 6 952 |
+| Antigravity CLI (commande) | 20 / 523 µs | 131 / 976 µs | 7 361 → 3 720 |
+| Gemini CLI | 18 / 702 µs | 105 / 811 µs | 9 243 → 5 221 |
+
+**Le seuil de latence est tenu** : au plus 0,7 ms de plus au 99e centile, pour 5 ms permises. Le débit compte le départ de l'agent et de sa vue à chaque rejeu, qui pèse sur les enregistrements de 2 à 7 lignes : le seuil de 2 200 lignes/s est manqué par deux d'entre eux (`cursor-subagent` 2 009, `vibe-interrupted` 1 215, liée 2 187). Sur les enregistrements longs, le module tient de 6 000 à 13 800 lignes/s, de 2 à 4 fois moins que la traduction liée. Une vue se lit par à-coups, très en dessous.
+
+**L'essai réel.** `real-harnesses.spec.ts` a rejoué le vrai Claude Code 2.1.318, Copilot CLI 1.0.98 et Mistral Vibe 3.0.3 : un ticket jusqu'à sa fusion, puis sa vue terminal, un message tapé là et revu dans la conversation d'Escouade. **Pas rejouées ici, à refaire par l'utilisateur** : Codex (0.144.5 sur ce poste, il faut 0.163 ou plus), Antigravity (`agy.exe` absent), Cursor CLI (absent du PATH), Gemini CLI (pas de clé d'API). Leurs vues passent les tests sur leurs faux harness et la parité sur leurs enregistrements. OpenCode n'a pas changé de vue.

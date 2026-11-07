@@ -67,8 +67,7 @@ stop, they say why, and their sessions are kept for their next message once it i
 | `src/rules.rs`         | The rules of each mode, the fence, the config, the models as OpenCode lists them   |
 | `README.md`            | This page                                                                          |
 
-It compiles to a module by `escouade-plugin build` (`sh scripts/plugins-wasm.sh opencode` for the tests of the app). The
-core still links the crate as a library, for its « Vue OpenCode » and its accounts. Its tests: those of the crate, played on
+It compiles to a module by `escouade-plugin build` (`sh scripts/plugins-wasm.sh opencode` for the tests of the app). Its tests: those of the crate, played on
 its lines without a module (`src/tests.rs`), its parity with the native plugin
 (`src-tauri/src/plugins_wasm_parity_tests.rs`, `tests/fixtures/plugins/parity/opencode*.json`), the bench of the harnesses on the fake `opencode serve` (`src-tauri/src/engine/opencode/bench.rs`), the
 recorded streams of OpenCode 1.19.3 replayed through it (`tests/fixtures/replays/opencode/`), the tests of the core that go

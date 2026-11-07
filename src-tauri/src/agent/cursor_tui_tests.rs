@@ -1,4 +1,5 @@
 use super::*;
+use escouade_acp::view::{tui_tool, typed_text};
 
 /// The transcript of a real interface's turn, stopped by Ctrl+C (ESC-24).
 const TUI: &str = include_str!("../../../tests/fixtures/cursor/transcript-tui.jsonl");

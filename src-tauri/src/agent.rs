@@ -25,13 +25,13 @@ mod codex;
 mod codex_tui;
 mod copilot;
 mod copilot_tui;
-mod cursor;
 mod cursor_tui;
 // The translation of the minimal fake engine of the conformance bench (`engine/minimal/`).
 mod gemini;
 mod gemini_tui;
 // The items of a harness's plugin in process (INT-9).
 mod items;
+mod localcmd;
 #[cfg(test)]
 mod minimal;
 mod opencode;
@@ -39,11 +39,12 @@ pub mod sidechain;
 mod transcript;
 mod vibe;
 mod vibe_tui;
+mod view;
+mod words;
 
-use escouade_plugin_claude::localcmd;
-pub use escouade_plugin_claude::words::strip_ansi;
-use escouade_plugin_claude::words::{strip_tags, tool_result_text};
 pub use transcript::HookOutcome;
+pub use words::strip_ansi;
+use words::tool_result_text;
 
 pub type AgentHandle = Arc<parking_lot::Mutex<AgentRt>>;
 
@@ -214,8 +215,12 @@ pub struct AgentRt {
     /// Why the setup of its worktree failed, until its ticket's first message tells it (written in
     /// the language of the texts for Claude, as that message).
     pub setup_failure: Option<String>,
-    /// What the translation of Claude Code keeps between the frames of its view's transcript (`agent/claude.rs`).
-    claude: claude::ClaudeState,
+    /// Where its terminal view stands in the plugin of its harness (`agent/view.rs`).
+    view: view::ViewState,
+    /// The view its plugin may drop (`ViewParams::gone`).
+    view_gone: Option<String>,
+    /// What its interface asks the user, as a hook told it, until it says it waits for the answer (« Vue Copilot »).
+    tui_asked: Option<String>,
     /// Requests waiting for an answer, in the order they came (an item's id is its request's).
     pending: Vec<PendingReq>,
     /// Usage of the running turn's API messages (by message id, with their model), until the
@@ -272,23 +277,10 @@ pub struct AgentRt {
     /// « Outils d'Escouade au prochain démarrage »: that process has none of Escouade's tools,
     /// which a start now would give (`Core::mark_escouade_next`, ESC-91).
     pub(crate) escouade_next: bool,
-    /// What the translation of Codex keeps between its messages (`agent/codex.rs`).
-    codex: codex::CodexState,
     /// How long the turn that ends took, as its harness's plugin told it (`Item::Took`).
     turn_took: Option<i64>,
-    /// What the translation of Copilot keeps between the events of its view's log (`agent/copilot.rs`).
-    copilot: copilot::CopilotState,
-    /// What the translation of Cursor keeps between its updates (`agent/cursor.rs`).
-    cursor: cursor::CursorState,
     /// How many task lists a harness of a plugin gave (`Item::Todos`): the id of the next one.
     todo_writes: u32,
-    /// What the translation of OpenCode keeps between its events (`agent/opencode.rs`).
-    /// What the translation of Mistral Vibe keeps between its updates (`agent/vibe.rs`).
-    vibe: vibe::VibeState,
-    /// What the translation of Antigravity CLI keeps between its events (`agent/agy.rs`).
-    agy: agy::AgyState,
-    /// What the hooks of its Gemini interface keep between them (`agent/gemini_tui.rs`).
-    gemini_tui: gemini_tui::GeminiTuiState,
 }
 
 /// A stream's process linked to claude.ai, and the session it holds there (its bridge id, when
@@ -531,7 +523,9 @@ impl AgentRt {
             setup: None,
             setup_output: None,
             setup_failure: None,
-            claude: claude::ClaudeState::default(),
+            view: view::ViewState::default(),
+            view_gone: None,
+            tui_asked: None,
             pending: Vec::new(),
             live: HashMap::new(),
             queued: 0,
@@ -553,14 +547,8 @@ impl AgentRt {
             fence: crate::fence::Fence::default(),
             privacy: crate::fence::Privacy::default(),
             escouade_next: false,
-            codex: codex::CodexState::default(),
             turn_took: None,
-            copilot: copilot::CopilotState::default(),
-            cursor: cursor::CursorState::default(),
             todo_writes: 0,
-            vibe: vibe::VibeState::default(),
-            agy: agy::AgyState::default(),
-            gemini_tui: gemini_tui::GeminiTuiState::default(),
         }
     }
 
@@ -647,7 +635,7 @@ impl AgentRt {
         self.proc = Some(proc);
         // A process that just started is not idle.
         self.meta.last_activity = now_ms();
-        self.claude_new_stream();
+        self.view_reset();
         self.pending.clear();
         self.live.clear();
         self.remote_state = None;
@@ -657,11 +645,6 @@ impl AgentRt {
         self.saw_init = false;
         self.queued = 0;
         self.announced_tasks.clear();
-        self.codex = codex::CodexState::default();
-        self.copilot = copilot::CopilotState::default();
-        self.cursor = cursor::CursorState::default();
-        self.vibe = vibe::VibeState::default();
-        self.agy = agy::AgyState::default();
         // What ran in the process before is gone with it.
         self.interrupt_plan();
     }
@@ -1139,7 +1122,6 @@ impl AgentRt {
             };
             self.patch(&id, patch, fx);
         }
-        self.claude.finalize();
     }
 
     /// A request comes after those waiting already: the one asked first stays the one shown
@@ -3422,10 +3404,6 @@ mod tests {
     #[test]
     fn ansi_and_tags_are_stripped() {
         assert_eq!(strip_ansi("\u{1b}[31mrouge\u{1b}[0m"), "rouge");
-        assert_eq!(
-            strip_tags("<local-command-stdout>ok</local-command-stdout>"),
-            "ok"
-        );
     }
 
     #[test]

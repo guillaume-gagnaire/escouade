@@ -1,6 +1,7 @@
-//! The calls of « Vue Gemini »'s hooks in ACP's form (ESC-275).
+//! The calls of « Vue Gemini »'s hooks in ACP's form (ESC-275), the view on its own.
 
 use super::*;
+use serde_json::Value;
 
 #[test]
 fn its_tools_are_put_in_acps_form_with_their_diff() {

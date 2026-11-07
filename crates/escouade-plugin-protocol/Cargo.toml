@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-protocol"
-version = "0.1.0"
+version = "0.1.1"
 description = "The JSON-RPC protocol of Escouade's plugins: its constants, its messages and the loop of a plugin, in process or as a WASM module"
 authors = ["Guillaume Gagnaire"]
 license = "MIT"

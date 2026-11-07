@@ -299,7 +299,8 @@ fn the_biggest_message_passes_through_the_module() {
         return;
     };
     let net = Net::default();
-    let manifest: Value = serde_json::from_str(escouade_plugin_claude::MANIFEST).unwrap();
+    let manifest: Value =
+        serde_json::from_str(include_str!("../../plugins/claude/escouade-plugin.json")).unwrap();
     let asked = crate::plugins::manifest::Limits {
         memory_bytes: manifest["limits"]["memoryBytes"].as_u64(),
         ..Default::default()

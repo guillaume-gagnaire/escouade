@@ -1,5 +1,5 @@
 //! What Escouade reads of Claude Code's words, without state: a local command's text, a tool's result, a window of its
-//! quota, and what the conversation says in the app's language. The core reads this too, as a library.
+//! quota, and what the conversation says in the app's language.
 
 use serde_json::{json, Value};
 

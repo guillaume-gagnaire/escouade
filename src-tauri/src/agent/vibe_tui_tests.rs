@@ -1,4 +1,5 @@
 use super::*;
+use escouade_acp::view::journal_tool;
 
 /// The segments of the journal a real interface wrote (Mistral Vibe 3.0.3, ESC-268): a turn with a
 /// command of its list, a turn whose command asked its permission (« Allow once » in the

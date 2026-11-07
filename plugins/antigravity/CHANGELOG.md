@@ -2,6 +2,7 @@
 
 ## 2.2.0
 
+- Its « Vue Antigravity » is read by the module (`view/translate`): the core no longer links this crate.
 - A WASM module (`run.wasm`), run in Escouade's host: no process of its own any more. It says what it said on the recorded streams
   of `agy`. It reads the agent's home by the host (`permissions.files`, `agentHome`, in reading), and only the last 4 MiB of a
   transcript. A transcript written late no longer holds the plugin: what follows is held and sent once it is read. It has its own

@@ -2,7 +2,7 @@
 title: "OpenCode en plugin"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4 (INT-10.2)","docs/PLUGINS.md §8.23 (ESC-349)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-223","Ticket ESC-349"]
-tickets: ["ESC-223","ESC-349"]
+tickets: ["ESC-223","ESC-349","ESC-352"]
 decisions: [93]
 compared: null
 ---
@@ -33,7 +33,7 @@ OpenCode est le premier harness sorti du cœur qui n'est pas un flux de lignes :
 
 - Le lancement et l'arrêt du serveur : le cœur le lance dans son Job object, sous WSL au besoin, dans un dossier à lui (aucun de ceux des agents), une seule fois pour les agents du même compte et avec un agent par dossier sur un serveur, et l'arrête avec son dernier agent.
 - Les capacités et le sens des modes, les comptes, les modèles lus sans serveur (`opencode models`), les textes rédigés (`opencode run`), la déclaration de « Les agents peuvent piloter Escouade », le PTY de la vue terminal (`opencode attach`, que `agent/open` décrit, le mot de passe en variable d'environnement seulement).
-- La règle des modèles et la traduction, liées en bibliothèque pour la vue OpenCode et les comptes, jusqu'à ce qu'elles passent par le contrat (P8).
+- La lecture des modèles d'un compte, dans sa propre copie de la règle (`engine/opencode/rules.rs`). La crate du plugin n'est plus liée (ESC-352). Sa vue n'a pas de fichier à lire : le flux d'événements passe déjà par le plugin, et `view/translate` ne la concerne pas.
 
 ## Un arrêt se dit
 

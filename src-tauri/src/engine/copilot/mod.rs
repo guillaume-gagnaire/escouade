@@ -16,10 +16,10 @@ mod prompt;
 #[cfg(test)]
 mod schema_tests;
 pub(crate) mod terminal;
+mod words;
 
 #[cfg(test)]
 pub(crate) use bench::fake_copilot;
-use escouade_plugin_copilot::words;
 #[cfg(test)]
 pub(crate) use words::{
     agent_mode, call_nano, form_content, limit_answer, next_month, permission_mode, prices,

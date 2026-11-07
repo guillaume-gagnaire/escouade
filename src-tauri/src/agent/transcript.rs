@@ -31,7 +31,9 @@ impl AgentRt {
     /// Its Claude Code interface starts: what was counted of the one before is gone with it.
     pub fn start_tui(&mut self) {
         self.meta.last_activity = now_ms();
-        self.claude_new_stream();
+        self.view_reset();
+        #[cfg(not(test))]
+        crate::plugins::view::warm(self.meta.engine);
         self.pending.clear();
         self.live.clear();
         self.tui_usage.clear();
@@ -42,9 +44,6 @@ impl AgentRt {
         self.queued = 0;
         self.announced_tasks.clear();
         self.interrupt_plan();
-        self.codex_new_conversation();
-        self.copilot_new_conversation();
-        self.cursor_new_conversation();
         // It tells the state of its link to claude.ai itself, once it has one.
         self.remote_state = None;
     }
@@ -61,76 +60,24 @@ impl AgentRt {
 
     /// One entry of the transcript its Claude Code interface writes.
     pub fn on_transcript(&mut self, e: &Value, fx: &mut Effects) {
-        // A subagent's entries are in files of their own; one here would be told as the agent's.
-        if e["isSidechain"] == true {
-            return;
-        }
-        // Something of its session is written: its absence now would be a loss.
-        if matches!(e["type"].as_str(), Some("user" | "assistant")) {
-            self.unwritten_session = None;
-        }
-        match e["type"].as_str().unwrap_or("") {
-            "user" => self.on_tui_user(e, fx),
-            "assistant" => self.on_tui_assistant(e, fx),
-            "system" => match e["subtype"].as_str().unwrap_or("") {
-                "turn_duration" => self.end_tui_turn(e["durationMs"].as_u64(), fx),
-                "compact_boundary" => self.handle_frame(e, fx),
-                // A local command's output, failed ones' (2.1.302: `/compact` that fails).
-                "local_command" => {
-                    let failed = e["commandOutcome"]["kind"] == "failed";
-                    self.on_local_command(
-                        e["uuid"].as_str(),
-                        e["content"].as_str().unwrap_or(""),
-                        failed,
-                        fx,
-                    )
-                }
-                // Started with Remote Control, the interface tells the link of its session.
-                "bridge_status" => self.on_bridge_status(e, fx),
-                _ => {}
-            },
-            "bridge-session" => {
-                if let Some(run) = self.tui.as_mut() {
-                    run.spoke = true;
-                }
-                if e["bridgeSessionId"].as_str().is_some_and(|s| !s.is_empty()) {
-                    self.interface_linked(fx);
-                }
-            }
-            // « Shift+Tab » in the interface: the agent's mode is the one it shows.
-            "permission-mode" => {
-                if let Some(mode) = e["permissionMode"].as_str() {
-                    if self.meta.set_mode(mode) {
-                        fx.agent_changed = true;
-                        fx.save = true;
-                    }
-                }
-            }
-            _ => {}
-        }
+        self.view_line(e, fx);
     }
 
     /// The interface tells how the link of its session to claude.ai went (`bridge_status`): at
     /// `url`, or, with none, that it did not open (a network, a proxy, a rule of the
     /// organization). Either way it is up.
-    fn on_bridge_status(&mut self, e: &Value, fx: &mut Effects) {
+    pub(super) fn on_bridge_status(&mut self, url: Option<&str>, said: &str, fx: &mut Effects) {
         let mut unasked = true;
         if let Some(run) = self.tui.as_mut() {
             run.spoke = true;
             // Only what it was asked for is news, and only until a link was seen.
             unasked = !run.remote || run.linked;
         }
-        match e["url"].as_str() {
+        match url {
             Some(url) => self.on_interface_link(url, fx),
             None if unasked => {}
             None => {
-                let said: String = e["content"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .trim()
-                    .chars()
-                    .take(200)
-                    .collect();
+                let said: String = said.trim().chars().take(200).collect();
                 let text = if said.is_empty() {
                     tr!(
                         "Remote control indisponible : Claude Code n’a pas pu ouvrir la session distante.",
@@ -195,180 +142,10 @@ impl AgentRt {
             .is_some_and(|t| t.output.shown() || t.spoke || t.registered.is_some())
     }
 
-    fn on_tui_user(&mut self, e: &Value, fx: &mut Effects) {
-        // Claude Code's own (the caveat of a local command, a compaction's summary).
-        if e["isMeta"] == true || e["isCompactSummary"] == true {
-            return;
-        }
-        let content = &e["message"]["content"];
-        let blocks = content.as_array().map(Vec::as_slice).unwrap_or_default();
-        if blocks.iter().any(|b| b["type"] == "tool_result") {
-            let frame = json!({
-                "type": "user", "message": e["message"], "uuid": e["uuid"],
-                "parent_tool_use_id": null, "tool_use_result": e["toolUseResult"],
-            });
-            return self.claude_frame(&frame, fx);
-        }
-        let text = match content.as_str() {
-            Some(s) => s.to_string(),
-            None => blocks
-                .iter()
-                .filter_map(|b| b["text"].as_str())
-                .collect::<Vec<_>>()
-                .join("\n"),
-        };
-        if INTERRUPTED.iter().any(|m| text.starts_with(m)) {
-            if self.meta.status.is_active() {
-                self.interrupted = true;
-                self.end_tui_turn(None, fx);
-            }
-            return;
-        }
-        // A local command (`/model opus`, `! ls`): shown as typed, then what it printed.
-        let text = match localcmd::parse(&text) {
-            Some(parts) => match parts.into_iter().next() {
-                Some(localcmd::Part::Typed(typed)) => typed,
-                // Its caveat, Claude Code's own.
-                None if text.contains("<local-command-caveat>") => return,
-                _ => return self.on_local_command(e["uuid"].as_str(), &text, false, fx),
-            },
-            None => text,
-        };
-        let kind = e["origin"]["kind"].as_str();
-        if kind.is_some_and(|k| k != "human") {
-            // A subagent's report, a background task that ended…: as the stream tells them.
-            let frame = json!({
-                "type": "user", "isReplay": true, "uuid": e["uuid"], "message": e["message"],
-                "origin": e["origin"],
-            });
-            return self.claude_frame(&frame, fx);
-        }
-        let images = blocks.iter().filter(|b| b["type"] == "image").count() as u32;
-        if text.trim().is_empty() && images == 0 {
-            return;
-        }
-        // The same prompt again: a command, as typed then as `<command-name>`.
-        let prompt_id = e["promptId"].as_str();
-        if prompt_id.is_some()
-            && prompt_id == self.tui_prompt_id.as_deref()
-            && self.tui_prompt.as_deref() == Some(text.as_str())
-        {
-            return;
-        }
-        self.tui_prompt_id = prompt_id.map(str::to_string);
-        let id = e["uuid"]
-            .as_str()
-            .map(str::to_string)
-            .unwrap_or_else(new_id);
-        if self.conv.contains(&id) {
-            return;
-        }
-        let mut item = json!({
-            "kind": "user", "id": id, "text": text, "images": images, "ts": now_ms(),
-            "queued": false, "origin": "terminal",
-        });
-        if text.trim().is_empty() {
-            item["text"] = json!("");
-        }
-        self.meta.resume_at = None;
-        self.append(item, fx);
-        if self.tui_prompt.is_none() {
-            self.turn_text.clear();
-            self.final_text.clear();
-            self.interrupted = false;
-            self.tui_error = None;
-            if self.meta.plan.as_ref().is_some_and(PlanState::is_finished) {
-                self.reset_plan(fx);
-            }
-        }
-        self.set_status(AgentStatus::Running, fx);
-        self.meta.prompts += 1;
-        self.meta.last_activity = now_ms();
-        self.tui_prompt = Some(text);
-        fx.agent_changed = true;
-        fx.save = true;
-    }
-
-    fn on_tui_assistant(&mut self, e: &Value, fx: &mut Effects) {
-        let msg = &e["message"];
-        if let (Some(mid), Some(model)) = (msg["id"].as_str(), msg["model"].as_str()) {
-            // Each block of a message is an entry of its own, with the message's usage.
-            if model != "<synthetic>" {
-                self.main_model = model.to_string();
-                self.claude.main_model = model.to_string();
-                self.tui_usage.insert(
-                    mid.to_string(),
-                    (model.to_string(), Usage::from_api(&msg["usage"])),
-                );
-                let u = &msg["usage"];
-                self.context_tokens = [
-                    &u["input_tokens"],
-                    &u["cache_read_input_tokens"],
-                    &u["cache_creation_input_tokens"],
-                ]
-                .iter()
-                .filter_map(|v| v.as_u64())
-                .sum();
-            }
-        }
-        let mut frame = json!({
-            "type": "assistant", "message": msg, "uuid": e["uuid"], "parent_tool_use_id": null,
-        });
-        if e["isApiErrorMessage"] == true {
-            let error = e["error"].as_str().unwrap_or("api_error");
-            frame["error"] = json!(error);
-            if error == "rate_limit" {
-                self.claude.rate_limited = true;
-            }
-            let text = msg["content"][0]["text"].as_str().unwrap_or(error);
-            self.tui_error = Some(text.to_string());
-        }
-        if !self.meta.status.is_active() {
-            self.set_status(AgentStatus::Running, fx);
-        }
-        self.claude_frame(&frame, fx);
-        fx.agent_changed = true;
-    }
-
     /// Which turn of its interface runs: the messages typed so far, and the id its harness gave
     /// the turn (Codex). A `Stop` takes it, for the end the core makes a moment later.
     pub(crate) fn tui_turn_mark(&self) -> (u32, Option<String>) {
-        (self.meta.prompts, self.codex_turn())
-    }
-
-    /// What a local command printed (`text`, its `<local-command-stdout>` or `-stderr>`, the `!`
-    /// mode's `<bash-stdout>`…, in the entry `id`): shown, and its turn over, as an error when it
-    /// failed (`failed`, or its error output), the error then on the turn's card only. Claude Code
-    /// ends such a turn with no `turn_duration` (2.1.302, ESC-12).
-    fn on_local_command(&mut self, id: Option<&str>, text: &str, failed: bool, fx: &mut Effects) {
-        let mut parts = localcmd::parse(text).unwrap_or_else(|| {
-            let plain = strip_tags(text);
-            let plain = (!plain.is_empty()).then_some(localcmd::Part::Output(plain));
-            plain.into_iter().collect()
-        });
-        // Only the command's own turn: one typed while the model runs a turn leaves that turn be.
-        let commands = self
-            .tui_prompt
-            .as_deref()
-            .is_some_and(|p| p.starts_with('/') || p.starts_with("! "));
-        let ends = self.meta.status.is_active() && commands;
-        if ends {
-            let error = |p: &localcmd::Part| match p {
-                localcmd::Part::Error(t) => Some(t.clone()),
-                _ => None,
-            };
-            let errors: Vec<String> = parts.iter().filter_map(error).collect();
-            if !errors.is_empty() {
-                self.tui_error = Some(errors.join("\n"));
-                parts.retain(|p| error(p).is_none());
-            } else if failed {
-                self.tui_error = Some(strip_tags(text));
-            }
-        }
-        self.local_output(id, &parts, fx);
-        if ends {
-            self.end_tui_turn(None, fx);
-        }
+        (self.meta.prompts, self.view.turn.clone())
     }
 
     /// The end the core makes when the transcript still did not tell that of the turn a `Stop`
@@ -390,11 +167,12 @@ impl AgentRt {
         if !self.meta.status.is_active() {
             return;
         }
-        match self.meta.engine {
-            EngineId::CODEX => return self.codex_tui_end(fx),
-            EngineId::COPILOT => return self.copilot_tui_end(fx),
-            EngineId::CURSOR | EngineId::VIBE | EngineId::AGY => return self.cursor_tui_end(fx),
-            _ => {}
+        if self.meta.engine != EngineId::CLAUDE {
+            self.tui_asked = None;
+            let error = self.tui_error.take();
+            self.view_end(json!({ "escouade": "end", "error": error }), fx);
+            self.tui_prompt = None;
+            return;
         }
         let mut models = serde_json::Map::new();
         for (model, u) in self.tui_usage.values() {
@@ -415,16 +193,11 @@ impl AgentRt {
             entry["costUSD"] = json!(cost);
         }
         let error = self.tui_error.take();
-        let result = json!({
-            "type": "result",
-            "subtype": if error.is_some() { "error_during_execution" } else { "success" },
-            "is_error": error.is_some(),
-            "result": error,
-            "duration_ms": duration_ms,
-            "modelUsage": models,
+        let end = json!({
+            "escouade": "end", "error": error, "durationMs": duration_ms, "models": models,
         });
         self.tui_prompt = None;
-        self.claude_frame(&result, fx);
+        self.view_end(end, fx);
     }
 
     /// One of the hooks its Claude Code interface calls (`tui::tui_settings`).

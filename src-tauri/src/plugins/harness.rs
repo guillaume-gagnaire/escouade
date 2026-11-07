@@ -573,6 +573,11 @@ impl ProcessEngine {
         serde_json::from_value(v).map_err(|e| anyhow!("{}: {method}: {e}", self.name))
     }
 
+    /// An instance of its module for its views (`plugins/view.rs`).
+    pub fn view_instance(&self) -> Result<super::wasm::Instance> {
+        self.rt.view_instance(&self.plugin).map_err(|e| anyhow!(e))
+    }
+
     /// The launch of its interface in a terminal (`terminal/launch`), checked as an agent's launch is.
     pub async fn terminal_launch(&self, params: proto::TerminalParams) -> Result<proto::Launch> {
         let launch: proto::Launch = self.call(method::TERMINAL_LAUNCH, &params).await?;

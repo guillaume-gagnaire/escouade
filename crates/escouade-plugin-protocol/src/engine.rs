@@ -44,6 +44,8 @@ pub mod method {
     pub const TERMINAL_LAUNCH: &str = "terminal/launch";
     /// One of its hooks, with what the core answers it (`Hook` → `HookAnswer`).
     pub const TERMINAL_HOOK: &str = "terminal/hook";
+    /// The lines the core read of what the harness's own interface writes, and its notes (`ViewParams` → `Items`).
+    pub const VIEW_TRANSLATE: &str = "view/translate";
     /// A harness shared by agents (`Launch::shared`): the agent's session opened on it (`Open` → `Opened`).
     pub const OPEN: &str = "agent/open";
     /// The agent stops using its shared harness (`Close`, a call or a notification): gently, its turn finished first and
@@ -704,6 +706,82 @@ pub enum Item {
     },
     /// The user's message typed in the harness's own interface: shown as they typed it.
     User { id: String, text: String },
+    /// What the user typed in the harness's own interface (or Escouade pasted there), read in its view: their message, under
+    /// `id` when it has one, and a turn starts. `prompt`: the id of its prompt, when the interface writes one message
+    /// twice (a command, as typed then as `<command-name>`).
+    Typed {
+        #[serde(default)]
+        id: Option<String>,
+        text: String,
+        #[serde(default)]
+        images: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        prompt: Option<String>,
+    },
+    /// The view's file was written since its interface started: the interface is up.
+    Spoke,
+    /// Something of its session is written: its absence now would be a loss.
+    Wrote,
+    /// The interface waits for the user, for this.
+    Waits { body: String },
+    /// The same, for the call of this tool, which the core words.
+    WaitsOn {
+        tool: String,
+        #[serde(default)]
+        input: Value,
+    },
+    /// What the interface is about to ask, which it waits for once a hook says so.
+    Asks {
+        tool: String,
+        #[serde(default)]
+        input: Value,
+    },
+    /// The agent works: a turn runs from now on, if none did.
+    Runs,
+    /// What it waited for is answered: it works again.
+    Goes,
+    /// The turn of its harness under way (the end the core makes after a hook is only that turn's).
+    ViewTurn {
+        #[serde(default)]
+        id: Option<String>,
+    },
+    /// The view's turn is over: the core closes it, and gives the note `end` back with what it knows of it.
+    ViewEnd {
+        #[serde(default)]
+        interrupted: bool,
+        /// Its length, in ms.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        duration: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+    },
+    /// The usage of a message of the view, as its API gave it, which the core prices at the end of the turn.
+    ViewUsage {
+        id: String,
+        model: String,
+        #[serde(default)]
+        usage: Value,
+    },
+    /// What went wrong in the view's turn, for its end.
+    ViewError { error: String },
+    /// A tool of the view whose run is not told, shown as `status`: again under the same id, its status changes.
+    Row {
+        #[serde(default)]
+        id: Option<String>,
+        name: String,
+        #[serde(default)]
+        input: Value,
+        status: String,
+    },
+    /// The interface tells how the link of its session to claude.ai went: at `url`, or, with none, that it did not open.
+    Bridged {
+        #[serde(default)]
+        url: Option<String>,
+        #[serde(default)]
+        said: String,
+    },
+    /// A sign that the interface's session is linked to claude.ai.
+    Linked,
     /// The model the harness took in place of the agent's (one its account does not offer).
     Model { model: String },
     /// What the agent's context holds (`tokens`), and the window of its model.
@@ -1148,6 +1226,72 @@ pub struct HookAnswer {
     pub items: Vec<Item>,
     #[serde(default)]
     pub answer: Option<Value>,
+}
+
+/// What the conversation holds of an id, for a view that starts on it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ViewKnown {
+    pub id: String,
+    /// A call's tool, and how it stands (`running`, `ok`…): none for what is no call.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+}
+
+/// `view/translate`: the terminal view of an agent. The core reads what the harness's own interface writes (its transcript,
+/// its rollout, its journal) and hands it on here a line at a time, what it holds of the agent beside it; the plugin answers
+/// the items. The core keeps the terminal, the file and the agent's state; the plugin, what the lines mean.
+///
+/// A line is what the file holds, or a note of the core, an object with a field `escouade`:
+/// - `{"escouade":"end","error":…,"durationMs":…,"models":…}`: the running turn is over, for a reason the core knows (its
+///   interface gone, a hook, what `Item::ViewEnd` asked): the plugin answers its `Item::Turn`;
+/// - `{"escouade":"hook","hook":…}`: a hook of the interface that says what the file does not;
+/// - `{"escouade":"frame","frame":…}`: a message of the harness, read as a process's (a recorded stream).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ViewParams {
+    /// The view, by a key of its own: another one is another conversation, which starts from nothing.
+    pub agent: String,
+    /// The harness, for a plugin that has several.
+    #[serde(default)]
+    pub harness: String,
+    /// The first lines of this view: `known` is given, and `gone`, the view it replaces, may be dropped.
+    #[serde(default)]
+    pub fresh: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub known: Vec<ViewKnown>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gone: Option<String>,
+    pub cwd: String,
+    #[serde(default)]
+    pub mode: String,
+    #[serde(default)]
+    pub model: String,
+    /// The language of the app.
+    #[serde(default)]
+    pub lang: String,
+    /// The model the agent last ran on.
+    #[serde(default)]
+    pub main_model: String,
+    #[serde(default)]
+    pub session: Option<String>,
+    /// A turn runs.
+    #[serde(default)]
+    pub active: bool,
+    /// The user stopped it.
+    #[serde(default)]
+    pub interrupted: bool,
+    /// The agent is a copy, its session not its own yet.
+    #[serde(default)]
+    pub copy: bool,
+    /// A discussion of the Docs tab: it writes nothing.
+    #[serde(default)]
+    pub discussion: bool,
+    /// The message of the turn under way, as the interface took it.
+    #[serde(default)]
+    pub prompt: Option<String>,
+    pub lines: Vec<String>,
 }
 
 /// A harness as a manifest declares it (`contributes.harnesses[]`): all the core needs without starting the plugin

@@ -26,8 +26,8 @@ the contract of the harnesses in process (INT-9):
 
 What stays in the core, as the contract says: the terminal view (its PTY and its hooks), the accounts (`copilot login`
 in each account's folder), an account's quota and models read by a server of their own, the texts it writes
-(`copilot -p`), Escouade's MCP server. The view reads the session's log through this plugin's translation, as a library
-(`src/translate.rs`): one translation for both.
+(`copilot -p`), Escouade's MCP server. The view's log is read line by line by this plugin (`view/translate`, `src/view.rs`), by the
+same translation as its agents (`src/translate.rs`).
 
 ## What it may do
 
@@ -65,7 +65,7 @@ plugin that stops while an agent runs is started again, as every plugin is, and 
 | `README.md`            | This page                                                                    |
 
 Its program is a module (`run.wasm`), compiled by `escouade-plugin build` from this folder and its `Cargo.lock`, on the
-crates `escouade-plugin-protocol` and `escouade-acp`. Until P8 the core also links this crate, for its view. The parity
+crates `escouade-plugin-protocol` and `escouade-acp`. The parity
 with the native plugin it was: `src-tauri/src/plugins_harness_parity_tests.rs`, `tests/fixtures/plugins/parity/copilot.jsonl`. Its other
 tests: the bench of the harnesses on the fake Copilot (`src-tauri/src/engine/copilot/bench.rs`), the recorded streams of
 Copilot CLI 1.0.98 (`src-tauri/src/agent/copilot_tests.rs`, `tests/fixtures/replays/copilot/`), the tests of the core

@@ -53,7 +53,6 @@ pub use copilot::COPILOT;
 #[cfg(test)]
 pub(crate) use cursor::fake_cursor;
 pub use cursor::CURSOR;
-pub(crate) use escouade_acp::git as codex_git;
 pub use gemini::GEMINI;
 pub use mcp::Escouade;
 #[cfg(test)]

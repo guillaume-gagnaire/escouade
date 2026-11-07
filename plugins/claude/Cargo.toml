@@ -7,12 +7,11 @@ license = "GPL-3.0-or-later"
 edition = "2021"
 rust-version = "1.88"
 
-# A module, compiled by `escouade-plugin build` (docs/PLUGINS.md §8.5). The `rlib` is for the core, which reads its
-# translation for « Vue Claude Code » (`src-tauri/src/agent/claude.rs`) until P8.
+# A module, compiled by `escouade-plugin build` (docs/PLUGINS.md §8.5).
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib"]
 
 [dependencies]
-escouade-plugin-protocol = "0.1.0"
+escouade-plugin-protocol = "0.1.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

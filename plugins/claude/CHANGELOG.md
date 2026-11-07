@@ -2,6 +2,7 @@
 
 ## 2.2.0
 
+- Its « Vue Claude Code » is read by the module (`view/translate`): the core no longer links this crate.
 - A WASM module (`run.wasm`), run in Escouade's host: no process of its own any more. It translates what `claude` says as it did. It has
   its own version, is published on the store and can be uninstalled.
 - No more `tokio` nor `signin.rs`: what Claude Code keeps of a sign-in is read by the core alone.

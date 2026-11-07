@@ -415,6 +415,54 @@ export interface ProcExitParams {
   code: number | null;
 }
 
+/** What the conversation holds of an id, for a view that starts on it. */
+export interface ViewKnown {
+  id: string;
+  /** A call's tool: none for what is no call. */
+  name?: string;
+  /** How a call stands (running, ok…). */
+  status?: string;
+}
+
+/** Lines of the view of an agent, and what Escouade holds of it as they come. */
+export interface ViewParams {
+  /** The view, by a key of its own: another key is another conversation, which starts from nothing. */
+  agent: string;
+  /** The harness, for a plugin that has several. */
+  harness?: string;
+  /** The first lines of this view: known is given, and gone may be dropped. */
+  fresh?: boolean;
+  known?: ViewKnown[];
+  /** The view this one replaces. */
+  gone?: string;
+  cwd: string;
+  mode?: string;
+  model?: string;
+  /** The language of the app. */
+  lang?: string;
+  /** The model the agent last ran on. */
+  mainModel?: string;
+  session?: string | null;
+  /** A turn runs. */
+  active?: boolean;
+  /** The user stopped it. */
+  interrupted?: boolean;
+  /** The agent is a copy, its session not its own yet. */
+  copy?: boolean;
+  /** A discussion of the Docs tab: it writes nothing. */
+  discussion?: boolean;
+  /** The message of the turn under way, as the interface took it. */
+  prompt?: string | null;
+  lines: string[];
+}
+
+/** What the lines mean, in their order: the items of agent/frames, and those of a view (op: typed, spoke, wrote, waits, waitsOn, asks, runs, goes, viewTurn, viewEnd, viewUsage, viewError, row, bridged, linked). An op Escouade does not know is left aside. */
+export interface ViewItems {
+  items: Array<{
+    op: string;
+  }>;
+}
+
 /** Every fact, in the order of the schema. */
 export const FACT_NAMES: readonly FactName[] = [
   'agent.created',
@@ -482,6 +530,8 @@ export interface ToPlugin {
   'ws/closed': { params: WsClosedParams; result: void };
   /** A timer came due. */
   'timer/fired': { params: TimerParams; result: void };
+  /** The terminal view of an agent of a harness: Escouade reads the file the harness's own interface writes, and hands its lines on with what it holds of the agent; the plugin answers what they mean, as the items of agent/frames and those of a view. A line is what the file holds, or a note of Escouade, an object with a field escouade: end (the running turn is over: error, durationMs, models), hook (a hook of the interface, under hook), frame (a message of the harness read as a process's, under frame). In an instance of its own, by the same turn as the rest, on the plugin's time for a turn: it may ask nothing of the host. A harness written in WASM answers it when it has a terminal view; any other refuses it as an unknown method. */
+  'view/translate': { params: ViewParams; result: ViewItems };
 }
 
 /** What the plugin sends to Escouade: each method, its parameters and its answer (`void` for a notification). */

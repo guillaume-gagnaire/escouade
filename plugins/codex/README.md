@@ -27,7 +27,7 @@ its own JSON-RPC protocol, one message a line (it is no ACP harness). On the con
 What stays in the core, as the contract says: Codex's place in the registry (its capabilities, the meaning of its
 modes), the accounts and their sign-in, an account's quota and models when none of its agents runs (an app-server of
 its own), the texts it writes (`codex exec`), the terminal view (its PTY, its hooks and their trust, its rollout read
-through this plugin's translation, used as a library), Escouade's MCP server.
+line by line by this plugin, `view/translate`), Escouade's MCP server.
 
 ## What it may do
 
@@ -63,7 +63,7 @@ the quota of an account, and the terminal view don't go through it.
 | `README.md`            | This page                                                                  |
 
 Its program is a module (`run.wasm`), compiled by `escouade-plugin build` from this folder and its `Cargo.lock`, on the
-crates `escouade-plugin-protocol` and `escouade-acp`. Until P8 the core also links this crate, for its view. Its tests:
+crates `escouade-plugin-protocol` and `escouade-acp`. Its tests:
 `src/tests.rs` and `src/prices.rs`, the bench of the harnesses on the fake Codex (`src-tauri/src/engine/codex/bench.rs`),
 the recorded streams of Codex 0.163.0 (`src-tauri/src/agent/codex_tests.rs`, `tests/fixtures/replays/codex/`), the parity with the native plugin it was, call by call on these recordings (`src-tauri/src/plugins_harness_parity_tests.rs`, `tests/fixtures/plugins/parity/codex.jsonl`), the tests
 of the core that go through it (`src-tauri/src/codex_tests.rs`, `codex_tui_tests.rs`), the e2e `tests/e2e/codex.spec.ts`,

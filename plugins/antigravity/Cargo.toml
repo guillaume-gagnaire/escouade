@@ -8,14 +8,13 @@ edition = "2021"
 rust-version = "1.88"
 
 # A module, compiled by `escouade-plugin build` (docs/PLUGINS.md §8.5). It is no ACP harness: it holds the client of `agy -p`
-# in stream-json, without a process nor a runtime of its own, and puts its events in the form the ACP client reads. The
-# `rlib` is for the core, whose « Vue Antigravity » reads its words as a library (`src-tauri/src/engine/agy/`) until P8.
+# in stream-json, without a process nor a runtime of its own, and puts its events in the form the ACP client reads.
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib"]
 
 [dependencies]
-escouade-acp = "0.1.0"
-escouade-plugin-protocol = "0.1.0"
+escouade-acp = "0.1.2"
+escouade-plugin-protocol = "0.1.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

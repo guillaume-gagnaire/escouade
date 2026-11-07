@@ -3,10 +3,10 @@
 //! once it answered; it starts no thread, nothing is spent, and it costs little (0,6 s and 62 Mo on Codex 0.163.0,
 //! tried). The conversation of an agent goes through its plugin (`dev.escouade.codex`).
 
+use super::words;
 use crate::engine::Program;
 use crate::job::Job;
 use anyhow::{anyhow, bail, Context, Result};
-use escouade_plugin_codex::words;
 use serde_json::{json, Value};
 use std::process::Stdio;
 use std::time::Duration;

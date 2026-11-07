@@ -2,7 +2,7 @@
 title: "Copilot CLI en plugin"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.5, §4.6 (INT-10.3)","docs/TODO-2.2.md, INT-10","Ticket ESC-224","plugins/copilot/README.md"]
-tickets: ["ESC-224","ESC-346"]
+tickets: ["ESC-224","ESC-346","ESC-352"]
 decisions: []
 compared: null
 ---
@@ -26,7 +26,7 @@ Copilot CLI est le premier harness sorti du cœur qui n'est pas ACP (INT-10.3) :
 
 Le moteur `Copilot` du registre garde ce qui n'est pas la conversation : ses capacités et le sens de ses modes, les comptes (`copilot login` dans le dossier de chacun), le quota et les modèles d'un compte lus par un serveur à lui, les textes rédigés (`copilot -p`), le fichier de l'entrée d'Escouade, la vue terminal (son PTY, ses hooks, le journal de sa session).
 
-La vue lit ce journal par la traduction du plugin, prise comme une bibliothèque : une seule traduction pour les deux, et la vue marche même plugin coupé.
+**La vue passe par le module** (`view/translate`, ESC-352) : le cœur lit le journal et passe ses lignes au plugin, une seule traduction pour les deux. Plugin coupé, le terminal marche et la conversation dit qu'elle ne le suit plus. Voir *Le contrat des harness en process*.
 
 ## Un arrêt se dit
 

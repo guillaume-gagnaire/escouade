@@ -5,7 +5,7 @@
 pub(super) use crate::plugins::harness::read_frame;
 use serde_json::Value;
 
-pub(super) use escouade_plugin_copilot::words::{signed_in, INHERITED_TOKENS};
+pub(super) use super::words::{signed_in, INHERITED_TOKENS};
 
 /// Whether the variables of a process give it a folder of its own (an account other than its Principal).
 pub(super) fn own_home(env: &[(String, String)]) -> bool {

@@ -8,9 +8,9 @@ edition = "2021"
 rust-version = "1.88"
 
 # A module, compiled by `escouade-plugin build` (docs/PLUGINS.md §8.5). The core runs `opencode serve` for the agents of an
-# account; this crate is its client, and translates its events. The `rlib` is what the core still links (§8.2, P8).
+# account; this crate is its client, and translates its events.
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib"]
 
 [dependencies]
 escouade-plugin-kit = "0.1.1"

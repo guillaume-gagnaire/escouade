@@ -8,6 +8,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### New
 
+- The terminal views of the harnesses go through their plugin too: a fix published on the store fixes the view, without waiting for an Escouade release. With the plugin off the terminal works, but the conversation says it no longer follows it.
 - “Get a review” in the Pull requests view: an agent reads a PR's diff and writes its comments by file and by line. You keep, edit or drop each one, then publish it all at once; nothing leaves without you.
 - Claude Code and the harnesses described over ACP, Goose included, now run as sandboxed WASM plugins, with no process of their own: they converse as before. Through Escouade, an ACP agent reads in its folder and its repository and writes in its folder, nothing else.
 - Linear, Trello, Jira and ClickUp now run as sandboxed WASM plugins, with no process of their own: they answer as before.

@@ -3,20 +3,19 @@
 //! (`agent/frames`) and goes back as the items of the conversation and the lines to write to it, by the client of
 //! `client`.
 //!
-//! A WASM module on `wasm32-wasip1`: no process, no file and no runtime of its own. It is an `rlib` too, for the core, which
-//! reads `translate`, `words`, `localcmd` and `client`'s arguments as a library for what stays in it: « Vue Claude Code »
-//! reads its session's transcript through the same translation, and the launch of its interface speaks the same words
-//! (until P8, docs/PLUGINS.md §8.10).
+//! A WASM module on `wasm32-wasip1`: no process, no file and no runtime of its own. Its « Vue Claude Code » is read here too
+//! (`view`): the core hands on the lines of the session's transcript (`view/translate`).
 
 pub mod client;
 pub mod localcmd;
 pub mod translate;
+pub mod view;
 pub mod words;
 
 use client::Agent;
 use escouade_plugin_protocol::engine::{
     method, AgentRef, AnswerPermission, AnswerQuestion, Asked, Attach, Control, Frames, Interrupt,
-    Items, LaunchParams, RemoteLink, SendMessage, SetValue, Task, UsageAsked, Writes,
+    Items, LaunchParams, RemoteLink, SendMessage, SetValue, Task, UsageAsked, ViewParams, Writes,
 };
 use escouade_plugin_protocol::{turn, Refusal};
 use serde_json::{json, Value};
@@ -28,6 +27,7 @@ pub const MANIFEST: &str = include_str!("../escouade-plugin.json");
 #[derive(Default)]
 struct Plugin {
     agents: HashMap<String, Agent>,
+    views: HashMap<String, view::View>,
 }
 
 fn invalid(e: impl std::fmt::Display) -> Refusal {
@@ -158,6 +158,21 @@ impl Plugin {
             method::CONTROL => {
                 let c: Control = read(params)?;
                 asked(self.agent(&c.agent)?.ask(c.request))
+            }
+            method::VIEW_TRANSLATE => {
+                let p: ViewParams = read(params)?;
+                if let Some(gone) = &p.gone {
+                    self.views.remove(gone);
+                }
+                let view = self.views.entry(p.agent.clone()).or_default();
+                if p.fresh {
+                    view.knows(&p);
+                }
+                let mut items = Vec::new();
+                for line in &p.lines {
+                    view.line(line, &p, &mut items);
+                }
+                give(Items { items })
             }
             other => Err(Refusal::not_found(other)),
         }

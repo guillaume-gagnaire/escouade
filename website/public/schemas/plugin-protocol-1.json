@@ -230,6 +230,16 @@
         "$ref": "#/definitions/TimerParams"
       }
     },
+    "view/translate": {
+      "description": "The terminal view of an agent of a harness: Escouade reads the file the harness's own interface writes, and hands its lines on with what it holds of the agent; the plugin answers what they mean, as the items of agent/frames and those of a view. A line is what the file holds, or a note of Escouade, an object with a field escouade: end (the running turn is over: error, durationMs, models), hook (a hook of the interface, under hook), frame (a message of the harness read as a process's, under frame). In an instance of its own, by the same turn as the rest, on the plugin's time for a turn: it may ask nothing of the host. A harness written in WASM answers it when it has a terminal view; any other refuses it as an unknown method.",
+      "direction": "toPlugin",
+      "params": {
+        "$ref": "#/definitions/ViewParams"
+      },
+      "result": {
+        "$ref": "#/definitions/ViewItems"
+      }
+    },
     "fs/read": {
       "description": "A file under a root: { text }, or { dataBase64 } when it is not UTF-8. With tail, what is past the limit below is cut from its start. For a plugin in WASM, by escouade.call (run.wasm) or by a line (run.js), on permissions.files: refused for a root it does not declare, a .., a ~, or a path that, links followed, is not under a root of that agent or that its fence refuses (« Projet privé »). failed past 256 KiB, or limits.fileBytes (4 MiB at most).",
       "direction": "toEscouade",
@@ -292,14 +302,24 @@
         "type": "object",
         "required": ["path"],
         "properties": {
-          "path": { "type": "string", "description": "The agent's folder." },
-          "commits": { "type": "boolean", "description": "It commits: its hooks count too. True when left out." }
+          "path": {
+            "type": "string",
+            "description": "The agent's folder."
+          },
+          "commits": {
+            "type": "boolean",
+            "description": "It commits: its hooks count too. True when left out."
+          }
         }
       },
       "result": {
         "type": "object",
         "required": ["protected"],
-        "properties": { "protected": { "type": "boolean" } }
+        "properties": {
+          "protected": {
+            "type": "boolean"
+          }
+        }
       },
       "errors": ["invalidParams", "refused"]
     },
@@ -1229,6 +1249,118 @@
         }
       },
       "required": ["proc", "code"]
+    },
+    "ViewKnown": {
+      "type": "object",
+      "description": "What the conversation holds of an id, for a view that starts on it.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string",
+          "description": "A call's tool: none for what is no call."
+        },
+        "status": {
+          "type": "string",
+          "description": "How a call stands (running, ok…)."
+        }
+      },
+      "required": ["id"]
+    },
+    "ViewParams": {
+      "type": "object",
+      "description": "Lines of the view of an agent, and what Escouade holds of it as they come.",
+      "properties": {
+        "agent": {
+          "type": "string",
+          "description": "The view, by a key of its own: another key is another conversation, which starts from nothing."
+        },
+        "harness": {
+          "type": "string",
+          "description": "The harness, for a plugin that has several."
+        },
+        "fresh": {
+          "type": "boolean",
+          "description": "The first lines of this view: known is given, and gone may be dropped."
+        },
+        "known": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ViewKnown"
+          }
+        },
+        "gone": {
+          "type": "string",
+          "description": "The view this one replaces."
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "lang": {
+          "type": "string",
+          "description": "The language of the app."
+        },
+        "mainModel": {
+          "type": "string",
+          "description": "The model the agent last ran on."
+        },
+        "session": {
+          "type": ["string", "null"]
+        },
+        "active": {
+          "type": "boolean",
+          "description": "A turn runs."
+        },
+        "interrupted": {
+          "type": "boolean",
+          "description": "The user stopped it."
+        },
+        "copy": {
+          "type": "boolean",
+          "description": "The agent is a copy, its session not its own yet."
+        },
+        "discussion": {
+          "type": "boolean",
+          "description": "A discussion of the Docs tab: it writes nothing."
+        },
+        "prompt": {
+          "type": ["string", "null"],
+          "description": "The message of the turn under way, as the interface took it."
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["agent", "cwd", "lines"]
+    },
+    "ViewItems": {
+      "type": "object",
+      "description": "What the lines mean, in their order: the items of agent/frames, and those of a view (op: typed, spoke, wrote, waits, waitsOn, asks, runs, goes, viewTurn, viewEnd, viewUsage, viewError, row, bridged, linked). An op Escouade does not know is left aside.",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "op": {
+                "type": "string"
+              }
+            },
+            "required": ["op"]
+          }
+        }
+      },
+      "required": ["items"]
     }
   }
 }

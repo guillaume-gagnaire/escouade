@@ -4,17 +4,17 @@
 //! goes back as the items of the conversation and the messages to write to it, by the client of `client`. It is a module
 //! (`run.wasm`).
 //!
-//! `translate` and `words` are also read by the core, as a library, until P8, for what stays in it: its « Vue Copilot » reads the
-//! session's log through the same translation, and an account's quota and models read by a server of their own.
+//! Its « Vue Copilot » is read here too (`view`): the core hands on the lines of the session's log (`view/translate`).
 
 pub mod client;
 pub mod translate;
+pub mod view;
 pub mod words;
 
 use client::Agent;
 use escouade_plugin_protocol::engine::{
     method, AgentRef, AnswerPermission, AnswerQuestion, Attach, Compact, Compacted, Frames, Items,
-    LaunchParams, SendMessage, SetValue, UsageAsked, Writes,
+    LaunchParams, SendMessage, SetValue, UsageAsked, ViewParams, Writes,
 };
 use escouade_plugin_protocol::{turn, Refusal};
 use serde_json::{json, Value};
@@ -26,6 +26,7 @@ pub const MANIFEST: &str = include_str!("../escouade-plugin.json");
 #[derive(Default)]
 struct Plugin {
     agents: HashMap<String, Agent>,
+    views: HashMap<String, view::View>,
 }
 
 fn invalid(e: impl std::fmt::Display) -> Refusal {
@@ -140,6 +141,21 @@ impl Plugin {
             method::RENAME => {
                 let v: SetValue = read(params)?;
                 writes(self.agent(&v.agent)?.rename(&v.value))
+            }
+            method::VIEW_TRANSLATE => {
+                let p: ViewParams = read(params)?;
+                if let Some(gone) = &p.gone {
+                    self.views.remove(gone);
+                }
+                let view = self.views.entry(p.agent.clone()).or_default();
+                if p.fresh {
+                    view.knows(&p);
+                }
+                let mut items = Vec::new();
+                for line in &p.lines {
+                    view.line(line, &p, &mut items);
+                }
+                give(Items { items })
             }
             other => Err(Refusal::not_found(other)),
         }

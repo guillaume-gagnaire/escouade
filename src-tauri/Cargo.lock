@@ -1127,7 +1127,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d045de693cb712d0b22c6a64be5b953f67b3ce00ab5ad3dd5d8b441886ab8e1a"
 dependencies = [
  "quote",
- "syn 3.0.6",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -1629,13 +1629,8 @@ dependencies = [
  "ctor",
  "dirs 6.0.0",
  "escouade-acp",
- "escouade-plugin-agy",
- "escouade-plugin-claude",
  "escouade-plugin-cli",
- "escouade-plugin-codex",
- "escouade-plugin-copilot",
  "escouade-plugin-kit",
- "escouade-plugin-opencode",
  "escouade-plugin-protocol",
  "escouade-voice",
  "espeak-ng",
@@ -1705,30 +1700,10 @@ dependencies = [
 
 [[package]]
 name = "escouade-acp"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "base64 0.22.1",
  "dunce",
- "escouade-plugin-protocol",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "escouade-plugin-agy"
-version = "2.2.0"
-dependencies = [
- "dirs 6.0.0",
- "escouade-acp",
- "escouade-plugin-protocol",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "escouade-plugin-claude"
-version = "2.2.0"
-dependencies = [
  "escouade-plugin-protocol",
  "serde",
  "serde_json",
@@ -1754,27 +1729,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "escouade-plugin-codex"
-version = "2.2.0"
-dependencies = [
- "escouade-acp",
- "escouade-plugin-protocol",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "escouade-plugin-copilot"
-version = "2.2.0"
-dependencies = [
- "chrono",
- "escouade-acp",
- "escouade-plugin-protocol",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "escouade-plugin-kit"
 version = "0.1.1"
 dependencies = [
@@ -1790,22 +1744,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "escouade-plugin-opencode"
-version = "2.2.0"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "escouade-plugin-kit",
- "escouade-plugin-protocol",
- "getrandom 0.4.3",
- "parking_lot",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "escouade-plugin-protocol"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",

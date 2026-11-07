@@ -1,29 +1,17 @@
 //! Claude Code in the agent's conversation. Since INT-10.5 its agents' frames are translated by its plugin
 //! (`dev.escouade.claude-code`, `plugins/claude/src/translate.rs`) and applied as items
-//! (`AgentRt::apply_items`, through `Engine::translate`). Its terminal view stays the core's (`agent/transcript.rs`): it
-//! reads the session's transcript through the same translation, as a library, for the same conversation in both. What is
-//! here is the agent's own: its plan told of the calls, a message that comes back, a file sent to the user.
+//! (`AgentRt::apply_items`, through `Engine::translate`), the transcript of its terminal view too
+//! (`plugins/claude/src/view.rs`). What is here is the agent's own: its plan told of the calls, a message that comes back, a
+//! file sent to the user.
 
 use super::*;
-use escouade_plugin_protocol::engine::{Item, ModelTurn};
-
-pub(crate) use escouade_plugin_claude::translate::Translator as ClaudeState;
+use escouade_plugin_protocol::engine::ModelTurn;
 
 impl AgentRt {
-    /// One frame of Claude Code, from its view's transcript or in a test: its items applied at once, the next frame reads
-    /// what they made.
+    /// One frame of Claude Code, in a test: its items applied at once, the next frame reads what they made.
+    #[cfg(test)]
     pub(crate) fn claude_frame(&mut self, f: &Value, fx: &mut Effects) {
-        let mut items: Vec<Item> = Vec::new();
-        self.claude.frame(f, i18n::ui().tag(), &mut items);
-        for item in items {
-            self.apply_item(item, fx);
-        }
-    }
-
-    /// Another process of it: what was kept of its stream is gone, the model it ran on stays.
-    pub(super) fn claude_new_stream(&mut self) {
-        self.claude = ClaudeState::default();
-        self.claude.main_model = self.main_model.clone();
+        self.view_frame(f, fx);
     }
 
     /// A conversation its harness says it runs (its `init`): another than the agent's starts anew.
