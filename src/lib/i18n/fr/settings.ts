@@ -334,6 +334,10 @@ export default {
     noUpdate: 'Aucune mise à jour disponible.',
     autoUpdate: 'Installer les mises à jour automatiquement',
     autoUpdateDesc: 'Escouade redémarre d’elle-même quand aucun agent ne travaille et que tout est enregistré.',
+    /** ESC-374: saved at once, and a check follows when it is switched on. */
+    betaUpdates: 'Recevoir les versions bêta',
+    betaUpdatesDesc:
+      'Les bêtas arrivent avant tout le monde et peuvent avoir des défauts. Décochée, Escouade reste sur sa bêta jusqu’à la version stable qui la suit.',
     localData: 'Données locales',
     telemetry: 'Statistiques d’usage',
     telemetryDesc:

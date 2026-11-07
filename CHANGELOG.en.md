@@ -114,6 +114,12 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - An agent saved on a harness this version doesn’t have (a later version’s, or a removed plugin’s) is read and kept with its conversation, marked “harness missing”; it doesn’t start, and no agent is created on that harness.
 - The install window of a plugin with no program no longer says Escouade does not filter its network: its webhooks go to the declared host only. It also says what sets off each webhook, and names the store once.
 
+## [2.1.4] — 2026-11-07
+
+### New
+
+- **Beta versions:** the “Receive beta versions” option (Settings › About, unticked by default) lets you try the next versions before everyone else. Unticked, Escouade ignores the betas; an app on a beta says so beside its version.
+
 ## [2.1.3] — 2026-11-06
 
 ### Fixes

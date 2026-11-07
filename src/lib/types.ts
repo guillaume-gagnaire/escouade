@@ -48,6 +48,8 @@ export interface Settings {
   switchAt: number;
   /** « Installer les mises à jour automatiquement »: the app restarts by itself for an update once at rest. */
   autoUpdate: boolean;
+  /** « Recevoir les versions bêta » (ESC-374): off by default; off, a version with a suffix (`2.2.0-beta.1`) is never offered. */
+  betaUpdates: boolean;
   /** « Statistiques d’usage »: null until the user answered the question of the first start. */
   telemetry: boolean | null;
   /** What the external ticket systems' links do (their accounts are kept apart, with their secrets). */

@@ -286,6 +286,9 @@ export default defineZone('settings', {
     noUpdate: 'No update available.',
     autoUpdate: 'Install updates automatically',
     autoUpdateDesc: 'Escouade restarts itself when no agent is working and everything is saved.',
+    betaUpdates: 'Receive beta versions',
+    betaUpdatesDesc:
+      'Betas come before everyone else’s update and may have flaws. Unticked, Escouade stays on its beta until the stable version that follows it.',
     localData: 'Local data',
     telemetry: 'Usage statistics',
     telemetryDesc:

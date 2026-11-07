@@ -372,6 +372,39 @@ jobs:
           jq -e '.notes | length > 0' "$RUNNER_TEMP/latest.json" > /dev/null
           node scripts/release-check.mjs "$RUNNER_TEMP/latest.json" "$RUNNER_TEMP/assets.json" "$TAG"
 
+      # The beta channel (ESC-374): beta.json, always in the latest stable release, holds the most
+      # recent version, stable or beta (scripts/beta-channel.mjs picks it); an app with « Recevoir
+      # les versions bêta » reads it before latest.json, which never holds a beta. A stable version
+      # puts its own in its draft, before it becomes the latest: its latest.json, or the beta.json of
+      # the latest release now when that one is newer (a beta of the next version under way).
+      - name: Beta channel of a stable version
+        if: ${{ !contains(github.ref_name, '-') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ needs.create.outputs.release-id }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # The beta.json of the latest release now, into $RUNNER_TEMP/beta-now.json (empty without one).
+          beta_now() {
+            : > "$RUNNER_TEMP/beta-now.json"
+            latest_release=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.id' 2>/dev/null || true)
+            [ -n "$latest_release" ] || return 0
+            gh api "repos/$GITHUB_REPOSITORY/releases/$latest_release/assets?per_page=100" > "$RUNNER_TEMP/latest-assets.json"
+            local id
+            id=$(jq -r 'map(select(.name == "beta.json")) | first | .id // empty' "$RUNNER_TEMP/latest-assets.json")
+            [ -z "$id" ] || gh api -H "Accept: application/octet-stream" "repos/$GITHUB_REPOSITORY/releases/assets/$id" > "$RUNNER_TEMP/beta-now.json"
+          }
+          # Puts $RUNNER_TEMP/beta.json in the release $1, in place of the one there.
+          put_beta() {
+            local id
+            id=$(gh api "repos/$GITHUB_REPOSITORY/releases/$1/assets?per_page=100"               --jq 'map(select(.name == "beta.json")) | first | .id // empty')
+            [ -z "$id" ] || gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$id"
+            curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json"               --data-binary "@$RUNNER_TEMP/beta.json"               "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$1/assets?name=beta.json" > /dev/null
+          }
+          beta_now
+          node scripts/beta-channel.mjs pick "$TAG" "$RUNNER_TEMP/latest.json" "$RUNNER_TEMP/beta-now.json" > "$RUNNER_TEMP/beta.json"
+          put_beta "$RELEASE_ID"
+
       # By id, as the draft is not found by tag. A pre-release cannot be the latest release. If
       # GitHub refuses ("Resource not accessible by integration"), the draft is complete: publish
       # it by hand, `gh release edit <tag> --draft=false --latest`.
@@ -384,6 +417,41 @@ jobs:
           latest=true
           if [[ "$TAG" == *-* ]]; then latest=false; fi
           gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false -f make_latest=$latest > /dev/null
+
+      # A beta, once published (beta.json names its files, which a draft does not serve): its
+      # latest.json, notes included, becomes the beta.json of the latest release, in place of the
+      # one there, unless that one is newer. Its own latest.json stays in its release, which is
+      # never the latest: the versions without the option never see it.
+      - name: Beta channel of a beta
+        if: ${{ contains(github.ref_name, '-') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # The beta.json of the latest release now, into $RUNNER_TEMP/beta-now.json (empty without one).
+          beta_now() {
+            : > "$RUNNER_TEMP/beta-now.json"
+            latest_release=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.id' 2>/dev/null || true)
+            [ -n "$latest_release" ] || return 0
+            gh api "repos/$GITHUB_REPOSITORY/releases/$latest_release/assets?per_page=100" > "$RUNNER_TEMP/latest-assets.json"
+            local id
+            id=$(jq -r 'map(select(.name == "beta.json")) | first | .id // empty' "$RUNNER_TEMP/latest-assets.json")
+            [ -z "$id" ] || gh api -H "Accept: application/octet-stream" "repos/$GITHUB_REPOSITORY/releases/assets/$id" > "$RUNNER_TEMP/beta-now.json"
+          }
+          # Puts $RUNNER_TEMP/beta.json in the release $1, in place of the one there.
+          put_beta() {
+            local id
+            id=$(gh api "repos/$GITHUB_REPOSITORY/releases/$1/assets?per_page=100"               --jq 'map(select(.name == "beta.json")) | first | .id // empty')
+            [ -z "$id" ] || gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$id"
+            curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json"               --data-binary "@$RUNNER_TEMP/beta.json"               "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$1/assets?name=beta.json" > /dev/null
+          }
+          beta_now
+          if [ -z "$latest_release" ]; then
+            echo "::error::No latest release to hold the beta.json of $TAG"
+            exit 1
+          fi
+          node scripts/beta-channel.mjs pick "$TAG" "$RUNNER_TEMP/latest.json" "$RUNNER_TEMP/beta-now.json" > "$RUNNER_TEMP/beta.json"
+          put_beta "$latest_release"
 
       # What the in-app updater downloads: the latest release's, or the pre-release's own (it is
       # never the latest). GitHub's cache can take a moment to follow the publication.
@@ -407,6 +475,30 @@ jobs:
             if [ "$attempt" -lt 6 ]; then sleep 10; fi
           done
           echo "::error::The updater would not read $TAG: $url does not say version $expected"
+          exit 1
+
+      # What the updater reads with « Recevoir les versions bêta »: beta.json of the latest release,
+      # the tag's version or a newer one; and latest.json there never holds a beta.
+      - name: Check what the updater reads with the betas
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          base="https://github.com/$GITHUB_REPOSITORY/releases/latest/download"
+          for attempt in 1 2 3 4 5 6; do
+            if curl -fsSL "$base/beta.json" -o "$RUNNER_TEMP/beta-read.json"               && node scripts/beta-channel.mjs check "$TAG" "$RUNNER_TEMP/beta-read.json" > "$RUNNER_TEMP/beta-check.txt"; then
+              cat "$RUNNER_TEMP/beta-check.txt"
+              stable=$(curl -fsSL "$base/latest.json" | jq -r '.version // empty')
+              if [[ -z "$stable" || "$stable" == *-* ]]; then
+                echo "::error::$base/latest.json says version '$stable': it must be a stable version"
+                exit 1
+              fi
+              exit 0
+            fi
+            echo "Try $attempt of 6: $base/beta.json is not right yet"
+            if [ "$attempt" -lt 6 ]; then sleep 10; fi
+          done
+          cat "$RUNNER_TEMP/beta-check.txt" 2>/dev/null || true
+          echo "::error::The updater with the betas would not read $TAG: $base/beta.json is not right"
           exit 1
 
   # Once the updater reads the version, its notes go to the Discord. A job of its own: `gh run

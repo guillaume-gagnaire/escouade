@@ -57,6 +57,10 @@ pub struct Settings {
     /// itself once it is at rest (`updates::busy`). Off, the user restarts it, or the update
     /// installs when the app is closed.
     pub auto_update: bool,
+    /// « Recevoir les versions bêta » (ESC-374): off, a version with a pre-release suffix
+    /// (`2.2.0-beta.1`) is never offered, and the check reads latest.json alone; on, it reads the
+    /// beta channel (beta.json) first (`updates::endpoints_for`, `updates::accepts`).
+    pub beta_updates: bool,
     /// What the external ticket systems' links do (their accounts are kept apart, with their
     /// secrets: `integrations::Accounts`).
     pub integrations: IntegrationSettings,
@@ -660,6 +664,7 @@ impl Default for Settings {
             quota_pause: 100,
             switch_at: 100,
             auto_update: true,
+            beta_updates: false,
             integrations: IntegrationSettings::default(),
             language: "system".into(),
             claude_language: "ui".into(),
@@ -3797,6 +3802,19 @@ mod tests {
         assert_eq!(serde_json::to_value(&s).unwrap()["autoUpdate"], json!(true));
         let off: Settings = serde_json::from_str(r#"{"autoUpdate":false}"#).unwrap();
         assert!(!off.auto_update);
+    }
+
+    #[test]
+    fn the_betas_are_off_until_the_user_asks_for_them() {
+        let s: Settings = serde_json::from_str(r#"{"autoUpdate":true}"#).unwrap();
+        assert!(!s.beta_updates);
+        assert!(!Settings::default().beta_updates);
+        assert_eq!(
+            serde_json::to_value(&s).unwrap()["betaUpdates"],
+            json!(false)
+        );
+        let on: Settings = serde_json::from_str(r#"{"betaUpdates":true}"#).unwrap();
+        assert!(on.beta_updates);
     }
 
     #[test]

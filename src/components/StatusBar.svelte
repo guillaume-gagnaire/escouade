@@ -26,7 +26,7 @@
   import { api } from '../lib/ipc';
   import { estimatedBy, estimateHint, fSpentUsd } from '../lib/spend';
   import { app } from '../lib/state.svelte';
-  import { postponeRestart, restartIn as restartSeconds } from '../lib/updater';
+  import { postponeRestart, restartIn as restartSeconds, shownVersion } from '../lib/updater';
   import type { EngineId } from '../lib/types';
   import AccountsPanel from './AccountsPanel.svelte';
   import BranchPicker from './branches/BranchPicker.svelte';
@@ -348,12 +348,12 @@
         <button class="small" onclick={postponeRestart}>{t('common.later')}</button>
       {:else if app.update?.ready}
         <button class="it link upd" onclick={() => (app.modal = { kind: 'update' })}
-          ><Icon name="download" size={14} /><Rich k="shell.status.updateReady" version={app.update.version}
+          ><Icon name="download" size={14} /><Rich k="shell.status.updateReady" version={shownVersion(app.update.version)}
             >{#snippet restart()}<b>{t('shell.status.restart')}</b>{/snippet}</Rich
           ></button
         >
       {:else if app.update}
-        <span class="it">{t('shell.status.updating', { version: app.update.version })}</span>
+        <span class="it">{t('shell.status.updating', { version: shownVersion(app.update.version) })}</span>
       {/if}
       {#if groups.length}
         <!-- The gauges, harness by harness, are one button: it opens every account's (the panel writes their values). -->

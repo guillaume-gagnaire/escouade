@@ -2,6 +2,7 @@
 // Prints the release notes of a version: its section of the changelog, without its heading.
 //   node scripts/changelog.mjs v1.3.0 (or 1.3.0) → the section of 1.3.0 in CHANGELOG.md (French), or a fallback sentence
 //   node scripts/changelog.mjs v1.3.0 --lang en  → the same from CHANGELOG.en.md (English: the GitHub release's notes)
+//   node scripts/changelog.mjs v2.2.0-beta.1    → its own section, else « ## [Non publié] » (« ## [Unreleased] » in English)
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,11 +17,26 @@ export const FALLBACKS = {
 };
 export const FALLBACK = FALLBACKS.fr;
 
-/** The body of `## [<version>] …` in `text`, up to the next `## ` heading; `fallback` without one. */
+/** The headings of what is not out yet, in each changelog: « [Non publié] », « [Unreleased] ». */
+export const UNRELEASED = ['Non publié', 'Unreleased'];
+
+/** Whether `version` is a pre-release (`2.2.0-beta.1`): a suffix after a dash, as semver has it. */
+export function isPrerelease(version) {
+  return /^\d+\.\d+\.\d+-/.test(String(version).replace(/^v/, ''));
+}
+
+/**
+ * The body of `## [<version>] …` in `text`, up to the next `## ` heading; `fallback` without one. A pre-release
+ * (`v2.2.0-beta.1`) without a section of its own takes that of what is not out yet: a beta goes out without the
+ * section being renamed.
+ */
 export function releaseNotes(text, tag, fallback = FALLBACK) {
   const version = String(tag).replace(/^v/, '');
   const lines = text.replace(/\r\n/g, '\n').split('\n');
-  const start = lines.findIndex((l) => l.startsWith(`## [${version}]`));
+  let start = lines.findIndex((l) => l.startsWith(`## [${version}]`));
+  if (start < 0 && isPrerelease(version)) {
+    start = lines.findIndex((l) => UNRELEASED.some((u) => l.startsWith(`## [${u}]`)));
+  }
   if (start < 0) return fallback;
   const rest = lines.slice(start + 1);
   const end = rest.findIndex((l) => l.startsWith('## '));

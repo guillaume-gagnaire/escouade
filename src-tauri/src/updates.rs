@@ -728,11 +728,42 @@ struct Candidate {
     route: Route,
 }
 
+/// The beta channel's file, beside latest.json in the latest stable release (ESC-374): the most
+/// recent version, stable or beta. latest.json never holds a beta, so that the versions without
+/// « Recevoir les versions bêta » (2.1.3 and before) never see one.
+pub const BETA_FILE: &str = "beta.json";
+
+/// Where the beta channel's file is beside `endpoint`: its last segment replaced, so that a
+/// test's server keeps serving both. None for an address that has no path.
+fn beta_endpoint(endpoint: &Url) -> Option<Url> {
+    let mut url = endpoint.clone();
+    url.path_segments_mut().ok()?.pop().push(BETA_FILE);
+    Some(url)
+}
+
+/// What a check reads, in order (the plugin takes the first that answers): with the betas, the
+/// beta channel beside each address first, then latest.json, when beta.json is not there (before
+/// the first release that holds one); without them, latest.json alone.
+pub fn endpoints_for(configured: &[Url], beta: bool) -> Vec<Url> {
+    let betas = configured.iter().filter(|_| beta).filter_map(beta_endpoint);
+    betas.chain(configured.iter().cloned()).collect()
+}
+
+/// Whether the version read (`remote`) is offered to the app at `current`: newer, and without
+/// the betas, no pre-release (`2.2.0-beta.1`). An app on a beta with them off thus stays on it
+/// until the stable version that follows it (2.2.0 after 2.2.0-beta.3), never an older one.
+pub fn accepts(current: &semver::Version, remote: &semver::Version, beta: bool) -> bool {
+    remote > current && (beta || remote.pre.is_empty())
+}
+
 /// A check of the updates: how to reach the network, and where latest.json is.
 struct Checker<R: Runtime> {
     app: AppHandle<R>,
     net: Network,
-    /// Where latest.json is (`plugins.updater.endpoints`), or a test's server.
+    /// « Recevoir les versions bêta »: the betas are offered (`accepts`).
+    beta: bool,
+    /// What the check reads, in order (`endpoints_for`): latest.json (`plugins.updater.endpoints`,
+    /// or a test's server), and beta.json before it with the betas.
     endpoints: Vec<Url>,
     /// How long before a failure that may pass is tried again.
     pause: Duration,
@@ -744,7 +775,8 @@ impl<R: Runtime> Checker<R> {
         Ok(Self {
             app: app.clone(),
             net: Network::from_settings(settings)?,
-            endpoints: configured_endpoints(app)?,
+            beta: settings.beta_updates,
+            endpoints: endpoints_for(&configured_endpoints(app)?, settings.beta_updates),
             pause: RETRY_PAUSE,
         })
     }
@@ -762,11 +794,13 @@ impl<R: Runtime> Checker<R> {
     /// The plugin's updater for a request that goes `route`.
     fn updater(&self, route: Route, slot: &Slot) -> Result<tauri_plugin_updater::Updater> {
         let (hook_slot, app) = (slot.clone(), self.app.clone());
+        let beta = self.beta;
         let mut builder = self
             .app
             .updater_builder()
             .timeout(TIMEOUT)
             .endpoints(self.endpoints.clone())?
+            .version_comparator(move |current, remote| accepts(&current, &remote.version, beta))
             .header(USER_AGENT, net::user_agent())?
             .on_before_exit(move || {
                 // Taken first: the lock is not held while the app stops.
@@ -887,8 +921,15 @@ impl<R: Runtime> Checker<R> {
     }
 }
 
-/// Where latest.json is, from the plugin's configuration (`plugins.updater.endpoints`).
+/// Where latest.json is, from the plugin's configuration (`plugins.updater.endpoints`); in a
+/// debug build, `ESCOUADE_UPDATE_ENDPOINT` when set (the end-to-end tests' server).
 fn configured_endpoints<R: Runtime>(app: &AppHandle<R>) -> Result<Vec<Url>> {
+    if cfg!(debug_assertions) {
+        let given = std::env::var("ESCOUADE_UPDATE_ENDPOINT").unwrap_or_default();
+        if !given.trim().is_empty() {
+            return Ok(vec![given.trim().parse()?]);
+        }
+    }
     let config = app.config();
     let endpoints: Vec<Url> = config
         .plugins
@@ -1506,6 +1547,68 @@ mod tests {
     use crate::core_tests::harness;
     use std::sync::atomic::{AtomicBool, AtomicUsize};
     use tokio::sync::Notify;
+
+    fn v(text: &str) -> semver::Version {
+        semver::Version::parse(text).unwrap()
+    }
+
+    #[test]
+    fn without_the_betas_a_version_with_a_suffix_is_never_offered() {
+        let current = v("2.1.4");
+        assert!(!accepts(&current, &v("2.2.0-beta.1"), false));
+        assert!(accepts(&current, &v("2.1.5"), false));
+        assert!(!accepts(&current, &v("2.1.4"), false));
+        assert!(!accepts(&current, &v("2.1.3"), false));
+    }
+
+    #[test]
+    fn with_the_betas_a_newer_beta_is_offered() {
+        let current = v("2.1.4");
+        assert!(accepts(&current, &v("2.2.0-beta.1"), true));
+        assert!(accepts(&current, &v("2.1.5"), true));
+        // `beta.10` comes after `beta.9`: the dot counts.
+        assert!(accepts(&v("2.2.0-beta.9"), &v("2.2.0-beta.10"), true));
+        assert!(!accepts(&v("2.2.0-beta.2"), &v("2.2.0-beta.1"), true));
+    }
+
+    #[test]
+    fn on_a_beta_without_the_betas_the_stable_version_that_follows_is_offered_not_an_older_one() {
+        let current = v("2.2.0-beta.3");
+        assert!(accepts(&current, &v("2.2.0"), false));
+        assert!(!accepts(&current, &v("2.1.5"), false));
+        assert!(!accepts(&current, &v("2.2.0-beta.4"), false));
+        assert!(accepts(&current, &v("2.2.0-beta.4"), true));
+    }
+
+    #[test]
+    fn the_check_reads_beta_json_beside_latest_json_only_with_the_betas() {
+        let latest: Url = "https://github.com/me/app/releases/latest/download/latest.json"
+            .parse()
+            .unwrap();
+        let read = |beta| -> Vec<String> {
+            endpoints_for(std::slice::from_ref(&latest), beta)
+                .iter()
+                .map(Url::to_string)
+                .collect()
+        };
+        assert_eq!(
+            read(false),
+            ["https://github.com/me/app/releases/latest/download/latest.json"]
+        );
+        assert_eq!(
+            read(true),
+            [
+                "https://github.com/me/app/releases/latest/download/beta.json",
+                "https://github.com/me/app/releases/latest/download/latest.json"
+            ]
+        );
+        // A test's server keeps its address and port.
+        let local: Url = "http://127.0.0.1:4120/latest.json".parse().unwrap();
+        assert_eq!(
+            endpoints_for(&[local], true)[0].as_str(),
+            "http://127.0.0.1:4120/beta.json"
+        );
+    }
 
     /// `f` within 5 s, or the test fails: a regression never hangs it.
     async fn within<T>(what: &str, f: impl Future<Output = T>) -> T {

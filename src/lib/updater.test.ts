@@ -10,7 +10,7 @@ vi.mock('./update-check', async (original) => ({ ...(await original<typeof impor
 vi.mock('./opener', () => ({ openUrl: vi.fn(async (url: string) => void server.opened.push(url)) }));
 
 import { UpdateTrouble } from './update-check';
-import { checkForUpdate, watchForUpdates } from './updater';
+import { checkForUpdate, isBeta, shownVersion, watchForUpdates } from './updater';
 
 const MINUTE = 60_000;
 const PAGE = 'https://github.com/guillaume-gagnaire/escouade/releases/tag/v1.6.0';
@@ -462,5 +462,18 @@ describe('the messages of the updater in English', () => {
     failed.finish(trouble('your company’s proxy refused the installer', { page: PAGE }));
     await expect.poll(() => app.toasts.at(-1)?.text).toBe('Couldn’t download the update: your company’s proxy refused the installer');
     expect(app.toasts.at(-1)?.action?.label).toBe('Download in the browser');
+  });
+});
+
+describe('a beta', () => {
+  beforeEach(() => setLang('fr'));
+
+  it('is a version with a suffix, said with « bêta » after it', () => {
+    expect(isBeta('2.2.0-beta.1')).toBe(true);
+    expect(isBeta('2.2.0')).toBe(false);
+    expect(shownVersion('2.2.0-beta.10')).toBe('2.2.0-beta.10 (bêta)');
+    expect(shownVersion('2.1.4')).toBe('2.1.4');
+    setLang('en');
+    expect(shownVersion('2.2.0-beta.1')).toBe('2.2.0-beta.1 (beta)');
   });
 });

@@ -46,6 +46,37 @@ describe('release notes', () => {
   });
 });
 
+describe('a pre-release', () => {
+  const WITH_UNRELEASED = `# Journal
+
+## [Non publié]
+
+### Nouveautés
+
+- Les bêtas.
+
+## [2.1.3] — 2026-11-06
+
+- Les quotas.
+`;
+
+  it('takes the section of what is not out yet when it has none of its own, in French and in English', () => {
+    expect(releaseNotes(WITH_UNRELEASED, 'v2.2.0-beta.1')).toBe('### Nouveautés\n\n- Les bêtas.');
+    const en = WITH_UNRELEASED.replace('[Non publié]', '[Unreleased]').replace('Nouveautés', 'New');
+    expect(releaseNotes(en, 'v2.2.0-beta.1', FALLBACKS.en)).toBe('### New\n\n- Les bêtas.');
+  });
+
+  it('takes its own section when it has one', () => {
+    const own = WITH_UNRELEASED.replace('## [Non publié]', '## [2.2.0-beta.1] — 2026-11-08\n\n- La bêta.\n\n## [Non publié]');
+    expect(releaseNotes(own, 'v2.2.0-beta.1')).toBe('- La bêta.');
+  });
+
+  it('falls back to the commits sentence without either, and a stable version never takes what is not out', () => {
+    expect(releaseNotes(CHANGELOG, 'v2.2.0-beta.1')).toBe(FALLBACK);
+    expect(releaseNotes(WITH_UNRELEASED, 'v2.2.0')).toBe(FALLBACK);
+  });
+});
+
 describe('the two changelogs', () => {
   it('reads the language of the command line, French by default, and refuses another', () => {
     expect(langOf(['v1.8.7'])).toBe('fr');

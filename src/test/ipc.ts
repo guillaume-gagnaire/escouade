@@ -113,6 +113,7 @@ export const SETTINGS: Settings = {
   quotaPause: 100,
   switchAt: 100,
   autoUpdate: true,
+  betaUpdates: false,
   telemetry: false,
   // The first start's question of the name for the shared tickets (ESC-190): asked already.
   nameAsked: true,

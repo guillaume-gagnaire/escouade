@@ -8,12 +8,13 @@ Ouvre les réglages avec `Ctrl+,` (`⌘,` sous macOS), puis choisis « À propo
 
 ## Escouade
 
-L’onglet n’a qu’un groupe, « Escouade », avec huit lignes, plus celle d’une mise à jour trouvée, sous « Installer les mises à jour automatiquement », tant qu’elle n’est pas installée (voir [« Rechercher une mise à jour »](#rechercher-une-mise-a-jour)).
+L’onglet n’a qu’un groupe, « Escouade », avec neuf lignes, plus celle d’une mise à jour trouvée, sous « Installer les mises à jour automatiquement », tant qu’elle n’est pas installée (voir [« Rechercher une mise à jour »](#rechercher-une-mise-a-jour)).
 
 | Ligne | Ce qu’elle montre ou fait | Par défaut |
 |---|---|---|
-| « Escouade » suivi de la version | La version installée. Dessous, les harness qu’Escouade trouve sur ta machine (« Harness détectés : Claude Code, Codex »), ou « Aucun harness trouvé ». À droite, le bouton « Rechercher une mise à jour ». | — |
+| « Escouade » suivi de la version | La version installée, suivie de « (bêta) » pour une bêta. Dessous, les harness qu’Escouade trouve sur ta machine (« Harness détectés : Claude Code, Codex »), ou « Aucun harness trouvé ». À droite, le bouton « Rechercher une mise à jour ». | — |
 | « Installer les mises à jour automatiquement » | « Escouade redémarre d’elle-même quand aucun agent ne travaille et que tout est enregistré. » | Activé |
+| « Recevoir les versions bêta » | « Les bêtas arrivent avant tout le monde et peuvent avoir des défauts. Décochée, Escouade reste sur sa bêta jusqu’à la version stable qui la suit. » S’enregistre aussitôt ; cochée, lance une recherche (voir [« Versions bêta »](updates#versions-beta)). | Désactivé |
 | « Statistiques d’usage » | « Les fonctionnalités utilisées, la version d’Escouade et le système, sous un identifiant tiré au hasard : rien qui t’identifie, ni tes projets ni ton code. » À droite, le bouton « En détail » (il ouvre la page [Confidentialité](/privacy/)) et un interrupteur. | Désactivé tant que tu n’as pas accepté la question du premier démarrage |
 | « Données locales » | Le dossier où Escouade garde ses données : `~/.escouade/`. | — |
 | « Crédits et licences » | Les composants et les voix qu’Escouade embarque, avec leur licence. Le bouton « Ouvrir » affiche la liste dans ton navigateur. | — |

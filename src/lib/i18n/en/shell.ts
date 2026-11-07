@@ -72,6 +72,7 @@ export default defineZone('shell', {
   },
   /** The update downloaded, its notes once installed, and the toasts about it. */
   update: {
+    betaVersion: '{version} (beta)',
     ready: 'Escouade {version} is ready',
     notes: 'What’s new in Escouade {version}',
     saveFirst: {

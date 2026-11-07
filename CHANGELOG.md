@@ -114,6 +114,12 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Un agent enregistré sur un harness que cette version n’a pas (celui d’une version plus récente, ou d’un plugin retiré) est lu et gardé avec sa conversation, marqué « harness absent » ; il ne démarre pas, et aucun agent n’est créé sur ce harness.
 - La fenêtre d’installation d’un plugin sans programme ne dit plus qu’Escouade ne filtre pas son réseau : ses webhooks ne partent que vers l’hôte déclaré. Elle dit aussi ce qui déclenche chaque webhook, et le store une seule fois.
 
+## [2.1.4] — 2026-11-07
+
+### Nouveautés
+
+- **Versions bêta :** l’option « Recevoir les versions bêta » (Réglages › À propos, décochée par défaut) te fait essayer les prochaines versions avant tout le monde. Décochée, Escouade ignore les bêtas ; une app sur une bêta le dit à côté de sa version.
+
 ## [2.1.3] — 2026-11-06
 
 ### Corrections
