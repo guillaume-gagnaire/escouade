@@ -22,6 +22,7 @@ test('a folder made by hand takes an agent dragged in and out, and a click moves
   const side = () => page.locator('aside.side');
   await expect(side().locator('.agent')).toHaveCount(1);
   await page.keyboard.press('Control+N');
+  await expect(side().locator('.agent')).toHaveCount(2);
   await page.keyboard.press('Control+N');
   await expect(side().locator('.agent')).toHaveCount(3);
   const [a, b, c] = (await order(page)) as string[];
@@ -58,6 +59,7 @@ test('a folder made by hand takes an agent dragged in and out, and a click moves
     .dragTo(side().locator(`.agent[data-agent="${a}"]`), { targetPosition: { x: 40, y: 4 } });
   await expect.poll(() => inside(page, 'Front')).toEqual([]);
   await expect(side().locator('section.folder .agent')).toHaveCount(0);
+  expect(await order(page)).toContain(b);
 });
 
 test('a folded folder keeps showing its agent that waits for an answer', async ({ app }) => {
@@ -154,7 +156,8 @@ test.describe('through MCP', () => {
     expect(folders[0].principal.id).toBe(mine);
     expect(folders[0].agents.map((x: { id: string }) => x.id)).toEqual([mine, one.id, two.id]);
 
-    // An empty `folder`: out of any folder.
+    // An empty `folder`: out of any folder. The limit of agents at work at once is lifted: `one` and `two` may still run.
+    await call('set_board', { project: 'demo-api', maxParallel: 6 });
     const loose = await call('create_agent', { project: 'demo-api', message: 'bonjour', folder: '' });
     expect(loose.folder).toBeNull();
     await expect(side.locator(`.agent[data-agent="${loose.id}"]`)).toHaveCount(1);
