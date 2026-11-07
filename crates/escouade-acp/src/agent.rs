@@ -2035,12 +2035,16 @@ impl Agent {
         self.tool_update(&n, out);
     }
 
-    /// Gemini's change of mode, told as a text: out of its mode plan, the mode a plan approved goes on in is set.
+    /// Gemini's change of mode, told as a text: out of its mode plan, the mode a plan approved goes on in is set. It lowers
+    /// the agent's mode, never raises it (`gemini::may_tell_mode`): the user raises it, through Escouade.
     fn gemini_told_mode(&mut self, mode: &str, out: &mut Vec<Item>) {
         if mode == "default" && std::mem::take(&mut self.gemini_resume) {
             for l in self.mode_lines(None) {
                 out.push(write(l));
             }
+            return;
+        }
+        if !gemini::may_tell_mode(&self.mode, mode) {
             return;
         }
         if self.mode != mode && !(mode == "default" && self.mode.is_empty()) {

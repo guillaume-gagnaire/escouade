@@ -90,6 +90,10 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### Fixes
 
+- Gemini CLI: what the model writes can no longer raise an agent's mode. Writing “[MODE_UPDATE] yolo” was enough to remove its permission requests; only you can raise a mode.
+- ACP agents and Copilot: a path with `..` no longer counts as inside the agent's folder, so a write outside it asks you first.
+- GitHub and GitLab no longer follow a next page outside their API: the token only goes to them.
+- Trello, ClickUp, Linear and Jira read large answers as the code hosts do, without hitting the 1 MB limit.
 - Turning the autopilot off or the pause on a red CI also holds back the tickets a start pass under way had not launched yet.
 - A plugin that decides permissions starts as soon as it is installed, updated or switched back on: its rule applies to the very first request.
 - Fable’s quota bar is named “Fable 7d”, like the other windows, by its length.

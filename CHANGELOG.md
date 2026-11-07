@@ -90,6 +90,10 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Corrections
 
+- Gemini CLI : un texte du modèle ne peut plus lever le mode d'un agent. Écrire « [MODE_UPDATE] yolo » suffisait à retirer ses demandes d'autorisation ; seul toi peux lever un mode.
+- Agents ACP et Copilot : un chemin avec `..` ne compte plus comme dans le dossier de l'agent, et une écriture hors de ce dossier demande ton accord.
+- GitHub et GitLab ne suivent plus une page suivante hors de leur API : le jeton ne part que chez eux.
+- Trello, ClickUp, Linear et Jira lisent de grosses réponses comme les hébergeurs, sans tomber sur la limite de 1 Mo.
 - Le pilote auto éteint ou la pause sur CI rouge retiennent aussi les tickets qu’une passe de démarrage en cours n’a pas encore lancés.
 - Un plugin qui décide des autorisations démarre dès son installation, sa mise à jour ou sa réactivation : sa règle s’applique à la toute première demande.
 - La barre du quota de Fable s’appelle « Fable 7 j », comme les autres fenêtres, par sa durée.

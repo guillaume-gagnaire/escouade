@@ -56,6 +56,22 @@ pub fn mode_update(text: &str) -> Option<&'static str> {
     escouade_mode(text.strip_prefix(MODE_UPDATE)?.trim())
 }
 
+/// How much a mode lets an agent do without asking.
+fn freedom(mode: &str) -> u8 {
+    match mode {
+        "plan" => 0,
+        "acceptEdits" => 2,
+        "bypassPermissions" => 3,
+        _ => 1,
+    }
+}
+
+/// Whether a text of Gemini may take an agent from the mode `from` to `to`. Gemini's change of mode comes where the model
+/// writes, and anything the model read can make it write that: a text may lower what an agent may do, never raise it.
+pub fn may_tell_mode(from: &str, to: &str) -> bool {
+    freedom(to) <= freedom(from)
+}
+
 /// Whether a call (its `toolCallId`) is Gemini's `exit_plan_mode`: the plan to approve.
 pub fn is_plan_exit(call: &str) -> bool {
     call.starts_with("exit_plan_mode")
@@ -69,6 +85,15 @@ pub fn plan_file(title: &str) -> Option<&str> {
         .filter(|p| !p.is_empty())
 }
 
+/// Whether `file` is where Gemini writes a plan: a Markdown file of a folder `plans` (of its home). The title of a call comes
+/// from the model's side: it does not get to show any file of that home in a card.
+fn is_a_plan(file: &str) -> bool {
+    let file = file.replace('\\', "/");
+    let mut parts = file.rsplit('/');
+    let name = parts.next().unwrap_or_default().to_lowercase();
+    name.ends_with(".md") && parts.next() == Some("plans") && !file.split('/').any(|p| p == "..")
+}
+
 /// The plan of the permission `params` of its `exit_plan_mode`: the text of the file it names, else its name.
 pub fn plan_of(params: &Value) -> String {
     plan_of_agent(params, "")
@@ -78,6 +103,7 @@ pub fn plan_of(params: &Value) -> String {
 pub fn plan_of_agent(params: &Value, agent: &str) -> String {
     let file = params["toolCall"]["title"].as_str().and_then(plan_file);
     let plan = file
+        .filter(|f| is_a_plan(f))
         .and_then(|f| crate::plugin::agent_file(agent, std::path::Path::new(f)))
         .unwrap_or_else(|| file.unwrap_or_default().to_string());
     plan.trim().to_string()

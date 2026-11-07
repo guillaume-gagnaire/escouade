@@ -1,6 +1,6 @@
 [package]
 name = "escouade-acp"
-version = "0.1.2"
+version = "0.1.3"
 description = "Escouade's client of the Agent Client Protocol: what an ACP agent says, as items of the conversation, and what to write back to it"
 authors = ["Guillaume Gagnaire"]
 license = "MIT"
