@@ -759,17 +759,18 @@ fn n3_a_word_of_a_command_that_resolves_into_the_fence_is_refused() {
             );
         }
     }
-    // In doubt (a path a shell makes): a card, never allowed.
+    // In doubt (a path a shell makes): a card or a refusal, never allowed nor « Toujours ». Which one depends on the
+    // system's paths (`$HOME/../prive` is refused on Linux, a card on Windows): both keep the fence.
     for cmd in [
         format!("type $HOME{sep}..{sep}prive{sep}secret.txt"),
         format!("type %CD%{sep}..{sep}prive"),
         "cargo test".to_string(),
     ] {
         let d = denied("run_command", command(&cmd));
-        assert_eq!(
-            words::judge(&rules, "bypassPermissions", &[], &d, "r"),
-            Verdict::Asked { always: false },
-            "{cmd}"
+        let verdict = words::judge(&rules, "bypassPermissions", &[], &d, "r");
+        assert!(
+            matches!(verdict, Verdict::Refused | Verdict::Asked { always: false }),
+            "{cmd}: {verdict:?}"
         );
     }
 }
