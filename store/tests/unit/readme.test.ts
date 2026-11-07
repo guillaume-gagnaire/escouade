@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { imageInfo } from '../../server/utils/images';
-import { insidePath, renderDocs, renderMarkdown } from '../../server/utils/readme';
+import { DOC_PAGES_MAX, insidePath, renderDocs, renderMarkdown, titleOf } from '../../server/utils/readme';
 import { readArchive } from '../../server/utils/tar';
 import { manifest, png, tarball } from '../fake/plugins.mjs';
 
@@ -122,5 +122,90 @@ describe('the README', () => {
     const docs = await renderDocs(read, { repo: REPO, commit: COMMIT, keep: async () => 'x' });
     expect(docs.readme).toEqual({ fr: '<h1>Only</h1>\n', en: '<h1>Only</h1>\n' });
     expect(docs.pages).toEqual([]);
+  });
+});
+
+describe('the documentation pages by language (ESC-366)', () => {
+  const docsOf = async (files: Record<string, string | Buffer>, docs: unknown = 'docs') =>
+    renderDocs(readArchive(tarball({ 'escouade-plugin.json': JSON.stringify(manifest(REPO, { store: { docs } })), ...files })), {
+      repo: REPO,
+      commit: COMMIT,
+      keep: async (_bytes, format) => `${'e'.repeat(64)}.${format}`,
+    });
+
+  it('gives the pages of docs/fr and docs/en their language, in the order of their names', async () => {
+    const docs = await docsOf({
+      'README.md': '# Ntfy\n',
+      'docs/fr/02-regler.md': '# Régler le sujet\n\nRetour à [l’installation](01-installer.md#avant).\n',
+      'docs/fr/01-installer.md': '# Installer\n\n![Capture](../images/shot.png)\n\nPuis [régler](./02-regler.md).\n',
+      'docs/en/01-install.md':
+        '# Install\n\n![Shot](../images/shot.png)\n\nThen [set it up](02-set-up.md), or [in French](../fr/01-installer.md).\n',
+      'docs/en/02-set-up.md': 'No heading here.\n\n```sh\n# not a title\n```\n',
+      'docs/images/shot.png': png(40, 20),
+      'docs/notes.md': '# Not shown: the folder has languages\n',
+    });
+    expect(docs.pages.map((p) => [p.lang, p.path, p.title])).toEqual([
+      ['fr', 'docs/fr/01-installer.md', 'Installer'],
+      ['fr', 'docs/fr/02-regler.md', 'Régler le sujet'],
+      ['en', 'docs/en/01-install.md', 'Install'],
+      // No heading, a `#` in a code block: the name of the file without its order.
+      ['en', 'docs/en/02-set-up.md', 'set-up'],
+    ]);
+    const [fr1, fr2, en1] = docs.pages;
+    // A link to another page opens its tab on the store; an image of the folder is copied, for both languages.
+    expect(fr1!.html).toContain('href="?tab=docs&amp;page=docs%2Ffr%2F02-regler.md"');
+    expect(fr2!.html).toContain('href="?tab=docs&amp;page=docs%2Ffr%2F01-installer.md"');
+    expect(en1!.html).toContain('href="?tab=docs&amp;page=docs%2Fen%2F02-set-up.md"');
+    expect(en1!.html).toContain('href="?tab=docs&amp;page=docs%2Ffr%2F01-installer.md"');
+    const img = `src="/files/${'e'.repeat(64)}.png" width="40" height="20"`;
+    expect(fr1!.html).toContain(img);
+    expect(en1!.html).toContain(img);
+    expect(docs.images).toEqual([`${'e'.repeat(64)}.png`]);
+    expect(fr1!.html).not.toContain('rel=');
+  });
+
+  it('keeps a folder without languages as before: every page, for both, without a language', async () => {
+    const docs = await docsOf({
+      'README.md': '# Ntfy\n\nSee [the setup](docs/setup.md).\n',
+      'docs/setup.md': '# Setting up\n\nBack to the [README](../README.md); the [source](../src/main.rs).\n',
+      'docs/more/deep.md': '# Deeper\n',
+      'src/main.rs': 'fn main() {}\n',
+    });
+    expect(docs.pages.map((p) => [p.path, p.title, p.lang])).toEqual([
+      ['docs/more/deep.md', 'Deeper', undefined],
+      ['docs/setup.md', 'Setting up', undefined],
+    ]);
+    expect(docs.pages.every((p) => !('lang' in p))).toBe(true);
+    expect(docs.readme.fr).toContain('href="?tab=docs&amp;page=docs%2Fsetup.md"');
+    expect(docs.pages[1]!.html).toContain('href="?"');
+    // Any other file of the repository: on GitHub, at the commit the store froze.
+    expect(docs.pages[1]!.html).toContain(`href="https://github.com/${REPO}/blob/${COMMIT}/src/main.rs"`);
+  });
+
+  it('shows the one language there is, and keeps DOC_PAGES_MAX pages per language', async () => {
+    const many = Object.fromEntries(
+      Array.from({ length: DOC_PAGES_MAX + 3 }, (_, i) => [`docs/en/${String(i).padStart(2, '0')}-p.md`, `# P${i}\n`]),
+    );
+    const fr = Object.fromEntries(
+      Array.from({ length: DOC_PAGES_MAX + 1 }, (_, i) => [`docs/fr/${String(i).padStart(2, '0')}-p.md`, `# P${i}\n`]),
+    );
+    const onlyEn = await docsOf({ 'README.md': '# x\n', ...many });
+    expect(onlyEn.pages).toHaveLength(DOC_PAGES_MAX);
+    expect(onlyEn.pages.every((p) => p.lang === 'en')).toBe(true);
+    expect(onlyEn.pages[0]!.title).toBe('P0');
+    const both = await docsOf({ 'README.md': '# x\n', ...many, ...fr });
+    expect(both.pages.filter((p) => p.lang === 'fr')).toHaveLength(DOC_PAGES_MAX);
+    expect(both.pages.filter((p) => p.lang === 'en')).toHaveLength(DOC_PAGES_MAX);
+  });
+
+  it('reads the title from the first heading, else the name without its order', () => {
+    expect(titleOf('Intro\n\n## **Set** `up`\n\n# Later\n', 'docs/x.md')).toBe('Set up');
+    expect(titleOf('Nothing\n', 'docs/fr/03_regler-le-sujet.md')).toBe('regler-le-sujet');
+    expect(titleOf('', 'docs/fr/01.md')).toBe('01');
+  });
+
+  it('reads no page from a folder that is not there', async () => {
+    expect((await docsOf({ 'README.md': '# x\n' }, 'documentation')).pages).toEqual([]);
+    expect((await docsOf({ 'README.md': '# x\n', 'x.md': '# x\n' }, 42)).pages).toEqual([]);
   });
 });

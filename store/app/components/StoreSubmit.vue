@@ -386,7 +386,7 @@ useHead(() => ({
               <div>
                 <b class="name">{{ NAMES[c.key]?.[lang] ?? c.key }}</b>
                 <span v-if="c.status !== 'fail' && c.detail[lang]" class="x">{{ c.detail[lang] }}</span>
-                <div v-for="(p, n) in c.status === 'fail' || c.status === 'hold' ? c.problems : []" :key="n" class="why" :class="c.status">
+                <div v-for="(p, n) in c.status !== 'skip' && c.status !== 'run' ? c.problems : []" :key="n" class="why" :class="c.status">
                   <b
                     ><template v-for="(part, i) in ticks(p.why[lang])" :key="i"
                       ><code v-if="i % 2">{{ part }}</code
@@ -739,11 +739,14 @@ useHead(() => ({
   color: var(--danger);
   font-weight: 600;
 }
-.why.hold {
+/* A warning on a check that passes (`store.docs` without a page, ESC-366): the colour of a hold. */
+.why.hold,
+.why.pass {
   border-color: color-mix(in oklch, var(--warn) 40%, transparent);
   background: var(--warn-bg);
 }
-.why.hold b {
+.why.hold b,
+.why.pass b {
   color: var(--warn);
 }
 .why .path {

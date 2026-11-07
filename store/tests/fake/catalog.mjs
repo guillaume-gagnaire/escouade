@@ -110,7 +110,17 @@ export async function seedCatalog({
         permissions: { events: ['agent.waiting'], network: ['ntfy.sh'] },
         contributes: { webhooks: [{ event: 'agent.waiting', url: 'https://ntfy.sh/{topic}' }] },
       },
-      files: { 'README.fr.md': '# ntfy\n\nEn français.\n', 'README.en.md': '# ntfy\n\nIn English.\n' },
+      files: {
+        'README.fr.md': '# ntfy\n\nEn français.\n',
+        'README.en.md': '# ntfy\n\nIn English.\n',
+        // Its documentation in both languages (ESC-366): docs/fr and docs/en, an image the two share.
+        'docs/fr/01-installer.md':
+          '# Installer\n\nAbonne-toi au sujet.\n\n![Le sujet](../images/sujet.png)\n\nPuis [règle-le](02-regler.md).\n',
+        'docs/fr/02-regler.md': 'Le sujet par projet.\n',
+        'docs/en/01-install.md': '# Install\n\nSubscribe to the topic.\n\n![The topic](../images/sujet.png)\n',
+        'docs/images/sujet.png': png(80, 40),
+      },
+      store: { docs: 'docs' },
     },
     {
       id: ids.nord,
@@ -124,7 +134,9 @@ export async function seedCatalog({
         description: { fr: 'La palette Nord, en clair et en sombre.', en: 'The Nord palette, light and dark.' },
         contributes: { themes: [{ id: 'nord', name: 'Nord', path: 'nord.json' }] },
       },
-      files: { 'README.md': '# Nord\n', 'icon.png': png(512, 512) },
+      // A documentation in French alone (ESC-366): an English visitor reads it.
+      files: { 'README.md': '# Nord\n', 'icon.png': png(512, 512), 'guide/fr/01-palette.md': '# La palette\n\nSeize couleurs.\n' },
+      store: { docs: 'guide/' },
       icon: 'icon.png',
     },
   ];

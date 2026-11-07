@@ -22,10 +22,25 @@ const purgeOn = (iso: string) => new Date(Date.parse(iso) + 30 * 86_400_000).toI
 const docs = computed(() => page.value.latest?.docs ?? null);
 const other = computed(() => (lang.value === 'fr' ? 'en' : 'fr'));
 const readme = computed(() => docs.value?.readme[lang.value] ?? docs.value?.readme[other.value] ?? null);
+// The pages of `docs/fr` or `docs/en` (ESC-366): the visitor's language, the other otherwise; a page asked by its
+// address shows its own language's. Those of a folder without languages have none, and show for both.
+const allPages = computed(() => docs.value?.pages ?? []);
 const docPage = computed(() => {
-  const pages = docs.value?.pages ?? [];
-  return pages.find((p) => p.path === route.query.page) ?? pages[0] ?? null;
+  const pages = allPages.value;
+  const asked = pages.find((p) => p.path === route.query.page);
+  if (asked) return asked;
+  return pages.find((p) => p.lang === lang.value) ?? pages.find((p) => p.lang === other.value) ?? pages.find((p) => !p.lang) ?? null;
 });
+const docPages = computed(() => allPages.value.filter((p) => (p.lang ?? null) === (docPage.value?.lang ?? null)));
+// A link of a page to another (`?tab=docs&page=…`, server/utils/readme.ts) stays in the page, without reloading it.
+const router = useRouter();
+function follow(ev: MouseEvent) {
+  const a = (ev.target as HTMLElement | null)?.closest?.('a');
+  const href = a?.getAttribute('href');
+  if (!href?.startsWith('?') || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button !== 0) return;
+  ev.preventDefault();
+  void router.push({ query: Object.fromEntries(new URLSearchParams(href.slice(1))) });
+}
 const short = (sha: string) => sha.slice(0, 7);
 // The review's signature of the version shown (STORE-8) and its public summary, one line per point.
 const signature = computed(() => page.value.latest?.signature ?? null);
@@ -100,7 +115,7 @@ async function copyRepo() {
     <nav v-if="!page.builtin" class="tabs">
       <NuxtLink :class="{ on: tab === 'readme' }" :to="tabLink('readme')">{{ words.plugin.tabs.readme }}</NuxtLink>
       <NuxtLink :class="{ on: tab === 'docs' }" :to="tabLink('docs')"
-        >{{ words.plugin.tabs.docs }}<span class="n">{{ docs?.pages.length ?? 0 }}</span></NuxtLink
+        >{{ words.plugin.tabs.docs }}<span class="n">{{ docPages.length }}</span></NuxtLink
       >
       <NuxtLink :class="{ on: tab === 'versions' }" :to="tabLink('versions')"
         >{{ words.plugin.tabs.versions }}<span class="n">{{ page.versions.length }}</span></NuxtLink
@@ -122,7 +137,7 @@ async function copyRepo() {
       <article v-else-if="tab === 'readme'" class="readme">
         <!-- The README as the store rendered it at the check: cut down to a short list of tags, without script, style
              or event (server/utils/readme.ts); the page's policy would refuse them all the same. -->
-        <div v-if="readme" class="md" v-html="readme"></div>
+        <div v-if="readme" class="md" @click="follow" v-html="readme"></div>
         <p v-else class="sub">{{ words.plugin.noReadme }}</p>
         <figure v-if="page.latest?.screenshots.length" class="shots">
           <img v-for="s in page.latest.screenshots" :key="s.src" :src="s.src" :width="s.width" :height="s.height" alt="" loading="lazy" />
@@ -130,16 +145,16 @@ async function copyRepo() {
         </figure>
       </article>
       <article v-else-if="tab === 'docs'" class="readme">
-        <nav v-if="(docs?.pages.length ?? 0) > 1" class="doc-pages">
+        <nav v-if="docPages.length > 1" class="doc-pages">
           <NuxtLink
-            v-for="p in docs!.pages"
+            v-for="p in docPages"
             :key="p.path"
             :class="{ on: p.path === docPage?.path }"
             :to="{ query: { tab: 'docs', page: p.path } }"
             >{{ p.title }}</NuxtLink
           >
         </nav>
-        <div v-if="docPage" class="md" v-html="docPage.html"></div>
+        <div v-if="docPage" class="md" :lang="docPage.lang" @click="follow" v-html="docPage.html"></div>
         <p v-else class="sub">{{ words.plugin.noDocs }}</p>
       </article>
       <div v-else class="versions">

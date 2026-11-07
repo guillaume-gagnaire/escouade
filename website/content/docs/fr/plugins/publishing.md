@@ -66,16 +66,37 @@ Un plugin écrit en Rust se publie en `run.wasm` : son manifeste nomme son `Carg
 
 Une panne du store, un réseau coupé par exemple, ne refuse pas la version : elle attend, à relancer.
 
-
 ## La page du plugin
 
 Une fois publiée, la version a sa page sur le store : son nom, son auteur, « Non vérifié » ou « En revue » jusqu’à sa signature, ce qu’elle pourra faire en mots (la permission la plus forte d’abord), son dépôt, son commit et son empreinte, ses versions, et « Ouvrir dans Escouade », qui ouvre sa page dans l’app.
 
 Quand la revue a relu la version, tu reçois sa réponse par e-mail et dans ton compte. Vérifiée, elle porte le sceau « Vérifié par Escouade » et le résumé de la revue (les permissions relues, les hôtes joints, ce qui a été vérifié), sur sa page et dans l’app, qui contrôle la signature avec ses propres clés. Si la revue demande des changements ou refuse, la version reste publiée, non vérifiée, et le message dit pourquoi : une nouvelle version qui en tient compte repasse en revue.
 
-Le README y est rendu une fois, à la soumission, dans la langue du visiteur (`README.fr.md` ou `README.en.md`, sinon `README.md`) ; les pages markdown du dossier `store.docs` font l’onglet « Documentation ». Le store en garde le markdown et une courte liste de balises HTML (titres, listes, liens, code, tableaux, `details`) ; il retire les scripts, les styles, les attributs `style` et `class`, les cadres et les formulaires. Les images du dépôt (PNG, JPEG ou WebP, 5 Mo au plus, en chemin relatif ou par leur adresse sur GitHub) sont copiées sur le store et réencodées ; les images d’ailleurs, comme les badges, sont retirées : un visiteur ne charge rien chez un tiers. Un lien vers un fichier du dépôt mène à GitHub, au commit publié.
+Le README y est rendu une fois, à la soumission, dans la langue du visiteur (`README.fr.md` ou `README.en.md`, sinon `README.md`) ; les pages markdown du dossier `store.docs` font l’onglet « Documentation ». Le store en garde le markdown et une courte liste de balises HTML (titres, listes, liens, code, tableaux, `details`) ; il retire les scripts, les styles, les attributs `style` et `class`, les cadres et les formulaires. Les images du dépôt (PNG, JPEG ou WebP, 5 Mo au plus, en chemin relatif ou par leur adresse sur GitHub) sont copiées sur le store et réencodées ; les images d’ailleurs, comme les badges, sont retirées : un visiteur ne charge rien chez un tiers. Un lien vers un fichier du dépôt mène à GitHub, au commit publié ; un lien vers une page de la documentation ou vers le README reste sur le store, dans son onglet.
 
 Tout le monde peut signaler un plugin depuis sa page, sans compte, avec une adresse e-mail : une personne lit chaque signalement. Tu vois qu’un signalement est ouvert, jamais qui l’a fait.
+
+### La documentation, par langue
+
+Le dossier que nomme `store.docs` donne ses pages en deux langues dans les sous-dossiers `fr/` et `en/` : le visiteur voit celles de sa langue, sinon celles de l’autre. Un dossier sans `fr/` ni `en/` montre toutes ses pages dans les deux langues. Les pages viennent dans l’ordre de leurs noms (préfixe-les : `01-installer.md`, `02-regler.md`), 20 au plus par langue ; le titre d’un onglet est le premier titre (`#`) de la page, sinon son nom sans le préfixe. Les images se rangent à côté, dans un dossier que les deux langues partagent.
+
+```text
+mon-plugin/
+├── escouade-plugin.json      "store": { "docs": "docs/" }
+├── README.fr.md
+├── README.en.md
+└── docs/
+    ├── fr/
+    │   ├── 01-installer.md   # Installer   …   [la suite](02-regler.md)
+    │   └── 02-regler.md      # Régler le sujet
+    ├── en/
+    │   ├── 01-install.md     # Install     …   ![Le sujet](../images/sujet.png)
+    │   └── 02-set-up.md      # Set it up
+    └── images/
+        └── sujet.png
+```
+
+Les liens entre pages s’écrivent en chemins relatifs (`02-regler.md`, `../en/01-install.md`) et les images aussi (`../images/sujet.png`). Si `store.docs` ne mène à aucune page markdown, le contrôle du README le dit en avertissement : la version passe, et sa page montre le README seul.
 
 ## La signature et le sceau
 
@@ -84,7 +105,6 @@ Une version vérifiée reçoit le sceau « Vérifié par Escouade » : la revu
 ## Les mises à jour
 
 Publier une version ne change rien chez ceux qui ont le plugin : Escouade la **propose, et ne l’installe jamais seule**, avec la même fenêtre que l’installation. Si elle demande plus, la fenêtre le dit, marque « nouveau » chaque permission en plus et redemande l’accord. Voir [installer un plugin](plugins/installer#les-mises-a-jour) et [les versions](plugins/versioning).
-
 
 ## Préparer la revue
 

@@ -1,6 +1,7 @@
 import { iconPath, message, RESERVED_PREFIX, validateText } from '../../../schemas/plugin-manifest.mjs';
 import { ICON_DECODE_MAX, imageInfo, SCREENSHOT_BYTES, SCREENSHOT_WIDTH, SCREENSHOTS_MAX } from './images';
 import { judgeLicense } from './licenses';
+import { docPages } from './readme';
 import type { ArchiveProblem, ArchiveRead } from './tar';
 import { folderName, tagFor, tagsOf } from '../../shared/folder';
 import { compareVersions, type Platform } from './versions';
@@ -652,7 +653,37 @@ export function readmeSource(read: ArchiveRead, root?: ArchiveRead | null): { re
   return readmes(root).length ? { read: root, fromRoot: true } : { read, fromRoot: false };
 }
 
+/**
+ * `store.docs` that names no page (ESC-366): a warning, the check passes all the same. The manifest's check already
+ * refuses a path out of the plugin (`innerPath`); this one says that the folder holds no markdown page, in `fr/`,
+ * `en/` or at its top, and the plugin's page will show its README alone.
+ */
+function docsWarning(read: ArchiveRead): Problem[] {
+  const m = manifestOf(read) as Record<string, unknown> | null;
+  const store = m?.store as Record<string, unknown> | undefined;
+  if (!store || !('docs' in store) || docPages(read, m).length) return [];
+  const named = typeof store.docs === 'string' ? store.docs : '';
+  return [
+    {
+      path: 'store.docs',
+      why: t(
+        `${code('store.docs')} ne nomme aucune page lisible${named ? ` : ${code(named)} n’a pas de fichier .md` : ''}. La page du plugin montrera son README seul.`,
+        `${code('store.docs')} names no readable page${named ? `: ${code(named)} has no .md file` : ''}. The plugin’s page will show its README alone.`,
+      ),
+      fix: t(
+        'Mets les pages en markdown dans ce dossier, sous fr/ et en/ pour une page par langue (01-installer.md…), ou retire store.docs.',
+        'Put the markdown pages in that folder, under fr/ and en/ for a page per language (01-install.md…), or remove store.docs.',
+      ),
+    },
+  ];
+}
+
 function checkReadme(read: ArchiveRead, s?: Snapshot): CheckResult {
+  const r = checkReadmeFile(read, s);
+  return { ...r, problems: [...r.problems, ...docsWarning(read)] };
+}
+
+function checkReadmeFile(read: ArchiveRead, s?: Snapshot): CheckResult {
   const found = [...read.files.entries()].filter(([p]) => !p.includes('/') && README.test(p));
   const filled = found.filter(([, b]) => b.toString('utf8').trim() !== '');
   if (filled.length) return pass('readme', t(filled.map(([p]) => p).join(' et '), filled.map(([p]) => p).join(' and ')));

@@ -13,16 +13,19 @@ import type { ArchiveRead } from './tar';
 // archive; nothing of the plugin runs.
 
 export interface DocPage {
-  /** The page's path in the plugin's folder (`docs/setup.md`). */
+  /** The page's path in the plugin's folder (`docs/setup.md`, `docs/fr/01-installer.md`). */
   path: string;
   title: string;
   html: string;
+  /** The language of a page of `docs/fr` or `docs/en` (ESC-366); none for a folder without them. */
+  lang?: Lang;
 }
 
 export interface Docs {
   /** The README of each language: README.fr.md and README.en.md, or README.md for both. */
   readme: Partial<Record<Lang, string>>;
-  /** The pages of `store.docs`, in the order of their names. */
+  /** The pages of `store.docs`, in the order of their names: those of its `fr` and `en` folders, each with its
+   * language, the page showing the visitor's (the other otherwise); without them, every page, for both. */
   pages: DocPage[];
   /** The images copied, by the name they are served under (`<sha256>.png`). */
   images: string[];
@@ -38,6 +41,7 @@ export const IMAGE_BYTES = 5 * 1024 * 1024;
 export const FILES = '/files/';
 
 const README = /^README(?:\.(fr|en))?\.md$/i;
+const LANGS = ['fr', 'en'] as const;
 const REL = 'nofollow ugc noopener noreferrer';
 
 const md = new MarkdownIt({ html: true, linkify: true, typographer: false });
@@ -142,6 +146,8 @@ export function renderMarkdown(
     /** The plugin's folder in the repository, '' at its root (ESC-313). */
     path?: string;
     images: Map<string, { name: string; width: number; height: number }>;
+    /** The documentation pages shown on the store: a link to one of them opens its tab there (ESC-366). */
+    pages?: ReadonlySet<string>;
   },
 ): { html: string; wanted: string[] } {
   const wanted: string[] = [];
@@ -172,6 +178,15 @@ export function renderMarkdown(
         else if (href && !/^[a-z][a-z0-9+.-]*:|^\/\//i.test(href) && !href.startsWith('#')) {
           // A file of the repository: on GitHub, at the commit the store froze.
           const path = insidePath(href, ctx.from, ctx.repo, ctx.path);
+          // Another page of its documentation, or its README: on the store, in the plugin's own tabs (ESC-366).
+          if (path && ctx.pages?.has(path)) {
+            out.href = `?tab=docs&page=${encodeURIComponent(path)}`;
+            return { tagName: 'a', attribs: out };
+          }
+          if (path && ctx.pages && !path.includes('/') && README.test(path)) {
+            out.href = '?';
+            return { tagName: 'a', attribs: out };
+          }
           const full = ctx.path && path ? `${ctx.path}/${path}` : path;
           if (full) out.href = `https://github.com/${ctx.repo}/blob/${ctx.commit}/${full.split('/').map(encodeURIComponent).join('/')}`;
         }
@@ -183,10 +198,48 @@ export function renderMarkdown(
   return { html, wanted };
 }
 
-/** The first heading of a markdown page, or its file name. */
-function titleOf(markdown: string, path: string): string {
-  const h = /^#{1,3}\s+(.+?)\s*#*\s*$/m.exec(markdown);
-  return (h?.[1] ?? posix.basename(path, '.md')).replace(/[*_`]/g, '').trim();
+/** The first heading of a markdown page (not a `#` of a code block), or its file name without its order (`01-`). */
+export function titleOf(markdown: string, path: string): string {
+  const tokens = md.parse(markdown, {});
+  const at = tokens.findIndex((t) => t.type === 'heading_open');
+  const inline = at >= 0 ? (tokens[at + 1]?.children ?? []) : [];
+  const heading = inline
+    .map((c) => (c.type === 'text' || c.type === 'code_inline' ? c.content : ''))
+    .join('')
+    .trim();
+  const name = posix.basename(path).replace(/\.md$/i, '');
+  return heading || name.replace(/^\d+[-_.\s]+/, '').trim() || name;
+}
+
+/** The folder `store.docs` names (`.` for the plugin's own), or null if it names none inside the plugin. */
+export function docsFolder(manifest: Record<string, unknown> | null): string | null {
+  const store = (manifest?.store ?? {}) as { docs?: unknown };
+  if (typeof store.docs !== 'string' || !store.docs.trim() || store.docs.includes('\\')) return null;
+  const dir = posix.normalize(store.docs.trim().replace(/\/+$/, '') || '.');
+  return dir === '..' || dir.startsWith('../') || posix.isAbsolute(dir) ? null : dir;
+}
+
+/**
+ * The documentation pages of `store.docs` (docs/STORE.md §3.2), in the order of their names, `DOC_PAGES_MAX` per
+ * language: with a `fr` or an `en` folder in it, the pages under them, each with its language (the others are not
+ * read); without, its markdown pages for both languages, as before ESC-366. A README is never a page.
+ */
+export function docPages(read: ArchiveRead, manifest: Record<string, unknown> | null): { path: string; lang?: Lang }[] {
+  const dir = docsFolder(manifest);
+  if (!dir) return [];
+  const base = dir === '.' ? '' : `${dir}/`;
+  const all = [...read.files.keys()].filter((p) => /\.md$/i.test(p) && p.startsWith(base) && !README.test(p)).sort();
+  const under = (l: Lang) => all.filter((p) => p.startsWith(`${base}${l}/`));
+  if (LANGS.some((l) => under(l).length))
+    return LANGS.flatMap((l) =>
+      under(l)
+        .slice(0, DOC_PAGES_MAX)
+        .map((path) => ({ path, lang: l })),
+    );
+  return all
+    .filter((p) => dir !== '.' || !p.includes('/'))
+    .slice(0, DOC_PAGES_MAX)
+    .map((path) => ({ path }));
 }
 
 /**
@@ -196,16 +249,9 @@ function titleOf(markdown: string, path: string): string {
 export async function renderDocs(read: ArchiveRead, ctx: { repo: string; commit: string; path?: string; keep: KeepImage }): Promise<Docs> {
   const readmes = [...read.files.keys()].filter((p) => !p.includes('/') && README.test(p));
   const byLang = (l: Lang) => readmes.find((p) => README.exec(p)![1]?.toLowerCase() === l) ?? readmes.find((p) => !README.exec(p)![1]);
-  const m = manifestOf(read);
-  const store = (m?.store ?? {}) as { docs?: unknown };
-  const docsDir = typeof store.docs === 'string' ? posix.normalize(store.docs.replace(/\/+$/, '')) : null;
-  const pages =
-    docsDir && !docsDir.startsWith('..')
-      ? [...read.files.keys()]
-          .filter((p) => /\.md$/i.test(p) && (docsDir === '.' ? !p.includes('/') : p.startsWith(`${docsDir}/`)) && !README.test(p))
-          .sort()
-          .slice(0, DOC_PAGES_MAX)
-      : [];
+  const listed = docPages(read, manifestOf(read) as Record<string, unknown> | null);
+  const pages = listed.map((p) => p.path);
+  const shown = new Set(pages);
   const sources = [...new Set([byLang('fr'), byLang('en'), ...pages].filter((p): p is string => !!p))];
   const text = (p: string) => read.files.get(p)!.toString('utf8');
 
@@ -233,15 +279,16 @@ export async function renderDocs(read: ArchiveRead, ctx: { repo: string; commit:
   }
 
   // 3. The pages, their images in place.
-  const render = (p: string) => renderMarkdown(text(p), { from: p, repo: ctx.repo, commit: ctx.commit, path: ctx.path, images }).html;
+  const render = (p: string) =>
+    renderMarkdown(text(p), { from: p, repo: ctx.repo, commit: ctx.commit, path: ctx.path, images, pages: shown }).html;
   const readme: Docs['readme'] = {};
-  for (const l of ['fr', 'en'] as const) {
+  for (const l of LANGS) {
     const p = byLang(l);
     if (p) readme[l] = render(p);
   }
   return {
     readme,
-    pages: pages.map((p) => ({ path: p, title: titleOf(text(p), p), html: render(p) })),
+    pages: listed.map(({ path, lang }) => ({ path, title: titleOf(text(path), path), html: render(path), ...(lang ? { lang } : {}) })),
     images: [...new Set([...images.values()].map((i) => i.name))],
   };
 }
