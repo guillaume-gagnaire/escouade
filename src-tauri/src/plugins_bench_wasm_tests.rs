@@ -19,6 +19,25 @@ fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
 }
 
+/// The file `build` writes for plugins/<dir>: its id and the version its manifest says.
+fn module_name(dir: &str) -> String {
+    let m: Value = serde_json::from_str(
+        &std::fs::read_to_string(
+            root()
+                .join("plugins")
+                .join(dir)
+                .join("escouade-plugin.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    format!(
+        "{}-{}.wasm",
+        m["id"].as_str().unwrap(),
+        m["version"].as_str().unwrap()
+    )
+}
+
 /// Where the tests keep the pinned Javy and the modules (as plugins_wasm_tests.rs).
 fn shared_data() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("target/wasm-tests")
@@ -107,10 +126,10 @@ fn build_writes_the_same_module_twice_and_its_sha256() {
             0
         );
     }
-    let name = "dev.escouade.team-rules-2.0.0.wasm";
+    let name = module_name("team-rules");
     let (a, b) = (
-        std::fs::read(one.join(name)).unwrap(),
-        std::fs::read(two.join(name)).unwrap(),
+        std::fs::read(one.join(&name)).unwrap(),
+        std::fs::read(two.join(&name)).unwrap(),
     );
     assert!(a.starts_with(b"\0asm"));
     assert_eq!(a, b);
@@ -153,8 +172,7 @@ fn build_gives_the_modules_of_the_goldens_on_slack_and_team_rules() {
             cli::main(args(&["build", &d, "--first-party", "--out", &o])),
             0
         );
-        let file = format!("dev.escouade.{name}-2.0.0.wasm");
-        let module = std::fs::read(out.join(name).join(file)).unwrap();
+        let module = std::fs::read(out.join(name).join(module_name(name))).unwrap();
         assert_eq!(goldens["plugins"][name]["module"], wasm::sha256(&module));
     }
 }
