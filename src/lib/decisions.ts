@@ -20,8 +20,11 @@ export const refLabel = (r: DecisionRef) => (typeof r === 'number' ? decisionNo(
 /** A decision as it is shown: its number, else its id. */
 export const decisionLabel = (d: DocsDecision) => refLabel(decisionRef(d));
 
-/** A key that tells a decision apart in the register (a number and an id never meet: an id is never digits alone). */
-export const decisionKey = (d: DocsDecision) => String(decisionRef(d));
+/**
+ * A key that tells a decision apart in the register: its number and its id, else its id (a proposal). Never the number
+ * alone: two validations at once could give one twice before ESC-377, and the register shows both (an id has no colon).
+ */
+export const decisionKey = (d: DocsDecision) => (d.number == null ? d.id : `${d.number}:${d.id}`);
 
 /** Whether `r` cites `d`: its number, or its id. */
 export const cites = (r: DecisionRef, d: DocsDecision) => (typeof r === 'number' ? d.number === r : d.id === r);

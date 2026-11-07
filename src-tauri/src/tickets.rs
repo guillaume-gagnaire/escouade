@@ -2956,7 +2956,10 @@ impl<R: Runtime> Core<R> {
     /// The approval `approve_begin` started: its validation, a failed step blocking the ticket,
     /// then what may start starts.
     async fn approve_run(self: &Arc<Self>, id: &str, t: Ticket) {
-        if let Err(e) = self.validate(&t).await {
+        let validated = self.validate(&t).await;
+        // The decision numbers it gave are on the target now, or free again (ESC-377).
+        self.docs_numbers_release(&t.project_id, &t.key).await;
+        if let Err(e) = validated {
             log::warn!("ticket {}: validation failed: {e:#}", t.key);
             let reason = error_line(&e);
             // One that left "À tester" meanwhile (back with its agent, or to do, maybe started

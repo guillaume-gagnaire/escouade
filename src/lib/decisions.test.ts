@@ -60,7 +60,8 @@ describe('the register of the decisions', () => {
     expect(decisionRef(list[2])).toBe(13);
     expect([decisionLabel(tarif), decisionLabel(list[0])]).toEqual(['tarif-famille', '004']);
     expect([refLabel(7), refLabel('relances')]).toEqual(['007', 'relances']);
-    expect(decisionKey(list[0])).toBe('4');
+    // Its number and its id: two validations at once could give one number twice (ESC-377).
+    expect([decisionKey(list[0]), decisionKey(tarif)]).toEqual(['4:decision-4', 'tarif-famille']);
     expect(cites('tarif-famille', tarif) && cites(13, list[2]) && !cites(4, tarif)).toBe(true);
     expect(filterDecisions(list, 'all').map(decisionRef)).toEqual(['tarif-famille', 'relances', 13, 4]);
     // A proposal is replaced by nothing.

@@ -950,6 +950,10 @@ pub struct Core<R: Runtime = Wry> {
     /// What each project's docs have to share, as last told to the window, and the conflict a
     /// « Partager » stopped on (`docsshare`).
     pub(crate) docs_shares: Mutex<HashMap<String, crate::docsshare::Memo>>,
+    /// The decision numbers given by the validations under way, per project, each with the key of
+    /// its ticket (ESC-377): held from the reading of the registers to the end of the validation,
+    /// so that two at once never give the same number before either is merged.
+    pub(crate) decision_numbers: Mutex<HashMap<String, crate::docsbranch::Given>>,
     /// One validation's merge at a time per repository (`merge_lock`).
     pub(crate) merge_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     /// One change of the Claude accounts' settings at a time (the accounts' tab, the window's
@@ -2017,6 +2021,7 @@ impl<R: Runtime> Core<R> {
             switch_told: Mutex::default(),
             ports_reserved: Mutex::default(),
             docs_shares: Mutex::default(),
+            decision_numbers: Mutex::default(),
             merge_locks: Mutex::default(),
             claude_accounts_lock: Mutex::default(),
             accounts: RwLock::new(accounts),

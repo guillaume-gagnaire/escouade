@@ -114,6 +114,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - Fable’s quota bar is named “Fable 7d”, like the other windows, by its length.
 - An agent saved on a harness this version doesn’t have (a later version’s, or a removed plugin’s) is read and kept with its conversation, marked “harness missing”; it doesn’t start, and no agent is created on that harness.
 - The install window of a plugin with no program no longer says Escouade does not filter its network: its webhooks go to the declared host only. It also says what sets off each webhook, and names the store once.
+- Two tickets approved at the same moment no longer get the same decision number. A duplicate already there no longer crashes the Decisions view: it shows both.
 
 ## [2.1.4] — 2026-11-07
 

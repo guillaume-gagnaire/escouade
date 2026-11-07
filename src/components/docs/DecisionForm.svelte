@@ -1,7 +1,7 @@
 <script lang="ts">
   import Modal from '../modals/Modal.svelte';
   import { t } from '../../lib/i18n';
-  import { decisionLabel, decisionNo } from '../../lib/decisions';
+  import { decisionKey, decisionLabel, decisionNo } from '../../lib/decisions';
   import { docsStore } from '../../lib/docs.svelte';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
@@ -93,7 +93,7 @@
         ><span>{t('docs.decisions.form.replaces')}</span>
         <select class="field input" bind:value={replacing}>
           <option value="">{t('docs.decisions.form.replacesNone')}</option>
-          {#each accepted as d (d.number)}
+          {#each accepted as d (decisionKey(d))}
             <option value={String(d.number)}>{decisionNo(d.number)} · {d.title}</option>
           {/each}
         </select></label

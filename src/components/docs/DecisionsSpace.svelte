@@ -12,6 +12,7 @@
     decisionLabel,
     decisionNo,
     decisionOrigin,
+    decisionRef,
     filterDecisions,
     replacementsOf,
     type DecisionFilter,
@@ -65,7 +66,8 @@
   /** Shows a decision named from another one (« Remplace », « Remplacée par »), the filter let go if it hides it. */
   function show(n: number) {
     if (!rows.some((d) => d.number === n)) filter = 'all';
-    chosen = String(n);
+    const d = all.find((x) => x.number === n);
+    if (d) chosen = decisionKey(d);
   }
   function headOf(d: DocsDecision): string {
     if (d.number == null) return t('docs.decisions.head.proposedId', { id: d.id, when: decisionDayWords(d.date, app.now) });
@@ -149,7 +151,7 @@
               {@const key = decisionKey(d)}
               <tr
                 class:on={shown != null && decisionKey(shown) === key}
-                data-decision={key}
+                data-decision={decisionRef(d)}
                 data-state={d.state}
                 onclick={() => (chosen = key)}
               >
