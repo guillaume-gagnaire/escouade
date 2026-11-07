@@ -1,9 +1,9 @@
 ---
-number: null
+number: 115
 id: "les-validations-d-un-projet-numerotent-l"
 title: "Les validations d'un projet numérotent leurs décisions l'une après l'autre"
 date: "2026-11-07"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-377"
 pages: ["docs/decisions"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"docs/decisions","added":4,"removed":2}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-07T21:24:36+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

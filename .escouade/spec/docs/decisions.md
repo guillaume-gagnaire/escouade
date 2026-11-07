@@ -3,7 +3,7 @@ title: "Décisions"
 subject: "Docs"
 sources: ["website/content/docs/fr/docs-space.md","docs/FACTORY.md","src-tauri/src/docs.rs","src-tauri/src/docsbranch.rs","src-tauri/src/docsticket.rs","src-tauri/src/mcp/docs.rs","src-tauri/src/tickets.rs","src/lib/decisions.ts","src/lib/i18n/fr/docs.ts"]
 tickets: ["ESC-259","ESC-263","ESC-303","ESC-377"]
-decisions: ["les-validations-d-un-projet-numerotent-l"]
+decisions: [115]
 compared: "2026-10-30T05:29:15+01:00"
 ---
 
