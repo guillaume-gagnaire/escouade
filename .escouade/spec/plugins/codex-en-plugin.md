@@ -1,8 +1,8 @@
 ---
 title: "Codex en plugin"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §4 (INT-10.4)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-225","plugins/codex/README.md"]
-tickets: ["ESC-225","ESC-346","ESC-352"]
+sources: ["docs/PLUGINS.md §4 (INT-10.4)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-225","plugins/codex/README.en.md"]
+tickets: ["ESC-225","ESC-346","ESC-352","ESC-369"]
 decisions: []
 compared: null
 ---

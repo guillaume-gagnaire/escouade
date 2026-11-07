@@ -1,12 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Its page has its documentation, in French and in English: README.fr.md, README.en.md and five pages in docs/.
+
 ## 2.2.1
 
 - A discussion refuses `PowerShell`, `Monitor` and `EnterWorktree`, as it refuses `Bash`, instead of asking on a card.
-
-## Unreleased
-
-- A discussion is refused `PowerShell`, `Monitor` and `EnterWorktree` too, as it is `Bash`.
 
 ## 2.2.0
 

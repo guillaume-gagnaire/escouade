@@ -1,8 +1,8 @@
 ---
 title: "Copilot CLI en plugin"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §4.5, §4.6 (INT-10.3)","docs/TODO-2.2.md, INT-10","Ticket ESC-224","plugins/copilot/README.md","tests/fixtures/engines/copilot-1.0.98.session-events.schema.json"]
-tickets: ["ESC-224","ESC-346","ESC-352","ESC-362"]
+sources: ["docs/PLUGINS.md §4.5, §4.6 (INT-10.3)","docs/TODO-2.2.md, INT-10","Ticket ESC-224","plugins/copilot/README.en.md","tests/fixtures/engines/copilot-1.0.98.session-events.schema.json"]
+tickets: ["ESC-224","ESC-346","ESC-352","ESC-362","ESC-369"]
 decisions: []
 compared: null
 ---

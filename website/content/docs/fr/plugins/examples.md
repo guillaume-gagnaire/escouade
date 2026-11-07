@@ -511,6 +511,6 @@ Un harness sans code : Goose, l’agent open source de Block, décrit par ACP. L
       }
     ]
   },
-  "store": { "categories": ["harness"] }
+  "store": { "categories": ["harness"], "docs": "docs" }
 }
 ```

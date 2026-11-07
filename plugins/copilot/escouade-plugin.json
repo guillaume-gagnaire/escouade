@@ -56,5 +56,5 @@
       }
     ]
   },
-  "store": { "categories": ["harness"] }
+  "store": { "categories": ["harness"], "docs": "docs" }
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Its page has its documentation, in French and in English: README.fr.md, README.en.md and five pages in docs/.
+
 ## 2.2.1
 
 - Its fence and read-only, given again by Escouade, survive a restart of the plugin (a change of language or network).

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Its page has its documentation, in French and in English: README.fr.md, README.en.md and five pages in docs/.
+
 ## 2.2.0
 
 - Its « Vue Antigravity » is read by the module (`view/translate`): the core no longer links this crate.

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Its page has its documentation, in French and in English: README.fr.md, README.en.md and five pages in docs/.
+
 ## 2.2.1
 
 - `git add` and `git commit` are accepted at once only in their plain forms: a redirection, `-F`, a second option go to a card.

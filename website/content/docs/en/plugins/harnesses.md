@@ -77,7 +77,7 @@ The Goose plugin (`plugins/goose/` of Escouade’s repository), tried with Goose
       }
     ]
   },
-  "store": { "categories": ["harness"] }
+  "store": { "categories": ["harness"], "docs": "docs" }
 }
 ```
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Its page has its documentation, in French and in English: README.fr.md, README.en.md and five pages in docs/.
+
 ## 2.2.1
 
 - The text of a command is read as its shell reads it, never as an argv: `git add .; node evil.js` goes to a card.

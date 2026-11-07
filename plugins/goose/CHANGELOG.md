@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Its page has its documentation, in French and in English: README.fr.md, README.en.md and five pages in docs/.
+
 ## 1.0.0 (2026-11-01)
 
 - Goose as a harness of Escouade, described over ACP without code (`goose acp`), served by the ACP plugin the app

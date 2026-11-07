@@ -31,5 +31,5 @@
     "memoryBytes": 268435456,
     "turnSeconds": 10
   },
-  "store": { "categories": ["harness"] }
+  "store": { "categories": ["harness"], "docs": "docs" }
 }
