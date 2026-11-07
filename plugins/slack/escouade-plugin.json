@@ -20,5 +20,6 @@
   },
   "contributes": {
     "secrets": [{ "key": "token", "title": { "fr": "Jeton du bot Slack (xoxb-…)", "en": "Slack bot token (xoxb-…)" } }]
-  }
+  },
+  "store": { "docs": "docs" }
 }

@@ -13,5 +13,6 @@
   "escouade": { "api": "1", "min": "2.2.0" },
   "run": { "js": "dist/plugin.mjs" },
   "activation": ["event:request.permission"],
-  "permissions": { "decide": true }
+  "permissions": { "decide": true },
+  "store": { "docs": "docs" }
 }

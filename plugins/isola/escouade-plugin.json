@@ -25,5 +25,5 @@
       }
     ]
   },
-  "store": { "categories": ["tools"] }
+  "store": { "categories": ["tools"], "docs": "docs" }
 }

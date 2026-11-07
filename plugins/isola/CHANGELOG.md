@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Its page has its documentation in French and in English: README.fr.md, README.en.md and the pages of docs/fr and docs/en (`store.docs`).
+
 ## 2.2.0
 
 - A WASM module (`run.wasm`), run in Escouade's host: no process of its own any more. The host runs `isola ls --json`,

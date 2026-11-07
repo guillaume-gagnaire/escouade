@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Its page has its documentation in French and in English: README.fr.md, README.en.md and the pages of docs/fr and docs/en (`store.docs`).
+
 ## 1.1.0 (2026-10-31)
 
 - A plugin of Escouade's own hand: its id is `dev.escouade.high-contrast` (it was `dev.exemple.high-contrast`), and it lives in `plugins/high-contrast/` of
