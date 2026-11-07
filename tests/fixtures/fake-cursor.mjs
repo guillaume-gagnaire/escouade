@@ -222,7 +222,7 @@ async function escouadeTool(entry, tool) {
     const text = await r.text();
     if (!r.ok) throw new Error(`${r.status}`);
     if (id === undefined) return null;
-    const answers = text.includes('data:')
+    const answers = /^data:/m.test(text)
       ? text
           .split('\n')
           .filter((l) => l.startsWith('data:'))
