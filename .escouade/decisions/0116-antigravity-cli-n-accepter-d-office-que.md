@@ -1,9 +1,9 @@
 ---
-number: null
+number: 116
 id: "antigravity-cli-n-accepter-d-office-que"
 title: "Antigravity CLI : n'accepter d'office que ce qui tient si agy lit une règle comme un début de texte"
 date: "2026-11-07"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-376"
 pages: ["plugins/antigravity-en-plugin"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/antigravity-en-plugin","added":14,"removed":13}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-07T21:32:53+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
