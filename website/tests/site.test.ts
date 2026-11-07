@@ -510,7 +510,10 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
     const start = html.indexOf(`id="${text.anchors.roadmap}"`);
     const roadmap = start < 0 ? '' : html.slice(start, html.indexOf('</section>', start));
     for (const part of [header, footer, roadmap]) {
-      expect(tags(part, 'a').some((a) => a.href === STORE[lang]), part.slice(0, 80)).toBe(true);
+      expect(
+        tags(part, 'a').some((a) => a.href === STORE[lang]),
+        part.slice(0, 80),
+      ).toBe(true);
     }
     for (const part of [header, footer]) expect(part).toContain(`>${escapeText(text.header.plugins)}</a>`);
   });
