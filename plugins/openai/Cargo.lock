@@ -160,7 +160,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-openai"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "escouade-voice",
  "serde_json",

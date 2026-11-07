@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.1
+
+- A discussion refuses `PowerShell`, `Monitor` and `EnterWorktree`, as it refuses `Bash`, instead of asking on a card.
+
 ## Unreleased
 
 - A discussion is refused `PowerShell`, `Monitor` and `EnterWorktree` too, as it is `Bash`.

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.2.1
 
 - `git add` and `git commit` are accepted at once only in their plain forms: a redirection, `-F`, a second option go to a card.
 - An edit of `.git`, `.opencode`, `opencode.json`, `.husky` or `.githooks` goes to a card, for a subagent too.

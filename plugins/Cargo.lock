@@ -200,7 +200,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-azure-devops"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
@@ -211,7 +211,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-bitbucket"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
@@ -222,7 +222,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-claude"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "escouade-plugin-protocol",
  "serde",
@@ -231,7 +231,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-clickup"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
@@ -269,7 +269,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-deepgram"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "escouade-voice",
  "serde_json",
@@ -277,7 +277,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-elevenlabs"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "escouade-voice",
  "serde_json",
@@ -303,7 +303,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-github"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
@@ -314,7 +314,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-gitlab"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
@@ -325,7 +325,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-groq"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "escouade-voice",
  "serde_json",
@@ -343,7 +343,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-jira"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -369,7 +369,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-linear"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
@@ -388,7 +388,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-openai"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "escouade-voice",
  "serde_json",
@@ -396,7 +396,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-opencode"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -418,7 +418,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-trello"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.1
+
+- Reads answers of up to 8 MiB, within 15 s, as the code hosts do: a large board no longer stops at 1 MiB.
+- Its page says what is true today: a plugin of the store, with its own version, that can be uninstalled.
+
 ## 2.2.0
 
 - A WASM module (`run.wasm`), run in Escouade's host: no process of its own any more. It answers as it did. It has its own version, is
