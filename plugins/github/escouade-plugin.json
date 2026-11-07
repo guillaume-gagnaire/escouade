@@ -36,5 +36,5 @@
     "ticketSources": [{ "id": "github", "name": "GitHub Issues", "account": "github" }],
     "forges": [{ "id": "github", "name": "GitHub", "account": "github" }]
   },
-  "store": { "categories": ["ticket-sources", "forges"] }
+  "store": { "categories": ["ticket-sources", "forges"], "docs": "docs" }
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Its page has its documentation, in French and in English: install, use, permissions, troubleshooting and develop.
+
 ## 2.2.1
 
 - A next page outside the API is not followed: the token stays on it.

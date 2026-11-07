@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Its page has its documentation, in French and in English: install, use, permissions, troubleshooting and develop.
+
 ## 2.2.1
 
 - Its page speaks of its module, not of a process.

@@ -35,5 +35,5 @@
     "ticketSources": [{ "id": "azure", "name": "Azure Boards", "account": "azure" }],
     "forges": [{ "id": "azure", "name": "Azure DevOps", "account": "azure" }]
   },
-  "store": { "categories": ["ticket-sources", "forges"] }
+  "store": { "categories": ["ticket-sources", "forges"], "docs": "docs" }
 }

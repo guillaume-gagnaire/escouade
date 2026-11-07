@@ -42,5 +42,5 @@
     ],
     "ticketSources": [{ "id": "trello", "name": "Trello", "account": "trello" }]
   },
-  "store": { "categories": ["ticket-sources"] }
+  "store": { "categories": ["ticket-sources"], "docs": "docs" }
 }

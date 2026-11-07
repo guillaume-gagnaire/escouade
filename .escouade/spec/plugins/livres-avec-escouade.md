@@ -1,9 +1,9 @@
 ---
 title: "Les plugins livrés avec Escouade"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §4.3, §4.4","docs/TODO-2.2.md (INT-4, INT-8.1)","src-tauri/src/plugins/builtin.rs","docs/PLUGINS.md §4.13","plugins/github/README.md","plugins/gitlab/README.md","plugins/gitea/README.md","plugins/azure-devops/README.md","docs/PLUGINS.md §8.7, §8.13","src-tauri/src/plugins/seed.rs"]
-tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338","ESC-339","ESC-344","ESC-351","ESC-349","ESC-348","ESC-345","ESC-350","ESC-370"]
-decisions: [80,92]
+sources: ["docs/PLUGINS.md §4.3, §4.4","docs/TODO-2.2.md (INT-4, INT-8.1)","src-tauri/src/plugins/builtin.rs","docs/PLUGINS.md §4.13","plugins/github/README.fr.md","plugins/gitlab/README.fr.md","plugins/gitea/README.fr.md","plugins/azure-devops/README.fr.md","docs/PLUGINS.md §8.7, §8.13","src-tauri/src/plugins/seed.rs","src-tauri/src/plugins_builtin_tests.rs"]
+tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338","ESC-339","ESC-344","ESC-351","ESC-349","ESC-348","ESC-345","ESC-350","ESC-367","ESC-370"]
+decisions: [80,92,110]
 compared: null
 ---
 
@@ -107,4 +107,4 @@ OpenAI, Groq, Mistral, ElevenLabs et Deepgram sont sortis d'`escouade-plugins` :
 
 ## La documentation d'un plugin de première main (ESC-370)
 
-Le README d'un dossier de `plugins/` peut être un par langue : `README.fr.md` et `README.en.md` à la place de `README.md`, comme le store les prend. Le test du registre accepte l'un ou l'autre (les deux langues, non vides, sinon `README.md`). La documentation du plugin est dans `docs/fr/` et `docs/en/`, les mêmes pages dans les deux langues, nommées pour leur ordre (`01-installer.md` / `01-install.md`…), et le manifeste la déclare : `"store": { "docs": "docs" }`. isola, Discord, Slack, Contraste élevé et Règles de l'équipe ont cette forme.
+Le README d'un dossier de `plugins/` peut être un par langue : `README.fr.md` et `README.en.md` à la place de `README.md`, comme le store les prend. Le test du registre accepte l'un ou l'autre (les deux langues, non vides, sinon `README.md`). La documentation du plugin est dans `docs/fr/` et `docs/en/`, les mêmes pages dans les deux langues, nommées pour leur ordre (`01-installer.md` / `01-install.md`…), et le manifeste la déclare : `"store": { "docs": "docs" }`. isola, Discord, Slack, Contraste élevé et Règles de l'équipe ont cette forme, comme Trello, ClickUp, Linear, Jira, GitHub, GitLab, Bitbucket, Gitea / Forgejo et Azure DevOps (ESC-367).

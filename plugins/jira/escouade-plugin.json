@@ -45,5 +45,5 @@
     ],
     "ticketSources": [{ "id": "jira", "name": "Jira", "account": "jira" }]
   },
-  "store": { "categories": ["ticket-sources"] }
+  "store": { "categories": ["ticket-sources"], "docs": "docs" }
 }

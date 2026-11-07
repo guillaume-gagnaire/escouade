@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Its page has its documentation, in French and in English: install, use, permissions, troubleshooting and develop.
+
 ## 2.2.1
 
 - Reads answers of up to 8 MiB, within 15 s, as the code hosts do: a large board no longer stops at 1 MiB.

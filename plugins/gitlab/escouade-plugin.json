@@ -36,5 +36,5 @@
     "ticketSources": [{ "id": "gitlab", "name": "GitLab Issues", "account": "gitlab" }],
     "forges": [{ "id": "gitlab", "name": "GitLab", "account": "gitlab" }]
   },
-  "store": { "categories": ["ticket-sources", "forges"] }
+  "store": { "categories": ["ticket-sources", "forges"], "docs": "docs" }
 }
