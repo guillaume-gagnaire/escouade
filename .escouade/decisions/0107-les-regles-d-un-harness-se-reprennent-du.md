@@ -1,9 +1,9 @@
 ---
-number: null
+number: 107
 id: "les-regles-d-un-harness-se-reprennent-du"
 title: "Les règles d'un harness se reprennent du cœur et lisent ce que le harness donne vraiment"
 date: "2026-11-07"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-362"
 pages: ["plugins/copilot-cli-en-plugin","plugins/harness-en-process","plugins/harness-acp-decrits"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/copilot-cli-en-plugin","added":7,"removed":2},{"page":"plugins/harness-en-process","added":6,"removed":0},{"page":"plugins/harness-acp-decrits","added":4,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-07T07:23:46+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
