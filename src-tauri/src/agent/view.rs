@@ -20,6 +20,8 @@ pub(crate) struct ViewState {
     generation: u64,
     /// The turn of its harness under way, as the plugin told it (`Item::ViewTurn`).
     pub(super) turn: Option<String>,
+    /// The last turn its plugin told, over or not: a hook told late is not a new turn.
+    pub(super) last_turn: Option<String>,
     /// Why the plugin did not read it, said once.
     told: bool,
     /// Its lines go by unread until then.
@@ -33,6 +35,7 @@ impl AgentRt {
     /// Another conversation (or another interface): what its plugin kept of the last one goes with its key.
     pub(super) fn view_reset(&mut self) {
         self.view.turn = None;
+        self.view.last_turn = None;
         self.view.told = false;
         self.view.paused = None;
         self.tui_asked = None;
@@ -300,7 +303,12 @@ impl AgentRt {
                     self.set_status(AgentStatus::Running, fx);
                 }
             }
-            Item::ViewTurn { id } => self.view.turn = id,
+            Item::ViewTurn { id } => {
+                if id.is_some() {
+                    self.view.last_turn.clone_from(&id);
+                }
+                self.view.turn = id;
+            }
             Item::ViewEnd {
                 interrupted,
                 duration,

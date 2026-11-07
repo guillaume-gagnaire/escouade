@@ -47,7 +47,11 @@ impl AgentRt {
         }
         match h["hook_event_name"].as_str().unwrap_or_default() {
             "UserPromptSubmit" => {
-                if !self.meta.status.is_active() {
+                // Told once the file had told that turn's end (the hook waited for the agent, under load): over already.
+                let over = self.view.turn.is_none()
+                    && h["turn_id"].as_str().is_some()
+                    && h["turn_id"].as_str() == self.view.last_turn.as_deref();
+                if !over && !self.meta.status.is_active() {
                     self.set_status(AgentStatus::Running, fx);
                 }
             }
@@ -305,6 +309,28 @@ mod tests {
         let stopped = a.tui_turn_mark();
         a.end_stopped_tui_turn(&stopped, &mut fx);
         assert!(matches!(fx.turn_end, Some(TurnEnd::Finished(_))));
+    }
+
+    #[test]
+    fn a_hook_told_late_does_not_start_again_a_turn_its_file_ended() {
+        let mut a = agent(Some("s1"));
+        let mut fx = Effects::default();
+        let ev = |payload: Value| json!({ "type": "event_msg", "payload": payload });
+        let submit = |turn: &str| json!({ "hook_event_name": "UserPromptSubmit", "session_id": "s1", "turn_id": turn });
+        a.codex_rollout(
+            &ev(json!({ "type": "task_started", "turn_id": "t1" })),
+            &mut fx,
+        );
+        a.codex_rollout(
+            &ev(json!({ "type": "task_complete", "turn_id": "t1", "duration_ms": 5 })),
+            &mut fx,
+        );
+        assert_eq!(a.meta.status, AgentStatus::Done);
+        a.codex_hook(&submit("t1"), &mut fx);
+        assert_eq!(a.meta.status, AgentStatus::Done, "that turn is over");
+        // The next turn's, told before the file tells it: a turn starts.
+        a.codex_hook(&submit("t2"), &mut fx);
+        assert_eq!(a.meta.status, AgentStatus::Running);
     }
 
     #[test]
