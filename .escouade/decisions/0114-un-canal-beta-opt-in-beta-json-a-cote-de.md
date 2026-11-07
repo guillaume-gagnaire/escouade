@@ -1,5 +1,5 @@
 ---
-number: 113
+number: 114
 id: "un-canal-beta-opt-in-beta-json-a-cote-de"
 title: "Un canal bêta opt-in : beta.json à côté de latest.json, les bêtas ignorées par défaut"
 date: "2026-11-07"
