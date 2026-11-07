@@ -210,12 +210,23 @@ fn every_folder_of_the_app_s_plugins_has_what_it_needs_and_is_in_the_registry() 
         let name = dir.display();
         let text = std::fs::read_to_string(dir.join(manifest::FILE))
             .unwrap_or_else(|_| panic!("{name}: no {}", manifest::FILE));
-        let readme = std::fs::read_to_string(dir.join("README.md"))
-            .unwrap_or_else(|_| panic!("{name}: no README.md"));
-        assert!(
-            readme.lines().count() > 5,
-            "{name}: a README that says something"
-        );
+        // Its page: README.md, or one by language (README.fr.md and README.en.md), as the store takes them.
+        let pages: Vec<String> = match std::fs::read_to_string(dir.join("README.md")) {
+            Ok(one) => vec![one],
+            Err(_) => ["README.fr.md", "README.en.md"]
+                .iter()
+                .map(|f| {
+                    std::fs::read_to_string(dir.join(f))
+                        .unwrap_or_else(|_| panic!("{name}: no README.md, nor {f}"))
+                })
+                .collect(),
+        };
+        for readme in &pages {
+            assert!(
+                readme.lines().count() > 5,
+                "{name}: a README that says something"
+            );
+        }
         let m = manifest::read(&text, Hand::Builtin)
             .manifest
             .unwrap_or_else(|p| panic!("{name}: {p:?}"));

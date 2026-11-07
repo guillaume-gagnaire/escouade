@@ -23,5 +23,5 @@
   "permissions": {
     "network": ["api.elevenlabs.io"]
   },
-  "store": { "categories": ["tools"] }
+  "store": { "categories": ["tools"], "docs": "docs" }
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Its page has its documentation, in French and in English: install, use, permissions, troubleshooting, develop.
+
 ## 2.2.1
 
 - Its page says what is true today: a plugin of the store, with its own version, that can be uninstalled.

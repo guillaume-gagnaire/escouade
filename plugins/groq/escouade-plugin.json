@@ -23,5 +23,5 @@
   "permissions": {
     "network": ["api.groq.com"]
   },
-  "store": { "categories": ["tools"] }
+  "store": { "categories": ["tools"], "docs": "docs" }
 }

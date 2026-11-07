@@ -23,5 +23,5 @@
   "permissions": {
     "network": ["api.openai.com"]
   },
-  "store": { "categories": ["tools"] }
+  "store": { "categories": ["tools"], "docs": "docs" }
 }

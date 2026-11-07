@@ -23,6 +23,7 @@
   "permissions": {
     "network": ["api.mistral.ai"]
   },
+  "store": { "docs": "docs" },
   "contributes": {
     "accounts": [
       {
