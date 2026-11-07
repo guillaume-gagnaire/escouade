@@ -4,9 +4,7 @@
       "method": "initialize",
       "result": {
         "capabilities": {
-          "harnesses": [
-            "agy"
-          ]
+          "harnesses": ["agy"]
         },
         "protocolVersion": 1
       }
@@ -96,9 +94,7 @@
       "method": "initialize",
       "result": {
         "capabilities": {
-          "harnesses": [
-            "agy"
-          ]
+          "harnesses": ["agy"]
         },
         "protocolVersion": 1
       }
@@ -230,9 +226,7 @@
       "method": "initialize",
       "result": {
         "capabilities": {
-          "harnesses": [
-            "agy"
-          ]
+          "harnesses": ["agy"]
         },
         "protocolVersion": 1
       }
@@ -337,9 +331,7 @@
       "method": "initialize",
       "result": {
         "capabilities": {
-          "harnesses": [
-            "agy"
-          ]
+          "harnesses": ["agy"]
         },
         "protocolVersion": 1
       }
@@ -505,9 +497,7 @@
       "method": "initialize",
       "result": {
         "capabilities": {
-          "harnesses": [
-            "agy"
-          ]
+          "harnesses": ["agy"]
         },
         "protocolVersion": 1
       }
@@ -682,9 +672,7 @@
       "method": "initialize",
       "result": {
         "capabilities": {
-          "harnesses": [
-            "agy"
-          ]
+          "harnesses": ["agy"]
         },
         "protocolVersion": 1
       }
@@ -789,9 +777,7 @@
       "method": "initialize",
       "result": {
         "capabilities": {
-          "harnesses": [
-            "agy"
-          ]
+          "harnesses": ["agy"]
         },
         "protocolVersion": 1
       }
@@ -952,9 +938,7 @@
       "method": "initialize",
       "result": {
         "capabilities": {
-          "harnesses": [
-            "agy"
-          ]
+          "harnesses": ["agy"]
         },
         "protocolVersion": 1
       }
@@ -1156,9 +1140,7 @@
       "method": "initialize",
       "result": {
         "capabilities": {
-          "harnesses": [
-            "agy"
-          ]
+          "harnesses": ["agy"]
         },
         "protocolVersion": 1
       }
@@ -1302,9 +1284,7 @@
       "method": "initialize",
       "result": {
         "capabilities": {
-          "harnesses": [
-            "agy"
-          ]
+          "harnesses": ["agy"]
         },
         "protocolVersion": 1
       }
@@ -1440,9 +1420,7 @@
       "method": "initialize",
       "result": {
         "capabilities": {
-          "harnesses": [
-            "agy"
-          ]
+          "harnesses": ["agy"]
         },
         "protocolVersion": 1
       }
@@ -1678,9 +1656,7 @@
       "method": "initialize",
       "result": {
         "capabilities": {
-          "harnesses": [
-            "agy"
-          ]
+          "harnesses": ["agy"]
         },
         "protocolVersion": 1
       }
@@ -2084,9 +2060,7 @@
       "method": "initialize",
       "result": {
         "capabilities": {
-          "harnesses": [
-            "agy"
-          ]
+          "harnesses": ["agy"]
         },
         "protocolVersion": 1
       }
