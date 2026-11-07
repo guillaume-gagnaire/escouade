@@ -188,12 +188,14 @@ describe('the home page and Escouade’s own', () => {
       const m = JSON.parse(readFileSync(join(root, d, 'escouade-plugin.json'), 'utf8'));
       if (published.includes(d)) continue;
       // A module that reads its manifest embeds it: a key added there changes its fingerprint (docs/PLUGINS.md §8.29).
+      // Its first version kept the tool's categories; a later one may carry a `store` key (its pages, ESC-366), as
+      // it has a new fingerprint anyway.
       const code = existsSync(join(root, d, 'src/lib.rs'))
         ? readFileSync(join(root, d, 'src/lib.rs'), 'utf8').split('#[cfg(test)]')[0]!
         : '';
       const embeds = /\(MANIFEST\)/.test(code);
-      expect(m.store, d).toEqual(embeds ? undefined : expect.anything());
-      const categories: string[] = embeds ? EMBEDDED_CATEGORIES[m.id]! : m.store.categories;
+      if (!embeds) expect(m.store, d).toEqual(expect.anything());
+      const categories: string[] = m.store?.categories ?? (embeds ? EMBEDDED_CATEGORIES[m.id]! : []);
       expect(categories?.length, d).toBeGreaterThan(0);
       for (const c of categories) expect(CATEGORIES, d).toContain(c);
     }
