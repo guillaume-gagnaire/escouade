@@ -13,6 +13,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- Les plugins d'Escouade sont dans l'installeur : à la première ouverture, même sans réseau, Escouade installe ceux que ta configuration utilise, et la vue Plugins propose les autres, installables d'un clic sans téléchargement.
 - Sur store.escouade.dev, la documentation d'un plugin peut avoir ses pages en français et en anglais : chacun lit celles de sa langue, sinon celles de l'autre, et un lien d'une page à l'autre reste sur le store.
 - Un plugin ne garde plus ce qu’Escouade lui a prêté : l’hôte d’un essai de connexion raté se referme aussitôt, et un compte retiré reprend son hôte et son jeton. Une adresse qui se fait passer pour locale, comme `http://localhost:1@exemple.dev`, est refusée dès le formulaire.
 - La documentation a une page sur les hébergeurs de code : ce qu'Escouade fait chez GitHub, GitLab, Bitbucket, Gitea, Forgejo et Azure DevOps, ses limites, et ce qui a vraiment été essayé. La page Confidentialité dit que tes jetons restent chez toi et que rien ne passe par un serveur d'Escouade.

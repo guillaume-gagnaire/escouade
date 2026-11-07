@@ -1726,8 +1726,14 @@ impl Plugins {
                 }
                 _ => continue,
             }
+            let asked = std::time::Instant::now();
             match self.install_seed(e, lang) {
-                Ok(v) => log::info!("plugin {} v{}: installed from the seed", v.id, v.version),
+                Ok(v) => log::info!(
+                    "plugin {} v{}: installed from the seed in {} ms",
+                    v.id,
+                    v.version,
+                    asked.elapsed().as_millis()
+                ),
                 Err(r) => {
                     log::warn!("plugin {}: the seed's v{} refused: {r}", e.id, e.version);
                     self.seed_refused.write().insert(e.id.clone(), r.message);

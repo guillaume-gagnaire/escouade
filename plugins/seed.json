@@ -1,4 +1,135 @@
 {
   "format": 1,
-  "plugins": []
+  "plugins": [
+    {
+      "id": "dev.escouade.acp",
+      "version": "2.2.2",
+      "sha256": "bfeb8f00390fe98b7ed32d5cd95d70e3782e06705acf744d8bcdd0dc735943d0"
+    },
+    {
+      "id": "dev.escouade.azure-devops",
+      "version": "2.2.2",
+      "sha256": "0c58b47d87a4d2f438055db60ed55c9bfa08fe8f0d01d690885eca298e264d58"
+    },
+    {
+      "id": "dev.escouade.bitbucket",
+      "version": "2.2.2",
+      "sha256": "9325c3326bd9249bbd6c9c3d2a2a89b7ed7e29da95d176d939acc82e9d261613"
+    },
+    {
+      "id": "dev.escouade.claude-code",
+      "version": "2.2.2",
+      "sha256": "210a742c27666dbbaf27c6f68b7dd7a2f350c264919e8dad073b03e29bdf4235"
+    },
+    {
+      "id": "dev.escouade.clickup",
+      "version": "2.2.2",
+      "sha256": "5bb00e2307bdb13d4316a059757038f2a3030104a7838fef8032d950ea875af5"
+    },
+    {
+      "id": "dev.escouade.codex",
+      "version": "2.2.2",
+      "sha256": "809bd52b8d57f0d27012048f6c2632e7e9fbcf78bbbf5afc23d716bae61a4140"
+    },
+    {
+      "id": "dev.escouade.copilot-cli",
+      "version": "2.2.2",
+      "sha256": "f3ca9a1e2db1d1dedf6dbea970b7081e13b17a888bca47d783e6256234893dc2"
+    },
+    {
+      "id": "dev.escouade.cursor-cli",
+      "version": "2.2.2",
+      "sha256": "918bbe5c32808ce9fcbc9f2e736411ae62e8366ddb5e47745defeeae2db39ea7"
+    },
+    {
+      "id": "dev.escouade.deepgram",
+      "version": "2.2.2",
+      "sha256": "2e83bce08d4157b6153694fd5524fd45b2b18bce3d1b30089b457a0d89b52fee"
+    },
+    {
+      "id": "dev.escouade.discord",
+      "version": "1.1.1",
+      "sha256": "756a04c28224820f3b9a904805d4b99c53f2f42adcd040da18bf53bd65c3a3e9"
+    },
+    {
+      "id": "dev.escouade.elevenlabs",
+      "version": "2.2.2",
+      "sha256": "2ef8846b1488c38749f133a834023a5276b1ca57885666151b522432378b4e0b"
+    },
+    {
+      "id": "dev.escouade.gemini-cli",
+      "version": "2.2.2",
+      "sha256": "a6d069b2948dfcec94a297729f80f34be96a73f3f53a39ac50e3bf13ad4f830f"
+    },
+    {
+      "id": "dev.escouade.gitea",
+      "version": "2.2.1",
+      "sha256": "60f975c09720d284f4cc955369cebbfc60d700d559d562bd35f9f2674e976a13"
+    },
+    {
+      "id": "dev.escouade.github",
+      "version": "2.2.2",
+      "sha256": "b106d0408a29f3c779f46e27ace88a2a61c9ce1a0eefb1535d685e3e2089fec0"
+    },
+    {
+      "id": "dev.escouade.gitlab",
+      "version": "2.2.2",
+      "sha256": "dbf78a0d1e72d76a17838328369861681b1f3b732c9d8373a46105b9e6b5116b"
+    },
+    {
+      "id": "dev.escouade.goose",
+      "version": "1.0.1",
+      "sha256": "b481bf37893ab767ddab8925b026a7f4df5f532bb07e2e99542d5f2da83d84b0"
+    },
+    {
+      "id": "dev.escouade.groq",
+      "version": "2.2.2",
+      "sha256": "3aa429593276bb2ef84730ca85b0243d5347fc807bec0034a578aef3ffddb20f"
+    },
+    {
+      "id": "dev.escouade.high-contrast",
+      "version": "1.1.1",
+      "sha256": "b1266a46c237bf49eb051b6b8369053f2b226336216dcde5ac721e619bf89678"
+    },
+    {
+      "id": "dev.escouade.jira",
+      "version": "2.2.2",
+      "sha256": "348c66a2250765acc8ac86285a0e9af0cb115ede0de39b57f814653cdc3146db"
+    },
+    {
+      "id": "dev.escouade.linear",
+      "version": "2.2.2",
+      "sha256": "47322419edb694b0b440880674b139a089f3702c3529a200c2b0fa94cac2f83e"
+    },
+    {
+      "id": "dev.escouade.mistral",
+      "version": "2.2.2",
+      "sha256": "405468a054918968d9ba5d54b1ba4159aab0ff51da6155d86a907edda0f491ce"
+    },
+    {
+      "id": "dev.escouade.openai",
+      "version": "2.2.2",
+      "sha256": "a33de19988112cce41d2e25df3d7702cddb93d5cbad8d02d6c5ead3469626ec2"
+    },
+    {
+      "id": "dev.escouade.opencode",
+      "version": "2.2.2",
+      "sha256": "25346f2dd5d64b32efe1ab79aed5538a0e0372c7738b4a85c2c9b78acd7e2ead"
+    },
+    {
+      "id": "dev.escouade.slack",
+      "version": "2.0.1",
+      "sha256": "4fe3776ce75b86ceb63e35c643d0335aa6b2c108415ded9f03f0936f50fb2272"
+    },
+    {
+      "id": "dev.escouade.team-rules",
+      "version": "2.0.1",
+      "sha256": "f7493718a47e9db447f791898a453626f22f1abf0e5e45c443c8712169f1b008"
+    },
+    {
+      "id": "dev.escouade.trello",
+      "version": "2.2.2",
+      "sha256": "892df2100dd93a74a52d0aa0f47667a98a4e22fb806e1d09a87bbc4081686e3a"
+    }
+  ]
 }

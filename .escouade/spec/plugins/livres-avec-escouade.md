@@ -1,9 +1,9 @@
 ---
 title: "Les plugins livrés avec Escouade"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §4.3, §4.4","docs/TODO-2.2.md (INT-4, INT-8.1)","src-tauri/src/plugins/builtin.rs","docs/PLUGINS.md §4.13","plugins/github/README.fr.md","plugins/gitlab/README.fr.md","plugins/gitea/README.fr.md","plugins/azure-devops/README.fr.md","docs/PLUGINS.md §8.7, §8.13, §8.14","src-tauri/src/plugins/seed.rs","src-tauri/src/plugins/sort.rs","src-tauri/src/plugins_builtin_tests.rs","src-tauri/src/plugins_sort_tests.rs"]
-tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338","ESC-339","ESC-344","ESC-351","ESC-349","ESC-348","ESC-345","ESC-350","ESC-367","ESC-370","ESC-373"]
-decisions: [80,92,110,113]
+sources: ["docs/PLUGINS.md §4.3, §4.4","docs/TODO-2.2.md (INT-4, INT-8.1)","src-tauri/src/plugins/builtin.rs","docs/PLUGINS.md §4.13","plugins/github/README.fr.md","plugins/gitlab/README.fr.md","plugins/gitea/README.fr.md","plugins/azure-devops/README.fr.md","docs/PLUGINS.md §8.7, §8.13, §8.14","src-tauri/src/plugins/seed.rs","src-tauri/src/plugins/sort.rs","src-tauri/src/plugins_builtin_tests.rs","src-tauri/src/plugins_sort_tests.rs","docs/PLUGINS.md §8.32","plugins/seed.json","tests/e2e/real-seed.spec.ts","https://store.escouade.dev/api/v1/catalog.json"]
+tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338","ESC-339","ESC-344","ESC-351","ESC-349","ESC-348","ESC-345","ESC-350","ESC-367","ESC-370","ESC-373","ESC-354"]
+decisions: [80,92,110,113,"l-amorce-de-la-2-2-les-26-plugins-signes"]
 compared: null
 ---
 
@@ -123,3 +123,15 @@ OpenAI, Groq, Mistral, ElevenLabs et Deepgram sont sortis d'`escouade-plugins` :
 ## La documentation d'un plugin de première main (ESC-370)
 
 Le README d'un dossier de `plugins/` peut être un par langue : `README.fr.md` et `README.en.md` à la place de `README.md`, comme le store les prend. Le test du registre accepte l'un ou l'autre (les deux langues, non vides, sinon `README.md`). La documentation du plugin est dans `docs/fr/` et `docs/en/`, les mêmes pages dans les deux langues, nommées pour leur ordre (`01-installer.md` / `01-install.md`…), et le manifeste la déclare : `"store": { "docs": "docs" }`. isola, Discord, Slack, Contraste élevé et Règles de l'équipe ont cette forme, comme Trello, ClickUp, Linear, Jira, GitHub, GitLab, Bitbucket, Gitea / Forgejo et Azure DevOps (ESC-367).
+
+## L'amorce remplie (ESC-354, Z2)
+
+`plugins/seed.json` n'est plus vide : il nomme la dernière version signée au store de **26 plugins de première main** (lue au catalogue du 2026-11-07). Ce que les sections plus haut disent « d'ici Z2 » ne vaut plus pour eux : ils ne sont plus donnés par l'app, mais installés depuis l'amorce, origine `store`, marque `seed`, et ils se désinstallent.
+
+- **Dans l'amorce** : Claude Code, Codex, Copilot CLI, Cursor CLI, Gemini CLI, OpenCode, `dev.escouade.acp`, Trello, Linear, Jira, ClickUp, GitHub, GitLab, Bitbucket, Gitea / Forgejo, Azure DevOps, OpenAI, Groq, Mistral, ElevenLabs, Deepgram, et, hors du registre, **Goose** et ceux **sur demande** (Discord, Slack, Contraste élevé, Règles de l'équipe). `builtin::seeds` accepte donc aussi Goose et ceux sur demande, que le tri connaissait déjà ; la vue les nomme sans leur manifeste.
+- **Pas encore dans l'amorce** : Antigravity CLI (aucune version signée au store) et isola (pas publié). Ils restent donnés par l'app, origine `builtin`, comme avant ; chacun entre dans la liste d'une ligne une fois signé.
+- **Un build de développement** dont le dossier de l'amorce n'a pas les fichiers d'un plugin que la liste nomme (ni `scripts/seed-dev.sh`, ni `seed.ts fetch`) lance ce plugin du registre, comme avant l'amorce. Une release garde l'entrée, et la vue dit ce qui manque.
+- **La release** attend la première liste de révocation du store : sans elle, `seed.ts fetch` s'arrête (« no revocation list could be read »). C'est un geste de l'utilisateur (sa clé). Le reste de l'étape tient contre le vrai store : les 26 signatures, les commentaires, les empreintes et les modules.
+- **Essayé hors ligne** sur une build release : un dossier vierge n'installe rien, et « Ajouter un compte… » sur Claude Code installe son plugin depuis l'amorce en 250 à 270 ms ; une configuration de 2.1 (Claude Code, Codex, Trello) installe ces trois-là au lancement, 130 à 300 ms chacun, et rien d'autre ; le module de Claude Code se précompile à sa première activation en 100 à 120 ms ; un plugin désinstallé n'est pas remis au lancement suivant.
+- **Le poids** : l'amorce fait 17,4 Mo en clair et ajoute 2,5 Mo à l'installeur, contre les 34,5 Mo qu'aurait pesés `escouade-plugins`.
+- Le journal de l'app dit le temps de chaque installation depuis l'amorce et de chaque mise en route d'un module.

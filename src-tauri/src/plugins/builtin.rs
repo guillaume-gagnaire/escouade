@@ -187,9 +187,11 @@ pub const GEMINI: &str = "dev.escouade.gemini-cli";
 /// The plugin « OpenCode »: OpenCode as a harness, on its `opencode serve` (INT-10.2).
 pub const OPENCODE: &str = "dev.escouade.opencode";
 
-/// Whether the seed may hold `id`: a plugin of the registry, less the demonstration, which is no product.
+/// Whether the seed may hold `id`: a plugin of the registry, less the demonstration, which is no product; and the plugins
+/// of the first hand the app never gave, published on the store (ESC-354): Goose, a harness its manifest describes, and
+/// those on request (Discord, Slack, High contrast, Team rules), which the seed proposes and never installs unasked.
 pub fn seeds(id: &str) -> bool {
-    id != "dev.escouade.minimal" && is_builtin(id)
+    (id != "dev.escouade.minimal" && is_builtin(id)) || super::sort::seeds_beyond_the_registry(id)
 }
 
 /// Whether `id` is the id of a plugin the app gives.

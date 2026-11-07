@@ -26,11 +26,18 @@ const ON_REQUEST: &[&str] = &[
     "dev.escouade.team-rules",
 ];
 
+/// Whether `id` is a plugin of the first hand the seed holds though the registry has it not (`builtin::seeds`): Goose and
+/// those on request.
+pub fn seeds_beyond_the_registry(id: &str) -> bool {
+    id == GOOSE || ON_REQUEST.contains(&id)
+}
+
 /// The name of a plugin on request in `lang`, for the view while it is not installed: they are not in the registry, whose
 /// manifests name the others (`builtin::name`).
 pub fn name_on_request(id: &str, lang: crate::i18n::Lang) -> Option<&'static str> {
     let fr = matches!(lang, crate::i18n::Lang::Fr);
     Some(match id {
+        GOOSE => "Goose",
         "dev.escouade.discord" => "Discord",
         "dev.escouade.slack" => "Slack",
         "dev.escouade.high-contrast" if fr => "Contraste élevé",

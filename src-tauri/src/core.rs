@@ -2178,9 +2178,16 @@ impl<R: Runtime> Core<R> {
         &self,
         id: &str,
     ) -> Result<Option<crate::plugins::PluginView>, crate::plugins::Refusal> {
+        let asked = std::time::Instant::now();
         let Some(view) = self.plugins.need(id, crate::i18n::ui())? else {
             return Ok(None);
         };
+        log::info!(
+            "plugin {} v{}: installed from the seed for a gesture in {} ms",
+            view.id,
+            view.version,
+            asked.elapsed().as_millis()
+        );
         self.plugin_changed(&view.id);
         self.plugin_runtime.prepare(&view.id);
         self.sync_harnesses();

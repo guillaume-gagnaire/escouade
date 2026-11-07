@@ -13,6 +13,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### New
 
+- Escouade's plugins come in the installer: at the first start, even offline, Escouade installs those your configuration uses, and the Plugins view offers the others, installed in one click with no download.
 - On store.escouade.dev, a plugin's documentation can have its pages in French and in English: each visitor reads those of their language, else those of the other, and a link from one page to another stays on the store.
 - A plugin no longer keeps what Escouade lent it: the host of a failed connection attempt closes at once, and a removed account takes back its host and its token. An address that only looks local, such as `http://localhost:1@exemple.dev`, is refused right in the form.
 - The documentation has a page on code hosts: what Escouade does on GitHub, GitLab, Bitbucket, Gitea, Forgejo and Azure DevOps, its limits, and what has really been tried. The Privacy page says your tokens stay with you and nothing goes through an Escouade server.

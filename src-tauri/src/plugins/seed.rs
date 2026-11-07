@@ -81,6 +81,12 @@ impl Seed {
                 }
                 ours
             });
+            // A build of development without the seed's files (no `scripts/seed-dev.sh`, no `seed.ts fetch`) runs the
+            // registry's plugins as before, from `scripts/plugins-wasm.sh` (ESC-354): the list names them, the folder
+            // has them not. A release keeps them, and says what it lacks.
+            if cfg!(debug_assertions) {
+                entries.retain(|e| dir.as_ref().is_some_and(|d| d.join(&e.id).is_dir()));
+            }
         }
         Self {
             dir,

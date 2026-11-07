@@ -1091,7 +1091,7 @@ Les e2e, et donc la vue Plugins, le store dans l'app, les thèmes et les sceaux 
 
 Décidé par l'utilisateur le 2026-11-04 : « je veux que tous les plugins, même les builtins, passent par le même système : on livre un plugin, il est compilé pour qu'il soit utilisable sur tous les systèmes, et il fait ce qu'il a besoin de faire », puis « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté ». Le même jour, l'état de fin : « A la fin, je veux que tous les plugins builtins soient dans /plugins/* (exemple plugins/claude), tous publiés sur le store, vérifiés et signés. »
 
-Ce chapitre est l'étude, faite avant le portage. **A1 à A8, A9, P3b, P1, P2, P3 (Codex, Copilot CLI, Cursor, Gemini), P4, P5, P6, P7 et D1 sont faits** (ESC-331, §8.11 ; ESC-332, §8.12 ; ESC-334, §8.13 ; ESC-338, §8.14 ; ESC-333, §8.15 ; ESC-341, §8.16 ; ESC-335, §8.17 ; ESC-336, §8.18 ; ESC-344, §8.19 ; ESC-351, §8.22 ; ESC-349, §8.23 ; ESC-348, §8.24 ; ESC-345, §8.25 ; ESC-346, §8.26 ; ESC-350, §8.28 ; ESC-337, §8.20 ; ESC-342, §8.21 ; ESC-347, §8.27) ; le reste du plan ne l'est pas. Le prototype, ses tests et ses mesures sont dans `prototypes/wasm-all/` (son README dit comment tout refaire). Il revoit le §5.7 (« le `run` natif, tranché ») et le §5.6 (« un `run.wasm` n'est pas ouvert ») : ces deux passages tiennent jusqu'à l'acceptation des décisions proposées par ESC-330. Sans numéro tant qu'elles ne sont pas acceptées, elles se citent par leur identifiant : `run-wasm-le-rust-des-plugins-compile-par`, `les-capacites-de-l-hote-ce-qu-un-plugin`, `la-premiere-main-dans-plugins-id-court-p`, `plus-aucun-run-command-le-store-le-refus`.
+Ce chapitre est l'étude, faite avant le portage. **A1 à A8, A9, P3b, P1, P2, P3 (Codex, Copilot CLI, Cursor, Gemini), P4, P5, P6, P7 et D1 sont faits** (ESC-331, §8.11 ; ESC-332, §8.12 ; ESC-334, §8.13 ; ESC-338, §8.14 ; ESC-333, §8.15 ; ESC-341, §8.16 ; ESC-335, §8.17 ; ESC-336, §8.18 ; ESC-344, §8.19 ; ESC-351, §8.22 ; ESC-349, §8.23 ; ESC-348, §8.24 ; ESC-345, §8.25 ; ESC-346, §8.26 ; ESC-350, §8.28 ; ESC-337, §8.20 ; ESC-342, §8.21 ; ESC-347, §8.27 ; ESC-354, Z2, §8.32) ; le reste du plan ne l'est pas. Le prototype, ses tests et ses mesures sont dans `prototypes/wasm-all/` (son README dit comment tout refaire). Il revoit le §5.7 (« le `run` natif, tranché ») et le §5.6 (« un `run.wasm` n'est pas ouvert ») : ces deux passages tiennent jusqu'à l'acceptation des décisions proposées par ESC-330. Sans numéro tant qu'elles ne sont pas acceptées, elles se citent par leur identifiant : `run-wasm-le-rust-des-plugins-compile-par`, `les-capacites-de-l-hote-ce-qu-un-plugin`, `la-premiere-main-dans-plugins-id-court-p`, `plus-aucun-run-command-le-store-le-refus`.
 
 **En bref.**
 
@@ -1524,7 +1524,7 @@ Le précompilé reste local, jamais reçu : `Module::deserialize` fait confiance
 
 **L'ordre de la release.** L'amorce fige des versions publiées : **le chef publie d'abord, la release ensuite**. `release.yml` télécharge l'amorce nommée par `plugins/seed.json` (un fichier commité : `id`, `version`, empreinte de `version.json`), vérifie chaque signature, et échoue sinon. Un build de développement n'a pas de signature : `debug_assertions` accepte l'amorce de `scripts/seed-dev.sh`, comme il accepte aujourd'hui un programme non signé.
 
-**Le poids.** `escouade-plugins.exe` pèse **34,5 Mo** aujourd'hui (34 479 104 o, release de `ticket/esc-226`) et disparaît. L'amorce pèse à peu près 23 × 0,5 Mo, soit **11 à 14 Mo** en clair d'après les deux modules mesurés, moins dans l'installeur compressé (165 Ko et 223 Ko en gzip pour les deux mesurés). Les plugins qui ne servent pas ne se précompilent pas. Le précompilé, 1,5 à 2 Mo par module actif, va dans le cache.
+**Le poids.** `escouade-plugins.exe` pèse **34,5 Mo** aujourd'hui (34 479 104 o, release de `ticket/esc-226`) et disparaît. L'amorce pèse à peu près 23 × 0,5 Mo, soit **11 à 14 Mo** en clair d'après les deux modules mesurés, moins dans l'installeur compressé (165 Ko et 223 Ko en gzip pour les deux mesurés). Les plugins qui ne servent pas ne se précompilent pas. Le précompilé, 1,5 à 2 Mo par module actif, va dans le cache. **Mesuré par Z2** (§8.32) : 26 plugins, 17,4 Mo en clair, **2,5 Mo de plus dans l'installeur** ; la précompilation de Claude Code à sa première activation, une centaine de millisecondes en release.
 
 ### 8.8 Les binaires natifs des tiers
 
@@ -1620,7 +1620,7 @@ Les tickets du portage, dans l'ordre. **Les lettres sont des noms de travail**, 
 | Ticket | Ce qu'il fait |
 | --- |--- |
 | **Z1. Les contrôles et la première publication** | `npm run plugins:publish` (fait, §8.6.2, ESC-353) ; le chef publie chaque plugin, revue et signature une par une la première fois |
-| **Z2. L'amorce réelle** | `plugins/seed.json` rempli, un essai d'installation hors ligne |
+| **Z2. L'amorce réelle** (fait, §8.32) | `plugins/seed.json` rempli, un essai d'installation hors ligne |
 | **Z3. Le retrait** | `escouade-plugins`, `run.command`, le transport par process, `check_program`, l'origine `builtin`, `BUILTINS`, les attestations ; `npm run bench:int0` complet |
 
 **L'ordre demandé par l'utilisateur** se lit ainsi : **le déménagement** (M0), **la CI de `plugins/`** (M1), **les contrôles du store pour un `run.wasm`** (A6, A7), **la publication de chacun** (Z1).
@@ -1680,7 +1680,7 @@ Les tickets du portage, dans l'ordre. **Les lettres sont des noms de travail**, 
 
 ### 8.14 Ce qu'A8 a construit (ESC-338)
 
-- **`plugins/seed.json`** : `{ "format": 1, "plugins": [{ "id", "version", "sha256" }] }`, `sha256` étant celui de `version.json`. Il est **vide jusqu'à Z2** : aucune version de la première main n'est publiée. Avec une liste vide, rien ne change pour l'utilisateur.
+- **`plugins/seed.json`** : `{ "format": 1, "plugins": [{ "id", "version", "sha256" }] }`, `sha256` étant celui de `version.json`. Il était **vide jusqu'à Z2** : aucune version de la première main n'était publiée. Avec une liste vide, rien ne change pour l'utilisateur. Z2 l'a rempli (§8.32).
 - **`plugins/seed.rs`.** `Seed::take` lit une version dans `<ressources>/seed/<id>/` et rend un `Fetched`, comme `Store::fetch`. Les contrôles sont les mêmes fonctions, sorties de `fetch` : `check_version_json` (l'empreinte embarquée, le dossier, l'id, la version), `check_seal`, `check_archive`, `check_module`. Le reste est `inspect_store` puis `install`, l'unique chemin d'une installation du store.
 - **Le premier lancement.** `Plugins::sync_seed`, dans `core`, après `apply_store` et avant le démarrage de tout plugin : installe ce que l'amorce a, qui n'est pas installé et que le tri désigne (`sort::sort`, ESC-373, §8.7), sauf ce que l'utilisateur a désinstallé. Le premier lancement et celui d'après une mise à jour de l'app sont le même code : seul compte ce qui est installé. L'origine est `Store { seed: true, .. }`.
 - **Ce qu'une version refusée laisse.** Rien d'installé, et sa raison dans la vue (« Proposés par Escouade ») : signature fausse, fichier changé, `escouade.min`, `escouade.max`, sceau retiré par la liste (`unverify`). **Une version retirée par `disable` s'installe**, coupée, sa raison dite : c'est la règle du §8.7, et le plugin reste visible dans « Ajoutés » avec le bandeau rouge. Sur un clic, en revanche, elle est refusée, comme une version retirée du store.
@@ -2266,3 +2266,33 @@ Un harness décrit tourne sur `dev.escouade.acp` : le cœur jugeait donc le plug
 **Comparé à `permissions.commands`.** Les deux sont dits mot pour mot à l'installation et sont décidés par le plugin. `proc/*` tient de plus : pas de `.cmd` ni de `.bat`, les `ESCOUADE_*` de l'app retirés, le journal, 4 programmes à la fois. Un harness décrit reste lancé comme un harness : un lanceur npm (`.cmd`) y est permis parce que les CLI s'installent ainsi, et `registry::version` hérite de l'environnement de l'app et ne passe pas par le journal du plugin. La lecture de version n'a pas `acp.env`.
 
 **Ce qui reste.** `forbidden_var` est une liste courte : `PYTHONPATH`, `RUBYOPT` ou `JAVA_TOOL_OPTIONS` passent, chez `proc/*` comme ici. Le refus d'une variable tombe au lancement : `crates/escouade-plugin-cli` ne le dit pas encore à `escouade-plugin check` ni au store. `readOnlyMode` reste cru d'un tiers en `"fs": false` : le client refuse les écritures qu'il voit, pas celles que l'agent fait seul.
+
+### 8.32 Ce que Z2 a rempli (ESC-354)
+
+- **`plugins/seed.json`** nomme **26 versions**, la dernière signée de chaque plugin de première main au catalogue du store du 2026-11-07 (`id`, `version`, empreinte de `version.json`) : les 2.2.2 des harness (Claude Code, Codex, Copilot CLI, Cursor CLI, Gemini CLI, OpenCode), de `dev.escouade.acp`, des sources et des hébergeurs (Trello, Linear, Jira, ClickUp, GitHub, GitLab, Bitbucket, Azure DevOps), de la voix (OpenAI, Groq, Mistral, ElevenLabs, Deepgram) ; Gitea 2.2.1 ; Goose 1.0.1 ; Discord 1.1.1, Contraste élevé 1.1.1, Slack 2.0.1, Règles de l'équipe 2.0.1. **Pas dedans** : Antigravity CLI (2.2.1 non signée, la 2.2.2 d'ESC-376 pas publiée) et isola (pas au store). Ils restent donnés par l'app, origine `builtin`, jusqu'à leur signature : une ligne de `seed.json` chacun.
+- **`builtin::seeds`** prend aussi les plugins de première main que l'app n'a jamais donnés, et que le tri connaît déjà (`sort::seeds_beyond_the_registry`) : Goose et ceux sur demande. La vue les nomme sans leur manifeste (`sort::name_on_request`, Goose compris).
+- **Un build de développement sans les fichiers de l'amorce** (ni `seed-dev.sh`, ni `seed.ts fetch`) : `Seed::of_app` écarte les entrées de la liste embarquée dont le dossier manque, et le plugin tourne du registre comme avant (`scripts/plugins-wasm.sh`). Sans cela, la liste remplie retirait à `npm run tauri dev` et aux e2e tous leurs harness. Une release les garde, et la vue dit ce qui manque.
+- **Les temps dans le journal** : `installed from the seed in N ms` (au lancement et pour un geste), et `plugin <id>: <comment son module est venu> in N ms` à chaque activation.
+
+**La release, essayée en local** contre le vrai store, en lecture seule (aucun Release lancé). `npx tsx store/scripts/seed.ts fetch`, le script du workflow, **échoue** : le store n'a pas encore de liste de révocation (404 sur `/api/v1/revocations.json` et sur la copie d'escouade.dev), et l'amorce ne part pas sans elle. **Il reste à l'utilisateur de signer et publier la liste nº 1** (vide), avant la première release de la 2.2. Le reste a été joué par les mêmes fonctions (`fetchSeed`), la liste seule venant du faux store : les 26 signatures tiennent avec les clés de `store/keys/` (`store.pub`, `backup.pub`), ainsi que les commentaires, les empreintes et les modules, en 3,2 s. Avec la version 2.1.4 de `main`, le script refuse aussitôt (`asks for Escouade 2.2.0`) : la release de la 2.2 passe la version avant.
+
+**L'essai hors ligne.** Une build release (`npx tauri build`, la version passée à 2.2.0 le temps de l'essai, l'amorce réelle dans `src-tauri/seed/`), jouée par `tests/e2e/real-seed.spec.ts` (`ESCOUADE_E2E_REAL_SEED=1`, `ESCOUADE_E2E_EXE` vers cette build), sur des dossiers de données neufs, toutes les requêtes de l'app vers un port fermé (Réglages › Réseau et `HTTPS_PROXY`). Le store n'a jamais été atteint (pas de `store/catalog.json`) ; seule la vérification de mise à jour de l'app contourne un proxy en échec, comme prévu (`updates.rs`).
+
+| | Ce qui a tourné | Temps |
+| --- | --- | --- |
+| Dossier vierge | rien d'installé ; « Ajouter un compte… » sur Claude Code à l'accueil installe `dev.escouade.claude-code` 2.2.2 depuis l'amorce (origine `store`, `seed`, `verified`) | 249 et 270 ms pour l'installation, 372 et 393 ms jusqu'à la ligne « Plugin Claude Code installé » |
+| Une 2.1 configurée (comptes Claude Code et Codex, un compte Trello ; pas de `plugins.json`) | Claude Code, Codex et Trello installés au lancement, rien d'autre ; isola et Antigravity CLI restent `builtin` | 161 à 299 ms par plugin |
+| Un agent Claude Code | il répond, sans téléchargement ; son module se précompile à la première activation | 102 et 116 ms de précompilation |
+| La vue Plugins | les trois dans « Ajoutés », désinstallables ; Copilot CLI, GitHub, Linear, Deepgram, Discord, Goose… sous « Proposés par Escouade », « Dans l'app, sans téléchargement » ; Trello désinstallé n'est pas remis au lancement suivant | |
+
+Les deux dossiers sont de l'essai : celui « d'une 2.1 » a les fichiers qu'une 2.1 garde (`settings.json`, `integrations.json`, pas de `plugins.json`), pas les données de l'utilisateur, pour qu'aucun de ses projets ne s'ouvre sous une build d'essai.
+
+**Le poids**, mesuré sur ces deux builds (l'installeur NSIS, `createUpdaterArtifacts` coupé faute de clé ; la seule différence est `src-tauri/seed/`) :
+
+| | En clair | Dans l'installeur |
+| --- | --- | --- |
+| L'amorce (26 plugins, dont 16,3 Mo de modules) | 17 414 737 o | **+2 491 942 o** : 34 799 184 o sans, 37 291 126 o avec (2,45 Mo en xz, 7,0 Mo en gzip) |
+| `escouade-plugins` en 2.2 avant le WASM (§8.7) | 34 479 104 o | — |
+| `escouade-plugins` aujourd'hui (la démonstration seule, jusqu'à Z3) | 1 012 224 o | 0,30 Mo en xz |
+
+L'amorce pèse donc la moitié de l'`escouade-plugins` prévu en clair, et 2,5 Mo dans l'installeur : les modules partagent leur code (le kit, la bibliothèque standard), que LZMA compresse ensemble. L'installeur de la 2.1.4 publié pèse 22 301 192 o ; celui-ci, sans l'amorce, 34 799 184 o. L'écart ne vient pas de l'amorce : `escouade-plugin.exe` (l'outil `escouade-plugin build`, 39 759 872 o en clair, 9,3 Mo en xz) est maintenant dans l'installeur, et `escouade.exe` porte wasmtime (97 942 016 o, 24,4 Mo en xz).
