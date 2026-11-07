@@ -260,7 +260,8 @@ test('the documentation pages of docs/fr and docs/en in the visitor’s language
   expect((await request.get(src)).status()).toBe(200);
   // A link to the other page stays on the store, in its tab.
   await md.getByRole('link', { name: 'règle-le' }).click();
-  await expect(page).toHaveURL(/[?&]page=docs%2Ffr%2F02-regler\.md/);
+  // The router writes the path's slashes as they are, a link encodes them: both name the same page.
+  await expect(page).toHaveURL(/[?&]page=docs(?:%2F|\/)fr(?:%2F|\/)02-regler\.md/);
   await expect(md).toContainText('Le sujet par projet.');
   await expect(pages.nth(1)).toHaveClass(/on/);
   // In English: its one page, and the same image.
