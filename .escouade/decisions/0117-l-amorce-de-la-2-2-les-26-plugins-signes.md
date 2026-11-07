@@ -1,9 +1,9 @@
 ---
-number: null
+number: 117
 id: "l-amorce-de-la-2-2-les-26-plugins-signes"
 title: "L'amorce de la 2.2 : les 26 plugins signés, Goose et ceux sur demande compris ; Antigravity CLI et isola restent donnés par l'app"
 date: "2026-11-07"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-354"
 pages: ["plugins/livres-avec-escouade"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/livres-avec-escouade","added":9,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-08T00:13:20+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
