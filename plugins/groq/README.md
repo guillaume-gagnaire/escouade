@@ -1,16 +1,16 @@
 # Groq
 
-`dev.escouade.groq`, a plugin [Escouade](https://escouade.dev) gives: shipped with the app, signed with it, updated with it
-(its version is Escouade's). It is the voice service Groq of Réglages › Voix, taken out of the core (INT-13,
+`dev.escouade.groq`, a plugin of [Escouade](https://escouade.dev), published on its store like any other: it has its own version,
+and can be uninstalled. It is the voice service Groq of Réglages › Voix, taken out of the core (INT-13,
 `docs/PLUGINS.md` §1.4 and §4.13): Whisper et Orpheus.
 
-Le service de voix Groq de Réglages › Voix, sorti du cœur : dictée d'un fichier, transcription en direct (ce service n’en offre pas), voix de l'agent, catalogue des modèles et des voix.
+Le service de voix Groq de Réglages › Voix, sorti du cœur : dictée d'un fichier, voix de l'agent, catalogue des modèles et des voix.
 
 ## Use it
 
-Nothing to do: it is in the Plugins view under « Livrés avec Escouade », on. Add your key in Réglages › Voix, as before. Turn the
-plugin off and the service goes with it (the dictation falls back to local). A plugin of the store that serves the same
-service id replaces it.
+It is in the Plugins view, on. Add your key in Réglages › Voix, as before. Turn the plugin off and the service goes with it (the
+dictation falls back to local). A plugin of another author cannot serve this service: the key of a service only goes to Escouade's own
+plugin.
 
 ## What it may do
 

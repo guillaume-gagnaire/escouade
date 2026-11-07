@@ -17,6 +17,7 @@
     "network": ["api.clickup.com"],
     "secrets": ["account:clickup"]
   },
+  "limits": { "fetchSeconds": 15, "fetchBytes": 8388608 },
   "contributes": {
     "accounts": [
       {

@@ -42,8 +42,12 @@ files of its `GEMINI_CLI_HOME`, Escouade's MCP server.
 - refuse at once a permission that names a path of a private project (`fenceOnPermissions`: Gemini reads and writes by
   itself; its rules refuse those paths to its file tools and its commands, in every mode);
 - refuse the writes and commands of a discussion of the Docs tab, as its rules do (`readOnlyMode`);
-- nothing else: no network, no secret, no file written, no command to run. An account's key or sign-in is given to Gemini by the core,
-  never to this plugin.
+- have Gemini CLI trust the agent's folder (`GEMINI_CLI_TRUST_WORKSPACE`): without it, Gemini starts no MCP server, Escouade's
+  included, and says nothing. Its price: Gemini then runs the hooks and reads the settings of the repository open in that folder,
+  in every project. An agent on a repository you do not trust is not safer in « Demander » for it;
+- nothing else: no network, no secret of its own, no file written, no command to run. It is given Escouade's MCP token to put in the
+  launch it describes, and has no network to send it anywhere. An account's key or sign-in is given to Gemini by the core, never to
+  this plugin.
 
 ## Accounts
 

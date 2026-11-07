@@ -31,8 +31,9 @@ machine's sign-in, an account by its API key, `keyVar`), the models read for an 
 - describe the launch of Cursor CLI and translate what it says: the core launches it, never this plugin;
 - refuse at once a permission that names a path of a private project (`fenceOnPermissions`: Cursor reads and writes
   by itself, which its modes' meanings say);
-- nothing else: no network, no secret, no file, no command to run. The API key of an account is given to Cursor by
-  the core, never to this plugin; the plugin is only told the account goes by one (`byKey`).
+- nothing else: no network, no secret of its own, no file, no command to run. It is given Escouade's MCP token to put in
+  the launch it describes, and has no network to send it anywhere. The API key of an account is given to Cursor by the core,
+  never to this plugin; the plugin is only told the account goes by one (`byKey`).
 
 ## Turned off
 

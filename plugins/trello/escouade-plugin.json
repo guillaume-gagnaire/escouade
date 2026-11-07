@@ -17,6 +17,7 @@
     "network": ["api.trello.com"],
     "secrets": ["account:trello"]
   },
+  "limits": { "fetchSeconds": 15, "fetchBytes": 8388608 },
   "contributes": {
     "accounts": [
       {

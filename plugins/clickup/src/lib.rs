@@ -22,7 +22,7 @@ use std::time::Duration;
 pub const ID: &str = "clickup";
 const S: &str = "ClickUp";
 
-/// Where the API is when the core does not say (`ESCOUADE_CLICKUP_API` for a fake one).
+/// Where the API is, unless its account says otherwise.
 const API: &str = "https://api.clickup.com/api/v2";
 /// The prefix of a status's chip in the import.
 const STATUS: &str = "status:";

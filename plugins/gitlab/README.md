@@ -65,7 +65,7 @@ says so, the code hosts' view too, and nothing is lost.
 | `README.md`            | This page                                    |
 | `Cargo.toml`, `src/`   | Its crate: `lib.rs` (its kinds), `merges.rs`, `issues.rs` |
 
-Its tests: the crate's own (`cargo test -p escouade-plugin-gitlab`), and those of the app that run its process against
+Its tests: the crate's own (`cargo test -p escouade-plugin-gitlab`), and those of the app that play its module against
 a fake GitLab fed with answers recorded from gitlab.com (`tests/fixtures/forges/gitlab/`, `record.mjs`):
 `src-tauri/src/forge/gitlab_tests.rs` for the merge requests, `src-tauri/src/integrations/gitlab_tests.rs` for the
 issues (gitlab.com and an instance side by side; `real_gitlab_issues`, ignored, is the real trial by hand with

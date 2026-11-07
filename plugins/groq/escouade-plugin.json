@@ -4,8 +4,8 @@
   "name": "Groq",
   "version": "2.2.0",
   "description": {
-    "fr": "Le service de voix Groq (dictée, direct, voix de l'agent), livré avec Escouade : ta clé reste dans le trousseau, le plugin ne la garde pas.",
-    "en": "The Groq voice service (dictation, live, the agent's voice), shipped with Escouade: your key stays in the keychain, the plugin keeps nothing."
+    "fr": "Le service de voix Groq (dictée, voix de l'agent) : ta clé reste dans le trousseau, le plugin ne la garde pas.",
+    "en": "The Groq voice service (dictation, the agent's voice): your key stays in the keychain, the plugin keeps nothing."
   },
   "author": {
     "name": "Escouade",

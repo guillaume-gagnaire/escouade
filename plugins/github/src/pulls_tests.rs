@@ -218,6 +218,28 @@ async fn graphql_and_rest_have_their_own_limits() {
 }
 // ---- Instances ----
 
+#[tokio::test]
+async fn a_next_page_on_another_host_is_not_read() {
+    let server = FakeServer::start().await;
+    let other = FakeServer::start().await;
+    let next = format!("<{}/items?page=2>; rel=\"next\"", other.url);
+    server.on_with("GET", "/items", 200, json!([1]), &[("Link", &next)]);
+    other.on("GET", "/items?page=2", 200, json!([2]));
+    let github = Github::new(reqwest::Client::new(), server.url.clone(), "t".into());
+    assert_eq!(github.list("/items").await.unwrap(), [json!(1)]);
+    assert!(other.requests().is_empty(), "the token went there");
+}
+
+#[tokio::test]
+async fn a_next_page_of_the_api_is_read() {
+    let server = FakeServer::start().await;
+    let next = format!("<{}/items?page=2>; rel=\"next\"", server.url);
+    server.on_with("GET", "/items", 200, json!([1]), &[("Link", &next)]);
+    server.on("GET", "/items?page=2", 200, json!([2]));
+    let github = Github::new(reqwest::Client::new(), server.url.clone(), "t".into());
+    assert_eq!(github.list("/items").await.unwrap(), [json!(1), json!(2)]);
+}
+
 #[test]
 fn graphql_sits_beside_rest_on_every_kind_of_instance() {
     assert_eq!(

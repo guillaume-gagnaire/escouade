@@ -18,7 +18,7 @@ use serde_json::Value;
 pub const ID: &str = "trello";
 const S: &str = "Trello";
 
-/// Where the API is, unless Escouade says otherwise (`ESCOUADE_TRELLO_API`: tests, demos).
+/// Where the API is, unless its account says otherwise.
 const API: &str = "https://api.trello.com/1";
 
 pub struct Trello {

@@ -17,6 +17,7 @@
     "network": ["api.linear.app"],
     "secrets": ["account:linear"]
   },
+  "limits": { "fetchSeconds": 15, "fetchBytes": 8388608 },
   "contributes": {
     "accounts": [
       {

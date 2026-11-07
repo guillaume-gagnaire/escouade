@@ -55,7 +55,8 @@ their conversations, and come back with it.
 - read what the agent asks it to in the agent's folder and its repository, and write in the agent's folder
   (`permissions.files`, the roots `agent` and `agentRepo`). The host judges each path, its links followed, and refuses a
   private project's, whatever the code here says;
-- nothing else: no network, no secret, no account, no command to run.
+- nothing else: no network, no secret of its own, no account, no command to run. It is given Escouade's MCP token to put in
+  the launch it describes, and has no network to send it anywhere.
 
 ## Run it alone
 

@@ -29,8 +29,8 @@ of a Power-Up, then « Token »), typed in Réglages › Intégrations. They are
 version from before reads the account as it is (docs/PLUGINS.md §4.4). Its texts (« Indique le jeton. », « Indique la
 clé d'API. ») are in its manifest (`contributes.accounts[0].fields[].missing`).
 
-It can be turned off for the app or for a project, never removed, and a plugin of the store with the same id is
-refused: this one is the app's. Turned off, or stopped, the sync says so (« Le plugin dev.escouade.trello ne répond
+It can be turned off for the app or for a project, or uninstalled: it is a plugin like any other, and comes back from
+the store. Turned off, or stopped, the sync says so (« Le plugin dev.escouade.trello ne répond
 pas ») and tries again later; nothing is lost.
 
 ## What is in this folder

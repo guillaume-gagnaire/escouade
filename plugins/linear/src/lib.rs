@@ -19,7 +19,7 @@ use serde_json::{json, Value};
 pub const ID: &str = "linear";
 const S: &str = "Linear";
 
-/// Where the API is, unless Escouade says otherwise (`ESCOUADE_LINEAR_API`: tests, demos).
+/// Where the API is, unless its account says otherwise.
 const API: &str = "https://api.linear.app";
 
 /// The issues of a page of the import.

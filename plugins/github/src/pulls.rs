@@ -330,9 +330,10 @@ impl Github {
                 None => &page,
             };
             out.extend(items.as_array().cloned().unwrap_or_default());
+            // On the API only: the token goes with this address, and `go` keeps it from a redirection, not from it.
             match next {
-                Some(n) => url = n,
-                None => break,
+                Some(n) if n.starts_with(&format!("{}/", self.base)) => url = n,
+                _ => break,
             }
         }
         Ok(out)

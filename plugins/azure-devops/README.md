@@ -1,8 +1,7 @@
 # Azure DevOps
 
-`dev.escouade.azure-devops`, a plugin [Escouade](https://escouade.dev) gives: it is shipped with the app, signed with
-it, and updated with it. Its version is Escouade's (the `0.0.0` of its manifest is replaced by the app's when it is
-read).
+`dev.escouade.azure-devops`, a plugin of [Escouade](https://escouade.dev), published on its store like any other: it has its
+own version, and can be uninstalled.
 
 Azure Boards dans le Kanban, et les PR d'Azure Repos, leurs stratégies, leurs pipelines, leurs relectures et leur merge,
 sur le compte de ton organisation.

@@ -21,7 +21,7 @@ use escouade_plugin_kit::http::reqwest;
 pub const NAME: &str = "GitHub";
 
 /// Where an instance's API is when Escouade does not say it: api.github.com for github.com, `api.<name>.ghe.com` for
-/// GHE.com, `/api/v3` of a GitHub Enterprise Server. (The core says github.com's: `ESCOUADE_GITHUB_API`, a fake one.)
+/// GHE.com, `/api/v3` of a GitHub Enterprise Server.
 pub fn api_base(url: &str) -> String {
     let host = host_of(url);
     if host.is_empty() || host == "github.com" {

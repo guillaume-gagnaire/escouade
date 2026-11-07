@@ -1,19 +1,19 @@
 # Mistral
 
-`dev.escouade.mistral`, a plugin [Escouade](https://escouade.dev) gives: shipped with the app, signed with it, updated with it
-(its version is Escouade's; the `0.0.0` of its manifest is replaced by the app's when it is read).
+`dev.escouade.mistral`, a plugin of [Escouade](https://escouade.dev), published on its store like any other: it has its own version,
+and can be uninstalled.
 
 Mistral dans Escouade, un seul plugin et un seul compte : le service de voix de Réglages › Voix (Voxtral : dictée d'un fichier, transcription en direct, voix de l'agent, catalogue des modèles et des voix ; INT-13) et Mistral Vibe comme harness, par ACP (INT-10.6). Ses agents conversent comme avant, par un programme à part qu'Escouade lance et surveille.
 
-One process serves both (`docs/PLUGINS.md` §4.13): `escouade-plugins mistral` answers `voice/*` and the contract of the harnesses.
+One module serves both (`docs/PLUGINS.md` §4.13): it answers `voice/*` and the contract of the harnesses.
 
 ## Use it
 
-Nothing to do: it is in the Plugins view under « Livrés avec Escouade », on. Add your key in Réglages › Voix, as before, and your
+It is in the Plugins view, on. Add your key in Réglages › Voix, as before, and your
 Mistral Vibe accounts in Réglages › Comptes. Turn the plugin off and both go with it: the dictation falls back to local, and an
 agent of Mistral Vibe says at its start « Le plugin Mistral (dev.escouade.mistral) est coupé ou n'est pas chargé : rallume-le dans
-la vue Plugins… » and keeps its session. It can never be removed, and a plugin of the store with the same id is refused: this one
-is the app's. A plugin of the store that serves the same voice service id replaces that service.
+la vue Plugins… » and keeps its session. It can be uninstalled: it is a plugin like any other, and comes back from the store. A
+plugin of another author cannot serve its voice service: the key of a service only goes to Escouade's own plugin.
 
 ## The Mistral account
 
@@ -57,7 +57,8 @@ process (INT-9):
 - a refusal of the user's cuts the turn (`session/cancel`): Vibe would otherwise try the command again under other
   forms, each asking again; « Toujours » is Vibe's `allow_always_permanent`, kept in the agent's own `VIBE_HOME`.
 
-What stays in the core, as the contract says: the terminal view (`vibe` in a PTY, its journal and its hooks followed),
+What stays in the core, as the contract says: the terminal view (`vibe` in a PTY, its hooks followed; its journal is read by the
+core and translated by this plugin, `view/translate`, which holds no connection to send it anywhere),
 the accounts, the models read for an account's menu, the texts it writes (`vibe -p`, no tool, within a price), the files of
 its `VIBE_HOME`, Escouade's MCP server.
 
@@ -71,7 +72,10 @@ A discussion of the Docs tab never goes to it: it has no mode that changes nothi
 - describe the launch of Mistral Vibe and translate what it says: the core launches it, never this plugin;
 - refuse at once a permission that names a path of a private project (`fenceOnPermissions`: Vibe reads and writes by
   itself; the core also refuses those paths to its file tools in its `config.toml`);
-- nothing else: no secret, no file, no command to run. The plugin is only told a Vibe account goes by a key (`byKey`).
+- accept by itself, in « Édits auto » and in « Demander », a write Vibe asks for in the agent's folder, and what `bypassPermissions`
+  asks; anything else is a card;
+- nothing else: no secret of its own, no file, no command to run. It is given Escouade's MCP token to put in the launch it describes,
+  and has no network to send it anywhere but `api.mistral.ai`. The plugin is only told a Vibe account goes by a key (`byKey`).
 
 ## What is in this folder
 
@@ -92,8 +96,8 @@ the fake Vibe (`src-tauri/src/engine/vibe/bench.rs`), the recorded streams of Mi
 
 ## Run it alone
 
-Against the fake Escouade of the plugins' bench, with the app's own `escouade-plugin` and `escouade-plugins` (built with
-`cargo build --bin escouade-plugin --bin escouade-plugins` in `src-tauri/`, side by side in `target/debug`):
+Against the fake Escouade of the plugins' bench, with the app's own `escouade-plugin` (built with
+`cargo build --bin escouade-plugin` in `src-tauri/`, in `target/debug`):
 
 ```sh
 escouade-plugin test plugins/mistral --builtin

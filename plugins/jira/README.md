@@ -16,7 +16,7 @@ project asks for it. The description's acceptance criteria give the criteria of 
 
 ## What it may do
 
-- **Network**: `*.atlassian.net`, and nothing else.
+- **Network**: `*.atlassian.net`, and the site of its account (`{account}`) when it is elsewhere; nothing else.
 - **Secrets**: the one of its account, `account:jira` (the API token), which it asks of Escouade for each call
   (`secrets/get`); Escouade never puts it in a call. The site and the e-mail are not secret: Escouade tells them.
 - No command to run, no fact read, no file.

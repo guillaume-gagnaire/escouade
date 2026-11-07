@@ -61,5 +61,5 @@ Cloud's API 2.0 documentation and tested against a fake server fed with answers 
 | `README.md`            | This page                                                 |
 | `Cargo.toml`, `src/`   | Its crate: `lib.rs` (its kind), `pulls.rs` (its client)   |
 
-Its tests: the crate's own (`cargo test -p escouade-plugin-bitbucket`), and those of the app that run its process
+Its tests: the crate's own (`cargo test -p escouade-plugin-bitbucket`), and those of the app that play its module
 against a fake Bitbucket: `src-tauri/src/forge/bitbucket_tests.rs`.

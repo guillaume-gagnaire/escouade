@@ -36,7 +36,8 @@ the CLI's is asked by Escouade, which knows where `gh` is.
 
 ## What it may do
 
-- reach `api.github.com`, `api.<name>.ghe.com` and the GitHub Enterprise Servers you add;
+- reach `api.github.com`, `api.<name>.ghe.com` and the GitHub Enterprise Servers you add, and where GitHub stores a job's
+  log (`*.actions.githubusercontent.com`, `*.blob.core.windows.net`), which it reaches without your token;
 - read the tokens of its accounts (`account:*`), never another plugin's;
 - nothing else: no command, no file, no fact of the board.
 
@@ -51,7 +52,7 @@ longer synced: an agent's card says so, the code hosts' view too, and nothing is
 | `README.md`            | This page                                                           |
 | `Cargo.toml`, `src/`   | Its crate: `lib.rs` (its kinds), `pulls.rs`, `issues.rs`            |
 
-Its tests: the crate's own (`cargo test -p escouade-plugin-github`), and those of the app that run its process against a
+Its tests: the crate's own (`cargo test -p escouade-plugin-github`), and those of the app that play its module against a
 fake GitHub, unchanged since the code left the core: `src-tauri/src/forge/github_tests.rs` (the pull requests, the
 checks, the reviews, the deployments, the limits; `real_github_reads` reads github.com with `gh`'s token, nothing
 written) and `src-tauri/src/integrations/github_tests.rs` (GitHub Issues).
