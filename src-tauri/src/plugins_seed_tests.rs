@@ -45,7 +45,7 @@ fn started(data: &DataDir, seed: Seed) -> std::sync::Arc<Plugins> {
     let list = seed.revocations();
     let plugins = Plugins::load_seeded(data.clone(), "2.2.0", seed);
     plugins.apply_store(list, Default::default());
-    plugins.sync_seed(Lang::Fr);
+    plugins.sync_seed(Lang::Fr, &|_| true);
     plugins
 }
 

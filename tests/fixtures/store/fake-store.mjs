@@ -25,7 +25,9 @@
 //   (ESC-323), named by its version.json; dev.exemple.wasm-changed: its module changed after its version.json (refused);
 // - dev.escouade.trello: 2.2.0 and 2.3.0 verified, a run.wasm plugin of the first hand, for the app's seed (ESC-338);
 //   dev.escouade.seed-later: verified, for an Escouade to come (min 99.0.0); dev.escouade.seed-tampered: verified, its
-//   archive changed after its version.json.
+//   archive changed after its version.json;
+// - dev.escouade.claude-code, codex, copilot-cli, github, linear, deepgram, isola, acp: 2.2.0 verified, in the seed only
+//   (not in the catalogue), for the sort of the seed (ESC-373).
 // Its controls: POST /_fake/revocations { entries, serial? } signs and serves the next list (the mirror too);
 // POST /_fake/down { down } makes /api/v1 answer 503; GET /_fake/state says the installs counted and the requests;
 // POST /_fake/seed { dir, plugins: [{ id, version }] } writes in `dir` the seed of those versions as the release makes it
@@ -225,6 +227,30 @@ const SPEC = [
     path: 'plugins/seed-tampered',
     repo: 'guillaume-gagnaire/escouade',
   },
+  // ESC-373: the sort of the seed, the plugins a configuration of 2.1 uses and those it does not: in the seed only, not in
+  // the catalogue (their module is the reactor's).
+  ...[
+    ['dev.escouade.claude-code', 'Claude Code'],
+    ['dev.escouade.codex', 'Codex'],
+    ['dev.escouade.copilot-cli', 'Copilot CLI'],
+    ['dev.escouade.github', 'GitHub'],
+    ['dev.escouade.linear', 'Linear'],
+    ['dev.escouade.deepgram', 'Deepgram'],
+    ['dev.escouade.isola', 'isola'],
+    ['dev.escouade.acp', 'ACP'],
+  ].map(([id, name]) => ({
+    id,
+    v: '2.2.0',
+    from: 'reactor',
+    runWasm: true,
+    verified: true,
+    seedOnly: true,
+    cat: ['tools'],
+    kw: [],
+    name,
+    path: `plugins/${id.slice('dev.escouade.'.length)}`,
+    repo: 'guillaume-gagnaire/escouade',
+  })),
 ];
 
 /** The store's content: the catalogue, the files by path, signed with `key`. */
@@ -300,6 +326,8 @@ export function build(key) {
       const target = s.forged ? `${s.id}@9.9.9` : `${s.id}@${s.v}`;
       files.set(`${base}/version.json.minisig`, Buffer.from(key.sign(json, `escouade-verified-v1 ${target} 2026-10-29`)));
     }
+    // In the seed only: its files, not a line of the catalogue.
+    if (s.seedOnly) return;
     if (!plugins.has(s.id))
       plugins.set(s.id, {
         id: s.id,

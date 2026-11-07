@@ -1127,6 +1127,14 @@ describe('board', () => {
     expect(app.accounts).toEqual([]);
   });
 
+  it('says a plugin of the seed a gesture installed, and has the plugins read again (ESC-373)', async () => {
+    const { emit } = await start();
+    const before = app.pluginsSeeded;
+    emit({ type: 'pluginSeeded', id: 'dev.escouade.codex', text: 'Plugin Codex installé' });
+    expect(app.toasts.at(-1)).toMatchObject({ text: 'Plugin Codex installé', kind: 'ok' });
+    expect(app.pluginsSeeded).toBe(before + 1);
+  });
+
   it('knows why a board starts nothing, from the start and as the backend tells it', async () => {
     const unborn = "main n'a encore aucun commit — aucun ticket ne démarre";
     const { emit } = await start({ boardIssues: { p1: unborn } });

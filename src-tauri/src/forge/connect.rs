@@ -562,6 +562,12 @@ impl<R: Runtime> Core<R> {
     /// account is saved, its token in the keychain. github.com's is Issues' account.
     pub async fn forge_connect(&self, form: ForgeForm) -> Result<ForgesView> {
         let provider = self.provider(form.kind.trim())?;
+        // Its plugin of the first hand, from the seed if it is not installed (ESC-373): the gesture asks for it.
+        if form.plugin.trim().is_empty() {
+            if let Some(p) = crate::plugins::sort::of_forge(&provider.kind()) {
+                self.need_plugin(p);
+            }
+        }
         let typed = if form.url.trim().is_empty() {
             provider.default_host().unwrap_or("")
         } else {

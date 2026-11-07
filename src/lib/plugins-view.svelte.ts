@@ -206,11 +206,26 @@ class PluginsStore {
     this.offers = (await pluginsApi.seedOffers()) ?? [];
   }
 
-  /** A plugin the seed proposes: from the store when it has a newer version, else from the seed, with no network. */
+  /**
+   * A plugin the seed proposes: from the store when it has a newer version, else from the seed, with no network, in one
+   * click (ESC-373): a plugin of the first hand, signed, as a gesture that needs it installs it.
+   */
   installOffer(o: SeedOffer) {
     const best = this.store?.best?.[o.id];
     if (best && best.localeCompare(o.version, undefined, { numeric: true }) > 0) return this.fromStore(o.id);
-    return this.inspect(() => pluginsApi.inspectSeed(o.id));
+    return this.installSeed(o.id);
+  }
+
+  async installSeed(id: string) {
+    this.error = null;
+    try {
+      const view = await pluginsApi.installSeed(id);
+      if (view) this.put(view);
+      void app.refreshEngines();
+      await this.loadOffers();
+    } catch (e) {
+      this.error = errorText(e);
+    }
   }
 
   /** Reads the icon of the installed plugin `id` once; read again after it is installed anew. */

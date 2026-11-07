@@ -757,6 +757,12 @@ impl<R: Runtime> Core<R> {
             // One account for both uses: the code host's form.
             bail!(by_its_host(service));
         }
+        // Its plugin of the first hand, from the seed if it is not installed (ESC-373): the gesture asks for it.
+        if form.plugin.trim().is_empty() {
+            if let Some(p) = crate::plugins::sort::of_service(service.as_str()) {
+                self.need_plugin(p);
+            }
+        }
         let mut account = Account {
             site: if service == Service::JIRA {
                 jira::site(&form.site)

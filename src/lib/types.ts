@@ -2641,6 +2641,8 @@ export type UiEvent =
   | { type: 'autopilotPause'; pause: AutopilotPause | null; projects?: Record<string, AutopilotPause> }
   /** The CI of a project's target branch as last read (ESC-63), or null when there is none to show. */
   | { type: 'targetCi'; projectId: string; ci: BranchCi | null }
+  /** A plugin of the seed installed for a gesture that needs it (ESC-373): said in a line, the plugins read again. */
+  | { type: 'pluginSeeded'; id: string; text: string }
   | { type: 'toast'; text: string }
   /** The settings changed a language: the window switches to it at once. */
   | { type: 'language'; lang: LangInfo }

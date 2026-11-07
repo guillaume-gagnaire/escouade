@@ -231,6 +231,8 @@ export const api = {
   accountAddMachine: (engine: EngineId) => invoke<Account>('account_add_machine', { engine }),
   /** Whether the machine's account of `engine` is signed in, with whom, and whether it is added already. */
   accountMachine: (engine: EngineId) => invoke<MachineAccount>('account_machine', { engine }),
+  /** The plugin of the harness `engine`, from the app's seed when it is not installed (ESC-373): said in a line once installed. */
+  pluginNeedEngine: (engine: EngineId) => invoke<void>('plugin_need_engine', { engine }),
   /** The account's name, `claude`, « Actif » and the defaults of its new agents (its folder stays its own); the accounts as they then are. */
   accountUpdate: (account: Account) => invoke<Account[]>('account_update', { account }),
   /** The accounts in the order of `ids`, as they then are. */

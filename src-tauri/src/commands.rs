@@ -402,6 +402,22 @@ pub fn plugin_inspect_seed(
     core.plugins.inspect_seed(&id, crate::i18n::ui())
 }
 
+/// « Ajouter un compte… » on `engine` (ESC-373): its plugin from the seed when it is not installed, with no network.
+#[tauri::command(async)]
+pub fn plugin_need_engine(core: CoreState, engine: EngineId) {
+    core.need_engine_plugin(engine);
+}
+
+/// « Installer » of a plugin the seed proposes (ESC-373): installed at once from the seed, with no network, as the gesture
+/// that needs it would; its view, or why the seed refuses it.
+#[tauri::command(async)]
+pub fn plugin_install_seed(
+    core: CoreState,
+    id: String,
+) -> Result<Option<crate::plugins::PluginView>, crate::plugins::Refusal> {
+    core.install_seed_plugin(&id)
+}
+
 /// What the app's seed holds that is not installed: what the user uninstalled, what it refused to install.
 #[tauri::command(async)]
 pub fn plugin_seed_offers(core: CoreState) -> Vec<crate::plugins::seed::Offer> {
@@ -3427,6 +3443,8 @@ pub fn voice_mistral_key(core: CoreState) -> crate::voice::online::MistralKey {
 /// keychain that refuses it (or none, on Linux) leaves it unsaved, and says so.
 #[tauri::command(async)]
 pub fn voice_online_key_set(core: CoreState, service: String, key: String) -> Res<()> {
+    // A key given to a service of the first hand: its plugin from the seed if it is not installed (ESC-373).
+    core.need_voice_plugin(&service);
     crate::voice::online::save_key(&*core.secrets, &service, &key)
 }
 

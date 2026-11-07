@@ -92,7 +92,9 @@
 
   // « Couleurs » (PLG-7): the plugins read once the settings are, then the theme chosen among those of the plugins on,
   // at once and as either changes; none (or its plugin off or gone), Escouade's colours.
+  // Read again when a gesture installed a plugin of the seed (ESC-373).
   $effect(() => {
+    void app.pluginsSeeded;
     if (app.ready) untrack(() => void plugins.load());
   });
   $effect(() => {

@@ -271,6 +271,8 @@ class AppState {
   ready = $state(false);
   /** Counts the `escouade://` links told (STORE-11): the view Plugins takes them (App.svelte). */
   deepLinks = $state(0);
+  /** How many plugins of the seed a gesture installed (ESC-373): the view Plugins reads them again. */
+  pluginsSeeded = $state(0);
   projects = $state<Project[]>([]);
   agents = $state<Record<string, Agent>>({});
   ui = $state<UiState>({ activeProject: null, view: 'project', selectedAgent: {} });
@@ -760,6 +762,10 @@ class AppState {
       case 'focusPrs':
         // The click of a review asked of the user.
         this.openPrs(e.projectId);
+        break;
+      case 'pluginSeeded':
+        this.toast(e.text, 'ok');
+        this.pluginsSeeded++;
         break;
       case 'toast':
         // For want of an account (ESC-128): with « Ajouter un compte… ».

@@ -1877,6 +1877,8 @@ impl<R: Runtime> Core<R> {
         share: &[String],
         mode: ShareMode,
     ) -> Result<Account> {
+        // Its harness's plugin, from the seed if it is not installed (ESC-373): the gesture asks for it.
+        self.need_engine_plugin(engine);
         let root = self.data.accounts_of(engine);
         let (made, _) = self.change_claude_accounts(|s| {
             let from = config_dir(&get(s, &principal_id(engine)), s);
@@ -1892,6 +1894,7 @@ impl<R: Runtime> Core<R> {
     /// `engine` (its Principal: its usual folder, `~/.claude`, `~/.codex`…), added last in the
     /// order and active, as it is. Refused when it is there already.
     pub fn add_machine_account(self: &Arc<Self>, engine: EngineId) -> Result<Account> {
+        self.need_engine_plugin(engine);
         let (made, _) = self.change_claude_accounts(|s| {
             let id = principal_id(engine);
             if s.accounts.iter().any(|a| a.id == id) {

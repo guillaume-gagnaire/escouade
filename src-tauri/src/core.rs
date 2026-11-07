@@ -1821,6 +1821,8 @@ impl<R: Runtime> Core<R> {
                 t.conflict = false;
             }
         }
+        // The harnesses of the agents, for the sort of the seed (ESC-373) once the accounts are read.
+        let agent_engines: Vec<EngineId> = state.agents.iter().map(|m| m.engine).collect();
         let conv_dir = data.conversations();
         let agents = state
             .agents
@@ -1896,8 +1898,26 @@ impl<R: Runtime> Core<R> {
         );
         // What was cached applies from the start: a version withdrawn stays stopped offline.
         plugins.apply_store(store.revocations(), store.offers());
-        // What the seed holds and is not installed goes in now, with no network, before any plugin starts.
-        plugins.sync_seed(crate::i18n::ui());
+        // What the seed holds, is not installed and the configuration uses goes in now, with no network, before any plugin
+        // starts (ESC-373): the rest stays in the seed, proposed, until a gesture needs it.
+        let sorted = {
+            let voice_keys = crate::voice::online::usable_keys(&settings, &*secrets);
+            crate::plugins::sort::sort(&crate::plugins::sort::Config {
+                settings: &settings,
+                projects: &state.projects,
+                agents: &agent_engines,
+                accounts: &accounts,
+                voice_keys: &voice_keys,
+                readable: [
+                    data.settings_file(),
+                    data.state_file(),
+                    data.integrations_file(),
+                ]
+                .iter()
+                .all(|f| crate::plugins::sort::reads(f)),
+            })
+        };
+        plugins.sync_seed(crate::i18n::ui(), &|id| sorted.wants(id));
         let plugin_runtime = crate::plugins::runtime::Runtime::new(
             plugins.clone(),
             secrets.clone(),
@@ -2126,6 +2146,111 @@ impl<R: Runtime> Core<R> {
     pub(crate) fn plugin_changed(&self, id: &str) {
         self.plugin_runtime.forget(id);
         crate::plugins::decide::warm_one(&self.plugins, &self.plugin_runtime, id);
+    }
+
+    /// The plugin `id` of the seed, installed now if it is not, with no network, for a gesture that needs it (ESC-373): an
+    /// account of its harness, a source or a code host chosen, a voice service, a worktree with an `.isola.toml`. The
+    /// gesture is the user's consent: no window more, a line that says it. Its harnesses and its voice services follow.
+    /// Nothing when it is installed, or the seed does not hold it; a refusal is in the log and in the view.
+    pub(crate) fn need_plugin(&self, id: &str) -> Option<crate::plugins::PluginView> {
+        match self.install_seed_plugin(id) {
+            Ok(v) => v,
+            Err(r) => {
+                self.hub.emit(UiEvent::Toast {
+                    text: tr!(
+                        "Le plugin {id} ne s'installe pas depuis l'amorce : {}",
+                        "The plugin {id} does not install from the seed: {}",
+                        r.message
+                    ),
+                });
+                None
+            }
+        }
+    }
+
+    /// `need_plugin`, its refusal given back (« Installer » of the view Plugins).
+    pub(crate) fn install_seed_plugin(
+        &self,
+        id: &str,
+    ) -> Result<Option<crate::plugins::PluginView>, crate::plugins::Refusal> {
+        let Some(view) = self.plugins.need(id, crate::i18n::ui())? else {
+            return Ok(None);
+        };
+        self.plugin_changed(&view.id);
+        self.plugin_runtime.prepare(&view.id);
+        self.sync_harnesses();
+        self.sync_voice_plugins();
+        self.telemetry
+            .track(crate::telemetry::Event::PluginInstalled { from_store: true });
+        self.hub.emit(UiEvent::PluginSeeded {
+            id: view.id.clone(),
+            text: tr!("Plugin {} installé", "Plugin {} installed", view.name),
+        });
+        Ok(Some(view))
+    }
+
+    /// What a save of the settings chose that needs a plugin of the seed (ESC-373): a voice service put on line for the
+    /// dictation or the voice, a harness of an account the save adds. What was there before asks nothing: a plugin the
+    /// user uninstalled comes back on a gesture only.
+    pub(crate) fn need_settings_plugins(&self, before: &Settings) {
+        let now = self.settings.read().clone();
+        let online = |mode: &str, service: &str| (mode == "online").then(|| service.to_string());
+        let chosen = [
+            (
+                online(&now.voice.transcription, &now.voice.online_service),
+                online(&before.voice.transcription, &before.voice.online_service),
+            ),
+            (
+                online(&now.voice.speech.engine, &now.voice.speech.online_service),
+                online(
+                    &before.voice.speech.engine,
+                    &before.voice.speech.online_service,
+                ),
+            ),
+        ];
+        for (now, was) in chosen {
+            if let Some(id) = now.filter(|n| Some(n) != was.as_ref()) {
+                self.need_voice_plugin(&id);
+            }
+        }
+        for a in &now.accounts {
+            if !before.accounts.iter().any(|b| b.engine == a.engine) {
+                self.need_engine_plugin(a.engine);
+            }
+        }
+    }
+
+    /// A launch of the folder `dir`: isola from the seed if it has an `.isola.toml` and isola is not installed (ESC-373).
+    pub(crate) fn need_isola(&self, dir: &str) {
+        if Path::new(dir).join(".isola.toml").is_file() {
+            self.need_plugin(crate::plugins::sort::ISOLA);
+        }
+    }
+
+    /// `need_plugin` for the voice service `id`.
+    pub(crate) fn need_voice_plugin(&self, id: &str) {
+        if let Some(p) = crate::plugins::sort::of_voice(id) {
+            self.need_plugin(&p);
+        }
+    }
+
+    /// What a project added needs of the seed (ESC-373): the plugin of the code host its remotes are on, isola for an
+    /// `.isola.toml`, those of its sources and of its harness by default (a project opened again keeps them).
+    pub(crate) fn need_project_plugins(&self, project: &Project) {
+        let accounts = self.accounts.read().clone();
+        for id in crate::plugins::sort::of_project(project, &accounts) {
+            self.need_plugin(id);
+        }
+        if let Some(e) = project.engine {
+            self.need_engine_plugin(e);
+        }
+    }
+
+    /// `need_plugin` for every plugin of the seed the harness `engine` runs on.
+    pub(crate) fn need_engine_plugin(&self, engine: EngineId) {
+        for id in crate::plugins::sort::of_engine(engine.as_str()) {
+            self.need_plugin(id);
+        }
     }
 
     /// Installs what the inspection `token` set aside. A plugin of that id stops first: under Windows its running
@@ -2438,6 +2563,7 @@ impl<R: Runtime> Core<R> {
         let self_update = s.claude_self_update;
         let before_settings = std::mem::replace(&mut *self.settings.write(), s);
         let mcp_was_enabled = before_settings.mcp_enabled;
+        self.need_settings_plugins(&before_settings);
         if self_update && !before_settings.claude_self_update {
             // « Mettre à jour Claude Code automatiquement » turned on: run when due, at once.
             crate::selfupdate::poke();
@@ -8383,6 +8509,7 @@ impl<R: Runtime> Core<R> {
         let _ = self.refresh_repos(&project.id, true).await;
         let project = self.project(&project.id).unwrap_or(project);
         self.watch_project(&project);
+        self.need_project_plugins(&project);
         if reopened {
             // Its tickets may start, its agents are counted, its Remote Control ones are
             // reachable again as they are when the app starts.
@@ -8418,13 +8545,25 @@ impl<R: Runtime> Core<R> {
         let agent_prefix = p.agent_branch_prefix.trim().to_string();
         let ticket_prefix = p.ticket_branch_prefix.trim().to_string();
         let docs_branch = p.docs_branch.trim().to_string();
-        let path = self.project(&p.id)?.path;
+        let before = self.project(&p.id)?;
+        let path = before.path.clone();
         if let Some(why) = paths::worktrees_root_problem(&path, &worktree_dir)
             .or_else(|| crate::docsbranch::branch_problem(&docs_branch))
             .or_else(|| git::branch_prefix_problem(&agent_prefix))
             .or_else(|| git::branch_prefix_problem(&ticket_prefix))
         {
             bail!(why);
+        }
+        // A source of tickets chosen, a harness by default: their plugin from the seed if it is not installed (ESC-373).
+        for l in &p.integrations.links {
+            if before.integrations.link(l.service).is_none() {
+                if let Some(id) = crate::plugins::sort::of_service(l.service.as_str()) {
+                    self.need_plugin(id);
+                }
+            }
+        }
+        if let Some(e) = p.engine.filter(|e| before.engine != Some(*e)) {
+            self.need_engine_plugin(e);
         }
         // Its preferred account is one there is (the window's copy may be older than the
         // accounts' tab); an account switched off is kept, and ignored while it is.

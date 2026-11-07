@@ -6,6 +6,7 @@ import { capsOf, engineName } from './engines';
 import { fDayMonth, fList, fPct, fTime } from './format';
 import { estimatedBy } from './spend';
 import { t, tIn } from './i18n';
+import { api } from './ipc';
 import { app } from './state.svelte';
 import type { SettingsTab } from './settings.svelte';
 import type { Account, AccountUsage, Agent, AutopilotPause, EngineId, Project, QuotaMeter, QuotaProjection, RateWindow } from './types';
@@ -102,9 +103,15 @@ export function newAgentDefaults(project: ProjectLike | undefined, engine?: Engi
   return accountDefaults(newAgentAccount(project, e), e);
 }
 
-/** « Ajouter un compte… » on `engine` (Réglages › Comptes, back there when it closes). */
+/**
+ * « Ajouter un compte… » on `engine` (Réglages › Comptes, back there when it closes). Choosing the harness installs its plugin
+ * from the app's seed when it is not installed, with no network (ESC-373): the core says it in a line.
+ */
 export function addAccount(engine: EngineId) {
   app.modal = { kind: 'account', engine };
+  void Promise.resolve()
+    .then(() => api.pluginNeedEngine(engine))
+    .catch(() => {});
 }
 
 /** The harness whose accounts the status bar shows: the one of the agent shown, else the project's default one. */

@@ -42,6 +42,7 @@ pub mod runtime;
 pub mod seed;
 pub mod shared;
 pub mod socket;
+pub mod sort;
 // The store in the app: its catalogue, its revocation list, a version downloaded and checked (STORE-9).
 pub mod store;
 // The seal of a version from the store, checked with the keys the app embeds (STORE-8).
@@ -1698,12 +1699,16 @@ impl Plugins {
         }
     }
 
-    /// The seed at the start of the app (its first start, or after an update): installs what it holds and is not installed,
-    /// with no network and by the store's own path, but what the user uninstalled. Replaces nothing that runs from the
-    /// store: a newer version of the seed is offered (`store_update`). Runs once the revocation lists are in
-    /// (`apply_store`), before any plugin starts. Nothing is precompiled here: a module is at its first activation.
-    pub fn sync_seed(&self, lang: Lang) {
+    /// The seed at the start of the app (its first start, or after an update): installs what it holds, is not installed and
+    /// the user's configuration uses (`wants`, the sort of `sort`, ESC-373), with no network and by the store's own path,
+    /// but what the user uninstalled. An `Origin::Builtin` of 2.1 takes the seed's version when `wants` names it, and is
+    /// otherwise taken away, its choices kept as « Garder ses réglages » keeps them, proposed by the view. Replaces nothing
+    /// that runs from the store: a newer version of the seed is offered (`store_update`). Runs once the revocation lists
+    /// are in (`apply_store`), before any plugin starts. Nothing is precompiled here: a module is at its first activation.
+    pub fn sync_seed(&self, lang: Lang, wants: &dyn Fn(&str) -> bool) {
         let notes = self.seed_notes();
+        // A harness a plugin of another hand describes is served by the generic ACP plugin.
+        let described = self.describes_harnesses();
         for e in &self.seed.entries {
             let here = self
                 .loaded
@@ -1711,12 +1716,15 @@ impl Plugins {
                 .iter()
                 .find(|l| l.installed.id == e.id)
                 .map(|l| l.installed.origin.clone());
-            let wanted = match here {
-                None => !notes.removed.contains_key(&e.id),
-                Some(origin) => origin == Origin::Builtin,
-            };
-            if !wanted {
-                continue;
+            let used = wants(&e.id) || (described && e.id == builtin::ACP);
+            match here {
+                None if used && !notes.removed.contains_key(&e.id) => {}
+                Some(Origin::Builtin) if used => {}
+                Some(Origin::Builtin) => {
+                    self.retire_builtin(&e.id);
+                    continue;
+                }
+                _ => continue,
             }
             match self.install_seed(e, lang) {
                 Ok(v) => log::info!("plugin {} v{}: installed from the seed", v.id, v.version),
@@ -1732,6 +1740,84 @@ impl Plugins {
                 if let Some(u) = self.store_update(&l.installed.id, version) {
                     updates.insert(l.installed.id.clone(), u);
                 }
+            }
+        }
+    }
+
+    /// Whether a plugin installed, other than a harness of the core's, describes a harness over ACP
+    /// (`contributes.harnesses[].acp`), which `dev.escouade.acp` serves.
+    fn describes_harnesses(&self) -> bool {
+        self.loaded.read().iter().any(|l| {
+            !harness::BUILTIN_HARNESSES
+                .iter()
+                .any(|h| h.plugin == l.installed.id)
+                && l.read
+                    .as_ref()
+                    .ok()
+                    .and_then(|r| r.manifest.as_ref().ok())
+                    .and_then(|m| m.contributes.get("harnesses"))
+                    .and_then(Value::as_array)
+                    .is_some_and(|h| h.iter().any(|h| h.get("acp").is_some()))
+        })
+    }
+
+    /// Takes an `Origin::Builtin` of 2.1 away that the sort does not keep: nothing of the user's is lost, its choices kept
+    /// for its next install (as « Garder ses réglages »), its secrets left in the keychain. Not noted as uninstalled: the
+    /// user did not take it away, and the view proposes it as any plugin of the seed.
+    fn retire_builtin(&self, id: &str) {
+        let _w = self.writing.lock();
+        let gone = {
+            let mut loaded = self.loaded.write();
+            let at = loaded
+                .iter()
+                .position(|l| l.installed.id == id && l.installed.origin == Origin::Builtin);
+            at.map(|at| loaded.remove(at))
+        };
+        let Some(gone) = gone else {
+            return;
+        };
+        self.updates.write().remove(id);
+        let kept = self.kept_file(id);
+        let saved = kept
+            .parent()
+            .map_or(Ok(()), std::fs::create_dir_all)
+            .and_then(|_| {
+                serde_json::to_vec_pretty(&gone.installed.choices).map_err(std::io::Error::other)
+            })
+            .and_then(|bytes| crate::paths::write_atomic(&kept, &bytes))
+            .and_then(|_| self.save());
+        match saved {
+            Ok(()) => log::info!("plugin {id}: not used by the settings, left in the seed"),
+            Err(e) => log::warn!("plugin {id}: left in the seed, but not saved: {e}"),
+        }
+    }
+
+    /// The plugin `id` of the seed installed now, with no network, for a gesture that needs it (an account of its
+    /// harness, a source, a code host, a voice service, an `.isola.toml`): the gesture is the user's consent, even for a
+    /// plugin they uninstalled. Its view when it was installed now; none when it is installed already or the seed does
+    /// not hold it.
+    pub fn need(&self, id: &str, lang: Lang) -> Result<Option<PluginView>, Refusal> {
+        if self.loaded.read().iter().any(|l| l.installed.id == id) {
+            return Ok(None);
+        }
+        let Some(e) = self.seed.entry(id).cloned() else {
+            return Ok(None);
+        };
+        match self.install_seed(&e, lang) {
+            Ok(v) => {
+                log::info!(
+                    "plugin {} v{}: installed from the seed for a gesture",
+                    v.id,
+                    v.version
+                );
+                Ok(Some(v))
+            }
+            Err(r) => {
+                log::warn!("plugin {id}: the seed's v{} refused: {r}", e.version);
+                self.seed_refused
+                    .write()
+                    .insert(id.to_string(), r.message.clone());
+                Err(r)
             }
         }
     }
@@ -1803,7 +1889,14 @@ impl Plugins {
                 let removed = notes.removed.get(&e.id);
                 seed::Offer {
                     id: e.id.clone(),
-                    name: removed.map_or_else(|| e.id.clone(), |r| r.name.get(lang).to_string()),
+                    name: removed.map_or_else(
+                        || {
+                            builtin::name(&e.id, lang)
+                                .or_else(|| sort::name_on_request(&e.id, lang).map(str::to_string))
+                                .unwrap_or_else(|| e.id.clone())
+                        },
+                        |r| r.name.get(lang).to_string(),
+                    ),
                     version: e.version.clone(),
                     removed: removed.map(|r| r.version.clone()),
                     refused: refused.get(&e.id).cloned(),

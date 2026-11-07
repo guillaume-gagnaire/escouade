@@ -3104,6 +3104,12 @@ pub enum UiEvent {
     OpenUrl {
         url: String,
     },
+    /// A plugin of the seed installed for a gesture that needs it (ESC-373): the window says it in a line, and reads
+    /// the plugins again.
+    PluginSeeded {
+        id: String,
+        text: String,
+    },
     /// Something done in the background the window says in passing (tickets imported by
     /// themselves).
     Toast {

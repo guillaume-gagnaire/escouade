@@ -185,6 +185,8 @@ mod plugins_rust_build_tests;
 #[cfg(test)]
 mod plugins_seed_tests;
 #[cfg(test)]
+mod plugins_sort_tests;
+#[cfg(test)]
 mod plugins_store_tests;
 #[cfg(test)]
 mod plugins_tests;
@@ -668,6 +670,8 @@ pub fn run() {
                 commands::plugin_inspect_store,
                 commands::plugin_inspect_seed,
                 commands::plugin_seed_offers,
+                commands::plugin_install_seed,
+                commands::plugin_need_engine,
                 commands::store_view,
                 commands::deep_links_take,
                 commands::store_refresh,

@@ -203,6 +203,22 @@ pub fn first_hand(id: &str) -> bool {
     id.starts_with(super::manifest::RESERVED_PREFIX)
 }
 
+/// The name of the plugin of the registry `id` in `lang`, as its manifest says it: what the view and the line of a
+/// gesture name a plugin of the seed that is not installed (ESC-373).
+pub fn name(id: &str, lang: crate::i18n::Lang) -> Option<String> {
+    let entry = REGISTRY.iter().find(|e| e.id == id)?;
+    let v: serde_json::Value = serde_json::from_str(entry.manifest).ok()?;
+    let name = v.get("name")?;
+    let key = match lang {
+        crate::i18n::Lang::Fr => "fr",
+        crate::i18n::Lang::En => "en",
+    };
+    name.as_str()
+        .or_else(|| name.get(key).and_then(|n| n.as_str()))
+        .or_else(|| name.get("en").and_then(|n| n.as_str()))
+        .map(str::to_string)
+}
+
 /// The manifest of the builtin plugin `id`, at Escouade's version `app_version`.
 pub fn manifest_text(id: &str, app_version: &str) -> Option<String> {
     let entry = REGISTRY.iter().find(|e| e.id == id)?;
