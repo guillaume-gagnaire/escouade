@@ -1,9 +1,9 @@
 ---
-number: null
+number: 104
 id: "les-hebergeurs-comptent-dans-les-statist"
 title: "Les hébergeurs comptent dans les statistiques, sans nom ni adresse, et la page Confidentialité suit le code"
 date: "2026-11-07"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-69"
 pages: ["git-fichiers/hebergeurs-de-code"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"git-fichiers/hebergeurs-de-code","added":10,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-07T03:41:47+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
