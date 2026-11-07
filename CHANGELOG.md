@@ -90,6 +90,10 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Après le merge, la carte d’un ticket terminé dit où il tourne (« staging ✓ · production ⏳ »), et la vue « Environnements » du Kanban montre ce qui est déployé où, les tickets qui attendent la production et un déploiement en échec avec son job. Sur une carte « En revue », « Ouvrir l’aperçu » ouvre l’aperçu Vercel, Netlify ou Cloudflare Pages de la PR.
 - `escouade-plugin test`, `validate` et `dev` jouent un plugin comme la version d’Escouade de ton choix (`--escouade 2.2.0`), pour écrire pour une version à venir.
 
+### Modifications
+
+- Le menu « Harness » à côté de « Nouvel agent » ne liste plus que les harness prêts à servir : installés et avec un compte. Ceux qui manquent ou n’ont pas de compte se règlent dans Réglages › Harness et Réglages › Comptes.
+
 ### Retiré
 
 - L’index du code est retiré : mesuré avec de vrais agents sur des changements à plusieurs endroits, il ne faisait pas économiser de tokens ni éviter d’oubli, et chaque harness trouve le code par ses propres outils. Ses bases sont effacées de ta machine à la mise à jour, et la recherche par le sens de la mémoire et des docs se règle maintenant dans Réglages › Projets › Tous les projets.

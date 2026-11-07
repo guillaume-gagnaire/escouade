@@ -2623,7 +2623,7 @@ describe('Sidebar of agents on harnesses that do not all do the same', () => {
 describe('Sidebar: choosing the harness and its brand (ESC-29)', () => {
   const more = () => screen.getByRole('button', { name: 'Autres façons de créer un agent' });
 
-  it('lists every harness in the menu « Harness », numbered, the project’s marked, one not found greyed with where to set it', async () => {
+  it('lists the harnesses set up in the menu « Harness », numbered, the project’s marked, not one not found', async () => {
     resetApp();
     app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
     app.settings.accounts = [
@@ -2634,8 +2634,8 @@ describe('Sidebar: choosing the harness and its brand (ESC-29)', () => {
     render(Sidebar, { project: project({ engine: 'codex' }) });
     await userEvent.click(more());
     const harness = (label: string) => menu.open!.items.find((i) => i.label === label)!;
-    // Codex not found: in its place, greyed, with where to set it (choice 1).
-    expect(harness('Harness nu')).toMatchObject({ engine: 'codex', disabled: true, reason: expect.stringContaining('Réglages › Harness') });
+    // Codex not found: left out, even with an account.
+    expect(harness('Harness nu')).toBeUndefined();
     menu.close();
     app.enginesFound = ['claude', 'codex'];
     await userEvent.click(more());
@@ -2649,18 +2649,22 @@ describe('Sidebar: choosing the harness and its brand (ESC-29)', () => {
     expect(backend.called('create_agent')[0].args).toEqual({ projectId: 'p1', model: null, engine: 'claude', isolated: null, base: null });
   });
 
-  it('keeps a harness without an account in its place, with « Ajouter un compte… » (choice 15)', async () => {
+  it('leaves out a harness found without an account, the others numbered from 1, and the heading without any', async () => {
     resetApp();
-    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    app.engines = [BARE_ENGINE, CLAUDE_ENGINE];
     app.enginesFound = ['claude', 'codex'];
     fakeBackend();
     render(Sidebar, { project: project() });
     await userEvent.click(more());
-    const codex = menu.open!.items.find((i) => i.label === 'Harness nu')!;
-    expect(codex).toMatchObject({ detail: 'Aucun compte', fix: 'Ajouter un compte…' });
-    expect(codex.key).toBeUndefined();
-    codex.onClick!();
-    expect(app.modal).toEqual({ kind: 'account', engine: 'codex' });
+    const labels = () => menu.open!.items.map((i) => i.label);
+    expect(labels()).not.toContain('Harness nu');
+    expect(menu.open!.items.find((i) => i.label === 'Claude Code')).toMatchObject({ key: '1' });
+    menu.close();
+    app.settings.accounts = [];
+    await userEvent.click(more());
+    expect(labels()).not.toContain('Harness');
+    expect(labels()).not.toContain('Claude Code');
+    expect(menu.open!.items[0]).toMatchObject({ label: 'Worktree', heading: true });
   });
 
   it('opens the menu « Harness » on Ctrl+Shift+N, and takes a harness by its number', async () => {

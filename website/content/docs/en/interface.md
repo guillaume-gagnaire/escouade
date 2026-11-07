@@ -79,7 +79,7 @@ At the top, a two-button switch: “Agents” shows an agent’s conversation, �
 
 ### The list of agents
 
-Under the selector, “New agent” (`Ctrl+N`) creates an agent on the project’s harness. The arrow to its right, or `Ctrl+Shift+N`, opens the “Harness” menu: each harness Escouade knows, numbered (`1` to `4` pick one while the menu is open), with the account, model and mode its new agent would take; the project’s is marked “The project’s”. A harness with no account stays in its place with “No account” and “Add an account…”; a harness not found is grayed out with where to set its executable. Under “Worktree”, “New agent without a worktree” (or “in a worktree”, depending on the project’s setting) and “New agent on a branch…”, then “Project’s default harness…”. With no agent, the list says “No agents.” with a “Create an agent” button.
+Under the selector, “New agent” (`Ctrl+N`) creates an agent on the project’s harness. The arrow to its right, or `Ctrl+Shift+N`, opens the “Harness” menu: each harness installed with an account, numbered (`1`, `2`… pick one while the menu is open), with the account, model and mode its new agent would take; the project’s is marked “The project’s”. A harness not found or without an account is not in it: it is set up in Settings › Harness and Settings › Accounts. Under “Worktree”, “New agent without a worktree” (or “in a worktree”, depending on the project’s setting) and “New agent on a branch…”, then “Project’s default harness…”. With no agent, the list says “No agents.” with a “Create an agent” button.
 
 The agent waiting for your answer goes first in the list. Each agent is a card, without a frame; the card of the agent on screen is raised:
 
