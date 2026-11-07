@@ -128,7 +128,6 @@
           aria-label={item.engine ? item.label : undefined}
           class:danger={item.danger}
           class:iconed={!!item.icon || !!item.swatch}
-          class:off={!!item.fix}
           class:marked={!!item.engine}
           disabled={item.disabled}
           data-key={item.key}
@@ -146,9 +145,7 @@
             ><span class="l">{item.label}</span>{#if item.detail}<span class="reason">{item.detail}</span
               >{/if}{#if item.disabled && item.reason}<span class="reason">{item.reason}</span>{/if}</span
           >
-          {#if item.fix}<span class="fix">{item.fix}</span>{:else if item.key}<kbd class="kbd">{item.key}</kbd>{:else if item.hint}<span
-              class="hint">{item.hint}</span
-            >{/if}
+          {#if item.key}<kbd class="kbd">{item.key}</kbd>{:else if item.hint}<span class="hint">{item.hint}</span>{/if}
         </button>
       {/if}
     {/each}
@@ -267,17 +264,6 @@
   }
   .marked .l {
     font-weight: 550;
-  }
-  .off .l,
-  .off .mk {
-    opacity: 0.55;
-  }
-  .fix {
-    flex: none;
-    color: var(--text);
-    font-size: 12px;
-    font-weight: 550;
-    white-space: nowrap;
   }
   .sep {
     height: 1px;

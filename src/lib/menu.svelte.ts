@@ -28,8 +28,6 @@ export interface MenuItem {
   key?: string;
   /** The one chosen among its siblings: a dot after its label (`menuitemradio`). */
   checked?: boolean;
-  /** What it does instead, written at its end, its label greyed (« Ajouter un compte… » for a harness without one). */
-  fix?: string;
   /** A row of colors to pick from, named by the label. */
   colors?: { values: string[]; selected: string; onPick: (color: string) => void };
 }

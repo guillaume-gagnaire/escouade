@@ -90,6 +90,10 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - After the merge, a done ticket’s card says where it runs (“staging ✓ · production ⏳”), and the board’s “Environments” view shows what is deployed where, the tickets waiting for production and a failed deployment with its job. On a card “In review”, “Open preview” opens the pull request’s Vercel, Netlify or Cloudflare Pages preview.
 - `escouade-plugin test`, `validate` and `dev` play a plugin as the version of Escouade you choose (`--escouade 2.2.0`), to write for a version to come.
 
+### Changes
+
+- The “Harness” menu beside “New agent” only lists the harnesses ready to serve: installed, with an account. Those missing or without an account are set up in Settings › Harness and Settings › Accounts.
+
 ### Removed
 
 - The code index is removed: measured with real agents on changes in several places, it saved neither tokens nor oversights, and each harness finds the code with its own tools. Its databases are erased from your machine at the update, and the search by meaning of the memory and the docs is now set in Settings › Projects › Every project.

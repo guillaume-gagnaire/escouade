@@ -13,7 +13,7 @@
   import { branchSummary, deltaDetail, repoLabel } from '../lib/repos';
   import { api } from '../lib/ipc';
   import { fDur, fUsd, fWhen, tildify } from '../lib/format';
-  import { accountName, addAccount, defaultEngine, hasAccount, newAgentAccount, newAgentDefaults } from '../lib/accounts';
+  import { accountName, defaultEngine, hasAccount, newAgentAccount, newAgentDefaults } from '../lib/accounts';
   import {
     cardActivity,
     cardSpend,
@@ -31,7 +31,7 @@
   import { revealHidden } from '../lib/recipe';
   import { toolLabel } from '../lib/tools';
   import { canSwitchView, copyRemoteLink, inHarnessView, integrateBase, openRemote, switchView, toggleRemote } from '../lib/agent-actions';
-  import { can, canFork, engineName, speakerOf } from '../lib/engines';
+  import { can, canFork, engineName, offered, speakerOf } from '../lib/engines';
   import { startAgentOn } from '../lib/branch-actions';
   import {
     canFixChecks,
@@ -543,10 +543,9 @@
   }
 
   /**
-   * The menu « Harness » beside « Nouvel agent » (choices 1, 15 and 16 of the 2.0 design): each harness Escouade knows, in
-   * its order, numbered, with the account, model and mode its new agent would take; one without an account in its place,
-   * with « Ajouter un compte… »; one not found greyed, with where to set it. Then the agent the other way round from « Un
-   * worktree par agent », the one on a branch, and the project's default harness.
+   * The menu « Harness » beside « Nouvel agent » (choices 1 and 16 of the 2.0 design): each harness set up (found, with an
+   * account), in its order, numbered, with the account, model and mode its new agent would take; none set up, no heading.
+   * Then the agent the other way round from « Un worktree par agent », the one on a branch, and the project's default harness.
    */
   async function newAgentMenu() {
     if (!moreBtn) return;
@@ -554,16 +553,8 @@
     await app.refreshEngines();
     if (!moreBtn) return;
     const own = project.engine ?? defaultEngine();
-    const harnesses: MenuItem[] = app.engines.map((e, i) => {
-      if (!app.enginesFound.includes(e.id)) return { label: e.name, engine: e.id, disabled: true, reason: t('nav.sidebar.harnessMissing') };
-      if (!hasAccount(e.id))
-        return {
-          label: e.name,
-          engine: e.id,
-          detail: t('nav.sidebar.noAccount'),
-          fix: t('nav.sidebar.addAccount'),
-          onClick: () => addAccount(e.id),
-        };
+    const setUp = offered().filter((e) => hasAccount(e.id));
+    const harnesses: MenuItem[] = setUp.map((e, i) => {
       const account = newAgentAccount(project, e.id);
       const d = newAgentDefaults(project, e.id);
       const detail = [
@@ -582,9 +573,9 @@
       };
     });
     menu.showAt(moreBtn, [
-      { label: t('nav.sidebar.harness'), heading: true, hint: kbd('Ctrl+Shift+N') },
-      ...harnesses,
-      { label: '', separator: true },
+      ...(harnesses.length
+        ? [{ label: t('nav.sidebar.harness'), heading: true, hint: kbd('Ctrl+Shift+N') }, ...harnesses, { label: '', separator: true }]
+        : []),
       { label: t('nav.sidebar.worktree'), heading: true },
       // The other way round from « Un worktree par agent »: without one in a project that gives one, in one otherwise.
       project.worktreePerAgent

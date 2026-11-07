@@ -55,9 +55,6 @@ export default {
     /** The menu « Harness » beside « Nouvel agent » (choices 1, 15, 16 of the 2.0 design). */
     harness: 'Harness',
     projectHarness: 'Celui du projet',
-    noAccount: 'Aucun compte',
-    addAccount: 'Ajouter un compte…',
-    harnessMissing: 'Introuvable : voir Réglages › Harness',
     worktree: 'Worktree',
     newAgentNoWorktreeDetail: 'Dans le dossier du projet, sur sa branche courante',
     newAgentInWorktreeDetail: 'Sur une branche à lui, dans un dossier à part',

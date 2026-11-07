@@ -417,7 +417,9 @@ test.describe('a harness installed while the app runs (ESC-186)', () => {
     await addProject(page, app.repo);
     const more = page.getByRole('button', { name: 'Autres façons de créer un agent' });
     await more.click();
-    await expect(page.getByRole('menuitem', { name: /^Codex/ })).toBeDisabled();
+    // Not found: not in the menu, only the harnesses set up are.
+    await expect(page.getByRole('menuitemradio', { name: /^Claude Code/ })).toBeVisible();
+    await expect(page.getByRole('menuitemradio', { name: /^Codex/ })).toHaveCount(0);
     await page.keyboard.press('Escape');
     // `npm install -g @openai/codex` meanwhile: its program, and its folder in the PATH of the user.
     fs.writeFileSync(path.join(installed, 'codex.cmd'), `@echo off\r\nnode "${FAKE_CODEX_MJS}" %*\r\n`);
