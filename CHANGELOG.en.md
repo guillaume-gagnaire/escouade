@@ -92,7 +92,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### Changes
 
-- The “Harness” menu beside “New agent” only lists the harnesses ready to serve: installed, with an account. Those missing or without an account are set up in Settings › Harness and Settings › Accounts.
+- The “Harness” menu beside “New agent” only lists the harnesses ready to serve: installed, with an account. Those missing or without an account are set up in Settings › Harness and Settings › Accounts. Thanks to @Metalzoid (#21).
 
 ### Removed
 

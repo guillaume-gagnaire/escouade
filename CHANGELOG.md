@@ -92,7 +92,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Modifications
 
-- Le menu « Harness » à côté de « Nouvel agent » ne liste plus que les harness prêts à servir : installés et avec un compte. Ceux qui manquent ou n’ont pas de compte se règlent dans Réglages › Harness et Réglages › Comptes.
+- Le menu « Harness » à côté de « Nouvel agent » ne liste plus que les harness prêts à servir : installés et avec un compte. Ceux qui manquent ou n’ont pas de compte se règlent dans Réglages › Harness et Réglages › Comptes. Merci à @Metalzoid (#21).
 
 ### Retiré
 
