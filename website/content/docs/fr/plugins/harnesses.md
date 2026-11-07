@@ -93,7 +93,7 @@ Chaque entrée de `contributes.harnesses` avec un objet `acp` est un harness dé
 
 ## L’objet `acp`
 
-- `args` : ses arguments (`["acp"]`) ; `env` et `removeEnv` : des variables à lui (jamais un secret : un manifeste se lit), et celles de l’app qu’il ne doit pas recevoir ;
+- `args` : ses arguments (`["acp"]`) ; `env` et `removeEnv` : des variables à lui (jamais un secret : un manifeste se lit), et celles de l’app qu’il ne doit pas recevoir. Les variables qu’un programme de plugin ne peut pas nommer (`PATH`, `NODE_OPTIONS`, `LD_*`, `DYLD_*`, `ESCOUADE_*`…) sont refusées : l’agent ne démarre pas, et dit pourquoi ;
 - `fs` : il lit et écrit les fichiers **par Escouade** (`fs/read_text_file`, `fs/write_text_file`), vrai par défaut. Mets `false` pour un agent qui les lit et écrit lui-même, comme Goose ou Cursor CLI, même quand Escouade le lui propose ;
 - `modes` : le mode ACP (`session/set_mode`) de chaque mode d’Escouade ; `readOnlyMode` : celui qui ne change rien, pour les discussions de l’onglet Docs ;
 - `modelOption` : l’option de configuration du modèle (`session/set_config_option`), sinon `session/set_model` ;

@@ -47,7 +47,7 @@ const WAITING_INPUT: usize = 1 << 20;
 const LINGER: Duration = Duration::from_secs(1);
 
 /// The variables a plugin may not name: Escouade's own, and those that would run another program in the one declared.
-fn forbidden_var(name: &str) -> bool {
+pub fn forbidden_var(name: &str) -> bool {
     let upper = name.to_ascii_uppercase();
     name.is_empty()
         || name.contains(['=', '\0'])

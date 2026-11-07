@@ -238,7 +238,7 @@ pub fn project_settings(
 }
 
 /// What a plugin may do, a word each, the strongest first (§3.4): `run` (it runs a program),
-/// `harness:<program> <args>` (an ACP harness it describes, which its agents run: PLG-6), `decide`
+/// `harness:<program> <args>` (what an ACP harness it describes runs: PLG-6, `described_lines`), `decide`
 /// (it decides the agents' permissions), then `commands:<c>`, `files:<root>:<access>`, `events:<e>`, `network:<host>` and
 /// `secrets:<key>`.
 pub fn asks(m: &Manifest) -> Vec<String> {
@@ -248,14 +248,11 @@ pub fn asks(m: &Manifest) -> Vec<String> {
         out.push("run".to_string());
     }
     for h in harness::harnesses_of(&m.contributes) {
-        if let Some(acp) = &h.acp {
-            let program = h.locate.names.first().cloned().unwrap_or(h.id);
-            let line = std::iter::once(program)
-                .chain(acp.args.iter().cloned())
-                .collect::<Vec<_>>()
-                .join(" ");
-            out.push(format!("harness:{line}"));
-        }
+        out.extend(
+            harness::described_lines(&h)
+                .into_iter()
+                .map(|l| format!("harness:{l}")),
+        );
     }
     if p.decide {
         out.push("decide".to_string());
@@ -1850,7 +1847,7 @@ impl Plugins {
             // signed alone: the store takes it from the app's repository only, then signs it.
             // A module of the seed that is not signed is a build of development's (`Seed::unsigned`).
             let signed = f.minisig.is_some() || f.unsigned;
-            if f.id.starts_with(manifest::RESERVED_PREFIX) && !signed {
+            if builtin::first_hand(&f.id) && !signed {
                 return Err(Refusal::other(tr_in!(
                     lang,
                     "{} v{} est un plugin d'Escouade (`dev.escouade.*`) que le store n'a pas encore signé : il ne s'installe que signé.",

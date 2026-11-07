@@ -197,6 +197,12 @@ pub fn is_builtin(id: &str) -> bool {
     REGISTRY.iter().any(|e| e.id == id)
 }
 
+/// Whether `id` is of Escouade's own hand: `dev.escouade.*`, an id the manifest refuses to a third party and that installs
+/// signed alone, which holds for those the app does not give (Goose). The one test of it.
+pub fn first_hand(id: &str) -> bool {
+    id.starts_with(super::manifest::RESERVED_PREFIX)
+}
+
 /// The manifest of the builtin plugin `id`, at Escouade's version `app_version`.
 pub fn manifest_text(id: &str, app_version: &str) -> Option<String> {
     let entry = REGISTRY.iter().find(|e| e.id == id)?;

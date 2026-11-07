@@ -730,6 +730,224 @@ async fn an_agent_that_passes_no_file_through_the_client_does_not_start_in_a_pri
     rt.shutdown();
 }
 
+/// The word `fenceOnPermissions` of a manifest of anyone's is not taken: nothing passes through the client, so no private
+/// project is open to it, as for any `"fs": false`. The client's fence on `fs/*` is its own, and stays for a harness of
+/// anyone's that goes through it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_third_party_manifest_does_not_hold_the_fence_by_saying_so() {
+    let (rt, _, _) = runtime("tiers-cloture");
+    let mut decl = fake_manifest()["contributes"]["harnesses"][0].clone();
+    decl["acp"]["fs"] = json!(false);
+    decl["acp"]["fenceOnPermissions"] = json!(true);
+    let engine = described(&rt, OWNER, decl);
+    let dir = bench_dir("plg6-tiers-cloture-run");
+    let fence = crate::fence::Fence::new(vec![bench_dir("plg6-tiers-cloture-other")]);
+    let a = Driven::spawn_with(engine, &dir, |s| s.fence = fence);
+    let err = a.proc().initialize().await.unwrap_err().to_string();
+    assert!(
+        err.contains("la clôture des projets privés ne tiendrait pas"),
+        "{err}"
+    );
+    assert!(
+        !dir.join("fake-acp.jsonl").exists(),
+        "its program never ran"
+    );
+    rt.shutdown();
+}
+
+/// A plugin of Escouade's own keeps its word on a harness it describes: `dev.escouade.goose` is in no registry of the app,
+/// so the rule cannot be `is_builtin` of its manifest's plugin.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_first_hand_manifest_keeps_its_word_on_the_fence() {
+    let (rt, _, _) = runtime("goose-cloture");
+    let mut decl = fake_manifest()["contributes"]["harnesses"][0].clone();
+    decl["acp"]["fs"] = json!(false);
+    decl["acp"]["fenceOnPermissions"] = json!(true);
+    let engine = described(&rt, "dev.escouade.goose", decl);
+    let dir = bench_dir("plg6-goose-cloture-run");
+    let fence = crate::fence::Fence::new(vec![bench_dir("plg6-goose-cloture-other")]);
+    let mut a = Driven::spawn_with(engine, &dir, |s| s.fence = fence);
+    a.proc().initialize().await.unwrap();
+    a.stop().await;
+    rt.shutdown();
+}
+
+/// Goose as its manifest describes it starts, and answers.
+#[tokio::test(flavor = "multi_thread")]
+async fn goose_as_its_manifest_describes_it_starts() {
+    let (rt, _, _) = runtime("goose");
+    let text = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../plugins/goose/escouade-plugin.json"),
+    )
+    .unwrap();
+    let manifest: Value = serde_json::from_str(&text).unwrap();
+    let engine = described(
+        &rt,
+        "dev.escouade.goose",
+        manifest["contributes"]["harnesses"][0].clone(),
+    );
+    assert_eq!(engine.id().as_str(), "goose");
+    let dir = bench_dir("plg6-goose-run");
+    let mut a = Driven::spawn_with(engine, &dir, |_| {});
+    a.proc().initialize().await.unwrap();
+    let end = a.turn("bonjour").await;
+    assert!(matches!(&end, TurnEnd::Finished(_)), "{end:?}");
+    a.stop().await;
+    rt.shutdown();
+}
+
+/// What `proc/*` refuses to a plugin with a module, a plugin without code does not get by naming it in its manifest: its
+/// harness does not start, and the conversation says which variable and why.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_variable_proc_refuses_in_a_third_party_description_is_refused_with_its_reason() {
+    let (rt, _, _) = runtime("tiers-env");
+    for var in [
+        "NODE_OPTIONS",
+        "LD_PRELOAD",
+        "DYLD_INSERT_LIBRARIES",
+        "PATH",
+        "path",
+        "ESCOUADE_TOKEN",
+    ] {
+        let mut decl = fake_manifest()["contributes"]["harnesses"][0].clone();
+        decl["acp"]["env"] = json!({ var: "--require ./x.js" });
+        let engine = described(&rt, OWNER, decl);
+        let dir = bench_dir(&format!("plg6-tiers-env-{var}"));
+        let a = Driven::spawn_with(engine, &dir, |_| {});
+        let err = a.proc().initialize().await.unwrap_err().to_string();
+        assert!(err.contains(var), "{var}: {err}");
+        assert!(err.contains("ne démarre pas"), "{var}: {err}");
+        assert!(
+            !dir.join("fake-acp.jsonl").exists(),
+            "{var}: its program never ran"
+        );
+    }
+    rt.shutdown();
+}
+
+/// The variables the core itself sets by a manifest's word (`accountVar`, `keyVar`) are judged too.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_third_party_description_cannot_name_a_refused_variable_for_the_core_to_set() {
+    let (rt, _, _) = runtime("tiers-compte");
+    for field in ["accountVar", "keyVar"] {
+        let mut decl = fake_manifest()["contributes"]["harnesses"][0].clone();
+        decl[field] = json!("LD_PRELOAD");
+        let engine = described(&rt, OWNER, decl);
+        let dir = bench_dir(&format!("plg6-tiers-compte-{field}"));
+        let meta = AgentMeta {
+            id: crate::model::new_id(),
+            cwd: dir.to_string_lossy().to_string(),
+            ..Default::default()
+        };
+        let spawn = Spawn::of(&meta, fake_acp(), Vec::new());
+        let err = engine
+            .spawn(spawn, Box::new(|_| {}), Box::new(|_, _| {}))
+            .err()
+            .unwrap_or_else(|| panic!("{field}: it started"))
+            .to_string();
+        assert!(err.contains("LD_PRELOAD"), "{field}: {err}");
+    }
+    rt.shutdown();
+}
+
+/// Any other variable goes through for a third party, and the first hand is not judged.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_plain_variable_of_a_third_party_and_any_of_the_first_hand_go_through() {
+    let (rt, _, _) = runtime("env-permis");
+    for (owner, var) in [
+        (OWNER, "FAKE_ACP_COLOR"),
+        ("dev.escouade.goose", "NODE_OPTIONS"),
+    ] {
+        let mut decl = fake_manifest()["contributes"]["harnesses"][0].clone();
+        decl["acp"]["env"] = json!({ var: "" });
+        let engine = described(&rt, owner, decl);
+        let dir = bench_dir(&format!("plg6-env-permis-{var}"));
+        let mut a = Driven::spawn_with(engine, &dir, |_| {});
+        a.proc().initialize().await.unwrap();
+        a.stop().await;
+    }
+    rt.shutdown();
+}
+
+/// « Un plugin tiers ne donne jamais de chemin » holds for `names` too, which are joined to each folder of the PATH: a
+/// path there would be the program itself.
+#[test]
+fn a_third_party_names_no_path_among_the_names_of_its_program() {
+    let (rt, _, _) = runtime("tiers-noms");
+    let Program::Native(path) = fake_acp() else {
+        unreachable!()
+    };
+    let path = path.to_string_lossy().into_owned();
+    let relative = format!("..{}fake-acp", std::path::MAIN_SEPARATOR);
+    let decl_with = |names: Vec<&str>| {
+        let mut decl = fake_manifest()["contributes"]["harnesses"][0].clone();
+        decl["locate"]["names"] = json!(names);
+        decl
+    };
+    let third = described(&rt, OWNER, decl_with(vec![&path, &relative]));
+    assert!(third.locate("", "").is_none(), "a path was run");
+    let first = described(&rt, "dev.escouade.goose", decl_with(vec![&path]));
+    assert!(first.locate("", "").is_some(), "the first hand may");
+}
+
+/// The manifest of the fake's plugin, read as a third party's, once `change` went by.
+fn third_party_manifest(change: impl FnOnce(&mut Value)) -> crate::plugins::manifest::Manifest {
+    let mut v = fake_manifest();
+    change(&mut v["contributes"]["harnesses"][0]);
+    crate::plugins::manifest::check(&v, crate::plugins::manifest::Hand::Third)
+        .manifest
+        .unwrap()
+}
+
+/// What runs is what the user was shown before installing, as `permissions.commands` shows each command: every name the
+/// program may be found by, its variables, and what asks its version, which runs with no agent.
+#[test]
+fn the_installation_shows_all_that_a_description_runs() {
+    let plain = crate::plugins::asks(&third_party_manifest(|_| {}));
+    assert_eq!(
+        plain,
+        ["harness:fake-acp acp"],
+        "nothing more for the plain one"
+    );
+    let asks = crate::plugins::asks(&third_party_manifest(|h| {
+        h["locate"]["names"] = json!(["fake-acp", "faux"]);
+        h["acp"]["env"] = json!({ "FAKE_ACP_COLOR": "bleu" });
+        h["versionArgs"] = json!(["-e", "faire()"]);
+    }));
+    for word in [
+        "harness:FAKE_ACP_COLOR=bleu fake-acp acp",
+        "harness:FAKE_ACP_COLOR=bleu faux acp",
+        "harness:fake-acp -e faire()",
+        "harness:faux -e faire()",
+    ] {
+        assert!(asks.iter().any(|w| w == word), "{word} in {asks:?}");
+    }
+}
+
+/// Its version is asked of the harnesses of the registry alone: nothing of a plugin runs before it is installed and on.
+#[test]
+fn the_version_of_a_description_is_asked_once_its_plugin_is_installed_and_on() {
+    let (rt, plugins, _) = runtime("version");
+    let id = harness::described_id(OWNER, "fake-acp");
+    let listed = || crate::engine::registry::all().iter().any(|e| e.id() == id);
+    let preview = plugins
+        .inspect_folder(
+            &fixtures().join("plugins").join("fake-acp"),
+            crate::i18n::Lang::Fr,
+        )
+        .unwrap();
+    assert!(!harness::sync(&rt, &plugins).contains(&id));
+    assert!(!listed(), "previewed, it is not installed");
+    plugins
+        .install(&preview.token, crate::i18n::Lang::Fr)
+        .unwrap();
+    assert!(harness::sync(&rt, &plugins).contains(&id));
+    assert!(listed());
+    plugins.choose(OWNER, |c| c.enabled = false).unwrap();
+    assert!(!harness::sync(&rt, &plugins).contains(&id));
+    assert!(!listed(), "off, it is not asked");
+}
+
 /// A discussion of the Docs tab: the agent is put in its mode that changes nothing, and its writes are refused.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_read_only_agent_is_put_in_its_read_only_mode_and_writes_nothing() {

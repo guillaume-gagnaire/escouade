@@ -135,7 +135,7 @@ pub fn first_hand(kind: &str) -> String {
 
 /// Whether `plugin` is of Escouade's own hand.
 pub fn is_first_hand(plugin: &str) -> bool {
-    plugin.is_empty() || plugin.starts_with(FIRST_HAND)
+    plugin.is_empty() || super::builtin::first_hand(plugin)
 }
 
 /// The kind of a code host of the core, from its provider: the sources of its accounts are those

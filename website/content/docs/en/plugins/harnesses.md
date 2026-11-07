@@ -93,7 +93,7 @@ Each entry of `contributes.harnesses` with an `acp` object is a described harnes
 
 ## The `acp` object
 
-- `args`: its arguments (`["acp"]`); `env` and `removeEnv`: variables of its own (never a secret: a manifest is read by all), and those of the app it must not get;
+- `args`: its arguments (`["acp"]`); `env` and `removeEnv`: variables of its own (never a secret: a manifest is read by all), and those of the app it must not get. The variables a plugin’s program can’t name (`PATH`, `NODE_OPTIONS`, `LD_*`, `DYLD_*`, `ESCOUADE_*`…) are refused: the agent doesn’t start, and says why;
 - `fs`: it reads and writes files **through Escouade** (`fs/read_text_file`, `fs/write_text_file`), true by default. Set `false` for an agent that reads and writes them itself, as Goose and Cursor CLI do, even when Escouade offers it;
 - `modes`: the ACP mode (`session/set_mode`) of each mode of Escouade; `readOnlyMode`: the one that changes nothing, for the discussions of the Docs tab;
 - `modelOption`: the configuration option of the model (`session/set_config_option`), else `session/set_model`;

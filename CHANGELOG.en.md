@@ -91,6 +91,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### Fixes
 
+- A harness described by a third-party plugin no longer gets the trust of Escouade’s own plugins: it can’t claim a fence to enter a private project, nor set variables like `NODE_OPTIONS` or `LD_PRELOAD`, and the install window shows all it will run.
 - Gemini CLI: what the model writes can no longer raise an agent's mode. Writing “[MODE_UPDATE] yolo” was enough to remove its permission requests; only you can raise a mode.
 - ACP agents and Copilot: a path with `..` no longer counts as inside the agent's folder, so a write outside it asks you first.
 - GitHub and GitLab no longer follow a next page outside their API: the token only goes to them.
