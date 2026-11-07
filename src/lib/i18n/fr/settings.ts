@@ -28,6 +28,33 @@ export default {
     about: { label: 'À propos', desc: 'Version et données locales' },
   },
 
+  // The pages of the window (direction A of the 2.2 redesign): their name in the bar and what they set (under the title).
+  pages: {
+    general: { label: 'Général', desc: 'Thème, zoom, langue, mises à jour et ce qui te concerne' },
+    agents: { label: 'Agents', desc: 'Les nouveaux agents, les textes rédigés, le remote control et le pilotage d’Escouade' },
+    accounts: {
+      label: 'Comptes et harness',
+      desc: 'Les harness de ce poste, leurs comptes, et ce qui se passe à la limite',
+    },
+    services: {
+      label: 'Services connectés',
+      desc: 'Hébergeurs de code et sources de tickets (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards)',
+    },
+    voice: { label: 'Voix', desc: 'Dictée et conversation vocale, sur ta machine ou en ligne' },
+    notifications: { label: 'Notifications', desc: 'Ce qui te prévient, et comment' },
+    plugins: { label: 'Plugins', desc: 'Ce qu’ils ajoutent à Escouade, d’où ils viennent et ce qu’ils peuvent faire' },
+    advanced: { label: 'Avancé', desc: 'Réseau, terminaux, pièces jointes, recherche par le sens et données locales' },
+    about: { label: 'À propos', desc: 'Version, crédits et liens' },
+    project: { label: 'Projet', desc: 'Ce projet seulement : son nom, sa tuile, son harness et son compte' },
+    git: { label: 'Git et worktrees', desc: 'Les worktrees de ses agents, leurs branches, leurs commits et ses dépôts' },
+    launch: { label: 'Lancement', desc: 'Les commandes qui lancent ce projet, et où s’ouvrent ses pages' },
+    board: { label: 'Kanban', desc: 'Les tickets validés, le pilote auto, les agents des tickets et le workflow' },
+    tickets: { label: 'Tickets importés', desc: 'Les sources liées à ce projet et la correspondance de leurs statuts' },
+    team: { label: 'Équipe', desc: 'Le Kanban partagé, les réglages partagés (.escouade.yml) et la mémoire partagée' },
+    privacy: { label: 'Confidentialité', desc: 'Ce que ce projet garde pour lui : ses fichiers, ses comptes, ses plugins' },
+    allProjects: { label: 'Tous les projets', desc: 'Ce que reçoit un nouveau projet, et les projets fermés' },
+  },
+
   // The window itself.
   modal: {
     // The headings of the tabs, after the general ones.

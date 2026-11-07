@@ -298,7 +298,7 @@ describe('the « Application » tab', () => {
       expect(backend.called('git_user_name')).toEqual([{ cmd: 'git_user_name', args: { projectId: null } }]);
       expect(panel()).toHaveTextContent('Repris de git');
       // Git's name stands in by itself: nothing to save.
-      expect(settingsForm.changed('app')).toBe(false);
+      expect(settingsForm.changed('general')).toBe(false);
       await userEvent.type(field(), ' Jr');
       expect(panel()).not.toHaveTextContent('Repris de git');
       await userEvent.click(saveButton());

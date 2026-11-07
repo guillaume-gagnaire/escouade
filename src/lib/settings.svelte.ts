@@ -22,23 +22,21 @@ import type {
   WorktreeSuggestion,
 } from './types';
 import { branchPrefixProblem, worktreesRootProblem } from './worktrees';
+import {
+  legacyTab,
+  rowsOf,
+  SETTINGS_PAGES,
+  SETTINGS_ROWS,
+  tabOfPage,
+  type RowInfo,
+  type SettingsPage,
+  type SettingsSection,
+  type SettingsTab,
+} from './settings-pages';
 
-export type SettingsTab =
-  | 'app'
-  | 'claude'
-  | 'accounts'
-  | 'notifications'
-  | 'voice'
-  | 'projects'
-  | 'board'
-  | 'integrations'
-  | 'plugins'
-  | 'mcp'
-  | 'terminals'
-  | 'network'
-  | 'about';
+export * from './settings-pages';
 
-/** The three groups of the tabs (2.0 design): the general ones, « Par projet », « Système ». */
+/** The three groups of the 2.0 tabs: the general ones, « Par projet », « Système ». */
 export type SettingsGroup = 'general' | 'project' | 'system';
 
 interface TabInfo {
@@ -67,7 +65,11 @@ function tabInfo(id: SettingsTab, icon: IconName, group: SettingsGroup = 'genera
   };
 }
 
-export const SETTINGS_TABS: TabInfo[] = [
+/**
+ * The tabs of the 2.0 window, shown until the shell of the pages (R2) takes their place: `SETTINGS_PAGES` is the
+ * register, these only how it is shown meanwhile.
+ */
+export const LEGACY_TABS: TabInfo[] = [
   tabInfo('app', 'lang'),
   tabInfo('claude', 'spark'),
   // The accounts are saved at once, each change (not part of the draft); « Quand un quota est épuisé » is.
@@ -77,45 +79,27 @@ export const SETTINGS_TABS: TabInfo[] = [
   tabInfo('projects', 'folder', 'project'),
   tabInfo('board', 'kanban', 'project'),
   tabInfo('integrations', 'link', 'project'),
-  // The one switch is saved at once (it writes into each harness's config).
   // A link to the view Plugins (choice 213): nothing of it is saved here.
   tabInfo('plugins', 'puzzle', 'system'),
+  // The one switch is saved at once (it writes into each harness's config).
   tabInfo('mcp', 'plug', 'system'),
   tabInfo('terminals', 'term', 'system'),
   tabInfo('network', 'globe', 'system'),
   tabInfo('about', 'info', 'system'),
 ];
 
-/** The app's settings each tab sets. */
-const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
-  app: ['language', 'claudeLanguage', 'writerEngine', 'writerModel', 'userName', 'userNameCleared'],
-  claude: [
-    'claudePath',
-    'autoResume',
-    'todoTools',
-    'claudeSelfUpdate',
-    'idleStopMinutes',
-    'midTurnDelaySecs',
-    'attachMaxMb',
-    'attachWarnMb',
-    'attachOrigin',
-    'attachBigText',
-    'attachKeepDays',
-    'remoteControlAll',
-  ],
-  // « Quand un quota est épuisé » (choice 2 of the 2.0 design): the rest of the tab is saved at once.
-  accounts: ['switchOnLimit', 'handoverOnLimit', 'handoverModels'],
-  // What a project added starts with: shown under the project's own settings.
-  projects: ['privateProjects'],
-  notifications: ['sound', 'osNotifications', 'notifyFor'],
-  voice: ['voice'],
-  terminals: ['pwshPath', 'bashPath', 'wslDistro'],
-  network: ['proxyUrl', 'noProxy', 'proxyTerminals', 'insecureTls'],
-  // The quotas are the account's: one pause for every project's board.
-  board: ['quotaPause'],
-  integrations: ['integrations'],
-  about: ['autoUpdate', 'telemetry'],
-};
+/** The app's settings each page sets, read from its rows. */
+export const SETTINGS_OF = {} as Record<SettingsPage, (keyof Settings)[]>;
+for (const p of SETTINGS_PAGES) SETTINGS_OF[p.id] = [...new Set(rowsOf(p.id).flatMap((r) => r.settings))];
+
+/** Where the window opens or comes back to: a page, or a tab of the 2.0 window (led to its page). */
+export interface SettingsPlace {
+  page?: SettingsPage;
+  /** An id of the 2.0 window, still read (`legacyTab`). */
+  tab?: SettingsTab;
+  projectId?: string;
+  section?: SettingsSection;
+}
 
 /** What the modal sets of a project, as the backend's `update_project` takes it, its board apart. */
 type ProjectFields = Pick<
@@ -398,9 +382,29 @@ const proposed = (n: number, refused = 0) => {
     : t('settings.suggest.proposedLeftMany', { count: n, refused });
 };
 
+/** The keys that differ from the draft as opened, by where they are kept. */
+interface ChangedKeys {
+  settings: Set<string>;
+  project: Set<string>;
+  board: Set<string>;
+}
+
+const rowChanged = (r: RowInfo, k: ChangedKeys) =>
+  r.settings.some((x) => k.settings.has(x)) || r.project.some((x) => k.project.has(x)) || r.board.some((x) => k.board.has(x));
+
 class SettingsForm {
-  tab = $state<SettingsTab>('claude');
-  /** The project the "Projets" and "Kanban" tabs set. */
+  /** The page on screen. */
+  page = $state<SettingsPage>('accounts');
+  #tab = $state<SettingsTab>('claude');
+  /** The tab of the 2.0 window on screen, until the shell of the pages (R2): choosing one goes to its page. */
+  get tab(): SettingsTab {
+    return this.#tab;
+  }
+  set tab(v: SettingsTab) {
+    this.#tab = v;
+    this.page = legacyTab(v);
+  }
+  /** The project the pages of a project set. */
   projectId = $state<string | null>(null);
   settings = $state<Settings>({} as Settings);
   /** By project. */
@@ -447,9 +451,9 @@ class SettingsForm {
     return null;
   });
 
-  /** A fresh draft of everything, on `tab` and the project given (else the one on screen). */
-  open({ tab = 'claude', projectId }: { tab?: SettingsTab; projectId?: string } = {}) {
-    this.resume({ tab, projectId });
+  /** A fresh draft of everything, on the page (or 2.0 tab) and the project given (else the one on screen). */
+  open(place: SettingsPlace = {}) {
+    this.resume(place);
     const settings = $state.snapshot(app.settings);
     const projects = Object.fromEntries(app.projects.map((p) => [p.id, draftOf(p)]));
     this.#base = { settings, projects };
@@ -477,22 +481,41 @@ class SettingsForm {
     else if (this.settings.userNameCleared) this.settings.userNameCleared = false;
   }
 
-  /** The draft as it is, on `tab` and the project given (else the one on screen). */
-  resume({ tab = 'claude', projectId }: { tab?: SettingsTab; projectId?: string } = {}) {
+  /**
+   * The draft as it is, on the page given (else the one an id of the 2.0 window leads to, else « Comptes et harness »)
+   * and the project given (else the one on screen).
+   */
+  resume({ page, tab, projectId, section }: SettingsPlace = {}) {
     const has = (id: string | null | undefined) => !!id && app.projects.some((p) => p.id === id);
-    this.tab = tab;
+    const shown = tab ?? (page ? tabOfPage(page) : 'claude');
+    this.#tab = shown;
+    this.page = page ?? legacyTab(shown, section);
     this.projectId = has(projectId) ? projectId! : has(app.project?.id) ? app.project!.id : (app.projects[0]?.id ?? null);
   }
 
-  /** A tab has something to save. */
-  changed(tab: SettingsTab): boolean {
-    const keys = SETTINGS_OF[tab];
-    const own = !!keys && keys.some((k) => k in changes(settingsOf(this.#base.settings), settingsOf(this.settings)));
-    if (tab === 'integrations') return own || Object.keys(this.projects).some((id) => this.#linksChanged(id));
-    if (tab === 'board') return own || Object.keys(this.projects).some((id) => !empty(this.#boardChanges(id)));
-    if (tab === 'projects') return own || Object.keys(this.projects).some((id) => !empty(this.#projectChanges(id)));
-    if (keys) return own;
-    return false;
+  /** A page has something to save: for the project given, else for any (a page of a project). */
+  changed(page: SettingsPage, projectId?: string): boolean {
+    const keys = this.#changedKeys(projectId);
+    return rowsOf(page).some((r) => rowChanged(r, keys));
+  }
+
+  /** A tab of the 2.0 window has something to save: one of the rows it shows (until R2). */
+  tabChanged(tab: SettingsTab): boolean {
+    const keys = this.#changedKeys();
+    return SETTINGS_ROWS.some((r) => r.tab === tab && rowChanged(r, keys));
+  }
+
+  /** What differs from the draft as opened: the app's keys, and those of the project given (else of any). */
+  #changedKeys(projectId?: string): ChangedKeys {
+    const settings = new Set(Object.keys(changes(settingsOf(this.#base.settings), settingsOf(this.settings))));
+    const project = new Set<string>();
+    const board = new Set<string>();
+    for (const id of projectId ? [projectId] : Object.keys(this.projects)) {
+      for (const k of Object.keys(this.#projectChanges(id))) project.add(k === 'worktreeCopy' ? 'copy' : k);
+      if (this.#linksChanged(id)) project.add('integrations');
+      for (const k of Object.keys(this.#boardChanges(id))) board.add(k);
+    }
+    return { settings, project, board };
   }
 
   /**

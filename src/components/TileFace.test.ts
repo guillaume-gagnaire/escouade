@@ -155,7 +155,7 @@ describe('Réglages › Projets', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Choisir une image…' }));
     await waitFor(() => expect(app.toasts.map((t) => t.text)).toContain('« big.png » pèse 3 Mo : un logo pèse 1 Mo au plus.'));
     expect(preview().querySelector('img')).toBeNull();
-    expect(settingsForm.changed('projects')).toBe(false);
+    expect(settingsForm.changed('project')).toBe(false);
     expect(backend.called('set_project_logo')).toHaveLength(0);
   });
 });

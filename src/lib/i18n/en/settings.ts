@@ -24,6 +24,32 @@ export default defineZone('settings', {
     about: { label: 'About', desc: 'Version and local data' },
   },
 
+  pages: {
+    general: { label: 'General', desc: 'Theme, zoom, language, updates and what concerns you' },
+    agents: { label: 'Agents', desc: 'New agents, written texts, remote control and driving Escouade' },
+    accounts: {
+      label: 'Accounts and harnesses',
+      desc: 'This machine’s harnesses, their accounts, and what happens at the limit',
+    },
+    services: {
+      label: 'Connected services',
+      desc: 'Code hosts and ticket sources (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards)',
+    },
+    voice: { label: 'Voice', desc: 'Dictation and voice conversation, on your machine or online' },
+    notifications: { label: 'Notifications', desc: 'What alerts you, and how' },
+    plugins: { label: 'Plugins', desc: 'What they add to Escouade, where they come from and what they can do' },
+    advanced: { label: 'Advanced', desc: 'Network, terminals, attachments, search by meaning and local data' },
+    about: { label: 'About', desc: 'Version, credits and links' },
+    project: { label: 'Project', desc: 'This project only: its name, its tile, its harness and its account' },
+    git: { label: 'Git and worktrees', desc: 'Its agents’ worktrees, their branches, their commits and its repositories' },
+    launch: { label: 'Launch', desc: 'The commands that launch this project, and where its pages open' },
+    board: { label: 'Kanban', desc: 'Approved tickets, the autopilot, the tickets’ agents and the workflow' },
+    tickets: { label: 'Imported tickets', desc: 'The sources linked to this project and how their statuses map' },
+    team: { label: 'Team', desc: 'The shared Kanban, the shared settings (.escouade.yml) and the shared memory' },
+    privacy: { label: 'Privacy', desc: 'What this project keeps to itself: its files, its accounts, its plugins' },
+    allProjects: { label: 'All projects', desc: 'What a new project starts with, and the closed projects' },
+  },
+
   modal: {
     groupProject: 'Per project',
     groupSystem: 'System',

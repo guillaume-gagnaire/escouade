@@ -48,6 +48,22 @@ describe('SettingsModal', () => {
     app.modal = { kind: 'settings' };
   });
 
+  it('opens on the page asked for, or on the page of a 2.0 tab, in the tab that shows it until R2', () => {
+    fakeBackend({ save_settings: () => [] });
+    render(SettingsModal, { page: 'tickets', projectId: 'p2' });
+    expect(tab('Intégrations')).toHaveAttribute('aria-selected', 'true');
+    expect(settingsForm.page).toBe('tickets');
+    expect(settingsForm.projectId).toBe('p2');
+    cleanup();
+    render(SettingsModal, { tab: 'projects', projectId: 'p1', section: 'launch' });
+    expect(tab('Projets')).toHaveAttribute('aria-selected', 'true');
+    expect(settingsForm.page).toBe('launch');
+    cleanup();
+    render(SettingsModal, { tab: 'terminals' });
+    expect(tab('Terminaux')).toHaveAttribute('aria-selected', 'true');
+    expect(settingsForm.page).toBe('advanced');
+  });
+
   it('dit sous le chemin de l’exécutable où est son claude, dans WSL aussi', async () => {
     fakeBackend({
       claude_locate: ({ path }: { path: string }) =>

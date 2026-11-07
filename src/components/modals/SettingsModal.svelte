@@ -3,7 +3,7 @@
   import { trapFocus } from '../../lib/focus';
   import { t } from '../../lib/i18n';
   import { shownVersion } from '../../lib/updater';
-  import { SETTINGS_TABS, settingsForm, type SettingsTab } from '../../lib/settings.svelte';
+  import { LEGACY_TABS, settingsForm, type SettingsPage, type SettingsSection, type SettingsTab } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import AccountsTab from '../settings/AccountsTab.svelte';
   import AppTab from '../settings/AppTab.svelte';
@@ -22,22 +22,30 @@
 
   // All the settings, the app's and each project's, in one place: a tab at a time, saved together.
   let {
+    page,
     tab,
     projectId,
     section,
     resume = false,
     suggest = false,
-  }: { tab?: SettingsTab; projectId?: string; section?: 'launch' | 'sources'; resume?: boolean; suggest?: boolean } = $props();
+  }: {
+    page?: SettingsPage;
+    tab?: SettingsTab;
+    projectId?: string;
+    section?: SettingsSection;
+    resume?: boolean;
+    suggest?: boolean;
+  } = $props();
 
   // A fresh draft each time the modal opens, unless it comes back from a modal it opened. Asked for it, Claude reads
   // the project to fill the launch commands of the draft (only a fresh one: coming back is not asking again).
   untrack(() => {
-    if (resume) return settingsForm.resume({ tab, projectId });
-    settingsForm.open({ tab, projectId });
+    if (resume) return settingsForm.resume({ page, tab, projectId, section });
+    settingsForm.open({ page, tab, projectId, section });
     if (suggest && settingsForm.projectId) void settingsForm.suggestLaunch(settingsForm.projectId);
   });
 
-  const current = $derived(SETTINGS_TABS.find((x) => x.id === settingsForm.tab) ?? SETTINGS_TABS[0]);
+  const current = $derived(LEGACY_TABS.find((x) => x.id === settingsForm.tab) ?? LEGACY_TABS[0]);
   const project = $derived(app.projects.find((p) => p.id === settingsForm.projectId));
   const draft = $derived(settingsForm.project);
   let body = $state<HTMLElement>();
@@ -68,12 +76,12 @@
 
   /** Up and down go from tab to tab, Home and End to the first and the last. */
   function onTabKey(e: KeyboardEvent, i: number) {
-    const n = SETTINGS_TABS.length;
+    const n = LEGACY_TABS.length;
     const to: Record<string, number> = { ArrowDown: (i + 1) % n, ArrowUp: (i - 1 + n) % n, Home: 0, End: n - 1 };
     const next = to[e.key];
     if (next === undefined) return;
     e.preventDefault();
-    settingsForm.tab = SETTINGS_TABS[next].id;
+    settingsForm.tab = LEGACY_TABS[next].id;
     (e.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLElement>('[role="tab"]')[next]?.focus();
   }
 </script>
@@ -90,10 +98,10 @@
     <nav class="s-nav">
       <span class="s-nav-h" aria-hidden="true">{t('common.settings')}</span>
       <div class="tabs" role="tablist" aria-orientation="vertical" aria-label={t('common.settings')}>
-        {#each SETTINGS_TABS as entry, i (entry.id)}
+        {#each LEGACY_TABS as entry, i (entry.id)}
           {@const on = entry.id === current.id}
-          {@const changed = settingsForm.changed(entry.id)}
-          {#if i > 0 && entry.group !== SETTINGS_TABS[i - 1].group}
+          {@const changed = settingsForm.tabChanged(entry.id)}
+          {#if i > 0 && entry.group !== LEGACY_TABS[i - 1].group}
             <span class="s-group" role="presentation"
               >{entry.group === 'project' ? t('settings.modal.groupProject') : t('settings.modal.groupSystem')}</span
             >

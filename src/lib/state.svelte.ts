@@ -20,7 +20,7 @@ import { readPref, writePref } from './prefs';
 import { errorText, missingAccountOf } from './refusal';
 import { parseTestId, parseWorktreeRunId, testCommand, worktreeCommand } from './recipe';
 import type { IconName } from './icons';
-import type { SettingsTab } from './settings.svelte';
+import type { SettingsPage, SettingsSection, SettingsTab } from './settings-pages';
 import type { FormFile } from './ticket-files';
 import type { FormImage } from './ticket-images';
 import { setSources } from './integrations';
@@ -99,7 +99,18 @@ export type Modal =
    * scrolled to a section of it; `resume`: with the draft it had, back from a modal it opened; `suggest`: Claude
    * reads the project at once to suggest its launch commands.
    */
-  | { kind: 'settings'; tab?: SettingsTab; projectId?: string; section?: 'launch' | 'sources'; resume?: boolean; suggest?: boolean }
+  | {
+      kind: 'settings';
+      /** The page it opens on (the last one when left out). */
+      page?: SettingsPage;
+      /** The project of a project's page. */
+      projectId?: string;
+      /** An id of the 2.0 window, led to its page (`legacyTab`) until each link gives its page (R6 at the latest). */
+      tab?: SettingsTab;
+      section?: SettingsSection;
+      resume?: boolean;
+      suggest?: boolean;
+    }
   /**
    * `commit`: what it changed; `refs`: what changes from `from` to `to` (branches, or commits); `wholeProject`: every
    * uncommitted file the project's list shows, worktrees of the agents included.

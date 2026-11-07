@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync } from 'svelte';
 import { board, fakeBackend, project, resetApp, SETTINGS } from '../test/ipc';
 import { setLang } from './i18n';
-import { SETTINGS_TABS, settingsForm } from './settings.svelte';
+import { LEGACY_TABS, settingsForm } from './settings.svelte';
 import { app } from './state.svelte';
 import type { RunCommand } from './types';
 
@@ -105,17 +105,17 @@ describe('settingsForm', () => {
     expect(backend.called('save_settings')[0].args.settings).toMatchObject({ attachMaxMb: 0, attachWarnMb: 0, attachKeepDays: 2 });
   });
 
-  it('sees a change of the attachments in the Claude Code tab, and has none once it is saved', async () => {
+  it('sees a change of the attachments on the page Avancé, and has none once it is saved', async () => {
     fakeBackend({ save_settings: () => [] });
     settingsForm.open();
-    expect(settingsForm.changed('claude')).toBe(false);
+    expect(settingsForm.changed('advanced')).toBe(false);
     settingsForm.settings.attachWarnMb = 50;
-    expect(settingsForm.changed('claude')).toBe(true);
+    expect(settingsForm.changed('advanced')).toBe(true);
     settingsForm.settings.attachWarnMb = 200;
     settingsForm.settings.attachBigText = 'refuse';
-    expect(settingsForm.changed('claude')).toBe(true);
+    expect(settingsForm.changed('advanced')).toBe(true);
     await settingsForm.save();
-    expect(settingsForm.changed('claude')).toBe(false);
+    expect(settingsForm.changed('advanced')).toBe(false);
     expect(app.settings.attachBigText).toBe('refuse');
   });
 
@@ -176,14 +176,14 @@ describe('settingsForm', () => {
     Object.assign(first, { command: ' npm ci ', cwd: ' web ' });
     empty.command = '   ';
     settingsForm.projects.p1.worktreeTeardown[0].command = 'docker compose down';
-    expect(settingsForm.changed('projects')).toBe(true);
+    expect(settingsForm.changed('git')).toBe(true);
     expect(await settingsForm.save()).toBe(true);
 
     const saved = backend.called('update_project')[0].args.project;
     expect(saved.worktreeSetup).toEqual([{ id: first.id, command: 'npm ci', shell: 'bash', cwd: 'web' }]);
     expect(saved.worktreeTeardown).toMatchObject([{ command: 'docker compose down', shell: 'bash', cwd: '' }]);
     expect(app.projects[0].worktreeSetup).toEqual(saved.worktreeSetup);
-    expect(settingsForm.changed('projects')).toBe(false);
+    expect(settingsForm.changed('git')).toBe(false);
   });
 
   it("fills the worktree steps with Claude's suggestion, and says when it has none", async () => {
@@ -255,7 +255,7 @@ describe('settingsForm', () => {
     let answer!: (v: unknown) => void;
     const backend = fakeBackend({ suggest_run_commands: () => new Promise((r) => (answer = r)) });
     settingsForm.open({ tab: 'projects', projectId: 'p1' });
-    expect(settingsForm.changed('projects')).toBe(false);
+    expect(settingsForm.changed('launch')).toBe(false);
     const asked = settingsForm.suggestLaunch('p1');
     expect(settingsForm.suggestingLaunch.p1).toBe(true);
     // The worktree steps' reading is another one.
@@ -273,13 +273,13 @@ describe('settingsForm', () => {
     // Shown apart, to be read in full: the draft keeps FRONT until it is taken.
     expect(settingsForm.launchProposal.p1).toEqual([web, db]);
     expect(settingsForm.projects.p1.runCommands).toEqual([FRONT]);
-    expect(settingsForm.changed('projects')).toBe(false);
+    expect(settingsForm.changed('launch')).toBe(false);
     // Taken, it replaces the draft's command.
     settingsForm.takeLaunchProposal('p1');
     expect(settingsForm.launchProposal.p1).toBeUndefined();
     expect(settingsForm.projects.p1.runCommands).toEqual([web, db]);
     // A draft like another: it shows as a change, and cancelling drops it.
-    expect(settingsForm.changed('projects')).toBe(true);
+    expect(settingsForm.changed('launch')).toBe(true);
     expect(app.projects[0].runCommands).toEqual([FRONT]);
     settingsForm.open({ tab: 'projects', projectId: 'p1' });
     expect(settingsForm.projects.p1.runCommands).toEqual([FRONT]);
@@ -374,31 +374,33 @@ describe('settingsForm', () => {
     expect(backend.calls).toEqual([]);
   });
 
-  it('marks the tabs whose settings changed', () => {
+  it('marks the pages whose settings changed', () => {
     settingsForm.open();
-    expect(settingsForm.changed('claude')).toBe(false);
+    expect(settingsForm.changed('agents')).toBe(false);
     settingsForm.settings.idleStopMinutes = 5;
     settingsForm.settings.proxyTerminals = true;
     settingsForm.projects.p2.board.maxParallel = 5;
-    expect(settingsForm.changed('claude')).toBe(true);
-    expect(settingsForm.changed('network')).toBe(true);
+    expect(settingsForm.changed('agents')).toBe(true);
+    expect(settingsForm.changed('advanced')).toBe(true);
     expect(settingsForm.changed('board')).toBe(true);
     expect(settingsForm.changed('notifications')).toBe(false);
-    expect(settingsForm.changed('terminals')).toBe(false);
-    expect(settingsForm.changed('projects')).toBe(false);
+    expect(settingsForm.changed('voice')).toBe(false);
+    expect(settingsForm.changed('git')).toBe(false);
     settingsForm.projects.p1.copy = '.env*\n';
     // The same patterns: nothing to save.
-    expect(settingsForm.changed('projects')).toBe(false);
+    expect(settingsForm.changed('git')).toBe(false);
     settingsForm.projects.p1.copy = '.env.local';
-    expect(settingsForm.changed('projects')).toBe(true);
+    expect(settingsForm.changed('git')).toBe(true);
   });
 
-  it('marks the Kanban tab for its app setting, the quota pause, as for its boards', () => {
+  it('marks the quota pause on Comptes et harness, and still on the 2.0 Kanban tab', () => {
     settingsForm.open();
-    expect(settingsForm.changed('board')).toBe(false);
+    expect(settingsForm.changed('accounts')).toBe(false);
     settingsForm.settings.quotaPause = 90;
-    expect(settingsForm.changed('board')).toBe(true);
-    expect(settingsForm.changed('claude')).toBe(false);
+    expect(settingsForm.changed('accounts')).toBe(true);
+    expect(settingsForm.changed('board')).toBe(false);
+    expect(settingsForm.tabChanged('board')).toBe(true);
+    expect(settingsForm.tabChanged('accounts')).toBe(false);
   });
 
   it('keeps what could not be saved to try again, without saving twice what was', async () => {
@@ -418,7 +420,7 @@ describe('settingsForm', () => {
     expect(app.toasts.at(-1)?.text).toContain('disque plein');
     expect(app.projects[0].board.strategy).toBe('squash');
     expect(settingsForm.changed('notifications')).toBe(false);
-    expect(settingsForm.changed('projects')).toBe(false);
+    expect(settingsForm.changed('project')).toBe(false);
     expect(settingsForm.changed('board')).toBe(true);
 
     fail = false;
@@ -447,14 +449,15 @@ describe('settingsForm', () => {
     settingsForm.projects.p1.board.strategy = 'rebase';
     expect(await settingsForm.save()).toBe(false);
     expect(app.projects[0].name).toBe('api');
-    expect(settingsForm.changed('projects')).toBe(true);
+    expect(settingsForm.changed('project')).toBe(true);
   });
 
-  it('resumes the draft it had, on the tab and project asked for', () => {
+  it('resumes the draft it had, on the page and project asked for, or the page of a 2.0 tab', () => {
     settingsForm.open({ projectId: 'p1' });
     settingsForm.settings.proxyUrl = 'http://proxy:3128';
     settingsForm.resume({ tab: 'projects', projectId: 'p2' });
     expect(settingsForm.tab).toBe('projects');
+    expect(settingsForm.page).toBe('project');
     expect(settingsForm.projectId).toBe('p2');
     expect(settingsForm.settings.proxyUrl).toBe('http://proxy:3128');
     // Its project closed meanwhile: the one on screen.
@@ -463,17 +466,17 @@ describe('settingsForm', () => {
     expect(settingsForm.projectId).toBe('p1');
   });
 
-  it('saves a project’s links on the « Intégrations » tab alone, without its empty ones', async () => {
+  it('saves a project’s links on its page Tickets importés alone, without its empty ones', async () => {
     const backend = fakeBackend();
     settingsForm.open({ tab: 'integrations', projectId: 'p1' });
-    expect(settingsForm.changed('integrations')).toBe(false);
+    expect(settingsForm.changed('tickets')).toBe(false);
     settingsForm.projects.p1.integrations.links.push(
       { service: 'jira', container: 'ATL', name: 'ATL — Atlas', states: { doing: { id: '3', name: 'In Progress' } } },
       { service: 'trello', container: '', name: '', states: {} },
     );
     settingsForm.projects.p1.integrations.comments = ['done'];
-    expect(settingsForm.changed('integrations')).toBe(true);
-    expect(settingsForm.changed('projects')).toBe(false);
+    expect(settingsForm.changed('tickets')).toBe(true);
+    expect(settingsForm.changed('project')).toBe(false);
     expect(await settingsForm.save()).toBe(true);
     const sent = backend.called('update_project')[0].args.project;
     expect(sent.integrations).toEqual({
@@ -482,16 +485,16 @@ describe('settingsForm', () => {
     });
     expect(sent.name).toBe('demo-api');
     expect(app.projects[0].integrations.links.map((l) => l.container)).toEqual(['ATL']);
-    expect(settingsForm.changed('integrations')).toBe(false);
+    expect(settingsForm.changed('tickets')).toBe(false);
   });
 
-  it('counts the sync settings as the « Intégrations » tab’s', async () => {
+  it('counts the sync settings as the page Services connectés’s', async () => {
     const backend = fakeBackend({ save_settings: () => [] });
     settingsForm.open({ tab: 'integrations' });
     settingsForm.settings.integrations.autoImport = true;
     settingsForm.settings.integrations.importLabel = 'escouade';
-    expect(settingsForm.changed('integrations')).toBe(true);
-    expect(settingsForm.changed('claude')).toBe(false);
+    expect(settingsForm.changed('services')).toBe(true);
+    expect(settingsForm.changed('tickets')).toBe(false);
     await settingsForm.save();
     expect(backend.called('save_settings')[0].args.settings.integrations).toMatchObject({ autoImport: true, importLabel: 'escouade' });
     expect(backend.called('update_project')).toHaveLength(0);
@@ -506,8 +509,8 @@ describe('settingsForm', () => {
     expect(backend.called('update_project')).toHaveLength(0);
   });
 
-  it('names its tabs in the language of the interface, read when asked', () => {
-    const names = () => SETTINGS_TABS.map((x) => `${x.label} / ${x.desc}`);
+  it('names the 2.0 tabs, shown until R2, in the language of the interface, read when asked', () => {
+    const names = () => LEGACY_TABS.map((x) => `${x.label} / ${x.desc}`);
     expect(names()[5]).toBe('Projets / Réglages propres à chaque projet');
     setLang('en');
     flushSync();
@@ -527,13 +530,9 @@ describe('settingsForm', () => {
       'About / Version and local data',
     ]);
     // Those set for one project only.
-    expect(SETTINGS_TABS.filter((x) => x.scoped).map((x) => x.id)).toEqual(['projects', 'board', 'integrations']);
+    expect(LEGACY_TABS.filter((x) => x.scoped).map((x) => x.id)).toEqual(['projects', 'board', 'integrations']);
     // In three groups (2.0 design): the general ones, « Par projet », « Système ».
-    expect(SETTINGS_TABS.map((x) => x.group)).toEqual([
-      ...Array(5).fill('general'),
-      ...Array(3).fill('project'),
-      ...Array(5).fill('system'),
-    ]);
+    expect(LEGACY_TABS.map((x) => x.group)).toEqual([...Array(5).fill('general'), ...Array(3).fill('project'), ...Array(5).fill('system')]);
   });
 
   it('tells in English what Claude suggested, in the singular and the plural of what it proposed and what was left out', async () => {
