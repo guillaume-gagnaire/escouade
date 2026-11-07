@@ -8,6 +8,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### New
 
+- A plugin no longer keeps what Escouade lent it: the host of a failed connection attempt closes at once, and a removed account takes back its host and its token. An address that only looks local, such as `http://localhost:1@exemple.dev`, is refused right in the form.
 - The documentation has a page on code hosts: what Escouade does on GitHub, GitLab, Bitbucket, Gitea, Forgejo and Azure DevOps, its limits, and what has really been tried. The Privacy page says your tokens stay with you and nothing goes through an Escouade server.
 - If you accepted the usage statistics, they also count PRs opened and merged, CI fixes and reviews by an agent, without a name or an address.
 - The overview has a “Pull requests” group: what to fix, what to merge and the reviews asked of you, across every project. Each piece of news from a code host (CI failed, changes requested, PR approved or merged, conflict, review requested, deployment) has its own switch in Settings › Notifications, and agents can read pull requests through the MCP server.

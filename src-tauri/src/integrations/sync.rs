@@ -12,6 +12,7 @@ use crate::core::Core;
 use crate::forge::accounts::{self as forge_accounts, ForgeAccount};
 use crate::i18n::{self, Lang};
 use crate::paths;
+use crate::plugins::runtime::Trial;
 use crate::tickets::TicketDraft;
 use crate::{board, git};
 use std::path::Path;
@@ -398,6 +399,12 @@ fn sources(lang: Lang, tickets: &[Ticket]) -> String {
     }
 }
 
+/// Under what the secret of `service`'s account is lent to its plugin.
+fn lent_key(service: Service) -> String {
+    let account = crate::plugins::accounts::source_account(service);
+    format!("account:{account}")
+}
+
 /// GitLab Issues and Azure Boards have no account of their own: their code host's serves.
 fn by_its_host(service: Service) -> String {
     if service == Service::AZURE {
@@ -455,11 +462,13 @@ impl<R: Runtime> Core<R> {
         views
     }
 
-    /// A client of `service` for `account` (GitHub's token asked of its CLI when none was given).
+    /// A client of `service` for `account` (GitHub's token asked of its CLI when none was given). Its secret is lent for
+    /// as long as the account lasts, or for the `trial` of an account not saved yet, with its site's host.
     async fn client_for(
         &self,
         service: Service,
         account: &Account,
+        trial: Option<&Trial>,
     ) -> Result<Box<dyn TicketSource>> {
         if !account.plugin.is_empty() {
             // Another plugin than Escouade's own hand serves it.
@@ -492,11 +501,16 @@ impl<R: Runtime> Core<R> {
                 Service::CLICKUP => (account.token.clone(), Some(&bases.clickup)),
                 _ => (account.token.clone(), Some(&bases.github)),
             };
-            self.plugin_runtime
-                .lend(own, &format!("account:{host}"), &secret);
-            if !account.site.is_empty() {
-                self.plugin_runtime
-                    .lend_host(own, &crate::forge::host_of(&account.site));
+            let key = format!("account:{host}");
+            match trial {
+                Some(t) => t.lend(own, &key, &secret, &crate::forge::host_of(&account.site)),
+                // Under the lock its removal takes: no loan comes after `take_back`.
+                None => {
+                    let accounts = self.accounts.read();
+                    if accounts.get(service).is_some() {
+                        self.plugin_runtime.lend(own, &key, &secret);
+                    }
+                }
             }
             #[cfg(any(debug_assertions, test))]
             self.plugin_runtime.set_routes(bases.faked());
@@ -530,7 +544,7 @@ impl<R: Runtime> Core<R> {
                 plugin: a.plugin.clone(),
                 ..Account::default()
             };
-            return self.client_for(service, &account).await;
+            return self.client_for(service, &account, None).await;
         }
         if service == Service::GITLAB {
             return self.gitlab_client().await;
@@ -554,7 +568,7 @@ impl<R: Runtime> Core<R> {
                 "The system keychain can’t be read: restart Escouade or connect the {name} account again."
             ));
         }
-        self.client_for(service, &account).await
+        self.client_for(service, &account, None).await
     }
 
     /// The code host's account of a source hosted by it (GitLab Issues, Azure Boards) when
@@ -605,8 +619,7 @@ impl<R: Runtime> Core<R> {
                     // The plugin « GitLab » serves it: the token as the core holds it (the user's, or `glab`'s)
                     // is lent to it under the instance's name.
                     let own = crate::plugins::builtin::GITLAB;
-                    self.plugin_runtime
-                        .lend(own, &format!("account:{host}"), &c.token);
+                    self.lend_account(own, &host, &c.token);
                     let account = Account {
                         site: a.url.clone(),
                         label: a.label.clone(),
@@ -668,8 +681,7 @@ impl<R: Runtime> Core<R> {
             match self.credentials(&a).await {
                 Ok(c) => {
                     let url = c.url.trim_end_matches('/').to_string();
-                    self.plugin_runtime
-                        .lend(plugin, &format!("account:{host}"), &c.token);
+                    self.lend_account(plugin, &host, &c.token);
                     let account = Account {
                         site: url.clone(),
                         label: a.label.clone(),
@@ -781,7 +793,8 @@ impl<R: Runtime> Core<R> {
         if !account.plugin.is_empty() {
             secrets::place(&*self.secrets, service, &mut account);
         }
-        let asked = match self.client_for(service, &account).await {
+        let trial = self.plugin_runtime.trial();
+        let asked = match self.client_for(service, &account, Some(&trial)).await {
             Ok(client) => client.me().await,
             Err(e) => Err(e),
         };
@@ -809,6 +822,8 @@ impl<R: Runtime> Core<R> {
                 accounts.to_forget.push(service);
             }
             accounts.set(service, Some(account));
+            self.plugin_runtime.take_back(&lent_key(service));
+            trial.keep();
         }
         self.save_accounts()?;
         Ok(self
@@ -853,6 +868,7 @@ impl<R: Runtime> Core<R> {
                 accounts.to_forget.push(service);
             }
             accounts.set(service, None);
+            self.plugin_runtime.take_back(&lent_key(service));
         }
         if service == Service::GITHUB {
             *self.gh_token.lock() = None;

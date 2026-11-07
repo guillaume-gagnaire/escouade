@@ -2068,7 +2068,7 @@ impl<R: Runtime> Core<R> {
             .set_accounts(std::sync::Arc::new(move |plugin| {
                 weak.upgrade().map_or(Vec::new(), |c| {
                     let mut hosts = crate::plugins::accounts::hosts_of(&c.accounts.read(), plugin);
-                    hosts.extend(c.plugin_runtime.lent_host(plugin));
+                    hosts.extend(c.plugin_runtime.lent_hosts(plugin));
                     hosts
                 })
             }));

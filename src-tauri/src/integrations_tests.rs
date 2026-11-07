@@ -545,6 +545,45 @@ async fn nothing_is_said_of_a_ticket_made_by_hand_nor_with_the_sync_turned_off()
 }
 
 #[tokio::test]
+async fn the_forms_read_the_host_of_a_site_that_only_looks_local() {
+    let h = harness("ig-looks-local");
+    let typed = "http://localhost:1@exemple.dev";
+    let e = h
+        .core
+        .integration_connect(
+            Service::JIRA,
+            Account {
+                site: typed.into(),
+                email: "a@b".into(),
+                token: "t".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        e.to_string(),
+        "Le site Jira doit être en https (http seulement sur cette machine)."
+    );
+    let insecure = "L'adresse doit être en https (http seulement sur cette machine).";
+    let e = h
+        .core
+        .forge_connect(crate::forge::connect::ForgeForm {
+            kind: "gitlab".into(),
+            url: typed.into(),
+            token: "t".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(e.to_string(), insecure);
+    assert_eq!(
+        h.core.forge_guess(typed).await.unwrap_err().to_string(),
+        insecure
+    );
+}
+
+#[tokio::test]
 async fn accounts_are_checked_saved_apart_and_forgotten() {
     let h = harness("ig-accounts");
     let server = FakeServer::start().await;

@@ -1,8 +1,8 @@
 ---
 title: "Les comptes partagés par plugin"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §4.3, §4.4, §4.8","docs/TODO-2.2.md (INT-6)","src-tauri/src/plugins/accounts.rs"]
-tickets: ["ESC-212","ESC-327"]
+sources: ["docs/PLUGINS.md §4.3, §4.4, §4.8","docs/TODO-2.2.md (INT-6)","src-tauri/src/plugins/accounts.rs","src-tauri/src/plugins/runtime.rs","src-tauri/src/integrations/jira.rs"]
+tickets: ["ESC-212","ESC-327","ESC-360"]
 decisions: [33]
 compared: null
 ---
@@ -50,3 +50,12 @@ Un compte (un GitLab, un Jira…) est d'un genre, que déclare le plugin qui le 
 - Le plugin « Mistral » déclare le genre `mistral`, dont les points sont un harness et une voix (`harnesses:vibe`, `voice:mistral`) : un compte de plugin ne sert pas que des sources et des hébergeurs. Le genre le dit dans `voice`, le harness par son `account`.
 - Une exception assumée à la lecture par `secrets/get` : le plugin n'a aucun droit sur le trousseau. La clé part avec chaque appel de la voix, et à Vibe par `MISTRAL_API_KEY`.
 - Le compte `mistral` et les comptes `vibe-<id>` ont leurs anciens noms (`dictation-mistral`, `vibe:<id>`), tenus et lus d'abord, comme ci-dessus. Le détail est dans *Mistral Vibe en plugin*.
+
+## Ce que le cœur prête à un plugin, et quand il le reprend
+
+- **Pendant un essai de connexion**, le cœur prête au plugin l'hôte saisi et le jeton, le temps de cet essai seul. Réussi ou raté, le prêt finit avec lui : un hôte mal tapé n'est plus joignable, ni un jeton refusé lisible. Un essai réussi laisse son jeton prêté au compte enregistré.
+- Deux essais en même temps sur un plugin ont chacun leur prêt : aucun ne prend l'hôte de l'autre, et chacun reprend le sien seulement.
+- Un essai raté sur un compte qui tourne (un jeton retapé) lui laisse son jeton. Pendant l'essai, un appel de ce compte lit le jeton essayé : `secrets/get` ne dit pas qui demande.
+- **Un compte enregistré** n'a pas besoin d'hôte prêté : `{account}` le lit dans les comptes à chaque appel. Son jeton lui reste prêté (celui de sa CLI n'est nulle part ailleurs), et reprêté à chaque client.
+- **Au retrait du compte**, son jeton est repris, pour tout plugin, sans toucher aux prêts d'un autre compte. Un jeton lu pendant le retrait n'est plus prêté. Un compte repris par un autre plugin perd de même le prêt du premier.
+- **L'adresse d'un compte** (Jira, hébergeur de code) est lue par un parseur d'URL : c'est l'hôte réel qui décide de « https, sauf cette machine ». `http://localhost:1@exemple.dev` vise `exemple.dev` : refusée dès le formulaire. `localhost`, `127.0.0.1` et `[::1]` passent en http, à toute casse et avec un port ou un utilisateur ; `localhost.exemple.dev` non.

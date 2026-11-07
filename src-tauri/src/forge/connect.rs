@@ -7,6 +7,7 @@ use crate::core::Core;
 use crate::integrations::{jira, Account};
 use crate::model::Service;
 use crate::model::UiEvent;
+use crate::plugins::runtime::Trial;
 use anyhow::bail;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -341,24 +342,30 @@ impl<R: Runtime> Core<R> {
             ));
         }
         let creds = self.credentials(&a).await?;
-        let client = self.client_of(&a.kind, &a.plugin, &creds)?;
+        let client = self.client_of(&a.kind, &a.plugin, &creds, None)?;
         Ok((client, a))
     }
 
     /// The client of an account of the code host `kind`: its plugin's (`ProcessForge`) when
     /// another than Escouade's own hand serves it (`plugin`), else the core's.
     /// A host whose client left the core (`Provider::plugin`: GitHub's) is its plugin's too, the
-    /// account's token lent to it as the core holds it (the user's, or its CLI's).
-    fn client_of(&self, kind: &str, plugin: &str, creds: &Credentials) -> Result<Box<dyn Forge>> {
+    /// account's token lent to it as the core holds it (the user's, or its CLI's): for as long as the account lasts,
+    /// or for the `trial` of an account not saved yet, with its host.
+    fn client_of(
+        &self,
+        kind: &str,
+        plugin: &str,
+        creds: &Credentials,
+        trial: Option<&Trial>,
+    ) -> Result<Box<dyn Forge>> {
         let provider = self.provider(kind)?;
         let first_hand = provider.plugin().filter(|_| plugin.is_empty());
         if let Some(own) = first_hand {
-            self.plugin_runtime.lend(
-                own,
-                &format!("account:{}", host_of(&creds.url)),
-                &creds.token,
-            );
-            self.plugin_runtime.lend_host(own, &host_of(&creds.url));
+            let host = host_of(&creds.url);
+            match trial {
+                Some(t) => t.lend(own, &format!("account:{host}"), &creds.token, &host),
+                None => self.lend_account(own, &host, &creds.token),
+            }
             #[cfg(any(debug_assertions, test))]
             self.plugin_runtime.set_routes(self.bases.read().faked());
         }
@@ -371,6 +378,16 @@ impl<R: Runtime> Core<R> {
             )));
         }
         Ok(provider.client(self.http()?, creds))
+    }
+
+    /// Lends `own` the token of the account of `host`, unless it went while its token was read: under the lock its
+    /// removal takes, so that no loan comes after `take_back`.
+    pub(crate) fn lend_account(&self, own: &str, host: &str, token: &str) {
+        let all = self.accounts.read();
+        if accounts::all(&all).iter().any(|a| a.host() == host) {
+            self.plugin_runtime
+                .lend(own, &format!("account:{host}"), token);
+        }
     }
 
     /// The plugin the app gives `id`, as the code hosts' view shows it.
@@ -510,7 +527,7 @@ impl<R: Runtime> Core<R> {
         let asked = async {
             let p = self.provider(&a.kind)?;
             let creds = self.credentials(a).await?;
-            let client = self.client_of(&a.kind, &a.plugin, &creds)?;
+            let client = self.client_of(&a.kind, &a.plugin, &creds, None)?;
             Ok::<_, anyhow::Error>(check_client(&*client, &p.scopes()).await.0)
         };
         asked.await.unwrap_or_else(|e| Status {
@@ -610,7 +627,8 @@ impl<R: Runtime> Core<R> {
         if !account.plugin.is_empty() {
             accounts::place(&*self.secrets, &mut account);
         }
-        let client = self.client_of(&account.kind, &account.plugin, &creds)?;
+        let trial = self.plugin_runtime.trial();
+        let client = self.client_of(&account.kind, &account.plugin, &creds, Some(&trial))?;
         let (status, id) = check_client(&*client, &provider.scopes()).await;
         let Some(id) = id else {
             if !account.plugin.is_empty() {
@@ -629,6 +647,8 @@ impl<R: Runtime> Core<R> {
             }
             all.forges.retain(|a| a.host() != host);
             all.forges.push(account);
+            self.plugin_runtime.take_back(&format!("account:{host}"));
+            trial.keep();
         }
         crate::integrations::secrets::save_accounts(&self.data, &self.accounts.read())?;
         self.forge_health.lock().insert(host, status);
@@ -682,6 +702,7 @@ impl<R: Runtime> Core<R> {
                 all.forget_forges.push(host.clone());
             }
             all.forges.retain(|a| a.host() != host);
+            self.plugin_runtime.take_back(&format!("account:{host}"));
         }
         crate::integrations::secrets::save_accounts(&self.data, &self.accounts.read())?;
         Ok(self.forges_view().await)

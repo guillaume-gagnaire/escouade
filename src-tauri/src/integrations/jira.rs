@@ -13,17 +13,14 @@ pub fn site(typed: &str) -> String {
 
 /// A site its token may be sent to: over https, or over http to this machine only (a fake one).
 pub fn secure(site: &str) -> bool {
-    if site.starts_with("https://") {
-        return true;
+    let Ok(url) = reqwest::Url::parse(site) else {
+        return false;
+    };
+    match url.scheme() {
+        "https" => true,
+        "http" => matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]")),
+        _ => false,
     }
-    let host = site
-        .strip_prefix("http://")
-        .unwrap_or(site)
-        .split('/')
-        .next()
-        .unwrap_or("");
-    let name = host.rsplit_once(':').map_or(host, |(h, _)| h);
-    matches!(name, "localhost" | "127.0.0.1" | "[::1]")
 }
 
 #[cfg(test)]
@@ -44,5 +41,25 @@ mod tests {
         assert!(secure("https://atlas.atlassian.net"));
         assert!(secure("http://localhost:4101") && secure("http://127.0.0.1:1"));
         assert!(!secure("http://atlas.atlassian.net"));
+    }
+
+    #[test]
+    fn the_host_of_a_site_is_the_one_its_address_really_names() {
+        // What stands before an @ is a user, however local it looks.
+        assert!(!secure("http://localhost:1@exemple.dev"));
+        assert!(!secure("http://127.0.0.1@exemple.dev/"));
+        assert!(secure("http://user@localhost:4101"));
+        assert!(!secure("http://localhost.exemple.dev"));
+        assert!(secure("http://[::1]:4101") && secure("http://[::1]"));
+        assert!(!secure("http://[::2]:4101"));
+        assert!(secure("http://LocalHost:4101") && secure("HTTP://127.0.0.1"));
+        assert!(secure("HTTPS://atlas.atlassian.net"));
+        assert!(!secure("HTTP://Atlas.Atlassian.Net"));
+    }
+
+    #[test]
+    fn what_is_no_web_address_takes_no_token() {
+        assert!(!secure("https://") && !secure("http://"));
+        assert!(!secure("ftp://localhost") && !secure("localhost:4101"));
     }
 }
