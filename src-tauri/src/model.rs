@@ -437,6 +437,17 @@ pub struct NotifyFor {
     pub errors: bool,
     /// "Tickets (prêt à tester, bloqué)".
     pub tickets: bool,
+    /// The news of the code hosts (ESC-68), one by one: "CI en échec", "Changements demandés",
+    /// "PR approuvée", "PR mergée", "Conflit", "Relecture demandée", "Déploiement en production
+    /// réussi", "Déploiement en échec".
+    pub pr_ci_failed: bool,
+    pub pr_changes: bool,
+    pub pr_approved: bool,
+    pub pr_merged: bool,
+    pub pr_conflict: bool,
+    pub pr_review: bool,
+    pub deploy_ok: bool,
+    pub deploy_failed: bool,
 }
 
 impl Default for NotifyFor {
@@ -446,11 +457,40 @@ impl Default for NotifyFor {
             done: true,
             errors: true,
             tickets: true,
+            pr_ci_failed: true,
+            pr_changes: true,
+            pr_approved: true,
+            pr_merged: true,
+            pr_conflict: true,
+            pr_review: true,
+            deploy_ok: true,
+            deploy_failed: true,
         }
     }
 }
 
 impl NotifyFor {
+    /// All on but `kind`, for the tests of the choices.
+    #[cfg(test)]
+    pub fn all_but(kind: NotifyKind) -> Self {
+        let mut n = Self::default();
+        *match kind {
+            NotifyKind::Question => &mut n.questions,
+            NotifyKind::Done => &mut n.done,
+            NotifyKind::Error => &mut n.errors,
+            NotifyKind::Ticket => &mut n.tickets,
+            NotifyKind::PrCiFailed => &mut n.pr_ci_failed,
+            NotifyKind::PrChanges => &mut n.pr_changes,
+            NotifyKind::PrApproved => &mut n.pr_approved,
+            NotifyKind::PrMerged => &mut n.pr_merged,
+            NotifyKind::PrConflict => &mut n.pr_conflict,
+            NotifyKind::PrReview => &mut n.pr_review,
+            NotifyKind::DeployOk => &mut n.deploy_ok,
+            NotifyKind::DeployFailed => &mut n.deploy_failed,
+        } = false;
+        n
+    }
+
     /// The user wants to be told of this kind of event.
     pub fn allows(&self, kind: NotifyKind) -> bool {
         match kind {
@@ -458,6 +498,14 @@ impl NotifyFor {
             NotifyKind::Done => self.done,
             NotifyKind::Error => self.errors,
             NotifyKind::Ticket => self.tickets,
+            NotifyKind::PrCiFailed => self.pr_ci_failed,
+            NotifyKind::PrChanges => self.pr_changes,
+            NotifyKind::PrApproved => self.pr_approved,
+            NotifyKind::PrMerged => self.pr_merged,
+            NotifyKind::PrConflict => self.pr_conflict,
+            NotifyKind::PrReview => self.pr_review,
+            NotifyKind::DeployOk => self.deploy_ok,
+            NotifyKind::DeployFailed => self.deploy_failed,
         }
     }
 }
@@ -3001,6 +3049,12 @@ pub enum UiEvent {
     FocusBoard {
         project_id: String,
     },
+    /// The notification of a review asked of the user was clicked: the project's pull requests
+    /// are shown (ESC-68).
+    #[serde(rename_all = "camelCase")]
+    FocusPrs {
+        project_id: String,
+    },
     /// Why no ticket of the project's board starts (its target branch has no commit yet, or is
     /// gone), or None once they may start again.
     /// A review of a pull request written by an agent, changed (ESC-66).
@@ -3246,28 +3300,17 @@ mod tests {
         );
         assert_eq!(
             serde_json::to_value(&s).unwrap()["notifyFor"],
-            json!({ "questions": true, "done": false, "errors": true, "tickets": true })
+            json!({
+                "questions": true, "done": false, "errors": true, "tickets": true,
+                "prCiFailed": true, "prChanges": true, "prApproved": true, "prMerged": true,
+                "prConflict": true, "prReview": true, "deployOk": true, "deployFailed": true,
+            })
         );
     }
 
     #[test]
     fn a_notification_kind_is_let_through_by_its_own_choice_only() {
-        let all_but = |off: NotifyKind| {
-            let mut n = NotifyFor::default();
-            match off {
-                NotifyKind::Question => n.questions = false,
-                NotifyKind::Done => n.done = false,
-                NotifyKind::Error => n.errors = false,
-                NotifyKind::Ticket => n.tickets = false,
-            }
-            n
-        };
-        let kinds = [
-            NotifyKind::Question,
-            NotifyKind::Done,
-            NotifyKind::Error,
-            NotifyKind::Ticket,
-        ];
+        let (all_but, kinds) = (NotifyFor::all_but, NotifyKind::ALL);
         for off in kinds {
             let n = all_but(off);
             for kind in kinds {

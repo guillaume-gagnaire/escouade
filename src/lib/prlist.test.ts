@@ -11,12 +11,15 @@ import {
   forkOwner,
   isMine,
   moveIn,
+  needOf,
+  overviewPrs,
   ownerOf,
   rowTone,
   saveFilter,
   savedFilter,
 } from './prlist';
-import { agent, pullRequest as pr } from '../test/ipc';
+import { agent, pullRequest as pr, ticket } from '../test/ipc';
+import type { TicketPr } from './types';
 
 const NOW = 1_793_260_800_000;
 
@@ -119,5 +122,84 @@ describe('in English', () => {
     setLang('en');
     expect(ciOf(pr({ checks: null })).text).toBe('No CI');
     expect(chipsOf(pr({ mergeable: false, reviewers: ['ada'] }), 'ada').map((c) => c.text)).toEqual(['Conflict', 'Your review']);
+  });
+});
+
+describe('the group « Pull requests » of the overview (ESC-68)', () => {
+  const list = (prs: ReturnType<typeof pr>[], over = {}) => ({ projectId: 'p1', word: 'PR', me: 'ada', prs, ...over });
+  const inReview = (number: number, over: Partial<TicketPr> = {}) =>
+    ticket({
+      column: 'pr',
+      agentId: null,
+      pr: {
+        number,
+        word: 'PR',
+        state: 'open',
+        draft: false,
+        approvals: 0,
+        changesRequested: false,
+        openThreads: 0,
+        checks: null,
+        closed: false,
+        ...over,
+      } as TicketPr,
+    });
+
+  it('tells what a pull request waits for', () => {
+    expect(needOf(pr({ checks: 'failure' }))).toBe('fix');
+    expect(needOf(pr({ changesRequested: true, approvals: 1 }))).toBe('fix');
+    expect(needOf(pr({ mergeable: false }))).toBe('fix');
+    expect(needOf(pr({ approvals: 1, checks: 'success' }))).toBe('merge');
+    expect(needOf(pr({ approvals: 1, checks: null }))).toBe('merge');
+    expect(needOf(pr({ approvals: 1, checks: 'pending' }))).toBeNull();
+    expect(needOf(pr({ approvals: 0, checks: 'success' }))).toBeNull();
+    expect(needOf(pr({ draft: true, checks: 'failure' }))).toBeNull();
+    expect(needOf(pr({ state: 'merged', approvals: 1 }))).toBeNull();
+  });
+
+  it('gathers the tickets, the agents and the lists, once each, the most pressing first', () => {
+    const a = agent({ id: 'a1', projectId: 'p1', prs: [pr({ number: 7, checks: 'failure' })] });
+    const t = inReview(12, { approvals: 1, checks: 'success' });
+    const lines = overviewPrs(
+      [
+        list([
+          pr({ number: 7, author: 'ada', checks: 'failure' }),
+          pr({ number: 12, author: 'ada' }),
+          pr({ number: 20, author: 'bob', reviewers: ['Ada'] }),
+          pr({ number: 21, author: 'ada', approvals: 1 }),
+          pr({ number: 22, author: 'bob', approvals: 1 }),
+          pr({ number: 23, author: 'ada', reviewers: ['ada'] }),
+        ]),
+      ],
+      [a],
+      [t],
+      ['p1'],
+    );
+    expect(lines.map((o) => [o.need, o.pr.number])).toEqual([
+      ['fix', 7],
+      ['merge', 21],
+      ['merge', 12],
+      ['review', 20],
+    ]);
+    expect(lines[0].agent?.id).toBe('a1');
+    expect(lines[2].ticket?.id).toBe(t.id);
+    expect(lines[2].pr.title).toBe(t.title);
+    expect(lines[3].agent).toBeNull();
+  });
+
+  it('leaves out an archived agent, a closed pull request and a project that is not open', () => {
+    const gone = agent({ id: 'a1', projectId: 'p1', archived: true, prs: [pr({ number: 7, checks: 'failure' })] });
+    const closed = inReview(12, { checks: 'failure', closed: true });
+    expect(overviewPrs([], [gone], [closed], ['p1'])).toEqual([]);
+    const elsewhere = agent({ id: 'a2', projectId: 'p9', prs: [pr({ number: 8, checks: 'failure' })] });
+    expect(overviewPrs([list([pr({ author: 'ada', checks: 'failure' })], { projectId: 'p9' })], [elsewhere], [], ['p1'])).toEqual([]);
+  });
+
+  it('keeps apart two pull requests of the same number in two repositories', () => {
+    const a = agent({
+      projectId: 'p1',
+      prs: [pr({ number: 7, checks: 'failure' }), pr({ number: 7, checks: 'failure', hostRepo: 'acme/up' })],
+    });
+    expect(overviewPrs([], [a], [], ['p1'])).toHaveLength(2);
   });
 });

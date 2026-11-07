@@ -151,6 +151,44 @@ pub fn new_failures<'a>(before: &[Environment], after: &'a [Environment]) -> Vec
         .collect()
 }
 
+/// The productions where a new deployment succeeded since `before` (an environment that was not
+/// there counts): each is notified once. A success older than what was known is not news: a
+/// reading of the host goes back as far as it can.
+pub fn new_productions<'a>(
+    before: &[Environment],
+    after: &'a [Environment],
+) -> Vec<&'a Environment> {
+    after
+        .iter()
+        .filter(|e| e.production)
+        .filter(|e| {
+            let Some(new) = &e.running else { return false };
+            let Some(was) = before.iter().find(|b| b.name == e.name) else {
+                return true;
+            };
+            match (&was.running, &was.latest) {
+                (Some(old), _) => old.sha != new.sha && new.created >= old.created,
+                (None, Some(old)) => new.created >= old.created,
+                (None, None) => true,
+            }
+        })
+        .collect()
+}
+
+/// What the notification of a deployment in production says.
+pub fn success_text(lang: Lang, e: &Environment) -> String {
+    let name = &e.name;
+    let sha: String = e
+        .running
+        .as_ref()
+        .map(|d| d.sha.chars().take(7).collect())
+        .unwrap_or_default();
+    match sha.is_empty() {
+        true => tr_in!(lang, "Déployé : {name}", "Deployed: {name}"),
+        false => tr_in!(lang, "Déployé : {name} ({sha})", "Deployed: {name} ({sha})"),
+    }
+}
+
 /// What the notification of a failed deployment says.
 pub fn failure_text(lang: Lang, e: &Environment) -> String {
     let name = &e.name;
@@ -313,12 +351,18 @@ impl<R: tauri::Runtime> Core<R> {
             let old = before.map(|b| b.environments).unwrap_or_default();
             // The first reading of a project tells nothing: what failed before is not news.
             if out.read_at.is_some() && !old.is_empty() {
-                for e in new_failures(&old, &out.environments) {
-                    let name = self.project(project_id).map(|p| p.name).unwrap_or_default();
+                let name = self.project(project_id).map(|p| p.name).unwrap_or_default();
+                let failures = new_failures(&old, &out.environments)
+                    .into_iter()
+                    .map(|e| (NotifyKind::DeployFailed, failure_text(i18n::ui(), e)));
+                let successes = new_productions(&old, &out.environments)
+                    .into_iter()
+                    .map(|e| (NotifyKind::DeployOk, success_text(i18n::ui(), e)));
+                for (kind, text) in failures.chain(successes) {
                     self.alert(
-                        NotifyKind::Ticket,
-                        name,
-                        failure_text(i18n::ui(), e),
+                        kind,
+                        name.clone(),
+                        text,
                         UiEvent::FocusBoard {
                             project_id: project_id.to_string(),
                         },

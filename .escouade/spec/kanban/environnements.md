@@ -2,7 +2,7 @@
 title: "Environnements et déploiements"
 subject: "kanban"
 sources: ["docs/TODO-1.8.md (chapitre 2, « Les déploiements »)","design/esc-67/README.md"]
-tickets: ["ESC-67"]
+tickets: ["ESC-67","ESC-68"]
 decisions: [61]
 compared: null
 ---
@@ -39,7 +39,11 @@ Après le merge, Escouade suit les déploiements du dépôt chez son hébergeur 
 ### Un déploiement en échec
 
 - Le dernier déploiement d'un environnement a échoué : son couloir est bordé de rouge, avec « Dernier déploiement en échec · <commit> » et « Voir le job », qui ouvre son journal chez l'hébergeur. Ce qui y tourne reste le dernier déploiement réussi.
-- Une notification le dit une fois par déploiement (« Déploiement en échec : production (<commit>) ») ; un clic ouvre le Kanban du projet. Ce qui avait déjà échoué à la première lecture n'est pas notifié. Elle suit le réglage des notifications des tickets.
+- Une notification le dit une fois par déploiement (« Déploiement en échec : production (<commit>) »), dans tout environnement ; un clic ouvre le Kanban du projet. Ce qui avait déjà échoué à la première lecture n'est pas notifié. Elle a son propre réglage, « Déploiement en échec » (voir *Notifications*).
+
+### Un déploiement en production réussi
+
+- Une notification le dit une fois par déploiement (« Déployé : production (<commit>) »), en production seulement ; un clic ouvre le Kanban du projet. La première lecture d'un projet ne dit rien. Elle a son propre réglage, « Déploiement en production réussi » (voir *Notifications*).
 
 ### Les aperçus
 

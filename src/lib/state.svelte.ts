@@ -757,6 +757,10 @@ class AppState {
         // The click of a ticket's notification.
         this.openBoard(e.projectId);
         break;
+      case 'focusPrs':
+        // The click of a review asked of the user.
+        this.openPrs(e.projectId);
+        break;
       case 'toast':
         // For want of an account (ESC-128): with « Ajouter un compte… ».
         if (missingAccountOf(e.text)) this.refused(e.text);

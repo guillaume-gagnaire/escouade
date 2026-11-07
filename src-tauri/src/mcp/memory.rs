@@ -16,7 +16,7 @@ use std::sync::Arc;
 use tauri::Runtime;
 
 /// The project the call names, or the calling agent's own when it names none.
-fn project_of<R: Runtime>(
+pub(super) fn project_of<R: Runtime>(
     core: &Core<R>,
     caller: &Caller,
     asked: Option<&str>,

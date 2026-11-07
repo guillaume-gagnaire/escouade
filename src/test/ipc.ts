@@ -41,7 +41,13 @@ export interface Call {
 }
 
 /** What a command answers when a test gives it no handler: nothing (null), except the lists the window reads on its own. */
-const ANSWERS: Record<string, unknown> = { closed_projects: [], memory_list: [], claude_memory_offer: [], target_cis: {} };
+const ANSWERS: Record<string, unknown> = {
+  closed_projects: [],
+  memory_list: [],
+  claude_memory_offer: [],
+  target_cis: {},
+  overview_prs: [],
+};
 
 /** What the backend answers by default from the arguments of a call. */
 const DEFAULTS: Record<string, (args: any) => unknown> = {
@@ -71,7 +77,20 @@ export const SETTINGS: Settings = {
   claudePath: '',
   sound: true,
   osNotifications: true,
-  notifyFor: { questions: true, done: true, errors: true, tickets: true },
+  notifyFor: {
+    questions: true,
+    done: true,
+    errors: true,
+    tickets: true,
+    prCiFailed: true,
+    prChanges: true,
+    prApproved: true,
+    prMerged: true,
+    prConflict: true,
+    prReview: true,
+    deployOk: true,
+    deployFailed: true,
+  },
   idleStopMinutes: 30,
   attachMaxMb: 0,
   attachWarnMb: 200,

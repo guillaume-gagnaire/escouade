@@ -12,10 +12,11 @@ use super::Caller;
 use crate::accounts;
 use crate::agent::{AgentRt, Waiting};
 use crate::core::Core;
+use crate::forge::{CheckState, PrState, PullRequest};
 use crate::git;
 use crate::model::{
     AgentMeta, AgentStatus, Column, Criterion, EngineId, PauseReason, PendingView, Project,
-    QuotaMeter, RateWindow, RemoteSource, Service, Ticket, FIVE_HOURS, MAX_PENDING_FIELD,
+    QuotaMeter, RateWindow, RemoteSource, Service, Ticket, TicketPr, FIVE_HOURS, MAX_PENDING_FIELD,
     MAX_PENDING_ITEMS, WEEK,
 };
 use crate::plan::PlanState;
@@ -544,6 +545,9 @@ pub(crate) struct TicketView {
     #[serde(skip_serializing_if = "Option::is_none")]
     account_lost: Option<String>,
     external: Option<External>,
+    /// Its pull request as last read: the one its validation opened, else the first of its agent.
+    /// No title nor comment here, none of a third party's words: `get_pull_request` gives them.
+    pr: Option<TicketPrView>,
     /// Its agent: None before it starts, and still named once the ticket is done (archived).
     agent: Option<TicketAgent>,
     /// Its agent's branch, else the existing one it takes up; None before its agent starts. Kept
@@ -564,6 +568,76 @@ pub(crate) struct TicketView {
     step: Option<String>,
     /// What its approval did, once it is done.
     outcome: Option<Outcome>,
+}
+
+/// A ticket's pull request, as `get_ticket` sums it up (ESC-68).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TicketPrView {
+    number: u64,
+    url: String,
+    /// The host's word: « MR » on GitLab, « PR » elsewhere.
+    word: String,
+    state: PrState,
+    draft: bool,
+    branch: String,
+    target: String,
+    /// The repository it is in, when it is not the project's target.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    repo: String,
+    checks: Option<CheckState>,
+    checks_failed: u32,
+    approvals: u32,
+    changes_requested: bool,
+    open_threads: u32,
+    conflict: Option<bool>,
+    /// When it was last read (ms); none for one read when its agent was shown.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    checked_at: Option<i64>,
+}
+
+impl From<&TicketPr> for TicketPrView {
+    fn from(p: &TicketPr) -> Self {
+        Self {
+            number: p.number,
+            url: p.url.clone(),
+            word: p.word.clone(),
+            state: p.state,
+            draft: p.draft,
+            branch: p.branch.clone(),
+            target: p.target.clone(),
+            repo: String::new(),
+            checks: p.checks,
+            checks_failed: p.checks_failed,
+            approvals: p.approvals,
+            changes_requested: p.changes_requested,
+            open_threads: p.open_threads,
+            conflict: p.mergeable.map(|m| !m),
+            checked_at: p.checked_at,
+        }
+    }
+}
+
+impl TicketPrView {
+    fn of_agent(p: &PullRequest, word: Option<&str>) -> Self {
+        Self {
+            number: p.number,
+            url: p.url.clone(),
+            word: word.unwrap_or("PR").to_string(),
+            state: p.state,
+            draft: p.draft,
+            branch: p.head.clone(),
+            target: p.base.clone(),
+            repo: p.host_repo.clone(),
+            checks: p.checks,
+            checks_failed: 0,
+            approvals: p.approvals,
+            changes_requested: p.changes_requested,
+            open_threads: p.open_threads,
+            conflict: p.mergeable.map(|m| !m),
+            checked_at: None,
+        }
+    }
 }
 
 /// A ticket's agent, as `get_ticket` sums it up.
@@ -614,6 +688,7 @@ pub(crate) fn ticket_view<R: Runtime>(core: &Core<R>, t: &Ticket) -> TicketView 
         .map(|(id, key)| (id.as_str(), key.as_str()))
         .collect();
     let mut worktree = None;
+    let mut agent_pr = None;
     let agent = t.agent_id.as_ref().map(|id| {
         let Ok(h) = core.agent(id) else {
             return TicketAgent {
@@ -625,6 +700,11 @@ pub(crate) fn ticket_view<R: Runtime>(core: &Core<R>, t: &Ticket) -> TicketView 
         };
         let rt = h.lock();
         worktree = rt.meta.worktree.clone();
+        agent_pr = rt
+            .meta
+            .prs
+            .first()
+            .map(|p| TicketPrView::of_agent(p, rt.meta.pr_word.as_deref()));
         TicketAgent {
             id: id.clone(),
             name: Some(rt.meta.name.clone()),
@@ -662,6 +742,7 @@ pub(crate) fn ticket_view<R: Runtime>(core: &Core<R>, t: &Ticket) -> TicketView 
             url: e.url.clone(),
             error: e.error.clone(),
         }),
+        pr: t.pr.as_ref().map(TicketPrView::from).or(agent_pr),
         agent,
         branch: worktree
             .as_ref()

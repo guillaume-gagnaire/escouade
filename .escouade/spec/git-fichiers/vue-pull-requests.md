@@ -2,7 +2,7 @@
 title: "Vue « Pull requests » du projet"
 subject: "git-fichiers"
 sources: ["docs/TODO-1.8.md","design/esc-65/README.md","src/components/prs/PrsView.svelte","src/lib/prlist.ts","src-tauri/src/pragent.rs","src-tauri/src/prview.rs"]
-tickets: ["ESC-65","ESC-66"]
+tickets: ["ESC-65","ESC-66","ESC-68"]
 decisions: [60]
 compared: null
 ---
@@ -52,3 +52,5 @@ compared: null
 - Essai réel sur GitHub à faire avec le compte de l'utilisateur ; GitLab, Bitbucket Cloud, Gitea/Forgejo et Azure DevOps suivent leur documentation et restent à essayer en vrai.
 - La carte d'un agent lancé sur une PR de fork ne montre pas cette PR : sa branche `pr-<n>` n'est pas celle du fork.
 - 30 PR au plus, les plus récemment mises à jour.
+
+- Chaque lecture de la liste est gardée : la vue d'ensemble et `list_pull_requests` la reprennent pendant une minute, et une relecture nouvellement demandée à l'utilisateur se notifie (voir *Notifications*).

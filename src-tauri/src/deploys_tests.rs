@@ -129,6 +129,37 @@ fn a_failure_is_news_once() {
 }
 
 #[test]
+fn a_new_deployment_in_production_is_told_once_in_production_only() {
+    let at = |env: &str, sha: &str, created: u64| Deployment {
+        created,
+        ..dep(env, "success", sha)
+    };
+    let before = summarize(&[at("production", "a", 10), at("staging", "a", 10)]);
+    let after = summarize(&[at("production", "b", 20), at("staging", "b", 20)]);
+    let new = new_productions(&before, &after);
+    assert_eq!(new.len(), 1);
+    assert_eq!(new[0].name, "production");
+    assert_eq!(success_text(Lang::Fr, new[0]), "Déployé : production (b)");
+    assert_eq!(success_text(Lang::En, new[0]), "Deployed: production (b)");
+    assert!(new_productions(&after, &after).is_empty(), "already told");
+    // An older success found again is no news, a first deployment is.
+    assert!(new_productions(&after, &before).is_empty());
+    assert_eq!(new_productions(&[], &after).len(), 1);
+    let failed = summarize(&[Deployment {
+        created: 30,
+        ..dep("production", "failure", "c")
+    }]);
+    assert!(
+        new_productions(&failed, &before).is_empty(),
+        "older than the failure"
+    );
+    assert_eq!(
+        new_productions(&failed, &summarize(&[at("production", "d", 40)])).len(),
+        1
+    );
+}
+
+#[test]
 fn the_preview_is_a_deployment_of_the_branch_else_a_check_of_its_host() {
     let mut preview = dep("Preview", "success", "a");
     preview.url = Some("https://demo-git-fix.example.vercel.app".into());

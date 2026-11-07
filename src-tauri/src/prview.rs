@@ -11,13 +11,21 @@ use crate::forge::{
     Unsupported,
 };
 use crate::integrations::HttpError;
+use crate::model::now_ms;
+use crate::prnews::limit_near;
 use anyhow::Result;
 use serde::Serialize;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tauri::Runtime;
 
 /// How much of a job's log the tab shows: its end, where the failure is told.
 pub const LOG_VIEW: usize = 20_000;
+
+/// How long a project's list is taken again rather than read (the view reads it every minute).
+const LIST_FRESH: Duration = Duration::from_secs(55);
+/// How long a pull request read whole by the tools is given again.
+const WHOLE_FRESH: Duration = Duration::from_secs(20);
 
 /// Why the host's answer is missing, as the tab draws it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -69,6 +77,22 @@ impl<T> Read<T> {
         Self {
             data: None,
             failure: Some(failure(e, limit)),
+        }
+    }
+    /// Not asked of the host: its limit of calls is near.
+    fn limited(reset: Option<u64>) -> Self {
+        let message = tr!(
+            "Limite d'API de l'hébergeur presque atteinte : la lecture attend.",
+            "The host's API limit is nearly reached: the reading waits."
+        );
+        Self {
+            data: None,
+            failure: Some(Failure {
+                kind: FailureKind::RateLimit,
+                message,
+                reset,
+                settings: false,
+            }),
         }
     }
 }
@@ -168,12 +192,75 @@ macro_rules! again {
     }};
 }
 
+/// A project's list of open pull requests, for the overview's group (ESC-68).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OverviewPrs {
+    pub project_id: String,
+    pub word: String,
+    pub prs: Vec<PullRequest>,
+    pub me: String,
+}
+
+/// A pull request read whole, for `get_pull_request` (ESC-68).
+#[derive(Debug, Clone, PartialEq)]
+pub struct PrWhole {
+    pub word: String,
+    pub pr: PullRequest,
+    pub detail: PrDetail,
+}
+
 /// A call the host's client does not do: nothing to show, without an error.
 fn or_none<T>(read: Result<Vec<T>>) -> Result<Vec<T>> {
     match read {
         Err(e) if e.downcast_ref::<Unsupported>().is_some() => Ok(Vec::new()),
         other => other,
     }
+}
+
+/// Its checks, its reviews and comments and its deployments, read together.
+async fn detail_of(
+    client: &dyn Forge,
+    repo: &RepoRef,
+    number: u64,
+    can: Can,
+    pr: &PullRequest,
+) -> Result<PrDetail> {
+    let (checks, reviews, comments, deployments) = tokio::join!(
+        async {
+            match can.checks {
+                true => or_none(again!(client.checks(repo, number))),
+                false => Ok(Vec::new()),
+            }
+        },
+        async {
+            match can.reviews {
+                true => or_none(again!(client.reviews(repo, number))),
+                false => Ok(Vec::new()),
+            }
+        },
+        async {
+            match can.reviews {
+                true => or_none(again!(client.comments(repo, number))),
+                false => Ok(Vec::new()),
+            }
+        },
+        async {
+            // A fork's branch is deployed in its own repository: none of them here.
+            match can.deployments && !pr.fork {
+                true => or_none(again!(client.deployments(repo, &pr.head))),
+                false => Ok(Vec::new()),
+            }
+        },
+    );
+    Ok(PrDetail {
+        checks: checks?,
+        reviews: reviews?,
+        comments: comments?,
+        deployments: deployments?,
+        can,
+        rate_limit: client.rate_limit(),
+    })
 }
 
 impl<R: Runtime> Core<R> {
@@ -217,44 +304,7 @@ impl<R: Runtime> Core<R> {
             Ok(t) => t,
             Err(e) => return Read::failed(&e, None),
         };
-        let (checks, reviews, comments, deployments) = tokio::join!(
-            async {
-                match can.checks {
-                    true => or_none(again!(client.checks(&repo, number))),
-                    false => Ok(Vec::new()),
-                }
-            },
-            async {
-                match can.reviews {
-                    true => or_none(again!(client.reviews(&repo, number))),
-                    false => Ok(Vec::new()),
-                }
-            },
-            async {
-                match can.reviews {
-                    true => or_none(again!(client.comments(&repo, number))),
-                    false => Ok(Vec::new()),
-                }
-            },
-            async {
-                // A fork's branch is deployed in its own repository: none of them here.
-                match can.deployments && !pr.fork {
-                    true => or_none(again!(client.deployments(&repo, &pr.head))),
-                    false => Ok(Vec::new()),
-                }
-            },
-        );
-        let detail = (|| {
-            Ok::<_, anyhow::Error>(PrDetail {
-                checks: checks?,
-                reviews: reviews?,
-                comments: comments?,
-                deployments: deployments?,
-                can: can.clone(),
-                rate_limit: client.rate_limit(),
-            })
-        })();
-        match detail {
+        match detail_of(&*client, &repo, number, can, &pr).await {
             Ok(d) => Read::ok(d),
             Err(e) => Read::failed(&e, client.rate_limit()),
         }
@@ -343,12 +393,182 @@ impl<R: Runtime> Core<R> {
                     &numbers,
                     prs.len() < escouade_plugin_protocol::forge::OPEN_PRS,
                 );
-                Read::ok(ProjectPrs {
+                let list = ProjectPrs {
                     word: provider.request_word().to_string(),
                     prs,
                     me: self.forge_login(&remote.host),
-                })
+                };
+                self.pr_list_read(project_id, &list, client.rate_limit(), now_ms());
+                Read::ok(list)
             }
+            Err(e) => {
+                let limit = client.rate_limit();
+                self.pr_lists
+                    .lock()
+                    .entry(project_id.to_string())
+                    .or_default()
+                    .limit = limit;
+                Read::failed(&e, limit)
+            }
+        }
+    }
+
+    /// `project_prs` for what can wait (the overview, the tools): the last list when it is under
+    /// `LIST_FRESH`, or when the host's limit of calls is near. And when it was read (ms).
+    pub async fn project_prs_recent(
+        self: &Arc<Self>,
+        project_id: &str,
+    ) -> (Read<ProjectPrs>, Option<i64>) {
+        if let Some(list) = self.pr_lists.lock().get(project_id) {
+            let near = limit_near(list.limit, (now_ms() / 1000) as u64);
+            match &list.read {
+                Some((at, read_at, prs)) if near || at.elapsed() < LIST_FRESH => {
+                    return (Read::ok(prs.clone()), Some(*read_at))
+                }
+                None if near => return (Read::limited(list.limit.map(|l| l.reset)), None),
+                _ => {}
+            }
+        }
+        let read = self.project_prs(project_id).await;
+        let at = read.data.is_some().then(now_ms);
+        (read, at)
+    }
+
+    /// The lists of every project, for the overview (ESC-68): those that could not be read are
+    /// left out, the view « Pull requests » says why.
+    pub async fn overview_prs(self: &Arc<Self>) -> Vec<OverviewPrs> {
+        let ids: Vec<String> = self.projects.read().iter().map(|p| p.id.clone()).collect();
+        let reads = ids.into_iter().map(|id| async move {
+            let (read, _) = self.project_prs_recent(&id).await;
+            read.data.map(|list| OverviewPrs {
+                project_id: id,
+                word: list.word,
+                prs: list.prs,
+                me: list.me,
+            })
+        });
+        futures_util::future::join_all(reads)
+            .await
+            .into_iter()
+            .flatten()
+            .collect()
+    }
+
+    /// What the host says of a pull request of the project, whole (`get_pull_request`, ESC-68):
+    /// through the agent that holds it, else its ticket, else on the project's target. Kept
+    /// `WHOLE_FRESH`: an agent that asks again costs the host nothing. `host_repo`: the repository
+    /// of one that is not on the target, only one an agent or a ticket of the project knows.
+    pub async fn project_pr(
+        self: &Arc<Self>,
+        project_id: &str,
+        number: u64,
+        host_repo: &str,
+    ) -> Read<PrWhole> {
+        let key = format!("{project_id}|{}|{number}", host_repo.to_lowercase());
+        if let Some((at, whole)) = self.pr_wholes.lock().get(&key) {
+            if at.elapsed() < WHOLE_FRESH {
+                return Read::ok(whole.clone());
+            }
+        }
+        let read = self.project_pr_read(project_id, number, host_repo).await;
+        if let Some(whole) = &read.data {
+            let mut kept = self.pr_wholes.lock();
+            kept.retain(|_, (at, _)| at.elapsed() < WHOLE_FRESH);
+            kept.insert(key, (Instant::now(), whole.clone()));
+        }
+        read
+    }
+
+    /// The account the project's host is read with (a login), as its list last said it.
+    pub(crate) fn pr_me(&self, project_id: &str) -> String {
+        self.pr_lists
+            .lock()
+            .get(project_id)
+            .and_then(|l| l.read.as_ref())
+            .map(|(_, _, list)| list.me.clone())
+            .unwrap_or_default()
+    }
+
+    /// The client, the repository and what the host can do for that pull request.
+    async fn pr_place(
+        self: &Arc<Self>,
+        project_id: &str,
+        number: u64,
+        host_repo: &str,
+    ) -> Result<(Box<dyn Forge>, RepoRef, Can)> {
+        let holder = self.agents.read().values().find_map(|h| {
+            let rt = h.lock();
+            let held = rt.meta.project_id == project_id
+                && !rt.meta.archived
+                && rt
+                    .meta
+                    .prs
+                    .iter()
+                    .any(|p| p.number == number && p.host_repo.eq_ignore_ascii_case(host_repo));
+            held.then(|| rt.meta.id.clone())
+        });
+        if let Some(id) = holder {
+            let (client, repo, can, _) = self.pr_of_agent(&id, number, host_repo).await?;
+            return Ok((client, repo, can));
+        }
+        let ticket = self.tickets.read().iter().find_map(|t| {
+            let tp = t.pr.as_ref().filter(|_| t.project_id == project_id)?;
+            let full = format!("{}/{}", tp.namespace, tp.name);
+            let here = host_repo.is_empty() || full.eq_ignore_ascii_case(host_repo);
+            (tp.number == number && here).then(|| tp.clone())
+        });
+        if let Some(tp) = ticket {
+            let (client, _) = self.forge_client(&tp.host).await?;
+            let can = self
+                .forges
+                .read()
+                .get(&tp.kind)
+                .map(|p| Can::from(&p.capabilities()))
+                .unwrap_or_default();
+            let repo = RepoRef {
+                namespace: tp.namespace,
+                name: tp.name,
+            };
+            return Ok((client, repo, can));
+        }
+        if !host_repo.is_empty() {
+            anyhow::bail!(tr!(
+                "#{number} introuvable sur {host_repo}",
+                "#{number} not found on {host_repo}"
+            ));
+        }
+        let (remote, provider, client) = self.project_host(project_id).await?;
+        Ok((client, remote.repo, Can::from(&provider.capabilities())))
+    }
+
+    async fn project_pr_read(
+        self: &Arc<Self>,
+        project_id: &str,
+        number: u64,
+        host_repo: &str,
+    ) -> Read<PrWhole> {
+        let (client, repo, can) = match self.pr_place(project_id, number, host_repo).await {
+            Ok(t) => t,
+            Err(e) => return Read::failed(&e, None),
+        };
+        let pr = match again!(client.pull_request(&repo, number)) {
+            Ok(pr) => pr,
+            Err(e) => return Read::failed(&e, client.rate_limit()),
+        };
+        // Its detail is four calls more: not on the last of the host's limit.
+        let limit = client.rate_limit();
+        if limit_near(limit, (now_ms() / 1000) as u64) {
+            return Read::limited(limit.map(|l| l.reset));
+        }
+        let word = self
+            .project_forge(project_id)
+            .await
+            .and_then(|r| r.kind)
+            .and_then(|k| self.forges.read().get(&k))
+            .map_or("PR", |p| p.request_word())
+            .to_string();
+        match detail_of(&*client, &repo, number, can, &pr).await {
+            Ok(detail) => Read::ok(PrWhole { word, pr, detail }),
             Err(e) => Read::failed(&e, client.rate_limit()),
         }
     }

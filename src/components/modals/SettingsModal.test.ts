@@ -176,12 +176,41 @@ describe('SettingsModal', () => {
     expect(tab('Notifications')).toHaveClass('changed');
     await save();
     expect(backend.called('save_settings')[0].args.settings.notifyFor).toEqual({
+      ...app.settings.notifyFor,
       questions: true,
       done: false,
       errors: true,
       tickets: true,
     });
     expect(app.settings.notifyFor.done).toBe(false);
+  });
+
+  it('sets each news of the code hosts on its own (ESC-68)', async () => {
+    const backend = backendSaving();
+    render(SettingsModal);
+    await userEvent.click(tab('Notifications'));
+    const hosts = within(panel()).getByRole('heading', { name: 'Pull requests et déploiements' }).closest('section')!;
+    const names = within(hosts)
+      .getAllByRole('checkbox')
+      .map((c) => c.closest('label')?.textContent?.trim());
+    expect(names).toEqual([
+      'CI en échec',
+      'Changements demandés',
+      'PR approuvée',
+      'PR mergée',
+      'Conflit',
+      'Relecture demandée',
+      'Déploiement en production réussi',
+      'Déploiement en échec',
+    ]);
+    await userEvent.click(within(hosts).getByRole('checkbox', { name: 'PR approuvée' }));
+    await userEvent.click(within(hosts).getByRole('checkbox', { name: 'Déploiement en production réussi' }));
+    await save();
+    const saved = backend.called('save_settings')[0].args.settings.notifyFor;
+    expect(saved.prApproved).toBe(false);
+    expect(saved.deployOk).toBe(false);
+    expect(saved.prCiFailed).toBe(true);
+    expect(saved.deployFailed).toBe(true);
   });
 
   it('has no defaults of new agents for every harness any more: each account has its own (ESC-128)', async () => {
@@ -1436,7 +1465,7 @@ describe('SettingsModal in English', () => {
       within(panel())
         .getAllByRole('heading')
         .map((h) => h.textContent),
-    ).toEqual(['Notify me about', 'Channels', 'Sound']);
+    ).toEqual(['Notify me about', 'Pull requests and deployments', 'Channels', 'Sound']);
     expect(
       group('Notify me about')
         .getAllByRole('checkbox')

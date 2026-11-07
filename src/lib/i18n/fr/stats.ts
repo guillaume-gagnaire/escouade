@@ -84,6 +84,15 @@ export default {
     contextUnknown: 'Contexte : pas encore connu',
     lastChange: 'Dernier changement {when}',
     waitingGroup: 'Attend ta réponse',
+    /** The group of the pull requests that wait for the user, and its parts; `titleMr`: all of them on GitLab. */
+    prs: {
+      title: 'Pull requests',
+      titleMr: 'Merge requests',
+      fix: 'À corriger',
+      merge: 'À merger',
+      review: 'Relectures demandées',
+      number: '{word} #{number}',
+    },
     empty: 'Aucun agent pour l’instant.',
     resumes: 'Reprise {when}',
     settingUp: 'Prépare le worktree · {step}',

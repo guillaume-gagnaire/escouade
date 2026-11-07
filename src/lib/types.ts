@@ -399,6 +399,15 @@ export interface NotifyFor {
   errors: boolean;
   /** « Tickets (prêt à tester, bloqué) ». */
   tickets: boolean;
+  /** The news of the code hosts (ESC-68), one by one. */
+  prCiFailed: boolean;
+  prChanges: boolean;
+  prApproved: boolean;
+  prMerged: boolean;
+  prConflict: boolean;
+  prReview: boolean;
+  deployOk: boolean;
+  deployFailed: boolean;
 }
 
 /** The sync with the external ticket systems and their automatic import, for every project. */
@@ -2620,6 +2629,7 @@ export type UiEvent =
   | { type: 'devPage'; page: PageEvent }
   | { type: 'openUrl'; url: string }
   | { type: 'focusBoard'; projectId: string }
+  | { type: 'focusPrs'; projectId: string }
   /** Why no ticket of the project's board starts (its target branch), or null once they may. */
   | { type: 'boardIssue'; projectId: string; issue: string | null }
   | { type: 'environments'; environments: ProjectEnvironments }
@@ -2911,6 +2921,15 @@ export type PrState = 'open' | 'closed' | 'merged';
 export type CheckState = 'pending' | 'success' | 'failure' | 'skipped';
 
 /** A pull request (a merge request on GitLab) as its code host tells it (`forge::PullRequest`). */
+/** A project's list of open pull requests, for the overview's group (ESC-68). */
+export interface OverviewPrs {
+  projectId: string;
+  word: string;
+  prs: PullRequest[];
+  /** The account the host was read with (its login). */
+  me: string;
+}
+
 export interface PullRequest {
   number: number;
   url: string;

@@ -1941,6 +1941,7 @@ async fn a_tickets_notifications_follow_the_tickets_choice_alone() {
         done: false,
         errors: false,
         tickets: true,
+        ..NotifyFor::default()
     };
     h.core.notify_ticket(&t.id, true);
     assert_eq!(h.alerts(), ["demo | DEM-1 prêt à tester"]);

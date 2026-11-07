@@ -267,6 +267,11 @@ impl FakeServer {
     }
 
     /// The requests other than reads (GET).
+    /// Forgets the requests received so far: what comes next is what a test counts.
+    pub fn clear_requests(&self) {
+        self.requests.lock().clear();
+    }
+
     pub fn writes(&self) -> Vec<Request> {
         self.requests()
             .into_iter()

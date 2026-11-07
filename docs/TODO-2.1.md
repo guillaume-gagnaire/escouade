@@ -16,7 +16,7 @@ Depuis ESC-203, chaque hébergeur est un plugin de première main, et le plugin 
 - [ ] CI de la branche cible et des branches poussées (ESC-63).
 - [ ] Vue « Pull requests » du projet (ESC-65), et la relecture d'une PR par un agent (ESC-66).
 - [ ] Déploiements (ESC-67).
-- [ ] Notifications, vue d'ensemble et outils MCP des PR (ESC-68).
+- [x] Notifications, vue d'ensemble et outils MCP des PR (ESC-68).
 - [ ] Docs, site et statistiques (ESC-69).
 - [ ] Essais : parcours enregistrés (ESC-53) et essai réel par hébergeur avant la release (ESC-70).
 

@@ -212,7 +212,9 @@ async fn the_reading_tools_say_they_only_read_and_what_they_take() {
             t.name
         );
         assert_eq!(v["annotations"]["readOnlyHint"], true, "{}: {v}", t.name);
-        assert_eq!(v["annotations"]["openWorldHint"], false, "{}: {v}", t.name);
+        // The pull requests are read from the code host, and only they.
+        let host = matches!(&*t.name, "list_pull_requests" | "get_pull_request");
+        assert_eq!(v["annotations"]["openWorldHint"], host, "{}: {v}", t.name);
     }
     let schema = |name: &str| {
         let t = tools.iter().find(|t| t.name == name).unwrap();
@@ -601,6 +603,7 @@ async fn a_ticket_is_read_whole_by_its_key_in_any_case_or_its_id() {
         "conflict": false,
         "step": null,
         "outcome": null,
+        "pr": null,
     });
     assert_eq!(
         read(&c, "get_ticket", json!({ "ticket": "dem-2" })).await,

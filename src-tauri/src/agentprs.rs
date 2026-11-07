@@ -1000,16 +1000,17 @@ impl<R: Runtime> Core<R> {
         if self.watched(&now_meta).await.as_ref() != Some(&w) {
             return Ok(());
         }
-        let changed = {
+        let (changed, before) = {
             let mut rt = h.lock();
             let changed = rt.meta.prs != prs || rt.meta.branch_ci != branch_ci;
-            rt.meta.prs = prs;
+            let before = std::mem::replace(&mut rt.meta.prs, prs.clone());
             rt.meta.branch_ci = branch_ci;
-            changed
+            (changed, before)
         };
         if changed {
             self.emit_agent(&h);
             self.request_save();
+            self.tell_agent_prs(&now_meta, &before, &prs);
         }
         Ok(())
     }
@@ -1399,7 +1400,11 @@ impl<R: Runtime> Core<R> {
     }
 
     /// `agent_prs_refresh` of an agent of several repositories: each repository's.
-    async fn prs_refresh_multi(&self, id: &str, targets: Vec<(String, Target)>) -> Result<()> {
+    async fn prs_refresh_multi(
+        self: &Arc<Self>,
+        id: &str,
+        targets: Vec<(String, Target)>,
+    ) -> Result<()> {
         let word = targets[0].1.provider.request_word().to_string();
         let mut prs = Vec::new();
         for (repo, t) in &targets {
@@ -1414,16 +1419,17 @@ impl<R: Runtime> Core<R> {
         }
         sort_prs(&mut prs);
         let h = self.agent(id)?;
-        let changed = {
+        let (changed, before, meta) = {
             let mut rt = h.lock();
             let changed = rt.meta.prs != prs || rt.meta.pr_word.as_deref() != Some(&word);
-            rt.meta.prs = prs;
+            let before = std::mem::replace(&mut rt.meta.prs, prs.clone());
             rt.meta.pr_word = Some(word);
-            changed
+            (changed, before, rt.meta.clone())
         };
         if changed {
             self.emit_agent(&h);
             self.request_save();
+            self.tell_agent_prs(&meta, &before, &prs);
         }
         Ok(())
     }

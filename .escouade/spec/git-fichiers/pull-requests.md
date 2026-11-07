@@ -2,7 +2,7 @@
 title: "Pull requests"
 subject: "Git & fichiers"
 sources: ["docs/SPEC.md","docs/TODO-1.8.md","src/components/PrPanel.svelte","src-tauri/src/prview.rs"]
-tickets: ["ESC-64","ESC-161","ESC-305","ESC-56","ESC-58","ESC-65","ESC-66"]
+tickets: ["ESC-64","ESC-161","ESC-305","ESC-56","ESC-58","ESC-65","ESC-66","ESC-68"]
 decisions: [15]
 compared: "2026-10-30T18:20:19+01:00"
 ---
@@ -84,3 +84,5 @@ Sous la carte et dans l'onglet « PR et CI », sur une PR ouverte, jamais d'elle
 - La liste des PR du projet et « Lancer un agent sur cette PR » : voir *Vue « Pull requests » du projet* ; « Faire relire par un agent » : voir *Relecture d'une PR par un agent*.
 - Un agent qui travaille dans un worktree qui n'est pas d'Escouade n'est suivi que sur Claude Code.
 - Le cycle des PR hors tickets et ce qui en reste à faire : `docs/TODO-1.8.md`, chapitre 2 (« Les PR hors tickets »).
+
+- Ce qu'une PR devient se notifie (voir *Notifications*), celles qui attendent l'utilisateur sont dans la vue d'ensemble (voir *Vue d'ensemble*), et les agents les lisent par `list_pull_requests` et `get_pull_request` (voir *Serveur MCP*).

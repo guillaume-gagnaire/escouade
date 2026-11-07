@@ -1031,6 +1031,10 @@ pub struct Core<R: Runtime = Wry> {
     /// minute, else every 5), and what wakes their reading at once (a push, the window's return).
     pub(crate) window_in_front: AtomicBool,
     pub(crate) ticket_prs_wake: tokio::sync::Notify,
+    /// The lists of the projects' open pull requests as last read (ESC-68), by project id.
+    pub(crate) pr_lists: Mutex<HashMap<String, crate::prnews::PrList>>,
+    /// The pull requests the tools read whole (ESC-68): an agent that asks again gets the same.
+    pub(crate) pr_wholes: Mutex<HashMap<String, (Instant, crate::prview::PrWhole)>>,
     /// The environments of the projects' hosts as last read (ESC-67), by project id; when the
     /// view « Environnements » of a project was last open; and whether a commit (the merge of a
     /// ticket) is in another (what runs in an environment), as git said it.
@@ -2022,6 +2026,8 @@ impl<R: Runtime> Core<R> {
             names_dropped: AtomicU64::new(0),
             window_in_front: AtomicBool::new(true),
             ticket_prs_wake: tokio::sync::Notify::new(),
+            pr_lists: Mutex::default(),
+            pr_wholes: Mutex::default(),
             deploys: Mutex::default(),
             deploys_viewed: Mutex::default(),
             deploys_contains: Mutex::default(),
@@ -3163,7 +3169,8 @@ impl<R: Runtime> Core<R> {
     /// it brings the window back and sends it `focus`.
     ///
     /// A kind the user switched off ("Me prévenir pour") neither chimes nor shows a system
-    /// notification; the taskbar flashes all the same, like the agent's tab and card.
+    /// notification; the taskbar flashes all the same, like the agent's tab and card. The news of a
+    /// code host has no agent behind it: switched off, it says nothing at all.
     pub(crate) fn alert(
         self: &Arc<Self>,
         kind: NotifyKind,
@@ -3173,6 +3180,9 @@ impl<R: Runtime> Core<R> {
     ) {
         let settings = self.settings.read().clone();
         let wanted = settings.notify_for.allows(kind);
+        if !wanted && kind.of_host() {
+            return;
+        }
         #[cfg(test)]
         if wanted {
             self.alerts.lock().push(format!("{title} | {body}"));

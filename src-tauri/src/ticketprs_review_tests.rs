@@ -377,7 +377,7 @@ async fn the_review_comments_go_to_the_agent_on_a_click_and_nothing_is_published
     assert!(
         h.alerts()[alerts..]
             .iter()
-            .any(|a| a.contains("DEM-1 : un retour de relecture sur la PR #12")),
+            .any(|a| a.contains("DEM-1 · PR #12 : changements demandés")),
         "{:?}",
         h.alerts()
     );

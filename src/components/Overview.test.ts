@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../lib/i18n';
 import { app } from '../lib/state.svelte';
 import type { Agent, PendingRequest } from '../lib/types';
-import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, project, resetApp, ticket } from '../test/ipc';
+import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, project, pullRequest, resetApp, ticket } from '../test/ipc';
 import Overview from './Overview.svelte';
 
 const NOW = Date.UTC(2026, 9, 10, 12, 0, 0);
@@ -687,5 +687,136 @@ describe('Overview: the brand of the harnesses (ESC-29)', () => {
     resetApp({ agents: [agent({ id: 'a1', status: 'running' })] });
     render(Overview);
     expect(screen.queryByRole('img', { name: /^Harness :/ })).toBeNull();
+  });
+});
+
+describe('the group « Pull requests » (ESC-68)', () => {
+  const lists = () => [
+    {
+      projectId: 'p1',
+      word: 'PR',
+      me: 'ada',
+      prs: [
+        pullRequest({ number: 12, title: 'Mode sombre', author: 'ada', checks: 'failure' }),
+        pullRequest({ number: 13, title: 'Export CSV', author: 'ada', approvals: 1, checks: 'success' }),
+        pullRequest({ number: 14, title: 'Traduire', author: 'bob', reviewers: ['ada'] }),
+      ],
+    },
+  ];
+  const withPrs = (handlers = {}) => {
+    fakeBackend({ overview_prs: lists, ...handlers });
+    render(Overview);
+  };
+  const rows = () => screen.findAllByRole('listitem').then((l) => l.filter((r) => r.dataset.pr));
+
+  it('shows nothing without a pull request that waits for the user', async () => {
+    resetApp({ projects: [project()], agents: [agent()] });
+    backend();
+    render(Overview);
+    await waitFor(() => expect(screen.getByText('Agent')).toBeInTheDocument());
+    expect(screen.queryByRole('heading', { name: /Pull requests/ })).not.toBeInTheDocument();
+  });
+
+  it('says what to fix, to merge and to review, after those who wait and before the projects', async () => {
+    resetApp({ projects: [project()], agents: [asking([permission()], { id: 'a1' }), agent({ id: 'a2' })] });
+    withPrs();
+    await screen.findByRole('heading', { name: /Pull requests/ });
+    const heads = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent?.replace(/\s+/g, ' ').trim());
+    expect(heads[0]).toMatch(/^Attend ta réponse/);
+    expect(heads[1]).toMatch(/^Pull requests ?3$/);
+    expect(heads[2]).toMatch(/^demo/);
+    expect(screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([
+      'À corriger1',
+      'À merger1',
+      'Relectures demandées1',
+    ]);
+    expect((await rows()).map((r) => r.dataset.pr)).toEqual(['12', '13', '14']);
+    expect(screen.getByText('Mode sombre')).toBeInTheDocument();
+    expect(screen.getByText('CI en échec')).toBeInTheDocument();
+    expect(screen.getByText('Ta relecture')).toBeInTheDocument();
+  });
+
+  it('shows in English too', async () => {
+    setLang('en');
+    resetApp({ projects: [project()], agents: [] });
+    withPrs();
+    expect(await screen.findByRole('heading', { name: /To fix/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /To merge/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Reviews requested/ })).toBeInTheDocument();
+  });
+
+  it('says Merge requests when GitLab says them all', async () => {
+    resetApp({ projects: [project()], agents: [] });
+    withPrs({ overview_prs: () => lists().map((l) => ({ ...l, word: 'MR' })) });
+    expect(await screen.findByRole('heading', { name: /Merge requests/ })).toBeInTheDocument();
+    expect(screen.getByText('MR #12')).toBeInTheDocument();
+  });
+
+  it('keeps a pull request with no agent from the empty message', async () => {
+    resetApp({ projects: [project()], agents: [] });
+    withPrs();
+    await screen.findByRole('heading', { name: /Pull requests/ });
+    expect(screen.queryByText('Aucun agent pour l’instant.')).not.toBeInTheDocument();
+  });
+
+  it('goes through its lines with the arrows and opens the project’s pull requests', async () => {
+    resetApp({ projects: [project()], agents: [] });
+    withPrs();
+    const list = await rows();
+    const line = (r: HTMLElement) => r.querySelector<HTMLElement>('.line')!;
+    line(list[0]).focus();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(document.activeElement).toBe(line(list[1]));
+    await userEvent.keyboard('{Enter}');
+    expect(app.prsOn).toBe(true);
+  });
+
+  it('opens the agent that works on it', async () => {
+    const a = agent({ id: 'a1', prs: [pullRequest({ number: 12, checks: 'failure' })] });
+    resetApp({ projects: [project()], agents: [a] });
+    backend();
+    render(Overview);
+    const [row] = await rows();
+    await userEvent.click(row);
+    expect(app.ui.view).toBe('project');
+    expect(app.agent?.id).toBe('a1');
+  });
+
+  it('opens the board for a ticket’s', async () => {
+    const t = ticket({
+      column: 'pr',
+      agentId: null,
+      pr: {
+        number: 12,
+        word: 'PR',
+        state: 'open',
+        draft: false,
+        approvals: 1,
+        changesRequested: false,
+        openThreads: 0,
+        checks: 'success',
+        closed: false,
+      } as never,
+    });
+    resetApp({ projects: [project()], agents: [], tickets: [t] });
+    backend();
+    render(Overview);
+    const [row] = await rows();
+    expect(within(row).getByText(t.key)).toBeInTheDocument();
+    await userEvent.click(row);
+    expect(app.boardOn).toBe(true);
+  });
+
+  it('reads the lists when it opens, and a failure leaves what the agents have', async () => {
+    const a = agent({ id: 'a1', prs: [pullRequest({ number: 12, checks: 'failure' })] });
+    resetApp({ projects: [project()], agents: [a] });
+    const be = fakeBackend({
+      overview_prs: () => {
+        throw new Error('injoignable');
+      },
+    });
+    render(Overview);
+    expect((await rows()).map((r) => r.dataset.pr)).toEqual(['12']);
+    await waitFor(() => expect(be.called('overview_prs')).toHaveLength(1));
   });
 });

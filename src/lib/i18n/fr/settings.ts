@@ -256,6 +256,18 @@ export default {
     done: 'Tâches terminées',
     errors: 'Erreurs',
     tickets: 'Tickets (prêt à tester, bloqué)',
+    /** The news of the code hosts, one by one (ESC-68): read from what Escouade follows, nothing more. */
+    hosts: 'Pull requests et déploiements',
+    hostsNote:
+      'Escouade les signale quand elle relit ce qu’elle suit : les PR des tickets en revue, celles de l’agent affiché, celles du projet tant que leur vue ou la vue d’ensemble est ouverte. Un type désactivé ne dit plus rien.',
+    prCiFailed: 'CI en échec',
+    prChanges: 'Changements demandés',
+    prApproved: 'PR approuvée',
+    prMerged: 'PR mergée',
+    prConflict: 'Conflit',
+    prReview: 'Relecture demandée',
+    deployOk: 'Déploiement en production réussi',
+    deployFailed: 'Déploiement en échec',
     channels: 'Canaux',
     /** `os`: « macOS » or « Windows ». */
     system: "Notifications {os} quand l'app n'est pas au premier plan",

@@ -2086,6 +2086,12 @@ pub async fn project_prs(
     Ok(core.project_prs(&project_id).await)
 }
 
+/// The open pull requests of every project, as recently read, for the overview (ESC-68).
+#[tauri::command]
+pub async fn overview_prs(core: CoreState<'_>) -> Res<Vec<crate::prview::OverviewPrs>> {
+    Ok(core.overview_prs().await)
+}
+
 /// The environments of the project's host as last read (ESC-67): the view « Environnements »
 /// opens on them, and its project is followed while it is open.
 #[tauri::command]

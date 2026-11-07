@@ -8202,24 +8202,10 @@ async fn an_answer_without_launch_commands_in_json_is_told_as_unreadable() {
 #[tokio::test]
 async fn a_kind_of_notification_switched_off_is_not_sent_but_the_others_are() {
     let h = harness("notify-kinds");
-    let kinds = [
-        NotifyKind::Question,
-        NotifyKind::Done,
-        NotifyKind::Error,
-        NotifyKind::Ticket,
-    ];
+    let kinds = NotifyKind::ALL;
     for off in kinds {
         h.core.alerts.lock().clear();
-        {
-            let mut s = h.core.settings.write();
-            s.notify_for = NotifyFor::default();
-            match off {
-                NotifyKind::Question => s.notify_for.questions = false,
-                NotifyKind::Done => s.notify_for.done = false,
-                NotifyKind::Error => s.notify_for.errors = false,
-                NotifyKind::Ticket => s.notify_for.tickets = false,
-            }
-        }
+        h.core.settings.write().notify_for = NotifyFor::all_but(off);
         for kind in kinds {
             h.core.alert(
                 kind,

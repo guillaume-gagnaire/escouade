@@ -37,6 +37,9 @@ pub(crate) mod memory;
 mod memory_tests;
 #[cfg(test)]
 mod private_tests;
+mod prs;
+#[cfg(test)]
+mod prs_tests;
 mod read;
 #[cfg(test)]
 mod remote_tests;

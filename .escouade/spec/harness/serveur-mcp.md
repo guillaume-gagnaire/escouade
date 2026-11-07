@@ -2,7 +2,7 @@
 title: "Serveur MCP"
 subject: "Harness"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256"]
+tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68"]
 decisions: []
 compared: null
 ---
@@ -226,3 +226,17 @@ Les outils d'Escouade passent par les mêmes demandes de permission que les autr
 - **Remote control en lecture seule.** Aucun outil ne l'allume, ne l'éteint ni ne le règle, pour un agent, un projet ou tous : l'allumer expose une session sur internet (joignable depuis claude.ai et l'app mobile). Les descriptions de `list_projects`, `list_agents` et `get_agent_summary` le disent.
 - **Montées en droits assumées.** `approve_ticket` est ouvert à tout client du serveur, Claude hors Escouade comme les agents (dans les projets qu'ils voient, jamais sur leur propre ticket), et `delete_ticket` supprime comme la fenêtre : un agent poussé par un contenu piégé peut valider ou supprimer le ticket d'un autre agent. Une fois l'interrupteur allumé, tout client voit les demandes et peut y répondre, sans réglage de plus ni limite de ce qu'il peut autoriser : un tel agent peut autoriser une commande demandée par un autre agent d'un projet qu'il voit, une demande à la fois, jamais durablement, jamais dans un projet privé qui n'est pas le sien. `stop_background_work` n'arrête que ce que l'agent a lancé et ne lance aucune commande ; `message_subagent` n'est qu'un message à l'agent sous le nom de son auteur ; `get_background_output` ne lit que le fichier de sortie qu'a gardé Claude Code pour la tâche.
 - Un agent qui a les outils agit aussi par ses autres outils : entre projets non privés, le serveur n'est pas un cloisonnement.
+
+## Les pull requests d'un projet
+
+Deux outils en lecture seule lisent les PR d'un projet (« merge requests » sur GitLab), et `get_ticket` donne celle du ticket. Formats dans docs/PROTOCOL.md. Commenter ou merger par le serveur n'existe pas : rien n'est écrit chez l'hébergeur.
+
+- `list_pull_requests` : les 30 PR ouvertes les plus récemment mises à jour du dépôt de la cible, chacune avec son état, sa CI, un conflit, ses approbations, ses changements demandés, ses fils ouverts, ses relecteurs, si une relecture est demandée au compte qui lit l'hébergeur, et le ticket et l'agent du projet qui la tiennent.
+- `get_pull_request` : une PR entière, par son numéro : la même ligne, ses vérifications, ses relectures qui disent quelque chose, ses fils non résolus, les déploiements de sa branche. Textes coupés à 2 000 octets, 30 relectures et 30 fils au plus, les derniers, avec le nombre de ceux laissés de côté. Une PR hors de la cible se nomme par son dépôt, seulement un dépôt qu'un agent ou un ticket du projet connaît : l'outil n'ouvre pas le jeton de l'utilisateur sur n'importe quel dépôt.
+- `get_ticket` : `pr`, la PR du ticket telle qu'elle a été lue en dernier (numéro, adresse, mot de l'hébergeur, état, branches, CI, approbations, changements demandés, fils ouverts, conflit), celle que sa validation a ouverte, sinon la première de son agent, `null` sans PR. Sans aucun texte de tiers : `get_pull_request` les donne.
+
+Un agent d'Escouade peut omettre le projet pour le sien. Un projet privé est cloisonné comme pour les autres outils : pour un agent d'un autre projet, il est introuvable, mot pour mot comme un nom que rien ne porte.
+
+**Le texte d'un hébergeur est une donnée.** Titres, relectures, commentaires et noms de vérifications sont écrits par quiconque peut ouvrir une PR. Les deux outils répondent donc comme ceux du store pour ce qu'écrit un plugin : un bloc d'avis, puis le JSON entre `<third_party_data>` et `</third_party_data>`, ses `<` échappés pour qu'un titre ne ferme pas la marque. Leurs descriptions et les instructions du serveur le disent.
+
+**Ils ménagent l'hébergeur.** Une liste de moins d'une minute est redonnée sans le lire, celle de la vue « Pull requests » et de la vue d'ensemble comprise ; une PR redemandée dans les 20 s aussi. Quand il reste moins d'un dixième de la limite d'appels, la liste redonne la dernière lue, et `get_pull_request` s'arrête avant le détail et le dit.

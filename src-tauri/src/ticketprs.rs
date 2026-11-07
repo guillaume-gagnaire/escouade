@@ -5,6 +5,7 @@
 //! of Escouade and when the window comes back, and on « Rafraîchir ». An error of the host is said
 //! on the card and never moves a ticket.
 
+use crate::agent::NotifyKind;
 use crate::board;
 use crate::core::Core;
 use crate::forge::{
@@ -14,6 +15,7 @@ use crate::forge::{
 use crate::git;
 use crate::i18n::{self, Lang};
 use crate::model::{now_ms, BoardSettings, Column, FailedCheck, PrFix, Service, Ticket, TicketPr};
+use crate::prnews;
 use anyhow::{anyhow, bail, Result};
 use std::collections::BTreeMap;
 use std::sync::atomic::Ordering;
@@ -961,17 +963,30 @@ impl<R: tauri::Runtime> Core<R> {
     ) {
         let claude = self.lang().claude;
         let read = self.edit_ticket(id, |t| {
+            let before = (t.column == Column::Pr)
+                .then_some(t.pr.as_ref().map(prnews::Facts::of_ticket))
+                .flatten();
             let news = settle(t, pr, checks, now_ms(), claude);
             let in_review = t.column == Column::Pr;
             let grew = match t.pr.as_mut() {
                 Some(tp) if in_review => feedback_read(tp, pr, feedback, me),
                 _ => false,
             };
-            Ok((news, grew))
+            let told = match (before, &t.pr) {
+                (Some(before), Some(tp)) => prnews::news(&before, &prnews::Facts::of_ticket(tp)),
+                _ => Vec::new(),
+            };
+            Ok((news, grew, told))
         });
-        let news = read.as_ref().map(|(n, _)| *n).ok();
-        if read.is_ok_and(|(_, grew)| grew) {
-            self.notify_feedback(id);
+        let news = read.as_ref().map(|(n, _, _)| *n).ok();
+        if let Ok((_, grew, mut told)) = read {
+            // Its merge is told once its ticket has moved on (`ticket_pr_merged`).
+            told.retain(|k| *k != NotifyKind::PrMerged);
+            self.tell_ticket_pr(id, &told);
+            // Changes asked say it already: the comments that come with them are the same news.
+            if grew && !told.contains(&NotifyKind::PrChanges) {
+                self.notify_feedback(id);
+            }
         }
         match news.ok_or(()) {
             Ok(News::Merged) => self.ticket_pr_merged(id).await,
@@ -1220,7 +1235,7 @@ impl<R: tauri::Runtime> Core<R> {
                 }
             }
         }
-        self.notify_ticket(id, false);
+        self.tell_ticket_pr(id, &[NotifyKind::PrMerged]);
         self.schedule();
     }
 

@@ -385,6 +385,17 @@
       {/each}
     </div>
   </Group>
+  <Group title={t('settings.notifications.hosts')} note={t('settings.notifications.hostsNote')}>
+    <div class="checks">
+      {#each ['prCiFailed', 'prChanges', 'prApproved', 'prMerged', 'prConflict', 'prReview', 'deployOk', 'deployFailed'] as const as k (k)}
+        <label class="w-tick check-row">
+          <input type="checkbox" bind:checked={s.notifyFor[k]} />
+          <span class="tick-box" aria-hidden="true"><Icon name="check" size={12} /></span>
+          <span>{t(`settings.notifications.${k}`)}</span>
+        </label>
+      {/each}
+    </div>
+  </Group>
   <Group title={t('settings.notifications.channels')}>
     <Row label={t('settings.notifications.system', { os: IS_MAC ? 'macOS' : 'Windows' })}>
       <Switch label={t('settings.notifications.systemLabel')} bind:on={s.osNotifications} />

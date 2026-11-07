@@ -8,6 +8,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- La vue d'ensemble a un groupe « Pull requests » : ce qui est à corriger, à merger et les relectures qu'on te demande, tous projets confondus. Chaque nouvelle d'un hébergeur (CI en échec, changements demandés, PR approuvée ou mergée, conflit, relecture demandée, déploiement) se règle à part dans Réglages › Notifications, et les agents lisent les PR par le serveur MCP.
 - Les vues terminal des harness passent aussi par leur plugin : une correction publiée au store corrige la vue, sans attendre une version d’Escouade. Plugin coupé, le terminal marche, mais la conversation dit qu’elle ne le suit plus.
 - « Faire relire » dans la vue Pull requests : un agent lit le diff d'une PR et rédige ses commentaires par fichier et par ligne. Tu gardes, corriges ou écartes chacun, puis tu publies le tout d'un coup ; rien ne part sans toi.
 - Claude Code et les harness décrits par ACP, Goose compris, tournent désormais comme des plugins isolés en WASM, sans process à eux : ils conversent comme avant. Par Escouade, un agent ACP lit dans son dossier et son dépôt et écrit dans son dossier, rien d’autre.

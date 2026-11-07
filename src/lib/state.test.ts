@@ -1393,6 +1393,13 @@ describe('board', () => {
     expect(app.toasts).toEqual([]);
   });
 
+  it('opens the pull requests of the project a review was asked in (ESC-68)', async () => {
+    const { emit } = await start();
+    emit({ type: 'focusPrs', projectId: 'p2' });
+    expect(app.ui.activeProject).toBe('p2');
+    expect(app.prsOn).toBe(true);
+  });
+
   it('shows the board of the project of a notification even when another view is up', async () => {
     const { emit } = await start();
     app.selectAgent('a2');

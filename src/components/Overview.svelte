@@ -11,9 +11,10 @@
   import { contextUse, estimateHint, fSpentUsd, spent } from '../lib/spend';
   import { can, showsCost, speakerOf } from '../lib/engines';
   import { app } from '../lib/state.svelte';
+  import { LIST_EVERY_MS, NEEDS, ageOf, chipsOf, ciOf, overviewPrs, rowTone, type OverviewPr, type PrNeed } from '../lib/prlist';
   import { revealHidden } from '../lib/recipe';
   import { SUMMED_UP, toolLabel } from '../lib/tools';
-  import type { Agent, PendingRequest, Project } from '../lib/types';
+  import type { Agent, OverviewPrs, PendingRequest, Project } from '../lib/types';
   import EngineMark from './EngineMark.svelte';
   import Icon from './Icon.svelte';
   import StatusDot from './StatusDot.svelte';
@@ -50,15 +51,39 @@
    * one line only: the arrows meet it once.
    */
   const groups = $derived.by(() => {
-    const out: Group[] = waiting.length ? [{ key: 'waiting', project: null, agents: waiting }] : [];
+    const out: Group[] = [{ key: 'waiting', project: null, agents: waiting }];
     for (const p of app.projects) {
       const agents = live.filter((a) => a.projectId === p.id && a.status !== 'waiting').sort((a, b) => a.createdAt - b.createdAt);
       if (agents.length) out.push({ key: `p-${p.id}`, project: p, agents });
     }
     return out;
   });
-  /** The lines in the order the arrows go through them. */
-  const order = $derived(groups.flatMap((g) => g.agents.map((a) => a.id)));
+  /** The projects' lists of pull requests, as the backend last gave them (it reads them at most once a minute). */
+  let lists = $state<OverviewPrs[]>([]);
+  /** The pull requests that wait for the user, between the agents that wait and the projects. */
+  const prs = $derived(
+    overviewPrs(
+      lists,
+      live,
+      Object.values(app.tickets),
+      app.projects.map((p) => p.id),
+    ),
+  );
+  /** Its parts, the most pressing first, those with a line only. */
+  const needs = $derived(NEEDS.map((need) => ({ need, lines: prs.filter((o) => o.need === need) })).filter((n) => n.lines.length));
+  /** « Merge requests » when GitLab says them all. */
+  const prsTitle = $derived(t(prs.every((o) => o.word === 'MR') ? 'stats.overview.prs.titleMr' : 'stats.overview.prs.title'));
+  const NEED_TITLE: Record<PrNeed, 'stats.overview.prs.fix' | 'stats.overview.prs.merge' | 'stats.overview.prs.review'> = {
+    fix: 'stats.overview.prs.fix',
+    merge: 'stats.overview.prs.merge',
+    review: 'stats.overview.prs.review',
+  };
+  /** The lines in the order the arrows go through them: an agent's by its id, a pull request's by its key. */
+  const order = $derived(
+    groups.flatMap((g) =>
+      g.project ? g.agents.map((a) => a.id) : [...g.agents.map((a) => a.id), ...needs.flatMap((n) => n.lines.map((o) => o.key))],
+    ),
+  );
   const sub = $derived(
     t('stats.overview.sub', {
       projects: t('common.count.projects', { count: app.projects.length }),
@@ -168,6 +193,23 @@
     if (current) lineOf(current)?.focus();
   });
 
+  async function readPrs() {
+    try {
+      lists = await api.overviewPrs();
+    } catch {
+      // The group shows what the tickets and the agents have; the view « Pull requests » says why.
+    }
+  }
+
+  // As the view « Pull requests » reads them: at once, then every minute while it is shown and the window visible.
+  onMount(() => {
+    void readPrs();
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') void readPrs();
+    }, LIST_EVERY_MS);
+    return () => clearInterval(timer);
+  });
+
   // Answered, an agent leaves « Attend ta réponse » for its project's group, its buttons with it: its line gets the
   // focus they held, not the page.
   $effect(() => {
@@ -181,8 +223,8 @@
   });
 
   function lineOf(id: string): HTMLElement | null {
-    for (const row of root?.querySelectorAll<HTMLElement>('li[data-agent]') ?? []) {
-      if (row.dataset.agent === id) return row.querySelector<HTMLElement>('.line');
+    for (const row of root?.querySelectorAll<HTMLElement>('li[data-line]') ?? []) {
+      if (row.dataset.line === id) return row.querySelector<HTMLElement>('.line');
     }
     return null;
   }
@@ -195,10 +237,10 @@
 
   function onFocusIn(e: FocusEvent) {
     // Tab and the mouse move the current line too.
-    const row = e.target instanceof Element ? e.target.closest<HTMLElement>('li[data-agent]') : null;
-    if (row?.dataset.agent) chosen = row.dataset.agent;
+    const row = e.target instanceof Element ? e.target.closest<HTMLElement>('li[data-line]') : null;
+    if (row?.dataset.line) chosen = row.dataset.line;
     // The focus went somewhere else on its own: it is not taken back.
-    if (refocus && row?.dataset.agent !== refocus) refocus = null;
+    if (refocus && row?.dataset.line !== refocus) refocus = null;
   }
 
   /** Shows the agent in its project: its conversation, not the editor (as Ctrl+J does). */
@@ -208,10 +250,10 @@
   }
 
   /** The arrows go from line to line, from anywhere in a row (its buttons included). */
-  function rowKey(e: KeyboardEvent, a: Agent) {
+  function rowKey(e: KeyboardEvent, id: string) {
     if (!MOVES.has(e.key) || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     e.preventDefault();
-    const i = order.indexOf(a.id);
+    const i = order.indexOf(id);
     const last = order.length - 1;
     const to = e.key === 'ArrowDown' ? Math.min(i + 1, last) : e.key === 'ArrowUp' ? Math.max(i - 1, 0) : e.key === 'Home' ? 0 : last;
     focusLine(order[to]);
@@ -221,11 +263,18 @@
    * Enter and Space open the agent of the line that has the focus (its row's buttons keep their keys). Not with a
    * modifier: Ctrl+Enter answers a request in the conversation only, here it does nothing.
    */
-  function lineKey(e: KeyboardEvent, a: Agent) {
+  function lineKey(e: KeyboardEvent, go: () => void) {
     if ((e.key !== 'Enter' && e.key !== ' ') || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
     // Space would scroll the list.
     e.preventDefault();
-    open(a);
+    go();
+  }
+
+  /** Shows what a pull request's line is about: its agent, else its ticket on the board, else the project's pull requests. */
+  function openPr(o: OverviewPr) {
+    if (o.agent) open(o.agent);
+    else if (o.ticket) app.openBoard(o.projectId);
+    else app.openPrs(o.projectId);
   }
 
   // Escape goes back to the view « Vue d’ensemble » covers. Seen before the others (capture): a dialog or a menu open
@@ -262,6 +311,39 @@
 
 <svelte:window onkeydowncapture={onWindowKey} />
 
+{#snippet prRow(o: OverviewPr)}
+  {@const p = app.projects.find((x) => x.id === o.projectId)}
+  {@const ci = ciOf(o.pr)}
+  {@const tag = o.ticket?.key ?? o.agent?.name}
+  <!-- As an agent's line: the keyboard opens from the line (role button), the mouse from anywhere in the row. -->
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <li
+    class="row pr"
+    class:cur={o.key === current}
+    data-line={o.key}
+    data-pr={o.pr.number}
+    aria-labelledby={`ov-${o.key}`}
+    onclick={() => openPr(o)}
+    onkeydown={(e) => rowKey(e, o.key)}
+  >
+    <div class="line" role="button" tabindex={o.key === current ? 0 : -1} onkeydown={(e) => lineKey(e, () => openPr(o))}>
+      <span class="agent">
+        <span class="glyph {rowTone(o.pr)}"><Icon name={ci.icon} size={13} /></span>
+        <span class="name" id={`ov-${o.key}`}>{t('stats.overview.prs.number', { word: o.word, number: o.pr.number })}</span>
+        {#if p}<span class="proj"><span class="swatch" style:background={p.color}></span>{p.name}</span>{/if}
+        {#if tag}<span class="tag">{tag}</span>{/if}
+      </span>
+      <span class="act"><span class="txt" use:tip={{ text: o.pr.title, cut: true }}>{o.pr.title}</span></span>
+      <span class="chips">
+        {#each chipsOf(o.pr, o.me).slice(0, 2) as c (c.key)}<span class="chip t-{c.tone}"><Icon name={c.icon} size={12} />{c.text}</span
+          >{/each}
+        {#if !chipsOf(o.pr, o.me).length}<span class="chip t-{ci.tone}">{ci.text}</span>{/if}
+      </span>
+      <span class="num since">{ageOf(o.pr, app.now)}</span>
+    </div>
+  </li>
+{/snippet}
+
 {#snippet row(a: Agent, asks: boolean)}
   {@const used = spent(a)}
   {@const ctx = contextUse(a)}
@@ -277,11 +359,12 @@
     class:waiting={asks}
     class:cur={a.id === current}
     data-agent={a.id}
+    data-line={a.id}
     aria-labelledby={`ov-a-${a.id}`}
     onclick={() => open(a)}
-    onkeydown={(e) => rowKey(e, a)}
+    onkeydown={(e) => rowKey(e, a.id)}
   >
-    <div class="line" role="button" tabindex={a.id === current ? 0 : -1} onkeydown={(e) => lineKey(e, a)}>
+    <div class="line" role="button" tabindex={a.id === current ? 0 : -1} onkeydown={(e) => lineKey(e, () => open(a))}>
       <span class="agent">
         <StatusDot status={a.status} awaits={!!pending} />
         <span class="name" id={`ov-a-${a.id}`} use:tip={{ text: a.name, cut: true }}>{a.name}</span>
@@ -396,7 +479,7 @@
     </span>
   </header>
   <div class="scroll">
-    {#if groups.length}
+    {#if groups.length > 1 || waiting.length || prs.length}
       <div class="list ov">
         <!-- Each value says what it is to assistive technologies (`.sr`): the headings are for the eyes. -->
         <div class="cols" aria-hidden="true">
@@ -405,22 +488,41 @@
           ><span class="num ctx">{t('stats.overview.context')}</span><span class="num since">{t('stats.overview.since')}</span>
         </div>
         {#each groups as g (g.key)}
-          <section class="group" class:waiting={!g.project} aria-labelledby={`ov-${g.key}`}>
-            <h2 class="gh">
-              {#if g.project}
-                <span class="swatch" style:background={g.project.color}></span>
-              {:else}
-                <StatusDot status="waiting" />
-              {/if}
-              <span id={`ov-${g.key}`}>{g.project ? g.project.name : t('stats.overview.waitingGroup')}</span>
-              <span class="n">{g.agents.length}</span>
-            </h2>
-            <ul>
-              {#each g.agents as a (a.id)}
-                {@render row(a, !g.project)}
+          {#if g.project || g.agents.length}
+            <section class="group" class:waiting={!g.project} aria-labelledby={`ov-${g.key}`}>
+              <h2 class="gh">
+                {#if g.project}
+                  <span class="swatch" style:background={g.project.color}></span>
+                {:else}
+                  <StatusDot status="waiting" />
+                {/if}
+                <span id={`ov-${g.key}`}>{g.project ? g.project.name : t('stats.overview.waitingGroup')}</span>
+                <span class="n">{g.agents.length}</span>
+              </h2>
+              <ul>
+                {#each g.agents as a (a.id)}
+                  {@render row(a, !g.project)}
+                {/each}
+              </ul>
+            </section>
+          {/if}
+          {#if !g.project && needs.length}
+            <section class="group" aria-labelledby="ov-prs">
+              <h2 class="gh">
+                <Icon name="pr" size={13} />
+                <span id="ov-prs">{prsTitle}</span>
+                <span class="n">{prs.length}</span>
+              </h2>
+              {#each needs as n (n.need)}
+                <h3 class="need" id={`ov-need-${n.need}`}>{t(NEED_TITLE[n.need])}<span class="n">{n.lines.length}</span></h3>
+                <ul aria-labelledby={`ov-need-${n.need}`}>
+                  {#each n.lines as o (o.key)}
+                    {@render prRow(o)}
+                  {/each}
+                </ul>
               {/each}
-            </ul>
-          </section>
+            </section>
+          {/if}
         {/each}
       </div>
     {:else}
@@ -516,6 +618,72 @@
     font-weight: 620;
   }
   .group.waiting .gh {
+    color: var(--wait);
+  }
+  /* The parts of the group « Pull requests »: quieter than a group's heading, on the same left edge. */
+  .need {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0;
+    padding: 10px 10px 4px;
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 550;
+  }
+  .glyph {
+    flex: none;
+    display: inline-flex;
+    color: var(--dim);
+  }
+  .glyph.ok {
+    color: var(--run);
+  }
+  .glyph.wait {
+    color: var(--wait);
+  }
+  .glyph.fail {
+    color: var(--del);
+  }
+  /* The chips take the columns of the model, the cost and the context: a pull request has none of them. */
+  .chips {
+    grid-column: 3 / -2;
+    display: flex;
+    justify-content: flex-end;
+    gap: 5px;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .chip {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 7px;
+    border-radius: 6px;
+    background: rgba(var(--fg-rgb), 0.04);
+    box-shadow: inset 0 0 0 1px var(--line);
+    font-size: 11.5px;
+    font-weight: 520;
+    white-space: nowrap;
+  }
+  .chip.t-ok {
+    color: var(--run);
+  }
+  .chip.t-wait {
+    color: var(--wait);
+  }
+  .chip.t-fail {
+    color: var(--del);
+  }
+  .chip.t-muted,
+  .chip.t-dim {
+    color: var(--muted);
+  }
+  .chip.t-ask {
+    background: var(--wait-bg);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
     color: var(--wait);
   }
   .swatch {
@@ -783,6 +951,12 @@
     }
     .ctx,
     .since {
+      display: none;
+    }
+    .row.pr .chips {
+      grid-column: 3;
+    }
+    .row.pr .chip:not(:first-child) {
       display: none;
     }
     .keys {

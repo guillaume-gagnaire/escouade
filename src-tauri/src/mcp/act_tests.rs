@@ -287,6 +287,7 @@ async fn a_ticket_is_created_in_to_do_with_its_criteria_and_what_it_comes_after(
             "model": "auto",
             "effort": "auto",
             "external": null,
+            "pr": null,
             "agent": null,
             "branch": null,
             "worktree": null,

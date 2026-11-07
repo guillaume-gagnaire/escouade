@@ -177,6 +177,16 @@ fn naming_calls() -> Vec<(&'static str, Names, Value)> {
         ),
         ("get_ticket", Names::Ticket, json!({ "ticket": "{}" })),
         (
+            "list_pull_requests",
+            Names::Project,
+            json!({ "project": "{}" }),
+        ),
+        (
+            "get_pull_request",
+            Names::Project,
+            json!({ "project": "{}", "number": 1 }),
+        ),
+        (
             "get_ticket_image",
             Names::Ticket,
             json!({ "ticket": "{}", "index": 0 }),

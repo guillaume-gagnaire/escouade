@@ -202,6 +202,7 @@ mod pragent_tests;
 mod pricing;
 #[cfg(test)]
 mod private_tests;
+mod prnews;
 mod proc;
 #[cfg(test)]
 mod process_tests;
@@ -832,6 +833,7 @@ pub fn run() {
                 commands::agent_pr_rerun,
                 commands::agent_no_pr,
                 commands::project_prs,
+                commands::overview_prs,
                 commands::pr_reviews,
                 commands::pr_review_start,
                 commands::pr_review_note,
