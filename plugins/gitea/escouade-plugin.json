@@ -32,5 +32,6 @@
       }
     ],
     "forges": [{ "id": "gitea", "name": "Gitea / Forgejo", "account": "gitea" }]
-  }
+  },
+  "store": { "categories": ["forges"] }
 }

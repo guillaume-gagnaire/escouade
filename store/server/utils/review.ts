@@ -18,6 +18,7 @@ import { acceptRevocations, lastRevocations } from './revocations';
 import { checkVersionSignature } from './signature';
 import { signatureIndex, verifiedBy } from './signatures';
 import { readArchive } from './tar';
+import type { Bearer } from './oauth';
 import { randomToken, tokenHash } from './tokens';
 import { compareVersions, type Binary } from './versions';
 import { hueOf, markOf, type Icon } from '../../shared/tile';
@@ -106,6 +107,25 @@ export async function tokenAdmin(db: Db, env: Env, header: string | undefined | 
   if (!row.token.usedAt || now.getTime() - row.token.usedAt.getTime() > 60_000)
     await db.update(adminTokens).set({ usedAt: now }).where(eq(adminTokens.id, id));
   return row.account;
+}
+
+/**
+ * What `npm run plugins:publish` is on `/mcp` (ESC-353, docs/PLUGINS.md §8.6.2): the administrator of an administration
+ * token, for a command that cannot go through a browser's consent, on the three tools it calls and no other: nothing that
+ * takes back, unlists or moves. The same functions, limits and journal as any client; what it submits and publishes are
+ * the account's own repositories' versions, unverified, and the app takes none of the first hand unsigned.
+ */
+export async function adminBearer(db: Db, env: Env, header: string | undefined | null, now = new Date()): Promise<Bearer | null> {
+  const account = await tokenAdmin(db, env, header, now);
+  if (!account) return null;
+  return {
+    account,
+    grantId: 0,
+    client: { id: 'plugins-publish', name: 'npm run plugins:publish' },
+    scopes: ['author'],
+    tools: ['submit_version', 'get_version', 'publish_version'],
+    expiresAt: new Date(now.getTime() + 60_000),
+  };
 }
 
 // ---- The queue ----

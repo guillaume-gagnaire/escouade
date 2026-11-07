@@ -364,6 +364,30 @@ test('the chief submits, publishes and manages a folder of the app’s repositor
   await expect(page.locator('#apps')).toContainText('Aucun client MCP connecté.');
 });
 
+test('an administration token opens /mcp, as npm run plugins:publish calls it (ESC-353)', async ({ browser, request }) => {
+  const page = await browser.newPage();
+  await signIn(page, E2E_ADMIN_LOGIN);
+  await page.goto('/account#tokens');
+  await page.locator('#token-label').fill('plugins:publish');
+  await page.getByRole('button', { name: 'Créer un jeton' }).click();
+  const token = (await page.locator('#tokens .made code').textContent())!.trim();
+  await page.close();
+  const call = (authorization: string, name: string, args: Record<string, unknown>) =>
+    request.post('/mcp', {
+      headers: { authorization, 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+      data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
+    });
+  type Answer = { result: { isError?: boolean; content: { text: string }[] } };
+  expect((await call('Bearer esc_admin_nope', 'get_version', { version_id: 1 })).status()).toBe(401);
+  // A whole exchange, no client nor initialize: the store's own refusal of a version that is not there.
+  const res = await call(`Bearer ${token}`, 'get_version', { version_id: 2 ** 31 - 1 });
+  expect(res.status()).toBe(200);
+  expect(((await res.json()) as Answer).result.content[0]!.text).toContain('not-found');
+  // Nothing beyond the command's three tools.
+  const out = await call(`Bearer ${token}`, 'yank_version', { plugin_id: 'dev.escouade.nothing', version: '1.0.0' });
+  expect(JSON.stringify(await out.json())).toMatch(/not found/i);
+});
+
 test('the review scope: an author does not get it, an administrator reads the queue and posts a report', async ({ browser }) => {
   test.setTimeout(120_000);
   // An author who asks for `review` is told they will not get it, and gets `author` alone.

@@ -35,5 +35,6 @@
       }
     ],
     "ticketSources": [{ "id": "clickup", "name": "ClickUp", "account": "clickup" }]
-  }
+  },
+  "store": { "categories": ["ticket-sources"] }
 }

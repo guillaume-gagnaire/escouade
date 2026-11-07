@@ -38,5 +38,6 @@
       }
     ],
     "forges": [{ "id": "bitbucket", "name": "Bitbucket", "account": "bitbucket" }]
-  }
+  },
+  "store": { "categories": ["forges"] }
 }

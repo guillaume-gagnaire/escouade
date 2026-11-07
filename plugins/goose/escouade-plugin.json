@@ -63,5 +63,6 @@
         }
       }
     ]
-  }
+  },
+  "store": { "categories": ["harness"] }
 }

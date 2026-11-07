@@ -9,6 +9,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ### New
 
 - The overview has a “Pull requests” group: what to fix, what to merge and the reviews asked of you, across every project. Each piece of news from a code host (CI failed, changes requested, PR approved or merged, conflict, review requested, deployment) has its own switch in Settings › Notifications, and agents can read pull requests through the MCP server.
+- On store.escouade.dev, Escouade's own plugins become plugins like any other, with their versions and their seal, under the « Escouade » mark: they appear as they are published.
 - The terminal views of the harnesses go through their plugin too: a fix published on the store fixes the view, without waiting for an Escouade release. With the plugin off the terminal works, but the conversation says it no longer follows it.
 - “Get a review” in the Pull requests view: an agent reads a PR's diff and writes its comments by file and by line. You keep, edit or drop each one, then publish it all at once; nothing leaves without you.
 - Claude Code and the harnesses described over ACP, Goose included, now run as sandboxed WASM plugins, with no process of their own: they converse as before. Through Escouade, an ACP agent reads in its folder and its repository and writes in its folder, nothing else.

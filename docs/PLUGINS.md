@@ -1427,13 +1427,27 @@ Chacun passe **comme un tiers** :
 1. l'étiquette `plugins/<id-court>/vX.Y.Z`, posée par le chef ;
 2. la soumission en dossier, par le MCP du store (`submit_version`) ;
 3. les contrôles, dont la compilation en WASM par le store ;
-4. la revue locale, qui recompile et compare ; le rapport ;
-5. la signature par le chef (`npm run plugin-review -- sign`, sa clé sans mot de passe : mémoire `first-party-plugin-signing`) ;
-6. la publication.
+4. la publication, non vérifiée, en demandant la revue (`publish_version`) : le store ne relit et ne signe qu'une version publiée (`docs/STORE.md` §4.3), et l'app ne prend aucun `dev.escouade.*` sans signature ;
+5. la revue locale, qui recompile et compare ; le rapport ;
+6. la signature par le chef (`npm run plugin-review -- sign`, sa clé sans mot de passe : mémoire `first-party-plugin-signing`) : la version porte le sceau.
 
-**La liste `BUILTINS` de `store/server/utils/builtin.ts`** se vide : chacun devient une vraie ligne de plugin, à sa place dans le catalogue, avec la marque « Escouade » et ses versions. Le préfixe `dev.escouade.*` reste réservé au dépôt de l'app (`STORE_FIRST_PARTY_REPO`, décision 25) et l'app ne l'installe que signé.
+**La liste `BUILTINS` de `store/server/utils/builtin.ts`** est vide (ESC-353) : chacun est une vraie ligne de plugin, à sa place dans le catalogue, avec la marque « Escouade » (le préfixe la donne, et sa tuile : marque ou glyphe de sa catégorie) et ses versions. Il n'y a plus rien sur le store pour un plugin tant qu'il n'est pas publié. Le préfixe `dev.escouade.*` reste réservé au dépôt de l'app (`STORE_FIRST_PARTY_REPO`, décision 25) et l'app ne l'installe que signé.
 
-Pour 23 plugins, ces gestes doivent tenir en une commande du chef : `npm run plugins:publish -- --changed` pose les étiquettes des dossiers qui ont bougé, soumet, attend, revoit, signe et publie, et s'arrête au premier verdict qui n'est pas « Vérifier ». La lecture humaine reste celle des diffs.
+Pour 23 plugins, ces gestes tiennent en une commande du chef (ESC-353, `store/scripts/plugins-publish/`) ; un agent de ticket ne la lance jamais :
+
+```sh
+npm run plugins:publish -- --changed        # tout dossier dont la version n'est pas encore signée au store
+npm run plugins:publish -- claude trello    # ceux-là
+```
+
+- **Qui passe** : les dossiers de `plugins/` dont le manifeste porte un `dev.escouade.*`, un par un, dans l'ordre des noms. `--changed` laisse de côté une version `0.0.0` (pas encore portée), et nommer un tel dossier est refusé.
+- **Avant tout** : l'arbre propre et le commit sur `origin/main`, sinon rien n'est fait (code 2).
+- **Pour chaque plugin** : l'étiquette sur ce commit, poussée ; `submit_version` ; `get_version` jusqu'à la fin des contrôles ; `publish_version` avec `request_review`, et pour une première version les `store.categories` de son manifeste (Cursor CLI, Gemini CLI et Mistral : celles de l'outil, voir plus bas) ; `plugin-review <id>@<version>` ; puis, sur le seul verdict du rapport, `plugin-review report`, `plugin-review sign`, et la lecture du catalogue qui doit la dire vérifiée.
+- **Il s'arrête** (code 1, avec la raison et ce qu'il reste à faire) au premier contrôle rouge, à une version retenue, à la limite de 20 soumissions par heure, à un rapport sans la ligne `**Verdict final : Vérifier**`, ou à un autre verdict : rien n'est déposé ni signé. L'outil n'écrit jamais ce verdict. C'est la lecture du chef (`/review-plugin`) qui le pose ; la lecture humaine reste celle des diffs.
+- **Il reprend là** : il ne garde rien à lui. Ce qui est au catalogue, signé ou non, n'est ni étiqueté ni soumis de nouveau ; un rapport présent n'est pas récrit ; une version signée n'est pas refaite.
+- **Un manifeste ne change pas pour ça** quand il entre dans le module : Cursor CLI, Gemini CLI et Mistral lisent le leur (`include_str!`, `harnesses_of`), et une clé `store` y change l'empreinte (+64 octets, mesuré). Leurs catégories restent donc dans l'outil (`EMBEDDED_CATEGORIES`), jusqu'à leur prochaine version. Les 21 autres modules les disent au manifeste, sans effet sur leur empreinte, et `goose` aussi. Un test tient cette règle.
+- **Ce qui est déjà au store ne repart pas** : une version signée ou retirée au catalogue n'est pas touchée (`discord`, `high-contrast`, `slack`, `team-rules`, tant que leur version ne bouge pas) ; une version publiée non signée va à sa revue, sans nouvelle soumission. Seule la version compte : un dossier changé sans version nouvelle ne repart pas.
+- **Il ne lit jamais la clé** : `sign` est `npm run plugin-review -- sign`, son propre process. Seul le jeton d'administration lui sert, celui du trousseau ou d'`ESCOUADE_STORE_TOKEN`, sur `/mcp`, limité à ces trois outils (`docs/STORE.md` §2.5). Aucun secret dans son journal.
 
 #### 8.6.3 Le kit sort sur crates.io
 
@@ -1594,7 +1608,7 @@ Les tickets du portage, dans l'ordre. **Les lettres sont des noms de travail**, 
 
 | Ticket | Ce qu'il fait |
 | --- |--- |
-| **Z1. Les contrôles et la première publication** | le chef publie chaque plugin (§8.6.2), revue et signature une par une la première fois |
+| **Z1. Les contrôles et la première publication** | `npm run plugins:publish` (fait, §8.6.2, ESC-353) ; le chef publie chaque plugin, revue et signature une par une la première fois |
 | **Z2. L'amorce réelle** | `plugins/seed.json` rempli, un essai d'installation hors ligne |
 | **Z3. Le retrait** | `escouade-plugins`, `run.command`, le transport par process, `check_program`, l'origine `builtin`, `BUILTINS`, les attestations ; `npm run bench:int0` complet |
 

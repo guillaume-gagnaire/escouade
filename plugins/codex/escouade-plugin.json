@@ -53,5 +53,6 @@
         "updateCommand": "npm install -g @openai/codex@latest"
       }
     ]
-  }
+  },
+  "store": { "categories": ["harness"] }
 }

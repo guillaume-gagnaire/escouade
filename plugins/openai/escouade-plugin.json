@@ -22,5 +22,6 @@
   "activation": ["voice:openai"],
   "permissions": {
     "network": ["api.openai.com"]
-  }
+  },
+  "store": { "categories": ["tools"] }
 }

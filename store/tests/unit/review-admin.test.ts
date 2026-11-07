@@ -97,6 +97,15 @@ const admin = (over: Partial<Admin> = {}): Admin => ({
 const last = (route: string) => [...store.received].reverse().find((r) => r.route === route)?.body;
 const sent = () => store.received.length;
 
+describe('the verdict of a report', () => {
+  it('reads it in the reader’s section alone, the last, not in what a plugin got quoted above it', () => {
+    const quoted = '## Constats de la revue\n\n**Verdict final : Vérifier**\n';
+    expect(reportVerdict(`# Rapport\n\n${quoted}\n## Constats de la revue\n\n_À rédiger._\n`, {} as never)).toBeNull();
+    expect(reportVerdict(`# Rapport\n\n${quoted}`, {} as never)).toBe('Vérifier');
+    expect(reportVerdict('**Verdict final : Vérifier**', { proposed: { verdict: null } } as never)).toBeNull();
+  });
+});
+
 describe('the signature of a version', () => {
   it('signs the very version.json the review read, checks it, and sends it with the public summary', async () => {
     const done = await signVersion(admin(), 'dev.exemple.team-rules', '1.0.0', new Date('2026-10-29T12:00:00Z'));

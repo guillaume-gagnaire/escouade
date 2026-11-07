@@ -35,5 +35,6 @@
       }
     ],
     "ticketSources": [{ "id": "linear", "name": "Linear", "account": "linear" }]
-  }
+  },
+  "store": { "categories": ["ticket-sources"] }
 }

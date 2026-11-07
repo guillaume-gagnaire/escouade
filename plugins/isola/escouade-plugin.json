@@ -24,5 +24,6 @@
         "up": "isola up"
       }
     ]
-  }
+  },
+  "store": { "categories": ["tools"] }
 }

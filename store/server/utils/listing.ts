@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { and, eq, isNull, lt, sql } from 'drizzle-orm';
+import { and, eq, isNull, like, lt, sql } from 'drizzle-orm';
 import { accounts, installsDaily, plugins, reports, versions } from '../db/schema';
-import { BUILTINS, isBuiltinId, sourceUrl, type Builtin } from './builtin';
+import { BUILTINS, isBuiltinId, isOwnId, ownLogo, sourceUrl, type Builtin } from './builtin';
 import { textOf, type Lang, type Text } from './checks';
 import type { Db } from './db';
 import { renderDocs, type Docs } from './readme';
@@ -54,7 +54,8 @@ export interface Entry {
   /** The logo of one of Escouade's own, drawn inline (shared/marks.ts); null for the others. */
   logo: Logo | null;
   author: { login: string; githubId: number } | null;
-  builtin: boolean;
+  /** One of Escouade's own (the reserve `dev.escouade.*`): the mark « Escouade » in place of its author (ESC-353). */
+  own: boolean;
   categories: Category[];
   keywords: string[];
   /** Its last published version; Escouade's own have the app's. */
@@ -191,7 +192,7 @@ function builtinEntry(b: Builtin): Entry {
     icon: null,
     logo: b.logo,
     author: null,
-    builtin: true,
+    own: true,
     categories: b.categories as Category[],
     keywords: [],
     version: null,
@@ -280,9 +281,9 @@ function entriesOf(all: Row[], ctx: Context, taken = false): Entry[] {
       mark: markOf(name.en),
       hue: hueOf(plugin.id),
       icon: v.icon ?? null,
-      logo: null,
+      logo: ownLogo(plugin.id, plugin.categories),
       author: login && githubId ? { login, githubId } : null,
-      builtin: false,
+      own: isOwnId(plugin.id),
       categories: plugin.categories.filter((c): c is Category => (CATEGORIES as readonly string[]).includes(c)),
       keywords: plugin.keywords,
       version: v.version,
@@ -325,7 +326,7 @@ export function score(e: Entry, q: string): number {
   const nameWords = names.flatMap((n) => n.split(/\s+/));
   const keywords = e.keywords.flatMap(words);
   const cats = e.categories.flatMap((c) => [CATEGORY_NAMES[c].fr, CATEGORY_NAMES[c].en, c]).flatMap(words);
-  const author = fold(e.builtin ? 'escouade' : (e.author?.login ?? ''));
+  const author = fold(e.own ? 'escouade' : (e.author?.login ?? ''));
   const desc = [e.description.fr, e.description.en].map(fold).join(' ');
   const id = fold(e.id);
   let total = 0;
@@ -392,13 +393,12 @@ function mixed(own: Entry[]): Entry[] {
 export function home(entries: Entry[]) {
   const counts: Record<string, number> = {};
   for (const e of entries) for (const c of e.categories) counts[c] = (counts[c] ?? 0) + 1;
-  const store = entries.filter((e) => !e.builtin);
   return {
     total: entries.length,
     counts,
-    verified: [...store.filter(verifiedish), ...mixed(entries.filter((e) => e.builtin))].slice(0, 6),
-    fresh: [...store].sort((a, b) => (b.firstAt ?? '').localeCompare(a.firstAt ?? '')).slice(0, 4),
-    top: store
+    verified: [...entries.filter((e) => !e.own && verifiedish(e)), ...mixed(entries.filter((e) => e.own && verifiedish(e)))].slice(0, 6),
+    fresh: [...entries].sort((a, b) => (b.firstAt ?? '').localeCompare(a.firstAt ?? '')).slice(0, 4),
+    top: entries
       .filter((e) => e.installs > 0)
       .sort((a, b) => b.installs - a.installs)
       .slice(0, 4),
@@ -519,7 +519,10 @@ export async function pluginPage(db: Db | null, dir: string, id: string) {
 
 /** An author's page: who they are on GitHub, and their published plugins; null if nobody has this login. */
 export async function authorPage(db: Db | null, login: string) {
-  if (login.toLowerCase() === 'escouade') return { author: null, builtin: true, plugins: BUILTINS.map(builtinEntry) };
+  if (login.toLowerCase() === 'escouade') {
+    const own = db ? entriesOf(await publishedRows(db, and(like(plugins.id, 'dev.escouade.%'), listed)), await contextOf(db)) : [];
+    return { author: null, builtin: true, plugins: [...BUILTINS.map(builtinEntry), ...own] };
+  }
   if (!db || !/^[A-Za-z0-9-]{1,39}$/.test(login)) return null;
   const [account] = await db
     .select({ id: accounts.id, login: accounts.login, githubId: accounts.githubId, name: accounts.name, createdAt: accounts.createdAt })

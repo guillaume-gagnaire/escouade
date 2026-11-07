@@ -18,7 +18,9 @@ Published on the store, submitted from their folder like anyone's plugin (docs/S
 | `goose/`         | `dev.escouade.goose`         | MIT     | Goose as a harness, described over ACP (`contributes.harnesses[].acp`)                    | Declarative                 |
 
 A version is a tag `plugins/<folder>/v1.2.3` (never `v1.2.3`, the app's releases), then its submission on the store
-from its folder, its review and its signature.
+from its folder, its review and its signature: `npm run plugins:publish -- --changed` goes through them, run by the
+chief alone (docs/PLUGINS.md §8.6.2). A manifest says its `store.categories`, which its first version needs (not Cursor CLI's, Gemini CLI's
+nor Mistral's: their module embeds their manifest, and the tool holds theirs).
 
 They are checked as an author checks a plugin before a tag: `node ci.mjs` looks for each one's LICENSE and CHANGELOG, runs
 its tests (the TypeScript ones' typecheck too, and checks that their `dist/` is the build of `src/`), then `escouade-plugin

@@ -419,6 +419,8 @@ export interface Bearer {
   client: { id: string; name: string };
   scopes: Scope[];
   expiresAt: Date;
+  /** The only tools it opens, whatever its scopes; all of theirs when left out. */
+  tools?: readonly string[];
 }
 
 /** Who a request to `/mcp` acts for: an access token not expired, of a grant not revoked, made for this resource. */

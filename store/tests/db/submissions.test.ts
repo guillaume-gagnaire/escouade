@@ -615,9 +615,9 @@ describe.skipIf(!url)('the submission', () => {
     const [v] = await q('select plugin_id, checks from versions where id = $1', [own.id]);
     expect(v.plugin_id).toBe('dev.escouade.ntfy');
     expect(v.checks.map((c: { status: string }) => c.status)).toEqual(Array(11).fill('pass'));
-    // Published, it is a plugin of the store in the catalogue: not one the app gives, hidden behind builtin.ts.
+    // Published, it is a plugin of the store in the catalogue, with the mark « Escouade » (ESC-353).
     await publishVersion(db, sam, own.id!, { categories: ['notifications'] });
-    expect((await catalog(db)).find((e) => e.id === 'dev.escouade.ntfy')).toMatchObject({ builtin: false });
+    expect((await catalog(db)).find((e) => e.id === 'dev.escouade.ntfy')).toMatchObject({ own: true, version: '0.3.0' });
 
     gh.push(FORK, 'plugins/ntfy/v0.3.0', files(FORK));
     const fork = await submit(sam, FORK, 'plugins/ntfy/v0.3.0', 'plugins/ntfy');

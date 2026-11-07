@@ -2,8 +2,10 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { BUILTINS, isBuiltinId } from '../../server/utils/builtin';
-import { asksOf, catalog, home, hueOf, localized, markOf, permissionsOf, pluginPage, search, type Entry } from '../../server/utils/listing';
+import { BUILTINS, isBuiltinId, isOwnId, ownLogo } from '../../server/utils/builtin';
+import { EMBEDDED_CATEGORIES } from '../../scripts/plugins-publish/publish';
+import { CATEGORIES } from '../../server/utils/submissions';
+import { asksOf, catalog, home, hueOf, localized, markOf, permissionsOf, search, type Entry } from '../../server/utils/listing';
 import { fold, highlight } from '../../shared/search';
 
 // The public pages' catalog without a database: the search made on the server (relevance, accents and case set
@@ -17,7 +19,7 @@ const entry = (over: Partial<Entry>): Entry => ({
   icon: null,
   logo: null,
   author: { login: 'sam', githubId: 1 },
-  builtin: false,
+  own: false,
   categories: ['notifications'],
   keywords: [],
   version: '1.0.0',
@@ -59,7 +61,29 @@ const nord = entry({
   installs: 1120,
   firstAt: '2026-10-12T00:00:00Z',
 });
-const all = [...(await catalog(null)), slack, ntfy, nord];
+/** One of Escouade's own, a line of the catalogue like any (ESC-353), published before the others. */
+const own = (id: string, name: string, categories: Entry['categories']) =>
+  entry({
+    id: `dev.escouade.${id}`,
+    name: { fr: name, en: name },
+    author: { login: 'guillaume-gagnaire', githubId: 9 },
+    own: true,
+    categories,
+    trust: 'verified',
+    firstAt: '2026-10-01T00:00:00Z',
+    asks: [{ kind: 'run' }],
+  });
+const all = [
+  own('claude-code', 'Claude Code', ['harness']),
+  own('gemini-cli', 'Gemini CLI', ['harness']),
+  own('opencode', 'OpenCode', ['harness']),
+  own('bitbucket', 'Bitbucket', ['forges']),
+  own('gitea', 'Gitea', ['forges']),
+  own('jira', 'Jira', ['ticket-sources']),
+  slack,
+  ntfy,
+  nord,
+];
 
 describe('the search', () => {
   it('ignores accents and case, and puts the name before the description', () => {
@@ -84,12 +108,12 @@ describe('the search', () => {
     const n = search(all, { cat: 'notifications' });
     expect(n.results.map((e) => e.id)).toEqual(['dev.lmartin.slack', 'dev.sroux.ntfy']);
     expect(n.counts.themes).toBe(1);
-    expect(n.counts.harness).toBe(9);
+    expect(n.counts.harness).toBe(3);
     expect(search(all, { cat: 'notifications', verified: true }).results).toEqual([]);
-    expect(search(all, { verified: true }).results.every((e) => e.builtin)).toBe(true);
+    expect(search(all, { verified: true }).results.every((e) => e.own)).toBe(true);
     expect(search(all, { noProgram: true }).results.map((e) => e.id)).toEqual(['io.github.amoreau.nord']);
     expect(search(all, { cat: 'notifications', noSecret: true }).results.map((e) => e.id)).toEqual(['dev.sroux.ntfy']);
-    expect(search(all, { noNetwork: true, cat: 'harness' }).results).toHaveLength(9);
+    expect(search(all, { noNetwork: true, cat: 'harness' }).results).toHaveLength(3);
   });
 
   it('sorts by installations or by the last update when asked', () => {
@@ -144,63 +168,51 @@ describe('the home page and Escouade’s own', () => {
     const h = home(all);
     expect(h.verified).toHaveLength(6);
     expect(new Set(h.verified.map((e) => e.categories[0])).size).toBeGreaterThan(2);
-    expect(h.fresh.map((e) => e.id)).toEqual([ntfy.id, slack.id, nord.id]);
+    expect(h.fresh.map((e) => e.id).slice(0, 3)).toEqual([ntfy.id, slack.id, nord.id]);
     expect(h.top.map((e) => e.id)).toEqual([slack.id, nord.id, ntfy.id]);
-    expect(h.counts['ticket-sources']).toBe(7);
+    expect(h.counts['ticket-sources']).toBe(1);
   });
 
-  it('reserves dev.escouade.* to Escouade’s own, with the categories of choice 214', () => {
-    expect(BUILTINS.every((b) => b.id.startsWith('dev.escouade.'))).toBe(true);
-    expect(new Set(BUILTINS.map((b) => b.id)).size).toBe(BUILTINS.length);
-    expect(new Set(BUILTINS.flatMap((b) => b.categories))).toEqual(new Set(['harness', 'ticket-sources', 'forges']));
-    // What the app gives, not every dev.escouade.*: those of plugins/<id>/ are published on the store (ESC-314), and
-    // listed as its plugins. A source here is the folder of a plugin the app gives (below).
-    expect(isBuiltinId('dev.escouade.github')).toBe(true);
-    expect(isBuiltinId('dev.escouade.discord')).toBe(false);
-    expect(BUILTINS.filter((b) => b.source).every((b) => /^plugins\/[a-z-]+$/.test(b.source!))).toBe(true);
+  it('keeps no list of its own: each is a plugin of the store, in the reserve dev.escouade.* (ESC-353)', async () => {
+    expect(BUILTINS).toEqual([]);
+    expect(await catalog(null)).toEqual([]);
+    expect(isBuiltinId('dev.escouade.github')).toBe(false);
+    expect(isOwnId('dev.escouade.github')).toBe(true);
+    expect(isOwnId('io.github.me.github')).toBe(false);
+  });
+
+  it('gives each folder of plugins/ a category of the store to be first published in', () => {
+    const root = fileURLToPath(new URL('../../../plugins/', import.meta.url));
+    const published = ['discord', 'high-contrast', 'slack', 'team-rules'];
+    for (const d of readdirSync(root).filter((x) => existsSync(join(root, x, 'escouade-plugin.json')))) {
+      const m = JSON.parse(readFileSync(join(root, d, 'escouade-plugin.json'), 'utf8'));
+      if (published.includes(d)) continue;
+      // A module that reads its manifest embeds it: a key added there changes its fingerprint (docs/PLUGINS.md §8.29).
+      const code = existsSync(join(root, d, 'src/lib.rs'))
+        ? readFileSync(join(root, d, 'src/lib.rs'), 'utf8').split('#[cfg(test)]')[0]!
+        : '';
+      const embeds = /\(MANIFEST\)/.test(code);
+      expect(m.store, d).toEqual(embeds ? undefined : expect.anything());
+      const categories: string[] = embeds ? EMBEDDED_CATEGORIES[m.id]! : m.store.categories;
+      expect(categories?.length, d).toBeGreaterThan(0);
+      for (const c of categories) expect(CATEGORIES, d).toContain(c);
+    }
   });
 });
 
 describe('the logos of Escouade’s own (PLG-13)', () => {
-  it('a brand’s mark only where its rules allow it without asking (read on 2026-10-29), else its category’s glyph', async () => {
-    const logos = Object.fromEntries(BUILTINS.map((b) => [b.id.replace('dev.escouade.', ''), b.logo]));
-    const brands = Object.entries(logos)
-      .filter(([, l]) => 'brand' in l)
-      .map(([id]) => id);
-    expect(brands.sort()).toEqual(['gitea', 'github', 'opencode']);
-    for (const b of BUILTINS) {
-      if ('brand' in b.logo) continue;
-      const want = b.categories.includes('harness') ? 'harness' : b.categories.includes('forges') ? 'forge' : 'source';
-      expect(b.logo, b.id).toEqual({ category: want });
-    }
-    const own = (await catalog(null)).filter((e) => e.builtin);
-    expect(own.every((e) => e.logo && !e.icon)).toBe(true);
+  it('a brand’s mark only where its rules allow it without asking (read on 2026-10-29), else its category’s glyph', () => {
+    expect(ownLogo('dev.escouade.github', ['ticket-sources', 'forges'])).toEqual({ brand: 'github' });
+    expect(ownLogo('dev.escouade.gitea', ['forges'])).toEqual({ brand: 'gitea' });
+    expect(ownLogo('dev.escouade.opencode', ['harness'])).toEqual({ brand: 'opencode' });
+    expect(ownLogo('dev.escouade.gitlab', ['ticket-sources', 'forges'])).toEqual({ category: 'forge' });
+    expect(ownLogo('dev.escouade.jira', ['ticket-sources'])).toEqual({ category: 'source' });
+    expect(ownLogo('dev.escouade.claude-code', ['harness'])).toEqual({ category: 'harness' });
   });
-});
 
-describe('the plugins of the app in their folder', () => {
-  // INT-4's rule (docs/PLUGINS.md §4.3): a plugin the app gives that left the core is a folder of the repository,
-  // readable alone, and its page links to it. The demonstration is not on the store.
-  const root = fileURLToPath(new URL('../../../plugins/', import.meta.url));
-  // The plugins the store lists that have a folder there, by their id, which their manifest gives: a folder has a short
-  // name (docs/PLUGINS.md §8.6.1). Isola has no page yet, the demonstration is a fixture.
-  const folders = new Map(
-    readdirSync(root)
-      .filter((d) => existsSync(join(root, d, 'escouade-plugin.json')))
-      .map((d): [string, string] => [JSON.parse(readFileSync(join(root, d, 'escouade-plugin.json'), 'utf8')).id, d])
-      .filter(([id]) => isBuiltinId(id)),
-  );
-
-  it('links each listed folder as its source, and each source is a folder with its manifest and its README', async () => {
-    const sourced = BUILTINS.filter((b) => b.source).map((b) => b.id);
-    expect(sourced.sort()).toEqual([...folders.keys()].sort());
-    expect(folders.get('dev.escouade.claude-code')).toBe('claude');
-    for (const b of BUILTINS.filter((x) => x.source)) {
-      const folder = folders.get(b.id)!;
-      expect(b.source).toBe(`plugins/${folder}`);
-      expect(existsSync(join(root, folder, 'README.md'))).toBe(true);
-      const page = await pluginPage(null, '', b.id);
-      expect(page?.builtin?.source).toBe(`https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/${folder}`);
-    }
+  it('draws nothing for the others, nor for a category without a glyph', () => {
+    expect(ownLogo('dev.escouade.high-contrast', ['themes'])).toBeNull();
+    expect(ownLogo('dev.escouade.isola', ['tools'])).toBeNull();
+    expect(ownLogo('io.github.me.github', ['forges'])).toBeNull();
   });
 });

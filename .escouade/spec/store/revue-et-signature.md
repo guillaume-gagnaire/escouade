@@ -1,9 +1,9 @@
 ---
 title: "La revue « Vérifié par Escouade » : la file, la signature, la révocation"
 subject: "store"
-sources: ["docs/STORE.md","design/store/index.html","design/app-redesign/UX-NOTES.md","store/server/utils/review.ts","store/server/utils/discord.ts","store/scripts/plugin-review/","docs/PLUGINS.md §5.6","docs/PLUGINS.md §8.5.5, §8.20","Consignes du chef au lancement d'ESC-324 (2026-11-01)"]
-tickets: ["ESC-235","ESC-295","ESC-302","ESC-324","ESC-343","ESC-337"]
-decisions: [46,76,89]
+sources: ["docs/STORE.md","design/store/index.html","design/app-redesign/UX-NOTES.md","store/server/utils/review.ts","store/server/utils/discord.ts","store/scripts/plugin-review/","store/scripts/plugins-publish/","docs/PLUGINS.md §5.6","docs/PLUGINS.md §8.5.5, §8.20","docs/PLUGINS.md §8.6.2","Consignes du chef au lancement d'ESC-324 (2026-11-01)"]
+tickets: ["ESC-235","ESC-295","ESC-302","ESC-324","ESC-343","ESC-337","ESC-353"]
+decisions: [46,76,89,"plugins-publish-publier-avant-la-revue-e"]
 compared: "2026-10-30T03:23:39+01:00"
 ---
 
@@ -60,3 +60,15 @@ Détail et procédure : `docs/STORE.md` §4.1, §4.2, §4.5, §4.6 (il fait foi)
 - **Le banc** joue le module publié dans l'hôte WASM, hors ligne, sans conteneur, comme pour un `run.js`.
 - **Les pistes de Rust** s'ajoutent aux autres : `build.rs` et macros procédurales ; `unsafe`, `extern`, `#[link]`, `#[no_mangle]`, `asm!`, `transmute` ; `include_bytes!`, `include_str!`, `include!` et `#[path]` vers un chemin absolu, qui sort du dossier ou calculé ; `env!` ; les imports du module, hors de `wasi_snapshot_preview1` et `escouade.call`, et les méthodes `net/*`, `ws/*`, `fs/*`, `proc/*` écrites dans le module, comparées à `permissions.network`, `files` et `commands` ; le `Cargo.lock` paquet par paquet (source, somme, liste fermée `rust_native.json`) et son diff avec la version d'avant ; le code illisible.
 - La lecture (`/review-plugin`) part de `Cargo.toml` et de `src/` : la recompilation à la même empreinte prouve que ces sources sont ce qui tourne.
+
+## La première main passe par une commande du chef (ESC-353)
+Ceci précise « ni publier ni supprimer » du jeton d'administration : il ouvre aussi, sur `/mcp`, les trois outils de cette commande (*Le serveur MCP du store*), et toujours rien qui supprime.
+
+- `npm run plugins:publish -- [--changed] [<court>…]` fait passer les plugins `dev.escouade.*` de `plugins/` au store, l'un après l'autre. C'est le chef qui la lance, jamais l'agent d'un ticket. `--changed` prend tout dossier dont la version n'est pas signée au store, sauf une version `0.0.0`, pas encore portée ; en nommer une est refusé.
+- **Avant tout** : un arbre sale, ou un commit qui n'est pas sur `origin/main`, est refusé, et rien n'est fait (code 2).
+- **Pour chaque plugin, dans l'ordre** : l'étiquette `plugins/<court>/vX.Y.Z` sur ce commit, poussée ; la soumission ; les contrôles ; la publication, non vérifiée, en demandant la revue, avec les `store.categories` du manifeste pour une première version ; la revue locale ; puis `report` et `sign`.
+- **La publication vient avant la revue**, comme pour tout plugin : le store ne sert à la revue et ne signe qu'une version publiée. L'app ne prend aucun `dev.escouade.*` sans signature. Une version publiée et pas encore signée se voit au store avec « En revue », et ne s'installe pas.
+- **Elle s'arrête** (code 1, avec sa raison et ce qu'il reste à faire) au premier contrôle rouge, à une version retenue, à la limite de soumissions, à un rapport sans la ligne `**Verdict final : Vérifier**`, ou à un autre verdict. Dans ces deux derniers cas, rien n'est déposé ni signé. La commande n'écrit jamais ce verdict : c'est celui de la lecture (`/review-plugin`). Une proposition du script n'en tient pas lieu.
+- **Elle reprend là** sans rien garder à elle : ce qui est au catalogue n'est ni étiqueté ni soumis de nouveau, un rapport présent n'est pas récrit, une version signée n'est pas refaite.
+- **Elle ne lit jamais la clé** : `sign` reste `npm run plugin-review -- sign`, dans son propre process. Aucun secret dans son journal.
+- Le verdict se lit dans la dernière section « Constats de la revue » : un titre identique cité d'un plugin, plus haut dans le rapport, ne décide de rien.

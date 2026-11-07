@@ -12,6 +12,7 @@ import { catalog as listing, pluginPage } from '../../server/utils/listing';
 import { readPublicKey } from '../../server/utils/minisign';
 import {
   acceptSignature,
+  adminBearer,
   adminTokensOf,
   closeReport,
   decide,
@@ -183,8 +184,16 @@ describe.skipIf(!url)('the review queue and the signatures', () => {
       expect(await tokenAdmin(db, env, `Bearer ${made.token}x`)).toBeNull();
       const [line] = await adminTokensOf(db, admin);
       expect(line).toMatchObject({ label: 'Mon poste', hint: `${made.token.slice(0, 14)}…` });
+      // On /mcp, for npm run plugins:publish: the same token, its account, three tools (ESC-353).
+      expect(await adminBearer(db, env, `Bearer ${made.token}`)).toMatchObject({
+        account: { id: admin.id },
+        scopes: ['author'],
+        tools: ['submit_version', 'get_version', 'publish_version'],
+      });
+      expect(await adminBearer(db, env, 'Bearer esc_mcp_nope')).toBeNull();
       expect(await revokeAdminToken(db, admin, line!.ref)).toBe(true);
       expect(await tokenAdmin(db, env, `Bearer ${made.token}`)).toBeNull();
+      expect(await adminBearer(db, env, `Bearer ${made.token}`)).toBeNull();
       expect(await adminTokensOf(db, admin)).toEqual([]);
     });
 

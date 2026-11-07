@@ -8,8 +8,8 @@ export function useCatalog() {
   const words = computed(() => CATALOG_TEXTS[lang.value]);
   const to = {
     plugin: (id: string) => pathIn(lang.value, `/plugins/${encodeURIComponent(id)}`),
-    author: (e: Pick<Entry, 'builtin' | 'author'>) =>
-      e.builtin ? pathIn(lang.value, '/authors/escouade') : e.author ? pathIn(lang.value, `/authors/${e.author.login}`) : null,
+    author: (e: Pick<Entry, 'own' | 'author'>) =>
+      e.own ? pathIn(lang.value, '/authors/escouade') : e.author ? pathIn(lang.value, `/authors/${e.author.login}`) : null,
     search: (q: Record<string, string | undefined> = {}) => {
       const p = new URLSearchParams(Object.entries(q).filter((x): x is [string, string] => !!x[1]));
       const s = p.toString();

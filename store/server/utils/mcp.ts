@@ -167,7 +167,7 @@ export function mcpServer(ctx: McpContext): McpServer {
     config: { title: string; description: string; input: S; annotations: typeof RO | typeof RW | typeof DESTRUCTIVE },
     run: Handler<z.infer<z.ZodObject<S>>>,
   ) {
-    if (!bearer.scopes.includes(scope)) return;
+    if (!bearer.scopes.includes(scope) || (bearer.tools && !bearer.tools.includes(name))) return;
     server.registerTool(
       name,
       { title: config.title, description: config.description, inputSchema: config.input, annotations: config.annotations },

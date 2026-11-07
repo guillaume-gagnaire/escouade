@@ -2,8 +2,8 @@
 title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","docs/PLUGINS.md §8.19 (ESC-344)","docs/PLUGINS.md §8.20 (ESC-337)","docs/PLUGINS.md §8.22 (ESC-351)","docs/PLUGINS.md §8.23 (ESC-349)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire","docs/PLUGINS.md §8.24 (ESC-348)","docs/PLUGINS.md §8.25 (ESC-345)","docs/PLUGINS.md §8.27 (ESC-347)","docs/PLUGINS.md §8.28 (ESC-350)","docs/PLUGINS.md §8.29 (ESC-358)","Accord de l'utilisateur du 2026-11-06 : publication et MIT d'escouade-voice"]
-tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351","ESC-352","ESC-349","ESC-348","ESC-345","ESC-346","ESC-347","ESC-350","ESC-358"]
-decisions: [73,71,70,72,75,80,84,86,89,92,93,96,99]
+tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351","ESC-352","ESC-349","ESC-348","ESC-345","ESC-346","ESC-347","ESC-350","ESC-358","ESC-353"]
+decisions: [73,71,70,72,75,80,84,86,89,92,93,96,99,"plugins-publish-publier-avant-la-revue-e"]
 compared: null
 ---
 
@@ -243,3 +243,13 @@ Publiés le 2026-11-06 par l'utilisateur : `escouade-plugin-kit` `0.1.1`, `escou
 Ce qui est dit plus haut des crates liées au cœur « jusqu'à P8 » est fini : `src-tauri/Cargo.toml` ne dépend d'aucun dossier de `plugins/`, et les crates de harness sont des `cdylib` seules. Les vues terminal de Claude Code, Codex, Copilot CLI, Cursor CLI, Gemini CLI, Mistral Vibe et Antigravity CLI passent par leur module (`view/translate`, voir *Le contrat des harness en process*). Le cœur garde `crates/escouade-acp`, `escouade-voice` et le kit, qui ne sont pas des plugins.
 
 Le contrat a grandi : `escouade-plugin-protocol` 0.1.1 et `escouade-acp` 0.1.2, qui porte les vues de Cursor CLI, Gemini CLI et Mistral Vibe, sont publiées. Antigravity CLI, Claude Code, Codex, Copilot CLI, Cursor CLI, Gemini CLI et Mistral compilent depuis crates.io. Leurs empreintes ont changé, comme celle d'OpenCode, redevenu un `cdylib` seul ; les 15 autres plugins n'ont pas bougé.
+
+## La publication de la première main (ESC-353)
+
+- `npm run plugins:publish` enchaîne les gestes de chaque plugin ; le détail est dans *La revue « Vérifié par Escouade »*. Rien n'est publié tant que le chef ne l'a pas lancée.
+- **Le store n'a plus de liste à lui.** Un plugin de la première main y est une vraie ligne du catalogue, avec ses versions, ses installations et son sceau, ou « En revue ». Il n'y est plus tant qu'il n'est pas publié : la liste « livrés avec Escouade » du store est vide, et *Les plugins* de l'app ne changent pas.
+- Le préfixe `dev.escouade.*`, réservé au dépôt de l'app, donne sa marque : « Escouade » à la place du compte, le lien vers `/authors/escouade`, et sa tuile (la marque de GitHub, Gitea ou OpenCode, sinon le glyphe d'un harness, d'un hébergeur ou d'une source). Un plugin d'un autre genre garde ses lettres.
+- Chaque manifeste qui n'a pas encore de version au store dit ses `store.categories`, comme un tiers : une première version sans catégorie arrête la commande.
+
+- **Une exception à la phrase précédente** : Cursor CLI, Gemini CLI et Mistral lisent leur manifeste depuis leur module, qui l'embarque. Une clé `store` y changerait leur empreinte : leurs catégories restent dans la commande jusqu'à leur prochaine version. Les 21 autres modules, et Goose, les déclarent à leur manifeste, sans effet sur leur empreinte.
+- **Ce qui est déjà au store ne repart pas.** La commande passe par les 23 modules et par `slack`, `team-rules`, `discord`, `high-contrast` et `goose`. Une version signée au catalogue n'est pas touchée. Une version publiée mais non signée va à sa revue, sans nouvelle soumission. Seul le numéro de version compte : un dossier changé sans nouvelle version ne repart pas.

@@ -58,5 +58,6 @@
         "writer": "Gemini 3.8 Flash"
       }
     ]
-  }
+  },
+  "store": { "categories": ["harness"] }
 }

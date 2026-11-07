@@ -30,5 +30,6 @@
     "fileBytes": 4194304,
     "memoryBytes": 268435456,
     "turnSeconds": 10
-  }
+  },
+  "store": { "categories": ["harness"] }
 }

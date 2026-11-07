@@ -63,14 +63,14 @@ async function copyRepo() {
       <div class="who">
         <h1>{{ e.name[lang] }} <TrustMark :trust="e.trust" :version="e.version" large /></h1>
         <div class="line">
-          <NuxtLink v-if="e.builtin" class="me" :to="to.author(e)!"><LogoMark :size="22" />Escouade</NuxtLink>
+          <NuxtLink v-if="e.own" class="me" :to="to.author(e)!"><LogoMark :size="22" />Escouade</NuxtLink>
           <NuxtLink v-else-if="e.author" class="me" :to="to.author(e)!"
             ><AuthorAvatar :login="e.author.login" :github-id="e.author.githubId" />{{ e.author.login }}</NuxtLink
           >
           <span v-else>{{ words.deleted }}</span>
           <NuxtLink v-for="c in e.categories" :key="c" :to="to.search({ cat: c })">{{ words.categories[c] }}</NuxtLink>
           <span v-if="e.version" class="mono">v{{ e.version }}</span>
-          <span v-if="!e.builtin" class="num">{{ words.installs(e.installs) }}</span>
+          <span class="num">{{ words.installs(e.installs) }}</span>
           <span v-if="page.latest?.license">{{ page.latest.license }}</span>
         </div>
         <p class="desc">{{ e.description[lang] }}</p>

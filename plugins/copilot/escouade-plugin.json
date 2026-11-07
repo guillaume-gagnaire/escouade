@@ -55,5 +55,6 @@
         "updateCommand": "npm install -g @github/copilot@latest"
       }
     ]
-  }
+  },
+  "store": { "categories": ["harness"] }
 }

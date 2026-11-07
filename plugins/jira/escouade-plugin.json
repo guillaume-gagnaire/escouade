@@ -43,5 +43,6 @@
       }
     ],
     "ticketSources": [{ "id": "jira", "name": "Jira", "account": "jira" }]
-  }
+  },
+  "store": { "categories": ["ticket-sources"] }
 }

@@ -130,7 +130,7 @@ describe('the MCP server’s tools', () => {
   });
 
   /** A server for a token of `scopes`, on a journal that keeps what it is told. */
-  async function serve(scopes: Scope[], env: Record<string, string> = {}) {
+  async function serve(scopes: Scope[], env: Record<string, string> = {}, tools?: string[]) {
     const noted: unknown[] = [];
     const db = { insert: () => ({ values: async (v: unknown) => void noted.push(v) }) } as unknown as Db;
     const account = { id: 1, githubId: 77, login: 'ana' } as Account;
@@ -138,7 +138,7 @@ describe('the MCP server’s tools', () => {
       db,
       env,
       site: 'https://s',
-      bearer: { account, grantId: 9, client: { id: 'mcp_x', name: 'Agent X' }, scopes, expiresAt: new Date() },
+      bearer: { account, grantId: 9, client: { id: 'mcp_x', name: 'Agent X' }, scopes, expiresAt: new Date(), tools },
       address: '127.0.0.1',
       deps: null,
     });
@@ -159,6 +159,11 @@ describe('the MCP server’s tools', () => {
     const all = (await admin.listTools()).tools.map((t) => t.name);
     expect(all).toEqual(expect.arrayContaining(['review_queue', 'review_version', 'post_report']));
     expect(all).toHaveLength(17);
+  });
+
+  it('shows an administration token its three tools alone (ESC-353)', async () => {
+    const { client } = await serve(['author'], {}, ['submit_version', 'get_version', 'publish_version']);
+    expect((await client.listTools()).tools.map((t) => t.name).sort()).toEqual(['get_version', 'publish_version', 'submit_version']);
   });
 
   it('refuses `review` to an account taken off STORE_ADMINS, and notes every call with its client', async () => {

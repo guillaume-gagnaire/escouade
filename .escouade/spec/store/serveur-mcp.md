@@ -2,8 +2,8 @@
 title: "Le serveur MCP du store : gérer ses plugins depuis un agent"
 subject: "store"
 sources: ["docs/STORE.md","store/server/utils/oauth.ts","store/server/utils/mcp.ts"]
-tickets: ["ESC-317"]
-decisions: [27]
+tickets: ["ESC-317","ESC-353"]
+decisions: [27,"plugins-publish-publier-avant-la-revue-e"]
 compared: null
 ---
 
@@ -36,3 +36,8 @@ Un auteur (et d'abord le chef d'escouade, pour les plugins `dev.escouade.*`) gè
 ## La documentation
 - Une page publique courte du store, `/agents` et `/en/agents`, liée du pied de page et d'« Applications connectées ».
 - La page « Le store depuis un agent » de la documentation du site (`plugins/store-mcp`, fr/en).
+
+## Le jeton d'administration (ESC-353)
+- `npm run plugins:publish` n'a pas de navigateur pour le consentement : `/mcp` prend aussi un jeton `esc_admin_`, pour son compte.
+- Ce jeton n'ouvre que `submit_version`, `get_version` et `publish_version`. Ni retrait, ni mise hors liste, ni changement de source, et rien de la file de revue.
+- Mêmes fonctions, mêmes limites et même journal qu'un autre client, sous le nom « npm run plugins:publish ». Il ne signe et ne révoque rien.

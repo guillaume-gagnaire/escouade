@@ -133,6 +133,8 @@ Le store prévient sur le Discord d'Escouade (`docs/STORE.md`, §4.7) : les admi
 
 ## La file de revue
 
+`npm run plugins:publish` (depuis la racine ou `store/`) fait passer les plugins de la première main au store : c'est le chef qui le lance (`docs/PLUGINS.md` §8.6.2).
+
 Pour les seuls comptes de `STORE_ADMINS` (`docs/STORE.md` §4.1, STORE-8) : la page `/review` (connecté), et pour le script de la revue (`npm run plugin-review -- report|sign|revoke|lift|revoke-key`), ces routes avec `Authorization: Bearer <jeton d'administration>`, sans cookie :
 
 | Route | Ce qu'elle fait |

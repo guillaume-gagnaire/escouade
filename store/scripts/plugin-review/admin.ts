@@ -231,10 +231,15 @@ export async function signVersion(a: Admin, id: string, version: string, now = n
   }
 }
 
-/** The verdict the reader settled in the report (« Verdict : … » in its findings), else the one the script proposed. */
+const FINDINGS = '## Constats de la revue';
+
+/**
+ * The verdict the reader settled in the report (« Verdict : … » in its findings), else the one the script proposed. Their
+ * section is the report's last: a heading the same quoted from a plugin, above it, settles nothing.
+ */
 export function reportVerdict(report: string, data: ReviewData & { proposed?: { verdict: string | null } }): string | null {
   const settled = /^[-*\s]*\**verdict(?: final)?\**\s*:\s*\**\s*(Vérifier|Demander des changements|Refuser)\b/im.exec(
-    report.split('## Constats de la revue')[1] ?? '',
+    report.includes(FINDINGS) ? report.slice(report.lastIndexOf(FINDINGS)) : '',
   );
   return settled?.[1] ?? data.proposed?.verdict ?? null;
 }

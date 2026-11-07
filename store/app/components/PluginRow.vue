@@ -33,11 +33,11 @@ const e = computed(() => props.entry);
         <template v-else>{{ e.description[lang] }}</template>
       </p>
       <div class="meta">
-        <span>{{ e.builtin ? 'Escouade' : (e.author?.login ?? words.deleted) }}</span>
+        <span>{{ e.own ? 'Escouade' : (e.author?.login ?? words.deleted) }}</span>
         <span v-if="e.categories[0]">{{ words.categories[e.categories[0]] }}</span>
         <PluginAsks :asks="e.asks" />
         <span class="grow"></span>
-        <span v-if="!e.builtin" class="num">{{ words.installs(e.installs) }}</span>
+        <span class="num">{{ words.installs(e.installs) }}</span>
       </div>
     </div>
     <div v-if="side" class="side">
