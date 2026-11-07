@@ -276,6 +276,43 @@ fn built(dir: &Path) -> PathBuf {
     at
 }
 
+/// The review plays a plugin offline (ESC-353): a source whose service is out of reach answers by the host's refusal, which
+/// it does not type. That cannot be judged here, and is no failure: every first-hand source and host would fall on it.
+#[tokio::test(flavor = "multi_thread")]
+async fn offline_a_service_out_of_reach_is_not_judged_and_fails_nothing() {
+    let dir = root().join("plugins/trello");
+    let target = std::env::var_os("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("target"));
+    let module = target.join("plugins-wasm/trello/plugin.wasm");
+    if !module.exists() {
+        return;
+    }
+    let r = run(
+        &dir,
+        &Options {
+            module: Some(module),
+            offline: true,
+            // The version it asks for, as the review plays the first hand.
+            app_version: "2.2.0".to_string(),
+            ..options(Lang::Fr)
+        },
+    )
+    .await;
+    assert_eq!(
+        r.outcome(Scenario::Tickets).verdict,
+        Verdict::Skip,
+        "{}",
+        r.render(Lang::Fr)
+    );
+    assert!(
+        said(&r, Scenario::Tickets).contains("account/me"),
+        "{}",
+        r.render(Lang::Fr)
+    );
+    assert!(r.passed(), "{}", r.render(Lang::Fr));
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn the_bench_plays_the_module_it_is_given_as_it_is() {
     if !ready() {

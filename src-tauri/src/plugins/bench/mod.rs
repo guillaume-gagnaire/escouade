@@ -1426,6 +1426,7 @@ async fn point(
         return;
     };
     let mut done = Vec::new();
+    let mut out_of_reach = Vec::new();
     for (method, extra) in calls {
         let mut params = json!({ "source": id, "forge": id, "account": {} });
         if let (Some(p), Value::Object(extra)) = (params.as_object_mut(), extra) {
@@ -1438,6 +1439,14 @@ async fn point(
             }
             Reply::Answered { result: Err(e), .. } if typed_code(e.code) => {
                 done.push(format!("{method}: {}", e.code));
+                continue;
+            }
+            // Offline (the review's bench) its service is out of reach, the host's refusal is what it says: how it
+            // tells a service's error cannot be judged here. A reachable host is judged by the author's bench.
+            Reply::Answered { result: Err(e), .. }
+                if b.o.offline && e.message.contains("permissions.network") =>
+            {
+                out_of_reach.push(method.to_string());
                 continue;
             }
             Reply::Answered { result: Err(e), .. } => (
@@ -1482,6 +1491,20 @@ async fn point(
             ),
         };
         b.fail(scenario, said, missing);
+        return;
+    }
+    if !out_of_reach.is_empty() {
+        let calls = out_of_reach.join(", ");
+        b.set(
+            scenario,
+            Verdict::Skip,
+            tr_in!(
+                lang,
+                "hors ligne : {calls} joignent leur service, leurs réponses ne se jugent pas ici",
+                "offline: {calls} reach their service, their answers cannot be judged here"
+            ),
+            None,
+        );
         return;
     }
     b.pass(scenario, done.join(" ; "));
