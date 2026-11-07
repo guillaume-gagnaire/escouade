@@ -84,18 +84,18 @@ fn meaning(lang: Lang, mode: &str) -> String {
         ),
         "acceptEdits" => tr_in!(
             lang,
-            "Son mode accept-edits : ses écritures dans le dossier passent sans demander ; ses commandes (sauf git add et git commit), ses écritures ailleurs et les outils MCP demandent. Pas de bac à sable.",
-            "Its accept-edits mode: its writes in the folder go through without asking; its commands (but git add and git commit), its writes elsewhere and MCP tools ask. No sandbox."
+            "Ses écritures dans le dossier de l’agent (hors .git, .husky, .githooks, .agents et .gemini), et git add et git commit seuls, sont acceptés par Escouade à la fin du tour, puis il les refait ; ses autres commandes, ses écritures ailleurs et les outils MCP demandent. Pas de bac à sable.",
+            "Its writes in the agent’s folder (but .git, .husky, .githooks, .agents and .gemini), and git add and git commit alone, are accepted by Escouade at the end of the turn, then it does them again; its other commands, its writes elsewhere and MCP tools ask. No sandbox."
         ),
         "bypassPermissions" => tr_in!(
             lang,
-            "Escouade lui permet tout par ses règles : commandes, fichiers, outils MCP et adresses, sans rien demander. Les chemins d’un projet privé restent refusés. Pas de bac à sable.",
-            "Escouade allows it everything by its rules: commands, files, MCP tools and addresses, without asking. A private project’s paths stay refused. No sandbox."
+            "Escouade lui permet tout par ses règles : commandes, fichiers, outils MCP et adresses, sans rien demander. Pour un projet privé, chaque appel est jugé par Escouade à la fin du tour, et ce qui nomme ses chemins refusé. Pas de bac à sable.",
+            "Escouade allows it everything by its rules: commands, files, MCP tools and addresses, without asking. For a private project, each call is judged by Escouade at the end of the turn, and what names its paths refused. No sandbox."
         ),
         _ => tr_in!(
             lang,
-            "Ses écritures dans le dossier de l’agent passent ; ses commandes, ses écritures ailleurs et les outils MCP demandent, une fois son tour fini (Antigravity ne demande rien en cours de tour), puis il les refait. Il lit sans demander. Pas de bac à sable.",
-            "Its writes in the agent’s folder go through; its commands, its writes elsewhere and MCP tools ask, once its turn is over (Antigravity asks nothing during a turn), then it does them again. It reads without asking. No sandbox."
+            "Ses écritures dans le dossier de l’agent (hors .git, .husky, .githooks, .agents et .gemini) sont acceptées par Escouade ; ses commandes, ses écritures ailleurs et les outils MCP demandent. Tout cela une fois son tour fini (Antigravity ne demande rien en cours de tour), puis il les refait. Il lit sans demander. Pas de bac à sable.",
+            "Its writes in the agent’s folder (but .git, .husky, .githooks, .agents and .gemini) are accepted by Escouade; its commands, its writes elsewhere and MCP tools ask. All of it once its turn is over (Antigravity asks nothing during a turn), then it does them again. It reads without asking. No sandbox."
         ),
     }
 }

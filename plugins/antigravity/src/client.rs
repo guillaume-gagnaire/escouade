@@ -83,7 +83,8 @@ pub struct Client {
     settings: Settings,
     /// Its program must start again before the next message (a model, effort or mode changed).
     stale: bool,
-    /// What the user allowed for good (« Toujours »), and for the next turn only.
+    /// What the user allowed for good (« Toujours »: exact rules, judged by the plugin, kept while it runs), and the rules
+    /// of `agy` for the next turn only.
     always: Vec<String>,
     once: Vec<String>,
     /// The turn under way: its calls (by step, their name and arguments), the calls of the step being written not told
@@ -124,7 +125,6 @@ impl Client {
     /// The agent `a`, given before its launch, or again to a plugin that started again (its program runs then).
     pub fn new(a: &Attach) -> Self {
         let home = a.home.as_ref().map(PathBuf::from);
-        let always = Self::always(&a.agent, home.as_deref());
         let tag: String = a
             .agent
             .chars()
@@ -164,8 +164,10 @@ impl Client {
                 effort: a.effort.clone(),
                 mode: a.mode.clone(),
             },
-            stale: false,
-            always,
+            // Given again to a plugin that started again: its rules are written again (`attached`), and its program
+            // started again before the next message, on them.
+            stale: true,
+            always: Vec::new(),
             once: Vec::new(),
             args: HashMap::new(),
             calls: VecDeque::new(),
@@ -183,25 +185,19 @@ impl Client {
         }
     }
 
-    /// What the user allowed the agent `agent` for good, kept in its home.
-    fn always(agent: &str, home: Option<&Path>) -> Vec<String> {
-        let file = home.map(words::always_file);
-        words::always_of(file.and_then(|f| host::read(agent, &f)))
-    }
-
     fn next(&mut self) -> u64 {
         self.seq += 1;
         self.seq
     }
 
-    /// The agent's settings, its rules as they stand: its mode's, its fence's, and what the user allowed. Its file before
-    /// kept but them and its provider (its account's key, or the machine's Google sign-in, ESC-271).
+    /// The agent's settings, its rules as they stand: its mode's, its fence's, and what was allowed for the next turn
+    /// alone (« Toujours » is the plugin's, never a rule). Its file before kept but them, `words::SET_KEYS` and its
+    /// provider (its account's key, or the machine's Google sign-in, ESC-271).
     fn settings_file(&self) -> Option<FileToWrite> {
         let home = self.home.as_deref()?;
         let file = words::settings_file(home);
         let before = host::read(&self.agent, &file).unwrap_or_default();
-        let allowed: Vec<String> = self.always.iter().chain(&self.once).cloned().collect();
-        let mut doc = words::settings_doc(&before, &self.rules, &self.settings.mode, &allowed);
+        let mut doc = words::settings_doc(&before, &self.rules, &self.settings.mode, &self.once);
         words::set_provider(&mut doc, self.by_key);
         Some(FileToWrite {
             path: file.to_string_lossy().into_owned(),
@@ -222,6 +218,15 @@ impl Client {
                 text: f.text,
             });
         }
+    }
+
+    /// Given again to a plugin that started again: its rules written again at once as they stand (what was allowed for a
+    /// turn went with the plugin, a mode changed meanwhile is the core's), its program started again before the next
+    /// message (`stale`).
+    pub fn attached(&self) -> Vec<Item> {
+        let mut out = Vec::new();
+        self.write_rules(&mut out);
+        out
     }
 
     /// The description of a program of the agent on its conversation (`conversation`), its model, effort and mode as they
@@ -245,7 +250,8 @@ impl Client {
             remove_env,
             files: self.settings_file().into_iter().collect(),
             fence_applied: !self.rules.fence.is_empty(),
-            read_only: self.rules.read_only,
+            // Its rules hold it only when they are written.
+            read_only: self.rules.read_only && self.home.is_some(),
             ..Launch::default()
         }
     }
@@ -268,7 +274,7 @@ impl Client {
             effort: p.effort.clone(),
             mode: p.mode.clone(),
         };
-        self.always = Self::always(&self.agent, self.home.as_deref());
+        self.stale = false;
         self.translator.launch(p);
         self.opened = false;
         self.up = true;
@@ -310,20 +316,6 @@ impl Client {
             .find(|v| v["step_index"].as_u64() == Some(step))
     }
 
-    /// The arguments of the call of the step `s`, as `step` will take them.
-    fn args_of(&self, s: &Value, name: &str) -> Value {
-        let step = s["step_index"].as_u64().unwrap_or(0);
-        match self.args.get(&step) {
-            Some((_, a)) => a.clone(),
-            None => self
-                .calls
-                .iter()
-                .find(|(n, _)| n == name)
-                .map(|(_, a)| a.clone())
-                .unwrap_or_else(|| s["tool_info"]["parameters"].clone()),
-        }
-    }
-
     /// The step whose line of the transcript `msg` needs before it is read: what ends a text (its calls, its reasoning),
     /// or a write (one refused ends `DONE` all the same, ESC-269).
     fn needs(&self, msg: &Value) -> Option<u64> {
@@ -336,13 +328,9 @@ impl Client {
         {
             return None;
         }
-        let writes = |name: &str| {
-            words::rule_of(name, &self.args_of(s, name))
-                .is_some_and(|(r, _)| r.starts_with("write_file("))
-        };
         let needed = match s["step_type"].as_str().unwrap_or_default() {
             "agent_response" => true,
-            "tool" | "subagent" => writes(s["tool_name"].as_str().unwrap_or_default()),
+            "tool" | "subagent" => words::writes(s["tool_name"].as_str().unwrap_or_default()),
             _ => false,
         };
         needed.then(|| s["step_index"].as_u64().unwrap_or(0))
@@ -508,10 +496,7 @@ impl Client {
                 msg["step_update"]["escouade"]["args"] = args.clone();
                 // A write refused ends `DONE` all the same (ESC-269): its transcript says it.
                 let mut state = state;
-                if state == "DONE"
-                    && words::rule_of(&name, &args)
-                        .is_some_and(|(r, _)| r.starts_with("write_file("))
-                {
+                if state == "DONE" && words::writes(&name) {
                     if let Some(t) = written.filter(|t| t["status"] == "ERROR") {
                         let e = t["error"].as_str().unwrap_or("error").to_string();
                         msg["step_update"]["state"] = json!("ERROR");
@@ -544,11 +529,13 @@ impl Client {
         let plan_file = self.plan_file.take();
         let spent = std::mem::take(&mut self.usage);
         let planning = self.settings.mode == "plan";
-        // What was allowed for this turn only is taken back.
-        if !self.once.is_empty() {
-            self.once.clear();
-            self.write_rules(out);
+        // What was allowed for this turn only is taken back, its rules written again whatever they were, and its program
+        // started again before the next message when one was taken back (`agy` reads them again only some time after).
+        let granted = std::mem::take(&mut self.once);
+        if !granted.is_empty() {
+            self.stale = true;
         }
+        self.write_rules(out);
         self.args.clear();
         self.calls.clear();
         self.translator.spend(spent);
@@ -558,24 +545,46 @@ impl Client {
         }
         let session = self.session.clone().unwrap_or_default();
         let mut asks: Vec<(String, Asked, &str, Value)> = Vec::new();
-        if !self.rules.read_only {
-            for d in &denied {
-                let Some((rule, said)) = words::rule_of(&d.tool, &d.args) else {
-                    continue;
-                };
-                // « Projet privé »: refused at once, never a card the user could accept.
-                if words::fenced(&d.args, &self.rules.fence) {
-                    eprintln!(
-                        "agy: a call naming a path of another project refused (private project)"
-                    );
-                    continue;
+        self.answers = Answers::default();
+        for d in &denied {
+            let Some((rule, said)) = words::rule_of(&d.tool, &d.args) else {
+                let refused = self.rules.read_only
+                    || words::fenced(&d.args, &self.rules.fence, &self.rules.cwd);
+                if let Some(said) = words::unruled(&d.tool, &d.args).filter(|_| !refused) {
+                    out.push(Item::Notice {
+                        text: words::unruled_notice(&self.lang, &said),
+                        level: "warn".into(),
+                    });
                 }
-                asks.push((
+                continue;
+            };
+            // Allowed for this very turn and refused all the same: asked again, it would go round for ever.
+            if granted.contains(&rule) {
+                out.push(Item::Notice {
+                    text: words::refused_again(&self.lang, &said),
+                    level: "warn".into(),
+                });
+                continue;
+            }
+            match words::judge(&self.rules, &self.settings.mode, &self.always, d, &rule) {
+                // « Projet privé », a discussion: refused at once, never a card the user could accept.
+                words::Verdict::Refused => {
+                    eprintln!(
+                        "agy: a call refused by Escouade's rules (private project or discussion)"
+                    );
+                }
+                words::Verdict::Allowed => {
+                    if !self.once.contains(&rule) {
+                        self.once.push(rule);
+                    }
+                    self.answers.allowed.push(said);
+                }
+                words::Verdict::Asked { always } => asks.push((
                     format!("{}-{}", self.tag, d.step),
                     Asked::Permission { rule, said },
                     "session/request_permission",
-                    words::permission_params(&session, d),
-                ));
+                    words::permission_params(&session, d, always),
+                )),
             }
         }
         for (i, q) in questions.iter().enumerate() {
@@ -590,7 +599,8 @@ impl Client {
                 params,
             ));
         }
-        if asks.is_empty() && planning {
+        let allowed_already = !self.answers.allowed.is_empty();
+        if asks.is_empty() && planning && !allowed_already {
             if let Some(plan) = plan_file.and_then(|f| host::read(&self.agent, Path::new(&f))) {
                 let n = self.next();
                 let rid = format!("{}-plan-{n}", self.tag);
@@ -599,22 +609,35 @@ impl Client {
             }
         }
         if asks.is_empty() {
+            // What Escouade's rules allowed goes on at once; else the turn is over.
+            if allowed_already {
+                return self.answered(out);
+            }
             return self.end_turn(false, None, out);
         }
-        self.answers = Answers::default();
         for (rid, asked, _, _) in &asks {
             self.asked.insert(rid.clone(), asked.clone());
         }
-        let mut allowed_by_rules = Vec::new();
+        let note = words::once_note(&self.lang);
+        let mut answered_by_client = Vec::new();
         for (rid, _, method, params) in asks {
             let (items, answered) = self.translator.ask(method, &rid, params);
-            out.extend(items);
+            // A permission's card says what « Autoriser » gives `agy`.
+            out.extend(items.into_iter().map(|mut i| {
+                if let Item::Permission { description, .. } = &mut i {
+                    *description = Some(match description.take() {
+                        Some(d) => format!("{d}\n{note}"),
+                        None => note.clone(),
+                    });
+                }
+                i
+            }));
             if let Some(allow) = answered {
-                allowed_by_rules.push((rid, allow));
+                answered_by_client.push((rid, allow));
             }
         }
-        // What Escouade's rules answer needs no card.
-        for (rid, allow) in allowed_by_rules {
+        // What the ACP client answered at once (a refusal: its own guards) needs no card.
+        for (rid, allow) in answered_by_client {
             self.answer(
                 &rid,
                 &AnswerPermission {
@@ -704,6 +727,9 @@ impl Client {
         self.up = false;
         self.stale_lines = true;
         out.push(Item::Pause);
+        // What was allowed for the turn stopped goes with it.
+        self.once.clear();
+        self.write_rules(&mut out);
         self.end_turn(true, None, &mut out);
         out
     }
@@ -723,9 +749,10 @@ impl Client {
         }
     }
 
-    /// Its rules written at once, its `--mode` at the next start of its program.
+    /// Its rules written at once, and its program started again before the next message on them: `agy` reads them again
+    /// only some time after, and a mode stricter must hold from that message on.
     pub fn set_mode(&mut self, mode: &str) -> Vec<Item> {
-        if words::agy_mode(&self.settings.mode) != words::agy_mode(mode) {
+        if self.settings.mode != mode {
             self.stale = true;
         }
         self.settings.mode = mode.to_string();
@@ -758,6 +785,10 @@ impl Client {
         let Some(rid) = self.known(&a.request) else {
             return self.lost_card();
         };
+        // A card of questions waits for its answers: a permission's would take it away unanswered.
+        if matches!(self.asked.get(&rid), Some(Asked::Question { .. })) {
+            return Err("this card asks questions: answer them".into());
+        }
         self.translator.answered(&a.request);
         let mut out = Vec::new();
         self.answer(&rid, a, &mut out);
@@ -777,19 +808,15 @@ impl Client {
                     {
                         self.answers.words.push(m.to_string());
                     }
-                } else if a.always {
-                    if !self.always.contains(&rule) {
-                        self.always.push(rule);
-                        if let Some(home) = self.home.as_deref() {
-                            out.push(Item::File {
-                                path: words::always_file(home).to_string_lossy().into_owned(),
-                                text: json!(self.always).to_string(),
-                            });
-                        }
-                    }
-                    self.answers.allowed.push(said);
                 } else {
-                    self.once.push(rule);
+                    // « Toujours » is kept by the plugin, never written where the agent writes nor as a rule of `agy`
+                    // (a start of a text): this very call is allowed again when `agy` refuses it (`words::judge`).
+                    if a.always && !self.always.contains(&rule) {
+                        self.always.push(rule.clone());
+                    }
+                    if !self.once.contains(&rule) {
+                        self.once.push(rule);
+                    }
                     self.answers.allowed.push(said);
                 }
                 self.answered(out);

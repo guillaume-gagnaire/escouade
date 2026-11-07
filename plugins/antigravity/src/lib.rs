@@ -109,9 +109,15 @@ impl Plugin {
             }
             method::ATTACH => {
                 let a: Attach = read(params)?;
-                self.agents
-                    .entry(a.agent.clone())
-                    .or_insert_with(|| Client::new(&a));
+                if !self.agents.contains_key(&a.agent) {
+                    let client = Client::new(&a);
+                    // Its rules as they stand, written before anything else is asked of it.
+                    let rules = client.attached();
+                    if a.home.is_some() && !rules.is_empty() {
+                        host::push(&a.agent, rules);
+                    }
+                    self.agents.insert(a.agent.clone(), client);
+                }
                 Ok(json!({}))
             }
             method::DETACH => {
@@ -192,5 +198,7 @@ impl Plugin {
     }
 }
 
+#[cfg(test)]
+mod rules_tests;
 #[cfg(test)]
 mod tests;

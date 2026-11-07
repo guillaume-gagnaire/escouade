@@ -38,6 +38,11 @@ fn decl() -> HarnessDecl {
     }
 }
 
+/// The mode the ACP client is kept in: it answers no permission by itself (its `acceptEdits` would let a write in
+/// `.husky` through), the client of `agy` judges them all (`words::judge`) before a card. Its own refusals hold (a text
+/// naming the fence, a discussion).
+const JUDGED: &str = "default";
+
 /// The time (ms since the epoch).
 fn now_ms() -> i64 {
     std::time::SystemTime::now()
@@ -61,8 +66,10 @@ pub struct Translator {
 
 impl Translator {
     pub fn new(a: &Attach) -> Self {
+        let mut acp = Agent::new(a, &decl(), env!("CARGO_PKG_VERSION"));
+        let _ = acp.set_mode(JUDGED);
         Translator {
-            acp: Agent::new(a, &decl(), env!("CARGO_PKG_VERSION")),
+            acp,
             lang: a.lang.clone(),
             session: a.session.clone(),
             told: HashSet::new(),
@@ -75,11 +82,11 @@ impl Translator {
         self.lang = p.lang.clone();
         // Its lines are the harness's, which speaks no ACP.
         let _ = self.acp.launch(p);
+        let _ = self.acp.set_mode(JUDGED);
     }
 
-    pub fn set_mode(&mut self, mode: &str) {
-        let _ = self.acp.set_mode(mode);
-    }
+    /// The mode is the client's to judge by (`words::judge`): the ACP client keeps `JUDGED`.
+    pub fn set_mode(&mut self, _mode: &str) {}
 
     pub fn set_model(&mut self, model: &str) {
         let _ = self.acp.set_model(model);

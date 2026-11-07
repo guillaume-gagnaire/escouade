@@ -21,7 +21,10 @@
     "wasm": "Cargo.toml"
   },
   "permissions": {
-    "files": [{ "root": "agentHome", "access": "read" }]
+    "files": [
+      { "root": "agentHome", "access": "read" },
+      { "root": "agentRepo", "access": "read" }
+    ]
   },
   "limits": {
     "fileBytes": 4194304

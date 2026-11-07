@@ -12,15 +12,17 @@ Escouade’s core finds `agy` and launches it, then launches it again when it mu
 
 Through Escouade’s host, in the agent’s own folder (`agentHome`, read), and nothing else:
 
-- the rules kept by “For this agent”, `settings.json` and `mcp_config.json`;
+- `settings.json` and `mcp_config.json`, to keep what `agy` put there itself (its interface’s trust): their rules, `toolPermission`, `agentMode` and any MCP server but Escouade’s are replaced, not taken over;
 - the last 4 MiB of the conversation’s transcript: its events don’t tell everything (a call’s arguments, a write’s text, its reasoning);
-- the plan file `agy` names, in that folder.
+- the plan file, at the write path the model gave, in that folder.
+
+It also asks the host whether the git of the agent’s worktree is protected (`agentRepo`, read: `fs/gitProtected`), before it accepts a `git add` or a `git commit` alone. It reads no file there.
 
 Your `~/.gemini` is never read nor written. The Google sign-in is in the system keychain, which the plugin never reads.
 
 ## What it has written
 
-It writes nothing itself. It describes to the core what to write in the agent’s folder, and the core checks it is there: the mode’s permission rules, those you allowed, and the entry of Escouade’s MCP server with its token.
+It writes nothing itself. It describes to the core what to write in the agent’s folder, and the core checks it is there: the mode’s permission rules, those you allowed for a turn’s resumption, and Escouade’s MCP server alone with its token. “For this agent” is written nowhere: the plugin keeps it while it runs.
 
 ## The secrets it gets
 
@@ -29,37 +31,35 @@ It writes nothing itself. It describes to the core what to write in the agent’
 
 ## What it accepts alone, and what goes to a card
 
-During a turn nothing goes to a card: `agy` does what its rules allow and refuses the rest. So the rules the plugin has written decide what goes through without a card:
+During a turn nothing goes to a card: `agy` does what its rules allow and refuses the rest. `agy` reads a rule as the start of a text (“commands that start with”), and how it judges them was never tried: so the plugin counts on no rule to guard anything. Outside Bypass, it has none of its own written, and `agy` reads without asking (its `plan` mode changes nothing):
 
 | Mode | What the rules allow |
 |---|---|
-| Ask | Writing in the agent’s folder (`write_file(<folder>)`). |
-| Accept edits | Its `accept-edits` mode, and the commands `git add` and `git commit` (`command(git add)`, `command(git commit)`). |
-| Plan | Nothing more: its `plan` mode changes nothing. |
-| Bypass | Everything: `command(*)`, `write_file(*)`, `read_file(*)`, `mcp(*)`, `read_url(*)`, `execute_url(*)`. |
+| Ask, Accept edits, Plan | Nothing. |
+| Bypass | Everything: `command(*)`, `write_file(*)`, `read_file(*)`, `mcp(*)`, `read_url(*)`, `execute_url(*)`. Nothing for a private project. |
 
-In every mode, the folders of the files attached to the agent are allowed for reading, and `agy` reads without asking.
+At the end of a turn, the plugin judges each refusal:
 
-At the end of a turn, each refusal becomes a card, except:
+- refused at once, without a card: a call that names a fenced path, by its text or by its resolved path (`..` included); everything, in a discussion;
+- accepted without a card: in Bypass, everything; a read in a folder of the attached files; in Ask and Accept edits, a write in the agent’s folder (resolved path), except in `.git` (any case, short name, a worktree’s `.git` file), `.husky`, `.githooks`, `.agents` and `.gemini`; in Accept edits, a command that is nothing but the worktree’s `git add` and `git commit`, read as Codex and Copilot read it (refused at the least doubt: `;`, `|`, `$`, a redirection, a line break, an option before the subcommand), when the host says its git protected; exactly a call allowed “For this agent”;
+- a card for the rest. “For this agent” is offered neither to a private project’s agent, nor for a write in the folders above.
 
-- a call that names a fenced path: refused at once, without a card;
-- in a discussion: no refusal is asked;
-- what Escouade’s rules already accept in the mode (in Accept edits, a write in the agent’s folder outside `.git`; in Bypass, everything): accepted without a card.
+What is accepted is so by the call’s exact rule, for the turn’s resumption only: `agy` is launched again before the resumption, the rule is taken back at the end of the turn, and `agy` launched again before the next message. A call refused again during the resumption that allowed it is not asked again. A command, a path or a tool with `*`, `?`, a parenthesis or a line break never becomes a rule: its refusal holds.
 
-“Allow” allows the call for the turn’s resumption; “For this agent” keeps it in the agent’s folder.
+A change of mode, a “Stop” and a restart of the plugin have the rules written again, without what had been allowed, and `agy` launched again before the next message.
 
 ## The fence of a private project
 
 The agent’s rules refuse reading each fenced path (`read_file(<path>)` as `deny`), which refuses writing it too: that is `agy`’s rule, and a refusal comes before everything, even in Bypass. The plugin refuses at once what `agy` wanted to do on those paths.
 
-The fence is in the rules of the agent’s folder: if the plugin starts again, it holds. A card shown before that restart can’t resume: its answer ends the turn.
+The fence is in the rules of the agent’s folder, written again when the plugin starts again: it holds. A card shown before that restart can’t resume: its answer ends the turn.
 
-What the fence doesn’t hold: a command that would read those paths.
+What the fence doesn’t hold: a command that would read those paths without naming them, a short name or a junction to them.
 
 ## What it cannot do
 
 - launch `agy` or any other program;
 - open a network connection;
-- read or have written anything outside the agent’s own folder;
+- read or have written anything outside the agent’s own folder (of its worktree, it knows only what the host says of its git);
 - read your `~/.gemini`, your Google sign-in or an account’s key;
 - put Escouade’s token among the arguments: the core refuses the launch.

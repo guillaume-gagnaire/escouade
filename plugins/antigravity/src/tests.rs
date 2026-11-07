@@ -163,16 +163,18 @@ fn a_command_refused_is_asked_at_the_end_of_the_turn_then_its_program_starts_aga
     assert!(!out.iter().any(|i| matches!(i, Item::Turn { .. })));
     let rid = request(&out);
     let out = c.answer_permission(&answer(&rid, true, true)).unwrap();
-    // Kept for good, its rule written, then its program again and the message that goes on, in that order.
+    // Kept for good by the plugin alone (no file the agent could write), its rule written for the next turn, then its
+    // program again and the message that goes on, in that order.
+    assert!(!out
+        .iter()
+        .any(|i| matches!(i, Item::File { path, .. } if !path.ends_with("settings.json"))));
     let at = |f: &dyn Fn(&Item) -> bool| out.iter().position(f).expect("an item");
-    let always =
-        at(&|i| matches!(i, Item::File { path, .. } if path.ends_with("escouade-always.json")));
     let rules = at(
         &|i| matches!(i, Item::File { path, text } if path.ends_with("settings.json") && text.contains("command(echo hi)")),
     );
     let relaunch = at(&|i| matches!(i, Item::Relaunch { .. }));
     let write = at(&|i| matches!(i, Item::Write { .. }));
-    assert!(always < rules && rules < relaunch && relaunch < write);
+    assert!(rules < relaunch && relaunch < write);
     let Some(Item::Relaunch { launch }) = out.get(relaunch) else {
         panic!("a relaunch");
     };
@@ -231,12 +233,14 @@ fn a_mode_or_a_model_changed_starts_its_program_again_at_the_next_message_only()
     let (mut c, _) = started(&params(&dir));
     let out = c.set_mode("bypassPermissions");
     assert!(matches!(&out[0], Item::File { text, .. } if text.contains("command(*)")));
-    // « Tout accepter » is its rules': no `--mode` to change.
-    assert!(!c
-        .send("un")
-        .iter()
-        .any(|i| matches!(i, Item::Relaunch { .. })));
-    c.frames(&[result()]);
+    // « Tout accepter » is its rules': no `--mode` to change, but its rules must hold from the next message on.
+    assert!(c.send("un").iter().any(
+        |i| matches!(i, Item::Relaunch { launch } if !launch.args.iter().any(|a| a == "--mode"))
+    ));
+    c.frames(&[
+        json!({ "event": "init", "conversation_id": "conv-1" }).to_string(),
+        result(),
+    ]);
     c.set_mode("plan");
     let out = c.send("deux");
     assert!(
@@ -315,7 +319,6 @@ fn a_fenced_call_is_never_a_card() {
     let out = c.frames(&[result()]);
     assert!(!out.iter().any(|i| matches!(i, Item::Permission { .. })));
     assert!(out.iter().any(|i| matches!(i, Item::Turn { .. })));
-    assert_eq!(words::read_always(&dir), Vec::<String>::new());
 }
 
 fn text_done(step: u64) -> String {
@@ -376,7 +379,12 @@ fn a_write_refused_in_a_transcript_late_is_a_card_all_the_same() {
     let dir = home("refused");
     let (mut c, _) = started(&params(&dir));
     c.send("écris");
-    let path = if cfg!(windows) { "C:\\wt\\a" } else { "/wt/a" };
+    // Out of the agent's folder: a card.
+    let path = if cfg!(windows) {
+        "C:\\autre\\a"
+    } else {
+        "/autre/a"
+    };
     let args = json!({ "Path": path, "Content": "x" });
     let out = c.frames(&[
         step(4, "write_file", "ACTIVE", args.clone(), None),
@@ -415,9 +423,47 @@ fn a_turn_stopped_reads_at_once_what_was_held() {
 }
 
 #[test]
-fn what_the_user_allowed_for_good_is_read_from_its_home() {
+fn what_the_agent_wrote_in_its_home_gives_it_no_right() {
+    // C8: `escouade-always.json` is no longer read, `toolPermission` and `agentMode` are taken out, and only Escouade's
+    // server is kept in its MCP config.
     let dir = home("always");
-    std::fs::write(words::always_file(&dir), r#"["command(ls)"]"#).unwrap();
-    let (c, _) = started(&params(&dir));
-    assert!(c.settings_text().contains("command(ls)"));
+    std::fs::write(dir.join("escouade-always.json"), r#"["command(*)"]"#).unwrap();
+    let settings = words::settings_file(&dir);
+    std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+    std::fs::write(
+        &settings,
+        r#"{"toolPermission":"always-proceed","agentMode":"auto","trustedWorkspaces":["x"]}"#,
+    )
+    .unwrap();
+    let mcp = words::mcp_file(&dir);
+    std::fs::create_dir_all(mcp.parent().unwrap()).unwrap();
+    std::fs::write(
+        &mcp,
+        r#"{"mcpServers":{"planted":{"command":"node","args":["x.js"]}}}"#,
+    )
+    .unwrap();
+    let mut p = params(&dir);
+    p.escouade = Some(Grant {
+        url: "http://127.0.0.1:9/mcp".into(),
+        token: "t".into(),
+    });
+    let mut c = Client::new(&Attach {
+        agent: p.agent.clone(),
+        ..Attach::default()
+    });
+    let launch = c.launch(&p);
+    let rules: Value = serde_json::from_str(&launch.files[0].text).unwrap();
+    assert_eq!(rules["permissions"]["allow"], json!([]));
+    assert!(rules.get("toolPermission").is_none() && rules.get("agentMode").is_none());
+    // What `agy` itself keeps there (the trust of its interface) stays.
+    assert_eq!(rules["trustedWorkspaces"], json!(["x"]));
+    let servers: Value = serde_json::from_str(&launch.files[1].text).unwrap();
+    assert_eq!(
+        servers["mcpServers"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .collect::<Vec<_>>(),
+        [escouade_acp::SERVER]
+    );
 }

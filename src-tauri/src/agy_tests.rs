@@ -198,7 +198,7 @@ async fn the_machines_antigravity_account_is_added_by_hand_and_its_defaults_hold
     assert!(
         texts(&h, &id)
             .iter()
-            .any(|t| t == "Modèle : gemini-3.8-flash, effort : high, mode : accept-edits"),
+            .any(|t| t == "Modèle : gemini-3.8-flash, effort : high, mode : default"),
         "{:?}",
         texts(&h, &id)
     );
