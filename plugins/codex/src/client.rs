@@ -166,7 +166,8 @@ impl Agent {
                 model: a.model.clone(),
                 effort: a.effort.clone(),
                 mode: a.mode.clone(),
-                ..Settings::default()
+                fence: a.fence.clone(),
+                read_only: a.read_only,
             },
             start: StartAt::New,
             instructions: None,
@@ -206,6 +207,9 @@ impl Agent {
         self.settings.model = a.model.clone();
         self.settings.effort = a.effort.clone();
         self.settings.mode = a.mode.clone();
+        // Each `turn/start` says them: what the core says wins over what a launch left.
+        self.settings.fence = a.fence.clone();
+        self.settings.read_only = a.read_only;
         self.home = agent_home(a);
     }
 
@@ -354,6 +358,7 @@ impl Agent {
                 model: &self.settings.model,
                 active: self.active,
                 interrupted: self.interrupted,
+                fenced: !self.settings.fence.is_empty(),
                 process: true,
                 lang: &self.lang,
                 session: self.session.as_deref(),

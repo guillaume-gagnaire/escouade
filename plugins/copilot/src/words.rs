@@ -161,25 +161,49 @@ pub fn catalog(listed: Option<&Value>, of_session: Option<&Value>) -> Vec<Value>
     models
 }
 
+/// The paths the read or the write `r` (a `permissionRequest`) touches: as asked (`path`, `fileName`, those of `fileEdits`, a
+/// move's two ends) and as Copilot resolved it (`resolvedPath`, links followed).
+pub fn paths_of(r: &Value) -> Vec<&str> {
+    let mut paths: Vec<&str> = ["path", "fileName", "resolvedPath"]
+        .iter()
+        .filter_map(|k| r[*k].as_str())
+        .filter(|p| !p.is_empty())
+        .collect();
+    for edit in r["fileEdits"].as_array().into_iter().flatten() {
+        paths.extend(
+            ["before", "after"]
+                .iter()
+                .filter_map(|k| edit[*k]["path"].as_str()),
+        );
+    }
+    paths
+}
+
 /// « Projet privé » (ESC-140): whether the permission `r` Copilot asks (its `permissionRequest`) names a path of `fence`
-/// (as Copilot names them): the path read or written, those its command may touch, or its command's text. Copilot asks
+/// (as Copilot names them): the path read or written, those its command may touch (`possiblePaths`, a list, and
+/// `resolvedPaths`, what each resolves to by its spelling), where it runs, or its command's text. Copilot asks
 /// for any path out of the agent's folder but in « Tout accepter » (`allow-all`), where nothing is asked, and a command
 /// can reach a path it does not name: a guard of Escouade's, not a barrier.
 pub fn fenced(r: &Value, fence: &[String]) -> bool {
     if fence.is_empty() {
         return false;
     }
-    let mut texts: Vec<&str> = ["path", "resolvedPath", "fileName", "fullCommandText"]
-        .iter()
-        .filter_map(|k| r[*k].as_str())
-        .collect();
-    for k in ["possiblePaths", "resolvedPaths"] {
-        texts.extend(
-            r[k].as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(Value::as_str),
-        );
+    let mut texts = paths_of(r);
+    texts.extend(
+        ["fullCommandText", "resolvedWorkingDirectory"]
+            .iter()
+            .filter_map(|k| r[*k].as_str()),
+    );
+    texts.extend(
+        r["possiblePaths"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str),
+    );
+    for (spelled, resolved) in r["resolvedPaths"].as_object().into_iter().flatten() {
+        texts.push(spelled);
+        texts.extend(resolved.as_str());
     }
     texts
         .iter()

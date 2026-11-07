@@ -2,7 +2,7 @@
 title: "Le contrat des harness en process"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.5 et §4.6","docs/PLUGINS.md §8.29 (ESC-352)","docs/TODO-2.2.md (INT-9)","crates/escouade-plugin-protocol/src/engine.rs","src-tauri/src/plugins/harness.rs","src-tauri/src/plugins/shared.rs","src-tauri/src/plugins/view.rs"]
-tickets: ["ESC-221","ESC-223","ESC-225","ESC-224","ESC-283","ESC-226","ESC-352"]
+tickets: ["ESC-221","ESC-223","ESC-225","ESC-224","ESC-283","ESC-226","ESC-352","ESC-362"]
 decisions: [34,68,101]
 compared: null
 ---
@@ -100,3 +100,12 @@ Le cœur ne lie plus aucune crate de plugin : `src-tauri/Cargo.toml` ne dépend 
 - **Ce que le cœur garde de copié.** Le lancement de l'interface n'est pas encore passé par `terminal/launch` : le cœur garde sa propre copie des mots qu'il lui faut (arguments, clôture, modèles d'un compte, prix d'OpenAI), dans `engine/<harness>/`.
 
 - **Un module qui ne répond plus** n'est pas rappelé à chaque ligne, le cœur lisant sous le verrou de l'agent : le problème dit, les lignes passent sans lui 30 s, puis un seul essai, et ainsi de suite. Ces lignes ne sont pas relues. Un tour en cours se ferme quand même, sans son plugin.
+
+## La clôture et la lecture seule après un redémarrage (ESC-362)
+
+Un plugin redémarre sans que son harness s'arrête. Ce qu'il tient lui-même de la clôture et de la lecture seule, il le reprend de `agent/attach`, à la création de l'agent comme quand il lui est redonné, et ce que dit le cœur l'emporte sur ce qu'il avait gardé : une clôture retirée se retire.
+
+- **Copilot CLI, Cursor, Gemini, Mistral Vibe et les harness ACP** tiennent la clôture dans le plugin, qui refuse d'après elle.
+- **Codex** la redit à chaque tour (`turn/start`, son profil de clôture ou sa lecture seule).
+- **OpenCode** la tient par les règles de sa session, et **Antigravity CLI** par ses règles : leurs plugins la reprenaient déjà.
+- **Claude Code** n'a rien à reprendre : son process garde ses arguments et le fichier de réglages du cœur.

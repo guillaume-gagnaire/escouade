@@ -259,8 +259,12 @@ const FAMILIES: { prefix: string[]; permission: string; given: (p: Record<string
   { prefix: ['proc'], permission: 'permissions.commands', given: (p) => filled(p.commands) },
 ];
 const filled = (v: unknown) => Array.isArray(v) && v.length > 0;
+/**
+ * The strings of a module are glued to one another (`commitsfs/gitProtectedprotectedfs/read`): a letter beside a method says
+ * nothing. A path says it is none (`library/std/src/fs/read.rs`).
+ */
 const METHOD =
-  /(?<![\w/.-])(?:net\/(?:fetch|stream|credit|cancel)|ws\/(?:open|send|close)|fs\/(?:read|write|stat|list|canon)|proc\/(?:spawn|write|kill))(?![\w/.-])/g;
+  /(?<![/.-])(?:net\/(?:fetch|stream|credit|cancel)|ws\/(?:open|send|close)|fs\/(?:read|write|stat|list|canon|gitProtected)|proc\/(?:spawn|write|kill))(?![/.-])/g;
 /** What wasmtime gives a module of WASI p1 here that reaches something: no folder is open, no socket exists. */
 const WASI_REACH = /^(?:path_|sock_|fd_prestat)/;
 

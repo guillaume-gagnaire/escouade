@@ -62,6 +62,7 @@ impl View {
             mode: &p.mode,
             active: p.active,
             discussion: p.discussion,
+            fenced: false,
             process: false,
             lang: &p.lang,
             resumed: p.session.as_deref().filter(|_| !p.copy),

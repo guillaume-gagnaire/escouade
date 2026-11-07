@@ -36,6 +36,8 @@ pub struct Ctx<'a> {
     pub active: bool,
     /// The user stopped the turn.
     pub interrupted: bool,
+    /// A private project's fence is set: git reads no file for it out of the sandbox.
+    pub fenced: bool,
     /// A process answers its requests: else (a recorded stream, its interface) each has its card.
     pub process: bool,
     /// The language of the app.
@@ -553,10 +555,11 @@ impl Translator {
                 if c.process
                     && matches!(c.mode, "acceptEdits" | "auto")
                     && same_dir(cwd, c.cwd)
-                    && git::accepts(
+                    && git::accepts_fenced(
                         p["command"].as_str().unwrap_or_default(),
                         &actions,
                         Path::new(c.cwd),
+                        c.fenced,
                     )
                 {
                     self.approved.push(Accepted {

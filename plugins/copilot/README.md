@@ -32,9 +32,10 @@ same translation as its agents (`src/translate.rs`).
 ## What it may do
 
 - describe the launch of Copilot and translate what it says: the core launches it, never this plugin;
-- answer the safe permissions by Escouade's rules (a read in the agent's folder; a write there, but in the mode Plan;
-  `git add` and `git commit` of its worktree in « Accepter les modifications » and « Auto », for which Escouade reads the
-  repository's configuration and hooks, by `fs/gitProtected`, which asks for the root `agentRepo`);
+- answer the safe permissions by Escouade's rules (a read in the agent's folder; a write there, but in the mode Plan and
+  in `.git`; `git add` and `git commit` of its worktree in « Accepter les modifications » and « Auto », its text read as
+  its shell reads it, for which Escouade reads the repository's configuration and hooks, by `fs/gitProtected`, which asks
+  for the root `agentRepo`); what Copilot's policy keeps for a human always has a card;
 - refuse at once a permission that names a path of a private project: a guard, as its modes' meanings say;
 - nothing else: no network and no secret. Escouade's token and the account's sign-in reach Copilot by the core, and
   this client never calls what gives a token in clear (`account.getAllUsers`, `account.getCurrentAuth`).

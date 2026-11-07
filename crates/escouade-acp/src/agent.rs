@@ -138,6 +138,8 @@ pub struct Agent {
     queue: VecDeque<Vec<Value>>,
     busy: bool,
     open: bool,
+    /// Started again in a turn: its `session/prompt` was asked by the plugin before, and its answer ends the turn.
+    lost_prompt: bool,
     can_load: bool,
     /// `session/load` replays the history: what comes meanwhile is the conversation's already.
     loading: bool,
@@ -274,6 +276,7 @@ impl Agent {
             queue: VecDeque::new(),
             busy: false,
             open: false,
+            lost_prompt: false,
             can_load: false,
             loading: false,
             options: Value::Null,
@@ -303,12 +306,51 @@ impl Agent {
         self.mode = a.mode.clone();
         self.model = a.model.clone();
         self.effort = a.effort.clone();
+        // The fence and read-only are held here: what the core says wins over what a launch left.
+        self.fence = a.fence.clone();
+        self.fence_keys = crate::paths::fence_of(&self.fence);
+        self.read_only = a.read_only;
         if !a.lang.is_empty() {
             self.lang = a.lang.clone();
         }
         if let Some(s) = &a.session {
             if self.session.is_none() {
                 self.start = StartAt::Resume { session: s.clone() };
+            }
+        }
+    }
+
+    /// Made again for a harness that still runs: its plugin started again (the language or the network changed, or it
+    /// crashed), and only `Agent::launch` writes `initialize`, so nothing opens its session again. What the core knows goes
+    /// on from there: the session open, a turn that runs, the permissions that wait. The ids of its requests are told
+    /// apart from those of the plugin before, whose answers may still come.
+    pub fn started_again(&mut self, a: &Attach) {
+        let Some(session) = &a.session else {
+            return;
+        };
+        self.session = Some(session.clone());
+        self.open = true;
+        self.told = true;
+        self.busy = a.running;
+        self.lost_prompt = a.running;
+        self.next = escouade_plugin_protocol::turn::instance_id() << 20;
+        // What each was is lost, not its id: a permission by far the most likely. A plan or a question held here is no
+        // request of the harness.
+        for request in &a.pending {
+            let id = request
+                .strip_prefix("acp-")
+                .and_then(|r| r.strip_prefix(self.tag.as_str()))
+                .and_then(|r| r.split_once('-'))
+                .map(|(_, id)| id)
+                .filter(|id| !matches!(*id, "plan" | "question"));
+            if let Some(id) = id {
+                let id = id.parse::<u64>().map_or_else(|_| json!(id), |n| json!(n));
+                let asked = Asked {
+                    id,
+                    method: "session/request_permission".into(),
+                    params: Value::Null,
+                };
+                self.asked.insert(request.clone(), asked);
             }
         }
     }
@@ -378,6 +420,13 @@ impl Agent {
         self.model = p.model.clone();
         self.effort = p.effort.clone();
         self.start = p.start.clone();
+        // A new process: what `started_again` took of the agent, attached before its launch, is not its session yet.
+        self.session = None;
+        self.open = false;
+        self.told = false;
+        self.busy = false;
+        self.lost_prompt = false;
+        self.asked.clear();
         self.escouade = p
             .escouade
             .as_ref()
@@ -530,7 +579,15 @@ impl Agent {
     fn read(&mut self, msg: Value, out: &mut Vec<Item>) {
         let Some(method) = msg["method"].as_str().map(str::to_string) else {
             if let Some(id) = msg["id"].as_u64() {
-                if let Some(ours) = self.ours.remove(&id) {
+                // The end of a turn asked before the plugin started again.
+                let lost = self.lost_prompt
+                    && (msg["result"]["stopReason"].is_string() || !msg["error"].is_null());
+                let ours = self
+                    .ours
+                    .remove(&id)
+                    .or_else(|| lost.then_some(Ours::Prompt));
+                if let Some(ours) = ours {
+                    self.lost_prompt = false;
                     self.error_code = msg["error"]["code"].as_i64();
                     let error = msg
                         .get("error")
@@ -1454,7 +1511,9 @@ impl Agent {
             "acceptEdits" | "default" if self.mode == "acceptEdits" || self.vibe || self.gemini => {
                 matches!(kind.as_str(), "edit" | "delete")
                     && !paths.is_empty()
-                    && paths.iter().all(|f| crate::inside(f, &self.cwd))
+                    && paths
+                        .iter()
+                        .all(|f| crate::inside(f, &self.cwd) && !crate::in_git_folder(f, &self.cwd))
             }
             _ => false,
         };

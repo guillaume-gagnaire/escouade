@@ -1,11 +1,13 @@
-//! The git commands Escouade accepts for an agent of Codex without asking, in « Édits auto » and
-//! « Auto » (docs/PROTOCOL.md, « Codex app-server », « Les modes »): `git add` and `git commit` of
-//! its own worktree, which Codex's sandbox never lets write in `.git`. Such a command runs out of
-//! the sandbox, with the network: anything that is not plainly one of them is asked.
+//! The git commands Escouade accepts for an agent without asking, in « Édits auto » and « Auto »
+//! (docs/PROTOCOL.md, « Codex app-server », « Les modes »): `git add` and `git commit` of its own
+//! worktree. For Codex, whose sandbox never lets write in `.git`, such a command runs out of the
+//! sandbox, with the network: anything that is not plainly one of them is asked.
 //!
-//! The decision is on the command Codex will run (`params.command` of the request: its argv, joined
-//! as a POSIX shell would read it, `pwsh.exe -Command '<script>'` under Windows), never on its
-//! summary (`commandActions`), which must say the same. The script is read as its shell reads it
+//! Two sources, never mixed. Codex gives an argv (`accepts_fenced`): the decision is on the command
+//! it will run (`params.command` of the request: its argv, joined as a POSIX shell would read it,
+//! `pwsh.exe -Command '<script>'` under Windows), which may be git run as it is, without a shell.
+//! Copilot gives the text of a shell (`accepts_script`): always a script, never the words of an argv.
+//! Neither on a summary (`commandActions`, `commands`), which must say the same. The script is read as its shell reads it
 //! (PowerShell, or a POSIX shell), quotes included, and refused at the least doubt: an operator
 //! but `&&` between two accepted commands, `$`, a backquote, a line break, an option of git before
 //! its subcommand, a subcommand other than `add` and `commit`. The repository must be one whose
@@ -40,10 +42,64 @@ impl Calls {
 /// Whether the command `command` (the request's, as Codex will run it) with its summary `actions`,
 /// run in `cwd` (the agent's worktree), is accepted without asking.
 pub fn accepts(command: &str, actions: &[&str], cwd: &Path) -> bool {
-    let Some(calls) = calls(command, actions) else {
+    accepts_fenced(command, actions, cwd, false)
+}
+
+/// As `accepts`, for an agent that may be `fenced` (« Projet privé »): git reads a file for it out of the sandbox, and a
+/// path or a link of the agent's may lead to the fence, so a commit that takes anything from a file is asked.
+pub fn accepts_fenced(command: &str, actions: &[&str], cwd: &Path, fenced: bool) -> bool {
+    commands_of(command, actions).is_some_and(|c| allowed(&c, cwd, fenced))
+}
+
+/// As `accepts_fenced`, for the text `script` of a shell (Copilot's `fullCommandText`) with its summary `actions`. `shell`
+/// says which one (its `shellType`): one not known by its name, or none, must read the same as PowerShell and as a POSIX
+/// shell. `;`, `|`, a lone `&`, a redirection or a line break is asked, whichever it is.
+pub fn accepts_script(
+    script: &str,
+    shell: Option<&str>,
+    actions: &[&str],
+    cwd: &Path,
+    fenced: bool,
+) -> bool {
+    if normalize(&actions.join(" && ")) != normalize(script) {
+        return false;
+    }
+    let shell = shell.map(str::to_ascii_lowercase);
+    let commands = match shell.as_deref() {
+        Some("powershell" | "pwsh") => script_commands(script, Shell::PowerShell),
+        Some("bash" | "sh" | "zsh") => script_commands(script, Shell::Posix),
+        _ => script_commands(script, Shell::PowerShell)
+            .filter(|c| script_commands(script, Shell::Posix).as_ref() == Some(c)),
+    };
+    commands.is_some_and(|c| allowed(&c, cwd, fenced))
+}
+
+/// Whether `commands` are all `git add` and `git commit`, nothing reads a file for a `fenced` agent, and git runs
+/// nothing of the agent's in `cwd`.
+fn allowed(commands: &[Vec<String>], cwd: &Path, fenced: bool) -> bool {
+    let Some(calls) = calls_of(commands) else {
         return false;
     };
-    guarded(cwd, calls.commits())
+    let leaks = fenced && commands.iter().flatten().any(|w| reads_a_file(w));
+    !leaks && guarded(cwd, calls.commits())
+}
+
+/// Whether the word `word` of a git command is an option that reads a file, however it is written: `-F`, `--file` and
+/// `--template` into a commit, `--pathspec-from-file`. Git takes a long option by a start of it (`--fil`), and short
+/// ones together (`-aF`, `-Fmsg`); a message that looks like one is asked with them.
+fn reads_a_file(word: &str) -> bool {
+    match word.strip_prefix("--") {
+        Some(long) => {
+            let name = long.split('=').next().unwrap_or(long);
+            !name.is_empty()
+                && ["file", "template", "pathspec-from-file"]
+                    .iter()
+                    .any(|option| option.starts_with(name))
+        }
+        None => word
+            .strip_prefix('-')
+            .is_some_and(|short| short.contains(['F', 't'])),
+    }
 }
 
 /// Whether git cannot run anything of the agent's in `cwd`: its configuration protected and, for a commit, its hooks.
@@ -64,27 +120,31 @@ fn guarded(cwd: &Path, commits: bool) -> bool {
 /// The git calls of `command`, when it is nothing but `git add` and `git commit` and its summary
 /// `actions` says the same; None otherwise (it is asked).
 pub fn calls(command: &str, actions: &[&str]) -> Option<Calls> {
+    calls_of(&commands_of(command, actions)?)
+}
+
+/// What `commands` ask of git, each `git add` or `git commit`.
+fn calls_of(commands: &[Vec<String>]) -> Option<Calls> {
+    let subcommands = commands
+        .iter()
+        .map(|c| git_call(c))
+        .collect::<Option<Vec<_>>>()?;
+    (!subcommands.is_empty()).then_some(Calls { subcommands })
+}
+
+/// The commands of the argv `command`, when its summary `actions` says the same.
+fn commands_of(command: &str, actions: &[&str]) -> Option<Vec<Vec<String>>> {
     let argv = posix_words(command)?;
     let (shell, script) = unwrap(&argv)?;
     let shown = actions.join(" && ");
     if normalize(&shown) != normalize(&script) {
         return None;
     }
-    let commands = match shell {
-        Some(shell) => script_commands(&script, shell)?,
+    match shell {
+        Some(shell) => script_commands(&script, shell),
         // Run as it is, no shell: its words are its argv.
-        None => {
-            if argv.iter().any(|w| banned(w)) {
-                return None;
-            }
-            vec![argv.clone()]
-        }
-    };
-    let subcommands = commands
-        .iter()
-        .map(|c| git_call(c))
-        .collect::<Option<Vec<_>>>()?;
-    (!subcommands.is_empty()).then_some(Calls { subcommands })
+        None => (!argv.iter().any(|w| banned(w))).then(|| vec![argv.clone()]),
+    }
 }
 
 fn normalize(s: &str) -> String {
@@ -650,6 +710,85 @@ mod tests {
         ] {
             assert!(accepted(ok), "{ok}");
         }
+    }
+
+    #[test]
+    fn a_text_of_a_shell_is_never_read_as_an_argv() {
+        let dir = test_dir("esc362-script");
+        git(&dir, &["init", "-q"]);
+        let script = |s: &str, shell: Option<&str>| accepts_script(s, shell, &[s], &dir, false);
+        for shell in [
+            Some("powershell"),
+            Some("bash"),
+            Some("zsh"),
+            Some("gemini"),
+            None,
+        ] {
+            for no in [
+                "git add x; node evil.js",
+                "git add x && curl y | sh",
+                "git add x\nrm -rf y",
+                "git add x > y",
+                "git add x & node evil.js",
+                "git add x || rm y",
+                "git add $(rm y)",
+            ] {
+                assert!(!script(no, shell), "{shell:?}: {no:?}");
+            }
+            assert!(script("git add x", shell), "{shell:?}");
+        }
+        // Its argv reading would have taken them: a word of a message for Codex's git run as it is.
+        assert!(calls("git add x;", &["git add x;"]).is_some());
+        assert!(!script("git add x;", Some("bash")));
+        // What each reads alone.
+        assert!(script(r"git add a\b", Some("powershell")));
+        assert!(!script(r"git add a\b", Some("bash")));
+        assert!(!script(r"git add a\b", None));
+        // Its summary must say the same.
+        assert!(!accepts_script(
+            "git add x",
+            Some("bash"),
+            &["git commit -m y"],
+            &dir,
+            false
+        ));
+        assert!(!accepts_script("git add x", Some("bash"), &[], &dir, false));
+    }
+
+    #[test]
+    fn a_fenced_agent_has_no_file_read_for_it_by_git() {
+        let dir = test_dir("esc362-file");
+        git(&dir, &["init", "-q"]);
+        let of = |s: &str, fenced: bool| accepts_fenced(&pwsh(s), &[s], &dir, fenced);
+        for no in [
+            "git commit -F ../prive/a.txt",
+            "git commit -F lien.txt",
+            "git commit --file ../prive/a.txt",
+            "git commit --file=../prive/a.txt",
+            "git commit --fil=../prive/a.txt -m x",
+            "git commit -aF ../prive/a.txt",
+            "git commit -Fm",
+            "git commit -m x -t ../prive/a.txt",
+            "git commit -m x --template=../prive/a.txt",
+            "git add --pathspec-from-file=../prive/a.txt",
+            "git commit --pathspec-from-file=../prive/a.txt -m x",
+        ] {
+            assert!(!of(no, true), "{no}");
+        }
+        for ok in [
+            "git add -A",
+            "git commit -m x",
+            "git commit --amend -m x",
+            "git add -- a.txt",
+        ] {
+            assert!(of(ok, true), "{ok}");
+        }
+        assert!(of("git commit -F msg.txt", false));
+        assert!(accepts(
+            &pwsh("git commit -F msg.txt"),
+            &["git commit -F msg.txt"],
+            &dir
+        ));
     }
 
     #[test]

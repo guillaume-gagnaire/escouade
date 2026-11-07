@@ -91,6 +91,8 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Corrections
 
+- Copilot CLI lit une commande comme son shell la lit : `git add x; node evil.js` et toute commande enchaînée, redirigée ou lancée hors du worktree passent par une carte, et une écriture dans `.git` aussi. Cette écriture passe aussi par une carte sur Cursor, Gemini, Mistral Vibe et les harness ACP.
+- La clôture d'un projet privé et la lecture seule tiennent quand un plugin de harness redémarre, par exemple après un changement de langue ou de réseau. Un agent clôturé n'a plus « Pour cette session » sur Copilot CLI, et un `git commit` qui lit son message dans un fichier lui passe par une carte. Un agent Cursor, Gemini ou Mistral Vibe garde aussi sa session : ses messages ne restent plus en attente après un redémarrage.
 - Un harness décrit par un plugin tiers n’a plus la confiance des plugins d’Escouade : il ne peut plus se dire clôturé pour entrer dans un projet privé, ni poser des variables comme `NODE_OPTIONS` ou `LD_PRELOAD`, et la fenêtre d’installation montre tout ce qu’il lancera.
 - Gemini CLI : un texte du modèle ne peut plus lever le mode d'un agent. Écrire « [MODE_UPDATE] yolo » suffisait à retirer ses demandes d'autorisation ; seul toi peux lever un mode.
 - Agents ACP et Copilot : un chemin avec `..` ne compte plus comme dans le dossier de l'agent, et une écriture hors de ce dossier demande ton accord.

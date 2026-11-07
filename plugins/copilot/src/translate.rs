@@ -41,6 +41,8 @@ pub struct Ctx<'a> {
     pub active: bool,
     /// A discussion of the Docs tab: it writes nothing.
     pub discussion: bool,
+    /// A private project's fence is set: `words::fenced` must keep seeing what it asks.
+    pub fenced: bool,
     /// A process answers its permissions: else (a recorded stream, its interface's log) each has its card.
     pub process: bool,
     /// The language of the app.
@@ -524,21 +526,24 @@ impl Translator {
     }
 
     /// Whether Escouade's rules answer the permission `r` (its `permissionRequest`) without a card: a read in the
-    /// agent's folder; a write there, but in the mode Plan; `git add` and `git commit` of its worktree in « Accepter les
-    /// modifications » and « Auto ».
+    /// agent's folder; a write there, but in the mode Plan and in `.git`; `git add` and `git commit` of its worktree in
+    /// « Accepter les modifications » and « Auto », its text read as its shell reads it. Each path as asked and as Copilot
+    /// resolved it, links followed. Never what Copilot's policy keeps for a human, or a way out of its sandbox.
     pub fn safe(r: &Value, c: &Ctx) -> bool {
+        if r["managedApprovalRequired"] == true || r["requestSandboxBypass"] == true {
+            return false;
+        }
+        let paths = words::paths_of(r);
+        let inside = !paths.is_empty() && paths.iter().all(|p| escouade_acp::inside(p, c.cwd));
         // A discussion (ESC-261) writes nothing: its reads alone go through, the rest comes to the core, which refuses a
         // write or a command.
         match r["kind"].as_str().unwrap_or_default() {
-            "read" => r["path"]
-                .as_str()
-                .is_some_and(|p| escouade_acp::inside(p, c.cwd)),
+            "read" => inside,
             _ if c.discussion => false,
             "write" => {
                 c.mode != "plan"
-                    && r["fileName"]
-                        .as_str()
-                        .is_some_and(|p| escouade_acp::inside(p, c.cwd))
+                    && inside
+                    && !paths.iter().any(|p| escouade_acp::in_git_folder(p, c.cwd))
             }
             "shell" => {
                 let ids: Vec<&str> = r["commands"]
@@ -547,11 +552,18 @@ impl Translator {
                     .flatten()
                     .filter_map(|c| c["identifier"].as_str())
                     .collect();
+                let in_worktree = r["resolvedWorkingDirectory"].as_str().is_none_or(|d| {
+                    escouade_acp::inside(d, c.cwd) && escouade_acp::inside(c.cwd, d)
+                });
                 matches!(c.mode, "acceptEdits" | "auto")
-                    && git::accepts(
+                    && in_worktree
+                    && r["hasWriteFileRedirection"] != true
+                    && git::accepts_script(
                         r["fullCommandText"].as_str().unwrap_or_default(),
+                        r["shellType"].as_str(),
                         &ids,
                         Path::new(c.cwd),
+                        c.fenced,
                     )
             }
             _ => false,
@@ -582,7 +594,8 @@ impl Translator {
             description,
             reason: r["intention"].as_str().map(str::to_string),
             hunks,
-            can_always: r["canOfferSessionApproval"] != false,
+            // Fenced, no rule of the session: what it covers is never asked again, so `words::fenced` never sees it.
+            can_always: r["canOfferSessionApproval"] != false && !c.fenced,
             always_scope: Some("session".into()),
             parent,
         });
@@ -777,7 +790,12 @@ fn permission_card(r: &Value, cwd: &str, lang: &str) -> (String, Value, Option<S
                     format!("Paths: {paths}"),
                 ));
             }
-            let urls = list("possibleUrls");
+            let urls: Vec<&str> = r["possibleUrls"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|u| u["url"].as_str())
+                .collect();
             if !urls.is_empty() {
                 let urls = urls.join(", ");
                 told.push(said(

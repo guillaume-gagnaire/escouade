@@ -188,8 +188,8 @@ impl Agent {
             open: a.session.is_some(),
             instructions: None,
             escouade: false,
-            fence: Vec::new(),
-            read_only: false,
+            fence: a.fence.clone(),
+            read_only: a.read_only,
             own_home: false,
             auth_type: Value::Null,
             how: "new",
@@ -214,6 +214,9 @@ impl Agent {
         self.model = a.model.clone();
         self.effort = a.effort.clone();
         self.mode = a.mode.clone();
+        // This plugin alone holds them: what the core says wins over what a launch left.
+        self.fence = a.fence.clone();
+        self.read_only = a.read_only;
     }
 
     /// The description of its launch, and the first line it is written.
@@ -397,6 +400,7 @@ impl Agent {
             mode: &self.mode,
             active: self.active,
             discussion: self.read_only,
+            fenced: !self.fence.is_empty(),
             process: true,
             lang: &self.lang,
             resumed: self.resumed.as_deref(),
@@ -858,7 +862,8 @@ impl Agent {
         if asked.kind == "exit_plan_mode" {
             return self.answer_plan(a, &asked);
         }
-        let result = if a.allow && a.always {
+        // A rule of the session would take the next requests away from `words::fenced`.
+        let result = if a.allow && a.always && self.fence.is_empty() {
             words::session_approval(&asked.data)
         } else if a.allow {
             json!({ "kind": "approve-once" })
@@ -887,7 +892,8 @@ impl Agent {
     fn answer_plan(&mut self, a: &AnswerPermission, asked: &Asked) -> Vec<String> {
         let (response, mode) = if a.allow && a.always {
             (
-                json!({ "approved": true, "selectedAction": "interactive", "autoApproveEdits": true }),
+                // Fenced, each edit is asked: `words::fenced` sees it.
+                json!({ "approved": true, "selectedAction": "interactive", "autoApproveEdits": self.fence.is_empty() }),
                 Some("acceptEdits".to_string()),
             )
         } else if a.allow {

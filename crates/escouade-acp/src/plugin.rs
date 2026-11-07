@@ -124,7 +124,8 @@ impl Plugin {
                 match self.agents.get_mut(&a.agent) {
                     Some(agent) => agent.attach(&a),
                     None => {
-                        let agent = Agent::new(&a, &decl, &version());
+                        let mut agent = Agent::new(&a, &decl, &version());
+                        agent.started_again(&a);
                         self.agents.insert(a.agent.clone(), agent);
                     }
                 }
@@ -229,3 +230,7 @@ impl Plugin {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "plugin_tests.rs"]
+mod tests;

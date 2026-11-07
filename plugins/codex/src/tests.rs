@@ -422,3 +422,6 @@ fn the_rollouts_items_take_the_app_servers_form() {
 fn folders_are_the_same_whatever_their_slashes_and_case() {
     assert!(crate::translate::same_dir(r"C:\p\wt\", "c:/p/wt"));
 }
+
+#[path = "rules_tests.rs"]
+mod rules;

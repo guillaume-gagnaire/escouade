@@ -172,9 +172,54 @@ pub fn inside(path: &str, dir: &str) -> bool {
     !d.is_empty() && rooted == root && p.starts_with(&d)
 }
 
+/// Whether `path` is in the git folder of a folder under `dir`, the agent's: `.git` whatever its case, the file `.git` of a
+/// worktree too, and the names Windows takes for it (`.git.`, `.git::$INDEX_ALLOCATION`, `git~1`). A write there is no
+/// work of the agent's: it runs with what `git` runs next (`hooks`, `config`). What cannot be placed is in it.
+pub fn in_git_folder(path: &str, dir: &str) -> bool {
+    let (Some((_, p)), Some((_, d))) = (parts_of(path, true), parts_of(dir, true)) else {
+        return true;
+    };
+    let name = |part: &String| {
+        let part = part.split(':').next().unwrap_or(part);
+        let part = part.trim_end_matches(['.', ' ']);
+        part == ".git" || part == "git~1"
+    };
+    p.strip_prefix(d.as_slice()).unwrap_or(&p).iter().any(name)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_git_folder_is_told_whatever_it_is_called() {
+        for path in [
+            "/w/proj/.git",
+            "/w/proj/.git/hooks/pre-commit",
+            "/w/proj/.GIT/config",
+            "/w/proj/sous/.git/config",
+            "/w/proj/a/../.git/config",
+            r"C:\w\proj\.Git\config",
+            r"C:\w\proj\.git.\config",
+            r"C:\w\proj\.git \config",
+            r"C:\w\proj\.git::$INDEX_ALLOCATION\config",
+            r"C:\w\proj\GIT~1\config",
+            "/../../x",
+        ] {
+            assert!(in_git_folder(path, "/w/proj"), "{path}");
+        }
+        for path in [
+            "/w/proj/.gitignore",
+            "/w/proj/.github/ci.yml",
+            "/w/proj/.gitattributes",
+            "/w/proj/git/config",
+            "/w/proj/a.git/config",
+        ] {
+            assert!(!in_git_folder(path, "/w/proj"), "{path}");
+        }
+        // A folder of a worktree under a `.git` of its own is not the agent's git folder.
+        assert!(!in_git_folder("/p/.git/x/a.txt", "/p/.git/x"));
+    }
 
     #[test]
     fn a_path_that_climbs_out_of_the_folder_is_not_in_it() {

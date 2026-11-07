@@ -188,7 +188,7 @@ describe.skipIf(!whole)('the leads of Rust', () => {
     expect(imports.some((i) => i.module === 'escouade' && i.name === 'call')).toBe(true);
     const got = moduleLeads('plugin.wasm', module, manifest.permissions);
     expect(got.filter((l) => /seraient refusés|ne se chargerait pas/.test(l.why))).toEqual([]);
-    expect(moduleLeads('plugin.wasm', module, {}).some((l) => /net\/fetch sans permissions\.network/.test(l.why))).toBe(true);
+    expect(moduleLeads('plugin.wasm', module, {}).some((l) => /net\/fetch\b.* sans permissions\.network/.test(l.why))).toBe(true);
   });
 
   it('compare them with the capabilities the manifest declares', () => {
@@ -215,6 +215,23 @@ describe.skipIf(!whole)('the leads of Rust', () => {
       /^permissions\.network est déclaré, et le module ne nomme/,
     );
     expect(moduleLeads('plugin.wasm', Buffer.from('garbage'), {})[0]).toMatchObject({ kind: 'obscure' });
+  });
+
+  it('find the methods in the glued strings of a module', () => {
+    // As Codex's module has them: no separator between two strings.
+    const glued = Buffer.concat([wasmWith([['escouade', 'call']]), Buffer.from('\0commitsfs/gitProtectedprotectedfs/read\0\0')]);
+    const files = { files: [{ root: 'agentRepo', access: 'read' }] };
+    expect(moduleLeads('plugin.wasm', glued, files).filter((l) => /ne nomme aucune/.test(l.why))).toEqual([]);
+    expect(moduleLeads('plugin.wasm', glued, {}).at(-1)!.why).toBe(
+      'le module nomme fs/gitProtected, fs/read sans permissions.files : ces appels seraient refusés (-32003)',
+    );
+    // Each alone, its neighbours glued or not; a path of the standard library is still none.
+    for (const text of ['xfs/gitProtectedy', '\0fs/gitProtected\0', 'agentfs/read\0']) {
+      const one = Buffer.concat([wasmWith([['escouade', 'call']]), Buffer.from(text)]);
+      expect(moduleLeads('plugin.wasm', one, files).filter((l) => /ne nomme aucune/.test(l.why))).toEqual([]);
+    }
+    const path = Buffer.concat([wasmWith([['escouade', 'call']]), Buffer.from('\0library/std/src/fs/read.rs\0')]);
+    expect(moduleLeads('plugin.wasm', path, files).at(-1)!.why).toMatch(/^permissions\.files est déclaré, et le module ne nomme/);
   });
 });
 

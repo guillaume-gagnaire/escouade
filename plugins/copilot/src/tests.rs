@@ -412,6 +412,7 @@ fn safe(r: &Value, mode: &str, discussion: bool) -> bool {
         mode,
         active: true,
         discussion,
+        fenced: false,
         process: true,
         lang: "fr",
         resumed: None,
@@ -444,3 +445,6 @@ fn safe_requests_go_without_a_card_only_when_a_process_answers_them() {
         assert!(safe(&read, mode, true), "{mode}");
     }
 }
+
+#[path = "rules_tests.rs"]
+mod rules;

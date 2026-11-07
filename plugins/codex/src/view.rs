@@ -185,6 +185,7 @@ impl View {
             model: &p.model,
             active: p.active,
             interrupted: p.interrupted,
+            fenced: false,
             process: false,
             lang: &p.lang,
             session: p.session.as_deref(),
