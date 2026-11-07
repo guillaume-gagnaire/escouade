@@ -68,8 +68,8 @@ export function dropPlace(
 /**
  * Where `item` lands moved one step (`by`) on the stored order; null at the ends. An agent at the edge of a folder leaves
  * it, above or below the folder; a loose agent arriving on a folder enters it (at the top going down, at the bottom going
- * up); a folder steps over the whole neighbour. Inside a folder the principal is always shown first whatever its stored
- * rank, so it is taken as sitting at rank 0, and an agent never steps above it (it leaves the folder instead).
+ * up); a folder steps over the whole neighbour. Inside a folder the principal is stored first (the core settles it so),
+ * and an agent never steps above it (it leaves the folder instead).
  */
 export function stepPlace(project: Project, items: SidebarItem[], item: string, by: -1 | 1): Place | null {
   const of = stored(project, items);
@@ -80,8 +80,7 @@ export function stepPlace(project: Project, items: SidebarItem[], item: string, 
   );
   const level = levelOf(project, item);
   const folder = (project.agentFolders ?? []).find((f) => f.id === level);
-  let row = of(level).filter((i) => seen.has(i));
-  if (folder?.principal && row.includes(folder.principal)) row = [folder.principal, ...row.filter((i) => i !== folder.principal)];
+  const row = of(level).filter((i) => seen.has(i));
   const at = row.indexOf(item);
   if (at < 0) return null;
   const k = at + by;

@@ -49,6 +49,17 @@ describe('AppState', () => {
     expect(app.agent?.id).toBe('a1');
   });
 
+  it('without an agent chosen keeps the oldest one, not the first drawn (which moves with what waits)', async () => {
+    await start({
+      agents: [agent(), agent({ id: 'a2', name: 'tests-e2e', createdAt: 2 })],
+      projects: [project()],
+    });
+    expect(app.agent?.id).toBe('a1');
+    app.agents.a2.status = 'waiting';
+    expect(app.projectAgents[0].id).toBe('a2');
+    expect(app.agent?.id).toBe('a1');
+  });
+
   it('falls back to the first project when the saved one is gone', async () => {
     await start({ ui: { activeProject: 'deleted', view: 'project', selectedAgent: {} } });
     expect(app.project?.id).toBe('p1');

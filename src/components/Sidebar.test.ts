@@ -3231,6 +3231,45 @@ describe('Sidebar agent folders', () => {
     expect(within(card('a2')).queryByRole('img', { name: 'Agent principal' })).toBeNull();
   });
 
+  it('the star sits before the name of the principal', () => {
+    withFolders();
+    fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    const a1 = card('a1');
+    const star = a1.querySelector('.star')!;
+    const name = a1.querySelector('.name')!;
+    expect(star.compareDocumentPosition(name) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('a click on the header outside the name folds the folder, one on the name does not', async () => {
+    withFolders();
+    const backend = fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    const header = folderOf('f1').querySelector<HTMLElement>('.folder-h')!;
+    await fireEvent.click(header.querySelector('.name')!);
+    expect(backend.called('agent_folder_fold')).toHaveLength(0);
+    await fireEvent.click(header.querySelector('.cnt')!);
+    await waitFor(() => expect(backend.called('agent_folder_fold')).toHaveLength(1));
+    expect(backend.called('agent_folder_fold')[0].args).toMatchObject({ folderId: 'f1', folded: true });
+  });
+
+  it('Alt+ArrowUp into a folded folder leaves the focus on its chevron', async () => {
+    withFolders(true);
+    app.ui.selectedAgent = { p1: 'a1' };
+    // The move lands a3 in the folded folder, where its card is not drawn.
+    fakeBackend({
+      agent_folder_move: () => {
+        app.projects[0].agentFolders![0].agents.push('a3');
+        app.projects[0].agentOrder = ['f1'];
+      },
+    });
+    render(Sidebar, { project: app.projects[0] });
+    card('a3').focus();
+    await fireEvent.keyDown(card('a3'), { key: 'ArrowUp', altKey: true });
+    await waitFor(() => expect(card('a3')).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(folderOf('f1').querySelector('.chev')));
+  });
+
   it('a folded folder still shows the agent that waits', () => {
     withFolders(true);
     // The agent open stays drawn too: pick a loose one.

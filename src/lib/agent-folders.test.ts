@@ -62,6 +62,12 @@ describe('stepPlace', () => {
     expect(stepPlace(p, items, 'f', -1)).toBeNull();
     expect(stepPlace(p, items, 'c', 1)).toBeNull();
   });
+  it('an agent never steps above the principal, stored first: it leaves the folder', () => {
+    const { p, items } = setup([ag('a'), ag('b'), ag('c')], [folder('f', ['c', 'a', 'b'], 'c')], ['f']);
+    expect(stepPlace(p, items, 'a', -1)).toEqual({ folderId: null, index: 0 });
+    expect(stepPlace(p, items, 'a', 1)).toEqual({ folderId: 'f', index: null });
+    expect(stepPlace(p, items, 'c', 1)).toEqual({ folderId: 'f', index: 1 });
+  });
   it('steps inside a folder', () => {
     const { p, items } = setup([ag('a'), ag('b'), ag('c')], [folder('f', ['a', 'b', 'c'])], ['f']);
     expect(stepPlace(p, items, 'a', 1)).toEqual({ folderId: 'f', index: 1 });

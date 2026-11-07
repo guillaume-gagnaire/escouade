@@ -293,7 +293,9 @@
     if (!p) return;
     await move(id, p);
     await tick();
-    document.querySelector<HTMLElement>(focus)?.focus();
+    // In a folded folder the card is not drawn: the focus goes to the folder's chevron.
+    const chev = p.folderId ? `[data-folder="${CSS.escape(p.folderId)}"] .chev` : focus;
+    (document.querySelector<HTMLElement>(focus) ?? document.querySelector<HTMLElement>(chev))?.focus();
   }
 
   // Dragging, as the project rail's tiles do (ProjectRail.svelte): a line shows where it lands, a folder's header lights up
@@ -1039,6 +1041,14 @@
       >
         <div class="a-top">
           <StatusDot status={a.status} awaits={!!pending} />
+          {#if principal}
+            <span
+              class="star"
+              role="img"
+              aria-label={t('nav.sidebar.folders.principal')}
+              use:tip={{ text: t('nav.sidebar.folders.principal'), aria: false }}><Icon name="star" size={12} /></span
+            >
+          {/if}
           {#if renaming === a.id}
             <!-- svelte-ignore a11y_autofocus -->
             <input
@@ -1055,14 +1065,6 @@
             />
           {:else}
             <span class="name" ondblclick={() => startRename(a)} role="presentation">{a.name}</span>
-          {/if}
-          {#if principal}
-            <span
-              class="star"
-              role="img"
-              aria-label={t('nav.sidebar.folders.principal')}
-              use:tip={{ text: t('nav.sidebar.folders.principal'), aria: false }}><Icon name="star" size={12} /></span
-            >
           {/if}
           {#if subsRunning + inBg > 0}
             <!-- Its subagents and its background tasks at work (choice 10): their lists unfold under the card of the agent open. -->
@@ -1396,6 +1398,8 @@
           {@const f = it.folder}
           {@const cards = f.folded ? foldedCards(it, selectedAgentId) : [...(it.principal ? [it.principal] : []), ...it.agents]}
           <section class="folder" class:over={overFolder === f.id} class:dragging={dragId === f.id} data-folder={f.id}>
+            <!-- A click on the header outside its name and its field folds it, as the chevron does (which has the keys). -->
+            <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
             <div
               class="folder-h"
               role="group"
@@ -1406,6 +1410,9 @@
               ondrop={(e) => onDrop(e, f.id)}
               ondragend={endDrag}
               oncontextmenu={(e) => folderMenu(e, f)}
+              onclick={(e) => {
+                if (!(e.target as HTMLElement).closest('.name, .rename, .chev')) app.run(api.agentFolderFold(project.id, f.id, !f.folded));
+              }}
             >
               <button
                 class="chev fold"
@@ -2461,7 +2468,6 @@
   }
   .star {
     display: inline-flex;
-    margin-left: auto;
     color: var(--p-ink);
   }
   .star :global(svg) {

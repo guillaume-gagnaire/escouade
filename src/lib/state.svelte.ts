@@ -436,7 +436,12 @@ class AppState {
     const sel = this.ui.selectedAgent[p.id];
     const a = sel ? this.agents[sel] : undefined;
     if (a && a.projectId === p.id) return a;
-    return this.projectAgents[0] ?? null;
+    // The oldest agent that is not archived, as before the folders: not the first one drawn, which moves with what waits.
+    return (
+      Object.values(this.agents)
+        .filter((x) => x.projectId === p.id && !x.archived)
+        .sort((x, y) => x.createdAt - y.createdAt)[0] ?? null
+    );
   });
 
   term = $derived.by(() => {
