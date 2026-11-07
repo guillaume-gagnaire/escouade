@@ -127,7 +127,7 @@ A busy sidebar can be sorted into folders: a frame with a name, a chevron to fol
 - **Fold**: a folded folder still shows the card of its agents that wait for an answer and that of the open agent. The choice is kept from one launch to the next.
 - **Delete**: “Delete the folder” (right-click on its header) takes its agents out without stopping any.
 
-An agent that creates others through [the MCP server](mcp) puts them with itself in a folder named after it, where it is the principal agent.
+An agent that creates others through [the MCP server](mcp) puts them with itself in a folder named after it, where it is the main agent.
 
 ## Rename, duplicate, archive, delete
 

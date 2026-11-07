@@ -78,7 +78,7 @@ Dans les arguments, un projet se nomme par son id ou son nom (casse libre), un a
 
 ### Lire
 
-Ces douze outils ne changent rien.
+Ces outils ne changent rien.
 
 | Outil | Arguments | Ce qu’il rend |
 |---|---|---|

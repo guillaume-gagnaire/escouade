@@ -78,7 +78,7 @@ In the arguments, a project is named by its id or its name (any case), an agent 
 
 ### Reading
 
-These twelve tools change nothing.
+These tools change nothing.
 
 | Tool | Arguments | What it returns |
 |---|---|---|
