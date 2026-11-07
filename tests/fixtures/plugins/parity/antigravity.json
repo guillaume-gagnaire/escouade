@@ -315,7 +315,7 @@
     },
     {
       "method": "agent/frames",
-      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"call\":\"agy-14dc9b9f-2\",\"canAlways\":true,\"description\":\"« Autoriser » vaut pour le tour qui suit : Antigravity lit ses règles comme un début de texte, ce qui commence pareil passe aussi pendant ce tour, puis la règle est retirée. « Toujours » : Escouade redonne l’autorisation quand Antigravity redemande exactement ceci.\",\"diff\":null,\"input\":null,\"op\":\"permission\",\"parent\":null,\"reason\":null,\"request\":\"acp-a-2-agy-a-2\",\"tool\":null}]}"
+      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"call\":\"agy-14dc9b9f-2\",\"canAlways\":true,\"description\":\"« Autoriser » vaut pour le tour suivant, comme début de texte : ce qui commence pareil passe aussi. « Toujours » : Escouade réautorise cet appel exact.\",\"diff\":null,\"input\":null,\"op\":\"permission\",\"parent\":null,\"reason\":null,\"request\":\"acp-a-2-agy-a-2\",\"tool\":null}]}"
     },
     {
       "method": "agent/answerPermission",
@@ -656,7 +656,7 @@
     },
     {
       "method": "agent/frames",
-      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"call\":\"agy-8851eea7-2\",\"canAlways\":true,\"description\":\"Hors du dossier de l’agent/n« Autoriser » vaut pour le tour qui suit : Antigravity lit ses règles comme un début de texte, ce qui commence pareil passe aussi pendant ce tour, puis la règle est retirée. « Toujours » : Escouade redonne l’autorisation quand Antigravity redemande exactement ceci.\",\"diff\":null,\"input\":null,\"op\":\"permission\",\"parent\":null,\"reason\":null,\"request\":\"acp-a-3-agy-a-2\",\"tool\":null}]}"
+      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"call\":\"agy-8851eea7-2\",\"canAlways\":true,\"description\":\"Hors du dossier de l’agent/n« Autoriser » vaut pour le tour suivant, comme début de texte : ce qui commence pareil passe aussi. « Toujours » : Escouade réautorise cet appel exact.\",\"diff\":null,\"input\":null,\"op\":\"permission\",\"parent\":null,\"reason\":null,\"request\":\"acp-a-3-agy-a-2\",\"tool\":null}]}"
     },
     {
       "method": "agent/answerPermission",
@@ -761,7 +761,7 @@
     },
     {
       "method": "agent/frames",
-      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"call\":\"agy-19cb8157-2\",\"canAlways\":true,\"description\":\"« Autoriser » vaut pour le tour qui suit : Antigravity lit ses règles comme un début de texte, ce qui commence pareil passe aussi pendant ce tour, puis la règle est retirée. « Toujours » : Escouade redonne l’autorisation quand Antigravity redemande exactement ceci.\",\"diff\":null,\"input\":null,\"op\":\"permission\",\"parent\":null,\"reason\":null,\"request\":\"acp-a-2-agy-a-2\",\"tool\":null}]}"
+      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"call\":\"agy-19cb8157-2\",\"canAlways\":true,\"description\":\"« Autoriser » vaut pour le tour suivant, comme début de texte : ce qui commence pareil passe aussi. « Toujours » : Escouade réautorise cet appel exact.\",\"diff\":null,\"input\":null,\"op\":\"permission\",\"parent\":null,\"reason\":null,\"request\":\"acp-a-2-agy-a-2\",\"tool\":null}]}"
     },
     {
       "method": "agent/answerPermission",
@@ -2149,7 +2149,7 @@
     },
     {
       "method": "agent/frames",
-      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"call\":\"agy-01f902d3-2\",\"canAlways\":true,\"description\":\"« Autoriser » vaut pour le tour qui suit : Antigravity lit ses règles comme un début de texte, ce qui commence pareil passe aussi pendant ce tour, puis la règle est retirée. « Toujours » : Escouade redonne l’autorisation quand Antigravity redemande exactement ceci.\",\"diff\":null,\"input\":null,\"op\":\"permission\",\"parent\":null,\"reason\":null,\"request\":\"acp-a-2-agy-a-2\",\"tool\":null}]}"
+      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"call\":\"agy-01f902d3-2\",\"canAlways\":true,\"description\":\"« Autoriser » vaut pour le tour suivant, comme début de texte : ce qui commence pareil passe aussi. « Toujours » : Escouade réautorise cet appel exact.\",\"diff\":null,\"input\":null,\"op\":\"permission\",\"parent\":null,\"reason\":null,\"request\":\"acp-a-2-agy-a-2\",\"tool\":null}]}"
     },
     {
       "method": "agent/answerPermission",

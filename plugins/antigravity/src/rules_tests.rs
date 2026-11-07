@@ -341,7 +341,7 @@ fn a_rule_is_never_a_joker_nor_wider_than_its_card_says() {
     // A card says what « Autoriser » gives `agy`.
     let out = turn_refusing(&mut c, "run_command", command("echo ok"));
     assert!(out.iter().any(
-        |i| matches!(i, Item::Permission { description: Some(d), .. } if d.contains("tour qui suit"))
+        |i| matches!(i, Item::Permission { description: Some(d), .. } if d.contains("tour suivant, comme début de texte"))
     ));
 }
 

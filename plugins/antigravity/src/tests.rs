@@ -467,3 +467,13 @@ fn what_the_agent_wrote_in_its_home_gives_it_no_right() {
         [escouade_acp::SERVER]
     );
 }
+
+#[test]
+fn the_note_of_a_card_leaves_the_list_its_choices() {
+    // With a card's reason, the list beside the conversation takes a note of 240 characters at most (`LIST_NOTE_MAX`).
+    for lang in ["fr", "en"] {
+        let n = words::once_note(lang).chars().count();
+        assert!(n <= words::ONCE_NOTE_MAX, "{lang}: {n}");
+    }
+    assert!(words::ONCE_NOTE_MAX + "Hors du dossier de l’agent\n".chars().count() <= 240);
+}

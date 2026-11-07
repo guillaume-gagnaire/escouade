@@ -639,14 +639,18 @@ pub fn permission_params(session: &str, d: &Denied, always: bool) -> Value {
 }
 
 /// What the card of a permission says « Autoriser » gives: `agy` judges its rules as a start of the text, for the next
-/// turn; « Toujours » is Escouade's, for this very call.
+/// turn; « Toujours » is Escouade's, for this very call. Short (`ONCE_NOTE_MAX`): with a card's reason, the list beside
+/// the conversation still offers its choices (it takes a note of 240 characters at most, `LIST_NOTE_MAX`).
 pub fn once_note(lang: &str) -> String {
     if lang == "fr" {
-        "« Autoriser » vaut pour le tour qui suit : Antigravity lit ses règles comme un début de texte, ce qui commence pareil passe aussi pendant ce tour, puis la règle est retirée. « Toujours » : Escouade redonne l’autorisation quand Antigravity redemande exactement ceci.".into()
+        "« Autoriser » vaut pour le tour suivant, comme début de texte : ce qui commence pareil passe aussi. « Toujours » : Escouade réautorise cet appel exact.".into()
     } else {
-        "“Allow” holds for the next turn: Antigravity reads its rules as the start of a text, so what starts the same also goes through during that turn, then the rule is taken back. “Always”: Escouade allows it again when Antigravity asks for exactly this.".into()
+        "“Allow” holds for the next turn, as the start of a text: what starts the same goes through too. “Always”: Escouade allows this exact call again.".into()
     }
 }
+
+/// The most characters of `once_note`, leaving room for a card's reason on the list (`LIST_NOTE_MAX` is 240).
+pub const ONCE_NOTE_MAX: usize = 160;
 
 /// Said when a call is refused that no rule of `agy` can hold as it is (`unruled`).
 pub fn unruled_notice(lang: &str, said: &str) -> String {
