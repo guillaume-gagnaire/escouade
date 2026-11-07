@@ -1,9 +1,9 @@
 ---
-number: null
+number: 105
 id: "un-pret-a-un-plugin-finit-avec-ce-pour-q"
 title: "Un prêt à un plugin finit avec ce pour quoi il a été fait, et une adresse se lit par un parseur"
 date: "2026-11-07"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-360"
 pages: ["plugins/comptes-partages"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/comptes-partages","added":7,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-07T06:06:13+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
