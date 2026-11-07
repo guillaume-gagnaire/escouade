@@ -8,6 +8,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- Les agents se rangent en dossiers dans la barre latérale : on glisse une carte dans un dossier, on le replie sans perdre de vue ce qui attend une réponse, et un agent qui en crée d’autres les range avec lui. Le serveur MCP lit et règle ces dossiers.
 - Les plugins ont leur vue, ouverte par l’icône de la barre des projets : installer depuis un dossier ou un dépôt git après avoir vu d’où vient le plugin, son empreinte, ce qu’il ajoute et ce qu’il pourra faire, la permission la plus forte d’abord ; l’activer pour l’app ou projet par projet, un projet privé restant coupé d’office ; lui retirer une permission, régler ses secrets, lire son journal, le désinstaller.
 - Une nouvelle version d’un plugin est proposée, jamais installée seule, et redemande ton accord si elle demande plus que la version installée.
 - L’index du code s’allume d’un coup sur tous les projets, depuis Réglages › Projets : chaque projet le suit tant qu’il n’a pas fait son propre choix, et sa section dit d’où vient son état. Les projets sont lus un par un sans bloquer la fenêtre, et couper la case demande avant d’effacer leurs index.

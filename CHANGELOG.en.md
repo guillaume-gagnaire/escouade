@@ -8,6 +8,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### New
 
+- Agents can be sorted into folders in the sidebar: drag a card into a folder, fold it without losing sight of what waits for an answer, and an agent that creates others puts them with itself. The MCP server reads and sets these folders.
 - Plugins have their own view, opened by the icon of the projects’ rail: install from a folder or a git repository after seeing where the plugin comes from, its fingerprint, what it adds and what it will be able to do, the strongest permission first; switch it on for the app or project by project, a private project staying off by default; take a permission back, set its secrets, read its journal, uninstall it.
 - A new version of a plugin is offered, never installed by itself, and asks for your consent again if it asks for more than the installed version.
 - The code index turns on for every project at once, from Settings › Projects: each project follows it until it makes its own choice, and its section says where its state comes from. Projects are read one by one without blocking the window, and turning the switch off asks before erasing their indexes.

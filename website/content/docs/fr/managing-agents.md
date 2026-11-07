@@ -117,6 +117,18 @@ Un clic sur la carte l’affiche ; `Ctrl+Tab` et `Ctrl+Maj+Tab` passent à l’a
 
 À la place du statut, la carte peut afficher « Préparation… » (le worktree se prépare) ou « Reprise à 15:00 » (l’agent a atteint la limite d’usage et repart seul à la remise à zéro du quota).
 
+## Les dossiers d’agents
+
+Une barre latérale chargée se range en dossiers : un cadre avec un nom, un chevron pour le replier, le nombre de ses agents et des pastilles « en cours » et « en attente ».
+
+- **Créer** : « Nouveau dossier » dans le menu à côté de « Nouvel agent », ou « Nouveau dossier avec cet agent » au clic droit d’une carte. Le nom se tape tout de suite ; un double-clic sur le nom le change plus tard.
+- **Ranger** : glisse une carte sur l’en-tête d’un dossier pour l’y mettre, hors du cadre pour l’en sortir ; au clavier, `Alt+↑` et `Alt+↓` déplacent d’un pas la carte ou le dossier qui a le focus. « Déplacer vers… » et « Hors dossier » du menu de la carte font la même chose. Un dossier ne se glisse pas dans un autre.
+- **L’agent principal** : « Faire l’agent principal » met une étoile (« Agent principal ») sur un agent du dossier, qui passe en tête ; « Retirer l’étoile » la reprend.
+- **Replier** : un dossier replié montre encore la carte de ses agents qui attendent une réponse et celle de l’agent ouvert. Le choix est gardé d’un lancement à l’autre.
+- **Supprimer** : « Supprimer le dossier » (clic droit sur son en-tête) en sort les agents sans en arrêter aucun.
+
+Un agent qui en crée d’autres par [le serveur MCP](mcp) les range avec lui dans un dossier à son nom, où il est l’agent principal.
+
 ## Renommer, dupliquer, archiver, supprimer
 
 Un clic droit sur la carte d’un agent ouvre son menu.

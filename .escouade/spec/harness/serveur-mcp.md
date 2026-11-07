@@ -1,7 +1,7 @@
 ---
 title: "Serveur MCP"
 subject: "Harness"
-sources: ["docs/SPEC.md"]
+sources: ["docs/SPEC.md","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md"]
 tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256"]
 decisions: []
 compared: null
@@ -69,7 +69,8 @@ Chaque outil est annoté lecture seule ou non. Réponse : un bloc de texte JSON,
 #### Lecture
 
 - `list_projects` : les projets, avec les deux réglages du remote control (`remoteControl`, celui du projet, « Remote control pour les agents de ce projet » ; `remoteControlAll`, le global, « Remote control pour tous les agents », le même sur chaque ligne : allumé, il couvre tous les agents de tous les projets, et l'interrupteur du projet est grisé dans la fenêtre).
-- `list_agents` : statut, attend une réponse et combien, ticket, modèle, compte, coût, sous-agents en cours (`subagentsRunning`, au premier plan ou en arrière-plan) et tâches de fond en cours (`backgroundTasksRunning`, jamais les sous-agents : le « N en fond » de la carte ; un agent « Terminé » peut ainsi avoir encore du travail qui tourne), remote control, workflow (`workflow` : nom, étape, tour, depuis ; `null` sans workflow).
+- `list_agents` : dans l'ordre de la barre latérale, avec son dossier (`folder`) et s'il en est l'agent principal (`principal`) ; statut, attend une réponse et combien, ticket, modèle, compte, coût, sous-agents en cours (`subagentsRunning`, au premier plan ou en arrière-plan) et tâches de fond en cours (`backgroundTasksRunning`, jamais les sous-agents : le « N en fond » de la carte ; un agent « Terminé » peut ainsi avoir encore du travail qui tourne), remote control, workflow (`workflow` : nom, étape, tour, depuis ; `null` sans workflow).
+- `list_folders` : les dossiers d'un projet, dans l'ordre de la barre latérale : `id`, `name`, `principal` (`{ id, name }` ou `null`) et `agents` (`[{ id, name, status }]`, le principal en tête, archivés exclus). Les agents hors dossier sont dans `list_agents`.
 - `list_tickets` : par colonne, dépendances, agent, raison du blocage, compte, modèle et effort quand ils ne sont pas sur « Auto ».
 - `get_ticket` : description, critères, boucles, avancement ; la liste de ses images (rang, fichier, nom, type, taille) et celle de ses autres fichiers (rang, fichier, nom, taille) ; le nombre de ses fichiers joints (`files`, que son agent reçoit par leurs chemins) ; ticket externe ; son compte, son modèle et son effort (`auto` quand ils suivent le compte courant, le Kanban ou le compte) et pourquoi il est repassé en « Auto » ; et de quoi suivre le flux : son agent et les demandes qui attendent, sa branche et son worktree, ce qui le bloque (raison, conflit), l'étape de validation en cours, le résultat une fois terminé (texte, adresse, commit du merge). Un agent d'Escouade lit le sien sans le nommer.
 - `get_ticket_image` : une image d'un ticket, par son fichier ou son rang dans la liste de `get_ticket` : le contenu en bloc image, puis ses nom, type et taille. Un agent d'Escouade omet le ticket pour lire le sien.
@@ -95,14 +96,28 @@ Chaque outil est annoté lecture seule ou non. Réponse : un bloc de texte JSON,
 - `create_ticket` : avec, au choix, des images ou d'autres fichiers (voir plus bas), et le compte (par son nom ou son id), le modèle et l'effort de ses agents (`auto` par défaut).
 - `update_ticket` : modifie un ticket « À faire » ; ajoute des images à la fin, en retire par leur fichier ou leur rang (celles qu'on ne nomme pas sont gardées) ; de même pour les fichiers ; compte, modèle et effort comme `create_ticket`.
 - `move_ticket` : réordonne un ticket « À faire » : en tête, en bas, avant un autre.
-- `start_ticket` : avec, au choix, le compte, le modèle et l'effort de ce ticket seul (le compte étant fixé comme dans sa fenêtre), qui passent avant ceux du Kanban pour son agent : garder Opus sur un ticket d'architecture quand le Kanban est sur Sonnet. `""` remet ceux du Kanban. Le ticket garde son choix s'il est renvoyé puis relancé. La réponse dit avec quoi son agent part, sans `effort` quand le modèle n'en prend pas (Haiku, dont l'agent part aussi en mode « Demander » si son mode serait Auto).
+- `start_ticket` : avec, au choix, le dossier de son agent (`folder`), le compte, le modèle et l'effort de ce ticket seul (le compte étant fixé comme dans sa fenêtre), qui passent avant ceux du Kanban pour son agent : garder Opus sur un ticket d'architecture quand le Kanban est sur Sonnet. `""` remet ceux du Kanban. Le ticket garde son choix s'il est renvoyé puis relancé. La réponse dit avec quoi son agent part, sans `effort` quand le modèle n'en prend pas (Haiku, dont l'agent part aussi en mode « Demander » si son mode serait Auto).
 - `set_board` : règle le Kanban d'un projet, n'importe lesquels de : après validation, branche cible, stratégie, brouillon, nettoyage, commits conventionnels, conflit, en parallèle, pilote auto, modèle, effort, mode (`auto`, `default`, `plan`, `acceptEdits`) et tests d'abord. Les champs laissés de côté ne changent pas ; `""` pour le modèle, l'effort ou le mode remet celui de l'app. La fenêtre se met à jour et le Kanban replanifie (allumer le pilote auto peut démarrer des tickets). Cela vaut pour les prochains agents de tickets, pas pour ceux déjà lancés : un agent qui mène le Kanban (un « chef d'escouade ») peut ainsi passer les agents de tickets sur Sonnet pour ménager le quota. Un agent d'Escouade règle comme la fenêtre, mode compris, le Kanban de tout projet qu'il voit. Sa réponse est le Kanban après le changement.
-- `create_agent` : projet, message de départ, worktree ou non, modèle.
+- `create_agent` : projet, message de départ, worktree ou non, modèle, dossier (`folder`, voir *Les dossiers d'agents*).
+- `create_folder` : crée un dossier en bas de la liste, comme « Nouveau dossier » : `name`, et au choix `agents` (ids ou noms, qui y entrent dans cet ordre en quittant leur place) et `principal` (l'un d'eux). Un dossier ne contient que des agents. Répond le dossier comme `list_folders`.
+- `update_folder` : `folder`, et au choix `name`, `principal` (un agent du dossier, ou `""` pour aucun) et `position` (rang dans la liste, à partir de 0). Ce qui est omis reste ; un champ refusé ne laisse rien de changé. Un dossier jamais renommé suit le nom de son principal. Répond le dossier après le changement.
+- `delete_folder` : `folder` ; ses agents reviennent hors dossier, à sa place, sans qu'aucun soit arrêté, archivé ou supprimé. Répond l'id, le nom et `deleted: true`.
+- `move_agent` : `agent`, `folder` (un dossier, `""` pour hors dossier ; omis, l'agent reste où il est) et `position` (rang à l'endroit visé, à partir de 0 ; omis : en bas). L'agent continue de tourner. Répond l'agent et son dossier (`null` hors dossier).
 - `send_message` : 32 000 caractères au plus (côté MCP seulement).
 - `stop_agent`.
 - `stop_background_work`, `message_subagent` : voir plus bas.
 - `answer_permission` : autoriser ou refuser une permission, avec un message au refus ; approuver ou renvoyer un plan, comme la carte de la fenêtre.
 - `answer_question` : répondre à une question avec les libellés des options ou un texte libre, au format de la carte de question.
+
+#### Les dossiers d'agents
+
+Les outils de dossiers font ce que fait l'utilisateur dans la barre latérale (sauf replier, qui est de l'affichage). Un dossier se nomme par son id ou son nom (casse ignorée). Mêmes règles d'accès que les autres outils : son projet et les projets non privés ; un agent d'Escouade peut omettre `project` pour le sien. `position` compte ce que les outils de lecture listent : les agents archivés ne sont pas comptés.
+
+- `list_agents` donne les agents dans l'ordre de la barre latérale (projet par projet, dans l'ordre de l'app), non plus du plus ancien au plus récent, et chaque agent porte `folder` (`{ id, name }`, `null` hors dossier) et `principal` (vrai pour l'agent principal de son dossier).
+- `create_agent` et `start_ticket` ont un paramètre facultatif `folder` : un dossier du projet (id ou nom) ; un nom qu'aucun dossier ne porte crée le dossier sous ce nom ; `""` : hors dossier. Leur réponse dit où l'agent est rangé (`folder`, `{ id, name }` ou `null`).
+- Sans `folder`, un agent d'Escouade qui crée un agent dans son projet le range dans son propre dossier ; s'il n'en a pas, un dossier est créé à sa place, nommé d'après lui (et qui le suit tant qu'il n'est pas renommé), lui-même agent principal, le nouvel agent dedans. Pas de dossier automatique dans un autre projet, pour « Claude (hors Escouade) » ni pour un agent que crée le pilote auto du Kanban ; `folder` reste possible, sans agent principal.
+- `start_ticket` ne crée pas l'agent tout de suite : le dossier visé est résolu à l'appel et gardé sur le ticket. Son agent y entre à son lancement, comme ceux que le ticket relance plus tard, tant que le dossier existe. Un ticket lancé par l'utilisateur ou par le pilote auto ne retient aucun dossier.
+- Un agent ou un dossier disparu entre-temps est refusé avec sa raison, jamais à moitié fait.
 
 #### Le flux du Kanban
 
