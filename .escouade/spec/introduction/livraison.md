@@ -3,7 +3,7 @@ title: "Livraison et mises à jour"
 subject: "Introduction"
 sources: ["docs/SPEC.md",".github/workflows/release.yml",".github/workflows/discord.yml","scripts/beta-channel.mjs","src-tauri/src/updates.rs"]
 tickets: ["ESC-374"]
-decisions: ["un-canal-beta-opt-in-beta-json-a-cote-de"]
+decisions: [113]
 compared: null
 ---
 

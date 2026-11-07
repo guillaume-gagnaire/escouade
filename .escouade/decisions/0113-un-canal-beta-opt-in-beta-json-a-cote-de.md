@@ -1,9 +1,9 @@
 ---
-number: null
+number: 113
 id: "un-canal-beta-opt-in-beta-json-a-cote-de"
 title: "Un canal bêta opt-in : beta.json à côté de latest.json, les bêtas ignorées par défaut"
 date: "2026-11-07"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-374"
 pages: ["introduction/livraison"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"introduction/livraison","added":85,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-07T19:48:21+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
