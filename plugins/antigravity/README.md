@@ -53,7 +53,7 @@ go by it.
 
 ## Turned off
 
-It can be turned off for the app, never removed, and a plugin of the store with the same id is refused: this one is the app's.
+It can be turned off for the app, or uninstalled: it is a plugin like any other, and comes back from the store.
 Turned off or not loaded, an agent of Antigravity says at its start « Le plugin Antigravity CLI (dev.escouade.antigravity-cli)
 est coupé ou n'est pas chargé : rallume-le dans la vue Plugins… », and keeps its conversation; a plugin that stops while an agent
 runs is started again, as every plugin is. A card shown before a restart cannot go on: its answer ends the turn. The texts, the

@@ -28,8 +28,7 @@ in Réglages › Intégrations. It is kept in the system's keychain under `plugi
 former name (`linear`) is kept beside it and read first, so that a version from before reads the account as it is
 (docs/PLUGINS.md §4.4). Its text (« Indique le jeton. ») is in its manifest (`contributes.accounts[0].fields[].missing`).
 
-It can be turned off for the app or for a project, never removed, and a plugin of the store with the same id is
-refused: this one is the app's. Turned off, or stopped, the sync says so (« Le plugin dev.escouade.linear ne répond pas »)
+It can be turned off for the app or for a project, or uninstalled: it is a plugin like any other, and comes back from the store. Turned off, or stopped, the sync says so (« Le plugin dev.escouade.linear ne répond pas »)
 and tries again later; nothing is lost.
 
 ## What is in this folder

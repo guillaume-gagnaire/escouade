@@ -45,8 +45,7 @@ a budget per day.
 
 ## Turned off
 
-It can be turned off for the app, never removed, and a plugin of the store with the same id is refused: this one is
-the app's. Turned off or not loaded, an agent of OpenCode says at its start « Le plugin OpenCode
+It can be turned off for the app, or uninstalled: it is a plugin like any other, and comes back from the store. Turned off or not loaded, an agent of OpenCode says at its start « Le plugin OpenCode
 (dev.escouade.opencode) est coupé ou n'est pas chargé : rallume-le dans la vue Plugins… », and keeps its session.
 
 A plugin that crashes is started again, as every plugin is: the server goes on, the agent's session is heard again, and
