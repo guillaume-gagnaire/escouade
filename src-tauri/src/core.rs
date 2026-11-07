@@ -1001,6 +1001,14 @@ pub struct Core<R: Runtime = Wry> {
     /// app's start) starts at once: `REMOTE_STARTS`. A message or a window opening starts its own
     /// at once, with no permit.
     pub(crate) remote_starts: tokio::sync::Semaphore,
+    /// Held by `apply_remote` from its reading of the settings to what it decides on the agent:
+    /// an application that started on settings older than another's never undoes it.
+    remote_decisions: tokio::sync::Mutex<()>,
+    /// Stops the next `apply_remote` once it has read the settings, until the second `Notify` is
+    /// told; the first says it got there (tests only).
+    #[cfg(test)]
+    pub(crate) remote_read_pause:
+        Mutex<Option<(Arc<tokio::sync::Notify>, Arc<tokio::sync::Notify>)>>,
     /// Times the files of an agent's plan were read, not counting the looks that found them as
     /// before (tests only).
     #[cfg(test)]
@@ -2010,6 +2018,9 @@ impl<R: Runtime> Core<R> {
             file_origins,
             origin_files: Default::default(),
             remote_starts: tokio::sync::Semaphore::new(REMOTE_STARTS),
+            remote_decisions: Default::default(),
+            #[cfg(test)]
+            remote_read_pause: Default::default(),
             #[cfg(test)]
             plan_reads: AtomicUsize::new(0),
             #[cfg(test)]
@@ -4328,13 +4339,19 @@ impl<R: Runtime> Core<R> {
             let mut rt = h.lock();
             (self.remote_name(&rt.meta), rt.end_remote())
         };
+        self.after_cut(h, &name, link).await;
+    }
+
+    /// What follows the end of the agent's Remote Control (`AgentRt::end_remote`, which gave
+    /// `link`), under the name it had (`name`).
+    async fn after_cut(self: &Arc<Self>, h: &AgentHandle, name: &str, link: Option<RemoteLink>) {
         self.request_save();
         self.emit_agent(h);
         // An interface started for it, and that no window showed, has no reason to run.
         self.stop_unseen_interface(h);
         if let Some(link) = link {
             // Unless Remote Control came back meanwhile: the link that follows takes the session.
-            self.close_link(h, link, &name, Duration::from_secs(15), true)
+            self.close_link(h, link, name, Duration::from_secs(15), true)
                 .await;
         }
     }
@@ -4466,10 +4483,22 @@ impl<R: Runtime> Core<R> {
             Nothing,
             Changed,
             On,
-            Off,
+            Off(String, Option<RemoteLink>),
         }
         let Ok(h) = self.agent(id) else { return };
+        // Saved settings are applied by a task of their own, which may come after that of newer
+        // ones (a new agent's, while the setting changes): one at a time, each reads them as they
+        // are when it decides.
+        let decision = self.remote_decisions.lock().await;
         let (global, project) = self.remote_settings(&h);
+        #[cfg(test)]
+        {
+            let pause = self.remote_read_pause.lock().take();
+            if let Some((reached, go)) = pause {
+                reached.notify_one();
+                go.notified().await;
+            }
+        }
         let step = {
             let mut rt = h.lock();
             match (
@@ -4485,17 +4514,18 @@ impl<R: Runtime> Core<R> {
                     rt.meta.remote_source = Some(source);
                     Step::Changed
                 }
-                (None, true) => Step::Off,
+                (None, true) => Step::Off(self.remote_name(&rt.meta), rt.end_remote()),
                 _ => Step::Nothing,
             }
         };
+        drop(decision);
         match step {
             Step::Nothing => {}
             Step::Changed => {
                 self.request_save();
                 self.emit_agent(&h);
             }
-            Step::Off => self.cut_remote(&h).await,
+            Step::Off(name, link) => self.after_cut(&h, &name, link).await,
             Step::On => {
                 self.request_save();
                 self.emit_agent(&h);

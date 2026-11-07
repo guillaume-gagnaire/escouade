@@ -6021,6 +6021,40 @@ async fn a_copy_of_an_agent_set_apart_by_hand_is_set_apart_too() {
     assert!(!m.remote_control && m.remote_off);
 }
 
+/// ESC-363: the `apply_remote` of a new agent read the settings, then waited for its turn while
+/// the global setting went on and its own `apply_remote` gave the agent Remote Control. What it
+/// had read was out of date, and it cut what the setting had just given.
+#[tokio::test]
+async fn a_remote_control_setting_applied_late_does_not_undo_a_newer_one() {
+    let h = harness("remote-late");
+    let (p, _) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.settle_remote().await;
+    h.core.ensure_process(&a).await.unwrap();
+
+    let (reached, go) = (
+        Arc::new(tokio::sync::Notify::new()),
+        Arc::new(tokio::sync::Notify::new()),
+    );
+    *h.core.remote_read_pause.lock() = Some((reached.clone(), go.clone()));
+    let late = h.core.apply_remote_soon(&a);
+    reached.notified().await;
+
+    // The setting goes on: its application either goes through or waits for the late one.
+    h.remote_all(true);
+    for _ in 0..50 {
+        if h.agent(&a).remote_control {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    go.notify_one();
+    late.await.unwrap();
+
+    h.wait_remote(&a, Some(RemoteSource::Global)).await;
+    assert_eq!(h.last_remote_request(&a), Some(true));
+}
+
 #[tokio::test]
 async fn an_agent_set_apart_by_hand_stays_without_remote_control_whatever_the_settings_do() {
     let h = harness("remote-apart");

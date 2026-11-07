@@ -91,6 +91,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### Fixes
 
+- Remote Control: an agent created just as you turn the setting on for all agents now keeps its Remote Control. It could lose it silently until the setting next changed.
 - Copilot CLI reads a command the way its shell does: `git add x; node evil.js` and any chained, redirected or out-of-worktree command now gets a card, and so does a write in `.git`. That write gets a card on Cursor, Gemini, Mistral Vibe and the ACP harnesses too.
 - A private project's fence and read-only mode now hold when a harness plugin restarts, for instance after a language or network change. A fenced agent no longer gets "For this session" on Copilot CLI, and a `git commit` that reads its message from a file gets a card. A Cursor, Gemini or Mistral Vibe agent also keeps its session: its messages no longer stay waiting after a restart.
 - A harness described by a third-party plugin no longer gets the trust of Escouade’s own plugins: it can’t claim a fence to enter a private project, nor set variables like `NODE_OPTIONS` or `LD_PRELOAD`, and the install window shows all it will run.
