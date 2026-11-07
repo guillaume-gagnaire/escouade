@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.2.1
 
 - Its page has its documentation, in French and in English: README.fr.md, README.en.md and five pages in docs/.
 - No rule of `agy` guards anything alone (ESC-371): outside Bypass without a fence, the plugin writes no `allow` rule of its own, and judges each call `agy` refused at the end of its turn.
