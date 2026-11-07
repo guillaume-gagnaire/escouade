@@ -1766,6 +1766,26 @@ impl<R: Runtime> Core<R> {
             &mut state.tickets,
         );
         let closed_index = entries.into_iter().map(|e| (e.id.clone(), e)).collect();
+        // The sidebar's order of each project settled once (a state from before the folders has
+        // none), so the window gets it complete; saved with the next write.
+        for p in &mut state.projects {
+            let owned: Vec<crate::folders::OwnedMember> = state
+                .agents
+                .iter()
+                .filter(|m| m.project_id == p.id)
+                .map(|m| crate::folders::OwnedMember {
+                    id: m.id.clone(),
+                    created_at: m.created_at,
+                    waiting: false,
+                    archived: m.archived,
+                })
+                .collect();
+            let members: Vec<_> = owned
+                .iter()
+                .map(crate::folders::OwnedMember::as_member)
+                .collect();
+            crate::folders::settle(p, &members);
+        }
         // Read before the agents are made: a turn does not survive a restart (they come back done).
         let cut_turns: Vec<String> = state
             .agents

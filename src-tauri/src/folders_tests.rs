@@ -214,6 +214,37 @@ mod core_hooks {
     }
 
     #[tokio::test]
+    async fn a_write_keeps_a_member_the_snapshot_did_not_hold() {
+        let h = harness("fo-stale");
+        let (p, _) = h.project(false).await;
+        let a = agent(&h, &p.id, None).await;
+        let f = h
+            .core
+            .folder_create(&p.id, None, std::slice::from_ref(&a), None, None)
+            .unwrap();
+        // Not an agent (yet, or any more) when the layout is read: it is not dropped.
+        h.core.projects.write()[0].agent_folders[0]
+            .agents
+            .push("late".into());
+        h.core.folder_fold(&p.id, &f.id, true).unwrap();
+        assert_eq!(folder_agents(&h, &p.id, &f.id), vec![a, "late".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn the_principal_chosen_takes_the_first_place_of_its_folder() {
+        let h = harness("fo-star");
+        let (p, _) = h.project(false).await;
+        let a = agent(&h, &p.id, None).await;
+        let b = agent(&h, &p.id, None).await;
+        let f = h
+            .core
+            .folder_create(&p.id, None, &[a.clone(), b.clone()], None, None)
+            .unwrap();
+        h.core.folder_principal(&p.id, &f.id, Some(&b)).unwrap();
+        assert_eq!(folder_agents(&h, &p.id, &f.id), vec![b, a]);
+    }
+
+    #[tokio::test]
     async fn the_copy_follows_its_original_in_its_folder() {
         let h = harness("fo-copy");
         let (p, _) = h.project(false).await;
@@ -338,6 +369,37 @@ mod core_hooks {
     }
 
     #[tokio::test]
+    async fn a_project_from_before_folders_loads_with_a_complete_order() {
+        let h = harness("fo-legacy");
+        let (p, _) = h.project(false).await;
+        let a = agent(&h, &p.id, None).await;
+        let b = agent(&h, &p.id, None).await;
+        h.core.archive_agent(&a, true).await.unwrap();
+        // As a state saved before this version: no order.
+        h.core.projects.write()[0].agent_order.clear();
+        h.core.save_now();
+        let app = mock_app();
+        let (re, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
+        let mut got = re.project(&p.id).unwrap().agent_order;
+        got.sort();
+        let mut want = vec![a, b];
+        want.sort();
+        assert_eq!(got, want);
+    }
+
+    #[tokio::test]
+    async fn a_closed_project_from_before_folders_comes_back_with_a_complete_order() {
+        let h = harness("fo-legacy-closed");
+        let (p, dir) = h.project(false).await;
+        let a = agent(&h, &p.id, None).await;
+        h.core.archive_agent(&a, true).await.unwrap();
+        h.core.projects.write()[0].agent_order.clear();
+        crate::closed_tests::close(&h, &p.id).await;
+        let back = crate::closed_tests::add_again(&h, &dir).await;
+        assert_eq!(back.agent_order, vec![a]);
+    }
+
+    #[tokio::test]
     async fn folders_come_back_with_a_closed_project() {
         let h = harness("fo-closed");
         let (p, dir) = h.project(false).await;
@@ -398,4 +460,34 @@ mod core_hooks {
         assert!(h.core.folder_rename(&p.id, &f.id, " ").is_err());
         assert_eq!(order(&h, &p.id), vec![a, f.id]);
     }
+}
+
+#[test]
+fn settle_keeps_an_id_the_snapshot_does_not_know() {
+    let mut p = project();
+    p.agent_folders = vec![folder("f", None, &["a", "late"])];
+    p.agent_order = ids(&["f", "ghost"]);
+    settle(&mut p, &members(&["a"]));
+    assert_eq!(p.agent_folders[0].agents, ids(&["a", "late"]));
+    assert_eq!(p.agent_order, ids(&["f", "ghost"]));
+    // What is shown ignores them.
+    let s = shown(&p, &members(&["a"]));
+    assert_eq!(
+        s,
+        vec![Shown::Folder {
+            id: "f".into(),
+            agents: ids(&["a"])
+        }]
+    );
+}
+
+#[test]
+fn settle_puts_the_principal_first() {
+    let mut p = project();
+    p.agent_folders = vec![folder("f", Some("b"), &["a", "b", "c"])];
+    p.agent_order = ids(&["f"]);
+    let m = members(&["a", "b", "c"]);
+    assert!(settle(&mut p, &m));
+    assert_eq!(p.agent_folders[0].agents, ids(&["b", "a", "c"]));
+    assert!(!settle(&mut p, &m));
 }

@@ -45,22 +45,28 @@ pub enum Shown {
     },
 }
 
-/// Drops the unknown ids and the doubles, then lists at the bottom, oldest first, every member
-/// placed nowhere. Idempotent; says whether it changed anything.
+/// Drops the doubles, puts each folder's principal first, then lists at the bottom, oldest first,
+/// every member placed nowhere. Ids unknown to `members` stay: the snapshot may be stale (an
+/// agent inserted or removed since), and a deletion goes through `remove_agent`; what is shown
+/// or counted ignores them (`shown`). Idempotent; says whether it changed anything.
 pub fn settle(p: &mut Project, members: &[Member]) -> bool {
     let before = (p.agent_folders.clone(), p.agent_order.clone());
-    let live: HashSet<&str> = members.iter().map(|m| m.id).collect();
     let mut seen: HashSet<String> = HashSet::new();
     for f in &mut p.agent_folders {
-        f.agents
-            .retain(|a| live.contains(a.as_str()) && seen.insert(a.clone()));
+        f.agents.retain(|a| seen.insert(a.clone()));
         if f.principal.as_ref().is_some_and(|x| !f.agents.contains(x)) {
             f.principal = None;
         }
+        if let Some(at) = f
+            .principal
+            .as_ref()
+            .and_then(|x| f.agents.iter().position(|a| a == x))
+        {
+            let x = f.agents.remove(at);
+            f.agents.insert(0, x);
+        }
     }
-    let folders: HashSet<String> = p.agent_folders.iter().map(|f| f.id.clone()).collect();
-    p.agent_order
-        .retain(|i| (folders.contains(i) || live.contains(i.as_str())) && seen.insert(i.clone()));
+    p.agent_order.retain(|i| seen.insert(i.clone()));
     for f in &p.agent_folders {
         if !seen.contains(&f.id) {
             p.agent_order.push(f.id.clone());
@@ -307,7 +313,10 @@ impl<R: Runtime> Core<R> {
                 .find(|p| p.id == project_id)
                 .ok_or_else(project_not_found)?;
             settle(p, &members);
-            f(p)?
+            let out = f(p)?;
+            // A move may have put an agent above the principal.
+            settle(p, &members);
+            out
         };
         self.request_save();
         self.emit_project(project_id);
@@ -420,6 +429,10 @@ impl<R: Runtime> Core<R> {
                 ));
             }
             f.principal = agent.map(Into::into);
+            if let Some(a) = agent {
+                f.agents.retain(|x| x != a);
+                f.agents.insert(0, a.to_string());
+            }
             Ok(())
         })
     }

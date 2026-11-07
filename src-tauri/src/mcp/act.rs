@@ -2380,7 +2380,11 @@ fn stored_index<R: Runtime>(
         None => &p.agent_order,
     };
     let rest: Vec<&String> = level.iter().filter(|i| *i != item).collect();
-    let listed = |i: &&String| !owned.iter().any(|m| m.archived && m.id == **i);
+    // Folders and live agents only: an archived agent or an id that is no agent has no rank.
+    let listed = |i: &&String| {
+        p.agent_folders.iter().any(|f| f.id == **i)
+            || owned.iter().any(|m| !m.archived && m.id == **i)
+    };
     Ok(rest
         .iter()
         .enumerate()

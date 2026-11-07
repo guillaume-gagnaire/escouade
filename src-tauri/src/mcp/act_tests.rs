@@ -5414,6 +5414,36 @@ async fn move_agent_puts_an_agent_in_and_out_of_a_folder_at_a_position() {
 }
 
 #[tokio::test]
+async fn a_position_does_not_count_an_id_that_is_no_agent() {
+    let h = harness("mcp-folder-phantom");
+    let p = project(&h).await;
+    let a = put_agent(&h, &p, "a", 1);
+    let b = put_agent(&h, &p, "b", 2);
+    let x = put_agent(&h, &p, "x", 3);
+    let f = h
+        .core
+        .folder_create(&p.id, Some("F"), &[a.id.clone(), b.id.clone()], None, None)
+        .unwrap();
+    // An id of an agent being removed stays in the folder first.
+    h.core.projects.write()[0].agent_folders[0]
+        .agents
+        .insert(0, "ghost".into());
+    let cl = external(&h).await;
+    read(
+        &cl,
+        "move_agent",
+        json!({ "agent": x.id, "folder": f.id, "position": 1 }),
+    )
+    .await;
+    assert_eq!(
+        h.core.shown_agents_of(&p.id),
+        [a.id.clone(), x.id.clone(), b.id.clone()]
+    );
+    cl.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
 async fn a_position_counts_what_the_read_tools_list_archived_ones_left_out() {
     let h = harness("mcp-folder-position");
     let p = project(&h).await;
