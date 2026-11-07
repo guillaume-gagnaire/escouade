@@ -6,6 +6,10 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- OpenCode: `git commit` and `git add` are accepted at once only in their plain form, and a write to `.git`, `.opencode` or `opencode.json` always asks: these rules are all that protects it.
+- OpenCode: a private project holds better. Its rules are set before a session opens, and “Always” is no longer offered under a fence.
+- Claude Code: a discussion also refuses PowerShell commands, instead of showing them on a card.
+
 ### New
 
 - A plugin no longer keeps what Escouade lent it: the host of a failed connection attempt closes at once, and a removed account takes back its host and its token. An address that only looks local, such as `http://localhost:1@exemple.dev`, is refused right in the form.

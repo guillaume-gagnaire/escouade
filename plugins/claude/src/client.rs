@@ -9,7 +9,16 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 
 /// The tools a discussion of the Docs tab is refused: what writes and what runs a command (ESC-261).
-pub const WRITES: [&str; 5] = ["Edit", "Write", "MultiEdit", "NotebookEdit", "Bash"];
+pub const WRITES: [&str; 8] = [
+    "Edit",
+    "Write",
+    "MultiEdit",
+    "NotebookEdit",
+    "Bash",
+    "PowerShell",
+    "Monitor",
+    "EnterWorktree",
+];
 
 /// Refused, every tool of Escouade's server, whatever config declares it: the start of their names.
 pub const ESCOUADE_TOOLS: &str = "mcp__escouade";

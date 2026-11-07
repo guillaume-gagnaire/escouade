@@ -6,6 +6,10 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- OpenCode : `git commit` et `git add` ne passent d'office que sous leur forme simple, et une écriture dans `.git`, `.opencode` ou `opencode.json` demande toujours : ces règles sont sa seule protection.
+- OpenCode : un projet privé tient mieux. Ses règles sont posées avant l'ouverture d'une session, et « Toujours » n'est plus proposé sous clôture.
+- Claude Code : une discussion refuse aussi les commandes PowerShell, au lieu de les présenter sur une carte.
+
 ### Nouveautés
 
 - Un plugin ne garde plus ce qu’Escouade lui a prêté : l’hôte d’un essai de connexion raté se referme aussitôt, et un compte retiré reprend son hôte et son jeton. Une adresse qui se fait passer pour locale, comme `http://localhost:1@exemple.dev`, est refusée dès le formulaire.

@@ -164,7 +164,7 @@ fn a_discussion_is_refused_what_writes_in_one_value() {
     assert!(l.read_only);
     assert!(l
         .args
-        .contains(&"--disallowedTools=Edit,Write,MultiEdit,NotebookEdit,Bash".to_string()));
+        .contains(&"--disallowedTools=Edit,Write,MultiEdit,NotebookEdit,Bash,PowerShell,Monitor,EnterWorktree".to_string()));
 }
 
 #[test]

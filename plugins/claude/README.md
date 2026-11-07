@@ -48,18 +48,19 @@ turn that lost one (`translate::lost`).
 Turned off or not loaded, an agent of Claude Code says at its start « Le plugin Claude Code
 (dev.escouade.claude-code) est coupé ou n'est pas chargé : rallume-le dans la vue Plugins… », and keeps its session; a
 plugin that stops while an agent runs is started again, as every plugin is, and an agent says so; after the last crash the
-agent stops, its session kept. The texts, the quota of an account and the terminal view don't go through it.
+agent stops, its session kept. The texts and the quota of an account don't go through it.
 
 ## What is in this folder
 
 | File                   | What it is                                                              |
 | ---------------------- | ----------------------------------------------------------------------- |
 | `escouade-plugin.json` | The manifest: the harness, its modes, models, efforts, its folder       |
-| `Cargo.toml`           | The crate `escouade-plugin-claude`: a `cdylib`, and an `rlib` for the core |
+| `Cargo.toml`           | The crate `escouade-plugin-claude`: a `cdylib`, which the core does not link |
 | `Cargo.lock`           | The crates published on crates.io: what the store compiles              |
 | `src/lib.rs`           | Its `run` and the export of its turn: the methods of the contract       |
 | `src/client.rs`        | The client of `claude`, a state machine without a process               |
 | `src/translate.rs`     | Its frames as items of the conversation                                 |
+| `src/view.rs`          | Its transcript read for the « Vue Claude Code » (`view/translate`)      |
 | `src/localcmd.rs`      | What it writes of a local command (`/compact`, `! ls`)                  |
 | `src/words.rs`         | What is said in the app's language, a local output, its quota's windows |
 | `src/tests.rs`         | The client and the translation on their own                             |

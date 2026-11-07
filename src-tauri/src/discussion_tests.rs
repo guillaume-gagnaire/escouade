@@ -116,10 +116,24 @@ fn writes_and_commands_are_refused_and_escouades_tools_for_the_docs_let_through(
         "MultiEdit",
         "NotebookEdit",
         "Bash",
+        // Claude Code's shell under Windows, what runs a command for its output, what makes a worktree.
+        "PowerShell",
+        "Monitor",
+        "EnterWorktree",
         "Permissions",
     ] {
         assert!(refused_tool(t) && !allowed_tool(t), "{t}");
     }
+    // The plugin of Claude Code has its own list, which the core does not link: the same one.
+    let plugin = include_str!("../../plugins/claude/src/client.rs");
+    let spelled: Vec<String> = crate::discussion::WRITES
+        .iter()
+        .map(|t| format!("\"{t}\","))
+        .collect();
+    assert!(
+        plugin.contains(&format!("[\n    {}\n]", spelled.join("\n    "))),
+        "plugins/claude/src/client.rs"
+    );
     // What reads, and what writes the docs (as proposals).
     for t in [
         "mcp__escouade__write_spec_page",

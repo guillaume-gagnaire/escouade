@@ -84,7 +84,177 @@
             },
             {
               "action": "ask",
+              "pattern": "git add -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -A *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -u *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add --all *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add --update *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add * -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *\t*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *\"-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *'-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add */-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add */\n*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *>*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *<*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *$*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *`*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *{*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *^*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *%*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
               "pattern": "git commit *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -m *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -am *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit * -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *\t*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *\"-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *'-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit */-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit */\n*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *>*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *<*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *$*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *`*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *{*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *^*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *%*",
               "permission": "bash"
             },
             {
@@ -94,8 +264,178 @@
             },
             {
               "action": "ask",
+              "pattern": ".git",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".git/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.git",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.git/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".opencode",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".opencode/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.opencode",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.opencode/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.json",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.json/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.json",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.json/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.jsonc",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.jsonc/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.jsonc",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.jsonc/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".husky",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".husky/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.husky",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.husky/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".githooks",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".githooks/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.githooks",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.githooks/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "git*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "git*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/git*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/git*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "openco*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "openco*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/openco*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/openco*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*:*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
               "pattern": "*",
               "permission": "webfetch"
+            },
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "websearch"
             },
             {
               "action": "ask",
@@ -1736,7 +2076,177 @@
             },
             {
               "action": "ask",
+              "pattern": "git add -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -A *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -u *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add --all *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add --update *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add * -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *\t*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *\"-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *'-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add */-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add */\n*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *>*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *<*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *$*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *`*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *{*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *^*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *%*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
               "pattern": "git commit *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -m *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -am *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit * -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *\t*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *\"-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *'-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit */-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit */\n*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *>*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *<*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *$*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *`*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *{*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *^*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *%*",
               "permission": "bash"
             },
             {
@@ -1746,8 +2256,178 @@
             },
             {
               "action": "ask",
+              "pattern": ".git",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".git/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.git",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.git/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".opencode",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".opencode/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.opencode",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.opencode/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.json",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.json/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.json",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.json/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.jsonc",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.jsonc/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.jsonc",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.jsonc/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".husky",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".husky/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.husky",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.husky/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".githooks",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".githooks/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.githooks",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.githooks/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "git*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "git*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/git*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/git*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "openco*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "openco*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/openco*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/openco*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*:*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
               "pattern": "*",
               "permission": "webfetch"
+            },
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "websearch"
             },
             {
               "action": "ask",
@@ -1775,7 +2455,177 @@
             },
             {
               "action": "ask",
+              "pattern": "git add -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -A *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -u *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add --all *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add --update *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add * -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *\t*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *\"-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *'-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add */-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add */\n*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *>*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *<*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *$*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *`*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *{*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *^*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *%*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
               "pattern": "git commit *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -m *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -am *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit * -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *\t*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *\"-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *'-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit */-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit */\n*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *>*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *<*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *$*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *`*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *{*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *^*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *%*",
               "permission": "bash"
             },
             {
@@ -1785,8 +2635,178 @@
             },
             {
               "action": "ask",
+              "pattern": ".git",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".git/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.git",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.git/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".opencode",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".opencode/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.opencode",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.opencode/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.json",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.json/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.json",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.json/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.jsonc",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.jsonc/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.jsonc",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.jsonc/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".husky",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".husky/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.husky",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.husky/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".githooks",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".githooks/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.githooks",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.githooks/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "git*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "git*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/git*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/git*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "openco*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "openco*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/openco*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/openco*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*:*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
               "pattern": "*",
               "permission": "webfetch"
+            },
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "websearch"
             },
             {
               "action": "ask",
@@ -2472,7 +3492,177 @@
             },
             {
               "action": "ask",
+              "pattern": "git add -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -A *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -u *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add --all *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add --update *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add * -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *\t*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *\"-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *'-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add */-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add */\n*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *>*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *<*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *$*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *`*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *{*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *^*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *%*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
               "pattern": "git commit *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -m *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -am *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit * -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *\t*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *\"-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *'-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit */-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit */\n*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *>*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *<*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *$*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *`*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *{*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *^*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *%*",
               "permission": "bash"
             },
             {
@@ -2482,8 +3672,178 @@
             },
             {
               "action": "ask",
+              "pattern": ".git",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".git/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.git",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.git/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".opencode",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".opencode/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.opencode",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.opencode/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.json",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.json/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.json",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.json/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.jsonc",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.jsonc/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.jsonc",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.jsonc/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".husky",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".husky/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.husky",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.husky/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".githooks",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".githooks/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.githooks",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.githooks/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "git*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "git*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/git*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/git*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "openco*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "openco*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/openco*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/openco*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*:*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
               "pattern": "*",
               "permission": "webfetch"
+            },
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "websearch"
             },
             {
               "action": "ask",
@@ -2588,7 +3948,177 @@
             },
             {
               "action": "ask",
+              "pattern": "git add -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -A *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add -u *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add --all *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add --update *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add * -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *\t*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *\"-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *'-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add */-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add */\n*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *>*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *<*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *$*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *`*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *{*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *^*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git add *%*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
               "pattern": "git commit *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -m *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit -am *",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit * -*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *\t*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *\"-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *'-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit */-*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit */\n*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *>*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *<*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *$*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *`*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *{*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *^*",
+              "permission": "bash"
+            },
+            {
+              "action": "ask",
+              "pattern": "git commit *%*",
               "permission": "bash"
             },
             {
@@ -2598,8 +4128,178 @@
             },
             {
               "action": "ask",
+              "pattern": ".git",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".git/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.git",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.git/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".opencode",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".opencode/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.opencode",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.opencode/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.json",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.json/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.json",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.json/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.jsonc",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "opencode.jsonc/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.jsonc",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/opencode.jsonc/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".husky",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".husky/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.husky",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.husky/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".githooks",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": ".githooks/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.githooks",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/.githooks/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "git*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "git*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/git*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/git*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "openco*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "openco*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/openco*~*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*/openco*~*/*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
+              "pattern": "*:*",
+              "permission": "edit"
+            },
+            {
+              "action": "ask",
               "pattern": "*",
               "permission": "webfetch"
+            },
+            {
+              "action": "ask",
+              "pattern": "*",
+              "permission": "websearch"
             },
             {
               "action": "ask",

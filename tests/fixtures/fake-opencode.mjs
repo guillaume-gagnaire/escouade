@@ -832,6 +832,8 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && p === '/session/status') {
     return json(Object.fromEntries([...turns.keys()].map((sid) => [sid, { type: 'busy' }])));
   }
+  // What OpenCode judges an edit against: the folder itself here, as a repository's root.
+  if (req.method === 'GET' && p === '/path') return json({ worktree: dir, directory: dir });
   if (req.method === 'POST' && p === '/session') return json(sessionInfo(newSession(dir, body || {})));
   if ((m = p.match(/^\/session\/([^/]+)$/))) {
     const s = sessionOf(dir, m[1]);

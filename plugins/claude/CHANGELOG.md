@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- A discussion is refused `PowerShell`, `Monitor` and `EnterWorktree` too, as it is `Bash`.
+
 ## 2.2.0
 
 - Its « Vue Claude Code » is read by the module (`view/translate`): the core no longer links this crate.

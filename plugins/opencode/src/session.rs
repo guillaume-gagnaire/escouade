@@ -84,7 +84,10 @@ impl Session {
             mode: a.mode.clone(),
             fence: a.fence.clone(),
             read_only: a.read_only,
+            worktree: None,
         };
+        let mut translator = Translator::new(&a.cwd, &a.model, a.session.clone(), &a.lang);
+        translator.set_fenced(!a.fence.is_empty());
         Arc::new(Session {
             agent: a.agent.clone(),
             server: Mutex::new(None),
@@ -96,12 +99,7 @@ impl Session {
                 settings,
                 ..State::default()
             }),
-            translator: Mutex::new(Translator::new(
-                &a.cwd,
-                &a.model,
-                a.session.clone(),
-                &a.lang,
-            )),
+            translator: Mutex::new(translator),
             host,
             heard: AtomicBool::new(false),
             closed: AtomicBool::new(false),
@@ -121,6 +119,7 @@ impl Session {
                 s.session = a.session.clone();
             }
         }
+        self.translator.lock().set_fenced(!a.fence.is_empty());
         *self.instructions.lock() = instructions(a);
         if let Some(server) = server {
             *self.server.lock() = Some(server);
@@ -306,19 +305,54 @@ impl Session {
         });
     }
 
-    /// The rules of its mode set on its session (OpenCode merges them, the last one of a
-    /// permission winning: each mode gives all of them).
-    fn set_rules(self: &Arc<Self>) {
-        let Ok(session) = self.session() else { return };
-        let rules = {
+    /// What OpenCode judges an edit against, which the rules of a fence are written from. Read before
+    /// its rules go, and kept: a plugin started again has to read it too. Refused when it can't be
+    /// read: a fence left without its `edit` rules would not hold.
+    async fn read_worktree(&self, srv: &Server) -> Result<()> {
+        {
             let s = self.state.lock();
-            session_rules(&s.settings)
-        };
-        self.fire(
+            if s.settings.fence.is_empty() || s.settings.worktree.is_some() {
+                return Ok(());
+            }
+        }
+        let path = srv.call("GET", "/path", &self.cwd, None).await?;
+        let worktree = path["worktree"]
+            .as_str()
+            .ok_or_else(|| anyhow!("OpenCode gave no worktree for {}", self.cwd))?;
+        self.state.lock().settings.worktree = Some(worktree.to_string());
+        Ok(())
+    }
+
+    /// The rules of its mode set on the session `id`, waited for (OpenCode adds them to those it has,
+    /// the last that matches winning: each mode gives all of them): until it answers, or if it
+    /// refuses, the session holds neither its fence nor its read-only.
+    async fn set_rules(&self, srv: &Server, id: &str) -> Result<()> {
+        self.read_worktree(srv).await?;
+        let rules = session_rules(&self.state.lock().settings);
+        srv.call(
             "PATCH",
-            format!("/session/{session}"),
+            &format!("/session/{id}"),
+            &self.cwd,
             Some(json!({ "permission": rules })),
-        );
+        )
+        .await
+        .map(|_| ())
+    }
+
+    /// `mode` for its next prompt, its rules on the session: refused, it stays in the mode it was.
+    async fn change_mode(&self, mode: &str) -> Result<()> {
+        let was = std::mem::replace(&mut self.state.lock().settings.mode, mode.to_string());
+        let Some(id) = self.state.lock().session.clone() else {
+            return Ok(());
+        };
+        let set = match self.srv() {
+            Ok(srv) => self.set_rules(&srv, &id).await,
+            Err(e) => Err(e),
+        };
+        if set.is_err() {
+            self.state.lock().settings.mode = was;
+        }
+        set
     }
 
     fn say_closed(&self) {
@@ -399,6 +433,7 @@ impl Session {
 
     /// Its session: a new one, the one it resumes, or a copy of its original's.
     async fn start(&self, srv: &Server, start: &StartAt) -> Result<(Value, &'static str)> {
+        self.read_worktree(srv).await?;
         let rules = {
             let s = self.state.lock();
             session_rules(&s.settings)
@@ -490,14 +525,26 @@ impl Session {
             .as_str()
             .ok_or_else(|| anyhow!("OpenCode gave no session"))?
             .to_string();
+        // A copy or a resumed session takes the rules of its mode (a copy has none), before
+        // anything can be sent to it: refused, no session, and a copy without rules goes.
+        if how != "new" {
+            if let Err(e) = self.set_rules(&srv, &id).await {
+                self.state.lock().session = None;
+                if how == "fork" {
+                    let gone = srv
+                        .call("DELETE", &format!("/session/{id}"), &self.cwd, None)
+                        .await;
+                    if let Err(e) = gone {
+                        eprintln!("opencode: the copy {id} stays: {e:#}");
+                    }
+                }
+                return Err(e);
+            }
+        }
         self.state.lock().session = Some(id.clone());
         srv.listen(&id, Arc::new(Hears(Arc::downgrade(self))));
         self.heard.store(true, Ordering::Release);
         self.give_escouade(&srv, open.escouade.as_ref()).await;
-        // A copy or a resumed session takes the rules of its mode (a copy has none).
-        if how != "new" {
-            self.set_rules();
-        }
         self.emit(json!({
             "type": "escouade.session",
             "properties": { "sessionID": id, "info": info, "start": how },
@@ -629,10 +676,10 @@ impl Session {
         self.state.lock().settings.effort = effort.to_string();
     }
 
-    /// Its agent at the next prompt; its rules at once.
-    pub(crate) fn set_mode(self: &Arc<Self>, mode: &str) {
-        self.state.lock().settings.mode = mode.to_string();
-        self.set_rules();
+    /// Its agent at the next prompt; its rules at once, or the change is refused: the screen must
+    /// not say a mode stricter than the one that holds.
+    pub(crate) async fn set_mode(&self, mode: &str) -> Result<()> {
+        self.change_mode(mode).await
     }
 
     pub(crate) fn answer_permission(self: &Arc<Self>, a: &AnswerPermission) -> Result<()> {
@@ -649,21 +696,38 @@ impl Session {
                     Some(a.resume.clone().unwrap_or_else(|| "default".into())),
                 )
             };
-            if let Some(mode) = mode {
-                self.state.lock().settings.mode = mode.clone();
-                self.set_rules();
-                let session = self.session().unwrap_or_default();
-                self.emit(json!({
+            let parts = vec![json!({ "type": "text", "text": text })];
+            let Some(mode) = mode else {
+                return self.prompt(parts);
+            };
+            // Its work starts once the rules of that mode hold, not before.
+            let me = self.clone();
+            self.host.spawn(async move {
+                let session = me.session().unwrap_or_default();
+                if let Err(e) = me.change_mode(&mode).await {
+                    eprintln!("opencode: {e:#}");
+                    me.emit(json!({
+                        "type": "escouade.prompt.failed",
+                        "properties": { "sessionID": session, "message": format!("{e:#}") },
+                    }));
+                    return;
+                }
+                me.emit(json!({
                     "type": "escouade.mode",
                     "properties": { "sessionID": session, "mode": mode },
                 }));
-            }
-            return self.prompt(vec![json!({ "type": "text", "text": text })]);
+                if let Err(e) = me.prompt(parts) {
+                    eprintln!("opencode: {e:#}");
+                }
+            });
+            return Ok(());
         }
+        // Under a fence, a pattern kept comes after its `deny`s and wins over them: never kept.
+        let fenced = !self.state.lock().settings.fence.is_empty();
         let body = if !a.allow {
             // Told the message, the agent goes on with it.
             json!({ "reply": "reject", "message": a.message })
-        } else if a.always {
+        } else if a.always && !fenced {
             // OpenCode keeps the pattern it proposed (`always`) for the rest of the session.
             json!({ "reply": "always" })
         } else {

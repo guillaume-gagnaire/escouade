@@ -7,7 +7,16 @@ use escouade_plugin_protocol::engine::StartAt;
 use serde_json::{json, Value};
 
 /// The tools a discussion of the Docs tab is refused: what writes and what runs a command (ESC-261).
-pub const WRITES: [&str; 5] = ["Edit", "Write", "MultiEdit", "NotebookEdit", "Bash"];
+pub const WRITES: [&str; 8] = [
+    "Edit",
+    "Write",
+    "MultiEdit",
+    "NotebookEdit",
+    "Bash",
+    "PowerShell",
+    "Monitor",
+    "EnterWorktree",
+];
 
 /// The arguments of a stream of its.
 pub const BASE_ARGS: &[&str] = &[

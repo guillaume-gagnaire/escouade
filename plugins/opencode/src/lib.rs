@@ -275,11 +275,6 @@ impl Plugin {
                     self.agent(&v.agent)?.set_effort(&v.value);
                     no_writes()
                 }
-                method::SET_MODE => {
-                    let v: SetValue = read(params.clone())?;
-                    self.agent(&v.agent)?.set_mode(&v.value);
-                    no_writes()
-                }
                 method::ANSWER_PERMISSION => {
                     let a: AnswerPermission = read(params.clone())?;
                     self.agent(&a.agent)?
@@ -315,6 +310,7 @@ impl Plugin {
         let reply = match m {
             method::OPEN
             | method::INTERRUPT
+            | method::SET_MODE
             | method::LET_GO
             | method::RENAME
             | method::CONTROL => reply.clone(),
@@ -339,6 +335,14 @@ impl Plugin {
                 let a: Interrupt = read(params)?;
                 self.agent(&a.agent)?
                     .interrupt(a.cancel_queued)
+                    .await
+                    .map_err(failed)?;
+                no_writes()
+            }
+            method::SET_MODE => {
+                let v: SetValue = read(params)?;
+                self.agent(&v.agent)?
+                    .set_mode(&v.value)
                     .await
                     .map_err(failed)?;
                 no_writes()

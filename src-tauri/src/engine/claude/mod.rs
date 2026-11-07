@@ -1251,7 +1251,8 @@ mod tests {
 
     #[test]
     fn a_discussion_has_its_tools_that_write_taken_away_in_every_mode() {
-        let refused = "--disallowedTools=Edit,Write,MultiEdit,NotebookEdit,Bash".to_string();
+        let refused =
+            "--disallowedTools=Edit,Write,MultiEdit,NotebookEdit,Bash,PowerShell,Monitor,EnterWorktree".to_string();
         for mode in ["default", "plan", "acceptEdits", "bypassPermissions"] {
             let m = AgentMeta {
                 mode: mode.into(),

@@ -26,6 +26,9 @@ pub struct Settings {
     /// A discussion of the Docs tab (ESC-261): its edits and commands refused, whatever its mode
     /// (`session_rules`).
     pub read_only: bool,
+    /// What OpenCode judges an edit against (`/` out of a repository), read from the server under
+    /// a fence: `relative`.
+    pub worktree: Option<String>,
 }
 
 /// The provider and the model of `<provider>/<model>` (a model's id may hold more slashes).
@@ -45,9 +48,10 @@ pub fn agent_of(mode: &str) -> &'static str {
 
 /// The rules of a session in Escouade's mode (OpenCode has no sandbox: only they protect), as
 /// Codex's modes are: the files of the agent's folder changed without a question, a command asked,
-/// `git add` and `git commit` accepted at once in « Accepter les modifications ». The last rule that
-/// matches wins, and a session merges them: each mode gives all of them.
-pub fn rules(mode: &str, fence: &[String]) -> Value {
+/// `git add` and `git commit` accepted at once in « Accepter les modifications » as long as they are
+/// plain (`git_rules`), and what git or OpenCode run stays on a card (`KEPT`). The last rule that
+/// matches wins, and a session adds them to those it has: each mode gives all of them.
+pub fn rules(mode: &str, fence: &[String], worktree: Option<&str>) -> Value {
     let (bash, git, edit, web, outside) = match mode {
         "bypassPermissions" => ("allow", "allow", "allow", "allow", "allow"),
         "acceptEdits" => ("ask", "allow", "allow", "ask", "ask"),
@@ -55,24 +59,101 @@ pub fn rules(mode: &str, fence: &[String]) -> Value {
         "plan" => ("ask", "ask", "ask", "ask", "ask"),
         _ => ("ask", "ask", "allow", "ask", "ask"),
     };
-    let rule = |p: &str, pattern: &str, a: &str| json!({ "permission": p, "pattern": pattern, "action": a });
-    let mut all = vec![
-        rule("bash", "*", bash),
-        rule("bash", "git add *", git),
-        rule("bash", "git commit *", git),
-        rule("edit", "*", edit),
-        rule("webfetch", "*", web),
-        rule("external_directory", "*", outside),
-    ];
-    all.extend(fence_rules(fence));
+    // Only « Sans permissions » lets them go.
+    let guard = if mode == "bypassPermissions" {
+        "allow"
+    } else {
+        "ask"
+    };
+    let mut all = vec![rule("bash", "*", bash)];
+    all.extend(git_rules(git, guard));
+    all.push(rule("edit", "*", edit));
+    all.extend(kept_paths().map(|p| rule("edit", &p, guard)));
+    all.push(rule("webfetch", "*", web));
+    all.push(rule("websearch", "*", web));
+    all.push(rule("external_directory", "*", outside));
+    all.extend(fence_rules(fence, worktree));
     Value::Array(all)
+}
+
+fn rule(permission: &str, pattern: &str, action: &str) -> Value {
+    json!({ "permission": permission, "pattern": pattern, "action": action })
+}
+
+/// The options that leave `git add` or `git commit` plain, when they come first.
+const PLAIN: [(&str, &[&str]); 2] = [
+    ("git add", &["-A", "-u", "--all", "--update"]),
+    ("git commit", &["-m", "-am"]),
+];
+
+/// What makes such a command more than it says, read on its text. OpenCode's own reading of it sees
+/// `;`, `|`, `&`, a new line, `$()` and `workdir`, not this: an option after the first (`-F`,
+/// `--file`, `--template`, `--pathspec-from-file` read any file, glued in `-avF`, shortened to
+/// `--fil`), an option written so that no pattern reads it (quoted, escaped: OpenCode's matcher takes
+/// `\` for `/`, and its `*` covers new lines), a redirection, and what a shell would expand into an
+/// option (`X=-F; git commit $X` shows no `-F`), in bash, PowerShell or cmd, whichever it runs.
+const GUARDED: [&str; 13] = [
+    "* -*", "*\t*", "*\"-*", "*'-*", "*/-*", "*/\n*", "*>*", "*<*", "*$*", "*`*", "*{*", "*^*",
+    "*%*",
+];
+
+/// `git add` and `git commit`: `git` when plain, `guard` for any other form, an option not in `PLAIN`
+/// or anything of `GUARDED`. The plain forms are listed, not the dangerous ones: the matcher cannot
+/// say « a word that ends in F », and ignores case, so a rule for `-avF` would also take every
+/// `-m "fix`.
+fn git_rules(git: &str, guard: &str) -> Vec<Value> {
+    let mut out = Vec::new();
+    for (command, plain) in PLAIN {
+        out.push(rule("bash", &format!("{command} *"), git));
+        out.push(rule("bash", &format!("{command} -*"), guard));
+        for option in plain {
+            out.push(rule("bash", &format!("{command} {option} *"), git));
+        }
+        for tail in GUARDED {
+            out.push(rule("bash", &format!("{command} {tail}"), guard));
+        }
+    }
+    out
+}
+
+/// What git or OpenCode run or take as rules, whatever the file is called on (ESC-364): a hook or a
+/// `.git/config` at the next `git commit`, a file of `.opencode` (a plugin, a tool, an agent) or an
+/// `opencode.json` (`plugin`, `mcp`, `permission`) at the next start of the folder's instance.
+/// `.husky` and `.githooks` are where `core.hooksPath` points by habit. The last two are the short
+/// names of Windows, which reach `.git` and `.opencode` as well (`GIT~1/hooks/x`, tried).
+const KEPT: [&str; 8] = [
+    ".git",
+    ".opencode",
+    "opencode.json",
+    "opencode.jsonc",
+    ".husky",
+    ".githooks",
+    "git*~*",
+    "openco*~*",
+];
+
+/// `KEPT` as a file or a folder, at the root or below it (out of a repository OpenCode judges from
+/// `/`: all is below), and any `:`, which no relative path has but a stream of Windows
+/// (`.git::$INDEX_ALLOCATION/hooks/x` reaches `.git`, tried; `.git./` and `.git /` do not, OpenCode
+/// makes such a folder as it is spelled).
+fn kept_paths() -> impl Iterator<Item = String> {
+    KEPT.iter()
+        .flat_map(|p| {
+            [
+                p.to_string(),
+                format!("{p}/*"),
+                format!("*/{p}"),
+                format!("*/{p}/*"),
+            ]
+        })
+        .chain(["*:*".to_string()])
 }
 
 /// The rules of the session of an agent of `s`: its mode's, its fence's, and for a discussion
 /// (ESC-261) every edit and command refused, last so that they win whatever came before. Refused by
 /// OpenCode itself, never a card: Escouade's tools (an MCP server's) stay as they were.
 pub fn session_rules(s: &Settings) -> Value {
-    let mut all = rules(&s.mode, &s.fence);
+    let mut all = rules(&s.mode, &s.fence, s.worktree.as_deref());
     if s.read_only {
         if let Value::Array(a) = &mut all {
             for p in ["edit", "bash"] {
@@ -88,10 +169,19 @@ pub fn session_rules(s: &Settings) -> Value {
 /// agent's folder), and to a command that names it (`bash`, a guard: a command can reach it
 /// without naming it). After the mode's rules: the last that matches wins, whatever the mode. Under
 /// Windows, in both spellings (`\` and `/`): `*` of OpenCode's patterns is any character.
-pub fn fence_rules(fence: &[String]) -> Vec<Value> {
+///
+/// OpenCode judges `read` and `list` by the absolute path, `edit` by the path from `worktree`: for a
+/// fence inside it, which `external_directory` does not stop, `edit` is held in that spelling
+/// (`relative`). `git add` and `git commit` read a file of their own, which no rule of a path sees:
+/// `git commit -F ../prive/x` is refused, in « Sans permissions » as in the others.
+pub fn fence_rules(fence: &[String], worktree: Option<&str>) -> Vec<Value> {
     let rule =
         |p: &str, pattern: String| json!({ "permission": p, "pattern": pattern, "action": "deny" });
     let mut out = Vec::new();
+    if !fence.is_empty() {
+        let forms = READS_A_FILE.iter().chain(&ADD_READS_A_FILE);
+        out.extend(forms.map(|form| rule("bash", form.to_string())));
+    }
     for path in fence {
         let mut spellings = vec![path.clone()];
         if path.contains('\\') {
@@ -105,8 +195,77 @@ pub fn fence_rules(fence: &[String]) -> Vec<Value> {
             }
             out.push(rule("bash", format!("*{p}*")));
         }
+        if let Some(rel) = worktree.and_then(|w| relative(w, path)) {
+            out.push(rule("edit", rel.clone()));
+            out.push(rule("edit", format!("{rel}/*")));
+            // A word alone (`secret`) would refuse every message that says it.
+            let named = if rel.contains('/') {
+                format!("*{rel}*")
+            } else {
+                format!("*{rel}/*")
+            };
+            out.push(rule("bash", named));
+        }
     }
     out
+}
+
+/// How `git add` and `git commit` read a file: `-F` and `-t`, alone or after one flag, `--file`,
+/// `--template`, `--pathspec-from-file`, shortened as git allows them, first or further. A rule for
+/// longer clusters would refuse every `-m "fix`; the fence's own rules still see the path they name.
+const READS_A_FILE: [&str; 14] = [
+    "git commit -F*",
+    "git commit * -F*",
+    "git commit -?F*",
+    "git commit * -?F*",
+    "git commit --fil*",
+    "git commit * --fil*",
+    "git commit -t*",
+    "git commit * -t*",
+    "git commit -?t*",
+    "git commit * -?t*",
+    "git commit --te*",
+    "git commit * --te*",
+    "git commit --path*",
+    "git commit * --path*",
+];
+
+/// `git add` reads a file by one option: its `-f` is another thing.
+const ADD_READS_A_FILE: [&str; 2] = ["git add --path*", "git add * --path*"];
+
+/// `to` as Node's `path.relative(from, to)` spells it, which is how OpenCode names an edit, in `/`
+/// (its matcher takes `\` for `/`). `from` may be `/`, the worktree of a folder out of any repository.
+/// None on another drive of Windows: Node then gives the absolute path, which the rules already say.
+/// By hand: a module's `Path` says WASI, even under Windows.
+pub fn relative(from: &str, to: &str) -> Option<String> {
+    fn split(path: &str) -> (Option<char>, Vec<String>) {
+        let path = path.replace('\\', "/");
+        let drive = match path.as_bytes() {
+            [d, b':', ..] if d.is_ascii_alphabetic() => Some(d.to_ascii_lowercase() as char),
+            _ => None,
+        };
+        let rest = if drive.is_some() { &path[2..] } else { &path };
+        let parts = rest
+            .split('/')
+            .filter(|part| !part.is_empty() && *part != ".")
+            .map(str::to_string)
+            .collect();
+        (drive, parts)
+    }
+    let (from_drive, from) = split(from);
+    let (to_drive, to) = split(to);
+    if from_drive.is_some() && from_drive != to_drive {
+        return None;
+    }
+    let windows = to_drive.is_some();
+    let common = from
+        .iter()
+        .zip(&to)
+        .take_while(|(a, b)| a == b || (windows && a.eq_ignore_ascii_case(b)))
+        .count();
+    let mut out = vec!["..".to_string(); from.len() - common];
+    out.extend_from_slice(&to[common..]);
+    (!out.is_empty()).then(|| out.join("/"))
 }
 
 /// The id of the card of a plan to approve, its turn over on it (`translate`).
@@ -298,6 +457,9 @@ pub fn listed(text: &str) -> Catalog {
 /// and the model of the agent that starts it, which OpenCode would otherwise pick itself (OpenCode
 /// Zen without an account, tried).
 pub fn config_content(model: &str) -> Value {
+    let mut edit = serde_json::Map::new();
+    edit.insert("*".to_string(), json!("allow"));
+    edit.extend(kept_paths().map(|p| (p, json!("ask"))));
     let mut c = json!({
         "autoupdate": false,
         "share": "disabled",
@@ -307,8 +469,9 @@ pub fn config_content(model: &str) -> Value {
         // question by default. Each agent's session has its mode's on top (`rules`).
         "permission": {
             "bash": { "*": "ask", "git add *": "ask", "git commit *": "ask" },
-            "edit": "allow",
+            "edit": edit,
             "webfetch": "ask",
+            "websearch": "ask",
             "external_directory": "ask",
         },
     });
@@ -356,41 +519,155 @@ pub fn no_model(lang: &str) -> String {
 mod tests {
     use super::*;
 
-    #[test]
-    fn a_fenced_session_is_refused_each_path_whatever_its_mode() {
-        // As OpenCode reads them: the last rule whose permission and pattern match, `*` any
-        // character.
-        fn matches(pattern: &str, what: &str) -> bool {
-            let parts: Vec<&str> = pattern.split('*').collect();
-            let mut rest = what;
-            for (i, part) in parts.iter().enumerate() {
-                if i == 0 {
-                    let Some(r) = rest.strip_prefix(part) else {
-                        return false;
-                    };
-                    rest = r;
-                } else if i == parts.len() - 1 {
-                    return rest.ends_with(part);
-                } else {
-                    let Some(at) = rest.find(part) else {
-                        return false;
-                    };
-                    rest = &rest[at + part.len()..];
-                }
+    /// `Wildcard.match` of OpenCode 1.19.3: any case, `\` read as `/`, `*` any character, new lines
+    /// too, `?` one, and a last ` *` optional (`git add *` takes `git add`). The cases of
+    /// `rules_verdicts.json` are played on the real one by `scripts/opencode-real-rules.mjs`.
+    fn opencode_matches(pattern: &str, what: &str) -> bool {
+        fn glob(p: &[char], w: &[char]) -> bool {
+            match p.first() {
+                None => w.is_empty(),
+                Some('*') => (0..=w.len()).any(|i| glob(&p[1..], &w[i..])),
+                Some('?') => !w.is_empty() && glob(&p[1..], &w[1..]),
+                Some(c) => w.first() == Some(c) && glob(&p[1..], &w[1..]),
             }
-            rest.is_empty()
         }
-        let fence = vec!["C:/code/secret".to_string()];
-        let action = |mode: &str, p: &str, what: &str| {
-            rules(mode, &fence)
+        let read = |s: &str| -> Vec<char> { s.replace('\\', "/").to_lowercase().chars().collect() };
+        let pattern = read(pattern);
+        let what = read(what);
+        if let [head @ .., ' ', '*'] = pattern.as_slice() {
+            if glob(head, &what) {
+                return true;
+            }
+        }
+        glob(&pattern, &what)
+    }
+
+    /// The action of the last rule that matches, as OpenCode takes it.
+    fn decides(rules: &Value, permission: &str, what: &str) -> String {
+        rules
+            .as_array()
+            .unwrap()
+            .iter()
+            .rev()
+            .find(|r| {
+                r["permission"] == permission
+                    && opencode_matches(r["pattern"].as_str().unwrap(), what)
+            })
+            .map(|r| r["action"].as_str().unwrap().to_string())
+            .unwrap_or_else(|| panic!("no rule of {permission} for {what}"))
+    }
+
+    fn verdicts() -> Value {
+        serde_json::from_str(include_str!("rules_verdicts.json")).unwrap()
+    }
+
+    /// The rules of a case, its folder `wt` and the one above it `up`.
+    fn case_rules(mode: &str, fenced: bool, wt: &str, up: &str) -> Value {
+        let fence: Vec<String> = if fenced {
+            verdicts()["fence"]
                 .as_array()
                 .unwrap()
                 .iter()
-                .rev()
-                .find(|r| r["permission"] == p && matches(r["pattern"].as_str().unwrap(), what))
-                .map(|r| r["action"].as_str().unwrap().to_string())
-                .unwrap()
+                .map(|p| p.as_str().unwrap().replace("{wt}", wt).replace("{up}", up))
+                .collect()
+        } else {
+            Vec::new()
         };
+        session_rules(&Settings {
+            mode: mode.into(),
+            fence,
+            worktree: Some(wt.to_string()),
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn the_rules_of_each_mode_do_what_the_real_opencode_was_seen_to_do() {
+        for case in verdicts()["cases"].as_array().unwrap() {
+            let rules = case_rules(
+                case["mode"].as_str().unwrap(),
+                case["fenced"] == true,
+                "C:/code/proj",
+                "C:/code",
+            );
+            let (permission, what) = match case["edit"].as_str() {
+                Some(path) => ("edit", path),
+                None => (
+                    "bash",
+                    case["seen"].as_str().or(case["bash"].as_str()).unwrap(),
+                ),
+            };
+            assert_eq!(
+                decides(&rules, permission, what),
+                case["want"].as_str().unwrap(),
+                "{case}"
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "writes what scripts/opencode-real-rules.mjs plays on the real OpenCode"]
+    fn dump_the_rules_for_the_real_opencode() {
+        let path = std::env::var("ESCOUADE_RULES_OUT").unwrap();
+        let wt = std::env::var("ESCOUADE_RULES_WT").unwrap();
+        let up = std::env::var("ESCOUADE_RULES_UP").unwrap();
+        let mut out = serde_json::Map::new();
+        for mode in ["default", "acceptEdits", "plan", "bypassPermissions"] {
+            out.insert(mode.into(), case_rules(mode, false, &wt, &up));
+            out.insert(format!("{mode}+fence"), case_rules(mode, true, &wt, &up));
+        }
+        out.insert("config".into(), config_content("fake/m"));
+        std::fs::write(path, Value::Object(out).to_string()).unwrap();
+    }
+
+    #[test]
+    fn a_path_is_spelled_from_the_worktree_as_node_does() {
+        let r = |from, to| relative(from, to);
+        assert_eq!(
+            r("C:/code/proj", "C:/code/proj/secret").as_deref(),
+            Some("secret")
+        );
+        assert_eq!(
+            r(r"C:\code\proj", r"C:\code\prive\x").as_deref(),
+            Some("../prive/x")
+        );
+        // Windows ignores case, a drive above all; a system of `/` does not.
+        assert_eq!(
+            r(r"c:\Code\proj", r"C:\code\prive").as_deref(),
+            Some("../prive")
+        );
+        assert_eq!(
+            r("/code/Proj", "/code/proj/x").as_deref(),
+            Some("../proj/x")
+        );
+        // Out of a repository OpenCode says `/`, and the path is from the root of its drive.
+        assert_eq!(r("/", r"C:\tmp\plain\a").as_deref(), Some("tmp/plain/a"));
+        assert_eq!(r("/", "/tmp/plain").as_deref(), Some("tmp/plain"));
+        // Another drive: Node gives the absolute path, already in the rules.
+        assert_eq!(r("C:/code", "D:/code"), None);
+        assert_eq!(r("C:/code", "C:/code"), None);
+    }
+
+    #[test]
+    fn a_fence_inside_the_worktree_is_refused_to_edits_as_opencode_names_them() {
+        let fence = vec![r"C:\code\proj\secret".to_string()];
+        let all = Value::Array(fence_rules(&fence, Some(r"C:\code\proj")));
+        assert_eq!(decides(&all, "edit", r"secret\a.txt"), "deny");
+        assert_eq!(decides(&all, "edit", "secret"), "deny");
+        // Without it the rules say the absolute path alone, which OpenCode never asks of `edit`.
+        let absolute = Value::Array(fence_rules(&fence, None));
+        assert!(absolute
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|r| r["permission"] == "edit")
+            .all(|r| !opencode_matches(r["pattern"].as_str().unwrap(), "secret/a.txt")));
+    }
+
+    #[test]
+    fn a_fenced_session_is_refused_each_path_whatever_its_mode() {
+        let fence = vec!["C:/code/secret".to_string()];
+        let action = |mode: &str, p: &str, what: &str| decides(&rules(mode, &fence, None), p, what);
         for mode in ["default", "acceptEdits", "plan", "bypassPermissions"] {
             for p in ["read", "edit", "list", "external_directory"] {
                 assert_eq!(action(mode, p, "C:/code/secret"), "deny", "{mode} {p}");
@@ -413,7 +690,7 @@ mod tests {
         );
         assert_eq!(action("default", "bash", "ls"), "ask");
         // A path of Windows in both spellings.
-        let both = fence_rules(&[r"C:\code\secret".to_string()]);
+        let both = fence_rules(&[r"C:\code\secret".to_string()], None);
         let patterns: Vec<&str> = both
             .iter()
             .filter(|r| r["permission"] == "read")
@@ -455,7 +732,12 @@ mod tests {
             // Reads, the web and the paths outside go as the mode says.
             assert_eq!(
                 last(&s, "webfetch"),
-                rules(mode, &[])[4]["action"],
+                rules(mode, &[], None)
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|r| r["permission"] == "webfetch")
+                    .unwrap()["action"],
                 "{mode}"
             );
         }
@@ -464,32 +746,19 @@ mod tests {
             mode: "default".into(),
             ..Default::default()
         };
-        assert_eq!(session_rules(&s), rules("default", &[]));
-        assert_eq!(last(&s, "edit"), "allow");
+        assert_eq!(session_rules(&s), rules("default", &[], None));
+        assert_eq!(decides(&session_rules(&s), "edit", "a.py"), "allow");
     }
 
     #[test]
     fn each_mode_of_escouade_has_its_rules_and_agent_in_opencode() {
-        // As OpenCode reads them: the last rule whose permission and pattern match.
-        let action = |mode: &str, p: &str, what: &str| {
-            rules(mode, &[])
-                .as_array()
-                .unwrap()
-                .iter()
-                .rev()
-                .find(|r| {
-                    let pattern = r["pattern"].as_str().unwrap();
-                    r["permission"] == p
-                        && (pattern == "*" || what.starts_with(pattern.trim_end_matches('*')))
-                })
-                .map(|r| r["action"].as_str().unwrap().to_string())
-                .unwrap()
-        };
+        let action = |mode: &str, p: &str, what: &str| decides(&rules(mode, &[], None), p, what);
         for (p, what) in [
             ("bash", "ls"),
             ("bash", "git add a"),
             ("edit", "a.py"),
             ("webfetch", "https://x"),
+            ("websearch", "rust"),
             ("external_directory", "/x"),
         ] {
             assert_eq!(action("bypassPermissions", p, what), "allow", "{p}");
@@ -501,6 +770,8 @@ mod tests {
         assert_eq!(action("acceptEdits", "bash", "git commit -m x"), "allow");
         assert_eq!(action("acceptEdits", "bash", "rm -rf build"), "ask");
         assert_eq!(action("default", "external_directory", "/x"), "ask");
+        assert_eq!(action("default", "websearch", "rust"), "ask");
+        assert_eq!(action("acceptEdits", "websearch", "rust"), "ask");
         assert_eq!(agent_of("plan"), "plan");
         assert_eq!(agent_of("acceptEdits"), "build");
     }
@@ -543,9 +814,22 @@ mod tests {
         assert_eq!(c["model"], "ollama/qwen3-coder:30b-32k");
         assert_eq!(c["small_model"], c["model"]);
         assert_eq!(c["mcp"]["escouade"]["enabled"], false);
-        // A subagent asks for its commands too.
+        // A subagent asks for its commands too, and takes `edit` of the config alone: `.git` stays
+        // on a card there as well.
         assert_eq!(c["permission"]["bash"]["*"], "ask");
         assert_eq!(c["permission"]["external_directory"], "ask");
+        assert_eq!(c["permission"]["websearch"], "ask");
+        let edit: Vec<Value> = c["permission"]["edit"]
+            .as_object()
+            .unwrap()
+            .iter()
+            .map(|(pattern, action)| rule("edit", pattern, action.as_str().unwrap()))
+            .collect();
+        let edit = Value::Array(edit);
+        assert_eq!(decides(&edit, "edit", "src/a.rs"), "allow");
+        assert_eq!(decides(&edit, "edit", ".git/hooks/pre-commit"), "ask");
+        assert_eq!(decides(&edit, "edit", ".opencode/plugin/x.ts"), "ask");
+        assert_eq!(decides(&edit, "edit", "sub/opencode.json"), "ask");
         assert!(config_content("sonnet").get("model").is_none());
         assert_eq!(split_model("openrouter/a/b"), Some(("openrouter", "a/b")));
         assert_eq!(split_model("sonnet"), None);

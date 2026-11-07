@@ -1,8 +1,8 @@
 ---
 title: "OpenCode en plugin"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §4 (INT-10.2)","docs/PLUGINS.md §8.23 (ESC-349)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-223","Ticket ESC-349"]
-tickets: ["ESC-223","ESC-349","ESC-352"]
+sources: ["docs/PLUGINS.md §4 (INT-10.2)","docs/PLUGINS.md §8.23 (ESC-349)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-223","Ticket ESC-349","Ticket ESC-364","plugins/opencode/src/rules_verdicts.json"]
+tickets: ["ESC-223","ESC-349","ESC-352","ESC-364"]
 decisions: [93]
 compared: null
 ---
@@ -40,3 +40,21 @@ OpenCode est le premier harness sorti du cœur qui n'est pas un flux de lignes :
 - **Coupé pour l'app ou pas chargé** : un agent qui tournait s'arrête en le disant ; au message suivant, un agent d'OpenCode dit « Le plugin OpenCode (dev.escouade.opencode) est coupé ou n'est pas chargé : rallume-le dans la vue Plugins… » et garde sa session. Rallumé, il reprend.
 - **Il plante** : le serveur continue, le plugin redémarre, la conversation dit « Le plugin de OpenCode a redémarré. », la session est réécoutée et le tour continue. Un tour fini pendant ce temps est fermé d'après le serveur.
 - **Après son dernier plantage permis** : ses agents s'arrêtent en disant pourquoi, leurs sessions gardées pour le message suivant, une fois le plugin relancé.
+
+## Ce qui reste à la carte (ESC-364)
+
+OpenCode n'a pas de bac à sable : ses règles sont sa seule protection, et elles ne lisent que du texte. Sauf en « Sans permissions » :
+
+- **`git add` et `git commit` ne passent d'office en « Accepter les modifications » que sous leur forme simple** : `git add <chemins>`, `git add -A`, `-u`, `--all`, `--update`, `git commit -m <message>`, `git commit -am <message>`, et rien d'autre derrière. Une seconde option (`-F`, `--amend`, `--no-verify`…), une redirection, une option entre guillemets ou échappée, ou ce qu'un shell développerait (`$`, `` ` ``, `{`, `%`, `^`) vont à la carte. Un message qui contient ` -`, `>`, `<`, `$` ou `%` va donc à la carte lui aussi : c'est le prix d'un motif qui ne sait dire que `*` et `?` et ignore la casse.
+- **Une écriture dans `.git`, `.opencode`, `opencode.json`, `opencode.jsonc`, `.husky` ou `.githooks`**, à toute profondeur, sous les noms courts et les flux de Windows, va à la carte, en « Demander » aussi, et pour un sous-agent (config du serveur). Un hook tourne au prochain `git commit`, un plugin de `.opencode/plugin` au prochain démarrage de l'instance du dossier, un `opencode.json` donne leurs règles aux sous-agents et peut déclarer des plugins et des serveurs MCP. `AGENTS.md`, `.gitignore`, `.github` restent libres.
+- **`websearch`** demande comme `webfetch`.
+
+Un dépôt dont `core.hooksPath` pointe ailleurs que dans `.husky` ou `.githooks` échappe à ces motifs : son dossier de hooks s'écrit sans carte.
+
+## Les règles sont posées avant l'ouverture
+
+Une session neuve les reçoit à sa création. Une reprise et une copie (qui n'en a aucune) les reçoivent par un `PATCH` attendu avant tout le reste : s'il échoue, la session n'ouvre pas, l'agent le dit, et une copie sans règles est supprimée. Un changement de mode attend aussi ce `PATCH` : refusé, le mode reste celui d'avant. Un plan approuvé ne part qu'une fois les règles de son mode en place.
+
+## Le mot de passe du serveur
+
+Il tient à l'écart les autres utilisateurs de la machine et les pages d'un navigateur, pas les agents : OpenCode donne tout son environnement à ses commandes, donc une commande lit `OPENCODE_SERVER_PASSWORD`, et peut changer ses règles, répondre à ses cartes et atteindre les sessions des autres agents du serveur. Seul un plugin en fichier d'OpenCode peut masquer la variable, ce qu'un module ne peut pas écrire.

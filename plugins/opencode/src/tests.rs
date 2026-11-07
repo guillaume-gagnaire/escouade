@@ -332,6 +332,254 @@ fn a_prompt_refused_ends_its_turn_with_what_the_server_said() {
     );
 }
 
+/// The agent attached with `more` to what `attach` gives, its stream read.
+fn attached_with(more: Value) -> Fake {
+    let mut f = Fake::default();
+    let mut params = json!({
+        "agent": "a1",
+        "cwd": r"C:\wt",
+        "model": "ollama/qwen",
+        "mode": "default",
+        "lang": "fr",
+        "shared": {
+            "key": "k",
+            "line": format!("opencode server listening on {BASE}"),
+            "keep": { "password": "pw" },
+        },
+    });
+    params
+        .as_object_mut()
+        .unwrap()
+        .extend(more.as_object().unwrap().clone());
+    let out = f.call(method::ATTACH, params);
+    f.answer(find(&out, "net/stream"), stream_opened(1, 200));
+    f
+}
+
+fn fenced(fence: Value) -> Fake {
+    attached_with(json!({ "fence": fence }))
+}
+
+fn message() -> Value {
+    json!({ "agent": "a1", "uuid": "u1", "text": "bonjour" })
+}
+
+/// Answers each request of `out` until the session is said opened, by `answer`; what the server was asked, in its
+/// order.
+fn until_open(f: &Fake, mut out: Vec<Value>) -> Vec<(String, String)> {
+    let mut asked = Vec::new();
+    for _ in 0..12 {
+        let Some(request) = find_all(&out, "net/fetch").first().copied().cloned() else {
+            break;
+        };
+        let (method, path) = fetched(std::slice::from_ref(&request));
+        asked.push((method, path.clone()));
+        let body = match path.as_str() {
+            "/path" => json!({ "worktree": "C:/wt" }),
+            "/session/ses_copy" | "/session" | "/session/old" => json!({ "id": "ses_copy" }),
+            "/config/providers" => json!({ "providers": [], "default": {} }),
+            _ => json!({}),
+        };
+        out = f.answer(&request, fetch(200, body));
+    }
+    asked
+}
+
+#[test]
+fn a_copy_takes_its_rules_before_it_opens_and_is_refused_with_them() {
+    let copy = json!({ "agent": "a1", "start": { "kind": "fork", "of": "old" } });
+    // Refused: no session, the copy without rules goes, and nothing can be sent to it.
+    let mut f = Fake::default();
+    f.attached(1);
+    let out = f.call(method::OPEN, copy.clone());
+    let out = f.answer(&out[0], fetch(200, json!([])));
+    assert_eq!(fetched(&out), ("POST".into(), "/session/old/fork".into()));
+    let out = f.answer(&out[0], fetch(200, json!({ "id": "ses_copy" })));
+    assert_eq!(fetched(&out), ("PATCH".into(), "/session/ses_copy".into()));
+    let out = f.answer(&out[0], fetch(500, json!({ "message": "broken" })));
+    assert_eq!(fetched(&out), ("DELETE".into(), "/session/ses_copy".into()));
+    let out = f.answer(&out[0], fetch(200, json!(true)));
+    let refused = out[0]["error"]["message"].as_str().unwrap();
+    assert!(refused.contains("PATCH /session/ses_copy"), "{refused}");
+    let sent = f.call(method::SEND_MESSAGE, message());
+    assert!(sent[0]["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("no session"));
+    assert!(find_all(&sent, "net/fetch").is_empty());
+
+    // Taken: its rules come before anything else of it.
+    let mut f = Fake::default();
+    f.attached(1);
+    let out = f.call(method::OPEN, copy);
+    let out = f.answer(&out[0], fetch(200, json!([])));
+    let out = f.answer(&out[0], fetch(200, json!({ "id": "ses_copy" })));
+    assert_eq!(fetched(&out), ("PATCH".into(), "/session/ses_copy".into()));
+    let body: Value = serde_json::from_str(out[0]["params"]["body"].as_str().unwrap()).unwrap();
+    assert_eq!(body["permission"][0]["action"], "ask");
+    let out = f.answer(&out[0], fetch(200, json!({ "id": "ses_copy" })));
+    assert_eq!(fetched(&out), ("GET".into(), "/mcp".into()));
+}
+
+#[test]
+fn a_resumed_session_refused_its_rules_does_not_open_and_keeps_no_session() {
+    let mut f = attached_with(json!({ "session": "old", "readOnly": true }));
+    let out = f.call(
+        method::OPEN,
+        json!({ "agent": "a1", "start": { "kind": "resume", "session": "old" } }),
+    );
+    assert_eq!(fetched(&out), ("GET".into(), "/session/old".into()));
+    let out = f.answer(&out[0], fetch(200, json!({ "id": "old" })));
+    assert_eq!(fetched(&out), ("PATCH".into(), "/session/old".into()));
+    let body: Value = serde_json::from_str(out[0]["params"]["body"].as_str().unwrap()).unwrap();
+    let rules = body["permission"].as_array().unwrap();
+    assert_eq!(rules[rules.len() - 1]["action"], "deny");
+    let out = f.answer(&out[0], fetch(500, json!({ "message": "broken" })));
+    assert!(out[0]["error"]["message"].as_str().is_some(), "{out:?}");
+    let sent = f.call(method::SEND_MESSAGE, message());
+    assert!(sent[0]["error"]["message"].as_str().is_some(), "{sent:?}");
+}
+
+#[test]
+fn a_fenced_session_reads_its_worktree_before_its_rules_or_is_refused() {
+    let f = fenced(json!([r"C:\wt\secret"]));
+    let open = json!({ "agent": "a1", "start": { "kind": "new" } });
+    let mut f = f;
+    let out = f.call(method::OPEN, open.clone());
+    assert_eq!(fetched(&out), ("GET".into(), "/path".into()));
+    let out = f.answer(&out[0], fetch(200, json!({ "worktree": r"C:\wt" })));
+    assert_eq!(fetched(&out), ("POST".into(), "/session".into()));
+    let body: Value = serde_json::from_str(out[0]["params"]["body"].as_str().unwrap()).unwrap();
+    assert!(body["permission"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|r| r["permission"] == "edit" && r["pattern"] == "secret/*" && r["action"] == "deny"));
+
+    let mut f = fenced(json!([r"C:\wt\secret"]));
+    let out = f.call(method::OPEN, open);
+    let out = f.answer(&out[0], fetch(500, json!({ "message": "broken" })));
+    assert!(out[0]["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("/path"));
+    assert!(find_all(&out, "net/fetch").is_empty());
+}
+
+#[test]
+fn a_mode_its_rules_refused_stays_the_one_that_was() {
+    let mut f = Fake::default();
+    f.opened(1);
+    let change = json!({ "agent": "a1", "value": "bypassPermissions" });
+    // Nothing is answered before the server is: the core would show the mode at once.
+    let out = f.call(method::SET_MODE, change);
+    assert_eq!(fetched(&out), ("PATCH".into(), "/session/ses_1".into()));
+    let body: Value = serde_json::from_str(out[0]["params"]["body"].as_str().unwrap()).unwrap();
+    assert_eq!(body["permission"][0]["action"], "allow");
+    let out = f.answer(&out[0], fetch(500, json!({ "message": "broken" })));
+    assert!(out[0]["error"]["message"].as_str().is_some(), "{out:?}");
+    // Its next prompt, and the rules given next, are of its old mode.
+    let out = f.call(method::SET_MODE, json!({ "agent": "a1", "value": "plan" }));
+    let out = f.answer(&out[0], fetch(500, json!({ "message": "broken" })));
+    assert!(out[0]["error"]["message"].as_str().is_some(), "{out:?}");
+    let out = f.call(method::SEND_MESSAGE, message());
+    let sent = find(&out, "net/fetch");
+    let body: Value = serde_json::from_str(sent["params"]["body"].as_str().unwrap()).unwrap();
+    assert_eq!(body["agent"], "build");
+}
+
+#[test]
+fn a_plan_approved_starts_once_the_rules_of_its_mode_hold() {
+    let mut f = Fake::default();
+    f.opened(1);
+    let approve = |f: &mut Fake| {
+        f.call(
+            method::ANSWER_PERMISSION,
+            json!({ "agent": "a1", "request": "plan:m1", "allow": true, "resume": "acceptEdits" }),
+        )
+    };
+    // Its prompt waits for its rules, and does not go without them.
+    let out = approve(&mut f);
+    let asked = find(&out, "net/fetch");
+    assert_eq!(
+        fetched(std::slice::from_ref(asked)),
+        ("PATCH".into(), "/session/ses_1".into())
+    );
+    assert_eq!(find_all(&out, "net/fetch").len(), 1, "{out:?}");
+    let out = f.answer(asked, fetch(500, json!({ "message": "broken" })));
+    assert!(find_all(&out, "net/fetch").is_empty(), "{out:?}");
+
+    let out = approve(&mut f);
+    let out = f.answer(find(&out, "net/fetch"), fetch(200, json!({})));
+    let asked = find(&out, "net/fetch");
+    assert_eq!(
+        fetched(std::slice::from_ref(asked)),
+        ("POST".into(), "/session/ses_1/prompt_async".into())
+    );
+}
+
+#[test]
+fn a_fenced_card_offers_no_always_and_none_is_kept() {
+    let mut f = fenced(json!(["C:/prive"]));
+    let out = f.call(
+        method::OPEN,
+        json!({ "agent": "a1", "start": { "kind": "new" } }),
+    );
+    until_open(&f, out);
+    let asked = json!({
+        "id": "per_1", "sessionID": "ses_copy", "permission": "external_directory",
+        "patterns": ["C:/autre/*"], "always": ["C:/*"], "metadata": {},
+    });
+    let out = f.events(
+        1,
+        &[json!({ "payload": { "type": "permission.asked", "properties": asked } })],
+    );
+    let card = items(&out)
+        .into_iter()
+        .find(|i| {
+            i["kind"] == "permission" || i["type"] == "permission" || i.get("request").is_some()
+        })
+        .unwrap_or_else(|| panic!("{out:?}"));
+    assert_eq!(card["canAlways"], false, "{card}");
+    assert!(!card["description"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("Toujours"));
+    let out = f.call(
+        method::ANSWER_PERMISSION,
+        json!({ "agent": "a1", "request": "per_1", "allow": true, "always": true }),
+    );
+    let reply = find(&out, "net/fetch");
+    let body: Value = serde_json::from_str(reply["params"]["body"].as_str().unwrap()).unwrap();
+    assert_eq!(body["reply"], "once");
+}
+
+#[test]
+fn an_unfenced_card_offers_always_as_it_did() {
+    let mut f = Fake::default();
+    f.opened(1);
+    let asked = json!({
+        "id": "per_1", "sessionID": "ses_1", "permission": "bash",
+        "patterns": ["ls"], "always": ["ls *"], "metadata": {},
+    });
+    let out = f.events(
+        1,
+        &[json!({ "payload": { "type": "permission.asked", "properties": asked } })],
+    );
+    let card = items(&out)
+        .into_iter()
+        .find(|i| i.get("request").is_some())
+        .unwrap_or_else(|| panic!("{out:?}"));
+    assert_eq!(card["canAlways"], true, "{card}");
+    let out = f.call(
+        method::ANSWER_PERMISSION,
+        json!({ "agent": "a1", "request": "per_1", "allow": true, "always": true }),
+    );
+    let reply = find(&out, "net/fetch");
+    let body: Value = serde_json::from_str(reply["params"]["body"].as_str().unwrap()).unwrap();
+    assert_eq!(body["reply"], "always");
+}
+
 #[test]
 fn a_session_gone_starts_a_new_one_and_a_server_that_fails_refuses_it() {
     let mut f = Fake::default();

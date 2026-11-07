@@ -2,7 +2,7 @@
 title: "Projets privés"
 subject: "Projets"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-139","ESC-140","ESC-142"]
+tickets: ["ESC-139","ESC-140","ESC-142","ESC-364"]
 decisions: []
 compared: null
 ---
@@ -55,3 +55,10 @@ Changer « Projet privé » ne coupe rien sur le moment ; le serveur MCP le pren
 
 - Le cloisonnement des fichiers est un « garde-fou » ou une « barrière » selon le harness, jamais une vraie barrière pour tous : un compte système par projet n'est pas proposé, les harness, leurs comptes et les outils de l'utilisateur n'y suivraient pas.
 - Entre projets qui ne sont pas privés, rien n'est cloisonné.
+
+## Sous clôture, sur OpenCode (ESC-364)
+
+- « Toujours » n'est pas offert : OpenCode garde le motif après les `deny` de la clôture, et il l'emporterait sur eux. Une carte ne vaut que pour une fois.
+- Les règles `edit` sont écrites depuis le `worktree` d'OpenCode, comme il juge une écriture : c'est ce qui tient une clôture dans le dossier de l'agent, que `external_directory` n'arrête pas. Si le `worktree` ne se lit pas, la session n'ouvre pas.
+- `git commit` et `git add` lisent un fichier par eux-mêmes : `-F`, `--file`, `-t`, `--template`, `--pathspec-from-file` sont refusés dans tous les modes, « Sans permissions » compris, et un chemin de la clôture écrit depuis le dossier de l'agent (`../prive`) est refusé à une commande comme le chemin absolu.
+- Pour une commande, la clôture reste une garde sur son texte : celle qui atteint un chemin sans le nommer passe.

@@ -28,6 +28,8 @@ pub struct Translator {
     model: String,
     /// The agent's session, once known.
     session: Option<String>,
+    /// Its session holds a fence: `set_fenced`.
+    fenced: bool,
     /// A turn is known to run: its first event says it to the core.
     active: bool,
     /// A compaction under way (ESC-205): its call to the model writes the summary the context
@@ -93,6 +95,12 @@ impl Translator {
             lang: lang.into(),
             ..Self::default()
         }
+    }
+
+    /// Under a fence, a card offers « Toujours » no more: what OpenCode would keep comes after the
+    /// fence's `deny`s, and wins over them.
+    pub(crate) fn set_fenced(&mut self, fenced: bool) {
+        self.fenced = fenced;
     }
 
     /// The user stopped the turn.
@@ -634,7 +642,11 @@ impl Translator {
                 .collect()
         };
         let patterns = strings(&p["patterns"]);
-        let always = strings(&p["always"]);
+        let always = if self.fenced {
+            Vec::new()
+        } else {
+            strings(&p["always"])
+        };
         let first = patterns.first().cloned().unwrap_or_default();
         let mut description: Option<String> = None;
         let mut hunks = None;

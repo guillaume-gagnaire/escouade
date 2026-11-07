@@ -140,7 +140,7 @@ pub const MODES: [&str; 2] = ["default", "plan"];
 
 /// The tools that write a file or run a command, as Claude Code names them (every harness's are
 /// named so on their cards): taken from a discussion's Claude Code, refused to the others.
-pub const WRITES: [&str; 5] = crate::engine::claude::client::WRITES;
+pub const WRITES: [&str; 8] = crate::engine::claude::client::WRITES;
 
 /// Whether a discussion may run on `engine`: its harness keeps it from writing (see the module).
 pub fn holds(engine: EngineId) -> bool {

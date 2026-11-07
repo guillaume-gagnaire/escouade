@@ -2,7 +2,7 @@
 title: "Claude Code en plugin"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4 (INT-10.5)","docs/PLUGINS.md §8.27 (ESC-347)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-226","plugins/claude/README.md"]
-tickets: ["ESC-226","ESC-347","ESC-352"]
+tickets: ["ESC-226","ESC-347","ESC-352","ESC-364"]
 decisions: []
 compared: null
 ---
@@ -31,3 +31,7 @@ La lecture d'une connexion (ce que Claude Code garde dans son dossier et, sous m
 ## Un arrêt se dit
 
 Coupé pour l'app ou pas chargé, un agent de Claude Code dit au lancement « Le plugin Claude Code (dev.escouade.claude-code) est coupé ou n'est pas chargé : rallume-le dans la vue Plugins… » et garde sa session ; rallumé, il reprend. Un plugin qui plante pendant un tour est relancé comme tout plugin de harness et la conversation le dit (voir *Le contrat des harness en process*). Les textes rédigés et le quota d'un compte ne passent pas par lui. Sa vue terminal marche plugin coupé, mais la conversation ne la suit plus, et le dit.
+
+## Une discussion ne lance rien (ESC-364)
+
+Une discussion perd les outils qui écrivent ou lancent une commande, et ceux qui lui restent sont refusés d'office s'ils arrivent : `Edit`, `Write`, `MultiEdit`, `NotebookEdit`, `Bash`, `PowerShell` (le shell ordinaire de Claude Code sous Windows), `Monitor` et `EnterWorktree`, qui crée un worktree. La liste est tenue des deux côtés, le plugin et le cœur, qui ne se lient pas : un test du cœur vérifie qu'elles sont les mêmes.
