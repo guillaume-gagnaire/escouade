@@ -80,8 +80,10 @@ describe('Escouade’s own plugins submitted to the store from their folder (ESC
       expect(m.id).toBe(`dev.escouade.${name}`);
       expect(m.version).toMatch(/^\d+\.\d+\.\d+$/);
       expect(m.repository).toBe(`https://github.com/${APP}/tree/main/plugins/${name}`);
-      for (const f of ['README.md', 'LICENSE', 'CHANGELOG.md', 'escouade-plugin.json'])
-        expect(repository[`plugins/${name}/${f}`], f).toBeTruthy();
+      for (const f of ['LICENSE', 'CHANGELOG.md', 'escouade-plugin.json']) expect(repository[`plugins/${name}/${f}`], f).toBeTruthy();
+      // Its page: README.md, or one per language (ESC-370).
+      const readmes = repository[`plugins/${name}/README.md`] ? ['README.md'] : ['README.fr.md', 'README.en.md'];
+      for (const f of readmes) expect(repository[`plugins/${name}/${f}`], f).toBeTruthy();
       expect(Object.keys(repository).some((p) => p.startsWith(`plugins/${name}/test/`))).toBe(true);
     }
   });
