@@ -1,9 +1,9 @@
 ---
-number: null
+number: 127
 id: "antigravity-n-accepter-d-office-qu-une-e"
 title: "Antigravity : n'accepter d'office qu'une écriture qui n'atteint qu'un fichier, dit par le cœur (fs/fileOnly)"
 date: "2026-11-08"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-389"
 pages: ["plugins/antigravity-en-plugin"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/antigravity-en-plugin","added":24,"removed":16}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-08T15:37:35+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
