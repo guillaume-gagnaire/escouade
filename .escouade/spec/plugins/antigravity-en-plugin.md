@@ -3,7 +3,7 @@ title: "Antigravity CLI en plugin"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4 (INT-10.8)","docs/PLUGINS.md §8.24 (ESC-348)","docs/PROTOCOL.md, Antigravity CLI, « Règles et jugement »","docs/TODO-2.2.md, INT-10.8","Ticket ESC-283","Ticket ESC-348","Ticket ESC-371","Ticket ESC-376","Ticket ESC-388","Essai real_agy_rules sur agy 1.5.3 (2026-11-08)","Revue de dev.escouade.antigravity-cli@2.2.0 (~/.escouade-review)","Revue de dev.escouade.antigravity-cli@2.2.1 (~/.escouade-review)","plugins/antigravity/README.en.md"]
 tickets: ["ESC-283","ESC-348","ESC-352","ESC-369","ESC-371","ESC-376","ESC-388"]
-decisions: [68,94,112,116,"antigravity-toolpermission-ecrit-request"]
+decisions: [68,94,112,116,125]
 compared: null
 ---
 
