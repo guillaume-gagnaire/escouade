@@ -839,6 +839,7 @@ pub fn run() {
                 commands::agent_pr_rerun,
                 commands::agent_no_pr,
                 commands::project_prs,
+                commands::project_code_host,
                 commands::overview_prs,
                 commands::pr_reviews,
                 commands::pr_review_start,

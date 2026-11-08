@@ -1,6 +1,7 @@
 // Test utilities: a fake Tauri backend recording every command.
 
 import { mockIPC, mockWindows } from '@tauri-apps/api/mocks';
+import { envsView } from '../lib/envs-view.svelte';
 import { buffers } from '../lib/editor/buffers.svelte';
 import { navHistory } from '../lib/editor/history';
 import { recentFiles } from '../lib/editor/quick-open';
@@ -406,6 +407,10 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.docsEdit = null;
   app.docsShare = {};
   app.boardIssues = {};
+  app.codeHosts = {};
+  envsView.forget();
+  app.envView = {};
+  app.environments = {};
   app.targetCi = {};
   app.setupOutput = {};
   app.relaunched = {};

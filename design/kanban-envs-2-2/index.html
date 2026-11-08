@@ -1,0 +1,483 @@
+<!doctype html>
+<!--
+  ESC-390 : les onglets de la barre latérale, l'en-tête du Kanban et la vue Environnements, en trois directions.
+  ?d=a|b|c, &theme=light, #fenetre (la fenêtre entière, 1440 × 900) ou #etats (les états : sans hébergeur, étroit,
+  en cours, échec, vide, choix des environnements). Textes de l'app ; données du projet Escouade le 2026-11-08, sauf le
+  projet « atlas-web » des états (staging et production), fictif. Captures : node design/kanban-envs-2-2/render.mjs
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>ESC-390 · onglets, en-tête du Kanban, Environnements</title>
+<style>
+  :root {
+    --p: oklch(0.75 0.11 190);
+    --frame: color-mix(in oklch, var(--p) 8%, #08090a);
+    --panel: color-mix(in oklch, var(--p) 4.5%, #0e0f11);
+    --raise: color-mix(in oklch, var(--p) 6%, #15161a);
+    --raise-2: color-mix(in oklch, var(--p) 6%, #1b1c20);
+    --well: color-mix(in oklch, var(--p) 2%, #0a0b0d);
+    --fg-rgb: 255, 255, 255;
+    --line: rgba(255, 255, 255, 0.075);
+    --line-2: rgba(255, 255, 255, 0.12);
+    --line-3: rgba(255, 255, 255, 0.2);
+    --hover: rgba(255, 255, 255, 0.045);
+    --text: #f7f8f8;
+    --soft: #d0d3d8;
+    --muted: #989da6;
+    --dim: #8f949e;
+    --p-ink: color-mix(in oklch, var(--p) 70%, white);
+    --run: oklch(0.79 0.15 155);
+    --wait: oklch(0.84 0.14 82);
+    --wait-bg: oklch(from var(--wait) l c h / 0.07);
+    --wait-line: oklch(from var(--wait) l c h / 0.32);
+    --del: oklch(0.74 0.14 22);
+    --info: oklch(0.8 0.1 235);
+    --idle: #7a7f88;
+    --on-wait: #1a1405;
+    --knob-on: color-mix(in oklch, var(--p) 75%, black);
+    --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  }
+  :root[data-theme='light'] {
+    --frame: color-mix(in oklch, var(--p) 7%, #f0f1f3);
+    --panel: color-mix(in oklch, var(--p) 2.5%, #fdfdfd);
+    --raise: color-mix(in oklch, var(--p) 4%, #f4f5f7);
+    --raise-2: color-mix(in oklch, var(--p) 5%, #eceef1);
+    --well: color-mix(in oklch, var(--p) 2.5%, #f6f7f9);
+    --fg-rgb: 15, 17, 22;
+    --line: rgba(15, 17, 22, 0.09);
+    --line-2: rgba(15, 17, 22, 0.14);
+    --line-3: rgba(15, 17, 22, 0.24);
+    --hover: rgba(15, 17, 22, 0.045);
+    --text: #15171c;
+    --soft: #363a42;
+    --muted: #555a63;
+    --dim: #5c616a;
+    --p-ink: color-mix(in oklch, var(--p) 55%, black);
+    --run: oklch(0.48 0.13 155);
+    --wait: oklch(0.5 0.11 70);
+    --wait-bg: oklch(from var(--wait) l c h / 0.09);
+    --wait-line: oklch(from var(--wait) l c h / 0.4);
+    --del: oklch(0.5 0.18 25);
+    --info: oklch(0.5 0.12 245);
+    --on-wait: #fff;
+    --knob-on: color-mix(in oklch, var(--p) 70%, black);
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--frame); }
+  body { margin: 0; font: 13px/1.45 'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif; font-feature-settings: 'cv11', 'ss03';
+    color: var(--text); -webkit-font-smoothing: antialiased; }
+  svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .mono { font-family: var(--mono); font-size: 11.5px; }
+  .muted { color: var(--muted); }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* La fenêtre (1440 × 900) : barre de titre, barre des projets, barre latérale, zone de travail, barre d'état. */
+  .win { width: 1440px; height: 900px; display: grid; grid-template-columns: 52px var(--side, 276px) 1fr; grid-template-rows: 38px 1fr 26px;
+    background: var(--frame); overflow: hidden; }
+  .title { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 0 14px; font-size: 12.5px; color: var(--muted); }
+  .title b { color: var(--text); font-weight: 650; display: inline-flex; align-items: center; gap: 8px; }
+  .title .sq { width: 10px; height: 10px; border-radius: 3px; background: var(--p); }
+  .rail { display: grid; align-content: start; justify-items: center; gap: 8px; padding-top: 4px; }
+  .tile { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font-weight: 700; font-size: 12px; color: #08090a;
+    background: var(--p); box-shadow: 0 0 0 2px var(--frame), 0 0 0 3.5px var(--p); }
+  .tile.o { background: var(--raise); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+  .side { min-width: 0; padding: 4px 10px 10px 4px; display: flex; flex-direction: column; container-type: inline-size; }
+  .main { min-width: 0; min-height: 0; background: var(--panel); border-radius: 12px 0 0 0; box-shadow: inset 0 0 0 1px var(--line); display: flex;
+    flex-direction: column; overflow: hidden; }
+  .status { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 0 14px; color: var(--muted); font-size: 11.5px; }
+  .new { display: flex; align-items: center; gap: 8px; height: 32px; margin: 12px 0 8px; padding: 0 8px 0 9px; color: var(--soft); font-weight: 550; }
+  .new .plus { width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; background: rgba(var(--fg-rgb), 0.07);
+    box-shadow: inset 0 0 0 1px var(--line); }
+  .new kbd { margin-left: auto; font: 500 11px/1 Inter, sans-serif; padding: 3px 6px; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--line-2); color: var(--muted); }
+  .agent { border-radius: 11px; padding: 10px 12px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); display: grid; gap: 4px; font-size: 12.5px; }
+  .agent .r { display: flex; align-items: center; gap: 8px; }
+  .agent .n { font-weight: 650; }
+  .agent .ring { width: 9px; height: 9px; border-radius: 50%; box-shadow: inset 0 0 0 1.6px var(--run); }
+  .agent .w { margin-left: auto; color: var(--wait); font-weight: 600; font-size: 12px; }
+
+  /* Ce qui est commun aux en-têtes. */
+  .btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--text); font-weight: 550; font-size: 12.5px; white-space: nowrap; background: transparent; }
+  .btn.icon { width: 30px; padding: 0; justify-content: center; color: var(--soft); }
+  .btn.quiet { box-shadow: none; color: var(--muted); }
+  .switch { display: inline-flex; align-items: center; gap: 9px; height: 30px; padding: 0 4px 0 11px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line-2);
+    font-weight: 550; font-size: 12.5px; white-space: nowrap; }
+  .knob { position: relative; width: 30px; height: 18px; border-radius: 9px; background: rgba(var(--fg-rgb), 0.14); }
+  .knob::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); }
+  .on .knob { background: var(--knob-on); }
+  .on .knob::after { left: 14px; }
+  .ci { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px 0 7px; border-radius: 7px; font-size: 12px; font-weight: 550;
+    color: var(--soft); background: rgba(var(--fg-rgb), 0.04); box-shadow: inset 0 0 0 1px var(--line); white-space: nowrap; }
+  .ci .s { width: 14px; height: 14px; border-radius: 50%; display: grid; place-items: center; }
+  .ci.ok .s { color: var(--run); }
+  .ci.ko { color: var(--del); box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.35); background: oklch(from var(--del) l c h / 0.07); }
+  .ci.wip .s { border: 1.6px solid var(--wait); border-right-color: transparent; width: 11px; height: 11px; }
+  .ci .since { color: var(--muted); font-weight: 450; }
+  .badge { min-width: 17px; height: 17px; padding: 0 5px; border-radius: 9px; background: var(--wait); color: var(--on-wait); font-size: 10.5px;
+    font-weight: 650; display: inline-flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--idle); }
+  .dot.ok { background: var(--run); } .dot.wt { background: var(--wait); } .dot.ko { background: var(--del); }
+  .spin { width: 11px; height: 11px; border-radius: 50%; border: 1.6px solid var(--wait); border-right-color: transparent; flex: none; }
+  .link { color: var(--info); display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+  .link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tk { display: grid; gap: 3px; padding: 10px 12px; border-radius: 10px; background: var(--raise-2); box-shadow: inset 0 0 0 1px var(--line); }
+  .tk .key { color: var(--muted); font-size: 11.5px; font-weight: 600; }
+  .tk .tt { color: var(--soft); font-size: 12.5px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+  .tk .meta { color: var(--muted); font-size: 11.5px; }
+  .pop { position: absolute; z-index: 5; width: 300px; padding: 6px; border-radius: 12px; background: var(--raise-2);
+    box-shadow: inset 0 0 0 1px var(--line-2), 0 18px 40px rgba(0, 0, 0, 0.35); font-size: 12.5px; }
+  :root[data-theme='light'] .pop { background: #fff; box-shadow: inset 0 0 0 1px var(--line-2), 0 14px 32px rgba(15, 17, 22, 0.14); }
+  .pop h4 { margin: 4px 8px 6px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+  .pop .row { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 7px; }
+  .pop .row.hl { background: var(--hover); }
+  .pop .cb { width: 15px; height: 15px; border-radius: 4px; box-shadow: inset 0 0 0 1.5px var(--line-3); display: grid; place-items: center; flex: none; }
+  .pop .cb.on { background: var(--text); color: var(--panel); box-shadow: none; }
+  .pop .why { margin-left: auto; color: var(--muted); font-size: 11.5px; }
+  .pop .grip { color: var(--muted); opacity: 0.6; }
+  .pop .foot { margin: 4px 0 0; padding: 8px 8px 4px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+
+  /* La planche des états : des cadres étiquetés. */
+  .sheet { width: 1440px; min-height: 900px; padding: 22px 26px; display: grid; gap: 18px; background: var(--frame); }
+  .sheet h2 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: 0.01em; }
+  .sheet h2 b { color: var(--text); font-weight: 650; margin-right: 6px; }
+  .grp { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+  .cell { display: grid; gap: 6px; }
+  .cap { font-size: 11.5px; color: var(--muted); }
+  .frame { background: var(--panel); border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; position: relative; }
+  .sidecell { background: var(--frame); padding: 8px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line); container-type: inline-size; }
+
+  /* ───────────────────────── Direction A, « Deux étages » ───────────────────────── */
+  .a .seg { display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--raise);
+    box-shadow: inset 0 0 0 1px var(--line); }
+  .a .seg > span { flex: 1 1 auto; display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 28px; padding: 0 6px; border-radius: 7px; color: var(--muted);
+    font-size: 12.5px; font-weight: 550; white-space: nowrap; min-width: 0; }
+  .a .seg > span.on { background: var(--panel); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2), 0 1px 2px rgba(0, 0, 0, 0.18); }
+  .a .seg .c { color: var(--dim); font-size: 11.5px; font-variant-numeric: tabular-nums; font-weight: 500; }
+  .a .seg svg { display: none; }
+  .a .seg .badge { min-width: 16px; height: 16px; font-size: 10px; }
+  .a .h1 { display: flex; align-items: center; gap: 10px; height: 54px; padding: 0 14px 0 22px; }
+  .a .h1 h1 { margin: 0; font-size: 15px; font-weight: 620; letter-spacing: -0.015em; }
+  .a .h1 .crumbs { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .a .h1 .right { margin-left: auto; display: flex; gap: 6px; align-items: center; flex: none; }
+  .a .h2 { display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 14px 0 16px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .a .vt { display: flex; align-self: stretch; gap: 2px; }
+  .a .vt span { display: inline-flex; align-items: center; gap: 7px; padding: 0 8px; color: var(--muted); font-weight: 550; font-size: 12.5px;
+    box-shadow: inset 0 -2px 0 transparent; }
+  .a .vt span.on { color: var(--text); box-shadow: inset 0 -2px 0 var(--text); }
+  .a .vt .c { color: var(--dim); font-size: 11.5px; font-weight: 500; }
+  .a .h2 .sp { margin-left: auto; }
+  .a .places { color: var(--muted); font-size: 12.5px; }
+  .a .places b { color: var(--text); font-weight: 600; }
+  .a .sep { width: 1px; height: 16px; background: var(--line-2); }
+  .a .cfg { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12.5px; min-width: 0; }
+  .a .cfg b { color: var(--text); font-weight: 550; overflow: hidden; text-overflow: ellipsis; }
+  .a .lanes { display: grid; grid-template-columns: repeat(var(--n), minmax(250px, 1fr)); gap: 14px; padding: 16px 16px 16px 18px; align-content: start; }
+  .a .lane { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .a .lh { display: grid; gap: 4px; padding: 2px 2px 10px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+  .a .lh .t { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+  .a .lh .t .n { color: var(--muted); font-weight: 500; font-size: 12px; }
+  .a .lh .t .tag { margin-left: auto; font-size: 11px; font-weight: 550; color: var(--muted); padding: 1px 7px; border-radius: 6px; box-shadow: inset 0 0 0 1px var(--line-2); }
+  .a .lh .m { color: var(--muted); font-size: 12px; display: flex; gap: 6px; align-items: center; min-width: 0; white-space: nowrap; }
+  .a .lh .m .mono { color: var(--soft); }
+  .a .lh .wip { color: var(--wait); font-size: 12px; display: flex; gap: 7px; align-items: center; }
+  .a .lh .bad { color: var(--del); font-size: 12px; font-weight: 550; display: flex; gap: 7px; align-items: center; }
+  .a .lh.ko { border-bottom-color: oklch(from var(--del) l c h / 0.6); }
+  .a .empty { padding: 14px 12px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line); border: 1px dashed transparent; color: var(--muted);
+    font-size: 12px; text-align: center; background: repeating-linear-gradient(135deg, transparent 0 6px, rgba(var(--fg-rgb), 0.018) 6px 12px); }
+  .a .more { color: var(--muted); font-size: 12px; padding: 2px 4px; }
+  .a .note { margin: 14px 18px 0; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+
+  /* ───────────────────────── Direction B, « Une barre, des groupes » ───────────────────────── */
+  .b .seg { display: grid; grid-template-columns: repeat(var(--n), 1fr); border-bottom: 1px solid var(--line); }
+  .b .seg > span { display: grid; justify-items: center; align-content: center; gap: 3px; height: 46px; position: relative; color: var(--muted); font-size: 12.5px;
+    font-weight: 550; white-space: nowrap; box-shadow: inset 0 -2px 0 transparent; }
+  .b .seg > span.on { color: var(--text); box-shadow: inset 0 -2px 0 var(--p); }
+  .b .seg .c { min-width: 18px; height: 17px; padding: 0 5px; border-radius: 6px; background: rgba(var(--fg-rgb), 0.07); color: var(--soft); font-size: 11px;
+    display: inline-flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
+  .b .seg > span .lw { display: inline-flex; gap: 5px; align-items: center; font-size: 12px; }
+  .b .seg svg { width: 16px !important; height: 16px !important; }
+  .b .seg .badge { position: absolute; top: 4px; left: calc(50% + 6px); min-width: 15px; height: 15px; font-size: 9.5px; padding: 0 4px; }
+  .b .seg .c { height: 15px; min-width: 15px; font-size: 10.5px; }
+  .b .head { display: flex; align-items: center; gap: 10px; height: 58px; padding: 0 14px 0 18px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .b .vs { display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line); flex: none; }
+  .b .vs span { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px; border-radius: 7px; color: var(--muted);
+    font-weight: 600; font-size: 13px; }
+  .b .vs span.on { background: var(--panel); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2), 0 1px 2px rgba(0, 0, 0, 0.18); }
+  .b .meta { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; min-width: 0; margin-right: auto; }
+  .b .grp2 { display: inline-flex; align-items: center; height: 30px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line-2); flex: none; }
+  .b .grp2 > * { display: inline-flex; align-items: center; gap: 6px; height: 100%; padding: 0 10px; font-size: 12.5px; }
+  .b .grp2 > * + * { box-shadow: inset 1px 0 0 var(--line-2); }
+  .b .grp2 .ok { color: var(--run); }
+  .b .grp2 .ko { color: var(--del); }
+  .b .grp2 b { font-weight: 600; }
+  .b .grp2 .lab { color: var(--muted); }
+  .b .flow { display: flex; align-items: center; gap: 8px; padding: 14px 18px 0; font-size: 12px; color: var(--muted); }
+  .b .flow .st { display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 10px; border-radius: 13px; background: rgba(var(--fg-rgb), 0.04);
+    box-shadow: inset 0 0 0 1px var(--line); color: var(--soft); font-weight: 550; }
+  .b .flow .st b { color: var(--muted); font-weight: 500; }
+  .b .flow .ar { color: var(--dim); }
+  .b .flow .r { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .b .lanes { display: grid; grid-template-columns: repeat(var(--n), minmax(240px, 1fr)) var(--hid, 0px); gap: 12px; padding: 14px 16px 16px 18px;
+    align-content: start; }
+  .b .lane { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 8px; border-radius: 12px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line); }
+  .b .lh { display: grid; gap: 6px; padding: 4px 4px 6px; }
+  .b .lh .t { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; }
+  .b .lh .t .n { color: var(--muted); font-weight: 500; font-size: 12px; }
+  .b .lh .t .k { margin-left: auto; color: var(--muted); }
+  .b .lh .m { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .b .lh .m .mono { color: var(--soft); }
+  .b .strip { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 8px; font-size: 12px; }
+  .b .strip.wip { color: var(--wait); background: var(--wait-bg); box-shadow: inset 0 0 0 1px var(--wait-line); }
+  .b .strip.bad { color: var(--del); background: oklch(from var(--del) l c h / 0.08); box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.4); font-weight: 550; }
+  .b .strip .r { margin-left: auto; color: var(--info); font-weight: 500; }
+  .b .empty { padding: 18px 8px; color: var(--muted); font-size: 12px; text-align: center; }
+  .b .hidden { display: grid; align-content: start; gap: 8px; padding: 10px 8px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line);
+    border: 1px dashed transparent; color: var(--muted); font-size: 12px; }
+  .b .hidden .h { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--soft); }
+  .b .hidden .e { display: flex; align-items: center; gap: 7px; padding: 6px 7px; border-radius: 7px; background: rgba(var(--fg-rgb), 0.03); }
+  .b .hidden .e .x { margin-left: auto; color: var(--info); }
+  .b .more { color: var(--muted); font-size: 12px; padding: 2px 4px; }
+
+  /* ───────────────────────── Direction C, « Lignes » ───────────────────────── */
+  .c .seg { display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line); }
+  .c .seg > span { flex: 0 0 38px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 30px; border-radius: 7px;
+    color: var(--muted); font-size: 12.5px; font-weight: 600; position: relative; white-space: nowrap; }
+  .c .seg > span.on { flex: 1 1 auto; background: var(--panel); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2), 0 1px 2px rgba(0, 0, 0, 0.18); }
+  .c .seg > span .l { display: none; }
+  .c .seg > span.on .l { display: inline; }
+  .c .seg .c { color: var(--dim); font-weight: 500; font-size: 11.5px; }
+  .c .seg > span:not(.on) .c { display: none; }
+  .c .seg .pip { position: absolute; top: 4px; right: 6px; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 7px; background: var(--wait);
+    color: var(--on-wait); font-size: 9.5px; font-weight: 700; display: grid; place-items: center; }
+  .c .head { display: flex; align-items: center; gap: 14px; height: 66px; padding: 0 14px 0 22px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .c .tt { display: grid; gap: 3px; min-width: 0; margin-right: auto; }
+  .c .words { display: flex; gap: 16px; align-items: baseline; }
+  .c .words span { font-size: 15px; font-weight: 620; letter-spacing: -0.015em; color: var(--muted); opacity: 0.75; }
+  .c .words span.on { color: var(--text); opacity: 1; }
+  .c .sub { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; min-width: 0; overflow: hidden; white-space: nowrap; }
+  .c .sub .ok { color: var(--run); display: inline-flex; gap: 4px; align-items: center; }
+  .c .sub .ko { color: var(--del); display: inline-flex; gap: 4px; align-items: center; font-weight: 550; }
+  .c .meter { display: grid; gap: 4px; justify-items: end; flex: none; }
+  .c .meter .bars { display: flex; gap: 3px; }
+  .c .meter .bars i { width: 7px; height: 12px; border-radius: 2px; background: rgba(var(--fg-rgb), 0.13); }
+  .c .meter .bars i.u { background: var(--p); }
+  .c .meter .l { font-size: 11.5px; color: var(--muted); }
+  .c .cfg { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line-2); font-size: 12.5px;
+    min-width: 0; }
+  .c .cfg .k { color: var(--muted); }
+  .c .cfg b { font-weight: 550; overflow: hidden; text-overflow: ellipsis; }
+  .c .rows { flex: 1; display: grid; align-content: start; gap: 10px; padding: 16px 18px; }
+  .c .row { display: grid; grid-template-columns: 280px 1fr; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line); background: var(--well); overflow: hidden; }
+  .c .row.ko { box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.45); }
+  .c .row .l { display: grid; align-content: start; gap: 5px; padding: 12px 14px; border-right: 1px solid var(--line); background: rgba(var(--fg-rgb), 0.015); }
+  .c .row .l .t { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; }
+  .c .row .l .t .n { margin-left: auto; color: var(--muted); font-weight: 500; font-size: 12px; }
+  .c .row .l .m { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .c .row .l .m .mono { color: var(--soft); }
+  .c .row .l .wip { color: var(--wait); font-size: 12px; display: flex; gap: 7px; align-items: center; }
+  .c .row .l .bad { color: var(--del); font-size: 12px; font-weight: 550; display: flex; gap: 7px; align-items: center; }
+  .c .row .r { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px; align-content: start; }
+  .c .chip { display: inline-flex; align-items: center; gap: 7px; max-width: 330px; height: 28px; padding: 0 10px; border-radius: 8px; background: var(--raise-2);
+    box-shadow: inset 0 0 0 1px var(--line); font-size: 12px; }
+  .c .chip .k { color: var(--muted); font-weight: 600; flex: none; }
+  .c .chip .x { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--soft); }
+  .c .chip.more { color: var(--muted); }
+  .c .row .r .none { color: var(--muted); font-size: 12px; padding: 5px 2px; }
+  .c .foot { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line); color: var(--muted); font-size: 12px; }
+  .c .foot .e { display: inline-flex; gap: 6px; align-items: center; padding: 3px 8px; border-radius: 6px; background: rgba(var(--fg-rgb), 0.04); color: var(--soft); }
+  .c .foot .e i { color: var(--muted); font-style: normal; }
+  .c .foot .r { margin-left: auto; color: var(--info); }
+  .c .bar { display: flex; align-items: center; gap: 10px; padding: 12px 18px 0; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const q = new URLSearchParams(location.search);
+const D = q.get('d') || 'a';
+if (q.get('theme') === 'light') document.documentElement.dataset.theme = 'light';
+const route = location.hash.slice(1) || 'fenetre';
+
+const P = {
+  agents: '<circle cx="9" cy="8" r="3"/><path d="M3.5 19c.8-3 3-4.6 5.5-4.6s4.7 1.6 5.5 4.6"/><path d="M16 5.5a3 3 0 0 1 0 5"/><path d="M18 14.6c1.3.6 2.2 2 2.6 4.4"/>',
+  kanban: '<rect x="3.5" y="4" width="17" height="16" rx="2.5"/><path d="M9 8v6M15 8v3"/>',
+  pr: '<circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v8M18 16V9a3 3 0 0 0-3-3h-4m2-2-2 2 2 2"/>',
+  docs: '<path d="M14 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5z"/><path d="M14 3.5v5h5M9 13h6M9 16.5h4"/>',
+  globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.4 3.5 5.3 3.5 8.5s-1.1 6.1-3.5 8.5c-2.4-2.4-3.5-5.3-3.5-8.5s1.1-6.1 3.5-8.5"/>',
+  import: '<path d="M12 4v11m-4.5-4.5L12 15l4.5-4.5M5 19.5h14"/>',
+  check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+  x: '<path d="m6.5 6.5 11 11m0-11-11 11"/>',
+  down: '<path d="m7 10 5 5 5-5"/>',
+  ext: '<path d="M14 4.5h5.5V10M19.5 4.5 11 13M17 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 4 18.5v-10A1.5 1.5 0 0 1 5.5 7H10"/>',
+  refresh: '<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4h-4"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12"/><circle cx="12" cy="12" r="2.8"/>',
+  eyeoff: '<path d="M4 4l16 16M10 6c.6-.1 1.3-.2 2-.2 6 0 9.5 6.4 9.5 6.4a17 17 0 0 1-2.6 3.4M6.5 7.6C4 9.3 2.5 12 2.5 12s3.5 6.5 9.5 6.5c1.6 0 3-.4 4.2-1"/>',
+  grip: '<circle cx="9" cy="7" r=".9"/><circle cx="15" cy="7" r=".9"/><circle cx="9" cy="12" r=".9"/><circle cx="15" cy="12" r=".9"/><circle cx="9" cy="17" r=".9"/><circle cx="15" cy="17" r=".9"/>',
+  more: '<circle cx="6" cy="12" r=".9"/><circle cx="12" cy="12" r=".9"/><circle cx="18" cy="12" r=".9"/>',
+  sliders: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  arrow: '<path d="M5 12h14m-5-5 5 5-5 5"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6 6l1.6 1.6M16.4 16.4 18 18M6 18l1.6-1.6M16.4 7.6 18 6"/>',
+};
+const I = (n, s = 14) => `<svg class="i" viewBox="0 0 24 24" style="width:${s}px;height:${s}px">${P[n]}</svg>`;
+
+// Les données du projet Escouade (Kanban et vue Environnements de la 2.2.0-beta.2, 2026-11-08).
+const MERGED = [
+  ['ESC-387', 'Réglages — les plugins de la première main disent les pages de la 2.2 (textes, README et docs du store)', 'il y a 1 h', '91be84c'],
+  ['ESC-389', 'Antigravity 2.2.4 : une écriture qui nomme un sous-dossier n\'ouvre plus son .git pendant la reprise (revue de la 2.2.3)', 'il y a 2 h', '20fbc31'],
+  ['ESC-386', 'Réglages R8 — la recherche dans les réglages et les points ambre, puis la doc', 'il y a 5 h', '4be20d7'],
+  ['ESC-388', 'Antigravity : avec agy 1.5.3, `-p` laisse passer commandes et écritures sans règle ni question', 'il y a 6 h', 'e8a1f30'],
+  ['ESC-385', 'Réglages R6 — les pages d\'un projet : Projet, Git et worktrees, Lancement, Kanban, Équipe, Confidentialité', 'il y a 9 h', '0c7d2b9'],
+];
+const NPM = [
+  ['ESC-342', 'Plugins (2.2) — WASM-ALL D1 : la documentation publique', 'il y a 3 j', 'df890f9'],
+  ['ESC-354', 'Plugins (2.2) — WASM-ALL Z2 : l\'amorce réelle (plugins/seed.json rempli, installation hors ligne essayée)', 'il y a 3 j', ''],
+  ['ESC-378', 'Réglages R1 — le registre des pages (direction A)', 'il y a 4 j', ''],
+  ['ESC-376', 'Antigravity CLI 2.2.2 — corriger la revue de la 2.2.1 (N1 à N6), vue terminal du cœur comprise', 'il y a 4 j', ''],
+];
+// Le projet des états, fictif : un site avec staging et production.
+const ATLAS = {
+  merged: [['ATL-214', 'Le panier garde les articles après la connexion', 'il y a 40 min', '3e9f1a2']],
+  staging: [['ATL-212', 'Recherche : les filtres restent dans l\'adresse', 'il y a 3 h'], ['ATL-209', 'Page produit : les avis se chargent par 20', 'hier']],
+  production: [['ATL-205', 'Paiement : Apple Pay sur Safari', 'il y a 2 j'], ['ATL-201', 'Les e-mails de commande en anglais', 'il y a 3 j']],
+};
+
+const tabsData = (host = true, review = 0, word = 'PR', active = 'kanban') =>
+  [['agents', 'Agents', 2], ['kanban', 'Kanban', null, review], host && ['pr', word], ['docs', 'Docs']].filter(Boolean)
+    .map(([id, l, c, r]) => ({ id, l, c, r, on: id === active }));
+
+/* ───── Les onglets de la barre latérale ───── */
+function tabs(o = {}) {
+  const t = tabsData(o.host !== false, o.review || 0, o.word || 'PR', o.active || 'kanban');
+  if (D === 'a') return `<div class="seg" style="--n:${t.length}">${t.map((x) => `<span class="${x.on ? 'on' : ''}">${I(x.id)}${x.l}${x.c != null ? `<span class="c">${x.c}</span>` : ''}${x.r ? `<span class="badge">${x.r}</span>` : ''}</span>`).join('')}</div>`;
+  if (D === 'b') return `<div class="seg" style="--n:${t.length}">${t.map((x) => `<span class="${x.on ? 'on' : ''}">${I(x.id)}<span class="lw">${x.l}${x.c != null ? `<span class="c">${x.c}</span>` : ''}</span>${x.r ? `<span class="badge">${x.r}</span>` : ''}</span>`).join('')}</div>`;
+  return `<div class="seg">${t.map((x) => `<span class="${x.on ? 'on' : ''}">${I(x.id, 15)}<span class="l">${x.l}</span>${x.c != null ? `<span class="c">${x.c}</span>` : ''}${x.r ? (x.on ? `<span class="badge">${x.r}</span>` : `<i class="pip">${x.r}</i>`) : ''}</span>`).join('')}</div>`;
+}
+
+/* ───── L'en-tête du Kanban ───── */
+// w : la largeur de la zone de travail ; o.view : tickets ou envs ; o.ci : ok, ko, wip ; o.auto.
+function header(w, o = {}) {
+  const envs = o.view === 'envs';
+  const narrow = w < 900, mid = w < 1020;
+  const ci = o.ci || 'ok';
+  const ciPill = (short) => ci === 'ok' ? `<span class="ci ok"><span class="s">${I('check', 12)}</span>main${short ? '' : '<span class="since">· CI verte</span>'}</span>`
+    : ci === 'ko' ? `<span class="ci ko"><span class="s">${I('x', 12)}</span>main${short ? '' : '<span class="since">· rouge depuis 2 h</span>'}</span>`
+    : `<span class="ci wip"><span class="s"></span>main${short ? '' : '<span class="since">· CI en cours</span>'}</span>`;
+  const auto = `<span class="switch ${o.auto ? 'on' : ''}">${o.auto ? 'Pilote auto' : (narrow ? 'Pilote auto' : 'Pilote auto · off')}<span class="knob"></span></span>`;
+  if (D === 'a') {
+    const right2 = envs
+      ? `<span class="places">Escouade · GitHub · lu à l'instant</span><span class="sep"></span><span class="cfg">${I('sliders')}<b>${narrow ? '1 sur 2' : '1 environnement sur 2'}</b>${I('down', 12)}</span><span class="btn icon quiet">${I('refresh')}</span>`
+      : `${ciPill(narrow)}<span class="places"><b>6</b> ${narrow ? 'libres' : 'places libres'}</span><span class="sep"></span><span class="cfg">${narrow ? '' : 'Après validation :'}<b>${mid ? 'squash → main' : 'merge squash → main'}</b>${I('down', 12)}</span>`;
+    return `<div class="h1"><h1>${envs ? 'Environnements' : 'Kanban'}</h1><span class="crumbs">Escouade · 384 tickets · 0 en boucle</span>
+      <div class="right"><span class="btn ${narrow ? 'icon' : ''}">${I('import')}${narrow ? '' : 'Importer'}</span>${auto}</div></div>
+      <div class="h2"><div class="vt"><span class="${envs ? '' : 'on'}">${I('kanban')}Tickets<span class="c">384</span></span><span class="${envs ? 'on' : ''}">${I('globe')}Environnements${narrow ? '' : '<span class="c">1</span>'}</span></div><span class="sp"></span>${right2}</div>`;
+  }
+  if (D === 'b') {
+    const status = envs
+      ? `<span class="grp2"><span class="lab">${narrow ? 'Lu' : 'GitHub · lu'} à l'instant</span><span>${I('refresh')}</span></span>`
+      : `<span class="grp2">${ci === 'ko' ? `<span class="ko">${I('x', 12)}<b>main</b>${narrow ? '' : '<span class="lab">rouge depuis 2 h</span>'}</span>` : ci === 'wip' ? `<span><span class="spin"></span><b>main</b></span>` : `<span class="ok">${I('check', 12)}<b>main</b></span>`}<span><b>6</b><span class="lab">${narrow ? 'libres' : 'places libres'}</span></span></span>`;
+    const cfg = envs ? `<span class="btn">${I('eye')}${narrow ? '1/2' : 'Montrés : 1 sur 2'}</span>`
+      : `<span class="btn" style="max-width:${mid ? 170 : 300}px">${I('gear')}<span style="overflow:hidden;text-overflow:ellipsis">${mid ? 'squash → main' : 'Après validation : squash → main'}</span></span>`;
+    return `<div class="head"><div class="vs"><span class="${envs ? '' : 'on'}">${I('kanban')}Tickets</span><span class="${envs ? 'on' : ''}">${I('globe')}Environnements</span></div>
+      <span class="meta">${narrow ? '' : mid ? '384 tickets' : 'Escouade · 384 tickets · 0 en boucle'}</span>${status}${cfg}<span class="btn icon">${I('import')}</span>${auto}</div>`;
+  }
+  // C
+  const used = 0, max = 6;
+  const meter = envs ? '' : `<div class="meter"><div class="bars">${Array.from({ length: max }, (_, i) => `<i class="${i < used ? 'u' : ''}"></i>`).join('')}</div><span class="l">${narrow ? '6 libres' : '6 places libres sur 6'}</span></div>`;
+  const ciTxt = ci === 'ok' ? `<span class="ok">${I('check', 12)}main · CI verte</span>` : ci === 'ko' ? `<span class="ko">${I('x', 12)}main · rouge depuis 2 h</span>` : `<span><span class="spin" style="display:inline-block;vertical-align:-1px"></span> main · CI en cours</span>`;
+  return `<div class="head"><div class="tt"><div class="words"><span class="${envs ? '' : 'on'}">Tickets</span><span class="${envs ? 'on' : ''}">Environnements</span></div>
+    <div class="sub">${narrow ? '' : 'Escouade · 384 tickets · 0 en boucle · '}${envs ? 'GitHub · lu à l\'instant' : ciTxt}</div></div>
+    ${meter}${envs ? `<span class="btn">${I('refresh')}Rafraîchir</span>` : `<span class="cfg">${narrow ? '' : '<span class="k">Après validation</span>'}<b>${mid ? 'squash → main' : 'merge squash → main'}</b>${I('down', 12)}</span><span class="btn ${narrow ? 'icon' : ''}">${I('import')}${narrow ? '' : 'Importer'}</span>`}${auto}</div>`;
+}
+
+/* ───── La vue Environnements ───── */
+const tk = ([k, t, w, sha]) => `<div class="tk"><span class="key">${k}</span><span class="tt">${t}</span>${w ? `<span class="meta">${sha ? `mergé ${w} · <span class="mono">${sha}</span>` : w}</span>` : ''}</div>`;
+const chip = ([k, t]) => `<span class="chip"><span class="k">${k}</span><span class="x">${t}</span></span>`;
+
+// Escouade : « Mergés, pas encore déployés » (37) et npm (86) ; github-pages, qui n'a jamais réussi, n'est pas montré d'office.
+function envsEscouade(o = {}) {
+  if (D === 'a') return `<div class="lanes" style="--n:2">
+    <section class="lane"><div class="lh"><div class="t"><i class="dot wt"></i>Mergés, pas encore déployés<span class="n">37</span></div><div class="m">les plus récents d'abord</div></div>${MERGED.map(tk).join('')}<span class="more">+ 32 autres</span></section>
+    <section class="lane"><div class="lh"><div class="t"><i class="dot ok"></i>npm<span class="n">86</span></div><div class="m"><span class="mono">df890f9</span>· il y a 3 j · par guillaume-gagnaire</div></div>${NPM.map(tk).join('')}<span class="more">+ 82 autres</span></section></div>
+    <div class="note">${I('eyeoff')}github-pages n'est pas montré : aucun déploiement réussi.</div>${o.pop ? popA() : ''}`;
+  if (D === 'b') return `<div class="flow"><span class="st"><i class="dot wt"></i>Mergés <b>37</b></span><span class="ar">${I('arrow', 13)}</span><span class="st"><i class="dot ok"></i>npm <b>86</b></span>
+    <span class="r">Le dernier environnement compte comme la production.</span></div>
+    <div class="lanes" style="--n:2;--hid:220px">
+    <section class="lane"><div class="lh"><div class="t"><i class="dot wt"></i>Mergés, pas encore déployés<span class="n">37</span></div></div>${MERGED.map(tk).join('')}<span class="more">+ 32 autres</span></section>
+    <section class="lane"><div class="lh"><div class="t"><i class="dot ok"></i>npm<span class="n">86</span><span class="k">${I('more')}</span></div><div class="m"><span class="mono">df890f9</span> · il y a 3 j · par guillaume-gagnaire</div></div>${NPM.map(tk).join('')}<span class="more">+ 82 autres</span></section>
+    <aside class="hidden"><span class="h">${I('eyeoff')}Pas montrés</span><span class="e"><i class="dot"></i>github-pages<span class="x">Montrer</span></span><span>Aucun déploiement réussi : il n'est pas montré d'office.</span></aside></div>`;
+  return `<div class="rows">
+    <div class="row"><div class="l"><div class="t"><i class="dot wt"></i>Mergés, pas encore déployés<span class="n">37</span></div><div class="m">les plus récents d'abord</div></div><div class="r">${MERGED.map(chip).join('')}<span class="chip more">+ 32 autres</span></div></div>
+    <div class="row"><div class="l"><div class="t"><i class="dot ok"></i>npm<span class="n">86</span></div><div class="m"><span class="mono">df890f9</span> · il y a 3 j · par guillaume-gagnaire</div></div><div class="r">${NPM.map(chip).join('')}<span class="chip more">+ 82 autres</span></div></div>
+    <div class="foot">${I('eyeoff')}Pas montré :<span class="e">github-pages <i>aucun déploiement réussi</i></span><span class="r">Choisir les environnements…</span></div></div>`;
+}
+
+function popA() {
+  return `<div class="pop" style="top:96px;right:56px"><h4>Environnements montrés</h4>
+    <div class="row"><span class="grip">${I('grip')}</span><span class="cb on">${I('check', 11)}</span>staging<span class="why">12 tickets</span></div>
+    <div class="row hl"><span class="grip">${I('grip')}</span><span class="cb on">${I('check', 11)}</span>production<span class="why">production</span></div>
+    <div class="row"><span class="grip">${I('grip')}</span><span class="cb"></span>npm<span class="why">masqué par toi</span></div>
+    <div class="row"><span class="grip">${I('grip')}</span><span class="cb"></span>github-pages<span class="why">aucun déploiement réussi</span></div>
+    <p class="foot">Glisse pour changer l'ordre ; le dernier compte comme la production. Gardé pour ce projet, sur cette machine.</p></div>`;
+}
+
+// atlas-web, fictif : staging en cours de déploiement, production en échec, mergés vides : les états d'une vraie colonne.
+function envsAtlas(o = {}) {
+  if (D === 'a') return `<div class="lanes" style="--n:3">
+    <section class="lane"><div class="lh"><div class="t"><i class="dot wt"></i>Mergés, pas encore déployés<span class="n">0</span></div><div class="m">tout ce qui est mergé est déployé</div></div><div class="empty">Rien n'attend un déploiement.</div></section>
+    <section class="lane"><div class="lh"><div class="t"><i class="dot ok"></i>staging<span class="n">2</span></div><div class="m"><span class="mono">7c41d0e</span>· il y a 3 h · <span class="link"><span>staging.atlas.shop</span>${I('ext', 11)}</span></div><div class="wip"><span class="spin"></span>Déploiement en cours · <span class="mono">3e9f1a2</span></div></div>${ATLAS.staging.map(tk).join('')}</section>
+    <section class="lane"><div class="lh ko"><div class="t"><i class="dot ko"></i>production<span class="n">2</span><span class="tag">production</span></div><div class="m"><span class="mono">b19e44c</span>· il y a 2 j · <span class="link"><span>atlas.shop</span>${I('ext', 11)}</span></div><div class="bad">${I('x', 12)}Dernier déploiement en échec · <span class="mono">7c41d0e</span><span class="link" style="margin-left:auto;font-weight:500">Voir le job${I('ext', 11)}</span></div></div>${ATLAS.production.map(tk).join('')}</section></div>${o.pop ? popA() : ''}`;
+  if (D === 'b') return `<div class="flow"><span class="st"><i class="dot wt"></i>Mergés <b>0</b></span><span class="ar">${I('arrow', 13)}</span><span class="st"><i class="dot ok"></i>staging <b>2</b></span><span class="ar">${I('arrow', 13)}</span><span class="st"><i class="dot ko"></i>production <b>2</b></span></div>
+    <div class="lanes" style="--n:3;--hid:200px">
+    <section class="lane"><div class="lh"><div class="t"><i class="dot wt"></i>Mergés, pas encore déployés<span class="n">0</span></div></div><div class="empty">Rien n'attend un déploiement.</div></section>
+    <section class="lane"><div class="lh"><div class="t"><i class="dot ok"></i>staging<span class="n">2</span><span class="k">${I('more')}</span></div><div class="m"><span class="mono">7c41d0e</span> · il y a 3 h · <span class="link"><span>staging.atlas.shop</span></span></div></div><div class="strip wip"><span class="spin"></span>Déploiement en cours · <span class="mono">3e9f1a2</span></div>${ATLAS.staging.map(tk).join('')}</section>
+    <section class="lane"><div class="lh"><div class="t"><i class="dot ko"></i>production<span class="n">2</span><span class="k">${I('more')}</span></div><div class="m"><span class="mono">b19e44c</span> · il y a 2 j · <span class="link"><span>atlas.shop</span></span></div></div><div class="strip bad">${I('x', 12)}Échec · <span class="mono">7c41d0e</span><span class="r">Voir le job</span></div>${ATLAS.production.map(tk).join('')}</section>
+    <aside class="hidden"><span class="h">${I('eyeoff')}Pas montrés</span><span class="e"><i class="dot"></i>npm<span class="x">Montrer</span></span><span class="e"><i class="dot"></i>github-pages<span class="x">Montrer</span></span></aside></div>`;
+  return `<div class="rows">
+    <div class="row"><div class="l"><div class="t"><i class="dot wt"></i>Mergés, pas encore déployés<span class="n">0</span></div></div><div class="r"><span class="none">Rien n'attend un déploiement.</span></div></div>
+    <div class="row"><div class="l"><div class="t"><i class="dot ok"></i>staging<span class="n">2</span></div><div class="m"><span class="mono">7c41d0e</span> · il y a 3 h · <span class="link"><span>staging.atlas.shop</span></span></div><div class="wip"><span class="spin"></span>En cours · <span class="mono">3e9f1a2</span></div></div><div class="r">${ATLAS.staging.map(chip).join('')}</div></div>
+    <div class="row ko"><div class="l"><div class="t"><i class="dot ko"></i>production<span class="n">2</span></div><div class="m"><span class="mono">b19e44c</span> · il y a 2 j · <span class="link"><span>atlas.shop</span></span></div><div class="bad">${I('x', 12)}Échec · <span class="mono">7c41d0e</span> · <span class="link">Voir le job</span></div></div><div class="r">${ATLAS.production.map(chip).join('')}</div></div>
+    <div class="foot">${I('eyeoff')}Pas montrés :<span class="e">npm <i>masqué par toi</i></span><span class="e">github-pages <i>aucun déploiement réussi</i></span><span class="r">Choisir les environnements…</span></div></div>`;
+}
+
+function sidebar(o = {}) {
+  return `${tabs(o)}<div class="new"><span class="plus">${I('plus')}</span>Nouvel agent<kbd>Ctrl N</kbd></div>
+    <div class="agent"><div class="r"><i class="ring"></i><span class="n">overseer</span><span class="w">Attend</span></div>
+    <div class="r muted">Opus 5.5 · 105h 55m · Plan 62/67</div><div class="r muted">${I('check', 12)}Tour fini<span style="margin-left:auto">2 055,55 $</span></div></div>`;
+}
+
+function fenetre() {
+  return `<div class="win ${D}"><div class="title"><b><i class="sq"></i>Escouade</b>Δ 5742</div>
+    <div class="rail"><span class="tile">Es</span><span class="tile o">At</span><span class="tile o">Vz</span></div>
+    <aside class="side">${sidebar({ review: 3, active: 'kanban' })}</aside>
+    <main class="main">${header(1088, { view: 'envs' })}${envsEscouade()}</main>
+    <div class="status"><span>main</span><span>Session 42 %</span><span>Semaine 61 %</span><span style="margin-left:auto">Escouade 2.2.0-beta.3</span></div></div>`;
+}
+
+function etats() {
+  const side = (w, o, cap) => `<div class="cell"><span class="cap">${cap}</span><div class="sidecell" style="width:${w}px">${tabs(o)}</div></div>`;
+  const head = (w, o, cap) => `<div class="cell"><span class="cap">${cap}</span><div class="frame" style="width:${w}px">${header(w, o)}</div></div>`;
+  return `<div class="sheet ${D}">
+    <section><h2><b>Onglets</b>avec et sans hébergeur, étroits, la pastille « à relire »</h2><div class="grp">
+      ${side(276, { review: 3, active: 'agents' }, 'Largeur habituelle (276 px) · GitHub · 3 tickets à relire')}
+      ${side(276, { host: false, active: 'kanban' }, 'Sans hébergeur : trois onglets')}
+      ${side(276, { word: 'MR', active: 'pr' }, 'GitLab : « MR »')}
+      ${side(220, { review: 3, active: 'kanban' }, 'Barre la plus étroite (220 px)')}
+    </div></section>
+    <section><h2><b>En-tête du Kanban</b>à trois largeurs de fenêtre (zone de travail de 1088, 900 et 760 px)</h2><div class="grp" style="flex-direction:column">
+      ${head(1088, { ci: 'ko', auto: true }, 'Fenêtre de 1440 px · CI de la cible rouge · pilote auto actif')}
+      ${head(900, { ci: 'wip' }, 'Fenêtre de 1250 px · CI en cours')}
+      ${head(760, { ci: 'ok' }, 'Fenêtre de 1110 px')}
+    </div></section>
+    <section><h2><b>Environnements</b>atlas-web (fictif) : vide, en cours, échec ; le choix des environnements montrés</h2>
+      <div class="frame" style="width:1388px;height:${D === 'c' ? 330 : 360}px;display:flex;flex-direction:column">${envsAtlas({ pop: D === 'a' })}</div></section>
+  </div>`;
+}
+
+document.getElementById('root').innerHTML = route === 'etats' ? etats() : fenetre();
+</script>
+</body>
+</html>

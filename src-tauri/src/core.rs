@@ -2151,6 +2151,7 @@ impl<R: Runtime> Core<R> {
     pub(crate) fn plugin_changed(&self, id: &str) {
         self.plugin_runtime.forget(id);
         crate::plugins::decide::warm_one(&self.plugins, &self.plugin_runtime, id);
+        self.hub.emit(UiEvent::CodeHosts);
     }
 
     /// The plugin `id` of the seed, installed now if it is not, with no network, for a gesture that needs it (ESC-373): an

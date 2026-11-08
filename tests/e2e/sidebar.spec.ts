@@ -102,16 +102,23 @@ test('the sidebar looks as the preview draws it, in both themes, at both sizes',
 
         // Agents | Kanban: the segments, the one shown, their places.
         expect.soft(await place(side.locator('.seg')), `segments' place, ${where}`).toEqual(await place(ps.locator('.seg')));
-        expect.soft(await look(side.locator('.seg')), `segments, ${where}`).toEqual(await look(ps.locator('.seg')));
-        // ESC-65 added a fourth view, « PR », chosen on its preview: the four share the row at the size of every
-        // `segmented` (12.5px), 3px on each side; the rest of the look, weight and face included, stays the preview's.
+        // Since ESC-390 (direction A of design/kanban-envs-2-2): words alone, no icon, the one shown raised; each word
+        // whole, the tabs filling the row from one end to the other.
         const shown = side.locator('.seg button[aria-pressed="true"]');
         const drawn = ps.locator('.seg button[aria-selected="true"]');
-        expect
-          .soft(await lookBut(shown, 'width', 'padding', 'font'), `Agents, ${where}`)
-          .toEqual(await lookBut(drawn, 'width', 'padding', 'font'));
         const face = (l: Record<string, unknown>) => String(l.font).replace(/ [\d.]+px /, ' ');
         expect.soft(face(await look(shown)), `Agents' face, ${where}`).toEqual(face(await look(drawn)));
+        expect.soft(await side.locator('.seg [data-icon]').count(), `no icon in the tabs, ${where}`).toBe(0);
+        const fit = await side.locator('.seg').evaluate((seg) => {
+          const tabs = [...seg.querySelectorAll('button')];
+          const box = seg.getBoundingClientRect();
+          return {
+            cut: tabs.filter((b) => b.scrollWidth > b.clientWidth).map((b) => b.textContent),
+            gapLeft: Math.round(tabs[0].getBoundingClientRect().left - box.left),
+            gapRight: Math.round(box.right - tabs.at(-1)!.getBoundingClientRect().right),
+          };
+        });
+        expect.soft(fit, `the tabs fill their row, ${where}`).toEqual({ cut: [], gapLeft: 3, gapRight: 3 });
 
         // « Nouvel agent Ctrl N » and the arrow of its menu « Harness ».
         expect.soft(await place(side.locator('.new-agent')), `new agent's place, ${where}`).toEqual(await place(ps.locator('.new-agent')));

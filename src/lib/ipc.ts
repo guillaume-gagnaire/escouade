@@ -1,5 +1,6 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import type {
+  CodeHost,
   MergeHow,
   EngineDecl,
   PageBounds,
@@ -463,6 +464,7 @@ export const api = {
   agentNoPr: (id: string) => invoke<NoPr | null>('agent_no_pr', { id }),
   /** The open pull requests of the project, on the remote of its target. */
   projectPrs: (projectId: string) => invoke<PrRead<ProjectPrs>>('project_prs', { projectId }),
+  projectCodeHost: (projectId: string) => invoke<CodeHost | null>('project_code_host', { projectId }),
   overviewPrs: () => invoke<OverviewPrs[]>('overview_prs'),
   /** « Lancer un agent sur cette PR » (ESC-65): an agent in a worktree on the branch of the open pull request `number`. */
   createAgentOnPr: (projectId: string, number: number) => invoke<Agent>('create_agent_on_pr', { projectId, number }),

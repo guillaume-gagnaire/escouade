@@ -28,6 +28,8 @@ export const ICONS = {
     '<path d="M2.75 5h5.5M11.25 5h2M2.75 11h2M7.75 11h5.5" /><circle cx="9.75" cy="5" r="1.5" /><circle cx="6.25" cy="11" r="1.5" />',
   sound: '<path d="M2.75 6.25h2.25L8.25 3.5v9L5 9.75H2.75z" /><path d="M10.75 5.9a3 3 0 0 1 0 4.2M12.5 4.25a5.4 5.4 0 0 1 0 7.5" />',
   down: '<path d="M4.5 6.25L8 9.75l3.5-3.5" />',
+  /** A handle to drag a row by (the environments menu, ESC-390). */
+  grip: '<circle cx="6" cy="4" r=".9" /><circle cx="10" cy="4" r=".9" /><circle cx="6" cy="8" r=".9" /><circle cx="10" cy="8" r=".9" /><circle cx="6" cy="12" r=".9" /><circle cx="10" cy="12" r=".9" />',
   right: '<path d="M6.25 4.5L9.75 8l-3.5 3.5" />',
   left: '<path d="M9.75 4.5L6.25 8l3.5 3.5" />',
   monitor: '<rect x="2" y="2.75" width="12" height="8.5" rx="1.4" /><path d="M6 13.25h4M8 11.25v2" />',

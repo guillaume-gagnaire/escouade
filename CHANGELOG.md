@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Le Kanban a un en-tête sur deux rangées, où rien ne se chevauche plus, et la vue Environnements ne montre que les environnements choisis, sans ceux qui n’ont jamais été déployés ; les onglets PR et Environnements n’apparaissent qu’avec un hébergeur de code.
 - OpenCode : `git commit` et `git add` ne passent d'office que sous leur forme simple, et une écriture dans `.git`, `.opencode` ou `opencode.json` demande toujours : ces règles sont sa seule protection.
 - OpenCode : un projet privé tient mieux. Ses règles sont posées avant l'ouverture d'une session, et « Toujours » n'est plus proposé sous clôture.
 - Claude Code : une discussion refuse aussi les commandes PowerShell, au lieu de les présenter sur une carte.

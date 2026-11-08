@@ -150,28 +150,36 @@ test('the Kanban looks as the preview draws it, in both themes, at both sizes', 
         const where = `${t} ${size.width}×${size.height}`;
         const pv = preview.locator('#view-board');
 
-        // The header: the title and its line, the places, « Importer », what validating does, the autopilot.
+        // The header, on two rows since ESC-390 (direction A of design/kanban-envs-2-2): the title, its line, « Importer »
+        // and the autopilot; then the views, the places and what validating does. Its first row keeps the 2.0 preview's
+        // title, line, « Importer » and switch; the second is the new design's, checked by its places.
         const head = board.locator('> .head');
         const phead = pv.locator('.kb-head');
-        expect.soft(await place(head), `header's place, ${where}`).toEqual(await place(phead));
-        expect.soft(await look(head), `header, ${where}`).toEqual(await look(phead));
+        const [hx, hy, hw] = await place(head);
+        const [px, py, pw] = await place(phead);
+        expect.soft([hx, hy, hw], `header's place, ${where}`).toEqual([px, py, pw]);
+        expect.soft((await place(head.locator('.h1')))[3], `its first row, ${where}`).toBe(52);
+        expect.soft((await place(head.locator('.h2')))[3], `its second row, ${where}`).toBe(40);
         expect.soft(await lookBut(head.locator('h1'), 'width'), `title, ${where}`).toEqual(await lookBut(phead.locator('h1'), 'width'));
         expect
           .soft(await lookBut(head.locator('.crumbs'), 'width'), `its line, ${where}`)
           .toEqual(await lookBut(phead.locator('.crumbs'), 'width'));
-        expect.soft(await head.locator('.places').isVisible(), `places shown, ${where}`).toBe(await phead.locator('.slots').isVisible());
-        if (await phead.locator('.slots').isVisible())
+        if (size.width > 1100) {
+          expect.soft(await look(head.locator('.imp')), `« Importer », ${where}`).toEqual(await look(phead.locator('.actions > .btn')));
           expect
-            .soft(await lookBut(head.locator('.places'), 'width', 'height'), `places, ${where}`)
-            .toEqual(await lookBut(phead.locator('.slots'), 'width', 'height'));
-        expect.soft(await look(head.locator('.imp')), `« Importer », ${where}`).toEqual(await look(phead.locator('.actions > .btn')));
-        expect.soft(await look(head.locator('.imp .icon')), `its icon, ${where}`).toEqual(await look(phead.locator('.actions > .btn svg')));
-        expect
-          .soft(await lookBut(head.locator('.cfg'), 'width'), `settings, ${where}`)
-          .toEqual(await lookBut(phead.locator('.select'), 'width'));
-        expect
-          .soft(await lookBut(head.locator('.cfg .v'), 'width'), `its summary, ${where}`)
-          .toEqual(await lookBut(phead.locator('.select b'), 'width'));
+            .soft(await look(head.locator('.imp .icon')), `its icon, ${where}`)
+            .toEqual(await look(phead.locator('.actions > .btn svg')));
+        }
+        // The second row: the views on the left, the places and « Après validation » on the right, nothing over another.
+        const row = await head.locator('.h2').evaluate((r) =>
+          [...r.querySelectorAll(':scope > *:not(.sp)')]
+            .map((e) => e.getBoundingClientRect())
+            .filter((b) => b.width > 0)
+            .map((b) => [Math.round(b.left), Math.round(b.right)]),
+        );
+        for (let i = 1; i < row.length; i++)
+          expect.soft(row[i][0], `second row, item ${i}, ${where}`).toBeGreaterThanOrEqual(row[i - 1][1]);
+        expect.soft(await head.locator('.cfg .v').isVisible(), `its summary, ${where}`).toBe(true);
         expect.soft(await look(head.locator('.auto')), `autopilot, ${where}`).toEqual(await look(phead.locator('.switch')));
         expect.soft(await look(head.locator('.knob')), `its switch, ${where}`).toEqual(await look(phead.locator('.switch .knob')));
         // Right edges: the controls end where the preview's do.
@@ -182,15 +190,17 @@ test('the Kanban looks as the preview draws it, in both themes, at both sizes', 
         // The band of the commands of .escouade.yml, under the header.
         const band = board.locator('.band.shared');
         const pband = pv.locator('#yml-banner');
-        expect.soft(await place(band), `band's place, ${where}`).toEqual(await place(pband));
+        // Below the header's two rows (ESC-390), 32 px lower than the preview's: its place across, its size.
+        const xwh = (el: Locator) => place(el).then(([x, , w, h]) => [x, w, h]);
+        expect.soft(await xwh(band), `band's place, ${where}`).toEqual(await xwh(pband));
         expect.soft(await look(band), `band, ${where}`).toEqual(await look(pband));
         expect.soft(await look(band.locator('.icon')), `its icon, ${where}`).toEqual(await look(pband.locator('svg')));
         expect.soft(await look(band.locator('.btn')), `« Les lire », ${where}`).toEqual(await look(pband.locator('.btn')));
 
         // The columns: their place, their head (a ring of their tone, name, count, « + »).
         // Their heights aside: the preview's Chromium hides its scrollbars, the app's window shows the board's.
-        const xyw = (el: Locator) => place(el).then((p) => p.slice(0, 3));
-        expect.soft(await place(board.locator('.cols')), `board's place, ${where}`).toEqual(await place(pv.locator('.board')));
+        const xyw = (el: Locator) => place(el).then(([x, , w]) => [x, w]);
+        expect.soft(await xyw(board.locator('.cols')), `board's place, ${where}`).toEqual(await xyw(pv.locator('.board')));
         const columns = [cols.todo, cols.doing, cols.review, cols.done];
         for (const [i, col] of columns.entries()) {
           const pcol = pv.locator('.col').nth(i);

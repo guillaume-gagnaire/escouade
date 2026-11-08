@@ -15,6 +15,18 @@ use std::process::Stdio;
 use std::time::Duration;
 use tauri::Runtime;
 
+/// A project's code host, as the sidebar and the board need it (ESC-390).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodeHost {
+    pub kind: String,
+    pub name: String,
+    /// Its word for a pull request (« PR », « MR » on GitLab).
+    pub word: String,
+    pub pull_requests: bool,
+    pub deployments: bool,
+}
+
 /// How an account stands, as its last check found it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -409,6 +421,30 @@ impl<R: Runtime> Core<R> {
             on,
             stopped,
         }
+    }
+
+    /// The code host of a project (ESC-390): its remote recognised by a code host whose plugin is
+    /// on. None without a remote, on a host Escouade does not know, or whose plugin is off: the
+    /// sidebar has no « PR » tab then, and the board no « Environnements ».
+    pub async fn project_code_host(&self, project_id: &str) -> Option<CodeHost> {
+        let remote = self.project_forge(project_id).await?;
+        let provider = remote
+            .kind
+            .as_deref()
+            .and_then(|k| self.forges.read().get(k))?;
+        if let Some(id) = provider.plugin() {
+            if !self.served_by(id).on {
+                return None;
+            }
+        }
+        let can = provider.capabilities();
+        Some(CodeHost {
+            kind: provider.kind(),
+            name: provider.name().to_string(),
+            word: provider.request_word().to_string(),
+            pull_requests: can.pull_requests,
+            deployments: can.deployments,
+        })
     }
 
     /// What a project's remote names (the remote of its target branch, else origin, else the

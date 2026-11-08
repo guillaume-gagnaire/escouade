@@ -2,8 +2,8 @@
 title: "Barre latérale"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","src-tauri/src/core.rs","src-tauri/src/engine/claude/mod.rs","src-tauri/src/worktrees.rs"]
-tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19","ESC-380"]
-decisions: []
+tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19","ESC-380","ESC-390"]
+decisions: ["environnements-montres-et-onglets-selon"]
 compared: null
 ---
 
@@ -196,3 +196,10 @@ La section entre Agents et Terminaux : les commandes qui lancent le projet pour 
 - Les commandes de lancement et les terminaux ne survivent pas à un redémarrage.
 - Escouade ne peut pas changer le remote control d'une interface Claude Code déjà ouverte : le changement attend son prochain lancement.
 - Claude Code ne dit pas pourquoi il refuse le remote control : Escouade le déduit de signes indirects.
+
+## Les onglets du haut (ESC-390)
+
+- « Agents · Kanban · PR · Docs » : des mots seuls, sans icône, dans une piste qui remplit la largeur de la barre ; chaque onglet a la largeur de son mot et ils se partagent le reste. L'onglet ouvert est en relief (direction A, choisie sur aperçu le 2026-11-08).
+- « Agents » porte le nombre d'agents en gris ; « Kanban », la pastille ambre des tickets « À tester ». « PR » est le mot de l'hébergeur (« MR » sur GitLab).
+- « PR » n'est là que si le projet a un hébergeur de code dont le plugin est actif et qui lit des pull requests (voir *Vue « Pull requests » du projet*). Sans lui, trois onglets remplissent la barre de la même façon. Un hébergeur qui part pendant que la vue des PR est ouverte ramène aux agents.
+- De 220 à 480 px de large, les mots restent entiers.

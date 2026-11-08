@@ -901,7 +901,9 @@ test('a ticket is taken by an agent that loops until its criteria are met, then 
       const [places, cfg, label, auto] = [r('.places'), r('.cfg'), r('.cfg .k'), r('.auto')];
       const problems: string[] = [];
       if (label.right > cfg.right + 0.5) problems.push(`label ends at ${label.right}, its button at ${cfg.right}`);
-      if (cfg.right > auto.left + 0.5) problems.push(`button ends at ${cfg.right}, the switch starts at ${auto.left}`);
+      // Two rows since ESC-390: the settings end inside the header, the switch above them.
+      if (cfg.right > auto.right + 0.5) problems.push(`button ends at ${cfg.right}, past the switch at ${auto.right}`);
+      if (cfg.top < auto.bottom) problems.push(`button at ${cfg.top}, over the switch's row ending at ${auto.bottom}`);
       if (places.right > cfg.left + 0.5) problems.push(`places end at ${places.right}, the button starts at ${cfg.left}`);
       return problems;
     });

@@ -25,9 +25,11 @@ import type { FormFile } from './ticket-files';
 import type { FormImage } from './ticket-images';
 import { setSources } from './integrations';
 import { applyTheme } from './theme';
+import { hasTab } from './code-host';
 import { workflows } from './workflows.svelte';
 import type {
   AccountView,
+  CodeHost,
   Agent,
   AgentStatus,
   AutopilotPause,
@@ -404,6 +406,11 @@ class AppState {
   prReviewOpen = $state<Record<string, number | null>>({});
   /** The word of each project's code host for a pull request (« PR », « MR » on GitLab), once read (ESC-65). */
   prWords = $state<Record<string, string>>({});
+  /**
+   * Each project's code host as last read (ESC-390): null for none, and then no « PR » tab in the sidebar nor
+   * « Environnements » on the board; absent while it is not read yet.
+   */
+  codeHosts = $state<Record<string, CodeHost | null>>({});
   /** The space of the Docs tab each project shows: the spec, the decisions or the documents. */
   docsSpace = $state<Record<string, DocsSpaceId>>({});
   /** The page of the spec each project shows; none: the map of the subjects. */
@@ -812,6 +819,9 @@ class AppState {
       case 'environments':
         this.environments[e.environments.projectId] = e.environments;
         break;
+      case 'codeHosts':
+        this.readCodeHosts();
+        break;
       case 'boardIssue':
         if (e.issue) this.boardIssues[e.projectId] = e.issue;
         else delete this.boardIssues[e.projectId];
@@ -836,10 +846,14 @@ class AppState {
       case 'vectorsDownload':
         this.vectorsProgress = { done: e.done, total: e.total };
         break;
-      case 'git':
+      case 'git': {
+        const had = this.git[e.projectId]?.hasRemote;
         this.git[e.projectId] = e.git;
+        // A remote added or removed (`git remote add` in a terminal): its code host read again (ESC-390).
+        if (had !== undefined && had !== e.git.hasRemote && e.projectId in this.codeHosts) void this.readCodeHost(e.projectId);
         if (e.projectId === this.ui.activeProject) this.gitTick++;
         break;
+      }
       case 'usage':
         this.usage = e.usage;
         break;
@@ -851,6 +865,7 @@ class AppState {
         break;
       case 'accounts':
         this.settings = { ...this.settings, accounts: e.accounts, engineOrder: e.engineOrder };
+        this.readCodeHosts();
         break;
       case 'engineModels':
         this.engineModels = { ...this.engineModels, [e.engine]: e.models };
@@ -1233,6 +1248,8 @@ class AppState {
    */
   openPrs(projectId = this.ui.activeProject) {
     if (!projectId) return;
+    // A project known to have no code host has no pull requests to show (ESC-390).
+    if (projectId in this.codeHosts && !hasTab(this.codeHosts[projectId], 'pullRequests')) return;
     this.ui.activeProject = projectId;
     this.ui.view = 'project';
     this.board[projectId] = false;
@@ -1246,6 +1263,28 @@ class AppState {
 
   closePrs(projectId = this.ui.activeProject) {
     if (projectId) this.prs[projectId] = false;
+  }
+
+  /**
+   * Reads a project's code host again (ESC-390). One gone while its views are open takes them away: the agents in
+   * place of the pull requests, the tickets in place of the environments.
+   */
+  async readCodeHost(projectId: string) {
+    let host: CodeHost | null;
+    try {
+      host = await api.projectCodeHost(projectId);
+    } catch {
+      return;
+    }
+    this.codeHosts[projectId] = host;
+    if (host) this.prWords[projectId] = host.word;
+    if (!hasTab(host, 'pullRequests') && this.prs[projectId]) this.closePrs(projectId);
+    if (!hasTab(host, 'deployments') && this.envView[projectId]) this.envView[projectId] = false;
+  }
+
+  /** The code hosts of the projects already read, read again (a host's plugin switched, an account connected). */
+  readCodeHosts() {
+    for (const id of Object.keys(this.codeHosts)) void this.readCodeHost(id);
   }
 
   /** A review as the backend has it; one that ends out of sight says so. */

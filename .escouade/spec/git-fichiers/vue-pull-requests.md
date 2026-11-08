@@ -2,8 +2,8 @@
 title: "Vue « Pull requests » du projet"
 subject: "git-fichiers"
 sources: ["docs/TODO-1.8.md","design/esc-65/README.md","src/components/prs/PrsView.svelte","src/lib/prlist.ts","src-tauri/src/pragent.rs","src-tauri/src/prview.rs"]
-tickets: ["ESC-65","ESC-66","ESC-68","ESC-383"]
-decisions: [60]
+tickets: ["ESC-65","ESC-66","ESC-68","ESC-383","ESC-390"]
+decisions: [60,"environnements-montres-et-onglets-selon"]
 compared: null
 ---
 
@@ -15,7 +15,9 @@ compared: null
 
 ### Où
 
-- Dans la barre latérale du projet, le sélecteur devient « Agents | Kanban | PR | Docs ». « PR » est le mot de l'hébergeur : « MR » sur GitLab, une fois la liste lue ou d'après un agent du projet. Infobulle : « Les PR ouvertes du projet ».
+- Dans la barre latérale du projet, l'onglet « PR » de « Agents · Kanban · PR · Docs » (voir *Barre latérale*). « PR » est le mot de l'hébergeur : « MR » sur GitLab. Infobulle : « Les PR ouvertes du projet ».
+- L'onglet n'existe que si le projet a un hébergeur de code : la remote de sa cible (sinon `origin`, sinon la seule) est reconnue par un hébergeur dont le plugin est actif, et cet hébergeur lit des pull requests. Sans lui, la barre a trois onglets, et rien n'ouvre la vue.
+- L'hébergeur se relit à l'ouverture du projet, quand une remote apparaît ou disparaît (`git remote add` dans un terminal), quand la fenêtre revient au premier plan, quand un plugin change (activé, coupé, installé) et quand un compte d'hébergeur est connecté ou retiré. Parti pendant que la vue est ouverte, elle laisse place aux agents ; arrivé, l'onglet apparaît.
 - La vue prend la place de travail comme le Kanban, et la quitte de même : un agent, un terminal, un lancement, l'éditeur, le Kanban ou Docs choisis.
 - En-tête comme celui du Kanban : « Pull requests » (« Merge requests » sur GitLab), dessous le projet et « 30 ouvertes » ; à droite les trois filtres, « Lu à 14:02 » (masqué sous 1100 px) et « Rafraîchir ».
 
@@ -52,5 +54,6 @@ compared: null
 - Essai réel sur GitHub à faire avec le compte de l'utilisateur ; GitLab, Bitbucket Cloud, Gitea/Forgejo et Azure DevOps suivent leur documentation et restent à essayer en vrai.
 - La carte d'un agent lancé sur une PR de fork ne montre pas cette PR : sa branche `pr-<n>` n'est pas celle du fork.
 - 30 PR au plus, les plus récemment mises à jour.
+- Une remote dont seule l'adresse change hors d'Escouade (`git remote set-url`) se voit au retour de la fenêtre au premier plan, pas avant.
 
 - Chaque lecture de la liste est gardée : la vue d'ensemble et `list_pull_requests` la reprennent pendant une minute, et une relecture nouvellement demandée à l'utilisateur se notifie (voir *Notifications*).

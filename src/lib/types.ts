@@ -1237,6 +1237,16 @@ export interface Deployment {
   log?: string | null;
 }
 
+/** A project's code host (`forge::connect::CodeHost`, ESC-390): its remote recognised by a host whose plugin is on. */
+export interface CodeHost {
+  kind: string;
+  name: string;
+  /** Its word for a pull request: « PR », « MR » on GitLab. */
+  word: string;
+  pullRequests: boolean;
+  deployments: boolean;
+}
+
 /** An environment as the view « Environnements » shows it (`deploys::Environment`). */
 export interface Environment {
   name: string;
@@ -2635,6 +2645,8 @@ export type UiEvent =
   /** Why no ticket of the project's board starts (its target branch), or null once they may. */
   | { type: 'boardIssue'; projectId: string; issue: string | null }
   | { type: 'environments'; environments: ProjectEnvironments }
+  /** The code hosts may have changed (a host's plugin on or off, an account connected or gone): read again (ESC-390). */
+  | { type: 'codeHosts' }
   | { type: 'prReview'; review: AgentReview }
   | { type: 'prReviewGone'; projectId: string; number: number }
   /** Why no ticket of a project that goes to any account starts for now, or null once they may; `projects`: the same for the paused projects that prefer an account. */

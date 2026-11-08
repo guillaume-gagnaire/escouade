@@ -3154,6 +3154,8 @@ pub async fn forge_connect(
     // An account there: the CI of the targets and the pull requests read at once (ESC-63).
     if r.is_ok() {
         core.wake_ticket_prs();
+        // A host known by its account only (a GitLab of its own) is a project's code host now (ESC-390).
+        core.hub.emit(crate::model::UiEvent::CodeHosts);
     }
     r
 }
@@ -3163,7 +3165,18 @@ pub async fn forge_disconnect(
     core: CoreState<'_>,
     host: String,
 ) -> Res<crate::forge::connect::ForgesView> {
-    core.forge_disconnect(&host).await.map_err(err)
+    let r = core.forge_disconnect(&host).await.map_err(err);
+    core.hub.emit(crate::model::UiEvent::CodeHosts);
+    r
+}
+
+/// The project's code host (ESC-390): none without a remote on a host whose plugin is on.
+#[tauri::command]
+pub async fn project_code_host(
+    core: CoreState<'_>,
+    project_id: String,
+) -> Res<Option<crate::forge::connect::CodeHost>> {
+    Ok(core.project_code_host(&project_id).await)
 }
 
 #[tauri::command]

@@ -60,6 +60,7 @@
   import { estimateHint, spent } from '../lib/spend';
   import { drivenAgents, pendingFor, pendingLabel, pendingText } from '../lib/later';
   import { app, type HeaderFolded } from '../lib/state.svelte';
+  import { hasTab } from '../lib/code-host';
   import { shortWindow } from '../lib/short-window.svelte';
   import { closeTerminal, newTerminal, terminalIn } from '../lib/term-actions';
   import { canPrepare, prepareLaunch, stopTests } from '../lib/test-launch.svelte';
@@ -147,6 +148,13 @@
   const review = $derived(app.reviewCount(project.id));
   /** The word of the project's code host (« PR », « MR » on GitLab): read by its view, else by one of its agents (ESC-65). */
   const prsWord = $derived(app.prWords[project.id] ?? app.projectAgents.find((a) => a.prWord)?.prWord ?? 'PR');
+  /** The « PR » tab only for a project whose remote is on a code host whose plugin is on (ESC-390). */
+  const prsTab = $derived(hasTab(app.codeHosts[project.id], 'pullRequests'));
+  // Its code host read when the project shows, and again when the window comes back (its remote may have changed).
+  $effect(() => {
+    const id = project.id;
+    untrack(() => void app.readCodeHost(id));
+  });
   /** Who waits for an answer goes first (2.0 design). */
   const agents = $derived(sidebarOrder(app.projectAgents));
   /** The requests answered from the list, until the agent's request is gone: one click answers once. */
@@ -751,10 +759,11 @@
 {/snippet}
 
 <!-- The keys 1, 2… of the list, wherever the focus is but a field. -->
-<svelte:window onkeydown={listKey} />
+<svelte:window onkeydown={listKey} onfocus={() => void app.readCodeHost(project.id)} />
 
 <aside class="side">
-  <div class="seg segmented" role="group" aria-label={t('nav.sidebar.viewLabel')}>
+  <!-- Agents · Kanban · PR · Docs (direction A of design/kanban-envs-2-2): words alone, each tab its own width. -->
+  <div class="seg" role="group" aria-label={t('nav.sidebar.viewLabel')}>
     <button
       class:on={!app.boardOn && !app.docsOn && !app.prsOn}
       aria-pressed={!app.boardOn && !app.docsOn && !app.prsOn}
@@ -762,24 +771,21 @@
         app.closeBoard(project.id);
         app.closeDocs(project.id);
         app.closePrs(project.id);
-      }}
-      ><Icon name="agents" size={14} />{t('common.agents')}<span class="count" aria-hidden="true">{app.projectAgents.length}</span></button
+      }}>{t('common.agents')}<span class="count" aria-hidden="true">{app.projectAgents.length}</span></button
     >
     <button class:on={app.boardOn} aria-pressed={app.boardOn} onclick={() => app.openBoard(project.id)}
-      ><Icon name="kanban" size={14} />Kanban{#if review}<span class="badge" use:tip={t('nav.sidebar.toReview', { count: review })}
-          >{review}</span
-        >{/if}</button
+      >Kanban{#if review}<span class="badge" use:tip={t('nav.sidebar.toReview', { count: review })}>{review}</span>{/if}</button
     >
-    <!-- The project's open pull requests (ESC-65), in the host's word: « PR », « MR » on GitLab. -->
-    <button
-      class:on={app.prsOn}
-      aria-pressed={app.prsOn}
-      onclick={() => app.openPrs(project.id)}
-      use:tip={t('prs.list.tabHint', { word: prsWord })}><Icon name="pr" size={14} />{t('prs.list.tab', { word: prsWord })}</button
-    >
-    <button class:on={app.docsOn} aria-pressed={app.docsOn} onclick={() => app.openDocs(project.id)}
-      ><Icon name="file" size={14} />{t('docs.tab')}</button
-    >
+    {#if prsTab}
+      <!-- The project's open pull requests (ESC-65), in the host's word: « PR », « MR » on GitLab; only with a code host. -->
+      <button
+        class:on={app.prsOn}
+        aria-pressed={app.prsOn}
+        onclick={() => app.openPrs(project.id)}
+        use:tip={t('prs.list.tabHint', { word: prsWord })}>{t('prs.list.tab', { word: prsWord })}</button
+      >
+    {/if}
+    <button class:on={app.docsOn} aria-pressed={app.docsOn} onclick={() => app.openDocs(project.id)}>{t('docs.tab')}</button>
   </div>
 
   {#if app.docsOn}
@@ -1422,22 +1428,64 @@
     inset: 0 0 0 -6px;
   }
 
-  /* Agents | Kanban | PR | Docs: each at least its own width, the short « PR » the least, and the room left shared
-     between the four (`auto` tracks stretch), so that they fill the bar as the three did. */
+  /*
+   * Agents | Kanban | PR | Docs (direction A, ESC-390): words alone, each tab its own width and the room left shared,
+   * the tab shown raised as a key of the panel; three tabs without a code host fill the bar the same way.
+   */
   .seg {
-    display: grid;
-    grid-template-columns: auto auto auto auto;
-    gap: 0;
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 10px;
+    background: var(--raise);
+    box-shadow: inset 0 0 0 1px var(--line);
   }
   .seg button {
-    gap: 4px;
-    padding: 0 3px;
+    flex: 1 1 auto;
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    height: 28px;
+    padding: 0 6px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 550;
     white-space: nowrap;
+    cursor: pointer;
+    transition:
+      color 0.15s,
+      background-color 0.15s;
+  }
+  .seg button:hover {
+    color: var(--text);
+  }
+  .seg button.on {
+    background: var(--panel);
+    color: var(--text);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 1px 2px rgba(0, 0, 0, calc(0.18 * var(--shade)));
+  }
+  .seg button:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
   }
   .seg .count {
     color: var(--dim);
     font-size: 11.5px;
+    font-weight: 500;
     font-variant-numeric: tabular-nums;
+  }
+  .seg .badge {
+    min-width: 16px;
+    height: 16px;
+    font-size: 10px;
   }
   .badge {
     min-width: 17px;
@@ -1498,12 +1546,6 @@
   }
   /* Narrow (ESC-204), « Nouvel agent » stays whole: its shortcut goes, still in its tooltip; on a card, the bars of a
      plan and of a ticket's loops go, their words stay. */
-  /* Below its default width, the four views keep their words, without their icons. */
-  @container sidebar (max-width: 255px) {
-    .seg button :global(.icon) {
-      display: none;
-    }
-  }
   @container sidebar (max-width: 250px) {
     .new-agent kbd,
     .plan-bar,
