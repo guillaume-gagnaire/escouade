@@ -4,6 +4,12 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
+## [2.1.5] — 2026-11-08
+
+### Fixes
+
+- **Antigravity CLI is turned off:** with agy 1.5, its agents could run a command or write a file without asking you, even in “Ask”. Escouade no longer starts it and says so in Settings › Harness; it comes back with a fix.
+
 ## [2.1.4] — 2026-11-07
 
 ### New

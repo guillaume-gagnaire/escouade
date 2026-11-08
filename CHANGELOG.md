@@ -4,6 +4,12 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
+## [2.1.5] — 2026-11-08
+
+### Corrections
+
+- **Antigravity CLI est coupé :** avec agy 1.5, ses agents pouvaient lancer une commande ou écrire un fichier sans te le demander, même en « Demander ». Escouade ne le lance plus et le dit dans Réglages › Harness ; il revient avec un correctif.
+
 ## [2.1.4] — 2026-11-07
 
 ### Nouveautés

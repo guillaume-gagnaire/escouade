@@ -1068,6 +1068,20 @@ impl Engine for Agy {
         TESTED
     }
 
+    // Refused whatever its version in 2.1.5 (ESC-388): with agy 1.5.3, `-p` lets a command or a write through with no rule
+    // and no question (real_agy_rules, 2026-11-08), so « Demander » would ask nothing. It comes back with its fix.
+    fn unsupported_line(&self, lang: Lang, version: &super::registry::Version) -> Option<String> {
+        // Its tests drive the fake agy still.
+        if cfg!(test) {
+            return None;
+        }
+        Some(tr_in!(
+            lang,
+            "Antigravity CLI {version} est coupé dans cette version d’Escouade : avec agy 1.5, ses agents pouvaient lancer une commande ou écrire un fichier sans te le demander. Il revient avec un correctif.",
+            "Antigravity CLI {version} is turned off in this version of Escouade: with agy 1.5, its agents could run a command or write a file without asking you. It comes back with a fix."
+        ))
+    }
+
     fn oldest_reason(&self, lang: Lang) -> String {
         tr_in!(
             lang,
