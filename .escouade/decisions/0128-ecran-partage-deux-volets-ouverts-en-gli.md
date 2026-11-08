@@ -1,9 +1,9 @@
 ---
-number: null
+number: 128
 id: "ecran-partage-deux-volets-ouverts-en-gli"
 title: "Écran partagé : jusqu'à quatre volets, ouverts en glissant depuis la barre latérale (direction B)"
 date: "2026-11-08"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-392"
 pages: ["fenetre/ecran-partage","fenetre/raccourcis"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"fenetre/ecran-partage","added":46,"removed":17},{"page":"fenetre/raccourcis","added":4,"removed":2}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-08T21:51:14+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

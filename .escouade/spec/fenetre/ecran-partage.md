@@ -3,7 +3,7 @@ title: "Écran partagé"
 subject: "fenetre"
 sources: ["docs/SPLIT.md","design/split-view/index.html"]
 tickets: ["ESC-392"]
-decisions: ["ecran-partage-deux-volets-ouverts-en-gli"]
+decisions: [128]
 compared: null
 ---
 

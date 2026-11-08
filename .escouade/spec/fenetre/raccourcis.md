@@ -3,7 +3,7 @@ title: "Raccourcis"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md"]
 tickets: ["ESC-392"]
-decisions: ["ecran-partage-deux-volets-ouverts-en-gli"]
+decisions: [128]
 compared: null
 ---
 
