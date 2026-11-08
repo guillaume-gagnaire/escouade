@@ -119,6 +119,12 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - The install window of a plugin with no program no longer says Escouade does not filter its network: its webhooks go to the declared host only. It also says what sets off each webhook, and names the store once.
 - Two tickets approved at the same moment no longer get the same decision number. A duplicate already there no longer crashes the Decisions view: it shows both.
 
+## [2.1.5] — 2026-11-08
+
+### Fixes
+
+- **Antigravity CLI is turned off:** with agy 1.5, its agents could run a command or write a file without asking you, even in “Ask”. Escouade no longer starts it and says so in Settings › Harness; it comes back with a fix.
+
 ## [2.1.4] — 2026-11-07
 
 ### New

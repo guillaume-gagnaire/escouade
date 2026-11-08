@@ -119,6 +119,12 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - La fenêtre d’installation d’un plugin sans programme ne dit plus qu’Escouade ne filtre pas son réseau : ses webhooks ne partent que vers l’hôte déclaré. Elle dit aussi ce qui déclenche chaque webhook, et le store une seule fois.
 - Deux tickets validés au même moment ne reçoivent plus le même numéro de décision. Un doublon déjà présent ne fait plus planter la vue Décisions : elle montre les deux.
 
+## [2.1.5] — 2026-11-08
+
+### Corrections
+
+- **Antigravity CLI est coupé :** avec agy 1.5, ses agents pouvaient lancer une commande ou écrire un fichier sans te le demander, même en « Demander ». Escouade ne le lance plus et le dit dans Réglages › Harness ; il revient avec un correctif.
+
 ## [2.1.4] — 2026-11-07
 
 ### Nouveautés
