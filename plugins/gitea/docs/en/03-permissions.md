@@ -8,7 +8,7 @@ This plugin is a WASM module: it runs inside Escouade, isolated, with no program
 - The instance of each of your accounts, the one you typed: that host alone, on its port, none of its subdomains. It may be on your local network: you chose it.
 - No other host. Escouade's host enforces it: a call to another host, to an IP address written as such, or to an address of your machine or local network (apart from the instance you typed) is refused before it leaves.
 - A redirect to a host other than the instance gets neither your token nor the call's body.
-- It goes through the proxy of Settings › Network when you have one.
+- It goes through the proxy of Settings › Advanced › Network when you have one.
 - Each answer is capped at 8 MiB and 15 seconds.
 
 ## What it reads and writes on the instance

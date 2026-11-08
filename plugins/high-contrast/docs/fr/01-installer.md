@@ -4,11 +4,11 @@
 
 1. Dans Escouade, ouvre la vue Plugins (l’icône en forme de pièce de puzzle de la barre des projets).
 2. **Store**, cherche « Contraste élevé » (ou la catégorie **Thèmes**), puis **Installer**. Tu peux aussi partir de sa page sur <https://store.escouade.dev/plugins/dev.escouade.high-contrast> et **Ouvrir dans Escouade**.
-3. La fenêtre « Installer Contraste élevé ? » dit « Sans programme : rien de lui ne s’exécute, ses contributions sont lues », et ce qu’il ajoute : un thème, dans Réglages › Application › Couleurs. **Installer**.
+3. La fenêtre « Installer Contraste élevé ? » dit « Sans programme : rien de lui ne s’exécute, ses contributions sont lues », et ce qu’il ajoute : un thème, dans Réglages › Général › Couleurs. **Installer**.
 
 ## Le choisir
 
-1. **Réglages › Application**, rangée **Couleurs** (sous **Thème**).
+1. **Réglages › Général**, rangée **Couleurs** (sous **Thème**).
 2. Choisis **Contraste élevé**.
 
 Le thème s’applique tout de suite : la fenêtre, les terminaux ouverts (sans les rouvrir) et l’éditeur. Il est gardé avec tes réglages et posé avant le premier affichage au démarrage suivant.
@@ -20,7 +20,7 @@ Pour revenir aux couleurs d’Escouade, choisis **Escouade** dans **Couleurs**.
 ## Ce qu’il change
 
 - Les surfaces, les bordures, les textes, l’accent, le focus et les couleurs d’état (en cours, en attente, terminé, ajouts et suppressions de code). En sombre, le fond est noir et l’accent jaune ; en clair, le fond est blanc et l’accent bleu.
-- La palette de couleurs de projet : six couleurs (jaune, cyan, magenta, vert, orange, violet) remplacent celle d’Escouade dans l’assistant « Nouveau projet », dans Réglages › Projet et dans le menu d’une tuile. Un projet garde sa couleur : si elle n’est pas dans la palette, elle y est ajoutée à la fin.
+- La palette de couleurs de projet : six couleurs (jaune, cyan, magenta, vert, orange, violet) remplacent celle d’Escouade dans l’assistant « Nouveau projet », dans Réglages › Projets › Projet et dans le menu d’une tuile. Un projet garde sa couleur : si elle n’est pas dans la palette, elle y est ajoutée à la fin.
 
 Ce qu’il ne donne pas garde la couleur d’Escouade : le bouton plein (`--primary`), la coloration du code (`--syn-*`), les couleurs ANSI des terminaux (`--ansi-*`), l’historique de git (`--lane-*`). La forme (polices, rayons, largeurs) reste toujours celle d’Escouade.
 

@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-azure-devops"
-version = "2.2.2"
+version = "2.2.3"
 description = "Le plugin Azure DevOps d'Escouade : les PR, la CI (stratégies et Azure Pipelines), les relectures et le merge d'Azure Repos, et les éléments de travail d'Azure Boards"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"

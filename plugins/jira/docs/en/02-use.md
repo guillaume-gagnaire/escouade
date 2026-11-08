@@ -12,11 +12,11 @@ Tick the issues, pick "Max loops", then "Import". Each imported ticket keeps the
 
 ## Acceptance criteria
 
-With "Extract the acceptance criteria" on (Settings › Integrations, "Sync" group), the plugin looks for the criteria in the description, once turned into Markdown: the list items under a heading or a line that names them ("Acceptance criteria", "Critères d'acceptation", "Definition of done", "Criteria", "AC", "DoD"), otherwise its task list items (`- [ ]`). It keeps twenty at most, of 300 characters at most. With no criterion found, the ticket gets Escouade's default criteria.
+With "Extract the acceptance criteria" on (Settings › Connected services, "Sync" group), the plugin looks for the criteria in the description, once turned into Markdown: the list items under a heading or a line that names them ("Acceptance criteria", "Critères d'acceptation", "Definition of done", "Criteria", "AC", "DoD"), otherwise its task list items (`- [ ]`). It keeps twenty at most, of 300 characters at most. With no criterion found, the ticket gets Escouade's default criteria.
 
 ## The Jira issue follows its ticket
 
-In Settings › Integrations, the "Status mapping" gives, for each Kanban column, a status of the Jira project (those of all its issue types, each once). Picking the project fills it in: the status that looks like "in progress" for "In progress" and "To test", the one that looks like "to test" for "Done", nothing for "To do".
+In Settings › Projects › Imported tickets, the "Status mapping" gives, for each Kanban column, a status of the Jira project (those of all its issue types, each once). Picking the project fills it in: the status that looks like "in progress" for "In progress" and "To test", the one that looks like "to test" for "Done", nothing for "To do".
 
 When an imported ticket reaches a column, if "Update the external status" is on:
 
@@ -29,7 +29,7 @@ With "Post a summary on every loop", each new loop of an agent also leaves a com
 
 ## Automatic import
 
-Settings › Integrations › "Automatic import" imports on its own the open issues that carry the chosen label (`claude-ready` by default). For Jira, it is a label of the issue.
+Settings › Connected services › "Automatic import" imports on its own the open issues that carry the chosen label (`claude-ready` by default). For Jira, it is a label of the issue.
 
 ## Limits
 

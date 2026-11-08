@@ -34,7 +34,7 @@ The key of Settings › Voice is **the Mistral account**: the voice and Mistral 
 
 1. Install Mistral Vibe: `uv tool install mistral-vibe` (you need [uv](https://docs.astral.sh/uv/)). Escouade finds `vibe-acp` on the `PATH`, or where `uv` puts it.
 2. Give it your key with `vibe --setup`, in a terminal: that is **the machine’s account**. Vibe keeps it on its side; Escouade never reads it.
-3. For another Mistral account, open Settings › Accounts, “Add an account…”, harness Mistral Vibe, “A new account”: its API key goes in the field (“From console.mistral.ai, API Keys”). Left empty, the account takes the Mistral key of Settings › Voice (“Empty: the Mistral key of Settings › Voice (…)”). Two Mistral organizations stay two accounts, each billed on its own.
+3. For another Mistral account, open Settings › Accounts and harnesses, “Add an account…”, harness Mistral Vibe, “A new account”: its API key goes in the field (“From console.mistral.ai, API Keys”). Left empty, the account takes the Mistral key of Settings › Voice (“Empty: the Mistral key of Settings › Voice (…)”). Two Mistral organizations stay two accounts, each billed on its own.
 4. Start an agent with the “Mistral Vibe” harness.
 
 The site’s [Harnesses](https://escouade.dev/en/docs/harness#mistral-vibe) page says the rest: modes, cost, terminal view.

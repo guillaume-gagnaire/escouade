@@ -5,9 +5,9 @@ Les messages ci-dessous sont ceux qu’Escouade et le plugin affichent, mot pour
 ## L’agent ne démarre pas
 
 **« Cursor CLI introuvable. Installe-le ou indique son chemin dans les réglages. »**
-Escouade n’a pas trouvé `agent`. Installe Cursor CLI (voir l’onglet Installer), ou donne le chemin de son exécutable dans Réglages › Harness.
+Escouade n’a pas trouvé `agent`. Installe Cursor CLI (voir l’onglet Installer), ou donne le chemin de son exécutable dans Réglages › Comptes et harness.
 
-**« Aucun compte Cursor CLI : ajoute-en un dans Réglages › Comptes. »**
+**« Aucun compte Cursor CLI : ajoute-en un dans Réglages › Comptes et harness. »**
 Ajoute le compte de la machine ou un compte par sa clé d’API.
 
 **« Cursor CLI n’a pas ouvert la session de l’agent : {raison}. S’il demande une connexion, connecte-le dans un terminal. »**
@@ -30,7 +30,7 @@ Escouade a refusé le lancement que le plugin a décrit. Le plugin officiel ne f
 **« Cursor CLI n’est pas connecté sur cette machine (« Please sign in to continue ») : lance agent login dans un terminal. »**
 Le compte de la machine n’est plus connecté. `agent login`, puis envoie un message.
 
-**« Cursor a refusé la clé d’API de ce compte : donne-la de nouveau dans Réglages › Comptes, « Changer la clé… ». »**
+**« Cursor a refusé la clé d’API de ce compte : donne-la de nouveau dans Réglages › Comptes et harness, « Changer la clé… ». »**
 La clé du compte est fausse ou révoquée. Crée-en une sur cursor.com, Settings › API Keys, et donne-la par « Changer la clé… ».
 
 **« Limite d’usage de ce compte Cursor atteinte (« Upgrade your plan to continue ») : l’usage inclus du mois est épuisé jusqu’à la remise à zéro de son offre. Son usage : {adresse} »**

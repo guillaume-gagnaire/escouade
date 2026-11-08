@@ -488,8 +488,8 @@ impl Boards {
 pub fn no_right(lang: Lang, said: &str, page: &str) -> String {
     tr_in!(
         lang,
-        "{said}. Le jeton d'Azure DevOps doit avoir le droit Work Items (lecture et écriture) : crée-en un sur {page}, puis remplace-le dans Réglages › Intégrations › Hébergeurs de code.",
-        "{said}. The Azure DevOps token needs the Work Items right (read and write): make one on {page}, then replace it in Settings › Integrations › Code hosts."
+        "{said}. Le jeton d'Azure DevOps doit avoir le droit Work Items (lecture et écriture) : crée-en un sur {page}, puis remplace-le dans Réglages › Services connectés › Hébergeurs de code.",
+        "{said}. The Azure DevOps token needs the Work Items right (read and write): make one on {page}, then replace it in Settings › Connected services › Code hosts."
     )
 }
 

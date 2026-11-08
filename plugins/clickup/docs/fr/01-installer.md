@@ -8,7 +8,7 @@ Sa page, dans la même vue, a un interrupteur pour toute l'app et un onglet « P
 
 ## 2. Créer la clé d'API chez ClickUp
 
-1. Dans Escouade, ouvre Réglages › Intégrations. Dans « Sources du Kanban », groupe « Comptes connectés », clique sur « Connecter… » à la ligne ClickUp.
+1. Dans Escouade, ouvre Réglages › Services connectés. Dans « Sources de tickets », groupe « Comptes connectés », clique sur « Connecter… » à la ligne ClickUp.
 2. Clique sur « Créer une clé d'API ClickUp ». Ton navigateur ouvre `https://app.clickup.com/settings/apps`, la page « Apps » de tes réglages ClickUp. Génère ta clé d'API personnelle (elle commence par `pk_`) et copie-la.
 3. Colle-la dans le champ « Clé d'API ».
 
@@ -24,7 +24,7 @@ La connexion est gardée tout de suite : elle ne passe pas par « Enregistrer »
 
 ## 4. Lier une liste à un projet
 
-Toujours dans Réglages › Intégrations, le groupe « Sources liées à `<projet>` » propose la liste « Liste ClickUp ». Elle range les listes de tous tes espaces de travail par espace et par dossier (« Produit › Sprints »), comme la barre latérale de ClickUp : les listes hors dossier d'abord, sans les archivées. Le nom de l'espace de travail vient devant quand tu en as plusieurs. Menu ouvert, taper les premières lettres d'un nom y va.
+Dans Réglages › Projets › Tickets importés, le groupe « Sources liées à `<projet>` » propose la liste « Liste ClickUp ». Elle range les listes de tous tes espaces de travail par espace et par dossier (« Produit › Sprints »), comme la barre latérale de ClickUp : les listes hors dossier d'abord, sans les archivées. Le nom de l'espace de travail vient devant quand tu en as plusieurs. Menu ouvert, taper les premières lettres d'un nom y va.
 
 Choisis une liste. Escouade charge ses statuts et pré-remplit la « Correspondance des statuts » (voir **Utiliser**). Enregistre les réglages.
 

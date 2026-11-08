@@ -17,7 +17,7 @@ No fact reached it. Check:
 Sent: Slack took the message.
 
 **`no Slack token kept: nothing sent (Plugins › Slack › Settings)`**
-No token is kept. Paste the bot’s token in **Settings › Secrets**, then **Keep**.
+No token is kept. Paste the bot’s token in the **Settings** tab of the plugin’s page, **Secrets** section, then **Keep**.
 
 **`the token kept is not a Slack bot token (xoxb-…): nothing sent`**
 The token kept does not start with `xoxb-`: it may be a user token (`xoxp-`) or the app’s. Copy the **Bot User OAuth Token** from **OAuth & Permissions**.
@@ -31,7 +31,7 @@ Slack answered, but refused. The end is Slack’s error code:
 - `is_archived`: the channel is archived.
 
 **`Slack could not be reached: {reason}`**
-The request did not get through: machine offline, proxy, certificate, Slack did not answer within 10 seconds, or its answer was not JSON (a Slack outage). Check your connection and **Settings › Network**. That message is lost.
+The request did not get through: machine offline, proxy, certificate, Slack did not answer within 10 seconds, or its answer was not JSON (a Slack outage). Check your connection and **Settings › Advanced › Network**. That message is lost.
 
 **`the queue of facts is full (256): the oldest, agent.status #17, is dropped`**
 Facts came faster than the plugin handled them: the oldest was not posted.

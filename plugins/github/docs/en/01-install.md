@@ -19,7 +19,7 @@ The token acts on your behalf: what it opens or publishes is under your account.
 
 ## 3. Connect
 
-1. In Escouade, open Settings › Integrations › "Code hosts", then "Connect a code host…". A repository whose remote is on an instance with no account also offers "Connect" followed by its host.
+1. In Escouade, open Settings › Connected services › "Code hosts", then "Connect a code host…". A repository whose remote is on an instance with no account also offers "Connect" followed by its host.
 2. "Code host": GitHub.
 3. "Address": empty for github.com; otherwise your instance's (`https://acme.ghe.com`, `https://github.acme.dev`). Only https is accepted (http only to this machine).
 4. "Token (empty: the gh one)": paste your token, or leave it empty for `gh`'s. The form reminds "Permissions to give the token: repo" and "Create a token" opens the instance's tokens page.
@@ -27,7 +27,7 @@ The token acts on your behalf: what it opens or publishes is under your account.
 
 The github.com account also serves GitHub Issues: its row says "Also used for GitHub Issues". A GitHub Enterprise serves pull requests and CI only.
 
-You can also connect GitHub Issues from Settings › Integrations › "Kanban sources": its row has a "Token (empty: the one from gh)" field and the "Create a GitHub token" link. It is the same account as github.com's in "Code hosts".
+You can also connect GitHub Issues from Settings › Connected services › "Ticket sources": its row has a "Token (empty: the one from gh)" field and the "Create a GitHub token" link. It is the same account as github.com's in "Code hosts".
 
 ## 4. Link a repository to a project for its issues
 

@@ -1,6 +1,6 @@
 # Dépannage
 
-Les messages ci-dessous sont ceux du plugin et d'Escouade, tels qu'ils s'affichent : sous le formulaire de connexion, sur la ligne du compte dans Réglages › Intégrations, sur la carte d'un agent ou dans l'onglet de sa PR. Quand Bitbucket donne une raison, elle suit le message.
+Les messages ci-dessous sont ceux du plugin et d'Escouade, tels qu'ils s'affichent : sous le formulaire de connexion, sur la ligne du compte dans Réglages › Services connectés, sur la carte d'un agent ou dans l'onglet de sa PR. Quand Bitbucket donne une raison, elle suit le message.
 
 ## À la connexion
 
@@ -14,7 +14,7 @@ Le champ « Jeton » est vide. Bitbucket n'a pas de CLI dont Escouade prendrait 
 Le jeton est faux, expiré ou révoqué, ou l'e-mail n'est pas celui de son compte Atlassian, ou c'est un jeton sans droits (scopes). Crée un jeton d'API avec les droits de Bitbucket que le formulaire rappelle.
 
 **« Bitbucket injoignable : … »**
-L'appel n'est pas arrivé : pas de réseau, un proxy ou un pare-feu qui bloque `api.bitbucket.org`, ou plus de 15 secondes sans réponse. Vérifie ta connexion et Réglages › Réseau.
+L'appel n'est pas arrivé : pas de réseau, un proxy ou un pare-feu qui bloque `api.bitbucket.org`, ou plus de 15 secondes sans réponse. Vérifie ta connexion et Réglages › Avancé › Réseau.
 
 ## Sur la ligne du compte
 
@@ -57,9 +57,9 @@ Ton jeton n'a pas le droit demandé (un droit manquant parmi ceux du formulaire)
 Le budget de l'heure est épuisé : le plugin a déjà attendu et redemandé une fois. Attends un peu.
 
 **« Bitbucket : introuvable (404) »**, **« Bitbucket : erreur 500 »** (ou une autre erreur du service), **« Bitbucket : réponse illisible »**, **« Bitbucket : trop de redirections »**
-Le dépôt ou l'objet n'existe plus ou n'est pas visible, Bitbucket a répondu par une erreur, autre chose que du JSON (souvent un proxy), ou plus de dix redirections. Réessaie ; si ça dure, regarde Réglages › Réseau.
+Le dépôt ou l'objet n'existe plus ou n'est pas visible, Bitbucket a répondu par une erreur, autre chose que du JSON (souvent un proxy), ou plus de dix redirections. Réessaie ; si ça dure, regarde Réglages › Avancé › Réseau.
 
-**« Bitbucket : aucun jeton pour bitbucket.org. Reconnecte le compte dans Réglages › Intégrations. »**
+**« Bitbucket : aucun jeton pour bitbucket.org. Reconnecte le compte dans Réglages › Services connectés. »**
 Escouade n'a pas pu prêter de jeton au plugin. Reconnecte le compte.
 
 **« Le plugin dev.escouade.bitbucket ne répond pas : … »**

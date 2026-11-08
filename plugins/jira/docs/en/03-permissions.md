@@ -7,7 +7,7 @@ This plugin is a WASM module: it runs inside Escouade, isolated, with no program
 - The `*.atlassian.net` sites, over https.
 - Your Jira account's site, the one you typed, if it is not under `atlassian.net`: that host alone, on its port, none of its subdomains.
 - No other host. Escouade's host enforces it: a call to another host, to an IP address written as such, or to an address of your machine or local network is refused before it leaves. Only the site you typed escapes that last check, since you chose it.
-- It goes through the proxy of Settings › Network when you have one.
+- It goes through the proxy of Settings › Advanced › Network when you have one.
 - Each answer from Jira is capped at 8 MiB and 15 seconds.
 
 ## What it reads and writes on Jira
@@ -28,7 +28,7 @@ It creates, changes, assigns and deletes no issue nor project.
 
 ## The secrets it receives
 
-- The API token of your Atlassian account, which you gave in Settings › Integrations. Escouade keeps it in the system keychain and lends it to the plugin when it asks, for a call; the plugin writes it nowhere.
+- The API token of your Atlassian account, which you gave in Settings › Connected services. Escouade keeps it in the system keychain and lends it to the plugin when it asks, for a call; the plugin writes it nowhere.
 - With your email, it makes the `Authorization` header (Basic) of each call to your site, and there only.
 - The site and the email are not secrets: Escouade gives them to the plugin with the account.
 - It can read no other secret: neither another plugin's, nor another Escouade account.
@@ -36,7 +36,7 @@ It creates, changes, assigns and deletes no issue nor project.
 ## What goes to Jira
 
 - The reads above, and the searches you type in the import window (as JQL).
-- The text of the comments Escouade has it post: the Escouade ticket key (`DEM-5`), its branch, its criteria and their state, the agent's notes, what was done, the outcome of the approval and the link of the pull request, depending on the column. They are written in the "Language of texts written by the agents" (Settings › Application).
+- The text of the comments Escouade has it post: the Escouade ticket key (`DEM-5`), its branch, its criteria and their state, the agent's notes, what was done, the outcome of the approval and the link of the pull request, depending on the column. They are written in the "Language of texts written by the agents" (Settings › General).
 
 ## What never goes there
 

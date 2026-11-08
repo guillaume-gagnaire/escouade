@@ -2,7 +2,7 @@
 
 ## Start an agent
 
-Choose “Codex” in the “Harness” menu of “New agent”, or make it a project’s default harness (Settings › Projects, “Default harness”). Each agent has its own `codex app-server`, on the first active Codex account that still has quota.
+Choose “Codex” in the “Harness” menu of “New agent”, or make it a project’s default harness (Settings › Projects › Project, “Default harness”). Each agent has its own `codex app-server`, on the first active Codex account that still has quota.
 
 The models and their efforts are those Codex lists for the account; before the first reading, the menu offers GPT-6-Luna alone. The model the account’s `config.toml` chooses is there too. Codex takes model, effort and mode at the next turn.
 

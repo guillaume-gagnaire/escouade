@@ -10,7 +10,7 @@ Un de tes projets est privé : chaque agent a alors une clôture, et Goose ne pe
 **« Goose introuvable. Installe-le ou indique son chemin dans les réglages. »**
 Escouade n’a pas trouvé `goose` dans le `PATH`. Installe Goose (voir l’onglet Installer) et relance Escouade si le `PATH` a changé.
 
-**« Aucun compte Goose : ajoute-en un dans Réglages › Comptes. »**
+**« Aucun compte Goose : ajoute-en un dans Réglages › Comptes et harness. »**
 Ajoute le compte de la machine ou un nouveau compte.
 
 **« Goose n’a pas ouvert la session de l’agent : {raison}. S’il demande une connexion, connecte-le dans un terminal. »**

@@ -294,9 +294,9 @@ describe('the register of the settings pages', () => {
   });
 
   // The messages of the core and of the plugin kit, and the comments, name the pages too: an agent reads « Settings ›
-  // Harness › Attachments » in a description of a tool and looks for it (R8). The plugins of plugins/ are published
-  // apart (ESC-387).
-  it('names only pages of the register in the sources of the app, of the core and of the kit', () => {
+  // Harness › Attachments » in a description of a tool and looks for it (R8). So do the plugins of the first party, in
+  // their messages, their README and the docs the store shows (ESC-387); their CHANGELOG tells their past, and is left.
+  it('names only pages of the register in the sources of the app, of the core, of the kit and of the plugins', () => {
     const files = {
       ...(import.meta.glob(['../**/*.ts', '../**/*.svelte', '!../**/*.test.ts', '!./i18n/**'], {
         query: '?raw',
@@ -308,11 +308,19 @@ describe('the register of the settings pages', () => {
         import: 'default',
         eager: true,
       }) as Record<string, string>),
+      ...(import.meta.glob(
+        [
+          '../../plugins/*/src/**/*.{rs,ts}',
+          '../../plugins/*/docs/**/*.md',
+          '../../plugins/*/README*.md',
+          '../../plugins/*/escouade-plugin.json',
+        ],
+        { query: '?raw', import: 'default', eager: true },
+      ) as Record<string, string>),
     };
-    // These read the message of a plugin of plugins/ (Copilot CLI's, ClickUp's): they follow it when ESC-387 makes it again.
-    for (const f of Object.keys(files)) if (/\/(copilot_tests|plugins_clickup_tests)\.rs$/.test(f)) delete files[f];
     expect(Object.keys(files).filter((f) => f.endsWith('.rs')).length).toBeGreaterThan(100);
     expect(Object.keys(files).some((f) => f.includes('escouade-plugin-kit'))).toBe(true);
+    expect(Object.keys(files).filter((f) => /\/plugins\/[^/]+\/docs\//.test(f)).length).toBeGreaterThan(100);
     const STOP = /[.,:;()«»“”"'`{}\n…!?\\|<>[\]/*]/;
     let paths = 0;
     const wrong: string[] = [];

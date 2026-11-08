@@ -143,7 +143,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-gitea"
-version = "2.2.1"
+version = "2.2.2"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",

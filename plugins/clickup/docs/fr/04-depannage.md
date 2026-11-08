@@ -11,14 +11,14 @@ Le champ « Clé d'API » est vide. Remplis-le ; rien n'est parti chez ClickUp.
 La clé est fausse, ou elle a été régénérée depuis. Recopie ta clé actuelle depuis « Créer une clé d'API ClickUp ».
 
 **« ClickUp injoignable : … »**
-L'appel n'est pas arrivé : pas de réseau, un proxy ou un pare-feu qui bloque `api.clickup.com`, ou plus de 15 secondes sans réponse. Vérifie ta connexion et Réglages › Réseau.
+L'appel n'est pas arrivé : pas de réseau, un proxy ou un pare-feu qui bloque `api.clickup.com`, ou plus de 15 secondes sans réponse. Vérifie ta connexion et Réglages › Avancé › Réseau.
 
 ## À l'import et à la synchronisation
 
-**« La liste ClickUp 901… n'existe plus ou n'est plus accessible : choisis-en une autre dans Réglages › Intégrations »**
+**« La liste ClickUp 901… n'existe plus ou n'est plus accessible : choisis-en une autre dans Réglages › Projets › Tickets importés »**
 La liste liée a été supprimée, ou ta clé, toujours bonne, n'y a plus accès. Choisis une autre liste pour le projet.
 
-**« La liste « Sprint 12 » de ClickUp n'a pas le statut « review » : ABC-12 reste où il est ; choisis un autre statut dans Réglages › Intégrations »**
+**« La liste « Sprint 12 » de ClickUp n'a pas le statut « review » : ABC-12 reste où il est ; choisis un autre statut dans Réglages › Projets › Tickets importés »**
 Le statut choisi pour la colonne a été renommé ou retiré de la liste. La tâche ne bouge pas. Choisis un des statuts actuels de la liste dans la correspondance des statuts. Escouade ne réessaie pas : rien ne changerait.
 
 **« ClickUp limite les requêtes (429) : réessaie dans un moment »**
@@ -31,9 +31,9 @@ Ta clé n'a pas accès à cette tâche ou à cet espace, ou la tâche n'existe p
 ClickUp a répondu par une erreur. Une synchronisation est réessayée seule, après 1, 5, 15 puis 60 minutes, pendant 24 heures ; « Resynchroniser » la renvoie tout de suite.
 
 **« ClickUp : réponse illisible »**
-ClickUp a répondu autre chose que du JSON, souvent une page d'erreur d'un proxy. Réessaie ; si ça dure, regarde Réglages › Réseau.
+ClickUp a répondu autre chose que du JSON, souvent une page d'erreur d'un proxy. Réessaie ; si ça dure, regarde Réglages › Avancé › Réseau.
 
-**« ClickUp : aucun jeton pour … Reconnecte le compte dans Réglages › Intégrations. »**
+**« ClickUp : aucun jeton pour … Reconnecte le compte dans Réglages › Services connectés. »**
 Escouade n'a pas pu prêter de clé au plugin : le compte n'en a plus. Déconnecte puis reconnecte ClickUp.
 
 **« Trousseau du système illisible : relance Escouade ou reconnecte le compte. »**

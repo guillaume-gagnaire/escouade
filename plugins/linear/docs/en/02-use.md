@@ -12,11 +12,11 @@ Tick the issues, pick "Max loops", then "Import". Each imported ticket keeps the
 
 ## Acceptance criteria
 
-With "Extract the acceptance criteria" on (Settings › Integrations, "Sync" group), the plugin looks for the criteria in the issue's description: the list items under a heading or a line that names them ("Acceptance criteria", "Critères d'acceptation", "Definition of done", "Criteria", "AC", "DoD"), otherwise its task list items (`- [ ]`). It keeps twenty at most, of 300 characters at most. With no criterion found, the ticket gets Escouade's default criteria.
+With "Extract the acceptance criteria" on (Settings › Connected services, "Sync" group), the plugin looks for the criteria in the issue's description: the list items under a heading or a line that names them ("Acceptance criteria", "Critères d'acceptation", "Definition of done", "Criteria", "AC", "DoD"), otherwise its task list items (`- [ ]`). It keeps twenty at most, of 300 characters at most. With no criterion found, the ticket gets Escouade's default criteria.
 
 ## The issue follows its ticket
 
-In Settings › Integrations, the "Status mapping" gives, for each Kanban column, the issue's Linear state. The team's states are listed in the order an issue goes through them: triage, backlog, unstarted, started, completed, canceled. Picking the team fills the mapping in: the state that looks like "in progress" for "In progress" and "To test", the one that looks like "to test" for "Done", nothing for "To do".
+In Settings › Projects › Imported tickets, the "Status mapping" gives, for each Kanban column, the issue's Linear state. The team's states are listed in the order an issue goes through them: triage, backlog, unstarted, started, completed, canceled. Picking the team fills the mapping in: the state that looks like "in progress" for "In progress" and "To test", the one that looks like "to test" for "Done", nothing for "To do".
 
 When an imported ticket reaches a column:
 
@@ -27,7 +27,7 @@ With "Post a summary on every loop", each new loop of an agent also leaves a com
 
 ## Automatic import
 
-Settings › Integrations › "Automatic import" imports on its own the issues that carry the chosen label (`claude-ready` by default). For Linear, it is a label of the issue, whose name must be the same, case aside.
+Settings › Connected services › "Automatic import" imports on its own the issues that carry the chosen label (`claude-ready` by default). For Linear, it is a label of the issue, whose name must be the same, case aside.
 
 ## Limits
 

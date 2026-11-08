@@ -7,7 +7,7 @@ Il s’adresse à qui a déjà Codex et un compte ChatGPT.
 ## Ce qu’il demande
 
 - Codex installé sur la machine (`npm install -g @openai/codex`, essayé avec la 0.163.0).
-- Un compte Codex ajouté dans Réglages › Comptes : sans compte, aucun agent ne démarre.
+- Un compte Codex ajouté dans Réglages › Comptes et harness : sans compte, aucun agent ne démarre.
 
 ## Ce qu’il peut faire
 

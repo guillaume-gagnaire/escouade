@@ -21,7 +21,7 @@ Escouade lit ses valeurs et filtre chacune avant de la poser sur la fenêtre :
 - une valeur doit être une couleur (`#rrggbb`, `color-mix()`, `var()` d’un autre jeton…), 160 caractères au plus ;
 - jamais de `url()`, d’autre fonction, de guillemets, d’antislash, de `;`, d’accolade ni de `!important`.
 
-Un thème ne peut donc rien charger, ni écrire du CSS à lui, ni masquer une demande d’Escouade (une autorisation, une question). Ce qui ne passe pas est écarté, et Réglages › Application dit combien de valeurs l’ont été.
+Un thème ne peut donc rien charger, ni écrire du CSS à lui, ni masquer une demande d’Escouade (une autorisation, une question). Ce qui ne passe pas est écarté, et Réglages › Général dit combien de valeurs l’ont été.
 
 ## Ce qu’il ne peut pas faire
 

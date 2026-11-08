@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-deepgram"
-version = "2.2.2"
+version = "2.2.3"
 description = "Le plugin Deepgram d'Escouade : le service de voix (dictée, direct, voix de l'agent)"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"

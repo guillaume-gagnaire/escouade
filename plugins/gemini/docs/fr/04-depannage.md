@@ -5,9 +5,9 @@ Les messages ci-dessous sont ceux qu’Escouade et le plugin affichent, mot pour
 ## L’agent ne démarre pas
 
 **« Gemini CLI introuvable. Installe-le ou indique son chemin dans les réglages. »**
-Escouade n’a pas trouvé `gemini`. Installe-le (`npm install -g @google/gemini-cli`), ou donne le chemin de son exécutable dans Réglages › Harness.
+Escouade n’a pas trouvé `gemini`. Installe-le (`npm install -g @google/gemini-cli`), ou donne le chemin de son exécutable dans Réglages › Comptes et harness.
 
-**« Aucun compte Gemini CLI : ajoute-en un dans Réglages › Comptes. »**
+**« Aucun compte Gemini CLI : ajoute-en un dans Réglages › Comptes et harness. »**
 Ajoute un compte Google ou une clé d’API.
 
 **« Gemini CLI n’a pas ouvert la session de l’agent : {raison}. S’il n’est pas connecté, lance gemini dans un terminal pour te connecter à ton compte Google, ou donne-lui une clé d’API par GEMINI_API_KEY. »**

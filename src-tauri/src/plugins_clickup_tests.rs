@@ -591,7 +591,7 @@ async fn a_status_the_list_lacks_is_said_and_not_sent() {
     assert!(lasting(&e));
     assert_eq!(
         e.to_string(),
-        "La liste « Sprint 12 » de ClickUp n'a pas le statut « qa » : ABC-12 reste où il est ; choisis un autre statut dans Réglages › Intégrations"
+        "La liste « Sprint 12 » de ClickUp n'a pas le statut « qa » : ABC-12 reste où il est ; choisis un autre statut dans Réglages › Projets › Tickets importés"
     );
     assert!(server.writes().is_empty());
     rt.shutdown();

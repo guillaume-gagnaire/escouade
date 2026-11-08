@@ -1,6 +1,6 @@
 # Troubleshooting
 
-The messages below are the plugin's and Escouade's, as they show: under the connection form, on the account's row in Settings › Integrations, on an agent's card or in its pull request's tab, or when you click the ⚠ of a card whose sync failed. When Azure gives a reason, it follows the message.
+The messages below are the plugin's and Escouade's, as they show: under the connection form, on the account's row in Settings › Connected services, on an agent's card or in its pull request's tab, or when you click the ⚠ of a card whose sync failed. When Azure gives a reason, it follows the message.
 
 ## When connecting
 
@@ -20,7 +20,7 @@ The address starts with `http://`. Give its `https://` address.
 The token is wrong, expired or revoked, or it does not reach this organization. Azure also answers a refused token with a sign-in page: the plugin reads it as that refusal. Make a token with "Create a token".
 
 **"Azure DevOps can’t be reached: …"**
-The call did not arrive: a mistyped address, no network, a proxy or a firewall, or more than 15 seconds without an answer. Check the address, your connection and Settings › Network.
+The call did not arrive: a mistyped address, no network, a proxy or a firewall, or more than 15 seconds without an answer. Check the address, your connection and Settings › Advanced › Network.
 
 ## On the account's row
 
@@ -60,20 +60,20 @@ The token lacks the scope asked (Code in write to open or merge, Build in execut
 Azure refused a call for its limit, twice in a row. The plugin slows down on its own; wait a little.
 
 **"Azure DevOps: not found (404)"**, **"Azure DevOps: error 500"** (or another error of the service), **"Azure DevOps: unreadable answer"**, **"Azure DevOps: too many redirects"**
-The repository or the object no longer exists or is not visible, Azure answered with an error, something other than JSON, or more than ten redirects. Try again; if it lasts, look at Settings › Network.
+The repository or the object no longer exists or is not visible, Azure answered with an error, something other than JSON, or more than ten redirects. Try again; if it lasts, look at Settings › Advanced › Network.
 
-**"Azure DevOps: no token for dev.azure.com. Connect the account again in Settings › Integrations."**
+**"Azure DevOps: no token for dev.azure.com. Connect the account again in Settings › Connected services."**
 Escouade could not lend a token to the plugin. Connect the account again.
 
 ## For Azure Boards
 
-**"Azure DevOps refuses these credentials (401). The Azure DevOps token needs the Work Items right (read and write): make one on https://dev.azure.com/acme/_usersSettings/tokens, then replace it in Settings › Integrations › Code hosts."**
+**"Azure DevOps refuses these credentials (401). The Azure DevOps token needs the Work Items right (read and write): make one on https://dev.azure.com/acme/_usersSettings/tokens, then replace it in Settings › Connected services › Code hosts."**
 The token serves pull requests but lacks the Work Items scope. A 403 refusal says the same. Make a token with Work Items in read and write on the page the message names, then replace the old one.
 
 **"No Azure DevOps account connected for the acme organization"**, **"No Azure DevOps account connected"**
 The linked project is in an organization whose account was disconnected. Connect the organization again in "Code hosts".
 
-**"Azure Boards: no token for … Connect the account again in Settings › Integrations."**
+**"Azure Boards: no token for … Connect the account again in Settings › Connected services."**
 Escouade could not lend a token to the plugin. Connect the account again.
 
 **"The plugin dev.escouade.azure-devops is not answering: …"**

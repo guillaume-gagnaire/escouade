@@ -2,7 +2,7 @@
 
 ## Start an agent
 
-Choose “Gemini CLI” in the “Harness” menu of “New agent”, or make it a project’s default harness (Settings › Projects, “Default harness”). Each agent has its own `gemini --acp` and its own configuration folder.
+Choose “Gemini CLI” in the “Harness” menu of “New agent”, or make it a project’s default harness (Settings › Projects › Project, “Default harness”). Each agent has its own `gemini --acp` and its own configuration folder.
 
 The “Model” menu lists the models of its session, Auto first (its router, which chooses at each turn). It has no “Effort” menu.
 

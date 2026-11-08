@@ -9,7 +9,7 @@ Install it with its script, as you would to use it in a terminal:
 - Windows: `irm https://claude.ai/install.ps1 | iex`
 - macOS and Linux: `curl -fsSL https://claude.ai/install.sh | bash`
 
-Escouade finds `claude` in the `PATH` or where its script puts it, in WSL too. Settings › Harness shows the executable found, its version and its state. The plugin was tried from Claude Code 2.1.283 to 2.1.301. `claude update` updates it.
+Escouade finds `claude` in the `PATH` or where its script puts it, in WSL too. Settings › Accounts and harnesses shows the executable found, its version and its state. The plugin was tried from Claude Code 2.1.283 to 2.1.301. `claude update` updates it.
 
 ## 2. Install the plugin
 
@@ -23,7 +23,7 @@ Like any plugin, it is switched off by its toggle in the Plugins view and uninst
 
 There is no account at first: an agent starts only on an account you added.
 
-1. Open Settings › Accounts and click **Add an account…** (or the button in the Claude Code group).
+1. Open Settings › Accounts and harnesses, then click **Add an account…** (or the button in the Claude Code group).
 2. Choose:
    - **This machine’s account**, offered when Claude Code is already signed in in its usual folder. **Add this account** adds it as it is.
    - **A new account**, with a folder of its own. Name it, choose what it takes from this machine’s account (`settings.json`, `CLAUDE.md`, `skills`, `agents`, `commands`, `plugins`, `hooks`, `output-styles`), linked or copied, then **Create and sign in**.

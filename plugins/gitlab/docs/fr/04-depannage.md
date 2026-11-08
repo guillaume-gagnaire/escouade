@@ -1,6 +1,6 @@
 # Dépannage
 
-Les messages ci-dessous sont ceux du plugin et d'Escouade, tels qu'ils s'affichent : sous le formulaire de connexion, sur la ligne du compte dans Réglages › Intégrations, sur la carte d'un agent ou dans l'onglet de sa MR, ou au clic sur le ⚠ d'une carte dont la synchronisation a échoué. Quand GitLab donne une raison, elle suit le message.
+Les messages ci-dessous sont ceux du plugin et d'Escouade, tels qu'ils s'affichent : sous le formulaire de connexion, sur la ligne du compte dans Réglages › Services connectés, sur la carte d'un agent ou dans l'onglet de sa MR, ou au clic sur le ⚠ d'une carte dont la synchronisation a échoué. Quand GitLab donne une raison, elle suit le message.
 
 ## À la connexion
 
@@ -20,7 +20,7 @@ L'adresse de l'instance commence par `http://`. Donne son adresse en `https://`.
 Le jeton est faux, expiré ou révoqué. Crée-en un autre avec « Créer un jeton ».
 
 **« GitLab injoignable : … »**
-L'appel n'est pas arrivé : une adresse mal tapée, pas de réseau, un proxy ou un pare-feu, ou plus de 15 secondes sans réponse. Vérifie l'adresse, ta connexion et Réglages › Réseau.
+L'appel n'est pas arrivé : une adresse mal tapée, pas de réseau, un proxy ou un pare-feu, ou plus de 15 secondes sans réponse. Vérifie l'adresse, ta connexion et Réglages › Avancé › Réseau.
 
 ## Sur la ligne du compte
 
@@ -57,9 +57,9 @@ Ton compte n'a pas le droit demandé dans ce projet (merger, relancer un job, ap
 GitLab a refusé un appel pour sa limite, deux fois de suite. Le plugin ralentit de lui-même ; attends un peu.
 
 **« GitLab : introuvable (404) »**, **« GitLab : erreur 500 »** (ou une autre erreur du service), **« GitLab : réponse illisible »**, **« GitLab : trop de redirections »**
-Le projet ou l'objet n'existe plus ou n'est pas visible, l'instance a répondu par une erreur, autre chose que du JSON (souvent un proxy ou une page de connexion), ou plus de dix redirections. Vérifie l'adresse de l'instance et Réglages › Réseau.
+Le projet ou l'objet n'existe plus ou n'est pas visible, l'instance a répondu par une erreur, autre chose que du JSON (souvent un proxy ou une page de connexion), ou plus de dix redirections. Vérifie l'adresse de l'instance et Réglages › Avancé › Réseau.
 
-**« GitLab : aucun jeton pour git.acme.dev. Reconnecte le compte dans Réglages › Intégrations. »**
+**« GitLab : aucun jeton pour git.acme.dev. Reconnecte le compte dans Réglages › Services connectés. »**
 Escouade n'a pas pu prêter de jeton au plugin. Reconnecte le compte.
 
 ## Pour GitLab Issues

@@ -13,10 +13,10 @@ Mistral answered 401 or 403: the key is wrong, revoked, or lacks the right asked
 **“Mistral refuses for now: too many requests or the quota is spent (…). Wait a little, or check the plan of your Mistral account.”**
 Mistral answered 429. In brackets, what it said. Wait, or look at your plan and credit at Mistral.
 
-**“Mistral does not answer: … Check the network and the proxy (Settings › Network), or go back to local.”**
+**“Mistral does not answer: … Check the network and the proxy (Settings › Advanced › Network), or go back to local.”**
 The request did not get through. What follows the colon says why:
 
-- a network or proxy error: check [Settings › Network](https://escouade.dev/en/docs/settings-network) and that `api.mistral.ai` can be reached;
+- a network or proxy error: check [Settings › Advanced › Network](https://escouade.dev/en/docs/settings-network) and that `api.mistral.ai` can be reached;
 - “timed out”: Mistral did not answer in time;
 - “this service’s plugin is gone”: the Mistral plugin is off or uninstalled. Turn it back on in the Plugins view, or install it (Install tab);
 - “The plugin dev.escouade.mistral is not answering: …”: the plugin is not running or stopped. Its Log tab, in the Plugins view, says why;
@@ -65,9 +65,9 @@ Install it from the Plugins view.
 Install it: `uv tool install mistral-vibe`.
 
 **“Mistral Vibe didn’t open the agent’s session: … If it has no API key, run vibe --setup in a terminal.”**
-For the machine’s account, `vibe --setup`; for another account, its key in Settings › Accounts.
+For the machine’s account, `vibe --setup`; for another account, its key in Settings › Accounts and harnesses.
 
-**“The Mistral Vibe account “<account>” has no API key: give it in Settings › Accounts, “Change the key…”.”**
+**“The Mistral Vibe account “<account>” has no API key: give it in Settings › Accounts and harnesses, “Change the key…”.”**
 Neither the account nor Settings › Voice has a key. Give one to either.
 
 **“That isn’t a Mistral API key: copy it whole from console.mistral.ai, API Keys.”**

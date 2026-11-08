@@ -2,7 +2,7 @@
 
 ## Lancer un agent
 
-Claude Code est le harness par défaut d’un projet tant que tu n’en choisis pas un autre (Réglages › Projets, « Harness par défaut »). « Nouvel agent » le lance ; dès que deux harness sont installés, la flèche de « Nouvel agent » ouvre le menu « Harness ».
+Claude Code est le harness par défaut d’un projet tant que tu n’en choisis pas un autre (Réglages › Projets › Projet, « Harness par défaut »). « Nouvel agent » le lance ; dès que deux harness sont installés, la flèche de « Nouvel agent » ouvre le menu « Harness ».
 
 L’agent démarre sur le premier compte actif de Claude Code qui a encore du quota. Il garde sa conversation d’un redémarrage à l’autre, et « Dupliquer la conversation » la copie sous une nouvelle session.
 

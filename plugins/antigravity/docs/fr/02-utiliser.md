@@ -2,7 +2,7 @@
 
 ## Lancer un agent
 
-Choisis « Antigravity CLI » dans le menu « Harness » de « Nouvel agent », ou fais-en le harness par défaut d’un projet (Réglages › Projets, « Harness par défaut »).
+Choisis « Antigravity CLI » dans le menu « Harness » de « Nouvel agent », ou fais-en le harness par défaut d’un projet (Réglages › Projets › Projet, « Harness par défaut »).
 
 Le menu « Modèle » liste les modèles de ton compte (`agy models`) ; pour Gemini, l’effort (Bas, Moyen, Élevé) est son menu « Effort ». Un changement de modèle, d’effort ou de mode prend effet au message suivant : Escouade relance `agy` sur la même conversation.
 

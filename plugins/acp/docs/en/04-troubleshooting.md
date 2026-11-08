@@ -22,7 +22,7 @@ A third-party plugin’s manifest sets a forbidden variable in `acp.env` (`PATH`
 **“{harness} not found. Install it or give its path in the settings.”**
 Escouade didn’t find the program in the `PATH`, under the names of `locate.names`.
 
-**“No {harness} account: add one in Settings › Accounts.”**
+**“No {harness} account: add one in Settings › Accounts and harnesses.”**
 Add an account of the harness.
 
 **The agent is marked “harness absent”**

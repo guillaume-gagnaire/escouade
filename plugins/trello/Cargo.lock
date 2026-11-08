@@ -170,7 +170,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-trello"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",

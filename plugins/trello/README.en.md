@@ -8,7 +8,7 @@ For you if your team keeps its work in Trello and you want to hand those cards t
 
 ## What it needs
 
-- A Trello account, with an API key and a token for that key (read and write). Both are made on Trello, in two clicks, from Settings › Integrations.
+- A Trello account, with an API key and a token for that key (read and write). Both are made on Trello, in two clicks, from Settings › Connected services.
 - Nothing to install on your machine.
 
 ## What it can do

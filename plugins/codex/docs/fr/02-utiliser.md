@@ -2,7 +2,7 @@
 
 ## Lancer un agent
 
-Choisis « Codex » dans le menu « Harness » de « Nouvel agent », ou fais-en le harness par défaut d’un projet (Réglages › Projets, « Harness par défaut »). Chaque agent a son `codex app-server`, sur le premier compte actif de Codex qui a encore du quota.
+Choisis « Codex » dans le menu « Harness » de « Nouvel agent », ou fais-en le harness par défaut d’un projet (Réglages › Projets › Projet, « Harness par défaut »). Chaque agent a son `codex app-server`, sur le premier compte actif de Codex qui a encore du quota.
 
 Les modèles et leurs efforts sont ceux que Codex liste pour le compte ; avant la première lecture, le menu ne propose que GPT-6-Luna. Le modèle choisi par le `config.toml` du compte y est aussi. Codex prend le modèle, l’effort et le mode au tour suivant.
 

@@ -7,7 +7,7 @@ It is for anyone who already has Codex and a ChatGPT account.
 ## What it needs
 
 - Codex installed on the machine (`npm install -g @openai/codex`, tried with 0.163.0).
-- A Codex account added in Settings › Accounts: with no account, no agent starts.
+- A Codex account added in Settings › Accounts and harnesses: with no account, no agent starts.
 
 ## What it can do
 

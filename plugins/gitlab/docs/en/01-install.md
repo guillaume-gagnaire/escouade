@@ -17,13 +17,13 @@ The token acts on your behalf: what it opens or publishes is under your account.
 
 ## 3. Connect
 
-1. In Escouade, open Settings › Integrations › "Code hosts", then "Connect a code host…". A repository whose remote is on an instance with no account also offers "Connect" followed by its host.
+1. In Escouade, open Settings › Connected services › "Code hosts", then "Connect a code host…". A repository whose remote is on an instance with no account also offers "Connect" followed by its host.
 2. "Code host": GitLab. For an address the app does not know, it finds the code host type on its own ("Finding out the code host type…") by asking the instance for `/api/v4/version`.
 3. "Address": empty for gitlab.com; otherwise your instance's, path included if it has one (`https://acme.dev/gitlab`). Only https is accepted (http only to this machine).
 4. "Token (empty: the glab one)": paste your token, or leave it empty for `glab`'s. The form reminds "Permissions to give the token: api".
 5. Click "Connect". Escouade asks GitLab who you are. The row says "Connected · @your-login".
 
-Each GitLab account also serves GitLab Issues: its row says "Also used for GitLab Issues". Under "Kanban sources", GitLab Issues has no account of its own: its row says "The GitLab code host’s account: it is connected and disconnected in Code hosts." and offers "Connect GitLab…".
+Each GitLab account also serves GitLab Issues: its row says "Also used for GitLab Issues". Under "Ticket sources", GitLab Issues has no account of its own: its row says "The GitLab code host’s account: it is connected and disconnected in Code hosts." and offers "Connect GitLab…".
 
 ## 4. Link a GitLab project for its issues
 

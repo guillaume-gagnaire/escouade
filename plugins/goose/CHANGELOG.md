@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.2
+
+- Its messages, README and documentation send to the settings pages of Escouade 2.2: Accounts and harnesses (ESC-387).
+
 ## 1.0.1
 
 - Its page has its documentation, in French and in English: README.fr.md, README.en.md and five pages in docs/.

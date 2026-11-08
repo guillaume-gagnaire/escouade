@@ -179,7 +179,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-mistral"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "escouade-acp",
  "escouade-plugin-protocol",

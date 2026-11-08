@@ -8,7 +8,7 @@ Sa page, dans la même vue, a un interrupteur pour toute l'app et un onglet « P
 
 ## 2. Créer la clé d'API chez Linear
 
-1. Dans Escouade, ouvre Réglages › Intégrations. Dans « Sources du Kanban », groupe « Comptes connectés », clique sur « Connecter… » à la ligne Linear.
+1. Dans Escouade, ouvre Réglages › Services connectés. Dans « Sources de tickets », groupe « Comptes connectés », clique sur « Connecter… » à la ligne Linear.
 2. Clique sur « Créer une clé d'API Linear ». Ton navigateur ouvre `https://linear.app/settings/account/security`. Crée une clé d'API personnelle et copie-la.
 3. Colle-la dans le champ « Clé d'API ».
 
@@ -22,7 +22,7 @@ La connexion est gardée tout de suite : elle ne passe pas par « Enregistrer »
 
 ## 4. Lier une équipe à un projet
 
-Toujours dans Réglages › Intégrations, le groupe « Sources liées à `<projet>` » propose la liste « Équipe Linear » : tes équipes, avec leur clé (« Moteur (ENG) »). Choisis-en une. Escouade charge ses états et pré-remplit la « Correspondance des statuts » (voir **Utiliser**). Enregistre les réglages.
+Dans Réglages › Projets › Tickets importés, le groupe « Sources liées à `<projet>` » propose la liste « Équipe Linear » : tes équipes, avec leur clé (« Moteur (ENG) »). Choisis-en une. Escouade charge ses états et pré-remplit la « Correspondance des statuts » (voir **Utiliser**). Enregistre les réglages.
 
 Tu peux aussi partir du Kanban : « Importer » sans source liée affiche « Aucune source liée à ce projet » et propose « Lier une source », qui ouvre ce même onglet.
 

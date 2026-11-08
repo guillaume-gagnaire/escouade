@@ -7,7 +7,7 @@ Il s’adresse à qui a un compte GitHub avec Copilot, Free compris.
 ## Ce qu’il demande
 
 - Copilot CLI installé sur la machine (`npm install -g @github/copilot`, essayé avec la 1.0.98).
-- Un compte Copilot CLI ajouté dans Réglages › Comptes, connecté par `copilot login` : sans compte, aucun agent ne démarre.
+- Un compte Copilot CLI ajouté dans Réglages › Comptes et harness, connecté par `copilot login` : sans compte, aucun agent ne démarre.
 
 ## Ce qu’il peut faire
 

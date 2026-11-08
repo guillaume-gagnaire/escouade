@@ -8,7 +8,7 @@ Pour toi si ton équipe range son travail dans Trello et que tu veux confier ces
 
 ## Ce qu'il te demande
 
-- Un compte Trello, avec une clé d'API et un jeton pour cette clé (lecture et écriture). Les deux se créent depuis Trello, en deux clics, depuis Réglages › Intégrations.
+- Un compte Trello, avec une clé d'API et un jeton pour cette clé (lecture et écriture). Les deux se créent depuis Trello, en deux clics, depuis Réglages › Services connectés.
 - Rien à installer sur ta machine.
 
 ## Ce qu'il peut faire

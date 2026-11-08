@@ -7,7 +7,7 @@ Ce plugin est un module WASM : il tourne dans Escouade, isolé, sans programme �
 - Les sites `*.atlassian.net`, en https.
 - Le site de ton compte Jira, celui que tu as tapé, s'il n'est pas sous `atlassian.net` : cet hôte seul, sur son port, aucun de ses sous-domaines.
 - Aucun autre hôte. C'est l'hôte d'Escouade qui l'applique : un appel vers un autre hôte, vers une adresse IP écrite telle quelle, ou vers une adresse de ta machine ou de ton réseau local est refusé avant de partir. Seul le site que tu as tapé échappe à ce dernier contrôle, puisque c'est toi qui l'as choisi.
-- Il passe par le proxy de Réglages › Réseau quand tu en as un.
+- Il passe par le proxy de Réglages › Avancé › Réseau quand tu en as un.
 - Chaque réponse de Jira est limitée à 8 Mio et à 15 secondes.
 
 ## Ce qu'il lit et ce qu'il écrit chez Jira
@@ -28,7 +28,7 @@ Il ne crée, ne modifie, n'assigne et ne supprime aucun ticket ni projet.
 
 ## Les secrets qu'il reçoit
 
-- Le jeton d'API de ton compte Atlassian, que tu as donné dans Réglages › Intégrations. Escouade le garde dans le trousseau du système et le prête au plugin quand il le demande, pour un appel ; le plugin ne l'écrit nulle part.
+- Le jeton d'API de ton compte Atlassian, que tu as donné dans Réglages › Services connectés. Escouade le garde dans le trousseau du système et le prête au plugin quand il le demande, pour un appel ; le plugin ne l'écrit nulle part.
 - Avec ton e-mail, il forme l'en-tête `Authorization` (Basic) de chaque appel vers ton site, et seulement là.
 - Le site et l'e-mail ne sont pas des secrets : Escouade les donne au plugin avec le compte.
 - Il ne peut lire aucun autre secret : ni celui d'un autre plugin, ni un autre compte d'Escouade.
@@ -36,7 +36,7 @@ Il ne crée, ne modifie, n'assigne et ne supprime aucun ticket ni projet.
 ## Ce qui part chez Jira
 
 - Les lectures ci-dessus, et les recherches que tu tapes dans la fenêtre d'import (en JQL).
-- Le texte des commentaires qu'Escouade fait poster : la clé du ticket Escouade (`DEM-5`), sa branche, ses critères et leur état, les notes de l'agent, ce qui a été fait, l'issue de la validation et le lien de la pull request, selon la colonne. Ils sont écrits dans la « Langue des textes rédigés par les agents » (Réglages › Application).
+- Le texte des commentaires qu'Escouade fait poster : la clé du ticket Escouade (`DEM-5`), sa branche, ses critères et leur état, les notes de l'agent, ce qui a été fait, l'issue de la validation et le lien de la pull request, selon la colonne. Ils sont écrits dans la « Langue des textes rédigés par les agents » (Réglages › Général).
 
 ## Ce qui n'y part jamais
 

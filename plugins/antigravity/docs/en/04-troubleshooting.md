@@ -5,9 +5,9 @@ The messages below are those Escouade and the plugin show, word for word, in the
 ## The agent doesn’t start
 
 **“Antigravity CLI not found. Install it or give its path in the settings.”**
-Escouade didn’t find `agy`. Install it (see the Install tab), or give its executable’s path in Settings › Harness.
+Escouade didn’t find `agy`. Install it (see the Install tab), or give its executable’s path in Settings › Accounts and harnesses.
 
-**“No Antigravity CLI account: add one in Settings › Accounts.”**
+**“No Antigravity CLI account: add one in Settings › Accounts and harnesses.”**
 Add this machine’s account or a Gemini API key.
 
 **“Antigravity CLI didn’t start the agent’s conversation: {reason}. If it isn’t signed in, run agy in a terminal to sign in to your Google account.”**

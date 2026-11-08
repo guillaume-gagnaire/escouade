@@ -2,7 +2,7 @@
 
 ## Start an agent
 
-Choose “Cursor CLI” in the “Harness” menu of “New agent”, or make it a project’s default harness (Settings › Projects, “Default harness”). Each agent has its own `agent acp` and its own configuration folder.
+Choose “Cursor CLI” in the “Harness” menu of “New agent”, or make it a project’s default harness (Settings › Projects › Project, “Default harness”). Each agent has its own `agent acp` and its own configuration folder.
 
 The “Model” menu lists your account’s models, Auto first, with their efforts (Low to Very high). A Free plan runs Auto alone: another model ends the turn in an error that says so. Model and mode change at once.
 

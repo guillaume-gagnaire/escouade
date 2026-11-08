@@ -8,9 +8,9 @@ Three steps: OpenCode on your machine, the plugin in Escouade, then the account.
 npm install -g opencode-ai
 ```
 
-That is OpenCode 1, the only one Escouade drives: OpenCode 2 (`@opencode/cli`) is recognized and says “Not supported”. Settings › Harness shows the executable found, its version and its state. The plugin was tried with OpenCode 1.19.3. `npm install -g opencode-ai@latest` updates it.
+That is OpenCode 1, the only one Escouade drives: OpenCode 2 (`@opencode/cli`) is recognized and says “Not supported”. Settings › Accounts and harnesses shows the executable found, its version and its state. The plugin was tried with OpenCode 1.19.3. `npm install -g opencode-ai@latest` updates it.
 
-Then connect a provider: `opencode auth login`, or “Sign in…” in Settings › Harness, which runs it. Ollama’s local models work too, declared in OpenCode’s config.
+Then connect a provider: `opencode auth login`, or “Sign in…” in Settings › Accounts and harnesses, which runs it. Ollama’s local models work too, declared in OpenCode’s config.
 
 ## 2. Install the plugin
 
@@ -24,7 +24,7 @@ Like any plugin, it is switched off by its toggle in the Plugins view and uninst
 
 OpenCode has a single account in Escouade: your usual OpenCode config and the providers you connected to it.
 
-1. Open Settings › Accounts and click **Add an account…**; once two harnesses are installed, choose the harness “OpenCode”.
+1. Open Settings › Accounts and harnesses, then click **Add an account…**; once two harnesses are installed, choose the harness “OpenCode”.
 2. **This machine’s account** is offered as soon as OpenCode is installed. **Add this account** adds it.
 3. On its card, set the model, effort and mode of new agents, and if you like a **daily budget ($)**.
 

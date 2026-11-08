@@ -9,7 +9,7 @@ Install it with its script:
 - Windows: `irm 'https://cursor.com/install?win32=true' | iex`
 - macOS and Linux: `curl https://cursor.com/install -fsS | bash`
 
-Then sign it in, in a terminal: `agent login`. Escouade finds it in the `PATH`, and on Windows in `%LOCALAPPDATA%\cursor-agent` even when it isn’t in the `PATH`. Settings › Harness shows the executable found and its version. The plugin was tried with Cursor CLI 2026.10.22. `agent update` updates it.
+Then sign it in, in a terminal: `agent login`. Escouade finds it in the `PATH`, and on Windows in `%LOCALAPPDATA%\cursor-agent` even when it isn’t in the `PATH`. Settings › Accounts and harnesses shows the executable found and its version. The plugin was tried with Cursor CLI 2026.10.22. `agent update` updates it.
 
 ## 2. Install the plugin
 
@@ -23,7 +23,7 @@ Like any plugin, it is switched off by its toggle in the Plugins view and uninst
 
 There is no account at first: an agent starts only on an account you added.
 
-1. Open Settings › Accounts and click **Add an account…**; once two harnesses are installed, choose the harness “Cursor CLI”.
+1. Open Settings › Accounts and harnesses, then click **Add an account…**; once two harnesses are installed, choose the harness “Cursor CLI”.
 2. Choose:
    - **This machine’s account**: the sign-in of `agent login`. **Add this account** adds it as it is.
    - **A new account**: another Cursor account, by its API key (on cursor.com, Settings › API Keys). Name it and paste the key.
@@ -38,4 +38,4 @@ The sign-in of `agent login` is the machine’s: a configuration folder doesn’
 - **The machine’s sign-in** stays Cursor’s. Escouade doesn’t read it.
 - **Each agent** has its own Cursor configuration folder (`CURSOR_CONFIG_DIR`), removed with it: its rules, its model and its sessions are kept there, never in your Cursor config.
 
-Cursor doesn’t tell its month’s usage: the link to cursor.com, in Settings › Accounts and the quota panel, opens its dashboard.
+Cursor doesn’t tell its month’s usage: the link to cursor.com, in Settings › Accounts and harnesses, and in the quota panel, opens its dashboard.

@@ -2,7 +2,7 @@
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.gitea",
   "name": "Gitea / Forgejo",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "description": {
     "fr": "Les PR, la CI (statuts et Actions), les relectures et le merge de tes dépôts Gitea, Forgejo et Codeberg, sur un seul compte.",
     "en": "Pull requests, CI (statuses and Actions), reviews and merging of your Gitea, Forgejo and Codeberg repositories, on one account."

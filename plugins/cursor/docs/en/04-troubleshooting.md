@@ -5,9 +5,9 @@ The messages below are those Escouade and the plugin show, word for word, in the
 ## The agent doesn’t start
 
 **“Cursor CLI not found. Install it or give its path in the settings.”**
-Escouade didn’t find `agent`. Install Cursor CLI (see the Install tab), or give its executable’s path in Settings › Harness.
+Escouade didn’t find `agent`. Install Cursor CLI (see the Install tab), or give its executable’s path in Settings › Accounts and harnesses.
 
-**“No Cursor CLI account: add one in Settings › Accounts.”**
+**“No Cursor CLI account: add one in Settings › Accounts and harnesses.”**
 Add this machine’s account or an account by its API key.
 
 **“Cursor CLI didn’t open the agent’s session: {reason}. If it asks for a sign-in, sign it in in a terminal.”**
@@ -30,7 +30,7 @@ Escouade refused the launch the plugin described. The official plugin doesn’t 
 **“Cursor CLI isn’t signed in on this machine (“Please sign in to continue”): run agent login in a terminal.”**
 This machine’s account is no longer signed in. `agent login`, then send a message.
 
-**“Cursor refused this account’s API key: give it again in Settings › Accounts, “Change the key…”.”**
+**“Cursor refused this account’s API key: give it again in Settings › Accounts and harnesses, “Change the key…”.”**
 The account’s key is wrong or revoked. Make one on cursor.com, Settings › API Keys, and give it with “Change the key…”.
 
 **“This Cursor account’s usage limit is reached (“Upgrade your plan to continue”): the month’s included usage is spent until its plan resets. Its usage: {address}”**

@@ -7,7 +7,7 @@ It is for anyone with a Cursor account, Free included.
 ## What it needs
 
 - Cursor CLI installed on the machine (tried with 2026.10.22), signed in by `agent login`.
-- A Cursor CLI account added in Settings › Accounts: this machine’s account, or another one by its API key.
+- A Cursor CLI account added in Settings › Accounts and harnesses: this machine’s account, or another one by its API key.
 
 ## What it can do
 

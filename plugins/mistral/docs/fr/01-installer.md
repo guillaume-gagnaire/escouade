@@ -34,7 +34,7 @@ La clé de Réglages › Voix est **le compte Mistral** : la voix et Mistral Vib
 
 1. Installe Mistral Vibe : `uv tool install mistral-vibe` (il faut [uv](https://docs.astral.sh/uv/)). Escouade trouve `vibe-acp` dans le `PATH`, ou là où `uv` le pose.
 2. Donne-lui ta clé avec `vibe --setup`, dans un terminal : c’est **le compte de la machine**. Vibe la garde de son côté ; Escouade ne la lit jamais.
-3. Pour un autre compte Mistral, ouvre Réglages › Comptes, « Ajouter un compte… », harness Mistral Vibe, « Un nouveau compte » : sa clé d’API va dans le champ (« Sur console.mistral.ai, API Keys »). Laissé vide, le compte prend la clé Mistral de Réglages › Voix (« Vide : la clé Mistral de Réglages › Voix (…) »). Deux organisations Mistral restent deux comptes, chacune facturée à part.
+3. Pour un autre compte Mistral, ouvre Réglages › Comptes et harness, « Ajouter un compte… », harness Mistral Vibe, « Un nouveau compte » : sa clé d’API va dans le champ (« Sur console.mistral.ai, API Keys »). Laissé vide, le compte prend la clé Mistral de Réglages › Voix (« Vide : la clé Mistral de Réglages › Voix (…) »). Deux organisations Mistral restent deux comptes, chacune facturée à part.
 4. Lance un agent avec le harness « Mistral Vibe ».
 
 La page [Harness](https://escouade.dev/docs/harness#mistral-vibe) du site dit le reste : modes, coût, vue terminal.

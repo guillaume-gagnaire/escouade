@@ -19,7 +19,7 @@ Le jeton agit en ton nom : ce qu'il ouvre ou publie l'est sous ton compte.
 
 ## 3. Connecter
 
-1. Dans Escouade, ouvre Réglages › Intégrations › « Hébergeurs de code », puis « Connecter un hébergeur… ». Un dépôt dont le remote est sur une instance sans compte propose aussi « Connecter » suivi de son hôte.
+1. Dans Escouade, ouvre Réglages › Services connectés › « Hébergeurs de code », puis « Connecter un hébergeur… ». Un dépôt dont le remote est sur une instance sans compte propose aussi « Connecter » suivi de son hôte.
 2. « Hébergeur » : GitHub.
 3. « Adresse » : vide pour github.com ; sinon celle de ton instance (`https://acme.ghe.com`, `https://github.acme.dev`). Seul https est accepté (http seulement vers cette machine).
 4. « Jeton (vide : celui de gh) » : colle ton jeton, ou laisse vide pour celui de `gh`. Le formulaire rappelle « Droits à donner au jeton : repo » et « Créer un jeton » ouvre la page des jetons de l'instance.
@@ -27,7 +27,7 @@ Le jeton agit en ton nom : ce qu'il ouvre ou publie l'est sous ton compte.
 
 Le compte de github.com sert aussi à GitHub Issues : sa ligne dit « Sert aussi à GitHub Issues ». Un GitHub Enterprise sert aux PR et à la CI seulement.
 
-Tu peux aussi connecter GitHub Issues depuis Réglages › Intégrations › « Sources du Kanban » : sa ligne a un champ « Jeton (vide : celui de gh) » et le lien « Créer un jeton GitHub ». C'est le même compte que celui de github.com dans « Hébergeurs de code ».
+Tu peux aussi connecter GitHub Issues depuis Réglages › Services connectés › « Sources de tickets » : sa ligne a un champ « Jeton (vide : celui de gh) » et le lien « Créer un jeton GitHub ». C'est le même compte que celui de github.com dans « Hébergeurs de code ».
 
 ## 4. Lier un dépôt à un projet pour ses issues
 

@@ -22,13 +22,13 @@ Le jeton agit en ton nom : ce qu'il ouvre ou publie l'est sous ton compte.
 
 ## 3. Connecter
 
-1. Dans Escouade, ouvre Réglages › Intégrations › « Hébergeurs de code », puis « Connecter un hébergeur… ». Un dépôt dont le remote est sur une organisation sans compte propose aussi « Connecter » suivi de son hôte.
+1. Dans Escouade, ouvre Réglages › Services connectés › « Hébergeurs de code », puis « Connecter un hébergeur… ». Un dépôt dont le remote est sur une organisation sans compte propose aussi « Connecter » suivi de son hôte.
 2. « Hébergeur » : Azure DevOps.
 3. « Adresse » : celle de ton organisation, `dev.azure.com/<organisation>` (une ancienne adresse `<organisation>.visualstudio.com` est la même), ou pour Azure DevOps Server celle de sa collection, comme `https://serveur/tfs/DefaultCollection`. Seul https est accepté (http seulement vers cette machine).
 4. « Jeton (vide : celui de az) » : colle ton jeton, ou laisse vide pour celui de `az`. Le formulaire rappelle les droits : `vso.code_write`, `vso.build_execute`, `vso.work_write`.
 5. Clique sur « Connecter ». La ligne dit « Connecté · » suivi de ton compte et de l'organisation (« ada@acme.dev · acme »), et « Sert aussi à Azure Boards ».
 
-Dans « Sources du Kanban », Azure Boards n'a pas de compte à lui : sa ligne dit « Compte de l'hébergeur Azure DevOps : il se connecte et se déconnecte dans Hébergeurs de code. », rappelle « Son jeton doit avoir le droit Work Items (lecture et écriture). » et propose « Connecter Azure DevOps… ».
+Dans « Sources de tickets », Azure Boards n'a pas de compte à lui : sa ligne dit « Compte de l'hébergeur Azure DevOps : il se connecte et se déconnecte dans Hébergeurs de code. », rappelle « Son jeton doit avoir le droit Work Items (lecture et écriture). » et propose « Connecter Azure DevOps… ».
 
 ## 4. Lier un projet Azure Boards
 

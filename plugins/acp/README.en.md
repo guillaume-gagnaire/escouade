@@ -7,7 +7,7 @@ It is for anyone who wants to use a described harness, like Goose, and for the a
 ## What it needs
 
 - Nothing to install beyond the described harness itself and the plugin that describes it.
-- An account of the described harness, in Settings › Accounts.
+- An account of the described harness, in Settings › Accounts and harnesses.
 
 ## What it can do
 

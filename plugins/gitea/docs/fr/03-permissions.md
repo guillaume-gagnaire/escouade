@@ -8,7 +8,7 @@ Ce plugin est un module WASM : il tourne dans Escouade, isolé, sans programme �
 - L'instance de chacun de tes comptes, celle que tu as tapée : cet hôte seul, sur son port, aucun de ses sous-domaines. Elle peut être sur ton réseau local : c'est toi qui l'as choisie.
 - Aucun autre hôte. C'est l'hôte d'Escouade qui l'applique : un appel vers un autre hôte, vers une adresse IP écrite telle quelle, ou vers une adresse de ta machine ou de ton réseau local (hors l'instance que tu as tapée) est refusé avant de partir.
 - Une redirection vers un autre hôte que l'instance ne reçoit ni ton jeton ni le corps de l'appel.
-- Il passe par le proxy de Réglages › Réseau quand tu en as un.
+- Il passe par le proxy de Réglages › Avancé › Réseau quand tu en as un.
 - Chaque réponse est limitée à 8 Mio et à 15 secondes.
 
 ## Ce qu'il lit et ce qu'il écrit sur l'instance

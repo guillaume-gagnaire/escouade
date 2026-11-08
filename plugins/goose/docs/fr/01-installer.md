@@ -23,7 +23,7 @@ Comme tout plugin, il se coupe par son interrupteur et se désinstalle depuis sa
 
 ## 4. Brancher un compte
 
-Aucun compte n’existe au départ : un agent ne démarre que sur un compte que tu as ajouté. Ouvre Réglages › Comptes, **Ajouter un compte…**, harness « Goose » :
+Aucun compte n’existe au départ : un agent ne démarre que sur un compte que tu as ajouté. Ouvre Réglages › Comptes et harness, **Ajouter un compte…**, harness « Goose » :
 
 - **Le compte de la machine** : la configuration habituelle de Goose, telle quelle.
 - **Un nouveau compte** : un dossier de configuration à lui, sous `~/.escouade/goose/`, donné à Goose par `GOOSE_PATH_ROOT`. Configure son fournisseur pour ce dossier.

@@ -10,7 +10,7 @@ Its page, in the same view, has a switch for the whole app and a "Projects" tab 
 
 Bitbucket Cloud connects with an Atlassian API token, with chosen scopes, and the email of the Atlassian account it belongs to.
 
-1. In Escouade, open Settings › Integrations › "Code hosts", then "Connect a code host…", and pick Bitbucket in "Code host".
+1. In Escouade, open Settings › Connected services › "Code hosts", then "Connect a code host…", and pick Bitbucket in "Code host".
 2. "Create a token" opens `https://id.atlassian.com/manage-profile/security/api-tokens`. Make an API token **with scopes**, for Bitbucket, and give it those the form reminds: `read:user:bitbucket`, `read:repository:bitbucket`, `read:pullrequest:bitbucket`, `write:pullrequest:bitbucket`, `read:pipeline:bitbucket`.
 3. Copy the token.
 

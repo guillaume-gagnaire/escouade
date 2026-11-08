@@ -2,7 +2,7 @@
 
 ## Lancer un agent
 
-Choisis « OpenCode » dans le menu « Harness » de « Nouvel agent », ou fais-en le harness par défaut d’un projet (Réglages › Projets, « Harness par défaut »).
+Choisis « OpenCode » dans le menu « Harness » de « Nouvel agent », ou fais-en le harness par défaut d’un projet (Réglages › Projets › Projet, « Harness par défaut »).
 
 Un seul `opencode serve` sert tous les agents OpenCode du compte : chaque agent y est une session, dans son dossier. Escouade lance le serveur avec le premier agent et l’arrête avec le dernier.
 

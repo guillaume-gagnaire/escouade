@@ -40,7 +40,7 @@ A voice Mistral does not know is replaced by its default voice, and the conversa
 
 ## Mistral Vibe agents
 
-The plugin also serves the “Mistral Vibe” harness: an agent started with it works through `vibe-acp`, a separate program Escouade starts and watches, on the account chosen (Settings › Accounts).
+The plugin also serves the “Mistral Vibe” harness: an agent started with it works through `vibe-acp`, a separate program Escouade starts and watches, on the account chosen (Settings › Accounts and harnesses).
 
 - **Modes**: “Ask” is its `ask` agent, “Accept edits” its `accept-edits` agent, “Bypass” its `auto-approve` agent. Vibe has no Plan mode: Escouade plays it (it studies, its writes are refused, its last words are the plan to approve on its card, then it carries it out).
 - **Model and effort**: the “Model” menu lists its session’s (`mistral-medium-3.5` by default). “Low” turns its thinking off, “High” keeps it.

@@ -335,8 +335,8 @@ pub fn protocol_refused(lang: &str, version: &Value) -> String {
 pub fn not_signed_in(lang: &str) -> String {
     said(
         lang,
-        "Copilot CLI n’est connecté à aucun compte GitHub sur ce compte : connecte-le dans Réglages › Comptes (« Se connecter… », copilot login).".into(),
-        "Copilot CLI isn’t signed in to any GitHub account on this account: sign it in in Settings › Accounts (“Sign in…”, copilot login).".into(),
+        "Copilot CLI n’est connecté à aucun compte GitHub sur ce compte : connecte-le dans Réglages › Comptes et harness (« Se connecter… », copilot login).".into(),
+        "Copilot CLI isn’t signed in to any GitHub account on this account: sign it in in Settings › Accounts and harnesses (“Sign in…”, copilot login).".into(),
     )
 }
 

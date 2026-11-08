@@ -1,6 +1,6 @@
 # Troubleshooting
 
-The messages below are the plugin's and Escouade's, as they show: under the connection form, on the account's row in Settings › Integrations, on an agent's card or in its pull request's tab. The plugin calls itself "Gitea" in its messages, for Forgejo too. When the instance gives a reason, it follows the message.
+The messages below are the plugin's and Escouade's, as they show: under the connection form, on the account's row in Settings › Connected services, on an agent's card or in its pull request's tab. The plugin calls itself "Gitea" in its messages, for Forgejo too. When the instance gives a reason, it follows the message.
 
 ## When connecting
 
@@ -20,7 +20,7 @@ The instance's address starts with `http://`. Give its `https://` address.
 The token is wrong or was deleted. Make another one with the scopes the form reminds.
 
 **"Gitea can’t be reached: …"**
-The call did not arrive: a mistyped address, no network, a proxy or a firewall, or more than 15 seconds without an answer. Check the address, your connection and Settings › Network.
+The call did not arrive: a mistyped address, no network, a proxy or a firewall, or more than 15 seconds without an answer. Check the address, your connection and Settings › Advanced › Network.
 
 ## On the account's row
 
@@ -57,9 +57,9 @@ The token lacks the right asked (one of the three scopes is missing), or your ac
 The instance limits the calls. Wait a little.
 
 **"Gitea: not found (404)"**, **"Gitea: error 500"** (or another error of the service), **"Gitea: unreadable answer"**, **"Gitea: too many redirects"**
-The repository or the object no longer exists or is not visible, the instance answered with an error, something other than JSON (often a proxy or a login page), or more than ten redirects. Check the instance's address and Settings › Network.
+The repository or the object no longer exists or is not visible, the instance answered with an error, something other than JSON (often a proxy or a login page), or more than ten redirects. Check the instance's address and Settings › Advanced › Network.
 
-**"Gitea / Forgejo: no token for git.acme.dev. Connect the account again in Settings › Integrations."**
+**"Gitea / Forgejo: no token for git.acme.dev. Connect the account again in Settings › Connected services."**
 Escouade could not lend a token to the plugin. Connect the account again.
 
 **"The plugin dev.escouade.gitea is not answering: …"**

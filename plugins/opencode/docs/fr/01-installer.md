@@ -8,9 +8,9 @@ Trois étapes : OpenCode sur ta machine, le plugin dans Escouade, puis le compte
 npm install -g opencode-ai
 ```
 
-C’est OpenCode 1, le seul que pilote Escouade : OpenCode 2 (`@opencode/cli`) est reconnu et dit « Non prise en charge ». Réglages › Harness montre l’exécutable trouvé, sa version et son état. Le plugin a été essayé avec OpenCode 1.19.3. `npm install -g opencode-ai@latest` le met à jour.
+C’est OpenCode 1, le seul que pilote Escouade : OpenCode 2 (`@opencode/cli`) est reconnu et dit « Non prise en charge ». Réglages › Comptes et harness montre l’exécutable trouvé, sa version et son état. Le plugin a été essayé avec OpenCode 1.19.3. `npm install -g opencode-ai@latest` le met à jour.
 
-Puis connecte un fournisseur : `opencode auth login`, ou « Se connecter… » dans Réglages › Harness, qui le lance. Les modèles locaux d’Ollama marchent aussi, déclarés dans la config d’OpenCode.
+Puis connecte un fournisseur : `opencode auth login`, ou « Se connecter… » dans Réglages › Comptes et harness, qui le lance. Les modèles locaux d’Ollama marchent aussi, déclarés dans la config d’OpenCode.
 
 ## 2. Installer le plugin
 
@@ -24,7 +24,7 @@ Comme tout plugin, il se coupe par son interrupteur dans la vue Plugins et se d�
 
 OpenCode a un seul compte dans Escouade : ta config habituelle d’OpenCode et les fournisseurs que tu y as connectés.
 
-1. Ouvre Réglages › Comptes et clique sur **Ajouter un compte…** ; dès que deux harness sont installés, choisis le harness « OpenCode ».
+1. Ouvre Réglages › Comptes et harness, puis clique sur **Ajouter un compte…** ; dès que deux harness sont installés, choisis le harness « OpenCode ».
 2. **Le compte de la machine** est proposé dès qu’OpenCode est installé (« OpenCode est installé sur cette machine »). **Ajouter ce compte** l’ajoute.
 3. Dans sa fiche, règle le modèle, l’effort et le mode des nouveaux agents, et si tu veux un **Budget par jour ($)**.
 

@@ -1,6 +1,6 @@
 # Troubleshooting
 
-The messages below are the plugin's and Escouade's, as they show: under the connection form, on the account's row in Settings › Integrations, on an agent's card or in its pull request's tab, or when you click the ⚠ of a card whose sync failed. When GitHub gives a reason, it follows the message.
+The messages below are the plugin's and Escouade's, as they show: under the connection form, on the account's row in Settings › Connected services, on an agent's card or in its pull request's tab, or when you click the ⚠ of a card whose sync failed. When GitHub gives a reason, it follows the message.
 
 ## When connecting
 
@@ -14,7 +14,7 @@ The instance's address starts with `http://`. Give its `https://` address.
 The token is wrong, expired or revoked. Make another one with "Create a token".
 
 **"GitHub can’t be reached: …"**
-The call did not arrive: a mistyped address, no network, a proxy or a firewall, or more than 15 seconds without an answer. Check the address, your connection and Settings › Network.
+The call did not arrive: a mistyped address, no network, a proxy or a firewall, or more than 15 seconds without an answer. Check the address, your connection and Settings › Advanced › Network.
 
 ## On the account's row
 
@@ -63,9 +63,9 @@ The token lacks the right asked on this repository (a fine-grained token without
 The API's limit is reached. The plugin slows down on its own; wait for the end of the window.
 
 **"GitHub: not found (404)"**, **"GitHub: error 500"** (or another error of the service), **"GitHub: unreadable answer"**, **"GitHub: too many redirects"**
-The repository or the object no longer exists or is not visible, GitHub answered with an error, something other than JSON (often a proxy), or more than ten redirects. Try again; if it lasts, look at Settings › Network.
+The repository or the object no longer exists or is not visible, GitHub answered with an error, something other than JSON (often a proxy), or more than ten redirects. Try again; if it lasts, look at Settings › Advanced › Network.
 
-**"GitHub: no token for github.com. Connect the account again in Settings › Integrations."**
+**"GitHub: no token for github.com. Connect the account again in Settings › Connected services."**
 Escouade could not lend a token to the plugin. Connect the account again.
 
 ## For GitHub Issues

@@ -7,7 +7,7 @@ It is for anyone with a Google account for Antigravity, or a Gemini API key.
 ## What it needs
 
 - Antigravity CLI installed on the machine (tried with 1.4.9).
-- An Antigravity CLI account added in Settings › Accounts: the machine’s Google sign-in, or a Gemini API key.
+- An Antigravity CLI account added in Settings › Accounts and harnesses: the machine’s Google sign-in, or a Gemini API key.
 
 ## What it can do
 

@@ -8,7 +8,7 @@ Its page, in the same view, has a switch for the whole app and a "Projects" tab 
 
 ## 2. Make the API token on Atlassian
 
-1. In Escouade, open Settings › Integrations. Under "Kanban sources", in the "Connected accounts" group, click "Connect…" on the Jira row.
+1. In Escouade, open Settings › Connected services. Under "Ticket sources", in the "Connected accounts" group, click "Connect…" on the Jira row.
 2. Click "Create an Atlassian API token". Your browser opens `https://id.atlassian.com/manage-profile/security/api-tokens`. Make an API token and paste it into the "API token" field.
 
 The token acts on your behalf, with your account's rights on the site: it sees the projects and issues you see.
@@ -29,7 +29,7 @@ The connection is kept at once: it does not go through "Save".
 
 ## 5. Link a Jira project to an Escouade project
 
-Still in Settings › Integrations, the "Sources linked to `<project>`" group offers the "Jira project" menu: the projects of your site, sorted by key, with their name. Pick one. Escouade loads its statuses and fills in the "Status mapping" (see **Use**). Save the settings.
+In Settings › Projects › Imported tickets, the "Sources linked to `<project>`" group offers the "Jira project" menu: the projects of your site, sorted by key, with their name. Pick one. Escouade loads its statuses and fills in the "Status mapping" (see **Use**). Save the settings.
 
 You can also start from the Kanban: "Import" with no linked source shows "No source linked to this project" and offers "Link a source", which opens that same tab.
 

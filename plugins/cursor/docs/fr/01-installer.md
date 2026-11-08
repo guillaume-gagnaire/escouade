@@ -9,7 +9,7 @@ Installe-le avec son script :
 - Windows : `irm 'https://cursor.com/install?win32=true' | iex`
 - macOS et Linux : `curl https://cursor.com/install -fsS | bash`
 
-Puis connecte-le dans un terminal : `agent login`. Escouade le trouve dans le `PATH`, et sous Windows dans `%LOCALAPPDATA%\cursor-agent` même absent du `PATH`. Réglages › Harness montre l’exécutable trouvé et sa version. Le plugin a été essayé avec Cursor CLI 2026.10.22. `agent update` le met à jour.
+Puis connecte-le dans un terminal : `agent login`. Escouade le trouve dans le `PATH`, et sous Windows dans `%LOCALAPPDATA%\cursor-agent` même absent du `PATH`. Réglages › Comptes et harness montre l’exécutable trouvé et sa version. Le plugin a été essayé avec Cursor CLI 2026.10.22. `agent update` le met à jour.
 
 ## 2. Installer le plugin
 
@@ -23,7 +23,7 @@ Comme tout plugin, il se coupe par son interrupteur dans la vue Plugins et se d�
 
 Aucun compte n’existe au départ : un agent ne démarre que sur un compte que tu as ajouté.
 
-1. Ouvre Réglages › Comptes et clique sur **Ajouter un compte…** ; dès que deux harness sont installés, choisis le harness « Cursor CLI ».
+1. Ouvre Réglages › Comptes et harness, puis clique sur **Ajouter un compte…** ; dès que deux harness sont installés, choisis le harness « Cursor CLI ».
 2. Choisis :
    - **Le compte de la machine** : la connexion de `agent login`. **Ajouter ce compte** l’ajoute tel quel.
    - **Un nouveau compte** : un autre compte Cursor, par sa clé d’API (sur cursor.com, Settings › API Keys). Donne-lui un nom et colle la clé.
@@ -38,4 +38,4 @@ La connexion de `agent login` est celle de la machine : un dossier de configurat
 - **La connexion de la machine** reste celle de Cursor. Escouade ne la lit pas.
 - **Chaque agent** a son propre dossier de configuration de Cursor (`CURSOR_CONFIG_DIR`), retiré avec lui : ses règles, son modèle et ses sessions y sont gardés, jamais dans ta config de Cursor.
 
-Cursor ne dit pas son usage du mois : « Usage sur cursor.com », dans Réglages › Comptes et le panneau des quotas, ouvre son tableau de bord.
+Cursor ne dit pas son usage du mois : « Usage sur cursor.com », dans Réglages › Comptes et harness, et dans le panneau des quotas, ouvre son tableau de bord.

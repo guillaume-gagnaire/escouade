@@ -7,7 +7,7 @@ Il s’adresse à qui a déjà OpenCode 1 et au moins un fournisseur connecté.
 ## Ce qu’il demande
 
 - OpenCode 1 installé sur la machine (`npm install -g opencode-ai`, essayé avec la 1.19.3). OpenCode 2 n’est pas pris en charge.
-- Un fournisseur connecté à OpenCode (`opencode auth login`), et son compte ajouté dans Réglages › Comptes.
+- Un fournisseur connecté à OpenCode (`opencode auth login`), et son compte ajouté dans Réglages › Comptes et harness.
 
 ## Ce qu’il peut faire
 

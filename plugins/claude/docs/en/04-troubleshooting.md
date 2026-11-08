@@ -5,9 +5,9 @@ The messages below are those Escouade and the plugin show, word for word, in the
 ## The agent doesn’t start
 
 **“Claude Code not found. Install it or give its path in the settings.”**
-Escouade didn’t find `claude`. Install Claude Code (see the Install tab), or give its executable’s path in Settings › Harness, or in the account’s “Executable” field.
+Escouade didn’t find `claude`. Install Claude Code (see the Install tab), or give its executable’s path in Settings › Accounts and harnesses, or in the account’s “Executable” field.
 
-**“No Claude Code account: add one in Settings › Accounts.”**
+**“No Claude Code account: add one in Settings › Accounts and harnesses.”**
 This harness has no account. Add this machine’s account or a new one.
 
 **“The Claude Code plugin (dev.escouade.claude-code) is switched off or not loaded: turn it back on in the Plugins view to start a Claude Code agent.”**

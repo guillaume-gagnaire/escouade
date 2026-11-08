@@ -22,7 +22,7 @@ Le manifeste d’un plugin tiers pose dans `acp.env` une variable interdite (`PA
 **« {harness} introuvable. Installe-le ou indique son chemin dans les réglages. »**
 Escouade n’a pas trouvé le programme dans le `PATH`, sous les noms de `locate.names`.
 
-**« Aucun compte {harness} : ajoute-en un dans Réglages › Comptes. »**
+**« Aucun compte {harness} : ajoute-en un dans Réglages › Comptes et harness. »**
 Ajoute un compte du harness.
 
 **L’agent est marqué « harness absent »**

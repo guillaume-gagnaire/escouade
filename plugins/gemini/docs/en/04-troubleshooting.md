@@ -5,9 +5,9 @@ The messages below are those Escouade and the plugin show, word for word, in the
 ## The agent doesn’t start
 
 **“Gemini CLI not found. Install it or give its path in the settings.”**
-Escouade didn’t find `gemini`. Install it (`npm install -g @google/gemini-cli`), or give its executable’s path in Settings › Harness.
+Escouade didn’t find `gemini`. Install it (`npm install -g @google/gemini-cli`), or give its executable’s path in Settings › Accounts and harnesses.
 
-**“No Gemini CLI account: add one in Settings › Accounts.”**
+**“No Gemini CLI account: add one in Settings › Accounts and harnesses.”**
 Add a Google account or an API key.
 
 **“Gemini CLI didn’t open the agent’s session: {reason}. If it isn’t signed in, run gemini in a terminal to sign in to your Google account, or give it an API key by GEMINI_API_KEY.”**

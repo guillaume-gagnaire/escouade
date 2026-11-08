@@ -30,7 +30,7 @@ fn a_state_no_type_has_goes_as_it_is() {
 fn a_token_without_the_work_items_right_is_told_in_english_too() {
     assert_eq!(
         no_right(Lang::En, "Azure DevOps denies access (403)", "https://x/tokens"),
-        "Azure DevOps denies access (403). The Azure DevOps token needs the Work Items right (read and write): make one on https://x/tokens, then replace it in Settings › Integrations › Code hosts."
+        "Azure DevOps denies access (403). The Azure DevOps token needs the Work Items right (read and write): make one on https://x/tokens, then replace it in Settings › Connected services › Code hosts."
     );
 }
 

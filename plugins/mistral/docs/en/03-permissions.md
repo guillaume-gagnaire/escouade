@@ -4,7 +4,7 @@ What the plugin can do, what it sends to Mistral and when, and what never goes t
 
 ## What its manifest declares
 
-- **Network**: `api.mistral.ai`, alone. The plugin is a WASM module: it reaches the network only through Escouade’s host, which refuses any other host, and goes through the proxy of [Settings › Network](https://escouade.dev/en/docs/settings-network).
+- **Network**: `api.mistral.ai`, alone. The plugin is a WASM module: it reaches the network only through Escouade’s host, which refuses any other host, and goes through the proxy of [Settings › Advanced › Network](https://escouade.dev/en/docs/settings-network).
 - **Activation**: `voice:mistral`, when a dictation, a voice or the settings need Mistral.
 - **An account**: `mistral`, the Mistral account of the voice and of Vibe, and **a harness**: `vibe`, Mistral Vibe.
 - **Nothing else**: no secret of its own (no `permissions.secrets`), no commands, no events, no files.

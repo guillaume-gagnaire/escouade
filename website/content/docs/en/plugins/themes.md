@@ -13,7 +13,7 @@ The “High contrast” plugin, whole: one theme, dark and light, and its projec
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.high-contrast",
   "name": { "fr": "Contraste élevé", "en": "High contrast" },
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": {
     "fr": "Un thème à fort contraste, clair et sombre : texte pur, bordures nettes, couleurs d'état franches.",
     "en": "A high-contrast theme, light and dark: pure text, sharp borders, plain status colors."

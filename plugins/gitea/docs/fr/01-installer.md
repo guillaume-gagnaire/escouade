@@ -8,7 +8,7 @@ Sa page, dans la même vue, a un interrupteur pour toute l'app et un onglet « P
 
 ## 2. Créer le jeton sur l'instance
 
-1. Dans Escouade, ouvre Réglages › Intégrations › « Hébergeurs de code », puis « Connecter un hébergeur… ». Un dépôt dont le remote est sur une instance sans compte propose aussi « Connecter » suivi de son hôte.
+1. Dans Escouade, ouvre Réglages › Services connectés › « Hébergeurs de code », puis « Connecter un hébergeur… ». Un dépôt dont le remote est sur une instance sans compte propose aussi « Connecter » suivi de son hôte.
 2. « Hébergeur » : Gitea / Forgejo. Pour une adresse que l'app ne connaît pas, elle cherche seule le type d'hébergeur (« Recherche du type d'hébergeur… »).
 3. « Adresse » : celle de l'instance (`https://codeberg.org`, `https://gitea.com`, `https://git.acme.dev`). Seul https est accepté (http seulement vers cette machine).
 4. « Créer un jeton » ouvre `<instance>/user/settings/applications`. Crée un jeton d'accès avec les droits que le formulaire rappelle : `write:repository`, `write:issue`, `read:user`. Copie-le.

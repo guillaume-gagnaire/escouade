@@ -2,7 +2,7 @@
 
 ## Start an agent
 
-Choose “OpenCode” in the “Harness” menu of “New agent”, or make it a project’s default harness (Settings › Projects, “Default harness”).
+Choose “OpenCode” in the “Harness” menu of “New agent”, or make it a project’s default harness (Settings › Projects › Project, “Default harness”).
 
 A single `opencode serve` serves all the account’s OpenCode agents: each agent is a session on it, in its folder. Escouade starts the server with the first agent and stops it with the last.
 

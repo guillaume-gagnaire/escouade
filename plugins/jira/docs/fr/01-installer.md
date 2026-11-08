@@ -8,7 +8,7 @@ Sa page, dans la même vue, a un interrupteur pour toute l'app et un onglet « P
 
 ## 2. Créer le jeton d'API chez Atlassian
 
-1. Dans Escouade, ouvre Réglages › Intégrations. Dans « Sources du Kanban », groupe « Comptes connectés », clique sur « Connecter… » à la ligne Jira.
+1. Dans Escouade, ouvre Réglages › Services connectés. Dans « Sources de tickets », groupe « Comptes connectés », clique sur « Connecter… » à la ligne Jira.
 2. Clique sur « Créer un jeton d'API Atlassian ». Ton navigateur ouvre `https://id.atlassian.com/manage-profile/security/api-tokens`. Crée un jeton d'API et copie-le dans le champ « Jeton d'API ».
 
 Le jeton agit en ton nom, avec les droits de ton compte sur le site : il voit les projets et les tickets que tu vois.
@@ -29,7 +29,7 @@ La connexion est gardée tout de suite : elle ne passe pas par « Enregistrer »
 
 ## 5. Lier un projet Jira à un projet Escouade
 
-Toujours dans Réglages › Intégrations, le groupe « Sources liées à `<projet>` » propose la liste « Projet Jira » : les projets de ton site, rangés par clé, avec leur nom. Choisis-en un. Escouade charge ses statuts et pré-remplit la « Correspondance des statuts » (voir **Utiliser**). Enregistre les réglages.
+Dans Réglages › Projets › Tickets importés, le groupe « Sources liées à `<projet>` » propose la liste « Projet Jira » : les projets de ton site, rangés par clé, avec leur nom. Choisis-en un. Escouade charge ses statuts et pré-remplit la « Correspondance des statuts » (voir **Utiliser**). Enregistre les réglages.
 
 Tu peux aussi partir du Kanban : « Importer » sans source liée affiche « Aucune source liée à ce projet » et propose « Lier une source », qui ouvre ce même onglet.
 

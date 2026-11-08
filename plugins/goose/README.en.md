@@ -8,7 +8,7 @@ It is for anyone who already has Goose and a configured provider.
 
 - Goose installed on the machine (`goose --version` answers 1.57.0 or later), with its provider configured (`goose configure`).
 - The ACP plugin (`dev.escouade.acp`) installed and on: it runs the described harnesses.
-- A Goose account added in Settings › Accounts.
+- A Goose account added in Settings › Accounts and harnesses.
 
 ## What it can do
 

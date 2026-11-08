@@ -21,7 +21,7 @@ Escouade reads its values and filters each before setting it on the window:
 - a value must be a color (`#rrggbb`, `color-mix()`, `var()` of another token…), 160 characters at most;
 - never `url()`, another function, quotes, a backslash, `;`, a brace or `!important`.
 
-So a theme can load nothing, write no CSS of its own, and hide no request of Escouade (a permission, a question). What does not pass is left out, and Settings › Application says how many values were.
+So a theme can load nothing, write no CSS of its own, and hide no request of Escouade (a permission, a question). What does not pass is left out, and Settings › General says how many values were.
 
 ## What it cannot do
 

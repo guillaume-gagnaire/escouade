@@ -5,12 +5,12 @@ The messages below are those Escouade and the plugin show, word for word, in the
 ## The agent doesn’t start
 
 **“Copilot CLI not found. Install it or give its path in the settings.”**
-Escouade didn’t find `copilot`. Install it (`npm install -g @github/copilot`), or give its executable’s path in Settings › Harness.
+Escouade didn’t find `copilot`. Install it (`npm install -g @github/copilot`), or give its executable’s path in Settings › Accounts and harnesses.
 
-**“No Copilot CLI account: add one in Settings › Accounts.”**
+**“No Copilot CLI account: add one in Settings › Accounts and harnesses.”**
 Add this machine’s account or a new one.
 
-**“Copilot CLI isn’t signed in to any GitHub account on this account: sign it in in Settings › Accounts (“Sign in…”, copilot login).”**
+**“Copilot CLI isn’t signed in to any GitHub account on this account: sign it in in Settings › Accounts and harnesses (“Sign in…”, copilot login).”**
 The account has no sign-in of its own. An account other than this machine’s doesn’t count the GitHub CLI’s (`gh`) sign-in: sign it in with “Sign in…”.
 
 **“Copilot CLI speaks protocol {version}, Escouade protocol {version}: update Copilot CLI (npm install -g @github/copilot@latest).”**

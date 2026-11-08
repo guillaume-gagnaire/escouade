@@ -24,7 +24,7 @@ escouade-plugin validate . --first-party    # le manifeste
 escouade-plugin test . --first-party        # le banc de conformité d’Escouade
 ```
 
-Pour le voir, charge son dossier en développement (vue Plugins › **En développement** › **Charger un dossier…**), choisis-le dans Réglages › Application › Couleurs, et passe de Sombre à Clair. Escouade le relit à chaque changement d’un fichier.
+Pour le voir, charge son dossier en développement (vue Plugins › **En développement** › **Charger un dossier…**), choisis-le dans Réglages › Général › Couleurs, et passe de Sombre à Clair. Escouade le relit à chaque changement d’un fichier.
 
 `node plugins/ci.mjs`, depuis la racine du dépôt (avec `ESCOUADE_PLUGIN_BIN` qui nomme le `escouade-plugin` de l’app), fait tout cela pour chaque plugin du dossier, avec sa LICENSE et son CHANGELOG.
 

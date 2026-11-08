@@ -34,7 +34,7 @@ Pour chaque message, une requête `POST https://slack.com/api/chat.postMessage`,
 - le nom du salon (`escouade-<projet>`, ou celui de `channels.json`) ;
 - le texte : la clé et le titre du ticket, ou le nom de l’agent.
 
-Escouade ne laisse partir que des requêtes en https vers `slack.com` et ses sous-domaines, sans suivre de redirection, 10 secondes et 1 Mio au plus, et jamais vers une adresse de ta machine ou de ton réseau local. Le proxy de **Réglages › Réseau** est suivi.
+Escouade ne laisse partir que des requêtes en https vers `slack.com` et ses sous-domaines, sans suivre de redirection, 10 secondes et 1 Mio au plus, et jamais vers une adresse de ta machine ou de ton réseau local. Le proxy de **Réglages › Avancé › Réseau** est suivi.
 
 ## Ce qui n’y part jamais
 

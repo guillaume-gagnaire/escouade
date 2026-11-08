@@ -9,7 +9,7 @@ Gemini CLI n’a pas encore été essayé avec un vrai compte : le plugin suit s
 ## Ce qu’il demande
 
 - Gemini CLI installé sur la machine (`npm install -g @google/gemini-cli`, Node 20 ou plus ; essayé avec la 0.66.0).
-- Un compte Gemini CLI ajouté dans Réglages › Comptes : un compte Google connecté par `gemini`, ou une clé d’API.
+- Un compte Gemini CLI ajouté dans Réglages › Comptes et harness : un compte Google connecté par `gemini`, ou une clé d’API.
 
 ## Ce qu’il peut faire
 

@@ -7,7 +7,7 @@ Il s’adresse à qui a un compte Cursor, Free compris.
 ## Ce qu’il demande
 
 - Cursor CLI installé sur la machine (essayé avec la 2026.10.22), connecté par `agent login`.
-- Un compte Cursor CLI ajouté dans Réglages › Comptes : le compte de la machine, ou un autre par sa clé d’API.
+- Un compte Cursor CLI ajouté dans Réglages › Comptes et harness : le compte de la machine, ou un autre par sa clé d’API.
 
 ## Ce qu’il peut faire
 

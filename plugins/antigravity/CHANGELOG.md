@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.5
+
+- Its messages, README and documentation send to the settings pages of Escouade 2.2: Accounts and harnesses and a project’s Project page (ESC-387).
+
 ## 2.2.4
 
 - In Ask and Accept edits, a write is accepted by the rules only when the core says it reaches a file alone (`fs/fileOnly`: a file there, or nothing and no submodule under it): with `agy` 1.5.3 the rule of a folder covers its `.git` at any depth, so a folder, a submodule (even never initialized) or what holds one is a card, without “Always” (ESC-389, the review of 2.2.3).

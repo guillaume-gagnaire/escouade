@@ -7,7 +7,7 @@ Il s’adresse à qui veut utiliser un harness décrit, comme Goose, et à l’a
 ## Ce qu’il demande
 
 - Rien à installer de plus que le harness décrit lui-même et le plugin qui le décrit.
-- Un compte du harness décrit, dans Réglages › Comptes.
+- Un compte du harness décrit, dans Réglages › Comptes et harness.
 
 ## Ce qu’il peut faire
 

@@ -8,7 +8,7 @@ Il s’adresse à qui a déjà Goose et un fournisseur configuré.
 
 - Goose installé sur la machine (`goose --version` répond 1.57.0 ou plus), avec son fournisseur configuré (`goose configure`).
 - Le plugin ACP (`dev.escouade.acp`) installé et allumé : c’est lui qui fait tourner les harness décrits.
-- Un compte Goose ajouté dans Réglages › Comptes.
+- Un compte Goose ajouté dans Réglages › Comptes et harness.
 
 ## Ce qu’il peut faire
 

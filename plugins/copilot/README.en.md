@@ -7,7 +7,7 @@ It is for anyone with a GitHub account that has Copilot, Free included.
 ## What it needs
 
 - Copilot CLI installed on the machine (`npm install -g @github/copilot`, tried with 1.0.98).
-- A Copilot CLI account added in Settings › Accounts, signed in by `copilot login`: with no account, no agent starts.
+- A Copilot CLI account added in Settings › Accounts and harnesses, signed in by `copilot login`: with no account, no agent starts.
 
 ## What it can do
 

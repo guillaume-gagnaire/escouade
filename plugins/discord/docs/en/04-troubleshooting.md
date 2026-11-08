@@ -18,7 +18,7 @@ Sent: Discord took the message.
 
 **`webhook to discord.com: {code} (ticket.column #42) {answer}`**
 Discord refused the message; the end of the line is the start of its answer (300 characters at most). By the code:
-- `404 Not Found`: the webhook no longer exists (deleted in Discord) or the address is wrong. Make it again, then paste its new address in **Settings › Secrets**;
+- `404 Not Found`: the webhook no longer exists (deleted in Discord) or the address is wrong. Make it again, then paste its new address in the **Settings** tab of the plugin’s page, **Secrets** section;
 - `401 Unauthorized`: the end of the URL (the webhook’s token) is wrong. Copy the whole URL again;
 - `429 Too Many Requests`: Discord limits the number of messages, that one is lost. Turn off the chattiest projects in the **Projects** tab.
 
@@ -26,10 +26,10 @@ Discord refused the message; the end of the line is the start of its answer (300
 Discord did not answer within 10 seconds. The message is lost; the next ones go if Discord answers.
 
 **`webhook to discord.com: no answer (…): {reason}`**
-The request did not get through: machine offline, proxy, certificate. Check your connection and **Settings › Network**.
+The request did not get through: machine offline, proxy, certificate. Check your connection and **Settings › Advanced › Network**.
 
 **`a webhook's address is not one (ticket.column)`**
-No address is kept, or what is kept is not an address. Paste the webhook’s URL in **Settings › Secrets**, then **Keep**.
+No address is kept, or what is kept is not an address. Paste the webhook’s URL in the **Settings** tab of the plugin’s page, **Secrets** section, then **Keep**.
 
 **``a webhook to {host} is not sent: not an http(s) address of a host of `permissions.network` (ticket.column)``**
 The address kept does not point to `discord.com`. An address on `discordapp.com` (Discord’s old domain) is refused: replace `discordapp.com` with `discord.com` in the URL, or copy it again from Discord.
