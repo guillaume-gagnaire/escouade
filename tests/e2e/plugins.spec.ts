@@ -15,17 +15,11 @@ function plugin(dir: string, manifest: unknown) {
 }
 
 // The plugins the app gives (origin builtin), and the others. Each plugin the app comes to give (INT-7, 8, 10, 13…) adds
-// one: the test reads them as a set that holds the demonstration plugin and isola, never as these alone.
+// one: the test reads them as a set that holds the demonstration plugin, never as these alone. isola is not given in
+// 2.2.0-beta.1 (ESC-388).
 const builtin = (list: { ok: View[] } | { err: unknown }) => ('ok' in list ? list.ok : []).filter((p) => p.origin.kind === 'builtin');
 const others = (list: { ok: View[] } | { err: unknown }) => ('ok' in list ? list.ok : []).filter((p) => p.origin.kind !== 'builtin');
-const OURS = [
-  'dev.escouade.minimal',
-  'dev.escouade.isola',
-  'dev.escouade.github',
-  'dev.escouade.gitlab',
-  'dev.escouade.bitbucket',
-  'dev.escouade.gitea',
-];
+const OURS = ['dev.escouade.minimal', 'dev.escouade.github', 'dev.escouade.gitlab', 'dev.escouade.bitbucket', 'dev.escouade.gitea'];
 
 interface View {
   id: string;
@@ -80,7 +74,7 @@ test('a declarative plugin is installed from a folder, and an invalid one says w
     later: { field: 'of a later Escouade' },
   });
 
-  // The app gives its own (INT-4): the demonstration plugin and isola among them, from the start, with the origin builtin.
+  // The app gives its own (INT-4): the demonstration plugin among them, from the start, with the origin builtin.
   const first = await invoke<View[]>('plugins_list');
   expect(others(first)).toEqual([]);
   expect(builtin(first).map((p) => p.id)).toEqual(expect.arrayContaining(OURS));

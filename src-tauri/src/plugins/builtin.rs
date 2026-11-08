@@ -57,6 +57,9 @@ pub const REGISTRY: &[Entry] = &[
         id: "dev.escouade.deepgram",
         manifest: include_str!("../../../plugins/deepgram/escouade-plugin.json"),
     },
+    // isola is not given in 2.2.0-beta.1 (ESC-388): its real trial was not run (isola has no Windows build, WSL was down on the
+    // machine that tries it). Its tests keep it.
+    #[cfg(test)]
     Entry {
         id: "dev.escouade.isola",
         manifest: include_str!("../../../plugins/isola/escouade-plugin.json"),

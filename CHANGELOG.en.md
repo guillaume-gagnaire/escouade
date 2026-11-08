@@ -99,6 +99,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### Removed
 
+- isola is not in this beta: its real trial could not run yet (isola has no Windows build). It comes back with it.
 - Antigravity CLI is not in this beta: with agy 1.5.3, its agents could run a command or write a file without asking you. It comes back as soon as its plugin keeps its promise.
 - The code index is removed: measured with real agents on changes in several places, it saved neither tokens nor oversights, and each harness finds the code with its own tools. Its databases are erased from your machine at the update, and the search by meaning of the memory and the docs is now set in Settings › Projects › Every project.
 
