@@ -27,7 +27,8 @@ else
   javy="$out/javy/$exe"
   if [ ! -x "$javy" ]; then
     mkdir -p "$out/javy"
-    curl -fsSL -o "$out/javy/$asset" "https://github.com/bytecodealliance/javy/releases/download/v9.1.0/$asset"
+    # GitHub's releases answer 502 to 504 now and then: tried again, further apart.
+    curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "$out/javy/$asset" "https://github.com/bytecodealliance/javy/releases/download/v9.1.0/$asset"
     got=$( (sha256sum "$out/javy/$asset" 2>/dev/null || shasum -a 256 "$out/javy/$asset") | cut -d' ' -f1)
     if [ "$got" != "$sum" ]; then
       echo "$asset: SHA-256 $got, not $sum" >&2

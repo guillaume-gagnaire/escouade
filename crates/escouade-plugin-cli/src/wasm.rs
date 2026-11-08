@@ -264,17 +264,32 @@ impl Compiler {
         );
         let client = self.client.read().as_ref().map(|f| f()).unwrap_or_default();
         let gz = block_on(async {
-            let r = client
-                .get(&url)
-                .timeout(Duration::from_secs(300))
-                .send()
-                .await
-                .and_then(|r| r.error_for_status())
-                .map_err(|e| format!("{url}: {e}"))?;
-            r.bytes()
-                .await
-                .map(|b| b.to_vec())
-                .map_err(|e| format!("{url}: {e}"))
+            // GitHub's releases answer 502 to 504 now and then (2026-11-08, three runs of the CI in a row): a server error
+            // or a cut connection is tried again, further apart each time; anything else is said at once.
+            let mut wait = Duration::from_secs(5);
+            let mut tries = 1;
+            loop {
+                let got = async {
+                    let r = client
+                        .get(&url)
+                        .timeout(Duration::from_secs(300))
+                        .send()
+                        .await?
+                        .error_for_status()?;
+                    r.bytes().await
+                }
+                .await;
+                match got {
+                    Ok(b) => break Ok(b.to_vec()),
+                    Err(e) if tries < 4 && e.status().is_none_or(|s| s.is_server_error()) => {
+                        log::warn!("{url}: {e}; tried again in {} s", wait.as_secs());
+                        tokio::time::sleep(wait).await;
+                        wait *= 3;
+                        tries += 1;
+                    }
+                    Err(e) => break Err(format!("{url}: {e}")),
+                }
+            }
         })?;
         let bytes = unpack_javy(&gz, asset, sum)?;
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
