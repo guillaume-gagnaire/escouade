@@ -6,7 +6,7 @@
 // commands of .escouade.yml, is driven by escouade-yml.spec.ts; « Lier une source » of an import by integrations.spec.ts.)
 
 import type { Page } from '@playwright/test';
-import { addProject, closeSettings, expect, openAdvanced, openSettingsPage, settingsEntry, test } from './fixture';
+import { addProject, closeSettings, expect, openAdvanced, openSettingsPage, settingsEntry, test, unfoldSections } from './fixture';
 
 /** The settings window, open on `page` of demo-api: its entry current in the bar, its title over the page. */
 async function landsOn(app: Page, page: string, title = page) {
@@ -21,6 +21,9 @@ async function landsOn(app: Page, page: string, title = page) {
 
 test.beforeEach(async ({ app }) => {
   await addProject(app.page, app.repo);
+  // In a short window (the CI's 1028 × 779), Lancement and Terminaux are folded, their rows (« Configurer », « Proposer
+  // des commandes ») hidden.
+  await unfoldSections(app.page);
 });
 
 test('the tile’s « Réglages du projet… » opens Projets › demo-api › Projet', async ({ app }) => {
