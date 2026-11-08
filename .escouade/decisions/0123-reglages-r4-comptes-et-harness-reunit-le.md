@@ -1,19 +1,19 @@
 ---
-number: null
+number: 123
 id: "reglages-r4-comptes-et-harness-reunit-le"
 title: "Réglages R4 : « Comptes et harness » réunit les harness, leurs comptes et ce qui se passe à la limite"
 date: "2026-11-08"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-382"
 pages: ["fenetre/reglages","harness/comptes","kanban/pilote-auto","fenetre/barre-de-statut","harness/claude-code-wsl"]
-tickets: []
+tickets: ["ESC-382"]
 documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"fenetre/reglages","added":6,"removed":7},{"page":"harness/comptes","added":22,"removed":18},{"page":"kanban/pilote-auto","added":4,"removed":3},{"page":"fenetre/barre-de-statut","added":5,"removed":5},{"page":"harness/claude-code-wsl","added":4,"removed":4}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-08T07:29:51+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

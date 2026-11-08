@@ -3,7 +3,7 @@ title: "Réglages"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/index.html","design/settings-2-2/captures/a-plugins.png"]
 tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384"]
-decisions: [118,119,120,121,"reglages-r4-comptes-et-harness-reunit-le"]
+decisions: [118,119,120,121,123]
 compared: null
 ---
 
