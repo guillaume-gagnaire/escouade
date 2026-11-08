@@ -1,12 +1,12 @@
-# Réglages : Kanban
+# Réglages : le Kanban d’un projet
 
-L’onglet « Kanban » des réglages décide, projet par projet, de ce que devient un ticket validé, des tests lancés avant la validation, du pilote auto et des agents qui prennent les tickets.
+La page « Kanban » d’un projet décide de ce que devient un ticket validé, des tests lancés avant la validation, du pilote auto et des agents qui prennent les tickets.
 
-## Ouvrir l’onglet
+## Ouvrir la page
 
-Ouvre les réglages avec `Ctrl+,` (`⌘,` sous macOS), puis choisis « Kanban ». Depuis le [Kanban](board), le bouton ⚙ « Après validation : … » de l’en-tête ouvre cet onglet directement, sur le projet affiché.
+Ouvre les réglages avec `Ctrl+,` (`⌘,` sous macOS), puis, sous « Projets », le projet et sa page « Kanban ». Depuis le [Kanban](board), le bouton ⚙ « Après validation : … » de l’en-tête ouvre cette page directement, sur le projet affiché.
 
-La barre « Projet » en haut de la fenêtre liste tes projets : ce que tu changes ne vaut que pour celui qui est sélectionné. Seul « Pause au-delà du quota » est commun à tous les projets. Tes changements restent dans un brouillon jusqu’à « Enregistrer » ; « Annuler » les abandonne, et un point à droite du nom de l’onglet marque ce qui n’est pas encore enregistré. Sans projet ouvert, l’onglet affiche « Aucun projet ouvert. ».
+Ce que tu y changes ne vaut que pour ce projet et s’enregistre au geste. La pause du pilote auto au-delà du quota, qui vaut pour tous les projets, est dans [« Comptes et harness »](settings-accounts), groupe « Quand un quota est épuisé ».
 
 ## Quand je valide un ticket « À tester »
 
@@ -19,7 +19,7 @@ Ce premier groupe dit ce que fait la validation d’un ticket « À tester » 
 | « Pousser la branche du ticket » | Commit et push sur `ticket/<clé>`, sans merge ni PR. | « Valider et pousser » |
 | « Laisser en l’état » | Les modifications restent non commitées dans le worktree. | « Valider » |
 
-`ticket/` est le « Préfixe des branches des tickets » du projet, à régler dans l’onglet [« Projets »](settings-projects) (`ticket/` par défaut) ; `<clé>` est la clé du ticket, par exemple `ATL-42`.
+`ticket/` est le « Préfixe des branches des tickets » du projet, à régler dans sa page [« Git et worktrees »](settings-projects) (`ticket/` par défaut) ; `<clé>` est la clé du ticket, par exemple `ATL-42`.
 
 Avec les trois premiers choix, Escouade commite d’abord ce que l’agent a laissé dans le worktree, puis fait l’action. Le ticket passe ensuite en « Terminé » et son agent est archivé. Si la branche n’apporte aucune modification, le ticket est terminé sans rien fusionner ni pousser. Avec « Laisser en l’état », le ticket passe aussi en « Terminé » ; l’agent et son worktree restent comme ils sont, sauf si le worktree ne garde rien de non sauvegardé (voir « Supprimer le worktree d’un ticket terminé ou supprimé », plus bas).
 
@@ -29,7 +29,7 @@ Affichée avec « Merger dans une branche » et « Ouvrir une pull request �
 
 Le merge se fait dans le dossier du projet quand la branche cible y est ouverte (il est alors refusé s’il y a des modifications non commitées sur des fichiers suivis), sinon dans un worktree temporaire. Il est refusé si la branche cible est ouverte dans le worktree d’un agent. Voir [les worktrees](worktrees).
 
-Pour que les nouveaux agents partent de la branche cible, règle « Branche de départ des nouveaux worktrees » sur « Branche cible du Kanban » dans [les réglages du projet](settings-projects) : ce réglage a remplacé « Les agents partent de la branche cible » de cet onglet (voir [la branche de départ](worktrees#la-branche-de-depart)).
+Pour que les nouveaux agents partent de la branche cible, règle « Branche de départ des nouveaux worktrees » sur « Branche cible du Kanban » dans [les réglages du projet](settings-projects) : ce réglage a remplacé « Les agents partent de la branche cible » de l’ancien onglet « Kanban » (voir [la branche de départ](worktrees#la-branche-de-depart)).
 
 ### Stratégie
 
@@ -68,9 +68,9 @@ Escouade ne perd jamais de travail en nettoyant : un worktree n’est supprimé 
 - avec « Laisser en l’état », l’issue du ticket le dit, par exemple « ◇ Laissé dans le worktree · worktree gardé : 2 fichier(s) non commité(s) », et l’agent reste ;
 - pour un ticket supprimé, la carte de son agent archivé le dit, sous son nom, dans la liste « Archivés ».
 
-Restaurer cet agent le remet au travail dans le même worktree. Pour ranger plus tard ce qui reste, utilise « Nettoyer » dans l’onglet [« Projets »](settings-projects).
+Restaurer cet agent le remet au travail dans le même worktree. Pour ranger plus tard ce qui reste, utilise « Nettoyer » dans sa page [« Git et worktrees »](settings-projects).
 
-Le message de commit sert à commiter ce que l’agent a laissé dans le worktree, et de message au squash ; un merge commit garde le message de git. Sa langue suit « Langue des textes rédigés par les agents » (onglet [« Application »](settings-application)).
+Le message de commit sert à commiter ce que l’agent a laissé dans le worktree, et de message au squash ; un merge commit garde le message de git. Sa langue suit « Langue des textes rédigés par les agents » (page [« Général »](settings-application)).
 
 ### En cas de conflit
 
@@ -96,7 +96,7 @@ Quand la pause joue, une bande sous l’en-tête du Kanban dit pourquoi rien ne 
 Avec plusieurs comptes Claude, la pause ne tient que si tous les comptes que le projet peut utiliser sont retenus, et le même seuil sert à choisir le compte sur lequel partent les nouveaux agents. Voir [les comptes](accounts) et [le suivi du quota](usage).
 
 > [!NOTE]
-> Le réglage « Reprendre sur un autre compte un agent de ticket arrêté par la limite » n’est pas dans cet onglet. Il est dans l’onglet [« Harness »](settings-claude-code), et n’apparaît qu’avec plusieurs comptes. Il est désactivé par défaut.
+> Le réglage « Reprendre sur un autre compte un agent de ticket arrêté par la limite » n’est pas dans cette page. Il est dans [« Comptes et harness »](settings-accounts), et n’apparaît qu’avec plusieurs comptes. Il est désactivé par défaut.
 
 ## Agents
 
@@ -105,11 +105,11 @@ Les agents qui prennent les tickets de ce projet. Voir [le Kanban](board).
 | Réglage | Effet | Par défaut |
 |---|---|---|
 | « En parallèle » | Le nombre de tickets « En cours » en même temps : 1, 2, 3, 4, 5 ou 6. Au-delà, les tickets « À faire » attendent une place libre. | 2 |
-| « Modèle » | Le modèle des agents de ticket : « Par défaut (…) », qui suit le modèle par défaut de l’onglet « Harness », ou Fable, Opus, Sonnet, Haiku. | « Par défaut » |
+| « Modèle » | Le modèle des agents de ticket : « Par défaut (…) », qui suit le modèle du compte qui le lance, ou Fable, Opus, Sonnet, Haiku. | « Par défaut » |
 | « Effort » | « Par défaut », ou Bas, Moyen, Élevé, Très élevé, Max. | « Par défaut » |
 | « Mode » | « Par défaut », ou le mode de permission : Auto, Demander, Plan, Édits auto, Bypass. | « Par défaut » |
 
-« Par défaut » veut dire le choix correspondant du compte qui prend le ticket, dans sa fiche de [Réglages › Comptes](settings-accounts) (« Nouveaux agents ») : le menu le nomme d’après le compte où partirait un nouvel agent du projet. Tant que tu n’y touches pas, ce sont ceux de son harness : Sonnet, Moyen et Auto pour Claude Code.
+« Par défaut » veut dire le choix correspondant du compte qui prend le ticket, dans sa fiche de [Réglages › Comptes et harness](settings-accounts) (« Nouveaux agents ») : le menu le nomme d’après le compte où partirait un nouvel agent du projet. Tant que tu n’y touches pas, ce sont ceux de son harness : Sonnet, Moyen et Auto pour Claude Code.
 
 Les modes de permission sont expliqués dans [les agents](managing-agents). En bref :
 

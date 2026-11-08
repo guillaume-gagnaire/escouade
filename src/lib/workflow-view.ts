@@ -27,7 +27,7 @@ export function labelIn(w: Workflow | null, name: string | null): string {
   if (!name) return '';
   const loop = w?.promptLoop?.steps.find((s) => String(s.n) === name || s.text === name);
   if (loop) return loop.text;
-  // Named by the user (Réglages › Projets › Workflow): as they wrote it.
+  // Named by the user (Réglages › Projets › Kanban › Workflow): as they wrote it.
   return w?.steps.find((s) => s.name === name)?.named ? name : stepLabel(name);
 }
 

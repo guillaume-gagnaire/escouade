@@ -137,7 +137,7 @@ Tant que l’onglet Docs est ouvert, ou que les docs ont des changements, la bar
 
 ## La branche des docs
 
-Réglages › Projets › Git, « Branche des docs » :
+Réglages › Projets › Git et worktrees, « Branche des docs » :
 
 - **La branche courante** (par défaut) : les docs vivent dans la branche de chaque dossier. Celles d’un ticket suivent sa branche et se fusionnent avec son code.
 - **Une branche fixe** (`docs`, par exemple) : les docs vivent toujours sur cette branche, qu’Escouade tient dans un worktree à part, dans son dossier système. Escouade la crée au besoin, depuis la branche distante si elle existe, et ne la fusionne jamais ailleurs : c’est à l’équipe de le faire.

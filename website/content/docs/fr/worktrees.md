@@ -16,13 +16,13 @@ L’option se règle par projet, et ne concerne que les agents créés ensuite :
 
 - la fenêtre « Nouveau projet », avec l’interrupteur « Un worktree git par agent » (désactivé par défaut) ;
 - un clic droit sur la tuile du projet (ou un clic sur son nom dans la barre de titre), puis « Activer le worktree par agent » ou « Désactiver le worktree par agent » (l’entrée précise « nouveaux agents ») ;
-- Réglages › Projets, groupe « Git », « Un worktree par agent ».
+- Réglages › Projets › Git et worktrees, groupe « Git », « Un worktree par agent ».
 
 Le dossier du projet doit être sur une branche qui a au moins un commit : un dépôt neuf, sans aucun commit, ne peut pas encore avoir de worktree. Quand un worktree ne peut pas être créé, l’agent travaille dans le dossier du projet et la conversation affiche « Worktree non créé, l’agent travaille dans le dossier du projet : … » avec la raison.
 
 ## Où il va et comment il s’appelle
 
-Quatre réglages du projet décident de l’emplacement et des noms (Réglages › Projets, groupe « Git »). La liste complète des réglages est dans [les réglages des projets](settings-projects).
+Quatre réglages du projet décident de l’emplacement et des noms (Réglages › Projets › Git et worktrees, groupe « Git »). La liste complète des réglages est dans [les réglages des projets](settings-projects).
 
 | Réglage | Par défaut | Ce qu’il fait |
 |---|---|---|
@@ -35,7 +35,7 @@ Le dossier du worktree est `<dossier des worktrees>/<nom de l’agent>`, sur une
 
 ### Au premier message
 
-Le réglage « Créer le worktree au premier message, au nom de l’agent » (Réglages › Projets, groupe « Git », et l’étape « Worktrees » de l’assistant) est activé par défaut, pour les projets existants aussi. Avec lui, « Nouvel agent » crée l’agent tout de suite, mais sans worktree ni branche : sa carte affiche « ⎇ au premier message » et sa conversation « Le worktree sera créé au premier message, au nom de l’agent. » Au premier message :
+Le réglage « Créer le worktree au premier message, au nom de l’agent » (Réglages › Projets › Git et worktrees, groupe « Git », et l’étape « Worktrees » de l’assistant) est activé par défaut, pour les projets existants aussi. Avec lui, « Nouvel agent » crée l’agent tout de suite, mais sans worktree ni branche : sa carte affiche « ⎇ au premier message » et sa conversation « Le worktree sera créé au premier message, au nom de l’agent. » Au premier message :
 
 1. Le modèle des textes rédigés nomme l’agent, d’après ce message (par exemple `refacto-auth`). Il a 15 secondes : passé ce délai, ou s’il échoue, l’agent garde `agent-N` et rien n’attend. Un nom qui arrive plus tard renomme la branche, comme quand le réglage est éteint.
 2. Le worktree est créé : la branche `<préfixe><nom>` et le dossier `<nom>`, avec `-2`, `-3`… si l’un des deux est pris.
@@ -50,7 +50,7 @@ Ne sont pas concernés, et reçoivent leur worktree tout de suite comme avant :
 
 Par défaut, le worktree part du commit où se trouve le dossier du projet à ce moment-là. La branche de ce dossier devient la **branche de base** de l’agent : c’est elle que le merge, « Intégrer » et sa pull request visent.
 
-Le réglage « Branche de départ des nouveaux worktrees » (Réglages › Projets, groupe « Git », et l’étape « Worktrees » de l’assistant) choisit une autre branche pour tous les nouveaux agents du projet :
+Le réglage « Branche de départ des nouveaux worktrees » (Réglages › Projets › Git et worktrees, groupe « Git », et l’étape « Worktrees » de l’assistant) choisit une autre branche pour tous les nouveaux agents du projet :
 
 - « Branche actuelle du dossier » : le défaut, décrit plus haut.
 - « Branche cible du Kanban » : utile quand ton dossier reste sur une branche de travail alors que les agents doivent partir de `main`.
@@ -182,7 +182,7 @@ Le merge ne supprime ni le worktree ni la branche de l’agent. Pour les ranger,
 
 ## Ouvrir une pull request
 
-Plutôt que de merger toi-même, tu peux proposer le travail d’un agent en pull request, chez tout [hébergeur de code](code-hosts) : GitHub, GitLab, Bitbucket Cloud, Gitea, Forgejo ou Azure DevOps. Il faut que le projet ait son dépôt distant chez l’hébergeur et un compte connecté dans [Réglages › Intégrations](settings-integrations) ; sinon, rien ne le propose.
+Plutôt que de merger toi-même, tu peux proposer le travail d’un agent en pull request, chez tout [hébergeur de code](code-hosts) : GitHub, GitLab, Bitbucket Cloud, Gitea, Forgejo ou Azure DevOps. Il faut que le projet ait son dépôt distant chez l’hébergeur et un compte connecté dans [Réglages › Services connectés](settings-integrations) ; sinon, rien ne le propose.
 
 « Ouvrir une PR » est dans l’en-tête de la conversation, dans le menu d’un clic droit sur la carte de l’agent, et dans le menu de sa branche du [sélecteur de branches](branches). La fenêtre propose un titre et une description, rédigés par le modèle des textes rédigés d’après les commits et le diff de la branche : relis-les, corrige-les, choisis la branche cible et le brouillon si tu veux. Rien ne part avant « Pousser et ouvrir », qui pousse la branche puis ouvre la PR. Les fichiers non commités du worktree n’y sont pas, et la fenêtre le dit.
 
@@ -209,7 +209,7 @@ Si le nettoyage rencontre un problème (un processus qui tient encore le dossier
 
 ## Les worktrees qui restent
 
-Le worktree d’un ticket terminé ou supprimé part tout seul (réglage « Supprimer le worktree d’un ticket terminé ou supprimé » de l’onglet [« Kanban »](settings-board)). Pour les autres agents archivés, ou ce qui reste d’avant, Réglages › Projets › « Worktrees restés » › « Nettoyer » supprime les worktrees des agents archivés du projet, après leurs commandes de démontage, et oublie ceux dont le dossier a déjà disparu (`git worktree prune`).
+Le worktree d’un ticket terminé ou supprimé part tout seul (réglage « Supprimer le worktree d’un ticket terminé ou supprimé » de la page [« Kanban »](settings-board) du projet). Pour les autres agents archivés, ou ce qui reste d’avant, Réglages › Projets › Git et worktrees › « Worktrees restés » › « Nettoyer » supprime les worktrees des agents archivés du projet, après leurs commandes de démontage, et oublie ceux dont le dossier a déjà disparu (`git worktree prune`).
 
 Aucun travail n’y est perdu : un worktree qui a des changements non commités, ou des commits qui ne sont ni dans la branche cible ni dans une autre branche (poussée, proposée en PR), est gardé. La rangée dit combien de worktrees sont supprimés, puis ceux qu’elle garde et pourquoi ; la carte de l’agent archivé le dit aussi. La branche d’un worktree supprimé part avec lui si son travail est dans la branche cible ; sinon elle reste, et « Restaurer » recrée le worktree à partir d’elle.
 

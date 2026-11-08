@@ -15,7 +15,7 @@ Le dépôt distant d’un projet dit chez quel hébergeur il est. Avec un compte
 
 Une PR s’appelle « MR » sur GitLab : l’app prend le mot de l’hébergeur partout.
 
-Chaque hébergeur est un plugin livré avec Escouade : il se voit dans [Réglages › Intégrations](settings-integrations#hebergeurs-de-code) et se coupe comme [tout plugin](plugins/introduction). Sa PR reste alors sur la carte telle qu’elle a été lue en dernier, et la carte le dit.
+Chaque hébergeur est un plugin livré avec Escouade : il se voit dans [Réglages › Services connectés](settings-integrations#hebergeurs-de-code) et se coupe comme [tout plugin](plugins/introduction). Sa PR reste alors sur la carte telle qu’elle a été lue en dernier, et la carte le dit.
 
 ## Les hébergeurs pris en charge
 
@@ -38,7 +38,7 @@ Chaque hébergeur est un plugin livré avec Escouade : il se voit dans [Réglage
 
 ## Connecter un compte
 
-Dans [Réglages › Intégrations](settings-integrations#hebergeurs-de-code), « Connecter un hébergeur… » demande l’hébergeur, l’adresse de l’instance et un jeton. Un compte par instance : chaque projet trouve le sien par son dépôt distant, et un dépôt sans compte propose de se connecter.
+Dans [Réglages › Services connectés](settings-integrations#hebergeurs-de-code), « Connecter un hébergeur… » demande l’hébergeur, l’adresse de l’instance et un jeton. Un compte par instance : chaque projet trouve le sien par son dépôt distant, et un dépôt sans compte propose de se connecter.
 
 Sans compte, Escouade ne bloque rien : la validation d’un ticket pousse la branche et ouvre dans ton navigateur la page de création de la PR, remplie.
 
@@ -87,7 +87,7 @@ Sur un dépôt public, n’importe qui peut ouvrir une PR, et son titre, son dif
 
 ### Les limites
 
-- La relecture est refusée sur Cursor CLI, qui ne sait pas couper ses outils, et sur un harness de plugin, dont rien ne vérifie ce qu’il laisse faire : choisis un autre harness dans Réglages › Application › « Textes rédigés ».
+- La relecture est refusée sur Cursor CLI, qui ne sait pas couper ses outils, et sur un harness de plugin, dont rien ne vérifie ce qu’il laisse faire : choisis un autre harness dans Réglages › Général › « Textes rédigés ».
 - Le diff part chez le service de ce harness, comme tout ce que tu donnes à un agent.
 - 40 commentaires au plus, sur des lignes de la nouvelle version.
 

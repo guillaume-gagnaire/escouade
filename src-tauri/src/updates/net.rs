@@ -226,8 +226,8 @@ impl Failure {
                 let status = status_text(407);
                 return tr_in!(
                     lang,
-                    "le proxy {p} demande une authentification ({status}) : mets l'identifiant et le mot de passe dans l'adresse du proxy, dans Réglages › Réseau",
-                    "the proxy {p} asks for authentication ({status}): put the user name and password in the proxy address, in Settings › Network"
+                    "le proxy {p} demande une authentification ({status}) : mets l'identifiant et le mot de passe dans l'adresse du proxy, dans Réglages › Avancé › Réseau",
+                    "the proxy {p} asks for authentication ({status}): put the user name and password in the proxy address, in Settings › Advanced › Network"
                 );
             }
             if self.stuck == Some(Stuck::TunnelRefused) {

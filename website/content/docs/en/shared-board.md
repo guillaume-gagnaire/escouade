@@ -12,14 +12,14 @@ Right-click the card, “Share with the team”, or the switch of the same name 
 - The ticket’s images are shared in a folder beside the file, `.escouade/tickets/<id>/`; its joined files too, up to 5 MB. A bigger joined file stays with you, and the form says so.
 - “Stop sharing” deletes the file (the deletion is to be committed); the ticket stays with you as it is. Deleting a shared ticket deletes its file too.
 
-In Settings › Projects, the “Shared Kanban” group says how many tickets the project shares, and “Share every new ticket” shares from the start those you make, by hand, by an import or through MCP.
+In Settings › Projects › Team, the “Shared Kanban” group says how many tickets the project shares, and “Share every new ticket” shares from the start those you make, by hand, by an import or through MCP.
 
 ## Your name
 
 Each file carries its author’s name, and the name of whoever took the ticket. Escouade asks for yours at the first launch, filled in from `git config user.name`; “Later” puts the question off until your first share.
 
-- You change it in Settings › Application › Team, “Your name”.
-- A project may have its own: Settings › Projects › Shared Kanban, “Your name in this project”. Empty, it is the application’s.
+- You change it in Settings › General › You, “Your name”.
+- A project may have its own: Settings › Projects › Team › Shared Kanban, “Your name in this project”. Empty, it is the application’s.
 - Your name stays on your machine: it is never written in [.escouade.yml](escouade-yml).
 - Beside the name, an id made from your git e-mail (the e-mail itself is written nowhere) tells your tickets from a namesake’s. It is what says whether a ticket is yours; it is the same on your other machines.
 

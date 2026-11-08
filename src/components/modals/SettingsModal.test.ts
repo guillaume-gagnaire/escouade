@@ -118,8 +118,8 @@ describe('SettingsModal', () => {
         .map((t) => t.querySelector('svg')?.dataset.icon ?? (t.querySelector('.sq') ? 'sq' : null)),
     ).toEqual(['sliders', 'agents', 'user', 'link', 'mic', 'bell', 'puzzle', 'term', 'sq', 'sq', 'folder', 'info']);
     expect([...nav().querySelectorAll('.s-h')].map((g) => g.textContent)).toEqual(['Escouade', 'Projets']);
-    // The search, there but inert until R8.
-    expect(within(nav()).getByRole('searchbox', { name: 'Rechercher un réglage' })).toBeDisabled();
+    // The search (R8).
+    expect(within(nav()).getByRole('searchbox', { name: 'Rechercher un réglage' })).toBeEnabled();
     expect(tab('Comptes et harness')).toHaveAttribute('aria-current', 'page');
     expect(within(dialog).getByRole('heading', { level: 1, name: 'Comptes et harness' })).toBeInTheDocument();
     expect(within(dialog).getByText('Les harness de ce poste, leurs comptes, et ce qui se passe à la limite')).toBeInTheDocument();
@@ -619,6 +619,9 @@ describe('SettingsModal', () => {
             'plugins_list',
             'plugin_seed_offers',
             'data_dir',
+            // The amber dots of the bar (R8): the code hosts' accounts as last checked, each plugin's process.
+            'forges',
+            'plugin_run',
           ].includes(c.cmd),
       ),
     ).toEqual([]);

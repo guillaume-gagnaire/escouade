@@ -25,7 +25,7 @@
 
   // The new project's assistant, in steps: the folder, its name and color and where its settings start from, then its
   // worktrees, launch, Kanban, account and integrations, each to skip, and a summary that says what would keep the way
-  // of working from working. Opened again on an existing project (Réglages › Projets), it sets that one up anew.
+  // of working from working. Opened again on an existing project (Réglages › Projets › Projet), it sets that one up anew.
   const from = app.modal?.kind === 'newProject' ? app.modal : null;
   const existing = from?.projectId ? (app.projects.find((p) => p.id === from.projectId) ?? null) : null;
   const form = new WizardForm(existing ? $state.snapshot(existing) : null);
@@ -234,7 +234,7 @@
       // Its history's letters, logo and label come back unless others were set here.
       if (restoring) return void show(letters.trim() || logoPick || labelOn || labelText.trim() ? await saveTile(p) : p, null);
       if (!withSettings) return void show(await saveTile(p), null);
-      // Made: shown even if its settings were refused (said by a toast), to be set in Réglages › Projets.
+      // Made: shown even if its settings were refused (said by a toast), to be set in Réglages › Projets › Projet and the pages after it.
       const saved = await form.save(p);
       await show(await saveTile(saved ?? p), agent);
     } finally {

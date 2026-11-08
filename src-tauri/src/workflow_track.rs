@@ -1251,7 +1251,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
         crate::workflowfix::corrected(scan, &fixes)
     }
 
-    /// The corrections of a project's workflows changed (Réglages › Projets › Workflow, its
+    /// The corrections of a project's workflows changed (Réglages › Projets › Kanban › Workflow, its
     /// `.escouade.yml`): the tracking takes them at once, its agents told as for a new reading.
     /// The history kept is not rewritten: its passages keep the names of their steps.
     pub(crate) fn workflow_fixes_changed(&self, project_id: &str) {

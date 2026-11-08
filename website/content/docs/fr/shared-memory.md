@@ -50,4 +50,4 @@ Escouade lit la mémoire de projet de Claude Code dans le dossier de chacun de t
 
 ## Dans les réglages
 
-Réglages › Projets, groupe « Mémoire partagée » : la liste des souvenirs du projet, leur sorte et leur description. Un clic sur un souvenir montre son texte. « Oublier », puis « Confirmer l’oubli », supprime son fichier. Les agents écrivent la mémoire eux-mêmes : les réglages servent à la lire et à la nettoyer. Voir [les réglages des projets](settings-projects).
+Réglages › Projets › Équipe, groupe « Mémoire partagée » : la liste des souvenirs du projet, leur sorte et leur description. Un clic sur un souvenir montre son texte. « Oublier », puis « Confirmer l’oubli », supprime son fichier. Les agents écrivent la mémoire eux-mêmes : les réglages servent à la lire et à la nettoyer. Voir [les réglages des projets](settings-projects).

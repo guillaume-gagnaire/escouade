@@ -1,10 +1,10 @@
-# Réglages : Réseau
+# Réglages : le réseau (Avancé)
 
-L’onglet « Réseau » des réglages configure le proxy HTTP(S) et la vérification des certificats TLS pour Claude Code, les quotas, les intégrations, les mises à jour et la dictée (le téléchargement de ses modèles et, en ligne, son service).
+Le groupe « Réseau » de la page « Avancé » configure le proxy HTTP(S) et la vérification des certificats TLS pour Claude Code, les quotas, les intégrations, les mises à jour et la dictée (le téléchargement de ses modèles et, en ligne, son service).
 
-## Ouvrir l’onglet
+## Ouvrir la page
 
-Ouvre les réglages avec `Ctrl+,` (`⌘,` sous macOS), puis choisis « Réseau » (« Proxy HTTP(S) et certificats TLS pour Claude Code, les intégrations et les mises à jour »). Ces réglages sont ceux de l’app, communs à tous les projets ; ils s’appliquent à « Enregistrer ».
+Ouvre les réglages avec `Ctrl+,` (`⌘,` sous macOS), puis choisis « Avancé » : « Réseau » est son premier groupe ; « proxy » dans la recherche de la barre y mène aussi. Ces réglages sont ceux de l’app, communs à tous les projets, et s’appliquent au geste.
 
 Ils sont utiles derrière un réseau d’entreprise : un proxy pour sortir, et parfois un certificat que le proxy impose. Sans proxy, tu n’as rien à régler ici.
 

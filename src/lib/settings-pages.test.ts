@@ -292,6 +292,54 @@ describe('the register of the settings pages', () => {
     }
     setLang('fr');
   });
+
+  // The messages of the core and of the plugin kit, and the comments, name the pages too: an agent reads « Settings ›
+  // Harness › Attachments » in a description of a tool and looks for it (R8). The plugins of plugins/ are published
+  // apart (ESC-387).
+  it('names only pages of the register in the sources of the app, of the core and of the kit', () => {
+    const files = {
+      ...(import.meta.glob(['../**/*.ts', '../**/*.svelte', '!../**/*.test.ts', '!./i18n/**'], {
+        query: '?raw',
+        import: 'default',
+        eager: true,
+      }) as Record<string, string>),
+      ...(import.meta.glob(['../../src-tauri/src/**/*.rs', '../../crates/escouade-plugin-kit/src/**/*.rs'], {
+        query: '?raw',
+        import: 'default',
+        eager: true,
+      }) as Record<string, string>),
+    };
+    // These read the message of a plugin of plugins/ (Copilot CLI's, ClickUp's): they follow it when ESC-387 makes it again.
+    for (const f of Object.keys(files)) if (/\/(copilot_tests|plugins_clickup_tests)\.rs$/.test(f)) delete files[f];
+    expect(Object.keys(files).filter((f) => f.endsWith('.rs')).length).toBeGreaterThan(100);
+    expect(Object.keys(files).some((f) => f.includes('escouade-plugin-kit'))).toBe(true);
+    const STOP = /[.,:;()«»“”"'`{}\n…!?\\|<>[\]/*]/;
+    let paths = 0;
+    const wrong: string[] = [];
+    for (const [lang, root, projects] of [
+      ['fr', 'Réglages › ', 'Projets'],
+      ['en', 'Settings › ', 'Projects'],
+    ] as const) {
+      setLang(lang);
+      const pages = SETTINGS_PAGES.map((p) => p.label);
+      for (const [file, text] of Object.entries(files)) {
+        for (let at = text.indexOf(root); at >= 0; at = text.indexOf(root, at + 1)) {
+          const rest = text.slice(at + root.length);
+          const end = rest.search(STOP);
+          const path = (end < 0 ? rest : rest.slice(0, end)).split(' › ').map((x) => x.trim());
+          const page = path[0] === projects ? path[1] : path[0];
+          paths++;
+          // Another app's settings (cursor.com's « Settings › API Keys ») are not Escouade's.
+          if (page === 'API Keys' || pages.some((p) => page === p || page?.startsWith(`${p} `))) continue;
+          const line = text.slice(0, at).split('\n').length;
+          wrong.push(`${file.replace(/^(\.\.\/)+/, '')}:${line}: ${root}${path.join(' › ')}`);
+        }
+      }
+    }
+    setLang('fr');
+    expect(paths).toBeGreaterThan(50);
+    expect(wrong).toEqual([]);
+  });
 });
 
 describe('the links of the app to the settings', () => {

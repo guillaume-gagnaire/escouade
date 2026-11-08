@@ -15,7 +15,7 @@ A project’s remote says which host it is on. With an account connected for tha
 
 A PR is called an “MR” on GitLab: the app uses the host’s word everywhere.
 
-Each host is a plugin that ships with Escouade: it shows in [Settings › Integrations](settings-integrations#code-hosts) and turns off like [any plugin](plugins/introduction). Its PR then stays on the card as it was last read, and the card says so.
+Each host is a plugin that ships with Escouade: it shows in [Settings › Connected services](settings-integrations#code-hosts) and turns off like [any plugin](plugins/introduction). Its PR then stays on the card as it was last read, and the card says so.
 
 ## Supported hosts
 
@@ -38,7 +38,7 @@ Each host is a plugin that ships with Escouade: it shows in [Settings › Integr
 
 ## Connect an account
 
-In [Settings › Integrations](settings-integrations#code-hosts), “Connect a code host…” asks for the host, the instance’s address, and a token. One account per instance: each project finds its own by its remote, and a repository without an account offers to connect.
+In [Settings › Connected services](settings-integrations#code-hosts), “Connect a code host…” asks for the host, the instance’s address, and a token. One account per instance: each project finds its own by its remote, and a repository without an account offers to connect.
 
 Without an account, Escouade doesn’t block anything: approving a ticket pushes the branch and opens the host’s page for creating the PR in your browser, filled in.
 
@@ -87,7 +87,7 @@ On a public repository, anyone can open a PR, and its title, diff, and comments 
 
 ### The limits
 
-- The review is refused on Cursor CLI, which can’t turn its tools off, and on a plugin’s harness, where nothing checks what it allows: choose another harness in Settings › Application › “Written texts”.
+- The review is refused on Cursor CLI, which can’t turn its tools off, and on a plugin’s harness, where nothing checks what it allows: choose another harness in Settings › Agents › “Written texts”.
 - The diff goes to that harness’s service, like everything you give an agent.
 - 40 comments at most, on lines of the new version.
 

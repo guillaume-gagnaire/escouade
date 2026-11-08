@@ -903,14 +903,14 @@ impl reqwest::dns::Resolve for Guarded {
     }
 }
 
-/// The network of the plugins in WASM: Réglages › Réseau, who tells the hosts of `{account}` and the ports of
+/// The network of the plugins in WASM: Réglages › Avancé › Réseau, who tells the hosts of `{account}` and the ports of
 /// `local:shared`; and what the tests change: a host served elsewhere (the fake Slack, in http, past the checks of the
 /// addresses), the answer of the resolver, and how long a stream stays silent.
 #[derive(Clone, Default)]
 pub struct Net {
     pub routes: HashMap<String, String>,
     pub dns: Option<Dns>,
-    /// Réglages › Réseau, read at each call: a change reaches the instances that run.
+    /// Réglages › Avancé › Réseau, read at each call: a change reaches the instances that run.
     pub network: Arc<RwLock<Settings>>,
     pub accounts: Option<HostsOf>,
     pub shared: Option<PortsOf>,
@@ -1256,7 +1256,7 @@ impl Fetcher {
         let invalid = |m: String| (super::runtime::INVALID_PARAMS, m);
         let client = self.client(judged.direct).ok_or((
             FAILED,
-            "no network client: is the proxy of Réglages › Réseau an address?".to_string(),
+            "no network client: is the proxy of Réglages › Avancé › Réseau an address?".to_string(),
         ))?;
         let method = params
             .get("method")

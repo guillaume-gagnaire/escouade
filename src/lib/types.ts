@@ -2463,7 +2463,7 @@ export interface WorkflowStep {
   agents: { name: string; path: string | null; description: string }[];
   reads: string[];
   writes: string[];
-  /** « deviné »: dotted until « Garder » or « Retirer » (Réglages › Projets › Workflow). */
+  /** « deviné »: dotted until « Garder » or « Retirer » (Réglages › Projets › Kanban › Workflow). */
   guessed?: boolean;
   /** What else signals it once corrected (ESC-195): the steps merged in, its name as read when renamed. */
   also?: string[];

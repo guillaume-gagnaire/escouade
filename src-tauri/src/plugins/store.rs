@@ -5,7 +5,7 @@
 //! against `version.json`, the signature with the keys the app embeds (`store_keys`). A gap stops
 //! everything and says so. The store cannot make a seal: it has no key.
 //!
-//! Everything goes through Réglages › Réseau (proxy, TLS) as the app's other requests; nothing is
+//! Everything goes through Réglages › Avancé › Réseau (proxy, TLS) as the app's other requests; nothing is
 //! sent but plain GETs, and the count of installations when the user accepted the statistics.
 
 use super::manifest::{self, Range};
@@ -76,7 +76,7 @@ pub fn platform() -> String {
     format!("{system}-{arch}")
 }
 
-/// The client of the store's requests: Réglages › Réseau's proxy, the certificates the system
+/// The client of the store's requests: Réglages › Avancé › Réseau's proxy, the certificates the system
 /// trusts (a corporate proxy's own authority), TLS unchecked when the user switched it off.
 pub fn client(settings: &Settings) -> reqwest::Result<reqwest::Client> {
     let mut b = reqwest::Client::builder()

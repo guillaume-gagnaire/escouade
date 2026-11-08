@@ -588,7 +588,7 @@ describe('Sidebar agent card plan line', () => {
   });
 
   it('says where the agent is in its workflow in the place of its plan, a ticket’s card in the tooltip of its loop (ESC-197)', async () => {
-    // GSD, its verifying step named by the user (Réglages › Projets › Workflow).
+    // GSD, its verifying step named by the user (Réglages › Projets › Kanban › Workflow).
     const named = {
       ...gsd(),
       steps: gsd().steps.map((st) => (st.name === 'gsd:verify-work' ? { ...st, name: 'Vérifier', named: true } : st)),

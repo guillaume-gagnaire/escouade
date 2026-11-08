@@ -1,20 +1,22 @@
-# Réglages : Projets
+# Réglages : les pages d’un projet
 
-L’onglet « Projets » règle un projet à la fois : son nom, sa couleur et sa tuile, son remote control, ses worktrees, la façon dont ses commits sont rédigés et ses commandes de préparation, de démontage et de lancement.
+Chaque projet a ses pages de réglages, dépliées sous son nom dans la barre, et « Tous les projets » règle ce qui vaut pour les nouveaux et les projets fermés.
+
+Les pages d’un projet : « Projet » (son nom, sa couleur, sa tuile, son harness et son compte), « Git et worktrees » (ses worktrees, ses branches, ses commits, ses commandes de préparation et de démontage, ses dépôts), « Lancement » (ses commandes de lancement), [« Kanban »](settings-board), [« Tickets importés »](settings-integrations), « Équipe » (le Kanban partagé, les réglages partagés de `.escouade.yml`, la mémoire partagée) et « Confidentialité » (projet privé, remote control, plugins dans ce projet). « Tous les projets », sous la liste, règle ce que reçoit un nouveau projet et garde les projets fermés.
 
 ## Choisir le projet
 
-L’onglet agit sur le projet choisi dans la rangée « Projet », sous l’en-tête de la [fenêtre des réglages](settings-application) : un bouton par projet ouvert. Ce que tu changes sur un projet reste dans le brouillon quand tu passes à un autre, et tout s’enregistre ensemble avec « Enregistrer ».
+Le projet choisi se déplie sous son nom dans la barre des [réglages](settings-application) ; un autre projet s’ouvre sur la même page. Tout s’enregistre au geste. Un point ambre sur un projet dit qu’aucun compte actif de son harness ne le sert.
 
 ## Plugins proposés
 
-Quand le `.escouade.yml` du projet propose des plugins (`plugins.recommended`) qui ne sont pas installés sur ta machine, une bande en tête de l’onglet les nomme, chacun avec ce qu’il demande. « Voir dans le store » ouvre sa page dans la vue Plugins, d’où tu l’installes après avoir lu ses permissions : la bande n’installe ni n’active rien. « Pas pour ce projet » la fait taire sur cette machine. Dans un projet privé, elle rappelle qu’un plugin installé n’y est actif qu’une fois activé pour lui. Voir [.escouade.yml](escouade-yml#plugins).
+Quand le `.escouade.yml` du projet propose des plugins (`plugins.recommended`) qui ne sont pas installés sur ta machine, une bande en tête de sa page « Projet » les nomme, chacun avec ce qu’il demande. « Voir dans le store » ouvre sa page dans la vue Plugins, d’où tu l’installes après avoir lu ses permissions : la bande n’installe ni n’active rien. « Pas pour ce projet » la fait taire sur cette machine. Dans un projet privé, elle rappelle qu’un plugin installé n’y est actif qu’une fois activé pour lui. Voir [.escouade.yml](escouade-yml#plugins).
 
 ## Identité
 
 | Réglage | Effet | Par défaut |
 |---|---|---|
-| « Nom » | Le nom du projet, tel que le montrent la barre de titre, l’infobulle de sa tuile et le sélecteur de projet. Il ne peut pas rester vide : « Enregistrer » est alors bloqué. | Le nom donné à la création, celui du dossier si tu n’en as pas donné |
+| « Nom » | Le nom du projet, tel que le montrent la barre de titre, l’infobulle de sa tuile et le sélecteur de projet. Il ne peut pas rester vide : le nom d’avant reste alors bloqué. | Le nom donné à la création, celui du dossier si tu n’en as pas donné |
 | « Dossier » | Le dossier du projet, affiché sans pouvoir être modifié. Le bouton « Ouvrir » l’ouvre avec le gestionnaire de fichiers du système. | — |
 | « Couleur » | Une pastille parmi 14 (13 teintes et un ton neutre). La couleur repère le projet et teinte l’interface quand il est affiché. | La première couleur qu’aucun projet n’a prise, à la création |
 | « Lettres de la tuile » | Ce que dit la tuile du projet dans la barre des projets : une à trois lettres ou chiffres (« API », « v2 »), ou un emoji seul. Le reste de ce que tu tapes (espaces, signes, une quatrième lettre) ne s’écrit pas. La tuile est montrée à côté du champ, telle que la barre la dessinera. | Vide : les initiales du nom (`demo-api` → « DA », `infra` → « In »), montrées en indication dans le champ |
@@ -26,7 +28,7 @@ Le logo est reconnu par son contenu, quelle que soit son extension. Une image tr
 
 Le libellé reste sur ce poste lui aussi : il ne va pas dans `.escouade.yml`. Tant que tu n’as pas tiré le bord de la barre des projets, elle passe de 52 à 72 px dès qu’un projet a son libellé allumé ; voir [la barre des projets](interface#sa-largeur). Le même réglage est dans l’assistant « Nouveau projet », sous les lettres et le logo.
 
-Les comptes sont décrits dans [les comptes](accounts) et réglés dans l’onglet [« Comptes »](settings-accounts). Un compte désactivé depuis qu’il a été choisi reste affiché avec « (inactif) » tant qu’il est choisi, et il est ignoré en attendant.
+Les comptes sont décrits dans [les comptes](accounts) et réglés dans la page [« Comptes et harness »](settings-accounts). Un compte désactivé depuis qu’il a été choisi reste affiché avec « (inactif) » tant qu’il est choisi, et il est ignoré en attendant.
 
 ## Remote control
 
@@ -36,7 +38,7 @@ Les comptes sont décrits dans [les comptes](accounts) et réglés dans l’ongl
 
 Pour mettre un agent à part, fais un clic droit sur sa carte, puis « Désactiver le remote control ». Éteint, le réglage retire le remote control aux agents qui le tenaient de lui, sans toucher à ceux que tu as activés à la main ni à ceux que le réglage global couvre encore.
 
-Quand « Remote control pour tous les agents » est allumé dans l’onglet [« Harness »](settings-claude-code), l’interrupteur du projet se montre allumé et grisé, avec « Activé pour tous les projets dans Réglages › Harness ». Le choix propre du projet est gardé : une fois le réglage global éteint, l’interrupteur retrouve son état. Voir [le remote control](remote-control).
+Quand « Remote control pour tous les agents » est allumé dans la page [« Agents »](settings-claude-code), l’interrupteur du projet se montre allumé et grisé, avec « Activé pour tous les projets dans Réglages › Agents ». Le choix propre du projet est gardé : une fois le réglage global éteint, l’interrupteur retrouve son état. Voir [le remote control](remote-control).
 
 ## Confidentialité
 
@@ -51,7 +53,7 @@ Voir [les projets privés](mcp#les-projets-prives) et [un compte pour un projet 
 
 ### Ses fichiers
 
-Pour un projet privé, les agents des autres projets ne lisent ni n’écrivent son dossier, ses worktrees, ses données dans le dossier d’Escouade (tickets, fichiers joints, conversations) ni ses sessions de harness. Ses propres agents ne lisent rien de tout cela pour les autres projets, ni le reste du dossier d’Escouade. Escouade donne ces règles à chaque harness au démarrage d’un agent, et l’onglet dit, sous « Projet privé », ce que chacun garantit :
+Pour un projet privé, les agents des autres projets ne lisent ni n’écrivent son dossier, ses worktrees, ses données dans le dossier d’Escouade (tickets, fichiers joints, conversations) ni ses sessions de harness. Ses propres agents ne lisent rien de tout cela pour les autres projets, ni le reste du dossier d’Escouade. Escouade donne ces règles à chaque harness au démarrage d’un agent, et la page « Confidentialité » dit, sous « Projet privé », ce que chacun garantit :
 
 | Harness | Protection | Ce qui n’est pas garanti |
 |---|---|---|
@@ -99,7 +101,7 @@ Tu peux écrire un chemin relatif au dossier du projet (`../app-worktrees`, `.wo
 
 Sous le champ, une ligne dit où ira le prochain worktree (« Le prochain : » suivi du chemin, avec `<nom>` pour le nom de l’agent). Les worktrees déjà créés restent où ils sont. Hors du projet, la vue Claude Code demande d’abord ta confiance pour chacun.
 
-Un dossier refusé remplace cette ligne par un message rouge et bloque « Enregistrer » :
+Un dossier refusé remplace cette ligne par un message rouge, et le dossier d’avant reste :
 
 - le dossier du projet lui-même ;
 - un dossier qui contient celui du projet : choisis-en un à côté (`../app-worktrees`) ou dedans (`.worktrees`) ;
@@ -110,7 +112,7 @@ Un dossier refusé remplace cette ligne par un message rouge et bloque « Enreg
 
 Les noms de branche des agents et des tickets sont ceux qui partent sur le dépôt distant avec une pull request : les préfixes servent à suivre la convention d’un dépôt. Les [branches](branches) sont décrites à part. Sous chaque champ, une ligne montre la forme obtenue.
 
-Un préfixe qui ne donnerait pas un nom de branche valide est refusé pendant que tu tapes, et bloque « Enregistrer ». Sont refusés : un espace, `..`, `~`, `^`, `:`, `?`, `*`, `[`, `\` et `@{` ; un `-` ou un `/` au début ; `//` ; une partie du nom qui commence par `.` ou finit par `.lock`.
+Un préfixe qui ne donnerait pas un nom de branche valide est refusé pendant que tu tapes, et le préfixe d’avant reste. Sont refusés : un espace, `..`, `~`, `^`, `:`, `?`, `*`, `[`, `\` et `@{` ; un `-` ou un `/` au début ; `//` ; une partie du nom qui commence par `.` ou finit par `.lock`.
 
 ### Fichiers copiés dans les worktrees
 
@@ -156,11 +158,11 @@ La proposition s’affiche en entier, avec le shell et le dossier de chaque comm
 - « Remplacer les commandes » met la proposition à la place des deux listes du brouillon.
 - « Ignorer » la jette.
 
-Rien n’est enregistré avant « Enregistrer ». Un message dit combien de commandes sont proposées, et combien Claude en a écarté (caractères invisibles ou ligne trop longue). Quand il n’en trouve aucune, il dit « Claude n’a trouvé aucune commande à lancer pour ce projet. ».
+Rien n’est pris avant « Remplacer ». Un message dit combien de commandes sont proposées, et combien Claude en a écarté (caractères invisibles ou ligne trop longue). Quand il n’en trouve aucune, il dit « Claude n’a trouvé aucune commande à lancer pour ce projet. ».
 
 ## Lancement
 
-Les commandes de lancement démarrent les serveurs, les observateurs et les services du projet. Chacune tourne dans son propre terminal, en lecture seule, lancée depuis la section Lancement de la barre latérale. L’engrenage de cette section (« Commandes de lancement… ») ouvre cet onglet sur ce groupe. Quand la section est vide, ses liens « Configurer » et « ✦ Proposer des commandes » l’ouvrent aussi, le second lançant en plus le remplissage. Voir [le lancement](launch) et [les terminaux](terminals).
+Les commandes de lancement démarrent les serveurs, les observateurs et les services du projet. Chacune tourne dans son propre terminal, en lecture seule, lancée depuis la section Lancement de la barre latérale. L’engrenage de cette section (« Commandes de lancement… ») ouvre la page « Lancement » du projet. Quand la section est vide, ses liens « Configurer » et « ✦ Proposer des commandes » l’ouvrent aussi, le second lançant en plus le remplissage. Voir [le lancement](launch) et [les terminaux](terminals).
 
 « Ouvrir les pages des lancements » dit où s’ouvre la page d’un test prêt (voir [La page du lancement](browser)) : « Dans l’agent » (par défaut), « Dans une fenêtre à part » ou « Dans le navigateur du système ». Ce choix reste sur ta machine.
 
@@ -173,7 +175,7 @@ Sans commande, le groupe dit « Aucune commande pour l’instant. ». Chaque c
 | « Commande » | La ligne de commande, comme `npm run dev`. Obligatoire. |
 | « Sous-dossier » (vide = dossier du projet) | Le dossier, sous celui du projet, où elle tourne, comme `apps/web`. |
 
-La croix à droite supprime la commande, et « + Ajouter une commande » en ajoute une. Une commande sans nom ou sans ligne de commande bloque « Enregistrer ».
+La croix à droite supprime la commande, et « + Ajouter une commande » en ajoute une. Une commande sans nom ou sans ligne de commande le dit sur sa ligne, et les commandes d’avant restent enregistrées.
 
 « ✦ Remplir automatiquement » fonctionne comme pour les worktrees. Claude lit le projet (manifestes, scripts, docker-compose, README…) et propose les commandes à lancer dans « Commandes de lancement proposées », que « Remplacer les commandes » met à la place de la liste.
 
@@ -189,7 +191,7 @@ La croix à droite supprime la commande, et « + Ajouter une commande » en aj
 
 La fenêtre de confirmation a une case « Effacer aussi son historique (conversations, tickets, réglages) », décochée par défaut. Cochée, rien n’est gardé : les conversations, les tickets et les réglages du projet sont effacés pour de bon, et le même dossier, ajouté de nouveau, repart de zéro.
 
-Fermer le projet agit tout de suite, sans attendre « Enregistrer », et ramène aux réglages avec le brouillon tel qu’il était.
+Fermer le projet agit tout de suite et ramène aux réglages avec le brouillon tel qu’il était.
 
 Fermer est refusé tant que la validation d’un ticket du projet tourne : « La validation du ticket DEM-3 est en cours : attends sa fin pour fermer le projet. » Attends qu’elle se termine, puis ferme le projet.
 
@@ -215,7 +217,7 @@ Tant qu’aucun projet n’a été fermé en gardant son historique, ce groupe n
 
 Un fichier que l’app ne sait pas lire (abîmé, ou renommé à la main) apparaît quand même dans la liste, sous « Historique illisible », avec son nom de fichier (`….json`) et sa taille. Il n’a pas de « Rouvrir » : seul « Effacer » est proposé. Après confirmation (« Ce fichier, que l’application ne peut pas lire, est effacé pour de bon. Les autres historiques, les fichiers et les worktrees sur le disque ne sont pas touchés. »), il supprime ce fichier, lui seul.
 
-Sans passer par la liste, ajoute simplement le projet de nouveau (le bouton `+` à droite des onglets), dans le même dossier. Peu importe comment tu écris le chemin : majuscules ou minuscules (sous Windows), `/` ou `\`, séparateur final, nom court, partage WSL… c’est reconnu comme le même dossier. La fenêtre « Nouveau projet » dit alors ce qu’elle a trouvé, par exemple « Historique retrouvé : 12 agents, 34 tickets, dernière activité le 14 octobre 2026 », reprend le nom, la couleur et « Un worktree git par agent » du projet fermé, et son bouton devient « Rouvrir le projet ».
+Sans passer par la liste, ajoute simplement le projet de nouveau (le bouton `+` de la barre des projets), dans le même dossier. Peu importe comment tu écris le chemin : majuscules ou minuscules (sous Windows), `/` ou `\`, séparateur final, nom court, partage WSL… c’est reconnu comme le même dossier. La fenêtre « Nouveau projet » dit alors ce qu’elle a trouvé, par exemple « Historique retrouvé : 12 agents, 34 tickets, dernière activité le 14 octobre 2026 », reprend le nom, la couleur et « Un worktree git par agent » du projet fermé, et son bouton devient « Rouvrir le projet ».
 
 Le projet revient tel qu’il était :
 
@@ -229,7 +231,7 @@ Les comptes qui lui étaient réservés (« Réservé aux projets ») n’ont 
 
 Rouvrir n’est pas créer un projet : la fenêtre ne propose pas de premier agent, puisque ceux du projet reviennent.
 
-L’interrupteur « Partir d’un projet vierge » (« L’historique reste dans Réglages › Projets, où l’effacer. ») crée à la place un projet neuf dans ce dossier, sans les agents ni les tickets d’avant. L’ancien historique reste dans « Projets fermés » : rien n’est effacé sans que tu le demandes.
+L’interrupteur « Partir d’un projet vierge » (« L’historique reste dans Réglages › Tous les projets, où l’effacer. ») crée à la place un projet neuf dans ce dossier, sans les agents ni les tickets d’avant. L’ancien historique reste dans « Projets fermés » : rien n’est effacé sans que tu le demandes.
 
 « Effacer l’historique… » demande confirmation (« Ses conversations, ses tickets et ses réglages sont effacés pour de bon. Les fichiers et les worktrees sur le disque ne sont pas touchés. »), puis supprime les conversations, les tickets et les réglages gardés de ce projet. Le même dossier, ajouté ensuite, n’a plus d’historique à retrouver.
 
@@ -242,4 +244,4 @@ Le groupe « Mémoire partagée » liste ce que les agents du projet ont noté
 
 ## Les autres réglages d’un projet
 
-Les liens d’un projet vers Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues et Azure Boards se règlent dans l’onglet [« Intégrations »](settings-integrations). Son Kanban (pilote auto, agents, validation) se règle dans l’onglet [« Kanban »](settings-board).
+Les liens d’un projet vers Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues et Azure Boards se règlent dans sa page [« Tickets importés »](settings-integrations). Son Kanban (pilote auto, agents, validation) se règle dans sa page [« Kanban »](settings-board).

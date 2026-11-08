@@ -1,21 +1,21 @@
 ---
 title: "Réglages"
 subject: "Fenêtre"
-sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/index.html","design/settings-2-2/captures/a-plugins.png","design/settings-2-2/captures/a-projet.png"]
-tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385"]
-decisions: [118,119,120,121,123,124]
+sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/index.html","design/settings-2-2/captures/a-plugins.png","design/settings-2-2/captures/a-projet.png","design/settings-2-2/captures/a-comptes.png"]
+tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386"]
+decisions: [118,119,120,121,123,124,"la-recherche-et-les-points-ambre-des-reg"]
 compared: null
 ---
 
 ## Ce que c'est
 
-Une seule fenêtre de réglages pour toute l'app : une barre des catégories à gauche, une page à la fois à droite. Les pages d'Escouade règlent l'app ; celles d'un projet ne règlent que lui. Chaque réglage s'applique et s'enregistre au geste, comme dans les réglages de macOS et de VS Code : ni « Annuler », ni « Enregistrer ». Chaque réglage est décrit sur la page de sa feature ; cette page dit comment la fenêtre marche et ce que chaque page contient.
+Une seule fenêtre de réglages pour toute l'app : une barre des catégories à gauche, avec la recherche en tête, une page à la fois à droite. Les pages d'Escouade règlent l'app ; celles d'un projet ne règlent que lui. Chaque réglage s'applique et s'enregistre au geste, comme dans les réglages de macOS et de VS Code : ni « Annuler », ni « Enregistrer ». Une page qui a un problème le dit par un point ambre dans la barre. Chaque réglage est décrit sur la page de sa feature ; cette page dit comment la fenêtre marche et ce que chaque page contient.
 
 ## Comportement
 
 ### Ouvrir
 
-- ⚙ de la barre de statut, « Réglages » en bas de la barre des projets, ou `Ctrl+,` : sur « Comptes et harness ».
+- « Réglages » en bas de la barre des projets, ou `Ctrl+,` : sur « Comptes et harness ».
 - Ouvertures directes : chaque renvoi de l'app vers un projet mène à sa page, « Projets › demo-api › Lancement », et non au milieu d'un défilement :
   - « Réglages du projet… » au clic droit sur un projet, et « Harness par défaut du projet… » du menu « Autres façons de créer un agent » : la page Projet de ce projet ;
   - ⚙ (« Commandes de lancement… »), « Configurer » et « ✦ Proposer des commandes » de la section Lancement : la page Lancement du projet ; le dernier lance aussi la lecture du projet (voir *Barre latérale*) ;
@@ -28,22 +28,39 @@ Une seule fenêtre de réglages pour toute l'app : une barre des catégories à 
   - « Réglages › Services connectés » de l'onglet « PR et CI » et de la vue Pull requests (jeton refusé, hébergeur sans compte) : la page Services connectés (voir *Pull requests*) ;
   - « Redémarrer maintenant » d'une mise à jour prête, dans Général : la fenêtre de la mise à jour, dont « Plus tard » revient sur Général.
 - Chaque page, et chaque projet, s'affiche depuis son début ; un renvoi qui vise un groupe (Workflow, Réglages partagés) l'amène en vue, sur la page ouverte seulement.
-- Les textes de l'app qui nomment une page la nomment par son chemin, une page d'un projet après « Projets » : « Réglages › Général › Couleurs » (thèmes d'un plugin), « Réglages › Général » (ton nom, statistiques d'usage), « Réglages › Agents » (remote control pour tous les agents), « Réglages › Projets › Équipe » (commandes de `.escouade.yml` en attente, nom dans un projet), « Réglages › Projets › Projet » (plugins proposés par un projet), « Réglages › Projets › Kanban » (« Pas de workflow pour ce projet »), « Réglages › Projets › Confidentialité » (compte réservé), « Réglages › Tous les projets » (historique d'un projet fermé). Un test refuse un chemin qui ne nomme pas une page.
+- Les textes qui nomment une page la nomment par son chemin, une page d'un projet après « Projets », un groupe après sa page : « Réglages › Général › Couleurs » (thèmes d'un plugin), « Réglages › Général » (ton nom, statistiques d'usage), « Réglages › Agents » (remote control pour tous les agents), « Réglages › Agents › Textes rédigés » (un harness qui ne sait pas répondre sans outil), « Réglages › Avancé › Réseau » (un proxy qui demande une authentification), « Settings › Advanced › Attachments » (la taille des pièces jointes, dans les descriptions des outils MCP), « Réglages › Services connectés » (un jeton manquant, dans le kit des plugins), « Réglages › Projets › Équipe » (commandes de `.escouade.yml` en attente, nom dans un projet), « Réglages › Projets › Projet » (plugins proposés par un projet), « Réglages › Projets › Kanban » (« Pas de workflow pour ce projet »), « Réglages › Projets › Confidentialité » (compte réservé), « Réglages › Tous les projets » (historique d'un projet fermé). Un test refuse un chemin qui ne nomme pas une page, en français et en anglais : dans les catalogues de l'interface, dans les sources et les commentaires de l'app, dans les messages et les commentaires du cœur et dans ceux du kit des plugins.
 
 ### La fenêtre
 
 - 1120 × 780, ou la place disponible avec 16 px autour (à 1028 × 779, la taille de la CI).
 - **La barre**, de haut en bas :
-  - « Rechercher un réglage » (`Ctrl+F`), inerte pour l'instant ;
+  - « Rechercher un réglage » (`Ctrl+F`) : la recherche (ci-dessous) ;
   - « Escouade » : Général, Agents, Comptes et harness, Services connectés, Voix, Notifications, Plugins, Avancé ;
   - « Projets » : chaque projet, sa couleur devant son nom, un cadenas pour un projet privé. Le projet choisi, quand une de ses pages est à l'écran, est déplié sur ses pages : Projet, Git et worktrees, Lancement, Kanban, Tickets importés, Équipe, Confidentialité. Choisir un autre projet garde la même page, sinon ouvre « Projet » ;
   - « Tous les projets » (ce que reçoit un nouveau projet, les projets fermés) ;
   - en bas : « À propos » et la version d'Escouade.
-- **Le clavier** : ↑ et ↓ vont d'une entrée de la barre à la suivante et l'ouvrent, Origine et Fin à la première et à la dernière ; passer sur un projet l'ouvre et le déplie. Une seule entrée de la barre est dans l'ordre de Tab : celle où est le clavier.
+- **Le clavier** : ↑ et ↓ vont d'une entrée de la barre à la suivante et l'ouvrent, Origine et Fin à la première et à la dernière ; passer sur un projet l'ouvre et le déplie. Une seule entrée de la barre est dans l'ordre de Tab : celle où est le clavier, qui a le focus à l'ouverture (la recherche le prend par `Ctrl+F` ou Tab arrière).
 - **La teinte suit la portée** : sur une page d'Escouade (Tous les projets compris), la fenêtre prend le teal d'Escouade ; sur une page d'un projet, la couleur de ce projet, dès qu'elle change. À la fermeture, l'app reprend sa propre teinte.
 - La page sous son titre et sa description ; pour une page d'un projet, sa tuile devant, et son nom pour titre sur la page Projet.
-- **« Avancé »**, en bas d'une page : un groupe replié sur une ligne qui nomme ce qu'il cache ; un clic le déplie sur place. Général, Agents, Comptes et harness et Projet en ont un (celui de Projet cache « Fermer le projet » : l'ancienne « Zone sensible », une seule action qu'aucun titre alarmant n'annonce ; celui de Comptes et harness se déplie seul quand Claude Code est introuvable, son chemin s'y réglant).
+- **« Avancé »**, en bas d'une page : un groupe replié sur une ligne qui nomme ce qu'il cache ; un clic le déplie sur place, la recherche aussi. Général, Agents, Comptes et harness et Projet en ont un (celui de Projet cache « Fermer le projet » : l'ancienne « Zone sensible », une seule action qu'aucun titre alarmant n'annonce ; celui de Comptes et harness se déplie seul quand Claude Code est introuvable, son chemin s'y réglant).
 - Pas de pied : ni « Annuler » ni « Enregistrer ». Échap, × ou un clic à côté de la fenêtre la ferment, sans question.
+
+### La recherche
+
+- Le champ en tête de la barre ; `Ctrl+F` (⌘F sous macOS) y mène de partout dans la fenêtre.
+- Il cherche dans le libellé et la description de chaque réglage du registre de la fenêtre, d'Escouade et de chaque projet, et dans le nom et la description de chaque page. En français et en anglais, quelle que soit la langue de l'interface, sans tenir compte de la casse ni des accents : « BETA » trouve « Recevoir les versions bêta », « proxy » « Proxy HTTP(S) », « NO_PROXY » « Exclusions ».
+- Tant que le champ a du texte, ses résultats remplacent les entrées de la barre : le libellé, et sous lui où il est (« Avancé », « Général › Avancé » pour une rangée repliée dans Avancé, « demo-api › Git et worktrees »). Un libellé qui commence par ce qui est tapé passe d'abord, puis un libellé qui le contient, puis un libellé qui en a tous les mots, puis une description qui les a ; à égalité, l'ordre de la barre. Un réglage d'un projet vient une fois par projet, le projet choisi d'abord. Sans résultat : « Aucun réglage ne répond à « zzqx » ».
+- ↑ et ↓, dans le champ, vont d'un résultat à l'autre ; Entrée ou un clic l'ouvre : sa page et son projet, « Avancé » déplié si la rangée y est, la rangée amenée au milieu de la page et surlignée en ambre un instant (sans fondu avec « réduire les animations »). Le focus reste dans le champ et ses résultats restent là, pour en ouvrir un autre.
+- Échap vide le champ et rend les entrées de la barre ; un second Échap ferme la fenêtre.
+
+### Les points ambre
+
+- Un point ambre au bout d'une entrée de la barre dit une page qui a un problème. Sa raison est l'infobulle de l'entrée (et sa description pour un lecteur d'écran), une ligne par problème :
+  - **Comptes et harness** : un harness installé et trouvé qui n'a aucun compte, « Codex n'a aucun compte : aucun agent ni ticket n'y démarre » ;
+  - **Services connectés** : un jeton d'hébergeur expiré ou révoqué à sa dernière vérification, « Jeton expiré ou révoqué · @ada · github.com », ou un jeton illisible dans le trousseau du système, « Jeton illisible dans le trousseau · … » ;
+  - **Plugins** : un plugin désactivé par Escouade, au manifeste invalide, ou dont le process s'est arrêté seul (après ses plantages, faute de mémoire, refusé), « Trello : Arrêté après 3 plantages ». Un plugin éteint, sans programme ou arrêté exprès n'en a pas ;
+  - **un projet** qu'aucun compte actif de son harness ne sert : sur son entrée et sur sa page Projet, où se choisit son compte, « Aucun compte Codex ne sert ce projet : ses agents et ses tickets ne démarrent pas ».
+- Les jetons (tels que leur dernière vérification les a trouvés) et les process des plugins sont relus à l'ouverture de la fenêtre ; la vérification que lance Services connectés met le point à jour ; les comptes et les projets suivent l'app.
 
 ### Enregistrer au geste
 
@@ -61,7 +78,7 @@ Une seule fenêtre de réglages pour toute l'app : une barre des catégories à 
 
 ### Les pages
 
-Chaque réglage a sa page dans le registre de la fenêtre, et chaque page son contenu.
+Chaque réglage a sa page dans le registre de la fenêtre, et chaque page son contenu. Le registre déclare chaque rangée une fois, avec sa page, son libellé et si elle est dans Avancé : la recherche le lit, et un test vérifie qu'aucune clé des réglages n'est sans page.
 
 - **Général** :
   - « Apparence » : « Thème », « Couleurs », « Zoom de l'interface », « Taille du texte des terminaux » (voir *Fenêtre*) ;
@@ -134,9 +151,10 @@ Le tableau des plugins, côté réglages. La vue Plugins reste l'endroit où l'o
 
 ## Limites
 
-- La recherche de la barre ne cherche rien encore.
+- La recherche trouve un réglage par son libellé ou sa description, et une page par son nom ; pas par sa valeur, ni par le titre d'un groupe (« Réseau » trouve la page Avancé par sa description, pas le groupe). Un réglage qu'une page ne montre pas dans l'état présent (« Ton identifiant » avant qu'il existe, un harness non installé) ouvre sa page sans rien surligner.
+- Un point ambre ne dit pas un jeton expiré tant qu'aucune vérification ne l'a trouvé (Services connectés en lance une à chaque ouverture de sa page) ; un plugin qui s'arrête pendant que la fenêtre est ouverte ne l'allume qu'à la prochaine ouverture.
 - Rien ne revient sur un réglage enregistré : pour le défaire, on le change de nouveau.
 - Le proxy n'est pas donné aux terminaux intégrés sans l'option qui l'exporte.
 - Ignorer la vérification des certificats ne vaut pour un process `claude` qu'à son prochain démarrage.
 - La page Plugins n'active pas un plugin projet par projet : c'est la page Confidentialité de chaque projet, ou l'onglet Projets de la page du plugin, dans la vue Plugins.
-- Les textes des plugins publiés à part (Jira, ClickUp, Azure DevOps, Copilot) disent encore les anciens noms d'onglets jusqu'à leur prochaine version.
+- Les textes des plugins publiés à part (Jira, ClickUp, Azure DevOps, Copilot) disent encore les anciens noms d'onglets jusqu'à leur prochaine version (ESC-387) ; le test des chemins ne lit pas `plugins/`.

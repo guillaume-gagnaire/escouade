@@ -7,13 +7,13 @@ A harness is the program that runs an agent: Claude Code, Codex, OpenCode, GitHu
 
 ## Choosing a harness
 
-Escouade starts the harness on your machine, with your own account: install at least one and sign in to it once, as you would to use it in a terminal. Settings › Harness lists each one with its executable, its version and its state (see [the harness settings](settings-claude-code)).
+Escouade starts the harness on your machine, with your own account: install at least one and sign in to it once, as you would to use it in a terminal. Settings › Accounts and harnesses lists each one with its executable, its version and its state (see [the harness settings](settings-claude-code)).
 
-Then add it an account in Settings › Accounts: no harness has one to begin with, and nothing starts on a harness without one. “Add an account…” offers the account already signed in on the machine, or a new one (see [multiple accounts](accounts#no-account-to-begin-with)). The model, effort and mode of new agents are set on each account’s card, with its harness’s.
+Then add it an account in Settings › Accounts and harnesses: no harness has one to begin with, and nothing starts on a harness without one. “Add an account…” offers the account already signed in on the machine, or a new one (see [multiple accounts](accounts#no-account-to-begin-with)). The model, effort and mode of new agents are set on each account’s card, with its harness’s.
 
 As soon as two harnesses are installed:
 
-- each project has its “Default harness” (Settings › Projects), Claude Code when unset;
+- each project has its “Default harness” (Settings › Projects › Project), Claude Code when unset;
 - the arrow of “New agent”, or `Ctrl+Shift+N`, opens the “Harness” menu, which numbers them (see [the interface](interface#the-list-of-agents));
 - a ticket’s window has its “Harness” field, the project’s by default, which the autopilot follows;
 - each agent’s card bears the mark of its harness, as soon as agents run on two harnesses.
@@ -92,11 +92,11 @@ OpenCode is a plugin shipped with Escouade (`dev.escouade.opencode`): its agents
 
 ### Installation and account
 
-`npm install -g opencode-ai` installs OpenCode 1, the only one Escouade drives: OpenCode 2 (`@opencode/cli`) is recognized and says “Not supported”. Connect a provider with `opencode auth login` (“Sign in…” in Settings › Harness runs it); Ollama’s local models work too. OpenCode has a single account in Escouade, its usual config. A single `opencode serve` serves all OpenCode agents, protected by a random password that never leaves Escouade; each agent is a session on it.
+`npm install -g opencode-ai` installs OpenCode 1, the only one Escouade drives: OpenCode 2 (`@opencode/cli`) is recognized and says “Not supported”. Connect a provider with `opencode auth login` (“Sign in…” in Settings › Accounts and harnesses runs it); Ollama’s local models work too. OpenCode has a single account in Escouade, its usual config. A single `opencode serve` serves all OpenCode agents, protected by a random password that never leaves Escouade; each agent is a session on it.
 
 ### Models and modes
 
-Its models, like those of Codex, Copilot CLI and Cursor CLI, are read at startup and when an account is added, without starting an agent, kept from one start to the next and read again when the menu opens on a list more than a day old. The “Model” menu lists the models of the connected providers, with a search, their provider and favorites (★) first, also set in Settings › Harness › OpenCode › “Models”. The effort is the model’s variant when it has one. Escouade always gives the model, so that OpenCode doesn’t pick one by itself.
+Its models, like those of Codex, Copilot CLI and Cursor CLI, are read at startup and when an account is added, without starting an agent, kept from one start to the next and read again when the menu opens on a list more than a day old. The “Model” menu lists the models of the connected providers, with a search, their provider and favorites (★) first, also set in Settings › Accounts and harnesses › OpenCode › “Models”. The effort is the model’s variant when it has one. Escouade always gives the model, so that OpenCode doesn’t pick one by itself.
 
 OpenCode has no sandbox: its permission rules are what follows the mode, and an accepted command can do anything.
 
@@ -111,7 +111,7 @@ A request from OpenCode has “Allow”, “Always allow” (the card says the p
 
 ### Cost, budget and view
 
-A turn’s cost is the one OpenCode gives, at the provider’s price: 0 with a local model. OpenCode has no quota: the status bar shows its account’s cost for the day, and “Daily budget ($)”, in Settings › Accounts, pauses the autopilot until midnight once reached (see [the OpenCode account](accounts#opencode-account)). The “OpenCode view” plugs OpenCode’s interface into the agent’s session without stopping Escouade’s tracking (see [the terminal view](claude-code-view#with-opencode)).
+A turn’s cost is the one OpenCode gives, at the provider’s price: 0 with a local model. OpenCode has no quota: the status bar shows its account’s cost for the day, and “Daily budget ($)”, in Settings › Accounts and harnesses, pauses the autopilot until midnight once reached (see [the OpenCode account](accounts#opencode-account)). The “OpenCode view” plugs OpenCode’s interface into the agent’s session without stopping Escouade’s tracking (see [the terminal view](claude-code-view#with-opencode)).
 
 ### What OpenCode doesn’t do
 
@@ -155,7 +155,7 @@ Cursor CLI is a plugin shipped with Escouade (`dev.escouade.cursor-cli`): its ag
 
 ### Installation and account
 
-Install Cursor CLI with its script (`irm 'https://cursor.com/install?win32=true' | iex` on Windows, `curl https://cursor.com/install -fsS | bash` on macOS and Linux), then sign it in with `agent login`. Escouade finds it in `%LOCALAPPDATA%\cursor-agent` on Windows, even when it isn’t on the `PATH`, and starts its latest installed version. Each agent has its own `agent acp` and a configuration folder of its own, removed with it: its rules, its model and its sessions are kept there, never in your Cursor config. The machine’s sign-in (`agent login`) is “the machine’s account”. Another Cursor account is added by its API key (cursor.com, Settings › API Keys) in Settings › Accounts: it’s kept in the system keychain and given to its agents by `CURSOR_API_KEY`, never in a file nor on a command line; “Change the key…” gives it again.
+Install Cursor CLI with its script (`irm 'https://cursor.com/install?win32=true' | iex` on Windows, `curl https://cursor.com/install -fsS | bash` on macOS and Linux), then sign it in with `agent login`. Escouade finds it in `%LOCALAPPDATA%\cursor-agent` on Windows, even when it isn’t on the `PATH`, and starts its latest installed version. Each agent has its own `agent acp` and a configuration folder of its own, removed with it: its rules, its model and its sessions are kept there, never in your Cursor config. The machine’s sign-in (`agent login`) is “the machine’s account”. Another Cursor account is added by its API key (cursor.com, Settings › API Keys) in Settings › Accounts and harnesses: it’s kept in the system keychain and given to its agents by `CURSOR_API_KEY`, never in a file nor on a command line; “Change the key…” gives it again.
 
 ### Models and modes
 
@@ -176,7 +176,7 @@ The Claude Code skills, commands, agents and hooks of your account and of the pr
 
 ### Cost, quota and what Cursor doesn’t do
 
-Cursor tells neither the tokens nor the cost of a turn when Escouade drives it: the conversation shows none, and the statistics count its turns and their length. Nor does it tell its usage of the month: no bar in the status bar, but “Usage on cursor.com” in Settings › Accounts and in the quota panel, which opens its dashboard. A limit reached (“Upgrade your plan to continue”) stops the turn on an amber card that says so, with, when there is one, the account or harness to go on with. No “Duplicate the conversation” (Cursor doesn’t copy a session), no attached PDFs, no `/` commands in Escouade (to compact its context, type `/summarize` in its terminal view), no remote control or background tasks. It gets Escouade’s MCP server through its session; the switch doesn’t declare it in Cursor’s config yet. The “Cursor CLI view” runs the agent in Cursor’s interface, with a limited following (see [the terminal view](claude-code-view#with-cursor-cli)).
+Cursor tells neither the tokens nor the cost of a turn when Escouade drives it: the conversation shows none, and the statistics count its turns and their length. Nor does it tell its usage of the month: no bar in the status bar, but “Usage on cursor.com” in Settings › Accounts and harnesses and in the quota panel, which opens its dashboard. A limit reached (“Upgrade your plan to continue”) stops the turn on an amber card that says so, with, when there is one, the account or harness to go on with. No “Duplicate the conversation” (Cursor doesn’t copy a session), no attached PDFs, no `/` commands in Escouade (to compact its context, type `/summarize` in its terminal view), no remote control or background tasks. It gets Escouade’s MCP server through its session; the switch doesn’t declare it in Cursor’s config yet. The “Cursor CLI view” runs the agent in Cursor’s interface, with a limited following (see [the terminal view](claude-code-view#with-cursor-cli)).
 
 ## Mistral Vibe
 
@@ -186,7 +186,7 @@ Mistral Vibe is served by the “Mistral” plugin shipped with Escouade (`dev.e
 
 Install Mistral Vibe with `uv tool install mistral-vibe`, then give it your Mistral API key with `vibe --setup`: it is kept in the system’s keychain, and Escouade never reads it. Escouade finds its `vibe-acp` on the `PATH`, or in `~/.local/bin` where `uv` puts it. Each agent has its `vibe-acp` and its own `VIBE_HOME` folder, removed with it: its rules, its sessions and the trust of its folder are kept there, never in your `~/.vibe`. Its updates and its telemetry are turned off there.
 
-The key of `vibe --setup` is “the machine’s account”. Another Mistral account is added by its API key (console.mistral.ai, API Keys) in Settings › Accounts, or by the Mistral key of Settings › Voice, leaving the field empty: the voice and Vibe share the Mistral account. The key is kept in the system’s keychain and given to its agents by `MISTRAL_API_KEY`, never in a file nor on a command line; “Change the key…” gives it again. An account without its key starts nothing. “Resume on <account>” keeps the agent’s session: only the key changes.
+The key of `vibe --setup` is “the machine’s account”. Another Mistral account is added by its API key (console.mistral.ai, API Keys) in Settings › Accounts and harnesses, or by the Mistral key of Settings › Voice, leaving the field empty: the voice and Vibe share the Mistral account. The key is kept in the system’s keychain and given to its agents by `MISTRAL_API_KEY`, never in a file nor on a command line; “Change the key…” gives it again. An account without its key starts nothing. “Resume on <account>” keeps the agent’s session: only the key changes.
 
 ### Models and modes
 
@@ -207,7 +207,7 @@ For a private project, the other projects’ paths are refused to its read and w
 
 ### Cost, quota and what Vibe doesn’t do
 
-Vibe tells the cost and tokens of each turn: the conversation, the agent’s card, the status bar and the statistics show them, as for OpenCode. It tells no quota (a Mistral API key is billed by use): the day’s cost and a “Daily budget ($)” stand in for it, and “Usage on admin.mistral.ai”, in Settings › Accounts and in the quota panel, opens Mistral’s console. Its rate limit (“Rate limit exceeded”, after five minutes of Vibe’s retries) stops the turn on an amber card; the agent goes on by itself a minute later, or, for a ticket’s agent, on another Vibe account when “Resume a ticket’s agent stopped by the usage limit on another account” is on. The texts written, when “Model for written texts” is “Mistral Vibe”, go through `vibe -p`, without any tool, in one turn and 0.05 $ at most. No Auto mode, attached PDFs, `/` commands in Escouade (`/compact` goes as a message), remote control or background tasks. It gets Escouade’s MCP server through its session; the switch doesn’t declare it in Vibe’s config yet. The “Mistral Vibe view” runs the agent in Vibe’s interface, on the same session (see [the terminal view](claude-code-view#with-mistral-vibe)).
+Vibe tells the cost and tokens of each turn: the conversation, the agent’s card, the status bar and the statistics show them, as for OpenCode. It tells no quota (a Mistral API key is billed by use): the day’s cost and a “Daily budget ($)” stand in for it, and “Usage on admin.mistral.ai”, in Settings › Accounts and harnesses and in the quota panel, opens Mistral’s console. Its rate limit (“Rate limit exceeded”, after five minutes of Vibe’s retries) stops the turn on an amber card; the agent goes on by itself a minute later, or, for a ticket’s agent, on another Vibe account when “Resume a ticket’s agent stopped by the usage limit on another account” is on. The texts written, when “Model for written texts” is “Mistral Vibe”, go through `vibe -p`, without any tool, in one turn and 0.05 $ at most. No Auto mode, attached PDFs, `/` commands in Escouade (`/compact` goes as a message), remote control or background tasks. It gets Escouade’s MCP server through its session; the switch doesn’t declare it in Vibe’s config yet. The “Mistral Vibe view” runs the agent in Vibe’s interface, on the same session (see [the terminal view](claude-code-view#with-mistral-vibe)).
 
 ## Antigravity CLI
 
@@ -215,7 +215,7 @@ Antigravity CLI is a plugin shipped with Escouade (`dev.escouade.antigravity-cli
 
 ### Installation and account
 
-Install Antigravity CLI with its script (`irm https://antigravity.google/cli/install.ps1 | iex` on Windows, `curl -fsSL https://antigravity.google/cli/install.sh | bash` elsewhere), then add its account in Settings › Accounts (see below). Escouade finds `agy` in the `PATH`, or where its script puts it. Each agent has its own folder, removed with it, which stands as `agy`’s home: its rules, its conversations and Escouade’s MCP server are kept there, never in your `~/.gemini`, which Gemini CLI shares. Its updates are off.
+Install Antigravity CLI with its script (`irm https://antigravity.google/cli/install.ps1 | iex` on Windows, `curl -fsSL https://antigravity.google/cli/install.sh | bash` elsewhere), then add its account in Settings › Accounts and harnesses (see below). Escouade finds `agy` in the `PATH`, or where its script puts it. Each agent has its own folder, removed with it, which stands as `agy`’s home: its rules, its conversations and Escouade’s MCP server are kept there, never in your `~/.gemini`, which Gemini CLI shares. Its updates are off.
 
 Its machine’s account is your Google sign-in: “Add an Antigravity CLI account…” offers it, signed in or not. Not signed in yet, “Add this account” adds it, then runs `agy` in a terminal of the window, which opens your browser; Escouade never sees your credentials, only that the system keychain keeps the sign-in. “Sign in…”, on its row, does the same again. A `GEMINI_API_KEY` of your machine isn’t given to it.
 
@@ -240,7 +240,7 @@ For a private project, reading the other projects’ paths is refused to it by i
 
 ### Cost, quota and what Antigravity doesn’t do
 
-Antigravity gives each turn’s tokens (on its card, in the statistics), not their cost nor its quota: its `/usage` (by group of models, weekly) is only in its interface; “Usage on antigravity.google”, in Settings › Accounts and the quota panel, opens the page of its plans. When its quota is spent, the turn ends “limited” on a card that says so; the agent tries again by itself at the reset Antigravity tells, else an hour later (a minute when the model’s capacity is what’s missing), or moves to another account as “Switch accounts at” and “Continue on the next harness” say. No Auto mode, attached images or PDFs, “Duplicate the conversation”, `/` commands in Escouade, remote control or background tasks. It gets Escouade’s MCP server through its folder’s config; the switch doesn’t declare it in yours yet. The “Antigravity CLI view” runs the agent in Antigravity’s interface, on the same conversation (see [the terminal view](claude-code-view#with-antigravity-cli)).
+Antigravity gives each turn’s tokens (on its card, in the statistics), not their cost nor its quota: its `/usage` (by group of models, weekly) is only in its interface; “Usage on antigravity.google”, in Settings › Accounts and harnesses and the quota panel, opens the page of its plans. When its quota is spent, the turn ends “limited” on a card that says so; the agent tries again by itself at the reset Antigravity tells, else an hour later (a minute when the model’s capacity is what’s missing), or moves to another account as “Switch accounts at” and “Continue on the next harness” say. No Auto mode, attached images or PDFs, “Duplicate the conversation”, `/` commands in Escouade, remote control or background tasks. It gets Escouade’s MCP server through its folder’s config; the switch doesn’t declare it in yours yet. The “Antigravity CLI view” runs the agent in Antigravity’s interface, on the same conversation (see [the terminal view](claude-code-view#with-antigravity-cli)).
 
 ## Gemini CLI
 
@@ -251,7 +251,7 @@ Gemini CLI is a plugin shipped with Escouade (`dev.escouade.gemini-cli`): its ag
 
 ### Installation and account
 
-Install Gemini CLI with npm (`npm install -g @google/gemini-cli`, Node 20 or later) or Homebrew (`brew install gemini-cli`), then add its account in Settings › Accounts (see below). Escouade finds `gemini` on the `PATH`, or in npm’s global folder. Each agent has its own configuration folder (`GEMINI_CLI_HOME`), removed with it: its settings, its sessions and its rules are kept there, never in your `~/.gemini`, which Antigravity CLI shares. Escouade turns off its updates and usage statistics there, and trusts the agent’s folder (without it, Gemini would leave out Escouade’s MCP server).
+Install Gemini CLI with npm (`npm install -g @google/gemini-cli`, Node 20 or later) or Homebrew (`brew install gemini-cli`), then add its account in Settings › Accounts and harnesses (see below). Escouade finds `gemini` on the `PATH`, or in npm’s global folder. Each agent has its own configuration folder (`GEMINI_CLI_HOME`), removed with it: its settings, its sessions and its rules are kept there, never in your `~/.gemini`, which Antigravity CLI shares. Escouade turns off its updates and usage statistics there, and trusts the agent’s folder (without it, Gemini would leave out Escouade’s MCP server).
 
 A Gemini account is one or the other, as you choose when you add it:
 
@@ -277,7 +277,7 @@ For a private project, its file tools and its commands that name the other proje
 
 ### Cost, quota and what Gemini doesn’t do
 
-Gemini gives each turn’s tokens, not their cost nor its quota: its usage is read by `/stats` in its interface, and “Usage on aistudio.google.com”, in Settings › Accounts and the quota panel, opens the usage page of the API keys. Its limit ends the turn “limited” on a card that says so; the agent goes on by itself when Gemini says (“Please retry in 30s”), else a minute later, or an hour later for its daily quota, or moves to another account as “Switch accounts at” and “Go on with the next harness” say. The texts it writes (an agent’s name, a commit message…) go through `gemini -p`, every tool of it refused. The “Gemini CLI view” runs the agent in Gemini’s interface, on the same session (see [the terminal view](claude-code-view#with-gemini-cli)). No Auto mode, attached PDFs, “Duplicate the conversation”, `/` commands in Escouade (`/compact`: its `/compress`, in its interface), remote control nor background tasks. It gets Escouade’s MCP server by its session; the switch doesn’t declare it in your config yet.
+Gemini gives each turn’s tokens, not their cost nor its quota: its usage is read by `/stats` in its interface, and “Usage on aistudio.google.com”, in Settings › Accounts and harnesses and the quota panel, opens the usage page of the API keys. Its limit ends the turn “limited” on a card that says so; the agent goes on by itself when Gemini says (“Please retry in 30s”), else a minute later, or an hour later for its daily quota, or moves to another account as “Switch accounts at” and “Go on with the next harness” say. The texts it writes (an agent’s name, a commit message…) go through `gemini -p`, every tool of it refused. The “Gemini CLI view” runs the agent in Gemini’s interface, on the same session (see [the terminal view](claude-code-view#with-gemini-cli)). No Auto mode, attached PDFs, “Duplicate the conversation”, `/` commands in Escouade (`/compact`: its `/compress`, in its interface), remote control nor background tasks. It gets Escouade’s MCP server by its session; the switch doesn’t declare it in your config yet.
 
 ## Other harnesses, by a plugin
 
@@ -289,4 +289,4 @@ Whatever their harness, Escouade’s agents get its MCP server, each with its ow
 
 ## Written texts
 
-A new agent’s name, the suggested commit messages and pull request descriptions are written by the harness of Settings › Application › “Model for written texts”: “Claude Haiku”, “Codex (GPT-6-Luna)”, an OpenCode model , “Copilot (GPT-5 mini)”, “Cursor (Auto)”, “Mistral Vibe”, “Gemini 3.8 Flash” (Antigravity CLI) or “Gemini CLI”, among the installed harnesses (see [written texts](settings-application#written-texts)).
+A new agent’s name, the suggested commit messages and pull request descriptions are written by the harness of Settings › Agents › “Model for written texts”: “Claude Haiku”, “Codex (GPT-6-Luna)”, an OpenCode model , “Copilot (GPT-5 mini)”, “Cursor (Auto)”, “Mistral Vibe”, “Gemini 3.8 Flash” (Antigravity CLI) or “Gemini CLI”, among the installed harnesses (see [written texts](settings-application#written-texts)).

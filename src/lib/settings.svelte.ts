@@ -338,6 +338,11 @@ class SettingsForm {
   page = $state<SettingsPage>('accounts');
   /** The project the pages of a project set. */
   projectId = $state<string | null>(null);
+  /**
+   * The row a search opened (R8): its page unfolds « Avancé » when it is there, and the window lights it. `n` tells
+   * one opening from the next of the same row.
+   */
+  found = $state<{ row: RowInfo; n: number } | null>(null);
   settings = $state<Settings>({} as Settings);
   /** By project. */
   projects = $state<Record<string, ProjectDraft>>({});
@@ -483,6 +488,7 @@ class SettingsForm {
   resume({ page, projectId }: SettingsPlace = {}) {
     const has = (id: string | null | undefined) => !!id && app.projects.some((p) => p.id === id);
     this.page = page ?? 'accounts';
+    this.found = null;
     this.projectId = has(projectId) ? projectId! : has(app.project?.id) ? app.project!.id : (app.projects[0]?.id ?? null);
   }
 

@@ -3,7 +3,7 @@
 // is folded into « Avancé », and the keys it sets. What it sets is read here: the dot of a changed page, the search
 // (R8), and the guarantee that no key is lost (each key of `Settings` and of a project is set by one page alone).
 
-import { t, type Key } from './i18n';
+import { t, tIn, type Key, type Lang } from './i18n';
 import type { IconName } from './icons';
 import type { BoardSettings, Settings } from './types';
 import type { ProjectDraft } from './settings.svelte';
@@ -89,6 +89,10 @@ export interface RowInfo {
   id: string;
   page: SettingsPage;
   label: string;
+  /** Its label in a language, whatever the interface's (the search reads both). */
+  labelIn(lang: Lang): string;
+  /** What it does, in a language: its label's `…Desc` or `…Hint` in the catalog, else nothing. */
+  descIn(lang: Lang): string;
   /** Folded into « Avancé » at the foot of its page. */
   advanced: boolean;
   /** The keys of the app's settings it sets. */
@@ -119,7 +123,21 @@ function row(id: string, page: SettingsPage, label: Key | Raw, o: RowOptions = {
     get label() {
       return typeof label === 'string' ? t(label) : label.raw;
     },
+    labelIn: (lang) => (typeof label === 'string' ? tIn(lang, label) : label.raw),
+    descIn: (lang) => (typeof label === 'string' ? descOf(lang, label) : ''),
   };
+}
+
+/** The text that says what a row does, found beside its label in the catalog (`betaUpdates` → `betaUpdatesDesc`). */
+function descOf(lang: Lang, label: Key): string {
+  return ['Desc', 'Hint']
+    .map((end) => {
+      const key = `${label}${end}` as Key;
+      const text = (tIn as (l: Lang, k: Key) => string)(lang, key);
+      return text === key ? '' : text;
+    })
+    .filter(Boolean)
+    .join(' ');
 }
 
 // The app's settings: one row per control, in the order of its page (PROPOSITION.md §2 and annexe A).

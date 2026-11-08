@@ -275,8 +275,8 @@ fn a_download_a_company_proxy_refused_says_so_and_sends_to_the_browser() {
 
 #[test]
 fn a_proxy_that_asks_for_a_password_says_where_to_put_it_for_a_check_and_a_download() {
-    let fr = "le proxy 127.0.0.1:9000 demande une authentification (407 Proxy Authentication Required) : mets l'identifiant et le mot de passe dans l'adresse du proxy, dans Réglages › Réseau";
-    let en = "the proxy 127.0.0.1:9000 asks for authentication (407 Proxy Authentication Required): put the user name and password in the proxy address, in Settings › Network";
+    let fr = "le proxy 127.0.0.1:9000 demande une authentification (407 Proxy Authentication Required) : mets l'identifiant et le mot de passe dans l'adresse du proxy, dans Réglages › Avancé › Réseau";
+    let en = "the proxy 127.0.0.1:9000 asks for authentication (407 Proxy Authentication Required): put the user name and password in the proxy address, in Settings › Advanced › Network";
     for what in [What::Check, What::Download] {
         // Whatever the proxy said of itself: it is not a refusal of the installer to send to the
         // browser.

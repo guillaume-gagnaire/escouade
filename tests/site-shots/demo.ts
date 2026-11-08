@@ -821,6 +821,8 @@ export function makeDemo(root: string, lang: Language, ports: number, hosts?: { 
     agent({
       id: AGENTS.push,
       project: 'mobile',
+      // Started after ecran-profil, not at the same millisecond: the bar sorts by start, a tie would swap the two cards.
+      ago: 30,
       name: a.push,
       engine: 'codex',
       model: 'gpt-5.6-terra',

@@ -1,25 +1,27 @@
-# Settings: Integrations
+# Settings: Connected services and Imported tickets
 
-The “Integrations” tab of the settings connects Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues, and Azure Boards, links each project to a source of tickets, and sets what Escouade writes on the external tickets and what it imports by itself.
+The “Connected services” page connects the code hosts and the accounts of Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues, and Azure Boards, and sets the sync and the automatic import, for all projects. Each project’s “Imported tickets” page links it to its sources and maps their statuses.
 
-## Open the tab
+An amber dot on “Connected services”, in the settings bar, says a token expired or can’t be read.
 
-Open the settings with `Ctrl+,` (`⌘,` on macOS), then choose “Integrations”. Imported tickets and their sync are explained in [integrations](integrations).
+## Open the pages
 
-The tab has two parts, each with its title and a line that says what it is for:
+Open the settings with `Ctrl+,` (`⌘,` on macOS), then choose “Connected services”, or, under “Projects”, the project’s “Imported tickets” page. Imported tickets and their sync are explained in [integrations](integrations).
+
+Connected services has two parts, each with its title and a line that says what it is for:
 
 - **“Code hosts”**: “The agents’ PRs and MRs, CI and deployments: one account per instance, which each project finds through its remote.” (see [below](#code-hosts));
-- **“Kanban sources”**: “Import and sync of tickets: an imported ticket follows its column there (status, comments).” The rest of the tab is under it.
+- **“Kanban sources”**: “Import and sync of tickets: an imported ticket follows its column there (status, comments).” The rest of the page is under it.
 
 A code host is not a source: connecting GitLab or GitHub as a code host serves the PRs and CI; its tickets come into the Kanban only once a source is linked to the project. GitHub Issues, GitLab Issues and Azure Boards take their code host’s account for that, asking nothing again.
 
 The sources bring together three kinds of settings:
 
-- “Connected accounts” is shared by the whole app and is saved right away, without “Save”.
-- “Sources linked to …” and “Status mapping” belong to the project selected in the “Project” bar at the top of the window. They stay in a draft until “Save”; “Cancel” drops them.
-- “Sync” and “Automatic import” are shared by all projects, and also go through “Save”.
+- “Connected accounts” is shared by the whole app and is saved right away.
+- “Sources linked to …” and “Status mapping” are on each project’s “Imported tickets” page. They save as you set them.
+- “Sync” and “Automatic import” are shared by all projects, and save as you set them.
 
-With no project open, the tab shows “No project open.”.
+With no project open, “Imported tickets” shows “No project open.”.
 
 ## Connected accounts
 
@@ -169,7 +171,7 @@ The automatic import brings a ticket in only once per project: a ticket already 
 
 ## Code hosts
 
-The first part of the tab connects the [code hosts](code-hosts): GitHub, GitLab, Bitbucket Cloud, Gitea, Forgejo, and Azure DevOps. They serve the pull requests (merge requests on GitLab) of agents and tickets, the CI, and the deployments, not the tickets themselves. One account per instance (github.com, gitlab.com, your company’s…); each project finds its own by its remote. “Connect a code host…” asks for the host, the address (empty: its public instance), and a token (empty: the one from its CLI, `gh`, `glab`, or `az`); a remote without an account offers “Connect” followed by its host.
+The first part of “Connected services” connects the [code hosts](code-hosts): GitHub, GitLab, Bitbucket Cloud, Gitea, Forgejo, and Azure DevOps. They serve the pull requests (merge requests on GitLab) of agents and tickets, the CI, and the deployments, not the tickets themselves. One account per instance (github.com, gitlab.com, your company’s…); each project finds its own by its remote. “Connect a code host…” asks for the host, the address (empty: its public instance), and a token (empty: the one from its CLI, `gh`, `glab`, or `az`); a remote without an account offers “Connect” followed by its host.
 
 Each instance says on its row whether it also serves as a source of the Kanban:
 

@@ -196,7 +196,7 @@ export function usableFor(project: string | undefined, engine: EngineId = defaul
 }
 
 /** The harness a project's new agents and tickets run on unless they say theirs. */
-function engineOfProject(project: { engine?: EngineId | null } | undefined): EngineId {
+export function engineOfProject(project: { engine?: EngineId | null } | undefined): EngineId {
   return project?.engine ?? defaultEngine();
 }
 

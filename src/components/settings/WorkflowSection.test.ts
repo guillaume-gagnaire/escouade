@@ -282,7 +282,7 @@ describe('Réglages › Projets › Kanban › Workflow (ESC-195)', () => {
   });
 });
 
-describe('Réglages › Projets › Workflow, supprimer et « Pas de workflow » (ESC-309)', () => {
+describe('Réglages › Projets › Kanban › Workflow, supprimer et « Pas de workflow » (ESC-309)', () => {
   it('deletes a workflow at once and says the reading will not make it again', async () => {
     const backend = open({}, gsdScan(), {
       set_workflow_removed: () => gsdScan({ workflows: [], removed: [{ id: '|claude|gsd', name: 'GSD', changed: false }] }),

@@ -13,13 +13,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### New
 
-- Settings have a bar on the left: Escouade’s pages, then each project with its own, All projects and About, from the keyboard too. The window, larger, takes the colour of what it sets, and what is rarely needed folds under “Advanced”, which names what it hides.
-- Settings apply as soon as you change them, with no “Save”: a text when you leave its field or pause typing. A value that cannot be, such as a project without a name, is said on its row and the previous one stays.
-- “Accounts and harnesses” shows each harness with its state, its version and its accounts, and installs a missing one in one click. What happens when a quota runs out, the autopilot’s pause included, is gathered in one place.
-- In the settings, General brings together the appearance, the language, the updates (betas included) and what concerns you; Agents, what sets the agents and driving Escouade; Advanced, the network, the terminals, the attachments and the search by meaning.
-- “Integrations” becomes two pages: Connected services, for the code hosts, the ticket sources’ accounts, the sync and the automatic import, which hold for every project; and, in each project, Imported tickets for its sources and how their statuses map.
-- The Plugins page of the settings says what each plugin adds, where it is set and in how many projects it is on, with its switch and its settings. It also offers Escouade’s plugins not yet installed, each installed in a click with nothing to download.
-- Each project has its own settings pages: Project, Git and worktrees, Launch, Kanban (with its workflow), Team, and Privacy, which also shows the plugins on in the project. The ⚙ of Launch, the Kanban or the Workflow panel open the right page directly.
+- Settings are rebuilt: a bar on the left with Escouade’s pages (General, Agents, Accounts and harnesses, Connected services, Voice, Notifications, Plugins, Advanced), then each project’s pages, and everything applies as soon as you change it, with no “Save”. A search (Ctrl+F) finds a setting by its name, in English or French, and opens its page; an amber dot marks the page that needs you, such as a harness without an account or an expired token.
 - Escouade's plugins come in the installer: at the first start, even offline, Escouade installs those your configuration uses, and the Plugins view offers the others, installed in one click with no download.
 - On store.escouade.dev, a plugin's documentation can have its pages in French and in English: each visitor reads those of their language, else those of the other, and a link from one page to another stays on the store.
 - A plugin no longer keeps what Escouade lent it: the host of a failed connection attempt closes at once, and a removed account takes back its host and its token. An address that only looks local, such as `http://localhost:1@exemple.dev`, is refused right in the form.

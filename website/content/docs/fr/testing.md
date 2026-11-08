@@ -70,7 +70,7 @@ isola est un plugin livré avec Escouade, `dev.escouade.isola` : le premier « 
 
 ## Valider un ticket
 
-Le bouton de la carte porte le nom de ce que la validation fait. Cela se règle dans le premier groupe de Réglages › Kanban, « Quand je valide un ticket « À tester » » ; le bouton « Après validation : … » de l’en-tête y mène (voir [Réglages du Kanban](settings-board)).
+Le bouton de la carte porte le nom de ce que la validation fait. Cela se règle dans le premier groupe de Réglages › Projets › Kanban, « Quand je valide un ticket « À tester » » ; le bouton « Après validation : … » de l’en-tête y mène (voir [Réglages du Kanban](settings-board)).
 
 | Choix du réglage | Bouton | Ce qui se passe | La carte « Terminé » dit |
 |---|---|---|---|

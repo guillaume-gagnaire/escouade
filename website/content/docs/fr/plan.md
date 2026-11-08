@@ -10,7 +10,7 @@ Le bandeau « Plan » apparaît entre l’en-tête de la conversation et les m
 
 Escouade ne crée jamais de tâche et ne modifie aucun fichier de plan : il lit ce que l’agent fait. La liste vient de l’une de ces deux sources.
 
-- **La liste de tâches de Claude Code.** L’agent la tient avec les outils de tâches de Claude Code (`TodoWrite`, ou `TaskCreate` et `TaskUpdate`). Le réglage « Les agents tiennent une liste de tâches » (Réglages › Harness, activé par défaut) donne cet outil aux agents lancés ensuite ; le modèle n’est pas obligé de s’en servir. Voir [les réglages des harness](settings-claude-code).
+- **La liste de tâches de Claude Code.** L’agent la tient avec les outils de tâches de Claude Code (`TodoWrite`, ou `TaskCreate` et `TaskUpdate`). Le réglage « Les agents tiennent une liste de tâches » (Réglages › Comptes et harness, activé par défaut) donne cet outil aux agents lancés ensuite ; le modèle n’est pas obligé de s’en servir. Voir [les réglages des harness](settings-claude-code).
 - **Un plan superpowers.** Pour un agent qui n’a pas de liste de tâches, Escouade lit le plan que l’agent a écrit dans `docs/superpowers/plans/` (skills `writing-plans`, `executing-plans`, `subagent-driven-development`) et le journal d’avancement que ces skills tiennent dans `.superpowers/sdd/`, pour savoir quelles tâches sont faites. Cette lecture se fait seulement dans le dossier de l’agent (son worktree, ou le projet) et ne modifie rien. Si l’agent tient aussi sa propre liste, c’est elle qui sert de liste ; le fichier de plan n’en donne alors que le titre et le nom.
 
 Le bandeau garde au plus 100 tâches.

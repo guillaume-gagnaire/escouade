@@ -1,4 +1,4 @@
-// Réglages › Projets › Workflow (ESC-195): what the reading found (its sources, its workflows), and the steps as the
+// Réglages › Projets › Kanban › Workflow (ESC-195): what the reading found (its sources, its workflows), and the steps as the
 // user corrects them, ahead of the reading. The rows edited here make the project's `workflowFixes`; the backend applies
 // them the same way (`workflowfix.rs`) for what follows the agents.
 import type { Workflow, WorkflowFix, WorkflowFixStep, WorkflowScan, WorkflowSignal } from './types';

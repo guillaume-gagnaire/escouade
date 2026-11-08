@@ -1,8 +1,10 @@
-# Réglages : Harness
+# Réglages : Agents
 
-L’onglet « Harness » (« Claude Code » jusqu’à la 1.7) liste les harness des agents, avec leur état, leur exécutable et leur version, et règle ce qui vaut pour tous : la vue des nouveaux agents, la vie des processus, les pièces jointes et le remote control.
+La page « Agents » règle ce qui vaut pour tous les agents, quel que soit leur harness.
 
-Le serveur qui laisse Claude piloter Escouade a son onglet, « Serveur MCP », dans le groupe « Système » des réglages (voir plus bas) ; ce qui se passe quand un quota est épuisé est dans l’onglet [« Comptes »](settings-accounts).
+Elle règle la vue des nouveaux agents, leur liste de tâches, le délai avant l’envoi pendant un tour, les textes rédigés, le remote control et le serveur MCP qui laisse Claude piloter Escouade ; dans son « Avancé », l’arrêt des processus inactifs et l’activité MCP. Les harness (leur état, leur exécutable, leur version, leur mise à jour) sont dans la page [« Comptes et harness »](settings-accounts), et les pièces jointes dans « Avancé » : cette page les décrit aussi, à leur place.
+
+Ce qui se passe quand un quota est épuisé est dans [« Comptes et harness »](settings-accounts), groupe « Quand un quota est épuisé ».
 
 ## Chaque harness
 
@@ -15,9 +17,9 @@ Un groupe par harness, sous son nom, avec à côté son état et sa version : �
 | « Modèles » (OpenCode) | Les modèles des fournisseurs connectés à OpenCode, avec une recherche : les favoris d’abord, puis un groupe par fournisseur. L’étoile d’un modèle en fait un favori, qui vient en premier dans le menu des modèles de ses agents. |
 | « Installation » | Pour un harness introuvable : la commande qui l’installe (Claude Code : `irm https://claude.ai/install.ps1 \| iex` sous Windows, `curl -fsSL https://claude.ai/install.sh \| bash` sous macOS et Linux). Pour Claude Code, la ligne dit aussi si une installation par npm a été interrompue, avec la commande qui la répare (voir le [dépannage](troubleshooting)). |
 
-Les comptes d’un harness ne se connectent pas ici mais dans l’onglet [« Comptes »](settings-accounts) : chacun y a son état et son bouton « Se connecter… ». Un harness introuvable n’apparaît que dans cet onglet. Au premier lancement, si aucun n’est trouvé, l’écran d’accueil dit « Aucun harness trouvé » et donne la commande d’installation de chacun ; Escouade marche dès qu’un harness est trouvé.
+Les comptes d’un harness se connectent dans la même page, [« Comptes et harness »](settings-accounts) : chacun y a son état et son bouton « Se connecter… ». Un harness introuvable n’apparaît que dans cette page. Au premier lancement, si aucun n’est trouvé, l’écran d’accueil dit « Aucun harness trouvé » et donne la commande d’installation de chacun ; Escouade marche dès qu’un harness est trouvé.
 
-Dès que deux harness sont installés, le projet a son « Harness par défaut » (Réglages › Projets), le bouton « ▾ » à côté de « Nouvel agent » propose « Nouvel agent sur … » pour chacun, et la fenêtre d’un ticket a son champ « Harness » (celui du projet par défaut), que le pilote auto suit. Dès que des agents tournent sur deux harness, le nom du harness de chacun s’affiche à côté de lui : sur sa carte, dans la vue d’ensemble, dans son en-tête et sur la carte de son ticket. Les menus du composer (modèles, effort, modes, commandes /) sont ceux du harness de l’agent.
+Dès que deux harness sont installés, le projet a son « Harness par défaut » (Réglages › Projets › Projet), le bouton « ▾ » à côté de « Nouvel agent » propose « Nouvel agent sur … » pour chacun, et la fenêtre d’un ticket a son champ « Harness » (celui du projet par défaut), que le pilote auto suit. Dès que des agents tournent sur deux harness, le nom du harness de chacun s’affiche à côté de lui : sur sa carte, dans la vue d’ensemble, dans son en-tête et sur la carte de son ticket. Les menus du composer (modèles, effort, modes, commandes /) sont ceux du harness de l’agent.
 
 ## Exécutable de Claude Code
 
@@ -25,7 +27,7 @@ Le groupe « Claude Code » commence par un champ.
 
 | Réglage | Effet | Par défaut |
 |---|---|---|
-| « Chemin de l’exécutable » (vide = détection automatique) | Le `claude` qu’Escouade lance pour les agents. Un compte qui a son propre exécutable, dans l’onglet [« Comptes »](settings-accounts), lance le sien. | Vide |
+| « Chemin de l’exécutable » (vide = détection automatique) | Le `claude` qu’Escouade lance pour les agents. Un compte qui a son propre exécutable, dans la page [« Comptes »](settings-accounts), lance le sien. | Vide |
 
 ### Où Escouade cherche
 
@@ -34,7 +36,7 @@ Champ vide, Escouade cherche `claude` dans le `PATH`, puis aux emplacements habi
 - sous Windows : `~\.local\bin\claude.exe`, `~\.claude\local\claude.exe` et `~\AppData\Roaming\npm\claude.cmd` ;
 - sous macOS et Linux : `~/.local/bin/claude`, `~/.claude/local/claude`, `/opt/homebrew/bin/claude` et `/usr/local/bin/claude`.
 
-Sous Windows, s’il n’en trouve aucun, Escouade cherche un Claude Code installé dans WSL, dans la distribution que nomme « Distribution WSL » dans l’onglet [« Terminaux »](settings-terminals) (vide = la distribution par défaut).
+Sous Windows, s’il n’en trouve aucun, Escouade cherche un Claude Code installé dans WSL, dans la distribution que nomme « Distribution WSL » dans [« Avancé › Terminaux »](settings-terminals) (vide = la distribution par défaut).
 
 Champ rempli, tu peux écrire :
 
@@ -51,7 +53,7 @@ Un quart de seconde après que tu as fini de taper, Escouade cherche le `claude`
 - « Trouvé dans WSL (Ubuntu) : » suivi du chemin Linux, pour un Claude Code de WSL ;
 - « Introuvable. » : sous Windows, la ligne rappelle alors les formes de chemin acceptées, celles de WSL comprises ; ailleurs elle dit « Introuvable. Indique le chemin de claude. ».
 
-Champ vide, le texte grisé dit déjà si `claude` est trouvé : « claude (trouvé dans le PATH) » ou « introuvable — indique le chemin de claude.exe ». Après « Enregistrer », un nouveau chemin ou une nouvelle distribution WSL fait chercher à nouveau, pour mettre à jour le bandeau du [Kanban](board) et le texte du champ.
+Champ vide, le texte grisé dit déjà si `claude` est trouvé : « claude (trouvé dans le PATH) » ou « introuvable — indique le chemin de claude.exe ». Une fois le champ quitté, un nouveau chemin ou une nouvelle distribution WSL fait chercher à nouveau, pour mettre à jour le bandeau du [Kanban](board) et le texte du champ.
 
 > [!WARNING]
 > Si le `claude` trouvé est dans WSL et que le réseau de WSL est en NAT, un avertissement s’ajoute : le serveur MCP d’Escouade et le suivi de la [vue Claude Code](claude-code-view) n’atteignent pas l’app. Passe WSL en mode miroir (`networkingMode=mirrored` sous `[wsl2]` dans `%UserProfile%\.wslconfig`), puis lance `wsl --shutdown`.
@@ -70,7 +72,7 @@ Désactivé, plus rien ne met Claude Code à jour : lance `claude update` toi-m�
 
 ## Nouveaux agents
 
-Le modèle, l’effort et le mode avec lesquels partent les nouveaux [agents](managing-agents) se règlent compte par compte, dans sa fiche de [Réglages › Comptes](settings-accounts), parmi ceux de son harness : il n’y a plus de réglage commun ici. Dans le champ de message d’un agent, tu peux les changer pour cet agent seul. Les tickets du Kanban prennent ceux du ticket, sinon de l’onglet [« Kanban »](settings-board) du projet, sinon du compte qui les prend.
+Le modèle, l’effort et le mode avec lesquels partent les nouveaux [agents](managing-agents) se règlent compte par compte, dans sa fiche de [Réglages › Comptes et harness](settings-accounts), parmi ceux de son harness : il n’y a plus de réglage commun ici. Dans le champ de message d’un agent, tu peux les changer pour cet agent seul. Les tickets du Kanban prennent ceux du ticket, sinon de la page [« Kanban »](settings-board) du projet, sinon du compte qui les prend.
 
 ### Les niveaux d’effort
 
@@ -99,7 +101,7 @@ Les demandes d’autorisation et leur traitement sont décrits dans [la conversa
 
 ## Tous les harness
 
-Le modèle, l’effort et le mode des nouveaux agents se règlent compte par compte, dans l’onglet [« Comptes »](settings-accounts).
+Le modèle, l’effort et le mode des nouveaux agents se règlent compte par compte, dans la page [« Comptes et harness »](settings-accounts).
 
 | Réglage | Effet | Par défaut |
 |---|---|---|
@@ -114,7 +116,7 @@ Quand un agent s’arrête sur la limite d’usage, Escouade prévoit de lui éc
 
 ### Reprise sur un autre compte
 
-Le réglage « Reprendre sur un autre compte un agent de ticket arrêté par la limite » est dans l’onglet [« Comptes »](settings-accounts), groupe « Quand un quota est épuisé », avec « Continuer sur le harness suivant… », l’ordre des harness et les modèles de passation. Avec plusieurs comptes, un agent de ticket arrêté par la limite repart tout seul, avec sa session, sur le compte que choisirait Escouade, quand un autre est utilisable, au lieu d’attendre la remise à zéro de son compte. Voir [les comptes](accounts) et l’onglet [« Comptes »](settings-accounts).
+Le réglage « Reprendre sur un autre compte un agent de ticket arrêté par la limite » est dans la page [« Comptes et harness »](settings-accounts), groupe « Quand un quota est épuisé », avec « Continuer sur le harness suivant… », l’ordre des harness et les modèles de passation. Avec plusieurs comptes, un agent de ticket arrêté par la limite repart tout seul, avec sa session, sur le compte que choisirait Escouade, quand un autre est utilisable, au lieu d’attendre la remise à zéro de son compte. Voir [les comptes](accounts) et la page [« Comptes et harness »](settings-accounts).
 
 ### Vue Claude Code
 
@@ -150,19 +152,19 @@ Ce réglage, dans le groupe de Claude Code (« Claude Code seulement : les aut
 
 L’interrupteur est désactivé par défaut. Allumé, chaque agent de chaque projet, existant ou nouveau (agents des tickets compris), est accessible depuis claude.ai et l’app Claude. Escouade lance tout de suite le processus `claude` de chacun, au plus 3 à la fois, et il reste lancé : il démarre avec l’app et n’est jamais arrêté pour inactivité. La session apparaît sur claude.ai sous le nom « projet · agent » (pour un agent de ticket, son nom vient du ticket). En vue Claude Code, une interface déjà ouverte ne le prend qu’à son prochain lancement. Pour mettre un agent à part, fais un clic droit sur sa carte, puis « Désactiver le remote control ».
 
-Le réglage s’enregistre avec « Enregistrer », comme la plupart des autres. Éteint, il retire le remote control aux agents qui le tenaient de lui, sans toucher à ceux que tu as activés à la main ni à ceux que le réglage de leur projet couvre encore.
+Le réglage s’enregistre au geste, comme les autres. Éteint, il retire le remote control aux agents qui le tenaient de lui, sans toucher à ceux que tu as activés à la main ni à ceux que le réglage de leur projet couvre encore.
 
-Tant qu’il est allumé, l’interrupteur « Remote control pour les agents de ce projet » de chaque projet, dans [l’onglet « Projets »](settings-projects), se montre allumé et grisé : « Activé pour tous les projets dans Réglages › Harness ». Le choix propre de chaque projet est gardé, et revient quand celui-ci est éteint.
+Tant qu’il est allumé, l’interrupteur « Remote control pour les agents de ce projet » de chaque projet, dans sa page [« Confidentialité »](settings-projects), se montre allumé et grisé : « Activé pour tous les projets dans Réglages › Agents ». Le choix propre de chaque projet est gardé, et revient quand celui-ci est éteint.
 
 Pour un agent en [vue Claude Code](claude-code-view), le changement vaut au prochain lancement de son interface. La page sur [le remote control](remote-control) donne le détail : d’où il vient, comment mettre un agent à part et ce qui se passe au redémarrage.
 
 ## Serveur MCP
 
-L’onglet « Serveur MCP » (groupe « Système » des réglages) laisse les agents d’Escouade, et chaque harness installé lancé hors d’Escouade (Claude Code, Codex, OpenCode, Copilot CLI, dans un terminal ou leur app), lire tes projets, tes agents et tes tickets, et créer des tickets ou lancer des agents, par le [serveur MCP](mcp) d’Escouade.
+Le groupe « Piloter Escouade » de la page « Agents » laisse les agents d’Escouade, et chaque harness installé lancé hors d’Escouade (Claude Code, Codex, OpenCode, Copilot CLI, dans un terminal ou leur app), lire tes projets, tes agents et tes tickets, et créer des tickets ou lancer des agents, par le [serveur MCP](mcp) d’Escouade.
 
 ### Les agents peuvent piloter Escouade
 
-L’interrupteur est désactivé par défaut ; c’est le seul, il vaut pour tous les harness. Il donne le serveur à chaque agent d’Escouade, de tous les projets, avec un jeton à lui : il n’y a rien à permettre dans les réglages d’un projet. Il le déclare aussi dans la config de chaque compte actif ajouté de chaque harness installé (un harness sans compte n’a la déclaration nulle part) : `~/.claude.json` (Claude Code, par `claude mcp add`), `~/.codex/config.toml` (Codex), `~/.config/opencode/opencode.json` (OpenCode), `~/.copilot/mcp-config.json` (Copilot CLI) pour le compte Principal, le reste du fichier et ses commentaires gardés. Un harness installé ou un compte ajouté plus tard est déclaré aussitôt. Il s’enregistre tout de suite, sans passer par « Enregistrer » : l’activer écrit dans ces fichiers, ce qu’un « Annuler » ne pourrait pas défaire. Le désactiver change le jeton, retire l’entrée partout (chaque fichier redevient celui d’avant, à l’octet près) et écarte le serveur des agents : ceux déjà lancés perdent les outils tout de suite.
+L’interrupteur est désactivé par défaut ; c’est le seul, il vaut pour tous les harness. Il donne le serveur à chaque agent d’Escouade, de tous les projets, avec un jeton à lui : il n’y a rien à permettre dans les réglages d’un projet. Il le déclare aussi dans la config de chaque compte actif ajouté de chaque harness installé (un harness sans compte n’a la déclaration nulle part) : `~/.claude.json` (Claude Code, par `claude mcp add`), `~/.codex/config.toml` (Codex), `~/.config/opencode/opencode.json` (OpenCode), `~/.copilot/mcp-config.json` (Copilot CLI) pour le compte Principal, le reste du fichier et ses commentaires gardés. Un harness installé ou un compte ajouté plus tard est déclaré aussitôt. Il s’enregistre tout de suite, comme tout réglage : l’activer écrit dans ces fichiers, ce qu’un « Annuler » ne pourrait pas défaire. Le désactiver change le jeton, retire l’entrée partout (chaque fichier redevient celui d’avant, à l’octet près) et écarte le serveur des agents : ceux déjà lancés perdent les outils tout de suite.
 
 Un agent déjà lancé reçoit les outils au prochain démarrage de son processus : sa conversation affiche alors « Outils d’Escouade au prochain démarrage » avec « Relancer », qui reprend sa session dans un nouveau processus, et une ligne sous l’interrupteur dit combien d’agents sont dans ce cas (« 1 agent déjà lancé aura les outils au prochain démarrage de son process : « Relancer » sur sa conversation. »). Voir [Les agents d’Escouade et le serveur](mcp#les-agents-d-escouade-et-le-serveur).
 
@@ -178,4 +180,4 @@ Interrupteur allumé, la liste dessous donne chaque déclaration :
 
 ## Activité MCP
 
-Le groupe « Activité MCP » de l’onglet « Serveur MCP » liste ce que le serveur a reçu et répondu, les appels les plus récents en tête. Chaque ligne donne l’heure, qui a appelé (le nom d’un agent, « Claude (hors Escouade) » ou, pour une requête refusée avant de savoir qui l’envoie, « Client inconnu »), l’outil, le résultat (« Fait », « Refusé » ou « Erreur »), puis ce qui a été demandé et, pour un refus ou une erreur, pourquoi. Pour un `set_board` réussi, la ligne dit aussi ce qui a changé, champ par champ, avant et après (« model: opus → sonnet · effort: (défaut) → medium »), ou « Aucun changement ». Les 200 derniers appels sont gardés en mémoire, pas enregistrés. Le bouton « Effacer » vide la liste ; sans appel, elle dit « Aucun appel pour l’instant. ».
+« Activité MCP », dans l’« Avancé » de la page « Agents », liste ce que le serveur a reçu et répondu, les appels les plus récents en tête. Chaque ligne donne l’heure, qui a appelé (le nom d’un agent, « Claude (hors Escouade) » ou, pour une requête refusée avant de savoir qui l’envoie, « Client inconnu »), l’outil, le résultat (« Fait », « Refusé » ou « Erreur »), puis ce qui a été demandé et, pour un refus ou une erreur, pourquoi. Pour un `set_board` réussi, la ligne dit aussi ce qui a changé, champ par champ, avant et après (« model: opus → sonnet · effort: (défaut) → medium »), ou « Aucun changement ». Les 200 derniers appels sont gardés en mémoire, pas enregistrés. Le bouton « Effacer » vide la liste ; sans appel, elle dit « Aucun appel pour l’instant. ».

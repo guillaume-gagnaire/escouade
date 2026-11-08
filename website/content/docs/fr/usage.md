@@ -37,7 +37,7 @@ Escouade suit les deux fenêtres de quota de ton abonnement Claude : la fenêtre
 
 ### Le quota d’un modèle
 
-Sur certains forfaits, Claude compte un modèle à part : la semaine de Fable, par exemple, a son propre plafond et sa propre remise à zéro. Escouade lui donne une barre de plus, à côté des autres et sous le nom que donne Anthropic : « Fable 7 j ». Elle se lit comme les autres (infobulle, lecteurs d’écran : « Quota sur 7 jours de Fable »), dans la barre de statut, le panneau des quotas et Réglages › Comptes.
+Sur certains forfaits, Claude compte un modèle à part : la semaine de Fable, par exemple, a son propre plafond et sa propre remise à zéro. Escouade lui donne une barre de plus, à côté des autres et sous le nom que donne Anthropic : « Fable 7 j ». Elle se lit comme les autres (infobulle, lecteurs d’écran : « Quota sur 7 jours de Fable »), dans la barre de statut, le panneau des quotas et Réglages › Comptes et harness.
 
 Ce quota ne retient que les agents et les tickets de ce modèle. Quand la semaine de Fable passe le seuil, un ticket Fable part sur un autre compte ou attend, et les tickets Opus ou Sonnet continuent sur le même compte. Le pilote auto n’est pas mis en pause pour autant. Un agent Fable arrêté par sa limite attend sa remise à zéro sans bloquer les autres modèles. Escouade reconnaît le modèle par son nom (« fable », « claude-fable-5-1 »…), quel que soit le nom qu’on lui donne.
 
@@ -106,7 +106,7 @@ Les [statistiques](stats) cumulent tout cela par jour, par semaine ou par mois.
 
 ## Quand un quota approche de sa limite
 
-Escouade réagit de trois façons. Les deux premières dépendent du seuil « Pause au-delà du quota », que tu règles dans Réglages › Kanban, groupe « Pilote auto » : 80, 90, 95 ou 100 % d’une fenêtre, 100 % par défaut, le même pour tous les projets ([les réglages du Kanban](settings-board)). Un compte est au seuil quand l’une de ses fenêtres l’atteint et que sa remise à zéro est encore à venir.
+Escouade réagit de trois façons. Les deux premières dépendent du seuil « Pause au-delà du quota », que tu règles dans Réglages › Projets › Kanban, groupe « Pilote auto » : 80, 90, 95 ou 100 % d’une fenêtre, 100 % par défaut, le même pour tous les projets ([les réglages du Kanban](settings-board)). Un compte est au seuil quand l’une de ses fenêtres l’atteint et que sa remise à zéro est encore à venir.
 
 1. **Les nouveaux agents changent de compte.** Quand le compte en cours passe le seuil et qu’un autre est disponible, les nouveaux agents et les tickets partent sur l’autre. Une notification le dit : « Le compte Principal a atteint 91 % : les nouveaux agents partent sur Pro. » ([Plusieurs comptes Claude](accounts)).
 2. **Le pilote auto se met en pause.** Quand tous les comptes qu’un ticket peut utiliser sont au seuil, aucun ticket ne démarre. Le Kanban écrit alors, sous son en-tête, une ligne comme « Pilote auto en pause : quota de 5 h à 92 % (reprise à 15:00) », avec le nom des comptes concernés quand il y en a plusieurs, et le bouton « Reprendre maintenant » pour passer outre. La pause se lève seule à la remise à zéro. Quand l’agent d’un ticket bute sur la limite d’usage sans reprise prévue (reprise automatique éteinte, ou heure de remise à zéro inconnue), aucun ticket ne démarre non plus pendant 30 minutes sur son compte. Voir [le pilote auto](autopilot).

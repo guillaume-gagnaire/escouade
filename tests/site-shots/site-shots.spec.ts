@@ -11,7 +11,7 @@ import { chromium, type Page } from '@playwright/test';
 import { en } from '../../src/lib/i18n/en';
 import { fr } from '../../src/lib/i18n/fr';
 import { startFakeTrackers } from '../fixtures/fake-trackers.mjs';
-import { FAKE_CODEX, FAKE_CURSOR, expect, test as base } from '../e2e/fixture';
+import { FAKE_CODEX, FAKE_CURSOR, closeSettings, expect, openSettingsPage, test as base } from '../e2e/fixture';
 import { PROJECTS, REVIEWED, hostsOf, makeDemo, textOf, trackersOf } from './demo';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
@@ -276,9 +276,10 @@ test('the website’s screenshots', async ({ app, language }) => {
   await jira.getByLabel(L.integrations.accounts.email).fill('camille@example.com');
   await jira.getByLabel(L.integrations.accounts.apiToken).fill('demo');
   await jira.getByRole('button', { name: L.integrations.accounts.connect, exact: true }).click();
+  // Its project is linked on demo-api's page « Tickets importés »; each setting is saved as it changes (ESC-380).
+  await openSettingsPage(settings, L.settings.pages.tickets.label, { project: 'demo-api' });
   await settings.getByRole('combobox', { name: L.integrations.sources.pick.jira }).selectOption('ATL');
-  await settings.getByRole('button', { name: L.common.save }).click();
-  await expect(settings).toBeHidden();
+  await closeSettings(settings);
   await page.getByRole('button', { name: L.common.import, exact: true }).click();
   const imp = page.getByRole('dialog', { name: L.integrations.modal.title });
   for (const key of ['ATL-1287', 'ATL-1290', 'ATL-1293']) await imp.getByRole('checkbox', { name: new RegExp(key) }).click();
@@ -289,10 +290,22 @@ test('the website’s screenshots', async ({ app, language }) => {
   // « test »: « Tester » on the ticket to test, its recipe (approved already) launched at once.
   await page.getByRole('region', { name: L.board.columns.review }).getByRole('button', { name: L.board.card.test }).click();
   const tester = page.getByRole('dialog', { name: /DEM-4/ });
-  await expect(tester.locator('.opened.done')).toBeVisible({ timeout: 60_000 });
+  // The page it opens shows in Escouade and closes this window (devpage.svelte.ts): its steps done, or the page itself.
+  await expect(
+    tester
+      .locator('.opened.done')
+      .or(page.getByText('http://localhost', { exact: false }).first())
+      .first(),
+  ).toBeVisible({
+    timeout: 60_000,
+  });
   await shot('test');
-  await tester.getByRole('button', { name: L.common.stopAll }).click();
-  await page.keyboard.press('Escape');
+  // The window may already have closed once the page opened: the tests are stopped from it while it is there.
+  const stop = tester.getByRole('button', { name: L.common.stopAll });
+  if (await stop.isVisible()) {
+    await stop.click();
+    await page.keyboard.press('Escape');
+  }
   await expect(tester).toBeHidden();
 
   // « chat »: the profile screen of mobile-app, its diff unfolded and the pictures the agent sent.
@@ -419,8 +432,7 @@ test.describe('the code hosts', () => {
     await form.getByRole('textbox').last().fill('demo');
     await form.getByRole('button', { name: L.integrations.accounts.connect, exact: true }).click();
     await expect(settings.getByText(/@ada/).first()).toBeVisible();
-    await settings.getByRole('button', { name: L.common.save }).click();
-    await expect(settings).toBeHidden();
+    await closeSettings(settings);
 
     // « prs »: the view « Pull requests » of demo-api.
     await page.locator('.side .seg').getByRole('button', { name: 'PR', exact: true }).click();

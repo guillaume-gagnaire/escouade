@@ -59,7 +59,7 @@ Tout le reste part **par chemin** : un autre format, un fichier lisible mais tro
 Fichier joint : rapport.xlsx, C:\…\rapport.xlsx
 ```
 
-La ligne suit la langue des textes rédigés par les agents (`Attached file: …` en anglais, voir [Réglages › Application](settings-application)). Sous WSL, le chemin est celui que lit Claude Code, par exemple `/mnt/c/…`.
+La ligne suit la langue des textes rédigés par les agents (`Attached file: …` en anglais, voir [Réglages › Général](settings-application)). Sous WSL, le chemin est celui que lit Claude Code, par exemple `/mnt/c/…`.
 
 Un fichier est refusé s’il dépasse la taille maximale que tu as fixée (aucune par défaut), si c’est un texte de plus de 256 Ko et que tu as choisi de les refuser, ou si Escouade ne peut pas le lire ou le copier. Il est nommé dans un message rouge, et les autres fichiers sont joints quand même. Dans la conversation, le message affiche « 2 images » et le nom des fichiers ; les lignes des fichiers envoyés par chemin y sont aussi, avec ton texte. Si Escouade ne retrouve plus un fichier au moment d’envoyer (déplacé ou supprimé entre-temps), le message est refusé, avec la raison, et revient dans le champ.
 
@@ -79,12 +79,12 @@ Un fichier envoyé par chemin est soit le fichier d’origine, soit une copie.
 
 - **Taille.** Aucune limite par défaut. Un fichier de plus de 200 Mo porte un avertissement (une marque « ! » sur sa puce, dont l’infobulle dit « Gros fichier : 250 Mo, copié sur le disque », ou « … joint là où il est, sans copie » pour un fichier d’origine), mais il se joint. Un fichier vide aussi. Tu peux fixer une taille maximale : au-delà, le fichier est refusé.
 - **Texte de plus de 256 Ko.** Par défaut, il part par chemin comme les autres fichiers. Tu peux le faire refuser, comme avant, en réglant « Texte de plus de 256 Ko » sur « Refusé » ; cela vaut aussi dans la fenêtre d’un ticket et dans la vue Claude Code.
-- **Réglages.** Les cinq réglages du groupe « Pièces jointes » (« Taille maximale d’un fichier joint », « Avertir au-delà de », « Joindre le fichier d’origine », « Texte de plus de 256 Ko » et « Purger les copies après ») sont dans [Réglages › Harness](settings-claude-code#pieces-jointes), avec leurs valeurs par défaut.
+- **Réglages.** Les cinq réglages du groupe « Pièces jointes » (« Taille maximale d’un fichier joint », « Avertir au-delà de », « Joindre le fichier d’origine », « Texte de plus de 256 Ko » et « Purger les copies après ») sont dans [Réglages › Avancé › Pièces jointes](settings-claude-code#pieces-jointes), avec leurs valeurs par défaut.
 
 ### Effacer les fichiers joints
 
 - La croix de la puce efface la copie, ou arrête celle qui est en cours. Pour un fichier d’origine, elle ne retire que la puce.
-- Les copies d’un agent partent avec lui quand tu le supprimes. Celles d’un projet partent quand tu le supprimes pour de bon : fermer un projet les garde avec son historique, et la taille de cet historique (dans Réglages › Projets) les compte aussi, comme les images de ses tickets. Celles d’un ticket partent avec le ticket.
+- Les copies d’un agent partent avec lui quand tu le supprimes. Celles d’un projet partent quand tu le supprimes pour de bon : fermer un projet les garde avec son historique, et la taille de cet historique (dans Réglages › Tous les projets) les compte aussi, comme les images de ses tickets. Celles d’un ticket partent avec le ticket.
 - Si tu règles la purge, Escouade efface les copies plus vieilles que le nombre de jours choisi, au démarrage puis chaque heure. Par défaut, rien n’est purgé.
 - Escouade n’efface jamais un fichier d’origine.
 - Pour chaque agent, Escouade garde, avec lui, la liste des fichiers d’origine qu’elle l’a autorisé à lire (200 au plus, les plus récents). L’interface ne montre pas encore cette liste et ne permet pas d’en retirer un fichier ; supprimer l’agent l’efface.

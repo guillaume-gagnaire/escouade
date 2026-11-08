@@ -1,10 +1,10 @@
-# Settings: Network
+# Settings: the network (Advanced)
 
-The “Network” tab of the settings configures the HTTP(S) proxy and TLS certificate checking for Claude Code, quotas, integrations, updates, and dictation (the download of its models and, online, its service).
+The “Network” group of the “Advanced” page configures the HTTP(S) proxy and TLS certificate checking for Claude Code, quotas, integrations, updates, and dictation (the download of its models and, online, its service).
 
-## Open the tab
+## Open the page
 
-Open the settings with `Ctrl+,` (`⌘,` on macOS), then choose “Network” (“HTTP(S) proxy and TLS certificates for Claude Code, integrations, and updates”). These are the app’s settings, shared by all projects; they apply on “Save”.
+Open the settings with `Ctrl+,` (`⌘,` on macOS), then choose “Advanced”: “Network” is its first group; “proxy” in the bar’s search leads there too. These are the app’s settings, shared by all projects, and they apply as you set them.
 
 They matter behind a company network: a proxy to get out, and sometimes a certificate the proxy imposes. Without a proxy, there’s nothing to set here.
 

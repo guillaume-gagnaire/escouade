@@ -108,7 +108,7 @@ Un thème sans code : des valeurs pour les jetons de la fenêtre, en sombre et e
 }
 ```
 
-Choisis-le dans Réglages › Application, rangée « Couleurs ».
+Choisis-le dans Réglages › Général, rangée « Couleurs ».
 
 ## Discord
 

@@ -2,6 +2,7 @@
   import type { Snippet } from 'svelte';
   import { t } from '../../lib/i18n';
   import { rowsOf, type SettingsPage } from '../../lib/settings-pages';
+  import { settingsForm } from '../../lib/settings.svelte';
   import Icon from '../Icon.svelte';
 
   // A group of settings under its title, a hairline above the next (`.sg` of the 2.0 design): its note under the title,
@@ -39,6 +40,12 @@
     children: Snippet;
     [attr: string]: unknown;
   } = $props();
+
+  // A row of this « Avancé » found by the search: unfolded, for the window to light it.
+  $effect(() => {
+    const f = settingsForm.found;
+    if (advanced && f?.row.advanced && f.row.page === advanced) open = true;
+  });
 
   const names = $derived(
     hides ??

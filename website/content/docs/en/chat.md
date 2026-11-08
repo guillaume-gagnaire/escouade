@@ -79,12 +79,12 @@ A file sent by path is either the original file or a copy.
 
 - **Size.** No limit by default. A file over 200 MB carries a warning (a “!” mark on its chip, whose tooltip says “Big file: 250 MB, copied to the disk”, or “… attached where it is, not copied” for an original file), but it is attached all the same. So is an empty file. You can set a maximum size: past it, the file is rejected.
 - **Text file over 256 KB.** By default, it goes by path like the other files. You can have it rejected, as before, by setting “Text over 256 KB” to “Refused”; that holds in a ticket’s window and in the Claude Code view too.
-- **Settings.** The five settings of the “Attachments” group (“Largest attached file”, “Warn above”, “Attach the original file”, “Text over 256 KB”, and “Purge copies after”) are in [Settings › Harness](settings-claude-code#attachments), with their defaults.
+- **Settings.** The five settings of the “Attachments” group (“Largest attached file”, “Warn above”, “Attach the original file”, “Text over 256 KB”, and “Purge copies after”) are in [Settings › Advanced › Attachments](settings-claude-code#attachments), with their defaults.
 
 ### Deleting attached files
 
 - The cross of a chip deletes the copy, or stops the one in progress. For an original file, it only removes the chip.
-- An agent’s copies go with it when you delete it. A project’s copies go when you delete it for good: closing a project keeps them with its history, and the size of that history (in Settings › Projects) counts them too, like the images of its tickets. A ticket’s copies go with the ticket.
+- An agent’s copies go with it when you delete it. A project’s copies go when you delete it for good: closing a project keeps them with its history, and the size of that history (in Settings › All projects) counts them too, like the images of its tickets. A ticket’s copies go with the ticket.
 - If you set the purge, Escouade deletes the copies older than the number of days you chose, at startup and then every hour. By default, nothing is purged.
 - Escouade never deletes an original file.
 - For each agent, Escouade keeps, with it, the list of original files it has allowed that agent to read (200 at most, the most recent). The interface doesn’t show this list yet and doesn’t let you remove a file from it; deleting the agent erases it.

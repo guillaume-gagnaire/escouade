@@ -94,7 +94,7 @@ export const ALLOWED: Allowed[] = [
 
   // G — branches
 
-  // ESC-195 — Réglages › Projets › Workflow
+  // ESC-195 — Réglages › Projets › Kanban › Workflow
   {
     file: 'src/components/settings/WorkflowSection.svelte',
     text: 'PROMPT.md',

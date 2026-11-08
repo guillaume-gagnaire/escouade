@@ -31,6 +31,15 @@ export default defineZone('settings', {
   nav: {
     search: 'Search settings',
     projects: 'Projects',
+    results: 'Settings found',
+    none: 'No setting matches “{query}”',
+    inAdvanced: '{page} › Advanced',
+    alerts: {
+      noAccount: '{harness} has no account: no agent or ticket starts on it',
+      projectNoAccount: 'No {harness} account serves this project: its agents and tickets don’t start',
+      unread: 'Token unreadable in the keychain · {label}',
+      plugin: '{name}: {state}',
+    },
   },
 
   fold: {

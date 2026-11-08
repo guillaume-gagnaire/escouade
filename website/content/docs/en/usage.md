@@ -37,7 +37,7 @@ Escouade follows the two quota windows of your Claude subscription: the 5-hour w
 
 ### A model’s own quota
 
-On some plans, Claude counts one model apart: Fable’s week, for instance, has its own cap and its own reset. Escouade gives it one more bar, beside the others and under the name Anthropic gives it: “Fable 7d”. It reads like the others (tooltip, screen readers: “Fable 7-day quota”), in the status bar, the quota panel and Settings › Accounts.
+On some plans, Claude counts one model apart: Fable’s week, for instance, has its own cap and its own reset. Escouade gives it one more bar, beside the others and under the name Anthropic gives it: “Fable 7d”. It reads like the others (tooltip, screen readers: “Fable 7-day quota”), in the status bar, the quota panel and Settings › Accounts and harnesses.
 
 That quota holds back that model’s agents and tickets alone. When Fable’s week passes the threshold, a Fable ticket goes to another account or waits, and the Opus or Sonnet tickets go on on the same account. The autopilot is not paused for it. A Fable agent stopped by its limit waits for the reset without holding the other models back. Escouade knows the model by its name (“fable”, “claude-fable-5-1”…), whichever name it goes by.
 
@@ -106,7 +106,7 @@ The [statistics](stats) add all this up by day, week or month.
 
 ## When a quota nears its limit
 
-Escouade reacts in three ways. The first two depend on the “Pause above quota” threshold, which you set in Settings › Kanban, “Autopilot” group: 80, 90, 95 or 100% of a window, 100% by default, the same for all projects ([the Kanban settings](settings-board)). An account is at the threshold when one of its windows reaches it and its reset is still to come.
+Escouade reacts in three ways. The first two depend on the “Pause above quota” threshold, which you set in Settings › Projects › Kanban, “Autopilot” group: 80, 90, 95 or 100% of a window, 100% by default, the same for all projects ([the Kanban settings](settings-board)). An account is at the threshold when one of its windows reaches it and its reset is still to come.
 
 1. **New agents change account.** When the current account passes the threshold and another one is available, new agents and tickets start on the other. A notification says so: “The Main account has reached 91%: new agents now go to Pro.” ([Several Claude accounts](accounts)).
 2. **The autopilot pauses.** When every account a ticket can use is at the threshold, no ticket starts. The Kanban then writes, under its header, a line such as “Autopilot paused: 5-hour quota at 92% (resumes at 3:00 PM)”, with the names of the accounts concerned when there are several, and the “Resume now” button to override it. The pause lifts by itself at the reset. When a ticket’s agent hits the usage limit with no resume planned (auto-resume off, or the reset time unknown), no ticket starts either for 30 minutes on its account. See [the autopilot](autopilot).

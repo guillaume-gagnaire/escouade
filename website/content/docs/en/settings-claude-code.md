@@ -1,8 +1,10 @@
-# Settings: Harness
+# Settings: Agents
 
-The “Harness” tab (“Claude Code” up to 1.7) lists the harnesses that run the agents, with their state, executable and version, and sets what holds for them all: the new agents’ view, how processes live, attachments and remote control.
+The “Agents” page sets what holds for every agent: the new agents’ view, their task list, the delay before sending during a turn, the written texts, remote control, and the MCP server that lets Claude drive Escouade; in its “Advanced”, stopping idle processes and the MCP activity.
 
-The server that lets Claude drive Escouade has its own tab, “MCP server”, in the settings’ “System” group (see below); what happens when a quota runs out is in the [“Accounts”](settings-accounts) tab.
+The harnesses themselves (their state, executable, version, update) are on the [“Accounts and harnesses”](settings-accounts) page, and attachments in “Advanced”: this page describes them too, in their place.
+
+What happens when a quota runs out is on [“Accounts and harnesses”](settings-accounts), “When a quota runs out” group.
 
 ## Each harness
 
@@ -15,9 +17,9 @@ One group per harness, under its name, with its state and version beside it: “
 | “Models” (OpenCode) | The models of the providers connected to OpenCode, with a search: the favorites first, then one group per provider. A model’s star makes it a favorite, which comes first in its agents’ model menu. |
 | “Installation” | For a harness that isn’t found: the command that installs it (Claude Code: `irm https://claude.ai/install.ps1 \| iex` on Windows, `curl -fsSL https://claude.ai/install.sh \| bash` on macOS and Linux). For Claude Code, the line also says whether an npm installation was interrupted, with the command that repairs it (see [Troubleshooting](troubleshooting)). |
 
-A harness’s accounts don’t sign in here but in the [“Accounts”](settings-accounts) tab: each has its state and its “Sign in…” button there. A harness that isn’t found shows only in this tab. At the first start, if none is found, the welcome screen says “No harness found” and gives the command that installs each one; Escouade works as soon as one harness is found.
+A harness’s accounts sign in on the same page, [“Accounts and harnesses”](settings-accounts): each has its state and its “Sign in…” button there. A harness that isn’t found shows only on this page. At the first start, if none is found, the welcome screen says “No harness found” and gives the command that installs each one; Escouade works as soon as one harness is found.
 
-As soon as two harnesses are installed, the project has its “Default harness” (Settings › Projects), the “▾” button beside “New agent” offers “New agent on …” for each one, and a ticket’s window has its “Harness” field (the project’s by default), which the autopilot follows. As soon as agents run on two harnesses, each one’s harness is named beside it: on its card, in the overview, in its header, and on its ticket’s card. The composer’s menus (models, effort, modes, / commands) are those of the agent’s harness.
+As soon as two harnesses are installed, the project has its “Default harness” (Settings › Projects › Project), the “▾” button beside “New agent” offers “New agent on …” for each one, and a ticket’s window has its “Harness” field (the project’s by default), which the autopilot follows. As soon as agents run on two harnesses, each one’s harness is named beside it: on its card, in the overview, in its header, and on its ticket’s card. The composer’s menus (models, effort, modes, / commands) are those of the agent’s harness.
 
 ## Claude Code’s executable
 
@@ -25,7 +27,7 @@ The “Claude Code” group starts with one field.
 
 | Setting | Effect | Default |
 |---|---|---|
-| “Executable path” (blank = detect automatically) | The `claude` Escouade runs for agents. An account with its own executable, in the [“Accounts”](settings-accounts) tab, runs its own. | Blank |
+| “Executable path” (blank = detect automatically) | The `claude` Escouade runs for agents. An account with its own executable, on the [“Accounts and harnesses”](settings-accounts) page, runs its own. | Blank |
 
 ### Where Escouade looks
 
@@ -34,7 +36,7 @@ With the field blank, Escouade looks for `claude` in the `PATH`, then in the ins
 - on Windows: `~\.local\bin\claude.exe`, `~\.claude\local\claude.exe`, and `~\AppData\Roaming\npm\claude.cmd`;
 - on macOS and Linux: `~/.local/bin/claude`, `~/.claude/local/claude`, `/opt/homebrew/bin/claude`, and `/usr/local/bin/claude`.
 
-On Windows, if it finds none, Escouade looks for a Claude Code installed in WSL, in the distribution named by “WSL distribution” in the [“Terminals”](settings-terminals) tab (blank = the default distribution).
+On Windows, if it finds none, Escouade looks for a Claude Code installed in WSL, in the distribution named by “WSL distribution” in [“Advanced › Terminals”](settings-terminals) (blank = the default distribution).
 
 With the field filled in, you can write:
 
@@ -51,7 +53,7 @@ A quarter of a second after you stop typing, Escouade looks for the `claude` in 
 - “Found in WSL (Ubuntu): ” followed by the Linux path, for a Claude Code in WSL;
 - “Not found.”: on Windows the line then recalls the accepted path forms, WSL’s included; elsewhere it says “Not found. Give the path to claude.”.
 
-With the field blank, the placeholder already says whether `claude` is found: “claude (found in PATH)” or “not found — enter the path to claude.exe”. After “Save”, a new path or a new WSL distribution triggers another search, to update the banner on the [Kanban](board) and the text of the field.
+With the field blank, the placeholder already says whether `claude` is found: “claude (found in PATH)” or “not found — enter the path to claude.exe”. Once you leave the field, a new path or a new WSL distribution triggers another search, to update the banner on the [Kanban](board) and the text of the field.
 
 > [!WARNING]
 > If the `claude` found is in WSL and WSL’s network is NAT, a warning is added: Escouade’s MCP server and the tracking of the [Claude Code view](claude-code-view) can’t reach the app. Switch WSL to mirrored mode (`networkingMode=mirrored` under `[wsl2]` in `%UserProfile%\.wslconfig`), then run `wsl --shutdown`.
@@ -70,7 +72,7 @@ Turned off, nothing updates Claude Code any more: run `claude update` yourself f
 
 ## New agents
 
-The model, effort and mode new [agents](managing-agents) start with are set account by account, on its card in [Settings › Accounts](settings-accounts), among its harness’s: there is no setting shared here any more. In an agent’s message field you can change them for that agent alone. Kanban tickets take the ticket’s, else the project’s [“Kanban”](settings-board) tab’s, else those of the account that takes them.
+The model, effort and mode new [agents](managing-agents) start with are set account by account, on its card in [Settings › Accounts and harnesses](settings-accounts), among its harness’s: there is no setting shared here any more. In an agent’s message field you can change them for that agent alone. Kanban tickets take the ticket’s, else the project’s [“Kanban”](settings-board) tab’s, else those of the account that takes them.
 
 ### Effort levels
 
@@ -99,7 +101,7 @@ Permission requests and how to answer them are described in [the conversation](c
 
 ## All harnesses
 
-New agents’ model, effort and mode are set account by account, in the [“Accounts”](settings-accounts) tab.
+New agents’ model, effort and mode are set account by account, on the [“Accounts and harnesses”](settings-accounts) page.
 
 | Setting | Effect | Default |
 |---|---|---|
@@ -114,7 +116,7 @@ When an agent stops on the usage limit, Escouade plans to write “continue” t
 
 ### Resume on another account
 
-The “Resume a ticket’s agent stopped by the usage limit on another account” setting is in the [“Accounts”](settings-accounts) tab, “When a quota runs out” group, with “Continue on the next harness…”, the harness order and the handover models. With several accounts, a ticket’s agent stopped by the limit goes on by itself, with its session, on the account Escouade would pick, when another one is usable, instead of waiting for its own account to reset. See [accounts](accounts) and the [“Accounts”](settings-accounts) tab.
+The “Resume a ticket’s agent stopped by the usage limit on another account” setting is on the [“Accounts and harnesses”](settings-accounts) page, “When a quota runs out” group, with “Continue on the next harness…”, the harness order and the handover models. With several accounts, a ticket’s agent stopped by the limit goes on by itself, with its session, on the account Escouade would pick, when another one is usable, instead of waiting for its own account to reset. See [accounts](accounts) and the [“Accounts and harnesses”](settings-accounts) page.
 
 ### Claude Code view
 
@@ -150,19 +152,19 @@ This setting, in Claude Code’s group (“Claude Code only: the other harnesses
 
 The switch is off by default. When on, every agent of every project, existing or new (ticket agents included), is reachable from claude.ai and the Claude app. Escouade starts each one’s `claude` process right away, at most 3 at a time, and it stays running: it starts with the app and is never stopped for inactivity. The session appears on claude.ai as “project · agent” (for a ticket agent, the name comes from the ticket). In Claude Code view, an interface that is already open only picks it up at its next launch. To set an agent apart, right-click its card, then “Turn off remote control”.
 
-The setting is saved with “Save”, like most of the others. When off, it takes remote control away from the agents that had it from this setting, without touching those you turned on by hand or those their project’s setting still covers.
+The setting saves as you set it, like the others. When off, it takes remote control away from the agents that had it from this setting, without touching those you turned on by hand or those their project’s setting still covers.
 
-While it is on, the “Remote control for this project’s agents” switch of each project, in the [“Projects” tab](settings-projects), shows on and grayed out: “On for all projects in Settings › Harness”. Each project’s own choice is kept, and comes back when this one is off.
+While it is on, the “Remote control for this project’s agents” switch of each project, on its [“Privacy” page](settings-projects), shows on and grayed out: “On for all projects in Settings › Agents”. Each project’s own choice is kept, and comes back when this one is off.
 
 For an agent in the [Claude Code view](claude-code-view), the change takes effect the next time its interface starts. The page on [remote control](remote-control) gives the detail: where it comes from, how to set an agent apart, and what happens at restart.
 
 ## MCP server
 
-The “MCP server” tab (the settings’ “System” group) lets Escouade’s agents, and every harness installed started outside Escouade (Claude Code, Codex, OpenCode, Copilot CLI, in a terminal or their app), read your projects, agents and tickets, and create tickets or start agents, through Escouade’s [MCP server](mcp).
+The “Drive Escouade” group of the “Agents” page lets Escouade’s agents, and every harness installed started outside Escouade (Claude Code, Codex, OpenCode, Copilot CLI, in a terminal or their app), read your projects, agents and tickets, and create tickets or start agents, through Escouade’s [MCP server](mcp).
 
 ### Agents can drive Escouade
 
-The switch is off by default; it is the only one, for every harness. It gives the server to each Escouade agent, in every project, with a token of its own: there is nothing to allow in a project’s settings. It also declares it in the config of each active account added of each harness installed (a harness without one has it declared nowhere): `~/.claude.json` (Claude Code, through `claude mcp add`), `~/.codex/config.toml` (Codex), `~/.config/opencode/opencode.json` (OpenCode), `~/.copilot/mcp-config.json` (Copilot CLI) for the Main account, the rest of the file and its comments kept. A harness installed or an account added later is declared at once. It saves right away, without “Save”: turning it on writes into these files, which “Cancel” could not undo. Turning it off changes the token, takes the entry out everywhere (each file back to what it was, byte for byte) and keeps the server away from the agents: those already running lose the tools at once.
+The switch is off by default; it is the only one, for every harness. It gives the server to each Escouade agent, in every project, with a token of its own: there is nothing to allow in a project’s settings. It also declares it in the config of each active account added of each harness installed (a harness without one has it declared nowhere): `~/.claude.json` (Claude Code, through `claude mcp add`), `~/.codex/config.toml` (Codex), `~/.config/opencode/opencode.json` (OpenCode), `~/.copilot/mcp-config.json` (Copilot CLI) for the Main account, the rest of the file and its comments kept. A harness installed or an account added later is declared at once. It saves right away, like every setting: turning it on writes into these files, which nothing could undo. Turning it off changes the token, takes the entry out everywhere (each file back to what it was, byte for byte) and keeps the server away from the agents: those already running lose the tools at once.
 
 An agent already running gets the tools the next time its process starts: its conversation then shows “Escouade’s tools at the next start” with “Restart”, which resumes its session in a new process, and a line under the switch says how many agents are in that case (“1 agent already running gets the tools the next time its process starts: “Restart” on its conversation.”). See [Escouade’s agents and the server](mcp#escouade-s-agents-and-the-server).
 
@@ -178,4 +180,4 @@ With the switch on, the list below gives each declaration:
 
 ## MCP activity
 
-The “MCP activity” group of the “MCP server” tab lists what the server received and answered, the most recent calls first. Each line gives the time, who called (an agent’s name, “Claude (outside Escouade)”, or, for a request refused before it is known who sent it, “Unknown client”), the tool, the result (“Done”, “Refused”, or “Error”), then what was asked and, for a refusal or an error, why. For a `set_board` that succeeded, the line also says what changed, field by field, before and after (“model: opus → sonnet · effort: (default) → medium”), or “No change”. The last 200 calls are kept in memory, not saved. The “Clear” button empties the list; with no calls, it says “No calls yet.”.
+“MCP activity”, in the “Advanced” of the “Agents” page, lists what the server received and answered, the most recent calls first. Each line gives the time, who called (an agent’s name, “Claude (outside Escouade)”, or, for a request refused before it is known who sent it, “Unknown client”), the tool, the result (“Done”, “Refused”, or “Error”), then what was asked and, for a refusal or an error, why. For a `set_board` that succeeded, the line also says what changed, field by field, before and after (“model: opus → sonnet · effort: (default) → medium”), or “No change”. The last 200 calls are kept in memory, not saved. The “Clear” button empties the list; with no calls, it says “No calls yet.”.

@@ -169,7 +169,7 @@ A double click on a separator restores its size too.
 | Shortcut | Action | Where |
 |---|---|---|
 | `Ctrl+,` | Open the settings. | Everywhere, terminals included |
-| `Ctrl+=` (or `Ctrl++`) / `Ctrl+-` | Zoom the whole interface in / out one step (see [“Display”](settings-application#display)). | Everywhere, terminals included, dialog open or not |
+| `Ctrl+=` (or `Ctrl++`) / `Ctrl+-` | Zoom the whole interface in / out one step (see [“Appearance”](settings-application#appearance)). | Everywhere, terminals included, dialog open or not |
 | `Ctrl+0` | Go back to a 100% zoom. | Everywhere, terminals included, dialog open or not |
 | `Esc` | Close the settings. | Settings open |
 | `Alt+↑` / `Alt+↓` | Move a setup or teardown command up / down, from any field of the command. | Project settings, worktree command lists |

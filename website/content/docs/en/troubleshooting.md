@@ -10,15 +10,15 @@ The problems Escouade runs into most often, each with its symptom, its cause, an
 
 **Cause.** Escouade looks for `claude` in this order:
 
-1. The path in Settings › Harness, “Executable path” field, when it is filled in. If it is filled in, it decides alone: a wrong path gives “not found”, even if `claude` is in the `PATH`.
+1. The path in Settings › Accounts and harnesses, “Executable path” field, when it is filled in. If it is filled in, it decides alone: a wrong path gives “not found”, even if `claude` is in the `PATH`.
 2. Otherwise, the `PATH`, then the usual installer locations. On Windows: `%USERPROFILE%\.local\bin\claude.exe`, `%USERPROFILE%\.claude\local\claude.exe`, and `%USERPROFILE%\AppData\Roaming\npm\claude.cmd`. On macOS and Linux: `~/.local/bin/claude`, `~/.claude/local/claude`, `/opt/homebrew/bin/claude`, and `/usr/local/bin/claude`.
 3. On Windows, failing that, a Claude Code installed in WSL (see below).
 
-The message says so with the command that installs it again: “Claude Code can’t be found: install it again (…), or set its path in Settings › Harness.”, when signing in an account, when starting an agent and in Settings › Harness.
+The message says so with the command that installs it again: “Claude Code can’t be found: install it again (…), or set its path in Settings › Accounts and harnesses.”, when signing in an account, when starting an agent and in Settings › Accounts and harnesses.
 
-**Fix.** Install Claude Code and sign in, or give its path in Settings › Harness (see the [Harness settings](settings-claude-code)). The field accepts `~` for your home folder, and on Windows you can leave out `.exe` or `.cmd`. The line under the field answers right away: “Found: …” with the path it picked, or “Not found. Give the path to claude.exe, …”. Clear the field to go back to automatic detection (“blank = detect automatically”).
+**Fix.** Install Claude Code and sign in, or give its path in Settings › Accounts and harnesses (see the [Harness settings](settings-claude-code)). The field accepts `~` for your home folder, and on Windows you can leave out `.exe` or `.cmd`. The line under the field answers right away: “Found: …” with the path it picked, or “Not found. Give the path to claude.exe, …”. Clear the field to go back to automatic detection (“blank = detect automatically”).
 
-A Claude account can have its own executable (Settings › Accounts, “Executable” field, “The one in the settings” by default). A path that exists but won’t run gives “can’t start” followed by that path.
+A Claude account can have its own executable (Settings › Accounts and harnesses, “Executable” field, “The one in the settings” by default). A path that exists but won’t run gives “can’t start” followed by that path.
 
 ### Claude Code disappeared after an interrupted update
 
@@ -40,15 +40,15 @@ If npm refuses (`ENOTEMPTY`), first delete what’s left (the path the message g
 
 **Cause.** macOS gives apps launched from the Finder or the Dock a minimal `PATH`, not your terminal’s. At startup, Escouade completes it with your login shell’s (it asks the shell with `$SHELL -ilc`), then adds `/opt/homebrew/bin`, `/usr/local/bin`, and `~/.local/bin`. It waits for the shell for only five seconds: a profile that asks for input, or takes longer, cancels that step. The same goes for a desktop launcher on Linux.
 
-**Fix.** Give the full path of `claude` in Settings › Harness (`which claude` in a terminal prints it), or lighten your shell profile so that it answers quickly.
+**Fix.** Give the full path of `claude` in Settings › Accounts and harnesses (`which claude` in a terminal prints it), or lighten your shell profile so that it answers quickly.
 
 ### Claude Code is installed in WSL
 
 **Symptom.** Claude Code is only installed in WSL, and Escouade can’t find it, or an agent can’t work in a folder.
 
-**Cause.** On Windows, Escouade only looks in WSL when Windows has no `claude`. It looks in the distribution set in Settings › Terminals (“WSL distribution” field, “blank = default distribution”), at `~/.local/bin/claude`, `~/.claude/local/claude`, `/usr/local/bin/claude`, and `/usr/bin/claude`. That search can start the distribution and take a few seconds.
+**Cause.** On Windows, Escouade only looks in WSL when Windows has no `claude`. It looks in the distribution set in Settings › Advanced › Terminals (“WSL distribution” field, “blank = default distribution”), at `~/.local/bin/claude`, `~/.claude/local/claude`, `/usr/local/bin/claude`, and `/usr/bin/claude`. That search can start the distribution and take a few seconds.
 
-**Fix.** Give the path in Settings › Harness, in one of these forms:
+**Fix.** Give the path in Settings › Accounts and harnesses, in one of these forms:
 
 - `~/.local/bin/claude`
 - `/home/<user>/.local/bin/claude`
@@ -58,7 +58,7 @@ The line under the field confirms it: “Found in WSL (Ubuntu): /home/ada/.local
 
 ### MCP tools and the Claude Code view tracking don’t work from WSL
 
-**Symptom.** Under the path field, Settings › Harness shows: “WSL’s network is NAT: Escouade’s MCP server and the tracking of the Claude Code view can’t reach the app.”
+**Symptom.** Under the path field, Settings › Accounts and harnesses shows: “WSL’s network is NAT: Escouade’s MCP server and the tracking of the Claude Code view can’t reach the app.”
 
 **Cause.** In NAT mode, WSL isn’t on Windows’ network: Escouade’s MCP server and the Claude Code view’s hooks, which listen on Windows’ `127.0.0.1`, are out of its reach.
 
@@ -77,7 +77,7 @@ Then, in a Windows terminal, run `wsl --shutdown` and restart Escouade.
 
 **Cause.** Escouade starts it without the shell profile: those files aren’t read.
 
-**Fix.** The proxy from Settings › Network, on the other hand, is passed to Claude Code in WSL. For another variable, define it on the Windows side (in your account’s environment variables), add its name to the Windows `WSLENV` variable (names are separated by `:` there), and restart Escouade. Escouade keeps your `WSLENV` value and adds the variables it passes itself.
+**Fix.** The proxy from Settings › Advanced › Network, on the other hand, is passed to Claude Code in WSL. For another variable, define it on the Windows side (in your account’s environment variables), add its name to the Windows `WSLENV` variable (names are separated by `:` there), and restart Escouade. Escouade keeps your `WSLENV` value and adds the variables it passes itself.
 
 ## Network
 
@@ -85,7 +85,7 @@ Then, in a Windows terminal, run `wsl --shutdown` and restart Escouade.
 
 **Symptom.** Quotas, integrations, updates, or Claude Code can’t connect from a corporate network.
 
-**Fix.** In Settings › Network, fill in “HTTP(S) proxy” (for example `http://user:password@proxy:3128`) and, if needed, “Exclusions” (the `NO_PROXY` list, separated by commas). The proxy is passed to Claude Code processes, quota reads, integrations, and updates. For an agent, it applies the next time its process (re)starts. For the built-in terminals, the launch commands, and the worktree setup and teardown commands to use it too, turn on “Also apply the proxy to the built-in terminals” (off by default). See the [Network settings](settings-network).
+**Fix.** In Settings › Advanced › Network, fill in “HTTP(S) proxy” (for example `http://user:password@proxy:3128`) and, if needed, “Exclusions” (the `NO_PROXY` list, separated by commas). The proxy is passed to Claude Code processes, quota reads, integrations, and updates. For an agent, it applies the next time its process (re)starts. For the built-in terminals, the launch commands, and the worktree setup and teardown commands to use it too, turn on “Also apply the proxy to the built-in terminals” (off by default). See the [Network settings](settings-network).
 
 ### A company proxy refuses the update
 
@@ -93,7 +93,7 @@ Then, in a Windows terminal, run `wsl --shutdown` and restart Escouade.
 
 **Cause.** A company proxy (Zscaler, Netskope, Squid…) often lets the check through but refuses the installer to a client that isn’t a browser. Escouade announces itself honestly (`Escouade/<version>`) and doesn’t pass itself off as a browser; when the proxy refuses the request, it doesn’t make it again without the proxy. An automatic check only shows its error after several failures in a row, over more than an hour.
 
-**Fix.** If the message says the proxy asks for authentication, put the username and password in the proxy’s address, in Settings › Network (for example `http://user:password@proxy:3128`). Otherwise, click “Download in the browser” in the message: the release’s page opens, and the proxy may ask you to confirm a warning. For the built-in update to go through, ask your IT department to allow `github.com` and `release-assets.githubusercontent.com`, and the download of the release files for the client whose User-Agent starts with `Escouade/`. The details are in [“Behind a company proxy”](updates#behind-a-company-proxy).
+**Fix.** If the message says the proxy asks for authentication, put the username and password in the proxy’s address, in Settings › Advanced › Network (for example `http://user:password@proxy:3128`). Otherwise, click “Download in the browser” in the message: the release’s page opens, and the proxy may ask you to confirm a warning. For the built-in update to go through, ask your IT department to allow `github.com` and `release-assets.githubusercontent.com`, and the download of the release files for the client whose User-Agent starts with `Escouade/`. The details are in [“Behind a company proxy”](updates#behind-a-company-proxy).
 
 ### A corporate certificate makes connections fail
 
@@ -101,7 +101,7 @@ Then, in a Windows terminal, run `wsl --shutdown` and restart Escouade.
 
 **Cause.** A corporate proxy decrypts the traffic with a certificate nobody recognizes. Escouade’s own requests (integrations, quotas, updates) trust recognized certificates and those installed on the system, usually a corporate proxy’s. Claude Code has its own list.
 
-**Fix.** Install the company certificate in the system: Escouade then trusts it for its own requests. Claude Code has its own list: for it, or if you can’t install the certificate, turn on “Skip TLS certificate verification” (Settings › Network, “Certificates” group). The setting applies to integrations, quotas, updates, Claude Code processes (the next time their process starts), and the commands agents run (npm, node…).
+**Fix.** Install the company certificate in the system: Escouade then trusts it for its own requests. Claude Code has its own list: for it, or if you can’t install the certificate, turn on “Skip TLS certificate verification” (Settings › Advanced › Network, “Certificates” group). The setting applies to integrations, quotas, updates, Claude Code processes (the next time their process starts), and the commands agents run (npm, node…).
 
 > [!WARNING]
 > With this setting, an intercepted connection, tokens included, would no longer be detected. Keep it for a network you trust.
@@ -110,7 +110,7 @@ Then, in a Windows terminal, run `wsl --shutdown` and restart Escouade.
 
 ### Quotas don’t show
 
-**Symptom.** In the status bar, `5h` and `W` have an empty bar and a “—” in place of the countdown, and the tooltip says “Quota unavailable”. In Settings › Accounts, the account says “Not signed in”, “Not signed in with a claude.ai account (API key?)”, or “Sign-in expired: run Claude Code again for this account.”
+**Symptom.** In the status bar, `5h` and `W` have an empty bar and a “—” in place of the countdown, and the tooltip says “Quota unavailable”. In Settings › Accounts and harnesses, the account says “Not signed in”, “Not signed in with a claude.ai account (API key?)”, or “Sign-in expired: run Claude Code again for this account.”
 
 **Possible causes.**
 
@@ -119,7 +119,7 @@ Then, in a Windows terminal, run `wsl --shutdown` and restart Escouade.
 - Anthropic can’t be reached (network, proxy, certificate: see above). The last values stay displayed, and Escouade tries again at the next read, about every five minutes.
 - On macOS, Claude Code keeps its sign-in in the keychain. If you deny access when macOS asks, Escouade doesn’t ask again for ten minutes.
 
-**Fix.** In Settings › Accounts, “Sign in…” (or “Sign in again…”) opens a terminal where Claude Code signs you in (use the `/login` command if it doesn’t offer it). For Main, it is your own Claude Code’s sign-in. See [Claude accounts](accounts).
+**Fix.** In Settings › Accounts and harnesses, “Sign in…” (or “Sign in again…”) opens a terminal where Claude Code signs you in (use the `/login` command if it doesn’t offer it). For Main, it is your own Claude Code’s sign-in. See [Claude accounts](accounts).
 
 ### An agent stopped on the usage limit
 
@@ -129,9 +129,9 @@ Then, in a Windows terminal, run `wsl --shutdown` and restart Escouade.
 
 **Fix.** What the app does depends on your settings:
 
-- **Auto-resume.** The “Auto-resume after the usage limit” setting (Settings › Harness, on by default) sends “continue” once the quota has reset. When Claude Code tells the reset time, the card says “Auto-resume” followed by the time, with a “Cancel auto-resume” button.
+- **Auto-resume.** The “Auto-resume after the usage limit” setting (Settings › Accounts and harnesses, on by default) sends “continue” once the quota has reset. When Claude Code tells the reset time, the card says “Auto-resume” followed by the time, with a “Cancel auto-resume” button.
 - **Another account.** With several accounts, the “Resume on Pro” button (with the name of another account), and its “Resume on another account” menu, restart the agent with its session on another account. Accounts that are inactive, not signed in, or above “Pause above quota” aren’t listed.
-- **Ticket agents** wait for their account to reset, unless you turn on “Resume a ticket’s agent stopped by the usage limit on another account” (Settings › Harness, with several accounts).
+- **Ticket agents** wait for their account to reset, unless you turn on “Resume a ticket’s agent stopped by the usage limit on another account” (Settings › Accounts and harnesses, with several accounts).
 
 To avoid reaching the limit, the [autopilot](autopilot) pauses before, at the “Pause above quota” threshold.
 
@@ -156,7 +156,7 @@ A ticket’s agent goes on the same way: its ticket isn’t blocked. To make the
 
 **Cause.** The agent’s Claude Code process ended on its own. The message it left usually says why (sign-in, proxy, version…).
 
-**Fix.** Send a message: Escouade restarts Claude on the same session. A process stopped on purpose isn’t an error: Escouade stops idle processes after a delay (Settings › Harness, “Stop idle agent processes after”, 30 minutes by default, 0 for never) and restarts them at the next action.
+**Fix.** Send a message: Escouade restarts Claude on the same session. A process stopped on purpose isn’t an error: Escouade stops idle processes after a delay (Settings › Agents › Advanced, “Stop idle agent processes after”, 30 minutes by default, 0 for never) and restarts them at the next action.
 
 ### Claude session not found
 
@@ -172,7 +172,7 @@ A ticket’s agent goes on the same way: its ticket isn’t blocked. To make the
 
 **Symptom.** The agent’s conversation shows “The worktree setup failed on `npm ci` (code 1).”, followed by the last lines of the output and by “Full output” with a path.
 
-**Cause.** A setup command of the project failed (Settings › Projects, “Worktrees” group, “When a worktree opens” section). Escouade runs them in order and stops at the first one that fails. The reason is in parentheses: “code 1”, “stopped”, “not done in 20 min” (a command gets 20 minutes), “doesn’t start” followed by the cause, or “the folder … doesn’t exist in the worktree”.
+**Cause.** A setup command of the project failed (Settings › Projects › Git and worktrees, “Worktrees” group, “When a worktree opens” section). Escouade runs them in order and stops at the first one that fails. The reason is in parentheses: “code 1”, “stopped”, “not done in 20 min” (a command gets 20 minutes), “doesn’t start” followed by the cause, or “the folder … doesn’t exist in the worktree”.
 
 **Fix.** Read the full output in `~/.escouade/logs/<agent>-setup.log`: each step has its name and its ending there. Fix the command in the project’s settings (see the [project settings](settings-projects)), or run it by hand in a terminal opened in the worktree. The commands receive `ESCOUADE_PROJECT_DIR`, `ESCOUADE_WORKTREE_DIR`, and `ESCOUADE_BRANCH`. The agent remains usable; for a ticket agent, the failure is added to its first message, and Claude has to do what it takes to be able to work and test. The log is replaced at each new setup, and goes away with the agent.
 
@@ -216,7 +216,7 @@ See [notifications](notifications).
 
 ### The system keychain is unreadable
 
-**Symptom.** Settings › Integrations says “System keychain unreadable: restart Escouade or reconnect the account.” or “System keychain unavailable: the token stays in ~/.escouade/integrations.json.”
+**Symptom.** Settings › Connected services says “System keychain unreadable: restart Escouade or reconnect the account.” or “System keychain unavailable: the token stays in ~/.escouade/integrations.json.”
 
 **Fix.** Restart Escouade; if the message comes back, reconnect the account (the token is then saved again). In the second case, the token stays in `integrations.json`, readable only by you on macOS and Linux.
 
@@ -282,14 +282,14 @@ If you see the delay and the log notes nothing, the time was not spent in Escoua
 
 - “No OpenAI key is saved.”: paste your key in [Settings › Voice](settings-voice#online-dictation), or go back to “Local (Whisper)”. On Linux, the key cannot be saved: stay local.
 - “OpenAI refuses the key.”: check it with the service, then “Replace”.
-- “OpenAI does not answer”: check the network and the proxy ([Settings › Network](settings-network)), or go back to local.
+- “OpenAI does not answer”: check the network and the proxy ([Settings › Advanced › Network](settings-network)), or go back to local.
 - “OpenAI did not transcribe the dictation”, with the code and reason the service gives: settle what it says on your account with it, or go back to local.
 
 ### The voice conversation does not start
 
 **Symptom.** A click on “Conversation” shows “Voice conversation is not available: the voice’s engine (ONNX Runtime) is missing from the app. Reinstall Escouade.”, or the download of a model or a voice fails.
 
-**Fix.** ONNX Runtime ships with the app: if it is missing, reinstall Escouade from [the download page](installation). A download that fails goes through the proxy of the network settings: behind a corporate proxy, check [Settings › Network](settings-network) and that `huggingface.co` can be reached. What downloads, and where, is in [Settings › Voice](settings-voice#what-downloads-and-where).
+**Fix.** ONNX Runtime ships with the app: if it is missing, reinstall Escouade from [the download page](installation). A download that fails goes through the proxy of the network settings: behind a corporate proxy, check [Settings › Advanced › Network](settings-network) and that `huggingface.co` can be reached. What downloads, and where, is in [Settings › Voice](settings-voice#what-downloads-and-where).
 
 ## Log and reports
 

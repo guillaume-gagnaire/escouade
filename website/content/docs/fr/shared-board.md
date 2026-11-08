@@ -12,14 +12,14 @@ Clic droit sur la carte, « Partager avec l’équipe », ou l’interrupteur 
 - Les images du ticket sont partagées dans un dossier à côté du fichier, `.escouade/tickets/<id>/` ; les fichiers joints aussi, jusqu’à 5 Mo. Au-delà, un fichier joint reste chez toi, et le formulaire le dit.
 - « Arrêter le partage » supprime le fichier (la suppression est à commiter) ; le ticket reste chez toi tel quel. Supprimer un ticket partagé supprime aussi son fichier.
 
-Dans Réglages › Projets, le groupe « Kanban partagé » dit combien de tickets le projet partage, et « Partager chaque nouveau ticket » partage d’office ceux que tu crées, à la main, par un import ou par MCP.
+Dans Réglages › Projets › Équipe, le groupe « Kanban partagé » dit combien de tickets le projet partage, et « Partager chaque nouveau ticket » partage d’office ceux que tu crées, à la main, par un import ou par MCP.
 
 ## Ton nom
 
 Chaque fichier porte le nom de son auteur, et celui de qui a pris le ticket. Escouade te le demande au premier lancement, prérempli par `git config user.name` ; « Plus tard » reporte la question à ton premier partage.
 
-- Tu le changes dans Réglages › Application › Équipe, « Ton nom ».
-- Un projet peut avoir le sien : Réglages › Projets › Kanban partagé, « Ton nom dans ce projet ». Vide, c’est celui de l’application.
+- Tu le changes dans Réglages › Général › Toi, « Ton nom ».
+- Un projet peut avoir le sien : Réglages › Projets › Équipe › Kanban partagé, « Ton nom dans ce projet ». Vide, c’est celui de l’application.
 - Ton nom reste sur ton poste : il n’est jamais écrit dans [.escouade.yml](escouade-yml).
 - À côté du nom, un identifiant tiré de ton e-mail git (l’e-mail lui-même n’est écrit nulle part) distingue tes tickets de ceux d’un homonyme. C’est lui qui dit si un ticket est à toi ; il est le même sur tes autres postes.
 

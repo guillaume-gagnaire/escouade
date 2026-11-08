@@ -146,9 +146,9 @@ pub struct Settings {
     /// « Nouveaux projets privés » (Réglages › Tous les projets): a project added is private
     /// (`Project::private`) from the start. Off by default.
     pub private_projects: bool,
-    /// « Thème » (Réglages › Application › Affichage): the window's look, the system's by default.
+    /// « Thème » (Réglages › Général › Apparence): the window's look, the system's by default.
     pub theme: ThemeChoice,
-    /// « Couleurs » (Réglages › Application › Affichage, PLG-7): the theme of a plugin the window takes,
+    /// « Couleurs » (Réglages › Général › Apparence, PLG-7): the theme of a plugin the window takes,
     /// `<plugin id>/<theme id>`; empty, Escouade's. Its values are filtered by the window
     /// (src/lib/plugin-themes.ts); a plugin switched off or gone leaves Escouade's colours, the choice kept.
     pub plugin_theme: String,
@@ -176,7 +176,7 @@ pub struct Settings {
     pub quota_projection: QuotaProjection,
     /// « Voix »: the dictation (`voice`).
     pub voice: VoiceSettings,
-    /// « Ton nom » (Réglages › Application › Équipe, ESC-190): written in the tickets shared with
+    /// « Ton nom » (Réglages › Général › Toi, ESC-190): written in the tickets shared with
     /// the team and in those this machine moves on; a project may have its own
     /// (`Project::user_name`). Empty until given: the name git knows stands in (ESC-243).
     pub user_name: String,

@@ -33,6 +33,16 @@ export default {
   nav: {
     search: 'Rechercher un réglage',
     projects: 'Projets',
+    results: 'Réglages trouvés',
+    none: 'Aucun réglage ne répond à « {query} »',
+    inAdvanced: '{page} › Avancé',
+    // The amber dot of a page that has a problem: its reason, in the tooltip.
+    alerts: {
+      noAccount: '{harness} n’a aucun compte : aucun agent ni ticket n’y démarre',
+      projectNoAccount: 'Aucun compte {harness} ne sert ce projet : ses agents et ses tickets ne démarrent pas',
+      unread: 'Jeton illisible dans le trousseau · {label}',
+      plugin: '{name} : {state}',
+    },
   },
 
   // « Avancé » at the foot of a page: folded, it names what it hides.

@@ -19,7 +19,7 @@ En plus :
 
 Escouade cherche `claude` dans cet ordre :
 
-1. le chemin de Réglages › Harness › « Chemin de l’exécutable », s’il n’est pas vide (c’est alors le seul endroit essayé) ;
+1. le chemin de Réglages › Comptes et harness › « Chemin de l’exécutable », s’il n’est pas vide (c’est alors le seul endroit essayé) ;
 2. le `PATH` ;
 3. les endroits où les installateurs de Claude Code le mettent (tableau ci-dessous) ;
 4. sous Windows, quand il n’y en a pas, un Claude Code installé dans WSL (voir [plus bas](#claude-code-dans-wsl)).
@@ -35,7 +35,7 @@ Sans aucun harness, l’écran d’accueil dit « Aucun harness trouvé » ave
 
 ### Les autres harness
 
-Claude Code n’est pas obligatoire : Escouade fait aussi tourner ses agents sur Codex, OpenCode et GitHub Copilot CLI, et un seul harness lui suffit. Installe ceux que tu veux et connecte-les ; ils apparaissent alors dans Réglages › Harness, avec leur version. Ajoute ensuite le compte de chacun dans Réglages › Comptes : seuls les comptes ajoutés lancent des agents (voir [les comptes](accounts)).
+Claude Code n’est pas obligatoire : Escouade fait aussi tourner ses agents sur Codex, OpenCode et GitHub Copilot CLI, et un seul harness lui suffit. Installe ceux que tu veux et connecte-les ; ils apparaissent alors dans Réglages › Comptes et harness, avec leur version. Ajoute ensuite le compte de chacun dans Réglages › Comptes et harness : seuls les comptes ajoutés lancent des agents (voir [les comptes](accounts)).
 
 | Harness | Installation | Connexion | Testé avec |
 |---|---|---|---|
@@ -92,14 +92,14 @@ Sous Linux, les jetons des intégrations (Jira, Trello, GitHub, Linear, ClickUp,
 Sous Windows, Escouade peut faire tourner un Claude Code installé dans WSL.
 
 1. Installe Claude Code dans ta distribution WSL et connecte-le.
-2. Ouvre Réglages › Harness. Dans « Chemin de l’exécutable », écris le chemin de `claude` sous l’une de ces formes :
+2. Ouvre Réglages › Comptes et harness. Dans « Chemin de l’exécutable », écris le chemin de `claude` sous l’une de ces formes :
    - `~/.local/bin/claude` ;
    - `/home/<utilisateur>/.local/bin/claude` ;
    - `\\wsl.localhost\<distribution>\home\<utilisateur>\.local\bin\claude`.
 3. Laisse le champ vide si Windows n’a pas de `claude` : Escouade cherche alors le sien dans WSL, aux endroits habituels (`~/.local/bin/claude` en premier).
 4. Lis la ligne sous le champ : « Trouvé dans WSL (Ubuntu) : … » confirme que `claude` est trouvé, et dans quelle distribution.
 
-La distribution utilisée est celle du chemin quand il la nomme (`\\wsl.localhost\<distribution>\…`), sinon celle de Réglages › Terminaux › « Distribution WSL », sinon la distribution par défaut de WSL.
+La distribution utilisée est celle du chemin quand il la nomme (`\\wsl.localhost\<distribution>\…`), sinon celle de Réglages › Avancé › Terminaux › « Distribution WSL », sinon la distribution par défaut de WSL.
 
 Escouade lance `claude` par `wsl.exe`, dans le dossier de l’agent (vu depuis WSL sous `/mnt/c/…`). Ses sessions, sa connexion et son quota sont lus dans le dossier personnel Linux. Un dossier de projet que WSL n’atteint pas (un partage réseau, le dossier d’une autre distribution) est refusé.
 
@@ -114,21 +114,21 @@ Une app lancée depuis le Finder ou le Dock ne reçoit pas le `PATH` de ton term
 
 Sous Linux, le même mécanisme s’applique, ce qui sert quand Escouade est lancée depuis le lanceur du bureau plutôt que depuis un terminal.
 
-Si `claude` reste introuvable, indique son chemin dans Réglages › Harness.
+Si `claude` reste introuvable, indique son chemin dans Réglages › Comptes et harness.
 
 ## Premier lancement
 
 Tant qu’aucun projet n’existe, Escouade ouvre un écran d’accueil : son logo, la phrase « Ajoute un projet pour y lancer des agents, suivre leurs questions et ouvrir des terminaux. » et le bouton « + Ajouter un projet ».
 
-- Si aucun harness n’est trouvé, un avertissement le dit : « Aucun harness trouvé », avec la commande d’installation de chacun. « Chercher à nouveau » les cherche une fois l’un d’eux installé, sans redémarrer Escouade : le PATH est relu à chaque recherche, comme au retour de la fenêtre au premier plan et à l’ouverture du menu « Harness ». Sinon, ouvre les réglages avec « Réglages › Harness… », le bouton « Réglages » en bas de la barre des projets ou `Ctrl+,`, onglet « Harness ». Sous macOS, `Ctrl` devient `⌘`.
+- Si aucun harness n’est trouvé, un avertissement le dit : « Aucun harness trouvé », avec la commande d’installation de chacun. « Chercher à nouveau » les cherche une fois l’un d’eux installé, sans redémarrer Escouade : le PATH est relu à chaque recherche, comme au retour de la fenêtre au premier plan et à l’ouverture du menu « Harness ». Sinon, ouvre les réglages avec « Réglages › Comptes et harness… », le bouton « Réglages » en bas de la barre des projets ou `Ctrl+,`, page « Comptes et harness ». Sous macOS, `Ctrl` devient `⌘`.
 - Tant qu’aucun compte n’est ajouté, l’écran dit « Aucun compte » : « Ajoute un compte : celui déjà connecté sur cette machine, ou un nouveau. Seuls les comptes ajoutés lancent des agents. » Le bouton « Ajouter un compte… » propose « Le compte de la machine », ton harness déjà connecté, ou « Un nouveau compte » (voir [les comptes](accounts#ajouter-un-compte)).
 - Clique sur « + Ajouter un projet » pour ouvrir la fenêtre « Nouveau projet ». La [prise en main](quick-start) la décrit champ par champ et va jusqu’au premier commit.
-- Escouade te demande aussi, dans une fenêtre « Aider à améliorer Escouade ? », si elle peut envoyer des statistiques d’usage : « Partager les statistiques » ou « Non merci ». Rien n’est envoyé avant ta réponse. Le détail est sur la page [Confidentialité](/privacy/), et le choix se change dans Réglages › À propos (voir [les réglages « À propos »](settings-about)).
+- Escouade te demande aussi, dans une fenêtre « Aider à améliorer Escouade ? », si elle peut envoyer des statistiques d’usage : « Partager les statistiques » ou « Non merci ». Rien n’est envoyé avant ta réponse. Le détail est sur la page [Confidentialité](/privacy/), et le choix se change dans Réglages › Général (voir [les réglages « À propos »](settings-about)).
 
 La fenêtre s’ouvre en 1440 × 900 (1000 × 600 au minimum) ; Escouade retient ensuite sa taille et sa position. Tes projets, tes conversations et tes réglages sont écrits dans `~/.escouade/` : voir les [données locales](data).
 
 ## Mises à jour
 
-Les mises à jour viennent des releases GitHub d’Escouade. L’app télécharge la nouvelle version en arrière-plan et l’installe sans fenêtre d’installeur. La barre d’état affiche alors « Mise à jour X prête · Redémarrer » : tu redémarres quand tu veux, ou Escouade redémarre d’elle-même quand aucun agent ne travaille et que tout est enregistré. Ce réglage, « Installer les mises à jour automatiquement », est activé par défaut ; il est dans Réglages › À propos, où « Rechercher une mise à jour » lance une vérification tout de suite.
+Les mises à jour viennent des releases GitHub d’Escouade. L’app télécharge la nouvelle version en arrière-plan et l’installe sans fenêtre d’installeur. La barre d’état affiche alors « Mise à jour X prête · Redémarrer » : tu redémarres quand tu veux, ou Escouade redémarre d’elle-même quand aucun agent ne travaille et que tout est enregistré. Ce réglage, « Installer les mises à jour automatiquement », est activé par défaut ; il est dans Réglages › Général, où « Rechercher une mise à jour » lance une vérification tout de suite.
 
 Voir les [mises à jour](updates) et les [réglages « À propos »](settings-about).

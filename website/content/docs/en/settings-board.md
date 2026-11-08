@@ -1,12 +1,12 @@
-# Settings: Kanban
+# Settings: a project’s Kanban
 
-The “Kanban” tab of the settings decides, project by project, what happens to an approved ticket, the tests run before approval, the autopilot, and the agents that take the tickets.
+A project’s “Kanban” page decides what happens to an approved ticket, the tests run before approval, the autopilot, and the agents that take the tickets.
 
-## Open the tab
+## Open the page
 
-Open the settings with `Ctrl+,` (`⌘,` on macOS), then choose “Kanban”. From the [Kanban](board), the ⚙ “After approval: …” button in the header opens this tab directly, on the project shown.
+Open the settings with `Ctrl+,` (`⌘,` on macOS), then, under “Projects”, the project and its “Kanban” page. From the [Kanban](board), the ⚙ “After approval: …” button in the header opens this page directly, on the project shown.
 
-The “Project” bar at the top of the window lists your projects: what you change applies only to the selected one. Only “Pause above quota” is shared by all projects. Your changes stay in a draft until you click “Save”; “Cancel” drops them, and a dot to the right of the tab’s name marks what isn’t saved yet. With no project open, the tab shows “No project open.”.
+What you change there applies only to this project, and saves as you set it. The autopilot’s pause above quota, shared by all projects, is on [“Accounts and harnesses”](settings-accounts), “When a quota runs out” group.
 
 ## When I approve a ticket in “To review”
 
@@ -19,7 +19,7 @@ This first group says what approving a ticket in “To review” does (see [the 
 | “Push the ticket’s branch” | Commits and pushes to `ticket/<key>`, with no merge or PR. | “Approve and push” |
 | “Leave as is” | The changes stay uncommitted in the worktree. | “Approve” |
 
-`ticket/` is the project’s “Tickets’ branch prefix”, set in the [“Projects”](settings-projects) tab (`ticket/` by default); `<key>` is the ticket’s key, for example `ATL-42`.
+`ticket/` is the project’s “Tickets’ branch prefix”, set on its [“Git and worktrees”](settings-projects) page (`ticket/` by default); `<key>` is the ticket’s key, for example `ATL-42`.
 
 With the first three choices, Escouade first commits what the agent left in the worktree, then does the action. The ticket then moves to “Done” and its agent is archived. If the branch brings no change, the ticket is finished with nothing merged or pushed. With “Leave as is”, the ticket also moves to “Done”; the agent and its worktree stay as they are, unless the worktree holds nothing unsaved (see “Delete the worktree of a done or deleted ticket”, below).
 
@@ -68,7 +68,7 @@ Escouade never loses work when cleaning up: a worktree is deleted only if all it
 - with “Leave as is”, the ticket’s outcome says so, for example “◇ Left in the worktree · worktree kept: 2 uncommitted file(s)”, and the agent stays;
 - for a deleted ticket, its archived agent’s card says so, under its name, in the “Archived” list.
 
-Restoring that agent puts it back to work in the same worktree. To tidy up what is left later, use “Clean up” in the [“Projects”](settings-projects) tab.
+Restoring that agent puts it back to work in the same worktree. To tidy up what is left later, use “Clean up” on its [“Git and worktrees”](settings-projects) page.
 
 The commit message is used to commit what the agent left in the worktree, and as the squash’s message; a merge commit keeps git’s message. Its language follows “Language of texts written by the agents” (in the [“Application”](settings-application) tab).
 
@@ -96,7 +96,7 @@ When the pause is in effect, a strip under the Kanban header says why nothing st
 With several Claude accounts, the pause holds only if every account the project can use is held back, and the same threshold is used to choose the account new agents start on. See [accounts](accounts) and [quota tracking](usage).
 
 > [!NOTE]
-> The setting “Resume a ticket’s agent stopped by the usage limit on another account” isn’t in this tab. It’s in the [“Harness”](settings-claude-code) tab, and only appears with several accounts. It’s off by default.
+> The setting “Resume a ticket’s agent stopped by the usage limit on another account” isn’t on this page. It’s on [“Accounts and harnesses”](settings-accounts), and only appears with several accounts. It’s off by default.
 
 ## Agents
 
@@ -105,11 +105,11 @@ The agents that take this project’s tickets. See [the Kanban](board).
 | Setting | Effect | Default |
 |---|---|---|
 | “In parallel” | The number of tickets “In progress” at once: 1, 2, 3, 4, 5, or 6. Beyond that, “To do” tickets wait for a free slot. | 2 |
-| “Model” | The model of the ticket agents: “Default (…)”, which follows the default model of the “Harness” tab, or Fable, Opus, Sonnet, Haiku. | “Default” |
+| “Model” | The model of the ticket agents: “Default (…)”, which follows the model of the account that starts it, or Fable, Opus, Sonnet, Haiku. | “Default” |
 | “Effort” | “Default”, or Low, Medium, High, Very high, Max. | “Default” |
 | “Mode” | “Default”, or the permission mode: Auto, Ask, Plan, Accept edits, Bypass. | “Default” |
 
-“Default” means the matching choice of the account that takes the ticket, on its card in [Settings › Accounts](settings-accounts) (“New agents”): the menu names it after the account a new agent of the project would go to. Until you change them, those are its harness’s: Sonnet, Medium, and Auto for Claude Code.
+“Default” means the matching choice of the account that takes the ticket, on its card in [Settings › Accounts and harnesses](settings-accounts) (“New agents”): the menu names it after the account a new agent of the project would go to. Until you change them, those are its harness’s: Sonnet, Medium, and Auto for Claude Code.
 
 Permission modes are explained in [agents](managing-agents). In short:
 

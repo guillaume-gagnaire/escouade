@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { onDestroy, untrack } from 'svelte';
+  import { onDestroy, tick, untrack } from 'svelte';
   import { trapFocus } from '../../lib/focus';
   import { t } from '../../lib/i18n';
   import { tileText } from '../../lib/project-rail';
-  import { pageInfo, SAVE_PAUSE_MS, settingsForm, type SettingsPage } from '../../lib/settings.svelte';
+  import { pageInfo, SAVE_PAUSE_MS, settingsForm, type RowInfo, type SettingsPage } from '../../lib/settings.svelte';
+  import { rowElement } from '../../lib/settings-search';
   import { app } from '../../lib/state.svelte';
   import { applyTheme } from '../../lib/theme';
   import AboutPage from '../settings/AboutPage.svelte';
@@ -88,16 +89,43 @@
 
   let body = $state<HTMLElement>();
 
-  // Each page, and each project's, starts at its top, or at the group the link asked for (on the page it opened on).
+  // Each page, and each project's, starts at its top, or at the group the link asked for (on the page it opened on), or
+  // at the row a search opened, lit.
   const opened = untrack(() => settingsForm.page);
   $effect(() => {
     const anchor = settingsForm.page === opened ? at : undefined;
     void settingsForm.projectId;
+    const found = settingsForm.found;
     if (!body) return;
+    if (found && found.row.page === settingsForm.page) {
+      void light(body, found.row);
+      return;
+    }
     const target = anchor ? body.querySelector(`[data-anchor="${anchor}"]`) : null;
     if (target) target.scrollIntoView({ block: 'start' });
     else body.scrollTop = 0;
   });
+
+  /**
+   * The row found, brought into view and lit for a moment. Its page may still be reading what it shows (the accounts,
+   * the plugins): looked for along a few frames, the top of the page meanwhile.
+   */
+  async function light(panel: HTMLElement, row: RowInfo) {
+    panel.scrollTop = 0;
+    await tick();
+    for (let i = 0; i < 30; i++) {
+      const el = rowElement(panel, row);
+      if (el) {
+        el.scrollIntoView({ block: 'center' });
+        el.classList.remove('s-found');
+        void el.offsetWidth;
+        el.classList.add('s-found');
+        setTimeout(() => el.classList.remove('s-found'), 2400);
+        return;
+      }
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+  }
 
   // Only a click on the overlay closes it: not the end of a selection dragged out of a field.
   let downOnOverlay = false;
@@ -311,11 +339,36 @@
     background: var(--raise-2);
     color: var(--text);
   }
-  /* Still with prefers-reduced-motion: it is there at once. */
+  /* The row a search opened: lit in amber, then back to the page's (the tint of something waiting, `--wait`). */
+  .s-body :global(.s-found) {
+    border-radius: 8px;
+    animation: found 2.4s ease-out;
+  }
+  @keyframes found {
+    0%,
+    40% {
+      background: var(--wait-bg);
+      box-shadow:
+        0 0 0 6px var(--wait-bg),
+        inset 0 0 0 1px var(--wait-line);
+    }
+    100% {
+      background: transparent;
+      box-shadow:
+        0 0 0 6px transparent,
+        inset 0 0 0 1px transparent;
+    }
+  }
+  /* Still with prefers-reduced-motion: it is there at once; the row found stays lit without fading. */
   @media (prefers-reduced-motion: reduce) {
     .overlay,
     .settings {
       animation: none;
+    }
+    .s-body :global(.s-found) {
+      animation: none;
+      background: var(--wait-bg);
+      box-shadow: 0 0 0 6px var(--wait-bg);
     }
   }
 </style>

@@ -6,7 +6,7 @@ Escouade importe les tickets de Jira, Trello, GitHub Issues, Linear, ClickUp, Gi
 
 ## Connecter un service
 
-Les comptes se connectent dans Réglages › Intégrations, groupe « Comptes connectés » (voir [Réglages des intégrations](settings-integrations)). Pour chaque service, « Connecter… » ouvre un formulaire. « Connecter » vérifie les identifiants auprès du service (« Vérification… »), puis la ligne dit « Connecté · » suivi de qui tu es chez lui (par exemple `ada@atlas.dev · atlas.atlassian.net`). Si le service refuse, la raison s’affiche sous le formulaire. La connexion est enregistrée tout de suite : elle ne passe pas par « Enregistrer ».
+Les comptes se connectent dans Réglages › Services connectés, groupe « Comptes connectés » (voir [Réglages des intégrations](settings-integrations)). Pour chaque service, « Connecter… » ouvre un formulaire. « Connecter » vérifie les identifiants auprès du service (« Vérification… »), puis la ligne dit « Connecté · » suivi de qui tu es chez lui (par exemple `ada@atlas.dev · atlas.atlassian.net`). Si le service refuse, la raison s’affiche sous le formulaire. La connexion est enregistrée tout de suite : elle ne passe pas par « Enregistrer ».
 
 | Service | Ce que tu donnes | Où l’obtenir |
 |---|---|---|
@@ -14,13 +14,13 @@ Les comptes se connectent dans Réglages › Intégrations, groupe « Comptes c
 | Trello | « Clé d’API » et « Jeton » | « Obtenir une clé d’API », puis « Obtenir un jeton pour cette clé » (disponible une fois la clé saisie : un jeton en lecture et écriture, sans expiration) |
 | GitHub | « Jeton », facultatif | « Créer un jeton GitHub ». Laissé vide, Escouade utilise celui de la CLI `gh` (`gh auth login`) ; le compte s’affiche alors avec « · via gh » |
 | Linear | « Clé d’API » | « Créer une clé d’API Linear » |
-| GitLab | Rien de plus : le compte de l’hébergeur GitLab (gitlab.com ou ton instance, jeton `api` ou celui de `glab`) | « Connecter GitLab… » ouvre le formulaire de Réglages › Intégrations › « Hébergeurs de code ». Un seul compte sert aux merge requests et aux tickets |
+| GitLab | Rien de plus : le compte de l’hébergeur GitLab (gitlab.com ou ton instance, jeton `api` ou celui de `glab`) | « Connecter GitLab… » ouvre le formulaire de Réglages › Services connectés › « Hébergeurs de code ». Un seul compte sert aux merge requests et aux tickets |
 | ClickUp | « Clé d’API » (`pk_…`) | « Créer une clé d’API ClickUp » (Réglages › Apps de ClickUp). La ligne dit alors « Connecté · » suivi de ton nom chez ClickUp |
-| Azure Boards | Rien de plus : le compte de l’hébergeur Azure DevOps (une organisation de dev.azure.com ou une collection d’Azure DevOps Server ; jeton personnel avec le droit Work Items en lecture et écriture, ou celui de `az`) | « Connecter Azure DevOps… » ouvre le formulaire de Réglages › Intégrations › « Hébergeurs de code ». Un seul compte sert aux pull requests et aux éléments de travail. Sans le droit Work Items, Azure refuse et l’erreur dit où créer un autre jeton (la page des jetons de l’organisation) |
+| Azure Boards | Rien de plus : le compte de l’hébergeur Azure DevOps (une organisation de dev.azure.com ou une collection d’Azure DevOps Server ; jeton personnel avec le droit Work Items en lecture et écriture, ou celui de `az`) | « Connecter Azure DevOps… » ouvre le formulaire de Réglages › Services connectés › « Hébergeurs de code ». Un seul compte sert aux pull requests et aux éléments de travail. Sans le droit Work Items, Azure refuse et l’erreur dit où créer un autre jeton (la page des jetons de l’organisation) |
 
 ### Hébergeur de code ou source de tickets
 
-Un [hébergeur de code](code-hosts) (GitHub, GitLab, Bitbucket, Gitea, Azure DevOps) sert aux pull requests, à la CI et aux déploiements des agents ; une source du Kanban sert aux tickets. Réglages › Intégrations les montre en deux parties nommées. Connecter son GitLab comme hébergeur ne met aucun ticket dans le Kanban : il faut encore lier un projet GitLab comme source (voir plus bas), ce que la fenêtre d’import propose d’un clic. Bitbucket et Gitea n’ont pas encore de source : leur ligne dit « Pas de tickets : PR et CI seulement ».
+Un [hébergeur de code](code-hosts) (GitHub, GitLab, Bitbucket, Gitea, Azure DevOps) sert aux pull requests, à la CI et aux déploiements des agents ; une source du Kanban sert aux tickets. Réglages › Services connectés les montre en deux parties nommées. Connecter son GitLab comme hébergeur ne met aucun ticket dans le Kanban : il faut encore lier un projet GitLab comme source (voir plus bas), ce que la fenêtre d’import propose d’un clic. Bitbucket et Gitea n’ont pas encore de source : leur ligne dit « Pas de tickets : PR et CI seulement ».
 
 « Déconnecter » oublie le compte et ses secrets. Les projets gardent leurs liens, inutilisés jusqu’à une nouvelle connexion.
 
@@ -36,18 +36,18 @@ GitHub (l’hébergeur et GitHub Issues), GitLab (l’hébergeur ; GitLab Issues
 
 Ces plugins se coupent dans la vue Plugins, pour toute l’app ou pour un projet (voir [les plugins livrés avec Escouade](plugins/installer#les-plugins-livres-avec-escouade)). Coupé ou arrêté, un plugin le dit au lieu de se taire :
 
-- **un hébergeur** : la carte de l’agent porte « Hébergeur arrêté : PR plus suivies » et garde les PR lues en dernier ; Réglages › Intégrations dit sous le compte « Le plugin GitHub est coupé (Réglages › Plugins) : ce compte ne sert plus rien, ses PR ne sont plus suivies », ou qu’il s’est arrêté et pourquoi ;
+- **un hébergeur** : la carte de l’agent porte « Hébergeur arrêté : PR plus suivies » et garde les PR lues en dernier ; Réglages › Services connectés dit sous le compte « Le plugin GitHub est coupé (Réglages › Plugins) : ce compte ne sert plus rien, ses PR ne sont plus suivies », ou qu’il s’est arrêté et pourquoi ;
 - **une source** : la synchro s’arrête, et son échec dit « Le plugin dev.escouade.trello ne répond pas : … » ; les tickets importés restent.
 
 Rallumé, le plugin reprend là où il s’était arrêté : la première lecture qui marche efface le message.
 
 ## Lier un projet à une source
 
-Un projet se lie à un endroit par service : un projet Jira, un tableau Trello, un dépôt GitHub, une équipe Linear, une liste ClickUp, un projet GitLab ou un projet Azure DevOps. Dans Réglages › Intégrations, le groupe « Sources liées à `<projet>` » propose, pour chaque service connecté, une liste : « Projet Jira », « Tableau Trello », « Dépôt GitHub Issues », « Équipe Linear », « Liste ClickUp », « Projet GitLab Issues », « Projet Azure Boards ». « Aucun » délie le service. Pour GitHub, le dépôt du projet, quand son remote est sur GitHub, vient en premier (« (dépôt du projet) ») ; de même pour GitLab, quand le remote est sur une instance connectée, et pour Azure Boards, quand il est sur l’organisation connectée. Les projets Azure DevOps sont rangés par organisation. Les projets GitLab sont rangés par instance, avec leurs groupes et sous-groupes dans le chemin (« acme/back/api »). Pour ClickUp, les listes de tous tes espaces de travail sont rangées par espace et par dossier (« Produit › Sprints »), comme dans la barre latérale de ClickUp : les listes hors dossier d’abord, les archivées en moins ; taper les premières lettres d’un nom, menu ouvert, y va.
+Un projet se lie à un endroit par service : un projet Jira, un tableau Trello, un dépôt GitHub, une équipe Linear, une liste ClickUp, un projet GitLab ou un projet Azure DevOps. Dans Réglages › Services connectés, le groupe « Sources liées à `<projet>` » propose, pour chaque service connecté, une liste : « Projet Jira », « Tableau Trello », « Dépôt GitHub Issues », « Équipe Linear », « Liste ClickUp », « Projet GitLab Issues », « Projet Azure Boards ». « Aucun » délie le service. Pour GitHub, le dépôt du projet, quand son remote est sur GitHub, vient en premier (« (dépôt du projet) ») ; de même pour GitLab, quand le remote est sur une instance connectée, et pour Azure Boards, quand il est sur l’organisation connectée. Les projets Azure DevOps sont rangés par organisation. Les projets GitLab sont rangés par instance, avec leurs groupes et sous-groupes dans le chemin (« acme/back/api »). Pour ClickUp, les listes de tous tes espaces de travail sont rangées par espace et par dossier (« Produit › Sprints »), comme dans la barre latérale de ClickUp : les listes hors dossier d’abord, les archivées en moins ; taper les premières lettres d’un nom, menu ouvert, y va.
 
 Choisir une source charge ses statuts et pré-remplit la correspondance des statuts (voir plus bas). Enregistre ensuite les réglages.
 
-Depuis le Kanban, « Importer » sans source liée affiche « Aucune source liée à ce projet », nomme les sept sources et propose « Lier une source », qui ouvre ce même onglet sur « Sources du Kanban ». Quand le remote du projet est sur un hébergeur connecté dont la source existe (GitHub, GitLab, Azure DevOps), elle propose directement « Lier acme/api (GitLab Issues) » : un clic lie le projet avec les statuts par défaut, et ses tickets s’affichent aussitôt.
+Depuis le Kanban, « Importer » sans source liée affiche « Aucune source liée à ce projet », nomme les sept sources et propose « Lier une source », qui ouvre la page « Tickets importés » du projet. Quand le remote du projet est sur un hébergeur connecté dont la source existe (GitHub, GitLab, Azure DevOps), elle propose directement « Lier acme/api (GitLab Issues) » : un clic lie le projet avec les statuts par défaut, et ses tickets s’affichent aussitôt.
 
 ## Importer des tickets
 
@@ -93,7 +93,7 @@ Il garde vingt critères au plus, de 300 caractères au plus. Sans critère trou
 
 ## Importer par étiquette
 
-Réglages › Intégrations › « Import automatique » laisse Escouade importer toute seule :
+Réglages › Services connectés › « Import automatique » laisse Escouade importer toute seule :
 
 | Réglage | Rôle | Par défaut |
 |---|---|---|
@@ -138,7 +138,7 @@ La dernière colonne, « Commenter », choisit les colonnes dont l’arrivée 
 
 ### La langue des commentaires
 
-Les commentaires sont publiés pour ton équipe : ils sont écrits dans la « Langue des textes rédigés par les agents » (Réglages › Application, voir [Réglages de l’application](settings-application)), pas dans celle de l’interface. L’issue d’un ticket terminé y est citée dans cette même langue.
+Les commentaires sont publiés pour ton équipe : ils sont écrits dans la « Langue des textes rédigés par les agents » (Réglages › Général, voir [Réglages de l’application](settings-application)), pas dans celle de l’interface. L’issue d’un ticket terminé y est citée dans cette même langue.
 
 ## Synchronisations qui échouent
 

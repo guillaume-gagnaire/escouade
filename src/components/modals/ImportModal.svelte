@@ -98,7 +98,7 @@
     app.modal = null;
   }
 
-  /** Réglages › Projets › this project › Tickets importés: the sources it links. */
+  /** Réglages › Projets › Tickets importés: the sources it links. */
   function manage() {
     app.modal = { kind: 'settings', page: 'tickets', projectId };
   }

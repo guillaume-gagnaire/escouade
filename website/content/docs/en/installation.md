@@ -19,7 +19,7 @@ On top of that:
 
 Escouade looks for `claude` in this order:
 
-1. the path in Settings › Harness › “Executable path”, if it is not blank (it is then the only place tried);
+1. the path in Settings › Accounts and harnesses › “Executable path”, if it is not blank (it is then the only place tried);
 2. the `PATH`;
 3. the places where the Claude Code installers put it (table below);
 4. on Windows, when there is none, a Claude Code installed in WSL (see [below](#claude-code-in-wsl)).
@@ -35,7 +35,7 @@ Without any harness, the welcome screen says “No harness found” with each on
 
 ### The other harnesses
 
-Claude Code isn’t required: Escouade also runs its agents on Codex, OpenCode and GitHub Copilot CLI, and a single harness is enough. Install the ones you want and sign in to them; they then show in Settings › Harness, with their version. Then add each one’s account in Settings › Accounts: only the accounts added start agents (see [the accounts](accounts)).
+Claude Code isn’t required: Escouade also runs its agents on Codex, OpenCode and GitHub Copilot CLI, and a single harness is enough. Install the ones you want and sign in to them; they then show in Settings › Accounts and harnesses, with their version. Then add each one’s account in Settings › Accounts and harnesses: only the accounts added start agents (see [the accounts](accounts)).
 
 | Harness | Installation | Sign-in | Tested with |
 |---|---|---|---|
@@ -92,14 +92,14 @@ On Linux, the tokens of the integrations (Jira, Trello, GitHub, Linear, ClickUp,
 On Windows, Escouade can run a Claude Code installed in WSL.
 
 1. Install Claude Code in your WSL distribution and sign it in.
-2. Open Settings › Harness. In “Executable path”, enter the path of `claude` in one of these forms:
+2. Open Settings › Accounts and harnesses. In “Executable path”, enter the path of `claude` in one of these forms:
    - `~/.local/bin/claude`;
    - `/home/<user>/.local/bin/claude`;
    - `\\wsl.localhost\<distribution>\home\<user>\.local\bin\claude`.
 3. Leave the field blank if Windows has no `claude`: Escouade then looks for its own in WSL, in the usual places (`~/.local/bin/claude` first).
 4. Read the line under the field: “Found in WSL (Ubuntu): …” confirms that `claude` is found, and in which distribution.
 
-The distribution used is the one the path names (`\\wsl.localhost\<distribution>\…`), otherwise the one in Settings › Terminals › “WSL distribution”, otherwise WSL’s default distribution.
+The distribution used is the one the path names (`\\wsl.localhost\<distribution>\…`), otherwise the one in Settings › Advanced › Terminals › “WSL distribution”, otherwise WSL’s default distribution.
 
 Escouade starts `claude` through `wsl.exe`, in the agent’s folder (seen from WSL under `/mnt/c/…`). Its sessions, sign-in and quota are read from the Linux home folder. A project folder that WSL can’t reach (a network share, another distribution’s folder) is refused.
 
@@ -114,21 +114,21 @@ An app started from the Finder or the Dock does not receive your terminal’s `P
 
 On Linux the same mechanism applies, which matters when Escouade is started from the desktop launcher rather than from a terminal.
 
-If `claude` is still not found, set its path in Settings › Harness.
+If `claude` is still not found, set its path in Settings › Accounts and harnesses.
 
 ## First launch
 
 As long as no project exists, Escouade opens a welcome screen: its logo, the sentence “Add a project to run agents, follow their questions, and open terminals.” and the “+ Add a project” button.
 
-- If no harness is found, a warning says so: “No harness found”, with each one’s install command. “Search again” looks for them once one is installed, without restarting Escouade: the PATH is read again at each search, as when the window comes back to the front and when the “Harness” menu opens. Else open the settings with “Settings › Harness…”, the “Settings” button at the bottom of the projects rail, or `Ctrl+,`, “Harness” tab. On macOS, `Ctrl` becomes `⌘`.
+- If no harness is found, a warning says so: “No harness found”, with each one’s install command. “Search again” looks for them once one is installed, without restarting Escouade: the PATH is read again at each search, as when the window comes back to the front and when the “Harness” menu opens. Else open the settings with “Settings › Accounts and harnesses…”, the “Settings” button at the bottom of the projects rail, or `Ctrl+,`, “Accounts and harnesses” page. On macOS, `Ctrl` becomes `⌘`.
 - As long as no account is added, the screen says “No account”: “Add an account: the one already signed in on this machine, or a new one. Only the accounts added start agents.” The “Add an account…” button offers “This machine’s account”, your harness already signed in, or “A new account” (see [the accounts](accounts#add-an-account)).
 - Click “+ Add a project” to open the “New project” window. The [quick start](quick-start) describes it field by field and goes all the way to the first commit.
-- Escouade also asks, in a “Help improve Escouade?” dialog, whether it may send usage statistics: “Share statistics” or “No thanks”. Nothing is sent before you answer. The detail is on the [Privacy](/en/privacy/) page, and the choice can be changed in Settings › About (see the [“About” settings](settings-about)).
+- Escouade also asks, in a “Help improve Escouade?” dialog, whether it may send usage statistics: “Share statistics” or “No thanks”. Nothing is sent before you answer. The detail is on the [Privacy](/en/privacy/) page, and the choice can be changed in Settings › General (see the [“About” settings](settings-about)).
 
 The window opens at 1440 × 900 (1000 × 600 at the minimum); Escouade then remembers its size and position. Your projects, conversations and settings are written in `~/.escouade/`: see [local data](data).
 
 ## Updates
 
-Updates come from Escouade’s GitHub releases. The app downloads the new version in the background and installs it without an installer window. The status bar then shows “Update X ready · Restart”: you restart when you want, or Escouade restarts by itself when no agent is working and everything is saved. That setting, “Install updates automatically”, is on by default; it is in Settings › About, where “Check for updates” runs a check right away.
+Updates come from Escouade’s GitHub releases. The app downloads the new version in the background and installs it without an installer window. The status bar then shows “Update X ready · Restart”: you restart when you want, or Escouade restarts by itself when no agent is working and everything is saved. That setting, “Install updates automatically”, is on by default; it is in Settings › General, where “Check for updates” runs a check right away.
 
 See [updates](updates) and the [“About” settings](settings-about).

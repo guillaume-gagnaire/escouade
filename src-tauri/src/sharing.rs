@@ -1685,7 +1685,7 @@ fn not_shared() -> anyhow::Error {
 /// The refusal of a share before this machine's user gave a name.
 pub(crate) fn name_missing() -> anyhow::Error {
     anyhow::anyhow!(tr!(
-        "Donne d’abord ton nom (Réglages › Application › Équipe) : il est écrit dans les tickets que tu partages.",
-        "Give your name first (Settings › Application › Team): it is written in the tickets you share."
+        "Donne d’abord ton nom (Réglages › Général › Toi) : il est écrit dans les tickets que tu partages.",
+        "Give your name first (Settings › General › You): it is written in the tickets you share."
     ))
 }

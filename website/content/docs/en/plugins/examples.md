@@ -108,7 +108,7 @@ A theme with no code: values for the window’s tokens, dark and light, and a pa
 }
 ```
 
-Pick it in Settings › Application, “Colors” row.
+Pick it in Settings › General, “Colors” row.
 
 ## Discord
 
