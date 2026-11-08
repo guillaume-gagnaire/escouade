@@ -1,9 +1,9 @@
 ---
-number: null
+number: 125
 id: "antigravity-toolpermission-ecrit-request"
 title: "Antigravity sur agy 1.5.3 : request-review écrit, refus dits finis retrouvés, dossier temporaire de l'agent, plus de deny de remontée"
 date: "2026-11-08"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-388"
 pages: ["plugins/antigravity-en-plugin"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/antigravity-en-plugin","added":16,"removed":12}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-08T11:53:51+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
