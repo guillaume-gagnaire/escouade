@@ -261,6 +261,11 @@ export default {
     privateOn: 'projet privé, activé par toi : Escouade ne peut pas empêcher un programme de lire le disque',
     appOff: 'Désactivé pour toute l’app : aucun projet ne le reçoit.',
     none: 'Aucun projet ouvert.',
+    /** Réglages › <projet> › Confidentialité: the plugins on in this project. */
+    title: 'Plugins dans ce projet',
+    pluginLabel: '{name} dans ce projet',
+    appOffShort: 'désactivé pour toute l’app',
+    noneInstalled: 'Aucun plugin installé qui s’active projet par projet.',
   },
 
   settings: {

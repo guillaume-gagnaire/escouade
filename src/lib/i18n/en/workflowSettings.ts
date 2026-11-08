@@ -1,6 +1,6 @@
 import { defineZone } from '../types';
 
-// Settings › Projects › Workflow (ESC-195): see the French catalog.
+// Settings › Projects › Kanban › Workflow (ESC-195): see the French catalog.
 export default defineZone('workflowSettings', {
   title: 'Workflow',
   enabled: 'Project workflows',

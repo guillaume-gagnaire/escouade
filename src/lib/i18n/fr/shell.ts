@@ -56,7 +56,7 @@ export default {
       /** `{agents}`, `{tickets}`: the counts, each with its noun; `{date}`: its last activity. */
       found: 'Historique retrouvé : {agents}, {tickets}, dernière activité le {date}',
       fresh: "Partir d'un projet vierge",
-      freshDesc: "L'historique reste dans Réglages › Projets, où l'effacer.",
+      freshDesc: "L'historique reste dans Réglages › Tous les projets, où l'effacer.",
       reopen: 'Rouvrir le projet',
       reopening: 'Réouverture…',
     },

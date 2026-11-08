@@ -53,7 +53,7 @@ const SPEECH: SpeechInfo = {
 
 function open(over: Record<string, (a: any) => unknown> = {}) {
   const backend = fakeBackend({ voice_info: () => VOICE, speech_info: () => SPEECH, save_settings: () => [], ...over });
-  render(SettingsModal, { tab: 'voice' });
+  render(SettingsModal, { page: 'voice' });
   return backend;
 }
 

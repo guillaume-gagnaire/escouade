@@ -63,7 +63,7 @@ test('the agents start from the target branch, brought up to date from the remot
   await picker.getByRole('option', { name: /^main/ }).click();
   await expect(picker).toBeHidden();
   // « Branche de départ des nouveaux worktrees », in the project's settings (ESC-160).
-  await openSettingsPage(settings, 'Projet');
+  await openSettingsPage(settings, 'Git et worktrees');
   await settings
     .getByRole('group', { name: 'Branche de départ des nouveaux worktrees' })
     .getByRole('button', { name: 'Branche cible du Kanban' })
@@ -147,7 +147,7 @@ test('the new worktrees start from the branch the project names, and an agent fr
   // « Branche de départ des nouveaux worktrees »: a branch, chosen in the picker.
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await openSettingsPage(settings, 'Projet');
+  await openSettingsPage(settings, 'Git et worktrees');
   const choice = settings.getByRole('group', { name: 'Branche de départ des nouveaux worktrees' });
   await expect(choice.getByRole('button', { name: 'Branche actuelle du dossier' })).toHaveAttribute('aria-pressed', 'true');
   await choice.getByRole('button', { name: 'Une branche…' }).click();

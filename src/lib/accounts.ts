@@ -8,7 +8,7 @@ import { estimatedBy } from './spend';
 import { t, tIn } from './i18n';
 import { api } from './ipc';
 import { app } from './state.svelte';
-import type { SettingsTab } from './settings.svelte';
+import type { SettingsPage } from './settings.svelte';
 import type { Account, AccountUsage, Agent, AutopilotPause, EngineId, Project, QuotaMeter, QuotaProjection, RateWindow } from './types';
 
 /** The id of the user's own Claude Code account. */
@@ -609,7 +609,7 @@ export function quotaRows(now: number): QuotaRow[] {
   return [...rows.filter((r) => r.current), ...rows.filter((r) => !r.current)];
 }
 
-/** Back to the settings' tab `tab` (« Comptes » by default), their draft as it was. */
-export function backToAccounts(tab: SettingsTab = 'accounts') {
-  app.modal = { kind: 'settings', tab, resume: true };
+/** Back to the settings' page `page` (« Comptes et harness » by default), their draft as it was. */
+export function backToAccounts(page: SettingsPage = 'accounts') {
+  app.modal = { kind: 'settings', page, resume: true };
 }

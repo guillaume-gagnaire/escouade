@@ -1,5 +1,5 @@
 // A workflow deleted, or « Pas de workflow pour ce projet » (ESC-309): the project's own /dev skill (its workflow in
-// .escouade/workflows/ of the repository) deleted in Réglages › Projets › Workflow, GSD of Principal's folder (its file on
+// .escouade/workflows/ of the repository) deleted in Réglages › Projets › Kanban › Workflow, GSD of Principal's folder (its file on
 // this machine) deleted by hand; neither comes back after « Relire » nor after a restart, both said under « Supprimés »;
 // one restored; then no workflow for the project: nothing read nor written again, its file deleted by hand stays gone.
 
@@ -21,7 +21,7 @@ test.use({
 async function open(page: Page) {
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await openSettingsPage(dialog, 'Projet');
+  await openSettingsPage(dialog, 'Kanban');
   const section = dialog.locator('#sg-workflow');
   await section.scrollIntoViewIfNeeded();
   return { dialog, section };
@@ -104,5 +104,5 @@ test('a workflow deleted, here or by hand, never comes back; no workflow for the
   const side = page.locator('aside.git-side');
   await side.getByRole('tab', { name: /^Workflow/ }).click();
   await expect(side.getByTestId('workflow-off')).toContainText('Pas de workflow pour ce projet');
-  await expect(side.getByTestId('workflow-off')).toContainText('Réglages › Projets › Workflow, « Lire les workflows »');
+  await expect(side.getByTestId('workflow-off')).toContainText('Réglages › Projets › Kanban, « Lire les workflows »');
 });

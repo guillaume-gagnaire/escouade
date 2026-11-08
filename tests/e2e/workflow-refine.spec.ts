@@ -26,7 +26,7 @@ test('« Affiner… » says who answers and at what cost, then writes what the r
 
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await openSettingsPage(dialog, 'Projet');
+  await openSettingsPage(dialog, 'Kanban');
   const section = dialog.locator('#sg-workflow');
   await section.scrollIntoViewIfNeeded();
   const shared = path.join(app.repo, '.escouade', 'workflows', 'claude-plan.yml');
@@ -69,7 +69,7 @@ test('an answer out of the schema changes nothing and says so', async ({ app }) 
   await addProject(page, app.repo, { lang: 'fr' });
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await openSettingsPage(dialog, 'Projet');
+  await openSettingsPage(dialog, 'Kanban');
   const section = dialog.locator('#sg-workflow');
   await section.scrollIntoViewIfNeeded();
   const shared = path.join(app.repo, '.escouade', 'workflows', 'claude-plan.yml');

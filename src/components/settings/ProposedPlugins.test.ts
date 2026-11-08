@@ -115,7 +115,7 @@ describe('the band of Settings › Project', () => {
   it('names the plugins proposed and not installed, with their page in the store, and installs nothing', async () => {
     resetApp({ projects: [proposing(['dev.exemple.slack', 'dev.exemple.team-rules', 'dev.exemple.high-contrast', 'dev.autre.absent'])] });
     const backend = fakeBackend({ plugins_list: () => [installed('dev.exemple.high-contrast')], store_view: () => STORE });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'project', projectId: 'p1' });
     const band = await screen.findByRole('region', { name: 'Plugins proposés par ce projet' });
     expect(band.textContent).toContain('Ce projet propose 3 plugins');
     const names = [...band.querySelectorAll('li .what b')].map((b) => b.textContent);
@@ -135,7 +135,7 @@ describe('the band of Settings › Project', () => {
   it('« Pas pour ce projet » silences it, kept on this machine; a plugin proposed later shows again', async () => {
     resetApp({ projects: [proposing(['dev.exemple.slack'], { private: true })] });
     fakeBackend({ plugins_list: () => [], store_view: () => STORE });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'project', projectId: 'p1' });
     const band = await screen.findByRole('region', { name: 'Plugins proposés par ce projet' });
     expect(band.textContent).toContain('Ce projet propose un plugin');
     expect(band.textContent).toContain('Projet privé : un plugin installé n’y est actif qu’une fois activé pour lui');
@@ -152,8 +152,8 @@ describe('the band of Settings › Project', () => {
     resetApp({ projects: [proposing(['dev.exemple.slack'])] });
     let answer: (v: PluginView[]) => void = () => {};
     fakeBackend({ plugins_list: () => new Promise<PluginView[]>((r) => (answer = r)), store_view: () => STORE });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
-    await screen.findByText('Exporter vers .escouade.yml');
+    render(SettingsModal, { page: 'project', projectId: 'p1' });
+    await screen.findByRole('textbox', { name: 'Nom du projet' });
     expect(screen.queryByRole('region', { name: 'Plugins proposés par ce projet' })).toBeNull();
     answer([installed('dev.exemple.slack')]);
     await vi.waitFor(() => expect(plugins.loaded).toBe(true));

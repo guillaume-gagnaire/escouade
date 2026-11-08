@@ -57,7 +57,7 @@ describe('Welcome', () => {
     app.enginesFound = [];
     await waitFor(() => expect(screen.getByRole('button', { name: 'Réglages › Comptes et harness…' })).toBeInTheDocument());
     await userEvent.click(screen.getByRole('button', { name: 'Réglages › Comptes et harness…' }));
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'claude' });
+    expect(app.modal).toEqual({ kind: 'settings', page: 'accounts' });
   });
 
   it('says WSL was searched too when a distribution is set', () => {

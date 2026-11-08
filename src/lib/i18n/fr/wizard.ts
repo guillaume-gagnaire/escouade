@@ -3,7 +3,7 @@ import type { Tree } from '../types';
 // The new project's assistant: its steps, the copy of another project's settings, the checks.
 export default {
   title: 'Nouveau projet',
-  /** Opened again on an existing project, from Réglages › Projets. */
+  /** Opened again on an existing project, from Réglages › Projets › Projet. */
   titleEdit: 'Configurer {name}',
   stepOf: 'Étape {n} sur {count}',
   stepsLabel: 'Étapes',
@@ -126,7 +126,8 @@ export default {
     reservedDesc:
       'Cochés, ils ne servent plus que lui : les autres projets ne partent plus dessus, et sessions, mémoire et historique de {harness} n’y sont partagés avec aucun autre projet.',
     reservedAlready: 'déjà réservé',
-    reservedNone: 'Aucun compte {harness} libre : ajoute un compte réservé dans Réglages › Projets, une fois le projet créé.',
+    reservedNone:
+      'Aucun compte {harness} libre : ajoute un compte réservé dans Réglages › Projets › Confidentialité, une fois le projet créé.',
   },
   integrations: {
     none: 'Aucun compte Jira, Trello, GitHub, Linear, ClickUp, GitLab ou Azure DevOps n’est connecté : connecte-en un dans Réglages › Services connectés, après la création.',
@@ -188,7 +189,7 @@ export default {
     },
     ok: 'Harness trouvé · un compte sert le projet · dépôt prêt',
   },
-  /** Réglages › Projets: the assistant opened again on the project. */
+  /** Réglages › Projets › Projet: the assistant opened again on the project. */
   reopen: {
     label: 'Assistant de configuration',
     desc: 'Revoir les réglages du projet étape par étape, ou y copier ceux d’un autre projet.',

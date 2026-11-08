@@ -61,7 +61,7 @@ export default defineZone('share', {
     group: 'Team',
     name: 'Your name',
     nameDesc:
-      'Written in the tickets you share and in those you move on: your teammates see it on their Kanban. A project may have its own (Settings › Projects).',
+      'Written in the tickets you share and in those you move on: your teammates see it on their Kanban. A project may have its own (Settings › Projects › Team).',
     id: 'Your id',
     idDesc:
       'What tells your tickets from a namesake’s: made from your git e-mail, so the same on your other machines. The e-mail itself is written nowhere.',

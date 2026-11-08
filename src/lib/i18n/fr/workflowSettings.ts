@@ -1,6 +1,6 @@
 import type { Tree } from '../types';
 
-// Réglages › Projets › Workflow (ESC-195): what the reading of the project's workflows found, read again by « Relire »
+// Réglages › Projets › Kanban › Workflow (ESC-195): what the reading of the project's workflows found, read again by « Relire »
 // or by itself, and the steps as the user corrects them, in the repository (.escouade/workflows/) or on this machine.
 export default {
   title: 'Workflow',

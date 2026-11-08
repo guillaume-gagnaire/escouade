@@ -184,7 +184,7 @@ test('the docs branch is set in the project’s settings: current, or fixed', as
   await expect(page.locator('[data-docs-share]')).toContainText('Docs sur la branche main');
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await openSettingsPage(dialog, 'Projet');
+  await openSettingsPage(dialog, 'Git et worktrees');
   const group = dialog.getByRole('group', { name: 'Branche des docs' });
   await group.scrollIntoViewIfNeeded();
   await expect(group.getByRole('button', { name: 'La branche courante' })).toHaveAttribute('aria-pressed', 'true');

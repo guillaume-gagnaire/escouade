@@ -21,18 +21,18 @@ describe('settingsForm', () => {
     settingsForm.open();
     expect(settingsForm.page).toBe('accounts');
     expect(settingsForm.projectId).toBe('p2');
-    settingsForm.open({ tab: 'board', projectId: 'p1' });
+    settingsForm.open({ page: 'board', projectId: 'p1' });
     expect(settingsForm.page).toBe('board');
     expect(settingsForm.projectId).toBe('p1');
     expect(settingsForm.project?.board.action).toBe('merge');
     // A project closed since the shortcut was made: the one on screen instead.
-    settingsForm.open({ tab: 'projects', projectId: 'gone' });
+    settingsForm.open({ page: 'project', projectId: 'gone' });
     expect(settingsForm.projectId).toBe('p2');
   });
 
   it('has no project to set when there is none', () => {
     resetApp({ projects: [] });
-    settingsForm.open({ tab: 'projects' });
+    settingsForm.open({ page: 'project' });
     expect(settingsForm.projectId).toBeNull();
     expect(settingsForm.project).toBeUndefined();
   });
@@ -158,7 +158,7 @@ describe('settingsForm', () => {
   it('saves the launch commands trimmed and the copied files one per line, and stops a removed one that ran', async () => {
     const backend = fakeBackend();
     app.launches.c1 = { status: 'running', ptyId: 't1', name: 'Front', stopping: false, code: null, startedAt: 1 };
-    settingsForm.open({ tab: 'projects', projectId: 'p1' });
+    settingsForm.open({ page: 'project', projectId: 'p1' });
     settingsForm.addCommand();
     const added = settingsForm.projects.p1.runCommands[1];
     Object.assign(added, { name: ' API ', command: ' cargo run ', cwd: ' back ' });
@@ -177,7 +177,7 @@ describe('settingsForm', () => {
   it('saves the worktree steps trimmed, without those that have no command', async () => {
     const backend = fakeBackend();
     app.shells = [{ id: 'bash', label: 'Git Bash', path: 'bash.exe' }];
-    settingsForm.open({ tab: 'projects', projectId: 'p1' });
+    settingsForm.open({ page: 'project', projectId: 'p1' });
     settingsForm.addStep('setup');
     settingsForm.addStep('setup');
     settingsForm.addStep('teardown');
@@ -201,7 +201,7 @@ describe('settingsForm', () => {
     const backend = fakeBackend({
       suggest_worktree_steps: () => new Promise((r) => (answer = r)),
     });
-    settingsForm.open({ tab: 'projects', projectId: 'p1' });
+    settingsForm.open({ page: 'project', projectId: 'p1' });
     settingsForm.addStep('teardown');
     const asked = settingsForm.suggest('p1');
     expect(settingsForm.suggesting.p1).toBe(true);
@@ -264,7 +264,7 @@ describe('settingsForm', () => {
   it("fills the launch commands with Claude's suggestion in place of the draft's, and says when it has none", async () => {
     let answer!: (v: unknown) => void;
     const backend = fakeBackend({ suggest_run_commands: () => new Promise((r) => (answer = r)) });
-    settingsForm.open({ tab: 'projects', projectId: 'p1' });
+    settingsForm.open({ page: 'project', projectId: 'p1' });
     expect(settingsForm.changed('launch')).toBe(false);
     const asked = settingsForm.suggestLaunch('p1');
     expect(settingsForm.suggestingLaunch.p1).toBe(true);
@@ -291,14 +291,14 @@ describe('settingsForm', () => {
     // A draft like another: it shows as a change, and cancelling drops it.
     expect(settingsForm.changed('launch')).toBe(true);
     expect(app.projects[0].runCommands).toEqual([FRONT]);
-    settingsForm.open({ tab: 'projects', projectId: 'p1' });
+    settingsForm.open({ page: 'project', projectId: 'p1' });
     expect(settingsForm.projects.p1.runCommands).toEqual([FRONT]);
 
     fakeBackend({ suggest_run_commands: () => ({ commands: [web], refused: 0 }) });
     await settingsForm.suggestLaunch('p1');
     expect(app.toasts.at(-1)?.text).toBe('1 commande proposée : relis-la avant de remplacer les commandes.');
     // A proposal not taken goes with the draft too.
-    settingsForm.open({ tab: 'projects', projectId: 'p1' });
+    settingsForm.open({ page: 'project', projectId: 'p1' });
     expect(settingsForm.launchProposal.p1).toBeUndefined();
 
     // Some were refused (a line break, invisible characters, a long run of blanks, too long): said, in the singular and the plural.
@@ -342,7 +342,7 @@ describe('settingsForm', () => {
         refused: 0,
       }),
     });
-    settingsForm.open({ tab: 'projects', projectId: 'p1' });
+    settingsForm.open({ page: 'project', projectId: 'p1' });
     await settingsForm.suggestLaunch('p1');
     settingsForm.takeLaunchProposal('p1');
     expect(await settingsForm.save()).toBe(true);
@@ -520,13 +520,13 @@ describe('settingsForm', () => {
   it('resumes the draft it had, on the page and project asked for, or the page of a 2.0 tab', () => {
     settingsForm.open({ projectId: 'p1' });
     settingsForm.settings.proxyUrl = 'http://proxy:3128';
-    settingsForm.resume({ tab: 'projects', projectId: 'p2' });
+    settingsForm.resume({ page: 'project', projectId: 'p2' });
     expect(settingsForm.page).toBe('project');
     expect(settingsForm.projectId).toBe('p2');
     expect(settingsForm.settings.proxyUrl).toBe('http://proxy:3128');
     // Its project closed meanwhile: the one on screen.
     app.projects = app.projects.filter((p) => p.id !== 'p2');
-    settingsForm.resume({ tab: 'projects', projectId: 'p2' });
+    settingsForm.resume({ page: 'project', projectId: 'p2' });
     expect(settingsForm.projectId).toBe('p1');
   });
 
@@ -603,7 +603,7 @@ describe('settingsForm', () => {
     setLang('en');
     const ci = { id: 's1', name: 'Front', command: 'npm run dev', shell: 'bash', cwd: '' };
     const db = { ...ci, id: 's2', name: 'Base' };
-    settingsForm.open({ tab: 'projects', projectId: 'p1' });
+    settingsForm.open({ page: 'project', projectId: 'p1' });
     const said = async (commands: unknown[], refused: number) => {
       fakeBackend({ suggest_run_commands: () => ({ commands, refused }) });
       await settingsForm.suggestLaunch('p1');

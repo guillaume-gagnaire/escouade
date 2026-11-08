@@ -1,4 +1,4 @@
-// A project's label under its tile (ESC-168), set in Réglages › Projets, then the rail's width chosen by its right edge:
+// A project's label under its tile (ESC-168), set in Réglages › Projets › Projet, then the rail's width chosen by its right edge:
 // the labels under the tiles on a narrow rail, beside them from 160 px, the width kept after a restart and given back by
 // a double click, held to the window's room. At 1440 × 900 and in the runner's window (its screen is 1024 × 768).
 

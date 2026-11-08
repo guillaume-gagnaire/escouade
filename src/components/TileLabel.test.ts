@@ -196,7 +196,7 @@ describe('Réglages › Projets', () => {
 
   it('turns the label on, with a shorter text, and saves them on this machine', async () => {
     const backend = fakeBackend();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'project', projectId: 'p1' });
     expect(labelSwitch()).toHaveAttribute('aria-checked', 'false');
     expect(labelField().value).toBe('');
     expect(labelField().placeholder).toBe('demo-api');

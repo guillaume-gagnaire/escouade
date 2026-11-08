@@ -52,7 +52,7 @@ test('the settings of a project: the files copied into the worktrees, dragged ta
   await addProject(page, app.repo, { firstAgent: false });
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await openSettingsPage(dialog, 'Projet');
+  await openSettingsPage(dialog, 'Git et worktrees');
   await tallField(
     page,
     dialog,
@@ -88,7 +88,7 @@ test('the commit window: its message dragged tall', async ({ app }) => {
   // A direct commit, its message proposed, for the window to open.
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await openSettingsPage(settings, 'Projet');
+  await openSettingsPage(settings, 'Git et worktrees');
   await settings.getByRole('button', { name: 'Direct, avec un message proposé' }).click();
   await closeSettings(settings);
   const worktrees = path.join(app.repo, '.claude', 'worktrees');

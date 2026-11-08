@@ -24,11 +24,11 @@ function open(over: Partial<Project> = {}, scan = gsdScan(), handlers: Record<st
     refresh_workflows: () => ({ ...scan, readAt: scan.readAt + 60_000 }),
     ...handlers,
   });
-  render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+  render(SettingsModal, { page: 'board', projectId: 'p1' });
   return backend;
 }
 
-describe('Réglages › Projets › Workflow (ESC-195)', () => {
+describe('Réglages › Projets › Kanban › Workflow (ESC-195)', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date(2026, 9, 26, 11, 0));

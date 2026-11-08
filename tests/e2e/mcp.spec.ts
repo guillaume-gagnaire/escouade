@@ -234,7 +234,7 @@ test.describe('the switch saved on, the app starting', () => {
     // And the project's settings have no switch of their own any more.
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
-    await openSettingsPage(dialog, 'Projet');
+    await openSettingsPage(dialog, 'Git et worktrees');
     await expect(dialog.getByRole('switch', { name: 'Un worktree par agent' })).toBeVisible();
     await expect(dialog.getByRole('switch', { name: 'Les agents peuvent utiliser Escouade' })).toHaveCount(0);
   });
@@ -273,7 +273,7 @@ test.describe('a private project', () => {
     // « Projet privé » switched on in the settings of « coffre ».
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
-    await openSettingsPage(dialog, 'Projet');
+    await openSettingsPage(dialog, 'Confidentialité');
     await dialog.getByRole('button', { name: 'coffre' }).click();
     await dialog.getByRole('switch', { name: 'Projet privé' }).click();
     await closeSettings(dialog);

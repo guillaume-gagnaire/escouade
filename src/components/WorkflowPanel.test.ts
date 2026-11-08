@@ -237,7 +237,7 @@ describe('the Workflow tab', () => {
     expect(partial).toHaveTextContent('Codex : il manque les sous-agents, le coût par étape.');
     expect(within(tab).getByRole('status')).toHaveTextContent('Le workflow a changé à 10:12. dem-5-export garde sa version');
     await userEvent.click(within(tab).getByRole('button', { name: 'Revoir les étapes' }));
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p1' });
+    expect(app.modal).toEqual({ kind: 'settings', page: 'board', projectId: 'p1', at: 'workflow' });
   });
 
   it('draws a guessed step dashed', async () => {
@@ -295,7 +295,7 @@ describe('the Workflow tab', () => {
     expect(screen.getByText('GSD').parentElement).toHaveTextContent('jamais lancé ici');
     expect(screen.getByRole('tab', { name: 'Workflow' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Analyser avec un agent…' }));
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p1' });
+    expect(app.modal).toEqual({ kind: 'settings', page: 'board', projectId: 'p1', at: 'workflow' });
   });
 
   it('says « Pas de workflow pour ce projet » and where it is undone (ESC-309)', async () => {
@@ -303,11 +303,11 @@ describe('the Workflow tab', () => {
     await open({ ...scanOf(), off: true }, []);
     expect(await screen.findByRole('heading', { name: 'Pas de workflow pour ce projet' })).toBeInTheDocument();
     expect(screen.getByTestId('workflow-off')).toHaveTextContent(
-      'Escouade ne lit ni n’écrit les workflows de demo-api et n’y suit aucun agent. Pour le défaire : Réglages › Projets › Workflow, « Lire les workflows ».',
+      'Escouade ne lit ni n’écrit les workflows de demo-api et n’y suit aucun agent. Pour le défaire : Réglages › Projets › Kanban, « Lire les workflows ».',
     );
     expect(screen.queryByRole('button', { name: 'Analyser avec un agent…' })).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Ouvrir les réglages du workflow' }));
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p1' });
+    expect(app.modal).toEqual({ kind: 'settings', page: 'board', projectId: 'p1', at: 'workflow' });
   });
 
   it('chooses among several workflows in its menu, a repository’s named by it', async () => {
@@ -337,7 +337,7 @@ describe('the Workflow tab', () => {
   });
 
   it('shows the workflow as the project has it: a step renamed by the user under its name, its agent on it', async () => {
-    // What effective_workflows gives once « Plan phase » was renamed « Plan : revue » in Réglages › Projets › Workflow
+    // What effective_workflows gives once « Plan phase » was renamed « Plan : revue » in Réglages › Projets › Kanban › Workflow
     // (ESC-195); the tracking, corrected too, puts the agent on « Plan : revue ».
     const w = gsd();
     const corrected = {

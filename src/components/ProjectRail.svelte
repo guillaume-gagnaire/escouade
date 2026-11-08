@@ -156,7 +156,7 @@
         label: t('nav.rail.addMenu.all'),
         icon: 'sliders',
         detail: t('nav.rail.addMenu.allDetail'),
-        onClick: () => (app.modal = { kind: 'settings', tab: 'projects' }),
+        onClick: () => (app.modal = { kind: 'settings', page: 'allProjects' }),
       },
     ];
     const r = button.getBoundingClientRect();

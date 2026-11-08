@@ -118,7 +118,7 @@
       <button
         class="cfg"
         use:tip={t('board.header.settingsTitle', { summary })}
-        onclick={() => (app.modal = { kind: 'settings', tab: 'board', projectId: project.id })}
+        onclick={() => (app.modal = { kind: 'settings', page: 'board', projectId: project.id })}
       >
         <span class="k">{t('board.header.afterApproval')}</span><b class="v">{summary}</b><Icon name="down" size={14} />
       </button>
@@ -162,7 +162,7 @@
     <div class="band shared" role="status">
       <Icon name="shield" size={14} />
       <span class="why" use:tip={{ text: t('settings.shared.banner'), cut: true }}>{t('settings.shared.banner')}</span>
-      <button class="btn" onclick={() => (app.modal = { kind: 'settings', tab: 'projects', projectId: project.id })}
+      <button class="btn" onclick={() => (app.modal = { kind: 'settings', page: 'team', projectId: project.id, at: 'shared' })}
         >{t('settings.shared.bannerButton')}</button
       >
     </div>

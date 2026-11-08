@@ -44,7 +44,7 @@ describe('ServicesPage', () => {
 
   it('is a page of Escouade, in its teal, and the old « integrations » tab leads to it', () => {
     backend();
-    render(SettingsModal, { tab: 'integrations' });
+    render(SettingsModal, { page: 'services' });
     expect(nav().getByRole('button', { name: 'Services connectés' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('dialog', { name: 'Réglages' })).toHaveAttribute('data-scope', 'app');
     expect(screen.getByRole('heading', { level: 1, name: 'Services connectés' })).toBeInTheDocument();

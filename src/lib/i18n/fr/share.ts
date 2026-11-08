@@ -63,7 +63,7 @@ export default {
     group: 'Équipe',
     name: 'Ton nom',
     nameDesc:
-      'Écrit dans les tickets que tu partages et dans ceux que tu fais avancer : tes coéquipiers le voient sur leur Kanban. Un projet peut avoir le sien (Réglages › Projets).',
+      'Écrit dans les tickets que tu partages et dans ceux que tu fais avancer : tes coéquipiers le voient sur leur Kanban. Un projet peut avoir le sien (Réglages › Projets › Équipe).',
     id: 'Ton identifiant',
     idDesc:
       'Ce qui distingue tes tickets de ceux d’un homonyme : tiré de ton e-mail git, donc le même sur tes autres postes. L’e-mail lui-même n’est écrit nulle part.',

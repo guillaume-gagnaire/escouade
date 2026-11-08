@@ -92,7 +92,7 @@ describe('Réglages › Projets', () => {
 
   it('chooses the tile’s letters, empty showing the initials, and saves them', async () => {
     const backend = fakeBackend();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'project', projectId: 'p1' });
     expect(letters().value).toBe('');
     expect(letters().placeholder).toBe('DA');
     expect(preview()).toHaveTextContent('DA');
@@ -106,7 +106,7 @@ describe('Réglages › Projets', () => {
 
     // Emptied: the initials again.
     app.modal = { kind: 'settings' };
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'project', projectId: 'p1' });
     await userEvent.clear(screen.getAllByRole('textbox', { name: 'Lettres de la tuile' }).at(-1)!);
     await afterGesture();
     expect(backend.called('update_project')[1].args.project.tileLetters).toBe('');
@@ -118,7 +118,7 @@ describe('Réglages › Projets', () => {
       read_logo: () => SVG,
       set_project_logo: ({ path }: { path: string | null }) => ({ ...app.projects[0], logo: path ? 'logo-9.svg' : '' }),
     });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'project', projectId: 'p1' });
     expect(screen.queryByRole('button', { name: 'Retirer' })).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Choisir une image…' }));
     await waitFor(() => expect(preview().querySelector('img')).toHaveAttribute('src', SVG));
@@ -133,7 +133,7 @@ describe('Réglages › Projets', () => {
 
     // « Retirer »: the letters again, once saved.
     app.modal = { kind: 'settings' };
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'project', projectId: 'p1' });
     const dialogs = screen.getAllByRole('dialog');
     const last = within(dialogs.at(-1)!);
     await userEvent.click(last.getByRole('button', { name: 'Retirer' }));
@@ -150,7 +150,7 @@ describe('Réglages › Projets', () => {
         throw '« big.png » pèse 3 Mo : un logo pèse 1 Mo au plus.';
       },
     });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'project', projectId: 'p1' });
     await userEvent.click(screen.getByRole('button', { name: 'Choisir une image…' }));
     await waitFor(() => expect(app.toasts.map((t) => t.text)).toContain('« big.png » pèse 3 Mo : un logo pèse 1 Mo au plus.'));
     expect(preview().querySelector('img')).toBeNull();

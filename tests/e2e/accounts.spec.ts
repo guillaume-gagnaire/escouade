@@ -85,7 +85,7 @@ test.describe('a private project, two accounts, the first out of quota', () => {
     await addProject(page, app.repo, { firstAgent: false });
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
-    await openSettingsPage(dialog, 'Projet');
+    await openSettingsPage(dialog, 'Confidentialité');
     await dialog.getByRole('switch', { name: 'Projet privé' }).click();
     // Made private, it says what it still shares, and how to have an account of its own.
     await expect(dialog.getByText(/^Ses agents peuvent partir sur « Principal » et « Pro », des comptes partagés/)).toBeVisible();

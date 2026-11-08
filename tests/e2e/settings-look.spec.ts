@@ -243,9 +243,9 @@ test('the bar goes from page to page by the keyboard, and « Avancé » unfolds 
   await expect(dialog.getByRole('heading', { level: 1 })).toHaveText('Git et worktrees');
   await page.keyboard.press('Home');
   await expect(settingsEntry(dialog, 'Général')).toBeFocused();
-  // « Zone sensible », folded at the foot of « Projet », says what it hides; unfolded, « Fermer le projet… » is there.
+  // « Avancé », folded at the foot of « Projet », says what it hides; unfolded, « Fermer le projet… » is there.
   await openSettingsPage(dialog, 'Projet');
-  const fold = dialog.getByRole('button', { name: /^Zone sensible/ });
+  const fold = dialog.locator('#settings-panel').getByRole('button', { name: /^Avancé/ });
   await expect(fold).toHaveAttribute('aria-expanded', 'false');
   await expect(fold).toContainText('Fermer le projet');
   await expect(dialog.getByRole('button', { name: 'Fermer le projet…' })).toHaveCount(0);

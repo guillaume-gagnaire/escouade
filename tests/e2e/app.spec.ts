@@ -331,7 +331,7 @@ test('the setting for all agents gives each one remote control, which one is set
   await openSettingsPage(dialog, 'Agents');
   await dialog.getByRole('switch', { name: 'Remote control pour tous les agents' }).click();
   // The project's own switch never says otherwise: on and grayed, with the reason.
-  await openSettingsPage(dialog, 'Projet');
+  await openSettingsPage(dialog, 'Confidentialité');
   const own = dialog.getByRole('switch', { name: 'Remote control pour les agents de ce projet' });
   await expect(own).toHaveAttribute('aria-checked', 'true');
   await expect(own).toBeDisabled();
@@ -408,6 +408,8 @@ test('a new worktree is set up before its agent takes a message, and torn down b
   // The header's « Commandes de lancement… »: in a short window (the runner's), the section folds and « Configurer » with it.
   await page.getByRole('button', { name: 'Commandes de lancement…', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
+  // It opens on « Lancement » (annexe B); the worktrees are on « Git et worktrees ».
+  await openSettingsPage(dialog, 'Git et worktrees');
   await dialog.getByRole('button', { name: 'Ajouter une commande de préparation' }).click();
   await dialog
     .getByRole('group', { name: 'Commande de préparation 1' })
@@ -450,6 +452,8 @@ test('a new agent’s worktree is made at its first message, under the name the 
   // The header's « Commandes de lancement… »: in a short window (the runner's), the section folds and « Configurer » with it.
   await page.getByRole('button', { name: 'Commandes de lancement…', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
+  // It opens on « Lancement » (annexe B); the worktrees are on « Git et worktrees ».
+  await openSettingsPage(dialog, 'Git et worktrees');
   await expect(dialog.getByRole('switch', { name: 'Créer le worktree au premier message, au nom de l’agent' })).toBeChecked();
   await dialog.getByRole('button', { name: 'Ajouter une commande de préparation' }).click();
   await dialog
@@ -484,6 +488,8 @@ test('a project’s worktrees go to the folder and on the branch prefix its sett
   // The header's « Commandes de lancement… »: in a short window (the runner's), the section folds and « Configurer » with it.
   await page.getByRole('button', { name: 'Commandes de lancement…', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
+  // It opens on « Lancement » (annexe B); the worktrees are on « Git et worktrees ».
+  await openSettingsPage(dialog, 'Git et worktrees');
   // Beside the repository, as the repositories that want no worktree in them have it.
   await dialog.getByRole('textbox', { name: 'Dossier des worktrees' }).fill('../demo-api-worktrees');
   const beside = path.join(path.dirname(app.repo), 'demo-api-worktrees');
@@ -1086,7 +1092,7 @@ test('a deleted ticket’s worktree holding work stays, its archived agent says 
   fs.rmSync(path.join(worktree, 'dem-1.txt'));
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await openSettingsPage(settings, 'Projet');
+  await openSettingsPage(settings, 'Git et worktrees');
   await settings.getByRole('button', { name: 'Nettoyer' }).click();
   await expect(settings.getByRole('status').filter({ hasText: 'worktree' })).toHaveText('1 worktree supprimé.', { timeout: 30_000 });
   await expect.poll(() => fs.existsSync(worktree)).toBe(false);

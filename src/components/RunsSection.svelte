@@ -54,11 +54,11 @@
   }
 
   function configure() {
-    app.modal = { kind: 'settings', tab: 'projects', projectId: project.id, section: 'launch' };
+    app.modal = { kind: 'settings', page: 'launch', projectId: project.id };
   }
   /** The same settings, where Claude reads the project at once to fill in the commands (to read before saving). */
   function propose() {
-    app.modal = { kind: 'settings', tab: 'projects', projectId: project.id, section: 'launch', suggest: true };
+    app.modal = { kind: 'settings', page: 'launch', projectId: project.id, suggest: true };
   }
   const isRunning = (c: RunCommand) => app.launches[c.id]?.status === 'running';
 

@@ -6,150 +6,15 @@ import { app } from '../../lib/state.svelte';
 import { BARE_ENGINE, CLAUDE_ENGINE, branchInfo, fakeBackend, gitInfo, project, resetApp } from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
 import { afterGesture } from '../../test/settings';
+import type { Manifest, PluginView } from '../../lib/plugins';
+import { plugins } from '../../lib/plugins-view.svelte';
 
 vi.mock('../../lib/terminals', () => ({ launchLog: () => ({}), disposeLog() {} }));
 
-describe('ProjectTab', () => {
+describe('PrivacyPage', () => {
   beforeEach(() => {
     resetApp({ projects: [project(), project({ id: 'p2', name: 'site' })] });
     app.modal = { kind: 'settings' };
-  });
-
-  it('shows in « Ton nom dans ce projet » the name git knows in its folder when none was given (ESC-243)', async () => {
-    app.settings = { ...app.settings, userName: '' };
-    fakeBackend({ git_user_name: ({ projectId }: { projectId: string | null }) => (projectId === 'p1' ? 'Bob (dépôt)' : 'Bob (global)') });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
-    const field = screen.getByRole('textbox', { name: 'Ton nom dans ce projet' });
-    await vi.waitFor(() => expect(field).toHaveAttribute('placeholder', 'Bob (dépôt)'));
-    expect(field).toHaveValue('');
-    expect(
-      screen.getByText(
-        'Vide : Bob (dépôt), repris de git (git config user.name de ce dépôt). Gardé sur ce poste, jamais dans .escouade.yml.',
-      ),
-    ).toBeInTheDocument();
-  });
-
-  it('shows the app’s name before git’s in « Ton nom dans ce projet » (ESC-243)', async () => {
-    app.settings = { ...app.settings, userName: 'Robert' };
-    fakeBackend({ git_user_name: () => 'Bob (dépôt)' });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
-    const field = screen.getByRole('textbox', { name: 'Ton nom dans ce projet' });
-    await new Promise((r) => setTimeout(r, 20));
-    expect(field).toHaveAttribute('placeholder', 'Robert');
-    expect(
-      screen.getByText('Vide : celui de Réglages › Général (Robert). Gardé sur ce poste, jamais dans .escouade.yml.'),
-    ).toBeInTheDocument();
-  });
-
-  it('has no switch of its own for Escouade’s tools: the app’s one gives them to every agent (ESC-91)', async () => {
-    const backend = fakeBackend();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
-    expect(screen.queryByRole('switch', { name: 'Les agents peuvent utiliser Escouade' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Serveur MCP' })).not.toBeInTheDocument();
-    // A change of the project saves nothing of the kind.
-    await userEvent.click(screen.getByRole('switch', { name: 'Un worktree par agent' }));
-    await afterGesture();
-    expect(backend.called('update_project')).toHaveLength(1);
-    expect(backend.called('update_project').at(-1)!.args.project).not.toHaveProperty('agentsUseEscouade');
-  });
-
-  it('makes a new agent’s worktree at its first message, under its name, until switched off (ESC-156)', async () => {
-    const backend = fakeBackend();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
-    const toggle = screen.getByRole('switch', { name: 'Créer le worktree au premier message, au nom de l’agent' });
-    // On for a project that does not say (saved before it).
-    expect(toggle).toBeChecked();
-    expect(
-      screen.getByText(
-        'Le premier message nomme l’agent, puis sa branche et son dossier prennent ce nom avant la préparation. Éteint, le worktree est créé tout de suite, en agent-N.',
-      ),
-    ).toBeInTheDocument();
-    await userEvent.click(toggle);
-    await afterGesture();
-    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({ id: 'p1', worktreeAtFirstMessage: false });
-  });
-
-  it('starts the new worktrees from the folder’s branch, the board’s target or a branch chosen (ESC-160)', async () => {
-    const backend = fakeBackend({
-      branch_list: () => [
-        branchInfo({ name: 'main', current: true }),
-        branchInfo({ name: 'release' }),
-        branchInfo({ name: 'origin/hotfix', remote: true }),
-      ],
-    });
-    app.git = { p1: gitInfo({ branch: 'main' }) };
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
-    const group = screen.getByRole('group', { name: 'Branche de départ des nouveaux worktrees' });
-    const chip = (name: RegExp | string) => within(group).getByRole('button', { name });
-    // The folder's branch for a project that does not say (saved before it).
-    expect(chip('Branche actuelle du dossier')).toHaveAttribute('aria-pressed', 'true');
-    expect(
-      screen.getByText('Ils partent de la branche sur laquelle est le dossier du projet au moment de leur création.'),
-    ).toBeInTheDocument();
-    await userEvent.click(chip('Branche cible du Kanban'));
-    expect(chip('Branche cible du Kanban')).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText(/^Ils partent de main, mise à jour depuis le distant/)).toBeInTheDocument();
-    // A branch, chosen in the picker: any, a remote one too.
-    await userEvent.click(chip('Une branche…'));
-    const picker = await screen.findByRole('dialog', { name: 'Branche de départ' });
-    await within(picker).findByText('origin/hotfix');
-    await userEvent.click(within(picker).getByText('origin/hotfix'));
-    expect(screen.queryByRole('dialog', { name: 'Branche de départ' })).toBeNull();
-    const named = chip('Branche de départ : origin/hotfix. Choisir une autre branche');
-    expect(named).toHaveAttribute('aria-pressed', 'true');
-    expect(named).toHaveTextContent('origin/hotfix');
-    expect(screen.getByText(/^Ils partent de origin\/hotfix,/)).toBeInTheDocument();
-    await afterGesture();
-    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({
-      id: 'p1',
-      worktreeBase: { kind: 'branch', branch: 'origin/hotfix' },
-    });
-  });
-
-  it('shows the branch the project starts from, and saves the folder’s again when chosen', async () => {
-    resetApp({ projects: [project({ worktreeBase: { kind: 'branch', branch: 'release' } })] });
-    app.modal = { kind: 'settings' };
-    const backend = fakeBackend();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
-    const group = screen.getByRole('group', { name: 'Branche de départ des nouveaux worktrees' });
-    expect(within(group).getByRole('button', { name: /release/ })).toHaveAttribute('aria-pressed', 'true');
-    await userEvent.click(within(group).getByRole('button', { name: 'Branche actuelle du dossier' }));
-    await afterGesture();
-    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({ worktreeBase: { kind: 'head' } });
-  });
-
-  it('opens the setup assistant again on the project (ESC-94)', async () => {
-    fakeBackend();
-    render(SettingsModal, { tab: 'projects', projectId: 'p2' });
-    expect(screen.getByText('Revoir les réglages du projet étape par étape, ou y copier ceux d’un autre projet.')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Ouvrir l’assistant…' }));
-    expect(app.modal).toEqual({ kind: 'newProject', projectId: 'p2' });
-  });
-
-  it('cleans up the worktrees archived agents left, and says which it kept and why (ESC-143)', async () => {
-    let done: (r: unknown) => void = () => {};
-    const backend = fakeBackend({ clean_worktrees: () => new Promise((r) => (done = r)) });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
-    expect(
-      screen.getByText(
-        'Supprime ceux des agents archivés, après leurs commandes de démontage, sauf ceux qui gardent des changements non commités ou des commits ni mergés ni poussés.',
-      ),
-    ).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Nettoyer' }));
-    expect(screen.getByRole('button', { name: 'Nettoyage…' })).toBeDisabled();
-    expect(backend.called('clean_worktrees')[0].args).toEqual({ projectId: 'p1' });
-    done({ removed: 2, kept: [{ agentId: 'a1', name: 'api', reason: 'worktree gardé : 1 fichier(s) non commité(s)' }] });
-    const status = await screen.findByRole('status');
-    expect(status).toHaveTextContent('2 worktrees supprimés. 1 gardé :');
-    expect(status).toHaveTextContent('api · worktree gardé : 1 fichier(s) non commité(s)');
-    expect(screen.getByRole('button', { name: 'Nettoyer' })).toBeEnabled();
-  });
-
-  it('says when no worktree was left to clean up', async () => {
-    fakeBackend({ clean_worktrees: () => ({ removed: 0, kept: [] }) });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
-    await userEvent.click(screen.getByRole('button', { name: 'Nettoyer' }));
-    expect(await screen.findByRole('status')).toHaveTextContent('Aucun worktree à supprimer.');
   });
 
   describe('remote control', () => {
@@ -157,30 +22,32 @@ describe('ProjectTab', () => {
     const REASON = 'Activé pour tous les projets dans Réglages › Agents';
     const tab = (name: string) => within(screen.getByRole('navigation')).getByRole('button', { name });
     const headings = () => screen.getAllByRole('heading').map((h) => h.textContent);
-    /** The modal on « Agents », the setting for all agents switched on or off, then on the project’s tab. */
-    const toProjects = async (global: boolean, [allLabel, projectsTab] = ['Remote control pour tous les agents', 'demo-api']) => {
+    /** The project, then its page « Confidentialité », from the bar. */
+    const toPrivacy = async (privacy = 'Confidentialité') => {
+      await userEvent.click(tab('demo-api'));
+      await userEvent.click(tab(privacy));
+    };
+    /** The modal on « Agents », the setting for all agents switched on or off, then on the project’s « Confidentialité ». */
+    const toProjects = async (global: boolean, [allLabel, privacy] = ['Remote control pour tous les agents', 'Confidentialité']) => {
       render(SettingsModal, { page: 'agents' });
       const all = screen.getByRole('switch', { name: allLabel });
       if (global !== (all.getAttribute('aria-checked') === 'true')) await userEvent.click(all);
-      await userEvent.click(tab(projectsTab));
+      await toPrivacy(privacy);
     };
 
     it('is hidden while no harness has Remote Control', () => {
       fakeBackend();
       app.engines = [BARE_ENGINE];
-      render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+      render(SettingsModal, { page: 'privacy', projectId: 'p1' });
       expect(screen.queryByRole('switch', { name: LABEL })).toBeNull();
       expect(headings()).not.toContain('Remote control');
     });
 
-    it('has its own group after the project’s identity, off by default, and says what it does', () => {
+    it('has its own group after « Projet privé », before the plugins, off by default, and says what it does', () => {
       fakeBackend();
-      render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+      render(SettingsModal, { page: 'privacy', projectId: 'p1' });
       const names = headings();
-      expect(names.indexOf('Remote control')).toBe(names.indexOf('Identité') + 1);
-      expect(names.indexOf('Confidentialité')).toBe(names.indexOf('Remote control') + 1);
-      expect(names.indexOf('Workflow')).toBe(names.indexOf('Confidentialité') + 1);
-      expect(names.indexOf('Git')).toBe(names.indexOf('Workflow') + 1);
+      expect(names.slice(names.indexOf('Confidentialité'))).toEqual(['Confidentialité', 'Remote control', 'Plugins dans ce projet']);
       const remote = screen.getByRole('switch', { name: LABEL });
       expect(remote).toHaveAttribute('aria-checked', 'false');
       expect(remote).toBeEnabled();
@@ -194,7 +61,7 @@ describe('ProjectTab', () => {
       const backend = fakeBackend();
       resetApp({ projects: [project({ remoteControl: true }), project({ id: 'p2', name: 'site' })] });
       app.modal = { kind: 'settings' };
-      render(SettingsModal, { tab: 'projects', projectId: 'p2' });
+      render(SettingsModal, { page: 'privacy', projectId: 'p2' });
       expect(screen.getByRole('switch', { name: LABEL })).toHaveAttribute('aria-checked', 'false');
       await userEvent.click(screen.getByRole('switch', { name: LABEL }));
       expect(screen.getByRole('switch', { name: LABEL })).toHaveAttribute('aria-checked', 'true');
@@ -210,7 +77,7 @@ describe('ProjectTab', () => {
       const backend = fakeBackend();
       resetApp({ projects: [project({ remoteControl: true })] });
       app.modal = { kind: 'settings' };
-      render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+      render(SettingsModal, { page: 'privacy', projectId: 'p1' });
       const remote = screen.getByRole('switch', { name: LABEL });
       expect(remote).toHaveAttribute('aria-checked', 'true');
       await userEvent.click(remote);
@@ -245,7 +112,7 @@ describe('ProjectTab', () => {
       expect(screen.getByRole('switch', { name: LABEL })).toBeDisabled();
       await userEvent.click(tab('Agents'));
       await userEvent.click(screen.getByRole('switch', { name: 'Remote control pour tous les agents' }));
-      await userEvent.click(tab('demo-api'));
+      await toPrivacy();
       const remote = screen.getByRole('switch', { name: LABEL });
       expect(remote).toHaveAttribute('aria-checked', 'false');
       expect(remote).toBeEnabled();
@@ -262,7 +129,7 @@ describe('ProjectTab', () => {
       expect(screen.getByRole('switch', { name: LABEL })).toBeDisabled();
       await userEvent.click(tab('Agents'));
       await userEvent.click(screen.getByRole('switch', { name: 'Remote control pour tous les agents' }));
-      await userEvent.click(tab('demo-api'));
+      await toPrivacy();
       expect(screen.getByRole('switch', { name: LABEL })).toHaveAttribute('aria-checked', 'true');
       expect(screen.getByRole('switch', { name: LABEL })).toBeEnabled();
       expect(backend.called('update_project')).toHaveLength(0);
@@ -271,7 +138,7 @@ describe('ProjectTab', () => {
     it('says it in English', async () => {
       setLang('en');
       fakeBackend();
-      await toProjects(true, ['Remote control for all agents', 'demo-api']);
+      await toProjects(true, ['Remote control for all agents', 'Privacy']);
       const remote = screen.getByRole('switch', { name: 'Remote control for this project’s agents' });
       expect(remote).toBeDisabled();
       expect(remote).toHaveAttribute('aria-checked', 'true');
@@ -282,99 +149,9 @@ describe('ProjectTab', () => {
       expect(screen.getAllByRole('heading').map((h) => h.textContent)).toContain('Remote control');
     });
   });
-
-  it('sets where the worktrees go and how their branches are named, and says where the next one goes', async () => {
-    const backend = fakeBackend();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
-    const dir = screen.getByRole('textbox', { name: 'Dossier des worktrees' });
-    expect(dir).toHaveValue('');
-    expect(dir).toHaveAttribute('placeholder', '.claude/worktrees');
-    expect(dir).toHaveAccessibleDescription(/Le prochain : C:\\code\\demo-api\\\.claude\\worktrees\\<nom>/);
-    const agents = screen.getByRole('textbox', { name: 'Préfixe des branches des agents' });
-    const tickets = screen.getByRole('textbox', { name: 'Préfixe des branches des tickets' });
-    expect(agents).toHaveValue('escouade/');
-    expect(tickets).toHaveValue('ticket/');
-    expect(screen.getByText('Branche d’un nouvel agent : escouade/<nom>. Vide : son nom seul.')).toBeInTheDocument();
-    await userEvent.type(dir, '../demo-api-worktrees');
-    expect(screen.getByText('Le prochain : C:\\code\\demo-api-worktrees\\<nom>')).toBeInTheDocument();
-    await userEvent.clear(agents);
-    await userEvent.type(agents, 'gg/');
-    expect(screen.getByText('Branche d’un nouvel agent : gg/<nom>. Vide : son nom seul.')).toBeInTheDocument();
-    await userEvent.clear(tickets);
-    await afterGesture();
-    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({
-      id: 'p1',
-      worktreeDir: '../demo-api-worktrees',
-      agentBranchPrefix: 'gg/',
-      ticketBranchPrefix: '',
-    });
-    expect(app.projects[0]).toMatchObject({ worktreeDir: '../demo-api-worktrees', agentBranchPrefix: 'gg/', ticketBranchPrefix: '' });
-  });
-
-  it('refuses a worktrees folder or a branch prefix that cannot be, and saves nothing until it is fixed', async () => {
-    const backend = fakeBackend();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
-    const dir = screen.getByRole('textbox', { name: 'Dossier des worktrees' });
-    await userEvent.type(dir, '../demo-api');
-    expect(dir).toHaveAttribute('aria-invalid', 'true');
-    expect(dir).toHaveAccessibleDescription(/C’est le dossier du projet lui-même\./);
-    // Left as it is: said on its row, not saved.
-    await afterGesture();
-    expect(backend.called('update_project')).toHaveLength(0);
-    await userEvent.clear(dir);
-    await userEvent.type(dir, '..');
-    expect(dir).toHaveAccessibleDescription(/Ce dossier contient celui du projet : choisis-en un à côté/);
-    await userEvent.clear(dir);
-    await userEvent.type(dir, 'D:wt');
-    expect(dir).toHaveAccessibleDescription(/Écris un chemin relatif au dossier du projet, ou un chemin complet \(C:\\…\)\./);
-    await userEvent.clear(dir);
-    await userEvent.type(dir, '.git/wt');
-    expect(dir).toHaveAccessibleDescription(/Ce dossier est dans un dossier \.git\./);
-    await userEvent.clear(dir);
-    expect(dir).toHaveAttribute('aria-invalid', 'false');
-    const tickets = screen.getByRole('textbox', { name: 'Préfixe des branches des tickets' });
-    await userEvent.type(tickets, ' x');
-    expect(tickets).toHaveAttribute('aria-invalid', 'true');
-    expect(tickets).toHaveAccessibleDescription(/Aucun nom de branche ne commence ainsi.*« \\ » ou « @\{ »/);
-    await afterGesture();
-    expect(backend.called('update_project')).toHaveLength(0);
-    expect(app.projects[0].ticketBranchPrefix).toBe('ticket/');
-  });
-
-  it('says in the sensitive zone that closing the project keeps its history, and offers to erase it with the question', async () => {
-    fakeBackend();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
-    // Folded at the foot of « Projet », it says what it hides.
-    await userEvent.click(screen.getByRole('button', { name: /^Zone sensible/ }));
-    expect(
-      screen.getByText(
-        "Le projet quitte l'application : ses agents, ses terminaux et ses lancements s'arrêtent. Son historique (conversations, tickets, réglages) est gardé : rouvrir ce dossier le retrouve. Les fichiers et les worktrees sur le disque ne sont pas touchés.",
-      ),
-    ).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Fermer le projet…' }));
-    expect(app.modal).toMatchObject({
-      kind: 'confirm',
-      option: { label: 'Effacer aussi son historique (conversations, tickets, réglages)', value: false },
-    });
-  });
-
-  it('says it in English', async () => {
-    setLang('en');
-    fakeBackend();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
-    expect(screen.getByRole('heading', { name: 'Identity' })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /^Danger zone/ }));
-    expect(
-      screen.getByText(
-        'The project leaves the app: its agents, terminals and launches stop. Its history (conversations, tickets, settings) is kept: adding this folder again brings it back. The files and worktrees on disk are not touched.',
-      ),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'MCP server' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('switch', { name: 'Agents can use Escouade' })).not.toBeInTheDocument();
-  });
 });
 
-describe('ProjectTab: « Projet privé » (ESC-139)', () => {
+describe('PrivacyPage: « Projet privé » (ESC-139)', () => {
   const LABEL = 'Projet privé';
   const DEFAULT = 'Nouveaux projets privés';
   const tab = (name: string) => within(screen.getByRole('navigation')).getByRole('button', { name });
@@ -387,7 +164,7 @@ describe('ProjectTab: « Projet privé » (ESC-139)', () => {
 
   it('is off by default, says what it changes, and is saved with the project', async () => {
     const backend = fakeBackend();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'privacy', projectId: 'p1' });
     const own = screen.getByRole('switch', { name: LABEL });
     expect(own).toHaveAttribute('aria-checked', 'false');
     expect(screen.getByRole('heading', { name: 'Confidentialité' })).toBeInTheDocument();
@@ -405,7 +182,7 @@ describe('ProjectTab: « Projet privé » (ESC-139)', () => {
   });
 
   it('says, harness by harness, whether its files are kept by a guard or a barrier, for a private project only (ESC-140, choice 28)', async () => {
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'privacy', projectId: 'p1' });
     expect(screen.queryByRole('list', { name: 'Ses fichiers' })).toBeNull();
     await userEvent.click(screen.getByRole('switch', { name: 'Projet privé' }));
     const list = screen.getByRole('list', { name: 'Ses fichiers' });
@@ -433,7 +210,7 @@ describe('ProjectTab: « Projet privé » (ESC-139)', () => {
 
   it('shows a private project as it is, its lock among the projects of the settings', async () => {
     const backend = fakeBackend();
-    render(SettingsModal, { tab: 'projects', projectId: 'p2' });
+    render(SettingsModal, { page: 'privacy', projectId: 'p2' });
     expect(screen.getByRole('switch', { name: LABEL })).toHaveAttribute('aria-checked', 'true');
     const lock = 'Projet privé : invisible pour les agents des autres projets';
     expect(screen.getByRole('button', { name: /site/ })).toContainElement(screen.getByRole('img', { name: lock }));
@@ -470,7 +247,7 @@ describe('ProjectTab: « Projet privé » (ESC-139)', () => {
   it('says it in English', () => {
     setLang('en');
     fakeBackend();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'privacy', projectId: 'p1' });
     expect(screen.getByRole('switch', { name: 'Private project' })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Private project: unseen by the agents of the other projects' })).toBeInTheDocument();
     cleanup();
@@ -479,7 +256,7 @@ describe('ProjectTab: « Projet privé » (ESC-139)', () => {
   });
 });
 
-describe('ProjectTab: a private project’s accounts (ESC-141)', () => {
+describe('PrivacyPage: a private project’s accounts (ESC-141)', () => {
   const PRIVATE = 'Projet privé';
   const LIMIT = 'Comptes partagés à la limite';
   const pro = { id: 'pro', name: 'Pro', configDir: 'C:/acc/pro', claudePath: '', active: true };
@@ -494,7 +271,7 @@ describe('ProjectTab: a private project’s accounts (ESC-141)', () => {
 
   it('says nothing of the accounts of a project that is not private', () => {
     fakeBackend();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'privacy', projectId: 'p1' });
     expect(screen.queryByRole('switch', { name: LIMIT })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Ajouter un compte réservé…' })).toBeNull();
   });
@@ -503,7 +280,7 @@ describe('ProjectTab: a private project’s accounts (ESC-141)', () => {
     const backend = fakeBackend({
       account_update: ({ account }) => [principal, account],
     });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'privacy', projectId: 'p1' });
     await userEvent.click(screen.getByRole('switch', { name: PRIVATE }));
     expect(
       screen.getByText(
@@ -531,7 +308,7 @@ describe('ProjectTab: a private project’s accounts (ESC-141)', () => {
 
   it('adds an account reserved to it, back to its settings as drafted', async () => {
     fakeBackend();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'privacy', projectId: 'p1' });
     await userEvent.click(screen.getByRole('switch', { name: PRIVATE }));
     await userEvent.click(screen.getByRole('button', { name: 'Ajouter un compte réservé…' }));
     expect(app.modal).toEqual({ kind: 'account', engine: 'claude', reserveFor: 'p1' });
@@ -544,7 +321,7 @@ describe('ProjectTab: a private project’s accounts (ESC-141)', () => {
       { ...principal, projects: ['p1'] },
       { ...pro, projects: ['p2'] },
     ];
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'privacy', projectId: 'p1' });
     expect(
       screen.getByText(
         'Compte réservé à ce projet : « Principal ». Sessions, mémoire et historique de Claude Code n’y sont partagés avec aucun autre projet. Le compte de la machine reste celui de Claude Code hors d’Escouade.',
@@ -555,7 +332,7 @@ describe('ProjectTab: a private project’s accounts (ESC-141)', () => {
   it('says it in English', async () => {
     setLang('en');
     fakeBackend();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'privacy', projectId: 'p1' });
     await userEvent.click(screen.getByRole('switch', { name: 'Private project' }));
     expect(screen.getByRole('switch', { name: 'Shared accounts at the limit' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add a reserved account…' })).toBeInTheDocument();
@@ -563,30 +340,100 @@ describe('ProjectTab: a private project’s accounts (ESC-141)', () => {
   });
 });
 
-describe('ProjectTab: its default harness (ESC-29)', () => {
+describe('PrivacyPage: the plugins in this project', () => {
+  const plugin = (
+    id: string,
+    name: string,
+    over: Partial<PluginView> = {},
+    contributes: Manifest['contributes'] = { ticketSources: [{ id, name }] },
+  ) =>
+    ({
+      id,
+      name,
+      version: '1.0.0',
+      description: name,
+      origin: { kind: 'store', version: '1.0.0', sha256: '', verified: true, repository: '', tag: '', commit: '', seed: true },
+      fingerprint: 'store:abcd',
+      folder: '',
+      declarative: false,
+      state: { kind: 'ready' },
+      ignored: [],
+      manifest: {
+        id,
+        name,
+        version: '1.0.0',
+        escouade: { api: 1, min: '2.2.0' },
+        activation: [],
+        permissions: { events: [], network: [], secrets: [], commands: [], decide: false },
+        contributes,
+      },
+      installedAt: '2026-11-08T10:00:00Z',
+      verified: true,
+      withdrawn: null,
+      inStore: null,
+      choices: { enabled: true, projects: {}, revoked: [], settings: {} },
+      asks: [],
+      secretKeys: [],
+      update: null,
+      commands: [],
+      commandsApproved: true,
+      ...over,
+    }) as PluginView;
+  const JIRA = plugin('dev.escouade.jira', 'Jira');
+  const LINEAR = plugin('dev.escouade.linear', 'Linear', { choices: { enabled: false, projects: {}, revoked: [], settings: {} } });
+  const THEME = plugin('dev.escouade.nord', 'Nord', {}, { themes: [{ id: 'nord', name: 'Nord' }] });
+
   beforeEach(() => {
-    resetApp({ projects: [project()] });
-    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    setLang('fr');
+    resetApp({ projects: [project(), project({ id: 'p2', name: 'site', private: true })] });
     app.modal = { kind: 'settings' };
-  });
-  const LABEL = 'Harness par défaut';
-
-  it('is offered only from two harnesses found on', () => {
-    fakeBackend();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
-    expect(screen.queryByRole('group', { name: LABEL })).toBeNull();
+    plugins.list = [];
+    plugins.loaded = false;
   });
 
-  it('is Claude Code until another is chosen, and saved with the project', async () => {
-    app.enginesFound = ['claude', 'codex'];
-    const backend = fakeBackend();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
-    const group = screen.getByRole('group', { name: LABEL });
-    expect(screen.getByText('Celui des nouveaux agents et des tickets du projet, sauf s’ils en choisissent un autre.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Claude Code', pressed: true })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Harness nu' }));
-    expect(group).toBeInTheDocument();
-    await afterGesture();
-    expect(backend.called('update_project').at(-1)!.args.project.engine).toBe('codex');
+  it('lists each plugin on project by project with its switch, set at once, a theme apart', async () => {
+    const backend = fakeBackend({
+      plugins_list: () => [JIRA, LINEAR, THEME],
+      plugin_seed_offers: () => [],
+      plugin_set_project: ({ id, project: p, on }: { id: string; project: string; on: boolean }) => ({
+        ...JIRA,
+        id,
+        choices: { ...JIRA.choices, projects: { [p]: on } },
+      }),
+    });
+    render(SettingsModal, { page: 'privacy', projectId: 'p1' });
+    const group = await screen.findByRole('region', { name: 'Plugins dans ce projet' });
+    const jira = await within(group).findByRole('switch', { name: 'Jira dans ce projet' });
+    expect(jira).toHaveAttribute('aria-checked', 'true');
+    // Off for the whole app: shown off, with why, and not switched here.
+    const linear = within(group).getByRole('switch', { name: 'Linear dans ce projet' });
+    expect(linear).toHaveAttribute('aria-checked', 'false');
+    expect(linear).toBeDisabled();
+    expect(within(group).getByText(/désactivé pour toute l’app/)).toBeInTheDocument();
+    // A theme reaches the whole app: no switch of a project.
+    expect(within(group).queryByRole('switch', { name: 'Nord dans ce projet' })).toBeNull();
+    await userEvent.click(jira);
+    expect(backend.called('plugin_set_project').at(-1)!.args).toEqual({ id: 'dev.escouade.jira', project: 'p1', on: false });
+    await vi.waitFor(() =>
+      expect(within(group).getByRole('switch', { name: 'Jira dans ce projet' })).toHaveAttribute('aria-checked', 'false'),
+    );
+  });
+
+  it('shows a private project off by default, and says nothing reaches it', async () => {
+    fakeBackend({ plugins_list: () => [JIRA], plugin_seed_offers: () => [] });
+    render(SettingsModal, { page: 'privacy', projectId: 'p2' });
+    const jira = await screen.findByRole('switch', { name: 'Jira dans ce projet' });
+    expect(jira).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByText(/projet privé : coupé d’office, rien ne lui parvient/)).toBeInTheDocument();
+  });
+
+  it('says when no plugin is on project by project, in English too', async () => {
+    fakeBackend({ plugins_list: () => [THEME], plugin_seed_offers: () => [] });
+    render(SettingsModal, { page: 'privacy', projectId: 'p1' });
+    expect(await screen.findByText('Aucun plugin installé qui s’active projet par projet.')).toBeInTheDocument();
+    cleanup();
+    setLang('en');
+    render(SettingsModal, { page: 'privacy', projectId: 'p1' });
+    expect(await screen.findByRole('region', { name: 'Plugins in this project' })).toBeInTheDocument();
   });
 });

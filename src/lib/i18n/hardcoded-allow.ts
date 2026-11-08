@@ -16,12 +16,12 @@ export const ALLOWED: Allowed[] = [
 
   // L4 — settings
   {
-    file: 'src/components/settings/ProjectTab.svelte',
+    file: 'src/components/settings/GitPage.svelte',
     text: 'Git',
     why: 'nom propre : Git reste Git, titre du groupe des réglages git du projet',
   },
   {
-    file: 'src/components/settings/ProjectTab.svelte',
+    file: 'src/components/settings/GitPage.svelte',
     text: '.env*',
     why: 'un motif de fichiers donné en exemple (le champ dit « un motif par ligne »), le même dans toutes les langues',
   },

@@ -361,7 +361,6 @@ export default defineZone('settings', {
     remoteDesc:
       'Every agent of this project, existing or new (ticket agents included), is reachable from claude.ai and the Claude app. Escouade starts each one’s claude process right away, and it stays running. The session appears on claude.ai as “project · agent” (for a ticket agent, the name comes from the ticket). In Claude Code view, an interface that is already open only picks it up at its next launch. To set an agent apart: right-click, “Turn off remote control”.',
     remoteGlobal: 'On for all projects in Settings › Agents',
-    privateTitle: 'Privacy',
     private: 'Private project',
     privateDesc:
       'The agents of the other projects do not see it through Escouade’s MCP server: not in the lists, nor by its name, its tickets or its agents. Its own agents see it alone. You, Claude outside Escouade and the app’s views see everything.',
@@ -476,7 +475,6 @@ export default defineZone('settings', {
     subfolderHint: '(blank = project folder)',
     subfolderPlaceholder: 'e.g. apps/web',
     noCommandsYet: 'No commands yet.',
-    danger: 'Danger zone',
     close: 'Close the project',
     closeDesc:
       'The project leaves the app: its agents, terminals and launches stop. Its history (conversations, tickets, settings) is kept: adding this folder again brings it back. The files and worktrees on disk are not touched.',
@@ -528,7 +526,9 @@ export default defineZone('settings', {
     deleteN: 'Delete command {n}',
   },
   shared: {
-    title: '.escouade.yml',
+    title: 'Shared settings',
+    /** Under the title: the file they are in. */
+    file: '.escouade.yml',
     none: 'This repository has no .escouade.yml. Export this project’s settings to share them with your team: the file is committed with the code.',
     read: {
       one: 'Settings read from .escouade.yml (version {version}): {count} setting defined by the file.',

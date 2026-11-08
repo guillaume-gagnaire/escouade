@@ -23,15 +23,7 @@ import type {
   WorktreeSuggestion,
 } from './types';
 import { branchPrefixProblem, worktreesRootProblem } from './worktrees';
-import {
-  legacyTab,
-  rowsOf,
-  SETTINGS_PAGES,
-  type RowInfo,
-  type SettingsPage,
-  type SettingsSection,
-  type SettingsTab,
-} from './settings-pages';
+import { rowsOf, SETTINGS_PAGES, type RowInfo, type SettingsPage } from './settings-pages';
 
 export * from './settings-pages';
 
@@ -39,13 +31,10 @@ export * from './settings-pages';
 export const SETTINGS_OF = {} as Record<SettingsPage, (keyof Settings)[]>;
 for (const p of SETTINGS_PAGES) SETTINGS_OF[p.id] = [...new Set(rowsOf(p.id).flatMap((r) => r.settings))];
 
-/** Where the window opens or comes back to: a page, or a tab of the 2.0 window (led to its page). */
+/** Where the window opens or comes back to: a page, and the project of a project's page. */
 export interface SettingsPlace {
   page?: SettingsPage;
-  /** An id of the 2.0 window, still read (`legacyTab`). */
-  tab?: SettingsTab;
   projectId?: string;
-  section?: SettingsSection;
 }
 
 /** What the modal sets of a project, as the backend's `update_project` takes it, its board apart. */
@@ -447,7 +436,7 @@ class SettingsForm {
   }
 
   /**
-   * What the window shows, read again from the app, on the page (or 2.0 tab) and the project given (else the one on
+   * What the window shows, read again from the app, on the page and the project given (else the one on
    * screen). A save still running is let finish first, so that what it sends is not shown as a change to undo.
    */
   open(place: SettingsPlace = {}) {
@@ -488,12 +477,12 @@ class SettingsForm {
   }
 
   /**
-   * The draft as it is, on the page given (else the one an id of the 2.0 window leads to, else « Comptes et harness »)
+   * The draft as it is, on the page given (else « Comptes et harness »)
    * and the project given (else the one on screen).
    */
-  resume({ page, tab, projectId, section }: SettingsPlace = {}) {
+  resume({ page, projectId }: SettingsPlace = {}) {
     const has = (id: string | null | undefined) => !!id && app.projects.some((p) => p.id === id);
-    this.page = page ?? (tab ? legacyTab(tab, section) : 'accounts');
+    this.page = page ?? 'accounts';
     this.projectId = has(projectId) ? projectId! : has(app.project?.id) ? app.project!.id : (app.projects[0]?.id ?? null);
   }
 

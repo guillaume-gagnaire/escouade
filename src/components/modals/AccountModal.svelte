@@ -8,7 +8,7 @@
   import { IS_MAC } from '../../lib/platform';
   import { app } from '../../lib/state.svelte';
   import { disposeTerminal, mountTerminal, openAccountLogin } from '../../lib/terminals';
-  import type { SettingsTab } from '../../lib/settings.svelte';
+  import type { SettingsPage } from '../../lib/settings.svelte';
   import type { Account, EngineId, MachineAccount, ShareMode } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import Modal from './Modal.svelte';
@@ -35,7 +35,7 @@
     engine: asked,
     reserveFor,
     onclose,
-  }: { accountId?: string; back?: SettingsTab; engine?: EngineId; reserveFor?: string; onclose?: () => void } = $props();
+  }: { accountId?: string; back?: SettingsPage; engine?: EngineId; reserveFor?: string; onclose?: () => void } = $props();
   /** The project the account is added for, while it is open still. */
   const reservedTo = $derived(reserveFor ? app.projects.find((p) => p.id === reserveFor) : undefined);
 
@@ -437,7 +437,7 @@
   function close() {
     stop();
     if (onclose) onclose();
-    else if (reserveFor) app.modal = { kind: 'settings', tab: 'projects', projectId: reserveFor, resume: true };
+    else if (reserveFor) app.modal = { kind: 'settings', page: 'privacy', projectId: reserveFor, resume: true };
     else backToAccounts(back);
   }
 

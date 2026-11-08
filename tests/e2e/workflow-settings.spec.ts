@@ -1,4 +1,4 @@
-// Réglages › Projets › Workflow (ESC-195): the reading of the frozen copy of GSD (tests/fixtures/workflows/gsd, its
+// Réglages › Projets › Kanban › Workflow (ESC-195): the reading of the frozen copy of GSD (tests/fixtures/workflows/gsd, its
 // commands, subagents and included workflows in Principal's Claude Code folder, its .planning in the project), its
 // sources, « Relire », the workflows found and the steps, kept in .escouade/workflows/ of the repository and never
 // committed; a step renamed, saved, and found again after a restart. In the
@@ -27,7 +27,7 @@ const WORDS = {
   fr: {
     settings: 'Réglages (Ctrl+,)',
     dialog: 'Réglages',
-    page: 'Projet',
+    page: 'Kanban',
     readAt: /^Lu par les règles à /,
     reread: 'Relire',
     gsd: 'Corriger les étapes de GSD',
@@ -43,7 +43,7 @@ const WORDS = {
   en: {
     settings: 'Settings (Ctrl+,)',
     dialog: 'Settings',
-    page: 'Project',
+    page: 'Kanban',
     readAt: /^Read by the rules at /,
     reread: 'Read again',
     gsd: 'Correct the steps of GSD',

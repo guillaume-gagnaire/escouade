@@ -143,7 +143,7 @@ pub struct Settings {
     /// « Remote control pour tous les agents »: every agent, those of tickets too, is reachable
     /// from claude.ai (`AgentMeta::remote_control`, `RemoteSource::Global`).
     pub remote_control_all: bool,
-    /// « Nouveaux projets privés » (Réglages › Projets): a project added is private
+    /// « Nouveaux projets privés » (Réglages › Tous les projets): a project added is private
     /// (`Project::private`) from the start. Off by default.
     pub private_projects: bool,
     /// « Thème » (Réglages › Application › Affichage): the window's look, the system's by default.

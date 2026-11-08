@@ -57,7 +57,7 @@ describe('TicketsPage', () => {
 
   it('is a page of the project, in its colour, and the old link to the sources leads to it', () => {
     backend();
-    render(SettingsModal, { tab: 'integrations', projectId: 'p1', section: 'sources' });
+    render(SettingsModal, { page: 'tickets', projectId: 'p1' });
     const sub = nav().getByRole('group', { name: 'demo-api' });
     expect(within(sub).getByRole('button', { name: 'Tickets importés' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('dialog', { name: 'Réglages' })).toHaveAttribute('data-scope', 'project');

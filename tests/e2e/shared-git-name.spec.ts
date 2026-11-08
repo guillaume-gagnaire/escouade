@@ -56,8 +56,8 @@ test('« Partager » without a name takes git’s, without asking, and the setti
   await openSettingsPage(dialog, 'Général');
   await expect(dialog.getByRole('textbox', { name: 'Ton nom', exact: true })).toHaveValue('Alice Globale');
   await expect(dialog.getByText('Repris de git', { exact: true })).toBeVisible();
-  // Réglages › Projets: the name in this project, empty, shows git's.
-  await openSettingsPage(dialog, 'Projet');
+  // Réglages › Projets › Équipe: the name in this project, empty, shows git's.
+  await openSettingsPage(dialog, 'Équipe');
   const own = dialog.getByRole('textbox', { name: 'Ton nom dans ce projet' });
   await own.scrollIntoViewIfNeeded();
   await expect(own).toHaveValue('');

@@ -157,7 +157,7 @@
     if (agent) app.composerPut = { agentId: agent.id, text: command };
   }
   function openSettings() {
-    app.modal = { kind: 'settings', tab: 'projects', projectId: pid };
+    app.modal = { kind: 'settings', page: 'board', projectId: pid, at: 'workflow' };
   }
   function choose(id: string) {
     workflows.chosen[pid] = id;

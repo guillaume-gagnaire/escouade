@@ -64,7 +64,7 @@ test('a project proposes its plugins: named with their store page, nothing insta
   execFileSync('git', ['add', '.escouade.yml'], { cwd: app.repo, stdio: 'pipe' });
   execFileSync('git', ['commit', '-qm', 'escouade.yml'], { cwd: app.repo, stdio: 'pipe' });
   await addProject(page, app.repo);
-  await expect(page.getByText(/propose 3 plugins : Réglages › Projets\./)).toBeVisible();
+  await expect(page.getByText(/propose 3 plugins : Réglages › Projets › Projet\./)).toBeVisible();
 
   // The band: the three, what each asks for, nothing installed.
   let settings = await projectSettings(page);
@@ -109,6 +109,6 @@ test('a project proposes its plugins: named with their store page, nothing insta
   await closeSettings(settings);
   await page.reload();
   settings = await projectSettings(page);
-  await expect(settings.getByRole('button', { name: 'Exporter vers .escouade.yml' })).toBeVisible();
+  await expect(settings.getByRole('textbox', { name: 'Nom du projet' })).toBeVisible();
   await expect(settings.getByRole('region', { name: 'Plugins proposés par ce projet' })).toHaveCount(0);
 });

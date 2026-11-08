@@ -1,4 +1,4 @@
-// The project's tile made one's own (ESC-167): its letters chosen in Réglages › Projets, then a logo in their place, on
+// The project's tile made one's own (ESC-167): its letters chosen in Réglages › Projets › Projet, then a logo in their place, on
 // the rail's tile, kept after a restart and erased with the project. At 1440 × 900 and in the runner's window (its
 // screen is 1024 × 768).
 

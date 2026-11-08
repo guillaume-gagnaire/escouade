@@ -34,25 +34,6 @@ export type SettingsPage =
   // Under the projects: what a new project starts with, the closed ones (the app's settings).
   | 'allProjects';
 
-/** The ids of the 2.0 window's tabs: still read from the links of the app (`legacyTab`) until R6. */
-export type SettingsTab =
-  | 'app'
-  | 'claude'
-  | 'accounts'
-  | 'notifications'
-  | 'voice'
-  | 'projects'
-  | 'board'
-  | 'integrations'
-  | 'plugins'
-  | 'mcp'
-  | 'terminals'
-  | 'network'
-  | 'about';
-
-/** A section of a tab that a link of the app asked for. */
-export type SettingsSection = 'launch' | 'sources';
-
 export interface PageInfo {
   id: SettingsPage;
   scope: SettingsScope;
@@ -304,6 +285,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('private', 'privacy', 'settings.project.private', { project: ['private'] }),
   row('sharedOnLimit', 'privacy', 'accounts.private.sharedOnLimit', { project: ['sharedOnLimit'] }),
   row('projectRemote', 'privacy', 'settings.project.remote', { project: ['remoteControl'] }),
+  row('projectPlugins', 'privacy', 'plugins.projects.title'),
 
   // Tous les projets › Nouveaux projets, Projets fermés.
   row('privateProjects', 'allProjects', 'settings.newProjects.private', s('privateProjects')),
@@ -322,28 +304,3 @@ export const BOARD_ELSEWHERE: BoardKey[] = ['prefix', 'nextNumber'];
 
 /** The rows of a page, in their order. */
 export const rowsOf = (id: SettingsPage): RowInfo[] => SETTINGS_ROWS.filter((r) => r.page === id);
-
-/**
- * The page an id of the 2.0 window leads to (the links of the app until each lot moves its own, R6 at the latest),
- * with the section it asked for: a project's launch, a project's sources.
- */
-export function legacyTab(tab: SettingsTab, section?: SettingsSection): SettingsPage {
-  if (tab === 'projects') return section === 'launch' ? 'launch' : 'project';
-  if (tab === 'integrations') return section === 'sources' ? 'tickets' : 'services';
-  return LEGACY[tab];
-}
-
-const LEGACY: Record<Exclude<SettingsTab, 'projects' | 'integrations'>, SettingsPage> = {
-  app: 'general',
-  // « Accueil : aucun harness » and « Réglages › Comptes et harness » lead to the harnesses (annexe B).
-  claude: 'accounts',
-  accounts: 'accounts',
-  notifications: 'notifications',
-  voice: 'voice',
-  board: 'board',
-  plugins: 'plugins',
-  mcp: 'agents',
-  terminals: 'advanced',
-  network: 'advanced',
-  about: 'about',
-};

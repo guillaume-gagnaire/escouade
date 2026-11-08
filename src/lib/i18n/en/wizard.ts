@@ -118,7 +118,7 @@ export default defineZone('wizard', {
     reservedDesc:
       'Ticked, they serve it alone: the other projects no longer go to them, and {harness} sessions, memory and history there are shared with no other project.',
     reservedAlready: 'already reserved',
-    reservedNone: 'No free {harness} account: add a reserved account in Settings › Projects once the project is created.',
+    reservedNone: 'No free {harness} account: add a reserved account in Settings › Projects › Privacy once the project is created.',
   },
   integrations: {
     none: 'No Jira, Trello, GitHub, Linear, ClickUp, GitLab or Azure DevOps account is connected: connect one in Settings › Connected services, after creating the project.',

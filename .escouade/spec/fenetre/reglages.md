@@ -1,9 +1,9 @@
 ---
 title: "Réglages"
 subject: "Fenêtre"
-sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/index.html","design/settings-2-2/captures/a-plugins.png"]
-tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384"]
-decisions: [118,119,120,121,123]
+sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/index.html","design/settings-2-2/captures/a-plugins.png","design/settings-2-2/captures/a-projet.png"]
+tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385"]
+decisions: [118,119,120,121,123,"les-pages-d-un-projet-dans-les-reglages"]
 compared: null
 ---
 
@@ -16,15 +16,19 @@ Une seule fenêtre de réglages pour toute l'app : une barre des catégories à 
 ### Ouvrir
 
 - ⚙ de la barre de statut, « Réglages » en bas de la barre des projets, ou `Ctrl+,` : sur « Comptes et harness ».
-- Ouvertures directes :
+- Ouvertures directes : chaque renvoi de l'app vers un projet mène à sa page, « Projets › demo-api › Lancement », et non au milieu d'un défilement :
+  - « Réglages du projet… » au clic droit sur un projet, et « Harness par défaut du projet… » du menu « Autres façons de créer un agent » : la page Projet de ce projet ;
+  - ⚙ (« Commandes de lancement… »), « Configurer » et « ✦ Proposer des commandes » de la section Lancement : la page Lancement du projet ; le dernier lance aussi la lecture du projet (voir *Barre latérale*) ;
   - « ⚙ Après validation » du Kanban : la page Kanban de son projet ;
-  - ⚙, « Configurer » et « ✦ Proposer des commandes » de la section Lancement : la page Lancement du projet ; le dernier lance aussi la lecture du projet (voir *Barre latérale*) ;
-  - « Réglages du projet… » au clic droit sur un projet : la page Projet de ce projet ;
+  - « Les lire » du bandeau du Kanban (commandes de `.escouade.yml` en attente) : la page Équipe de son projet, sur « Réglages partagés » ;
+  - le panneau Workflow (« Réglages du workflow », « Décrire un workflow… », « Ouvrir les réglages du workflow ») : la page Kanban de son projet, sur « Workflow » ;
+  - la fenêtre d'un compte ouverte par « Ajouter un compte réservé… » : en se fermant, la page Confidentialité du projet, son brouillon tel qu'il était ;
+  - « Tous les projets fermés… » du menu `+` de la barre des projets : la page Tous les projets ;
   - « Lier une source » et « ⚙ Gérer les sources » de la fenêtre d'import : la page Tickets importés de son projet (voir *Intégrations*) ;
   - « Réglages › Services connectés » de l'onglet « PR et CI » et de la vue Pull requests (jeton refusé, hébergeur sans compte) : la page Services connectés (voir *Pull requests*) ;
   - « Redémarrer maintenant » d'une mise à jour prête, dans Général : la fenêtre de la mise à jour, dont « Plus tard » revient sur Général.
-- Chaque page, et chaque projet, s'affiche depuis son début (ou depuis sa partie, tant qu'elle montre un ancien onglet : voir *Les pages*).
-- Les textes de l'app qui nomment une page la nomment par son chemin : « Réglages › Général › Couleurs » (thèmes d'un plugin), « Réglages › Général » (ton nom, statistiques d'usage), « Réglages › Agents » (remote control pour tous les agents).
+- Chaque page, et chaque projet, s'affiche depuis son début ; un renvoi qui vise un groupe (Workflow, Réglages partagés) l'amène en vue, sur la page ouverte seulement.
+- Les textes de l'app qui nomment une page la nomment par son chemin, une page d'un projet après « Projets » : « Réglages › Général › Couleurs » (thèmes d'un plugin), « Réglages › Général » (ton nom, statistiques d'usage), « Réglages › Agents » (remote control pour tous les agents), « Réglages › Projets › Équipe » (commandes de `.escouade.yml` en attente, nom dans un projet), « Réglages › Projets › Projet » (plugins proposés par un projet), « Réglages › Projets › Kanban » (« Pas de workflow pour ce projet »), « Réglages › Projets › Confidentialité » (compte réservé), « Réglages › Tous les projets » (historique d'un projet fermé). Un test refuse un chemin qui ne nomme pas une page.
 
 ### La fenêtre
 
@@ -38,13 +42,13 @@ Une seule fenêtre de réglages pour toute l'app : une barre des catégories à 
 - **Le clavier** : ↑ et ↓ vont d'une entrée de la barre à la suivante et l'ouvrent, Origine et Fin à la première et à la dernière ; passer sur un projet l'ouvre et le déplie. Une seule entrée de la barre est dans l'ordre de Tab : celle où est le clavier.
 - **La teinte suit la portée** : sur une page d'Escouade (Tous les projets compris), la fenêtre prend le teal d'Escouade ; sur une page d'un projet, la couleur de ce projet, dès qu'elle change. À la fermeture, l'app reprend sa propre teinte.
 - La page sous son titre et sa description ; pour une page d'un projet, sa tuile devant, et son nom pour titre sur la page Projet.
-- **« Avancé »**, en bas d'une page : un groupe replié sur une ligne qui nomme ce qu'il cache ; un clic le déplie sur place. Général, Agents, Comptes et harness et Projet en ont un (celui de Projet s'appelle « Zone sensible » et cache « Fermer le projet » ; celui de Comptes et harness se déplie seul quand Claude Code est introuvable, son chemin s'y réglant).
+- **« Avancé »**, en bas d'une page : un groupe replié sur une ligne qui nomme ce qu'il cache ; un clic le déplie sur place. Général, Agents, Comptes et harness et Projet en ont un (celui de Projet cache « Fermer le projet » : l'ancienne « Zone sensible », une seule action qu'aucun titre alarmant n'annonce ; celui de Comptes et harness se déplie seul quand Claude Code est introuvable, son chemin s'y réglant).
 - Pas de pied : ni « Annuler » ni « Enregistrer ». Échap, × ou un clic à côté de la fenêtre la ferment, sans question.
 
 ### Enregistrer au geste
 
 - **Un choix** (interrupteur, segments, menu, case, raccourci enregistré, commande ajoutée ou retirée, proposition de Claude prise, logo choisi) s'applique et s'enregistre aussitôt.
-- **Un texte** (champ, nombre) s'enregistre quand il perd le focus, ou après 0,7 s sans frappe. Fermer la fenêtre enregistre ce qui attendait encore.
+- **Un texte** (champ, nombre) s'enregistre quand il perd le focus, ou après 0,7 s sans frappe. Fermer la fenêtre enregistre ce qui attendait encore. Passer d'une page d'un projet à une autre garde son brouillon.
 - Chaque enregistrement envoie ce qui a changé par-dessus ce que l'app a alors (le Kanban, lui, avance seul), un à la fois : ce qui change pendant qu'un enregistrement tourne part avec le suivant. Rien n'est envoyé quand rien n'a changé.
 - **Une saisie invalide** se dit sur sa rangée, et la valeur enregistrée avant reste tant qu'elle n'est pas corrigée ; le reste s'enregistre :
   - un projet sans nom : « Un projet garde un nom : « demo-api » reste enregistré. » ;
@@ -52,12 +56,12 @@ Une seule fenêtre de réglages pour toute l'app : une barre des catégories à 
   - un dossier des worktrees ou un préfixe de branche refusé, avec la raison sous le champ (voir *Git & fichiers*) ;
   - un nombre vidé ou sous 0, par exemple « Un nombre entier, 0 ou plus : 15 reste enregistré. » ; un nombre à virgule est arrondi à l'entier du dessous ; une taille de texte hors de ses bornes est ramenée dedans.
 - Ce qui coûte le dit sur sa rangée, comme avant : le proxy et les certificats ne valent pour un agent qu'au prochain démarrage de son process, le remote control lance aussitôt le process `claude` de chaque agent concerné.
-- Certaines rangées passent par leur propre appel au backend, comme avant : l'apparence (voir *Fenêtre*), « Recevoir les versions bêta » (enregistré, puis une recherche de mise à jour), les comptes des harness et leur « Projection des quotas » (voir *Barre de statut*), les comptes des intégrations (voir *Intégrations*), l'interrupteur « Les agents peuvent piloter Escouade » (voir *Serveur MCP*), les modèles de la voix, téléchargés ou effacés sur leur ligne, et, sur la page Plugins, l'interrupteur d'un plugin et « Installer » d'un plugin proposé.
+- Certaines rangées passent par leur propre appel au backend, comme avant : l'apparence (voir *Fenêtre*), « Recevoir les versions bêta » (enregistré, puis une recherche de mise à jour), les comptes des harness et leur « Projection des quotas » (voir *Barre de statut*), les comptes des intégrations (voir *Intégrations*), l'interrupteur « Les agents peuvent piloter Escouade » (voir *Serveur MCP*), les modèles de la voix, téléchargés ou effacés sur leur ligne, sur la page Plugins l'interrupteur d'un plugin et « Installer » d'un plugin proposé, et sur la page Confidentialité l'interrupteur d'un plugin dans le projet.
 - Rien ne se perd au redémarrage : ce qui est enregistré est dans `settings.json` et les fichiers des projets, dont aucune clé ne change.
 
 ### Les pages
 
-Chaque réglage a sa page dans le registre de la fenêtre. Les pages d'Escouade et Tickets importés ont leur contenu propre ; Comptes et harness et les autres pages d'un projet montrent encore le contenu des onglets de la 2.0, jusqu'à ce que leur lot de la refonte les redécoupe.
+Chaque réglage a sa page dans le registre de la fenêtre, et chaque page son contenu.
 
 - **Général** :
   - « Apparence » : « Thème », « Couleurs », « Zoom de l'interface », « Taille du texte des terminaux » (voir *Fenêtre*) ;
@@ -83,14 +87,26 @@ Chaque réglage a sa page dans le registre de la fenêtre. Les pages d'Escouade 
   - « Recherche par le sens » › « Modèle local » (voir *Recherche par le sens*) ;
   - « Données locales » : le dossier des données d'Escouade, et « Ouvrir le dossier ».
 - **À propos** : le logo, « Escouade » et sa version, les harness détectés ; « Crédits et licences », « Site web », Discord, « Soutenir Escouade ».
-- **Projet**, **Git et worktrees**, **Lancement**, **Équipe**, **Confidentialité** : l'ancien onglet Projets du projet, chacune ouverte sur sa partie (Git, Lancement, Kanban partagé, Confidentialité) ; « Fermer le projet… » est sous « Zone sensible », repliée. Fermer ou non revient aux réglages (voir *Fermer un projet*). Leur contenu : « Identité » (nom, dossier, couleur, lettres, logo et libellé de la tuile, harness et « Compte préféré », « Assistant de configuration ») ; « Remote control pour les agents de ce projet » ; « Confidentialité » (« Projet privé », « Ses fichiers », ses comptes, voir *Serveur MCP* et *Comptes*) ; « Workflow » ; « Git » (commit, worktrees, préfixes, fichiers copiés, commandes de préparation et de démontage, voir *Git & fichiers*) ; « Worktrees restés » › « Nettoyer » ; « Lancement » ; le Kanban partagé, `.escouade.yml` et la mémoire partagée.
+- **Projet** (titrée du nom du projet) : la bande des plugins que propose son `.escouade.yml` (voir *Plugins proposés par un projet*) ; « Identité » : nom, dossier (« Ouvrir »), couleur, lettres, logo et libellé de la tuile, « Harness par défaut » (dès deux harness trouvés) et « Compte préféré » (dès deux comptes) ; puis « Assistant de configuration » ; Avancé : « Fermer le projet… ». Fermer ou non revient sur cette page (voir *Fermer un projet*).
+- **Git et worktrees** : « Git » (un worktree par agent, au premier message, branche de départ, dossier des worktrees, préfixes des branches, fichiers copiés, commit, branche des docs, voir *Git & fichiers* et *Docs du projet*) ; « Worktrees » (préparation et démontage, « Remplir automatiquement », « Worktrees restés » › « Nettoyer ») ; « Dépôts » pour un projet de plusieurs dépôts (voir *Projet à plusieurs dépôts*).
+- **Lancement** : « Ouvrir les pages des lancements », les commandes de lancement, « Ajouter une commande » et « Remplir automatiquement » (voir *Barre latérale*).
+- **Kanban** : branche cible, action à la validation, tests, nettoyage, message de commit, conflit (voir *Validation*) ; pilote auto et ses agents (voir *Pilote auto*) ; puis « Workflow », le workflow du projet (voir *Workflows*). La pause au-delà du quota est dans Comptes et harness.
 - **Tickets importés** : les sources liées au projet et la correspondance de leurs statuts ; sans compte connecté, un renvoi à Services connectés (voir *Intégrations*).
-- **Kanban** : branche cible, action à la validation, tests, nettoyage, message de commit, conflit (voir *Validation*) ; pilote auto et ses agents (voir *Pilote auto*) ; la pause au-delà du quota est dans Comptes et harness.
+- **Équipe** : « Kanban partagé » (« Ton nom dans ce projet », les tickets partagés, « Partager chaque nouveau ticket », voir *Kanban partagé*) ; « Réglages partagés », `.escouade.yml` en sous-titre (son état, ses commandes en attente, « Exporter vers .escouade.yml », voir *Réglages partagés*) ; « Mémoire partagée » (voir *Mémoire partagée*).
+- **Confidentialité** : « Projet privé », et pour un projet privé « Ses fichiers » harness par harness, ses comptes réservés ou partagés (« Réserver … à ce projet », « Ajouter un compte réservé… ») et « Comptes partagés à la limite » (voir *Projets privés*, *Comptes*) ; « Remote control » › « Remote control pour les agents de ce projet », quand un harness l'a (voir *Barre latérale*) ; « Plugins dans ce projet » (ci-dessous).
 - **Tous les projets** : « Nouveaux projets » (« Nouveaux projets privés », éteint par défaut), puis « Projets fermés », seulement s'il y en a, avec par projet « Rouvrir » et « Effacer l'historique… », et « Historique illisible » avec « Effacer » (voir *Fermer un projet*). Effacer un historique revient sur cette page.
+
+### Les plugins d'un projet
+
+Dans Confidentialité, le pendant de l'onglet Projets de la page d'un plugin : « Plugins dans ce projet », sous « Un plugin s’active projet par projet. Un projet privé est coupé d’office : rien ne lui parvient tant que tu ne l’y actives pas. ».
+
+- Une ligne par plugin installé qui s'active projet par projet (un thème, qui vaut pour toute l'app, n'y est pas) : ses deux lettres, son nom, et l'interrupteur « <plugin> dans ce projet », appliqué aussitôt.
+- Un plugin coupé pour toute l'app est montré éteint, « désactivé pour toute l’app », sans interrupteur actif ; dans un projet privé, un plugin qui n'y a pas été activé dit « projet privé : coupé d’office, rien ne lui parvient ».
+- Aucun : « Aucun plugin installé qui s’active projet par projet. »
 
 ### La page Plugins
 
-Le tableau des plugins, côté réglages. La vue Plugins reste l'endroit où l'on installe depuis le store, un dossier ou un dépôt, où l'on active un plugin projet par projet, retire une permission et lit un journal (voir *Les plugins : vue d'ensemble*).
+Le tableau des plugins, côté réglages. La vue Plugins reste l'endroit où l'on installe depuis le store, un dossier ou un dépôt, retire une permission et lit un journal (voir *Les plugins : vue d'ensemble*).
 
 - **Installés**, avec « Ouvrir la vue Plugins » à droite du titre (la vue, sur ses plugins installés). Une ligne par plugin installé, livrés avec l'app compris :
   - ses deux lettres, son nom et sa version ;
@@ -122,4 +138,5 @@ Le tableau des plugins, côté réglages. La vue Plugins reste l'endroit où l'o
 - Rien ne revient sur un réglage enregistré : pour le défaire, on le change de nouveau.
 - Le proxy n'est pas donné aux terminaux intégrés sans l'option qui l'exporte.
 - Ignorer la vérification des certificats ne vaut pour un process `claude` qu'à son prochain démarrage.
-- La page Plugins n'active pas un plugin projet par projet : c'est l'onglet Projets de sa page, dans la vue Plugins (et, plus tard, la page Confidentialité du projet).
+- La page Plugins n'active pas un plugin projet par projet : c'est la page Confidentialité de chaque projet, ou l'onglet Projets de la page du plugin, dans la vue Plugins.
+- Les textes des plugins publiés à part (Jira, ClickUp, Azure DevOps, Copilot) disent encore les anciens noms d'onglets jusqu'à leur prochaine version.

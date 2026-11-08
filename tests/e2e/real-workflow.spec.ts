@@ -270,14 +270,14 @@ function checkFiles(repo: string, commitsBefore: string) {
   expect(git(repo, 'status', '--porcelain', '--', '.escouade')).toMatch(/\.escouade/);
 }
 
-/** « Relire » in Réglages › Projets › Workflow, then whether the files were touched (mtime and text). */
+/** « Relire » in Réglages › Projets › Kanban › Workflow, then whether the files were touched (mtime and text). */
 async function rereadLeavesFiles(page: Page, repo: string) {
   const before = Object.fromEntries(
     Object.keys(workflowFiles(repo)).map((f) => [f, fs.statSync(path.join(repo, '.escouade', 'workflows', f)).mtimeMs]),
   );
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await openSettingsPage(settings, 'Projet');
+  await openSettingsPage(settings, 'Kanban');
   const reread = settings.getByRole('button', { name: /^Relire/ });
   if (await reread.isVisible()) {
     await reread.click();

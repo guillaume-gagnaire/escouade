@@ -203,7 +203,7 @@ export default {
       closedOn: 'Fermé le {date}',
       reopen: 'Rouvrir',
       all: 'Tous les projets fermés…',
-      allDetail: 'Réglages › Projets',
+      allDetail: 'Réglages › Tous les projets',
     },
   },
 

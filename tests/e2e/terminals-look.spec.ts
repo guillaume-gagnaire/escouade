@@ -105,7 +105,7 @@ async function shots(page: Page, preview: Page, screen: string, size: (typeof SI
   await preview.screenshot({ path: path.join(SHOTS, `${n}.preview.png`) });
 }
 
-/** The launch commands of the project, as Réglages › Projets writes them. */
+/** The launch commands of the project, as Réglages › Projets › Lancement writes them. */
 async function commands(page: Page, list: { name: string; command: string; dir?: string }[]) {
   // The header's « Commandes de lancement… »: in a short window (the runner's), the section folds and « Configurer » with it.
   await page.getByRole('button', { name: 'Commandes de lancement…', exact: true }).click();

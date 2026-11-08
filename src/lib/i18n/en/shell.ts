@@ -48,7 +48,7 @@ export default defineZone('shell', {
     history: {
       found: 'History found: {agents}, {tickets}, last activity on {date}',
       fresh: 'Start from a blank project',
-      freshDesc: 'The history stays in Settings › Projects, where you can erase it.',
+      freshDesc: 'The history stays in Settings › All projects, where you can erase it.',
       reopen: 'Reopen project',
       reopening: 'Reopening…',
     },

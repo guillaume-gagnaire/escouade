@@ -16,7 +16,7 @@ describe('BoardTab in English', () => {
     resetApp({ projects: [project()] });
     app.git.p1 = gitInfo();
     fakeBackend({ git_branches: () => ['main', 'release'] });
-    settingsForm.open({ tab: 'board', projectId: 'p1' });
+    settingsForm.open({ page: 'board', projectId: 'p1' });
     setLang('en');
   });
 
@@ -105,5 +105,13 @@ describe('BoardTab in English', () => {
     expect(screen.getByRole('radio', { name: /Merger dans une branche/ })).toBeInTheDocument();
     expect(within(screen.getByRole('group', { name: 'En parallèle' })).getAllByRole('button').length).toBeGreaterThan(0);
     expect(screen.getByText('feat: limiter les tentatives de connexion [DEM-42]')).toBeInTheDocument();
+  });
+
+  it('ends with the project’s workflow (R6: Workflow left the project’s settings for its Kanban)', () => {
+    render(BoardTab, { project: app.projects[0] });
+    const titles = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    expect(titles.at(-1)).toBe('Workflow');
+    expect(titles.slice(0, -1)).toEqual(['When I approve a ticket in “To review”', 'Before and after', 'Autopilot', 'Agents']);
+    expect(document.querySelector('#sg-workflow')).toHaveAttribute('data-anchor', 'workflow');
   });
 });

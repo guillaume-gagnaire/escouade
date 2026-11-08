@@ -62,7 +62,7 @@ export interface WizardConfig {
   workflowsEnabled: boolean;
 }
 
-/** What a new project starts with besides the assistant's settings: « Nouveaux projets privés » (Réglages › Projets). */
+/** What a new project starts with besides the assistant's settings: « Nouveaux projets privés » (Réglages › Tous les projets). */
 export interface NewProjectDefaults {
   private?: boolean;
 }

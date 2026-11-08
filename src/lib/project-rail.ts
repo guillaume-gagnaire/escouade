@@ -164,7 +164,7 @@ export function projectMenu(p: Project): MenuItem[] {
       label: t('nav.titleBar.menu.settings'),
       icon: 'sliders',
       onClick: () => {
-        app.modal = { kind: 'settings', tab: 'projects', projectId: p.id };
+        app.modal = { kind: 'settings', page: 'project', projectId: p.id };
       },
     },
     {

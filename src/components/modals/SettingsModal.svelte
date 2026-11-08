@@ -3,14 +3,7 @@
   import { trapFocus } from '../../lib/focus';
   import { t } from '../../lib/i18n';
   import { tileText } from '../../lib/project-rail';
-  import {
-    pageInfo,
-    SAVE_PAUSE_MS,
-    settingsForm,
-    type SettingsPage,
-    type SettingsSection,
-    type SettingsTab,
-  } from '../../lib/settings.svelte';
+  import { pageInfo, SAVE_PAUSE_MS, settingsForm, type SettingsPage } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import { applyTheme } from '../../lib/theme';
   import AboutPage from '../settings/AboutPage.svelte';
@@ -19,13 +12,17 @@
   import AgentsPage from '../settings/AgentsPage.svelte';
   import BoardTab from '../settings/BoardTab.svelte';
   import ClosedProjects from '../settings/ClosedProjects.svelte';
+  import GitPage from '../settings/GitPage.svelte';
   import GeneralPage from '../settings/GeneralPage.svelte';
+  import LaunchPage from '../settings/LaunchPage.svelte';
   import NewProjects from '../settings/NewProjects.svelte';
   import NotificationsPage from '../settings/NotificationsPage.svelte';
   import PluginsPage from '../settings/PluginsPage.svelte';
-  import ProjectTab from '../settings/ProjectTab.svelte';
+  import PrivacyPage from '../settings/PrivacyPage.svelte';
+  import ProjectPage from '../settings/ProjectPage.svelte';
   import ServicesPage from '../settings/ServicesPage.svelte';
   import SettingsNav from '../settings/SettingsNav.svelte';
+  import TeamPage from '../settings/TeamPage.svelte';
   import TicketsPage from '../settings/TicketsPage.svelte';
   import VoiceTab from '../settings/VoiceTab.svelte';
   import Icon from '../Icon.svelte';
@@ -33,20 +30,19 @@
 
   // All the settings, the app's and each project's, in one place (direction A, design/settings-2-2/index.html#a-*):
   // the bar of the pages on the left, a page at a time on the right. Each setting is saved as it changes (ESC-380): a
-  // choice at once, a text when it loses the focus or after a pause in the typing; no « Enregistrer ». Escouade's pages
-  // have their file each (R3); until R4 to R7 cut up the others, they show what the 2.0 tabs showed, opened on their part.
+  // choice at once, a text when it loses the focus or after a pause in the typing; no « Enregistrer ». Each page has its
+  // file; a link of the app gives the page (« Projets › demo-api › Lancement ») and, at times, the group it is about.
   let {
     page,
-    tab,
     projectId,
-    section,
+    at,
     resume = false,
     suggest = false,
   }: {
     page?: SettingsPage;
-    tab?: SettingsTab;
     projectId?: string;
-    section?: SettingsSection;
+    /** The group of the page it opens on (its `anchor`). */
+    at?: string;
     resume?: boolean;
     suggest?: boolean;
   } = $props();
@@ -54,8 +50,8 @@
   // Read again from the app each time the modal opens, unless it comes back from a modal it opened. Asked for it, Claude reads
   // the project to fill the launch commands of the draft (only a fresh one: coming back is not asking again).
   untrack(() => {
-    if (resume) return settingsForm.resume({ page, tab, projectId, section });
-    settingsForm.open({ page, tab, projectId, section });
+    if (resume) return settingsForm.resume({ page, projectId });
+    settingsForm.open({ page, projectId });
     if (suggest && settingsForm.projectId) void settingsForm.suggestLaunch(settingsForm.projectId);
   });
 
@@ -90,19 +86,12 @@
     app.applyTheme();
   });
 
-  /** Where a page opens, until its lot gives it a content of its own: on its part of the 2.0 tab it shows. */
-  const ANCHOR: Partial<Record<SettingsPage, string>> = {
-    git: 'git',
-    launch: 'launch',
-    team: 'shared',
-    privacy: 'private',
-  };
-
   let body = $state<HTMLElement>();
 
-  // Each page, and each project's, starts at its top, or at its part.
+  // Each page, and each project's, starts at its top, or at the group the link asked for (on the page it opened on).
+  const opened = untrack(() => settingsForm.page);
   $effect(() => {
-    const anchor = ANCHOR[settingsForm.page];
+    const anchor = settingsForm.page === opened ? at : undefined;
     void settingsForm.projectId;
     if (!body) return;
     const target = anchor ? body.querySelector(`[data-anchor="${anchor}"]`) : null;
@@ -158,12 +147,20 @@
         <div class="inner">
           {#if info.scope === 'project'}
             {#if project && draft}
-              {#if info.id === 'board'}
+              {#if info.id === 'git'}
+                <GitPage {project} />
+              {:else if info.id === 'launch'}
+                <LaunchPage {project} />
+              {:else if info.id === 'board'}
                 <BoardTab {project} />
               {:else if info.id === 'tickets'}
                 <TicketsPage {project} />
+              {:else if info.id === 'team'}
+                <TeamPage {project} />
+              {:else if info.id === 'privacy'}
+                <PrivacyPage {project} />
               {:else}
-                <ProjectTab {project} />
+                <ProjectPage {project} />
               {/if}
             {:else}
               <p class="none">{t('settings.modal.noProject')}</p>

@@ -262,6 +262,11 @@ export default defineZone('plugins', {
     privateOn: 'private project, switched on by you: Escouade cannot keep a program from reading the disk',
     appOff: 'Switched off for the whole app: no project gets it.',
     none: 'No project open.',
+    /** Settings › <project> › Privacy: the plugins on in this project. */
+    title: 'Plugins in this project',
+    pluginLabel: '{name} in this project',
+    appOffShort: 'switched off for the whole app',
+    noneInstalled: 'No plugin installed that is switched on project by project.',
   },
 
   settings: {

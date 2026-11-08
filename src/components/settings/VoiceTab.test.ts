@@ -26,7 +26,7 @@ const INFO: VoiceInfo = {
 
 function open(over: Record<string, (a: any) => unknown> = {}) {
   const backend = fakeBackend({ voice_info: () => INFO, save_settings: () => [], ...over });
-  render(SettingsModal, { tab: 'voice' });
+  render(SettingsModal, { page: 'voice' });
   return backend;
 }
 

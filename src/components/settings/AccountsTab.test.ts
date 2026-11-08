@@ -50,12 +50,12 @@ describe('AccountsTab', () => {
   beforeEach(() => {
     resetApp();
     app.settings = { ...SETTINGS, accounts: [PRINCIPAL, PRO] };
-    app.modal = { kind: 'settings', tab: 'accounts' };
+    app.modal = { kind: 'settings', page: 'accounts' };
   });
 
   it('sets « Projection des quotas » at once, past 80 % by default, with the app’s other settings as they are, the draft left as it is', async () => {
     const b = backend();
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     await userEvent.click(within(document.getElementById('settings-panel')!).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     const projection = screen.getByRole('group', { name: 'Projection des quotas' });
     const choice = (name: string) => within(projection).getByRole('button', { name });
@@ -77,7 +77,7 @@ describe('AccountsTab', () => {
   it('reads « Projection des quotas » saved before 2.0.2 as a switch: off is « Jamais »', async () => {
     backend();
     (app.settings as { quotaProjection: unknown }).quotaProjection = false;
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     await userEvent.click(within(document.getElementById('settings-panel')!).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     const projection = screen.getByRole('group', { name: 'Projection des quotas' });
     expect(within(projection).getByRole('button', { name: 'Jamais' })).toHaveAttribute('aria-pressed', 'true');
@@ -85,7 +85,7 @@ describe('AccountsTab', () => {
 
   it('sets « Changer de compte à » at once, « À la limite » by default, and says what it changes', async () => {
     const b = backend();
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     const at = screen.getByRole('group', { name: 'Changer de compte à' });
     expect(
       within(at)
@@ -109,7 +109,7 @@ describe('AccountsTab', () => {
     backend();
     setLang('en');
     app.settings = { ...app.settings, switchAt: 90 };
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     const at = screen.getByRole('group', { name: 'Switch accounts at' });
     expect(within(at).getByRole('button', { name: '90%' })).toHaveAttribute('aria-pressed', 'true');
     expect(within(at).getByRole('button', { name: 'At the limit' })).toBeInTheDocument();
@@ -118,7 +118,7 @@ describe('AccountsTab', () => {
 
   it('comes after « Claude Code » and shows each account, its folder and whether it is signed in', async () => {
     const b = backend();
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Comptes et harness' })).toHaveAttribute(
       'aria-current',
       'page',
@@ -154,7 +154,7 @@ describe('AccountsTab', () => {
         usageOf('pro', { reason: 'Connexion expirée : relance Claude Code pour ce compte.', updatedAt: 0 }),
       ],
     };
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     expect(await within(row('Principal')).findByText('Pas connecté par un compte claude.ai (clé d’API ?)')).toBeInTheDocument();
     expect(within(row('Principal')).getByRole('button', { name: 'Se connecter…' })).toBeInTheDocument();
     expect(await within(row('Pro')).findByText('Inactif')).toBeInTheDocument();
@@ -167,7 +167,7 @@ describe('AccountsTab', () => {
     const b = backend({
       account_update: (a: { account: Account }) => [PRINCIPAL, { ...a.account, name: a.account.name.trim() }],
     });
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     const name = within(row('Pro')).getByRole('textbox', { name: 'Nom' });
     await userEvent.clear(name);
     await userEvent.type(name, ' Boulot {Enter}');
@@ -194,7 +194,7 @@ describe('AccountsTab', () => {
       account_status: (a: { id: string }) => (a.id === 'oc' ? { connected: true, email: null, dir: 'C:\\oc', stamp: null } : status()(a)),
       account_update: (a: { account: Account }) => [PRINCIPAL, a.account],
     });
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     // Claude Code has its quota: no budget.
     expect(within(row('Principal')).queryByRole('textbox', { name: 'Budget par jour ($)' })).not.toBeInTheDocument();
     const field = within(row('Local')).getByRole('textbox', { name: 'Budget par jour ($)' });
@@ -241,7 +241,7 @@ describe('AccountsTab', () => {
             ? { connected: true, email: null, dir: 'C:\Users\ada\.cursor', stamp: null }
             : status()(a),
     });
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     const team = screen.getAllByRole('listitem', { name: 'Équipe' })[0];
     expect(await within(team).findByText('Connecté · clé …abcd')).toBeInTheDocument();
     // Neither its cost of the day nor a budget: Cursor tells none.
@@ -264,7 +264,7 @@ describe('AccountsTab', () => {
       account_status: (a: { id: string }) =>
         a.id === 'vibe-equipe' ? { connected: true, email: 'clé …wxyz', dir: 'C:\\equipe', stamp: null } : status()(a),
     });
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     const team = screen.getAllByRole('listitem', { name: 'Équipe' })[0];
     expect(await within(team).findByText('Connecté · clé …wxyz')).toBeInTheDocument();
     // Its cost told, no quota: the day's cost and a budget stand in, and its usage is on Mistral's console.
@@ -290,7 +290,7 @@ describe('AccountsTab', () => {
             ? { connected: false, email: null, dir: 'C:\\Users\\ada\\.gemini', stamp: null }
             : status()(a),
     });
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     const team = screen.getAllByRole('listitem', { name: 'Équipe' })[0];
     expect(await within(team).findByText('Connecté · clé …wxyz')).toBeInTheDocument();
     // Neither cost nor budget: Antigravity tells tokens alone.
@@ -328,7 +328,7 @@ describe('AccountsTab', () => {
               ? { connected: true, email: null, dir: 'C:\\Users\\ada\\.gemini', stamp: null }
               : status()(a),
     });
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     const cle = screen.getAllByRole('listitem', { name: 'Clé' })[0];
     expect(await within(cle).findByText('Connecté · clé …wxyz')).toBeInTheDocument();
     expect(within(cle).queryByRole('textbox', { name: 'Budget par jour ($)' })).not.toBeInTheDocument();
@@ -358,7 +358,7 @@ describe('AccountsTab', () => {
     app.settings = { ...SETTINGS, accounts: [PRINCIPAL, OC] };
     app.usage = { ...app.usage, accounts: [usageOf('principal'), usageOf('oc', { engine: 'codex', meters: [], todayCost: 0.42 })] };
     backend();
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     expect(within(row('Local')).getByText('0,42 $')).toBeInTheDocument();
     expect(within(row('Local')).getByText('0,42 $').parentElement).toHaveTextContent('Aujourd’hui 0,42 $');
     expect(within(row('Principal')).queryByText(/Aujourd’hui/)).not.toBeInTheDocument();
@@ -366,7 +366,7 @@ describe('AccountsTab', () => {
 
   it('puts the name back when the backend refuses it', async () => {
     backend({ account_update: () => Promise.reject('Un compte s’appelle déjà « Principal ».') });
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     const name = within(row('Pro')).getByRole('textbox', { name: 'Nom' });
     await userEvent.clear(name);
     await userEvent.type(name, 'Principal{Enter}');
@@ -376,7 +376,7 @@ describe('AccountsTab', () => {
 
   it('puts the accounts in another order', async () => {
     const b = backend({ account_reorder: (a: { ids: string[] }) => a.ids.map((id) => (id === 'pro' ? PRO : PRINCIPAL)) });
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     expect(within(row('Principal')).getByRole('button', { name: 'Monter Principal' })).toBeDisabled();
     expect(within(row('Pro')).getByRole('button', { name: 'Descendre Pro' })).toBeDisabled();
     await userEvent.click(within(row('Principal')).getByRole('button', { name: 'Descendre Principal' }));
@@ -388,7 +388,7 @@ describe('AccountsTab', () => {
 
   it('puts an account at rest, never the last one active', async () => {
     const b = backend({ account_update: (a: { account: Account }) => [PRINCIPAL, a.account] });
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     const principal = within(row('Principal')).getByRole('switch', { name: 'Actif' });
     expect(principal).toBeEnabled();
     await userEvent.click(within(row('Pro')).getByRole('switch', { name: 'Actif' }));
@@ -404,7 +404,7 @@ describe('AccountsTab', () => {
     const pro = { ...PRO, active: false };
     app.settings.accounts = [PRINCIPAL, pro];
     const b = backend({ account_update: (a: { account: Account }) => [a.account, pro] });
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     expect(screen.getByRole('status').textContent).toBe('');
     await userEvent.click(within(row('Principal')).getByRole('checkbox', { name: 'demo' }));
     expect(b.called('account_update')[0].args.account).toEqual({ ...PRINCIPAL, projects: ['p1'] });
@@ -433,8 +433,8 @@ describe('AccountsTab', () => {
       ],
     });
     app.settings = { ...SETTINGS, accounts: [PRINCIPAL, PRO] };
-    app.modal = { kind: 'settings', tab: 'accounts' };
-    render(SettingsModal, { tab: 'accounts' });
+    app.modal = { kind: 'settings', page: 'accounts' };
+    render(SettingsModal, { page: 'accounts' });
     await userEvent.click(within(row('Pro')).getByRole('button', { name: 'Supprimer' }));
     expect(within(row('Pro')).getByRole('alert')).toHaveTextContent('Le compte sert encore à 2 agents.');
     expect(app.modal?.kind).toBe('settings');
@@ -446,7 +446,7 @@ describe('AccountsTab', () => {
 
   it('removes an account once confirmed, saying its folder stays, then comes back to the tab', async () => {
     const b = backend({ account_remove: () => [PRINCIPAL] });
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     await userEvent.click(within(row('Pro')).getByRole('button', { name: 'Supprimer' }));
     const modal = app.modal;
     if (modal?.kind !== 'confirm') throw new Error(`${modal?.kind}`);
@@ -458,15 +458,15 @@ describe('AccountsTab', () => {
     await modal.onConfirm(false);
     expect(b.called('account_remove')[0].args.id).toBe('pro');
     expect(app.settings.accounts).toEqual([PRINCIPAL]);
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'accounts', resume: true });
+    expect(app.modal).toEqual({ kind: 'settings', page: 'accounts', resume: true });
     // Cancelled: back to the tab, nothing removed.
     modal.onCancel?.();
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'accounts', resume: true });
+    expect(app.modal).toEqual({ kind: 'settings', page: 'accounts', resume: true });
   });
 
   it('removes the machine’s account once confirmed, saying the machine stays signed in (ESC-128)', async () => {
     const b = backend({ account_remove: () => [PRO] });
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     await within(row('Principal')).findByText('Connecté · ada@atlas.dev');
     await userEvent.click(within(row('Principal')).getByRole('button', { name: 'Supprimer' }));
     const modal = app.modal;
@@ -483,7 +483,7 @@ describe('AccountsTab', () => {
 
   it('opens the window that adds an account, or signs one in', async () => {
     backend();
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     // Each harness's group has its own (2.0 design): the window opens on that harness.
     await userEvent.click(screen.getByRole('button', { name: 'Ajouter un compte Claude Code…' }));
     expect(app.modal).toEqual({ kind: 'account', engine: 'claude' });
@@ -520,7 +520,7 @@ describe('AccountsTab', () => {
         closed_projects: () => [closed('c1', 'ancien'), closed('c2', 'vieux')],
         account_update: (a: { account: Account }) => [PRINCIPAL, a.account],
       });
-      render(SettingsModal, { tab: 'accounts' });
+      render(SettingsModal, { page: 'accounts' });
       const old = await within(row('Pro')).findByRole('checkbox', { name: 'ancien (fermé)' });
       expect(old).toBeChecked();
       expect(within(row('Pro')).getByRole('checkbox', { name: 'demo' })).toBeChecked();
@@ -540,7 +540,7 @@ describe('AccountsTab', () => {
         closed_projects: () => [closed('c1', 'ancien')],
         account_update: (a: { account: Account }) => [PRINCIPAL, a.account],
       });
-      render(SettingsModal, { tab: 'accounts' });
+      render(SettingsModal, { page: 'accounts' });
       const dot = (box: HTMLElement) => box.closest('label')!.querySelector('i')!;
       const old = await within(row('Pro')).findByRole('checkbox', { name: 'ancien (fermé)' });
       const open = within(row('Pro')).getByRole('checkbox', { name: 'demo' });
@@ -561,7 +561,7 @@ describe('AccountsTab', () => {
       app.projects = [project({ id: 'p1', name: 'demo' }), project({ id: 'p2', name: 'autre' })];
       app.settings.accounts = [PRINCIPAL, PRO];
       backend({ account_update: (a: { account: Account }) => [PRINCIPAL, a.account] });
-      render(SettingsModal, { tab: 'accounts' });
+      render(SettingsModal, { page: 'accounts' });
       const dot = (name: string) => within(row('Pro')).getByRole('checkbox', { name }).closest('label')!.querySelector('i')!;
       expect(dot('demo')).toHaveClass('lit');
       expect(dot('autre')).toHaveClass('lit');
@@ -574,7 +574,7 @@ describe('AccountsTab', () => {
       app.projects = [];
       app.settings.accounts = [PRINCIPAL, { ...PRO, projects: ['c1'] }];
       backend({ closed_projects: () => [closed('c1', 'ancien')] });
-      render(SettingsModal, { tab: 'accounts' });
+      render(SettingsModal, { page: 'accounts' });
       expect(await within(row('Pro')).findByRole('checkbox', { name: 'ancien (fermé)' })).toBeChecked();
       expect(within(row('Pro')).getByRole('group', { name: 'Réservé aux projets' })).toBeInTheDocument();
       expect(within(row('Pro')).queryByText(/Tous les projets/)).not.toBeInTheDocument();
@@ -585,7 +585,7 @@ describe('AccountsTab', () => {
     it('says « Tous les projets » only when nothing at all is reserved, a closed project included', async () => {
       app.settings.accounts = [PRINCIPAL, { ...PRO, projects: ['c1'] }];
       backend({ closed_projects: () => [closed('c1', 'ancien')] });
-      render(SettingsModal, { tab: 'accounts' });
+      render(SettingsModal, { page: 'accounts' });
       await within(row('Pro')).findByRole('checkbox', { name: 'ancien (fermé)' });
       expect(within(row('Pro')).queryByText(/Tous les projets/)).not.toBeInTheDocument();
       expect(within(row('Principal')).getByText('Tous les projets')).toBeInTheDocument();
@@ -597,7 +597,7 @@ describe('AccountsTab', () => {
     it('shows nothing of a project it has no name for: gone from both lists, or a file the app cannot read', async () => {
       app.settings.accounts = [PRINCIPAL, { ...PRO, projects: ['p1', 'gone', 'bad'] }];
       const b = backend({ closed_projects: () => [closed('bad', '', { unreadable: true, path: '', color: '' })] });
-      render(SettingsModal, { tab: 'accounts' });
+      render(SettingsModal, { page: 'accounts' });
       await waitFor(() => expect(b.called('closed_projects')).toHaveLength(1));
       await new Promise((r) => setTimeout(r));
       expect(
@@ -615,7 +615,7 @@ describe('AccountsTab', () => {
           throw new Error('disque illisible');
         },
       });
-      render(SettingsModal, { tab: 'accounts' });
+      render(SettingsModal, { page: 'accounts' });
       expect(await within(row('Pro')).findByRole('checkbox', { name: 'demo' })).toBeChecked();
       await new Promise((r) => setTimeout(r));
       expect(checkboxes('Pro')).toHaveLength(1);
@@ -626,7 +626,7 @@ describe('AccountsTab', () => {
       setLang('en');
       app.settings.accounts = [PRINCIPAL, { ...PRO, projects: ['c1'] }];
       backend({ closed_projects: () => [closed('c1', 'ancien')] });
-      render(SettingsModal, { tab: 'accounts' });
+      render(SettingsModal, { page: 'accounts' });
       expect(await within(row('Pro')).findByRole('checkbox', { name: 'ancien (closed)' })).toBeChecked();
     });
   });
@@ -634,7 +634,7 @@ describe('AccountsTab', () => {
   it('reads in English, Principal by its English name until it is renamed', async () => {
     setLang('en');
     backend();
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Accounts and harnesses' })).toBeInTheDocument();
     expect(names()).toEqual(['Main', 'Pro']);
     expect(await within(row('Main')).findByText('Signed in · ada@atlas.dev')).toBeInTheDocument();
@@ -725,7 +725,7 @@ describe('AccountsTab with two harnesses (ESC-30)', () => {
     resetApp();
     app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
     app.settings = { ...SETTINGS, accounts: [PRINCIPAL, PRO, CODEX_MAIN, WORK], engineOrder: ['claude', 'codex'] };
-    app.modal = { kind: 'settings', tab: 'accounts' };
+    app.modal = { kind: 'settings', page: 'accounts' };
   });
 
   const list = (name: string) => screen.getByRole('list', { name });
@@ -740,7 +740,7 @@ describe('AccountsTab with two harnesses (ESC-30)', () => {
       save_settings: () => [],
       account_reorder: (a: { ids: string[] }) => a.ids.map((id) => app.settings.accounts.find((x) => x.id === id)),
     });
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     expect(items('Comptes Claude Code')).toEqual(['Principal', 'Pro']);
     expect(items('Comptes Harness nu')).toEqual(['Principal', 'Travail']);
     // The machine's account of each harness goes like the others (ESC-128).
@@ -760,7 +760,7 @@ describe('AccountsTab with two harnesses (ESC-30)', () => {
     app.enginesFound = ['claude', 'codex'];
     app.settings.accounts = [PRO];
     fakeBackend({ account_status: statuses, save_settings: () => [] });
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     expect(items('Comptes Claude Code')).toEqual(['Pro']);
     const empty = screen.getByRole('region', { name: 'Harness nu' });
     expect(within(empty).getByText('Aucun compte')).toHaveAttribute('data-engine-state', 'noAccount');
@@ -775,7 +775,7 @@ describe('AccountsTab with two harnesses (ESC-30)', () => {
     app.settings.accounts = [];
     app.settings.engineOrder = [];
     fakeBackend({ account_status: statuses, save_settings: () => [] });
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     expect(within(screen.getByRole('region', { name: 'Claude Code' })).getByText('Aucun compte')).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Comptes Claude Code' })).not.toBeInTheDocument();
     // Declared, not found on this machine: its group, nothing to add to it.
@@ -805,7 +805,7 @@ describe('AccountsTab with two harnesses (ESC-30)', () => {
       engines_declared: () => (installed ? [CLAUDE_ENGINE, { ...BARE_ENGINE, id: 'codex', name: 'Codex' }] : [CLAUDE_ENGINE]),
       engines_found_now: () => ['claude', 'codex'],
     });
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     // The harness, not a plugin of another kind.
     const codex = await screen.findByRole('region', { name: 'Codex' });
     expect(screen.queryByRole('region', { name: 'Trello' })).toBeNull();
@@ -833,7 +833,7 @@ describe('AccountsTab with two harnesses (ESC-30)', () => {
         { id: 'dev.escouade.cursor-cli', name: 'Cursor CLI', version: '2.2.0', removed: null, refused: 'Signature invalide.' },
       ],
     });
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     const cursor = await screen.findByRole('region', { name: 'Cursor CLI' });
     expect(within(cursor).getByText('Signature invalide.')).toHaveClass('bad');
   });
@@ -844,7 +844,7 @@ describe('AccountsTab with two harnesses (ESC-30)', () => {
       save_settings: () => [],
       account_update: (a: { account: Account }) => app.settings.accounts.map((x) => (x.id === a.account.id ? a.account : x)),
     });
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     const work = within(list('Comptes Harness nu')).getByRole('listitem', { name: 'Travail' });
     const defaults = within(within(work).getByRole('group', { name: 'Nouveaux agents' }));
     // The models of its harness, nothing of Claude Code's; its modes; no effort, which it takes none of.
@@ -883,7 +883,7 @@ describe('AccountsTab with two harnesses (ESC-30)', () => {
   it('keeps one account of each harness active, whatever the other harness has', () => {
     app.settings.accounts = [PRINCIPAL, PRO, CODEX_MAIN, { ...WORK, active: false }];
     fakeBackend({ account_status: statuses, save_settings: () => [] });
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     const codex = list('Comptes Harness nu');
     expect(within(within(codex).getByRole('listitem', { name: 'Principal' })).getByRole('switch', { name: 'Actif' })).toBeDisabled();
     const claude = list('Comptes Claude Code');
@@ -892,7 +892,7 @@ describe('AccountsTab with two harnesses (ESC-30)', () => {
 
   it('sets the order of the harnesses, which gives a project its fallback harnesses', async () => {
     const b = fakeBackend({ account_status: statuses, save_settings: () => [], engine_order_set: (a: { order: string[] }) => a.order });
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     await userEvent.click(within(document.getElementById('settings-panel')!).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     expect(screen.getByText(/Après son harness par défaut, un projet passe aux suivants dans cet ordre/)).toBeInTheDocument();
     const order = list('Ordre des harness');
@@ -921,7 +921,7 @@ describe('AccountsTab with two harnesses (ESC-30)', () => {
     app.engines = [CLAUDE_ENGINE];
     app.settings.accounts = [PRINCIPAL, PRO];
     fakeBackend({ account_status: statuses, save_settings: () => [] });
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     expect(screen.queryByRole('list', { name: 'Ordre des harness' })).not.toBeInTheDocument();
     expect(screen.getByRole('list', { name: 'Comptes Claude Code' })).toBeInTheDocument();
   });
@@ -929,7 +929,7 @@ describe('AccountsTab with two harnesses (ESC-30)', () => {
   it('is written in English', async () => {
     setLang('en');
     fakeBackend({ account_status: statuses, save_settings: () => [] });
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     expect(screen.getByRole('list', { name: 'Claude Code accounts' })).toBeInTheDocument();
     await userEvent.click(within(document.getElementById('settings-panel')!).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     expect(screen.getByRole('list', { name: 'Harness order' })).toBeInTheDocument();
@@ -942,12 +942,12 @@ describe('AccountsTab: an account a private project shares (ESC-141)', () => {
     setLang('fr');
     resetApp({ projects: [project({ id: 'p1', name: 'client', private: true }), project({ id: 'p2', name: 'site' })] });
     app.settings = { ...SETTINGS, accounts: [PRINCIPAL, PRO] };
-    app.modal = { kind: 'settings', tab: 'accounts' };
+    app.modal = { kind: 'settings', page: 'accounts' };
   });
 
   it('says a private project still goes to it, and reserves it to that project alone', async () => {
     const b = backend({ account_update: ({ account }) => [PRINCIPAL, account] });
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     const said = 'Le projet privé « client » part encore sur ce compte, partagé avec d’autres projets.';
     expect(within(row('Principal')).getByText(said)).toBeVisible();
     expect(within(row('Pro')).getByText(said)).toBeVisible();
@@ -961,7 +961,7 @@ describe('AccountsTab: an account a private project shares (ESC-141)', () => {
     backend();
     app.settings.accounts = [PRINCIPAL, { ...PRO, projects: ['p1'] }];
     app.projects[0].sharedOnLimit = false;
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     expect(screen.queryByText(/part encore sur ce compte/)).not.toBeInTheDocument();
   });
 });

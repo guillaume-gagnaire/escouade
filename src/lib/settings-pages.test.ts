@@ -4,7 +4,6 @@ import { board, project, resetApp } from '../test/ipc';
 import { setLang } from './i18n';
 import {
   BOARD_ELSEWHERE,
-  legacyTab,
   pageInfo,
   rowsOf,
   SETTINGS_ELSEWHERE,
@@ -14,8 +13,10 @@ import {
   settingsForm,
   type ProjectDraft,
   type SettingsPage,
-  type SettingsTab,
 } from './settings.svelte';
+import * as register from './settings-pages';
+import { fr } from './i18n/fr';
+import { en } from './i18n/en';
 import { app } from './state.svelte';
 import type { BoardSettings, Settings } from './types';
 
@@ -145,22 +146,6 @@ const pagesSetting = (where: 'settings' | 'project' | 'board', key: string) => [
   ...new Set(SETTINGS_ROWS.filter((r) => (r[where] as string[]).includes(key)).map((r) => r.page)),
 ];
 
-const LEGACY: SettingsTab[] = [
-  'app',
-  'claude',
-  'accounts',
-  'notifications',
-  'voice',
-  'projects',
-  'board',
-  'integrations',
-  'plugins',
-  'mcp',
-  'terminals',
-  'network',
-  'about',
-];
-
 describe('the register of the settings pages', () => {
   it('declares each page once, with its scope, its icon, its label and its description', () => {
     const ids = SETTINGS_PAGES.map((p) => p.id);
@@ -276,26 +261,68 @@ describe('the register of the settings pages', () => {
     }
   });
 
-  it('leads each id of a 2.0 tab to a page, and the sections asked for to theirs', () => {
+  it('names in the texts of the app only pages of the register, in « Réglages › … » and « Settings › … »', () => {
+    // A text that sends the user to a page names one that exists; a project's page comes after « Projets ».
+    const texts = (tree: unknown): string[] =>
+      typeof tree === 'string' ? [tree] : tree && typeof tree === 'object' ? Object.values(tree).flatMap(texts) : [];
+    const STOP = /[.,:;()«»“”"{}\n…!?]/;
+    for (const [lang, catalog, root, projects] of [
+      ['fr', fr, 'Réglages › ', 'Projets'],
+      ['en', en, 'Settings › ', 'Projects'],
+    ] as const) {
+      setLang(lang);
+      const pages = new Set(SETTINGS_PAGES.map((p) => p.label));
+      let paths = 0;
+      const wrong: string[] = [];
+      for (const text of texts(catalog)) {
+        for (let at = text.indexOf(root); at >= 0; at = text.indexOf(root, at + 1)) {
+          const rest = text.slice(at + root.length);
+          const end = rest.search(STOP);
+          const path = (end < 0 ? rest : rest.slice(0, end)).split(' › ').map((x) => x.trim());
+          const page = path[0] === projects ? path[1] : path[0];
+          // The text may go on after the name of the page (« Réglages › Plugins le rallume »).
+          // Another app's settings (cursor.com's « Settings › API Keys ») are not Escouade's.
+          const elsewhere = page === 'API Keys';
+          if (!elsewhere && ![...pages].some((p) => page === p || page?.startsWith(`${p} `))) wrong.push(text);
+          paths++;
+        }
+      }
+      expect(paths, lang).toBeGreaterThan(10);
+      expect(wrong, lang).toEqual([]);
+    }
+    setLang('fr');
+  });
+});
+
+describe('the links of the app to the settings', () => {
+  // The ids of the 2.0 window's tabs (`legacyTab()`, from R1 to R6) are gone: each link gives its page.
+  const sources = import.meta.glob(['../**/*.ts', '../**/*.svelte', '!../**/*.test.ts'], {
+    query: '?raw',
+    import: 'default',
+    eager: true,
+  }) as Record<string, string>;
+
+  it('has no `legacyTab` any more, nor the ids of the 2.0 tabs', () => {
+    expect(register).not.toHaveProperty('legacyTab');
+    expect(Object.keys(sources).length).toBeGreaterThan(100);
+    for (const [file, text] of Object.entries(sources)) {
+      expect(text, file).not.toMatch(/\blegacyTab\(|\bSettingsTab\b|\bSettingsSection\b/);
+    }
+  });
+
+  it('opens each settings page by its id, never by a tab or a section', () => {
     const pages = new Set<string>(SETTINGS_PAGES.map((p) => p.id));
-    for (const tab of LEGACY) expect(pages.has(legacyTab(tab)), tab).toBe(true);
-    expect(Object.fromEntries(LEGACY.map((tab) => [tab, legacyTab(tab)]))).toEqual({
-      app: 'general',
-      claude: 'accounts',
-      accounts: 'accounts',
-      notifications: 'notifications',
-      voice: 'voice',
-      projects: 'project',
-      board: 'board',
-      integrations: 'services',
-      plugins: 'plugins',
-      mcp: 'agents',
-      terminals: 'advanced',
-      network: 'advanced',
-      about: 'about',
-    });
-    expect(legacyTab('projects', 'launch')).toBe('launch');
-    expect(legacyTab('integrations', 'sources')).toBe('tickets');
+    let links = 0;
+    for (const [file, text] of Object.entries(sources)) {
+      for (const m of text.matchAll(/kind: 'settings'([^}]*)\}/g)) {
+        links++;
+        expect(m[1], file).not.toMatch(/\b(tab|section):/);
+        const page = /page: '(\w+)'/.exec(m[1])?.[1];
+        if (page) expect(pages.has(page), `${file}: ${page}`).toBe(true);
+      }
+    }
+    // The links of annexe B: the rail, the side bar, Lancement, the Kanban, Workflow, an account, the imports…
+    expect(links).toBeGreaterThanOrEqual(15);
   });
 });
 
@@ -304,15 +331,15 @@ describe('settingsForm by page', () => {
     resetApp({ projects: [project(), project({ id: 'p2', name: 'site', board: board({ action: 'pr' }) })] });
   });
 
-  it('opens on a page, or on the page a 2.0 tab leads to', () => {
+  it('opens on a page, « Comptes et harness » when none is given', () => {
     settingsForm.open();
     expect(settingsForm.page).toBe('accounts');
     settingsForm.open({ page: 'tickets', projectId: 'p2' });
     expect(settingsForm.page).toBe('tickets');
     expect(settingsForm.projectId).toBe('p2');
-    settingsForm.open({ tab: 'projects', section: 'launch', projectId: 'p1' });
+    settingsForm.open({ page: 'launch', projectId: 'p1' });
     expect(settingsForm.page).toBe('launch');
-    settingsForm.resume({ tab: 'mcp' });
+    settingsForm.resume({ page: 'agents' });
     expect(settingsForm.page).toBe('agents');
   });
 

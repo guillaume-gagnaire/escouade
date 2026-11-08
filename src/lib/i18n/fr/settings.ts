@@ -417,8 +417,6 @@ export default {
       'Chaque agent de ce projet, existant ou nouveau (agents des tickets compris), est accessible depuis claude.ai et l’app Claude. Escouade lance tout de suite le process claude de chacun, qui reste lancé. La session apparaît sur claude.ai sous le nom « projet · agent » (pour un agent de ticket, son nom vient du ticket). En vue Claude Code, une interface déjà ouverte ne le prend qu’à son prochain lancement. Pour mettre un agent à part : clic droit, « Désactiver le remote control ».',
     /** Under the switch, shown on and disabled: the setting for all agents covers the project already. */
     remoteGlobal: 'Activé pour tous les projets dans Réglages › Agents',
-    /** The group of « Projet privé », after the remote control. */
-    privateTitle: 'Confidentialité',
     private: 'Projet privé',
     privateDesc:
       'Les agents des autres projets ne le voient pas par le serveur MCP d’Escouade : ni dans les listes, ni par son nom, ses tickets ou ses agents. Les siens ne voient que lui. Toi, Claude hors Escouade et les vues de l’app voyez tout.',
@@ -543,7 +541,6 @@ export default {
     subfolderHint: '(vide = dossier du projet)',
     subfolderPlaceholder: 'ex. apps/web',
     noCommandsYet: "Aucune commande pour l'instant.",
-    danger: 'Zone sensible',
     close: 'Fermer le projet',
     closeDesc:
       "Le projet quitte l'application : ses agents, ses terminaux et ses lancements s'arrêtent. Son historique (conversations, tickets, réglages) est gardé : rouvrir ce dossier le retrouve. Les fichiers et les worktrees sur le disque ne sont pas touchés.",
@@ -606,7 +603,9 @@ export default {
   },
   // The project’s .escouade.yml (ESC-146): what it sets, its commands waiting, the settings kept on this machine.
   shared: {
-    title: '.escouade.yml',
+    title: 'Réglages partagés',
+    /** Under the title: the file they are in. */
+    file: '.escouade.yml',
     /** What the group says of the file, by its state. */
     none: 'Ce dépôt n’a pas de .escouade.yml. Exporte les réglages de ce projet pour les partager avec ton équipe : le fichier se commite avec le code.',
     read: {

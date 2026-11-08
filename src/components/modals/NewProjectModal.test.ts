@@ -117,7 +117,7 @@ describe('NewProjectModal on the folder of a closed project', () => {
     expect(
       await screen.findByText('Historique retrouvé : 12 agents, 34 tickets, dernière activité le 14 octobre 2026'),
     ).toBeInTheDocument();
-    expect(screen.getByText("L'historique reste dans Réglages › Projets, où l'effacer.")).toBeInTheDocument();
+    expect(screen.getByText("L'historique reste dans Réglages › Tous les projets, où l'effacer.")).toBeInTheDocument();
   });
 
   it('writes a plural of agents and of tickets for each count', async () => {
@@ -428,7 +428,7 @@ describe('NewProjectModal in English', () => {
     render(NewProjectModal);
     await typePath('C:\\code\\demo');
     expect(await screen.findByText('History found: 1 agent, 34 tickets, last activity on October 14, 2026')).toBeInTheDocument();
-    expect(screen.getByText('The history stays in Settings › Projects, where you can erase it.')).toBeInTheDocument();
+    expect(screen.getByText('The history stays in Settings › All projects, where you can erase it.')).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Start from a blank project' })).toHaveAttribute('aria-checked', 'false');
     expect(screen.queryByRole('switch', { name: 'Create a first agent' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Reopen project' }));

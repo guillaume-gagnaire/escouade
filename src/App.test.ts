@@ -533,7 +533,7 @@ describe('App layout', () => {
     await userEvent.click(await (await barSoon()).findByRole('button', { name: 'Avancé' }));
     await userEvent.type(screen.getByPlaceholderText('aucun'), 'http://proxy:3128');
     await userEvent.click(projectRow());
-    await userEvent.click(screen.getByRole('button', { name: /^Zone sensible/ }));
+    await userEvent.click(within(document.getElementById('settings-panel')!).getByRole('button', { name: /^Avancé/ }));
     await userEvent.click(screen.getByRole('button', { name: 'Fermer le projet…' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Annuler' }));
     expect(await bar().findByRole('button', { name: 'Projet' })).toHaveAttribute('aria-current', 'page');
@@ -541,7 +541,7 @@ describe('App layout', () => {
     expect(screen.getByPlaceholderText('aucun')).toHaveValue('http://proxy:3128');
     // Closed for good: still the settings, still the draft.
     await userEvent.click(projectRow());
-    await userEvent.click(screen.getByRole('button', { name: /^Zone sensible/ }));
+    await userEvent.click(within(document.getElementById('settings-panel')!).getByRole('button', { name: /^Avancé/ }));
     await userEvent.click(screen.getByRole('button', { name: 'Fermer le projet…' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Fermer le projet' }));
     expect(await screen.findByText('Aucun projet ouvert.')).toBeInTheDocument();
@@ -593,7 +593,7 @@ describe('App layout', () => {
     app.modal = { kind: 'settings' };
     await screen.findByRole('dialog', { name: 'Réglages' });
     await userEvent.click(projectRow());
-    await userEvent.click(screen.getByRole('button', { name: /^Zone sensible/ }));
+    await userEvent.click(within(document.getElementById('settings-panel')!).getByRole('button', { name: /^Avancé/ }));
     await userEvent.click(screen.getByRole('button', { name: 'Fermer le projet…' }));
     expect(
       await screen.findByRole('checkbox', { name: 'Effacer aussi son historique (conversations, tickets, réglages)' }),
