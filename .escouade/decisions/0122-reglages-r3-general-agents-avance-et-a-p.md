@@ -1,9 +1,9 @@
 ---
-number: null
+number: 122
 id: "reglages-r3-general-agents-avance-et-a-p"
 title: "Réglages R3 : Général, Agents, Avancé et À propos ont leur contenu propre"
 date: "2026-11-08"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-381"
 pages: ["fenetre/reglages","docs/recherche-par-le-sens"]
@@ -12,8 +12,8 @@ documents: ["design/settings-2-2/PROPOSITION.md"]
 supersedes: []
 superseded_by: null
 changes: [{"page":"fenetre/reglages","added":29,"removed":23},{"page":"docs/recherche-par-le-sens","added":1,"removed":1}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-08T05:59:50+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
