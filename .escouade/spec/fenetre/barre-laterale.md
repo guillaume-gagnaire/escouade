@@ -3,7 +3,7 @@ title: "Barre latérale"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","src-tauri/src/core.rs","src-tauri/src/engine/claude/mod.rs","src-tauri/src/worktrees.rs"]
 tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19","ESC-380","ESC-390"]
-decisions: ["environnements-montres-et-onglets-selon"]
+decisions: [129]
 compared: null
 ---
 

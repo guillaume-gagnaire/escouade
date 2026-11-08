@@ -3,7 +3,7 @@ title: "Vue « Pull requests » du projet"
 subject: "git-fichiers"
 sources: ["docs/TODO-1.8.md","design/esc-65/README.md","src/components/prs/PrsView.svelte","src/lib/prlist.ts","src-tauri/src/pragent.rs","src-tauri/src/prview.rs"]
 tickets: ["ESC-65","ESC-66","ESC-68","ESC-383","ESC-390"]
-decisions: [60,"environnements-montres-et-onglets-selon"]
+decisions: [60,129]
 compared: null
 ---
 

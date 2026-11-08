@@ -1,9 +1,9 @@
 ---
-number: null
+number: 129
 id: "environnements-montres-et-onglets-selon"
 title: "Environnements montrés et onglets selon l'hébergeur de code"
 date: "2026-11-08"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-390"
 pages: ["kanban/environnements","kanban/kanban","git-fichiers/vue-pull-requests","fenetre/barre-laterale"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"kanban/environnements","added":14,"removed":7},{"page":"kanban/kanban","added":12,"removed":10},{"page":"git-fichiers/vue-pull-requests","added":4,"removed":1},{"page":"fenetre/barre-laterale","added":5,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-08T21:55:00+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

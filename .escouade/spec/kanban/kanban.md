@@ -3,7 +3,7 @@ title: "Kanban"
 subject: "Kanban"
 sources: ["docs/SPEC.md","design/kanban-envs-2-2/README.md"]
 tickets: ["ESC-95","ESC-123","ESC-141","ESC-143","ESC-153","ESC-190","ESC-243","ESC-59","ESC-63","ESC-390"]
-decisions: ["environnements-montres-et-onglets-selon"]
+decisions: [129]
 compared: null
 order: 30
 ---
