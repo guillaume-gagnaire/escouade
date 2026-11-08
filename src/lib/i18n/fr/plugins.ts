@@ -375,19 +375,29 @@ export default {
 
   adds: {
     themes: {
-      one: 'Un thème, dans Réglages › Application › Couleurs : {names}',
-      other: '{count} thèmes, dans Réglages › Application › Couleurs : {names}',
+      one: 'Un thème, dans Réglages › Général › Couleurs : {names}',
+      other: '{count} thèmes, dans Réglages › Général › Couleurs : {names}',
     },
     harnesses: { one: 'Un harness, dans « Nouvel agent » : {names}', other: '{count} harness, dans « Nouvel agent » : {names}' },
-    ticketSources: { one: 'Une source du Kanban : {names}', other: '{count} sources du Kanban : {names}' },
+    ticketSources: {
+      one: 'Une source du Kanban, dans Réglages › Services connectés : {names}',
+      other: '{count} sources du Kanban, dans Réglages › Services connectés : {names}',
+    },
     launchEnvironments: {
       one: 'Un environnement de lancement, pour les lancements de test : {names}',
       other: '{count} environnements de lancement, pour les lancements de test : {names}',
     },
-    forges: { one: 'Un hébergeur de code : {names}', other: '{count} hébergeurs de code : {names}' },
+    forges: {
+      one: 'Un hébergeur de code, dans Réglages › Services connectés : {names}',
+      other: '{count} hébergeurs de code, dans Réglages › Services connectés : {names}',
+    },
     accounts: {
-      one: 'Un type de compte, dans Réglages › Comptes : {names}',
-      other: '{count} types de comptes, dans Réglages › Comptes : {names}',
+      one: 'Un type de compte, dans Réglages › Comptes et harness : {names}',
+      other: '{count} types de comptes, dans Réglages › Comptes et harness : {names}',
+    },
+    accountsServices: {
+      one: 'Un type de compte, dans Réglages › Services connectés : {names}',
+      other: '{count} types de comptes, dans Réglages › Services connectés : {names}',
     },
     webhooks: { one: 'Un webhook : {names}', other: '{count} webhooks : {names}' },
     commands: { one: 'Une commande : {names}', other: '{count} commandes : {names}' },
@@ -404,10 +414,22 @@ export default {
     bad: 'Lien Escouade illisible, rien n’a été fait : {url}',
   },
 
-  link: {
-    title: 'Les plugins ont leur vue',
-    body: 'Installer, activer projet par projet, retirer une permission, lire un journal : tout se fait dans la vue Plugins, ouverte par l’icône de la barre des projets.',
+  // Réglages › Plugins (direction A, ESC-384): the installed ones, what each adds and where it is set, the seed's.
+  settingsPage: {
     open: 'Ouvrir la vue Plugins',
+    none: 'Aucun plugin installé. Un plugin ajoute un harness, une source du Kanban, un hébergeur de code, un thème ou un service de voix.',
+    settings: 'Réglages',
+    settingsOf: 'Réglages de {name}, dans la vue Plugins',
+    verified: 'Vérifié',
+    verifiedTip: 'Vérifié par Escouade : la v{version}, signée, relue par Escouade',
+    voice: 'Un service de voix, dans Réglages › Voix',
+    active: { one: 'Actif sur {count} projet sur {total}', other: 'Actif sur {count} projets sur {total}' },
+    wholeApp: 'Pour toute l’app',
+    seedNote:
+      'Dans l’installeur, rien à télécharger : chacun s’installe aussi tout seul au geste qui le demande (ajouter un compte, choisir une source, un hébergeur ou un service de voix).',
+    install: 'Installer',
+    installOf: 'Installer {name}',
+    security: 'Sécurité',
   },
 
   proposed: {

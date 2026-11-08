@@ -202,9 +202,10 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('osNotifications', 'notifications', 'settings.notifications.systemName', s('osNotifications')),
   row('sound', 'notifications', 'settings.notifications.soundOn', s('sound')),
 
-  // Plugins › Installés, Proposés par Escouade, N'installer que des versions vérifiées (in the view Plugins until R7).
-  row('pluginsInstalled', 'plugins', 'settings.pages.plugins.label'),
-  row('pluginsVerifiedOnly', 'plugins', 'plugins.store.verifiedOnly', s('pluginsVerifiedOnly')),
+  // Plugins › Installés, Proposés par Escouade, Sécurité (N'installer que des versions vérifiées).
+  row('pluginsInstalled', 'plugins', 'plugins.installed.title'),
+  row('pluginsSeed', 'plugins', 'plugins.installed.seedTitle'),
+  row('pluginsVerifiedOnly', 'plugins', 'plugins.installed.verifiedOnly', s('pluginsVerifiedOnly')),
 
   // Avancé › Réseau, Terminaux, Pièces jointes, Recherche par le sens, Données locales.
   row('proxyUrl', 'advanced', 'settings.network.proxyUrl', s('proxyUrl')),

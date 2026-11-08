@@ -1,9 +1,9 @@
 ---
 title: "Réglages"
 subject: "Fenêtre"
-sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md"]
-tickets: ["ESC-378","ESC-379","ESC-380"]
-decisions: [118,119]
+sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/captures/a-plugins.png"]
+tickets: ["ESC-378","ESC-379","ESC-380","ESC-384"]
+decisions: [118,119,"la-page-plugins-des-reglages-devient-le"]
 compared: null
 ---
 
@@ -48,7 +48,7 @@ Une seule fenêtre de réglages pour toute l'app : une barre des catégories à 
   - un dossier des worktrees ou un préfixe de branche refusé, avec la raison sous le champ (voir *Git & fichiers*) ;
   - un nombre vidé ou sous 0, par exemple « Un nombre entier, 0 ou plus : 15 reste enregistré. » ; un nombre à virgule est arrondi à l'entier du dessous ; une taille de texte hors de ses bornes est ramenée dedans.
 - Ce qui coûte le dit sur sa rangée, comme avant : le proxy et les certificats ne valent pour un agent qu'au prochain démarrage de son process, le remote control lance aussitôt le process `claude` de chaque agent concerné.
-- Certaines rangées passent par leur propre appel au backend, comme avant : « Affichage » (voir *Fenêtre*), les comptes des harness et leur « Projection des quotas » (voir *Barre de statut*), les comptes des intégrations (voir *Intégrations*), l'interrupteur « Les agents peuvent piloter Escouade » (voir *Serveur MCP*), et les modèles de la voix, téléchargés ou effacés sur leur ligne.
+- Certaines rangées passent par leur propre appel au backend, comme avant : « Affichage » (voir *Fenêtre*), les comptes des harness et leur « Projection des quotas » (voir *Barre de statut*), les comptes des intégrations (voir *Intégrations*), l'interrupteur « Les agents peuvent piloter Escouade » (voir *Serveur MCP*), les modèles de la voix, téléchargés ou effacés sur leur ligne, et, sur la page Plugins, l'interrupteur d'un plugin et « Installer » d'un plugin proposé.
 - Rien ne se perd au redémarrage : ce qui est enregistré est dans `settings.json` et les fichiers des projets, dont aucune clé ne change.
 
 ### Les pages
@@ -60,7 +60,7 @@ Chaque réglage a sa page dans le registre de la fenêtre. Jusqu'à ce que chaqu
 - **Comptes et harness** : les comptes, puis l'ancien onglet Harness.
 - **Services connectés** et **Tickets importés** (sur sa partie « Sources ») : l'ancien onglet Intégrations, pour le projet choisi.
 - **Voix**, **Notifications** : comme avant.
-- **Plugins** : le lien vers la vue Plugins.
+- **Plugins** : les plugins installés, ceux que propose Escouade, et « N'installer que des versions vérifiées » (ci-dessous).
 - **Avancé** : Réseau, Terminaux, puis « Recherche par le sens ».
 - **À propos** : comme avant.
 - **Projet**, **Git et worktrees**, **Lancement**, **Équipe**, **Confidentialité** : l'ancien onglet Projets du projet, chacune ouverte sur sa partie (Git, Lancement, Kanban partagé, Confidentialité) ; « Fermer le projet… » est sous « Zone sensible », repliée. Fermer ou non revient aux réglages (voir *Fermer un projet*).
@@ -80,6 +80,20 @@ Le détail des réglages de chaque ancien onglet :
 - **Terminaux** : PowerShell 7, Git Bash, distribution WSL (bash sous macOS), shells détectés (voir *Barre latérale*).
 - **Réseau** : proxy et certificats (ci-dessous).
 - **À propos** : version, « Rechercher une mise à jour », « Installer les mises à jour automatiquement », « Recevoir les versions bêta », statistiques d'usage, données locales (voir *Livraison et mises à jour*).
+
+### La page Plugins
+
+Le tableau des plugins, côté réglages. La vue Plugins reste l'endroit où l'on installe depuis le store, un dossier ou un dépôt, où l'on active un plugin projet par projet, retire une permission et lit un journal (voir *Les plugins : vue d'ensemble*).
+
+- **Installés**, avec « Ouvrir la vue Plugins » à droite du titre (la vue, sur ses plugins installés). Une ligne par plugin installé, livrés avec l'app compris :
+  - ses deux lettres, son nom et sa version ;
+  - ce qu'il ajoute et où cela se règle, en deux points au plus, dans cet ordre : harness (« Un harness, dans « Nouvel agent » : Claude Code »), source du Kanban et hébergeur de code (« … dans Réglages › Services connectés : GitHub »), thème (« Un thème, dans Réglages › Général › Couleurs : … »), service de voix (un plugin qui s'active sur `voice:…` : « Un service de voix, dans Réglages › Voix »), puis environnements de lancement, webhooks, commandes et le reste. Ses types de comptes ne sont dits que s'il n'ajoute rien d'autre. Sans rien de tout cela : sa description ;
+  - sur combien de projets il est actif (« Actif sur 2 projets sur 3 », un projet privé ne le comptant que s'il y a été activé), ou « Pour toute l'app » pour un thème ; rien sans projet ouvert ;
+  - son état s'il ne peut pas tourner (désactivé par Escouade, manifeste invalide) ;
+  - à droite : « Vérifié » (bouclier, teal) pour une version vérifiée par Escouade ; « Réglages » s'il a des réglages ou des secrets à saisir, qui ferme la fenêtre et ouvre sa page dans la vue Plugins, sur son onglet Réglages ; son interrupteur « Actif dans Escouade », appliqué aussitôt. C'est lui que nomment « Réglages › Plugins le rallume » (un hébergeur dont le plugin est coupé) et « Le plugin … est coupé (Réglages › Plugins) ».
+  - Aucun plugin : « Aucun plugin installé. Un plugin ajoute un harness, une source du Kanban, un hébergeur de code, un thème ou un service de voix. »
+- **Proposés par Escouade**, s'il en reste : les plugins de l'amorce qui ne sont pas installés (voir *Les plugins livrés avec Escouade*), sous la note « Dans l'installeur, rien à télécharger : chacun s'installe aussi tout seul au geste qui le demande (ajouter un compte, choisir une source, un hébergeur ou un service de voix). ». Par plugin, pourquoi il n'est pas là (« Dans l'app, sans téléchargement. Il s'installe quand tu en as besoin. », « Tu l'as désinstallé (v1.3.0). Escouade ne le remet que sur un geste qui le demande. », ou la raison d'un refus) et « Installer » : installé d'un clic depuis l'amorce, sans réseau ni fenêtre, dit par « Plugin Trello installé » ; il passe alors dans les installés. Une version plus récente du store se propose ensuite comme une mise à jour, dans la vue.
+- **Sécurité** › « N'installer que des versions vérifiées », le réglage de la vue Plugins (`pluginsVerifiedOnly`), avec l'état de la liste de révocation (« Liste de révocation lue à 14:02 · nº 418, signée, relue toutes les 6 heures »).
 
 ### Nettoyer les worktrees restés
 
@@ -101,3 +115,4 @@ Le détail des réglages de chaque ancien onglet :
 - Rien ne revient sur un réglage enregistré : pour le défaire, on le change de nouveau.
 - Le proxy n'est pas donné aux terminaux intégrés sans l'option qui l'exporte.
 - Ignorer la vérification des certificats ne vaut pour un process `claude` qu'à son prochain démarrage.
+- La page Plugins n'active pas un plugin projet par projet : c'est l'onglet Projets de sa page, dans la vue Plugins (et, plus tard, la page Confidentialité du projet).

@@ -387,7 +387,9 @@ export function contributionsOf(m: Manifest | null, lang: string): string[] {
   ];
   for (const [key, label] of points) {
     const n = list(key).length;
-    if (n) out.push(t(`plugins.adds.${label}`, { count: n, names: names(key) }));
+    // An account of a Kanban source or a code host is added in Services connectés; a harness's, in Comptes et harness.
+    const where = label === 'accounts' && (list('ticketSources').length || list('forges').length) ? 'accountsServices' : label;
+    if (n) out.push(t(`plugins.adds.${where}`, { count: n, names: names(key) }));
   }
   return out;
 }

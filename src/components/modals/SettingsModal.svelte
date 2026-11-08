@@ -21,6 +21,7 @@
   import NewProjects from '../settings/NewProjects.svelte';
   import IntegrationsTab from '../settings/IntegrationsTab.svelte';
   import McpSection from '../settings/McpSection.svelte';
+  import PluginsPage from '../settings/PluginsPage.svelte';
   import ProjectTab from '../settings/ProjectTab.svelte';
   import SettingsNav from '../settings/SettingsNav.svelte';
   import VoiceTab from '../settings/VoiceTab.svelte';
@@ -178,16 +179,7 @@
           {:else if info.id === 'notifications'}
             <AppTab tab="notifications" />
           {:else if info.id === 'plugins'}
-            <section class="sg plugins-link">
-              <p><b>{t('plugins.link.title')}</b> {t('plugins.link.body')}</p>
-              <button
-                class="btn primary"
-                onclick={() => {
-                  close();
-                  app.openPlugins();
-                }}><Icon name="puzzle" size={14} />{t('plugins.link.open')}</button
-              >
-            </section>
+            <PluginsPage />
           {:else if info.id === 'advanced'}
             <AppTab tab="network" />
             <AppTab tab="terminals" />
@@ -293,23 +285,6 @@
   .inner {
     max-width: 720px;
     container: settings / inline-size;
-  }
-  .plugins-link {
-    display: grid;
-    justify-items: start;
-    gap: 12px;
-    padding-top: 6px;
-  }
-  .plugins-link p {
-    margin: 0;
-    max-width: 560px;
-    color: var(--soft);
-    font-size: 12.5px;
-    line-height: 1.55;
-  }
-  .plugins-link b {
-    color: var(--text);
-    font-weight: 600;
   }
   .none {
     margin: 20px 0 0;
