@@ -7,6 +7,11 @@
       "sha256": "bfeb8f00390fe98b7ed32d5cd95d70e3782e06705acf744d8bcdd0dc735943d0"
     },
     {
+      "id": "dev.escouade.antigravity-cli",
+      "version": "2.2.4",
+      "sha256": "790b0d368e2f35dcdeb6268f02198b8781e0ab7ced9a00e38c585b2f340bec68"
+    },
+    {
       "id": "dev.escouade.azure-devops",
       "version": "2.2.2",
       "sha256": "0c58b47d87a4d2f438055db60ed55c9bfa08fe8f0d01d690885eca298e264d58"

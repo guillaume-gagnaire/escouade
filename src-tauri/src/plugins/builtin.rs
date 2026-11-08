@@ -124,9 +124,6 @@ pub const REGISTRY: &[Entry] = &[
         id: CODEX,
         manifest: include_str!("../../../plugins/codex/escouade-plugin.json"),
     },
-    // Antigravity CLI is not given in 2.2.0-beta.1 (ESC-388): with agy 1.5.3, `-p` lets a command or a write through with no
-    // rule and no question (real_agy_rules, 2026-11-08). Its agents say their plugin is not installed; its tests keep it.
-    #[cfg(test)]
     Entry {
         id: ANTIGRAVITY,
         manifest: include_str!("../../../plugins/antigravity/escouade-plugin.json"),
