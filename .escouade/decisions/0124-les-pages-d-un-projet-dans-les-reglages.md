@@ -1,9 +1,9 @@
 ---
-number: null
+number: 124
 id: "les-pages-d-un-projet-dans-les-reglages"
 title: "Les pages d'un projet dans les réglages, et des renvois qui mènent à leur page"
 date: "2026-11-08"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-385"
 pages: ["fenetre/reglages","projets/fermer-un-projet"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"fenetre/reglages","added":27,"removed":13},{"page":"projets/fermer-un-projet","added":3,"removed":3}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-08T08:56:24+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
