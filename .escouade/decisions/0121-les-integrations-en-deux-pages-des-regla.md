@@ -1,9 +1,9 @@
 ---
-number: null
+number: 121
 id: "les-integrations-en-deux-pages-des-regla"
 title: "Les intégrations en deux pages des réglages : Services connectés (app) et Tickets importés (projet)"
 date: "2026-11-08"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-383"
 pages: ["kanban/integrations","fenetre/reglages","git-fichiers/hebergeurs-de-code","git-fichiers/pull-requests","git-fichiers/vue-pull-requests"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"kanban/integrations","added":21,"removed":14},{"page":"fenetre/reglages","added":7,"removed":5},{"page":"git-fichiers/hebergeurs-de-code","added":3,"removed":2},{"page":"git-fichiers/pull-requests","added":2,"removed":2},{"page":"git-fichiers/vue-pull-requests","added":1,"removed":1}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-08T04:56:15+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
