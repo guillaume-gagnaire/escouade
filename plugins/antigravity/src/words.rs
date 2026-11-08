@@ -199,12 +199,17 @@ pub fn deny_rules(rules: &AgyRules) -> Vec<String> {
     deny
 }
 
-/// The keys of the settings the plugin takes out whatever the file held: their effect in `-p` was never tried, and the
-/// agent can write its home, so what it planted there is not kept (`agy`'s defaults hold).
+/// The keys of the settings the plugin takes out whatever the file held: the agent can write its home, so what it planted
+/// there is not kept (`agy`'s defaults hold), but `toolPermission`, set again (`TOOL_PERMISSION`).
 pub const SET_KEYS: [&str; 2] = ["toolPermission", "agentMode"];
 
+/// The `toolPermission` the plugin writes: what no rule allows needs a review, refused in `-p` (`agy` 1.5.3's default,
+/// measured by `real_agy_rules`; `agent-decides` or `always-proceed` would let `agy` judge alone, ESC-388).
+pub const TOOL_PERMISSION: &str = "request-review";
+
 /// The settings `before` (a JSON object, else none) with their `permissions` as Escouade sets them (its mode's rules, what
-/// the user allowed for the next turn, its refusals: `deny` before all, `agy`'s rule), `SET_KEYS` taken out.
+/// the user allowed for the next turn, its refusals: `deny` before all, `agy`'s rule), `SET_KEYS` taken out and
+/// `toolPermission` set to `TOOL_PERMISSION`.
 pub fn settings_doc(before: &str, rules: &AgyRules, mode: &str, allowed: &[String]) -> Value {
     let mut doc: Value = serde_json::from_str(before)
         .ok()
@@ -224,6 +229,7 @@ pub fn settings_doc(before: &str, rules: &AgyRules, mode: &str, allowed: &[Strin
     let mut deny = deny_rules(rules);
     deny.extend(guard_rules(&rules.cwd, allowed));
     doc["permissions"] = json!({ "allow": allow, "deny": deny, "ask": [] });
+    doc["toolPermission"] = json!(TOOL_PERMISSION);
     doc
 }
 
@@ -236,10 +242,10 @@ fn separator(path: &str) -> char {
     }
 }
 
-/// The refusals that guard a turn going on with a write allowed (`allowed`, rules `write_file(<path>)`), whatever `agy`
-/// makes of a rule (ESC-376, until `real_agy_rules` says it): each folder of `KEPT` at the root of the agent's folder
-/// `cwd`, but one a write allowed is in, and each path allowed followed by `\..` and `/..`. Whether `deny` wins over
-/// `allow` there is the real `agy`'s to say.
+/// The refusals that guard a turn going on with a write allowed (`allowed`, rules `write_file(<path>)`, ESC-376): each
+/// folder of `KEPT` at the root of the agent's folder `cwd`, but one a write allowed is in (`deny` wins over `allow`,
+/// `real_agy_rules`). No refusal of `<path>\..`: `agy` 1.5.3 reads it as the folder of `<path>`, which would refuse the
+/// write allowed itself, and refuses `<path>\..\.git\x` with no such refusal (ESC-388).
 pub fn guard_rules(cwd: &str, allowed: &[String]) -> Vec<String> {
     let writes: Vec<&str> = allowed
         .iter()
@@ -257,15 +263,6 @@ pub fn guard_rules(cwd: &str, allowed: &[String]) -> Vec<String> {
             let folder = format!("{root}{sep}{k}");
             if !writes.iter().any(|w| escouade_acp::inside(w, &folder)) {
                 deny.push(format!("write_file({folder})"));
-            }
-        }
-    }
-    for w in writes {
-        let w = w.trim_end_matches(['/', '\\']);
-        for climb in ["\\..", "/.."] {
-            let rule = format!("write_file({w}{climb})");
-            if !deny.contains(&rule) {
-                deny.push(rule);
             }
         }
     }
@@ -580,6 +577,13 @@ fn shape_of(tool: &str, args: &Value) -> Option<(String, String, bool)> {
     }
 }
 
+/// What `agy` names the call `tool` with `args` in the `denied_actions` of its `result` (`command`, `write_file`,
+/// `read_file`, `mcp`, `read_url`): the action of its rule.
+pub fn action_of(tool: &str, args: &Value) -> Option<String> {
+    let (rule, _, _) = shape_of(tool, args)?;
+    rule.split('(').next().map(str::to_string)
+}
+
 /// The rule of `agy` that allows the call `tool` with `args` (`command(echo hi)`, `write_file(C:\x\b.txt)`,
 /// `mcp(escouade/get_board)`), and the call as the model is told it was allowed or refused. None for a call no rule names,
 /// or whose text no rule can hold as it is (`unruled`).
@@ -797,6 +801,15 @@ pub fn refused_again(lang: &str, said: &str) -> String {
     }
 }
 
+/// The result of a call `agy` refused but told done (ESC-388).
+pub fn refused_by_agy(lang: &str) -> &'static str {
+    if lang == "fr" {
+        "Refusé par Antigravity : aucune règle ne l’autorisait."
+    } else {
+        "Refused by Antigravity: no rule allowed it."
+    }
+}
+
 /// The label of a choice of `ask_question`, its mark of the one it recommends left out.
 fn choice_label(o: &Value) -> String {
     let text = o
@@ -891,10 +904,29 @@ pub fn home_env(env: &[(String, String)], home: &Path) -> Vec<(String, String)> 
     if !env.iter().any(|(k, _)| k == NO_SELF_UPDATE.0) {
         env.push((NO_SELF_UPDATE.0.into(), NO_SELF_UPDATE.1.into()));
     }
+    // `agy` 1.5.3 writes in its temporary folder with no rule nor question (ESC-388): one of the agent's own.
+    let tmp = temp_dir(home).to_string_lossy().into_owned();
+    env.retain(|(k, _)| !TEMP_VARS.contains(&k.as_str()));
+    for var in TEMP_VARS {
+        env.push((var.into(), tmp.clone()));
+    }
     let home = home.to_string_lossy().into_owned();
     env.push(("USERPROFILE".into(), home.clone()));
     env.push(("HOME".into(), home));
     env
+}
+
+/// The variables that name the temporary folder (Windows, then Unix).
+pub const TEMP_VARS: [&str; 3] = ["TEMP", "TMP", "TMPDIR"];
+
+/// The temporary folder of `agy` in the agent's home: what it writes there with no question touches no file of the user's.
+pub fn temp_dir(home: &Path) -> PathBuf {
+    home.join("tmp")
+}
+
+/// The file that makes `temp_dir` (the core writes a launch's files, their folder made).
+pub fn temp_mark(home: &Path) -> PathBuf {
+    temp_dir(home).join(".escouade")
 }
 
 /// What the card of a turn stopped by its limit says (`said`: `agy`'s own words).

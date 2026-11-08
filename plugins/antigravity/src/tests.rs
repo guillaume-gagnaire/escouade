@@ -102,7 +102,8 @@ fn its_launch_has_its_rules_and_its_server_in_files_never_its_token_in_its_argum
         .windows(2)
         .any(|w| w == ["--model", "gemini-3.8-flash"]));
     assert!(launch.fence_applied);
-    assert_eq!(launch.files.len(), 2);
+    // Its rules, its server, and the mark of its temporary folder (ESC-388).
+    assert_eq!(launch.files.len(), 3);
     assert!(launch.files[0].text.contains("prive"));
     assert!(launch.files[1].text.contains("Bearer s3cr3t"));
     assert!(launch.remove_env.iter().any(|v| v == "GEMINI_API_KEY"));
@@ -454,7 +455,9 @@ fn what_the_agent_wrote_in_its_home_gives_it_no_right() {
     let launch = c.launch(&p);
     let rules: Value = serde_json::from_str(&launch.files[0].text).unwrap();
     assert_eq!(rules["permissions"]["allow"], json!([]));
-    assert!(rules.get("toolPermission").is_none() && rules.get("agentMode").is_none());
+    // What it planted is not kept: what no rule allows needs a review (ESC-388).
+    assert_eq!(rules["toolPermission"], "request-review");
+    assert!(rules.get("agentMode").is_none());
     // What `agy` itself keeps there (the trust of its interface) stays.
     assert_eq!(rules["trustedWorkspaces"], json!(["x"]));
     let servers: Value = serde_json::from_str(&launch.files[1].text).unwrap();

@@ -809,7 +809,7 @@ fn n2_no_command_is_allowed_by_a_rule_but_exactly_what_the_user_allowed_for_good
 }
 
 #[test]
-fn n2_a_turn_going_on_with_a_write_allowed_refuses_kept_and_climbing_out_of_it() {
+fn n2_a_turn_going_on_with_a_write_allowed_refuses_kept_but_never_the_write_itself() {
     let sep = if WIN { "\\" } else { "/" };
     let dir = home("n2-guard");
     let mut c = started(&params(&dir, "default"));
@@ -824,11 +824,9 @@ fn n2_a_turn_going_on_with_a_write_allowed_refuses_kept_and_climbing_out_of_it()
             "{k}: {deny:?}"
         );
     }
-    assert!(
-        deny.contains(&format!("write_file({path}\\..)")),
-        "{deny:?}"
-    );
-    assert!(deny.contains(&format!("write_file({path}/..)")), "{deny:?}");
+    // `agy` 1.5.3 reads `<path>\..` as its folder: refused, it would refuse the write allowed itself, and it refuses
+    // `<path>\..\.git\x` with no such refusal (`real_agy_rules`, ESC-388).
+    assert!(!deny.iter().any(|d| d.contains("..")), "{deny:?}");
     // The turn over, they go with the write allowed.
     let out = c.frames(&[init(), result()]);
     assert_eq!(denied_rules(&out), Vec::<String>::new());
@@ -846,10 +844,7 @@ fn n2_a_turn_going_on_with_a_write_allowed_refuses_kept_and_climbing_out_of_it()
         deny.contains(&format!("write_file({}{sep}.agents)", cwd())),
         "{deny:?}"
     );
-    assert!(
-        deny.contains(&format!("write_file({config}\\..)")),
-        "{deny:?}"
-    );
+    assert!(!deny.iter().any(|d| d.contains("..")), "{deny:?}");
 }
 
 #[test]
@@ -942,20 +937,226 @@ fn denied_rules(out: &[Item]) -> Vec<String> {
     serde_json::from_value(doc["permissions"]["deny"].clone()).unwrap()
 }
 
+// ---- ESC-388: a refusal `agy` 1.5.3 tells `DONE` ----------------------------------------------------------------
+
+/// A step of a call as `agy` tells it, with no error.
+fn told(index: u64, tool: &str, state: &str, args: Value) -> String {
+    json!({ "event": "step_update", "step_update": {
+        "step_index": index, "step_type": "tool", "tool_name": tool, "state": state,
+        "tool_info": { "parameters": args },
+    } })
+    .to_string()
+}
+
+/// The end of a turn whose `result` lists `actions` refused (`denied_actions`).
+fn result_denying(actions: &[&str]) -> String {
+    let denied: Vec<Value> = actions.iter().map(|a| json!({ "action": a })).collect();
+    json!({ "event": "result", "result": { "status": "SUCCESS", "denied_actions": denied } })
+        .to_string()
+}
+
+/// The transcript of the conversation, its steps `(index, status)`.
+fn transcript_of(dir: &Path, steps: &[(u64, &str)]) {
+    let file = words::transcript(dir, "conv-1");
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    let lines: String = steps
+        .iter()
+        .map(|(i, s)| json!({ "step_index": i, "type": "GENERIC", "status": s }).to_string() + "\n")
+        .collect();
+    std::fs::write(file, lines).unwrap();
+}
+
+/// What `frames` gave and what the host's timer let through after, until nothing is held.
+fn read_all(c: &mut Client, lines: &[String]) -> Vec<Item> {
+    let mut out = c.frames(lines);
+    for _ in 0..20 {
+        out.extend(c.tick());
+    }
+    out
+}
+
+/// Whether `out` tells the call of the step `step` failed.
+fn failed(out: &[Item], step: u64) -> bool {
+    let id = words::call_id("conv-1", step);
+    out.iter()
+        .any(|i| matches!(i, Item::ToolResult { id: d, error: true, .. } if *d == id))
+}
+
+#[test]
+fn esc388_a_command_agy_refused_but_told_done_is_a_card_by_its_denied_actions() {
+    let dir = home("388-cmd");
+    let mut c = started(&params(&dir, "default"));
+    c.send("fais-le");
+    let args = command("mkdir proof");
+    let out = read_all(
+        &mut c,
+        &[
+            init(),
+            told(2, "run_command", "ACTIVE", args.clone()),
+            told(2, "run_command", "DONE", args),
+            result_denying(&["command"]),
+        ],
+    );
+    assert_eq!(cards(&out).len(), 1, "{out:?}");
+    assert!(failed(&out, 2), "told failed: {out:?}");
+    assert!(!out.iter().any(|i| matches!(i, Item::Turn { .. })));
+    // Allowed: its exact rule for the turn that goes on.
+    let (rid, _) = cards(&out).remove(0);
+    let out = c.answer_permission(&answer(&rid, true, false)).unwrap();
+    assert_eq!(allowed(&out), ["command(mkdir proof)"]);
+    assert!(went_on(&out).is_some_and(|m| m.contains("mkdir proof")));
+}
+
+#[test]
+fn esc388_a_write_agy_refused_but_told_done_and_never_written_is_a_card() {
+    let dir = home("388-write");
+    let mut c = started(&params(&dir, "default"));
+    c.send("écris");
+    transcript_of(&dir, &[(0, "DONE"), (1, "DONE")]);
+    let args = write_of(&at(".git/config"));
+    let out = read_all(
+        &mut c,
+        &[
+            init(),
+            told(2, "write_file", "ACTIVE", args.clone()),
+            told(2, "write_file", "DONE", args),
+            result_denying(&["write_file"]),
+        ],
+    );
+    assert_eq!(cards(&out).len(), 1, "{out:?}");
+    assert!(failed(&out, 2), "{out:?}");
+}
+
+#[test]
+fn esc388_the_call_refused_is_the_one_the_transcript_does_not_say_done() {
+    let dir = home("388-two");
+    let mut c = started(&params(&dir, "default"));
+    c.send("fais-le");
+    // `echo un` ran (allowed for good by the user before): its line says it; `echo deux` was refused.
+    transcript_of(&dir, &[(0, "DONE"), (1, "DONE"), (2, "DONE"), (3, "DONE")]);
+    let out = read_all(
+        &mut c,
+        &[
+            init(),
+            told(2, "run_command", "DONE", command("echo un")),
+            told(4, "run_command", "DONE", command("echo deux")),
+            result_denying(&["command"]),
+        ],
+    );
+    assert_eq!(cards(&out).len(), 1, "{out:?}");
+    assert!(failed(&out, 4) && !failed(&out, 2), "{out:?}");
+    let (rid, _) = cards(&out).remove(0);
+    let out = c.answer_permission(&answer(&rid, true, false)).unwrap();
+    assert_eq!(allowed(&out), ["command(echo deux)"]);
+}
+
+#[test]
+fn esc388_a_refusal_told_both_ways_is_one_card() {
+    let dir = home("388-once");
+    let mut c = started(&params(&dir, "default"));
+    c.send("fais-le");
+    let out = read_all(
+        &mut c,
+        &[
+            init(),
+            refused(2, "run_command", command("echo hi")),
+            result_denying(&["command"]),
+        ],
+    );
+    assert_eq!(cards(&out).len(), 1, "{out:?}");
+}
+
+#[test]
+fn esc388_a_call_that_ran_with_nothing_denied_is_no_card() {
+    let dir = home("388-ran");
+    let mut c = started(&params(&dir, "default"));
+    c.send("fais-le");
+    let out = read_all(
+        &mut c,
+        &[
+            init(),
+            told(2, "run_command", "DONE", command("echo hi")),
+            result(),
+        ],
+    );
+    assert!(cards(&out).is_empty(), "{out:?}");
+    assert!(!failed(&out, 2));
+    assert!(out.iter().any(|i| matches!(i, Item::Turn { .. })));
+}
+
+#[test]
+fn esc388_its_temporary_folder_is_in_the_agents_home_never_the_users() {
+    // `agy` 1.5.3 lets a write in its temporary folder through with no rule nor question: the user's `%TEMP%` is not it.
+    let dir = home("388-temp");
+    let mut c = Client::new(&Attach {
+        agent: "agy-a1".into(),
+        cwd: cwd(),
+        lang: "fr".into(),
+        ..Attach::default()
+    });
+    let launch = c.launch(&params(&dir, "default"));
+    let tmp = words::temp_dir(&dir).to_string_lossy().into_owned();
+    for var in ["TEMP", "TMP", "TMPDIR"] {
+        assert!(
+            launch.env.iter().any(|v| v.name == var && v.value == tmp),
+            "{var}: {:?}",
+            launch
+                .env
+                .iter()
+                .map(|v| (&v.name, &v.value))
+                .collect::<Vec<_>>()
+        );
+    }
+    // Made, by a file of its own the core writes in it.
+    assert!(launch
+        .files
+        .iter()
+        .any(|f| Path::new(&f.path).parent() == Some(Path::new(&tmp))));
+    assert!(launch.files[0].path.ends_with("settings.json"));
+    // And so at each launch again.
+    let out = turn_refusing(&mut c, "run_command", command("echo ok"));
+    let (rid, _) = cards(&out).remove(0);
+    let out = c.answer_permission(&answer(&rid, true, false)).unwrap();
+    let relaunch = out
+        .iter()
+        .find_map(|i| match i {
+            Item::Relaunch { launch } => Some(launch),
+            _ => None,
+        })
+        .expect("a relaunch");
+    assert!(relaunch
+        .env
+        .iter()
+        .any(|v| v.name == "TEMP" && v.value == tmp));
+}
+
+#[test]
+fn esc388_its_settings_ask_for_a_review_of_what_no_rule_allows() {
+    let dir = home("388-review");
+    let c = started(&params(&dir, "default"));
+    let doc: Value = serde_json::from_str(&c.settings_text()).unwrap();
+    assert_eq!(doc["toolPermission"], "request-review");
+    // Whatever the agent planted there.
+    let before = r#"{"toolPermission":"always-proceed","agentMode":"x"}"#;
+    let doc = words::settings_doc(before, &rules_here(), "default", &[]);
+    assert_eq!(doc["toolPermission"], "request-review");
+    assert!(doc.get("agentMode").is_none());
+}
+
 // ---- The real `agy` ----------------------------------------------------------------------------------------------
 
 /// A case of `real_agy_rules`: what it tries, its rules `allow` and `deny`, what the model is told to call, whether `agy`
 /// must let it run.
 type Case = (&'static str, Vec<String>, Vec<String>, String, bool);
 
-/// ESC-371, by hand, the day `agy` is on the machine again (`ESCOUADE_TEST_REAL_AGY`, its `agy.exe` or `agy`), on its
-/// sign-in, in a `USERPROFILE` of its own, in a git repository of its own beside a « private » folder: how `agy` 1.4.9 judges
-/// the rules Escouade writes, case by case. Each case writes `settings.json`, starts `agy -p` on one message that has the
-/// model call one tool, and reads its stream: `allowed` when the call ran, `refused` when its step ended
-/// `permission check failed` or `denied permission`. What each case must give is the plugin's assumption; one that differs
-/// is printed, and the run fails at its end with all of them. The plugin does not depend on any of them holding: no rule
-/// of its guards anything alone (this file's other tests): until it ran, nothing is allowed by a rule that would not hold
-/// if `agy` read it as a mere start of the text (ESC-376). Never run in ESC-371 nor ESC-376 (no `agy` on the machine).
+/// ESC-371, by hand (`ESCOUADE_TEST_REAL_AGY`, its `agy.exe` or `agy`; `ESCOUADE_TEST_REAL_AGY_CASES` for some cases), on
+/// its sign-in, in a git repository of its own beside a « private » folder, launched as the plugin has it (its home as
+/// `USERPROFILE`, its own temporary folder, `toolPermission` `request-review`): how `agy` judges the rules Escouade writes,
+/// case by case. Each case writes `settings.json`, starts `agy -p` on one message that has the model call one tool, and
+/// reads its stream: `refused` when its step ended refused or the turn's `result` lists it (`denied_actions`), `allowed`
+/// when the call ran; a case where the model called another tool is tried again. Its expected results are what `agy` 1.5.3
+/// did on 2026-11-08 (ESC-388); one that differs is printed with what `agy` said, and the run fails at its end with all of
+/// them. Then a call refused, allowed by the user and done again in the turn that goes on, as the plugin has it.
 #[test]
 #[ignore = "real Antigravity CLI: ESCOUADE_TEST_REAL_AGY=<agy>"]
 fn real_agy_rules() {
@@ -978,6 +1179,8 @@ fn real_agy_rules() {
     let w = |p: &Path| p.to_string_lossy().into_owned();
     let (wt_s, prive_s) = (w(&wt), w(&prive));
     let sep = std::path::MAIN_SEPARATOR;
+    // A file of the user's own temporary folder (the root of this test may be in it).
+    let users_temp = std::env::temp_dir().join(format!("esc388-{}.txt", std::process::id()));
     // (what it tries, its rules allow, its rules deny, what the model is told to call, what `agy` must do)
     let cases: Vec<Case> = vec![
         (
@@ -1051,11 +1254,12 @@ fn real_agy_rules() {
             false,
         ),
         (
-            "prefix: more words after an allowed command",
+            // 1.5.3: a rule is the whole command, not its start.
+            "prefix: more words after an allowed command are refused",
             vec!["command(git add)".into()],
             vec![],
             "run_command `git add .`".into(),
-            true,
+            false,
         ),
         (
             "a `*` in a rule matches anything",
@@ -1065,11 +1269,12 @@ fn real_agy_rules() {
             true,
         ),
         (
-            "a `*` inside a rule is a joker",
+            // 1.5.3: `*` alone is anything, not a `*` among words.
+            "a `*` inside a command rule is no joker",
             vec!["command(echo *)".into()],
             vec![],
             "run_command `echo joker`".into(),
-            true,
+            false,
         ),
         (
             "deny before allow",
@@ -1185,11 +1390,12 @@ fn real_agy_rules() {
             false,
         ),
         (
-            "deny of <file> backslash .. leaves <file> allowed",
+            // 1.5.3 reads `<file>\..` as its folder: why the plugin writes no such refusal (ESC-388).
+            "deny of <file> backslash .. refuses <file> too",
             vec![format!("write_file({wt_s}{sep}a.txt)")],
             vec![format!("write_file({wt_s}{sep}a.txt{sep}..)")],
             format!("write_file {wt_s}{sep}a.txt"),
-            true,
+            false,
         ),
         (
             "no rule: a write of the folder itself is refused",
@@ -1220,96 +1426,385 @@ fn real_agy_rules() {
             false,
         ),
         (
-            "a `*` inside a path rule is a joker",
+            // 1.5.3: no glob but `*` alone (case 11); the plugin writes no `*`, bracket nor brace in a rule.
+            "a `*` inside a path rule is no joker",
             vec![format!("write_file({wt_s}{sep}*.txt)")],
             vec![],
             format!("write_file {wt_s}{sep}h.txt"),
-            true,
+            false,
         ),
         (
-            "brackets in a rule are a glob",
+            "brackets in a rule are no glob",
             vec!["command(echo [ab])".into()],
             vec![],
             "run_command `echo a`".into(),
-            true,
+            false,
         ),
         (
-            "braces in a rule are a glob",
+            "braces in a rule are no glob",
             vec!["command(echo {hi,ho})".into()],
             vec![],
             "run_command `echo ho`".into(),
+            false,
+        ),
+        // ESC-388: `agy` 1.5.3 writes in its temporary folder with no rule nor question; the plugin gives it its own.
+        (
+            "no rule: a write in the user's temporary folder is refused",
+            vec![],
+            vec![],
+            format!("write_file {}", w(&users_temp)),
+            false,
+        ),
+        (
+            "no rule: a write in its own temporary folder is allowed",
+            vec![],
+            vec![],
+            format!("write_file {}", w(&words::temp_dir(&agy_home).join("t.txt"))),
             true,
         ),
     ];
+    // Its cases one by one; `ESCOUADE_TEST_REAL_AGY_CASES` (`0,5,17`) runs some alone.
+    let only: Option<Vec<usize>> = std::env::var("ESCOUADE_TEST_REAL_AGY_CASES")
+        .ok()
+        .map(|v| v.split(',').filter_map(|n| n.trim().parse().ok()).collect());
     let mut wrong = Vec::new();
     for (i, (what, allow, deny, call, expected)) in cases.iter().enumerate() {
+        if only.as_ref().is_some_and(|o| !o.contains(&i)) {
+            continue;
+        }
         let ask: Vec<String> = if what.starts_with("ask before") {
             vec!["command(echo ask)".into()]
         } else {
             vec![]
         };
-        let settings = words::settings_file(&agy_home);
-        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
-        let doc = json!({ "permissions": { "allow": allow, "deny": deny, "ask": ask } });
-        std::fs::write(&settings, doc.to_string()).unwrap();
-        let message = format!(
-            "Call exactly one tool, once, with exactly these arguments, then stop: {call}. Do not call anything else."
-        );
-        let input =
-            json!({ "event": "user", "message": { "content": message } }).to_string() + "\n";
-        let mut child = std::process::Command::new(&program)
-            .args([
-                "-p=",
-                "--input-format",
-                "stream-json",
-                "--output-format",
-                "stream-json",
-            ])
-            .current_dir(&wt)
-            .env("USERPROFILE", &agy_home)
-            .env("HOME", &agy_home)
-            .env("AGY_CLI_DISABLE_AUTO_UPDATE", "1")
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .expect("agy");
-        {
-            use std::io::Write;
-            let mut stdin = child.stdin.take().unwrap();
-            stdin.write_all(input.as_bytes()).unwrap();
-        }
-        let out = child.wait_with_output().unwrap();
-        let stream = String::from_utf8_lossy(&out.stdout);
-        let steps: Vec<Value> = stream
-            .lines()
-            .filter_map(|l| serde_json::from_str::<Value>(l).ok())
-            .filter(|v| v["event"] == "step_update" && v["step_update"]["step_type"] == "tool")
-            .map(|v| v["step_update"].clone())
-            .collect();
-        let refused = steps.iter().any(|s| {
-            s["tool_info"]["error"]["message"]
-                .as_str()
-                .is_some_and(words::is_denial)
+        // As the plugin writes them: what no rule allows needs a review (ESC-388).
+        let doc = json!({
+            "permissions": { "allow": allow, "deny": deny, "ask": ask },
+            "toolPermission": words::TOOL_PERMISSION,
         });
-        let ran = steps.iter().any(|s| s["state"] == "DONE") && !refused;
-        let said = if ran {
-            "allowed"
-        } else if refused {
-            "refused"
-        } else {
-            "no call"
-        };
+        // The model does not always call the tool it is told to: tried again, three times at most.
+        let mut said = "no call";
+        let mut seen = Vec::new();
+        for _ in 0..3 {
+            let turns = agy_session(
+                &program,
+                &wt,
+                &agy_home,
+                &[(one_call(call), Some(doc.clone()))],
+            );
+            said = judged(&turns[0], call.split(' ').next().unwrap_or_default());
+            seen = turns.into_iter().next().unwrap_or_default();
+            if said != "no call" {
+                break;
+            }
+        }
         println!(
             "{i:2}. {what}: {said} (expected {})",
             if *expected { "allowed" } else { "refused" }
         );
-        if ran != *expected || (!ran && !refused) {
+        if said != if *expected { "allowed" } else { "refused" } {
             wrong.push(format!("{what}: {said}"));
+            // What `agy` said of it, to tell why.
+            for v in seen
+                .iter()
+                .filter(|v| v["event"] == "step_update" || v["event"] == "result")
+            {
+                let mut v = v.clone();
+                v["init"] = Value::Null;
+                println!(
+                    "    {}",
+                    v.to_string().chars().take(400).collect::<String>()
+                );
+            }
         }
+    }
+    // What the user accepts passes in the turn that goes on: the plugin's own client drives `agy` (its launches, its
+    // relaunches on the conversation, its files, its messages), each card answered « Autoriser » (ESC-388).
+    if only.as_ref().is_none_or(|o| o.contains(&cases.len())) {
+        let mut said = (0, false, false);
+        for _ in 0..3 {
+            let _ = std::fs::remove_dir(wt.join("accepted"));
+            said = accepted_by_the_user(&program, &wt, &root.join("home-accepted"));
+            if said.1 && said.2 {
+                break;
+            }
+        }
+        let (cards, made, written) = said;
+        println!(
+            "{:2}. refused, accepted by the user, done in the turn going on: {cards} card(s), command made: {made}, write made: {written}",
+            cases.len()
+        );
+        if cards == 0 || !made || !written {
+            wrong.push(format!(
+                "accepted by the user: {cards} card(s), command made: {made}, write made: {written}"
+            ));
+        }
+    }
+    // Whatever the stream said, the user's temporary folder was not written.
+    if users_temp.exists() {
+        wrong.push(format!("{} was written", users_temp.display()));
+        let _ = std::fs::remove_file(&users_temp);
     }
     let _ = std::fs::remove_dir_all(&root);
     assert!(wrong.is_empty(), "agy judged otherwise: {wrong:#?}");
+}
+
+/// One turn of the plugin's client on the real `agy` in `wt`, the agent's home `home`, in « Demander »: the model asked to
+/// run `mkdir accepted` and to write `ok.txt`, each card answered « Autoriser », until the turn is over. How many cards,
+/// and whether the folder and the file were made.
+fn accepted_by_the_user(program: &str, wt: &Path, home: &Path) -> (usize, bool, bool) {
+    use escouade_plugin_protocol::engine::Launch;
+    use std::io::{BufRead, Write};
+    use std::process::{Child, ChildStdin, Stdio};
+    use std::sync::mpsc;
+    use std::time::{Duration, Instant};
+    let _ = std::fs::remove_dir_all(home);
+    std::fs::create_dir_all(home).unwrap();
+    let file = wt.join("ok.txt");
+    let _ = std::fs::remove_file(&file);
+    let cwd = wt.to_string_lossy().into_owned();
+    let p = LaunchParams {
+        agent: "agy-a1".into(),
+        cwd: cwd.clone(),
+        model: std::env::var("ESCOUADE_TEST_REAL_AGY_MODEL").unwrap_or_default(),
+        mode: "default".into(),
+        lang: "en".into(),
+        home: Some(home.to_string_lossy().into_owned()),
+        ..LaunchParams::default()
+    };
+    let mut c = Client::new(&Attach {
+        agent: p.agent.clone(),
+        cwd,
+        lang: "en".into(),
+        ..Attach::default()
+    });
+    // A program of `agy` as the client describes it, its files written as the core writes them; its lines come on `rx`.
+    let (tx, rx) = mpsc::channel::<String>();
+    let start = |launch: &Launch| -> (Child, ChildStdin) {
+        for f in &launch.files {
+            let path = Path::new(&f.path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, &f.text).unwrap();
+        }
+        let mut cmd = std::process::Command::new(program);
+        cmd.args(&launch.args)
+            .current_dir(wt)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null());
+        for v in &launch.remove_env {
+            cmd.env_remove(v);
+        }
+        for v in &launch.env {
+            cmd.env(&v.name, &v.value);
+        }
+        let mut child = cmd.spawn().expect("agy");
+        let stdin = child.stdin.take().unwrap();
+        let out = child.stdout.take().unwrap();
+        let tx = tx.clone();
+        std::thread::spawn(move || {
+            for l in std::io::BufReader::new(out).lines().map_while(Result::ok) {
+                if tx.send(l).is_err() {
+                    break;
+                }
+            }
+        });
+        (child, stdin)
+    };
+    let stop = |running: &mut Option<(Child, ChildStdin)>| {
+        if let Some((mut child, stdin)) = running.take() {
+            drop(stdin);
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    };
+    let mut running = Some(start(&c.launch(&p)));
+    let message = format!(
+        "Do exactly these two things, one after the other, with no other tool: run the command `mkdir accepted` with \
+         run_command, then write the file {} with write_file, its Content `x`.",
+        file.display()
+    );
+    let mut items: std::collections::VecDeque<Item> = c.send(&message).into();
+    let (mut cards, mut over) = (0, false);
+    let mut seen: Vec<String> = Vec::new();
+    let deadline = Instant::now() + Duration::from_secs(240);
+    while !over && cards <= 6 && Instant::now() < deadline {
+        while let Some(i) = items.pop_front() {
+            seen.push(format!(
+                "item {}",
+                format!("{i:?}").chars().take(200).collect::<String>()
+            ));
+            match i {
+                Item::Relaunch { launch } => {
+                    stop(&mut running);
+                    running = Some(start(&launch));
+                }
+                Item::Pause => stop(&mut running),
+                Item::Write { line } => {
+                    if let Some((_, stdin)) = running.as_mut() {
+                        let _ = stdin.write_all(format!("{line}\n").as_bytes());
+                        let _ = stdin.flush();
+                    }
+                }
+                Item::File { path, text } => {
+                    let path = Path::new(&path);
+                    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+                    std::fs::write(path, text).unwrap();
+                }
+                Item::Permission { request, .. } => {
+                    cards += 1;
+                    items.extend(
+                        c.answer_permission(&answer(&request, true, false))
+                            .unwrap_or_default(),
+                    );
+                }
+                Item::Turn { .. } => over = true,
+                _ => {}
+            }
+        }
+        if over {
+            break;
+        }
+        match rx.recv_timeout(Duration::from_millis(40)) {
+            Ok(l) => {
+                seen.push(l.chars().take(300).collect::<String>());
+                items.extend(c.frames(&[l]))
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => items.extend(c.tick()),
+            Err(_) => break,
+        }
+    }
+    stop(&mut running);
+    if !over {
+        println!("    the turn did not end:");
+        for l in seen.iter().rev().take(40).rev() {
+            println!("      {l}");
+        }
+    }
+    let made = wt.join("accepted").is_dir();
+    let written = file.is_file();
+    let _ = std::fs::remove_file(&file);
+    (cards, made, written)
+}
+
+/// The message that has the model call one tool.
+fn one_call(call: &str) -> String {
+    format!(
+        "Call exactly one tool, once, with exactly these arguments, then stop: {call}. For write_file, the Content is \
+         `x`. Do not call anything else."
+    )
+}
+
+/// One program of `agy -p`, as the plugin runs it (stream-json both ways, its input open between turns): each message
+/// sent once the turn before is over, its settings written first (when given). What it said, turn by turn.
+fn agy_session(
+    program: &str,
+    wt: &Path,
+    home: &Path,
+    turns: &[(String, Option<Value>)],
+) -> Vec<Vec<Value>> {
+    use std::io::{BufRead, Write};
+    std::fs::create_dir_all(words::temp_dir(home)).unwrap();
+    // A model of its own (`ESCOUADE_TEST_REAL_AGY_MODEL`): each has its quota.
+    let model: Vec<String> = std::env::var("ESCOUADE_TEST_REAL_AGY_MODEL")
+        .ok()
+        .filter(|m| !m.trim().is_empty())
+        .map(|m| vec!["--model".into(), m])
+        .unwrap_or_default();
+    let mut child = std::process::Command::new(program)
+        .args([
+            "-p=",
+            "--input-format",
+            "stream-json",
+            "--output-format",
+            "stream-json",
+        ])
+        .args(&model)
+        .current_dir(wt)
+        // As the plugin has it launched: its home, its temporary folder, its update off.
+        .envs(words::home_env(&[], home))
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("agy");
+    let mut stdin = child.stdin.take().unwrap();
+    let mut lines = std::io::BufReader::new(child.stdout.take().unwrap()).lines();
+    let mut said = Vec::new();
+    for (message, settings) in turns {
+        if let Some(doc) = settings {
+            let file = words::settings_file(home);
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(&file, serde_json::to_string_pretty(doc).unwrap()).unwrap();
+        }
+        let input =
+            json!({ "event": "user", "message": { "content": message } }).to_string() + "\n";
+        if stdin
+            .write_all(input.as_bytes())
+            .and_then(|_| stdin.flush())
+            .is_err()
+        {
+            break;
+        }
+        let mut turn = Vec::new();
+        for l in lines.by_ref() {
+            let Ok(v) = serde_json::from_str::<Value>(&l.unwrap_or_default()) else {
+                continue;
+            };
+            let over = v["event"] == "result";
+            turn.push(v);
+            if over {
+                break;
+            }
+        }
+        said.push(turn);
+    }
+    drop(stdin);
+    let _ = child.wait();
+    said
+}
+
+/// What `agy` made of the call of a turn to the tool `tool` (`run_command`, `write_file`, `view_file`): `refused` when
+/// its step ended refused (`permission check failed`, `denied permission`) or the turn's `result` lists a refusal of its
+/// action (`denied_actions`: 1.5.3 tells some refused calls `DONE`, ESC-388), `allowed` when it ran, else `no call`
+/// (another tool called, the model's choice).
+fn judged(turn: &[Value], tool: &str) -> &'static str {
+    let action = words::action_of(
+        tool,
+        &json!({ "CommandLine": "x", "Path": "/x", "AbsolutePath": "/x" }),
+    );
+    // Its steps: those of its action, whatever the tool's name (`view_file` asked, `read_file` called).
+    let steps: Vec<&Value> = turn
+        .iter()
+        .filter(|v| v["event"] == "step_update" && v["step_update"]["step_type"] == "tool")
+        .map(|v| &v["step_update"])
+        .filter(|s| {
+            action.is_some()
+                && words::action_of(
+                    s["tool_name"].as_str().unwrap_or_default(),
+                    &s["tool_info"]["parameters"],
+                ) == action
+        })
+        .collect();
+    let refused = steps.iter().any(|s| {
+        s["tool_info"]["error"]["message"]
+            .as_str()
+            .is_some_and(words::is_denial)
+    }) || turn.iter().any(|v| {
+        v["event"] == "result"
+            && v["result"]["denied_actions"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(|a| a["action"].as_str() == action.as_deref())
+    });
+    if refused {
+        "refused"
+    } else if steps.iter().any(|s| s["state"] == "DONE") {
+        "allowed"
+    } else {
+        "no call"
+    }
 }
 
 #[test]

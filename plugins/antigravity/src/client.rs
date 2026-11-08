@@ -92,6 +92,8 @@ pub struct Client {
     args: HashMap<u64, (String, Value)>,
     calls: VecDeque<(String, Value)>,
     denied: Vec<Denied>,
+    /// The calls told `DONE`, in their order: `agy` 1.5.3 tells some it refused so (ESC-388), its `result` says them.
+    done: Vec<Denied>,
     questions: Vec<Value>,
     plan_file: Option<String>,
     usage: Usage,
@@ -172,6 +174,7 @@ impl Client {
             args: HashMap::new(),
             calls: VecDeque::new(),
             denied: Vec::new(),
+            done: Vec::new(),
             questions: Vec::new(),
             plan_file: None,
             usage: Usage::default(),
@@ -244,11 +247,20 @@ impl Client {
             .map(|k| k.to_string())
             .collect();
         remove_env.push(words::HOME_VAR.to_string());
+        let mut files: Vec<FileToWrite> = self.settings_file().into_iter().collect();
+        if self.home.is_some() {
+            files.push(FileToWrite {
+                path: words::temp_mark(home).to_string_lossy().into_owned(),
+                text:
+                    "Antigravity's temporary folder for this agent (TEMP, TMP), made by Escouade.\n"
+                        .into(),
+            });
+        }
         Launch {
             args: words::launch_args(&self.settings, conversation),
             env,
             remove_env,
-            files: self.settings_file().into_iter().collect(),
+            files,
             fence_applied: !self.rules.fence.is_empty(),
             // Its rules hold it only when they are written.
             read_only: self.rules.read_only && self.home.is_some(),
@@ -299,10 +311,13 @@ impl Client {
                 .as_ref()
                 .map(|g| (g.url.as_str(), g.token.as_str()));
             let doc = words::grant_doc(&before, grant);
-            launch.files.push(FileToWrite {
-                path: file.to_string_lossy().into_owned(),
-                text: serde_json::to_string_pretty(&doc).unwrap_or_default(),
-            });
+            launch.files.insert(
+                1.min(launch.files.len()),
+                FileToWrite {
+                    path: file.to_string_lossy().into_owned(),
+                    text: serde_json::to_string_pretty(&doc).unwrap_or_default(),
+                },
+            );
         }
         launch
     }
@@ -513,18 +528,66 @@ impl Client {
                         tool: name,
                         args,
                     });
-                } else if state == "DONE" && words::is_plan_file(&name, &args) {
-                    self.plan_file = args["Path"].as_str().map(str::to_string);
+                } else if state == "DONE" {
+                    if words::is_plan_file(&name, &args) {
+                        self.plan_file = args["Path"].as_str().map(str::to_string);
+                    }
+                    self.done.push(Denied {
+                        step,
+                        tool: name,
+                        args,
+                    });
                 }
             }
             _ => {}
         }
     }
 
+    /// The calls `agy` refused but told `DONE` (1.5.3, ESC-388): what its `result` lists refused (`denied_actions`) beyond
+    /// the steps told refused, each the last call told `DONE` of its action that its transcript does not say `DONE` (one
+    /// refused is never written there; one that ran is, before its event).
+    fn told_done(&self, r: &Value, denied: &[Denied], mut done: Vec<Denied>) -> Vec<Denied> {
+        let action = |d: &Denied| words::action_of(&d.tool, &d.args);
+        let mut caught: Vec<Option<String>> = denied.iter().map(action).collect();
+        let mut found = Vec::new();
+        for a in r["denied_actions"].as_array().into_iter().flatten() {
+            let a = a["action"].as_str().map(str::to_string);
+            if let Some(i) = caught.iter().position(|c| c.is_some() && *c == a) {
+                caught.remove(i);
+                continue;
+            }
+            let ran = |d: &Denied| {
+                self.transcript_step(d.step)
+                    .is_some_and(|t| t["status"] == "DONE")
+            };
+            match done
+                .iter()
+                .rposition(|d| a.is_some() && action(d) == a && !ran(d))
+            {
+                Some(i) => found.push(done.remove(i)),
+                None => eprintln!("agy: a refusal of {a:?} no call told matches"),
+            }
+        }
+        found.sort_by_key(|d| d.step);
+        found
+    }
+
     /// The end of a turn of `agy` (`result`): over for Escouade, or what it was refused and asked asked of the user first,
     /// or its plan to approve.
     fn turn_over(&mut self, r: &Value, out: &mut Vec<Item>) {
-        let denied = std::mem::take(&mut self.denied);
+        let mut denied = std::mem::take(&mut self.denied);
+        let done = std::mem::take(&mut self.done);
+        // Told `DONE`, it did not run: its row says it was refused.
+        let session = self.session.clone().unwrap_or_default();
+        for d in self.told_done(r, &denied, done) {
+            out.push(Item::ToolResult {
+                id: words::call_id(&session, d.step),
+                output: words::refused_by_agy(&self.lang).into(),
+                error: true,
+                result: Value::Null,
+            });
+            denied.push(d);
+        }
         let questions = std::mem::take(&mut self.questions);
         let plan_file = self.plan_file.take();
         let spent = std::mem::take(&mut self.usage);
@@ -730,6 +793,7 @@ impl Client {
             self.queue.clear();
         }
         self.denied.clear();
+        self.done.clear();
         self.questions.clear();
         self.calls.clear();
         self.args.clear();
