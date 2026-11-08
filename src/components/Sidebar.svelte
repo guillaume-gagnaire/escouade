@@ -1422,11 +1422,11 @@
     inset: 0 0 0 -6px;
   }
 
-  /* Agents | Kanban | PR | Docs: each its own width, the short « PR » the least. */
+  /* Agents | Kanban | PR | Docs: each at least its own width, the short « PR » the least, and the room left shared
+     between the four (`auto` tracks stretch), so that they fill the bar as the three did. */
   .seg {
     display: grid;
     grid-template-columns: auto auto auto auto;
-    justify-content: space-between;
     gap: 0;
   }
   .seg button {
