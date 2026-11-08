@@ -29,9 +29,9 @@ export interface AlertsInput {
 
 /** Why a plugin stands still, or nothing when it is meant to (switched off, no program) or runs. */
 function pluginProblem(p: AlertsInput['plugins'][number], run: PluginRun['status'] | undefined): string | null {
-  if (p.state.kind === 'invalid') return t('plugins.state.invalid');
-  if (p.state.kind === 'disabled') return t('plugins.state.disabled');
-  if (!p.choices.enabled || p.declarative || run?.phase !== 'stopped') return null;
+  if (p.state?.kind === 'invalid') return t('plugins.state.invalid');
+  if (p.state?.kind === 'disabled') return t('plugins.state.disabled');
+  if (!p.choices?.enabled || p.declarative || run?.phase !== 'stopped') return null;
   const stop = run.stop;
   if (stop?.kind === 'crashed') return t('plugins.state.crashed', { count: stop.times ?? 3 });
   if (stop?.kind === 'memory') return t('plugins.state.memory');
@@ -53,8 +53,8 @@ export function alertsOf(input: AlertsInput): Record<string, string[]> {
     add(`${o.id}:project`, reason);
   }
   for (const f of input.forges) {
-    if (f.status.health === 'expired') add('services', t('integrations.forges.expired', { label: f.label }));
-    if (f.status.health === 'unread') add('services', t('settings.nav.alerts.unread', { label: f.label }));
+    if (f.status?.health === 'expired') add('services', t('integrations.forges.expired', { label: f.label }));
+    if (f.status?.health === 'unread') add('services', t('settings.nav.alerts.unread', { label: f.label }));
   }
   for (const a of input.ticketAccounts) if (a.connected && a.unread) add('services', t('settings.nav.alerts.unread', { label: a.label }));
   for (const p of input.plugins) {
@@ -79,13 +79,22 @@ class SettingsAlerts {
       (v) => this.takeForges(v),
       (e) => console.warn(errorText(e)),
     );
-    // As the app read them (the Plugins page and view read them again); their processes, now.
-    if (!plugins.loaded) await plugins.load();
-    const running = plugins.list.filter((p) => p.state.kind === 'ready' && p.choices.enabled && !p.declarative);
+    // As the app read them (the Plugins page and view read them again); their processes, now. The dots wait for no
+    // list that cannot be read.
+    if (!plugins.loaded) {
+      try {
+        await plugins.load();
+      } catch (e) {
+        console.warn(errorText(e));
+        return;
+      }
+    }
+    const running = plugins.list.filter((p) => p.state?.kind === 'ready' && p.choices?.enabled && !p.declarative);
     const read = await Promise.all(
       running.map((p) =>
         pluginsApi.run(p.id).then(
-          (r) => [p.id, r.status] as const,
+          // A process not read (nothing answered) is no dot.
+          (r) => (r?.status ? ([p.id, r.status] as const) : null),
           () => null,
         ),
       ),
