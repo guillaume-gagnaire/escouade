@@ -3,7 +3,7 @@ title: "Réglages"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/captures/a-plugins.png"]
 tickets: ["ESC-378","ESC-379","ESC-380","ESC-384"]
-decisions: [118,119,"la-page-plugins-des-reglages-devient-le"]
+decisions: [118,119,120]
 compared: null
 ---
 
