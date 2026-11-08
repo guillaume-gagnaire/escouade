@@ -210,7 +210,7 @@ pub struct UnknownHost {
     pub projects: Vec<String>,
 }
 
-/// Réglages › Intégrations › Hébergeurs de code.
+/// Réglages › Services connectés › Hébergeurs de code.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ForgesView {
@@ -425,7 +425,7 @@ impl<R: Runtime> Core<R> {
         registry.analyze(&url, |host| accounts::kind_for(&list, host))
     }
 
-    /// Réglages › Intégrations › Hébergeurs de code, with the state each account was last found in.
+    /// Réglages › Services connectés › Hébergeurs de code, with the state each account was last found in.
     pub async fn forges_view(&self) -> ForgesView {
         let registry = self.forges.read().clone();
         let kinds = crate::plugins::accounts::kinds_of(&self.plugins);

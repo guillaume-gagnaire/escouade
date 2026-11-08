@@ -3,7 +3,7 @@
 // their external ones moved and commented while the fake `claude` works them.
 
 import { execFileSync } from 'node:child_process';
-import { addProject, expect, test, openSettingsPage, closeSettings } from './fixture';
+import { addProject, expect, test, openSettingsPage, closeSettings, settingsEntry } from './fixture';
 import { startFakeTrackers } from '../fixtures/fake-trackers.mjs';
 
 let trackers: { url: string; close: () => Promise<void> };
@@ -58,7 +58,8 @@ test('a Jira issue and a Trello card are imported, and their states follow their
   await trello.getByRole('button', { name: 'Connecter' }).click();
   await expect(settings.getByText('Connecté · @ada')).toBeVisible();
 
-  // Sources: each one's default states, Trello's « Terminé » set by hand.
+  // Sources, on the project's page: each one's default states, Trello's « Terminé » set by hand.
+  await openSettingsPage(settings, 'Tickets importés');
   await settings.getByRole('combobox', { name: 'Projet Jira' }).selectOption('ATL');
   await expect(settings.getByRole('combobox', { name: 'Jira — En cours' })).toHaveValue('3');
   await expect(settings.getByRole('combobox', { name: 'Jira — Terminé' })).toHaveValue('10');
@@ -122,7 +123,8 @@ test('a ClickUp task is imported with its checklist, and its status follows its 
   await form.getByRole('button', { name: 'Connecter' }).click();
   await expect(settings.getByText('Connecté · Ada Lovelace')).toBeVisible();
 
-  // The list, by space and folder; the defaults guessed from the list's own statuses.
+  // The list, on the project's page, by space and folder; the defaults guessed from the list's own statuses.
+  await openSettingsPage(settings, 'Tickets importés');
   const source = settings.getByRole('combobox', { name: 'Liste ClickUp' });
   await expect(source.locator('optgroup[label="Produit › Sprints"] option')).toHaveText(['Sprint 12']);
   await source.selectOption('l1');
@@ -181,11 +183,13 @@ test('the automatic import brings the GitHub issues that carry its label', async
   // Issues' account, and github.com's among the code hosts: the same one.
   await expect(settings.getByText('Connecté · @ada')).toHaveCount(2);
   await expect(settings.getByRole('group', { name: 'github.com' })).toContainText('Sert aussi à GitHub Issues');
+  // The automatic import is Escouade's, the source the project's.
+  await settings.getByRole('switch', { name: 'Importer les tickets étiquetés' }).click();
+  await settings.getByRole('button', { name: '5 min', exact: true }).click();
+  await openSettingsPage(settings, 'Tickets importés');
   await settings.getByRole('combobox', { name: 'Dépôt GitHub Issues' }).selectOption('acme/demo');
   await expect(settings.getByRole('combobox', { name: 'GitHub Issues — En cours' })).toHaveValue('label:in-progress');
   await expect(settings.getByRole('combobox', { name: 'GitHub Issues — Terminé' })).toHaveValue('label:à tester');
-  await settings.getByRole('switch', { name: 'Importer les tickets étiquetés' }).click();
-  await settings.getByRole('button', { name: '5 min', exact: true }).click();
   // Kept « À faire »: the autopilot is turned off first.
   await openSettingsPage(settings, 'Kanban');
   await settings.getByRole('switch', { name: 'Attribuer les tickets automatiquement' }).click();
@@ -245,7 +249,8 @@ test('GitLab Issues takes the GitLab code host’s account, its project offered 
   execFileSync('git', ['remote', 'add', 'origin', `${trackers.url}/acme/api.git`], { cwd: app.repo, stdio: 'pipe' });
   await addProject(page, app.repo, { firstAgent: false });
 
-  // No source yet: the import names the seven, and leads to the sources of the Kanban.
+  // No source yet: the import names the seven, and leads to the project's page « Tickets importés »; with no account,
+  // that page leads to « Services connectés ».
   await page.getByRole('button', { name: /^Kanban/ }).click();
   await page.getByRole('button', { name: 'Importer' }).click();
   const imp = page.getByRole('dialog', { name: 'Importer des tickets' });
@@ -255,7 +260,10 @@ test('GitLab Issues takes the GitLab code host’s account, its project offered 
   ).toBeVisible();
   await imp.getByRole('button', { name: 'Lier une source' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await expect(settings.getByRole('heading', { name: 'Sources du Kanban' })).toBeInViewport();
+  await expect(settingsEntry(settings, 'Tickets importés')).toHaveAttribute('aria-current', 'page');
+  await expect(settings.getByRole('heading', { name: 'Sources liées à demo-api' })).toBeVisible();
+  await settings.getByRole('button', { name: 'Ouvrir Services connectés' }).click();
+  await expect(settingsEntry(settings, 'Services connectés')).toHaveAttribute('aria-current', 'page');
   await expect(settings.getByRole('heading', { name: 'Hébergeurs de code' })).toBeVisible();
 
   // GitLab Issues is connected through the code host's own form: one account for both uses.

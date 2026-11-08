@@ -321,7 +321,7 @@ async fn without_a_pull_request_the_agent_is_told_why_it_cannot_open_one() {
     let server = FakeServer::start().await;
     let (id, _, _) = github_agent(&h, &server).await;
     assert_eq!(h.core.agent_no_pr(&id).await.unwrap(), None, "it can");
-    // No account for github.com: Réglages › Intégrations settles it.
+    // No account for github.com: Réglages › Services connectés settles it.
     let h = harness("prview-noaccount");
     let (p, r) = h.project(true).await;
     crate::core_tests::git(

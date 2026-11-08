@@ -675,8 +675,8 @@ impl<R: Runtime> Core<R> {
             .and_then(|k| self.forges.read().get(k))
             .ok_or_else(|| {
                 anyhow!(tr!(
-                    "Hébergeur inconnu pour {host} : connecte-le dans Réglages › Intégrations.",
-                    "Unknown code host for {host}: connect it in Settings › Integrations."
+                    "Hébergeur inconnu pour {host} : connecte-le dans Réglages › Services connectés.",
+                    "Unknown code host for {host}: connect it in Settings › Connected services."
                 ))
             })?;
         if !provider.capabilities().pull_requests {
@@ -1225,8 +1225,8 @@ impl<R: Runtime> Core<R> {
                 .and_then(|k| self.forges.read().get(k))
                 .ok_or_else(|| {
                     anyhow!(tr!(
-                        "Hébergeur inconnu pour {host} : connecte-le dans Réglages › Intégrations.",
-                        "Unknown code host for {host}: connect it in Settings › Integrations."
+                        "Hébergeur inconnu pour {host} : connecte-le dans Réglages › Services connectés.",
+                        "Unknown code host for {host}: connect it in Settings › Connected services."
                     ))
                 })?;
             if !provider.capabilities().pull_requests {

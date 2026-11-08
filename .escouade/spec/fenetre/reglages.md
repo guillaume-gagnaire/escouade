@@ -2,8 +2,8 @@
 title: "Réglages"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/captures/a-plugins.png"]
-tickets: ["ESC-378","ESC-379","ESC-380","ESC-384"]
-decisions: [118,119,120]
+tickets: ["ESC-378","ESC-379","ESC-380","ESC-383","ESC-384"]
+decisions: [118,119,120,"les-integrations-en-deux-pages-des-regla"]
 compared: null
 ---
 
@@ -19,7 +19,9 @@ Une seule fenêtre de réglages pour toute l'app : une barre des catégories à 
 - Ouvertures directes :
   - « ⚙ Après validation » du Kanban : la page Kanban de son projet ;
   - ⚙, « Configurer » et « ✦ Proposer des commandes » de la section Lancement : la page Lancement du projet ; le dernier lance aussi la lecture du projet (voir *Barre latérale*) ;
-  - « Réglages du projet… » au clic droit sur un projet : la page Projet de ce projet.
+  - « Réglages du projet… » au clic droit sur un projet : la page Projet de ce projet ;
+  - « Lier une source » et « ⚙ Gérer les sources » de la fenêtre d'import : la page Tickets importés de son projet (voir *Intégrations*) ;
+  - « Réglages › Services connectés » de l'onglet « PR et CI » et de la vue Pull requests (jeton refusé, hébergeur sans compte) : la page Services connectés (voir *Pull requests*).
 - Chaque page, et chaque projet, s'affiche depuis son début (ou depuis sa partie, tant qu'elle montre un ancien onglet : voir *Les pages*).
 
 ### La fenêtre
@@ -53,21 +55,22 @@ Une seule fenêtre de réglages pour toute l'app : une barre des catégories à 
 
 ### Les pages
 
-Chaque réglage a sa page dans le registre de la fenêtre. Jusqu'à ce que chaque lot de la refonte les redécoupe, les pages montrent encore le contenu des onglets de la 2.0 :
+Chaque réglage a sa page dans le registre de la fenêtre. Jusqu'à ce que chaque lot de la refonte les redécoupe, certaines pages montrent encore le contenu des onglets de la 2.0 :
 
 - **Général** : l'ancien onglet Application.
 - **Agents** : le serveur MCP (« Les agents peuvent piloter Escouade », « Activité MCP »).
 - **Comptes et harness** : les comptes, puis l'ancien onglet Harness.
-- **Services connectés** et **Tickets importés** (sur sa partie « Sources ») : l'ancien onglet Intégrations, pour le projet choisi.
+- **Services connectés** : « Hébergeurs de code » (les instances et leurs jetons), puis « Sources de tickets » : leurs comptes (« servi par » un plugin), « Synchronisation » et « Import automatique », pour tous les projets (voir *Intégrations*, *Hébergeurs de code*). Elle ne demande aucun projet.
 - **Voix**, **Notifications** : comme avant.
 - **Plugins** : les plugins installés, ceux que propose Escouade, et « N'installer que des versions vérifiées » (ci-dessous).
 - **Avancé** : Réseau, Terminaux, puis « Recherche par le sens ».
 - **À propos** : comme avant.
 - **Projet**, **Git et worktrees**, **Lancement**, **Équipe**, **Confidentialité** : l'ancien onglet Projets du projet, chacune ouverte sur sa partie (Git, Lancement, Kanban partagé, Confidentialité) ; « Fermer le projet… » est sous « Zone sensible », repliée. Fermer ou non revient aux réglages (voir *Fermer un projet*).
 - **Kanban** : l'ancien onglet Kanban du projet.
+- **Tickets importés** : les sources liées au projet et la correspondance de leurs statuts ; sans compte connecté, un renvoi à Services connectés (voir *Intégrations*).
 - **Tous les projets** : « Nouveaux projets » (« Nouveaux projets privés », éteint par défaut), puis « Projets fermés », seulement s'il y en a, avec par projet « Rouvrir » et « Effacer l'historique… », et « Historique illisible » avec « Effacer » (voir *Fermer un projet*). Effacer un historique revient sur cette page.
 
-Le détail des réglages de chaque ancien onglet :
+Le détail des réglages de chaque ancien onglet encore montré :
 
 - **Application** : « Affichage » (« Thème », « Zoom de l'interface », « Taille du texte des terminaux », « Taille du texte de l'éditeur », voir *Fenêtre*) ; « Langue de l'interface » (« Système (…) » par défaut, « English », « Français ») et « Langue des textes rédigés par Claude » (« Comme l'interface » par défaut), « Modèle des textes rédigés » (voir *Langues*).
 - **Harness** : un groupe par harness (exécutable, version, état, « Se connecter… », et pour OpenCode ses « Modèles » favoris, voir *Harness*) ; pour Claude Code, le chemin de `claude` et où il est (voir *Claude Code dans WSL*), reprise automatique après la limite d'usage, « Reprendre sur un autre compte un agent de ticket arrêté par la limite » avec plusieurs comptes (voir *Comptes*), « Les agents tiennent une liste de tâches », activé par défaut (voir *Avancée d'un plan*), arrêt des process inactifs ; « Pièces jointes » (voir *Conversation*) ; « Remote control pour tous les agents » (voir *Barre latérale*).
@@ -76,7 +79,6 @@ Le détail des réglages de chaque ancien onglet :
 - **Voix** : « Micro utilisé », « Modèle », « Langue parlée », « Raccourci » (voir *Dictée*) ; « Conversation » (voir *Conversation vocale*).
 - **Projets** : « Identité » (nom, dossier, couleur, lettres, logo et libellé de la tuile, harness et « Compte préféré », « Assistant de configuration ») ; « Remote control pour les agents de ce projet » ; « Confidentialité » (« Projet privé », « Ses fichiers », ses comptes, voir *Serveur MCP* et *Comptes*) ; « Workflow » ; « Git » (commit, worktrees, préfixes, fichiers copiés, commandes de préparation et de démontage, voir *Git & fichiers*) ; « Worktrees restés » › « Nettoyer » ; « Lancement » ; le Kanban partagé, `.escouade.yml` et la mémoire partagée.
 - **Kanban** : branche cible, action à la validation, tests, nettoyage, message de commit, conflit (voir *Validation*) ; pilote auto et ses agents (voir *Pilote auto*) ; « Pause au-delà du quota », « pour tous les projets » : un réglage de l'app, rangé dans la page Comptes et harness (voir *Comptes*).
-- **Intégrations** : comptes des services et hébergeurs ; sources liées au projet, correspondance des statuts, synchronisation et import automatique (voir *Intégrations*).
 - **Terminaux** : PowerShell 7, Git Bash, distribution WSL (bash sous macOS), shells détectés (voir *Barre latérale*).
 - **Réseau** : proxy et certificats (ci-dessous).
 - **À propos** : version, « Rechercher une mise à jour », « Installer les mises à jour automatiquement », « Recevoir les versions bêta », statistiques d'usage, données locales (voir *Livraison et mises à jour*).

@@ -129,7 +129,7 @@ export default {
     reservedNone: 'Aucun compte {harness} libre : ajoute un compte réservé dans Réglages › Projets, une fois le projet créé.',
   },
   integrations: {
-    none: 'Aucun compte Jira, Trello, GitHub, Linear, ClickUp, GitLab ou Azure DevOps n’est connecté : connecte-en un dans Réglages › Intégrations, après la création.',
+    none: 'Aucun compte Jira, Trello, GitHub, Linear, ClickUp, GitLab ou Azure DevOps n’est connecté : connecte-en un dans Réglages › Services connectés, après la création.',
     source: 'Source {service}',
     noSource: 'Aucune',
     loading: 'Chargement…',

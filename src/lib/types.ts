@@ -3079,7 +3079,7 @@ export interface PrFailure {
   message: string;
   /** When the host's limit starts over (Unix seconds). */
   reset?: number;
-  /** Réglages › Intégrations settles it. */
+  /** Réglages › Services connectés settles it. */
   settings?: boolean;
 }
 

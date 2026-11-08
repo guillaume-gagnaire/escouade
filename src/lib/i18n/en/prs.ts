@@ -222,7 +222,7 @@ export default defineZone('prs', {
     },
     noPr: {
       title: 'No {word} on this branch',
-      settings: 'Settings › Integrations',
+      settings: 'Settings › Connected services',
     },
     project: {
       title: 'Open {word}s of the project',

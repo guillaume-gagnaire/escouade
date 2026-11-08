@@ -19,11 +19,12 @@
   import BoardTab from '../settings/BoardTab.svelte';
   import ClosedProjects from '../settings/ClosedProjects.svelte';
   import NewProjects from '../settings/NewProjects.svelte';
-  import IntegrationsTab from '../settings/IntegrationsTab.svelte';
   import McpSection from '../settings/McpSection.svelte';
   import PluginsPage from '../settings/PluginsPage.svelte';
   import ProjectTab from '../settings/ProjectTab.svelte';
+  import ServicesPage from '../settings/ServicesPage.svelte';
   import SettingsNav from '../settings/SettingsNav.svelte';
+  import TicketsPage from '../settings/TicketsPage.svelte';
   import VoiceTab from '../settings/VoiceTab.svelte';
   import VectorsSection from '../settings/VectorsSection.svelte';
   import Icon from '../Icon.svelte';
@@ -94,7 +95,6 @@
     launch: 'launch',
     team: 'shared',
     privacy: 'private',
-    tickets: 'sources',
   };
 
   let body = $state<HTMLElement>();
@@ -155,12 +155,12 @@
       </div>
       <div class="s-body" bind:this={body} role="region" id="settings-panel" aria-labelledby="settings-title">
         <div class="inner">
-          {#if info.scope === 'project' || info.id === 'services'}
+          {#if info.scope === 'project'}
             {#if project && draft}
               {#if info.id === 'board'}
                 <BoardTab {project} />
-              {:else if info.id === 'services' || info.id === 'tickets'}
-                <IntegrationsTab {project} />
+              {:else if info.id === 'tickets'}
+                <TicketsPage {project} />
               {:else}
                 <ProjectTab {project} />
               {/if}
@@ -174,6 +174,8 @@
           {:else if info.id === 'accounts'}
             <AccountsTab />
             <AppTab tab="claude" />
+          {:else if info.id === 'services'}
+            <ServicesPage />
           {:else if info.id === 'voice'}
             <VoiceTab />
           {:else if info.id === 'notifications'}

@@ -131,7 +131,6 @@ const REDRAWN = {
     'src/components/settings/BoardTab.svelte',
     'src/components/settings/ClosedProjects.svelte',
     'src/components/settings/ForgesSection.svelte',
-    'src/components/settings/IntegrationsTab.svelte',
     'src/components/settings/McpSection.svelte',
     'src/components/settings/ModelFavorites.svelte',
     'src/components/settings/NewProjects.svelte',

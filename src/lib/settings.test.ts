@@ -532,7 +532,7 @@ describe('settingsForm', () => {
 
   it('saves a project’s links on its page Tickets importés alone, without its empty ones', async () => {
     const backend = fakeBackend();
-    settingsForm.open({ tab: 'integrations', projectId: 'p1' });
+    settingsForm.open({ page: 'tickets', projectId: 'p1' });
     expect(settingsForm.changed('tickets')).toBe(false);
     settingsForm.projects.p1.integrations.links.push(
       { service: 'jira', container: 'ATL', name: 'ATL — Atlas', states: { doing: { id: '3', name: 'In Progress' } } },
@@ -554,7 +554,7 @@ describe('settingsForm', () => {
 
   it('counts the sync settings as the page Services connectés’s', async () => {
     const backend = fakeBackend({ save_settings: () => [] });
-    settingsForm.open({ tab: 'integrations' });
+    settingsForm.open({ page: 'services' });
     settingsForm.settings.integrations.autoImport = true;
     settingsForm.settings.integrations.importLabel = 'escouade';
     expect(settingsForm.changed('services')).toBe(true);

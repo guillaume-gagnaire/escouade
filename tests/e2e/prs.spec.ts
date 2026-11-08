@@ -32,7 +32,7 @@ test.afterAll(async () => {
   delete process.env.ESCOUADE_PR_READ_EVERY_MS;
 });
 
-/** Connects github.com's account (the fake one's) in Réglages › Intégrations. */
+/** Connects github.com's account (the fake one's) in Réglages › Services connectés. */
 async function connectGithub(page: Page) {
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });

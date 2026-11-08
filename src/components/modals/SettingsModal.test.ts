@@ -1244,8 +1244,10 @@ describe('SettingsModal', () => {
     // No project in the bar, and still an entry to reach it from the keyboard.
     expect(nav().querySelectorAll('.s-h')).toHaveLength(1);
     await expect.poll(() => document.activeElement).toBe(tab('Général'));
+    // « Services connectés » is Escouade's: it needs no project.
     await userEvent.click(tab('Services connectés'));
-    expect(screen.getByText('Aucun projet ouvert.')).toBeInTheDocument();
+    expect(screen.queryByText('Aucun projet ouvert.')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Comptes connectés' })).toBeInTheDocument();
   });
 
   describe('the projects closed with their history', () => {

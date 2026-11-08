@@ -121,7 +121,7 @@ export default defineZone('wizard', {
     reservedNone: 'No free {harness} account: add a reserved account in Settings › Projects once the project is created.',
   },
   integrations: {
-    none: 'No Jira, Trello, GitHub, Linear, ClickUp, GitLab or Azure DevOps account is connected: connect one in Settings › Integrations, after creating the project.',
+    none: 'No Jira, Trello, GitHub, Linear, ClickUp, GitLab or Azure DevOps account is connected: connect one in Settings › Connected services, after creating the project.',
     source: '{service} source',
     noSource: 'None',
     loading: 'Loading…',
