@@ -3,7 +3,7 @@ title: "Réglages"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md"]
 tickets: ["ESC-378","ESC-379","ESC-380"]
-decisions: [118,"les-reglages-s-appliquent-et-s-enregistr"]
+decisions: [118,119]
 compared: null
 ---
 

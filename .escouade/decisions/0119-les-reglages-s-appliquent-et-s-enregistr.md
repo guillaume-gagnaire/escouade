@@ -1,9 +1,9 @@
 ---
-number: null
+number: 119
 id: "les-reglages-s-appliquent-et-s-enregistr"
 title: "Les réglages s'appliquent et s'enregistrent au geste, sans « Annuler » ni « Enregistrer »"
 date: "2026-11-08"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-380"
 pages: ["fenetre/reglages","fenetre/fenetre","fenetre/barre-laterale","kanban/integrations","introduction/livraison"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"fenetre/reglages","added":19,"removed":11},{"page":"fenetre/fenetre","added":3,"removed":3},{"page":"fenetre/barre-laterale","added":4,"removed":4},{"page":"kanban/integrations","added":1,"removed":1},{"page":"introduction/livraison","added":1,"removed":1}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-08T03:41:22+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
