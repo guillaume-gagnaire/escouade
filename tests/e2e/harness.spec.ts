@@ -88,7 +88,7 @@ test('« Modèle des textes rédigés » offers Claude Haiku alone with Claude C
   await addProject(page, app.repo);
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await openSettingsPage(settings, 'Général');
+  await openSettingsPage(settings, 'Agents');
   const writer = settings.getByRole('group', { name: 'Modèle des textes rédigés' });
   await expect(writer.getByRole('button')).toHaveText(['Claude Haiku']);
   await expect(writer.getByRole('button', { name: 'Claude Haiku' })).toHaveAttribute('aria-pressed', 'true');
@@ -119,8 +119,8 @@ test.describe('with no harness found', () => {
       'Claude Code est introuvable : réinstalle-le (`irm https://claude.ai/install.ps1 | iex`, ou `npm install -g @anthropic-ai/claude-code`), ou indique son chemin dans Réglages › Harness.';
     await expect(claude.getByText(gone, { exact: true })).toHaveCount(2);
     // No harness to write the texts: « Modèle des textes rédigés » is not offered.
-    await openSettingsPage(settings, 'Général');
-    await expect(settings.getByRole('heading', { name: 'Langue' })).toBeVisible();
+    await openSettingsPage(settings, 'Agents');
+    await expect(settings.getByRole('heading', { name: 'Nouveaux agents' })).toBeVisible();
     await expect(settings.getByRole('group', { name: 'Modèle des textes rédigés' })).toHaveCount(0);
     await openSettingsPage(settings, 'Comptes et harness');
     // Its path given and saved: it is found, Escouade works.

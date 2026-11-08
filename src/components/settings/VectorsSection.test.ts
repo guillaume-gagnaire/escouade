@@ -8,7 +8,7 @@ import SettingsModal from '../modals/SettingsModal.svelte';
 
 vi.mock('../../lib/terminals', () => ({ launchLog: () => ({}), disposeLog() {} }));
 
-// The model of the search by meaning (ESC-254), for every project of this machine (« Tous les projets », ESC-310):
+// The model of the search by meaning (ESC-254), for every project of this machine (Avancé › « Recherche par le sens », ESC-310):
 // downloaded with its progress, called off, deleted.
 
 const MODEL: VectorsModelInfo = {
@@ -20,9 +20,9 @@ const MODEL: VectorsModelInfo = {
   downloading: false,
 };
 
-const group = () => screen.getByText('Tous les projets', { selector: 'h2' }).closest('section') as HTMLElement;
+const group = () => screen.getByText('Recherche par le sens', { selector: 'h2' }).closest('section') as HTMLElement;
 
-describe('the search by meaning in the projects’ settings', () => {
+describe('the search by meaning in Réglages › Avancé', () => {
   beforeEach(() => {
     app.modal = { kind: 'settings' };
     app.vectorsProgress = null;
@@ -39,7 +39,7 @@ describe('the search by meaning in the projects’ settings', () => {
     render(SettingsModal, { page: 'advanced', projectId: 'p1' });
     const g = await waitFor(() => {
       const s = group();
-      within(s).getByText('Recherche par le sens');
+      within(s).getByText('Modèle local');
       return s;
     });
     expect(within(g).getByText(/multilingual-e5-base, licence MIT/)).toBeInTheDocument();

@@ -539,5 +539,5 @@ La liste sous la carte d’un agent, la puce de sa carte et la vue de chaque tâ
 | Masquer chez moi | Hide for me | le fichier reste, l’équipe le voit toujours |
 | Supprimer pour l’équipe | Delete for the team | supprime son fichier, à commiter |
 | Garder le mien / Prendre le sien | Keep mine / Take theirs | un fichier en conflit git |
-| Ton nom | Your name | Réglages › Application › Équipe (“Team”), et par projet |
+| Ton nom | Your name | Réglages › Général › Toi (“You”), et par projet |
 | Kanban partagé | Shared Kanban | le groupe de Réglages › Projets |

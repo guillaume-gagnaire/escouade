@@ -1,8 +1,8 @@
 ---
 title: "Réglages"
 subject: "Fenêtre"
-sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/captures/a-plugins.png"]
-tickets: ["ESC-378","ESC-379","ESC-380","ESC-383","ESC-384"]
+sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/index.html","design/settings-2-2/captures/a-plugins.png"]
+tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-383","ESC-384"]
 decisions: [118,119,120,121]
 compared: null
 ---
@@ -21,8 +21,10 @@ Une seule fenêtre de réglages pour toute l'app : une barre des catégories à 
   - ⚙, « Configurer » et « ✦ Proposer des commandes » de la section Lancement : la page Lancement du projet ; le dernier lance aussi la lecture du projet (voir *Barre latérale*) ;
   - « Réglages du projet… » au clic droit sur un projet : la page Projet de ce projet ;
   - « Lier une source » et « ⚙ Gérer les sources » de la fenêtre d'import : la page Tickets importés de son projet (voir *Intégrations*) ;
-  - « Réglages › Services connectés » de l'onglet « PR et CI » et de la vue Pull requests (jeton refusé, hébergeur sans compte) : la page Services connectés (voir *Pull requests*).
+  - « Réglages › Services connectés » de l'onglet « PR et CI » et de la vue Pull requests (jeton refusé, hébergeur sans compte) : la page Services connectés (voir *Pull requests*) ;
+  - « Redémarrer maintenant » d'une mise à jour prête, dans Général : la fenêtre de la mise à jour, dont « Plus tard » revient sur Général.
 - Chaque page, et chaque projet, s'affiche depuis son début (ou depuis sa partie, tant qu'elle montre un ancien onglet : voir *Les pages*).
+- Les textes de l'app qui nomment une page la nomment par son chemin : « Réglages › Général › Couleurs » (thèmes d'un plugin), « Réglages › Général » (ton nom, statistiques d'usage), « Réglages › Agents » (remote control pour tous les agents).
 
 ### La fenêtre
 
@@ -36,7 +38,7 @@ Une seule fenêtre de réglages pour toute l'app : une barre des catégories à 
 - **Le clavier** : ↑ et ↓ vont d'une entrée de la barre à la suivante et l'ouvrent, Origine et Fin à la première et à la dernière ; passer sur un projet l'ouvre et le déplie. Une seule entrée de la barre est dans l'ordre de Tab : celle où est le clavier.
 - **La teinte suit la portée** : sur une page d'Escouade (Tous les projets compris), la fenêtre prend le teal d'Escouade ; sur une page d'un projet, la couleur de ce projet, dès qu'elle change. À la fermeture, l'app reprend sa propre teinte.
 - La page sous son titre et sa description ; pour une page d'un projet, sa tuile devant, et son nom pour titre sur la page Projet.
-- **« Avancé »**, en bas d'une page : un groupe replié sur une ligne qui nomme ce qu'il cache ; un clic le déplie sur place. Pour l'instant, seule la page Projet en a un : « Zone sensible », qui cache « Fermer le projet ».
+- **« Avancé »**, en bas d'une page : un groupe replié sur une ligne qui nomme ce qu'il cache ; un clic le déplie sur place. Général, Agents et Projet en ont un (celui de Projet s'appelle « Zone sensible » et cache « Fermer le projet »).
 - Pas de pied : ni « Annuler » ni « Enregistrer ». Échap, × ou un clic à côté de la fenêtre la ferment, sans question.
 
 ### Enregistrer au geste
@@ -50,38 +52,41 @@ Une seule fenêtre de réglages pour toute l'app : une barre des catégories à 
   - un dossier des worktrees ou un préfixe de branche refusé, avec la raison sous le champ (voir *Git & fichiers*) ;
   - un nombre vidé ou sous 0, par exemple « Un nombre entier, 0 ou plus : 15 reste enregistré. » ; un nombre à virgule est arrondi à l'entier du dessous ; une taille de texte hors de ses bornes est ramenée dedans.
 - Ce qui coûte le dit sur sa rangée, comme avant : le proxy et les certificats ne valent pour un agent qu'au prochain démarrage de son process, le remote control lance aussitôt le process `claude` de chaque agent concerné.
-- Certaines rangées passent par leur propre appel au backend, comme avant : « Affichage » (voir *Fenêtre*), les comptes des harness et leur « Projection des quotas » (voir *Barre de statut*), les comptes des intégrations (voir *Intégrations*), l'interrupteur « Les agents peuvent piloter Escouade » (voir *Serveur MCP*), les modèles de la voix, téléchargés ou effacés sur leur ligne, et, sur la page Plugins, l'interrupteur d'un plugin et « Installer » d'un plugin proposé.
+- Certaines rangées passent par leur propre appel au backend, comme avant : l'apparence (voir *Fenêtre*), « Recevoir les versions bêta » (enregistré, puis une recherche de mise à jour), les comptes des harness et leur « Projection des quotas » (voir *Barre de statut*), les comptes des intégrations (voir *Intégrations*), l'interrupteur « Les agents peuvent piloter Escouade » (voir *Serveur MCP*), les modèles de la voix, téléchargés ou effacés sur leur ligne, et, sur la page Plugins, l'interrupteur d'un plugin et « Installer » d'un plugin proposé.
 - Rien ne se perd au redémarrage : ce qui est enregistré est dans `settings.json` et les fichiers des projets, dont aucune clé ne change.
 
 ### Les pages
 
-Chaque réglage a sa page dans le registre de la fenêtre. Jusqu'à ce que chaque lot de la refonte les redécoupe, certaines pages montrent encore le contenu des onglets de la 2.0 :
+Chaque réglage a sa page dans le registre de la fenêtre. Les pages d'Escouade et Tickets importés ont leur contenu propre ; Comptes et harness et les autres pages d'un projet montrent encore le contenu des onglets de la 2.0, jusqu'à ce que leur lot de la refonte les redécoupe.
 
-- **Général** : l'ancien onglet Application.
-- **Agents** : le serveur MCP (« Les agents peuvent piloter Escouade », « Activité MCP »).
-- **Comptes et harness** : les comptes, puis l'ancien onglet Harness.
+- **Général** :
+  - « Apparence » : « Thème », « Couleurs », « Zoom de l'interface », « Taille du texte des terminaux » (voir *Fenêtre*) ;
+  - « Langue » : « Langue de l'interface » (« Système (…) » par défaut, « English », « Français ») et « Langue des textes rédigés par les agents » (« Comme l'interface » par défaut) (voir *Langues*) ;
+  - « Mises à jour » : la version (« Escouade 2.2.0 ») et « Rechercher une mise à jour », sous elle « Aucune mise à jour disponible. » après une recherche sans rien ; la mise à jour trouvée, en téléchargement puis prête, avec son redémarrage et ses nouveautés, ou un téléchargement qui échoue ; « Installer les mises à jour automatiquement » ; « Recevoir les versions bêta » (voir *Livraison et mises à jour*) ;
+  - « Toi » : « Ton nom » (voir *Kanban partagé*) et « Statistiques d'usage » ;
+  - Avancé : « Taille du texte de l'éditeur », « Ton identifiant ».
+- **Agents** :
+  - « Nouveaux agents » : « Vue des nouveaux agents », « Les agents tiennent une liste de tâches », activé par défaut (voir *Avancée d'un plan*), « Délai avant l'envoi pendant un tour » ; les deux premiers seulement quand un harness installé les a ;
+  - « Textes rédigés » : « Modèle des textes rédigés », et son modèle pour un harness qui le prend (voir *Langues*) ; absent sans harness installé ;
+  - « Remote control » : « Remote control pour tous les agents », qui dit quels harness l'ont (voir *Barre latérale*) ; absent sans harness qui l'a ;
+  - « Piloter Escouade » : « Les agents peuvent piloter Escouade » et ses déclarations (voir *Serveur MCP*) ;
+  - Avancé : arrêt des process inactifs, « Activité MCP ».
+- **Comptes et harness** : les comptes (« Ajouter un compte… », « Se connecter… », voir *Comptes* ; « Quotas » › « Projection des quotas », voir *Barre de statut*) ; puis un groupe par harness (exécutable, version, état, installation, coût estimé, et pour OpenCode ses « Modèles » favoris, voir *Harness*) ; pour Claude Code, le chemin de `claude` et où il est (voir *Claude Code dans WSL*) et sa mise à jour par Escouade ; puis « Tous les harness » › reprise automatique après la limite d'usage.
 - **Services connectés** : « Hébergeurs de code » (les instances et leurs jetons), puis « Sources de tickets » : leurs comptes (« servi par » un plugin), « Synchronisation » et « Import automatique », pour tous les projets (voir *Intégrations*, *Hébergeurs de code*). Elle ne demande aucun projet.
-- **Voix**, **Notifications** : comme avant.
-- **Plugins** : les plugins installés, ceux que propose Escouade, et « N'installer que des versions vérifiées » (ci-dessous).
-- **Avancé** : Réseau, Terminaux, puis « Recherche par le sens ».
-- **À propos** : comme avant.
-- **Projet**, **Git et worktrees**, **Lancement**, **Équipe**, **Confidentialité** : l'ancien onglet Projets du projet, chacune ouverte sur sa partie (Git, Lancement, Kanban partagé, Confidentialité) ; « Fermer le projet… » est sous « Zone sensible », repliée. Fermer ou non revient aux réglages (voir *Fermer un projet*).
-- **Kanban** : l'ancien onglet Kanban du projet.
-- **Tickets importés** : les sources liées au projet et la correspondance de leurs statuts ; sans compte connecté, un renvoi à Services connectés (voir *Intégrations*).
-- **Tous les projets** : « Nouveaux projets » (« Nouveaux projets privés », éteint par défaut), puis « Projets fermés », seulement s'il y en a, avec par projet « Rouvrir » et « Effacer l'historique… », et « Historique illisible » avec « Effacer » (voir *Fermer un projet*). Effacer un historique revient sur cette page.
-
-Le détail des réglages de chaque ancien onglet encore montré :
-
-- **Application** : « Affichage » (« Thème », « Zoom de l'interface », « Taille du texte des terminaux », « Taille du texte de l'éditeur », voir *Fenêtre*) ; « Langue de l'interface » (« Système (…) » par défaut, « English », « Français ») et « Langue des textes rédigés par Claude » (« Comme l'interface » par défaut), « Modèle des textes rédigés » (voir *Langues*).
-- **Harness** : un groupe par harness (exécutable, version, état, « Se connecter… », et pour OpenCode ses « Modèles » favoris, voir *Harness*) ; pour Claude Code, le chemin de `claude` et où il est (voir *Claude Code dans WSL*), reprise automatique après la limite d'usage, « Reprendre sur un autre compte un agent de ticket arrêté par la limite » avec plusieurs comptes (voir *Comptes*), « Les agents tiennent une liste de tâches », activé par défaut (voir *Avancée d'un plan*), arrêt des process inactifs ; « Pièces jointes » (voir *Conversation*) ; « Remote control pour tous les agents » (voir *Barre latérale*).
-- **Comptes** : la liste des comptes, « Ajouter un compte… », « Se connecter… » (voir *Comptes*) ; « Quotas » › « Projection des quotas » (voir *Barre de statut*).
-- **Notifications** : « Me prévenir pour », les nouvelles des hébergeurs, notifications du système, son (voir *Notifications*).
 - **Voix** : « Micro utilisé », « Modèle », « Langue parlée », « Raccourci » (voir *Dictée*) ; « Conversation » (voir *Conversation vocale*).
-- **Projets** : « Identité » (nom, dossier, couleur, lettres, logo et libellé de la tuile, harness et « Compte préféré », « Assistant de configuration ») ; « Remote control pour les agents de ce projet » ; « Confidentialité » (« Projet privé », « Ses fichiers », ses comptes, voir *Serveur MCP* et *Comptes*) ; « Workflow » ; « Git » (commit, worktrees, préfixes, fichiers copiés, commandes de préparation et de démontage, voir *Git & fichiers*) ; « Worktrees restés » › « Nettoyer » ; « Lancement » ; le Kanban partagé, `.escouade.yml` et la mémoire partagée.
+- **Notifications** : « Me prévenir pour », « Pull requests et déploiements », notifications du système, son (voir *Notifications*).
+- **Plugins** : les plugins installés, ceux que propose Escouade, et « N'installer que des versions vérifiées » (ci-dessous).
+- **Avancé** :
+  - « Réseau » : proxy, exclusions, proxy des terminaux, « Ignorer la vérification des certificats TLS » (ci-dessous) ;
+  - « Terminaux » : PowerShell 7, Git Bash, distribution WSL (bash sous macOS), shells détectés (voir *Barre latérale*) ;
+  - « Pièces jointes » (voir *Conversation*) ;
+  - « Recherche par le sens » › « Modèle local » (voir *Recherche par le sens*) ;
+  - « Données locales » : le dossier des données d'Escouade, et « Ouvrir le dossier ».
+- **À propos** : le logo, « Escouade » et sa version, les harness détectés ; « Crédits et licences », « Site web », Discord, « Soutenir Escouade ».
+- **Projet**, **Git et worktrees**, **Lancement**, **Équipe**, **Confidentialité** : l'ancien onglet Projets du projet, chacune ouverte sur sa partie (Git, Lancement, Kanban partagé, Confidentialité) ; « Fermer le projet… » est sous « Zone sensible », repliée. Fermer ou non revient aux réglages (voir *Fermer un projet*). Leur contenu : « Identité » (nom, dossier, couleur, lettres, logo et libellé de la tuile, harness et « Compte préféré », « Assistant de configuration ») ; « Remote control pour les agents de ce projet » ; « Confidentialité » (« Projet privé », « Ses fichiers », ses comptes, voir *Serveur MCP* et *Comptes*) ; « Workflow » ; « Git » (commit, worktrees, préfixes, fichiers copiés, commandes de préparation et de démontage, voir *Git & fichiers*) ; « Worktrees restés » › « Nettoyer » ; « Lancement » ; le Kanban partagé, `.escouade.yml` et la mémoire partagée.
+- **Tickets importés** : les sources liées au projet et la correspondance de leurs statuts ; sans compte connecté, un renvoi à Services connectés (voir *Intégrations*).
 - **Kanban** : branche cible, action à la validation, tests, nettoyage, message de commit, conflit (voir *Validation*) ; pilote auto et ses agents (voir *Pilote auto*) ; « Pause au-delà du quota », « pour tous les projets » : un réglage de l'app, rangé dans la page Comptes et harness (voir *Comptes*).
-- **Terminaux** : PowerShell 7, Git Bash, distribution WSL (bash sous macOS), shells détectés (voir *Barre latérale*).
-- **Réseau** : proxy et certificats (ci-dessous).
-- **À propos** : version, « Rechercher une mise à jour », « Installer les mises à jour automatiquement », « Recevoir les versions bêta », statistiques d'usage, données locales (voir *Livraison et mises à jour*).
+- **Tous les projets** : « Nouveaux projets » (« Nouveaux projets privés », éteint par défaut), puis « Projets fermés », seulement s'il y en a, avec par projet « Rouvrir » et « Effacer l'historique… », et « Historique illisible » avec « Effacer » (voir *Fermer un projet*). Effacer un historique revient sur cette page.
 
 ### La page Plugins
 

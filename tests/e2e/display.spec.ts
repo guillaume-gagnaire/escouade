@@ -1,6 +1,6 @@
-// « Affichage » in Réglages › Application: the zoom of the whole interface (the WebView's), applied at once, kept after a
+// « Apparence » in Réglages › Général: the zoom of the whole interface (the WebView's), applied at once, kept after a
 // restart, changed from the keyboard too, never past what the window holds (the interface is laid out for 1000 × 600
-// pixels at least); and the font sizes of the terminals and of the editor, set apart.
+// pixels at least); and the font sizes of the terminals and of the editor (in the page's « Avancé »), set apart.
 
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -51,7 +51,7 @@ function overflowing(page: Page) {
   });
 }
 
-/** The settings' « Application » tab, open. */
+/** The settings' page « Général », open. */
 async function openDisplay(page: Page) {
   await page.keyboard.press('Control+,');
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
@@ -61,7 +61,7 @@ async function openDisplay(page: Page) {
 
 const settingsOf = (data: string) => JSON.parse(fs.readFileSync(path.join(data, 'settings.json'), 'utf8'));
 
-test('the zoom of Réglages › Application grows the whole interface at once, nothing cut, and stays after a restart', async ({ app }) => {
+test('the zoom of Réglages › Général grows the whole interface at once, nothing cut, and stays after a restart', async ({ app }) => {
   let { page } = app;
   await addProject(page, app.repo);
   const base = await page.evaluate(() => devicePixelRatio);
@@ -193,6 +193,11 @@ test('the terminals and the editor have their own font size, set at once and fit
   await expect.poll(async () => (await measure()).cell / before.cell).toBeGreaterThan(1.75);
 
   const dialog = await openDisplay(page);
+  // The editor's, in « Avancé » at the foot of the page, folded.
+  await dialog
+    .locator('#settings-panel')
+    .getByRole('button', { name: /^Avancé/ })
+    .click();
   const editor = dialog.getByRole('spinbutton', { name: 'Taille du texte de l’éditeur' });
   await editor.fill('16');
   await editor.press('Tab');

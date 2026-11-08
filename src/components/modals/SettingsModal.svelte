@@ -13,27 +13,29 @@
   } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import { applyTheme } from '../../lib/theme';
+  import AboutPage from '../settings/AboutPage.svelte';
   import AccountsTab from '../settings/AccountsTab.svelte';
-  import AppTab from '../settings/AppTab.svelte';
-  import ApplicationTab from '../settings/ApplicationTab.svelte';
+  import AdvancedPage from '../settings/AdvancedPage.svelte';
+  import AgentsPage from '../settings/AgentsPage.svelte';
   import BoardTab from '../settings/BoardTab.svelte';
   import ClosedProjects from '../settings/ClosedProjects.svelte';
+  import GeneralPage from '../settings/GeneralPage.svelte';
+  import HarnessesSection from '../settings/HarnessesSection.svelte';
   import NewProjects from '../settings/NewProjects.svelte';
-  import McpSection from '../settings/McpSection.svelte';
+  import NotificationsPage from '../settings/NotificationsPage.svelte';
   import PluginsPage from '../settings/PluginsPage.svelte';
   import ProjectTab from '../settings/ProjectTab.svelte';
   import ServicesPage from '../settings/ServicesPage.svelte';
   import SettingsNav from '../settings/SettingsNav.svelte';
   import TicketsPage from '../settings/TicketsPage.svelte';
   import VoiceTab from '../settings/VoiceTab.svelte';
-  import VectorsSection from '../settings/VectorsSection.svelte';
   import Icon from '../Icon.svelte';
   import TileFace from '../TileFace.svelte';
 
   // All the settings, the app's and each project's, in one place (direction A, design/settings-2-2/index.html#a-*):
   // the bar of the pages on the left, a page at a time on the right. Each setting is saved as it changes (ESC-380): a
-  // choice at once, a text when it loses the focus or after a pause in the typing; no « Enregistrer ». Until R3 to R7
-  // cut them up, the pages show what the 2.0 tabs showed, opened on their part.
+  // choice at once, a text when it loses the focus or after a pause in the typing; no « Enregistrer ». Escouade's pages
+  // have their file each (R3); until R4 to R7 cut up the others, they show what the 2.0 tabs showed, opened on their part.
   let {
     page,
     tab,
@@ -168,30 +170,27 @@
               <p class="none">{t('settings.modal.noProject')}</p>
             {/if}
           {:else if info.id === 'general'}
-            <ApplicationTab />
+            <GeneralPage />
           {:else if info.id === 'agents'}
-            <McpSection />
+            <AgentsPage />
           {:else if info.id === 'accounts'}
             <AccountsTab />
-            <AppTab tab="claude" />
+            <HarnessesSection />
           {:else if info.id === 'services'}
             <ServicesPage />
           {:else if info.id === 'voice'}
             <VoiceTab />
           {:else if info.id === 'notifications'}
-            <AppTab tab="notifications" />
+            <NotificationsPage />
           {:else if info.id === 'plugins'}
             <PluginsPage />
           {:else if info.id === 'advanced'}
-            <AppTab tab="network" />
-            <AppTab tab="terminals" />
-            <!-- Also with no project open: that is when a folder's old history is most worth finding. -->
-            <VectorsSection />
+            <AdvancedPage />
           {:else if info.id === 'allProjects'}
             <NewProjects />
             <ClosedProjects />
           {:else}
-            <AppTab tab="about" />
+            <AboutPage />
           {/if}
         </div>
       </div>

@@ -1,4 +1,4 @@
-// The foundations of the 2.0 design (ESC-71) in the real app: « Thème » in Réglages › Application › Affichage (Système
+// The foundations of the 2.0 design (ESC-71) in the real app: « Thème » in Réglages › Général › Apparence (Système
 // by default, applied at once, the window's own theme with it, kept after a restart and shown before the first render),
 // and the common controls as the preview draws them (design/app-redesign/index.html#settings-app), in both themes, at
 // 1440 × 900 and at CI's 1028 × 779. The captures of the app and of the preview go to ESCOUADE_E2E_SHOTS when it is set,
@@ -108,7 +108,7 @@ test('« Thème » is the system’s by default, applies at once with the window
   await expect.poll(async () => (await shown(page)).theme).toBe(system);
 });
 
-test('the common controls of Réglages › Application look as the preview draws them, in both themes, at both sizes', async ({ app }) => {
+test('the common controls of Réglages › Général look as the preview draws them, in both themes, at both sizes', async ({ app }) => {
   const exe = chromium.executablePath();
   test.skip(
     !fs.existsSync(exe) || !fs.existsSync(PREVIEW_FONT),

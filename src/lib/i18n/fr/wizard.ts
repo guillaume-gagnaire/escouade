@@ -118,7 +118,7 @@ export default {
     none: 'Aucune commande : ajoute-en une, ou laisse Claude lire le projet.',
   },
   account: {
-    remoteAll: 'Déjà allumé pour tous les agents (Réglages › Harness).',
+    remoteAll: 'Déjà allumé pour tous les agents (Réglages › Agents).',
     /** ESC-128: its harness has no account yet. */
     noAccount: 'Aucun compte {harness} : les agents et les tickets de ce projet ne démarreront qu’une fois un compte ajouté.',
     /** A private project's accounts (ESC-163): reserved to it alone once it is made. */

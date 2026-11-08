@@ -170,7 +170,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('mcp', 'agents', 'mcp.section.enable', s('mcpEnabled')),
   row('mcpDeclared', 'agents', 'mcp.section.list'),
   row('idleStop', 'agents', 'settings.claude.idleStop', { advanced: true, ...s('idleStopMinutes') }),
-  row('mcpActivity', 'agents', 'mcp.section.title', { advanced: true }),
+  row('mcpActivity', 'agents', 'mcp.activity.title', { advanced: true }),
 
   // Comptes et harness › each harness, Quand un quota est épuisé; Avancé.
   row('harnesses', 'accounts', 'settings.claude.allHarnesses'),
@@ -220,7 +220,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('attachOrigin', 'advanced', 'settings.claude.attachOrigin', s('attachOrigin')),
   row('attachBigText', 'advanced', 'settings.claude.attachBigText', s('attachBigText')),
   row('attachKeep', 'advanced', 'settings.claude.attachKeep', s('attachKeepDays')),
-  row('vectors', 'advanced', 'vectors.allTitle'),
+  row('vectors', 'advanced', 'vectors.label'),
   row('localData', 'advanced', 'settings.about.localData'),
 
   // À propos.

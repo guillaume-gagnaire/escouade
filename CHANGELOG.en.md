@@ -15,6 +15,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 - Settings have a bar on the left: Escouade’s pages, then each project with its own, All projects and About, from the keyboard too. The window, larger, takes the colour of what it sets, and what is rarely needed folds under “Advanced”, which names what it hides.
 - Settings apply as soon as you change them, with no “Save”: a text when you leave its field or pause typing. A value that cannot be, such as a project without a name, is said on its row and the previous one stays.
+- In the settings, General brings together the appearance, the language, the updates (betas included) and what concerns you; Agents, what sets the agents and driving Escouade; Advanced, the network, the terminals, the attachments and the search by meaning.
 - “Integrations” becomes two pages: Connected services, for the code hosts, the ticket sources’ accounts, the sync and the automatic import, which hold for every project; and, in each project, Imported tickets for its sources and how their statuses map.
 - The Plugins page of the settings says what each plugin adds, where it is set and in how many projects it is on, with its switch and its settings. It also offers Escouade’s plugins not yet installed, each installed in a click with nothing to download.
 - Escouade's plugins come in the installer: at the first start, even offline, Escouade installs those your configuration uses, and the Plugins view offers the others, installed in one click with no download.

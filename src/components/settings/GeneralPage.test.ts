@@ -26,15 +26,15 @@ const choice = (setting: string, name: string) =>
 const UI = 'Langue de l’interface';
 const CLAUDE = 'Langue des textes rédigés par les agents';
 
-describe('the « Application » tab', () => {
+describe('the page « Général »', () => {
   beforeEach(() => {
     resetApp();
-    app.modal = { kind: 'settings', tab: 'app' };
+    app.modal = { kind: 'settings', page: 'general' };
   });
 
   it('comes first and chooses the languages, each named in itself', () => {
     fakeBackend();
-    render(SettingsModal, { tab: 'app' });
+    render(SettingsModal, { page: 'general' });
     expect(within(screen.getByRole('navigation')).getAllByRole('button')[0]).toHaveTextContent('Général');
     expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Général' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByText('Thème, zoom, langue, mises à jour et ce qui te concerne')).toBeInTheDocument();
@@ -55,7 +55,7 @@ describe('the « Application » tab', () => {
   it('names the system’s language in the language of the interface', () => {
     fakeBackend();
     app.lang = { ui: 'fr', system: 'en', claude: 'fr' };
-    render(SettingsModal, { tab: 'app' });
+    render(SettingsModal, { page: 'general' });
     expect(choices(UI)[0]).toBe('Système (Anglais)');
     setLang('en');
     flushSync();
@@ -67,7 +67,7 @@ describe('the « Application » tab', () => {
 
   it('saves each language as it is chosen, once', async () => {
     const backend = fakeBackend({ save_settings: () => [] });
-    render(SettingsModal, { tab: 'app' });
+    render(SettingsModal, { page: 'general' });
     await userEvent.click(choice(UI, 'English'));
     await afterGesture();
     expect(backend.called('save_settings')).toHaveLength(1);
@@ -83,15 +83,19 @@ describe('the « Application » tab', () => {
   it('reads in English', () => {
     fakeBackend();
     setLang('en');
-    render(SettingsModal, { tab: 'app' });
+    render(SettingsModal, { page: 'general' });
     expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'General' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByText('Theme, zoom, language, updates and what concerns you')).toBeInTheDocument();
-    expect(within(panel()).getByRole('heading', { name: 'Display' })).toBeInTheDocument();
+    expect(within(panel()).getByRole('heading', { name: 'Appearance' })).toBeInTheDocument();
+    expect(within(panel()).getByRole('heading', { name: 'Updates' })).toBeInTheDocument();
+    expect(within(panel()).getByRole('heading', { name: 'You' })).toBeInTheDocument();
     expect(choices('Theme')).toEqual(['System', 'Light', 'Dark']);
     expect(choices('Interface zoom')).toEqual(['90%', '100%', '110%', '125%', '150%']);
     expect(panel()).toHaveTextContent('Also from the keyboard: Ctrl+= to zoom in, Ctrl+- to zoom out, Ctrl+0 to go back to 100%.');
     expect(within(panel()).getByRole('spinbutton', { name: 'Terminal text size' })).toBeInTheDocument();
-    expect(within(panel()).getByRole('spinbutton', { name: 'Editor text size' })).toBeInTheDocument();
+    // The editor's, folded into « Advanced », named there.
+    expect(within(panel()).queryByRole('spinbutton', { name: 'Editor text size' })).toBeNull();
+    expect(within(panel()).getByRole('button', { name: /^Advanced/ })).toHaveTextContent('Editor text size');
     expect(within(panel()).getByRole('heading', { name: 'Language' })).toBeInTheDocument();
     expect(choices('Interface language')).toEqual(['System (French)', 'English', 'Français']);
     expect(choices('Language of texts written by the agents')).toEqual(['Same as the interface (default)', 'English', 'Français']);
@@ -100,20 +104,22 @@ describe('the « Application » tab', () => {
     );
   });
 
-  describe('« Affichage »', () => {
+  describe('« Apparence »', () => {
     const ZOOM = 'Zoom de l’interface';
     const field = (name: string) => within(panel()).getByRole('spinbutton', { name }) as HTMLInputElement;
     beforeEach(() => Object.assign(zoomState, { fit: 200, shown: 100 }));
     afterEach(() => vi.useRealTimers());
 
-    it('comes first, its zoom in steps, its keys said, the font sizes of the terminals and of the editor apart', () => {
+    it('comes first, its zoom in steps, its keys said, the font size of the terminals, the editor’s in « Avancé »', async () => {
       fakeBackend();
-      render(SettingsModal, { tab: 'app' });
+      render(SettingsModal, { page: 'general' });
       expect(
         within(panel())
           .getAllByRole('heading')
           .map((h) => h.textContent),
-      ).toEqual(['Affichage', 'Textes rédigés', 'Langue', 'Équipe']);
+      ).toEqual(['Apparence', 'Langue', 'Mises à jour', 'Toi']);
+      expect(within(panel()).queryByRole('spinbutton', { name: 'Taille du texte de l’éditeur' })).toBeNull();
+      await userEvent.click(within(panel()).getByRole('button', { name: /^Avancé/ }));
       expect(choices(ZOOM)).toEqual(['90 %', '100 %', '110 %', '125 %', '150 %']);
       expect(choice(ZOOM, '100 %')).toHaveAttribute('aria-pressed', 'true');
       expect(panel()).toHaveTextContent('Aussi au clavier : Ctrl+= pour agrandir, Ctrl+- pour réduire, Ctrl+0 pour revenir à 100 %.');
@@ -125,7 +131,7 @@ describe('the « Application » tab', () => {
     it('zooms at once and saves it by itself, without « Enregistrer », the draft left as it is', async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       const backend = fakeBackend({ save_settings: () => [] });
-      render(SettingsModal, { tab: 'app' });
+      render(SettingsModal, { page: 'general' });
       await userEvent.click(choice(ZOOM, '150 %'));
       expect(choice(ZOOM, '150 %')).toHaveAttribute('aria-pressed', 'true');
       expect(app.settings.uiZoom).toBe(150);
@@ -143,7 +149,7 @@ describe('the « Application » tab', () => {
     it('chooses the theme in segments, Système by default, applied at once and saved by itself, the draft left as it is', async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       const backend = fakeBackend({ save_settings: () => [] });
-      render(SettingsModal, { tab: 'app' });
+      render(SettingsModal, { page: 'general' });
       expect(choices('Thème')).toEqual(['Système', 'Clair', 'Sombre']);
       expect(choice('Thème', 'Système')).toHaveAttribute('aria-pressed', 'true');
       expect(panel()).toHaveTextContent('Système suit le thème de Windows, macOS ou Linux, et ses changements.');
@@ -167,32 +173,35 @@ describe('the « Application » tab', () => {
     it('does not offer the steps the window cannot hold, and says when the zoom chosen is held to a smaller one', () => {
       fakeBackend();
       Object.assign(zoomState, { fit: 125, shown: 125 });
-      render(SettingsModal, { tab: 'app' });
+      render(SettingsModal, { page: 'general' });
       expect(choice(ZOOM, '125 %')).toBeEnabled();
       expect(choice(ZOOM, '150 %')).toBeDisabled();
       // A step out of the segments (the keys reach it) is shown only while it is the one chosen.
       expect(choices(ZOOM)).not.toContain('200 %');
-      expect(within(panel()).queryByRole('status')).toBeNull();
+      expect(within(panel()).queryByText(/La fenêtre est trop petite/)).toBeNull();
       app.settings.uiZoom = 200;
       flushSync();
       expect(choices(ZOOM)).toEqual(['90 %', '100 %', '110 %', '125 %', '150 %', '200 %']);
       expect(choice(ZOOM, '200 %')).toBeDisabled();
       expect(choice(ZOOM, '200 %')).toHaveAttribute('aria-pressed', 'true');
-      expect(within(panel()).getByRole('status').textContent?.trim()).toBe(
-        'La fenêtre est trop petite pour 200 % : l’interface est à 125 % tant qu’elle ne grandit pas.',
-      );
+      expect(
+        within(panel())
+          .getByText(/La fenêtre est trop petite/)
+          .textContent?.trim(),
+      ).toBe('La fenêtre est trop petite pour 200 % : l’interface est à 125 % tant qu’elle ne grandit pas.');
     });
 
     it('keeps a font size typed in range, to the half pixel', async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       const backend = fakeBackend({ save_settings: () => [] });
-      render(SettingsModal, { tab: 'app' });
+      render(SettingsModal, { page: 'general' });
       const term = field('Taille du texte des terminaux');
       await userEvent.clear(term);
       await userEvent.type(term, '40');
       await fireEvent.change(term);
       expect(app.settings.terminalFontSize).toBe(24);
       expect(term.value).toBe('24');
+      await userEvent.click(within(panel()).getByRole('button', { name: /^Avancé/ }));
       const editor = field('Taille du texte de l’éditeur');
       await userEvent.clear(editor);
       await userEvent.type(editor, '15.2');
@@ -203,88 +212,6 @@ describe('the « Application » tab', () => {
     });
   });
 
-  describe('« Modèle des textes rédigés »', () => {
-    const WRITER = 'Modèle des textes rédigés';
-
-    it('offers Claude Haiku alone with Claude Code alone, chosen by default', () => {
-      fakeBackend();
-      render(SettingsModal, { tab: 'app' });
-      expect(within(panel()).getByRole('heading', { name: 'Textes rédigés' })).toBeInTheDocument();
-      expect(choices(WRITER)).toEqual(['Claude Haiku']);
-      expect(choice(WRITER, 'Claude Haiku')).toHaveAttribute('aria-pressed', 'true');
-      expect(panel()).toHaveTextContent('Seuls les harness installés sont proposés.');
-    });
-
-    it('lists only the harnesses installed, and saves the one chosen', async () => {
-      app.engines = [CLAUDE_ENGINE, BARE_ENGINE, { ...BARE_ENGINE, id: 'cursor', name: 'Absent', writer: 'Absent mini' }];
-      app.enginesFound = ['claude', 'codex'];
-      const backend = fakeBackend({ save_settings: () => [] });
-      render(SettingsModal, { tab: 'app' });
-      expect(choices(WRITER)).toEqual(['Claude Haiku', 'Nu mini']);
-      await userEvent.click(choice(WRITER, 'Nu mini'));
-      expect(choice(WRITER, 'Nu mini')).toHaveAttribute('aria-pressed', 'true');
-      await afterGesture();
-      expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ writerEngine: 'codex' });
-    });
-
-    it('shows the harness the texts go to when the one chosen is not installed any more', () => {
-      app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
-      app.enginesFound = ['codex'];
-      app.settings = { ...app.settings, writerEngine: 'claude' };
-      fakeBackend();
-      render(SettingsModal, { tab: 'app' });
-      expect(choices(WRITER)).toEqual(['Nu mini']);
-      expect(choice(WRITER, 'Nu mini')).toHaveAttribute('aria-pressed', 'true');
-    });
-
-    it('chooses the model of a harness that takes the one given, among those of its account (ESC-45)', async () => {
-      const OPENCODE = { ...BARE_ENGINE, id: 'opencode' as const, name: 'OpenCode', writer: 'OpenCode', writerTakesModel: true };
-      app.engines = [CLAUDE_ENGINE, BARE_ENGINE, OPENCODE];
-      app.enginesFound = ['claude', 'codex', 'opencode'];
-      app.engineModels = {
-        // Codex picks its own: no menu for it.
-        codex: [{ id: 'gpt-x', label: 'GPT-X', efforts: [], defaultEffort: null, images: false, default: true }],
-        opencode: [
-          { id: 'ollama/qwen', label: 'Qwen', efforts: [], defaultEffort: null, images: false, default: true, provider: 'Ollama (local)' },
-          { id: 'paid/coder', label: 'Coder', efforts: [], defaultEffort: null, images: false, default: false, provider: 'Paid' },
-        ],
-      };
-      const backend = fakeBackend({ save_settings: () => [] });
-      render(SettingsModal, { tab: 'app' });
-      expect(within(panel()).queryByRole('combobox', { name: 'Modèle' })).toBeNull();
-      await userEvent.click(choice(WRITER, 'Nu mini'));
-      expect(within(panel()).queryByRole('combobox', { name: 'Modèle' })).toBeNull();
-      await userEvent.click(choice(WRITER, 'OpenCode'));
-      const menu = within(panel()).getByRole('combobox', { name: 'Modèle' });
-      expect([...menu.querySelectorAll('option')].map((o) => o.textContent)).toEqual([
-        'Par défaut (Qwen)',
-        'Qwen · Ollama (local)',
-        'Coder · Paid',
-      ]);
-      expect(menu).toHaveValue('');
-      expect(panel()).toHaveTextContent('sans lui, OpenCode en choisirait un lui-même');
-      await userEvent.selectOptions(menu, 'paid/coder');
-      await afterGesture();
-      expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ writerEngine: 'opencode', writerModel: 'paid/coder' });
-    });
-
-    it('is not shown when no harness is installed', () => {
-      app.enginesFound = [];
-      fakeBackend();
-      render(SettingsModal, { tab: 'app' });
-      expect(within(panel()).queryByRole('group', { name: WRITER })).toBeNull();
-    });
-
-    it('reads in English', () => {
-      fakeBackend();
-      setLang('en');
-      render(SettingsModal, { tab: 'app' });
-      expect(within(panel()).getByRole('heading', { name: 'Written texts' })).toBeInTheDocument();
-      expect(choices('Model for written texts')).toEqual(['Claude Haiku']);
-      expect(panel()).toHaveTextContent('Only the installed harnesses are offered.');
-    });
-  });
-
   describe('« Ton nom » (ESC-243)', () => {
     const NAME = 'Ton nom';
     const field = () => within(panel()).getByRole('textbox', { name: NAME });
@@ -292,7 +219,7 @@ describe('the « Application » tab', () => {
     it('is filled with git’s name when none was given, says so, and saves nothing until changed', async () => {
       app.settings = { ...app.settings, userName: '', nameAsked: true };
       const backend = fakeBackend({ git_user_name: () => 'Bob Durand', save_settings: () => [] });
-      render(SettingsModal, { tab: 'app' });
+      render(SettingsModal, { page: 'general' });
       await vi.waitFor(() => expect(field()).toHaveValue('Bob Durand'));
       expect(backend.called('git_user_name')).toEqual([{ cmd: 'git_user_name', args: { projectId: null } }]);
       expect(panel()).toHaveTextContent('Repris de git');
@@ -307,7 +234,7 @@ describe('the « Application » tab', () => {
     it('stays empty once emptied on purpose, saved and opened again', async () => {
       app.settings = { ...app.settings, userName: '', nameAsked: true };
       const backend = fakeBackend({ git_user_name: () => 'Bob Durand', save_settings: () => [] });
-      const view = render(SettingsModal, { tab: 'app' });
+      const view = render(SettingsModal, { page: 'general' });
       await vi.waitFor(() => expect(field()).toHaveValue('Bob Durand'));
       await userEvent.clear(field());
       expect(panel()).not.toHaveTextContent('Repris de git');
@@ -316,7 +243,7 @@ describe('the « Application » tab', () => {
       expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ userName: '', userNameCleared: true });
       expect(field()).toHaveValue('');
       view.unmount();
-      render(SettingsModal, { tab: 'app' });
+      render(SettingsModal, { page: 'general' });
       await vi.waitFor(() => expect(backend.called('git_user_name')).toHaveLength(2));
       await new Promise((r) => setTimeout(r, 20));
       expect(field()).toHaveValue('');
@@ -326,7 +253,7 @@ describe('the « Application » tab', () => {
     it('keeps the name given, git’s aside', async () => {
       app.settings = { ...app.settings, userName: 'Robert' };
       fakeBackend({ git_user_name: () => 'Bob Durand' });
-      render(SettingsModal, { tab: 'app' });
+      render(SettingsModal, { page: 'general' });
       await new Promise((r) => setTimeout(r, 20));
       expect(field()).toHaveValue('Robert');
       expect(panel()).not.toHaveTextContent('Repris de git');
@@ -357,7 +284,7 @@ describe('« Couleurs », the theme of a plugin (PLG-7)', () => {
 
   beforeEach(() => {
     resetApp();
-    app.modal = { kind: 'settings', tab: 'app' };
+    app.modal = { kind: 'settings', page: 'general' };
     plugins.list = [];
     plugins.loaded = true;
   });
@@ -368,7 +295,7 @@ describe('« Couleurs », the theme of a plugin (PLG-7)', () => {
 
   it('offers the plugins’ way to themes when none is installed', async () => {
     fakeBackend();
-    render(SettingsModal, { tab: 'app' });
+    render(SettingsModal, { page: 'general' });
     expect(panel()).toHaveTextContent('Aucun thème installé. Un plugin peut en apporter un : ses couleurs et sa palette de projets.');
     await userEvent.click(within(panel()).getByRole('button', { name: 'Voir les thèmes' }));
     expect(app.modal).toBeNull();
@@ -380,7 +307,7 @@ describe('« Couleurs », the theme of a plugin (PLG-7)', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const backend = fakeBackend();
     plugins.list = [themed()];
-    render(SettingsModal, { tab: 'app' });
+    render(SettingsModal, { page: 'general' });
     const select = within(panel()).getByRole('combobox', { name: 'Couleurs' }) as HTMLSelectElement;
     expect([...select.options].map((o) => o.textContent)).toEqual(['Escouade', 'Contraste élevé · Contraste']);
     expect(select.value).toBe('');
@@ -396,7 +323,7 @@ describe('« Couleurs », the theme of a plugin (PLG-7)', () => {
     fakeBackend();
     plugins.list = [themed(false)];
     app.settings.pluginTheme = 'dev.exemple.hc/high-contrast';
-    render(SettingsModal, { tab: 'app' });
+    render(SettingsModal, { page: 'general' });
     expect(within(panel()).queryByRole('combobox', { name: 'Couleurs' })).toBeNull();
     expect(panel()).toHaveTextContent(
       'Le thème choisi n’est plus là : son plugin (dev.exemple.hc) est désactivé ou désinstallé. Escouade a repris ses couleurs.',

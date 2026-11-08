@@ -22,7 +22,11 @@ test('a setting changed, the window closed at once, the app started again: it is
   await expect(sound).toHaveAttribute('aria-checked', now);
 
   // A number that cannot be: said on its row, the one saved before kept.
-  await openSettingsPage(dialog, 'Comptes et harness');
+  await openSettingsPage(dialog, 'Agents');
+  await dialog
+    .locator('#settings-panel')
+    .getByRole('button', { name: /^Avancé/ })
+    .click();
   const idle = dialog.getByRole('spinbutton', { name: /Arrêter les processus des agents inactifs/ });
   const before = await idle.inputValue();
   await idle.fill('');
@@ -48,7 +52,11 @@ test('a setting changed, the window closed at once, the app started again: it is
   await expect(dialog.getByRole('switch', { name: 'Son activé' })).toHaveAttribute('aria-checked', now);
   await openSettingsPage(dialog, 'Projet');
   await expect(dialog.getByRole('textbox', { name: 'Nom du projet' })).toHaveValue('demo-api-renommé');
-  await openSettingsPage(dialog, 'Comptes et harness');
+  await openSettingsPage(dialog, 'Agents');
+  await dialog
+    .locator('#settings-panel')
+    .getByRole('button', { name: /^Avancé/ })
+    .click();
   await expect(dialog.getByRole('spinbutton', { name: /Arrêter les processus des agents inactifs/ })).toHaveValue(before);
 });
 

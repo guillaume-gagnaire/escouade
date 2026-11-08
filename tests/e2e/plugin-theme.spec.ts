@@ -4,7 +4,7 @@ import type { Locator, Page } from '@playwright/test';
 import { addProject, expect, test, openSettingsPage } from './fixture';
 
 // The themes of plugins (PLG-7, ESC-179): a declarative plugin that brings a theme, installed from a folder, chosen in
-// Réglages › Application › Couleurs. The window, a terminal kept open and the project colours take it at once: the
+// Réglages › Général › Couleurs. The window, a terminal kept open and the project colours take it at once: the
 // computed colour of a few surfaces is the theme's, a value that is no colour is left out (Escouade's kept), and what
 // the theme leaves out (the light panel) keeps Escouade's. « Escouade » chosen again, then the plugin uninstalled, the
 // window comes back to Escouade's colours.
@@ -138,7 +138,7 @@ test('a plugin’s theme is put on the window, a terminal and the project colour
   // Back from the view Plugins, the project colour glides back (0.7 s).
   await expect.poll(() => surfaces(page, box)).toEqual(escouade);
 
-  // Chosen in Réglages › Application › Couleurs: applied at once, saved by itself.
+  // Chosen in Réglages › Général › Couleurs: applied at once, saved by itself.
   settings = await openApplication(page);
   const colors = settings.getByRole('combobox', { name: 'Couleurs' });
   await expect(colors.locator('option')).toHaveText(['Escouade', 'Nuit bleue · Thèmes de test']);

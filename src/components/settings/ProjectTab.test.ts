@@ -37,7 +37,7 @@ describe('ProjectTab', () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(field).toHaveAttribute('placeholder', 'Robert');
     expect(
-      screen.getByText('Vide : celui de Réglages › Application (Robert). Gardé sur ce poste, jamais dans .escouade.yml.'),
+      screen.getByText('Vide : celui de Réglages › Général (Robert). Gardé sur ce poste, jamais dans .escouade.yml.'),
     ).toBeInTheDocument();
   });
 
@@ -154,12 +154,12 @@ describe('ProjectTab', () => {
 
   describe('remote control', () => {
     const LABEL = 'Remote control pour les agents de ce projet';
-    const REASON = 'Activé pour tous les projets dans Réglages › Harness';
+    const REASON = 'Activé pour tous les projets dans Réglages › Agents';
     const tab = (name: string) => within(screen.getByRole('navigation')).getByRole('button', { name });
     const headings = () => screen.getAllByRole('heading').map((h) => h.textContent);
-    /** The modal on « Claude Code », the setting for all agents switched on or off, then on the project’s tab. */
+    /** The modal on « Agents », the setting for all agents switched on or off, then on the project’s tab. */
     const toProjects = async (global: boolean, [allLabel, projectsTab] = ['Remote control pour tous les agents', 'demo-api']) => {
-      render(SettingsModal, { tab: 'claude' });
+      render(SettingsModal, { page: 'agents' });
       const all = screen.getByRole('switch', { name: allLabel });
       if (global !== (all.getAttribute('aria-checked') === 'true')) await userEvent.click(all);
       await userEvent.click(tab(projectsTab));
@@ -243,7 +243,7 @@ describe('ProjectTab', () => {
       fakeBackend();
       await toProjects(true);
       expect(screen.getByRole('switch', { name: LABEL })).toBeDisabled();
-      await userEvent.click(tab('Comptes et harness'));
+      await userEvent.click(tab('Agents'));
       await userEvent.click(screen.getByRole('switch', { name: 'Remote control pour tous les agents' }));
       await userEvent.click(tab('demo-api'));
       const remote = screen.getByRole('switch', { name: LABEL });
@@ -260,7 +260,7 @@ describe('ProjectTab', () => {
       await toProjects(true);
       expect(screen.getByRole('switch', { name: LABEL })).toHaveAttribute('aria-checked', 'true');
       expect(screen.getByRole('switch', { name: LABEL })).toBeDisabled();
-      await userEvent.click(tab('Comptes et harness'));
+      await userEvent.click(tab('Agents'));
       await userEvent.click(screen.getByRole('switch', { name: 'Remote control pour tous les agents' }));
       await userEvent.click(tab('demo-api'));
       expect(screen.getByRole('switch', { name: LABEL })).toHaveAttribute('aria-checked', 'true');
@@ -275,7 +275,7 @@ describe('ProjectTab', () => {
       const remote = screen.getByRole('switch', { name: 'Remote control for this project’s agents' });
       expect(remote).toBeDisabled();
       expect(remote).toHaveAttribute('aria-checked', 'true');
-      expect(screen.getByText('On for all projects in Settings › Harness')).toBeVisible();
+      expect(screen.getByText('On for all projects in Settings › Agents')).toBeVisible();
       expect(screen.getByText(/^Every agent of this project/)).toHaveTextContent(
         'Every agent of this project, existing or new (ticket agents included), is reachable from claude.ai and the Claude app. Escouade starts each one’s claude process right away, and it stays running. The session appears on claude.ai as “project · agent” (for a ticket agent, the name comes from the ticket). In Claude Code view, an interface that is already open only picks it up at its next launch. To set an agent apart: right-click, “Turn off remote control”.',
       );

@@ -37,6 +37,18 @@ export default defineZone('settings', {
     advanced: 'Advanced',
   },
 
+  groups: {
+    appearance: 'Appearance',
+    updates: 'Updates',
+    you: 'You',
+    newAgents: 'New agents',
+    remote: 'Remote control',
+    pilot: 'Drive Escouade',
+    network: 'Network',
+    terminals: 'Terminals',
+    localData: 'Local data',
+  },
+
   modal: {
     noProject: 'No project open.',
   },
@@ -343,7 +355,7 @@ export default defineZone('settings', {
     remote: 'Remote control for this project’s agents',
     remoteDesc:
       'Every agent of this project, existing or new (ticket agents included), is reachable from claude.ai and the Claude app. Escouade starts each one’s claude process right away, and it stays running. The session appears on claude.ai as “project · agent” (for a ticket agent, the name comes from the ticket). In Claude Code view, an interface that is already open only picks it up at its next launch. To set an agent apart: right-click, “Turn off remote control”.',
-    remoteGlobal: 'On for all projects in Settings › Harness',
+    remoteGlobal: 'On for all projects in Settings › Agents',
     privateTitle: 'Privacy',
     private: 'Private project',
     privateDesc:

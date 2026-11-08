@@ -161,7 +161,7 @@ test('« Vue des nouveaux agents » set to the harness’s terminal opens a new 
   const { page } = app;
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await openSettingsPage(dialog, 'Comptes et harness');
+  await openSettingsPage(dialog, 'Agents');
   const choice = dialog.getByRole('group', { name: 'Vue des nouveaux agents' });
   await expect(choice.getByRole('button', { name: 'Escouade' })).toHaveAttribute('aria-pressed', 'true');
   await choice.getByRole('button', { name: 'Terminal du harness' }).click();

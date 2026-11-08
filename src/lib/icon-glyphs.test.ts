@@ -22,7 +22,7 @@ const REDRAWN = {
     'src/components/settings/SharedMark.svelte',
     'src/components/settings/Row.svelte',
     'src/components/settings/Group.svelte',
-    'src/components/settings/ApplicationTab.svelte',
+    'src/components/settings/GeneralPage.svelte',
   ],
   'lot 2 (ESC-72)': [
     'src/App.svelte',
@@ -127,7 +127,12 @@ const REDRAWN = {
   'lot 11b (ESC-152)': [
     'src/components/modals/SettingsModal.svelte',
     'src/components/settings/AccountsTab.svelte',
-    'src/components/settings/AppTab.svelte',
+    'src/components/settings/AboutPage.svelte',
+    'src/components/settings/AdvancedPage.svelte',
+    'src/components/settings/AgentsPage.svelte',
+    'src/components/settings/HarnessesSection.svelte',
+    'src/components/settings/McpActivity.svelte',
+    'src/components/settings/NotificationsPage.svelte',
     'src/components/settings/BoardTab.svelte',
     'src/components/settings/ClosedProjects.svelte',
     'src/components/settings/ForgesSection.svelte',

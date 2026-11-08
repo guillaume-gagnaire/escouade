@@ -112,7 +112,7 @@ export default defineZone('wizard', {
     none: 'No command: add one, or let Claude read the project.',
   },
   account: {
-    remoteAll: 'Already on for all agents (Settings › Harness).',
+    remoteAll: 'Already on for all agents (Settings › Agents).',
     noAccount: 'No {harness} account: this project’s agents and tickets won’t start until one is added.',
     reserved: 'Accounts reserved to this project',
     reservedDesc:

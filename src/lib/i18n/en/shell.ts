@@ -101,7 +101,7 @@ export default defineZone('shell', {
     title: 'Help improve Escouade?',
     body: 'Escouade can send usage statistics, with nothing that identifies you: which features are used, with which version of Escouade and which system. Never your projects, your code, your conversations or your name.',
     detail:
-      'They go to a server of Escouade’s hosted in France (Aptabase, open source), under an id drawn at random, and are kept 25 months. You can change your mind at any time in Settings › About.',
+      'They go to a server of Escouade’s hosted in France (Aptabase, open source), under an id drawn at random, and are kept 25 months. You can change your mind at any time in Settings › General.',
     more: 'What is sent, in detail',
     yes: 'Share statistics',
     no: 'No thanks',

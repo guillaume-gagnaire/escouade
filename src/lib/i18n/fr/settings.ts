@@ -40,6 +40,19 @@ export default {
     advanced: 'Avancé',
   },
 
+  // The groups of Escouade's pages (PROPOSITION.md §2) that no tab of the 2.0 window had.
+  groups: {
+    appearance: 'Apparence',
+    updates: 'Mises à jour',
+    you: 'Toi',
+    newAgents: 'Nouveaux agents',
+    remote: 'Remote control',
+    pilot: 'Piloter Escouade',
+    network: 'Réseau',
+    terminals: 'Terminaux',
+    localData: 'Données locales',
+  },
+
   // The window itself.
   modal: {
     noProject: 'Aucun projet ouvert.',
@@ -397,7 +410,7 @@ export default {
     remoteDesc:
       'Chaque agent de ce projet, existant ou nouveau (agents des tickets compris), est accessible depuis claude.ai et l’app Claude. Escouade lance tout de suite le process claude de chacun, qui reste lancé. La session apparaît sur claude.ai sous le nom « projet · agent » (pour un agent de ticket, son nom vient du ticket). En vue Claude Code, une interface déjà ouverte ne le prend qu’à son prochain lancement. Pour mettre un agent à part : clic droit, « Désactiver le remote control ».',
     /** Under the switch, shown on and disabled: the setting for all agents covers the project already. */
-    remoteGlobal: 'Activé pour tous les projets dans Réglages › Harness',
+    remoteGlobal: 'Activé pour tous les projets dans Réglages › Agents',
     /** The group of « Projet privé », after the remote control. */
     privateTitle: 'Confidentialité',
     private: 'Projet privé',

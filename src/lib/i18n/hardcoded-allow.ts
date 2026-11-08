@@ -31,7 +31,7 @@ export const ALLOWED: Allowed[] = [
     why: 'le même motif d’exemple que dans Réglages › Projets, pour le même champ de l’assistant',
   },
   {
-    file: 'src/components/settings/AppTab.svelte',
+    file: 'src/components/settings/AdvancedPage.svelte',
     text: '~/.escouade',
     why: 'un chemin de dossier, pas un texte (le temps que le vrai soit lu)',
   },

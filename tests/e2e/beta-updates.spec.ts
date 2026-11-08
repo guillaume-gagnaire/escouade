@@ -53,7 +53,7 @@ test('the betas are off by default, and once ticked the check reads beta.json, t
   });
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await openSettingsPage(dialog, 'À propos');
+  await openSettingsPage(dialog, 'Général');
   const beta = dialog.getByRole('switch', { name: 'Recevoir les versions bêta' });
   await expect(beta).toHaveAttribute('aria-checked', 'false');
   const found = dialog.locator('.sr', { has: page.locator('[data-update]') });
@@ -71,7 +71,7 @@ test('the betas are off by default, and once ticked the check reads beta.json, t
   expect(served.hits).toContain('/beta.json');
   const saved = JSON.parse(fs.readFileSync(path.join(data, 'settings.json'), 'utf8'));
   expect(saved.betaUpdates).toBe(true);
-  await expect(settingsEntry(dialog, 'À propos')).not.toHaveClass(/changed/);
+  await expect(settingsEntry(dialog, 'Général')).not.toHaveClass(/changed/);
 
   // No beta.json (before the first release that holds one): latest.json.
   served.beta = null;

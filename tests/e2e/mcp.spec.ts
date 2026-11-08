@@ -98,8 +98,12 @@ test('Claude drives Escouade: a ticket created through MCP arrives in the Kanban
   const lost = await rpc(server!, 3, 'tools/call', { name: 'create_ticket', arguments: { project: 'nope', title: 'x' } });
   expect(lost.json.result.isError).toBe(true);
 
-  // The activity shows them, newest first, live (the dialog has been open all along): the failed call, the ticket made, and
-  // the request without a token, refused, from a client it does not know.
+  // The activity shows them, newest first, live (the dialog has been open all along), in the page's « Avancé »: the failed
+  // call, the ticket made, and the request without a token, refused, from a client it does not know.
+  await dialog
+    .locator('#settings-panel')
+    .getByRole('button', { name: /^Avancé/ })
+    .click();
   const calls = dialog.getByRole('list', { name: 'Appels au serveur MCP, les plus récents en tête' }).getByRole('listitem');
   await expect(calls).toHaveCount(3);
   await expect(calls.nth(0)).toContainText('create_ticket');

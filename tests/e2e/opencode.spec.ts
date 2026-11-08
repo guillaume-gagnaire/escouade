@@ -303,7 +303,7 @@ test.describe('OpenCode, its cost and its budget (ESC-45)', () => {
     await expect(day).toContainText(/0,004\s\$\s\/\s0,002\s\$/);
 
     // The texts written by OpenCode: its model chosen among those of its providers.
-    await openSettingsPage(settings, 'Général');
+    await openSettingsPage(settings, 'Agents');
     await settings.getByRole('group', { name: 'Modèle des textes rédigés' }).getByRole('button', { name: 'OpenCode' }).click();
     const model = settings.getByRole('combobox', { name: 'Modèle' });
     await expect(model.locator('option')).toHaveText(['Par défaut (Coder)', 'Coder · Paid']);

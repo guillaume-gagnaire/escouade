@@ -328,14 +328,14 @@ test('the setting for all agents gives each one remote control, which one is set
   const card = page.locator('.card').first();
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await openSettingsPage(dialog, 'Comptes et harness');
+  await openSettingsPage(dialog, 'Agents');
   await dialog.getByRole('switch', { name: 'Remote control pour tous les agents' }).click();
   // The project's own switch never says otherwise: on and grayed, with the reason.
   await openSettingsPage(dialog, 'Projet');
   const own = dialog.getByRole('switch', { name: 'Remote control pour les agents de ce projet' });
   await expect(own).toHaveAttribute('aria-checked', 'true');
   await expect(own).toBeDisabled();
-  await expect(dialog.getByText('Activé pour tous les projets dans Réglages › Harness')).toBeVisible();
+  await expect(dialog.getByText('Activé pour tous les projets dans Réglages › Agents')).toBeVisible();
   await closeSettings(dialog);
   // The agent there was gets it, and its card says where it comes from.
   await expect(card.locator('[data-tip*="Remote control : connecté"][data-tip*="activé par le réglage de tous les agents"]')).toBeVisible();

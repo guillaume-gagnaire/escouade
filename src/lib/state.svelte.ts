@@ -154,7 +154,7 @@ export type Modal =
   | { kind: 'testLaunch'; agentId: string }
   | { kind: 'import'; projectId: string }
   /** The update downloaded (`app.update`), which a restart installs; `back`, the settings' tab it was opened from and goes back to. */
-  | { kind: 'update'; back?: SettingsTab }
+  | { kind: 'update'; back?: SettingsPage }
   /** The release notes of the update installed since the last start. */
   | { kind: 'notes'; version: string; notes: string }
   /** « Rechercher dans les conversations » (Ctrl+K). */

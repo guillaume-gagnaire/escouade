@@ -128,7 +128,7 @@ describe('SettingsModal', () => {
     await userEvent.click(tab('Avancé'));
     expect(tab('Avancé')).toHaveAttribute('aria-current', 'page');
     expect(tab('Comptes et harness')).not.toHaveAttribute('aria-current');
-    expect(within(panel()).getByRole('heading', { name: 'Proxy' })).toBeInTheDocument();
+    expect(within(panel()).getByRole('heading', { name: 'Réseau' })).toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: /Chemin de l'exécutable/ })).not.toBeInTheDocument();
     // Each page starts at its top, whatever the one before was scrolled to.
     panel().scrollTop = 300;
@@ -366,6 +366,8 @@ describe('SettingsModal', () => {
     const resume = screen.getByRole('switch', { name: 'Reprise automatique après la limite d’usage' });
     expect(resume).toHaveAttribute('aria-checked', 'true');
     await userEvent.click(resume);
+    await userEvent.click(tab('Agents'));
+    await userEvent.click(within(panel()).getByRole('button', { name: /^Avancé/ }));
     const idle = screen.getByRole('spinbutton', { name: /Arrêter les processus des agents inactifs/ });
     await userEvent.clear(idle);
     await afterGesture();
@@ -385,8 +387,8 @@ describe('SettingsModal', () => {
 
   it('opens new agents in Escouade or in their harness’s terminal (ESC-34)', async () => {
     const backend = backendSaving();
-    render(SettingsModal);
-    const view = group('Tous les harness').getByRole('group', { name: 'Vue des nouveaux agents' });
+    render(SettingsModal, { page: 'agents' });
+    const view = group('Nouveaux agents').getByRole('group', { name: 'Vue des nouveaux agents' });
     const escouade = within(view).getByRole('button', { name: 'Escouade' });
     const harness = within(view).getByRole('button', { name: 'Terminal du harness' });
     expect(escouade).toHaveAttribute('aria-pressed', 'true');
@@ -403,8 +405,8 @@ describe('SettingsModal', () => {
 
   it('saves the delay before a message sent during a turn', async () => {
     const backend = backendSaving();
-    render(SettingsModal);
-    const delay = group('Tous les harness').getByRole('group', { name: 'Délai avant l’envoi pendant un tour' });
+    render(SettingsModal, { page: 'agents' });
+    const delay = group('Nouveaux agents').getByRole('group', { name: 'Délai avant l’envoi pendant un tour' });
     expect(screen.getByText(/tu peux le modifier ou l’annuler d’ici là/)).toHaveTextContent(/Cursor et OpenCode/);
     expect(
       within(delay)
@@ -418,14 +420,14 @@ describe('SettingsModal', () => {
     expect(app.settings.midTurnDelaySecs).toBe(20);
   });
 
-  it('lets the agents keep a task list, from the group of the processes, on by default', async () => {
+  it('lets the agents keep a task list, from « Nouveaux agents », on by default', async () => {
     const backend = backendSaving();
-    render(SettingsModal);
-    const processes = group('Tous les harness');
+    render(SettingsModal, { page: 'agents' });
+    const processes = group('Nouveaux agents');
     const todo = processes.getByRole('switch', { name: 'Les agents tiennent une liste de tâches' });
     expect(todo).toHaveAttribute('aria-checked', 'true');
     // Next to the other settings of the processes, with its help.
-    expect(processes.getByRole('switch', { name: 'Reprise automatique après la limite d’usage' })).toBeInTheDocument();
+    expect(processes.getByRole('group', { name: 'Vue des nouveaux agents' })).toBeInTheDocument();
     // The help says what the setting does, and that the model is the one to use the tool: the banner is not promised.
     const help = processes.getByText(/Donne aux agents l’outil de liste de tâches de Claude Code/);
     expect(help).toHaveTextContent(/s’ils la tiennent, Escouade montre leur avancée dans le bandeau « Plan »/);
@@ -438,14 +440,14 @@ describe('SettingsModal', () => {
     expect(app.settings.todoTools).toBe(false);
   });
 
-  describe('the attachments of the Claude Code tab', () => {
+  describe('the attachments, in « Avancé »', () => {
     const maxField = () => screen.getByRole('spinbutton', { name: 'Taille maximale d’un fichier joint (Mo)' });
     const warnField = () => screen.getByRole('spinbutton', { name: 'Avertir pour un fichier joint de plus de (Mo)' });
     const keepField = () => screen.getByRole('spinbutton', { name: 'Purger les copies après (jours)' });
 
     it('shows the five settings with their defaults: no maximum, a warning at 200 Mo, the original file, a big text by its path', () => {
       fakeBackend();
-      render(SettingsModal);
+      render(SettingsModal, { page: 'advanced' });
       const attachments = group('Pièces jointes');
       expect(maxField()).toHaveValue(0);
       expect(warnField()).toHaveValue(200);
@@ -462,7 +464,7 @@ describe('SettingsModal', () => {
 
     it('saves what is set', async () => {
       const backend = backendSaving();
-      render(SettingsModal);
+      render(SettingsModal, { page: 'advanced' });
       const attachments = group('Pièces jointes');
       await userEvent.clear(maxField());
       await userEvent.type(maxField(), '500');
@@ -485,7 +487,7 @@ describe('SettingsModal', () => {
     it('is written in English too', () => {
       setLang('en');
       fakeBackend();
-      render(SettingsModal);
+      render(SettingsModal, { page: 'advanced' });
       const attachments = group('Attachments');
       expect(attachments.getByRole('spinbutton', { name: 'Largest attached file (MB)' })).toBeInTheDocument();
       expect(attachments.getByRole('spinbutton', { name: 'Warn for an attached file over (MB)' })).toBeInTheDocument();
@@ -498,7 +500,7 @@ describe('SettingsModal', () => {
 
   it('saves the task list at each switch, back on when switched on again', async () => {
     const backend = backendSaving();
-    render(SettingsModal);
+    render(SettingsModal, { page: 'agents' });
     const todo = screen.getByRole('switch', { name: 'Les agents tiennent une liste de tâches' });
     await userEvent.click(todo);
     await userEvent.click(todo);
@@ -508,18 +510,18 @@ describe('SettingsModal', () => {
     expect(app.settings.todoTools).toBe(true);
   });
 
-  it('makes every agent reachable by remote control from its own group, beside the MCP switch, off until the user switches it on', async () => {
+  it('makes every agent reachable by remote control from Agents, before « Piloter Escouade », off until the user switches it on', async () => {
     const backend = backendSaving();
-    render(SettingsModal);
-    const remote = group('Claude Code');
+    render(SettingsModal, { page: 'agents' });
+    const remote = group('Remote control');
     const all = remote.getByRole('switch', { name: 'Remote control pour tous les agents' });
     expect(remote.getByText('Claude Code seulement : les autres harness n’ont pas de remote control.')).toBeInTheDocument();
     expect(all).toHaveAttribute('aria-checked', 'false');
     expect(remote.getByText(/^Chaque agent de chaque projet, existant ou nouveau \(agents des tickets compris\)/)).toHaveTextContent(
       'Chaque agent de chaque projet, existant ou nouveau (agents des tickets compris), est accessible depuis claude.ai et l’app Claude. Escouade lance tout de suite le process claude de chacun, qui reste lancé. La session apparaît sur claude.ai sous le nom « projet · agent » (pour un agent de ticket, son nom vient du ticket). En vue Claude Code, une interface déjà ouverte ne le prend qu’à son prochain lancement. Pour mettre un agent à part : clic droit, « Désactiver le remote control ».',
     );
-    // The MCP server has a tab of its own (choice 2 of the 2.0 design).
-    expect(within(panel()).queryByRole('heading', { name: 'Activité MCP' })).toBeNull();
+    // On the page of « Piloter Escouade », its group after.
+    expect(within(panel()).getByRole('heading', { name: 'Piloter Escouade' })).toBeInTheDocument();
     await userEvent.click(all);
     expect(all).toHaveAttribute('aria-checked', 'true');
     await afterGesture();
@@ -529,7 +531,7 @@ describe('SettingsModal', () => {
 
   it('saves the remote control of all agents at each switch, off again when switched off', async () => {
     const backend = backendSaving();
-    render(SettingsModal);
+    render(SettingsModal, { page: 'agents' });
     const all = screen.getByRole('switch', { name: 'Remote control pour tous les agents' });
     await userEvent.click(all);
     await userEvent.click(all);
@@ -611,6 +613,7 @@ describe('SettingsModal', () => {
             'vectors_model',
             'account_status',
             'closed_projects',
+            'data_dir',
           ].includes(c.cmd),
       ),
     ).toEqual([]);
@@ -1301,7 +1304,7 @@ describe('SettingsModal', () => {
 
   it('checks for an update on demand', async () => {
     const backend = fakeBackend({ update_check: () => ({ kind: 'none' }) });
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     expect(screen.getByText('Escouade 1.3.1', { selector: '#settings-panel *' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Rechercher une mise à jour' }));
     await expect.poll(() => app.toasts.at(-1)?.text).toBe('Aucune mise à jour disponible.');
@@ -1313,7 +1316,7 @@ describe('SettingsModal', () => {
     fakeBackend({
       update_check: () => ({ kind: 'failed', trouble: { message: '403 Forbidden de github.com', show: true, page: null } }),
     });
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     const button = screen.getByRole('button', { name: 'Rechercher une mise à jour' });
     await userEvent.click(button);
     await expect.poll(() => app.toasts.at(-1)?.text).toBe('Vérification des mises à jour impossible : 403 Forbidden de github.com');
@@ -1324,7 +1327,7 @@ describe('SettingsModal', () => {
 
   it('installs updates by itself unless told not to', async () => {
     const backend = fakeBackend({ save_settings: () => [] });
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     const auto = screen.getByRole('switch', { name: 'Installer les mises à jour automatiquement' });
     expect(auto).toHaveAttribute('aria-checked', 'true');
     expect(
@@ -1338,7 +1341,7 @@ describe('SettingsModal', () => {
 
   it('receives the betas only once ticked, saved at once, a check following (ESC-374)', async () => {
     const backend = fakeBackend({ save_settings: () => [], update_check: () => ({ kind: 'none' }) });
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     const beta = screen.getByRole('switch', { name: 'Recevoir les versions bêta' });
     expect(beta).toHaveAttribute('aria-checked', 'false');
     expect(screen.getByText(/Les bêtas arrivent avant tout le monde et peuvent avoir des défauts/)).toBeInTheDocument();
@@ -1363,8 +1366,8 @@ describe('SettingsModal', () => {
       update_check: () => ({ kind: 'found', update: { id: 3, version: '2.2.0-beta.2', notes: '' } }),
       update_download: () => new Promise(() => {}),
     });
-    render(SettingsModal, { tab: 'about' });
-    expect(screen.getByTestId('app-version')).toHaveTextContent('Escouade 2.2.0-beta.1 (bêta)');
+    render(SettingsModal, { page: 'general' });
+    expect(screen.getByText('Escouade 2.2.0-beta.1 (bêta)', { selector: '#settings-panel *' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Rechercher une mise à jour' }));
     await expect.poll(() => screen.queryByText('Escouade 2.2.0-beta.2 (bêta) disponible')).not.toBeNull();
   });
@@ -1372,7 +1375,7 @@ describe('SettingsModal', () => {
   it('shares the usage statistics only once switched on', async () => {
     const backend = fakeBackend({ save_settings: () => [] });
     app.settings = { ...app.settings, telemetry: null };
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     const share = screen.getByRole('switch', { name: 'Statistiques d’usage' });
     expect(share).toHaveAttribute('aria-checked', 'false');
     await userEvent.click(share);
@@ -1384,7 +1387,7 @@ describe('SettingsModal', () => {
   it('stops the usage statistics when switched off', async () => {
     const backend = fakeBackend({ save_settings: () => [] });
     app.settings = { ...app.settings, telemetry: true };
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     const share = screen.getByRole('switch', { name: 'Statistiques d’usage' });
     expect(share).toHaveAttribute('aria-checked', 'true');
     await userEvent.click(share);
@@ -1394,14 +1397,14 @@ describe('SettingsModal', () => {
 
   it('opens the website, in the language of the interface, and the Discord server', async () => {
     const backend = fakeBackend({ open_url: () => null });
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'about' });
     expect(screen.getByText('Site web')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Ouvrir le site' }));
     await userEvent.click(screen.getByRole('button', { name: 'Rejoindre le Discord' }));
     expect(backend.called('open_url').map((c) => c.args.url)).toEqual(['https://escouade.dev/', 'https://discord.gg/m3KYtN8gxP']);
     cleanup();
     setLang('en');
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'about' });
     await userEvent.click(screen.getByRole('button', { name: 'Open the website' }));
     expect(backend.called('open_url').at(-1)?.args.url).toBe('https://escouade.dev/en/');
     setLang('fr');
@@ -1409,7 +1412,7 @@ describe('SettingsModal', () => {
 
   it('offers a coffee, on the Stripe page of the language of the interface, in the browser', async () => {
     const backend = fakeBackend({ open_url: () => null });
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'about' });
     expect(screen.getByText('Soutenir Escouade')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Offrir un café' }));
     expect(backend.called('open_url').map((c) => c.args.url)).toEqual(['https://buy.stripe.com/8x2fZh20z7rM87067200001']);
@@ -1417,7 +1420,7 @@ describe('SettingsModal', () => {
     expect(screen.queryAllByRole('dialog')).toHaveLength(1);
     cleanup();
     setLang('en');
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'about' });
     expect(screen.getByText('Support Escouade')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Buy a coffee' }));
     expect(backend.called('open_url').at(-1)?.args.url).toBe('https://buy.stripe.com/00w7sLcFdaDYaf8cvq00000');
@@ -1426,7 +1429,7 @@ describe('SettingsModal', () => {
 
   it('says where the local data is, and opens its folder', async () => {
     const backend = fakeBackend({ data_dir: () => 'C:\\Users\\moi\\.escouade', open_path: () => null });
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'advanced' });
     expect(await screen.findByText('~/.escouade')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Ouvrir le dossier' }));
     expect(backend.called('open_path').map((c) => c.args.path)).toEqual(['C:\\Users\\moi\\.escouade']);
@@ -1539,26 +1542,28 @@ describe('SettingsModal in English', () => {
     flushSync();
     expect(path).toHaveAttribute('placeholder', 'not found — enter the path to claude.exe');
     expect(screen.getByRole('switch', { name: 'Auto-resume after the usage limit' })).toBeInTheDocument();
+    await userEvent.click(tab('Agents'));
+    await userEvent.click(within(panel()).getByRole('button', { name: /^Advanced/ }));
     expect(screen.getByRole('spinbutton', { name: 'Stop idle agent processes after (minutes)' })).toBeInTheDocument();
     await userEvent.type(screen.getByRole('spinbutton', { name: /Stop idle/ }), '0');
   });
 
   it('names the task list setting in English', async () => {
     fakeBackend();
-    render(SettingsModal);
+    render(SettingsModal, { page: 'agents' });
     const todo = screen.getByRole('switch', { name: 'Agents keep a task list' });
     expect(todo).toHaveAttribute('aria-checked', 'true');
     const help = screen.getByText(/Gives agents Claude Code’s task list tool/);
     expect(help).toHaveTextContent(/if they keep a list, Escouade shows their progress in the “Plan” banner/);
     expect(help).toHaveTextContent(/the model does not have to use it/);
     expect(help).not.toHaveTextContent(/so Escouade can show/);
-    expect(screen.getByRole('heading', { name: 'All harnesses' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'New agents' })).toBeInTheDocument();
   });
 
   it('names the remote control setting for all agents in English', async () => {
     const backend = backendSaving();
-    render(SettingsModal);
-    const remote = group('Claude Code');
+    render(SettingsModal, { page: 'agents' });
+    const remote = group('Remote control');
     const all = remote.getByRole('switch', { name: 'Remote control for all agents' });
     expect(remote.getByText('Claude Code only: the other harnesses have no remote control.')).toBeInTheDocument();
     expect(all).toHaveAttribute('aria-checked', 'false');
@@ -1671,10 +1676,20 @@ describe('SettingsModal in English', () => {
     expect(panel()).toHaveTextContent('NO_PROXY, separated by commas');
     expect(screen.getByRole('switch', { name: 'Skip TLS certificate verification' })).toHaveAttribute('aria-checked', 'false');
 
-    await userEvent.click(tab(/^About/));
+    expect(within(panel()).getByRole('heading', { name: 'Local data' })).toBeInTheDocument();
+    expect(
+      within(panel())
+        .getAllByRole('heading')
+        .map((h) => h.textContent),
+    ).toEqual(['Network', 'Terminals', 'Attachments', 'Search by meaning', 'Local data']);
+
+    await userEvent.click(tab('General'));
     expect(screen.getByRole('button', { name: 'Check for updates' })).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Install updates automatically' })).toBeInTheDocument();
-    expect(screen.getByText('Local data')).toBeInTheDocument();
+
+    await userEvent.click(tab(/^About/));
+    expect(screen.getByRole('button', { name: 'Open the website' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Check for updates' })).toBeNull();
   });
 
   it('says a project’s settings in English, the worktree commands and the launch commands included', async () => {
@@ -1759,7 +1774,7 @@ describe('SettingsModal in English', () => {
 
   it('tells the update check in English, and saves a switch without a toast', async () => {
     const backend = fakeBackend({ save_settings: () => [], update_check: () => ({ kind: 'none' }) });
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
     await expect.poll(() => app.toasts.at(-1)?.text).toBe('No update available.');
     await userEvent.click(screen.getByRole('switch', { name: 'Install updates automatically' }));
@@ -1845,13 +1860,13 @@ describe('SettingsModal, the version of Claude Code', () => {
     const labels = ['Les agents tiennent une liste de tâches', 'Remote control pour tous les agents'];
     const view = 'Vue des nouveaux agents';
     fakeBackend({ claude_locate: () => located });
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'agents' });
     for (const name of labels) expect(screen.getByRole('switch', { name })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: view })).toBeInTheDocument();
     cleanup();
     app.engines = [BARE_ENGINE];
     fakeBackend({ claude_locate: () => located });
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'agents' });
     for (const name of labels) expect(screen.queryByRole('switch', { name })).toBeNull();
     expect(screen.queryByRole('group', { name: view })).toBeNull();
   });
@@ -2022,22 +2037,22 @@ describe('SettingsModal, the « Harness » tab (ESC-29)', () => {
   });
 });
 
-describe('SettingsModal, À propos (choice 13 of the 2.0 design)', () => {
+describe('SettingsModal, Général › Mises à jour (choice 13 of the 2.0 design)', () => {
   beforeEach(() => resetApp());
 
   it('keeps a download of an update that failed while it lasts, with the way through the browser', async () => {
     fakeBackend();
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     expect(screen.queryByText(/^Mise à jour /)).toBeNull();
     cleanup();
     app.updateTrouble = { version: '1.9.0', message: 'le proxy a refusé le fichier (403)', page: 'https://example.com/v1.9.0' };
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     expect(screen.getByText('Mise à jour 1.9.0')).toBeInTheDocument();
     expect(screen.getByText('Téléchargement impossible : le proxy a refusé le fichier (403)')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Télécharger dans le navigateur' })).toBeInTheDocument();
     cleanup();
     app.updateTrouble = { version: '1.9.0', message: 'délai dépassé', page: null };
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     expect(screen.getByText('Téléchargement impossible : délai dépassé')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Télécharger dans le navigateur' })).toBeNull();
   });
@@ -2059,7 +2074,7 @@ describe('SettingsModal, À propos (choice 13 of the 2.0 design)', () => {
 
   it('shows an update found by the button while it downloads, then ready, and says so to a screen reader (ESC-250)', async () => {
     const { ready } = found('2.5.0');
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     const live = screen.getByTestId('update-live');
     expect(live).toHaveAttribute('aria-live', 'polite');
     expect(live).toHaveTextContent('');
@@ -2078,7 +2093,7 @@ describe('SettingsModal, À propos (choice 13 of the 2.0 design)', () => {
   it('shows an update the automatic check found, ready, its restart through the update’s window and its notes', async () => {
     const backend = fakeBackend();
     app.update = { version: '2.6.0', notes: '- Une rangée dans À propos', ready: true };
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     const row = within(updateRow());
     expect(row.getByText('Escouade 2.6.0 prête')).toBeInTheDocument();
     // The notes, folded until asked for.
@@ -2088,7 +2103,7 @@ describe('SettingsModal, À propos (choice 13 of the 2.0 design)', () => {
     expect(row.getByRole('button', { name: 'Masquer les nouveautés' })).toHaveAttribute('aria-expanded', 'true');
     // As the status bar: the update’s window (unsaved files, agents at work), which comes back here once put off.
     await userEvent.click(row.getByRole('button', { name: 'Redémarrer maintenant' }));
-    expect(app.modal).toEqual({ kind: 'update', back: 'about' });
+    expect(app.modal).toEqual({ kind: 'update', back: 'general' });
     expect(backend.called('update_restart')).toEqual([]);
   });
 
@@ -2097,7 +2112,7 @@ describe('SettingsModal, À propos (choice 13 of the 2.0 design)', () => {
     app.update = { version: '2.6.1', notes: '', ready: true };
     app.now = 1_000_000;
     app.restartAt = 1_000_000 + 9_500;
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     const row = within(updateRow());
     expect(row.getByText('Redémarrage dans 10 s')).toBeInTheDocument();
     // No notes: nothing to unfold.
@@ -2110,7 +2125,7 @@ describe('SettingsModal, À propos (choice 13 of the 2.0 design)', () => {
 
   it('finds and offers an update with the automatic updates turned off', async () => {
     found('2.7.0');
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     await userEvent.click(screen.getByRole('switch', { name: 'Installer les mises à jour automatiquement' }));
     await userEvent.click(screen.getByRole('button', { name: 'Rechercher une mise à jour' }));
     expect(await screen.findByText('Escouade 2.7.0 disponible')).toBeInTheDocument();
@@ -2118,7 +2133,7 @@ describe('SettingsModal, À propos (choice 13 of the 2.0 design)', () => {
 
   it('shows nothing found with the toast alone, and a failed check with its error alone', async () => {
     fakeBackend({ update_check: () => ({ kind: 'none' }) });
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     await userEvent.click(screen.getByRole('button', { name: 'Rechercher une mise à jour' }));
     await expect.poll(() => app.toasts.at(-1)?.text).toBe('Aucune mise à jour disponible.');
     expect(screen.queryByText(/^Escouade \S+ (disponible|prête)$/)).toBeNull();
@@ -2131,7 +2146,7 @@ describe('SettingsModal, À propos (choice 13 of the 2.0 design)', () => {
 
   it('gives way to the download that failed, never both rows, and to a newer version found meanwhile', async () => {
     const { ready } = found('2.8.0');
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     await userEvent.click(screen.getByRole('button', { name: 'Rechercher une mise à jour' }));
     expect(await screen.findByText('Escouade 2.8.0 disponible')).toBeInTheDocument();
     ready({ kind: 'failed', trouble: { message: 'le proxy a refusé le fichier (403)', show: false, page: null } });

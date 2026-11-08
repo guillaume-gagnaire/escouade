@@ -128,7 +128,7 @@ test('the store for real: four signed plugins installed, tried, turned off, take
     .poll(() => JSON.parse(fs.readFileSync(path.join(app.data, 'settings.json'), 'utf8')).pluginTheme)
     .toContain('dev.escouade.high-contrast');
   const after = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--text'));
-  note(`\n### Ce qu'il fait\n\nThème choisi dans Réglages › Application › Couleurs : --text ${before.trim()} → ${after.trim()}.`);
+  note(`\n### Ce qu'il fait\n\nThème choisi dans Réglages › Général › Couleurs : --text ${before.trim()} → ${after.trim()}.`);
   await colors.selectOption({ index: 0 });
   await expect(page.locator('#escouade-plugin-theme')).toHaveCount(0);
   await settings.getByRole('button', { name: 'Fermer' }).click();

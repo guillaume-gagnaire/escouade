@@ -50,7 +50,7 @@ test('« Partager » without a name takes git’s, without asking, and the setti
   const [name] = fs.readdirSync(dir).filter((f) => f.endsWith('.yml'));
   expect(fs.readFileSync(path.join(dir, name), 'utf8')).toContain('author: { name: Alice Globale, id: a91f03c2 }');
 
-  // Réglages › Application: « Ton nom » filled with git's, said so.
+  // Réglages › Général: « Ton nom » filled with git's, said so.
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
   await openSettingsPage(dialog, 'Général');

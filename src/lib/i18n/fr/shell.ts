@@ -110,7 +110,7 @@ export default {
     title: 'Aider à améliorer Escouade ?',
     body: 'Escouade peut envoyer des statistiques d’usage, sans rien qui t’identifie : quelles fonctionnalités servent, avec quelle version d’Escouade et quel système. Jamais tes projets, ton code, tes conversations ni ton nom.',
     detail:
-      'Elles partent vers un serveur d’Escouade hébergé en France (Aptabase, open source), sous un identifiant tiré au hasard, et sont gardées 25 mois. Tu peux changer d’avis à tout moment dans Réglages › À propos.',
+      'Elles partent vers un serveur d’Escouade hébergé en France (Aptabase, open source), sous un identifiant tiré au hasard, et sont gardées 25 mois. Tu peux changer d’avis à tout moment dans Réglages › Général.',
     more: 'Ce qui est envoyé, en détail',
     yes: 'Partager les statistiques',
     no: 'Non merci',

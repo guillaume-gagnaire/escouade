@@ -9,8 +9,10 @@ import { setLang } from '../../lib/i18n';
 import { mcp } from '../../lib/mcp.svelte';
 import { app } from '../../lib/state.svelte';
 import type { Account, EngineDecl, McpActivityEntry, McpDeclaration, McpStatus } from '../../lib/types';
-import { agent, BARE_ENGINE, fakeBackend, resetApp, SETTINGS } from '../../test/ipc';
+import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp, SETTINGS } from '../../test/ipc';
+import { afterGesture } from '../../test/settings';
 import SettingsModal from '../modals/SettingsModal.svelte';
+import McpActivity from './McpActivity.svelte';
 import McpSection from './McpSection.svelte';
 
 const PRINCIPAL: Account = { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true };
@@ -68,18 +70,18 @@ const switchEl = () => screen.getByRole('switch', { name: 'Les agents peuvent pi
 /** The declarations listed under the switch, each as it reads. */
 const rows = () => within(screen.getByRole('list', { name: 'Déclarations dans les harness' })).getAllByRole('listitem');
 
-describe('McpSection', () => {
+describe('Agents › « Piloter Escouade » (McpSection)', () => {
   beforeEach(() => {
     resetApp();
     app.settings = { ...SETTINGS, accounts: [PRINCIPAL, PRO] };
   });
 
-  it('is the tab « Serveur MCP » of « Système » (choice 2 of the 2.0 design), off by default, with its help and its note', async () => {
+  it('is the group « Piloter Escouade » of the page Agents (from the 2.0 tab « Serveur MCP »), off by default, with its help and its note', async () => {
     backend();
-    app.modal = { kind: 'settings', tab: 'mcp' };
-    render(SettingsModal, { tab: 'mcp' });
+    app.modal = { kind: 'settings', page: 'agents' };
+    render(SettingsModal, { page: 'agents' });
     expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Agents' })).toHaveAttribute('aria-current', 'page');
-    expect(await screen.findByRole('heading', { name: 'Activité MCP' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Piloter Escouade' })).toBeInTheDocument();
     expect(switchEl()).toHaveAttribute('aria-checked', 'false');
     // One switch: none of a harness of its own (ESC-119).
     expect(screen.getAllByRole('switch').filter((s) => /piloter Escouade/.test(s.getAttribute('aria-label') ?? ''))).toHaveLength(1);
@@ -97,14 +99,16 @@ describe('McpSection', () => {
     // Off: nothing is said of a declaration.
     expect(screen.queryByRole('list', { name: 'Déclarations dans les harness' })).not.toBeInTheDocument();
     expect(screen.queryByText(/Déclaration dans/)).not.toBeInTheDocument();
-    // The log has its own group, after.
+    // The log is in the page's « Avancé », folded, named there; unfolded, under its title.
+    expect(screen.queryByRole('heading', { name: 'Activité MCP' })).toBeNull();
+    await userEvent.click(within(document.getElementById('settings-panel')!).getByRole('button', { name: /^Avancé/ }));
     expect(screen.getByRole('heading', { name: 'Activité MCP' })).toBeInTheDocument();
   });
 
   it('turns on at once, not through the modal’s draft, and says what it declares as the backend tells it', async () => {
     const be = backend();
-    app.modal = { kind: 'settings', tab: 'mcp' };
-    render(SettingsModal, { tab: 'mcp' });
+    app.modal = { kind: 'settings', page: 'agents' };
+    render(SettingsModal, { page: 'agents' });
     await userEvent.click(switchEl());
     expect(be.called('mcp_set_enabled').map((c) => c.args)).toEqual([{ enabled: true }]);
     await waitFor(() => expect(switchEl()).toHaveAttribute('aria-checked', 'true'));
@@ -297,6 +301,7 @@ describe('McpSection', () => {
       mcp_activity: () => [call({ outcome: 'refused', message: 'The autopilot is paused' })],
     });
     render(McpSection);
+    render(McpActivity);
     expect(await screen.findByText('Claude · Main account')).toBeInTheDocument();
     expect(screen.getByText('Declared')).toBeInTheDocument();
     expect(screen.getByText('Not declared')).toBeInTheDocument();
@@ -310,8 +315,7 @@ describe('McpSection', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy the command' })).toBeInTheDocument();
     expect(screen.getByText('Run it by hand in PowerShell:')).toBeInTheDocument();
-    // Its title is the tab's (« MCP server »): the group is named by it.
-    expect(screen.getByRole('region', { name: 'MCP server' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Drive Escouade' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'MCP activity' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Clear' })).toBeInTheDocument();
     expect(await screen.findByText('Refused')).toBeInTheDocument();
@@ -327,7 +331,7 @@ describe('McpSection', () => {
 
     it('has nothing to clear while empty', async () => {
       backend();
-      render(McpSection);
+      render(McpActivity);
       expect(await screen.findByText('Aucun appel pour l’instant.')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Effacer' })).toBeDisabled();
     });
@@ -355,7 +359,7 @@ describe('McpSection', () => {
           call({ at: new Date(2026, 9, 10, 14, 33).getTime(), tool: 'create_ticket', outcome: 'error', message: 'Le titre est vide' }),
         ],
       });
-      render(McpSection);
+      render(McpActivity);
       const log = await screen.findByRole('list', { name: 'Appels au serveur MCP, les plus récents en tête' });
       await waitFor(() => expect(within(log).getAllByRole('listitem')).toHaveLength(4));
       const rows = within(log).getAllByRole('listitem');
@@ -386,7 +390,7 @@ describe('McpSection', () => {
 
     it('shows a call as it comes, above the others', async () => {
       backend({ mcp_activity: () => [call({ tool: 'list_projects', summary: '' })] });
-      render(McpSection);
+      render(McpActivity);
       await waitFor(() => expect(items()).toHaveLength(1));
       mcp.take({
         type: 'mcpActivity',
@@ -398,7 +402,7 @@ describe('McpSection', () => {
 
     it('clears the log, in the window and in the backend', async () => {
       const be = backend({ mcp_activity: () => [call(), call({ tool: 'get_ticket' })] });
-      render(McpSection);
+      render(McpActivity);
       await waitFor(() => expect(items()).toHaveLength(2));
       await userEvent.click(screen.getByRole('button', { name: 'Effacer' }));
       expect(be.called('mcp_clear_activity')).toHaveLength(1);
@@ -412,7 +416,7 @@ describe('McpSection', () => {
       backend({
         mcp_activity: () => [call({ tool: 'get_ticket' }), call({ at: new Date(2026, 9, 10, 14, 35).getTime(), tool: 'list_agents' })],
       });
-      render(McpSection);
+      render(McpActivity);
       await waitFor(() => expect(items()).toHaveLength(2));
       expect(items().map((r) => r.querySelector('.tool')?.textContent)).toEqual(['list_agents', 'get_ticket']);
     });
@@ -509,5 +513,146 @@ describe('McpSection — every harness installed (ESC-119)', () => {
     render(McpSection);
     expect(await screen.findByText('Codex · Perso account')).toBeInTheDocument();
     expect(screen.getAllByText('Declared')).toHaveLength(2);
+  });
+});
+
+const IDLE = 'Arrêter les processus des agents inactifs après';
+const IDLE_FIELD = 'Arrêter les processus des agents inactifs après (minutes)';
+const REMOTE = 'Remote control pour tous les agents';
+const panel = () => document.getElementById('settings-panel')!;
+/** The choices of a setting, as its chips read. */
+const choices = (name: string) =>
+  within(within(panel()).getByRole('group', { name }))
+    .getAllByRole('button')
+    .map((b) => b.textContent?.trim());
+const choice = (setting: string, name: string) =>
+  within(within(panel()).getByRole('group', { name: setting })).getByRole('button', { name });
+
+describe('the page « Agents »', () => {
+  beforeEach(() => {
+    resetApp();
+    app.modal = { kind: 'settings', page: 'agents' };
+  });
+
+  it('has its groups in the order of the study, the rare folded into « Avancé »', async () => {
+    backend();
+    render(SettingsModal, { page: 'agents' });
+    expect(screen.getByText('Les nouveaux agents, les textes rédigés, le remote control et le pilotage d’Escouade')).toBeInTheDocument();
+    expect(
+      within(panel())
+        .getAllByRole('heading')
+        .map((h) => h.textContent),
+    ).toEqual(['Nouveaux agents', 'Textes rédigés', 'Remote control', 'Piloter Escouade']);
+    const fold = within(panel()).getByRole('button', { name: /^Avancé/ });
+    expect(fold).toHaveTextContent(IDLE + ' · Activité MCP');
+    expect(within(panel()).queryByText(IDLE)).toBeNull();
+    await userEvent.click(fold);
+    expect(within(panel()).getByText(IDLE)).toBeInTheDocument();
+    expect(within(panel()).getByRole('heading', { name: 'Activité MCP' })).toBeInTheDocument();
+  });
+
+  it('says the remote control of every agent is its harness’s alone, and hides it with no harness that has one', () => {
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    backend();
+    const view = render(SettingsModal, { page: 'agents' });
+    expect(within(panel()).getByRole('switch', { name: REMOTE })).toBeInTheDocument();
+    expect(panel()).toHaveTextContent('Claude Code seulement : les autres harness n’ont pas de remote control.');
+    view.unmount();
+    app.engines = [BARE_ENGINE];
+    render(SettingsModal, { page: 'agents' });
+    expect(within(panel()).queryByRole('heading', { name: 'Remote control' })).toBeNull();
+  });
+
+  it('saves the stop of the idle processes, from « Avancé »', async () => {
+    const be = backend({ save_settings: () => [] });
+    render(SettingsModal, { page: 'agents' });
+    await userEvent.click(within(panel()).getByRole('button', { name: /^Avancé/ }));
+    const field = within(panel()).getByRole('spinbutton', { name: IDLE_FIELD });
+    await userEvent.clear(field);
+    await userEvent.type(field, '45');
+    await afterGesture();
+    expect(be.called('save_settings').at(-1)!.args.settings).toMatchObject({ idleStopMinutes: 45 });
+  });
+
+  describe('« Modèle des textes rédigés »', () => {
+    const WRITER = 'Modèle des textes rédigés';
+
+    it('offers Claude Haiku alone with Claude Code alone, chosen by default', () => {
+      fakeBackend();
+      render(SettingsModal, { page: 'agents' });
+      expect(within(panel()).getByRole('heading', { name: 'Textes rédigés' })).toBeInTheDocument();
+      expect(choices(WRITER)).toEqual(['Claude Haiku']);
+      expect(choice(WRITER, 'Claude Haiku')).toHaveAttribute('aria-pressed', 'true');
+      expect(panel()).toHaveTextContent('Seuls les harness installés sont proposés.');
+    });
+
+    it('lists only the harnesses installed, and saves the one chosen', async () => {
+      app.engines = [CLAUDE_ENGINE, BARE_ENGINE, { ...BARE_ENGINE, id: 'cursor', name: 'Absent', writer: 'Absent mini' }];
+      app.enginesFound = ['claude', 'codex'];
+      const backend = fakeBackend({ save_settings: () => [] });
+      render(SettingsModal, { page: 'agents' });
+      expect(choices(WRITER)).toEqual(['Claude Haiku', 'Nu mini']);
+      await userEvent.click(choice(WRITER, 'Nu mini'));
+      expect(choice(WRITER, 'Nu mini')).toHaveAttribute('aria-pressed', 'true');
+      await afterGesture();
+      expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ writerEngine: 'codex' });
+    });
+
+    it('shows the harness the texts go to when the one chosen is not installed any more', () => {
+      app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+      app.enginesFound = ['codex'];
+      app.settings = { ...app.settings, writerEngine: 'claude' };
+      fakeBackend();
+      render(SettingsModal, { page: 'agents' });
+      expect(choices(WRITER)).toEqual(['Nu mini']);
+      expect(choice(WRITER, 'Nu mini')).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('chooses the model of a harness that takes the one given, among those of its account (ESC-45)', async () => {
+      const OPENCODE = { ...BARE_ENGINE, id: 'opencode' as const, name: 'OpenCode', writer: 'OpenCode', writerTakesModel: true };
+      app.engines = [CLAUDE_ENGINE, BARE_ENGINE, OPENCODE];
+      app.enginesFound = ['claude', 'codex', 'opencode'];
+      app.engineModels = {
+        // Codex picks its own: no menu for it.
+        codex: [{ id: 'gpt-x', label: 'GPT-X', efforts: [], defaultEffort: null, images: false, default: true }],
+        opencode: [
+          { id: 'ollama/qwen', label: 'Qwen', efforts: [], defaultEffort: null, images: false, default: true, provider: 'Ollama (local)' },
+          { id: 'paid/coder', label: 'Coder', efforts: [], defaultEffort: null, images: false, default: false, provider: 'Paid' },
+        ],
+      };
+      const backend = fakeBackend({ save_settings: () => [] });
+      render(SettingsModal, { page: 'agents' });
+      expect(within(panel()).queryByRole('combobox', { name: 'Modèle' })).toBeNull();
+      await userEvent.click(choice(WRITER, 'Nu mini'));
+      expect(within(panel()).queryByRole('combobox', { name: 'Modèle' })).toBeNull();
+      await userEvent.click(choice(WRITER, 'OpenCode'));
+      const menu = within(panel()).getByRole('combobox', { name: 'Modèle' });
+      expect([...menu.querySelectorAll('option')].map((o) => o.textContent)).toEqual([
+        'Par défaut (Qwen)',
+        'Qwen · Ollama (local)',
+        'Coder · Paid',
+      ]);
+      expect(menu).toHaveValue('');
+      expect(panel()).toHaveTextContent('sans lui, OpenCode en choisirait un lui-même');
+      await userEvent.selectOptions(menu, 'paid/coder');
+      await afterGesture();
+      expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ writerEngine: 'opencode', writerModel: 'paid/coder' });
+    });
+
+    it('is not shown when no harness is installed', () => {
+      app.enginesFound = [];
+      fakeBackend();
+      render(SettingsModal, { page: 'agents' });
+      expect(within(panel()).queryByRole('group', { name: WRITER })).toBeNull();
+    });
+
+    it('reads in English', () => {
+      fakeBackend();
+      setLang('en');
+      render(SettingsModal, { page: 'agents' });
+      expect(within(panel()).getByRole('heading', { name: 'Written texts' })).toBeInTheDocument();
+      expect(choices('Model for written texts')).toEqual(['Claude Haiku']);
+      expect(panel()).toHaveTextContent('Only the installed harnesses are offered.');
+    });
   });
 });
